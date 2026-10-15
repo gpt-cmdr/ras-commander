@@ -3327,8 +3327,11 @@ class RasUnsteady:
         """
         target_path = Path(file_path)
         target_mode: Optional[int] = None
+        target_visibility = 0
         try:
-            target_mode = target_path.stat().st_mode & 0o777
+            target_stat = target_path.stat()
+            target_mode = target_stat.st_mode & 0o777
+            target_visibility = getattr(target_stat, "st_file_attributes", 0) & 0x6
         except OSError:
             target_mode = None
 
@@ -3354,6 +3357,21 @@ class RasUnsteady:
                     os.chmod(temp_path, target_mode)
                 except OSError:
                     logger.debug("Could not preserve mode for %s", target_path)
+
+            if os.name == "nt":
+                # SMB can mark dot-prefixed temporary files Hidden. Preserve
+                # the destination's Hidden/System bits before replacement:
+                # VB6 Dir() otherwise reports an existing unsteady file missing.
+                import ctypes
+                from ctypes import wintypes
+                attributes = getattr(temp_path.stat(), "st_file_attributes", 0)
+                attributes = (attributes & ~0x6) | target_visibility
+                kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+                setter = kernel32.SetFileAttributesW
+                setter.argtypes = (wintypes.LPCWSTR, wintypes.DWORD)
+                setter.restype = wintypes.BOOL
+                if not setter(str(temp_path), attributes or 0x80):
+                    raise ctypes.WinError(ctypes.get_last_error())
 
             os.replace(temp_path, target_path)
             temp_path = None
@@ -6428,6 +6446,206 @@ class RasUnsteady:
         if isinstance(value, np.ndarray):
             return [RasUnsteady._decode_hdf_attr_value(item) for item in value]
         return value
+
+    @staticmethod
+    @log_call
+    def import_gridded_gdal_precipitation(
+        unsteady_file: Union[str, Path],
+        *,
+        units: str,
+        data_type: str = "cumulative",
+        hecras_dir: Optional[Union[str, Path]] = None,
+        timeout: float = 300,
+        ras_object: Optional[Any] = None,
+    ) -> Dict[str, Any]:
+        """Import configured NetCDF through HEC's GDAL and accumulated HDF writer.
+
+        Call configure_gridded_gdal_precipitation() first on a clean staged copy.
+        The installed vendor reader decodes values, timestamps and CRS. Python
+        validates the output and atomically replaces the sidecar after success.
+        Existing imported values are rejected. Requires the .NET Framework
+        compiler and installed runtime, or a configured private Wine prefix.
+
+        Args:
+            unsteady_file: Configured unsteady-flow path or project number.
+            units: Explicit depth units for cumulative input or per-hour units
+                for rates, as accepted by RasPrecipHdf.validate_data_type_units().
+            data_type: "cumulative" or "per-avg" (alias "per-aver"). Rates are
+                interval-ending hourly averages with a zero first baseline.
+                Interval amounts, instantaneous rates, GRIB and a nonzero first
+                rate duration are rejected. Use Python/HDF for those inputs.
+            hecras_dir: Runtime directory. Defaults to the project's executable
+                parent or RasProcess's configured Wine installation on Linux.
+            timeout: Total compiler/import limit in seconds.
+            ras_object: Optional project for number and executable resolution.
+
+        Returns:
+            Import receipt with parsed times, shape, vendor assembly identity,
+            source/helper hashes and destination. This verifies import only;
+            use RasPreprocess and RasCmdr to verify forcing and hydraulics.
+
+        Raises:
+            ValueError: Invalid source, metadata, semantics or existing payload.
+            FileNotFoundError: Source, runtime or compiler is unavailable.
+            RuntimeError: Native import or output validation fails.
+            TimeoutError: The total execution deadline is exhausted.
+            subprocess.TimeoutExpired: A compiler/import process exceeds its limit.
+
+        CF time units must be seconds/minutes/hours/days since a Gregorian epoch,
+        with at least two strictly increasing whole-second timestamps.
+        """
+        from ._native_precip import import_native_gdal
+        import sys
+        import platform
+
+        path = RasUnsteady._resolve_unsteady_file_path(unsteady_file, ras_object).absolute()
+        if hecras_dir is None:
+            if platform.system() == "Linux":
+                facade = sys.modules.get("ras_commander.RasProcess")
+                wine = facade.RasProcess._get_wine_config() if facade else None
+                hecras_dir = wine.ras_install_dir if wine else None
+            else:
+                obj = ras_object or ras
+                executable = getattr(obj, "ras_exe_path", None)
+                hecras_dir = Path(executable).parent if executable else None
+        if hecras_dir is None:
+            raise ValueError("Supply hecras_dir or configure the native runtime")
+        return import_native_gdal(path, Path(hecras_dir), units=units,
+                                  data_type=data_type, timeout=timeout)
+
+    @staticmethod
+    @log_call
+    def configure_gridded_gdal_precipitation(
+        unsteady_file: Union[str, Path],
+        raster_filename: Union[str, Path],
+        dataset_name: str,
+        interpolation: str = "Bilinear",
+        ras_object: Optional[Any] = None,
+        ratio: Optional[float] = None,
+        historic: bool = False,
+    ) -> None:
+        """Configure vendor GDAL input without importing precipitation values.
+
+        Writes .u## source records and matching .u##.hdf attributes. Call
+        import_gridded_gdal_precipitation() next; source configuration alone
+        does not materialize the imported raster payload. This method performs
+        no raster decoding, unit conversion or HEC-RAS execution.
+
+        Args:
+            unsteady_file: Existing unsteady-flow path or project number.
+            raster_filename: Existing NetCDF (.nc, .nc4, .netcdf) or GRIB
+                (.grb, .grib, .grb2, .grib2). Relative paths use the unsteady
+                folder. Stage the source there for portable Windows/Wine paths.
+                Configuration accepts GRIB, but native import is NetCDF only.
+            dataset_name: Explicit vendor GDAL dataset/group selector.
+            interpolation: "Bilinear", "Nearest", or empty for vendor default.
+            ras_object: Optional project for unsteady-flow number resolution.
+            ratio: Explicit positive multiplier. Conflicting retained non-unit
+                ratios are rejected.
+            historic: Write ratio=1.0 for observed/analysis rainfall.
+
+        Returns:
+            None. Updates source configuration in place. Source metadata must
+            supply vendor-readable units, timestamps, CRS and temporal semantics.
+
+        Raises:
+            ValueError: Unsupported suffix/release, blank selector, conflicting
+                legacy rainfall or cached precipitation in the sidecar. Use a
+                clean staged copy so cached values cannot mask a failed import.
+            FileNotFoundError: The source raster does not exist.
+
+        After import, preprocess a fresh stage, inspect materialized forcing and
+        verify final cell rainfall and hydraulics. Do not reuse old plan outputs
+        as native-ingestion evidence.
+        """
+        import h5py
+
+        from .RasUtils import RasUtils
+
+        unsteady_path = RasUtils.safe_resolve(
+            RasUnsteady._resolve_unsteady_file_path(unsteady_file, ras_object)
+        )
+        source = Path(str(raster_filename).replace("\\", "/"))
+        if source.suffix.lower() not in {
+            ".nc", ".nc4", ".netcdf", ".grb", ".grib", ".grb2", ".grib2"
+        }:
+            raise ValueError("Vendor GDAL precipitation requires NetCDF or GRIB input")
+        source_path = source if source.is_absolute() else unsteady_path.parent / source
+        if not source_path.is_file():
+            raise FileNotFoundError(f"Precipitation raster not found: {source_path}")
+        dataset_name = str(dataset_name).strip() if dataset_name is not None else ""
+        if not dataset_name:
+            raise ValueError("dataset_name must be an explicit nonempty GDAL selector")
+        for value in (str(raster_filename), dataset_name):
+            if any(char in value for char in ("\r", "\n", "\x00")):
+                raise ValueError("GDAL source fields must be single-line values")
+        source_text = RasUnsteady._format_met_dss_filename(source_path, unsteady_path)
+        interpolation = RasUnsteady._normalize_gridded_interpolation(interpolation)
+        effective_ratio = RasUnsteady._effective_precipitation_ratio(ratio, historic=historic)
+        RasUnsteady._preflight_legacy_precipitation_boundaries(unsteady_path)
+        capabilities = RasUnsteady._gridded_precipitation_capabilities(
+            unsteady_path, ras_object
+        )
+        RasUnsteady._preflight_precipitation_ratio(
+            unsteady_path, capabilities, effective_ratio
+        )
+
+        entries = [
+            ("Precipitation Mode", "Enable"),
+            ("Met BC=Precipitation|Mode", "Gridded"),
+            ("Met BC=Precipitation|Gridded Source", "GDAL Raster File(s)"),
+            ("Met BC=Precipitation|Gridded GDAL Filename", source_text),
+            ("Met BC=Precipitation|Gridded GDAL Group", dataset_name),
+        ]
+        if interpolation:
+            entries.append(("Met BC=Precipitation|Gridded Interpolation", interpolation))
+        with unsteady_path.open(encoding="utf-8", errors="replace", newline="") as source_file:
+            lines, _ = RasUnsteady._updated_met_precipitation_lines(
+                source_file.readlines(), entries
+            )
+        RasUnsteady._apply_precipitation_ratio_line(
+            lines, effective_ratio, unsteady_path, historic=historic
+        )
+
+        hdf_path = Path(str(unsteady_path) + ".hdf")
+        met_path = "Event Conditions/Meteorology"
+        precip_path = f"{met_path}/Precipitation"
+        # Never silently reuse or delete precipitation from an earlier import.
+        # Check before any write, including metadata changes.
+        if hdf_path.exists():
+            with h5py.File(hdf_path, "r") as hdf:
+                if precip_path in hdf and len(hdf[precip_path]):
+                    raise ValueError(
+                        "Existing precipitation datasets could mask native GDAL ingestion; "
+                        "use a separately staged clean unsteady sidecar"
+                    )
+        with h5py.File(hdf_path, "a") as hdf:
+            precip = hdf.require_group(precip_path)
+            # Retain unrelated metadata, remove stale source selectors.
+            for key in ("DSS Filename", "DSS Pathname", "GDAL Group"):
+                if key in precip.attrs:
+                    del precip.attrs[key]
+            for key, value in {
+                "Mode": "Gridded", "Source": "GDAL Raster File(s)",
+                "GDAL Filename": source_text, "GDAL Datasetname": dataset_name,
+                "GDAL Folder": "", "GDAL Filter": "",
+            }.items():
+                precip.attrs[key] = np.bytes_(value)
+            precip.attrs["Enabled"] = np.uint8(1)
+            if interpolation:
+                precip.attrs["Interpolation Method"] = np.bytes_(interpolation)
+            elif "Interpolation Method" in precip.attrs:
+                del precip.attrs["Interpolation Method"]
+            RasUnsteady._write_precipitation_ratio_attribute(
+                precip, effective_ratio, hdf_path, historic=historic
+            )
+            RasUnsteady._ensure_meteorology_attributes_dataset(hdf, met_path)
+        RasUnsteady._atomic_write_lines(unsteady_path, lines)
+        logger.info(
+            "Configured native GDAL precipitation in %s: %s, dataset=%s; "
+            "no raster values imported; call import_gridded_gdal_precipitation before preprocessing",
+            unsteady_path.name, source_text, dataset_name,
+        )
 
     @staticmethod
     @log_call

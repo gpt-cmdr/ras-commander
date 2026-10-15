@@ -129,7 +129,11 @@ class PrecipCapabilities:
     """Resolve and enforce HEC-RAS gridded-precipitation capabilities."""
 
     _QUALIFIED_WINDOWS = {"6.3", "6.3.1", "6.6", "7.0", "7.0.1"}
-    _QUALIFIED_WITH_WMIC = {"6.1", "6.2", "6.3", "6.3.1"}
+    _QUALIFIED_NATIVE_GDAL_WINDOWS = {
+        "6.0", "6.1", "6.2", "6.3", "6.3.1", "6.4", "6.4.1", "6.5", "6.6", "7.0", "7.0.1",
+    }
+    _QUALIFIED_NATIVE_GDAL_WINE = {"6.1", "6.2", "6.3", "6.3.1", "6.4", "6.4.1", "6.5", "6.6", "7.0", "7.0.1"}
+    _QUALIFIED_WITH_WMIC = {"6.0", "6.1", "6.2", "6.3", "6.3.1"}
 
     @staticmethod
     def _version_label(version: object) -> str:
@@ -205,8 +209,8 @@ class PrecipCapabilities:
         elif normalized == "6.5":
             dss_qualification = "inconclusive"
             notes.append(
-                "The available 6.5 host exits before precipitation preprocessing; "
-                "format support is documented but executable qualification is inconclusive."
+                "An earlier 6.5 DSS host profile failed at startup; later native-NetCDF "
+                "qualification passed in the owner context. DSS has not been requalified."
             )
         else:
             dss_qualification = "documented"
@@ -214,9 +218,9 @@ class PrecipCapabilities:
         netcdf_qualification: QualificationStatus = "documented"
         if prerelease:
             netcdf_qualification = "historical_beta"
-        elif normalized == "6.6":
+        elif normalized in PrecipCapabilities._QUALIFIED_NATIVE_GDAL_WINE:
             netcdf_qualification = "qualified_windows_and_wine"
-        elif normalized == "7.0":
+        elif normalized in PrecipCapabilities._QUALIFIED_NATIVE_GDAL_WINDOWS:
             netcdf_qualification = "qualified_windows"
 
         native_grib_qualification: QualificationStatus = (
@@ -234,6 +238,43 @@ class PrecipCapabilities:
         else:
             geotiff_qualification = "documented"
 
+        if normalized in PrecipCapabilities._QUALIFIED_NATIVE_GDAL_WINDOWS:
+            notes.append(
+                "Explicit native NetCDF import qualified on Windows for cumulative "
+                "depth and zero-baseline period-average hourly rates; matched compiled geometry "
+                "and one solver core were verified. GRIB and other semantics remain unqualified."
+            )
+
+        if normalized in PrecipCapabilities._QUALIFIED_NATIVE_GDAL_WINE and not prerelease:
+            notes.append(
+                "Native NetCDF cumulative/rate full qualification and the Python/HDF "
+                "cumulative control passed under Wine, including independent temporary "
+                "forcing, compiled-input and exact hydraulic parity checks."
+            )
+
+        if normalized == "6.0" and not prerelease:
+            notes.append(
+                "Wine 6.0 vendor cumulative/rate source imports passed, but full "
+                "qualification remains open: preprocessing stalled after explicit "
+                "owned TCU acceptance on both native and Python/HDF controls."
+            )
+
+        if normalized in {"7.0", "7.0.1"} and normalized in PrecipCapabilities._QUALIFIED_NATIVE_GDAL_WINE and not prerelease:
+            notes.append(
+                "The qualified Wine 7.x profile requires "
+                "RasCmdr.compute_plan(disable_omp_affinity=True), setting "
+                "KMP_AFFINITY=disabled only in the engine environment. "
+                "The default Wine profile failed on unimplemented NUMA/affinity calls."
+            )
+
+        if normalized == "6.4" and not prerelease:
+            notes.append(
+                "Native NetCDF fully qualified using the signed extracted runtime on "
+                "a temporary NTFS virtual disk backed by approved task storage. "
+                "Private UNC and mapped-network runtime attempts failed; runtime "
+                "location is part of the tested 6.4 environment."
+            )
+
         notes.append(
             "WPC QPF GRIB2 compression is not accepted natively through 7.0.1; "
             "translate it to DSS with HEC-Vortex or HEC-MetVue."
@@ -246,7 +287,12 @@ class PrecipCapabilities:
             ratio_applied=ratio_applied,
             period_average_timing=timing,
             native_dss_qualification=dss_qualification,
-            native_netcdf_qualification="historical_beta" if prerelease else "documented",
+            native_netcdf_qualification=(
+                "historical_beta" if prerelease else "qualified_windows_and_wine"
+                if normalized in PrecipCapabilities._QUALIFIED_NATIVE_GDAL_WINE else "qualified_windows"
+                if normalized in PrecipCapabilities._QUALIFIED_NATIVE_GDAL_WINDOWS
+                else "documented"
+            ),
             netcdf_hdf_qualification=netcdf_qualification,
             native_grib_qualification=native_grib_qualification,
             grib_translation_qualification=grib_translation_qualification,

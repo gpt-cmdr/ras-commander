@@ -1,8 +1,10 @@
 """Fail-closed classification for software-assent dialogs.
 
 This module intentionally contains no UI automation. Callers may terminate
-their own process tree when a matching dialog blocks execution, but must never
-click a control or otherwise automate assent.
+their own process tree when a matching dialog blocks execution. Compute and
+watchdogs never click legal controls. Separate RasTcu acceptance APIs
+require explicit operator assent and exact process ownership. Preprocessing
+can opt in explicitly; ordinary compute/watchdogs do not grant assent.
 """
 
 from typing import Optional
@@ -12,8 +14,9 @@ TCU_DIALOG_TITLE = "Terms and Conditions for Use (TCU)"
 TCU_BLOCKING_ERROR = (
     'HEC-RAS is blocked by the first-run "Terms and Conditions for Use (TCU)" '
     "dialog. Provision an already accepted, exact-version user state or have an "
-    "authorized user review the terms interactively; ras-commander will not "
-    "automate assent."
+    "authorized user review the terms interactively. Explicit operator assent can "
+    "be recorded with RasTcu.accept_gui_terms(operator_acceptance=True); compute "
+    "never accepts terms automatically."
 )
 
 _LEGAL_ASSENT_MARKERS = (

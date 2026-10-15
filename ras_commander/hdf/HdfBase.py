@@ -73,6 +73,50 @@ class HdfBase:
     """
 
     @staticmethod
+    @log_call
+    def fingerprint_model_inputs(
+        hdf_path: Union[str, Path],
+        *,
+        groups: Tuple[str, ...] = ("Geometry", "Plan Data"),
+        block_bytes: int = 1048576,
+    ) -> Dict[str, Any]:
+        """Fingerprint selected compiled model inputs after native writers exit.
+
+        Numeric hashes preserve exact values. Compound fields are hashed without
+        padding; string hashes preserve record boundaries. Attributes are retained
+        separately so callers can distinguish changed paths/timestamps from changed
+        hydraulic inputs. No equality tolerance or ignored attribute is implied.
+
+        Args:
+            hdf_path: Existing geometry, temporary or result HDF, as str or Path.
+            groups: Disjoint absolute or relative group paths to inspect.
+            block_bytes: Maximum fixed-width row block size, at least 1024 bytes.
+                Variable-length strings are read one block of records at a time;
+                their individual allocation size is controlled by HDF5.
+
+        Returns:
+            JSON-safe dataset hashes, shapes, dtypes, group/dataset attributes,
+            hard-link aliases and missing group paths. This receipt does not establish model equivalence.
+
+        Raises:
+            ValueError: Invalid limits, overlapping groups, non-hard links,
+                external/virtual datasets or a row exceeding the block limit.
+            OSError: The file cannot be read. Native writers must already be stopped.
+            RuntimeError: The file changes during inspection.
+            TypeError: Unsupported attributes or nested/object compound fields.
+        """
+        if isinstance(block_bytes, bool) or not isinstance(block_bytes, int) or block_bytes < 1024:
+            raise ValueError("block_bytes must be an integer of at least 1024")
+        if isinstance(groups, str) or not groups or any(not isinstance(g, str) or not g.strip('/') for g in groups):
+            raise ValueError("groups must contain nonempty HDF group paths")
+        normalized = ['/' + g.strip('/') for g in groups]
+        if any(a == b or b.startswith(a + '/') or a.startswith(b + '/')
+               for index, a in enumerate(normalized) for b in normalized[index + 1:]):
+            raise ValueError("groups must be distinct and must not overlap")
+        from ._fingerprint import fingerprint_model_inputs
+        return fingerprint_model_inputs(Path(hdf_path), normalized, block_bytes)
+
+    @staticmethod
     def get_simulation_start_time(hdf_file: h5py.File) -> datetime:
         """
         Extract the simulation start time from the HDF file.

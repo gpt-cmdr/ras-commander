@@ -800,6 +800,8 @@ class PreprocessResult:
             the temporary HDF fallback.
         timed_out: Whether preprocessing exceeded its bounded wait.
         error: Error message if preprocessing failed, None on success.
+        tcu_acceptance_receipts: Explicit operator-authorized TCU actions during
+            this preprocessing launch; empty when no action was attempted.
 
     Examples:
         # Simple usage (bool-compatible):
@@ -825,6 +827,7 @@ class PreprocessResult:
     full_result_copied: bool = False
     timed_out: bool = False
     error: Optional[str] = None
+    tcu_acceptance_receipts: List[Dict[str, Any]] = field(default_factory=list)
 
     def __bool__(self) -> bool:
         return self.success

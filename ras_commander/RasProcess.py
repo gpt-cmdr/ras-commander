@@ -1499,7 +1499,12 @@ Step 5: Configure (optional — auto-detection usually works)
         working_dir: Path,
         semantic_stable_seconds: float,
     ) -> Tuple[subprocess.CompletedProcess, str, Dict[str, Any]]:
-        """Run CompleteGeometry until exit or stable semantic HDF completion."""
+        """Wait for exit, or witnessed completion plus fresh stable geometry.
+
+        Existing tables and a pause between processing stages cannot establish
+        completion. The Wine fallback also requires this invocation's terminal
+        geometry message and a changed file signature.
+        """
         if IS_LINUX:
             wine_config = RasProcess._get_wine_config()
             if wine_config is None:
@@ -1521,10 +1526,16 @@ Step 5: Configure (optional — auto-detection usually works)
         if semantic_stable_seconds < 0:
             raise ValueError("semantic_stable_seconds must be non-negative")
 
-        with tempfile.TemporaryFile(
-            mode="w+", encoding="utf-8", errors="replace"
-        ) as stdout_file, tempfile.TemporaryFile(
-            mode="w+", encoding="utf-8", errors="replace"
+        try:
+            before = geom_hdf_path.stat()
+            initial_signature = (before.st_size, before.st_mtime_ns)
+        except OSError:
+            initial_signature = None
+
+        with tempfile.TemporaryDirectory(prefix="ras-geometry-") as log_directory, open(
+            Path(log_directory) / "stdout.log", "w+", encoding="utf-8", errors="replace"
+        ) as stdout_file, open(
+            Path(log_directory) / "stderr.log", "w+", encoding="utf-8", errors="replace"
         ) as stderr_file:
             process = subprocess.Popen(
                 command,
@@ -1549,13 +1560,21 @@ Step 5: Configure (optional — auto-detection usually works)
                 semantics = RasProcess._geometry_completion_semantics(
                     geom_hdf_path
                 )
-                if semantics["success"]:
-                    try:
-                        stat = geom_hdf_path.stat()
-                        signature = (stat.st_size, stat.st_mtime_ns)
-                    except OSError:
-                        signature = None
-                    if signature is not None and signature == ready_signature:
+                # Reopen independently: seeking the handle shared with the
+                # writer would change its output offset and corrupt its log.
+                with (Path(log_directory) / "stdout.log").open("rb") as reader:
+                    reader.seek(0, os.SEEK_END)
+                    reader.seek(max(0, reader.tell() - 65536))
+                    tail = reader.read().decode("utf-8", errors="replace")
+                terminal_message = tail.rstrip().endswith("Completed Writing Geometry")
+                try:
+                    stat = geom_hdf_path.stat()
+                    signature = (stat.st_size, stat.st_mtime_ns)
+                except OSError:
+                    signature = None
+                fresh_geometry = signature is not None and signature != initial_signature
+                if semantics["success"] and terminal_message and fresh_geometry:
+                    if signature == ready_signature:
                         ready_since = ready_since or time.monotonic()
                     else:
                         ready_signature = signature
@@ -1799,9 +1818,10 @@ Step 5: Configure (optional — auto-detection usually works)
             Command timeout in seconds (default 1800).
         semantic_stable_seconds : float, optional
             Under Wine, terminate only the owned ``RasProcess.exe`` tree after
-            the completed HDF semantics and file size/mtime remain stable for
-            this many seconds (default 10). Native Windows continues to wait
-            for normal process exit.
+            this invocation reports ``Completed Writing Geometry``, changes the
+            geometry file, and leaves valid HDF semantics and size/mtime stable
+            for this many seconds (default 10). Preexisting tables cannot trigger
+            this fallback. Native Windows waits for normal process exit.
 
         Returns
         -------

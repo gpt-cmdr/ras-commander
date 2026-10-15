@@ -564,3 +564,27 @@ def test_non_hourly_rate_metadata_requires_explicit_conversion(tmp_path):
             value_type="rate",
             first_timestep_hours=1.0,
         )
+
+
+def test_midnight_cache_keeps_explicit_vendor_compatible_cf_time_units(tmp_path):
+    import xarray as xr
+
+    frames = np.ones((3, 2, 2))
+    frames[0] = 0.0
+    source = _write_tiff(tmp_path / "midnight.tif", frames, units="mm")
+    times = pd.date_range("2040-01-01", periods=3, freq="30min")
+    cube = RasPrecipGrid.from_geotiff(
+        source, timestamps=times, units="mm", value_type="amount")
+    path = RasPrecipGrid.to_ras_netcdf(cube, tmp_path / "midnight.nc").path
+    with xr.open_dataset(path, decode_times=False) as raw:
+        assert raw.time.attrs["units"] == "seconds since 2040-01-01 00:00:00"
+    with xr.open_dataset(path) as decoded:
+        np.testing.assert_array_equal(decoded.time.values.astype("datetime64[ns]"), times.values)
+    assert RasPrecipGrid._valid_cached_netcdf(path, cube)
+    with h5py.File(path, "a") as hdf:
+        hdf["time"].attrs["units"] = np.bytes_("seconds since 2040-01-01")
+    assert not RasPrecipGrid._valid_cached_netcdf(path, cube)
+    rebuilt = RasPrecipGrid.to_ras_netcdf(cube, path)
+    assert rebuilt.reused is False
+    with xr.open_dataset(path, decode_times=False) as raw:
+        assert raw.time.attrs["units"] == "seconds since 2040-01-01 00:00:00"

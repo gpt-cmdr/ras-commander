@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "as_of": "2026-09-26",
+  "as_of": "2026-10-15",
   "scope": "HEC-RAS global gridded meteorological precipitation",
   "status_vocabulary": [
     "Supported and qualified",
@@ -20,7 +20,10 @@
       "end": "2018-09-09T19:20:00"
     },
     "materialized_input": {
-      "shape": [3, 268830],
+      "shape": [
+        3,
+        268830
+      ],
       "maximum": 3.617718458175659,
       "nonzero": 230735
     },
@@ -36,10 +39,15 @@
     "route": "GeoTIFF -> cached NetCDF plus native HDF -> preprocessing -> compute",
     "executable_sha256": "a34e56a172ba06cde2d546f4d7282801c2b67040969d4ed23b41dfc755772134",
     "final_hdf_sha256": "e6edf6998766620bdd92c39ca6bd33280c96a0b422925f6c6f48a5a26c7c8047",
-    "solver_rainfall_shape": [4, 408],
+    "solver_rainfall_shape": [
+      4,
+      408
+    ],
     "solver_rainfall_timestamps": [
-      "09Aug2024 10:00:00.000", "09Aug2024 11:00:00.000",
-      "09Aug2024 12:00:00.000", "09Aug2024 13:00:00.000"
+      "09Aug2024 10:00:00.000",
+      "09Aug2024 11:00:00.000",
+      "09Aug2024 12:00:00.000",
+      "09Aug2024 13:00:00.000"
     ],
     "solver_interval_maximum_inches": 0.0393701009452343,
     "cumulative_precipitation_maximum_inches": 0.11574575304985046,
@@ -53,7 +61,10 @@
     "platform": "Windows",
     "route": "GeoTIFF -> cached NetCDF plus native HDF -> preprocessing -> compute",
     "final_hdf_sha256": "38860520816db4dc06c4837221fc6732b246c52e4d4996e7b5c7fea5f3cd8bfd",
-    "solver_rainfall_shape": [4, 408],
+    "solver_rainfall_shape": [
+      4,
+      408
+    ],
     "cumulative_precipitation_maximum_inches": 0.11574575304985046,
     "final_cumulative_nonzero_cells": 18066,
     "hydraulic_depth_maximum_feet": 9.718265533447266,
@@ -64,7 +75,7 @@
   },
   "wine_geotiff_qualification": {
     "status": "executed",
-    "platform": "CLB07 CT212 / Wine 11",
+    "platform": "Linux / Wine 11",
     "hec_ras_version": "6.6",
     "project": "RasExamples 6.6 BaldEagleCrkMulti2D",
     "route": "GeoTIFF sequence -> cached NetCDF plus native unsteady HDF -> RasPreprocess -> RasCmdr",
@@ -77,7 +88,10 @@
       "after": "accepted"
     },
     "temporary_hdf": {
-      "shape": [4, 408],
+      "shape": [
+        4,
+        408
+      ],
       "timestamps": [
         "09Aug2024 10:00:00.000",
         "09Aug2024 11:00:00.000",
@@ -85,10 +99,26 @@
         "09Aug2024 13:00:00.000"
       ],
       "intervals": [
-        {"minimum": 0.0, "maximum": 0.0, "nonzero": 0},
-        {"minimum": 0.01968505047261715, "maximum": 0.0393701009452343, "nonzero": 408},
-        {"minimum": 0.009842525236308575, "maximum": 0.0393701009452343, "nonzero": 408},
-        {"minimum": 0.003937006462365389, "maximum": 0.0393701009452343, "nonzero": 408}
+        {
+          "minimum": 0.0,
+          "maximum": 0.0,
+          "nonzero": 0
+        },
+        {
+          "minimum": 0.01968505047261715,
+          "maximum": 0.0393701009452343,
+          "nonzero": 408
+        },
+        {
+          "minimum": 0.009842525236308575,
+          "maximum": 0.0393701009452343,
+          "nonzero": 408
+        },
+        {
+          "minimum": 0.003937006462365389,
+          "maximum": 0.0393701009452343,
+          "nonzero": 408
+        }
       ]
     },
     "messages": [
@@ -119,7 +149,7 @@
   },
   "wine_dss_qualification": {
     "status": "executed",
-    "platform": "CLB07 CT212 / Wine 11",
+    "platform": "Linux / Wine 11",
     "hec_ras_version": "6.6",
     "project": "Clean RasExamples 6.6 BaldEagleCrkMulti2D",
     "route": "native HEC-DSS gridded precipitation",
@@ -135,7 +165,10 @@
       "success": true,
       "elapsed_seconds": 13.2879,
       "temporary_hdf_exists": true,
-      "shape": [3, 268830]
+      "shape": [
+        3,
+        268830
+      ]
     },
     "final": {
       "completion_verified": true,
@@ -188,8 +221,8 @@
       "format": "GDAL NetCDF",
       "first_documented_release": "6.0",
       "vendor_route": "native",
-      "qualification": "Official documentation and schema evidence only in this matrix branch",
-      "notes": "This entry describes vendor GDAL ingestion. The separate ras-commander native-HDF route has MRMS NetCDF evidence on Windows 7.0 and Windows/Wine 6.6. Native GDAL still needs its deterministic semantic matrix; do not transfer native-HDF evidence to that route."
+      "qualification": "Native Windows full cumulative/rate qualification passed on all eleven stable releases6.0 through7.0.1; Wine source checks passed on all eleven; strict full Wine matrix remains incomplete.",
+      "notes": "Configuration alone does not import raster values. Call configure_gridded_gdal_precipitation then import_gridded_gdal_precipitation. See native_gdal_investigation for exact release evidence and limits."
     },
     {
       "format": "GDAL GRIB/GRIB2",
@@ -209,7 +242,7 @@
       "format": "GeoTIFF precipitation time series",
       "first_documented_release": null,
       "vendor_route": "ras-commander translation to NetCDF plus native HDF materialization",
-      "qualification": "Supported with translation; qualified on Windows and CLB07/Wine 11 with HEC-RAS 6.6",
+      "qualification": "Supported with translation; qualified on Windows and Linux/Wine 11 with HEC-RAS 6.6",
       "notes": "Explicit timestamps, units, temporal semantics, CRS, affine grid, and NoData policy are validated before a content-addressed HEC-compatible NetCDF and equivalent HDF payload are written. Windows and Wine qualifications verified temporary-HDF rainfall, completed compute, and positive final per-cell rainfall and hydraulics. HEC-RAS documentation examined for 6.0-7.0.1 limits native GDAL meteorological precipitation to NetCDF or GRIB; direct vendor GeoTIFF ingestion and cross-version support are not claimed."
     },
     {
@@ -226,7 +259,11 @@
       "release_date": "2016-03-04",
       "stable": true,
       "status": "Unsupported",
-      "evidence": ["official release documentation", "official 5.x examples", "5.0.7 schema-string comparison"],
+      "evidence": [
+        "official release documentation",
+        "official 5.x examples",
+        "5.0.7 schema-string comparison"
+      ],
       "windows_executable_sha256": "f1913cfee5655c59ad63bae1ae9545ed1063fa5408ce84bde1a56566d7c99aea",
       "execution": "Not applicable: global gridded meteorology is absent; older uniform-per-area precipitation remains distinct."
     },
@@ -235,7 +272,11 @@
       "release_date": "2016-04",
       "stable": true,
       "status": "Unsupported",
-      "evidence": ["official release documentation", "official 5.x examples", "5.0.7 schema-string comparison"],
+      "evidence": [
+        "official release documentation",
+        "official 5.x examples",
+        "5.0.7 schema-string comparison"
+      ],
       "windows_executable_sha256": "3ecf4d03f6054d085745ffc2ed673292f462a5b82c2e99f6fb58092a083724e6",
       "execution": "Not applicable: global gridded meteorology is absent."
     },
@@ -244,7 +285,9 @@
       "release_date": "2016-08",
       "stable": false,
       "status": "Unsupported",
-      "evidence": ["official withdrawn-release notice"],
+      "evidence": [
+        "official withdrawn-release notice"
+      ],
       "windows_executable_sha256": null,
       "execution": "Not installed and not sourced from an unofficial mirror; HEC withdrew this release for a critical simplified-breach defect."
     },
@@ -253,7 +296,11 @@
       "release_date": "2016-09",
       "stable": true,
       "status": "Unsupported",
-      "evidence": ["official release documentation", "official 5.x examples", "5.0.7 schema-string comparison"],
+      "evidence": [
+        "official release documentation",
+        "official 5.x examples",
+        "5.0.7 schema-string comparison"
+      ],
       "windows_executable_sha256": "794e3dc4c9f2b2820b6056ee2aa6c2bf7712b8879f4b13163bf4c44156e68b37",
       "execution": "Not applicable: global gridded meteorology is absent."
     },
@@ -262,7 +309,11 @@
       "release_date": "2018-03",
       "stable": true,
       "status": "Unsupported",
-      "evidence": ["official release documentation", "official 5.x examples", "5.0.7 schema-string comparison"],
+      "evidence": [
+        "official release documentation",
+        "official 5.x examples",
+        "5.0.7 schema-string comparison"
+      ],
       "windows_executable_sha256": "4b260e8a010d6d7eaa4cfa74b998603136d6d692bec29838c91313fd8e711d5b",
       "execution": "Not applicable: global gridded meteorology is absent."
     },
@@ -271,7 +322,11 @@
       "release_date": "2018-06",
       "stable": true,
       "status": "Unsupported",
-      "evidence": ["official release documentation", "official 5.x examples", "5.0.7 schema-string comparison"],
+      "evidence": [
+        "official release documentation",
+        "official 5.x examples",
+        "5.0.7 schema-string comparison"
+      ],
       "windows_executable_sha256": "eb973b70aa718e1f48bac2e4dc3c2ffc5b4409ace19b2ca747e4e2b5b7e9cc86",
       "execution": "Not applicable: global gridded meteorology is absent."
     },
@@ -280,7 +335,11 @@
       "release_date": "2018-11",
       "stable": true,
       "status": "Unsupported",
-      "evidence": ["official release documentation", "official 5.x examples", "5.0.7 schema-string comparison"],
+      "evidence": [
+        "official release documentation",
+        "official 5.x examples",
+        "5.0.7 schema-string comparison"
+      ],
       "windows_executable_sha256": "0af2521be71574c893c606f9fb4229df91e2464ebf6c04507957b80e0be1766f",
       "execution": "Not applicable: global gridded meteorology is absent."
     },
@@ -289,7 +348,11 @@
       "release_date": "2019-03",
       "stable": true,
       "status": "Unsupported",
-      "evidence": ["official release documentation", "official 5.0.7 examples", "focused RasMapperLib schema-string inspection"],
+      "evidence": [
+        "official release documentation",
+        "official 5.0.7 examples",
+        "focused RasMapperLib schema-string inspection"
+      ],
       "windows_executable_sha256": "940dbdc1869e8672402821a0df091d905406b9b0ff7f44d521a8681ca917e88e",
       "execution": "No global gridded-meteorology grammar was found in official examples or matching schema strings."
     },
@@ -298,66 +361,102 @@
       "release_date": "2021-05-28",
       "stable": true,
       "status": "Not yet tested",
-      "evidence": ["official new-features documentation", "official Bald Eagle DSS fixture", "6.0 schema strings", "native Windows RasTcu public-API and runtime-dialog evidence"],
+      "evidence": [
+        "official new-features documentation",
+        "official Bald Eagle DSS fixture",
+        "6.0 schema strings",
+        "native Windows RasTcu public-API and runtime-dialog evidence"
+      ],
       "windows_executable_sha256": "2126b0307f7b77e1885f7a0dba4ddd590d0c08d1ac63e425c8a7b7fed54e7473",
       "preprocess": "RasTcu.accept() and status() both report exact-runtime acceptance with no GUI interaction, but launching the same executable still raises the actual Terms and Conditions dialog before preprocessing.",
       "solver": "Not run.",
-      "limitations": ["ras-commander TCU API-registry/runtime disagreement on this host", "precipitation ratio defect later fixed in 6.2", "period-average interpolation timing defect later corrected in 6.4"]
+      "limitations": [
+        "ras-commander TCU API-registry/runtime disagreement on this host",
+        "precipitation ratio defect later fixed in 6.2",
+        "period-average interpolation timing defect later corrected in 6.4"
+      ]
     },
     {
       "version": "6.1",
       "release_date": "2021-09-21",
       "stable": true,
       "status": "Supported with documented limitation",
-      "evidence": ["native Windows public-API execution", "official release documentation"],
+      "evidence": [
+        "native Windows public-API execution",
+        "official release documentation"
+      ],
       "windows_executable_sha256": "58423df21f7115340a9d41f5d93039a786c91f0ffc944f7b23c77846bcc9e330",
       "qualification_wmic_shim": "process_local_cim",
       "preprocess": "DSS precipitation materialized as 3 x 268830 values; messages report precipitation processing finished.",
       "solver": "Unmodified run aborts because Windows no longer supplies WMIC. A qualification-only process-local CIM shim produces a verified solve, final cumulative maximum 0.1145427823, 126462 nonzero cumulative values across 8 output times, and nonzero WSE.",
-      "limitations": ["host compatibility shim required on this Windows host", "precipitation ratio defect later fixed in 6.2", "period-average interpolation timing defect later corrected in 6.4"]
+      "limitations": [
+        "host compatibility shim required on this Windows host",
+        "precipitation ratio defect later fixed in 6.2",
+        "period-average interpolation timing defect later corrected in 6.4"
+      ]
     },
     {
       "version": "6.2",
       "release_date": "2022-03-11",
       "stable": true,
       "status": "Supported with documented limitation",
-      "evidence": ["native Windows public-API execution", "official release documentation"],
+      "evidence": [
+        "native Windows public-API execution",
+        "official release documentation"
+      ],
       "windows_executable_sha256": "826082cb45384ec6c05150eb71a8ab26bb5183a8e2603f717cf8ee9832e7a92e",
       "qualification_wmic_shim": "process_local_cim",
       "preprocess": "DSS precipitation materialized as 3 x 268830 values; messages report precipitation processing finished.",
       "solver": "Unmodified run aborts because Windows no longer supplies WMIC. A qualification-only process-local CIM shim produces a verified solve, final cumulative maximum 0.1145427823, 144528 nonzero cumulative values across 9 output times, and nonzero WSE.",
-      "limitations": ["host compatibility shim required on this Windows host", "period-average interpolation timing defect later corrected in 6.4"]
+      "limitations": [
+        "host compatibility shim required on this Windows host",
+        "period-average interpolation timing defect later corrected in 6.4"
+      ]
     },
     {
       "version": "6.3",
       "release_date": "2022-08-25",
       "stable": true,
       "status": "Supported with documented limitation",
-      "evidence": ["native Windows public-API execution", "official release documentation"],
+      "evidence": [
+        "native Windows public-API execution",
+        "official release documentation"
+      ],
       "windows_executable_sha256": "3a8f683961dcad82cfb15bbb68ec3df62c6510711dd89c37e3e09f52c9d8b860",
       "qualification_wmic_shim": "available_process_local_cim_not_needed_in_this_matrix_run",
       "preprocess": "DSS precipitation materialized as 3 x 268830 values; messages report precipitation processing finished.",
       "solver": "Verified solve with final cumulative maximum 0.1145427823, 144528 nonzero cumulative values, and nonzero WSE.",
-      "limitations": ["exact-release process-local WMIC fallback retained from earlier host evidence", "6.3's advertised period-average fix was incomplete; use 6.4 or later for that input semantic"]
+      "limitations": [
+        "exact-release process-local WMIC fallback retained from earlier host evidence",
+        "6.3's advertised period-average fix was incomplete; use 6.4 or later for that input semantic"
+      ]
     },
     {
       "version": "6.3.1",
       "release_date": "2022-09-30",
       "stable": true,
       "status": "Supported with documented limitation",
-      "evidence": ["native Windows public-API execution", "official release documentation"],
+      "evidence": [
+        "native Windows public-API execution",
+        "official release documentation"
+      ],
       "windows_executable_sha256": "7b40237b2ef0a90a32b673affe7f5de7114410527d17e755d0c62a44e2c39a9e",
       "qualification_wmic_shim": "available_process_local_cim_not_needed_in_this_matrix_run",
       "preprocess": "DSS precipitation materialized as 3 x 268830 values; messages report precipitation processing finished.",
       "solver": "Verified solve with final cumulative maximum 0.1145427823, 144528 nonzero cumulative values, and nonzero WSE.",
-      "limitations": ["exact-release process-local WMIC fallback retained from earlier host evidence", "period-average inputs can produce a result shifted one period later; corrected in 6.4"]
+      "limitations": [
+        "exact-release process-local WMIC fallback retained from earlier host evidence",
+        "period-average inputs can produce a result shifted one period later; corrected in 6.4"
+      ]
     },
     {
       "version": "6.4",
       "release_date": "2023-06-05",
       "stable": true,
       "status": "Not yet tested",
-      "evidence": ["official release and resolved-issues documentation"],
+      "evidence": [
+        "official release and resolved-issues documentation"
+      ],
       "windows_executable_sha256": null,
       "execution": "No local runtime; the current official archive offers superseding 6.4.1. No unofficial installer was used.",
       "limitations": []
@@ -367,38 +466,58 @@
       "release_date": "2023-06-22",
       "stable": true,
       "status": "Not yet tested",
-      "evidence": ["official documentation", "CLB07 runtime inventory", "public RasTcu API evidence", "read-only Wine dialog inspection"],
+      "evidence": [
+        "official documentation",
+        "Wine runtime inventory",
+        "public RasTcu API evidence",
+        "read-only Wine dialog inspection"
+      ],
       "windows_executable_sha256": null,
       "wine_executable_sha256": "0fd3bcef58db429bc2faa0c926d5da4ca64918d398ce9db349f138aee1d533f6",
       "preprocess": "Native registered prefix: RasTcu.accept() returns no-donor-available. Mixed accepted prefix: 6.4.1 opens 'RasMapper Component did not load' / 'ActiveX component can't create object' before preprocessing.",
       "solver": "Not run.",
-      "limitations": ["exact-profile TCU provisioning blocker", "mixed-profile COM registration blocker; no precipitation inference"]
+      "limitations": [
+        "exact-profile TCU provisioning blocker",
+        "mixed-profile COM registration blocker; no precipitation inference"
+      ]
     },
     {
       "version": "6.5",
       "release_date": "2024-02-02",
       "stable": true,
       "status": "Not yet tested",
-      "evidence": ["native Windows public-API attempt", "read-only Win32 dialog inspection", "official documentation"],
+      "evidence": [
+        "native Windows public-API attempt",
+        "read-only Win32 dialog inspection",
+        "official documentation"
+      ],
       "windows_executable_sha256": "b23bd359f47e2a869a5b931a98b461c43978d86c6250894e88a09b21f8aae99d",
       "preprocess": "The exact 6.5 Ras.exe opens an HEC/VB dialog titled 'Error' with body 'Unexpected error; quitting' before a fresh plan result is materialized, including from a clean short-path project.",
       "solver": "Not reached.",
-      "limitations": ["confirmed startup/install/runtime failure on this host; do not classify as a precipitation defect"]
+      "limitations": [
+        "confirmed startup/install/runtime failure on this host; do not classify as a precipitation defect"
+      ]
     },
     {
       "version": "6.6",
       "release_date": "2024-09-30",
       "stable": true,
       "status": "Supported and qualified",
-      "evidence": ["native Windows DSS public-API execution", "CLB07/Wine 11 translated-GeoTIFF public-API execution", "official documentation"],
+      "evidence": [
+        "native Windows DSS public-API execution",
+        "Linux/Wine 11 translated-GeoTIFF public-API execution",
+        "official documentation"
+      ],
       "windows_executable_sha256": "a34e56a172ba06cde2d546f4d7282801c2b67040969d4ed23b41dfc755772134",
       "preprocess": "DSS precipitation materialized as 3 x 268830 values; messages report precipitation processing finished.",
       "solver": "Verified solve with final cumulative maximum 0.1145427823, 144528 nonzero cumulative values, and nonzero WSE.",
       "wine": "Translated GeoTIFF feature snapshot qualified end to end: exact 4 x 408 interval values; final cumulative maximum 0.1157457530 inches over 18066 cells; final hydraulic depth maximum 9.7182655334 feet over 7576 cells.",
-      "wine_dss": "Qualified on CLB07/Wine 11: removing WINEDLLOVERRIDES='mscoree,mshtml=' resolved the prior timeout. Preprocessing 13.2879 seconds, 3 x 268830 values, verified compute; final cumulative max 0.11454278230667114 inches, 144528 nonzero entries, WSE max 923.1984252929688 feet, exactly matching Windows 6.6 metrics.",
+      "wine_dss": "Qualified on Linux/Wine 11: removing WINEDLLOVERRIDES='mscoree,mshtml=' resolved the prior timeout. Preprocessing 13.2879 seconds, 3 x 268830 values, verified compute; final cumulative max 0.11454278230667114 inches, 144528 nonzero entries, WSE max 923.1984252929688 feet, exactly matching Windows 6.6 metrics.",
       "wine_dss_final_hdf_sha256": "6f8aa85125809c10393e47ed7c2f412203a2121db4e0b116493ca7ea7516e106",
       "wine_dss_control": "Short-path and isolated-profile controls retaining the combined disabling override both timed out at 120 seconds. The successful run isolated the combined override, not its individual DLL entries.",
-      "limitations": ["WPC QPF GRIB2 requires DSS translation"]
+      "limitations": [
+        "WPC QPF GRIB2 requires DSS translation"
+      ]
     },
     {
       "version": "6.7 Beta 5",
@@ -406,33 +525,1042 @@
       "stable": false,
       "status": "Supported and qualified",
       "support_claim": false,
-      "evidence": ["native Windows public-API execution", "historical prerelease runtime"],
+      "evidence": [
+        "native Windows public-API execution",
+        "historical prerelease runtime"
+      ],
       "windows_executable_sha256": "80e708b51e68f342359817b1dc54559da0f8b57021a0b42cf9f64b61c32b6524",
       "preprocess": "DSS precipitation materialized as 3 x 268830 values; messages report precipitation processing finished.",
       "solver": "Verified historical solve with final cumulative maximum 0.1145427823, 144528 nonzero cumulative values, and nonzero WSE.",
-      "limitations": ["prerelease evidence only; use stable 7.0/7.0.1 for support decisions"]
+      "limitations": [
+        "prerelease evidence only; use stable 7.0/7.0.1 for support decisions"
+      ]
     },
     {
       "version": "7.0",
       "release_date": "2026-04-17",
       "stable": true,
       "status": "Supported and qualified",
-      "evidence": ["native Windows public-API execution", "official documentation"],
+      "evidence": [
+        "native Windows public-API execution",
+        "official documentation"
+      ],
       "windows_executable_sha256": "9990c10531221469bf51a9a62ae91f36ec01e651bed83aadf632e678130ae797",
       "preprocess": "DSS precipitation materialized as 3 x 268830 values; messages report precipitation processing finished.",
       "solver": "Verified solve with final cumulative maximum 0.1145427823, 144528 nonzero cumulative values, and nonzero WSE.",
-      "limitations": ["WPC QPF GRIB2 requires DSS translation"]
+      "limitations": [
+        "WPC QPF GRIB2 requires DSS translation"
+      ]
     },
     {
       "version": "7.0.1",
       "release_date": "2026-06-02",
       "stable": true,
       "status": "Supported and qualified",
-      "evidence": ["native Windows public-API execution", "official documentation"],
+      "evidence": [
+        "native Windows public-API execution",
+        "official documentation"
+      ],
       "windows_executable_sha256": "ce2ca395c68c4ee17387376ea3a7152c24db483488dced4eb96a59e85fd72985",
       "preprocess": "DSS precipitation materialized as 3 x 268830 values; messages report precipitation processing finished.",
       "solver": "Verified solve with final cumulative maximum 0.1145427823, 144528 nonzero cumulative values, and nonzero WSE.",
-      "limitations": ["WPC QPF GRIB2 requires DSS translation"]
+      "limitations": [
+        "WPC QPF GRIB2 requires DSS translation"
+      ]
     }
-  ]
+  ],
+  "native_gdal_investigation": {
+    "date": "2026-10-15",
+    "versions": [
+      "6.0",
+      "6.1",
+      "6.2",
+      "6.3",
+      "6.3.1",
+      "6.4",
+      "6.4.1",
+      "6.5",
+      "6.6",
+      "7.0",
+      "7.0.1"
+    ],
+    "configuration_only": "Does not import payload; explicit vendor import required before preprocessing.",
+    "windows_sources": {
+      "stable_releases": 11,
+      "historical_betas": 2,
+      "positive_cases_per_runtime": 4,
+      "negative_unchanged_cases_per_runtime": 9,
+      "cache_midnight_2040_pass": [
+        "6.6",
+        "7.0.1"
+      ]
+    },
+    "semantics_supported": [
+      "cumulative depth",
+      "interval-ending period-average hourly rate with zero baseline"
+    ],
+    "semantics_rejected": [
+      "per-cum",
+      "inst-val",
+      "GRIB",
+      "nonzero first rate duration",
+      "non-Gregorian calendars",
+      "subsecond timestamps"
+    ],
+    "protocol": {
+      "name": "native-gdal-v2-model-inputs",
+      "project": "Official Bald Eagle Dam Break example, plan06",
+      "solver_cores": 1,
+      "routes": [
+        "configuration-only negative",
+        "Python/HDF control",
+        "vendor cumulative",
+        "vendor zero-baseline period-average rate"
+      ],
+      "checks_per_positive_route": 13,
+      "comparison": "Exact imported, independently preprocessed and final precipitation, water surface and hydraulic depth arrays; exact compiled geometry with named audit exclusions and sorted exact region/cell mappings preserving duplicates.",
+      "input_inspection": "Earlier matrices: retrospective public-API reads of retained quiescent final HDFs. Latest Wine7.0: direct thirteen-gate execution, rechecked with the final assessor. Original reports are immutable.",
+      "excluded_audit_attributes": [
+        "Data Date",
+        "Property Tables Last Computed",
+        "Terrain File Date",
+        "Land Cover File Date",
+        "Land Cover Date Last Modified",
+        "Infiltration File Date",
+        "Infiltration Date Last Modified",
+        "Percent Impervious File Date",
+        "Percent Impervious Date Last Modified",
+        "Sediment Bed Material File Date"
+      ],
+      "excluded_audit_datasets": {
+        "/Geometry/Compute Processes": "Only the recognized eight-field execution-history schema; unknown schemas remain compared."
+      }
+    },
+    "runtime_profile": {
+      "wine": "11.0",
+      "dotnet_framework": "4.8",
+      "windows_python": "3.11.9, 64-bit",
+      "wine_7x_engine_environment": {
+        "KMP_AFFINITY": "disabled"
+      },
+      "windows_64_runtime_location": "Signed extracted runtime on temporary local NTFS volume; network-runtime attempts failed."
+    },
+    "wine_sources": {
+      "passed_versions": [
+        "6.0",
+        "6.1",
+        "6.2",
+        "6.3",
+        "6.3.1",
+        "6.4",
+        "6.4.1",
+        "6.5",
+        "6.6",
+        "7.0",
+        "7.0.1"
+      ]
+    },
+    "windows_full": {
+      "6.0": {
+        "passed": true,
+        "runtime_sha256": "2126b0307f7b77e1885f7a0dba4ddd590d0c08d1ac63e425c8a7b7fed54e7473",
+        "cumulative_checks": {
+          "empty_control_fails": true,
+          "vendor_compute_verified": true,
+          "python_compute_verified": true,
+          "vendor_preprocess_verified": true,
+          "python_preprocess_verified": true,
+          "native_import_recorded": true,
+          "native_started_without_payload": true,
+          "after_import_exact_parity": true,
+          "temporary_exact_parity": true,
+          "final_exact_parity": true,
+          "positive_cell_rainfall": true,
+          "nonempty_hydraulics": true,
+          "compiled_geometry_exact_parity": true
+        },
+        "rate_checks": {
+          "empty_control_fails": true,
+          "vendor_compute_verified": true,
+          "python_compute_verified": true,
+          "vendor_preprocess_verified": true,
+          "python_preprocess_verified": true,
+          "native_import_recorded": true,
+          "native_started_without_payload": true,
+          "after_import_exact_parity": true,
+          "temporary_exact_parity": true,
+          "final_exact_parity": true,
+          "positive_cell_rainfall": true,
+          "nonempty_hydraulics": true,
+          "compiled_geometry_exact_parity": true
+        },
+        "original_report_sha256": "a2a6ed5ba860bd1e81d6d20abbc37904be5bb6d8a15225110888f408360874d9",
+        "model_input_receipt_sha256": "b69f4abc4aaf20bcbf92b3c1faecdd4b89cefb50920bdb903217f97c4c1622ac",
+        "report_sha256": "ffff225069b3b35a704f3933c5a8f5f779066b0c1f4147fed2d9c575f2d9eafe",
+        "original_protocol": "native-gdal-v1",
+        "retrospective_inputs": true,
+        "disable_omp_affinity": false,
+        "solver_cores": 1
+      },
+      "6.1": {
+        "passed": true,
+        "runtime_sha256": "58423df21f7115340a9d41f5d93039a786c91f0ffc944f7b23c77846bcc9e330",
+        "cumulative_checks": {
+          "empty_control_fails": true,
+          "vendor_compute_verified": true,
+          "python_compute_verified": true,
+          "vendor_preprocess_verified": true,
+          "python_preprocess_verified": true,
+          "native_import_recorded": true,
+          "native_started_without_payload": true,
+          "after_import_exact_parity": true,
+          "temporary_exact_parity": true,
+          "final_exact_parity": true,
+          "positive_cell_rainfall": true,
+          "nonempty_hydraulics": true,
+          "compiled_geometry_exact_parity": true
+        },
+        "rate_checks": {
+          "empty_control_fails": true,
+          "vendor_compute_verified": true,
+          "python_compute_verified": true,
+          "vendor_preprocess_verified": true,
+          "python_preprocess_verified": true,
+          "native_import_recorded": true,
+          "native_started_without_payload": true,
+          "after_import_exact_parity": true,
+          "temporary_exact_parity": true,
+          "final_exact_parity": true,
+          "positive_cell_rainfall": true,
+          "nonempty_hydraulics": true,
+          "compiled_geometry_exact_parity": true
+        },
+        "original_report_sha256": "5eb78ec90a48e2cf3dc8c034e4345c35687776b3e0ac3867856c1d9044760ac1",
+        "model_input_receipt_sha256": "b69f4abc4aaf20bcbf92b3c1faecdd4b89cefb50920bdb903217f97c4c1622ac",
+        "report_sha256": "382a4f5ba5bb850d79395743e8f84d1373288c9c6b564c9030cccc696fcf1371",
+        "original_protocol": "native-gdal-v1",
+        "retrospective_inputs": true,
+        "disable_omp_affinity": false,
+        "solver_cores": 1
+      },
+      "6.2": {
+        "passed": true,
+        "runtime_sha256": "826082cb45384ec6c05150eb71a8ab26bb5183a8e2603f717cf8ee9832e7a92e",
+        "cumulative_checks": {
+          "empty_control_fails": true,
+          "vendor_compute_verified": true,
+          "python_compute_verified": true,
+          "vendor_preprocess_verified": true,
+          "python_preprocess_verified": true,
+          "native_import_recorded": true,
+          "native_started_without_payload": true,
+          "after_import_exact_parity": true,
+          "temporary_exact_parity": true,
+          "final_exact_parity": true,
+          "positive_cell_rainfall": true,
+          "nonempty_hydraulics": true,
+          "compiled_geometry_exact_parity": true
+        },
+        "rate_checks": {
+          "empty_control_fails": true,
+          "vendor_compute_verified": true,
+          "python_compute_verified": true,
+          "vendor_preprocess_verified": true,
+          "python_preprocess_verified": true,
+          "native_import_recorded": true,
+          "native_started_without_payload": true,
+          "after_import_exact_parity": true,
+          "temporary_exact_parity": true,
+          "final_exact_parity": true,
+          "positive_cell_rainfall": true,
+          "nonempty_hydraulics": true,
+          "compiled_geometry_exact_parity": true
+        },
+        "original_report_sha256": "5eb78ec90a48e2cf3dc8c034e4345c35687776b3e0ac3867856c1d9044760ac1",
+        "model_input_receipt_sha256": "b69f4abc4aaf20bcbf92b3c1faecdd4b89cefb50920bdb903217f97c4c1622ac",
+        "report_sha256": "0b886b10bba74b1fe69b23cb36dc0e59161a7edab004d466467e0ee97ac5b559",
+        "original_protocol": "native-gdal-v1",
+        "retrospective_inputs": true,
+        "disable_omp_affinity": false,
+        "solver_cores": 1
+      },
+      "6.3": {
+        "passed": true,
+        "runtime_sha256": "3a8f683961dcad82cfb15bbb68ec3df62c6510711dd89c37e3e09f52c9d8b860",
+        "cumulative_checks": {
+          "empty_control_fails": true,
+          "vendor_compute_verified": true,
+          "python_compute_verified": true,
+          "vendor_preprocess_verified": true,
+          "python_preprocess_verified": true,
+          "native_import_recorded": true,
+          "native_started_without_payload": true,
+          "after_import_exact_parity": true,
+          "temporary_exact_parity": true,
+          "final_exact_parity": true,
+          "positive_cell_rainfall": true,
+          "nonempty_hydraulics": true,
+          "compiled_geometry_exact_parity": true
+        },
+        "rate_checks": {
+          "empty_control_fails": true,
+          "vendor_compute_verified": true,
+          "python_compute_verified": true,
+          "vendor_preprocess_verified": true,
+          "python_preprocess_verified": true,
+          "native_import_recorded": true,
+          "native_started_without_payload": true,
+          "after_import_exact_parity": true,
+          "temporary_exact_parity": true,
+          "final_exact_parity": true,
+          "positive_cell_rainfall": true,
+          "nonempty_hydraulics": true,
+          "compiled_geometry_exact_parity": true
+        },
+        "original_report_sha256": "5eb78ec90a48e2cf3dc8c034e4345c35687776b3e0ac3867856c1d9044760ac1",
+        "model_input_receipt_sha256": "b69f4abc4aaf20bcbf92b3c1faecdd4b89cefb50920bdb903217f97c4c1622ac",
+        "report_sha256": "f4c8167d7685c3d9769447925a5907dc565c71ac0c1e3b66d007a8abc58d0747",
+        "original_protocol": "native-gdal-v1",
+        "retrospective_inputs": true,
+        "disable_omp_affinity": false,
+        "solver_cores": 1
+      },
+      "6.3.1": {
+        "passed": true,
+        "runtime_sha256": "7b40237b2ef0a90a32b673affe7f5de7114410527d17e755d0c62a44e2c39a9e",
+        "cumulative_checks": {
+          "empty_control_fails": true,
+          "vendor_compute_verified": true,
+          "python_compute_verified": true,
+          "vendor_preprocess_verified": true,
+          "python_preprocess_verified": true,
+          "native_import_recorded": true,
+          "native_started_without_payload": true,
+          "after_import_exact_parity": true,
+          "temporary_exact_parity": true,
+          "final_exact_parity": true,
+          "positive_cell_rainfall": true,
+          "nonempty_hydraulics": true,
+          "compiled_geometry_exact_parity": true
+        },
+        "rate_checks": {
+          "empty_control_fails": true,
+          "vendor_compute_verified": true,
+          "python_compute_verified": true,
+          "vendor_preprocess_verified": true,
+          "python_preprocess_verified": true,
+          "native_import_recorded": true,
+          "native_started_without_payload": true,
+          "after_import_exact_parity": true,
+          "temporary_exact_parity": true,
+          "final_exact_parity": true,
+          "positive_cell_rainfall": true,
+          "nonempty_hydraulics": true,
+          "compiled_geometry_exact_parity": true
+        },
+        "original_report_sha256": "5eb78ec90a48e2cf3dc8c034e4345c35687776b3e0ac3867856c1d9044760ac1",
+        "model_input_receipt_sha256": "b69f4abc4aaf20bcbf92b3c1faecdd4b89cefb50920bdb903217f97c4c1622ac",
+        "report_sha256": "8c96f7261f3abc12e04732afc924353b0e6d83fc0894ecb67433bec71f36dd53",
+        "original_protocol": "native-gdal-v1",
+        "retrospective_inputs": true,
+        "disable_omp_affinity": false,
+        "solver_cores": 1
+      },
+      "6.4": {
+        "passed": true,
+        "runtime_sha256": "66d382278f2a4dd78617349ea3fae7ecfb8c44aa37198926b89fbf751305ec45",
+        "cumulative_checks": {
+          "empty_control_fails": true,
+          "vendor_compute_verified": true,
+          "python_compute_verified": true,
+          "vendor_preprocess_verified": true,
+          "python_preprocess_verified": true,
+          "native_import_recorded": true,
+          "native_started_without_payload": true,
+          "after_import_exact_parity": true,
+          "temporary_exact_parity": true,
+          "final_exact_parity": true,
+          "positive_cell_rainfall": true,
+          "nonempty_hydraulics": true,
+          "compiled_geometry_exact_parity": true
+        },
+        "rate_checks": {
+          "empty_control_fails": true,
+          "vendor_compute_verified": true,
+          "python_compute_verified": true,
+          "vendor_preprocess_verified": true,
+          "python_preprocess_verified": true,
+          "native_import_recorded": true,
+          "native_started_without_payload": true,
+          "after_import_exact_parity": true,
+          "temporary_exact_parity": true,
+          "final_exact_parity": true,
+          "positive_cell_rainfall": true,
+          "nonempty_hydraulics": true,
+          "compiled_geometry_exact_parity": true
+        },
+        "original_report_sha256": "4585986710bf8c01f254ce9dc40d0d9101281a62d1a415340e051e917b9e4f44",
+        "model_input_receipt_sha256": "b69f4abc4aaf20bcbf92b3c1faecdd4b89cefb50920bdb903217f97c4c1622ac",
+        "report_sha256": "5e8b533adcf6de78684b21f1600249e6234f3a9ff3528dc304398fa894a5c589",
+        "original_protocol": "native-gdal-v1",
+        "retrospective_inputs": true,
+        "disable_omp_affinity": false,
+        "solver_cores": 1
+      },
+      "6.4.1": {
+        "passed": true,
+        "runtime_sha256": "0fd3bcef58db429bc2faa0c926d5da4ca64918d398ce9db349f138aee1d533f6",
+        "cumulative_checks": {
+          "empty_control_fails": true,
+          "vendor_compute_verified": true,
+          "python_compute_verified": true,
+          "vendor_preprocess_verified": true,
+          "python_preprocess_verified": true,
+          "native_import_recorded": true,
+          "native_started_without_payload": true,
+          "after_import_exact_parity": true,
+          "temporary_exact_parity": true,
+          "final_exact_parity": true,
+          "positive_cell_rainfall": true,
+          "nonempty_hydraulics": true,
+          "compiled_geometry_exact_parity": true
+        },
+        "rate_checks": {
+          "empty_control_fails": true,
+          "vendor_compute_verified": true,
+          "python_compute_verified": true,
+          "vendor_preprocess_verified": true,
+          "python_preprocess_verified": true,
+          "native_import_recorded": true,
+          "native_started_without_payload": true,
+          "after_import_exact_parity": true,
+          "temporary_exact_parity": true,
+          "final_exact_parity": true,
+          "positive_cell_rainfall": true,
+          "nonempty_hydraulics": true,
+          "compiled_geometry_exact_parity": true
+        },
+        "original_report_sha256": "5eb78ec90a48e2cf3dc8c034e4345c35687776b3e0ac3867856c1d9044760ac1",
+        "model_input_receipt_sha256": "b69f4abc4aaf20bcbf92b3c1faecdd4b89cefb50920bdb903217f97c4c1622ac",
+        "report_sha256": "7764b5aebe8c0a3569d433083ee94aa66e0e8a30b322faa236308573478cf4d6",
+        "original_protocol": "native-gdal-v1",
+        "retrospective_inputs": true,
+        "disable_omp_affinity": false,
+        "solver_cores": 1
+      },
+      "6.5": {
+        "passed": true,
+        "runtime_sha256": "b23bd359f47e2a869a5b931a98b461c43978d86c6250894e88a09b21f8aae99d",
+        "cumulative_checks": {
+          "empty_control_fails": true,
+          "vendor_compute_verified": true,
+          "python_compute_verified": true,
+          "vendor_preprocess_verified": true,
+          "python_preprocess_verified": true,
+          "native_import_recorded": true,
+          "native_started_without_payload": true,
+          "after_import_exact_parity": true,
+          "temporary_exact_parity": true,
+          "final_exact_parity": true,
+          "positive_cell_rainfall": true,
+          "nonempty_hydraulics": true,
+          "compiled_geometry_exact_parity": true
+        },
+        "rate_checks": {
+          "empty_control_fails": true,
+          "vendor_compute_verified": true,
+          "python_compute_verified": true,
+          "vendor_preprocess_verified": true,
+          "python_preprocess_verified": true,
+          "native_import_recorded": true,
+          "native_started_without_payload": true,
+          "after_import_exact_parity": true,
+          "temporary_exact_parity": true,
+          "final_exact_parity": true,
+          "positive_cell_rainfall": true,
+          "nonempty_hydraulics": true,
+          "compiled_geometry_exact_parity": true
+        },
+        "original_report_sha256": "5eb78ec90a48e2cf3dc8c034e4345c35687776b3e0ac3867856c1d9044760ac1",
+        "model_input_receipt_sha256": "b69f4abc4aaf20bcbf92b3c1faecdd4b89cefb50920bdb903217f97c4c1622ac",
+        "report_sha256": "5cf4a34a2971821751dc59e40813fc9ad1f93bf9223e26c0b36bd4370ca8cc3d",
+        "original_protocol": "native-gdal-v1",
+        "retrospective_inputs": true,
+        "disable_omp_affinity": false,
+        "solver_cores": 1
+      },
+      "6.6": {
+        "passed": true,
+        "runtime_sha256": "a34e56a172ba06cde2d546f4d7282801c2b67040969d4ed23b41dfc755772134",
+        "cumulative_checks": {
+          "empty_control_fails": true,
+          "vendor_compute_verified": true,
+          "python_compute_verified": true,
+          "vendor_preprocess_verified": true,
+          "python_preprocess_verified": true,
+          "native_import_recorded": true,
+          "native_started_without_payload": true,
+          "after_import_exact_parity": true,
+          "temporary_exact_parity": true,
+          "final_exact_parity": true,
+          "positive_cell_rainfall": true,
+          "nonempty_hydraulics": true,
+          "compiled_geometry_exact_parity": true
+        },
+        "rate_checks": {
+          "empty_control_fails": true,
+          "vendor_compute_verified": true,
+          "python_compute_verified": true,
+          "vendor_preprocess_verified": true,
+          "python_preprocess_verified": true,
+          "native_import_recorded": true,
+          "native_started_without_payload": true,
+          "after_import_exact_parity": true,
+          "temporary_exact_parity": true,
+          "final_exact_parity": true,
+          "positive_cell_rainfall": true,
+          "nonempty_hydraulics": true,
+          "compiled_geometry_exact_parity": true
+        },
+        "original_report_sha256": "7189ee8ef5e433bec6bbfbbd594428138e90c3664d6e879c4b201c2a9c8b13f3",
+        "model_input_receipt_sha256": "b69f4abc4aaf20bcbf92b3c1faecdd4b89cefb50920bdb903217f97c4c1622ac",
+        "report_sha256": "679a47b3b703b8218d38951a1999856495004bb6f7c0d7bce96d56116646be8f",
+        "original_protocol": "native-gdal-v1",
+        "retrospective_inputs": true,
+        "disable_omp_affinity": false,
+        "solver_cores": 1
+      },
+      "7.0": {
+        "passed": true,
+        "runtime_sha256": "9990c10531221469bf51a9a62ae91f36ec01e651bed83aadf632e678130ae797",
+        "cumulative_checks": {
+          "empty_control_fails": true,
+          "vendor_compute_verified": true,
+          "python_compute_verified": true,
+          "vendor_preprocess_verified": true,
+          "python_preprocess_verified": true,
+          "native_import_recorded": true,
+          "native_started_without_payload": true,
+          "after_import_exact_parity": true,
+          "temporary_exact_parity": true,
+          "final_exact_parity": true,
+          "positive_cell_rainfall": true,
+          "nonempty_hydraulics": true,
+          "compiled_geometry_exact_parity": true
+        },
+        "rate_checks": {
+          "empty_control_fails": true,
+          "vendor_compute_verified": true,
+          "python_compute_verified": true,
+          "vendor_preprocess_verified": true,
+          "python_preprocess_verified": true,
+          "native_import_recorded": true,
+          "native_started_without_payload": true,
+          "after_import_exact_parity": true,
+          "temporary_exact_parity": true,
+          "final_exact_parity": true,
+          "positive_cell_rainfall": true,
+          "nonempty_hydraulics": true,
+          "compiled_geometry_exact_parity": true
+        },
+        "original_report_sha256": "5eb78ec90a48e2cf3dc8c034e4345c35687776b3e0ac3867856c1d9044760ac1",
+        "model_input_receipt_sha256": "b69f4abc4aaf20bcbf92b3c1faecdd4b89cefb50920bdb903217f97c4c1622ac",
+        "report_sha256": "af3537665159b1060e358887db060739addac0fc9fe36107a53b5fa2d46fbfa4",
+        "original_protocol": "native-gdal-v1",
+        "retrospective_inputs": true,
+        "disable_omp_affinity": false,
+        "solver_cores": 1
+      },
+      "7.0.1": {
+        "passed": true,
+        "runtime_sha256": "ce2ca395c68c4ee17387376ea3a7152c24db483488dced4eb96a59e85fd72985",
+        "cumulative_checks": {
+          "empty_control_fails": true,
+          "vendor_compute_verified": true,
+          "python_compute_verified": true,
+          "vendor_preprocess_verified": true,
+          "python_preprocess_verified": true,
+          "native_import_recorded": true,
+          "native_started_without_payload": true,
+          "after_import_exact_parity": true,
+          "temporary_exact_parity": true,
+          "final_exact_parity": true,
+          "positive_cell_rainfall": true,
+          "nonempty_hydraulics": true,
+          "compiled_geometry_exact_parity": true
+        },
+        "rate_checks": {
+          "empty_control_fails": true,
+          "vendor_compute_verified": true,
+          "python_compute_verified": true,
+          "vendor_preprocess_verified": true,
+          "python_preprocess_verified": true,
+          "native_import_recorded": true,
+          "native_started_without_payload": true,
+          "after_import_exact_parity": true,
+          "temporary_exact_parity": true,
+          "final_exact_parity": true,
+          "positive_cell_rainfall": true,
+          "nonempty_hydraulics": true,
+          "compiled_geometry_exact_parity": true
+        },
+        "original_report_sha256": "a2a6ed5ba860bd1e81d6d20abbc37904be5bb6d8a15225110888f408360874d9",
+        "model_input_receipt_sha256": "b69f4abc4aaf20bcbf92b3c1faecdd4b89cefb50920bdb903217f97c4c1622ac",
+        "report_sha256": "a346b0cb61095daa02494fb220d9a49f5918144fc3fcb3f58b6219e314daedef",
+        "original_protocol": "native-gdal-v1",
+        "retrospective_inputs": true,
+        "disable_omp_affinity": false,
+        "solver_cores": 1
+      }
+    },
+    "wine_full": {
+      "qualified_versions": [
+        "6.1",
+        "6.2",
+        "6.3",
+        "6.3.1",
+        "6.4",
+        "6.4.1",
+        "6.5",
+        "6.6",
+        "7.0",
+        "7.0.1"
+      ],
+      "unqualified_versions": [
+        "6.0"
+      ],
+      "6.1": {
+        "passed": true,
+        "runtime_sha256": "58423df21f7115340a9d41f5d93039a786c91f0ffc944f7b23c77846bcc9e330",
+        "cumulative_checks": {
+          "empty_control_fails": true,
+          "vendor_compute_verified": true,
+          "python_compute_verified": true,
+          "vendor_preprocess_verified": true,
+          "python_preprocess_verified": true,
+          "native_import_recorded": true,
+          "native_started_without_payload": true,
+          "after_import_exact_parity": true,
+          "temporary_exact_parity": true,
+          "final_exact_parity": true,
+          "positive_cell_rainfall": true,
+          "nonempty_hydraulics": true,
+          "compiled_geometry_exact_parity": true
+        },
+        "rate_checks": {
+          "empty_control_fails": true,
+          "vendor_compute_verified": true,
+          "python_compute_verified": true,
+          "vendor_preprocess_verified": true,
+          "python_preprocess_verified": true,
+          "native_import_recorded": true,
+          "native_started_without_payload": true,
+          "after_import_exact_parity": true,
+          "temporary_exact_parity": true,
+          "final_exact_parity": true,
+          "positive_cell_rainfall": true,
+          "nonempty_hydraulics": true,
+          "compiled_geometry_exact_parity": true
+        },
+        "original_report_sha256": "5490ab31897e2d7791b37a75354caeb6ae93b4ba1d1de78f3f6902b1ebc670c2",
+        "model_input_receipt_sha256": "b69f4abc4aaf20bcbf92b3c1faecdd4b89cefb50920bdb903217f97c4c1622ac",
+        "report_sha256": "d09902d28d9812daa20305232d51bfb9095fd5788fd24c062c9e7a112726da05",
+        "original_protocol": "native-gdal-v1",
+        "retrospective_inputs": true,
+        "disable_omp_affinity": false,
+        "solver_cores": 1
+      },
+      "6.2": {
+        "passed": true,
+        "runtime_sha256": "826082cb45384ec6c05150eb71a8ab26bb5183a8e2603f717cf8ee9832e7a92e",
+        "cumulative_checks": {
+          "empty_control_fails": true,
+          "vendor_compute_verified": true,
+          "python_compute_verified": true,
+          "vendor_preprocess_verified": true,
+          "python_preprocess_verified": true,
+          "native_import_recorded": true,
+          "native_started_without_payload": true,
+          "after_import_exact_parity": true,
+          "temporary_exact_parity": true,
+          "final_exact_parity": true,
+          "positive_cell_rainfall": true,
+          "nonempty_hydraulics": true,
+          "compiled_geometry_exact_parity": true
+        },
+        "rate_checks": {
+          "empty_control_fails": true,
+          "vendor_compute_verified": true,
+          "python_compute_verified": true,
+          "vendor_preprocess_verified": true,
+          "python_preprocess_verified": true,
+          "native_import_recorded": true,
+          "native_started_without_payload": true,
+          "after_import_exact_parity": true,
+          "temporary_exact_parity": true,
+          "final_exact_parity": true,
+          "positive_cell_rainfall": true,
+          "nonempty_hydraulics": true,
+          "compiled_geometry_exact_parity": true
+        },
+        "original_report_sha256": "44406797edaf5d8254903d32e13839d4d0d7be99b2fb0a60234ea140cc71e5b2",
+        "model_input_receipt_sha256": "b69f4abc4aaf20bcbf92b3c1faecdd4b89cefb50920bdb903217f97c4c1622ac",
+        "report_sha256": "51884e48dd2a50fe31e33d3cbd489932eafc765a23ab71a35d4d3420026a77c2",
+        "original_protocol": "native-gdal-v1",
+        "retrospective_inputs": true,
+        "disable_omp_affinity": false,
+        "solver_cores": 1
+      },
+      "6.3": {
+        "passed": true,
+        "runtime_sha256": "3a8f683961dcad82cfb15bbb68ec3df62c6510711dd89c37e3e09f52c9d8b860",
+        "cumulative_checks": {
+          "empty_control_fails": true,
+          "vendor_compute_verified": true,
+          "python_compute_verified": true,
+          "vendor_preprocess_verified": true,
+          "python_preprocess_verified": true,
+          "native_import_recorded": true,
+          "native_started_without_payload": true,
+          "after_import_exact_parity": true,
+          "temporary_exact_parity": true,
+          "final_exact_parity": true,
+          "positive_cell_rainfall": true,
+          "nonempty_hydraulics": true,
+          "compiled_geometry_exact_parity": true
+        },
+        "rate_checks": {
+          "empty_control_fails": true,
+          "vendor_compute_verified": true,
+          "python_compute_verified": true,
+          "vendor_preprocess_verified": true,
+          "python_preprocess_verified": true,
+          "native_import_recorded": true,
+          "native_started_without_payload": true,
+          "after_import_exact_parity": true,
+          "temporary_exact_parity": true,
+          "final_exact_parity": true,
+          "positive_cell_rainfall": true,
+          "nonempty_hydraulics": true,
+          "compiled_geometry_exact_parity": true
+        },
+        "original_report_sha256": "002346894ce20fb6d9c33f208751bfae9c575d2296fd0e3d1170b1471dcef10d",
+        "model_input_receipt_sha256": "b69f4abc4aaf20bcbf92b3c1faecdd4b89cefb50920bdb903217f97c4c1622ac",
+        "report_sha256": "9d9d46a73fd776501053def7b33508888f02d72fe5ec39511879edc3252cd160",
+        "original_protocol": "native-gdal-v1",
+        "retrospective_inputs": true,
+        "disable_omp_affinity": false,
+        "solver_cores": 1
+      },
+      "6.3.1": {
+        "passed": true,
+        "runtime_sha256": "7b40237b2ef0a90a32b673affe7f5de7114410527d17e755d0c62a44e2c39a9e",
+        "cumulative_checks": {
+          "empty_control_fails": true,
+          "vendor_compute_verified": true,
+          "python_compute_verified": true,
+          "vendor_preprocess_verified": true,
+          "python_preprocess_verified": true,
+          "native_import_recorded": true,
+          "native_started_without_payload": true,
+          "after_import_exact_parity": true,
+          "temporary_exact_parity": true,
+          "final_exact_parity": true,
+          "positive_cell_rainfall": true,
+          "nonempty_hydraulics": true,
+          "compiled_geometry_exact_parity": true
+        },
+        "rate_checks": {
+          "empty_control_fails": true,
+          "vendor_compute_verified": true,
+          "python_compute_verified": true,
+          "vendor_preprocess_verified": true,
+          "python_preprocess_verified": true,
+          "native_import_recorded": true,
+          "native_started_without_payload": true,
+          "after_import_exact_parity": true,
+          "temporary_exact_parity": true,
+          "final_exact_parity": true,
+          "positive_cell_rainfall": true,
+          "nonempty_hydraulics": true,
+          "compiled_geometry_exact_parity": true
+        },
+        "original_report_sha256": "323dad7b9469d1f3f991eb5776fd5cd79b855c6f315e9b63b4f13b4c270ceb5a",
+        "model_input_receipt_sha256": "b69f4abc4aaf20bcbf92b3c1faecdd4b89cefb50920bdb903217f97c4c1622ac",
+        "report_sha256": "931e04b292978cc31c0cc8d25e5b4fb9a46085d6651abc65381513f0d0ee7996",
+        "original_protocol": "native-gdal-v1",
+        "retrospective_inputs": true,
+        "disable_omp_affinity": false,
+        "solver_cores": 1
+      },
+      "6.4": {
+        "passed": true,
+        "runtime_sha256": "66d382278f2a4dd78617349ea3fae7ecfb8c44aa37198926b89fbf751305ec45",
+        "cumulative_checks": {
+          "empty_control_fails": true,
+          "vendor_compute_verified": true,
+          "python_compute_verified": true,
+          "vendor_preprocess_verified": true,
+          "python_preprocess_verified": true,
+          "native_import_recorded": true,
+          "native_started_without_payload": true,
+          "after_import_exact_parity": true,
+          "temporary_exact_parity": true,
+          "final_exact_parity": true,
+          "positive_cell_rainfall": true,
+          "nonempty_hydraulics": true,
+          "compiled_geometry_exact_parity": true
+        },
+        "rate_checks": {
+          "empty_control_fails": true,
+          "vendor_compute_verified": true,
+          "python_compute_verified": true,
+          "vendor_preprocess_verified": true,
+          "python_preprocess_verified": true,
+          "native_import_recorded": true,
+          "native_started_without_payload": true,
+          "after_import_exact_parity": true,
+          "temporary_exact_parity": true,
+          "final_exact_parity": true,
+          "positive_cell_rainfall": true,
+          "nonempty_hydraulics": true,
+          "compiled_geometry_exact_parity": true
+        },
+        "original_report_sha256": "b7594c34b4a930b9bfb1d963aa6d41db28b1eb94bc217a50cb3fb2b71ee4cfd1",
+        "model_input_receipt_sha256": "b69f4abc4aaf20bcbf92b3c1faecdd4b89cefb50920bdb903217f97c4c1622ac",
+        "report_sha256": "a23477fd0202d7593ee988d27c3adf1489bbd87842467b87e138b666b0343f90",
+        "original_protocol": "native-gdal-v1",
+        "retrospective_inputs": true,
+        "disable_omp_affinity": false,
+        "solver_cores": 1
+      },
+      "6.4.1": {
+        "passed": true,
+        "runtime_sha256": "0fd3bcef58db429bc2faa0c926d5da4ca64918d398ce9db349f138aee1d533f6",
+        "cumulative_checks": {
+          "empty_control_fails": true,
+          "vendor_compute_verified": true,
+          "python_compute_verified": true,
+          "vendor_preprocess_verified": true,
+          "python_preprocess_verified": true,
+          "native_import_recorded": true,
+          "native_started_without_payload": true,
+          "after_import_exact_parity": true,
+          "temporary_exact_parity": true,
+          "final_exact_parity": true,
+          "positive_cell_rainfall": true,
+          "nonempty_hydraulics": true,
+          "compiled_geometry_exact_parity": true
+        },
+        "rate_checks": {
+          "empty_control_fails": true,
+          "vendor_compute_verified": true,
+          "python_compute_verified": true,
+          "vendor_preprocess_verified": true,
+          "python_preprocess_verified": true,
+          "native_import_recorded": true,
+          "native_started_without_payload": true,
+          "after_import_exact_parity": true,
+          "temporary_exact_parity": true,
+          "final_exact_parity": true,
+          "positive_cell_rainfall": true,
+          "nonempty_hydraulics": true,
+          "compiled_geometry_exact_parity": true
+        },
+        "original_report_sha256": "0b55aa2f8e64b9a62a6a8b15930c0f220dfda55e2466d2284f856c006c0d0595",
+        "model_input_receipt_sha256": "b69f4abc4aaf20bcbf92b3c1faecdd4b89cefb50920bdb903217f97c4c1622ac",
+        "report_sha256": "da83bedafdcaab1e03099ea68b866325cbf01827d569250f3f6d094807efcbde",
+        "original_protocol": "native-gdal-v1",
+        "retrospective_inputs": true,
+        "disable_omp_affinity": false,
+        "solver_cores": 1
+      },
+      "6.5": {
+        "passed": true,
+        "runtime_sha256": "b23bd359f47e2a869a5b931a98b461c43978d86c6250894e88a09b21f8aae99d",
+        "cumulative_checks": {
+          "empty_control_fails": true,
+          "vendor_compute_verified": true,
+          "python_compute_verified": true,
+          "vendor_preprocess_verified": true,
+          "python_preprocess_verified": true,
+          "native_import_recorded": true,
+          "native_started_without_payload": true,
+          "after_import_exact_parity": true,
+          "temporary_exact_parity": true,
+          "final_exact_parity": true,
+          "positive_cell_rainfall": true,
+          "nonempty_hydraulics": true,
+          "compiled_geometry_exact_parity": true
+        },
+        "rate_checks": {
+          "empty_control_fails": true,
+          "vendor_compute_verified": true,
+          "python_compute_verified": true,
+          "vendor_preprocess_verified": true,
+          "python_preprocess_verified": true,
+          "native_import_recorded": true,
+          "native_started_without_payload": true,
+          "after_import_exact_parity": true,
+          "temporary_exact_parity": true,
+          "final_exact_parity": true,
+          "positive_cell_rainfall": true,
+          "nonempty_hydraulics": true,
+          "compiled_geometry_exact_parity": true
+        },
+        "original_report_sha256": "428e3dd98adb96e07291e4ad313d3b5bf4b36c12ffb07442e6ebf8370e6f958c",
+        "model_input_receipt_sha256": "b69f4abc4aaf20bcbf92b3c1faecdd4b89cefb50920bdb903217f97c4c1622ac",
+        "report_sha256": "2b08597c0fdc3af6b281f96ba6a9c6a6aec0b7f7ec7f3e87440507791c196fe7",
+        "original_protocol": "native-gdal-v1",
+        "retrospective_inputs": true,
+        "disable_omp_affinity": false,
+        "solver_cores": 1
+      },
+      "6.6": {
+        "passed": true,
+        "runtime_sha256": "a34e56a172ba06cde2d546f4d7282801c2b67040969d4ed23b41dfc755772134",
+        "cumulative_checks": {
+          "empty_control_fails": true,
+          "vendor_compute_verified": true,
+          "python_compute_verified": true,
+          "vendor_preprocess_verified": true,
+          "python_preprocess_verified": true,
+          "native_import_recorded": true,
+          "native_started_without_payload": true,
+          "after_import_exact_parity": true,
+          "temporary_exact_parity": true,
+          "final_exact_parity": true,
+          "positive_cell_rainfall": true,
+          "nonempty_hydraulics": true,
+          "compiled_geometry_exact_parity": true
+        },
+        "rate_checks": {
+          "empty_control_fails": true,
+          "vendor_compute_verified": true,
+          "python_compute_verified": true,
+          "vendor_preprocess_verified": true,
+          "python_preprocess_verified": true,
+          "native_import_recorded": true,
+          "native_started_without_payload": true,
+          "after_import_exact_parity": true,
+          "temporary_exact_parity": true,
+          "final_exact_parity": true,
+          "positive_cell_rainfall": true,
+          "nonempty_hydraulics": true,
+          "compiled_geometry_exact_parity": true
+        },
+        "original_report_sha256": "6b5decca97aa3b8b95d4a8943ff192f2f3e3392950e16328a27e3bf270d54f69",
+        "model_input_receipt_sha256": "b69f4abc4aaf20bcbf92b3c1faecdd4b89cefb50920bdb903217f97c4c1622ac",
+        "report_sha256": "371e2d71f279d2494bade2637213006d9076dcef17dfde1e83896843e30e0efb",
+        "original_protocol": "native-gdal-v1",
+        "retrospective_inputs": true,
+        "disable_omp_affinity": false,
+        "solver_cores": 1
+      },
+      "7.0": {
+        "passed": true,
+        "runtime_sha256": "9990c10531221469bf51a9a62ae91f36ec01e651bed83aadf632e678130ae797",
+        "cumulative_checks": {
+          "empty_control_fails": true,
+          "vendor_compute_verified": true,
+          "python_compute_verified": true,
+          "vendor_preprocess_verified": true,
+          "python_preprocess_verified": true,
+          "native_import_recorded": true,
+          "native_started_without_payload": true,
+          "after_import_exact_parity": true,
+          "temporary_exact_parity": true,
+          "final_exact_parity": true,
+          "positive_cell_rainfall": true,
+          "nonempty_hydraulics": true,
+          "compiled_geometry_exact_parity": true
+        },
+        "rate_checks": {
+          "empty_control_fails": true,
+          "vendor_compute_verified": true,
+          "python_compute_verified": true,
+          "vendor_preprocess_verified": true,
+          "python_preprocess_verified": true,
+          "native_import_recorded": true,
+          "native_started_without_payload": true,
+          "after_import_exact_parity": true,
+          "temporary_exact_parity": true,
+          "final_exact_parity": true,
+          "positive_cell_rainfall": true,
+          "nonempty_hydraulics": true,
+          "compiled_geometry_exact_parity": true
+        },
+        "original_report_sha256": "4c2f5ea04e1bbd641688e8856d12d434c869cd27301d99e808b63cd60f4be590",
+        "report_sha256": "4c2f5ea04e1bbd641688e8856d12d434c869cd27301d99e808b63cd60f4be590",
+        "original_protocol": "native-gdal-v2-model-inputs",
+        "retrospective_inputs": false,
+        "disable_omp_affinity": true,
+        "solver_cores": 1,
+        "assessment_source_sha256": "9d3f954fa6530ebdbdf5a01b87d13692a3c82aea8e0a473ef2a5145e83a71726"
+      },
+      "7.0.1": {
+        "passed": true,
+        "runtime_sha256": "ce2ca395c68c4ee17387376ea3a7152c24db483488dced4eb96a59e85fd72985",
+        "cumulative_checks": {
+          "empty_control_fails": true,
+          "vendor_compute_verified": true,
+          "python_compute_verified": true,
+          "vendor_preprocess_verified": true,
+          "python_preprocess_verified": true,
+          "native_import_recorded": true,
+          "native_started_without_payload": true,
+          "after_import_exact_parity": true,
+          "temporary_exact_parity": true,
+          "final_exact_parity": true,
+          "positive_cell_rainfall": true,
+          "nonempty_hydraulics": true,
+          "compiled_geometry_exact_parity": true
+        },
+        "rate_checks": {
+          "empty_control_fails": true,
+          "vendor_compute_verified": true,
+          "python_compute_verified": true,
+          "vendor_preprocess_verified": true,
+          "python_preprocess_verified": true,
+          "native_import_recorded": true,
+          "native_started_without_payload": true,
+          "after_import_exact_parity": true,
+          "temporary_exact_parity": true,
+          "final_exact_parity": true,
+          "positive_cell_rainfall": true,
+          "nonempty_hydraulics": true,
+          "compiled_geometry_exact_parity": true
+        },
+        "original_report_sha256": "8dc1f3967cf3f3c3f830fbcf75b4d4c1aaf36869476ca6e539a228659f524fa2",
+        "model_input_receipt_sha256": "b69f4abc4aaf20bcbf92b3c1faecdd4b89cefb50920bdb903217f97c4c1622ac",
+        "report_sha256": "cf7d70813d56913d671fe3890eb0e527a1fd95a8a2881e78e04cb5a39b515ba1",
+        "original_protocol": "native-gdal-v1",
+        "retrospective_inputs": true,
+        "disable_omp_affinity": true,
+        "solver_cores": 1
+      },
+      "6.0": {
+        "passed": false,
+        "source_import_passed": true,
+        "stage": "startup/preprocessing",
+        "reason": "Both Python/HDF and native controls stall after explicit owned TCU assent. Exact vendor key/name queried; expected sentinel observed in both views. Wizard closure leaves only a background window. Loader/OLE traces establish no missing-module or class-registration cause.",
+        "gui_readiness_verified": false,
+        "tracking_issue": "https://github.com/gpt-cmdr/ras-commander/issues/532"
+      }
+    },
+    "regressions": [
+      "Completed solve with excessive rainfall is rejected.",
+      "Exact rainfall with divergent hydraulics is rejected.",
+      "Missing or changed compiled geometry is rejected.",
+      "Reordered exact region/cell pairs pass; changed pairs or duplicate counts fail.",
+      "Preexisting valid tables cannot complete an active Wine geometry rebuild."
+    ],
+    "capability_policy": "All eleven exact stable releases qualified on Windows; ten on Wine. 6.0 Wine remains unqualified. Unknown patches and historical betas do not inherit qualification.",
+    "geometry_completion_regression": {
+      "before": "Preexisting valid tables allowed early termination during stage2/4.",
+      "after": "Both disposable copies, with and without Mapper configuration, finished by normal process exit; success=true.",
+      "receipt_sha256": "c13fbbecb6c72cc6d9f0c257e9f4d814be8926b0a812bcefc9fa8f5346ee4014"
+    },
+    "native_helper_source_sha256": "48475d5115397b2a8d0c706d568de5e9399b1a9ae46bcc816b6c15ca91a4ebb9"
+  }
 }

@@ -10,3 +10,4 @@ include ras_commander/native/RasMapperTerrainExportHelper.cs
 include ras_commander/native/BuildRasMapperTerrainExportHelper.ps1
 recursive-include ras_commander/resources/templates *
 
+include ras_commander/native/RasMetImportHelper.cs

@@ -269,7 +269,7 @@ def test_build_compute_command_preserves_modern_layout(version, tmp_path):
     assert command == f'"{ras_exe}" -c "{project_path}" "{plan_path}"'
 
 
-@pytest.mark.parametrize("version", ["6.1", "6.2", "6.3", "6.3.1"])
+@pytest.mark.parametrize("version", ["6.0", "6.1", "6.2", "6.3", "6.3.1"])
 def test_legacy_wmic_subprocess_env_is_scoped_to_evidence_backed_versions(
     monkeypatch,
     version,
@@ -295,7 +295,7 @@ def test_legacy_wmic_subprocess_env_is_scoped_to_evidence_backed_versions(
 
 
 @pytest.mark.parametrize(
-    "version", ["5.0.7", "6.0", "6.3.2", "6.4", "7.0"]
+    "version", ["5.0.7", "6.3.2", "6.4", "7.0"]
 )
 def test_legacy_wmic_subprocess_env_does_not_change_other_versions(
     monkeypatch,
@@ -2562,6 +2562,7 @@ def test_verify_completion_rejects_unchanged_pre_run_hdf_within_tolerance(
     ) is False
 
 
+@pytest.mark.skipif(os.name != "nt", reason="Windows mapped-drive path semantics")
 def test_plan_process_paths_preserve_mapped_drive_when_resolve_returns_unc(
     monkeypatch,
 ):
@@ -4017,3 +4018,35 @@ def test_solver_process_match_stays_unknown_for_same_slot_seen_missing(
         ours,
         [process],
     ) is None
+
+
+def test_compute_plan_openmp_override_reaches_only_engine_environment(monkeypatch, tmp_path):
+    ras_obj, _ = _make_skip_scenario(monkeypatch, tmp_path)
+    launches = []
+    shim_environment = {'PATH': 'private-wmic-path', 'KMP_AFFINITY': 'compact'}
+    monkeypatch.setenv('KMP_AFFINITY', 'scatter')
+    monkeypatch.setattr(RasCmdr, '_legacy_wmic_subprocess_env', staticmethod(lambda obj: (shim_environment, None)))
+
+    class CapturingPopen:
+        pid = 7654
+        returncode = 0
+
+        def __init__(self, argv, **kwargs):
+            launches.append(kwargs)
+
+        def wait(self, timeout=None):
+            return self.returncode
+
+        def poll(self):
+            return self.returncode
+
+    monkeypatch.setattr(rascmdr_module.subprocess, 'Popen', CapturingPopen)
+    monkeypatch.setattr(RasCmdr, '_launcher_create_time', staticmethod(lambda pid: 456.75))
+    result = RasCmdr.compute_plan('01', force_rerun=True, ras_object=ras_obj,
+                                 dialog_watchdog=False, disable_omp_affinity=True)
+    assert result.success
+    assert len(launches) == 1
+    assert launches[0]['env'] == {'PATH': 'private-wmic-path', 'KMP_AFFINITY': 'disabled'}
+    assert shim_environment['KMP_AFFINITY'] == 'compact'
+    assert rascmdr_module.os.environ['KMP_AFFINITY'] == 'scatter'
+    assert result.execution_details['openmp_environment_overrides'] == {'KMP_AFFINITY': 'disabled'}

@@ -111,7 +111,9 @@ def test_set_gridded_precipitation_matches_gui_imported_u01(tmp_path):
     netcdf_path = precip_dir / NETCDF_FIXTURE.name
     netcdf_path.write_bytes(NETCDF_FIXTURE.read_bytes())
 
-    gui_text = GUI_U01_FIXTURE.read_bytes().decode("utf-8")
+    # Git may normalize this native text fixture to LF on Linux. HEC-RAS
+    # authoring emits CRLF, so exercise the mutations and compare that format.
+    gui_text = "\r\n".join(GUI_U01_FIXTURE.read_text(encoding="utf-8").splitlines()) + "\r\n"
     starting_text = gui_text
     starting_text = starting_text.replace("Precipitation Mode=Enable\r\n", "Precipitation Mode=Disable\r\n")
     starting_text = starting_text.replace(
@@ -156,7 +158,7 @@ def test_set_gridded_precipitation_matches_gui_imported_u01(tmp_path):
         ras_object=ras_object,
     )
 
-    assert unsteady_path.read_bytes() == GUI_U01_FIXTURE.read_bytes()
+    assert unsteady_path.read_bytes() == gui_text.encode("utf-8")
 
 
 def test_update_precipitation_hdf_matches_gui_imported_plan_payload(tmp_path, monkeypatch):
