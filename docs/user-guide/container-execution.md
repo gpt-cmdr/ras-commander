@@ -55,6 +55,20 @@ For 6.6 or 7.0.1, change the version in both repository names. Wine `v4` and nat
 
 Use matching HEC-RAS versions. A missing image fails explicitly; the API does not choose another version. The native worker requires populated 2D meshes and validates their complete water-surface output.
 
+Other releases with a HEC Linux engine (5.0.7, 6.1, 7.0) use the GHCR images in the
+[packaged catalog](apptainer-images.md#which-images-apply-to-which-hec-ras-release); pass
+`image=` to use a local build instead. The preparation container reads the project's
+geometry HDF (`.g##.hdf`) and checks that preprocessing keeps its 2D mesh. HEC's 6.1 example
+archive and the 5.0.x/6.0 installer examples omit those files, as can models saved by older
+releases; open and save the geometry once (or compute the plan once under `RasSlurm` or
+`RasPortableDocker`, whose result project includes it) first.
+
+On a Linux host whose default Docker AppArmor profile denies Wine's sockets, preparation
+fails with `wineserver: socket: Permission denied`. Pass `apparmor_profile="unconfined"`
+(or the name of a site profile that allows Unix sockets) to `preprocess_plan`,
+`compute_plan`, or `run_plan`; it adds `--security-opt apparmor=<profile>` and is off by
+default.
+
 ## Prepare a complete working copy
 
 Start with a fresh, complete model copy containing its original populated

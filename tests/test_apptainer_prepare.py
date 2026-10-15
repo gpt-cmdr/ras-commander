@@ -44,7 +44,7 @@ while [ $# -gt 0 ]; do
 done
 [ -n "${FAKE_PREPARE_FAIL:-}" ] && { echo "wine failed" >&2; exit 1; }
 cd "$WORK"
-rm -f TEST.c02  # stale geometry preprocessing removed by the preparation
+rm -f TEST.c99  # stale geometry preprocessing removed by the preparation
 printf 'compiled' > TEST.p08.tmp.hdf
 printf 'b-file\n' > TEST.b08
 printf 'x-file\n' > TEST.x02
@@ -308,7 +308,7 @@ def test_prepare_returns_unchanged_artifacts_drops_deleted_and_keeps_nested_mani
 ):
     # A re-prepared project already holds byte-identical artifacts and a stale file.
     (project / "TEST.x02").write_text("x-file\n")
-    (project / "TEST.c02").write_text("stale")
+    (project / "TEST.c99").write_text("stale")
     (project / "Terrain" / "SHA256SUMS").write_text("vendor manifest\n")
     job = RasApptainer.render_prepare_job(project, "TEST", 8, site, tmp_path / "job")
     transport = ClusterTransport()
@@ -318,10 +318,10 @@ def test_prepare_returns_unchanged_artifacts_drops_deleted_and_keeps_nested_mani
 
     assert result.success, result.problems
     assert (result.directory / "project" / "TEST.x02").is_file()
-    assert (result.directory / "deleted_inputs.txt").read_text() == "TEST.c02\n"
-    assert not (tmp_path / "prepared" / "TEST.c02").exists()
+    assert (result.directory / "deleted_inputs.txt").read_text() == "TEST.c99\n"
+    assert not (tmp_path / "prepared" / "TEST.c99").exists()
     assert (tmp_path / "prepared" / "Terrain" / "SHA256SUMS").read_text() == "vendor manifest\n"
-    assert (project / "TEST.c02").exists()
+    assert (project / "TEST.c99").exists()
 
 
 def test_prepare_submit_rejects_placeholder_prepare_digest(project, site, tmp_path):
@@ -329,3 +329,27 @@ def test_prepare_submit_rejects_placeholder_prepare_digest(project, site, tmp_pa
     job = RasApptainer.render_prepare_job(project, "TEST", 8, placeholder, tmp_path / "job")
     with pytest.raises(ApptainerProfileError, match="all-zero"):
         RasApptainer.submit(job, ClusterTransport(), placeholder, dry_run=False)
+
+
+def test_cfile_release_prepare_returns_and_binds_computed_geometry(project, site, tmp_path):
+    site507 = replace(site, ras_version="5.0.7", hecras_dir=None, ld_library_path=None)
+    (project / "TEST.c02").write_bytes(b"computed\r\ngeometry\x00")
+    job = RasApptainer.render_prepare_job(project, "TEST", 8, site507, tmp_path / "job")
+    script = job.script_path.read_text()
+    assert "--require-computed-geometry" in script
+    assert "TEST.c02" in script.split("ARTIFACTS=(", 1)[1].split(")", 1)[0]
+    transport = ClusterTransport()
+    job = RasApptainer.submit(job, transport, site507, dry_run=False)
+    remote = Path(f"{job.remote_directory}/out/4242")
+    # The unchanged .c02 is still returned because it is a solver artifact.
+    assert (remote / "project" / "TEST.c02").read_bytes() == b"computed\r\ngeometry\x00"
+
+    result = RasApptainer.collect_prepare(job, transport, site507, tmp_path / "prepared")
+    # The fake worker's receipt does not list TEST.c02, so it is not bound.
+    assert not result.success
+    assert any("TEST.c02" in problem for problem in result.problems)
+
+
+def test_tmphdf_release_prepare_does_not_require_computed_geometry(project, site, tmp_path):
+    job = RasApptainer.render_prepare_job(project, "TEST", 8, site, tmp_path / "job")
+    assert "--require-computed-geometry" not in job.script_path.read_text()

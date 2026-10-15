@@ -47,9 +47,12 @@ DOCKER=${DOCKER:-docker}
 BUILD_CPUS=${BUILD_CPUS:-2}
 WINE_SECURITY_OPT=${WINE_SECURITY_OPT-apparmor=unconfined}
 
-case "$VERSION" in 6.5|6.6|7.0.1) ;; *) echo "error: HEC-RAS version must be 6.5, 6.6 or 7.0.1" >&2; exit 2 ;; esac
-[[ "$BASE" =~ ^[a-z0-9][a-z0-9._/:-]*@sha256:[0-9a-f]{64}$ ]] \
-    || { echo "error: base image must be pinned by digest (name@sha256:<64 hex>)" >&2; exit 2; }
+# Any Windows HEC-RAS release from 5.0 through 7.x, named by its install folder
+# (5.0, 5.0.7, 6.3.1, 6.6, 7.0.1, ...). The base image must declare the same version.
+[[ "$VERSION" =~ ^[5-7]\.[0-9]+(\.[0-9]+)?$ ]] \
+    || { echo "error: HEC-RAS version must be an install folder name such as 5.0, 5.0.7, 6.6 or 7.0.1" >&2; exit 2; }
+[[ "$BASE" =~ ^([a-z0-9][a-z0-9._/:-]*@)?sha256:[0-9a-f]{64}$ ]] \
+    || { echo "error: base image must be pinned by digest (name@sha256:<64 hex>) or a local image ID (sha256:<64 hex>)" >&2; exit 2; }
 [[ "$COMMIT" =~ ^[0-9a-f]{40}$ ]] || { echo "error: RAS_COMMANDER_COMMIT must be a full 40-hex commit" >&2; exit 2; }
 [[ "$TAG" =~ ^[a-z0-9][a-z0-9._/-]*:[A-Za-z0-9_][A-Za-z0-9._-]{0,127}$ ]] \
     || { echo "error: tag must be <repository>:<tag>" >&2; exit 2; }
@@ -110,11 +113,21 @@ if [ -n "$CONSTRAINTS" ]; then
     CONSTRAINT_ARG="-c /tmp/build-constraints.txt"
 fi
 
-echo "== build layer from $BASE ($BASE_ID), cpushim: $SHIM_SOURCE"
+# The GDAL bridge (and its label) is created only when the release ships
+# RasMapper's GDAL folder.
+if "$DOCKER" run --rm --network none --entrypoint /bin/sh "$BASE" -c \
+        "test -d \"$SEED/drive_c/Program Files (x86)/HEC/HEC-RAS/$VERSION/GDAL\""; then
+    GDAL_BRIDGE=C:/Python311/GDAL
+else
+    GDAL_BRIDGE=none
+    echo "note: HEC-RAS $VERSION has no GDAL directory in the base; skipping the GDAL bridge" >&2
+fi
+
+echo "== build layer from $BASE ($BASE_ID), cpushim: $SHIM_SOURCE, gdal bridge: $GDAL_BRIDGE"
 "$DOCKER" run --name "$BUILDER" --user root "${SECURITY[@]}" --cpus "$BUILD_CPUS" \
     -v "$WHEEL_PATH:/tmp/build-wheel/$WHEEL:ro" "${SHIM_MOUNT[@]}" "${CONSTRAINT_MOUNT[@]}" \
     --env "WHEEL=$WHEEL" --env "VERSION=$VERSION" --env "SEED=$SEED" --env "SHIM=$SHIM" \
-    --env "CONSTRAINT_ARG=$CONSTRAINT_ARG" \
+    --env "CONSTRAINT_ARG=$CONSTRAINT_ARG" --env "GDAL_BRIDGE=$GDAL_BRIDGE" \
     --entrypoint /bin/bash "$BASE" -c '
 set -euo pipefail
 python -m pip install --no-cache-dir --disable-pip-version-check $CONSTRAINT_ARG "/tmp/build-wheel/$WHEEL[compute]"
@@ -131,11 +144,13 @@ wineserver -w || true
 
 cd "$SEED/drive_c/Python311"
 target="../Program Files (x86)/HEC/HEC-RAS/$VERSION/GDAL"
-[ -d "$target" ] || { echo "error: HEC-RAS $VERSION GDAL directory missing: $target" >&2; exit 1; }
-if [ -L GDAL ] || [ -e GDAL ]; then
-    [ "$(readlink GDAL)" = "$target" ] || { echo "error: C:\\Python311\\GDAL exists and is not the bridge" >&2; exit 1; }
-else
-    ln -s "$target" GDAL
+if [ "$GDAL_BRIDGE" != none ]; then
+    [ -d "$target" ] || { echo "error: HEC-RAS $VERSION GDAL directory missing: $target" >&2; exit 1; }
+    if [ -L GDAL ] || [ -e GDAL ]; then
+        [ "$(readlink GDAL)" = "$target" ] || { echo "error: C:\\Python311\\GDAL exists and is not the bridge" >&2; exit 1; }
+    else
+        ln -s "$target" GDAL
+    fi
 fi
 
 if [ -f /tmp/build-shim/cpushim.so ]; then shim_src=/tmp/build-shim/cpushim.so; else shim_src=/opt/hecras-prepare/cpushim.so; fi
@@ -175,7 +190,7 @@ echo LAYER-OK
     --change "LABEL io.ras-commander.wheel-sha256=$WHEEL_SHA" \
     --change "LABEL io.ras-commander.parent-image=$BASE" \
     --change "LABEL io.ras-commander.parent-image-id=$BASE_ID" \
-    --change 'LABEL io.ras-commander.gdal-bridge=C:/Python311/GDAL' \
+    --change "LABEL io.ras-commander.gdal-bridge=$GDAL_BRIDGE" \
     --change "LABEL io.ras-commander.cpu-shim=$SHIM" \
     --change "LABEL io.ras-commander.cpu-shim-source=$SHIM_SOURCE" \
     --change "LABEL io.ras-commander.executor-recipe-sha256=$RECIPE_SHA" \
@@ -188,7 +203,9 @@ echo LAYER-OK
 
 echo "== verify $TAG"
 "$DOCKER" run --rm "${SECURITY[@]}" --cpus "$BUILD_CPUS" --network none \
+    --tmpfs /tmp:rw,exec,size=${VERIFY_TMPFS_SIZE:-12g} \
     --env "EXPECTED_VERSION=$WHEEL_VERSION" --env "EXPECTED_SEED=$SEED" --env "EXPECTED_SHIM=$SHIM" \
+    --env "GDAL_BRIDGE=$GDAL_BRIDGE" \
     --entrypoint /bin/bash "$TAG" -c '
 set -euo pipefail
 python - <<"PY"
@@ -213,7 +230,7 @@ PY
 python -m ras_commander.remote.execute_request --help >/dev/null
 private=$(mktemp -d)/prefix
 cp -a "$RAS_COMMANDER_WINE_PREFIX_SEED" "$private"
-ls -ld "$private/drive_c/Python311/GDAL/"
+[ "$GDAL_BRIDGE" = none ] || ls -ld "$private/drive_c/Python311/GDAL/"
 export WINEPREFIX=$private WINEARCH=$RAS_COMMANDER_WINE_ARCH WINEDEBUG=-all \
     WINEDLLOVERRIDES=winedbg.exe=d LD_PRELOAD=$RAS_COMMANDER_WINE_CPU_SHIM
 version=$(xvfb-run -a wine "$RAS_COMMANDER_WINE_PYTHON" -c "import ras_commander, ras_commander.remote.execute_request; print(ras_commander.__version__)" 2>/dev/null | tr -d "\r" | tail -n1)

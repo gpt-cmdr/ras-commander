@@ -10,12 +10,86 @@ converted to a SIF once, then pinned by its SHA-256.
 | Wine preprocessing (Docker workflow) | `rascommander/hec-ras-wine-precompute_<version>:v4` | [`RasDocker.preprocess_plan`](container-execution.md) | [`containers/hecras-wine-precompute`][precompute] |
 | Wine portable executor | Derived from the pre-compute image | [`RasSlurm`](slurm-portable-execution.md), [`RasApptainer.render_prepare_job`](slurm-apptainer-execution.md#wine-preparation-on-the-cluster), `RasPortableDocker` | [`containers/hecras-wine-executor`][executor] |
 
+Qualified images for every supported release are published at `ghcr.io/gpt-cmdr`: OCI images
+as `hec-ras-<role>_<version>` and byte-identical SIFs (ORAS) as `hec-ras-<role>-sif_<version>`,
+tag `0.106.0`. The packaged catalog pins each by digest and records the SIF's SHA-256, so
+`resolve_sif()` and `ensure_sif_command()` pull the published SIF and verify it.
+
 The pre-compute image is a Docker controller with its own entry point; under
 Apptainer, use the executor derived from it. The [container catalog](container-images.md)
 lists published registry digests. A registry digest and a SIF SHA-256 are
 different identities: jobs verify the SIF bytes.
 
-## Get a SIF
+## Which images apply to which HEC-RAS release
+
+| HEC-RAS | Full Windows compute under Wine (`wine-executor`; `RasSlurm`) | Wine preprocessing → native Linux solve (`wine-precompute` + `linux-unsteady`; `RasDocker`, `RasApptainer`) |
+| --- | --- | --- |
+| 5.0–5.0.6, 6.0 | Applies; accept the terms [in each task](#hec-ras-terms-and-conditions) | Not applicable: HEC published no Linux engine |
+| 5.0.7 | Applies; accept the terms in each task | Applies: Linux engine uses the `bin_ras` layout (`rasUnsteady64` plus the `.c##` computed geometry; see [HEC-RAS 5.0.7](slurm-apptainer-execution.md#hec-ras-507-bin_ras-layout)) |
+| 6.1 | Applies | Applies: canonical `RasUnsteady` + `libs/` layout with the pre-6.3.1 solver arguments (`RasUnsteady <project>.c## b##`; see [solver argument conventions](slurm-apptainer-execution.md#solver-argument-conventions-by-release)) |
+| 6.2, 6.3, 6.3.1, 6.4.1 | Applies | Not applicable: HEC published no Linux engine |
+| 6.5, 6.6, 7.x | Applies | Applies |
+
+HEC-RAS 4.x is not supported in containers: it has no command-line compute and runs only
+through its COM interface on Windows (see the [legacy COM interface](legacy-com-interface.md)).
+
+`RasContainerImages.applicable_roles(version)` returns the same answer in code.
+An applicable role still needs an image built for that release:
+[`build_release_images.sh`](#build-wine-images-for-a-release) builds the Wine images for any
+install-folder version (`5.0`, `5.0.7`, `6.3.1`, `6.6`, `7.0.1`, …) from HEC's official
+installer, and the [native recipe][native] builds the Linux engine image from HEC's Linux
+distribution. Published images are listed in the packaged catalog
+(`RasContainerImages.catalog()`) and in the [container catalog](container-images.md).
+
+## Use a local or cached image
+
+Jobs always run a SIF on shared storage that is verified by its SHA-256.
+`RasContainerImages.resolve_sif` picks it, in this order:
+
+1. **Your own image** — `sif_path=` (a site-built or locally cached SIF), used
+   as-is after hashing; pass `expected_sha256=` to pin it.
+2. **The cache** — `cache_dir=`, else `$RAS_COMMANDER_IMAGE_CACHE`, else
+   `~/.cache/ras-commander/images`. Files are named by registry digest and
+   re-verified on every use (against the published SIF hash, or the `.sha256`
+   sidecar recorded when the file was pulled).
+3. **The registry** — pulled into the cache only if `pull` allows: `"never"`
+   (offline; fail if not cached), `"missing"` (default), or `"always"`.
+
+```python
+from ras_commander import RasContainerImages
+from ras_commander.RasSlurm import SlurmSiteConfig
+
+native = RasContainerImages.resolve_sif(
+    "linux-unsteady", "6.6", cache_dir="/shared/ras-images", pull="never",
+)
+executor = RasContainerImages.resolve_sif(
+    "wine-executor", "5.0.6", sif_path="/shared/ras-images/hec-ras-wine-executor_5.0.6.sif",
+)
+site = SlurmSiteConfig(
+    site_name="example", apptainer_image=str(executor.path),
+    apptainer_image_sha256=executor.sha256, container_identity=executor.container_identity,
+)
+```
+
+When you submit from a workstation over SSH, fill the cluster's shared cache
+from its login host, or from a short job, instead. `ensure_sif_command` returns an idempotent bash
+snippet that reuses a verified copy or pulls one, and prints `<sha256>  <path>`:
+
+```python
+from ras_commander import RasApptainer, RasContainerImages, SshApptainerTransport
+
+command = RasContainerImages.ensure_sif_command("linux-unsteady", "6.6", "/shared/ras-images")
+result = SshApptainerTransport(profile).run(["bash", "-c", command])
+sha256, path = result.stdout.split()
+```
+
+Pass `work_dir=` (for example `/scratch/$SLURM_JOB_ID/apptainer-work`) to unpack
+image layers on node-local disk when the cache is on network storage; it defaults
+to `<cache>/.apptainer-work`. Point the cache at storage that compute nodes can
+read so one copy serves every job. Cache entries are never overwritten in place; a new release has a new
+digest and a new file.
+
+## Get a SIF manually
 
 **Pull by digest.** On a node with registry access, pull once to shared storage
 and record the SIF hash:
@@ -51,14 +125,62 @@ Put the SIF hash in the site configuration (`apptainer_image_sha256`,
 `prepare_image_sha256`) and `sif:sha256:<hash>` in `container_identity`.
 Never pull or convert per job.
 
+## Build Wine images for a release
+
+[`containers/hecras-wine-runtime/build_release_images.sh`][runtime] builds the Wine images for
+one HEC-RAS release from its official installer on a Linux Docker host:
+
+```bash
+CI=1 python -m pip wheel --no-deps --wheel-dir /tmp/rc-wheel .
+bash containers/hecras-wine-runtime/build_base.sh            # once: Wine 11, .NET 4.8, Windows Python 3.11
+RAS_COMMANDER_COMMIT=$(git rev-parse HEAD) \
+bash containers/hecras-wine-runtime/build_release_images.sh 5.0.7 HEC-RAS_507_Setup.exe \
+  /tmp/rc-wheel/ras_commander-<version>-py3-none-any.whl work/ archives/
+```
+
+1. **Runtime profile** (`build_runtime_profile.sh`): installs the release into a copy of the
+   shared base prefix, installs the wheel into Windows Python, accepts the
+   [terms](#hec-ras-terms-and-conditions) through HEC-RAS's own dialog, and writes
+   `runtime.json` with SHA-256 records for Python, the wheel, `Ras.exe`, the terms record, and the
+   installer. 7.x combined installers install nothing silently; extract their MSI first with
+   [`extract_installer.py`][native] and pass it as `HECRAS_MSI=<file.msi>`.
+2. **Pre-compute image** (`hec-ras-wine-precompute_<version>:v5-<commit>`): the bundled runtime,
+   the [CPU shim](#cpu-numbering-shim), and the `RasDocker` controller.
+3. **Executor image** (`hec-ras-wine-executor_<version>:<commit>`), derived from step 2 as
+   described [below](#wine-executor-image).
+4. `docker save` archives with `.sha256` and `.image-id` sidecars for
+   [conversion to SIF](#get-a-sif-manually). The pre-compute archive is kept only for releases
+   with a Linux engine. The release's example projects are exported beside them as
+   `hec-ras-examples_<version>_<commit>.tar.gz` (test data, not part of any image).
+
+Each release needs about 20 GB free on the Docker host while it builds; the script removes its
+images and BuildKit cache when done unless `KEEP_IMAGES=1`.
+
+## HEC-RAS terms and conditions
+
+HEC-RAS asks the user to accept its Terms and Conditions for Use (TCU) before it computes; under
+Wine an unanswered dialog would hold a job until its time limit. Acceptance is always given
+through HEC-RAS's own dialog, by the operator who runs the build or sets the option below, and is
+verified by relaunching HEC-RAS; ras-commander never writes acceptance state itself.
+
+- **6.1 and later** record acceptance in the Wine prefix. The profile build accepts once
+  (`accept_tcu.py`) and every task's private copy of the prefix inherits it. Building the image
+  means accepting HEC's terms for its users; publish such an image only if that is acceptable.
+- **6.0 and earlier** (including 5.0.7) record acceptance per machine, so a copied prefix does
+  not carry it. Set `RAS_COMMANDER_WINE_ACCEPT_TCU=1` to have each task accept the terms in its
+  own prefix before computing; under Apptainer pass it as
+  `APPTAINERENV_RAS_COMMANDER_WINE_ACCEPT_TCU=1` in the site or profile `environment`. Setting it
+  is your acceptance of the [HEC-RAS terms](https://www.hec.usace.army.mil/software/hec-ras/).
+  Without it the executor and prepare job refuse to start HEC-RAS and say why.
+
 ## Wine executor image
 
-[`build_executor_image.sh`][executor] derives the executor from a
-digest-pinned `rascommander/hec-ras-wine-precompute_<version>` image (6.5, 6.6,
-or 7.0.1). It installs one ras-commander wheel into both the Linux Python
+[`build_executor_image.sh`][executor] derives the executor from a pre-compute image:
+a digest-pinned `rascommander/hec-ras-wine-precompute_<version>` (6.5, 6.6, or 7.0.1) or a
+locally built one passed by image ID, as `build_release_images.sh` does. It installs one ras-commander wheel into both the Linux Python
 (with the `compute` extra) and the Windows `C:\Python311` in the Wine prefix,
 adds the GDAL bridge `C:\Python311\GDAL` → `HEC-RAS\<version>\GDAL` that
-RasMapper calls need, installs the [CPU shim](#cpu-numbering-shim), and sets
+RasMapper calls need (when the release ships that folder), installs the [CPU shim](#cpu-numbering-shim), and sets
 the executor environment:
 
 | Variable | Value |
@@ -119,31 +241,86 @@ created. Both also disable the Wine debugger so a crash exits instead of
 waiting for input.
 
 The published pre-compute `v4` images do not contain the shim; the executor
-build compiles it when the base lacks it. The successor pre-compute recipe
-(`v5`) bakes it in and must be rebuilt and requalified before publication.
+build compiles it when the base lacks it. The `v5` pre-compute images built by
+`build_release_images.sh` bake it in.
+
+The executor and prepare job also set `KMP_AFFINITY=disabled` unless it is already set:
+HEC-RAS 7.0's OpenMP runtime otherwise aborts under Wine with `OMP: Error #179`.
 
 ## Qualification status
 
-Live qualification on October 13, 2026 (ras-commander PR #525, Apptainer 1.5.4, partition `clb`): an executor built from this recipe on `rascommander/hec-ras-wine-precompute_6.6@sha256:5fbc07a2…` (7.37 GB image, SIF `98c88cee…`) and the published native 6.6 `v1` SIF (`428385b9…`), both converted with `build_sif_from_archive.sbatch`:
+Live qualification on October 13–14, 2026 (ras-commander PRs #525/#528, Apptainer 1.5.4, Slurm
+partition `clb`). For every release, the executor was built by `build_release_images.sh` from
+HEC's official installer, converted with `build_sif_from_archive.sbatch`, and run as a `RasSlurm`
+job array computing the release's own Muncie example, plans 01 (1D) and 03 (2D), under Wine with
+validated receipts (solver verified, volume accounting and inflow reconciliation passed). Where a
+Linux engine exists, `render_prepare_job` prepared plan 03 under Wine in the executor SIF and
+`render_job` solved it with the native SIF on 2 cores; the table compares the native water surface
+with the Wine result over computational cells.
 
-| Run | Result |
-| --- | --- |
-| `RasSlurm` pool, 2 slots, Muncie plans 01 (1D) and 03 (2D) under Wine | Both steps `COMPLETED 0:0` on one node, receipts validated, collection succeeded |
-| `RasSlurm` job array, throttle 2, same requests | Two array tasks, each one `rc-###` step, `COMPLETED 0:0`; results identical to the pool run |
-| `RasApptainer.render_prepare_job` → `collect_prepare`, plan 03 | Wine preprocessing in 34 s with the CPU shim; prepared project verified |
-| `RasApptainer.render_job` → `collect` on the prepared project, published native SIF | 2 cores, 33 s; results populated to the planned end time |
-| Wine (1 core) vs native (2 cores) water surface, plan 03 | Max difference 0.0031 ft at any time step; maximum-WSE map within 0.0001 ft |
+| HEC-RAS | Wine compute, plans 01 + 03 | Native solve, plan 03 | Max WSE difference, any time step | Max-WSE map difference |
+| --- | --- | --- | --- | --- |
+| 7.0.1 | Passed | Passed, 30 s | 0.010 ft | 0.0001 ft |
+| 7.0 | Passed | Passed, 32 s | 0.008 ft | 0.0005 ft |
+| 6.6 | Passed | Passed, 24 s | 0.010 ft | 0.0001 ft |
+| 6.5 | Passed | Passed, 25 s | 0.011 ft | 0.0001 ft |
+| 6.4.1, 6.3.1, 6.3, 6.2 | Passed | No Linux engine | — | — |
+| 6.1 | Passed | Passed, 40 s | 0.009 ft | 0.0001 ft |
+| 6.0 | Passed (terms accepted per task) | No Linux engine | — | — |
+| 5.0.7 | Passed (terms accepted per task) | Passed, 74 s | 0.012 ft | 0.0001 ft |
+| 5.0.6, 5.0.5, 5.0.4, 5.0.3, 5.0.1, 5.0 | Passed (terms accepted per task) | No Linux engine | — | — |
 
-Each Wine step's memory peak reached about 6 GiB (cgroup accounting, including
-the private prefix copy and file cache); budget `slurm_memory` at 6–8 GiB per
-Wine request and measure on your models. The 6.5 and 7.0.1 executors, the
-shim-bearing pre-compute `v5`, and TACC were not run. Build and convert the
-images, then run one representative model end to end on your cluster before a
-campaign. A successful job is computational evidence, not engineering
-approval.
+### Gridded precipitation
+
+BaldEagleCrkMulti2D plan 06 ("Gridded Precip - Infiltration", HEC's example from 6.0 on) was
+run with two precipitation sources: the bundled NEXRAD DSS grid (run window 2018-09-09
+18:00-19:20), and three synthetic hourly GeoTIFF frames imported with
+`RasUnsteady.set_gridded_precipitation_geotiff` (ras-commander writes the NetCDF and the
+"Imported Raster Data" payload HEC-RAS's GUI import would write). The check is the cumulative
+precipitation depth that reached the mesh.
+
+| HEC-RAS | DSS grid, Wine | DSS grid, native | GeoTIFF, Wine | GeoTIFF, native |
+| --- | --- | --- | --- | --- |
+| 7.0.1, 7.0, 6.6, 6.5 | Passed, 0.11454 in | Passed, identical | Passed, 0.11575 in | Passed, identical |
+| 6.4.1, 6.3.1, 6.3, 6.2 | Passed, 0.11454 in | No Linux engine | Passed, 0.11575 in | No Linux engine |
+| 6.1 | Passed, 0.11454 in | Passed, identical | Passed, 0.10978 in | Passed, identical |
+| 6.0 | Passed, 0.11454 in (terms per task) | No Linux engine | Passed, 0.10978 in | No Linux engine |
+
+The DSS results match the Windows reference for this window; the GeoTIFF results for 6.2 and
+later match the Windows/Wine 6.6 reference. 6.0 and 6.1 map the same raster to the mesh
+differently (identically under Wine and natively), so compare raster results within a release.
+A plan whose `.u##` names a GDAL raster without the imported payload fails in every release
+(`Expected precip dataset ... Imported Raster Data/Values does not exist`): HEC-RAS reads GDAL
+rasters only in its GUI import, so import them with ras-commander. HEC-RAS 5.x has no gridded
+meteorology.
+
+`RasDocker` with the final images ran Muncie plan 03 end to end (Wine preparation, native
+solve) for 7.0.1, 7.0, 6.6, 6.5, 6.1, and 5.0.7, and the DSS case for 7.0.1, 7.0, 6.6, 6.5,
+and 6.1, with the same cumulative precipitation. The SIFs in the packaged catalog are the
+exact files of the final Slurm requalification (2026-10-15): for every Linux-engine release,
+Muncie plans 01/03 under Wine and natively, and the DSS case under Wine and natively. Hosts whose Docker AppArmor profile denies Wine's sockets need
+`apparmor_profile="unconfined"`.
+
+Notes:
+
+- The differences are between engines (Windows under Wine on 1 core, Linux on 2 cores), not
+  run-to-run noise. 7.x writes engine-specific placeholder values in trailing boundary cells, so
+  compare computational cells only (`Geometry/2D Flow Areas/Attributes` `Cell Count`).
+- HEC-RAS 5.x writes volume accounting as `Vol Accounting …` attributes on
+  `Results/Unsteady/Summary` rather than a `Volume Accounting` group; receipts validate either.
+- The 6.6 executor was also run in pool mode with identical results, and 436 steady 6.6 requests
+  ran earlier through `RasSlurm` (see [Portable execution on Slurm](slurm-portable-execution.md)).
+- Each Wine step's memory peak reached about 6 GiB (cgroup accounting, including the private
+  prefix copy and file cache); budget `slurm_memory` at 6–8 GiB per Wine request and measure on
+  your models. TACC was not run.
+
+That is one example project per release. Build and convert the images, then run one
+representative model end to end on your cluster before a campaign. A successful job is
+computational evidence, not engineering approval.
 
 [native]: https://github.com/gpt-cmdr/ras-commander/blob/main/containers/hecras-unsteady/README.md
 [precompute]: https://github.com/gpt-cmdr/ras-commander/blob/main/containers/hecras-wine-precompute/README.md
 [executor]: https://github.com/gpt-cmdr/ras-commander/blob/main/containers/hecras-wine-executor/README.md
 [sifbuilder]: https://github.com/gpt-cmdr/ras-commander/blob/main/containers/apptainer/README.md
 [shim]: https://github.com/gpt-cmdr/ras-commander/blob/main/containers/hecras-wine-precompute/cpushim.c
+[runtime]: https://github.com/gpt-cmdr/ras-commander/blob/main/containers/hecras-wine-runtime

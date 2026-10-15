@@ -27,7 +27,7 @@ import sys
 import time
 from numbers import Number
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple, Union
+from typing import Callable, Dict, List, Optional, Tuple, Union
 
 from ._legal_dialogs import (
     TCU_BLOCKING_ERROR,
@@ -352,6 +352,13 @@ class RasPreprocess:
             )
 
         gridded_stability_state: Dict[str, object] = {}
+        solver_started = lambda: RasPreprocess._unsteady_compute_started(
+            process.pid,
+            tmp_hdf,
+            b_file,
+            x_file,
+            artifact_baseline=artifact_baseline,
+        )
         if requires_gridded_precipitation:
             alternate_signal_condition = lambda: (
                 RasPreprocess._completepreprocess_handoff_ready(
@@ -361,6 +368,7 @@ class RasPreprocess:
                     gridded_stability_state,
                     started_at=start_time,
                     artifact_baseline=artifact_baseline,
+                    solver_started=solver_started,
                 )
             )
             alternate_signal_description = (
@@ -445,6 +453,7 @@ class RasPreprocess:
                     gridded_stability_state,
                     started_at=start_time,
                     artifact_baseline=artifact_baseline,
+                    solver_started=solver_started,
                 ):
                     signal_source = "bco_completepreprocess_writer_quiescent"
                     logger.info(
@@ -640,8 +649,17 @@ class RasPreprocess:
             import h5py
             from ._preprocess_validation import _event_condition_errors
 
+            from ._preprocess_validation import _hdf_ras_major_version
+
             with h5py.File(tmp_hdf, "r") as hdf:
                 event_errors = _event_condition_errors(hdf, precipitation_mode)
+                ras_major = _hdf_ras_major_version(hdf)
+            if ras_major is not None and ras_major < 6:
+                c_file = project_folder / f"{project_name}.c{geometry_number}"
+                if not c_file.is_file() or c_file.stat().st_size == 0:
+                    event_errors.append(
+                        f"HEC-RAS {ras_major}.x preprocessing did not write {c_file.name}"
+                    )
         except Exception as exc:
             event_errors = [f"could not validate Event Conditions: {exc}"]
         if event_errors:
@@ -1457,8 +1475,15 @@ class RasPreprocess:
         artifact_baseline: Optional[
             Dict[Path, Optional[Tuple[int, int]]]
         ] = None,
+        solver_started: Optional[Callable[[], bool]] = None,
     ) -> bool:
         """Return when an observed native writer has ended and artifacts are quiet.
+
+        Also return once no writer is active and ``solver_started`` reports this
+        launch's own unsteady solver running: HEC-RAS starts the solver only
+        after preprocessing has written the event conditions, and the solver's
+        own writes would otherwise keep the artifacts from ever going quiet.
+        Some releases (6.1) run no separate writer at all.
 
         This is an active-engine predicate.  It intentionally never opens the
         temporary HDF: HDF5 readers can deny Windows writer access.  The caller
@@ -1473,9 +1498,14 @@ class RasPreprocess:
             if writers == (-1,):
                 logger.warning(
                     "Could not enumerate CompletePreProcess writers; refusing "
-                    "gridded-preprocessing handoff"
+                    "gridded-preprocessing handoff for this poll"
                 )
-                stability_state.clear()
+                # A failed scan proves nothing about the writer, so restart the
+                # quiescence wait but keep whether a writer was already seen:
+                # once it has exited it can never be observed again.
+                for key in ("active_completepreprocess_pids", "writer_absent_since",
+                            "fingerprint", "observed_at"):
+                    stability_state.pop(key, None)
                 return False
             if stability_state.get("active_completepreprocess_pids") != writers:
                 logger.info(
@@ -1489,6 +1519,21 @@ class RasPreprocess:
             stability_state.pop("fingerprint", None)
             stability_state.pop("observed_at", None)
             return False
+
+        # HEC-RAS starts its unsteady solver only after preprocessing; with no
+        # writer running (a successful scan), the solver's start is the handoff.
+        # Some releases (6.1) never run a separate CompletePreProcess writer.
+        # Completed-file validation still requires the materialized precipitation.
+        if solver_started is not None and solver_started():
+            stability_state.pop("active_completepreprocess_pids", None)
+            stability_state["writer_observation"] = (
+                "solver_started" if stability_state.get("completepreprocess_seen")
+                else "solver_started_no_writer_observed")
+            logger.info(
+                "No CompletePreProcess writer is active and the owned unsteady "
+                "solver started; stopping before it advances"
+            )
+            return True
 
         # The narrow process matcher may not have observed a writer yet.  That
         # absence is not evidence that no writer can still start, so it cannot

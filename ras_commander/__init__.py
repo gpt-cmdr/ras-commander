@@ -116,6 +116,7 @@ _LAZY_EXPORTS = {
     'ApptainerStatus': ('.RasApptainer', 'ApptainerStatus'),
     'ApptainerCollection': ('.RasApptainer', 'ApptainerCollection'),
     'ApptainerPrepareCollection': ('.RasApptainer', 'ApptainerPrepareCollection'),
+    'RasContainerImages': ('.RasContainerImages', 'RasContainerImages'),
     'ApptainerTransport': ('.RasApptainer', 'ApptainerTransport'),
     'SshApptainerTransport': ('.RasApptainer', 'SshApptainerTransport'),
     'ApptainerProfileError': ('.RasApptainer', 'ApptainerProfileError'),
@@ -512,7 +513,7 @@ __all__ = [
     'RasPortableDocker', 'PortableDockerExecutionResult', 'PortableDockerPoolResult',
     'RasSlurm', 'SlurmSiteConfig', 'SlurmTransportConfig', 'SlurmSubmission',
     'SlurmStatus', 'SlurmTaskAccounting', 'SlurmCollection',
-    'RasApptainer', 'ApptainerSiteProfile', 'ApptainerJob', 'ApptainerStatus', 'ApptainerCollection', 'ApptainerPrepareCollection', 'ApptainerTransport', 'SshApptainerTransport', 'ApptainerProfileError', 'InputCheckError',
+    'RasApptainer', 'ApptainerSiteProfile', 'ApptainerJob', 'ApptainerStatus', 'ApptainerCollection', 'ApptainerPrepareCollection', 'RasContainerImages', 'ApptainerTransport', 'SshApptainerTransport', 'ApptainerProfileError', 'InputCheckError',
 
     # DSS operations (lazy loaded)
     'RasDss',

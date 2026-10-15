@@ -1019,3 +1019,17 @@ def test_slurm_array_status_summarizes_every_task(tmp_path, monkeypatch, sacct, 
     monkeypatch.setattr(module.subprocess, "run", run)
 
     assert RasSlurm.status(submission).allocation_state == expected
+
+
+def test_launcher_accepts_a_symlinked_node_scratch_root(tmp_path, monkeypatch):
+    launcher, rendered, scratch_root, commands = _launcher_batch(
+        tmp_path, monkeypatch, mode="pool"
+    )
+    batch = rendered.submission_directory / "slurm_batch.json"
+    payload = json.loads(batch.read_text())
+    link = tmp_path / "scratch-link"
+    link.symlink_to(scratch_root)
+    payload["site"]["node_scratch_root"] = str(link)
+    batch.write_text(json.dumps(payload))
+    assert launcher.run(batch)
+    assert len(commands) == 2

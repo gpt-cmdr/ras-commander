@@ -26,7 +26,10 @@ from ._container_resume import find_resume, record_resume
 
 
 logger = get_logger(__name__)
-_VERSIONS = {"6.5", "6.6", "7.0.1"}
+# Releases with the published Docker Hub v4/v1 pairs used as defaults. Other
+# releases with a HEC Linux engine take their defaults from the packaged image
+# catalog (RasContainerImages) or an explicit ``image=``.
+_DOCKER_HUB_DEFAULT_VERSIONS = {"6.5", "6.6", "7.0.1"}
 _RUN_ID = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,63}\Z")
 _OWNER_LABEL = "info.rascommander.docker-run-owner"
 _RESERVED_MOUNTS = {
@@ -135,6 +138,7 @@ class RasDocker:
         replace_generated: bool = False, docker_executable: str = "docker",
         pull: str = "missing", run_id: Optional[str] = None, user: str = "root",
         stream_callback: Optional[Any] = None, resume: bool = False,
+        apparmor_profile: Optional[str] = None,
     ) -> ContainerResult:
         """Create ``.tmp.hdf``, ``.b##`` and ``.x##`` in the Wine image.
 
@@ -160,6 +164,10 @@ class RasDocker:
             run_id: Optional unique 1–64 character run ID. IDs cannot be reused,
                 including after failed launches; omitted IDs are generated.
             user: Container user; ``"root"`` supports Windows bind mounts.
+            apparmor_profile: Optional AppArmor profile for the container
+                (``--security-opt apparmor=<profile>``). Hosts whose default
+                Docker profile denies Wine's sockets (``wineserver: socket:
+                Permission denied``) need ``"unconfined"`` or a site profile.
             stream_callback: Partial ExecutionCallback object. An optional
                 ``on_container_event(event)`` receives project/stage identity,
                 live stdout/stderr, validated completion and resume events.
@@ -177,6 +185,7 @@ class RasDocker:
             mounts=mounts, timeout=timeout, num_cores=num_cores,
             replace_generated=replace_generated, docker_executable=docker_executable,
             pull=pull, run_id=run_id, user=user, prepare_receipt=None,
+            apparmor_profile=apparmor_profile,
             stream_callback=stream_callback, resume=resume,
         )
 
@@ -191,6 +200,7 @@ class RasDocker:
         pull: str = "missing", run_id: Optional[str] = None, user: str = "root",
         prepare_receipt: Optional[Union[str, Path]] = None,
         stream_callback: Optional[Any] = None, resume: bool = False,
+        apparmor_profile: Optional[str] = None,
     ) -> ContainerResult:
         """Run preprocessed inputs with the native Linux unsteady solver image.
 
@@ -208,6 +218,7 @@ class RasDocker:
             mounts=mounts, timeout=timeout, num_cores=num_cores,
             replace_generated=replace_generated, docker_executable=docker_executable,
             pull=pull, run_id=run_id, user=user, prepare_receipt=prepare_receipt,
+            apparmor_profile=apparmor_profile,
             stream_callback=stream_callback, resume=resume,
         )
 
@@ -223,6 +234,7 @@ class RasDocker:
         docker_executable: str = "docker", pull: str = "missing",
         run_id: Optional[str] = None, user: str = "root",
         stream_callback: Optional[Any] = None, resume: bool = False,
+        apparmor_profile: Optional[str] = None,
     ) -> Tuple[ContainerResult, Optional[ContainerResult]]:
         """Prepare then compute, stopping if preparation fails.
 
@@ -240,6 +252,7 @@ class RasDocker:
             replace_generated=replace_generated, docker_executable=docker_executable,
             pull=pull, user=user,
             stream_callback=stream_callback, resume=resume,
+            apparmor_profile=apparmor_profile,
         )
         prepared = RasDocker.preprocess_plan(
             project_path, plan_number, image=preprocess_image,
@@ -332,10 +345,22 @@ class RasDocker:
     @staticmethod
     def _execute(stage, project_path, plan_number, *, version, image, mounts,
                  timeout, num_cores, replace_generated, docker_executable, pull,
-                 run_id, user, prepare_receipt, stream_callback=None, resume=False):
+                 run_id, user, prepare_receipt, stream_callback=None, resume=False,
+                 apparmor_profile=None):
         started = time.monotonic()
-        if version not in _VERSIONS:
-            raise ValueError("version must be '6.5', '6.6' or '7.0.1'")
+        from .RasContainerImages import RasContainerImages, applicable_roles, normalize_version
+
+        try:
+            folder = normalize_version(version)
+        except ValueError as exc:
+            raise ValueError(f"version must be a HEC-RAS release such as '6.6': {exc}") from exc
+        if folder != version:
+            raise ValueError(f"version must be the install folder name {folder!r}")
+        if "linux-unsteady" not in applicable_roles(version):
+            raise ValueError(
+                f"RasDocker runs Wine preprocessing then a native Linux solve; HEC-RAS {version} "
+                "has no HEC Linux engine. Run it entirely under Wine with RasPortableDocker or RasSlurm."
+            )
         for name, value in (("timeout", timeout), ("num_cores", num_cores)):
             if isinstance(value, bool) or not isinstance(value, Integral) or value < 1:
                 raise ValueError(f"{name} must be a positive integer")
@@ -350,13 +375,23 @@ class RasDocker:
         for name, value in (("docker_executable", docker_executable), ("user", user)):
             if not isinstance(value, str) or not value.strip() or any(c in value for c in "\x00\r\n"):
                 raise ValueError(f"{name} must be a nonempty string without control characters")
+        if apparmor_profile is not None and not (
+                isinstance(apparmor_profile, str)
+                and re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,127}", apparmor_profile)):
+            raise ValueError("apparmor_profile must be a profile name such as 'unconfined'")
         project = RasUtils.safe_resolve(Path(project_path).expanduser())
         if not project.is_file() or project.suffix.lower() != ".prj":
             raise ValueError("project_path must point to an existing .prj file")
         plan = RasDocker._normalize_plan(plan_number)
         family = "wine-precompute" if stage == "prepare" else "linux-unsteady"
         tag = "v4" if stage == "prepare" else "v1"
-        image = image if image is not None else f"rascommander/hec-ras-{family}_{version}:{tag}"
+        if image is None and version in _DOCKER_HUB_DEFAULT_VERSIONS:
+            image = f"rascommander/hec-ras-{family}_{version}:{tag}"
+        elif image is None:
+            try:
+                image = RasContainerImages.get(family, version).reference
+            except LookupError as exc:
+                raise ValueError(f"{exc}; pass image= with a local or registry image") from exc
         if not isinstance(image, str) or not image or image.startswith("-") or any(c.isspace() or c == "\x00" for c in image):
             raise ValueError("image must be a Docker image reference, not CLI options")
         known_image = re.search(r"(?:^|/)hec-ras-(wine-precompute|linux-unsteady)_([^:@/]+)(?=[:@]|$)", image)
@@ -412,6 +447,7 @@ class RasDocker:
             command = [docker_executable, "run", "--rm", "--pull", pull,
                        "--name", name, "--label", f"{_OWNER_LABEL}={owner}",
                        "--cidfile", str(cid_file), "--user", user,
+                       *(["--security-opt", f"apparmor={apparmor_profile}"] if apparmor_profile else []),
                        "--cpus", str(num_cores), *mount_args,
                        image, stage, "--project", f"/job/{project.name}", "--plan", plan,
                        "--timeout", str(timeout), "--run-id", run_id,

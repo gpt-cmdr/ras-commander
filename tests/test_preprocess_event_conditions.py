@@ -143,3 +143,18 @@ def test_active_text_point_mode_cannot_be_hidden_by_missing_hdf_group(tmp_path):
     with h5py.File(path, "a") as hdf:
         del hdf["Event Conditions/Meteorology"]
         assert any("Precipitation/Values" in p for p in _event_condition_errors(hdf, mode))
+
+
+def test_hec_ras_5x_hdf_does_not_require_completed_flag(tmp_path):
+    from ras_commander._preprocess_validation import _event_condition_errors
+
+    path = tmp_path / "model507.p01.tmp.hdf"
+    with h5py.File(path, "w") as hdf:
+        hdf.attrs["File Version"] = np.bytes_(b"HEC-RAS 5.0.7 March 2019")
+        hdf.create_group("Event Conditions/Unsteady")
+    with h5py.File(path, "r") as hdf:
+        assert _event_condition_errors(hdf) == []
+    with h5py.File(path, "a") as hdf:
+        hdf.attrs["File Version"] = np.bytes_(b"HEC-RAS 6.6 September 2024")
+    with h5py.File(path, "r") as hdf:
+        assert any("Completed Successfully" in p for p in _event_condition_errors(hdf))

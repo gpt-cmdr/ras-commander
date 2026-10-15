@@ -22,6 +22,8 @@ _WINE_ARCH = "RAS_COMMANDER_WINE_ARCH"
 _WINE_DELEGATED = "RAS_COMMANDER_WINE_DELEGATED"
 _WINE_PREFIX_WINDOWS = "RAS_COMMANDER_WINE_PREFIX_WINDOWS"
 _WINE_CPU_SHIM = "RAS_COMMANDER_WINE_CPU_SHIM"
+_WINE_ACCEPT_TCU = "RAS_COMMANDER_WINE_ACCEPT_TCU"
+_TCU_HELPER = r"C:\ras-commander-runtime\accept_tcu.py"
 _WINDOWS_SAFE_PATH_CHARACTERS = frozenset(
     "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 ._()+-\\:"
 )
@@ -123,6 +125,64 @@ def _xvfb_command(xvfb_run: str) -> list[str]:
     return [xvfb_run, "-n", str(_free_x_display())]
 
 
+def _is_legacy_tcu_release(ras_executable: str) -> bool:
+    """Return whether the release keeps per-machine TCU state (HEC-RAS 6.0 and earlier).
+
+    Their acceptance recorded at image build time does not carry to another
+    Wine host, so it must be given in the task's own prefix.
+    """
+    import re as _re
+
+    match = _re.fullmatch(r"(\d+)\.(\d+)(?:\.\d+)?", PureWindowsPath(ras_executable).parent.name)
+    return bool(match) and (int(match.group(1)), int(match.group(2))) <= (6, 0)
+
+
+def _accept_legacy_tcu(tools, environment, windows_python, ras_executable, task_root, windows_path):
+    """Accept the HEC-RAS TCU through its dialog in this task's private prefix.
+
+    Only for HEC-RAS 6.0 and earlier, and only when the operator opts in with
+    ``RAS_COMMANDER_WINE_ACCEPT_TCU=1`` (the operator's acceptance of HEC's
+    terms for the runs it starts). Uses the image's ``accept_tcu.py`` and
+    requires a verified relaunch; sets ``RAS_COMMANDER_TCU_PROBE`` to the
+    task-scoped record so ``RasTcu`` reports the acceptance.
+    """
+    if os.environ.get(_WINE_ACCEPT_TCU) != "1":
+        raise RuntimeError(
+            "HEC-RAS 6.0 and earlier record TCU acceptance per machine, so an image's "
+            "build-time acceptance does not apply here and HEC-RAS would wait on its "
+            "Terms and Conditions dialog. Set RAS_COMMANDER_WINE_ACCEPT_TCU=1 to accept "
+            "the terms (https://www.hec.usace.army.mil/software/hec-ras/) in each task."
+        )
+    probe = task_root / "tcu-probe.json"
+    completed = subprocess.run(
+        [*_xvfb_command(tools["xvfb-run"]), tools["wine"], windows_python, _TCU_HELPER,
+         ras_executable, windows_path(probe), "task"],
+        check=False, shell=False, env=environment, timeout=900,
+    )
+    try:
+        import json as _json
+
+        record = _json.loads(probe.read_text(encoding="utf-8"))
+        verified = record["executables"][0]["verified"] is True
+    except (OSError, ValueError, KeyError, IndexError):
+        verified = False
+    if completed.returncode != 0 or not verified:
+        raise RuntimeError("HEC-RAS TCU acceptance in the task prefix was not verified")
+    environment["RAS_COMMANDER_TCU_PROBE"] = windows_path(probe)
+    print("ras-commander Wine runtime: TCU accepted in the task prefix", flush=True)
+
+
+def _disable_openmp_affinity(environment: dict) -> None:
+    """Disable Intel OpenMP thread pinning for Windows HEC-RAS under Wine.
+
+    HEC-RAS 7.0 enables CPU affinity; under Wine in a Slurm CPU set its
+    ``GetNumaNodeProcessorMaskEx()`` query fails and the unsteady engine aborts
+    with ``OMP: Error #179``. The allocation already bounds the CPUs, so the
+    pinning adds nothing. A caller-provided ``KMP_AFFINITY`` is kept.
+    """
+    environment.setdefault("KMP_AFFINITY", "disabled")
+
+
 def _disable_wine_debugger(overrides: str) -> str:
     """Return DLL overrides that stop a crash from waiting in winedbg."""
     entries = [entry for entry in overrides.split(";") if entry.strip()]
@@ -211,6 +271,7 @@ def _execute_with_wine(
     environment["WINEDLLOVERRIDES"] = _disable_wine_debugger(
         environment.get("WINEDLLOVERRIDES", "")
     )
+    _disable_openmp_affinity(environment)
     if cpu_shim is not None:
         preload = environment.get("LD_PRELOAD", "").strip()
         if str(cpu_shim) not in preload.replace(":", " ").split():
@@ -280,6 +341,9 @@ def _execute_with_wine(
         ):
             raise ValueError("winepath returned an unsafe private prefix path")
         environment[_WINE_PREFIX_WINDOWS] = str(prefix_windows_path)
+        if _is_legacy_tcu_release(request.ras_executable):
+            _accept_legacy_tcu(tools, environment, windows_python, request.ras_executable,
+                               task_root, windows_path)
         print("ras-commander Wine runtime: starting delegated execution", flush=True)
         completed = subprocess.run(
             [

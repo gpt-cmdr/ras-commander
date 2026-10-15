@@ -66,6 +66,33 @@ extras. `init_ras_worker()` now accepts only `"psexec"`, `"local"`, and
 - `remote/docker/setup_docker.py` lists its HEC-RAS 6.6 entry under `6.6`
   again; it was mislabeled `7.0`, so `--version 6.6` was rejected.
 
+- `RasContainerImages` adds a packaged, digest-pinned image catalog and a
+  local SIF cache: `resolve_sif(role, version, sif_path=..., cache_dir=...,
+  pull="never"|"missing"|"always")` uses a supplied or cached SIF before
+  pulling, and `ensure_sif_command()` fills a shared cluster cache over SSH.
+  `applicable_roles()` reports which image roles apply to HEC-RAS 5.0 through
+  7.x: `wine-executor` for every release, and `wine-precompute` +
+  `linux-unsteady` only where HEC publishes a Linux engine (5.0.7, 6.1, 6.5,
+  6.6, 7.x). HEC-RAS 4.x versions are refused with a pointer to `RasControl`
+  (4.x computes only through COM on Windows).
+- `containers/hecras-wine-runtime/build_release_images.sh` builds the
+  pre-compute and executor images for any Windows release from 5.0 through 7.x
+  from HEC's official installer; all of them (and native 5.0.7, 6.1, 6.5, 6.6,
+  7.0, 7.0.1) were qualified live on Slurm on October 13–14, 2026.
+- HEC-RAS 5.0.7 runs natively: `RasApptainer`, `RasCmdr.compute_plan_linux`, and
+  `RasDocker` support HEC's `bin_ras` layout with the `.c##` solver arguments,
+  and 6.1 uses the same `cfile` arguments with the canonical layout.
+- HEC-RAS 6.0 and earlier record terms acceptance per machine: set
+  `RAS_COMMANDER_WINE_ACCEPT_TCU=1` (under Apptainer,
+  `APPTAINERENV_RAS_COMMANDER_WINE_ACCEPT_TCU=1`) to accept them through
+  HEC-RAS's dialog in each task; without it the executor refuses to start.
+- `validate_unsteady_results()` reads HEC-RAS 5.x volume accounting
+  (`Vol Accounting …` attributes on `Results/Unsteady/Summary`).
+- The Wine executor sets `KMP_AFFINITY=disabled` unless set, avoiding
+  HEC-RAS 7.0's `OMP: Error #179` under Wine.
+- `ensure_sif_command(..., work_dir=...)` unpacks image layers outside a
+  network-backed cache.
+
 **Breaking changes**
 
 - Removed `SlurmSiteConfig.memory_per_task`, which never set memory; use

@@ -73,6 +73,13 @@ _VERSION_PATTERN = re.compile(r"(?<!\d)(\d+)\.(\d+)(?:\.(\d+))?")
 
 HEC_TERMS_URL = "https://www.hec.usace.army.mil/software/hec-ras/"
 
+# Container images record a black-box acceptance probe at build time: the
+# operator accepted the dialog for the exact Ras.exe, and a relaunch showed no
+# dialog. Under Wine, releases up to 6.0 record acceptance in a form that is
+# not interpretable from the registry, so this record is the only evidence.
+TCU_PROBE_ENVIRONMENT = "RAS_COMMANDER_TCU_PROBE"
+TCU_PROBE_SCHEMA = "ras-commander-tcu-probe/v1"
+
 
 @dataclass(frozen=True)
 class TcuStatus:
@@ -174,6 +181,42 @@ class RasTcu:
             if len(parts) >= 2:
                 version_label = parts[-2]
         return RasTcu._has_tcu_sentinel(hive, subkey, version_label)
+
+    @staticmethod
+    def _running_under_wine() -> bool:
+        """Return whether this Windows process runs under Wine."""
+        try:
+            import ctypes
+
+            return hasattr(ctypes.windll.ntdll, "wine_get_version")
+        except Exception:
+            return False
+
+    @staticmethod
+    def _probe_verifies(exe: str) -> bool:
+        """Return whether a build-time probe record verifies this exact Ras.exe."""
+        import hashlib
+        import json
+
+        record_path = os.environ.get(TCU_PROBE_ENVIRONMENT, "").strip()
+        if not record_path:
+            return False
+        try:
+            record = json.loads(Path(record_path).read_text(encoding="utf-8"))
+            entries = record.get("executables", []) if record.get("schema") == TCU_PROBE_SCHEMA else []
+            for entry in entries:
+                legacy = RasTcu._version_tuple(Path(exe).parent.name)
+                # HEC-RAS 6.0 and earlier keep per-machine state: only an
+                # acceptance given in this task's prefix counts.
+                if legacy is not None and legacy[:2] <= (6, 0) and record.get("scope") != "task":
+                    continue
+                if (str(entry.get("ras_executable", "")).casefold() == str(exe).casefold()
+                        and entry.get("verified") is True):
+                    digest = hashlib.sha256(Path(exe).read_bytes()).hexdigest()
+                    return digest == entry.get("ras_executable_sha256")
+        except (OSError, ValueError, AttributeError):
+            return False
+        return False
 
     @staticmethod
     def _version_tuple(version_label: Optional[str]) -> Optional[Tuple[int, int, int]]:
@@ -295,6 +338,9 @@ class RasTcu:
         version = version or Path(install_dir).name
         install_version = Path(install_dir).name
 
+        if RasTcu._probe_verifies(exe):
+            return TcuStatus(True, version, install_dir, None, "probe-verified")
+
         try:
             import winreg
         except ImportError:  # pragma: no cover - Windows only
@@ -314,6 +360,12 @@ class RasTcu:
                 and RasTcu._node_exists(winreg.HKEY_CURRENT_USER, subkey)
             ):
                 existing_key = subkey
+
+        legacy = RasTcu._version_tuple(install_version)
+        if legacy is not None and legacy[:2] <= (6, 0) and RasTcu._running_under_wine():
+            # The legacy sentinel written under Wine is not interpretable;
+            # report unknown rather than a false negative.
+            return TcuStatus(None, version, install_dir, existing_key, "wine-legacy-unverifiable")
 
         if existing_key is not None:
             return TcuStatus(

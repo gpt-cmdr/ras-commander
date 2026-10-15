@@ -455,13 +455,19 @@ class HdfUtils:
         """
         Parse a datetime string from a RAS simulation window into a datetime object.
 
+        HEC-RAS writes the end of a day as ``2400`` (``02JAN1900 2400``), which
+        is midnight at the start of the next day.
+
         Args:
             datetime_str (str): The datetime string to parse.
 
         Returns:
             datetime: The parsed datetime object.
         """
-        return datetime.strptime(datetime_str, "%d%b%Y %H%M")
+        text = datetime_str.strip()
+        if text.endswith(" 2400"):
+            return datetime.strptime(text[:-5], "%d%b%Y") + timedelta(days=1)
+        return datetime.strptime(text, "%d%b%Y %H%M")
 
 
 # Rename to parse_duration and make public

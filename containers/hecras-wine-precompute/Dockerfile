@@ -26,10 +26,10 @@ ARG RAS_COMMANDER_COMMIT
 ARG RAS_COMMANDER_WHEEL_SHA256
 ARG HEC_RAS_VERSION=6.6
 ARG WINE_VERSION=11.0.0.0~trixie-1
-ARG XVFB_VERSION=2:21.1.16-1.3+deb13u3
+ARG XVFB_VERSION=2:21.1.16-1.3+deb13u4
 ARG XAUTH_VERSION=1:1.1.2-1.1
 ARG PROCPS_VERSION=2:4.0.4-9
-ARG TINI_VERSION=0.19.0-3+b7
+ARG TINI_VERSION=0.19.0-3+b8
 
 RUN dpkg --add-architecture i386 \
     && apt-get update \
@@ -98,6 +98,7 @@ RUN --mount=type=bind,from=hecras_runtime,target=/seed,readonly \
     && find /runtime/wine-seed -type d -exec chmod 755 {} + \
     && find /runtime/wine-seed -type f -exec chmod u+rw,go+r,go-w {} + \
     && python -c "import os; from prepare import load_runtime; load_runtime(os.environ['RAS_COMMANDER_PREPARE_RUNTIME_MANIFEST'], os.environ['RAS_COMMANDER_PREPARE_HECRAS_VERSION'])"
-ENV RAS_COMMANDER_PREPARE_BUNDLED_RUNTIME=1
+ENV RAS_COMMANDER_PREPARE_BUNDLED_RUNTIME=1 \
+    RAS_COMMANDER_TCU_PROBE=C:\\ras-commander-runtime\\tcu-probe.json
 LABEL io.ras-commander.hec-ras-runtime="bundled"
 USER rasworker

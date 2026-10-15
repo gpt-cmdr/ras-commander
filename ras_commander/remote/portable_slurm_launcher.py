@@ -91,9 +91,14 @@ def _job_scratch(site: dict) -> Path:
     creates it 0700. Either way it must be a real directory owned by the job
     user, so another user cannot pre-create or redirect it.
     """
-    root = Path(site["node_scratch_root"])
+    configured = Path(site["node_scratch_root"])
     job = os.environ.get("SLURM_JOB_ID", "")
-    if not root.is_absolute() or root.is_symlink() or not root.is_dir():
+    if not configured.is_absolute():
+        raise ValueError("node_scratch_root must be an absolute directory")
+    # Sites may point /scratch elsewhere (clb07-slurm: /scratch -> /projects/scratch).
+    # The per-job directory below must still be a real directory owned by this user.
+    root = configured.resolve()
+    if not root.is_dir():
         raise ValueError("node_scratch_root must be an existing absolute directory")
     if not re.fullmatch(r"[0-9]+", job):
         raise ValueError("SLURM_JOB_ID is required for step scratch")

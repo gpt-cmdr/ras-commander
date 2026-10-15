@@ -65,3 +65,11 @@ def test_parse_duration_public_method():
         days=1,
         seconds=1,
     )
+
+
+def test_window_datetime_reads_end_of_day_2400():
+    from datetime import datetime
+    from ras_commander.hdf import HdfUtils
+    assert HdfUtils.parse_ras_window_datetime("02JAN1900 2400") == datetime(1900, 1, 3)
+    assert HdfUtils.parse_ras_window_datetime("31DEC1999 2400") == datetime(2000, 1, 1)
+    assert HdfUtils.parse_ras_window_datetime("02JAN1900 0130") == datetime(1900, 1, 2, 1, 30)
