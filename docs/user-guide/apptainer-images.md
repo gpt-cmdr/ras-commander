@@ -24,8 +24,8 @@ different identities: jobs verify the SIF bytes.
 
 | HEC-RAS | Full Windows compute under Wine (`wine-executor`; `RasSlurm`) | Wine preprocessing → native Linux solve (`wine-precompute` + `linux-unsteady`; `RasDocker`, `RasApptainer`) |
 | --- | --- | --- |
-| 5.0–5.0.6, 6.0 | Applies; accept the terms [in each task](#hec-ras-terms-and-conditions) | Not applicable: HEC published no Linux engine |
-| 5.0.7 | Applies; accept the terms in each task | Applies: Linux engine uses the `bin_ras` layout (`rasUnsteady64` plus the `.c##` computed geometry; see [HEC-RAS 5.0.7](slurm-apptainer-execution.md#hec-ras-507-bin_ras-layout)) |
+| 5.0–5.0.6, 6.0 | Applies ([one setting](#hec-ras-60-and-earlier)) | Not applicable: HEC published no Linux engine |
+| 5.0.7 | Applies ([one setting](#hec-ras-60-and-earlier)) | Applies: Linux engine uses the `bin_ras` layout (`rasUnsteady64` plus the `.c##` computed geometry; see [HEC-RAS 5.0.7](slurm-apptainer-execution.md#hec-ras-507-bin_ras-layout)) |
 | 6.1 | Applies | Applies: canonical `RasUnsteady` + `libs/` layout with the pre-6.3.1 solver arguments (`RasUnsteady <project>.c## b##`; see [solver argument conventions](slurm-apptainer-execution.md#solver-argument-conventions-by-release)) |
 | 6.2, 6.3, 6.3.1, 6.4.1 | Applies | Not applicable: HEC published no Linux engine |
 | 6.5, 6.6, 7.x | Applies | Applies |
@@ -139,10 +139,8 @@ bash containers/hecras-wine-runtime/build_release_images.sh 5.0.7 HEC-RAS_507_Se
 ```
 
 1. **Runtime profile** (`build_runtime_profile.sh`): installs the release into a copy of the
-   shared base prefix, installs the wheel into Windows Python, accepts the
-   [terms](#hec-ras-terms-and-conditions) through HEC-RAS's own dialog, and writes
-   `runtime.json` with SHA-256 records for Python, the wheel, `Ras.exe`, the terms record, and the
-   installer. 7.x combined installers install nothing silently; extract their MSI first with
+   shared base prefix, installs the wheel into Windows Python, and writes `runtime.json` with
+   SHA-256 records for Python, the wheel, `Ras.exe`, and the installer. 7.x combined installers install nothing silently; extract their MSI first with
    [`extract_installer.py`][native] and pass it as `HECRAS_MSI=<file.msi>`.
 2. **Pre-compute image** (`hec-ras-wine-precompute_<version>:v5-<commit>`): the bundled runtime,
    the [CPU shim](#cpu-numbering-shim), and the `RasDocker` controller.
@@ -156,22 +154,11 @@ bash containers/hecras-wine-runtime/build_release_images.sh 5.0.7 HEC-RAS_507_Se
 Each release needs about 20 GB free on the Docker host while it builds; the script removes its
 images and BuildKit cache when done unless `KEEP_IMAGES=1`.
 
-## HEC-RAS terms and conditions
+## HEC-RAS 6.0 and earlier
 
-HEC-RAS asks the user to accept its Terms and Conditions for Use (TCU) before it computes; under
-Wine an unanswered dialog would hold a job until its time limit. Acceptance is always given
-through HEC-RAS's own dialog, by the operator who runs the build or sets the option below, and is
-verified by relaunching HEC-RAS; ras-commander never writes acceptance state itself.
-
-- **6.1 and later** record acceptance in the Wine prefix. The profile build accepts once
-  (`accept_tcu.py`) and every task's private copy of the prefix inherits it. Building the image
-  means accepting HEC's terms for its users; publish such an image only if that is acceptable.
-- **6.0 and earlier** (including 5.0.7) record acceptance per machine, so a copied prefix does
-  not carry it. Set `RAS_COMMANDER_WINE_ACCEPT_TCU=1` to have each task accept the terms in its
-  own prefix before computing; under Apptainer pass it as
-  `APPTAINERENV_RAS_COMMANDER_WINE_ACCEPT_TCU=1` in the site or profile `environment`. Setting it
-  is your acceptance of the [HEC-RAS terms](https://www.hec.usace.army.mil/software/hec-ras/).
-  Without it the executor and prepare job refuse to start HEC-RAS and say why.
+For 6.0 and earlier (including 5.0.7), set `RAS_COMMANDER_WINE_ACCEPT_TCU=1` in each task;
+under Apptainer pass it as `APPTAINERENV_RAS_COMMANDER_WINE_ACCEPT_TCU=1` in the site or
+profile `environment`. Without it the executor and prepare job stop with an explanation.
 
 ## Wine executor image
 
@@ -266,9 +253,9 @@ with the Wine result over computational cells.
 | 6.5 | Passed | Passed, 25 s | 0.011 ft | 0.0001 ft |
 | 6.4.1, 6.3.1, 6.3, 6.2 | Passed | No Linux engine | — | — |
 | 6.1 | Passed | Passed, 40 s | 0.009 ft | 0.0001 ft |
-| 6.0 | Passed (terms accepted per task) | No Linux engine | — | — |
-| 5.0.7 | Passed (terms accepted per task) | Passed, 74 s | 0.012 ft | 0.0001 ft |
-| 5.0.6, 5.0.5, 5.0.4, 5.0.3, 5.0.1, 5.0 | Passed (terms accepted per task) | No Linux engine | — | — |
+| 6.0 | Passed | No Linux engine | — | — |
+| 5.0.7 | Passed | Passed, 74 s | 0.012 ft | 0.0001 ft |
+| 5.0.6, 5.0.5, 5.0.4, 5.0.3, 5.0.1, 5.0 | Passed | No Linux engine | — | — |
 
 ### Gridded precipitation
 
@@ -284,7 +271,7 @@ precipitation depth that reached the mesh.
 | 7.0.1, 7.0, 6.6, 6.5 | Passed, 0.11454 in | Passed, identical | Passed, 0.11575 in | Passed, identical |
 | 6.4.1, 6.3.1, 6.3, 6.2 | Passed, 0.11454 in | No Linux engine | Passed, 0.11575 in | No Linux engine |
 | 6.1 | Passed, 0.11454 in | Passed, identical | Passed, 0.10978 in | Passed, identical |
-| 6.0 | Passed, 0.11454 in (terms per task) | No Linux engine | Passed, 0.10978 in | No Linux engine |
+| 6.0 | Passed, 0.11454 in | No Linux engine | Passed, 0.10978 in | No Linux engine |
 
 The DSS results match the Windows reference for this window; the GeoTIFF results for 6.2 and
 later match the Windows/Wine 6.6 reference. 6.0 and 6.1 map the same raster to the mesh

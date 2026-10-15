@@ -45,11 +45,9 @@ rather than substituting an image by name.
     Requalify your image and site with a representative request before a campaign; a
     receipt is computational evidence, not hydraulic approval.
 
-HEC-RAS 6.0 and earlier record their terms acceptance per machine, so an executor image for
-those releases cannot carry it. Accept the terms in each task by setting
-`environment={"APPTAINERENV_RAS_COMMANDER_WINE_ACCEPT_TCU": "1"}` on `SlurmSiteConfig`; without
-it the executor refuses to start HEC-RAS rather than wait on the dialog. See
-[HEC-RAS terms and conditions](apptainer-images.md#hec-ras-terms-and-conditions).
+For HEC-RAS 6.0 and earlier, set
+`environment={"APPTAINERENV_RAS_COMMANDER_WINE_ACCEPT_TCU": "1"}` on `SlurmSiteConfig` (see
+[HEC-RAS 6.0 and earlier](apptainer-images.md#hec-ras-60-and-earlier)).
 
 To reuse a local or cached SIF (or fill a shared cache once), use
 `RasContainerImages.resolve_sif()` or `ensure_sif_command()`; see
