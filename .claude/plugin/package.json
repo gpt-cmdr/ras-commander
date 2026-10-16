@@ -2,7 +2,7 @@
   "manifest": {
     "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
     "name": "ras-commander",
-    "version": "0.1.0",
+    "version": "0.1.1",
     "description": "Coordinate HEC-RAS, API discovery, and cloud-native GIS workflows through current public packages.",
     "author": {
       "name": "gpt-cmdr",
