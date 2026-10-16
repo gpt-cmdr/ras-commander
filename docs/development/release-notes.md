@@ -9,6 +9,83 @@ alone does not identify a development checkout.
 
 ### Unreleased
 
+**2D cell results exclude ghost cells by default (behavior change)**
+
+HEC-RAS writes cell results for the physical cells of a 2D flow area followed
+by ghost cells outside the perimeter. `Geometry/2D Flow Areas/Attributes`
+`Cell Count` is the physical count. Ghost values are placeholders, not
+solution results: summary maximum and minimum water surface are 0.0, and
+minimum elevation is NaN. Including them produced wrong results. On
+DavisStormSystem p02, the `HdfResultsProducts` maximum-WSE raster published
+73,004 pixels at 0.0. `HdfResultsQuery` point queries near the perimeter
+snapped to ghost centers and returned a maximum WSE of 0.0. Monte Carlo
+statistics also carried permanently-zero columns.
+
+- Cell results from `get_mesh_summary()`, `get_mesh_summary_values()`,
+  `get_mesh_max_ws()`, `get_mesh_min_ws()`, `get_mesh_max_ws_err()`,
+  `get_mesh_max_iter()`, `get_mesh_last_iter()`, `get_mesh_max_depth()`,
+  `get_mesh_timeseries()`, `iter_mesh_timeseries()`, and
+  `get_mesh_cells_timeseries()` now contain physical cells only. Pass
+  `include_ghost_cells=True` for the previous shapes.
+- Results carry an `is_ghost_cell` column, or a `cell_id` coordinate for
+  xarray results.
+- For `get_mesh_timeseries()` and `iter_mesh_timeseries()`, negative
+  `spatial_selection` positions now count back from the last physical cell.
+- When an HDF has no `Cell Count`, every cell is kept and a warning is logged.
+- Face results are unchanged.
+- `HdfMesh.get_mesh_cell_points()` accepts `include_ghost_cells=False`; its
+  default is unchanged.
+- `HdfResultsQuery`, `HdfResultsProducts`, `PrecipMrms` flood animation,
+  `RasMonteCarlo` full-domain extraction, `export_depth_rasters_at_times()`,
+  and `HdfResultsSediment` now use physical cells only. The depth-raster grid
+  extent is unchanged; only ghost-derived values are removed.
+- `check_stability` iteration averages no longer include ghost zeros.
+- **Migration:** code that pairs cell results by position with the full
+  `Cells Center Coordinate` array must join on `cell_id`, use
+  `HdfMesh.get_mesh_cell_points(..., include_ghost_cells=False)`, or pass
+  `include_ghost_cells=True`.
+
+**Unreadable boundary groups raise instead of returning an empty frame**
+
+`HdfBndry.get_bc_lines()`, `get_reference_lines()`, and `get_reference_points()`
+caught every read error and returned an empty GeoDataFrame. A malformed or
+unreadable group was therefore indistinguishable from a geometry with no
+features. As `get_breaklines()` and `get_refinement_regions()` already do, they
+now raise a `ValueError` naming the HDF and group. An HDF without the group
+still returns an empty GeoDataFrame.
+
+**AORC precipitation works with current xarray**
+
+The `precip`, `notebooks`, and `all` extras pinned `zarr<3`, but current
+xarray releases require zarr 3 and pass `zarr_format` to `zarr.open_group()`.
+A fresh install therefore paired xarray 2026.9 with zarr 2.18 and failed every
+AORC read with `TypeError: open_group() got an unexpected keyword argument
+'zarr_format'`. The cap is removed (`zarr>=2.14.0`). AORC downloads were
+verified with xarray 2026.9.0 and zarr 3.4.1.
+
+**HdfBase timestamp readers accept paths**
+
+`HdfBase.get_unsteady_timestamps()` and `HdfBase.get_simulation_start_time()`
+accept a `str` or `Path` as well as an open `h5py.File`. A path previously
+failed with `TypeError: string indices must be integers`.
+`get_unsteady_timestamps()` also reads `Time Date Stamp` when a plan HDF has
+no `Time Date Stamp (ms)` dataset, as in HEC-RAS 5.0.x, and raises a
+`ValueError` naming both datasets when neither exists.
+
+**Missing optional packages name the extra to install**
+
+A public export whose module needs a package outside the core install now
+raises an `ImportError` naming the package and the extra that provides it,
+instead of a bare `ModuleNotFoundError`. psutil and pywin32 point to
+`pip install "ras-commander[compute]"`; other packages point to
+`pip install "ras-commander[full]"`. `RasCmdr.compute_plan()`,
+`compute_parallel()`, `compute_test_mode()`, and `inspect_plan_processes()`
+check for psutil before launching HEC-RAS, and `RasControl` reports missing
+pywin32 before opening the COM interface.
+
+
+### v0.106.0 (October 2026)
+
 **Multi-area computation points regenerate correctly**
 
 `GeomMesh.generate()` now regenerates the selected 2D area's computation
@@ -29,6 +106,16 @@ Functions that return xarray objects or GeoDataFrames raise an `ImportError`
 that names the missing package and `pip install "ras-commander[full]"`. The
 installation guide no longer states that the `compute` extra covers all
 direct HDF result extraction.
+
+**Stage hydrograph edits stay within the selected boundary**
+
+Stage hydrograph authoring now bounds every edit to the selected boundary block,
+including long inline tables and repeated edits. The new
+`RasUnsteady.set_stage_hydrograph_initial_stage()` setter can preserve dry
+initialization when an owned 2D child changes from normal depth to a stage
+hydrograph. It preserves sibling boundaries and source bytes and reports
+pre/post digests; it does not resolve native HEC-RAS `USXSID` solver errors
+(#517).
 
 **Removed unimplemented remote worker stubs**
 
@@ -106,79 +193,34 @@ extras. `init_ras_worker()` now accepts only `"psexec"`, `"local"`, and
   `timeout_seconds`, `rsync_executable`, `launcher_python_executable`) as
   no-ops; unknown fields are rejected.
 
-**2D cell results exclude ghost cells by default (behavior change)**
+**Parent-grid mesh anchoring and geometry reliability**
 
-HEC-RAS writes cell results for the physical cells of a 2D flow area followed
-by ghost cells outside the perimeter. `Geometry/2D Flow Areas/Attributes`
-`Cell Count` is the physical count. Ghost values are placeholders, not
-solution results: summary maximum and minimum water surface are 0.0, and
-minimum elevation is NaN. Including them produced wrong results. On
-DavisStormSystem p02, the `HdfResultsProducts` maximum-WSE raster published
-73,004 pixels at 0.0. `HdfResultsQuery` point queries near the perimeter
-snapped to ghost centers and returned a maximum WSE of 0.0. Monte Carlo
-statistics also carried permanently-zero columns.
+`GeomMesh.get_grid_anchor()` and `GeomMesh.generate(..., grid_anchor=...)` let
+child meshes follow a parent's regular grid while RAS Mapper applies
+refinement regions and breaklines. `RasBreakout2D.prepare_cloned_geometry()`
+can pass the parent anchor through; an optional breakline perimeter-crossing
+limit can discard lines that weave across a child trim boundary (#529).
+Multi-area geometries now regenerate the selected area's computation points
+instead of silently retaining stale points (#531).
 
-- Cell results from `get_mesh_summary()`, `get_mesh_summary_values()`,
-  `get_mesh_max_ws()`, `get_mesh_min_ws()`, `get_mesh_max_ws_err()`,
-  `get_mesh_max_iter()`, `get_mesh_last_iter()`, `get_mesh_max_depth()`,
-  `get_mesh_timeseries()`, `iter_mesh_timeseries()`, and
-  `get_mesh_cells_timeseries()` now contain physical cells only. Pass
-  `include_ghost_cells=True` for the previous shapes.
-- Results carry an `is_ghost_cell` column, or a `cell_id` coordinate for
-  xarray results.
-- For `get_mesh_timeseries()` and `iter_mesh_timeseries()`, negative
-  `spatial_selection` positions now count back from the last physical cell.
-- When an HDF has no `Cell Count`, every cell is kept and a warning is logged.
-- Face results are unchanged.
-- `HdfMesh.get_mesh_cell_points()` accepts `include_ghost_cells=False`; its
-  default is unchanged.
-- `HdfResultsQuery`, `HdfResultsProducts`, `PrecipMrms` flood animation,
-  `RasMonteCarlo` full-domain extraction, `export_depth_rasters_at_times()`,
-  and `HdfResultsSediment` now use physical cells only. The depth-raster grid
-  extent is unchanged; only ghost-derived values are removed.
-- `check_stability` iteration averages no longer include ghost zeros.
-- **Migration:** code that pairs cell results by position with the full
-  `Cells Center Coordinate` array must join on `cell_id`, use
-  `HdfMesh.get_mesh_cell_points(..., include_ghost_cells=False)`, or pass
-  `include_ghost_cells=True`.
+**Clear compiled 2D-area infiltration associations**
 
-**Unreadable boundary groups raise instead of returning an empty frame**
+`RasMap.clear_geometry_infiltration()` now removes stale infiltration
+associations from both geometry-level and per-area HDF attributes while
+preserving unrelated area attributes. It refuses redirected paths and unsafe
+HDF/filesystem links before writing (#530).
 
-`HdfBndry.get_bc_lines()`, `get_reference_lines()`, and `get_reference_points()`
-caught every read error and returned an empty GeoDataFrame. A malformed or
-unreadable group was therefore indistinguishable from a geometry with no
-features. As `get_breaklines()` and `get_refinement_regions()` already do, they
-now raise a `ValueError` naming the HDF and group. An HDF without the group
-still returns an empty GeoDataFrame.
+**Native GDAL NetCDF precipitation import**
 
-**AORC precipitation works with current xarray**
-
-The `precip`, `notebooks`, and `all` extras pinned `zarr<3`, but current
-xarray releases require zarr 3 and pass `zarr_format` to `zarr.open_group()`.
-A fresh install therefore paired xarray 2026.9 with zarr 2.18 and failed every
-AORC read with `TypeError: open_group() got an unexpected keyword argument
-'zarr_format'`. The cap is removed (`zarr>=2.14.0`). AORC downloads were
-verified with xarray 2026.9.0 and zarr 3.4.1.
-
-**HdfBase timestamp readers accept paths**
-
-`HdfBase.get_unsteady_timestamps()` and `HdfBase.get_simulation_start_time()`
-accept a `str` or `Path` as well as an open `h5py.File`. A path previously
-failed with `TypeError: string indices must be integers`.
-`get_unsteady_timestamps()` also reads `Time Date Stamp` when a plan HDF has
-no `Time Date Stamp (ms)` dataset, as in HEC-RAS 5.0.x, and raises a
-`ValueError` naming both datasets when neither exists.
-
-**Missing optional packages name the extra to install**
-
-A public export whose module needs a package outside the core install now
-raises an `ImportError` naming the package and the extra that provides it,
-instead of a bare `ModuleNotFoundError`. psutil and pywin32 point to
-`pip install "ras-commander[compute]"`; other packages point to
-`pip install "ras-commander[full]"`. `RasCmdr.compute_plan()`,
-`compute_parallel()`, `compute_test_mode()`, and `inspect_plan_processes()`
-check for psutil before launching HEC-RAS, and `RasControl` reports missing
-pywin32 before opening the COM interface.
+`RasUnsteady.configure_gridded_gdal_precipitation()` and
+`import_gridded_gdal_precipitation()` add a vendor-GDAL route for cumulative
+depth and interval-ending hourly average rates. The import validates CF time
+and units, stages the accumulated-raster sidecar, then atomically replaces it
+after validation. Qualification is limited to the documented platform and
+release profiles and requires physical-input and hydraulic gates. Wine 7.0
+rate-attempt intermittency remains under investigation (#536), and Wine 6.0
+preprocessing/startup remains unqualified (#532); neither limitation is
+resolved by this release (#533).
 
 ### v0.105.0 (October 2026)
 
