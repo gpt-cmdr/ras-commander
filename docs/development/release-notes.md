@@ -9,6 +9,8 @@ alone does not identify a development checkout.
 
 ### Unreleased
 
+### v0.106.1 (October 2026)
+
 **Point-precipitation preprocessing repairs HEC-RAS's intermittent failure**
 
 HEC-RAS's own `RasProcess.exe CompletePreProcess` intermittently writes no
@@ -99,6 +101,12 @@ instead of a bare `ModuleNotFoundError`. psutil and pywin32 point to
 check for psutil before launching HEC-RAS, and `RasControl` reports missing
 pywin32 before opening the COM interface.
 
+**Terrain qualification evidence and limits are documented**
+
+The terrain subset guide records the paired-sampling and complete-polygon evidence,
+retains known whole-support collar differences, and separates those checks from
+fresh runtime qualification and hydraulic acceptance. See
+[receipt-bound downstream qualification](../terrain-input-subsets.md#receipt-bound-downstream-qualification).
 
 ### v0.106.0 (October 2026)
 
