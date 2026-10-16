@@ -123,8 +123,6 @@ class RasPreprocess:
         accept_tcu: bool = False,
         precipitation_repair_attempts: int = 6,
         precipitation_repair_timeout: Optional[int] = None,
-        precipitation_repair_attempts: int = 6,
-        precipitation_repair_timeout: Optional[int] = None,
     ) -> PreprocessResult:
         """
         Preprocess a plan on Windows for Linux execution.
