@@ -1,11 +1,11 @@
 {
   "schema_version": 1,
   "purpose": "Current stable package discovery; not a compatibility qualification record.",
-  "observed_utc": "2026-10-13T15:10:12.545643+00:00",
+  "observed_utc": "2026-10-16T14:15:44.814592+00:00",
   "packages": {
     "ras-commander": {
       "status": "released",
-      "version": "0.104.0",
+      "version": "0.106.1",
       "requires_python": ">=3.10",
       "requires_dist": [
         "Pillow>=9.0; extra == \"all\"",
@@ -13,15 +13,6 @@
         "affine; extra == \"dss-native\"",
         "aiohttp; extra == \"all\"",
         "aiohttp; extra == \"notebooks\"",
-        "azure-identity>=1.14; extra == \"all\"",
-        "azure-identity>=1.14; extra == \"remote-all\"",
-        "azure-identity>=1.14; extra == \"remote-azure\"",
-        "azure-mgmt-compute>=30.0; extra == \"all\"",
-        "azure-mgmt-compute>=30.0; extra == \"remote-all\"",
-        "azure-mgmt-compute>=30.0; extra == \"remote-azure\"",
-        "boto3>=1.28; extra == \"all\"",
-        "boto3>=1.28; extra == \"remote-all\"",
-        "boto3>=1.28; extra == \"remote-aws\"",
         "cfgrib>=0.9.10; extra == \"all\"",
         "cfgrib>=0.9.10; extra == \"all\"",
         "cfgrib>=0.9.10; extra == \"full\"",
@@ -57,7 +48,6 @@
         "pandas",
         "paramiko>=3.0; extra == \"all\"",
         "paramiko>=3.0; extra == \"remote-all\"",
-        "paramiko>=3.0; extra == \"remote-ssh\"",
         "psutil>=5.6.6; extra == \"all\"",
         "psutil>=5.6.6; extra == \"compute\"",
         "psutil>=5.6.6; extra == \"execution\"",
@@ -84,9 +74,6 @@
         "pywin32>=227; sys_platform == \"win32\" and extra == \"compute\"",
         "pywin32>=227; sys_platform == \"win32\" and extra == \"execution\"",
         "pywin32>=227; sys_platform == \"win32\" and extra == \"full\"",
-        "pywinrm>=0.4.3; extra == \"all\"",
-        "pywinrm>=0.4.3; extra == \"remote-all\"",
-        "pywinrm>=0.4.3; extra == \"remote-winrm\"",
         "rasterio; extra == \"all\"",
         "rasterio; extra == \"all\"",
         "rasterio; extra == \"full\"",
@@ -116,30 +103,30 @@
         "xarray; extra == \"all\"",
         "xarray; extra == \"full\"",
         "xarray; extra == \"precip\"",
-        "zarr<3,>=2.14.0; extra == \"all\"",
-        "zarr<3,>=2.14.0; extra == \"notebooks\"",
-        "zarr<3,>=2.14.0; extra == \"precip\"",
+        "zarr>=2.14.0; extra == \"all\"",
+        "zarr>=2.14.0; extra == \"notebooks\"",
+        "zarr>=2.14.0; extra == \"precip\"",
         "zipfile-deflate64; python_version < \"3.11\" and extra == \"ebfe\""
       ],
       "archives": [
         {
-          "filename": "ras_commander-0.104.0-py3-none-any.whl",
+          "filename": "ras_commander-0.106.1-py3-none-any.whl",
           "package_type": "bdist_wheel",
-          "sha256": "8ee5d53b413f9c306aa5cd10fdafa41d5534f719829906a94d4f1ace8bcd38e5",
-          "url": "https://files.pythonhosted.org/packages/65/a1/61c1638213bd56ba9bb0db3dd3642eedc4bbc88f1ea9dcd5d39bf054e038/ras_commander-0.104.0-py3-none-any.whl",
-          "size_bytes": 2552012,
-          "uploaded_utc": "2026-10-04T12:51:45.349863Z"
+          "sha256": "9f94bc25aaf8ceb533056b4df0b00b6b03c27b54060625965548fadcd0cc6d0d",
+          "url": "https://files.pythonhosted.org/packages/22/da/08eb3bcf532b56e710a18044503cfe0f1df61755e354069eab6c858cdb62/ras_commander-0.106.1-py3-none-any.whl",
+          "size_bytes": 2754209,
+          "uploaded_utc": "2026-10-16T14:13:54.256195Z"
         },
         {
-          "filename": "ras_commander-0.104.0.tar.gz",
+          "filename": "ras_commander-0.106.1.tar.gz",
           "package_type": "sdist",
-          "sha256": "7de8d5923e2029b5241b85d9c743b184c3e8333132f51492fbdd30d007bc7aac",
-          "url": "https://files.pythonhosted.org/packages/fc/48/8a47e582b6a2d3ef4c15e6eccb9e777189f8166fb5c84d5d9950c7b9859a/ras_commander-0.104.0.tar.gz",
-          "size_bytes": 3249400,
-          "uploaded_utc": "2026-10-04T12:51:47.003318Z"
+          "sha256": "c4206019c9a4e50e72ed9f758c1ca4dfc2dffdcc0cedb022b65d9cf7e3cca219",
+          "url": "https://files.pythonhosted.org/packages/40/3a/2cca9207b50bfa1310860cede354938dc876d8514966d7a50b792e8c9ce2/ras_commander-0.106.1.tar.gz",
+          "size_bytes": 3617172,
+          "uploaded_utc": "2026-10-16T14:13:55.980027Z"
         }
       ],
-      "source": "https://pypi.org/pypi/ras-commander/0.104.0/json",
+      "source": "https://pypi.org/pypi/ras-commander/0.106.1/json",
       "qualification": "not_established_by_metadata_check"
     },
     "ras-commander-mcp": {
