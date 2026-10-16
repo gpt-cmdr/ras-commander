@@ -298,3 +298,29 @@ HEC documents terrain rounding at 1/32 of a map unit by default, which can chang
 a value by as much as 0.015625 map units (feet in a foot CRS). A TIFF can therefore
 use lossless compression
 while storing rounded elevations. See the [HEC-RAS 6.6 Terrain Layer manual](https://www.hec.usace.army.mil/confluence/rasdocs/rmum/6.6/terrain-layer).
+
+## Receipt-bound downstream qualification
+
+The `fim-commander` HG cohort qualifies the frozen sampling implementation at
+`a778591974f12706a2fd24e48471851500cc32d4`. All 22 original profile holds
+clear when both terrains receive identical binary64 XY coordinates through the
+same native Float32 point reader. Independent native profile station sets followed
+by secondary Float64 interpolation caused the earlier comparison residuals;
+no elevation tolerance is introduced. Original failed receipts remain immutable,
+and the QA-only successors do not rebuild the carriers.
+
+The complete-polygon sample replays one unchanged 20,296-vertex polygon and twelve
+unchanged channels. Its final comparison passes all 5,980,124 centres inside the
+child domain and complete replayed footprints, plus twelve exact channel profiles.
+Domain-only selection and a fixed 1,000-foot raster buffer are downstream policies;
+this library preserves each selected native record in full. Historical
+whole-support collar differences remain retained and are not relabeled as equality.
+See the [original cohort audit](https://github.com/CLB-Engineering-Corporation/fim-commander/blob/gen3/input-pack-polygons-unions/docs/reviews/gen3-domain-input-pack/HG_API_ORIGINAL_COHORT.md)
+and [polygon audit](https://github.com/CLB-Engineering-Corporation/fim-commander/blob/gen3/input-pack-polygons-unions/docs/reviews/gen3-domain-input-pack/HG_API_POLYGON_EVIDENCE.md)
+for immutable request, image and receipt identities.
+
+These frozen receipts precede the managed Task completion implementation at
+`7ad83a39a`. They establish neither its native qualification nor the cause of prior
+Python.NET dispatcher crashes. The isolated worker deadline and fresh
+receipt-bound native qualification remain required. Terrain comparison is not
+hydraulic acceptance or H&H engineering approval.
