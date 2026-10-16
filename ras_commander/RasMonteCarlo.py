@@ -1398,7 +1398,10 @@ class RasMonteCarlo:
                 f"Could not resolve geometry HDF for {hdf_path}"
             )
 
-        cell_points = HdfMesh.get_mesh_cell_points(geom_hdf_path)
+        # Physical cells only, matching the other full-domain extractors.
+        cell_points = HdfMesh.get_mesh_cell_points(
+            geom_hdf_path, include_ghost_cells=False
+        )
         if cell_points.empty:
             raise ValueError(f"No mesh cell points found in {geom_hdf_path}")
 

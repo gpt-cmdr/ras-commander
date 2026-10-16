@@ -330,6 +330,7 @@ def test_synthetic_mixed_meshes_log_exactly_one_source_per_mesh(
         "mesh_name",
         "cell_id",
         "maximum_depth",
+        "is_ghost_cell",
         "geometry",
     ]
     assert _provenance_messages(caplog) == [
@@ -354,6 +355,7 @@ def test_max_depth_returns_typed_spatial_empty_result_with_source_crs(tmp_path):
         "mesh_name",
         "cell_id",
         "maximum_depth",
+        "is_ghost_cell",
         "geometry",
     ]
     assert result.geometry.name == "geometry"
@@ -841,6 +843,7 @@ def test_max_depth_on_real_completed_hdf_with_stored_depth(caplog):
         "mesh_name",
         "cell_id",
         "maximum_depth",
+        "is_ghost_cell",
         "geometry",
     ]
     assert result.geometry.name == "geometry"

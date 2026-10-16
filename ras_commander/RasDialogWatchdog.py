@@ -806,7 +806,8 @@ class DialogWatchdog:
             if not _WIN32_UNAVAILABLE_WARNED:
                 logger.warning(
                     "DialogWatchdog requires pywin32 (win32gui); dialogs will NOT "
-                    "be auto-dismissed. Install pywin32 on Windows or pass "
+                    "be auto-dismissed. Install pywin32 on Windows "
+                    '(pip install "ras-commander[compute]") or pass '
                     "dialog_watchdog=False to disable this watchdog."
                 )
                 _WIN32_UNAVAILABLE_WARNED = True

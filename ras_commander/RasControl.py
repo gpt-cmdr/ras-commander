@@ -67,6 +67,7 @@ except ImportError:
     WIN32_AVAILABLE = False
 
 from .LoggingConfig import get_logger
+from ._optional_deps import OptionalDependencyError, missing_dependency_message
 from .Decorators import log_call
 from .ExecutionArtifacts import (
     finalize_plan_execution_artifacts,
@@ -1725,6 +1726,12 @@ class RasControl:
 
         if not project_path.exists():
             raise FileNotFoundError(f"Project file not found: {project_path}")
+        if win32com is None:
+            raise OptionalDependencyError(
+                missing_dependency_message(
+                    "win32com", "RasControl's HECRASController COM interface (Windows only)"
+                )
+            )
 
         com_rc = None
         result = None

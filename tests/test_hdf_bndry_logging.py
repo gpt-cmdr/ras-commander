@@ -193,10 +193,12 @@ def test_boundary_parse_errors_include_hdf_path_and_group(
     with h5py.File(geom_hdf, "w") as hdf_file:
         hdf_file.create_group("Geometry/Boundary Condition Lines")
 
-    with caplog.at_level("ERROR", logger=LOGGER_NAME):
-        result = HdfBndry.get_bc_lines(geom_hdf)
+    # A group that exists but cannot be read must not look like "no BC lines".
+    with caplog.at_level("ERROR", logger=LOGGER_NAME), pytest.raises(
+        ValueError, match="Geometry/Boundary Condition Lines"
+    ):
+        HdfBndry.get_bc_lines(geom_hdf)
 
-    assert result.empty
     messages = _hdf_bndry_messages(caplog)
     assert len(messages) == 1
     assert str(geom_hdf) in messages[0]
