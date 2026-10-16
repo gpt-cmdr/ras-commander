@@ -20,6 +20,7 @@ from ..Decorators import log_call, standardize_input
 from ..LoggingConfig import get_logger
 from ..RasUtils import RasUtils
 from .HdfBase import HdfBase
+from .HdfMesh import HdfMesh
 from .HdfResultsMesh import HdfResultsMesh
 from .HdfResultsPlan import HdfResultsPlan
 from .HdfUtils import HdfUtils
@@ -649,7 +650,8 @@ class HdfResultsProducts:
             )
         for mesh in inspection["meshes"]:
             mesh_name = mesh["mesh_name"]
-            cell_count = int(mesh["cell_count"])
+            # Result frames hold physical cells only; ghost cells are excluded.
+            cell_count = int(mesh.get("declared_cell_count", mesh["cell_count"]))
             subset = frame.loc[frame["mesh_name"] == mesh_name].sort_values(
                 "cell_id",
                 kind="stable",
@@ -814,6 +816,7 @@ class HdfResultsProducts:
         maximum: float | None = None
         datasets = []
         missing_meshes = []
+        physical_counts = HdfMesh._physical_cell_counts(hdf_file)
         for row in attributes[:]:
             mesh_name = HdfUtils.convert_ras_string(row[0])
             path = (
@@ -832,7 +835,11 @@ class HdfResultsProducts:
                     f"Maximum water-surface error dataset is invalid: {path}"
                 )
             datasets.append(path)
-            value_count = int(dataset.shape[-1])
+            # Ghost cells follow the physical cells and carry no solution.
+            value_count = min(
+                int(dataset.shape[-1]),
+                physical_counts.get(str(mesh_name), int(dataset.shape[-1])),
+            )
             row_count += value_count
             chunk_size = max(1, min(1_000_000, value_count))
             for start in range(0, value_count, chunk_size):

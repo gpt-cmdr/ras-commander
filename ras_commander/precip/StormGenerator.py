@@ -96,7 +96,7 @@ class StormGenerator:
     ]
 
     # NOAA HDSC API endpoint for precipitation frequency data
-    NOAA_API_URL = "https://hdsc.nws.noaa.gov/cgi-bin/hdsc/new/cgi_readH5.py"
+    NOAA_API_URL = "https://hdsc.nws.noaa.gov/cgi-bin/new/cgi_readH5.py"
 
     # NOAA API Response Structure Metadata
     # The API returns unlabeled quantile arrays. These constants define the
@@ -105,7 +105,7 @@ class StormGenerator:
     # NOAA Atlas 14 output structure.
     #
     # Source: NOAA HDSC API documentation
-    # https://hdsc.nws.noaa.gov/cgi-bin/hdsc/new/cgi_readH5.py
+    # https://hdsc.nws.noaa.gov/cgi-bin/new/cgi_readH5.py
 
     # Duration mapping (rows in quantiles array)
     # API returns 19 durations in this exact order:

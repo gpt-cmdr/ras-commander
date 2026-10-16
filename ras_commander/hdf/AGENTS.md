@@ -45,6 +45,12 @@ This file is the canonical local instruction file for `ras_commander/hdf/`.
   `Plan Information/Simulation Start Time` attr, then 5.0.x `Time Window` ("<start> to <end>"),
   then the first `Unsteady Time Series/Time Date Stamp`. Required by all 2D summary reads
   (`HdfResultsMesh.get_mesh_max_ws`/`get_mesh_summary_output`); 5.0.x plan HDFs omit the 6.x attr.
+  It and `HdfBase.get_unsteady_timestamps()` accept a path or an open handle.
+- 2D cell result arrays list ghost cells after the physical cells (IDs >= `Attributes/Cell Count`).
+  Ghost values are placeholders (summary max WSE 0.0, NaN min elevation). `HdfResultsMesh` cell
+  results exclude them by default (`include_ghost_cells=True` keeps them, flagged `is_ghost_cell`).
+  `HdfMesh.get_mesh_cell_points()` still returns every center unless `include_ghost_cells=False`.
+  Never pair cell results with the full `Cells Center Coordinate` array by position.
 - 2D cell geometry and face geometry: `HdfMesh`
 - HEC-RAS 7.0 Linux solver-temporary face property-table recovery:
   `HdfMesh.write_linux_tmp_face_property_tables()`,

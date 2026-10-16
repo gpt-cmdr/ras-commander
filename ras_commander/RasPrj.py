@@ -2477,15 +2477,19 @@ class RasPrj:
                     getattr(exc, "reason_code", type(exc).__name__),
                 )
                 continue
-            if (
-                resolution.selected_format != "hdf"
-                or not resolution.selected_exists
-            ):
+            if resolution.selected_format != "hdf":
                 logger.warning(
                     "Skipping HDF results summary for plan %s because %s is "
                     "the selected result format",
                     row["plan_number"],
                     resolution.selected_format,
+                )
+                continue
+            if not resolution.selected_exists:
+                # A plan that has not been computed yet has no result HDF.
+                logger.debug(
+                    "Skipping HDF results summary for plan %s: no result HDF yet",
+                    row["plan_number"],
                 )
                 continue
             entry = {

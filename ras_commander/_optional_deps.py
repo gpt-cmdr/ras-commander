@@ -1,7 +1,10 @@
 """Deferred imports for optional dependencies.
 
 The core ``ras-commander`` install has only h5py, numpy, and pandas, and the
-``compute`` extra adds only process-supervision packages. Modules that also
+``compute`` extra adds only process-supervision packages (psutil, and pywin32
+on Windows). The package's lazy exports import their modules through
+:func:`import_feature_module`, so a missing optional package surfaces as an
+``ImportError`` that names the extra to install. Modules that also
 offer xarray- or GeoDataFrame-returning functions bind the optional package to
 a module-level proxy from :func:`optional_module`. The module then imports
 without the package, and the first attribute access on the proxy raises an
@@ -19,12 +22,25 @@ from types import ModuleType
 from typing import Any, Optional
 
 FULL_EXTRA_HINT = 'pip install "ras-commander[full]"'
+COMPUTE_EXTRA_HINT = 'pip install "ras-commander[compute]"'
 
+# Import name -> pip distribution name, where the two differ.
 _PIP_NAMES = {
-    "geopandas": "geopandas",
-    "shapely": "shapely",
-    "xarray": "xarray",
+    "win32api": "pywin32",
+    "win32com": "pywin32",
+    "win32con": "pywin32",
+    "win32gui": "pywin32",
+    "win32process": "pywin32",
+    "win32ui": "pywin32",
+    "pythoncom": "pywin32",
+    "pywintypes": "pywin32",
+    "yaml": "pyyaml",
+    "PIL": "Pillow",
 }
+
+# Packages supplied by the ``compute`` extra. Every other optional package is
+# in ``full``.
+_COMPUTE_PACKAGES = {"psutil", "pywin32"}
 
 
 class OptionalDependencyError(ImportError):
@@ -35,11 +51,49 @@ def missing_dependency_message(module_name: str, purpose: str) -> str:
     """Return the installation guidance for a missing optional package."""
     package = module_name.split(".", 1)[0]
     pip_name = _PIP_NAMES.get(package, package)
+    if pip_name in _COMPUTE_PACKAGES:
+        return (
+            f"{purpose} requires the '{package}' package, which the core "
+            "ras-commander install does not include. "
+            f"Install it with: {COMPUTE_EXTRA_HINT} (or: pip install {pip_name})"
+        )
     return (
         f"{purpose} requires the '{package}' package, which the core and "
         "'compute' ras-commander installs do not include. "
         f"Install it with: {FULL_EXTRA_HINT} (or: pip install {pip_name})"
     )
+
+
+def _missing_top_level_name(exc: ModuleNotFoundError) -> Optional[str]:
+    """Return the top-level package an import failed to find, if known."""
+    name = exc.name
+    if not name:
+        # Some import hooks raise without setting ``name``; fall back to the
+        # standard "No module named 'x'" message.
+        text = str(exc)
+        if "No module named " in text:
+            name = text.split("No module named ", 1)[1].strip().strip("'\"")
+    return name.split(".", 1)[0] if name else None
+
+
+def import_feature_module(module_name: str, package: Optional[str], purpose: str) -> ModuleType:
+    """Import a ras-commander module, translating a missing optional package.
+
+    A missing third-party package raises :class:`OptionalDependencyError` that
+    names the extra to install. A missing ``ras_commander`` module is a
+    packaging defect and is re-raised unchanged.
+    """
+    try:
+        return importlib.import_module(module_name, package)
+    except OptionalDependencyError:
+        raise
+    except ModuleNotFoundError as exc:
+        missing = _missing_top_level_name(exc)
+        if missing is None or missing == "ras_commander":
+            raise
+        raise OptionalDependencyError(
+            missing_dependency_message(missing, purpose)
+        ) from exc
 
 
 def require_module(module_name: str, purpose: str) -> ModuleType:

@@ -48,13 +48,22 @@ def standardize_input(file_type: str = 'plan_hdf'):
             
             # If first parameter is 'hdf_file', pass an h5py object
             if param_names and param_names[0] == 'hdf_file':
-                if isinstance(args[0], h5py.File):
-                    return func(*args, **kwargs)
-                elif isinstance(args[0], (str, Path)):
-                    with h5py.File(args[0], 'r') as hdf:
-                        return func(hdf, *args[1:], **kwargs)
+                if args:
+                    hdf_arg, rest = args[0], args[1:]
+                elif 'hdf_file' in kwargs:
+                    hdf_arg, rest = kwargs.pop('hdf_file'), ()
                 else:
-                    raise ValueError(f"Expected h5py.File or path, got {type(args[0])}")
+                    return func(*args, **kwargs)
+                if isinstance(hdf_arg, h5py.File):
+                    return func(hdf_arg, *rest, **kwargs)
+                elif isinstance(hdf_arg, (str, Path)):
+                    hdf_file_path = Path(str(hdf_arg).strip())
+                    if not hdf_file_path.is_file():
+                        raise FileNotFoundError(f"HDF file not found: {hdf_file_path}")
+                    with h5py.File(hdf_file_path, 'r') as hdf:
+                        return func(hdf, *rest, **kwargs)
+                else:
+                    raise ValueError(f"Expected h5py.File or path, got {type(hdf_arg)}")
                 
             # Handle both static method calls and regular function calls
             if args and isinstance(args[0], type):

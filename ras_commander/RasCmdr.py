@@ -82,6 +82,7 @@ from .ExecutionArtifacts import (
     remove_plan_execution_artifacts as _remove_plan_execution_artifacts,
 )
 from .LoggingConfig import get_logger
+from ._optional_deps import require_module
 from .RasBco import BcoMonitor
 from .RasPlan import RasPlan
 from .RasPrj import RasPrj, init_ras_project, ras
@@ -99,6 +100,11 @@ _MAX_SUBPROCESS_WAIT_SECONDS = (2**32 - 2) / 1000.0
 class _RuntimeDeadlineExceeded(TimeoutError):
     """Internal marker for the public ``max_runtime`` deadline."""
 
+
+
+def _require_process_supervision(api_name: str) -> None:
+    """Fail before launch when psutil, required to supervise Ras.exe, is absent."""
+    require_module("psutil", f"{api_name} process supervision")
 
 
 class RasCmdr:
@@ -2460,6 +2466,7 @@ class RasCmdr:
         exact legacy and modern compute/preprocess names whose plan-specific
         command signature is not established.
         """
+        _require_process_supervision("RasCmdr.inspect_plan_processes()")
         import psutil
 
         from ._process_inspection import (
@@ -3203,6 +3210,7 @@ class RasCmdr:
         """
         if type(disable_omp_affinity) is not bool:
             raise TypeError("disable_omp_affinity must be a bool")
+        _require_process_supervision("RasCmdr.compute_plan()")
         max_runtime_seconds = RasCmdr._normalize_max_runtime(max_runtime)
         _success = False
         _results_df_row = None
@@ -4457,6 +4465,7 @@ class RasCmdr:
 
             - verify is passed through to compute_plan() for each worker execution.
         """
+        _require_process_supervision("RasCmdr.compute_parallel()")
         execution_results: Dict[str, bool] = {}
         execution_details_by_plan: Dict[str, Dict[str, Any]] = {}
         filtered_plan_numbers: List[str] = []
@@ -5317,6 +5326,7 @@ class RasCmdr:
 
             - verify is passed through to compute_plan() for each plan execution.
         """
+        _require_process_supervision("RasCmdr.compute_test_mode()")
         promotion_lock_lease: Optional[Dict[str, Any]] = None
         try:
             ras_obj = ras_object or ras

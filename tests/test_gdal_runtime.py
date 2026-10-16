@@ -273,3 +273,20 @@ def test_resolve_hecras_gdal_paths_reports_missing_bin64(tmp_path):
 
     with pytest.raises(FileNotFoundError, match="bin64"):
         _gdal_runtime.resolve_hecras_gdal_paths(hecras_dir)
+
+
+def test_untraversable_gdal_bridge_is_reported_unusable(tmp_path, monkeypatch):
+    """WinError 448 (untrusted mount point) means "not usable", not a crash."""
+    from pathlib import Path
+
+    python_dir = tmp_path / "python"
+    python_dir.mkdir()
+
+    def refuse(self):
+        raise OSError(
+            448,
+            "The path cannot be traversed because it contains an untrusted mount point",
+        )
+
+    monkeypatch.setattr(Path, "is_dir", refuse)
+    assert _gdal_runtime.python_gdal_bridge_is_usable(python_dir) is False

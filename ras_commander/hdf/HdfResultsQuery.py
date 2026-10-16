@@ -336,14 +336,21 @@ def _get_kdtree(
     geom_hdf_path: Union[str, Path],
     ras_object: Optional[Any] = None,
 ) -> Dict[str, Any]:
-    """Build and cache a KDTree over all mesh cell centers in the geometry HDF."""
+    """Build and cache a KDTree over physical mesh cell centers in the geometry HDF.
+
+    Ghost cells outside the perimeter are excluded: their results are
+    placeholders (summary maxima of 0.0, NaN minimum elevation), and a point
+    inside a perimeter cell can otherwise be nearer a ghost center.
+    """
     geom_hdf_path = Path(geom_hdf_path)
     cache_key = str(geom_hdf_path.absolute())
 
     if cache_key in _kdtree_cache:
         return _kdtree_cache[cache_key]
 
-    cell_points = HdfMesh.get_mesh_cell_points(geom_hdf_path)
+    cell_points = HdfMesh.get_mesh_cell_points(
+        geom_hdf_path, include_ghost_cells=False
+    )
     if cell_points.empty:
         raise ValueError(
             f"No 2D mesh cell centers found in geometry HDF: {geom_hdf_path}"
@@ -460,6 +467,26 @@ def _nearest_cell_global_index(
     return int(mesh_slice.start + local_offset), float(distances[local_offset])
 
 
+def _physical_mesh_values(
+    values: np.ndarray,
+    cache: Dict[str, Any],
+    mesh_name: str,
+) -> np.ndarray:
+    """Trim one mesh's per-cell values to the KDTree's physical cells.
+
+    HEC-RAS cell arrays list the physical cells first, then ghost cells.
+    """
+    mesh_slice = cache["mesh_slices"][mesh_name]
+    count = mesh_slice.stop - mesh_slice.start
+    values = np.asarray(values, dtype=float)
+    if values.shape[-1] < count:
+        raise ValueError(
+            f"Mesh '{mesh_name}' returned {values.shape[-1]} cell values but "
+            f"has {count} physical cells"
+        )
+    return values[..., :count]
+
+
 def _coerce_points_dataframe(points: Any) -> pd.DataFrame:
     """Convert supported point inputs to a simple x/y DataFrame."""
     if hasattr(points, "geometry"):
@@ -507,7 +534,7 @@ def _read_geometry_cell_dataset(
                     f"Dataset not found in geometry HDF: {dataset_path}"
                 )
             mesh_values = np.asarray(hdf_file[dataset_path][()], dtype=float)
-            values.append(mesh_values)
+            values.append(_physical_mesh_values(mesh_values, cache, mesh_name))
 
     return np.concatenate(values) if values else np.array([], dtype=float)
 
@@ -606,10 +633,10 @@ def _get_steady_variable_values(
                     mesh_name,
                     "Water Surface",
                 )
-                ws_values = _collapse_steady_dataset(
-                    ws_values,
+                ws_values = _physical_mesh_values(
+                    _collapse_steady_dataset(ws_values, mesh_name, "Water Surface"),
+                    cache,
                     mesh_name,
-                    "Water Surface",
                 )
                 if cell_min_elev is None:
                     cell_min_elev = _read_geometry_cell_dataset(
@@ -632,7 +659,7 @@ def _get_steady_variable_values(
                 mesh_name,
                 variable_name,
             )
-            values.append(mesh_values)
+            values.append(_physical_mesh_values(mesh_values, cache, mesh_name))
 
     return np.concatenate(values) if values else np.array([], dtype=float)
 
@@ -657,7 +684,13 @@ def _read_unsteady_direct(
                     f"Dataset not found in plan HDF: {dataset_path}"
                 )
             dataset_values = np.asarray(hdf_file[dataset_path][()], dtype=float)
-            values.append(_select_time_slice(dataset_values, time_index))
+            values.append(
+                _physical_mesh_values(
+                    _select_time_slice(dataset_values, time_index),
+                    cache,
+                    mesh_name,
+                )
+            )
 
     return np.concatenate(values) if values else np.array([], dtype=float)
 
@@ -769,10 +802,12 @@ def _reconstruct_velocity_components_from_faces(
         cell_face_info = np.asarray(topology["cell_face_info"], dtype=int)
         cell_face_values = np.asarray(topology["cell_face_values"], dtype=int)
 
-        mesh_vx = np.full(len(cell_face_info), np.nan, dtype=float)
-        mesh_vy = np.full(len(cell_face_info), np.nan, dtype=float)
+        mesh_slice = cache["mesh_slices"][mesh_name]
+        physical_info = cell_face_info[: mesh_slice.stop - mesh_slice.start]
+        mesh_vx = np.full(len(physical_info), np.nan, dtype=float)
+        mesh_vy = np.full(len(physical_info), np.nan, dtype=float)
 
-        for cell_id, (start, count) in enumerate(cell_face_info[:, :2]):
+        for cell_id, (start, count) in enumerate(physical_info[:, :2]):
             connections = cell_face_values[start : start + count]
             if connections.ndim == 1:
                 face_ids = connections
@@ -966,7 +1001,7 @@ def _get_unsteady_variable_max_values(
                     f"Unsupported dataset shape for {dataset_path}: "
                     f"{dataset_values.shape}"
                 )
-            values.append(np.asarray(mesh_values, dtype=float))
+            values.append(_physical_mesh_values(mesh_values, cache, mesh_name))
 
     return np.concatenate(values) if values else np.array([], dtype=float)
 
@@ -980,14 +1015,17 @@ def _summary_values_by_mesh(
     values: List[np.ndarray] = []
 
     for mesh_name in cache["mesh_order"]:
-        mesh_df = (
-            summary_df[summary_df["mesh_name"] == mesh_name]
-            .sort_values("cell_id")
-            .reset_index(drop=True)
-        )
         expected_count = (
             cache["mesh_slices"][mesh_name].stop
             - cache["mesh_slices"][mesh_name].start
+        )
+        mesh_df = (
+            summary_df[
+                (summary_df["mesh_name"] == mesh_name)
+                & (summary_df["cell_id"] < expected_count)
+            ]
+            .sort_values("cell_id")
+            .reset_index(drop=True)
         )
         if len(mesh_df) != expected_count:
             raise ValueError(
@@ -1061,6 +1099,8 @@ def _get_cell_averaged_max_velocity(
             cell_face_info = geom_hdf[info_path][()]
             cell_face_values = geom_hdf[values_path][()][:, 0].astype(int)
 
+            mesh_slice = cache["mesh_slices"][mesh_name]
+            cell_face_info = cell_face_info[: mesh_slice.stop - mesh_slice.start]
             mesh_cell_values = np.full(len(cell_face_info), np.nan, dtype=float)
             for cell_id, (start, count) in enumerate(cell_face_info[:, :2]):
                 face_subset = cell_face_values[start : start + count]
