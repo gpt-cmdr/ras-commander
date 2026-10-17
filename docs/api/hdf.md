@@ -709,6 +709,70 @@ Utility class for HDF file operations.
 - `parse_ras_datetime_ms(datetime_bytes)` - Parse datetime with milliseconds
 - `parse_run_time_window(window_str)` - Parse time window strings
 
+## Optional Rust acceleration
+
+`ras_commander.fast_hdf` provides optional numeric HDF reads, native mesh ring
+assembly, and direct mesh-to-PMTiles export. Existing `HdfResultsMesh` and
+`HdfMesh.get_mesh_cell_polygons` methods use the extension when installed while
+preserving their established xarray and GeoDataFrame outputs. Lazy result views
+push selected reads and bounded batches through the same adapter. This backend
+provides HDF reads only. Set `RAS_COMMANDER_FAST_HDF=0` to select the Python
+reference paths.
+
+The extension is a separate distribution, `ras-commander-fast-hdf`. Until its
+first wheel release, build it from this repository; the `fast-hdf` extra is not
+yet a publicly installable release:
+
+```powershell
+uv tool run --from maturin maturin build --release --locked --manifest-path rust/fast-hdf/Cargo.toml --out working/wheels
+uv pip install --python .venv/Scripts/python.exe working/wheels/<built-wheel>.whl
+```
+
+A Rust toolchain and platform linker are required to build from source. Ordinary
+ras-commander installations do not require either. Geometry output requires
+GeoPandas and Shapely; direct PMTiles export requires pyproj. The wheel workflow
+is configured to build Windows x64, Linux x64 and macOS ARM64 artifacts for
+review; it does not publish them.
+
+```python
+from ras_commander import fast_hdf
+
+print(fast_hdf.available())
+polygons = fast_hdf.mesh_polygons("model.g01.hdf", backend="rust", threads=4)
+fast_hdf.export_mesh_pmtiles(
+    "model.g01.hdf", "mesh.pmtiles", layer_name="mesh_cells",
+    min_zoom=10, max_zoom=14, backend="rust", threads=4,
+)
+```
+
+Explicit `backend="rust"` requires native execution and reports unavailable or
+unsupported operations. Automatic mode can use the compatibility path. Direct
+export keeps polygons packed through a vectorized pyproj transformation and
+passes them to freestiler's Rust core, without building per-cell Python geometry
+objects. Each feature retains `mesh_name` and `cell_id`; IDs are not renumbered
+when a source cell has no polygon. Tile feature identifiers are independently
+unique across meshes.
+
+`HdfMesh.get_mesh_cell_polygons(strict=True)` retains its diagnostic behavior.
+Automatic mode uses the Python polygonizer for unsupported layouts, including
+two-face diagnostic records; required Rust mode reports these cases explicitly.
+Use `threads` to bound native parallelism when calling from other worker pools.
+
+Coordinate transformation uses the HDF CRS, or an explicit `source_crs` override.
+Missing CRS must be supplied rather than assumed to be WGS84. Result property
+arrays passed to `export_mesh_pmtiles(properties=...)` are grouped by mesh and
+indexed by original cell ID. Time-series ghost columns retain their existing
+behavior; geometry extraction does not infer a different physical-cell count.
+
+Freestiler does not drop features by a configured density or area policy.
+The native export path repairs quantized rings on the integer tile grid.
+Very small cells can become one-pixel centroid squares at low zoom to preserve
+visibility. PMTiles are for visualization; use source polygons for analysis.
+The exporter retains source geometry in memory and spools encoded tile batches.
+Successful exports atomically replace the destination; failed exports preserve
+an existing destination. Exporting over the source HDF file is rejected.
+Run `scripts/benchmark_fast_hdf.py --help` for the reproducible benchmark driver.
+
 ## Visualization
 
 ### HdfPlot & HdfResultsPlot

@@ -9,6 +9,28 @@ from pyproj import CRS
 from ras_commander.hdf.HdfMesh import HdfMesh, MeshCellPolygonError
 
 
+@pytest.mark.parametrize("points", [
+    [[0, 0], [1, 1], [0, 1], [1, 0]],
+    [[0, 0], [1, 0], [2, 0], [3, 0]],
+])
+def test_native_invalid_closed_ring_keeps_strict_diagnostics(tmp_path, points):
+    pytest.importorskip("ras_commander_fast_hdf")
+    path = _write_polygon_cases(tmp_path / "invalid-closed.g01.hdf")
+    base = "Geometry/2D Flow Areas/Diagnostic Mesh/"
+    with h5py.File(path, "a") as hdf:
+        hdf[base + "FacePoints Coordinate"][:4] = points
+        del hdf[base + "Cells Face and Orientation Info"]
+        hdf[base + "Cells Face and Orientation Info"] = np.array([[0, 4]], dtype=np.int32)
+    reference = HdfMesh.get_mesh_cell_polygons(path, backend="python")
+    automatic = HdfMesh.get_mesh_cell_polygons(path, backend="auto")
+    assert automatic.attrs == reference.attrs
+    assert automatic.empty and reference.empty
+    with pytest.raises(MeshCellPolygonError):
+        HdfMesh.get_mesh_cell_polygons(path, backend="auto", strict=True)
+    with pytest.raises(MeshCellPolygonError):
+        HdfMesh.get_mesh_cell_polygons(path, backend="rust", strict=True)
+
+
 def _write_polygon_cases(path: Path) -> Path:
     points = np.array(
         [

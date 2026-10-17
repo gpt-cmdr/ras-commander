@@ -777,11 +777,14 @@ class HdfMesh:
             return GeoDataFrame()
 
     @staticmethod
+    @log_call
     @standardize_input(file_type='geom_hdf')
     def get_mesh_cell_polygons(
         hdf_path: Path,
         *,
         strict: bool = False,
+        backend: str = "auto",
+        threads: Optional[int] = None,
     ) -> 'GeoDataFrame':
         """
         Return 2D flow mesh cell polygons.
@@ -797,6 +800,13 @@ class HdfMesh:
             ``result.attrs["cell_polygon_diagnostics"]`` as an equality-safe
             tuple of record dictionaries. Use
             :meth:`diagnose_mesh_cell_polygons` for a DataFrame.
+        backend : str, default "auto"
+            Use the optional Rust extension when available. "python" forces
+            the reference polygonizer; "rust" requires native execution.
+            Auto mode falls back for unsupported topology and preserves
+            the diagnostic records and strict-mode contract.
+        threads : int, optional
+            Maximum threads for native extraction and polygon construction.
 
         Returns
         -------
@@ -814,6 +824,10 @@ class HdfMesh:
         Use :meth:`diagnose_mesh_cell_polygons` or ``strict=True`` whenever an
         exhaustive physical-cell mask is required.
         """
+        from ..fast_hdf import _try_mesh_polygons
+        native = _try_mesh_polygons(hdf_path, backend=backend, threads=threads, strict=strict)
+        if native is not None:
+            return native
         # Lazy imports for heavy dependencies
         from geopandas import GeoDataFrame
         from shapely.geometry import Polygon
