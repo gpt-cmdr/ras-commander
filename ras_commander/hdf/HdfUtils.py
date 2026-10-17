@@ -345,15 +345,23 @@ class HdfUtils:
 
         Returns:
             pd.DatetimeIndex: DatetimeIndex of converted and rounded datetimes.
+                Uses millisecond resolution so dates beyond 2262 remain
+                representable while preserving the default 100 ms precision.
         """
-        if time_unit == "days":
-            datetimes = start_time + pd.to_timedelta(timesteps, unit='D')
-        elif time_unit == "hours":
-            datetimes = start_time + pd.to_timedelta(timesteps, unit='H')
-        else:
+        unit_seconds = {"days": 86400.0, "hours": 3600.0}.get(time_unit)
+        if unit_seconds is None:
             raise ValueError(f"Unsupported time unit: {time_unit}")
 
-        return pd.DatetimeIndex(datetimes).round(round_to)
+        # pandas' default datetime64[ns] range ends in 2262. Keep HEC-RAS
+        # calendar dates in datetime64[ms], which spans a much wider range and
+        # is finer than the default 100 ms rounding interval.
+        start = np.datetime64(start_time, "ms")
+        offsets_ms = np.rint(
+            np.asarray(timesteps, dtype=np.float64) * unit_seconds * 1000.0
+        ).astype("timedelta64[ms]")
+        timestamps = start + offsets_ms
+        index = pd.DatetimeIndex(timestamps.astype("datetime64[ms]"))
+        return index.round(round_to)
     
 # rename to convert_hdf5_attrs_to_dict and make public
 
