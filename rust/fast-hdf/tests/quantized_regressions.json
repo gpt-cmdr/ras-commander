@@ -1,0 +1,366 @@
+[
+  {
+    "archive": "invalid_g11.pmtiles",
+    "tile": [
+      6,
+      18,
+      23
+    ],
+    "layer": "mesh_cells",
+    "properties": {
+      "mesh_name": "Upper 2D Area",
+      "cell_id": 1041,
+      "test_value": 260.25
+    },
+    "reason": "Ring Self-intersection[736 4106]",
+    "geometry": {
+      "type": "Polygon",
+      "coordinates": [
+        [
+          [
+            735,
+            4106
+          ],
+          [
+            737,
+            4106
+          ],
+          [
+            736,
+            4106
+          ],
+          [
+            735,
+            4107
+          ],
+          [
+            735,
+            4106
+          ]
+        ]
+      ]
+    }
+  },
+  {
+    "archive": "invalid_g11.pmtiles",
+    "tile": [
+      6,
+      18,
+      23
+    ],
+    "layer": "mesh_cells",
+    "properties": {
+      "mesh_name": "BaldEagleCr",
+      "cell_id": 787,
+      "test_value": 196.75
+    },
+    "reason": "Self-intersection[946 3935]",
+    "geometry": {
+      "type": "Polygon",
+      "coordinates": [
+        [
+          [
+            946,
+            3935
+          ],
+          [
+            947,
+            3935
+          ],
+          [
+            945,
+            3935
+          ],
+          [
+            945,
+            3934
+          ],
+          [
+            946,
+            3935
+          ]
+        ]
+      ]
+    }
+  },
+  {
+    "archive": "invalid_g11.pmtiles",
+    "tile": [
+      6,
+      18,
+      23
+    ],
+    "layer": "mesh_cells",
+    "properties": {
+      "mesh_name": "BaldEagleCr",
+      "cell_id": 1399,
+      "test_value": 349.75
+    },
+    "reason": "Self-intersection[906 3955]",
+    "geometry": {
+      "type": "Polygon",
+      "coordinates": [
+        [
+          [
+            908,
+            3954
+          ],
+          [
+            908,
+            3955
+          ],
+          [
+            906,
+            3955
+          ],
+          [
+            907,
+            3955
+          ],
+          [
+            907,
+            3954
+          ],
+          [
+            906,
+            3954
+          ],
+          [
+            908,
+            3954
+          ]
+        ]
+      ]
+    }
+  },
+  {
+    "archive": "invalid_g01.pmtiles",
+    "tile": [
+      10,
+      291,
+      383
+    ],
+    "layer": "mesh_cells",
+    "properties": {
+      "mesh_name": "BaldEagleCr",
+      "cell_id": 34162,
+      "test_value": 8540.5
+    },
+    "reason": "Ring Self-intersection[2330 1774]",
+    "geometry": {
+      "type": "Polygon",
+      "coordinates": [
+        [
+          [
+            2330,
+            1779
+          ],
+          [
+            2330,
+            1773
+          ],
+          [
+            2330,
+            1774
+          ],
+          [
+            2334,
+            1774
+          ],
+          [
+            2334,
+            1779
+          ],
+          [
+            2330,
+            1779
+          ]
+        ]
+      ]
+    }
+  },
+  {
+    "archive": "invalid_g01.pmtiles",
+    "tile": [
+      10,
+      291,
+      383
+    ],
+    "layer": "mesh_cells",
+    "properties": {
+      "mesh_name": "BaldEagleCr",
+      "cell_id": 58343,
+      "test_value": 14585.75
+    },
+    "reason": "Ring Self-intersection[2569 2365]",
+    "geometry": {
+      "type": "Polygon",
+      "coordinates": [
+        [
+          [
+            2569,
+            2364
+          ],
+          [
+            2569,
+            2365
+          ],
+          [
+            2576,
+            2366
+          ],
+          [
+            2573,
+            2369
+          ],
+          [
+            2569,
+            2369
+          ],
+          [
+            2569,
+            2364
+          ]
+        ]
+      ]
+    }
+  },
+  {
+    "archive": "invalid_g01.pmtiles",
+    "tile": [
+      11,
+      583,
+      767
+    ],
+    "layer": "mesh_cells",
+    "properties": {
+      "mesh_name": "BaldEagleCr",
+      "cell_id": 65426,
+      "test_value": 16356.5
+    },
+    "reason": "Self-intersection[810 913]",
+    "geometry": {
+      "type": "Polygon",
+      "coordinates": [
+        [
+          [
+            811,
+            913
+          ],
+          [
+            818,
+            901
+          ],
+          [
+            821,
+            905
+          ],
+          [
+            821,
+            913
+          ],
+          [
+            810,
+            913
+          ],
+          [
+            811,
+            913
+          ]
+        ]
+      ]
+    }
+  },
+  {
+    "archive": "invalid_g01.pmtiles",
+    "tile": [
+      11,
+      583,
+      767
+    ],
+    "layer": "mesh_cells",
+    "properties": {
+      "mesh_name": "BaldEagleCr",
+      "cell_id": 60168,
+      "test_value": 15042.0
+    },
+    "reason": "Self-intersection[1171 719]",
+    "geometry": {
+      "type": "Polygon",
+      "coordinates": [
+        [
+          [
+            1160,
+            719
+          ],
+          [
+            1160,
+            711
+          ],
+          [
+            1172,
+            711
+          ],
+          [
+            1171,
+            719
+          ],
+          [
+            1172,
+            719
+          ],
+          [
+            1160,
+            719
+          ]
+        ]
+      ]
+    }
+  },
+  {
+    "archive": "invalid_g01.pmtiles",
+    "tile": [
+      12,
+      1166,
+      1533
+    ],
+    "layer": "mesh_cells",
+    "properties": {
+      "mesh_name": "BaldEagleCr",
+      "cell_id": 16330,
+      "test_value": 4082.5
+    },
+    "reason": "Ring Self-intersection[3060 1595]",
+    "geometry": {
+      "type": "Polygon",
+      "coordinates": [
+        [
+          [
+            3060,
+            1615
+          ],
+          [
+            3060,
+            1594
+          ],
+          [
+            3060,
+            1595
+          ],
+          [
+            3077,
+            1595
+          ],
+          [
+            3077,
+            1615
+          ],
+          [
+            3060,
+            1615
+          ]
+        ]
+      ]
+    }
+  }
+]

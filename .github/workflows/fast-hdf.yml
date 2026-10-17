@@ -1,0 +1,61 @@
+name: Rust HDF backend
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'rust/fast-hdf/**'
+      - 'ras_commander/fast_hdf.py'
+      - 'ras_commander/hdf/HdfMesh.py'
+      - 'ras_commander/hdf/HdfResultsMesh.py'
+      - 'ras_commander/hdf/HdfResultView.py'
+      - 'tests/test_hdf_result_view.py'
+      - 'tests/test_fast_hdf*.py'
+      - '.github/workflows/fast-hdf.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  wheels:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+          - os: macos-14
+            target: aarch64-apple-darwin
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Native unit tests
+        run: cargo test --locked --manifest-path rust/fast-hdf/Cargo.toml
+      - name: Build wheel
+        uses: PyO3/maturin-action@v1
+        with:
+          target: ${{ matrix.target }}
+          args: --release --locked --manifest-path rust/fast-hdf/Cargo.toml --out dist
+          manylinux: auto
+      - name: Upload wheel for review (no publishing)
+        uses: actions/upload-artifact@v4
+        with:
+          name: fast-hdf-${{ matrix.target }}
+          path: dist/*.whl
+          if-no-files-found: error
+      - name: Install Python package and built native wheel
+        env:
+          CI: '1'
+        shell: bash
+        run: |
+          python -m pip install . pytest xarray geopandas shapely pyproj
+          python -m pip install dist/*.whl
+          python -c "import ras_commander_fast_hdf as native; assert native.API_VERSION == 1"
+      - name: Binding and fallback regression tests
+        run: python -m pytest tests/test_fast_hdf.py tests/test_hdf_result_view.py tests/test_hdf_results_mesh.py tests/test_hdf_mesh_cell_polygon_diagnostics.py -q
