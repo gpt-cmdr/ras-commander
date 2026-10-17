@@ -2359,9 +2359,17 @@ class HdfResultsMesh:
         with h5py.File(hdf_path, "r") as result_hdf, h5py.File(geom_source, "r") as geom_hdf:
             if time_stamp_path in result_hdf:
                 raw_times = result_hdf[time_stamp_path][()]
-                hdf_times = pd.DatetimeIndex(
-                    [_parse_timestamp(value.decode("utf-8")) for value in raw_times]
-                ).round("s")
+                parsed_times = [
+                    _parse_timestamp(value.decode("utf-8")) for value in raw_times
+                ]
+                if parsed_times:
+                    # The source stamps need not have a fixed interval. Preserve
+                    # their exact values at millisecond resolution.
+                    hdf_times = pd.DatetimeIndex(
+                        np.asarray(parsed_times, dtype="datetime64[ms]")
+                    ).round("s")
+                else:
+                    hdf_times = pd.DatetimeIndex([], dtype="datetime64[ms]")
             elif time_path in result_hdf:
                 start_time = HdfBase.get_simulation_start_time(result_hdf)
                 hdf_times = HdfUtils.convert_timesteps_to_datetimes(
