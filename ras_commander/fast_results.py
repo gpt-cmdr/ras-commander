@@ -56,7 +56,12 @@ _MS = timedelta(milliseconds=1)
 
 @dataclass(frozen=True)
 class TemporalReduction:
-    """Per-element reduction of a ``(time, element)`` series."""
+    """Per-element reduction of a ``(time, element)`` series.
+
+    Engine-backed reductions report a combined ``engine_seconds`` timing.
+    Separate read/reduce timings are NaN when that engine cannot measure the
+    split; ``read_plan['timing_scope']`` explains the available measurement.
+    """
 
     maximum: np.ndarray
     peak_index: np.ndarray
@@ -149,14 +154,18 @@ def native_temporal_reduce(dataset, offset=None, *, threshold=None, backend="aut
             raise FastHdfError(f"Native reduction returned an invalid {key!r} array")
     if int(raw["rows"]) != dataset.shape[0]:
         raise FastHdfError("Native reduction row count disagrees with the dataset")
+    timings = {k: float(raw[k]) for k in ("setup_seconds", "read_seconds", "reduce_seconds")}
+    read_plan = {k: raw[k] for k in ("block_rows", "blocks", "block_bytes", "max_block_bytes",
+                                    "chunk_shape", "storage_chunk_bytes", "chunk_cache_bytes",
+                                    "stored_dtype")}
+    if "engine_seconds" in raw:
+        timings["engine_seconds"] = float(raw["engine_seconds"])
+        read_plan["timing_scope"] = raw["timing_scope"]
     return TemporalReduction(
         maximum=raw["maximum"], peak_index=raw["peak_index"],
         finite_count=raw["finite_count"], exceed_count=raw["exceed_count"],
         first_exceed_index=raw["first_exceed_index"], rows=int(raw["rows"]), backend="rust",
-        timings={k: float(raw[k]) for k in ("setup_seconds", "read_seconds", "reduce_seconds")},
-        read_plan={k: raw[k] for k in ("block_rows", "blocks", "block_bytes", "max_block_bytes",
-                                       "chunk_shape", "storage_chunk_bytes", "chunk_cache_bytes",
-                                       "stored_dtype")},
+        timings=timings, read_plan=read_plan,
     )
 
 
