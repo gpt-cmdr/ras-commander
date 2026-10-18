@@ -1,5 +1,7 @@
 mod mesh;
+pub mod ras_text;
 mod reader;
+mod text_bindings;
 mod tile_engine;
 mod tiles;
 
@@ -144,5 +146,6 @@ fn ras_commander_fast_hdf(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(reader::numeric_capability, m)?)?;
     m.add_function(wrap_pyfunction!(mesh::assemble_cells, m)?)?;
     m.add_function(wrap_pyfunction!(tiles::write_pmtiles, m)?)?;
+    text_bindings::register(m)?;
     Ok(())
 }
