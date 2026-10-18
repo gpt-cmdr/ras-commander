@@ -416,7 +416,13 @@ def export_pmtiles(output_path, layers: Mapping, *, source_crs="EPSG:4326",
     ``layers`` maps source-layer names to coordinates, offsets, cell_ids and
     optional property columns. Properties are aligned with the supplied IDs.
     Each layer may override ``source_crs``. No feature-dropping is requested.
-    Geometry buffers describe one closed exterior ring per feature.
+    Legacy ``offsets`` describes one closed exterior ring per feature.
+    For holes/multipart, replace it with ``ring_offsets`` (coordinate spans),
+    ``polygon_offsets`` (ring spans: exterior first, then holes), and
+    ``feature_offsets`` (polygon spans). All are integer arrays starting at zero
+    with terminal sentinels. Components must be nonempty; an empty layer uses
+    [0] at each level. IDs/properties remain per feature. Coordinates must
+    describe valid polygons; ring winding is handled by freestiler.
     """
     from pyproj import CRS, Transformer
     mode, threads = _mode(backend), _threads(threads)
@@ -433,18 +439,33 @@ def export_pmtiles(output_path, layers: Mapping, *, source_crs="EPSG:4326",
         if not isinstance(name, str) or not name:
             raise ValueError("Source layer names must be non-empty strings")
         coords = np.ascontiguousarray(layer["coordinates"], dtype=np.float64)
-        offsets, ids = np.asarray(layer["offsets"]), np.asarray(layer["cell_ids"])
-        if offsets.dtype.kind not in "iu" or ids.dtype.kind not in "iu":
-            raise ValueError("Offsets and feature IDs must be integers")
+        ids = np.asarray(layer["cell_ids"])
+        if ids.dtype.kind not in "iu" or ids.ndim != 1:
+            raise ValueError("Feature IDs must be a one-dimensional integer array")
         if coords.ndim != 2 or coords.shape[1] != 2 or not np.isfinite(coords).all():
             raise ValueError("Coordinates must be a finite N by 2 array")
-        if offsets.ndim != 1 or ids.ndim != 1 or len(offsets) != len(ids) + 1:
-            raise ValueError("Offsets must contain one more entry than feature IDs")
-        if len(offsets) == 0 or offsets[0] != 0 or offsets[-1] != len(coords) or np.any(offsets[1:] < offsets[:-1]):
-            raise ValueError("Offsets must span the coordinate array monotonically")
+        nested_keys = ("ring_offsets", "polygon_offsets", "feature_offsets")
+        nested = any(key in layer for key in nested_keys)
+        if nested and ("offsets" in layer or not all(key in layer for key in nested_keys)):
+            raise ValueError("Use offsets or all three nested offset arrays, not both")
+        packed_offsets = {}
+        children = len(coords)
+        for key in nested_keys if nested else ("offsets",):
+            offsets = np.asarray(layer[key])
+            if offsets.dtype.kind not in "iu" or offsets.ndim != 1:
+                raise ValueError(f"{key} must be a one-dimensional integer array")
+            if (not len(offsets) or offsets[0] != 0 or offsets[-1] != children
+                    or np.any(offsets[1:] <= offsets[:-1])):
+                raise ValueError(f"{key} must span all children strictly monotonically from zero")
+            if offsets.max() > np.iinfo(np.int64).max:
+                raise ValueError("Packed indices exceed int64")
+            packed_offsets[key] = np.ascontiguousarray(offsets, dtype=np.int64)
+            children = len(offsets) - 1
+        if children != len(ids):
+            raise ValueError("Feature offsets differ from ID count")
         if np.any(ids < 0) or len(np.unique(ids)) != len(ids):
             raise ValueError("Feature IDs must be nonnegative and unique within a layer")
-        for values in (offsets, ids):
+        for values in (ids,):
             if values.size and values.max() > np.iinfo(np.int64).max:
                 raise ValueError("Packed indices exceed int64")
         columns = {key: _property_values(value, len(ids), key)
@@ -462,7 +483,7 @@ def export_pmtiles(output_path, layers: Mapping, *, source_crs="EPSG:4326",
         if not np.isfinite(coords).all() or np.any(np.abs(coords[:, 0]) > 180) or np.any(np.abs(coords[:, 1]) > 85.0511287798066):
             raise ValueError("Transformed coordinates are outside the Web Mercator domain")
         prepared.append({"name": name, "coordinates": coords,
-                         "offsets": np.ascontiguousarray(offsets, dtype=np.int64),
+                         **packed_offsets,
                          "cell_ids": np.ascontiguousarray(ids, dtype=np.int64),
                          "properties": columns})
     if not prepared:
@@ -545,3 +566,88 @@ def export_mesh_pmtiles(hdf_path, output_path, *, mesh_names=None, properties=No
              "cell_ids": np.arange(count, dtype=np.int64), "properties": columns}
     return export_pmtiles(output_path, {layer_name: layer}, source_crs=source_crs,
                           min_zoom=min_zoom, max_zoom=max_zoom, backend=backend, threads=threads)
+
+
+@log_call
+def export_arrow(output, batches, *, source_crs, format, max_batch_rows=65536):
+    """Export a typed Arrow table/reader through optional native source writers.
+
+    Required columns: nonnullable mesh_name:string and cell_id:int64, and
+    geometry:binary (XY OGC WKB). Attributes: int64/uint64/float64/bool/string/
+    binary/timestamp[ms]. Nulls are explicit. CRS is required and compared with
+    existing GeoArrow metadata. GeoJSON is transformed using pyproj always_xy;
+    large integer attributes become decimal strings, times remain integer ms.
+    Existing outputs reject. IPC staging adds disk I/O; Rust callers can feed
+    RecordBatch iterators directly. No implicit Python fallback.
+    """
+    import json
+    import pyarrow as pa
+    from pyproj import CRS, Transformer
+    import shapely
+
+    native = _native("rust")
+    if not hasattr(native, "export_ipc_file"):
+        raise FastHdfError("Native extension was built without export writers")
+    output = Path(output)
+    if source_crs is None:
+        raise ValueError("source_crs is required")
+    if isinstance(max_batch_rows, bool) or operator.index(max_batch_rows) <= 0:
+        raise ValueError("max_batch_rows must be positive")
+    max_batch_rows = operator.index(max_batch_rows)
+    crs = CRS(source_crs)
+    if isinstance(batches, pa.Table):
+        reader = batches.to_reader(max_chunksize=max_batch_rows)
+    elif isinstance(batches, pa.RecordBatchReader):
+        reader = batches
+    else:
+        raise TypeError("batches must be a pyarrow Table or RecordBatchReader")
+    schema = reader.schema
+    index = schema.get_field_index("geometry")
+    if index < 0 or schema.field(index).type != pa.binary():
+        raise ValueError("geometry must be binary XY WKB")
+    old_metadata = schema.field(index).metadata or {}
+    if b"ARROW:extension:metadata" in old_metadata:
+        old_crs = json.loads(old_metadata[b"ARROW:extension:metadata"]).get("crs")
+        if old_crs is None or not crs.equals(CRS(old_crs), ignore_axis_order=True):
+            raise ValueError("conflicting or missing GeoArrow CRS")
+    geographic = format in {"geojson", "jsonl"}
+    target = CRS(4326) if geographic else crs
+    transformer = Transformer.from_crs(crs, target, always_xy=True) if geographic else None
+    evidence = dict(wkt=target.to_wkt(), projjson=target.to_json_dict(),
+        units=target.axis_info[0].unit_name, axis_order="xy", resolved=True,
+        geographic_wgs84=target.equals(CRS(4326), ignore_axis_order=True))
+    old_contract = (schema.metadata or {}).get(b"ras:export:v1")
+    if old_contract:
+        old = json.loads(old_contract)
+        if (not old.get("resolved") or old.get("axis_order") != "xy"
+                or not crs.equals(CRS(old["wkt"]), ignore_axis_order=True)
+                or not crs.equals(CRS(old["projjson"]), ignore_axis_order=True)):
+            raise ValueError("conflicting source CRS contract")
+    field = schema.field(index).with_metadata({"ARROW:extension:name":"geoarrow.wkb",
+        "ARROW:extension:metadata":json.dumps({"crs":target.to_json_dict(), "crs_type":"projjson"})})
+    metadata = dict(schema.metadata or {})
+    metadata[b"ras:export:v1"] = json.dumps(evidence).encode()
+    output_schema = schema.set(index, field).with_metadata(metadata)
+    # Native contract validation remains authoritative for all scalar types,
+    # dimensions, identity, domain, size and geometry structural checks.
+    with tempfile.TemporaryDirectory(prefix="ras-export-", dir=output.parent) as folder:
+        ipc = Path(folder)/"input.arrow"
+        with pa.OSFile(str(ipc), "wb") as sink, pa.ipc.new_file(sink, output_schema) as writer:
+            for batch in reader:
+                if batch.schema != schema:
+                    raise ValueError("batch schema mismatch")
+                if batch.num_rows > max_batch_rows:
+                    raise ValueError("batch exceeds max_batch_rows")
+                columns = list(batch.columns)
+                if geographic:
+                    geometries = shapely.from_wkb(columns[index].to_numpy(zero_copy_only=False))
+                    if np.any(shapely.has_z(geometries)) or np.any(shapely.has_m(geometries)):
+                        raise ValueError("explicit XY conversion required for Z/M")
+                    geometries = shapely.transform(geometries, transformer.transform, interleaved=False)
+                    geometries = shapely.orient_polygons(geometries, exterior_cw=False)
+                    columns[index] = pa.array(shapely.to_wkb(geometries, flavor="iso"), type=pa.binary())
+                writer.write_batch(pa.RecordBatch.from_arrays(columns, schema=output_schema))
+        return json.loads(native.export_ipc_file(ipc, output, format, max_batch_rows))
+
+
+__all__.append("export_arrow")

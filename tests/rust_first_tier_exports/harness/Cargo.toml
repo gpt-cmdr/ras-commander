@@ -1,0 +1,13 @@
+[package]
+name = "ras-export-test-harness"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[dependencies]
+ras-export = { path = "../../../rust/fast-hdf/src/exports", features = ["all-writers"] }
+serde_json = "1"
+
+[[bin]]
+name = "export-test-harness"
+path = "main.rs"
