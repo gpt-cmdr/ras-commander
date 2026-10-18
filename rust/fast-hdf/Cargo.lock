@@ -956,6 +956,7 @@ dependencies = [
 [[package]]
 name = "hdf5-core"
 version = "0.9.1"
+source = "git+https://github.com/CLB-Engineering-Corporation/ras-commander-rust?rev=1c3a9ce894f22267782aa8737d59b923a0bf918a#1c3a9ce894f22267782aa8737d59b923a0bf918a"
 dependencies = [
  "thiserror 2.0.21",
 ]
@@ -963,6 +964,7 @@ dependencies = [
 [[package]]
 name = "hdf5-reader"
 version = "0.9.1"
+source = "git+https://github.com/CLB-Engineering-Corporation/ras-commander-rust?rev=1c3a9ce894f22267782aa8737d59b923a0bf918a#1c3a9ce894f22267782aa8737d59b923a0bf918a"
 dependencies = [
  "flate2",
  "hdf5-core",
@@ -1738,16 +1740,28 @@ version = "0.1.0"
 dependencies = [
  "flate2",
  "freestiler-core",
- "hdf5-reader",
  "i_float",
  "i_overlay",
  "ndarray",
  "numpy",
  "prost",
  "pyo3",
+ "ras-commander-rust",
  "ras-export",
  "rayon",
  "serde_json",
+]
+
+[[package]]
+name = "ras-commander-rust"
+version = "0.1.0"
+source = "git+https://github.com/CLB-Engineering-Corporation/ras-commander-rust?rev=1c3a9ce894f22267782aa8737d59b923a0bf918a#1c3a9ce894f22267782aa8737d59b923a0bf918a"
+dependencies = [
+ "flate2",
+ "geo",
+ "hdf5-reader",
+ "ndarray",
+ "rayon",
 ]
 
 [[package]]

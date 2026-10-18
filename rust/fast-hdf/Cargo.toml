@@ -19,7 +19,7 @@ rayon = "1.10"
 prost = "0.13"
 i_overlay = "=1.9.4"
 i_float = "=1.6.0"
-hdf5-reader = { git = "https://github.com/gpt-cmdr/netcdf-rust", rev = "24ff6fcfcc79a35c30aa5d8cb3028ab4d9d00564" }
+ras-commander-rust = { git = "https://github.com/CLB-Engineering-Corporation/ras-commander-rust", rev = "1c3a9ce894f22267782aa8737d59b923a0bf918a", default-features = false, features = ["hdf", "mesh", "results"] }
 freestiler-core = { git = "https://github.com/walkerke/freestiler", rev = "beb64b0d4414da895ec67d02b2f91db6ab6acc37" }
 # Fast Rust zlib implementation; features unify with both upstream readers.
 flate2 = { version = "1", default-features = false, features = ["zlib-rs"] }

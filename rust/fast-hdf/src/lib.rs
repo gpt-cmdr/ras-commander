@@ -1,8 +1,8 @@
+mod analysis;
 pub mod fluvial;
 mod fluvial_bindings;
 pub mod fluvial_geometry;
 pub mod fluvial_topology;
-mod analysis;
 mod mesh;
 pub mod ras_text;
 mod reader;
@@ -135,6 +135,8 @@ fn validate_export_wkb(
 
 #[pymodule]
 fn ras_commander_fast_hdf(m: &Bound<'_, PyModule>) -> PyResult<()> {
+    m.add("ENGINE_COMMIT", "1c3a9ce894f22267782aa8737d59b923a0bf918a")?;
+    m.add("ENGINE_FEATURES", ("hdf", "mesh", "results"))?;
     m.add("API_VERSION", 1)?;
     #[cfg(feature = "exports-arrow")]
     {
