@@ -338,9 +338,12 @@ class HdfFluvialPluvial:
             coords2 = tuple(round(coord, precision) for coord in coords2)
             return tuple(sorted([coords1, coords2]))
 
-        for _, row in cell_polygons_gdf.iterrows():
-            cell_id = row['cell_id']
-            geom = row['geometry']
+        # iterrows finalizes a Series for every cell and deep-copies frame attrs.
+        # Mesh diagnostics contain per-cell records, making that O(N**2).
+        # Extract columns once; preserve the caller's geometry and metadata.
+        cell_ids = cell_polygons_gdf['cell_id'].to_numpy(copy=False)
+        geometries = cell_polygons_gdf.geometry.array
+        for cell_id, geom in zip(cell_ids, geometries):
             if geom.is_empty or not geom.is_valid:
                 continue
             coords = list(geom.exterior.coords)

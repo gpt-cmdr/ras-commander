@@ -291,8 +291,7 @@ class HdfBase:
 
     @staticmethod
     def _resolve_rasmap_path(base_folder: Path, filename: str) -> Path:
-        cleaned = filename.replace(".\\", "").replace("./", "")
-        return base_folder / cleaned
+        return HdfUtils.resolve_ras_relative_path(base_folder, filename)
 
     @staticmethod
     def _get_projection_from_hdf_attribute(
@@ -367,94 +366,33 @@ class HdfBase:
         return None
 
     @staticmethod
+    @log_call
     @standardize_input(file_type='plan_hdf')
     def get_projection(hdf_path: Path) -> Optional[str]:
+        """Return an exact authority/source WKT from consistent CRS evidence.
+
+        Inspect HDF, the matching RASMapper projection and terrain metadata.
+        Missing or conflicting evidence returns None; no coordinates are
+        transformed and no authority is guessed from a low-confidence match.
         """
-        Get projection information from HDF file or RASMapper project file.
-        Converts WKT projection to EPSG code for GeoDataFrame compatibility.
-
-        Args:
-            hdf_path (Path): Path to the HDF file.
-
-        Returns:
-            Optional[str]: The projection as EPSG code (e.g. "EPSG:6556"), WKT
-                string if no EPSG match is found, or None if no projection is
-                available.
-        """
-        project_folder = hdf_path.parent
-        proj_file = None
-
-        projection = HdfBase._get_projection_from_hdf_attribute(hdf_path)
-        if projection:
-            return projection
-
-        try:
-            rasmap_files = list(project_folder.glob("*.rasmap"))
-            if rasmap_files:
-                rasmap_path = rasmap_files[0]
-                tree = ET.parse(rasmap_path)
-                root = tree.getroot()
-
-                proj_elem = root.find(".//RASProjectionFilename")
-                if proj_elem is not None:
-                    filename = proj_elem.get("Filename")
-                    if filename:
-                        proj_file = HdfBase._resolve_rasmap_path(
-                            project_folder,
-                            filename,
-                        )
-                        if proj_file.exists():
-                            projection = HdfBase._get_projection_from_prj_file(
-                                proj_file
-                            )
-                            if projection:
-                                return projection
-        except Exception as e:
-            logger.debug(
-                "Error reading RASMapper projection file while checking %s: %s",
-                hdf_path,
-                str(e),
-            )
-
-        if proj_file:
-            error_msg = (
-                "No valid projection found. Checked:\n"
-                f"1. HDF file projection attribute: {hdf_path}\n"
-                f"2. RASMapper projection file {proj_file} found in RASMapper "
-                "file, but was invalid"
-            )
-        else:
-            error_msg = (
-                "No valid projection found. Checked:\n"
-                f"1. HDF file projection attribute: {hdf_path}\n"
-                "2. No RASMapper projection file found"
-            )
-
-        error_msg += (
-            "\nTo fix this:\n"
-            "1. Open RASMapper\n"
-            "2. Click Map > Set Projection\n"
-            "3. Select an appropriate projection file or coordinate system\n"
-            "4. Save the RASMapper project"
+        resolution = HdfUtils.resolve_crs_evidence(
+            HdfUtils.collect_hdf_crs_evidence(hdf_path)
         )
-
-        logger.debug(error_msg)
-
+        if resolution.status == "resolved":
+            return resolution.authority or resolution.crs
+        logger.debug("CRS resolution for %s: %s; evidence=%s", hdf_path,
+                     resolution.status, resolution.evidence)
         try:
             warning_key = str(hdf_path.resolve())
         except OSError:
             warning_key = str(hdf_path.absolute())
-
-        if (
-            warning_key not in _missing_projection_warning_paths
-            and logger.isEnabledFor(logging.WARNING)
-        ):
-            logger.warning(
-                "Projection not found for %s; returned geospatial outputs will "
-                "not have a CRS. Enable DEBUG for checked paths and RASMapper "
-                "projection setup guidance.",
-                hdf_path.name,
-            )
+        if warning_key not in _missing_projection_warning_paths and logger.isEnabledFor(logging.WARNING):
+            if resolution.status == "missing":
+                logger.warning("Projection not found for %s; returned geospatial outputs will "
+                               "not have a CRS. Enable DEBUG for checked evidence.", hdf_path.name)
+            else:
+                logger.warning("Conflicting projection evidence for %s; returned geospatial "
+                               "outputs will not have a CRS.", hdf_path.name)
             _missing_projection_warning_paths.add(warning_key)
         return None
 

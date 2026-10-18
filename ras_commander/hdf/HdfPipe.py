@@ -90,13 +90,13 @@ class HdfPipe:
     @staticmethod
     @log_call
     @standardize_input(file_type='plan_hdf')
-    def get_pipe_conduits(hdf_path: Path, crs: Optional[str] = "EPSG:4326") -> gpd.GeoDataFrame:
+    def get_pipe_conduits(hdf_path: Path, crs: Optional[str] = None) -> gpd.GeoDataFrame:
         """
         Extracts pipe conduit geometries and attributes from HDF5 file.
 
         Parameters:
             hdf_path: Path to the HDF5 file
-            crs: Coordinate Reference System (default: "EPSG:4326")
+            crs: Coordinate Reference System (default: None; detect from source evidence)
 
         Returns:
             GeoDataFrame with columns:
@@ -104,6 +104,9 @@ class HdfPipe:
             - Polyline: LineString geometries
             - Terrain_Profiles: List of (station, elevation) tuples
         """
+        if crs is None:
+            crs = HdfBase.get_projection(hdf_path)
+
         shapely_geometry = require_module("shapely.geometry", "Returning GeoDataFrame results from HdfPipe")
         LineString = shapely_geometry.LineString
 
@@ -178,7 +181,7 @@ class HdfPipe:
     @staticmethod
     @log_call
     @standardize_input(file_type='plan_hdf')
-    def get_pipe_nodes(hdf_path: Path, crs: Optional[str] = "EPSG:4326") -> gpd.GeoDataFrame:
+    def get_pipe_nodes(hdf_path: Path, crs: Optional[str] = None) -> gpd.GeoDataFrame:
         """
         Creates a GeoDataFrame for Pipe Node points and their attributes from an HDF5 file.
 
@@ -188,7 +191,7 @@ class HdfPipe:
 
         Args:
             hdf_path (Union[str, Path]): Path to the HDF5 file.
-            crs (Optional[str]): Coordinate Reference System (default: "EPSG:4326").
+            crs (Optional[str]): Coordinate Reference System (default: None; detect from source evidence).
 
         Returns:
             gpd.GeoDataFrame: GeoDataFrame containing pipe node attributes and
@@ -200,6 +203,9 @@ class HdfPipe:
         Example:
             >>> nodes_gdf = HdfPipe.get_pipe_nodes("path/to/plan.hdf")
         """
+        if crs is None:
+            crs = HdfBase.get_projection(hdf_path)
+
         shapely_geometry = require_module("shapely.geometry", "Returning GeoDataFrame results from HdfPipe")
         Point = shapely_geometry.Point
 
@@ -302,14 +308,14 @@ class HdfPipe:
     @staticmethod
     @log_call
     @standardize_input(file_type='plan_hdf')
-    def get_pipe_network(hdf_path: Path, pipe_network_name: Optional[str] = None, crs: Optional[str] = "EPSG:4326") -> gpd.GeoDataFrame:
+    def get_pipe_network(hdf_path: Path, pipe_network_name: Optional[str] = None, crs: Optional[str] = None) -> gpd.GeoDataFrame:
         """
         Creates a GeoDataFrame for a pipe network's geometry.
 
         Parameters:
             hdf_path: Path to the HDF5 file
             pipe_network_name: Name of network (uses first if None)
-            crs: Coordinate Reference System (default: "EPSG:4326")
+            crs: Coordinate Reference System (default: None; detect from source evidence)
 
         Returns:
             GeoDataFrame containing:
@@ -318,6 +324,9 @@ class HdfPipe:
             - Node points
             - Associated attributes
         """
+        if crs is None:
+            crs = HdfBase.get_projection(hdf_path)
+
         shapely_geometry = require_module("shapely.geometry", "Returning GeoDataFrame results from HdfPipe")
         LineString = shapely_geometry.LineString
         MultiLineString = shapely_geometry.MultiLineString
