@@ -47,8 +47,20 @@ def _record_ok(path):
 
 def test_receipt_pins_are_the_activated_build(receipt):
     assert receipt["accepted"] is True
-    assert receipt["accepted_source_commit"] == "3be708ad3fb1efa482ca9cf2b401e7f31b587d1a"
-    assert receipt["accepted_source_tree"] == "bb3254f4d45c3c67acf52f5156c6b9b4841c5117"
+    if "native_engine_commit" in receipt:
+        # Explicit new-wave activation; scientific oracles remain unchanged.
+        assert receipt["native_engine_commit"] == "1c3a9ce894f22267782aa8737d59b923a0bf918a"
+        assert receipt["source_parent"] == "d61c62a5a4c5458d58b83dfd99149b5e8318e5c5"
+        source = env_path("RAS_CONSUMER_SOURCE_CHECKOUT")
+        assert source is not None
+        head = subprocess.check_output(["git", "-C", str(source), "rev-parse", "HEAD"], text=True).strip()
+        assert head == receipt["accepted_source_commit"]
+        subprocess.run(["git", "-C", str(source), "merge-base", "--is-ancestor",
+                        receipt["source_parent"], head], check=True)
+        assert native_package().ENGINE_COMMIT == receipt["native_engine_commit"]
+    else:
+        assert receipt["accepted_source_commit"] == "3be708ad3fb1efa482ca9cf2b401e7f31b587d1a"
+        assert receipt["accepted_source_tree"] == "bb3254f4d45c3c67acf52f5156c6b9b4841c5117"
     assert receipt["editable_install_allowed"] is False
 
 
