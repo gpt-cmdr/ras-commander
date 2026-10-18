@@ -203,11 +203,12 @@ pub fn write_pmtiles(
                             })
                             .collect(),
                     );
-                    crate::mesh::validate_ring(ring.0.iter().map(|c| [c.x, c.y])).map_err(
-                        |error| {
-                            crate::TopologyError::new_err(format!("{name}: feature {id}: {error}"))
-                        },
-                    )?;
+                    ras_commander_rust::mesh::validate_ring_geometry(
+                        ring.0.iter().map(|c| [c.x, c.y]),
+                    )
+                    .map_err(|error| {
+                        crate::TopologyError::new_err(format!("{name}: feature {id}: {error}"))
+                    })?;
                     rings.push(ring);
                 }
                 let exterior = rings.remove(0);
