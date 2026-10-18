@@ -5,7 +5,7 @@ use freestiler_core::geo::{
     Line,
 };
 use ndarray::Array2;
-use numpy::{IntoPyArray, PyArray1, PyArray2, PyReadonlyArray2};
+use numpy::{IntoPyArray, PyReadonlyArray2};
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
 use rayon::prelude::*;
@@ -64,11 +64,30 @@ pub(crate) fn validate_ring(points: impl IntoIterator<Item = Point>) -> Result<(
     }
     Ok(())
 }
-type Packed<'py> = (
-    Bound<'py, PyArray2<f64>>,
-    Bound<'py, PyArray1<i64>>,
-    Bound<'py, PyArray1<i64>>,
-);
+// Only a proven geometric invalidity is eligible for quarantine. Bounds,
+// connectivity, layout and arithmetic failures never enter that policy.
+#[derive(Debug)]
+enum CellError {
+    Structural(String),
+    Geometry(String),
+}
+impl From<String> for CellError {
+    fn from(value: String) -> Self {
+        Self::Structural(value)
+    }
+}
+impl From<&str> for CellError {
+    fn from(value: &str) -> Self {
+        Self::Structural(value.into())
+    }
+}
+impl std::fmt::Display for CellError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Structural(s) | Self::Geometry(s) => f.write_str(s),
+        }
+    }
+}
 
 fn index(n: i64, bound: usize, label: &str) -> Result<usize, String> {
     let n = usize::try_from(n).map_err(|_| format!("negative {label}"))?;
@@ -138,9 +157,24 @@ impl Topology {
                 "face perimeter",
             )?;
         }
+        // Preflight every cell before geometry work, including cells following
+        // an invalid ring. Corruption cannot be hidden by strict early failure.
+        for cell in 0..self.cell_info.nrows() {
+            let range = span(
+                self.cell_info[[cell, 0]],
+                self.cell_info[[cell, 1]],
+                self.cell_faces.nrows(),
+                "cell faces",
+            )
+            .map_err(|e| format!("cell {cell}: {e}"))?;
+            for row in range {
+                index(self.cell_faces[[row, 0]], self.ends.nrows(), "cell face")
+                    .map_err(|e| format!("cell {cell}: {e}"))?;
+            }
+        }
         Ok(())
     }
-    fn ring(&self, cell: usize) -> Result<Option<Vec<Point>>, String> {
+    fn ring(&self, cell: usize) -> Result<Option<Vec<Point>>, CellError> {
         let slice = span(
             self.cell_info[[cell, 0]],
             self.cell_info[[cell, 1]],
@@ -221,14 +255,14 @@ impl Topology {
         if ring.len() < 4 {
             return Err("cell ring has fewer than four coordinates".into());
         }
-        validate_ring(ring.iter().copied())?;
+        validate_ring(ring.iter().copied()).map_err(CellError::Geometry)?;
         Ok(Some(ring))
     }
 }
 
 /// Assemble simple cell boundary rings, retaining every face perimeter vertex.
 #[pyfunction]
-#[pyo3(signature=(face_points,face_endpoints,face_perimeter_info,face_perimeter_values,cell_face_info,cell_face_values,threads=None))]
+#[pyo3(signature=(face_points,face_endpoints,face_perimeter_info,face_perimeter_values,cell_face_info,cell_face_values,threads=None,*,strict=true,return_diagnostics=false))]
 #[allow(clippy::too_many_arguments)] // Six independent HDF arrays form the binding contract.
 pub fn assemble_cells<'py>(
     py: Python<'py>,
@@ -239,7 +273,9 @@ pub fn assemble_cells<'py>(
     cell_face_info: PyReadonlyArray2<'py, i64>,
     cell_face_values: PyReadonlyArray2<'py, i64>,
     threads: Option<usize>,
-) -> PyResult<Packed<'py>> {
+    strict: bool,
+    return_diagnostics: bool,
+) -> PyResult<Bound<'py, PyAny>> {
     // Own buffers before releasing Python: callers may mutate original arrays
     // from another thread while this operation runs.
     let top = Topology {
@@ -252,19 +288,37 @@ pub fn assemble_cells<'py>(
     };
     let pool = crate::pool(threads)?;
     let packed = py
-        .detach(|| -> Result<_, String> {
+        .detach(|| -> Result<_, CellError> {
             top.validate()?;
             let rings: Vec<_> = pool.install(|| {
                 (0..top.cell_info.nrows())
                     .into_par_iter()
-                    .map(|cell| top.ring(cell).map_err(|e| format!("cell {cell}: {e}")))
+                    .map(|cell| top.ring(cell))
                     .collect()
             });
             let mut coords = Vec::new();
             let mut offsets = vec![0i64];
             let mut ids = Vec::new();
+            let mut diagnostics = Vec::new();
             for (cell, result) in rings.into_iter().enumerate() {
-                if let Some(ring) = result? {
+                let ring = match result {
+                    Ok(ring) => ring,
+                    Err(CellError::Geometry(reason)) if !strict => {
+                        diagnostics.push((
+                            i64::try_from(cell).map_err(|_| "cell ID overflow")?,
+                            "invalid_geometry",
+                            reason,
+                        ));
+                        continue;
+                    }
+                    Err(CellError::Structural(reason)) => {
+                        return Err(CellError::Structural(format!("cell {cell}: {reason}")))
+                    }
+                    Err(CellError::Geometry(reason)) => {
+                        return Err(CellError::Geometry(format!("cell {cell}: {reason}")))
+                    }
+                };
+                if let Some(ring) = ring {
                     coords.extend(ring.into_iter().flatten());
                     offsets.push(
                         i64::try_from(coords.len() / 2).map_err(|_| "coordinate count overflow")?,
@@ -272,17 +326,37 @@ pub fn assemble_cells<'py>(
                     ids.push(i64::try_from(cell).map_err(|_| "cell ID overflow")?);
                 }
             }
-            Ok((coords, offsets, ids))
+            Ok((coords, offsets, ids, diagnostics))
         })
-        .map_err(TopologyError::new_err)?;
-    let (coords, offsets, ids) = packed;
+        .map_err(|error| {
+            let structural = matches!(&error, CellError::Structural(_));
+            let exception = TopologyError::new_err(error.to_string());
+            // Preserve the public exception class while exposing the typed
+            // distinction to the adapter; no message parsing or fallback on
+            // structural corruption.
+            if let Err(error) = exception
+                .value(py)
+                .setattr("mesh_structure_error", structural)
+            {
+                return error;
+            }
+            exception
+        })?;
+    let (coords, offsets, ids, diagnostics) = packed;
     let coords = Array2::from_shape_vec((coords.len() / 2, 2), coords)
         .map_err(|e| PyValueError::new_err(e.to_string()))?;
-    Ok((
+    let arrays = (
         coords.into_pyarray(py),
         offsets.into_pyarray(py),
         ids.into_pyarray(py),
-    ))
+    );
+    if return_diagnostics {
+        Ok((arrays.0, arrays.1, arrays.2, diagnostics)
+            .into_pyobject(py)?
+            .into_any())
+    } else {
+        Ok(arrays.into_pyobject(py)?.into_any())
+    }
 }
 
 #[cfg(test)]
@@ -305,14 +379,18 @@ mod tests {
     fn four_face_bowtie_is_not_a_valid_source_polygon() {
         let top = four_face_cell(array![[0., 0.], [2., 2.], [0., 2.], [2., 0.]]);
         top.validate().unwrap();
-        assert!(top.ring(0).unwrap_err().contains("self-intersection"));
+        assert!(top
+            .ring(0)
+            .unwrap_err()
+            .to_string()
+            .contains("self-intersection"));
     }
 
     #[test]
     fn four_face_collinear_closed_chain_has_zero_area() {
         let top = four_face_cell(array![[0., 0.], [1., 0.], [2., 0.], [3., 0.]]);
         top.validate().unwrap();
-        assert!(top.ring(0).unwrap_err().contains("zero-area"));
+        assert!(top.ring(0).unwrap_err().to_string().contains("zero-area"));
     }
 
     #[test]
@@ -392,7 +470,11 @@ mod tests {
             cell_faces: array![[0], [1], [2], [3], [4], [5]],
         };
         top.validate().unwrap();
-        assert!(top.ring(0).unwrap_err().contains("disconnected"));
+        assert!(top
+            .ring(0)
+            .unwrap_err()
+            .to_string()
+            .contains("disconnected"));
     }
 
     #[test]
@@ -428,6 +510,10 @@ mod tests {
             cell_faces: array![[0, 1], [0, -1]],
         };
         top.validate().unwrap();
-        assert!(top.ring(0).unwrap_err().contains("duplicate face"));
+        assert!(top
+            .ring(0)
+            .unwrap_err()
+            .to_string()
+            .contains("duplicate face"));
     }
 }

@@ -1085,7 +1085,7 @@ class HdfMesh:
     @staticmethod
     @log_call
     @standardize_input(file_type='geom_hdf')
-    def diagnose_mesh_cell_polygons(hdf_path: Path) -> pd.DataFrame:
+    def diagnose_mesh_cell_polygons(hdf_path: Path, *, backend: str = "auto") -> pd.DataFrame:
         """Return cells not reconstructed as exactly one polygon.
 
         The result contains the native ``mesh_name`` and zero-based ``cell_id``,
@@ -1097,8 +1097,31 @@ class HdfMesh:
         topology from a clean reconstruction. An empty result means every
         named mesh supplied topology and every processed physical cell produced
         exactly one polygon.
+
+        ``backend="auto"`` permits reference inspection for a diagnostic report
+        after native topology rejection; the rejection is retained in result
+        attrs. This does not relax native polygon extraction. Explicit Rust or
+        ``RAS_COMMANDER_FAST_HDF=required`` never falls back. Native geometric
+        reason codes can be more specific than reference polygonization codes.
         """
-        polygons = HdfMesh.get_mesh_cell_polygons(hdf_path, strict=False)
+        # Inspecting malformed topology is distinct from publishing extracted
+        # polygons. Auto diagnosis may use the reference inspection after native
+        # corruption rejection; explicitly required native mode never falls back.
+        from ..fast_hdf import FastHdfError, _mode
+
+        mode = _mode(backend)
+        native_rejection = None
+        try:
+            polygons = HdfMesh.get_mesh_cell_polygons(hdf_path, strict=False, backend=backend)
+        except FastHdfError as exc:
+            if mode != "auto":
+                raise
+            native_rejection = str(exc)
+            logger.warning(
+                "Native topology rejected; using Python inspection for the diagnostic report only: %s",
+                exc,
+            )
+            polygons = HdfMesh.get_mesh_cell_polygons(hdf_path, strict=False, backend="python")
         diagnostic_records = polygons.attrs.get("cell_polygon_diagnostics")
         columns = [
             "mesh_name",
@@ -1110,18 +1133,13 @@ class HdfMesh:
             "face_ids",
             "missing_face_ids",
         ]
-        if diagnostic_records is None:
-            return pd.DataFrame(columns=[
-                "mesh_name",
-                "cell_id",
-                "face_count",
-                "polygon_count",
-                "status",
-                "reason_code",
-                "face_ids",
-                "missing_face_ids",
-            ])
-        return pd.DataFrame.from_records(diagnostic_records, columns=columns)
+        result = pd.DataFrame.from_records(
+            () if diagnostic_records is None else diagnostic_records, columns=columns
+        )
+        if native_rejection is not None:
+            result.attrs["diagnostic_backend"] = "python"
+            result.attrs["native_rejection"] = native_rejection
+        return result
         
     @staticmethod
     def _physical_cell_counts(hdf_file: h5py.File) -> Dict[str, int]:

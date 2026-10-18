@@ -11,6 +11,7 @@ from __future__ import annotations
 
 from contextlib import nullcontext
 import importlib
+import inspect
 import operator
 import os
 from pathlib import Path
@@ -246,7 +247,7 @@ _MESH_ARRAYS = (
 )
 
 
-def _assemble(hdf, mesh_name, module, backend, threads, *, diagnostics=False):
+def _assemble(hdf, mesh_name, module, backend, threads, *, diagnostics=False, strict=True):
     paths = [f"Geometry/2D Flow Areas/{mesh_name}/{name}" for name in _MESH_ARRAYS]
     arrays = read_datasets(hdf, paths, backend=backend, threads=threads)
     args = []
@@ -258,24 +259,43 @@ def _assemble(hdf, mesh_name, module, backend, threads, *, diagnostics=False):
             if values.dtype.kind == "u" and values.size and values.max() > np.iinfo(np.int64).max:
                 raise ValueError(f"Connectivity exceeds int64: {path}")
         args.append(np.ascontiguousarray(values, dtype=np.float64 if index in {0, 3} else np.int64))
-    if diagnostics and np.any(args[4][:, 1] == 2):
-        raise module.UnsupportedError("Two-face diagnostic records require the Python polygonizer")
-    coordinates, offsets, cell_ids = module.assemble_cells(*args, threads=threads)
+    if diagnostics:
+        # API_VERSION 1 predates quarantine. Check the additive binding
+        # signature before requesting it: old wheels remain usable for packed
+        # extraction, but cannot claim this policy. Auto may use Python;
+        # required native reports an explicit rebuild requirement.
+        try:
+            parameters = inspect.signature(module.assemble_cells).parameters
+        except (TypeError, ValueError):
+            parameters = {}
+        if not {"strict", "return_diagnostics"}.issubset(parameters):
+            raise module.UnsupportedError(
+                "Native mesh quarantine requires assemble_cells strict and "
+                "return_diagnostics support; rebuild the optional extension")
+        coordinates, offsets, cell_ids, invalid = module.assemble_cells(
+            *args, threads=threads, strict=strict, return_diagnostics=True)
+    else:
+        coordinates, offsets, cell_ids = module.assemble_cells(*args, threads=threads)
     result = {"coordinates": coordinates, "offsets": offsets, "cell_ids": cell_ids}
     if diagnostics:
-        if np.any(args[4][cell_ids, 1] < 3):
-            raise module.UnsupportedError("Closed boundary-only records require the Python polygonizer")
         records = []
-        for cell_id in np.flatnonzero(args[4][:, 1] < 3):
+        invalid = {int(cell): (code, reason) for cell, code, reason in invalid}
+        missing = np.ones(len(args[4]), dtype=bool)
+        missing[cell_ids] = False
+        for cell_id in np.flatnonzero(missing):
             start, length = map(int, args[4][cell_id, :2])
             records.append({
                 "mesh_name": mesh_name, "cell_id": int(cell_id),
                 "face_count": length, "polygon_count": 0,
-                "status": "omitted" if length == 0 else "boundary_only",
-                "reason_code": "zero_faces" if length == 0 else "insufficient_faces",
+                "status": "omitted" if cell_id in invalid or length == 0 else "boundary_only",
+                "reason_code": "no_polygon" if cell_id in invalid else (
+                    "zero_faces" if length == 0 else "insufficient_faces"),
                 "face_ids": tuple(map(int, args[5][start:start + length, 0])),
                 "missing_face_ids": (),
             })
+            if cell_id in invalid:
+                records[-1]["native_reason_code"] = invalid[cell_id][0]
+                records[-1]["reason"] = invalid[cell_id][1]
         result["diagnostics"] = records
     return result
 
@@ -329,9 +349,11 @@ def _try_mesh_polygons(hdf_path, *, backend="auto", threads=None, strict=None):
             try:
                 if not all(f"Geometry/2D Flow Areas/{name}/{key}" in hdf for key in _MESH_ARRAYS):
                     raise module.UnsupportedError("Incomplete native mesh layout")
-                packed = _assemble(hdf, name, module, backend, threads, diagnostics=strict is not None)
+                packed = _assemble(hdf, name, module, backend, threads,
+                                   diagnostics=strict is not None, strict=strict is not False)
             except Exception as exc:
-                if mode == "auto" and _unsupported(module, exc):
+                if (mode == "auto" and _unsupported(module, exc)
+                        and not hasattr(exc, "mesh_structure_error")):
                     logger.debug("Legacy polygon fallback for %s/%s: %s", hdf_path, name, exc)
                     return None
                 if strict and isinstance(exc, module.TopologyError):
