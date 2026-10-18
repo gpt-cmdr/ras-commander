@@ -169,11 +169,7 @@ fn block_lines(block: &crate::ras_text::CountedBlock) -> Range<usize> {
 /// Per-node table of `key` items: (status, offsets, values). Status is
 /// 0 = absent, 1 = valid, 2 = malformed (count/slot/field diagnostics).
 /// Malformed blocks contribute no values: nothing is repaired or guessed.
-fn node_table(
-    index: &GeometryIndex,
-    key: &str,
-    width: usize,
-) -> (Vec<u8>, Vec<i64>, Vec<f64>) {
+fn node_table(index: &GeometryIndex, key: &str, width: usize) -> (Vec<u8>, Vec<i64>, Vec<f64>) {
     let mut status = Vec::with_capacity(index.nodes.len());
     let mut offsets = Vec::with_capacity(index.nodes.len() + 1);
     let mut values = Vec::new();
