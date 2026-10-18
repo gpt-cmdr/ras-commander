@@ -623,8 +623,12 @@ def export_arrow(output, batches, *, source_crs, format, max_batch_rows=65536):
                 or not crs.equals(CRS(old["wkt"]), ignore_axis_order=True)
                 or not crs.equals(CRS(old["projjson"]), ignore_axis_order=True)):
             raise ValueError("conflicting source CRS contract")
-    field = schema.field(index).with_metadata({"ARROW:extension:name":"geoarrow.wkb",
-        "ARROW:extension:metadata":json.dumps({"crs":target.to_json_dict(), "crs_type":"projjson"})})
+    geometry_metadata = dict(old_metadata)
+    extension_metadata = json.loads(geometry_metadata.get(b"ARROW:extension:metadata", b"{}"))
+    extension_metadata.update(crs=target.to_json_dict(), crs_type="projjson")
+    geometry_metadata.update({b"ARROW:extension:name": b"geoarrow.wkb",
+        b"ARROW:extension:metadata": json.dumps(extension_metadata).encode()})
+    field = schema.field(index).with_metadata(geometry_metadata)
     metadata = dict(schema.metadata or {})
     metadata[b"ras:export:v1"] = json.dumps(evidence).encode()
     output_schema = schema.set(index, field).with_metadata(metadata)
@@ -640,7 +644,16 @@ def export_arrow(output, batches, *, source_crs, format, max_batch_rows=65536):
                     raise ValueError("batch exceeds max_batch_rows")
                 columns = list(batch.columns)
                 if geographic:
-                    geometries = shapely.from_wkb(columns[index].to_numpy(zero_copy_only=False))
+                    # Validate original bytes before Shapely can strip EWKB SRIDs
+                    # or trailing data. Borrow Arrow buffers for one native call.
+                    values = columns[index]
+                    validity, offsets, data = values.buffers()
+                    native.validate_export_wkb(
+                        np.frombuffer(offsets, dtype=np.int32),
+                        np.frombuffer(data if data is not None else b"", dtype=np.uint8),
+                        None if validity is None else np.frombuffer(validity, dtype=np.uint8),
+                        values.offset, len(values))
+                    geometries = shapely.from_wkb(values.to_numpy(zero_copy_only=False))
                     if np.any(shapely.has_z(geometries)) or np.any(shapely.has_m(geometries)):
                         raise ValueError("explicit XY conversion required for Z/M")
                     geometries = shapely.transform(geometries, transformer.transform, interleaved=False)
