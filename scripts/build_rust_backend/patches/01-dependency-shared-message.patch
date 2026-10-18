@@ -1,0 +1,113 @@
+diff --git a/hdf5-reader/src/messages/shared.rs b/hdf5-reader/src/messages/shared.rs
+index 0e5b908..433a770 100644
+--- a/hdf5-reader/src/messages/shared.rs
++++ b/hdf5-reader/src/messages/shared.rs
+@@ -52,11 +52,13 @@ pub fn parse(
+                 address,
+             }
+         }
++        // Versions 2 and 3 store the location immediately after the type
++        // byte (HDF5 file format specification, "Shared Message").
+         2 => {
+             let type_field = cursor.read_u8()?;
+-            cursor.skip(2)?;
+             match type_field {
+-                0 => {
++                // 0 is the historical OHDR value; HDF5 1.8+ writes 2 (committed).
++                0 | 2 => {
+                     let address = cursor.read_offset(offset_size)?;
+                     SharedMessage::SharedInOhdr {
+                         message_type,
+@@ -73,7 +75,6 @@ pub fn parse(
+         }
+         3 => {
+             let type_field = cursor.read_u8()?;
+-            cursor.skip(2)?;
+             match type_field {
+                 1 => {
+                     let heap_id = cursor.read_bytes(8)?.to_vec();
+@@ -118,47 +119,59 @@ mod tests {
+     use super::*;
+     use crate::messages::MSG_DATATYPE;
+ 
+-    #[test]
+-    fn parses_v2_object_header_reference_with_padding() {
+-        let mut bytes = Vec::new();
+-        bytes.push(2);
+-        bytes.push(0);
+-        bytes.extend_from_slice(&[0, 0]);
+-        bytes.extend_from_slice(&0x1234u64.to_le_bytes());
+-
+-        let mut cursor = Cursor::new(&bytes);
+-        let message = parse(&mut cursor, MSG_DATATYPE, 8, 8, bytes.len()).unwrap();
+-        match message {
++    fn ohdr_address(bytes: &[u8], offset_size: u8) -> u64 {
++        let mut cursor = Cursor::new(bytes);
++        match parse(&mut cursor, MSG_DATATYPE, offset_size, 8, bytes.len()).unwrap() {
+             SharedMessage::SharedInOhdr {
+                 message_type,
+                 address,
+             } => {
+                 assert_eq!(message_type, MSG_DATATYPE);
+-                assert_eq!(address, 0x1234);
++                assert_eq!(cursor.position() as usize, bytes.len());
++                address
+             }
+             other => panic!("expected OHDR reference, got {:?}", other),
+         }
+     }
+ 
+     #[test]
+-    fn parses_v3_sohm_heap_id_with_padding() {
+-        let mut bytes = Vec::new();
+-        bytes.push(3);
+-        bytes.push(1);
+-        bytes.extend_from_slice(&[0, 0]);
+-        bytes.extend_from_slice(&[1, 2, 3, 4, 5, 6, 7, 8]);
++    fn parses_v2_committed_reference_written_by_hdf5() {
++        // Payload copied from an h5py 3.16 / HDF5 2.0 committed datatype
++        // reference (earliest format, 8-byte offsets, message padded to 16).
++        let bytes = [2, 2, 0x70, 0x2c, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
++        assert_eq!(ohdr_address(&bytes, 8), 0x2c70);
++        // Same reference from a libver="latest" file (no trailing padding).
++        let bytes = [2, 2, 0x59, 0x29, 0, 0, 0, 0, 0, 0];
++        assert_eq!(ohdr_address(&bytes, 8), 0x2959);
++    }
++
++    #[test]
++    fn parses_v2_historical_type_zero() {
++        let mut bytes = vec![2, 0];
++        bytes.extend_from_slice(&0x1234u64.to_le_bytes());
++        assert_eq!(ohdr_address(&bytes, 8), 0x1234);
++    }
+ 
++    #[test]
++    fn parses_v3_committed_address_and_sohm_heap_id() {
++        let mut bytes = vec![3, 2];
++        bytes.extend_from_slice(&0x1234u32.to_le_bytes());
++        assert_eq!(ohdr_address(&bytes, 4), 0x1234);
++
++        let bytes = [3, 1, 1, 2, 3, 4, 5, 6, 7, 8];
+         let mut cursor = Cursor::new(&bytes);
+-        let message = parse(&mut cursor, MSG_DATATYPE, 8, 8, bytes.len()).unwrap();
+-        match message {
+-            SharedMessage::SharedInSohm {
+-                message_type,
+-                heap_id,
+-            } => {
+-                assert_eq!(message_type, MSG_DATATYPE);
++        match parse(&mut cursor, MSG_DATATYPE, 8, 8, bytes.len()).unwrap() {
++            SharedMessage::SharedInSohm { heap_id, .. } => {
+                 assert_eq!(heap_id, vec![1, 2, 3, 4, 5, 6, 7, 8]);
+             }
+             other => panic!("expected SOHM reference, got {:?}", other),
+         }
+     }
++
++    #[test]
++    fn parses_v1_reference_with_reserved_bytes() {
++        let mut bytes = vec![1, 0, 0, 0, 0, 0, 0, 0];
++        bytes.extend_from_slice(&0x4321u64.to_le_bytes());
++        assert_eq!(ohdr_address(&bytes, 8), 0x4321);
++    }
+ }
