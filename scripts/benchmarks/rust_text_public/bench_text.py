@@ -182,6 +182,7 @@ def main() -> None:
     parser.add_argument("--reps", type=int, default=5)
     parser.add_argument("--files", type=int, default=4)
     parser.add_argument("--edit-xs", type=int, default=10)
+    parser.add_argument("--paths", nargs="*", help="manifest-relative geometry paths (overrides --files)")
     parser.add_argument("--worker", nargs=3, metavar=("CASE", "BACKEND", "FILE"))
     args = parser.parse_args()
     if args.worker:
@@ -194,6 +195,13 @@ def main() -> None:
     manifest = json.loads((args.corpus / "corpus-manifest.json").read_text(encoding="utf-8"))
     geoms = [f for f in manifest["files"] if f["family"] == "g" and f["resolved_by_ras_prj"]]
     seen, selected = set(), []
+    if args.paths:
+        wanted = {Path(p).as_posix() for p in args.paths}
+        selected = [f for f in geoms if Path(f["path"]).as_posix() in wanted]
+        missing = wanted - {Path(f["path"]).as_posix() for f in selected}
+        if missing:
+            raise SystemExit(f"fixtures unavailable: {sorted(missing)}")
+        geoms = []
     for f in sorted(geoms, key=lambda f: -f["bytes"]):
         if f["sha256"] not in seen:  # distinct content only
             seen.add(f["sha256"])
