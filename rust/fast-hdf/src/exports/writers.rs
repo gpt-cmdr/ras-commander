@@ -6,7 +6,7 @@ use arrow_schema::DataType;
 use arrow_schema::SchemaRef;
 use std::{fs::File, path::Path};
 
-#[cfg(feature = "geojson")]
+#[cfg(any(feature = "geojson", feature = "flatgeobuf"))]
 use std::io::{BufWriter, Write};
 
 pub(crate) enum Writer<'a> {
@@ -276,8 +276,8 @@ impl<'a> Writer<'a> {
                 file.flush()?;
             }
             #[cfg(feature = "flatgeobuf")]
-            Self::Fgb(w, mut file) => {
-                w.write(&mut file)?;
+            Self::Fgb(w, file) => {
+                finalize_fgb(*w, file)?;
             }
             #[cfg(feature = "geopackage")]
             Self::Gpkg(gpkg) => {
@@ -382,4 +382,48 @@ fn signed_batch(batch: &RecordBatch) -> Result<RecordBatch> {
         std::sync::Arc::new(signed_schema(&batch.schema())),
         columns,
     )?)
+}
+
+/// Buffer the official writer's per-feature output writes. Explicitly propagate
+/// both buffered-write and sink-flush failures before file sync/publication.
+#[cfg(feature = "flatgeobuf")]
+fn finalize_fgb(writer: flatgeobuf::FgbWriter<'_>, sink: impl Write) -> Result<()> {
+    let mut buffered = BufWriter::with_capacity(1024 * 1024, sink);
+    writer.write(&mut buffered)?;
+    buffered.flush()?;
+    Ok(())
+}
+
+#[cfg(all(test, feature = "flatgeobuf"))]
+mod finalization_tests {
+    use super::*;
+    struct FailingSink {
+        fail_write: bool,
+    }
+    impl Write for FailingSink {
+        fn write(&mut self, data: &[u8]) -> std::io::Result<usize> {
+            if self.fail_write {
+                Err(std::io::Error::other("injected output write failure"))
+            } else {
+                Ok(data.len())
+            }
+        }
+        fn flush(&mut self) -> std::io::Result<()> {
+            Err(std::io::Error::other("injected sink flush failure"))
+        }
+    }
+    #[test]
+    fn propagates_buffered_write_failure() {
+        let writer =
+            flatgeobuf::FgbWriter::create("fault", flatgeobuf::GeometryType::Unknown).unwrap();
+        let error = finalize_fgb(writer, FailingSink { fail_write: true }).unwrap_err();
+        assert!(error.to_string().contains("output write failure"));
+    }
+    #[test]
+    fn propagates_explicit_sink_flush_failure() {
+        let writer =
+            flatgeobuf::FgbWriter::create("fault", flatgeobuf::GeometryType::Unknown).unwrap();
+        let error = finalize_fgb(writer, FailingSink { fail_write: false }).unwrap_err();
+        assert!(error.to_string().contains("sink flush failure"));
+    }
 }
