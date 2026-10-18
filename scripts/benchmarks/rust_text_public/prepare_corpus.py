@@ -59,6 +59,7 @@ def main() -> None:
     parser.add_argument("--out", type=Path, required=True)
     parser.add_argument("--versions", nargs="+", default=["6.6", "7.0"])
     args = parser.parse_args()
+    args.out = args.out.expanduser().resolve()
     manifest = {"archives": {}, "files": []}
     for version in args.versions:
         RasExamples.get_example_projects(version)
