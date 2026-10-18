@@ -7,7 +7,9 @@ stored values (minimum one complete row; float64 blocks also need a half-size
 float32 copy). HDF5 decompresses whole storage chunks, so a storage chunk
 larger than the budget is resident while it is decompressed; the native
 reader's per-file chunk cache (``read_plan["chunk_cache_bytes"]``) retains
-decompressed chunks up to its size. Neither route returns or accumulates the
+decompressed chunks up to its size. Narrowing copies, finite masks, reduction
+temporaries and accumulators are additional working memory: the block budget
+is not a total process RSS limit. Neither route returns or accumulates the
 complete series. Policy follows :mod:`ras_commander.fast_hdf`:
 ``RAS_COMMANDER_FAST_HDF=0`` selects Python, ``required`` forbids fallback, and
 an explicit ``backend`` overrides the environment.
@@ -168,7 +170,7 @@ def _python_reduce(dataset, offset, threshold, max_block_bytes):
         exceed = np.zeros(elements, dtype=np.uint64)
         first = np.full(elements, -1, dtype=np.int64)
     columns = np.arange(elements)
-    rows = max(1, int(max_block_bytes) // max(1, elements * 4))
+    rows = max(1, int(max_block_bytes) // max(1, elements * dataset.dtype.itemsize))
     for start in range(0, times if elements else 0, rows):
         values = np.array(dataset[start:start + rows, :], dtype=np.float32, copy=True)
         if offset is not None:
