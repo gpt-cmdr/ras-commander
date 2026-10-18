@@ -18,6 +18,24 @@
 //!
 //! Indices are row positions, not times; the Python adapter maps them to
 //! timestamps without nanosecond coercion.
+//!
+//! Memory contract of the native reader (`bindings::temporal_reduce`):
+//!
+//! - Returned block: each read returns at most `block_rows` complete rows,
+//!   `block_rows * elements * stored_item_bytes <= max_block_bytes`, except
+//!   the one-row floor (one row is always read even if wider than the budget).
+//!   `float64` blocks are narrowed into a second `float32` buffer, so the
+//!   transient block peak is 1.5x the budget for `float64` storage.
+//! - Storage chunks: HDF5 inflates a whole storage chunk to read any part of
+//!   it. A chunk intersecting a block is decompressed in full, so a chunk
+//!   larger than the budget (for example one `(all_times, all_elements)`
+//!   chunk) is unavoidably resident while it is decompressed; that is storage
+//!   decompression, not the returned series. The per-file chunk cache (64 MiB
+//!   by default, reported as `chunk_cache_bytes`) retains decompressed chunks
+//!   up to its size; larger chunks are not cached and are decompressed again
+//!   for each block that touches them (more CPU, not more memory). Several
+//!   chunks of one block may be decompressed concurrently.
+//! - Accumulators: 20 bytes per element (36 with a threshold).
 
 pub mod bindings;
 
@@ -25,6 +43,24 @@ use rayon::prelude::*;
 
 /// Element slab processed by one task; keeps per-task work cache-friendly.
 const SLAB: usize = 4096;
+
+/// Rows per read block for a `(time, element)` series.
+///
+/// The returned block (`rows * row_bytes`) never exceeds `max_block_bytes`
+/// except for the one-row floor: a block always holds at least one complete
+/// row, even when a single row is wider than the budget. When whole storage
+/// chunks along time fit the budget, blocks are whole-chunk multiples so no
+/// chunk straddles two blocks; when one storage chunk alone exceeds the
+/// budget, blocks are budget-sized row slabs within that chunk.
+pub fn block_rows(chunk_rows: u64, row_bytes: u64, max_block_bytes: u64) -> u64 {
+    let budget_rows = (max_block_bytes / row_bytes.max(1)).max(1);
+    let chunk_rows = chunk_rows.max(1);
+    if chunk_rows <= budget_rows {
+        budget_rows / chunk_rows * chunk_rows
+    } else {
+        budget_rows
+    }
+}
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Reduction {
@@ -286,6 +322,24 @@ mod tests {
         assert_eq!(serial.first_exceed_index, blocked.first_exceed_index);
         let bits = |v: &[f32]| v.iter().map(|x| x.to_bits()).collect::<Vec<_>>();
         assert_eq!(bits(&serial.maximum), bits(&blocked.maximum));
+    }
+
+    #[test]
+    fn block_rows_respect_budget_and_one_row_floor() {
+        // Whole chunks fit: whole-chunk multiples.
+        assert_eq!(block_rows(12, 1000, 64_000), 60);
+        assert_eq!(block_rows(1, 1000, 64_000), 64);
+        // One storage chunk (all 865 rows) exceeds the budget: budget-sized slabs.
+        assert_eq!(block_rows(865, 1000, 64_000), 64);
+        assert_eq!(block_rows(865, 1000, 5_500), 5);
+        // Budget smaller than one row: one-row floor.
+        assert_eq!(block_rows(865, 1000, 1), 1);
+        assert_eq!(block_rows(1, 1000, 999), 1);
+        assert_eq!(block_rows(0, 0, 0), 1);
+        for (chunk, row, budget) in [(865u64, 359_516u64, 16u64 << 20), (7, 8, 100), (3, 4, 11)] {
+            let rows = block_rows(chunk, row, budget);
+            assert!(rows == 1 || rows * row <= budget, "{chunk} {row} {budget}");
+        }
     }
 
     #[test]

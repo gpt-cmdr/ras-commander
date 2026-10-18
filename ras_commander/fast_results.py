@@ -1,8 +1,14 @@
 """Optional native temporal reductions of HEC-RAS result time series.
 
 Reduces a ``(time, element)`` HDF dataset to per-element maximum, first peak
-row, finite-sample count and optional threshold exceedance without holding the
-complete series in memory. Policy follows :mod:`ras_commander.fast_hdf`:
+row, finite-sample count and optional threshold exceedance in bounded row
+blocks. Memory contract: each read block holds at most ``max_block_bytes`` of
+stored values (minimum one complete row; float64 blocks also need a half-size
+float32 copy). HDF5 decompresses whole storage chunks, so a storage chunk
+larger than the budget is resident while it is decompressed; the native
+reader's per-file chunk cache (``read_plan["chunk_cache_bytes"]``) retains
+decompressed chunks up to its size. Neither route returns or accumulates the
+complete series. Policy follows :mod:`ras_commander.fast_hdf`:
 ``RAS_COMMANDER_FAST_HDF=0`` selects Python, ``required`` forbids fallback, and
 an explicit ``backend`` overrides the environment.
 
@@ -58,6 +64,7 @@ class TemporalReduction:
     rows: int
     backend: str
     timings: Mapping[str, float] = field(default_factory=dict)
+    read_plan: Mapping[str, object] = field(default_factory=dict)
 
 
 def _threshold(threshold):
@@ -145,6 +152,9 @@ def native_temporal_reduce(dataset, offset=None, *, threshold=None, backend="aut
         finite_count=raw["finite_count"], exceed_count=raw["exceed_count"],
         first_exceed_index=raw["first_exceed_index"], rows=int(raw["rows"]), backend="rust",
         timings={k: float(raw[k]) for k in ("setup_seconds", "read_seconds", "reduce_seconds")},
+        read_plan={k: raw[k] for k in ("block_rows", "blocks", "block_bytes", "max_block_bytes",
+                                       "chunk_shape", "storage_chunk_bytes", "chunk_cache_bytes",
+                                       "stored_dtype")},
     )
 
 

@@ -1869,7 +1869,8 @@ class HdfResultsMesh:
         Non-finite samples are ignored when a cell has at least one finite
         sample. A cell with no finite samples is returned with a NaN maximum.
         Both stored and derived time series are reduced in bounded time
-        chunks rather than materialized as a complete ``(time, cell)`` array.
+        chunks rather than materialized as a complete ``(time, cell)`` array;
+        HDF5 still decompresses each whole storage chunk that a read touches.
 
         One INFO message per mesh identifies provenance. If the HDF contains
         ``Depth``, that stored HEC-RAS dataset is read only. Otherwise, depth
