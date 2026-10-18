@@ -1,3 +1,7 @@
+pub mod fluvial;
+mod fluvial_bindings;
+pub mod fluvial_geometry;
+pub mod fluvial_topology;
 mod analysis;
 mod mesh;
 pub mod ras_text;
@@ -148,6 +152,7 @@ fn ras_commander_fast_hdf(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(mesh::assemble_cells, m)?)?;
     m.add_function(wrap_pyfunction!(analysis::bindings::temporal_reduce, m)?)?;
     m.add_function(wrap_pyfunction!(tiles::write_pmtiles, m)?)?;
+    fluvial_bindings::register(m)?;
     text_bindings::register(m)?;
     Ok(())
 }
