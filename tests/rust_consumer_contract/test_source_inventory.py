@@ -1,24 +1,38 @@
-"""Static consumer-contract guard at the 89b4ace baseline.
+"""Static consumer-contract guard for the accepted combined source (3be708ad).
 
-These tests read source only. They pin what consumers may bind to and record
-which entry points are not reusable outside CPython (PyO3/NumPy/path coupled).
-Native/installed-wheel acceptance lives in test_native_gate.py and is blocked
-until accepted source pins and a reviewed portable-build receipt exist.
+Reads source only. Source registrations (including ``register(m)``
+delegation and ``add_class``) are reconciled against the accepted runtime ABI
+inventory when RAS_CONSUMER_ACCEPTANCE_RECEIPT is supplied; the expected set is
+also frozen here so a dropped or renamed registration fails without it.
 """
+import json
+import re
+from pathlib import Path
+
 import pytest
 
+from .contract import load_receipt
 from .inventory import build
 
-EXPECTED_ENTRY_POINTS = {
-    # name: feature gate (None = always compiled)
-    "read_numeric": None,
-    "read_numeric_batch": None,
-    "numeric_capability": None,
-    "assemble_cells": None,
-    "write_pmtiles": None,
-    "export_ipc_file": "exports-arrow",
-    "validate_export_wkb": "exports-arrow",
-    "export_pmtiles_ipc_file": "exports-pmtiles",
+EXPECTED = {
+    # name: (kind, feature gate, registering file)
+    "read_numeric": ("function", None, "src/lib.rs"),
+    "read_numeric_batch": ("function", None, "src/lib.rs"),
+    "numeric_capability": ("function", None, "src/lib.rs"),
+    "assemble_cells": ("function", None, "src/lib.rs"),
+    "temporal_reduce": ("function", None, "src/lib.rs"),
+    "write_pmtiles": ("function", None, "src/lib.rs"),
+    "export_ipc_file": ("function", "exports-arrow", "src/lib.rs"),
+    "validate_export_wkb": ("function", "exports-arrow", "src/lib.rs"),
+    "export_pmtiles_ipc_file": ("function", "exports-pmtiles", "src/lib.rs"),
+    "NativeAnalysis": ("class", None, "src/fluvial_bindings.rs"),
+    "assemble_rings": ("function", None, "src/fluvial_bindings.rs"),
+    "face_graph": ("function", None, "src/fluvial_bindings.rs"),
+    "validate_geometry": ("function", None, "src/fluvial_bindings.rs"),
+    "text_index": ("function", None, "src/text_bindings.rs"),
+    "text_apply_edits": ("function", None, "src/text_bindings.rs"),
+    "text_geometry_index": ("function", None, "src/text_bindings.rs"),
+    "text_geometry_edit": ("function", None, "src/text_bindings.rs"),
 }
 
 
@@ -27,45 +41,88 @@ def inventory():
     return build()
 
 
-def test_python_entry_points_and_feature_gates(inventory):
-    found = {e["name"]: e["feature"] for e in inventory["python_entry_points"]}
-    assert found == EXPECTED_ENTRY_POINTS
+def _names(signature):
+    """Ordered parameter names of a pyo3 or inspect signature string."""
+    if signature is None or signature.startswith("<"):
+        return None
+    text = signature.strip("()")
+    names = []
+    for part in text.split(","):
+        part = part.strip()
+        if part in {"", "*", "/", "self"}:
+            continue
+        names.append(re.split(r"[=:]", part)[0].strip())
+    return names
 
 
-def test_every_entry_point_signature_is_recorded(inventory):
-    missing = [e["name"] for e in inventory["python_entry_points"] if not e["signature"]]
-    assert missing == []
+def test_registrations_kinds_gates_and_delegation(inventory):
+    found = {e["name"]: (e["kind"], e["feature"], e["registered_in"])
+             for e in inventory["python_entry_points"]}
+    assert found == EXPECTED
+    assert len(inventory["python_entry_points"]) == 17  # no duplicates
 
 
-def test_dependency_pins_match_contract(inventory):
+def test_module_constants(inventory):
+    for name in ("API_VERSION", "TEXT_API_VERSION", "UnsupportedError", "TopologyError",
+                 "TextEditError", "TextNotFoundError", "TextParseError"):
+        assert name in inventory["module_constants"]
+
+
+def test_source_matches_accepted_runtime_abi(inventory):
+    receipt = load_receipt()
+    if receipt is None:
+        pytest.skip("accepted runtime inventory not supplied (RAS_CONSUMER_ACCEPTANCE_RECEIPT)")
+    runtime = json.loads(Path(receipt["runtime_inventory"]).read_text(encoding="utf-8"))
+    entries = runtime["entrypoints"]
+    assert set(entries) == set(EXPECTED)
+    for item in inventory["python_entry_points"]:
+        entry = entries[item["name"]]
+        assert entry["kind"] == item["kind"], item["name"]
+        static = _names(item["signature"])
+        if static is not None:
+            assert static == _names(entry["signature"]), item["name"]
+        for method, sig in item.get("methods", {}).items():
+            static = _names(sig)
+            runtime_names = _names(entry["methods"][method])
+            if static is not None:
+                assert static == runtime_names, f"{item['name']}.{method}"
+        if item["kind"] == "class":
+            assert set(item["methods"]) == set(entry["methods"])
+
+
+def test_dependency_pins_and_features(inventory):
     deps = inventory["crate"]["git_dependencies"]
     assert deps["hdf5-reader"]["rev"] == "24ff6fcfcc79a35c30aa5d8cb3028ab4d9d00564"
     assert deps["freestiler-core"]["rev"] == "beb64b0d4414da895ec67d02b2f91db6ab6acc37"
     assert inventory["export_crate"]["git_dependencies"]["freestiler-core"]["rev"] == \
         deps["freestiler-core"]["rev"]
-
-
-def test_build_features_cover_main_build(inventory):
     features = inventory["crate"]["features"]
-    for name in ("extension-module", "exports-all", "exports-pmtiles"):
+    receipt = load_receipt()
+    for name in (receipt["features"] if receipt else ("extension-module", "exports-all", "exports-pmtiles")):
         assert name in features
     assert set(features["exports-all"]) == {
         "exports-geojson", "exports-flatgeobuf", "exports-geoparquet", "exports-geopackage"}
 
 
-def test_domain_kernels_are_python_coupled(inventory):
-    # The RAS domain kernels (numeric reads, mesh assembly, PMTiles writer) are
-    # currently PyO3-bound. This is the documented gap: they are NOT a
-    # pure-Rust/WASM consumer contract until a binding-free layer is extracted.
+def test_binding_boundary(inventory):
+    """Consumer boundary evidence: which domain cores are already binding-free.
+
+    Fluvial graph/geometry/topology, the lossless text core, the analysis
+    reduction core and the export crate carry no PyO3/NumPy; the numeric
+    reader, mesh assembly, PMTiles writer and all *_bindings modules do. The
+    binding-free modules are not thereby a qualified WASM contract: text/edit
+    and the export crate still use filesystem paths.
+    """
     modules = inventory["modules"]
-    for rel in ("src/reader.rs", "src/mesh.rs", "src/tiles.rs"):
+    free = ["src/fluvial.rs", "src/fluvial_geometry.rs", "src/fluvial_topology.rs",
+            "src/analysis/mod.rs", "src/ras_text/geometry.rs", "src/ras_text/fixed_width.rs",
+            "src/exports/contract.rs"]
+    coupled = ["src/reader.rs", "src/mesh.rs", "src/tiles.rs", "src/fluvial_bindings.rs",
+               "src/text_bindings.rs", "src/analysis/bindings.rs"]
+    for rel in free:
+        assert modules[rel]["coupling"]["pyo3"] == 0 and modules[rel]["coupling"]["numpy"] == 0, rel
+    for rel in coupled:
         assert modules[rel]["coupling"]["pyo3"] > 0, rel
+    assert modules["src/exports/lib.rs"]["coupling"]["filesystem"] > 0
+    assert modules["src/ras_text/edit.rs"]["coupling"]["filesystem"] > 0
     assert inventory["crate"]["crate_types"] == ["cdylib", "rlib"]
-
-
-def test_export_crate_is_binding_free_but_path_based(inventory):
-    pure = inventory["pure_rust_public_api"]
-    assert {"export_ipc", "export_batches", "Format"} <= set(pure["src/exports/lib.rs"])
-    assert {"validate_wkb", "Contract", "Crs"} <= set(pure["src/exports/contract.rs"])
-    # Binding-free, yet filesystem-path based: not browser/range ready as-is.
-    assert inventory["modules"]["src/exports/lib.rs"]["coupling"]["filesystem"] > 0
