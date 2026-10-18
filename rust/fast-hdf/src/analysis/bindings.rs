@@ -1,4 +1,4 @@
-use super::Accumulator;
+use super::{block_rows, Accumulator};
 use crate::reader::{checked_native, err, Native};
 use crate::UnsupportedError;
 use hdf5_reader::{Dataset, Hdf5File, SliceInfo, SliceInfoElem};
@@ -8,16 +8,9 @@ use pyo3::prelude::*;
 use pyo3::types::PyDict;
 use std::time::Instant;
 
-/// Rows per read: whole HDF chunks along time, bounded by `max_block_bytes`.
-fn block_rows(ds: &Dataset, elements: u64, item: u64, max_block_bytes: u64) -> u64 {
-    let chunk = ds
-        .chunks()
-        .and_then(|c| c.first().copied())
-        .map_or(1, u64::from)
-        .max(1);
-    let row_bytes = elements.saturating_mul(item).max(1);
-    let chunks = (max_block_bytes / row_bytes.saturating_mul(chunk)).max(1);
-    chunk.saturating_mul(chunks)
+/// Storage chunk shape (`None` for contiguous/compact layouts).
+fn chunk_shape(ds: &Dataset) -> Option<Vec<u64>> {
+    ds.chunks().map(|c| c.into_iter().map(u64::from).collect())
 }
 
 fn read_rows(ds: &Dataset, kind: Native, rows: (u64, u64), cols: u64) -> Result<Vec<f32>, PyErr> {
@@ -57,10 +50,12 @@ fn read_rows(ds: &Dataset, kind: Native, rows: (u64, u64), cols: u64) -> Result<
     }
 }
 
-/// Reduce a 2-D `(time, element)` dataset without materializing it.
+/// Reduce a 2-D `(time, element)` dataset in bounded row blocks.
 ///
-/// See the module documentation for the missing-value, offset, tie and
-/// threshold semantics. Returns arrays plus per-stage timings in seconds.
+/// See the module documentation for the missing-value, offset, tie,
+/// threshold and memory semantics. Returns arrays, the read plan
+/// (`block_rows`, `blocks`, `block_bytes`, `chunk_shape`,
+/// `storage_chunk_bytes`, `chunk_cache_bytes`) and per-stage timings.
 #[pyfunction]
 #[pyo3(signature=(path, dataset_path, offset=None, threshold=None,
                   max_block_bytes=16 << 20, threads=None, parallel=true))]
@@ -102,7 +97,17 @@ pub fn temporal_reduce<'py>(
     let (times, elements) = (shape[0], shape[1]);
     let n =
         usize::try_from(elements).map_err(|_| PyValueError::new_err("element count too large"))?;
-    let step = block_rows(&ds, elements, item, max_block_bytes);
+    let chunk = chunk_shape(&ds);
+    // f64 blocks are read as f64 before narrowing, so budget the stored width.
+    let row_bytes = elements.saturating_mul(item);
+    let chunk_rows = chunk.as_ref().and_then(|c| c.first().copied()).unwrap_or(1);
+    let step = block_rows(chunk_rows, row_bytes, max_block_bytes);
+    // Decompressed size of one storage chunk: HDF5 must inflate a whole chunk
+    // to read any part of it, independently of the block budget.
+    let storage_chunk_bytes = chunk
+        .as_ref()
+        .map(|c| c.iter().fold(item, |acc, &d| acc.saturating_mul(d)));
+    let cache_bytes = ds.chunk_cache_stats().max_bytes;
     let setup_seconds = opened.elapsed().as_secs_f64();
     let (reduction, read_seconds, reduce_seconds, blocks) = py.detach(|| {
         pool.install(|| -> PyResult<_> {
@@ -154,6 +159,18 @@ pub fn temporal_reduce<'py>(
         if item == 4 { "float32" } else { "float64" },
     )?;
     result.set_item("block_rows", step)?;
+    result.set_item(
+        "block_bytes",
+        if times == 0 || n == 0 {
+            0
+        } else {
+            step.min(times).saturating_mul(row_bytes)
+        },
+    )?;
+    result.set_item("max_block_bytes", max_block_bytes)?;
+    result.set_item("chunk_shape", chunk)?;
+    result.set_item("storage_chunk_bytes", storage_chunk_bytes)?;
+    result.set_item("chunk_cache_bytes", cache_bytes)?;
     result.set_item("blocks", blocks)?;
     result.set_item("setup_seconds", setup_seconds)?;
     result.set_item("read_seconds", read_seconds)?;

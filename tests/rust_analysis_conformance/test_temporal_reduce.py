@@ -202,3 +202,54 @@ def test_invalid_requests(tmp_path, native):
             fast_results.temporal_reduce(series, backend="rust", max_block_bytes=0)
         with pytest.raises(FastHdfError):
             fast_results.temporal_reduce(np.zeros((2, 3)), backend="rust")
+
+
+# ---- bounded-read regression (supervisor review): one storage chunk spans all times ----
+
+def _large_chunk_file(path, dtype, times=240, elements=3000):
+    rng = np.random.default_rng(11)
+    values = rng.normal(size=(times, elements)).astype(dtype)
+    values[rng.random(values.shape) < 0.05] = np.nan
+    values[:, 7] = np.nan
+    if dtype == np.float64:  # rounding/overflow cases for float32 narrowing
+        values[3, :4] = [16777217.0, 1e39, -1e39, 0.1]
+    with h5py.File(path, "w") as hdf:
+        hdf.create_dataset("series", data=values, chunks=(times, elements), compression="gzip")
+    return values
+
+
+@pytest.mark.parametrize("dtype, item", [(np.float32, 4), (np.float64, 8)])
+@pytest.mark.parametrize("budget", [64 * 1024, 1])
+def test_single_all_time_chunk_is_read_in_budgeted_row_slabs(tmp_path, native_calls, forbid_python,
+                                                             dtype, item, budget):
+    values = _large_chunk_file(tmp_path / "s.h5", dtype)
+    times, elements = values.shape
+    row_bytes = elements * item
+    result = reduce_file(tmp_path / "s.h5", "rust", threshold=0.5, max_block_bytes=budget)
+    plan = result.read_plan
+    expected_rows = max(1, budget // row_bytes)  # one-row floor below the row width
+    assert plan["block_rows"] == expected_rows < times
+    assert plan["blocks"] == -(-times // expected_rows)
+    assert plan["block_bytes"] == expected_rows * row_bytes
+    assert plan["block_bytes"] <= budget or expected_rows == 1
+    assert plan["chunk_shape"] == [times, elements]
+    assert plan["storage_chunk_bytes"] == times * elements * item  # whole chunk is inflated
+    assert plan["stored_dtype"] == np.dtype(dtype).name
+    assert len(native_calls) == 1
+    expected = oracle(values, threshold=0.5)
+    assert_matches(result, expected)
+    assert result.maximum.tobytes() == expected["maximum"].tobytes()
+    if dtype == np.float64:
+        assert result.maximum[0] >= np.float32(16777216.0)  # narrowed, not float64
+        assert result.finite_count[1] == expected["finite_count"][1]  # +/-1e39 -> inf -> missing
+
+
+def test_whole_chunk_multiples_when_chunks_fit_budget(tmp_path, native):
+    values = adversarial(40, 9)
+    path = write(tmp_path / "s.h5", values, chunks=(4, 9), compression="gzip")
+    fits = reduce_file(path, "rust", max_block_bytes=3 * 4 * 9 * 4)  # 3 chunks of 4 rows
+    assert fits.read_plan["block_rows"] == 12 and fits.read_plan["blocks"] == 4
+    split = reduce_file(path, "rust", max_block_bytes=3 * 9 * 4)  # chunk exceeds budget
+    assert split.read_plan["block_rows"] == 3 and split.read_plan["blocks"] == 14
+    assert_matches(fits, oracle(values))
+    assert_matches(split, oracle(values))

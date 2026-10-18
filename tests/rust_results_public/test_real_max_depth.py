@@ -24,12 +24,13 @@ from .conftest import MANIFEST, entries, fixture_file
 BASE = "Results/Unsteady/Output/Output Blocks/Base Output/Unsteady Time Series/2D Flow Areas"
 THRESHOLD = 0.5
 UNSTEADY = entries(unsteady=True)
-# Stored 5.0.x plans name meshes in "Geometry/2D Flow Areas/Names" and have no
-# "Attributes"; the existing public mesh discovery (both routes) returns no rows.
+# Some stored 5.0.3 plans name meshes in "Geometry/2D Flow Areas/Names" and have
+# no "Attributes"; existing public mesh discovery (both routes) returns no rows.
+# Canonical 5.0.7 D601 has Attributes and is covered normally.
 DISCOVERY_GAP = pytest.mark.xfail(
-    strict=True, reason="pre-existing: 5.0.x mesh discovery lacks Attributes (see OUTPUT.md)")
+    strict=True, reason="pre-existing: mesh discovery needs Attributes (see OUTPUT.md)")
 PUBLIC = [pytest.param(e, id=e["path"], marks=DISCOVERY_GAP)
-          if e["stored_version"].startswith("5.0") else pytest.param(e, id=e["path"])
+          if e.get("discovery_gap") else pytest.param(e, id=e["path"])
           for e in UNSTEADY]
 
 
@@ -93,6 +94,12 @@ def test_public_max_depth_native_equals_python_route(entry, native_calls, forbid
     assert accelerated.geometry.equals(reference.geometry)
     assert accelerated.crs == reference.crs
     assert accelerated["maximum_depth"].dtype == np.float32
+    baseline = entry.get("baseline")
+    if baseline:  # independent supervisor capture on the clean baseline
+        assert len(accelerated) == baseline["rows"]
+        assert accelerated.crs.to_string() == baseline["crs"]
+        assert accelerated["maximum_depth"].notna().sum() == baseline["rows"]
+        assert accelerated.groupby("mesh_name").size().to_dict() == baseline["per_mesh"]
 
 
 @pytest.mark.parametrize("entry", PUBLIC)

@@ -1,12 +1,25 @@
 {
- "description": "Immutable local copies; set RAS_RESULTS_FIXTURE_ROOT to their folder. Model files are never committed.",
- "unavailable": [
-  {
-   "name": "JUL2020_D100RAS.p04.hdf (D601, stored 5.0.7)",
-   "reason": "coordinator-local on CLB-06; not present on this host"
-  }
- ],
+ "description": "Immutable local copies; set RAS_RESULTS_FIXTURE_ROOT to their folder. Model files are never committed. 'baseline' entries are independent supervisor Python-route row counts and CRS.",
+ "unavailable": [],
  "fixtures": [
+  {
+   "path": "v507_D601/JUL2020_D100RAS.p04.hdf",
+   "sha256": "37d91b9f957f78067cb0a8ae5db7cf3355f9c5d7172cb40e7931c35be78b9683",
+   "stored_version": "5.0.7",
+   "source": "canonical retained corpus input (supervisor-staged D601)",
+   "unsteady_2d": true,
+   "series": {
+    "D601": "Depth"
+   },
+   "baseline": {
+    "rows": 340248,
+    "crs": "EPSG:6588",
+    "source": "supervisor reference-depth-baseline.json (clean 89b4ace Python route)",
+    "per_mesh": {
+     "D601": 340248
+    }
+   }
+  },
   {
    "path": "v66_BE_mc/BaldEagleDamBrk.p07.hdf",
    "sha256": "07cad3930a679891f87bbface1ab749b82fd7d7eae6aaac3b5ff041c44280984",
@@ -15,6 +28,14 @@
    "unsteady_2d": true,
    "series": {
     "BaldEagleCr": "Water Surface"
+   },
+   "baseline": {
+    "rows": 87039,
+    "crs": "EPSG:2271",
+    "source": "supervisor reference-depth-baseline.json (clean 89b4ace Python route)",
+    "per_mesh": {
+     "BaldEagleCr": 87039
+    }
    }
   },
   {
@@ -99,7 +120,8 @@
    "series": {
     "2DFlow3": "Depth",
     "2DFlow4": "Depth"
-   }
+   },
+   "discovery_gap": "no Geometry/2D Flow Areas/Attributes (5.0.3 Names layout)"
   },
   {
    "path": "v503_P118/P118_PHASING.p05.hdf",
@@ -111,7 +133,8 @@
     "2DFlow3": "Depth",
     "2DFlow4": "Depth",
     "WH": "Depth"
-   }
+   },
+   "discovery_gap": "no Geometry/2D Flow Areas/Attributes (5.0.3 Names layout)"
   },
   {
    "path": "v503_P118/P118_PHASING.p09.hdf",
@@ -131,7 +154,8 @@
     "2DFlow7": "Depth",
     "2DFlow8": "Depth",
     "2DFlow9": "Depth"
-   }
+   },
+   "discovery_gap": "no Geometry/2D Flow Areas/Attributes (5.0.3 Names layout)"
   },
   {
    "path": "BaldEagleDamBrk.p03.hdf",
@@ -150,6 +174,15 @@
    "series": {
     "BaldEagleCr": "Water Surface",
     "Upper 2D Area": "Water Surface"
+   },
+   "baseline": {
+    "rows": 4425,
+    "crs": "EPSG:2271",
+    "source": "supervisor reference-depth-baseline.json (clean 89b4ace Python route)",
+    "per_mesh": {
+     "BaldEagleCr": 3359,
+     "Upper 2D Area": 1066
+    }
    }
   }
  ]
