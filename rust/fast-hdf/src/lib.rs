@@ -117,6 +117,7 @@ fn ras_commander_fast_hdf(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add("TopologyError", m.py().get_type::<TopologyError>())?;
     m.add_function(wrap_pyfunction!(reader::read_numeric, m)?)?;
     m.add_function(wrap_pyfunction!(reader::read_numeric_batch, m)?)?;
+    m.add_function(wrap_pyfunction!(reader::numeric_capability, m)?)?;
     m.add_function(wrap_pyfunction!(mesh::assemble_cells, m)?)?;
     m.add_function(wrap_pyfunction!(tiles::write_pmtiles, m)?)?;
     Ok(())

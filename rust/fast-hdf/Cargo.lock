@@ -955,7 +955,6 @@ dependencies = [
 [[package]]
 name = "hdf5-core"
 version = "0.9.1"
-source = "git+https://github.com/gpt-cmdr/netcdf-rust?rev=24ff6fcfcc79a35c30aa5d8cb3028ab4d9d00564#24ff6fcfcc79a35c30aa5d8cb3028ab4d9d00564"
 dependencies = [
  "thiserror 2.0.21",
 ]
@@ -963,7 +962,6 @@ dependencies = [
 [[package]]
 name = "hdf5-reader"
 version = "0.9.1"
-source = "git+https://github.com/gpt-cmdr/netcdf-rust?rev=24ff6fcfcc79a35c30aa5d8cb3028ab4d9d00564#24ff6fcfcc79a35c30aa5d8cb3028ab4d9d00564"
 dependencies = [
  "flate2",
  "hdf5-core",
