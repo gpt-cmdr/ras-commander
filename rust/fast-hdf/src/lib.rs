@@ -1,3 +1,4 @@
+mod analysis;
 mod mesh;
 pub mod ras_text;
 mod reader;
@@ -145,6 +146,7 @@ fn ras_commander_fast_hdf(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(reader::read_numeric_batch, m)?)?;
     m.add_function(wrap_pyfunction!(reader::numeric_capability, m)?)?;
     m.add_function(wrap_pyfunction!(mesh::assemble_cells, m)?)?;
+    m.add_function(wrap_pyfunction!(analysis::bindings::temporal_reduce, m)?)?;
     m.add_function(wrap_pyfunction!(tiles::write_pmtiles, m)?)?;
     text_bindings::register(m)?;
     Ok(())

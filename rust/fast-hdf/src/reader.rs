@@ -51,7 +51,7 @@ fn classify(e: &Error) -> u8 {
         _ => 0,
     }
 }
-fn err(e: Error) -> PyErr {
+pub(crate) fn err(e: Error) -> PyErr {
     let message = e.to_string();
     match classify(&e) {
         1 => PyKeyError::new_err(message),
@@ -63,7 +63,7 @@ fn err(e: Error) -> PyErr {
 
 /// Element types the native reader decodes bit-exactly into NumPy.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum Native {
+pub(crate) enum Native {
     I8,
     I16,
     I32,
@@ -387,7 +387,7 @@ fn native(dtype: &Datatype, enc: &Encoding) -> Result<Native, String> {
     }
 }
 
-fn checked_native(file: &Hdf5File, ds: &Dataset) -> PyResult<Native> {
+pub(crate) fn checked_native(file: &Hdf5File, ds: &Dataset) -> PyResult<Native> {
     let enc = encoding(file, ds)
         .map_err(|e| UnsupportedError::new_err(format!("cannot verify datatype encoding: {e}")))?;
     native(ds.dtype(), &enc).map_err(UnsupportedError::new_err)
