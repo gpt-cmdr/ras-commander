@@ -59,7 +59,11 @@ def edit_plan(path: Path, k: int):
         key = (nodes.at[i, "River"], nodes.at[i, "Reach"], nodes.at[i, "RS"])
         if (index.find_node(*key) == i and index.raw["station_elevation"]["status"][i] == 1
                 and index.raw["mannings_n"]["status"][i] == 1):
-            chosen.append((key, index.station_elevation(i).copy(), index.mannings_n(i).copy()))
+            se = index.station_elevation(i)
+            # Python set_station_elevation rejects vertical walls (repeated
+            # stations) that native accepts; both backends get the same plan.
+            if len(se) > 1 and (se[1:, 0] > se[:-1, 0]).all():
+                chosen.append((key, se.copy(), index.mannings_n(i).copy()))
         if len(chosen) == 2 * k:
             break
     sta = [(key, se) for key, se, _ in chosen[:k]]
