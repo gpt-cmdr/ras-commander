@@ -10,6 +10,8 @@ name = "ras_commander_fast_hdf"
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
+ras-export = { path = "src/exports", optional = true }
+serde_json = "1"
 pyo3 = { version = "0.30", features = ["abi3-py310"] }
 numpy = "0.30"
 ndarray = "0.17"
@@ -23,6 +25,12 @@ freestiler-core = { git = "https://github.com/walkerke/freestiler", rev = "beb64
 flate2 = { version = "1", default-features = false, features = ["zlib-rs"] }
 
 [features]
+exports-arrow = ["dep:ras-export"]
+exports-geojson = ["exports-arrow", "ras-export/geojson"]
+exports-flatgeobuf = ["exports-arrow", "ras-export/flatgeobuf"]
+exports-geoparquet = ["exports-arrow", "ras-export/geoparquet"]
+exports-geopackage = ["exports-arrow", "ras-export/geopackage"]
+exports-all = ["exports-geojson", "exports-flatgeobuf", "exports-geoparquet", "exports-geopackage"]
 extension-module = ["pyo3/extension-module"]
 
 [dev-dependencies]

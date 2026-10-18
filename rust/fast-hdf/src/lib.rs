@@ -1,7 +1,6 @@
 mod mesh;
 mod reader;
 mod tile_engine;
-mod tile_repair;
 mod tiles;
 
 use pyo3::exceptions::PyValueError;
@@ -43,9 +42,31 @@ pub(crate) fn pool(threads: Option<usize>) -> PyResult<Arc<rayon::ThreadPool>> {
     Ok(pool)
 }
 
+#[cfg(feature = "exports-arrow")]
+#[pyfunction]
+#[pyo3(signature = (input, output, format, max_batch_rows=65536))]
+fn export_ipc_file(
+    py: Python<'_>,
+    input: std::path::PathBuf,
+    output: std::path::PathBuf,
+    format: &str,
+    max_batch_rows: usize,
+) -> PyResult<String> {
+    let format = format
+        .parse::<ras_export::Format>()
+        .map_err(|e| PyValueError::new_err(e.to_string()))?;
+    py.detach(move || {
+        let metrics = ras_export::export_ipc(&input, &output, format, max_batch_rows)
+            .map_err(|e| PyValueError::new_err(e.to_string()))?;
+        serde_json::to_string(&metrics).map_err(|e| PyValueError::new_err(e.to_string()))
+    })
+}
+
 #[pymodule]
 fn ras_commander_fast_hdf(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add("API_VERSION", 1)?;
+    #[cfg(feature = "exports-arrow")]
+    m.add_function(wrap_pyfunction!(export_ipc_file, m)?)?;
     m.add("__version__", env!("CARGO_PKG_VERSION"))?;
     m.add("UnsupportedError", m.py().get_type::<UnsupportedError>())?;
     m.add("TopologyError", m.py().get_type::<TopologyError>())?;
