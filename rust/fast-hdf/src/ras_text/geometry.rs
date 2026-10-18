@@ -62,7 +62,10 @@ const fn blanks(key: &'static str, per_item: usize, width: usize, per_line: usiz
 pub const BLOCK_SPECS: &[BlockSpec] = &[
     spec("#Sta/Elev", 2, 8, 10),
     spec("#Mann", 3, 8, 9),
-    spec("#Block Obstruct", 3, 8, 9),
+    // Normal-format obstructions leave the undefined side/outer slots blank
+    // (RasExamples DredgeChannel.g02, hick85.g01, ROCK_TEST.g02), as in
+    // `#XS Ineff`; blanks stay NaN and are never filled in.
+    blanks("#Block Obstruct", 3, 8, 9),
     blanks("#XS Ineff", 3, 8, 9),
     spec("#Inline Weir SE", 2, 8, 10),
     spec("XS GIS Cut Line", 2, 16, 4),
@@ -294,8 +297,20 @@ impl GeometryIndex {
                 ));
                 continue;
             };
-            let expected = count * spec.values_per_item;
-            let mut values = Vec::with_capacity(expected);
+            let Some(expected) = count.checked_mul(spec.values_per_item) else {
+                diagnostics.push(diag(
+                    Severity::Error,
+                    "bad-count",
+                    doc,
+                    line,
+                    format!("{}: count {count} overflows the value total", spec.key),
+                ));
+                continue;
+            };
+            // The count is untrusted input: reserve no more than the remaining
+            // lines can hold, so a huge declared count cannot exhaust memory.
+            let readable = (n - line - 1).saturating_mul(spec.values_per_line);
+            let mut values = Vec::with_capacity(expected.min(readable));
             let mut cur = line + 1;
             while values.len() < expected && cur < n {
                 if doc.key_line(cur).is_some() || doc.is_free_text(cur) {
@@ -451,6 +466,23 @@ impl GeometryIndex {
                         ));
                         continue;
                     };
+                    // Blank lengths are 0.0 (as in Python); a non-numeric
+                    // token is reported so callers can skip the node exactly
+                    // like `GeomCrossSection.get_cross_sections` does.
+                    if let Some(bad) = parts
+                        .iter()
+                        .take(5)
+                        .skip(2)
+                        .find(|p| !p.is_empty() && parse_f64(p).is_none())
+                    {
+                        diagnostics.push(diag(
+                            Severity::Warning,
+                            "bad-node-length",
+                            doc,
+                            head,
+                            format!("node length '{bad}' is not a number"),
+                        ));
+                    }
                     let length = |i: usize| parts.get(i).and_then(|p| parse_f64(p)).unwrap_or(0.0);
                     let mut node_name = String::new();
                     let mut bank_sta_line = None;

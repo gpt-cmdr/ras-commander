@@ -413,3 +413,59 @@ fn atomic_write_replaces_target_and_leaves_no_temp() {
     assert!(leftovers.is_empty());
     std::fs::remove_dir_all(&dir).unwrap();
 }
+
+#[test]
+fn huge_declared_counts_cannot_exhaust_memory() {
+    // A hostile or corrupt count must become a diagnostic, never a giant
+    // allocation (this aborted the process before capacity was bounded).
+    for count in ["4000000000", "9223372036854775807", "18446744073709551615"] {
+        let text = xs().replacen("#Sta/Elev= 3 ", &format!("#Sta/Elev= {count} "), 1);
+        let d = doc(&text);
+        let g = GeometryIndex::parse(&d);
+        assert!(g.error_count() >= 1, "count {count} must be diagnosed");
+        assert_eq!(d.as_bytes(), text.as_bytes());
+    }
+}
+
+#[test]
+fn non_numeric_node_lengths_are_reported() {
+    let text = xs().replacen(",100.5   ,10,20,30", ",100.5   ,10,abc,30", 1);
+    let g = GeometryIndex::parse(&doc(&text));
+    let bad: Vec<_> = g
+        .diagnostics
+        .iter()
+        .filter(|d| d.code == "bad-node-length")
+        .collect();
+    assert_eq!(bad.len(), 1);
+    assert_eq!(bad[0].severity, Severity::Warning);
+    assert_eq!(bad[0].line, 3);
+    // Blank lengths stay 0.0 without a diagnostic, as in Python.
+    let blank = xs().replacen(",100.5   ,10,20,30", ",100.5   ,,20,30", 1);
+    let g = GeometryIndex::parse(&doc(&blank));
+    assert!(g.diagnostics.iter().all(|d| d.code != "bad-node-length"));
+    assert_eq!(g.nodes[0].lengths, [0.0, 20.0, 30.0]);
+}
+
+#[test]
+fn normal_format_blocked_obstruction_blanks_are_missing_values() {
+    // RasExamples DredgeChannel.g02 layout: undefined left obstruction and a
+    // blank outer slot on the right one.
+    let text = xs().replacen(
+        "Bank Sta=10,90.0",
+        "#Block Obstruct= 2 , 0 \r\n                          194.89           575.5\r\nBank Sta=10,90.0",
+        1,
+    );
+    let d = doc(&text);
+    let g = GeometryIndex::parse(&d);
+    assert_eq!(g.error_count(), 0, "{:?}", g.diagnostics);
+    let block = g.node_block(0, "#Block Obstruct").expect("block");
+    assert_eq!(block.count, 2);
+    let v = &block.values;
+    assert!(v[0].is_nan() && v[1].is_nan() && v[2].is_nan() && v[4].is_nan());
+    assert_eq!((v[3], v[5]), (194.89, 575.5));
+    assert_eq!(d.as_bytes(), text.as_bytes());
+    // Blank Manning's n slots remain errors: their meaning is unresolved.
+    let mann = xs().replacen("       0     .06       0", "       0             0", 1);
+    let g = GeometryIndex::parse(&doc(&mann));
+    assert!(g.diagnostics.iter().any(|d| d.code == "blank-slot"));
+}
