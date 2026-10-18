@@ -580,13 +580,47 @@ def export_arrow(output, batches, *, source_crs, format, max_batch_rows=65536):
     Existing outputs reject. IPC staging adds disk I/O; Rust callers can feed
     RecordBatch iterators directly. No implicit Python fallback.
     """
+    return _export_arrow_transport(output, batches, source_crs=source_crs,
+                                   format=format, max_batch_rows=max_batch_rows)
+
+
+@log_call
+def export_arrow_pmtiles(output, batches, *, source_crs, min_zoom=0, max_zoom=12,
+                         max_batch_rows=65536, layer_name="features", threads=None,
+                         timestamp_ms=False, reuse_from=None):
+    """Export an Arrow/WKB rendering bundle using freestiler and reversible IDs.
+
+    Output is a new directory containing tiles.pmtiles, identities.arrow and
+    manifest.json. Existing bundles reject. Reuse a previous bundle to retain
+    its composite identity mapping. Timestamps reject unless timestamp_ms=True;
+    UInt64 must fit signed int64, binary properties reject. No custom tile repair.
+    """
+    import json
+    for value in (min_zoom, max_zoom, max_batch_rows):
+        if isinstance(value, bool):
+            raise ValueError("zoom/batch limits must be integers")
+    if not isinstance(timestamp_ms, bool):
+        raise TypeError("timestamp_ms must be bool")
+    options = dict(layer=layer_name, min_zoom=operator.index(min_zoom),
+        max_zoom=operator.index(max_zoom), max_batch_rows=operator.index(max_batch_rows),
+        timestamp_ms=timestamp_ms, reuse_from=None if reuse_from is None else str(Path(reuse_from)))
+    return _export_arrow_transport(output, batches, source_crs=source_crs,
+        format="pmtiles", max_batch_rows=max_batch_rows,
+        pmtiles_options=(json.dumps(options), _threads(threads)))
+
+
+def _export_arrow_transport(output, batches, *, source_crs, format,
+                            max_batch_rows, pmtiles_options=None):
     import json
     import pyarrow as pa
     from pyproj import CRS, Transformer
     import shapely
 
+    if format == "pmtiles" and pmtiles_options is None:
+        raise ValueError("Use export_arrow_pmtiles for typed PMTiles bundles")
     native = _native("rust")
-    if not hasattr(native, "export_ipc_file"):
+    method = "export_pmtiles_ipc_file" if format == "pmtiles" else "export_ipc_file"
+    if not hasattr(native, method):
         raise FastHdfError("Native extension was built without export writers")
     output = Path(output)
     if source_crs is None:
@@ -610,7 +644,7 @@ def export_arrow(output, batches, *, source_crs, format, max_batch_rows=65536):
         old_crs = json.loads(old_metadata[b"ARROW:extension:metadata"]).get("crs")
         if old_crs is None or not crs.equals(CRS(old_crs), ignore_axis_order=True):
             raise ValueError("conflicting or missing GeoArrow CRS")
-    geographic = format in {"geojson", "jsonl"}
+    geographic = format in {"geojson", "jsonl", "pmtiles"}
     target = CRS(4326) if geographic else crs
     transformer = Transformer.from_crs(crs, target, always_xy=True) if geographic else None
     evidence = dict(wkt=target.to_wkt(), projjson=target.to_json_dict(),
@@ -631,6 +665,10 @@ def export_arrow(output, batches, *, source_crs, format, max_batch_rows=65536):
     field = schema.field(index).with_metadata(geometry_metadata)
     metadata = dict(schema.metadata or {})
     metadata[b"ras:export:v1"] = json.dumps(evidence).encode()
+    if format == "pmtiles":
+        metadata[b"ras:pmtiles:source_crs"] = json.dumps(dict(wkt=crs.to_wkt(),
+            projjson=crs.to_json_dict(), units=crs.axis_info[0].unit_name,
+            axis_order="xy", resolved=True)).encode()
     output_schema = schema.set(index, field).with_metadata(metadata)
     # Native contract validation remains authoritative for all scalar types,
     # dimensions, identity, domain, size and geometry structural checks.
@@ -660,7 +698,12 @@ def export_arrow(output, batches, *, source_crs, format, max_batch_rows=65536):
                     geometries = shapely.orient_polygons(geometries, exterior_cw=False)
                     columns[index] = pa.array(shapely.to_wkb(geometries, flavor="iso"), type=pa.binary())
                 writer.write_batch(pa.RecordBatch.from_arrays(columns, schema=output_schema))
+        if format == "pmtiles":
+            options, threads = pmtiles_options
+            return json.loads(native.export_pmtiles_ipc_file(ipc, output, options, threads=threads))
         return json.loads(native.export_ipc_file(ipc, output, format, max_batch_rows))
 
 
 __all__.append("export_arrow")
+
+__all__.append("export_arrow_pmtiles")
