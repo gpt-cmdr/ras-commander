@@ -51,7 +51,11 @@ def _append_face_ring(points, endpoint_a, endpoint_b, coordinates):
 
 
 def integer_milliseconds(value):
-    """Checked epoch milliseconds without a nanosecond conversion (year3000)."""
+    """Checked epoch milliseconds without a nanosecond conversion (year3000).
+
+    Lightweight scalar conversion used in per-cell loops; intentionally no
+    ``log_call`` here. The public bulk analysis boundary logs once instead.
+    """
     import pandas as pd
     if pd.isna(value):
         return 0, False
@@ -273,6 +277,7 @@ class Analysis:
         frame=gpd.GeoDataFrame(records,columns=["mesh_name","classification","area_acres","geometry"],geometry="geometry",crs=self.crs)
         return frame,diagnostics
 
+    @log_call
     def qualifying_edges(self, delta_t_ms):
         """Native (i, j) vertex pairs, i < j, meeting the seed predicate."""
         if type(delta_t_ms) is not int or not 0<=delta_t_ms<=2**64-1:

@@ -128,7 +128,13 @@ def _read(path: Union[str, Path]) -> Tuple[Path, bytes]:
 
 @dataclass
 class GeometryTextIndex:
-    """Decoded native geometry index of one immutable byte buffer."""
+    """Decoded native geometry index of one immutable byte buffer.
+
+    ``find_node``, ``station_elevation``, ``mannings_n`` and ``bank_stations``
+    are lightweight state accessors used inside bulk reads/edits. They are
+    deliberately not decorated with ``log_call``: public FastText operations
+    log the boundary once, without logging each indexed node or its buffers.
+    """
 
     path: Optional[Path]
     sha256: str
