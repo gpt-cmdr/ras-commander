@@ -843,6 +843,7 @@ version = "0.15.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "db5eda63aa99ac06160fd53328ed75c34f14e3196d3f56a3649e247ed796e54b"
 dependencies = [
+ "geo-types",
  "geojson",
  "log",
  "scroll",
@@ -1757,6 +1758,7 @@ dependencies = [
  "arrow-ipc",
  "arrow-schema",
  "flatgeobuf",
+ "freestiler-core",
  "geopackage",
  "geoparquet",
  "geozero",

@@ -25,6 +25,7 @@ freestiler-core = { git = "https://github.com/walkerke/freestiler", rev = "beb64
 flate2 = { version = "1", default-features = false, features = ["zlib-rs"] }
 
 [features]
+exports-pmtiles = ["exports-arrow", "ras-export/pmtiles"]
 exports-arrow = ["dep:ras-export"]
 exports-geojson = ["exports-arrow", "ras-export/geojson"]
 exports-flatgeobuf = ["exports-arrow", "ras-export/flatgeobuf"]

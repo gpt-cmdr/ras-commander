@@ -62,6 +62,28 @@ fn export_ipc_file(
     })
 }
 
+#[cfg(feature = "exports-pmtiles")]
+#[pyfunction]
+#[pyo3(signature = (input, output, options, threads=None))]
+fn export_pmtiles_ipc_file(
+    py: Python<'_>,
+    input: std::path::PathBuf,
+    output: std::path::PathBuf,
+    options: &str,
+    threads: Option<usize>,
+) -> PyResult<String> {
+    let options: ras_export::pmtiles_bridge::Options =
+        serde_json::from_str(options).map_err(|e| PyValueError::new_err(e.to_string()))?;
+    let pool = pool(threads)?;
+    py.detach(move || {
+        pool.install(|| {
+            let metrics = ras_export::pmtiles_bridge::export_ipc(&input, &output, &options)
+                .map_err(|e| PyValueError::new_err(e.to_string()))?;
+            serde_json::to_string(&metrics).map_err(|e| PyValueError::new_err(e.to_string()))
+        })
+    })
+}
+
 // Validate original Arrow WKB buffers before a reprojection library can
 // normalize away unsupported encodings or trailing bytes. Arrays borrow Arrow
 // storage; no per-feature Python objects or geometry copies are needed.
@@ -112,6 +134,8 @@ fn ras_commander_fast_hdf(m: &Bound<'_, PyModule>) -> PyResult<()> {
         m.add_function(wrap_pyfunction!(export_ipc_file, m)?)?;
         m.add_function(wrap_pyfunction!(validate_export_wkb, m)?)?;
     }
+    #[cfg(feature = "exports-pmtiles")]
+    m.add_function(wrap_pyfunction!(export_pmtiles_ipc_file, m)?)?;
     m.add("__version__", env!("CARGO_PKG_VERSION"))?;
     m.add("UnsupportedError", m.py().get_type::<UnsupportedError>())?;
     m.add("TopologyError", m.py().get_type::<TopologyError>())?;

@@ -1,5 +1,7 @@
 //! Typed, batch-fed source exports. This library never runs HEC-RAS or reprojects.
 pub mod contract;
+#[cfg(feature = "pmtiles")]
+pub mod pmtiles_bridge;
 mod writers;
 
 use arrow_array::RecordBatch;
