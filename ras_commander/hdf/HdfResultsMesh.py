@@ -109,6 +109,7 @@ from .._optional_deps import (
 from .._rasmap_schema import rasmap_dataframe_is_usable
 from ..Decorators import log_call, standardize_input
 from ..LoggingConfig import get_logger
+from .. import fast_results
 from ..fast_hdf import FastHdfError, read_dataset
 from .HdfBase import HdfBase
 from .HdfMesh import HdfMesh
@@ -1845,7 +1846,16 @@ class HdfResultsMesh:
         max_chunk_bytes: int = 16 * 1024 * 1024,
         max_chunk_rows: int = 32,
     ) -> np.ndarray:
-        """Reduce a ``(time, cell)`` HDF dataset without materializing it."""
+        """Reduce a ``(time, cell)`` HDF dataset without materializing it.
+
+        Uses the optional native reduction (``fast_results``) when policy and
+        the dataset allow it; the loop below is the Python reference route.
+        """
+        native = fast_results.native_temporal_reduce(
+            result_ds, minimum_elevation, max_block_bytes=max_chunk_bytes
+        )
+        if native is not None:
+            return native.maximum
         time_count, cell_count = result_ds.shape
         maximum = np.full(cell_count, np.nan, dtype=np.float32)
         if time_count == 0 or cell_count == 0:
