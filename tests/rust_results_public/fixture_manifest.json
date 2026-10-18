@@ -1,0 +1,156 @@
+{
+ "description": "Immutable local copies; set RAS_RESULTS_FIXTURE_ROOT to their folder. Model files are never committed.",
+ "unavailable": [
+  {
+   "name": "JUL2020_D100RAS.p04.hdf (D601, stored 5.0.7)",
+   "reason": "coordinator-local on CLB-06; not present on this host"
+  }
+ ],
+ "fixtures": [
+  {
+   "path": "v66_BE_mc/BaldEagleDamBrk.p07.hdf",
+   "sha256": "07cad3930a679891f87bbface1ab749b82fd7d7eae6aaac3b5ff041c44280984",
+   "stored_version": "6.6",
+   "source": "RasExamples BaldEagleCrkMulti2D Monte Carlo fleet members computed with 6.6",
+   "unsteady_2d": true,
+   "series": {
+    "BaldEagleCr": "Water Surface"
+   }
+  },
+  {
+   "path": "v66_BE_mc/BaldEagleDamBrk.p08.hdf",
+   "sha256": "70041b6b47c95c23c6169763a75127677ab2f6c0abb3f0321a94fb0b4d7c3941",
+   "stored_version": "6.6",
+   "source": "RasExamples BaldEagleCrkMulti2D Monte Carlo fleet members computed with 6.6",
+   "unsteady_2d": true,
+   "series": {
+    "BaldEagleCr": "Water Surface"
+   }
+  },
+  {
+   "path": "v66_BE_mc/BaldEagleDamBrk.p09.hdf",
+   "sha256": "1acb3755032cc45521bbf32a0ee9658416196a53c9d1d2b9c90ea0be5d020b29",
+   "stored_version": "6.6",
+   "source": "RasExamples BaldEagleCrkMulti2D Monte Carlo fleet members computed with 6.6",
+   "unsteady_2d": true,
+   "series": {
+    "BaldEagleCr": "Water Surface"
+   }
+  },
+  {
+   "path": "v66_BE_smoke/BaldEagleDamBrk.p18.hdf",
+   "sha256": "1eec67c67784b6c3c1042723f627a399582bc950829fb4e44973b72d9ccdb378",
+   "stored_version": "6.6",
+   "source": "RasExamples BaldEagleCrkMulti2D computed locally (6.6, geom preprocess smoke)",
+   "unsteady_2d": true,
+   "series": {
+    "BaldEagleCr": "Water Surface",
+    "Upper 2D Area": "Water Surface"
+   }
+  },
+  {
+   "path": "v70_gen/BaldEagleDamBrk.p18.hdf",
+   "sha256": "661fa9df2dab1c4583e2e289afd601e8f956280613ce0a09f527f61be19196ec",
+   "stored_version": "7.0",
+   "source": "RasExamples projects computed with 7.0 (fixtures-api generated_7.0)",
+   "unsteady_2d": true,
+   "series": {
+    "BaldEagleCr": "Water Surface",
+    "Upper 2D Area": "Water Surface"
+   }
+  },
+  {
+   "path": "v70_chippewa/Chippewa_2D.p02.hdf",
+   "sha256": "65dee6b9e0d29cb0007e0cd9c0aafa9a39b874c9a50023a6addb21d448c68ee8",
+   "stored_version": "7.0",
+   "source": "RasExamples Chippewa_2D computed with 7.0",
+   "unsteady_2d": true,
+   "series": {
+    "Perimeter 1": "Water Surface"
+   }
+  },
+  {
+   "path": "v70_gen/DavisStormSystem.p02.hdf",
+   "sha256": "77a95e3f43d344c7587eaa1ae446d2f13e11f8b8e230b0f5ff86736888130089",
+   "stored_version": "7.0",
+   "source": "RasExamples projects computed with 7.0 (fixtures-api generated_7.0)",
+   "unsteady_2d": true,
+   "series": {
+    "DS Channel": "Water Surface",
+    "area2": "Water Surface"
+   }
+  },
+  {
+   "path": "v70_gen/Muncie.p03.hdf",
+   "sha256": "9e70a8fec5a77bff57dfdf49e167296185456335236d35075a88aa96c4edf795",
+   "stored_version": "7.0",
+   "source": "RasExamples projects computed with 7.0 (fixtures-api generated_7.0)",
+   "unsteady_2d": true,
+   "series": {
+    "2D Interior Area": "Water Surface"
+   }
+  },
+  {
+   "path": "v503_P118/P118_PHASING.p01.hdf",
+   "sha256": "a9469facd017604c2ef02e4a2ffd3df6939979af4fb466e5ce664a14317d9345",
+   "stored_version": "5.0.3",
+   "source": "local non-public HEC-RAS 5.0.3 project copy (not redistributable)",
+   "unsteady_2d": true,
+   "series": {
+    "2DFlow3": "Depth",
+    "2DFlow4": "Depth"
+   }
+  },
+  {
+   "path": "v503_P118/P118_PHASING.p05.hdf",
+   "sha256": "a0af9cd5068d22d567782d81da33f0d6b0447a0b818e121f968c9bb95e6c3661",
+   "stored_version": "5.0.3",
+   "source": "local non-public HEC-RAS 5.0.3 project copy (not redistributable)",
+   "unsteady_2d": true,
+   "series": {
+    "2DFlow3": "Depth",
+    "2DFlow4": "Depth",
+    "WH": "Depth"
+   }
+  },
+  {
+   "path": "v503_P118/P118_PHASING.p09.hdf",
+   "sha256": "98849faaa9030529a12263389cf35e93c6663668283f94ab3154423aa93b826e",
+   "stored_version": "5.0.3",
+   "source": "local non-public HEC-RAS 5.0.3 project copy (not redistributable)",
+   "unsteady_2d": true,
+   "series": {
+    "2DFlow1": "Depth",
+    "2DFlow10": "Depth",
+    "2DFlow11": "Depth",
+    "2DFlow2": "Depth",
+    "2DFlow3": "Depth",
+    "2DFlow4": "Depth",
+    "2DFlow5": "Depth",
+    "2DFlow6": "Depth",
+    "2DFlow7": "Depth",
+    "2DFlow8": "Depth",
+    "2DFlow9": "Depth"
+   }
+  },
+  {
+   "path": "BaldEagleDamBrk.p03.hdf",
+   "sha256": "98bfbeea11d31f9586b2e21b1f292974a93b97742c86eb370c3d78be1e9efa9f",
+   "stored_version": "6.6",
+   "source": "coordinator whole-model-exports first-tier fixture",
+   "unsteady_2d": false,
+   "series": {}
+  },
+  {
+   "path": "BaldEagleDamBrk.p18.hdf",
+   "sha256": "1d0063a84fd131ac95ffaa2b3f6647f2ef51c7f38f23c43e8ae6c698bfc95f0b",
+   "stored_version": "7.0",
+   "source": "coordinator whole-model-exports first-tier fixture",
+   "unsteady_2d": true,
+   "series": {
+    "BaldEagleCr": "Water Surface",
+    "Upper 2D Area": "Water Surface"
+   }
+  }
+ ]
+}
