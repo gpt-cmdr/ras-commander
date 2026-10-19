@@ -131,7 +131,7 @@ fn mode(m: PlanResultMode) -> &'static str {
 #[pyfunction]
 fn capabilities(py: Python<'_>) -> PyResult<Bound<'_, PyDict>> {
     Ok(
-        dict!(py,"api_version"=>crate::API_VERSION,"engine_commit"=>env!("RAS_ENGINE_COMMIT"),"engine_features"=>env!("RAS_ENGINE_FEATURES").split(',').collect::<Vec<_>>(),"bindings"=>["numeric_capability","read_numeric","read_numeric_batch","temporal_reduce","assemble_cells","raw_crs_evidence","typed_group_attributes","mesh_inventory","cross_sections","plan_result_mode","steady_profile_names","read_cross_section_result","plan_capabilities"]),
+        dict!(py,"api_version"=>crate::API_VERSION,"engine_commit"=>env!("RAS_ENGINE_COMMIT"),"engine_features"=>env!("RAS_ENGINE_FEATURES").split(',').collect::<Vec<_>>(),"bindings"=>["numeric_capability","read_numeric","read_numeric_batch","temporal_reduce","assemble_cells","raw_crs_evidence","typed_group_attributes","mesh_inventory","cross_sections","plan_result_mode","steady_profile_names","read_cross_section_result","plan_capabilities","unsteady_time_axis","unsteady_row_times","result_units","dataset_unit_evidence","mesh_name_diagnostics"]),
     )
 }
 #[pyfunction]
@@ -170,14 +170,21 @@ fn typed_group_attributes<'py>(
         };d.set_item("capability",capability(py,&c)?)?;Ok(d)
     }).collect()
 }
+fn result_availability<'py>(
+    py: Python<'py>,
+    r: &ras_commander_rust::schema::ResultAvailability,
+) -> PyResult<Bound<'py, PyDict>> {
+    let vars=r.variables.iter().map(|v|Ok(dict!(py,"dataset"=>&v.dataset,"shape"=>&v.shape,"capability"=>capability(py,&v.capability)?))).collect::<PyResult<Vec<_>>>()?;
+    Ok(dict!(py,"capability"=>capability(py,&r.capability)?,"variables"=>vars))
+}
 #[pyfunction]
 fn mesh_inventory(py: Python<'_>, path: PathBuf) -> PyResult<Vec<Bound<'_, PyDict>>> {
     let meshes = py
-        .detach(|| ReadOnlyHdfSession::open(path)?.initial_2d_inventory())
+        .detach(|| ReadOnlyHdfSession::open(path)?.mesh_inventory())
         .map_err(crate::reader::err)?;
     meshes.into_iter().map(|m| {
-        let vars=m.results.variables.iter().map(|v|Ok(dict!(py,"dataset"=>&v.dataset,"shape"=>&v.shape,"capability"=>capability(py,&v.capability)?))).collect::<PyResult<Vec<_>>>()?;
-        Ok(dict!(py,"source"=>m.source,"mesh_name"=>m.mesh_name,"physical_cells"=>m.physical_cells,"stored_cells"=>m.stored_cells,"ghost_cells"=>m.ghost_cells,"results"=>dict!(py,"capability"=>capability(py,&m.results.capability)?,"variables"=>vars)))
+        let blocks=m.output_blocks.iter().map(|b| Ok(dict!(py,"mode"=>match b.mode {ras_commander_rust::schema::MeshResultMode::Unsteady=>"unsteady",ras_commander_rust::schema::MeshResultMode::Steady=>"steady",_=>"unknown"},"block_name"=>&b.block_name,"dataset_root"=>&b.dataset_root,"results"=>result_availability(py,&b.results)?))).collect::<PyResult<Vec<_>>>()?;
+        Ok(dict!(py,"source"=>m.source,"mesh_name"=>m.mesh_name,"physical_cells"=>m.physical_cells,"stored_cells"=>m.stored_cells,"ghost_cells"=>m.ghost_cells,"results"=>result_availability(py,&m.results)?,"output_blocks"=>blocks))
     }).collect()
 }
 #[pyfunction]
@@ -285,7 +292,176 @@ fn plan_capabilities(py: Python<'_>, path: PathBuf) -> PyResult<Bound<'_, PyDict
     }).collect::<PyResult<Vec<_>>>()?;
     Ok(dict!(py,"mode"=>mode(c.mode),"families"=>families))
 }
+
+fn axis_capability(a: &ras_commander_rust::hdf::time::TimeAxis) -> Capability {
+    if a.timestamps.is_some() {
+        Capability::Supported
+    } else {
+        a.integer_ms.clone().unwrap_or_else(|| {
+            Capability::unsupported(
+                UnsupportedCode::Schema,
+                "numeric time axis has no proven civil epoch".into(),
+            )
+        })
+    }
+}
+#[pyfunction]
+#[pyo3(signature=(path,max_bytes=16777216))]
+fn unsteady_time_axis(
+    py: Python<'_>,
+    path: PathBuf,
+    max_bytes: usize,
+) -> PyResult<Bound<'_, PyDict>> {
+    use ras_commander_rust::hdf::time::{MillisecondSource, TimeEpoch};
+    let a = py
+        .detach(|| ReadOnlyHdfSession::open(path)?.unsteady_time_axis(max_bytes))
+        .map_err(crate::reader::err)?;
+    let timestamps = a
+        .timestamps
+        .as_ref()
+        .map(|v| v.iter().map(ToString::to_string).collect::<Vec<_>>());
+    let epoch = match a.epoch {
+        TimeEpoch::CivilUnix1970 => "civil_unix_1970",
+        _ => "unknown",
+    };
+    let source = a.ms_source.map(|v| match v {
+        MillisecondSource::StoredStringDataset => "stored_string_dataset",
+        MillisecondSource::DerivedFromStrings => "derived_from_strings",
+        _ => "unknown",
+    });
+    Ok(
+        dict!(py,"group"=>&a.group,"rows"=>a.rows,"days"=>&a.days,"raw_strings"=>&a.raw_strings,"raw_ms"=>&a.raw_ms,"raw_ms_strings"=>&a.raw_ms_strings,"ms_since_epoch"=>&a.ms_since_epoch,"timestamps"=>timestamps,"hour_2400_rows"=>&a.hour_2400_rows,"epoch"=>epoch,"ms_source"=>source,"timezone"=>py.None(),"capability"=>capability(py,&axis_capability(&a))?,"integer_ms"=>a.integer_ms.as_ref().map(|c|capability(py,c)).transpose()?),
+    )
+}
+#[pyfunction]
+#[pyo3(signature=(path,rows,max_bytes=16777216))]
+fn unsteady_row_times(
+    py: Python<'_>,
+    path: PathBuf,
+    rows: (u64, u64, u64),
+    max_bytes: usize,
+) -> PyResult<Bound<'_, PyDict>> {
+    let (a, r) = py
+        .detach(|| {
+            let a = ReadOnlyHdfSession::open(path)?.unsteady_time_axis(max_bytes)?;
+            let r = a.select(Slice::new(rows.0, rows.1, rows.2))?;
+            Ok::<_, ras_commander_rust::Error>((a, r))
+        })
+        .map_err(crate::reader::err)?;
+    let timestamps = r
+        .timestamps
+        .as_ref()
+        .map(|v| v.iter().map(ToString::to_string).collect::<Vec<_>>());
+    let hours = a
+        .hour_2400_rows
+        .iter()
+        .copied()
+        .filter(|row| r.row_indices.binary_search(row).is_ok())
+        .collect::<Vec<_>>();
+    Ok(
+        dict!(py,"row_indices"=>&r.row_indices,"days"=>&r.days,"raw_strings"=>&r.raw_strings,"raw_ms"=>&r.raw_ms,"raw_ms_strings"=>&r.raw_ms_strings,"ms_since_epoch"=>&r.ms_since_epoch,"timestamps"=>timestamps,"hour_2400_rows"=>hours,"epoch"=>match a.epoch {ras_commander_rust::hdf::time::TimeEpoch::CivilUnix1970=>"civil_unix_1970",_=>"unknown"},"integer_ms"=>a.integer_ms.as_ref().map(|c|capability(py,c)).transpose()?,"capability"=>capability(py,&axis_capability(&a))?,"timezone"=>py.None()),
+    )
+}
+fn unit_evidence<'py>(
+    py: Python<'py>,
+    e: &ras_commander_rust::hdf::units::UnitsEvidence,
+) -> PyResult<Bound<'py, PyDict>> {
+    use ras_commander_rust::hdf::units::UnitsEvidence as E;
+    let (status, text, raw, c) = match e {
+        E::Declared { text, raw_bytes } => (
+            "declared",
+            Some(text.as_str()),
+            raw_bytes.as_slice(),
+            Capability::Supported,
+        ),
+        E::Absent => (
+            "absent",
+            None,
+            &[][..],
+            Capability::unavailable("unit attribute absent".into()),
+        ),
+        E::Unsupported {
+            capability,
+            raw_bytes,
+        } => (
+            "unsupported",
+            None,
+            raw_bytes.as_slice(),
+            capability.clone(),
+        ),
+        E::Corrupt {
+            capability,
+            raw_bytes,
+        } => ("corrupt", None, raw_bytes.as_slice(), capability.clone()),
+        _ => (
+            "unknown",
+            None,
+            &[][..],
+            Capability::unsupported(
+                UnsupportedCode::NotImplemented,
+                "future unit evidence".into(),
+            ),
+        ),
+    };
+    Ok(
+        dict!(py,"status"=>status,"text"=>text,"raw_bytes"=>PyBytes::new(py,raw),"capability"=>capability(py,&c)?),
+    )
+}
+fn dataset_units<'py>(
+    py: Python<'py>,
+    e: &ras_commander_rust::hdf::units::UnitsEvidence,
+    source: &ras_commander_rust::hdf::units::UnitsSource,
+    quantity: &Option<String>,
+) -> PyResult<Bound<'py, PyDict>> {
+    use ras_commander_rust::hdf::units::UnitsSource as S;
+    let attribute = match source {
+        S::UnitsAttribute => Some("Units"),
+        S::VariableUnits => Some("Variable Units"),
+        S::VariablePair => Some("Variable"),
+        S::QuantityLabel { attribute } => Some(attribute.as_str()),
+        _ => None,
+    };
+    let d = unit_evidence(py, e)?;
+    d.set_item("source_attribute", attribute)?;
+    d.set_item("quantity_name", quantity)?;
+    Ok(d)
+}
+#[pyfunction]
+fn dataset_unit_evidence<'py>(
+    py: Python<'py>,
+    path: PathBuf,
+    dataset: &str,
+) -> PyResult<Bound<'py, PyDict>> {
+    let u = py
+        .detach(|| ReadOnlyHdfSession::open(path)?.dataset_unit_evidence(dataset))
+        .map_err(crate::reader::err)?;
+    dataset_units(py, &u.units, &u.source, &u.quantity_name)
+}
+#[pyfunction]
+fn result_units(py: Python<'_>, path: PathBuf) -> PyResult<Bound<'_, PyDict>> {
+    use ras_commander_rust::hdf::units::{UnitSystemKind as K, UnitsFamily as F};
+    let u = py
+        .detach(|| ReadOnlyHdfSession::open(path)?.result_units())
+        .map_err(crate::reader::err)?;
+    let variables=u.variables.iter().map(|v|Ok(dict!(py,"family"=>match v.family {F::Mesh2D=>"mesh_2d",F::CrossSectionUnsteady=>"cross_section_unsteady",F::CrossSectionSteady=>"cross_section_steady",_=>"unknown"},"area"=>&v.area,"variable"=>&v.variable,"dataset"=>&v.dataset,"units"=>dataset_units(py,&v.units,&v.source,&v.quantity_name)?))).collect::<PyResult<Vec<_>>>()?;
+    let systems=u.unit_system.iter().map(|e|Ok(dict!(py,"source"=>&e.source,"source_attribute"=>"Units System","kind"=>e.kind.map(|k|match k {K::UsCustomary=>"us_customary",K::SiMetric=>"si_metric",K::Unrecognized=>"unrecognized",_=>"unknown"}),"value"=>unit_evidence(py,&e.value)?))).collect::<PyResult<Vec<_>>>()?;
+    Ok(dict!(py,"variables"=>variables,"unit_system"=>systems))
+}
+#[pyfunction]
+fn mesh_name_diagnostics(py: Python<'_>, path: PathBuf) -> PyResult<Vec<Bound<'_, PyDict>>> {
+    use ras_commander_rust::schema::MeshNameIssue as I;
+    let d = py
+        .detach(|| ReadOnlyHdfSession::open(path)?.mesh_name_diagnostics())
+        .map_err(crate::reader::err)?;
+    d.iter().map(|v|Ok(dict!(py,"mesh_name"=>&v.mesh_name,"issue"=>match v.issue {I::MissingGroup=>"missing_group",I::ExtraGroup=>"extra_group",I::DuplicateAttributeName=>"duplicate_attribute_name",I::InvalidName=>"invalid_name",_=>"unknown"}))).collect()
+}
 pub(crate) fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {
+    m.add_function(wrap_pyfunction!(unsteady_time_axis, m)?)?;
+    m.add_function(wrap_pyfunction!(unsteady_row_times, m)?)?;
+    m.add_function(wrap_pyfunction!(result_units, m)?)?;
+    m.add_function(wrap_pyfunction!(dataset_unit_evidence, m)?)?;
+    m.add_function(wrap_pyfunction!(mesh_name_diagnostics, m)?)?;
+
     m.add_function(wrap_pyfunction!(capabilities, m)?)?;
     m.add_function(wrap_pyfunction!(raw_crs_evidence, m)?)?;
     m.add_function(wrap_pyfunction!(typed_group_attributes, m)?)?;

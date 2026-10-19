@@ -11,7 +11,7 @@ mod text_bindings;
 mod tile_engine;
 mod tiles;
 
-pub(crate) const API_VERSION: u32 = 2;
+pub(crate) const API_VERSION: u32 = 3;
 
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
