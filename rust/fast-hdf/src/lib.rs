@@ -1,4 +1,5 @@
 mod analysis;
+mod domain;
 pub mod fluvial;
 mod fluvial_bindings;
 pub mod fluvial_geometry;
@@ -17,15 +18,13 @@ use std::sync::{Arc, Mutex, OnceLock};
 
 pyo3::create_exception!(ras_commander_fast_hdf, UnsupportedError, PyValueError);
 pyo3::create_exception!(ras_commander_fast_hdf, TopologyError, PyValueError);
+pyo3::create_exception!(ras_commander_fast_hdf, CorruptDataError, PyValueError);
 
 pub(crate) fn pool(threads: Option<usize>) -> PyResult<Arc<rayon::ThreadPool>> {
-    if threads == Some(0) || threads.is_some_and(|n| n > 1024) {
-        return Err(PyValueError::new_err("threads must be between 1 and 1024"));
-    }
+    let count = reader::threads(threads)?;
     static POOLS: OnceLock<Mutex<HashMap<usize, Arc<rayon::ThreadPool>>>> = OnceLock::new();
     // Bound implicit concurrency; caller-level archive workers also consume CPUs.
-    let count = threads
-        .unwrap_or_else(|| std::thread::available_parallelism().map_or(1, |n| n.get().min(8)));
+
     let mut cache = POOLS
         .get_or_init(|| Mutex::new(HashMap::new()))
         .lock()
@@ -135,9 +134,17 @@ fn validate_export_wkb(
 
 #[pymodule]
 fn ras_commander_fast_hdf(m: &Bound<'_, PyModule>) -> PyResult<()> {
-    m.add("ENGINE_COMMIT", "1c3a9ce894f22267782aa8737d59b923a0bf918a")?;
-    m.add("ENGINE_FEATURES", ("hdf", "mesh", "results"))?;
-    m.add("API_VERSION", 1)?;
+    m.add("ENGINE_COMMIT", env!("RAS_ENGINE_COMMIT"))?;
+    m.add(
+        "ENGINE_FEATURES",
+        pyo3::types::PyTuple::new(
+            m.py(),
+            env!("RAS_ENGINE_FEATURES").split(',').collect::<Vec<_>>(),
+        )?,
+    )?;
+    m.add("API_VERSION", 2)?;
+    m.add("CorruptDataError", m.py().get_type::<CorruptDataError>())?;
+    domain::register(m)?;
     #[cfg(feature = "exports-arrow")]
     {
         m.add_function(wrap_pyfunction!(export_ipc_file, m)?)?;
