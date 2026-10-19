@@ -170,3 +170,5 @@ fn ras_commander_fast_hdf(m: &Bound<'_, PyModule>) -> PyResult<()> {
     Ok(())
 }
 
+#[cfg(test)]
+mod mesh_attribution;
