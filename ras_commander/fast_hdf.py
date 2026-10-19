@@ -71,9 +71,9 @@ def _native(mode):
         if mode == "rust":
             raise FastHdfError("The optional ras-commander-fast-hdf extension is unavailable") from exc
         return None
-    if getattr(module, "API_VERSION", None) != 5:
+    if getattr(module, "API_VERSION", None) != 6:
         if mode == "rust":
-            raise FastHdfError("Incompatible ras-commander-fast-hdf API; version 5 is required")
+            raise FastHdfError("Incompatible ras-commander-fast-hdf API; version 6 is required")
         logger.warning("Ignoring incompatible ras-commander-fast-hdf extension")
         return None
     return module
@@ -183,8 +183,10 @@ def read_dataset(dataset: h5py.Dataset, selection=None, *, backend="auto", threa
         return dataset[key]
     expected = dataset.shape if slices is None else tuple(len(range(*item)) for item in slices)
     try:
-        values = module.read_numeric(os.fsdecode(dataset.file.filename), dataset.name,
-                                     selection=slices, threads=threads)
+        values = _read_fim_result(module, dataset, slices, threads)
+        if values is None:
+            values = module.read_numeric(os.fsdecode(dataset.file.filename), dataset.name,
+                                         selection=slices, threads=threads)
     except Exception as exc:
         if mode == "auto" and _unsupported(module, exc):
             logger.debug("h5py fallback for %s: %s", dataset.name, exc)
@@ -195,6 +197,36 @@ def read_dataset(dataset: h5py.Dataset, selection=None, *, backend="auto", threa
         values = np.squeeze(values, axis=squeeze)
     # h5py returns a NumPy scalar for a scalar dataset/full integer indexing.
     return values[()] if values.ndim == 0 else values
+
+
+def _read_fim_result(module, dataset, slices, threads):
+    """Dispatch bounded Base Output reads; other layouts retain numeric reads."""
+    # Explicit thread controls still belong to the generic reader. Typed readers
+    # use the engine's session defaults and its fixed 64 MiB output budget.
+    if not dataset.shape or threads is not None:
+        return None
+    shape = dataset.shape if slices is None else tuple(len(range(*s)) for s in slices)
+    if int(np.prod(shape)) * dataset.dtype.itemsize + shape[-1] * 8 > 67108864:
+        return None
+    parts = dataset.name.strip("/").split("/")
+    prefix = ["Results", "Unsteady", "Output", "Output Blocks", "Base Output"]
+    if parts[:5] != prefix or len(parts) not in {9, 10}:
+        return None
+    block, family, area = parts[5:8]
+    if family != "2D Flow Areas":
+        return None
+    path = os.fsdecode(dataset.file.filename)
+    if block == "Summary Output" and len(parts) == 9 and slices is None:
+        return module.read_mesh_summary(path, area, parts[8])["values"]
+    if block != "Unsteady Time Series" or len(dataset.shape) != 2:
+        return None
+    rows, columns = slices or [(0, n, 1) for n in dataset.shape]
+    elements = None if columns == (0, dataset.shape[1], 1) else list(range(*columns))
+    if len(parts) == 9:
+        return module.read_mesh_series(path, area, parts[8], rows, elements)["values"]
+    if parts[8] == "Boundary Conditions":
+        return module.read_mesh_boundary_series(path, area, parts[9], rows, elements)["values"]
+    return None
 
 
 @log_call

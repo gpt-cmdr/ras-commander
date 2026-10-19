@@ -35,6 +35,7 @@ import pandas as pd
 from shapely.geometry import LineString, MultiLineString, MultiPolygon, Point, Polygon
 
 from ..Decorators import log_call, standardize_input
+from ..fast_hdf import read_dataset
 from ..LoggingConfig import get_logger
 from .HdfBase import HdfBase
 from .HdfUtils import HdfUtils
@@ -815,7 +816,7 @@ class HdfBndry:
 
                 bl_line_data = hdf_file[breaklines_path]
                 attributes = bl_line_data["Attributes"][()]
-                source_points = bl_line_data["Polyline Points"][()]
+                source_points = read_dataset(bl_line_data["Polyline Points"])
                 diagnostics = []
 
                 # Initialize lists to store valid breakline data
@@ -828,7 +829,7 @@ class HdfBndry:
                 valid_geoms = []
 
                 # Process each breakline
-                for idx, (pnt_start, pnt_cnt, part_start, part_cnt) in enumerate(bl_line_data["Polyline Info"][()]):
+                for idx, (pnt_start, pnt_cnt, part_start, part_cnt) in enumerate(read_dataset(bl_line_data["Polyline Info"])):
                     name = HdfUtils.convert_ras_string(attributes["Name"][idx])
 
                     # Validate the native span before tolerating a degenerate
@@ -879,7 +880,7 @@ class HdfBndry:
                     if part_cnt == 1:
                         geom = LineString(points)
                     else:
-                        parts = bl_line_data["Polyline Parts"][()][part_start:part_start + part_cnt]
+                        parts = read_dataset(bl_line_data["Polyline Parts"])[part_start:part_start + part_cnt]
                         if part_start < 0 or part_cnt < 1 or len(parts) != part_cnt:
                             raise ValueError(f"Invalid parts for breakline {idx} ({name})")
                         lines = []
@@ -985,10 +986,10 @@ class HdfBndry:
                 attributes = rr_data["Attributes"][()]
                 rr_ids = range(len(attributes))
                 names = [HdfUtils.convert_ras_string(name) for name in attributes["Name"]]
-                polygon_points = rr_data["Polygon Points"][()]
-                polygon_parts = rr_data["Polygon Parts"][()] if "Polygon Parts" in rr_data else None
+                polygon_points = read_dataset(rr_data["Polygon Points"])
+                polygon_parts = read_dataset(rr_data["Polygon Parts"]) if "Polygon Parts" in rr_data else None
                 geoms = list()
-                for pnt_start, pnt_cnt, part_start, part_cnt in rr_data["Polygon Info"][()]:
+                for pnt_start, pnt_cnt, part_start, part_cnt in read_dataset(rr_data["Polygon Info"]):
                     try:
                         pnt_start, pnt_cnt = map(_nonnegative_index, (pnt_start, pnt_cnt))
                     except ValueError as exc:

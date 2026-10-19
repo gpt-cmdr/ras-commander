@@ -106,6 +106,7 @@ import numpy as np
 import pandas as pd
 
 from ..Decorators import log_call, standardize_input
+from ..fast_hdf import read_dataset
 from ..LoggingConfig import get_logger
 from .HdfBase import HdfBase
 from .HdfUtils import HdfUtils
@@ -754,7 +755,7 @@ class HdfMesh:
                 for index, name in enumerate(mesh_area_names):
                     perimeter_path = f"{name}/Perimeter"
                     if perimeter_path in group:
-                        mesh_area_polygons.append(Polygon(group[perimeter_path][()]))
+                        mesh_area_polygons.append(Polygon(read_dataset(group[perimeter_path])))
                         continue
                     if fallback_polygons is None:
                         fallback_polygons = _strict_collection_perimeters(
@@ -1184,7 +1185,7 @@ class HdfMesh:
 
                 for mesh_name in mesh_area_names:
                     # Get all cell centers in one read
-                    cell_centers = hdf_file[f"Geometry/2D Flow Areas/{mesh_name}/Cells Center Coordinate"][()]
+                    cell_centers = read_dataset(hdf_file[f"Geometry/2D Flow Areas/{mesh_name}/Cells Center Coordinate"])
                     if mesh_name in physical_counts:
                         cell_centers = cell_centers[:physical_counts[mesh_name]]
                     cell_count = len(cell_centers)
@@ -1270,10 +1271,10 @@ class HdfMesh:
                             f"Face topology is partial for mesh {mesh_name!r}"
                         )
                     # Read all data at once
-                    facepoints_index = hdf_file[dataset_paths[0]][()]
-                    facepoints_coords = hdf_file[dataset_paths[1]][()]
-                    faces_perim_info = hdf_file[dataset_paths[2]][()]
-                    faces_perim_values = hdf_file[dataset_paths[3]][()]
+                    facepoints_index = read_dataset(hdf_file[dataset_paths[0]])
+                    facepoints_coords = read_dataset(hdf_file[dataset_paths[1]])
+                    faces_perim_info = read_dataset(hdf_file[dataset_paths[2]])
+                    faces_perim_values = read_dataset(hdf_file[dataset_paths[3]])
 
                     # Process each face
                     for face_id, ((pnt_a_idx, pnt_b_idx), (start_row, count)) in enumerate(zip(facepoints_index, faces_perim_info)):
