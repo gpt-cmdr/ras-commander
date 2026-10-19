@@ -1,5 +1,6 @@
-"""Explicit API6 full-feature native entrypoint contract (45); additions require review."""
+"""Explicit API7 full-feature native entrypoint contract (46); additions require review."""
 EXPECTED = {
+    "HdfSession": ("class", None, "src/session.rs"),
     "mesh_summary_inventory": ("function", None, "src/fim.rs"),
     "mesh_series_inventory": ("function", None, "src/fim.rs"),
     "mesh_boundary_inventory": ("function", None, "src/fim.rs"),

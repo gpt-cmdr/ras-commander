@@ -1,5 +1,6 @@
 //! FIM typed reads. Engine owns all schema and identity decisions.
 use crate::domain::{attribute_type, capability, identity, typed_attribute_dict};
+use numpy::IntoPyArray;
 use pyo3::{
     exceptions::PyValueError,
     prelude::*,
@@ -12,19 +13,25 @@ use ras_commander_rust::hdf::{ReadOnlyHdfSession, Slice};
 use std::path::PathBuf;
 macro_rules! dict { ($py:expr, $($k:expr => $v:expr),* $(,)?) => {{ let d=PyDict::new($py); $(d.set_item($k,$v)?;)* d }}; }
 const _: () = assert!(ras_commander_rust::hdf::DEFAULT_MAX_BYTES == 67108864);
-fn slice(r: (u64, u64, u64)) -> Slice {
+pub(crate) fn slice(r: (u64, u64, u64)) -> Slice {
     Slice::new(r.0, r.1, r.2)
 }
-fn inventory<'py>(py: Python<'py>, i: MeshResultInventory) -> PyResult<Bound<'py, PyDict>> {
+pub(crate) fn inventory<'py>(
+    py: Python<'py>,
+    i: MeshResultInventory,
+) -> PyResult<Bound<'py, PyDict>> {
     let vars=i.variables.into_iter().map(|v| {
  let attrs=v.attributes.iter().map(|a|typed_attribute_dict(py,a)).collect::<PyResult<Vec<_>>>()?;
  Ok(dict!(py,"name"=>v.name,"path"=>v.path,"domain"=>v.domain.as_str(),"shape"=>v.shape,"kind"=>v.kind.map(crate::reader::numeric_kind_name),"dtype"=>v.kind.and_then(crate::reader::numpy),"chunks"=>v.chunks,"capability"=>capability(py,&v.capability)?,"attributes"=>attrs,"time_of_extreme_row"=>v.time_of_extreme_row))
  }).collect::<PyResult<Vec<_>>>()?;
     Ok(dict!(py,"group"=>i.group,"capability"=>capability(py,&i.capability)?,"variables"=>vars))
 }
-fn selection<'py>(py: Python<'py>, s: MeshResultSelection) -> PyResult<Bound<'py, PyDict>> {
+pub(crate) fn selection<'py>(
+    py: Python<'py>,
+    s: MeshResultSelection,
+) -> PyResult<Bound<'py, PyDict>> {
     Ok(
-        dict!(py,"identity"=>identity(py,&s.id)?,"elements"=>s.elements,"rows"=>(s.rows.start,s.rows.end,s.rows.step),"values"=>crate::reader::array(py,s.values)?),
+        dict!(py,"identity"=>identity(py,&s.id)?,"elements"=>s.elements.into_pyarray(py),"rows"=>(s.rows.start,s.rows.end,s.rows.step),"values"=>crate::reader::array(py,s.values)?),
     )
 }
 
@@ -177,7 +184,7 @@ fn reduce_mesh_series<'py>(
         })
         .map_err(crate::reader::err)?;
     Ok(
-        dict!(py,"identity"=>identity(py,&r.id)?,"elements"=>r.elements,"values"=>crate::reader::array(py,r.values)?,"time_indices"=>r.time_indices),
+        dict!(py,"identity"=>identity(py,&r.id)?,"elements"=>r.elements.into_pyarray(py),"values"=>crate::reader::array(py,r.values)?,"time_indices"=>r.time_indices.into_pyarray(py)),
     )
 }
 
