@@ -1,0 +1,5 @@
+{
+  "engine_commit": "7894a3b98583c64170fc6bb4bef007ebc4a79d7a",
+  "source": "crates/ras-commander-rust/tests/fixtures/xs_time",
+  "type": "engine frozen synthetic; generator and manifest unchanged"
+}

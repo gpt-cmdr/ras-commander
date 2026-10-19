@@ -62,10 +62,28 @@ pub fn assemble_cells<'py>(
         ids.into_pyarray(py),
     );
     if return_diagnostics {
+        let diagnostics = diagnostic_records(py, diagnostics)?;
         Ok((arrays.0, arrays.1, arrays.2, diagnostics)
             .into_pyobject(py)?
             .into_any())
     } else {
         Ok(arrays.into_pyobject(py)?.into_any())
     }
+}
+
+pub(crate) fn diagnostic_records<'py>(
+    py: Python<'py>,
+    records: Vec<(i64, &str, String)>,
+) -> PyResult<Vec<Bound<'py, pyo3::types::PyDict>>> {
+    records
+        .into_iter()
+        .map(|(cell, kind, reason)| {
+            let c = ras_commander_rust::Capability::corrupt(&reason);
+            let d =
+                crate::domain::diagnostic(py, Some(&cell.to_string()), Some(&reason), Some(&c))?;
+            d.set_item("cell_id", cell)?;
+            d.set_item("kind", kind)?;
+            Ok(d)
+        })
+        .collect()
 }

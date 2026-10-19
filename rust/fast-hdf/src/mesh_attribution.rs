@@ -107,7 +107,9 @@ fn profile<'py>(
     ];
     timings["numpy_output"] = start.elapsed().as_secs_f64().into();
     let start = Instant::now();
-    let diagnostics = diagnostics.into_pyobject(py)?.into_any();
+    let diagnostics = crate::mesh::diagnostic_records(py, diagnostics)?
+        .into_pyobject(py)?
+        .into_any();
     timings["diagnostics_python"] = start.elapsed().as_secs_f64().into();
     let start = Instant::now();
     let result = PyTuple::new(

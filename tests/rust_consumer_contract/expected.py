@@ -1,4 +1,4 @@
-"""Explicit full-feature native entrypoint contract; additions require review."""
+"""Explicit API5 full-feature native entrypoint contract (33); additions require review."""
 EXPECTED = {
     "structure_inventory": ("function", None, "src/structures.rs"),
     "read_structure_series": ("function", None, "src/structures.rs"),

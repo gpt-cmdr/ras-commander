@@ -4,7 +4,7 @@ import hashlib,json,os
 import h5py,numpy as np,pytest
 from bridge_test import native
 ROOT=Path(__file__).with_name('fixtures')/'structures'
-FAMILIES=['sa2d_area_connection','lateral_structure','storage_area']
+FAMILIES=['sa_2d_area_connection','lateral_structure','storage_area']
 
 def check(native,path):
     plan=native.plan_capabilities(path)
@@ -15,7 +15,7 @@ def check(native,path):
         assert inv['capability']['status']=='supported' and inv['time_rows']==4
         with h5py.File(path) as f:
             for desc in inv['structures']:
-                assert desc['identity']['row']>=0 and desc['node_pointer']['status'] in ('declared','absent')
+                assert desc['identity']['row']>=0 and desc['node_pointer']['capability']['status'] in ('supported','unavailable')
                 for series in desc['series']:
                     if series['capability']['status']!='supported':continue
                     data=f[series['path']][:]
@@ -56,7 +56,7 @@ def test_api4_audit_contract(native):
     for d in inv['structures']:
         for item in d['series']:
             c=item['columns']
-            if c['status']=='declared':assert c['source']==c['source_attribute']
+            if c['capability']['status']=='supported':assert c['value']['source_attribute'] in ('Variable_Unit','Connections')
     cap=native.numeric_capability(p,s['path']);assert cap['dataset_path']==cap['dataset']
     for t in [0,1025]:
         with pytest.raises(ValueError):native.read_structure_series(p,'lateral_structure',inv['structures'][0]['name'],s['relative'],(0,4,1),(0,s['shape'][1],1),threads=t)
