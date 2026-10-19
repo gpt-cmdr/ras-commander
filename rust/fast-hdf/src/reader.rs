@@ -28,7 +28,7 @@ pub(crate) fn err(e: Error) -> PyErr {
         ErrorKind::Internal => PyRuntimeError::new_err(message),
         _ => PyRuntimeError::new_err(message),
     };
-    Python::attach(|py| {
+    let _annotation_result = Python::attach(|py| {
         let value = exception.value(py);
         value.setattr("engine_kind", format!("{:?}", e.kind))?;
         value.setattr("subject", e.subject)?;
@@ -46,9 +46,9 @@ pub(crate) fn err(e: Error) -> PyErr {
             )?;
         }
         Ok::<_, PyErr>(())
-    })
-    .err()
-    .unwrap_or(exception)
+    });
+    // Annotation failure must never replace the engine failure category.
+    exception
 }
 
 pub(crate) fn threads(value: Option<usize>) -> PyResult<usize> {
@@ -88,9 +88,9 @@ pub(crate) fn array<'py>(py: Python<'py>, output: NumericArray) -> PyResult<Boun
         )),
     }
 }
-fn numpy(kind: Native) -> &'static str {
+fn numpy(kind: Native) -> Option<&'static str> {
     let little = cfg!(target_endian = "little");
-    match (kind, little) {
+    Some(match (kind, little) {
         (Native::I8, _) => "|i1",
         (Native::U8, _) => "|u1",
         (Native::I16, true) => "<i2",
@@ -109,8 +109,8 @@ fn numpy(kind: Native) -> &'static str {
         (Native::U64, false) => ">u8",
         (Native::F32, false) => ">f4",
         (Native::F64, false) => ">f8",
-        _ => "unknown",
-    }
+        _ => return None,
+    })
 }
 
 #[pyfunction]
@@ -225,16 +225,32 @@ pub fn numeric_capability<'py>(
             out.set_item("float_layout", float)?;
         }
     }
-    match cap.kind {
-        Some(kind) => {
+    match cap.kind.and_then(numpy) {
+        Some(dtype) => {
             out.set_item("supported", true)?;
-            out.set_item("numpy_dtype", numpy(kind))?;
+            out.set_item("numpy_dtype", dtype)?;
             out.set_item("reason", py.None())?;
         }
         None => {
             out.set_item("supported", false)?;
             out.set_item("numpy_dtype", py.None())?;
-            out.set_item("reason", cap.capability.reason())?;
+            let reason = cap
+                .capability
+                .reason()
+                .unwrap_or("numeric kind has no supported NumPy conversion");
+            out.set_item("reason", reason)?;
+            if cap.kind.is_some() {
+                out.set_item(
+                    "capability",
+                    crate::domain::capability(
+                        py,
+                        &ras_commander_rust::Capability::unsupported(
+                            ras_commander_rust::UnsupportedCode::NotImplemented,
+                            reason.into(),
+                        ),
+                    )?,
+                )?;
+            }
         }
     }
     Ok(out)

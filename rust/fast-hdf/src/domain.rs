@@ -131,7 +131,7 @@ fn mode(m: PlanResultMode) -> &'static str {
 #[pyfunction]
 fn capabilities(py: Python<'_>) -> PyResult<Bound<'_, PyDict>> {
     Ok(
-        dict!(py,"api_version"=>2,"engine_commit"=>env!("RAS_ENGINE_COMMIT"),"engine_features"=>env!("RAS_ENGINE_FEATURES").split(',').collect::<Vec<_>>(),"bindings"=>["numeric_capability","read_numeric","read_numeric_batch","temporal_reduce","assemble_cells","raw_crs_evidence","typed_group_attributes","mesh_inventory","cross_sections","plan_result_mode","steady_profile_names","read_cross_section_result","plan_capabilities"]),
+        dict!(py,"api_version"=>crate::API_VERSION,"engine_commit"=>env!("RAS_ENGINE_COMMIT"),"engine_features"=>env!("RAS_ENGINE_FEATURES").split(',').collect::<Vec<_>>(),"bindings"=>["numeric_capability","read_numeric","read_numeric_batch","temporal_reduce","assemble_cells","raw_crs_evidence","typed_group_attributes","mesh_inventory","cross_sections","plan_result_mode","steady_profile_names","read_cross_section_result","plan_capabilities"]),
     )
 }
 #[pyfunction]
