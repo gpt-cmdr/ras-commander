@@ -27,4 +27,9 @@ EXPECTED = {
     "steady_profile_names": ("function", None, "src/domain.rs"),
     "read_cross_section_result": ("function", None, "src/domain.rs"),
     "plan_capabilities": ("function", None, "src/domain.rs"),
+    "unsteady_time_axis": ("function", None, "src/domain.rs"),
+    "unsteady_row_times": ("function", None, "src/domain.rs"),
+    "result_units": ("function", None, "src/domain.rs"),
+    "dataset_unit_evidence": ("function", None, "src/domain.rs"),
+    "mesh_name_diagnostics": ("function", None, "src/domain.rs"),
 }
