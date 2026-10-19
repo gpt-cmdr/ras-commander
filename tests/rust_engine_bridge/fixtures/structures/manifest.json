@@ -1,0 +1,204 @@
+{
+  "fixtures": {
+    "both_label_attributes": {
+      "expect": {
+        "aggregate": "Supported",
+        "lateral": "Supported",
+        "sa2d": "Supported",
+        "storage": "Supported"
+      },
+      "file": "both_label_attributes.h5",
+      "sha256": "dc03c4ba640be36b2daebb350bb2c5e64a0f8a438549b90d151ee7ff5ea54873"
+    },
+    "count_mismatch": {
+      "expect": {
+        "aggregate": "Corrupt",
+        "lateral": "Corrupt",
+        "sa2d": "Supported",
+        "storage": "Supported"
+      },
+      "file": "count_mismatch.h5",
+      "sha256": "15825ef8546471f7cd85d799c37c12c33954e165e132c1876fab94473125a49d"
+    },
+    "duplicate_geometry_identity": {
+      "expect": {
+        "aggregate": "Unsupported:IdentityLayout",
+        "lateral": "Unsupported:IdentityLayout",
+        "sa2d": "Supported",
+        "storage": "Supported"
+      },
+      "file": "duplicate_geometry_identity.h5",
+      "sha256": "ecf9c26f992e380df79faf6c14fca458e31169d2e282609eb07bbc83392f72a3"
+    },
+    "duplicate_names": {
+      "expect": {
+        "aggregate": "Corrupt",
+        "lateral": "Corrupt",
+        "sa2d": "Supported",
+        "storage": "Supported"
+      },
+      "file": "duplicate_names.h5",
+      "sha256": "977414df860ab68ca84230d52e8d6c8b45276bcc5ad81ef8e208bc023436a3cd"
+    },
+    "duplicate_node_pointer": {
+      "expect": {
+        "aggregate": "Corrupt",
+        "lateral": "Corrupt",
+        "sa2d": "Supported",
+        "storage": "Supported"
+      },
+      "file": "duplicate_node_pointer.h5",
+      "sha256": "9fb634d828efacddff2890dc194fc9f6245103cf5ed5aef1538d1d7c311ac90e"
+    },
+    "good": {
+      "expect": {
+        "aggregate": "Supported",
+        "lateral": "Supported",
+        "sa2d": "Supported",
+        "storage": "Supported"
+      },
+      "file": "good.h5",
+      "sha256": "36e0f65ea218a38e61f0b8c86783286d25ea8c397240b182e669a31134e2df1e"
+    },
+    "integer_series": {
+      "expect": {
+        "aggregate": "Supported",
+        "lateral": "Supported",
+        "sa2d": "Supported",
+        "storage": "Supported"
+      },
+      "file": "integer_series.h5",
+      "sha256": "d0f12aa5d01e2b1fdcd79839cb6aea4ec242a28331b6a908f6ecf2ac194acf1d"
+    },
+    "label_count_mismatch": {
+      "expect": {
+        "aggregate": "Supported",
+        "lateral": "Supported",
+        "sa2d": "Supported",
+        "storage": "Supported"
+      },
+      "file": "label_count_mismatch.h5",
+      "sha256": "d7d6dd24a40b29aa0e09674b2150245382bb098e24e6569607102add6792bdbc"
+    },
+    "missing_attribute_table": {
+      "expect": {
+        "aggregate": "Unsupported:IdentityLayout",
+        "lateral": "Unsupported:IdentityLayout",
+        "sa2d": "Unsupported:IdentityLayout",
+        "storage": "Supported"
+      },
+      "file": "missing_attribute_table.h5",
+      "sha256": "9b99055a973ce9053cb0c6a7b5f3fc78b32ced0bf7aba472691175df20c644de"
+    },
+    "missing_time_axis": {
+      "expect": {
+        "aggregate": "Corrupt",
+        "lateral": "Corrupt",
+        "sa2d": "Corrupt",
+        "storage": "Corrupt"
+      },
+      "file": "missing_time_axis.h5",
+      "sha256": "72eef4160d421cf58a9bd29a9b1acedf80a2f030e97892994f1b99b58396f7d1"
+    },
+    "row_count_vs_time_axis": {
+      "expect": {
+        "aggregate": "Corrupt",
+        "lateral": "Corrupt",
+        "sa2d": "Supported",
+        "storage": "Supported"
+      },
+      "file": "row_count_vs_time_axis.h5",
+      "sha256": "208195d875d805329c4955c4475e388dc2b563fc2df83ac17996b9fa44a16bc7"
+    },
+    "storage_is_dataset": {
+      "expect": {
+        "aggregate": "Corrupt",
+        "lateral": "Supported",
+        "sa2d": "Supported",
+        "storage": "Corrupt"
+      },
+      "file": "storage_is_dataset.h5",
+      "sha256": "653729325d7521fc54fa64763cacc4d37ab5209648bbe60f9a4f7b08e5a24e88"
+    },
+    "unmatched_connection": {
+      "expect": {
+        "aggregate": "Unsupported:IdentityLayout",
+        "lateral": "Supported",
+        "sa2d": "Unsupported:IdentityLayout",
+        "storage": "Supported"
+      },
+      "file": "unmatched_connection.h5",
+      "sha256": "ae6de08964bc9532be2890172857d6f35b124bc37217f3d61a6349f90b92fc18"
+    },
+    "unmatched_lateral_group": {
+      "expect": {
+        "aggregate": "Unsupported:IdentityLayout",
+        "lateral": "Unsupported:IdentityLayout",
+        "sa2d": "Supported",
+        "storage": "Supported"
+      },
+      "file": "unmatched_lateral_group.h5",
+      "sha256": "cd56c967a2e31621f687d1043ab682fe637c5fae8d8313d729a397949bbfab7a"
+    },
+    "unmatched_storage_name": {
+      "expect": {
+        "aggregate": "Unsupported:IdentityLayout",
+        "lateral": "Supported",
+        "sa2d": "Supported",
+        "storage": "Unsupported:IdentityLayout"
+      },
+      "file": "unmatched_storage_name.h5",
+      "sha256": "87c6bcaff365d7b77fc038e37b33d6e3ea519f004d5399fb28af5428a03bafcb"
+    },
+    "unqualified_inline_group": {
+      "expect": {
+        "aggregate": "Unsupported:Schema",
+        "lateral": "Supported",
+        "sa2d": "Supported",
+        "storage": "Supported"
+      },
+      "file": "unqualified_inline_group.h5",
+      "sha256": "cf10aa9f7c34bbf7b96d85a803d669f75216b1ba453b3b43e26f6fba90c58724"
+    },
+    "wrong_object_type": {
+      "expect": {
+        "aggregate": "Corrupt",
+        "lateral": "Corrupt",
+        "sa2d": "Supported",
+        "storage": "Supported"
+      },
+      "file": "wrong_object_type.h5",
+      "sha256": "a2339e4029bd2cbdce6b986d57c142cdbed3340adaaf8ba9820ba6248c6067ee"
+    }
+  },
+  "frozen_read": {
+    "bits": [
+      1102053376,
+      1102577664,
+      1104150528,
+      1104674816
+    ],
+    "cols": [
+      0,
+      2,
+      1
+    ],
+    "relative": "Structure Variables",
+    "rows": [
+      1,
+      4,
+      2
+    ],
+    "shape": [
+      2,
+      2
+    ],
+    "structure": "R1 Reach1 200"
+  },
+  "generator": "make_fixtures.py",
+  "laterals": [
+    "R1 Reach1 100",
+    "R1 Reach1 200"
+  ],
+  "time_rows": 4
+}

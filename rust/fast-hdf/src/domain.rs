@@ -131,7 +131,7 @@ fn mode(m: PlanResultMode) -> &'static str {
 #[pyfunction]
 fn capabilities(py: Python<'_>) -> PyResult<Bound<'_, PyDict>> {
     Ok(
-        dict!(py,"api_version"=>crate::API_VERSION,"engine_commit"=>env!("RAS_ENGINE_COMMIT"),"engine_features"=>env!("RAS_ENGINE_FEATURES").split(',').collect::<Vec<_>>(),"bindings"=>["numeric_capability","read_numeric","read_numeric_batch","temporal_reduce","assemble_cells","raw_crs_evidence","typed_group_attributes","mesh_inventory","cross_sections","plan_result_mode","steady_profile_names","read_cross_section_result","plan_capabilities","unsteady_time_axis","unsteady_row_times","result_units","dataset_unit_evidence","mesh_name_diagnostics"]),
+        dict!(py,"api_version"=>crate::API_VERSION,"engine_commit"=>env!("RAS_ENGINE_COMMIT"),"engine_features"=>env!("RAS_ENGINE_FEATURES").split(',').collect::<Vec<_>>(),"bindings"=>["numeric_capability","read_numeric","read_numeric_batch","temporal_reduce","assemble_cells","raw_crs_evidence","typed_group_attributes","mesh_inventory","cross_sections","plan_result_mode","steady_profile_names","read_cross_section_result","plan_capabilities","unsteady_time_axis","unsteady_row_times","result_units","dataset_unit_evidence","mesh_name_diagnostics","structure_inventory","read_structure_series"]),
     )
 }
 #[pyfunction]
@@ -287,10 +287,11 @@ fn plan_capabilities(py: Python<'_>, path: PathBuf) -> PyResult<Bound<'_, PyDict
         .detach(|| ReadOnlyHdfSession::open(path)?.plan_capabilities())
         .map_err(crate::reader::err)?;
     let families=c.families.iter().map(|f| {
-        let family=match f.family {ResultFamily::Mesh2D=>"mesh_2d",ResultFamily::CrossSectionsUnsteady=>"cross_sections_unsteady",ResultFamily::SteadyProfiles=>"steady_profiles",ResultFamily::Structures=>"structures",ResultFamily::Pipes=>"pipes",ResultFamily::ReferenceLines=>"reference_lines",ResultFamily::ReferencePoints=>"reference_points",_=>"unknown"};
+        let family=match f.family {ResultFamily::Mesh2D=>"mesh_2d",ResultFamily::CrossSectionsUnsteady=>"cross_sections_unsteady",ResultFamily::SteadyProfiles=>"steady_profiles",ResultFamily::Structures=>"structures",ResultFamily::Pipes=>"pipes",ResultFamily::ReferenceLines=>"reference_lines",ResultFamily::ReferencePoints=>"reference_points",ResultFamily::BoundaryConditions=>"boundary_conditions",ResultFamily::CalibrationRegions=>"calibration_regions",_=>"unknown"};
         Ok(dict!(py,"family"=>family,"capability"=>capability(py,&f.status)?,"datasets"=>&f.datasets))
     }).collect::<PyResult<Vec<_>>>()?;
-    Ok(dict!(py,"mode"=>mode(c.mode),"families"=>families))
+    let structures=c.structures.iter().map(|s| Ok(dict!(py,"family"=>crate::structures::family_name(s.kind),"capability"=>capability(py,&s.status)?,"datasets"=>&s.datasets,"diagnostics"=>&s.diagnostics))).collect::<PyResult<Vec<_>>>()?;
+    Ok(dict!(py,"mode"=>mode(c.mode),"families"=>families,"structures"=>structures))
 }
 
 fn axis_capability(a: &ras_commander_rust::hdf::time::TimeAxis) -> Capability {
@@ -407,7 +408,7 @@ fn unit_evidence<'py>(
         dict!(py,"status"=>status,"text"=>text,"raw_bytes"=>PyBytes::new(py,raw),"capability"=>capability(py,&c)?),
     )
 }
-fn dataset_units<'py>(
+pub(crate) fn dataset_units<'py>(
     py: Python<'py>,
     e: &ras_commander_rust::hdf::units::UnitsEvidence,
     source: &ras_commander_rust::hdf::units::UnitsSource,

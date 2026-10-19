@@ -956,7 +956,7 @@ dependencies = [
 [[package]]
 name = "hdf5-core"
 version = "0.9.1"
-source = "git+https://github.com/CLB-Engineering-Corporation/ras-commander-rust?rev=c38fb04f4f71f10cad4abf4c051fed5ae613534d#c38fb04f4f71f10cad4abf4c051fed5ae613534d"
+source = "git+https://github.com/CLB-Engineering-Corporation/ras-commander-rust?rev=3895026ba9b0e25d2a80f41d0d67286021ad73e4#3895026ba9b0e25d2a80f41d0d67286021ad73e4"
 dependencies = [
  "thiserror 2.0.21",
 ]
@@ -964,7 +964,7 @@ dependencies = [
 [[package]]
 name = "hdf5-reader"
 version = "0.9.1"
-source = "git+https://github.com/CLB-Engineering-Corporation/ras-commander-rust?rev=c38fb04f4f71f10cad4abf4c051fed5ae613534d#c38fb04f4f71f10cad4abf4c051fed5ae613534d"
+source = "git+https://github.com/CLB-Engineering-Corporation/ras-commander-rust?rev=3895026ba9b0e25d2a80f41d0d67286021ad73e4#3895026ba9b0e25d2a80f41d0d67286021ad73e4"
 dependencies = [
  "flate2",
  "hdf5-core",
@@ -1756,7 +1756,7 @@ dependencies = [
 [[package]]
 name = "ras-commander-rust"
 version = "0.1.0"
-source = "git+https://github.com/CLB-Engineering-Corporation/ras-commander-rust?rev=c38fb04f4f71f10cad4abf4c051fed5ae613534d#c38fb04f4f71f10cad4abf4c051fed5ae613534d"
+source = "git+https://github.com/CLB-Engineering-Corporation/ras-commander-rust?rev=3895026ba9b0e25d2a80f41d0d67286021ad73e4#3895026ba9b0e25d2a80f41d0d67286021ad73e4"
 dependencies = [
  "flate2",
  "geo",

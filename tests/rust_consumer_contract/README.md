@@ -36,7 +36,7 @@ equal output). Its docstring states the measurement limits.
 
 
 Hardened bridge activation: engine commit is read from the activated checkout's
-Cargo.toml; API_VERSION=3, TEXT_API_VERSION=1. expected.py explicitly lists all 31
+Cargo.toml; API_VERSION=4, TEXT_API_VERSION=1. expected.py explicitly lists all 33
 entrypoints, including fourteen hardened domain bindings. Old 17-entry runtime inventories
 are rejected, not silently upgraded. After installing the newly built full-feature wheel,
 run `python tests/rust_consumer_contract/capture_runtime.py --source-commit COMMIT

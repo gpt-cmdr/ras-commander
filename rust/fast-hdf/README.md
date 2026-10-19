@@ -268,3 +268,30 @@ Main captures a fresh full-feature runtime inventory and receipt. Prior API2/26-
 inventories are historical and must fail the current exact ABI gate. Requalify installed
 full-feature wheels with all consumer, bridge and unchanged audit-compat suites; GNU
 local import is supplementary. No wheel publication is implied.
+
+## W5 bridge contract (API_VERSION = 4)
+The single Cargo dependency pin is engine 3895026ba9b0e25d2a80f41d0d67286021ad73e4.
+TEXT_API_VERSION remains 1. Full-feature ABI explicitly lists 33 entrypoints.
+Existing public call signatures and exception classes remain unchanged; the Python
+adapter requires API 4. Historical API 3 migration notes above remain applicable.
+
+structure_inventory(path, family, max_bytes=16777216)
+read_structure_series(path, family, structure, relative, rows, columns,
+                      max_bytes=67108864, threads=1, parallel=True)
+
+Family keys: sa2d_area_connection, lateral_structure, storage_area. Rows/columns
+are (start, stop, stride). structure=None selects only storage-area family series.
+Inventory returns source group, time_rows, identities, Node Pointer evidence,
+series shape/kind/capability, exact label bytes and units, static dataset paths,
+and label diagnostics. Successful inventory status certifies the engine's layout
+validation; it does not certify every column-label table. Per-series columns and
+inventory diagnostics retain unsupported/corrupt label evidence. No identity,
+unit or absent series is invented. Reads retain F32/F64 dtype/shape/bit values,
+engine path validation, explicit byte budgets and standard error mapping.
+
+plan_capabilities adds structures (per-family capability/datasets/diagnostics),
+and maps boundary_conditions/calibration_regions explicitly alongside reference
+lines/points. These statuses certify stored evidence, never solver success.
+Frozen structure fixtures and generators are copied byte-for-byte from the pinned
+engine's tests/fixtures/structures; its manifest is the hash oracle. No real
+fixture is copied into this checkout. Main owns MSVC/real-file qualification.
