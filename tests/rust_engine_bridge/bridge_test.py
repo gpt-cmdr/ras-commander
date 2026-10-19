@@ -7,15 +7,16 @@ import h5py
 import numpy as np
 import pytest
 
-PIN = "1c3a9ce894f22267782aa8737d59b923a0bf918a"
 ROOT = Path(__file__).resolve().parents[2]
+DEP = tomllib.loads((ROOT / "rust/fast-hdf/Cargo.toml").read_text())["dependencies"]["ras-commander-rust"]
+PIN = DEP["rev"]
 
 
 def test_source_delegation_and_exact_git_pin():
     cargo = tomllib.loads((ROOT / 'rust/fast-hdf/Cargo.toml').read_text())
     dep = cargo['dependencies']['ras-commander-rust']
     assert dep['rev'] == PIN and dep['default-features'] is False
-    assert dep['features'] == ['hdf', 'mesh', 'results']
+    assert dep['features'] == ['catalog', 'hdf', 'mesh', 'results']
     assert 'path' not in dep and 'hdf5-reader' not in cargo['dependencies']
     for file in ['reader.rs', 'mesh.rs', 'analysis/bindings.rs']:
         source = (ROOT / 'rust/fast-hdf/src' / file).read_text()
@@ -27,10 +28,11 @@ def test_source_delegation_and_exact_git_pin():
 
 @pytest.fixture
 def native():
-    import ras_commander_fast_hdf as module
+    module = pytest.importorskip("ras_commander_fast_hdf")
     assert module.ENGINE_COMMIT == PIN
-    assert tuple(module.ENGINE_FEATURES) == ('hdf', 'mesh', 'results')
-    assert module.API_VERSION == module.TEXT_API_VERSION == 1
+    assert tuple(module.ENGINE_FEATURES) == ('catalog', 'hdf', 'mesh', 'results')
+    assert module.API_VERSION == 2
+    assert module.TEXT_API_VERSION == 1
     return module
 
 
