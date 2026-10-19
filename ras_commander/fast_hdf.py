@@ -9,7 +9,10 @@ mode. Native exceptions are never converted to successful empty results.
 
 from __future__ import annotations
 
-from contextlib import nullcontext
+from contextlib import nullcontext, contextmanager
+from collections import OrderedDict
+from threading import RLock
+import atexit
 import importlib
 import inspect
 import operator
@@ -27,7 +30,7 @@ from .LoggingConfig import get_logger
 logger = get_logger(__name__)
 
 __all__ = [
-    "FastHdfError", "available", "read_dataset", "read_datasets",
+    "FastHdfError", "available", "close_sessions", "read_dataset", "read_datasets",
     "packed_meshes", "mesh_polygons", "export_pmtiles", "export_mesh_pmtiles",
 ]
 
@@ -71,9 +74,9 @@ def _native(mode):
         if mode == "rust":
             raise FastHdfError("The optional ras-commander-fast-hdf extension is unavailable") from exc
         return None
-    if getattr(module, "API_VERSION", None) != 6:
+    if getattr(module, "API_VERSION", None) != 7:
         if mode == "rust":
-            raise FastHdfError("Incompatible ras-commander-fast-hdf API; version 6 is required")
+            raise FastHdfError("Incompatible ras-commander-fast-hdf API; version 7 is required")
         logger.warning("Ignoring incompatible ras-commander-fast-hdf extension")
         return None
     return module
@@ -83,6 +86,58 @@ def _native(mode):
 def available() -> bool:
     """Whether a compatible extension can be imported, independently of policy."""
     return _native("auto") is not None
+
+
+# At most four mapped files. The lock also keeps eviction/close from racing a
+# cached read; native sessions independently serialize close against reads.
+_sessions = OrderedDict()
+_sessions_lock = RLock()
+_SESSION_LIMIT = 4
+
+
+@log_call
+def close_sessions(path=None):
+    """Release cached native file mappings before replacing HDFs or running RAS.
+
+    Omit path to close all cached files. Explicit HdfSession objects are owned
+    by their caller and must be closed separately.
+    """
+    resolved = None if path is None else str(Path(path).resolve())
+    with _sessions_lock:
+        for key in list(_sessions):
+            if resolved is None or key[0] == resolved:
+                session, _ = _sessions.pop(key)
+                session.close()
+
+
+@contextmanager
+def _session(module, path, threads=None):
+    path = Path(path).resolve()
+    enabled = os.environ.get("RAS_COMMANDER_HDF_SESSION_CACHE", "1").strip().lower() not in {"0", "false", "off"}
+    if not enabled:
+        close_sessions(path)
+        with module.HdfSession(path, threads=threads) as session:
+            yield session
+        return
+    with _sessions_lock:
+        try:
+            stat = path.stat()
+        except OSError:
+            close_sessions(path)
+            raise
+        key = (str(path), stat.st_size, stat.st_mtime_ns)
+        for old in list(_sessions):
+            if old[0] == str(path) and (old != key or _sessions[old][1] != threads):
+                _sessions.pop(old)[0].close()
+        if key not in _sessions:
+            while len(_sessions) >= _SESSION_LIMIT:
+                _sessions.popitem(last=False)[1][0].close()
+            _sessions[key] = (module.HdfSession(path, threads=threads), threads)
+        _sessions.move_to_end(key)
+        yield _sessions[key][0]
+
+
+atexit.register(close_sessions)
 
 
 def _unsupported(module, exc):
@@ -183,10 +238,10 @@ def read_dataset(dataset: h5py.Dataset, selection=None, *, backend="auto", threa
         return dataset[key]
     expected = dataset.shape if slices is None else tuple(len(range(*item)) for item in slices)
     try:
-        values = _read_fim_result(module, dataset, slices, threads)
-        if values is None:
-            values = module.read_numeric(os.fsdecode(dataset.file.filename), dataset.name,
-                                         selection=slices, threads=threads)
+        with _session(module, os.fsdecode(dataset.file.filename), threads) as session:
+            values = _read_fim_result(session, dataset, slices, threads)
+            if values is None:
+                values = session.read_numeric(dataset.name, selection=slices)
     except Exception as exc:
         if mode == "auto" and _unsupported(module, exc):
             logger.debug("h5py fallback for %s: %s", dataset.name, exc)
@@ -217,15 +272,15 @@ def _read_fim_result(module, dataset, slices, threads):
         return None
     path = os.fsdecode(dataset.file.filename)
     if block == "Summary Output" and len(parts) == 9 and slices is None:
-        return module.read_mesh_summary(path, area, parts[8])["values"]
+        return module.read_mesh_summary(area, parts[8])["values"]
     if block != "Unsteady Time Series" or len(dataset.shape) != 2:
         return None
     rows, columns = slices or [(0, n, 1) for n in dataset.shape]
-    elements = None if columns == (0, dataset.shape[1], 1) else list(range(*columns))
+    elements = None if columns == (0, dataset.shape[1], 1) else np.arange(*columns, dtype=np.uint64)
     if len(parts) == 9:
-        return module.read_mesh_series(path, area, parts[8], rows, elements)["values"]
+        return module.read_mesh_series(area, parts[8], rows, elements)["values"]
     if parts[8] == "Boundary Conditions":
-        return module.read_mesh_boundary_series(path, area, parts[9], rows, elements)["values"]
+        return module.read_mesh_boundary_series(area, parts[9], rows, elements)["values"]
     return None
 
 
@@ -252,7 +307,8 @@ def read_datasets(hdf_path, dataset_paths: Sequence[str], *, backend="auto", thr
         native_values = {}
         if eligible:
             try:
-                native_values = module.read_numeric_batch(os.fsdecode(hdf.filename), eligible, threads=threads)
+                with _session(module, os.fsdecode(hdf.filename), threads) as session:
+                    native_values = session.read_numeric_batch(eligible)
             except Exception as exc:
                 if mode != "auto" or not _unsupported(module, exc):
                     raise FastHdfError(f"Native batch read failed for {hdf.filename}: {exc}") from exc
