@@ -1,5 +1,6 @@
 mod analysis;
 mod domain;
+mod fim;
 pub mod fluvial;
 mod fluvial_bindings;
 pub mod fluvial_geometry;
@@ -14,7 +15,7 @@ mod tiles;
 
 pub(crate) static REGISTERED_BINDINGS: OnceLock<Vec<String>> = OnceLock::new();
 
-pub(crate) const API_VERSION: u32 = 5;
+pub(crate) const API_VERSION: u32 = 6;
 
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
@@ -150,6 +151,7 @@ fn ras_commander_fast_hdf(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add("API_VERSION", API_VERSION)?;
     m.add("CorruptDataError", m.py().get_type::<CorruptDataError>())?;
     domain::register(m)?;
+    fim::register(m)?;
     structures::register(m)?;
     #[cfg(feature = "exports-arrow")]
     {
