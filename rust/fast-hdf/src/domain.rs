@@ -131,7 +131,7 @@ fn mode(m: PlanResultMode) -> &'static str {
 #[pyfunction]
 fn capabilities(py: Python<'_>) -> PyResult<Bound<'_, PyDict>> {
     Ok(
-        dict!(py,"api_version"=>crate::API_VERSION,"engine_commit"=>env!("RAS_ENGINE_COMMIT"),"engine_features"=>env!("RAS_ENGINE_FEATURES").split(',').collect::<Vec<_>>(),"bindings"=>["numeric_capability","read_numeric","read_numeric_batch","temporal_reduce","assemble_cells","raw_crs_evidence","typed_group_attributes","mesh_inventory","cross_sections","plan_result_mode","steady_profile_names","read_cross_section_result","plan_capabilities","unsteady_time_axis","unsteady_row_times","result_units","dataset_unit_evidence","mesh_name_diagnostics","structure_inventory","read_structure_series"]),
+        dict!(py,"api_version"=>crate::API_VERSION,"engine_commit"=>env!("RAS_ENGINE_COMMIT"),"engine_features"=>env!("RAS_ENGINE_FEATURES").split(',').collect::<Vec<_>>(),"bindings"=>crate::REGISTERED_BINDINGS.get().ok_or_else(||pyo3::exceptions::PyRuntimeError::new_err("module registration incomplete"))?),
     )
 }
 #[pyfunction]
@@ -174,7 +174,7 @@ fn result_availability<'py>(
     py: Python<'py>,
     r: &ras_commander_rust::schema::ResultAvailability,
 ) -> PyResult<Bound<'py, PyDict>> {
-    let vars=r.variables.iter().map(|v|Ok(dict!(py,"dataset"=>&v.dataset,"shape"=>&v.shape,"capability"=>capability(py,&v.capability)?))).collect::<PyResult<Vec<_>>>()?;
+    let vars=r.variables.iter().map(|v|Ok(dict!(py,"dataset"=>&v.dataset,"dataset_path"=>&v.dataset,"shape"=>&v.shape,"capability"=>capability(py,&v.capability)?))).collect::<PyResult<Vec<_>>>()?;
     Ok(dict!(py,"capability"=>capability(py,&r.capability)?,"variables"=>vars))
 }
 #[pyfunction]
@@ -237,7 +237,9 @@ fn cross_sections(py: Python<'_>, path: PathBuf, max_bytes: usize) -> PyResult<B
             Ok(d)
         })
         .collect::<PyResult<Vec<_>>>()?;
-    Ok(dict!(py,"source"=>g.source,"dataset"=>g.dataset,"sections"=>sections))
+    Ok(
+        dict!(py,"source"=>g.source,"dataset_path"=>&g.dataset,"dataset"=>g.dataset,"sections"=>sections),
+    )
 }
 #[pyfunction]
 #[pyo3(signature=(path,kind,variable,rows,sections,max_bytes=67108864,threads=None,parallel=true))]
@@ -290,7 +292,7 @@ fn plan_capabilities(py: Python<'_>, path: PathBuf) -> PyResult<Bound<'_, PyDict
         let family=match f.family {ResultFamily::Mesh2D=>"mesh_2d",ResultFamily::CrossSectionsUnsteady=>"cross_sections_unsteady",ResultFamily::SteadyProfiles=>"steady_profiles",ResultFamily::Structures=>"structures",ResultFamily::Pipes=>"pipes",ResultFamily::ReferenceLines=>"reference_lines",ResultFamily::ReferencePoints=>"reference_points",ResultFamily::BoundaryConditions=>"boundary_conditions",ResultFamily::CalibrationRegions=>"calibration_regions",_=>"unknown"};
         Ok(dict!(py,"family"=>family,"capability"=>capability(py,&f.status)?,"datasets"=>&f.datasets))
     }).collect::<PyResult<Vec<_>>>()?;
-    let structures=c.structures.iter().map(|s| Ok(dict!(py,"family"=>crate::structures::family_name(s.kind),"capability"=>capability(py,&s.status)?,"datasets"=>&s.datasets,"diagnostics"=>&s.diagnostics))).collect::<PyResult<Vec<_>>>()?;
+    let structures=c.structures.iter().map(|s| Ok(dict!(py,"family"=>crate::structures::family_name(s.kind),"capability"=>capability(py,&s.status)?,"datasets"=>&s.datasets,"diagnostics"=>s.diagnostics.iter().map(|m|diagnostic(py,None,Some(m),None)).collect::<PyResult<Vec<_>>>()?))).collect::<PyResult<Vec<_>>>()?;
     Ok(dict!(py,"mode"=>mode(c.mode),"families"=>families,"structures"=>structures))
 }
 
@@ -307,7 +309,7 @@ fn axis_capability(a: &ras_commander_rust::hdf::time::TimeAxis) -> Capability {
     }
 }
 #[pyfunction]
-#[pyo3(signature=(path,max_bytes=16777216))]
+#[pyo3(signature=(path,max_bytes=67108864))]
 fn unsteady_time_axis(
     py: Python<'_>,
     path: PathBuf,
@@ -335,7 +337,7 @@ fn unsteady_time_axis(
     )
 }
 #[pyfunction]
-#[pyo3(signature=(path,rows,max_bytes=16777216))]
+#[pyo3(signature=(path,rows,max_bytes=67108864))]
 fn unsteady_row_times(
     py: Python<'_>,
     path: PathBuf,
@@ -444,7 +446,7 @@ fn result_units(py: Python<'_>, path: PathBuf) -> PyResult<Bound<'_, PyDict>> {
     let u = py
         .detach(|| ReadOnlyHdfSession::open(path)?.result_units())
         .map_err(crate::reader::err)?;
-    let variables=u.variables.iter().map(|v|Ok(dict!(py,"family"=>match v.family {F::Mesh2D=>"mesh_2d",F::CrossSectionUnsteady=>"cross_section_unsteady",F::CrossSectionSteady=>"cross_section_steady",_=>"unknown"},"area"=>&v.area,"variable"=>&v.variable,"dataset"=>&v.dataset,"units"=>dataset_units(py,&v.units,&v.source,&v.quantity_name)?))).collect::<PyResult<Vec<_>>>()?;
+    let variables=u.variables.iter().map(|v|Ok(dict!(py,"family"=>match v.family {F::Mesh2D=>"mesh_2d",F::CrossSectionUnsteady=>"cross_section_unsteady",F::CrossSectionSteady=>"cross_section_steady",_=>"unknown"},"area"=>&v.area,"variable"=>&v.variable,"dataset"=>&v.dataset,"dataset_path"=>&v.dataset,"units"=>dataset_units(py,&v.units,&v.source,&v.quantity_name)?))).collect::<PyResult<Vec<_>>>()?;
     let systems=u.unit_system.iter().map(|e|Ok(dict!(py,"source"=>&e.source,"source_attribute"=>"Units System","kind"=>e.kind.map(|k|match k {K::UsCustomary=>"us_customary",K::SiMetric=>"si_metric",K::Unrecognized=>"unrecognized",_=>"unknown"}),"value"=>unit_evidence(py,&e.value)?))).collect::<PyResult<Vec<_>>>()?;
     Ok(dict!(py,"variables"=>variables,"unit_system"=>systems))
 }
@@ -454,7 +456,7 @@ fn mesh_name_diagnostics(py: Python<'_>, path: PathBuf) -> PyResult<Vec<Bound<'_
     let d = py
         .detach(|| ReadOnlyHdfSession::open(path)?.mesh_name_diagnostics())
         .map_err(crate::reader::err)?;
-    d.iter().map(|v|Ok(dict!(py,"mesh_name"=>&v.mesh_name,"issue"=>match v.issue {I::MissingGroup=>"missing_group",I::ExtraGroup=>"extra_group",I::DuplicateAttributeName=>"duplicate_attribute_name",I::InvalidName=>"invalid_name",_=>"unknown"}))).collect()
+    d.iter().map(|v|Ok(dict!(py,"subject"=>Some(&v.mesh_name),"message"=>None::<String>,"capability"=>None::<String>,"mesh_name"=>&v.mesh_name,"issue"=>match v.issue {I::MissingGroup=>"missing_group",I::ExtraGroup=>"extra_group",I::DuplicateAttributeName=>"duplicate_attribute_name",I::InvalidName=>"invalid_name",_=>"unknown"}))).collect()
 }
 pub(crate) fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(unsteady_time_axis, m)?)?;
@@ -473,4 +475,16 @@ pub(crate) fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(read_cross_section_result, m)?)?;
     m.add_function(wrap_pyfunction!(plan_capabilities, m)?)?;
     Ok(())
+}
+
+/// Shared envelope; None means the engine did not provide that evidence.
+pub(crate) fn diagnostic<'py>(
+    py: Python<'py>,
+    subject: Option<&str>,
+    message: Option<&str>,
+    c: Option<&Capability>,
+) -> PyResult<Bound<'py, PyDict>> {
+    Ok(
+        dict!(py,"subject"=>subject,"message"=>message,"capability"=>c.map(|c|capability(py,c)).transpose()?),
+    )
 }

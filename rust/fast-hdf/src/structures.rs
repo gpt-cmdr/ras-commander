@@ -43,7 +43,7 @@ fn columns<'py>(py: Python<'py>, c: &C) -> PyResult<Bound<'py, PyDict>> {
         } => {
             d.set_item("status", "declared")?;
             d.set_item(
-                "source",
+                "source_attribute",
                 match source {
                     S::VariableUnit => "Variable_Unit",
                     S::Connections => "Connections",
@@ -82,15 +82,18 @@ fn columns<'py>(py: Python<'py>, c: &C) -> PyResult<Bound<'py, PyDict>> {
             d.set_item("status", "unknown")?;
         }
     };
+    if let Some(value) = d.get_item("source_attribute")? {
+        d.set_item("source", value)?;
+    }
     Ok(d)
 }
 fn series<'py>(py: Python<'py>, s: &StructureSeries) -> PyResult<Bound<'py, PyDict>> {
     Ok(
-        dict!(py,"path"=>&s.path,"relative"=>&s.relative,"shape"=>&s.shape,"kind"=>s.kind.map(|k|format!("{k:?}").to_lowercase()),"capability"=>crate::domain::capability(py,&s.capability)?,"columns"=>columns(py,&s.columns)?,"units"=>crate::domain::dataset_units(py,&s.units.units,&s.units.source,&s.units.quantity_name)?),
+        dict!(py,"path"=>&s.path,"dataset_path"=>&s.path,"relative"=>&s.relative,"shape"=>&s.shape,"kind"=>s.kind.map(crate::reader::numeric_kind_name),"dtype"=>s.kind.and_then(crate::reader::numpy),"capability"=>crate::domain::capability(py,&s.capability)?,"columns"=>columns(py,&s.columns)?,"units"=>crate::domain::dataset_units(py,&s.units.units,&s.units.source,&s.units.quantity_name)?),
     )
 }
 #[pyfunction]
-#[pyo3(signature=(path,family,max_bytes=16777216))]
+#[pyo3(signature=(path,family,max_bytes=67108864))]
 fn structure_inventory<'py>(
     py: Python<'py>,
     path: PathBuf,
@@ -118,14 +121,18 @@ fn structure_inventory<'py>(
             }
             _ => None,
         })
-        .map(|(s, c)| Ok(dict!(py,"path"=>&s.path,"capability"=>crate::domain::capability(py,c)?)))
+        .map(|(s, c)| {
+            let d = crate::domain::diagnostic(py, Some(&s.path), None, Some(c))?;
+            d.set_item("path", &s.path)?;
+            Ok(d)
+        })
         .collect::<PyResult<Vec<_>>>()?;
     Ok(
         dict!(py,"family"=>family_name(inv.kind),"group"=>inv.group,"time_rows"=>inv.time_rows,"capability"=>crate::domain::capability(py,&Capability::Supported)?,"structures"=>structures,"family_series"=>inv.family_series.iter().map(|s|series(py,s)).collect::<PyResult<Vec<_>>>()?,"diagnostics"=>diagnostics),
     )
 }
 #[pyfunction]
-#[pyo3(signature=(path,family,structure,relative,rows,columns,max_bytes=67108864,threads=1,parallel=true))]
+#[pyo3(signature=(path,family,structure,relative,rows,columns,max_bytes=67108864,threads=None,parallel=true))]
 #[allow(clippy::too_many_arguments)]
 fn read_structure_series<'py>(
     py: Python<'py>,
@@ -136,10 +143,11 @@ fn read_structure_series<'py>(
     rows: (u64, u64, u64),
     columns: (u64, u64, u64),
     max_bytes: usize,
-    threads: usize,
+    threads: Option<usize>,
     parallel: bool,
 ) -> PyResult<Bound<'py, pyo3::types::PyAny>> {
     let k = self::family(family)?;
+    let threads = crate::reader::threads(threads)?;
     let out = py
         .detach(|| {
             ReadOnlyHdfSession::with_options(path, threads, parallel)?.read_structure_series(

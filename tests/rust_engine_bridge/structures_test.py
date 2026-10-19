@@ -38,3 +38,29 @@ def test_structure_corruption_and_labels(native):
     inv=native.structure_inventory(ROOT/'label_count_mismatch.h5','lateral_structure')
     assert inv['diagnostics'] and inv['diagnostics'][0]['capability']['status']=='corrupt'
     with pytest.raises(ValueError):native.read_structure_series(ROOT/'good.h5','lateral_structure','R1 Reach1 100','../Flow',(0,4,1),(0,1,1))
+
+def test_api4_audit_contract(native):
+    import inspect
+    import runpy
+    EXPECTED=runpy.run_path(str(Path(__file__).parents[1]/'rust_consumer_contract/expected.py'))['EXPECTED']
+    names=set(native.capabilities()['bindings'])
+    assert names=={n for n,(_,gate,_) in EXPECTED.items() if gate is None or hasattr(native,n)}
+    for name in ['structure_inventory','read_structure_series','unsteady_time_axis','unsteady_row_times','cross_sections','read_cross_section_result']:
+        assert inspect.signature(getattr(native,name)).parameters['max_bytes'].default==64<<20
+    assert inspect.signature(native.read_structure_series).parameters['threads'].default is None
+    p=ROOT/'good.h5'
+    inv=native.structure_inventory(p,'lateral_structure')
+    s=inv['structures'][0]['series'][0]
+    assert s['dataset_path']==s['path'] and np.dtype(s['dtype']).kind=='f'
+    assert s['kind'] in ('f32','f64')
+    for d in inv['structures']:
+        for item in d['series']:
+            c=item['columns']
+            if c['status']=='declared':assert c['source']==c['source_attribute']
+    cap=native.numeric_capability(p,s['path']);assert cap['dataset_path']==cap['dataset']
+    for t in [0,1025]:
+        with pytest.raises(ValueError):native.read_structure_series(p,'lateral_structure',inv['structures'][0]['name'],s['relative'],(0,4,1),(0,s['shape'][1],1),threads=t)
+    for d in native.structure_inventory(ROOT/'label_count_mismatch.h5','lateral_structure')['diagnostics']:
+        assert {'subject','message','capability'}<=d.keys()
+    for family in native.plan_capabilities(ROOT/'label_count_mismatch.h5')['structures']:
+        for d in family['diagnostics']:assert {'subject','message','capability'}==d.keys()
