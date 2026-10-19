@@ -11,6 +11,8 @@ mod text_bindings;
 mod tile_engine;
 mod tiles;
 
+pub(crate) const API_VERSION: u32 = 2;
+
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
 use std::collections::HashMap;
@@ -142,7 +144,7 @@ fn ras_commander_fast_hdf(m: &Bound<'_, PyModule>) -> PyResult<()> {
             env!("RAS_ENGINE_FEATURES").split(',').collect::<Vec<_>>(),
         )?,
     )?;
-    m.add("API_VERSION", 2)?;
+    m.add("API_VERSION", API_VERSION)?;
     m.add("CorruptDataError", m.py().get_type::<CorruptDataError>())?;
     domain::register(m)?;
     #[cfg(feature = "exports-arrow")]

@@ -53,8 +53,12 @@ pub fn temporal_reduce<'py>(
         })
         .map_err(err)?;
     let engine_seconds = started.elapsed().as_secs_f64();
-    let elements = cap.shape[1];
-    let times = cap.shape[0];
+    let (Some(&times), Some(&elements)) = (cap.shape.first(), cap.shape.get(1)) else {
+        return Err(err(ras_commander_rust::Error::new(
+            ras_commander_rust::ErrorKind::Corrupt,
+            "reduction capability is missing time/element dimensions",
+        )));
+    };
     let n = elements;
     let item = output.stored_item_bytes;
     let row_bytes = elements.saturating_mul(item);
