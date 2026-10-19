@@ -22,6 +22,7 @@ import inspect
 import json
 import os
 import struct
+import tomllib
 from collections import Counter
 from pathlib import Path
 
@@ -364,3 +365,10 @@ def tile_payload(archive, zxy):
 
 
 __all__ = [n for n in dir() if not n.startswith("_") and n not in {"annotations"}]
+
+
+def engine_dependency():
+    """Exact pin comes from the activated source manifest, never a copied literal."""
+    root = env_path("RAS_CONSUMER_SOURCE_CHECKOUT") or Path(__file__).resolve().parents[2]
+    manifest = tomllib.loads((root / "rust/fast-hdf/Cargo.toml").read_text(encoding="utf-8"))
+    return manifest["dependencies"]["ras-commander-rust"]

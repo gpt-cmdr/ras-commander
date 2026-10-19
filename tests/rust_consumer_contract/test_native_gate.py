@@ -17,7 +17,8 @@ from pathlib import Path
 
 import pytest
 
-from .contract import env_path, native_binary, native_package, sha256
+from .expected import EXPECTED
+from .contract import engine_dependency, env_path, native_binary, native_package, sha256
 
 pytestmark = pytest.mark.usefixtures("receipt")
 
@@ -49,8 +50,7 @@ def test_receipt_pins_are_the_activated_build(receipt):
     assert receipt["accepted"] is True
     if "native_engine_commit" in receipt:
         # Explicit new-wave activation; scientific oracles remain unchanged.
-        assert receipt["native_engine_commit"] == "1c3a9ce894f22267782aa8737d59b923a0bf918a"
-        assert receipt["source_parent"] == "d61c62a5a4c5458d58b83dfd99149b5e8318e5c5"
+        assert receipt["native_engine_commit"] == engine_dependency()["rev"]
         source = env_path("RAS_CONSUMER_SOURCE_CHECKOUT")
         assert source is not None
         head = subprocess.check_output(["git", "-C", str(source), "rev-parse", "HEAD"], text=True).strip()
@@ -135,7 +135,7 @@ def test_runtime_abi_matches_accepted_inventory(receipt):
     assert inventory["source_commit"] == receipt["accepted_source_commit"]
     assert inventory["native_binary_sha256"] == receipt["native_binary_sha256"]
     pkg = native_package()
-    assert pkg.API_VERSION == inventory["api_version"] == 1
+    assert pkg.API_VERSION == inventory["api_version"] == pkg.capabilities()["api_version"] == 2
     assert pkg.TEXT_API_VERSION == inventory["text_api_version"] == 1
     runtime = {}
     for name in dir(pkg):
@@ -151,7 +151,8 @@ def test_runtime_abi_matches_accepted_inventory(receipt):
                                 for m in inventory["entrypoints"].get(name, {}).get("methods", {})}
         runtime[name] = entry
     assert sorted(runtime) == sorted(inventory["entrypoints"])
-    assert len(runtime) == 17
+    assert set(runtime) == set(EXPECTED)
+    assert len(runtime) == 26
     for name, entry in inventory["entrypoints"].items():
         assert runtime[name]["signature"] == entry["signature"], name
         assert runtime[name]["kind"] == entry["kind"], name
