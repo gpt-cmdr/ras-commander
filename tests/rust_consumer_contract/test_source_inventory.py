@@ -1,4 +1,4 @@
-"""Static consumer-contract guard for the accepted combined source (3be708ad).
+"""Static consumer-contract guard for the hardened engine-backed source.
 
 Reads source only. Source registrations (including ``register(m)``
 delegation and ``add_class``) are reconciled against the accepted runtime ABI
@@ -14,26 +14,8 @@ import pytest
 from .contract import load_receipt
 from .inventory import build
 
-EXPECTED = {
-    # name: (kind, feature gate, registering file)
-    "read_numeric": ("function", None, "src/lib.rs"),
-    "read_numeric_batch": ("function", None, "src/lib.rs"),
-    "numeric_capability": ("function", None, "src/lib.rs"),
-    "assemble_cells": ("function", None, "src/lib.rs"),
-    "temporal_reduce": ("function", None, "src/lib.rs"),
-    "write_pmtiles": ("function", None, "src/lib.rs"),
-    "export_ipc_file": ("function", "exports-arrow", "src/lib.rs"),
-    "validate_export_wkb": ("function", "exports-arrow", "src/lib.rs"),
-    "export_pmtiles_ipc_file": ("function", "exports-pmtiles", "src/lib.rs"),
-    "NativeAnalysis": ("class", None, "src/fluvial_bindings.rs"),
-    "assemble_rings": ("function", None, "src/fluvial_bindings.rs"),
-    "face_graph": ("function", None, "src/fluvial_bindings.rs"),
-    "validate_geometry": ("function", None, "src/fluvial_bindings.rs"),
-    "text_index": ("function", None, "src/text_bindings.rs"),
-    "text_apply_edits": ("function", None, "src/text_bindings.rs"),
-    "text_geometry_index": ("function", None, "src/text_bindings.rs"),
-    "text_geometry_edit": ("function", None, "src/text_bindings.rs"),
-}
+from .expected import EXPECTED
+from .contract import engine_dependency
 
 
 @pytest.fixture(scope="module")
@@ -59,11 +41,12 @@ def test_registrations_kinds_gates_and_delegation(inventory):
     found = {e["name"]: (e["kind"], e["feature"], e["registered_in"])
              for e in inventory["python_entry_points"]}
     assert found == EXPECTED
-    assert len(inventory["python_entry_points"]) == 17  # no duplicates
+    assert len(inventory["python_entry_points"]) == 26 == len(EXPECTED)  # explicit full-feature set, no duplicates
 
 
 def test_module_constants(inventory):
     for name in ("API_VERSION", "TEXT_API_VERSION", "UnsupportedError", "TopologyError",
+                 "CorruptDataError", "ENGINE_COMMIT", "ENGINE_FEATURES",
                  "TextEditError", "TextNotFoundError", "TextParseError"):
         assert name in inventory["module_constants"]
 
@@ -93,7 +76,7 @@ def test_source_matches_accepted_runtime_abi(inventory):
 def test_dependency_pins_and_features(inventory):
     deps = inventory["crate"]["git_dependencies"]
     if "ras-commander-rust" in deps:
-        assert deps["ras-commander-rust"]["rev"] == "1c3a9ce894f22267782aa8737d59b923a0bf918a"
+        assert deps["ras-commander-rust"] == {k: engine_dependency()[k] for k in ("git", "rev")}
         assert "hdf5-reader" not in deps  # engine owns its generic reader pin
     else:
         assert deps["hdf5-reader"]["rev"] == "24ff6fcfcc79a35c30aa5d8cb3028ab4d9d00564"

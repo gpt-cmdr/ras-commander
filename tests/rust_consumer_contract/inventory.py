@@ -152,7 +152,7 @@ def build():
                   "features": _features(main_cargo), "git_dependencies": _git_deps(main_cargo)},
         "export_crate": {"name": "ras-export", "features": _features(export_cargo),
                          "git_dependencies": _git_deps(export_cargo)},
-        "module_constants": re.findall(r'm\.add\("(\w+)"', "\n".join(texts.values())),
+        "module_constants": re.findall(r'm\.add\(\s*"(\w+)"', "\n".join(texts.values())),
         "python_entry_points": registrations,
         "modules": modules,
         "pure_rust_public_api": pure,
