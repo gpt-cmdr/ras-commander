@@ -202,8 +202,13 @@ def _python_reduce(dataset, offset, threshold, max_block_bytes):
             exceed += hit.sum(axis=0, dtype=np.uint64)
             new = hit.any(axis=0) & (first < 0)
             first[new] = start + hit.argmax(axis=0)[new]
-    chunk = dataset.chunks
-    cache_bytes = dataset.file.id.get_access_plist().get_cache()[2]
+    # Array-like dataset wrappers need only shape/dtype/indexing. Optional HDF
+    # reporting must not narrow that existing fallback contract.
+    chunk = getattr(dataset, "chunks", None)
+    try:
+        cache_bytes = dataset.file.id.get_access_plist().get_cache()[2]
+    except AttributeError:
+        cache_bytes = None
     return TemporalReduction(
         maximum, peak, count, exceed, first, times, "python",
         timings={"setup_seconds": float("nan"), "read_seconds": float("nan"),
