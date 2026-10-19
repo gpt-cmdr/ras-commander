@@ -1,5 +1,18 @@
-"""Explicit API5 full-feature native entrypoint contract (33); additions require review."""
+"""Explicit API6 full-feature native entrypoint contract (45); additions require review."""
 EXPECTED = {
+    "mesh_summary_inventory": ("function", None, "src/fim.rs"),
+    "mesh_series_inventory": ("function", None, "src/fim.rs"),
+    "mesh_boundary_inventory": ("function", None, "src/fim.rs"),
+    "read_mesh_summary": ("function", None, "src/fim.rs"),
+    "read_mesh_series": ("function", None, "src/fim.rs"),
+    "read_mesh_boundary_series": ("function", None, "src/fim.rs"),
+    "reduce_mesh_series": ("function", None, "src/fim.rs"),
+    "read_mesh_geometry": ("function", None, "src/fim.rs"),
+    "run_summary": ("function", None, "src/fim.rs"),
+    "geometry_family": ("function", None, "src/fim.rs"),
+    "compare_mesh_identity": ("function", None, "src/fim.rs"),
+    "layer_inventory": ("function", None, "src/fim.rs"),
+
     "structure_inventory": ("function", None, "src/structures.rs"),
     "read_structure_series": ("function", None, "src/structures.rs"),
     # name: (kind, feature gate, registering file)

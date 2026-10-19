@@ -32,7 +32,10 @@ pub(crate) fn identity<'py>(
     Ok(dict!(py,"source"=>&id.source,"table"=>&id.table,"row"=>id.row))
 }
 const _: () = assert!(ras_commander_rust::hdf::DEFAULT_MAX_BYTES == 67108864);
-fn attribute_type<'py>(py: Python<'py>, t: &AttributeType) -> PyResult<Bound<'py, PyDict>> {
+pub(crate) fn attribute_type<'py>(
+    py: Python<'py>,
+    t: &AttributeType,
+) -> PyResult<Bound<'py, PyDict>> {
     let d = PyDict::new(py);
     match t {
         AttributeType::Int {
@@ -150,13 +153,36 @@ fn typed_group_attributes<'py>(
     let attrs = py
         .detach(|| ReadOnlyHdfSession::open(path)?.typed_group_attributes(group))
         .map_err(crate::reader::err)?;
-    attrs.into_iter().map(|a| {
-        let d=dict!(py,"name"=>a.name,"kind"=>"attribute","shape"=>a.shape,"attribute_type"=>attribute_type(py,&a.attribute_type)?,"datatype_label"=>a.datatype_label,"raw_bytes"=>PyBytes::new(py,&a.raw_bytes));
-        let c=a.value.capability();
-        match a.value {
-            MetadataValue::Signed(v)=>{d.set_item("value",v)?;},MetadataValue::Unsigned(v)=>{d.set_item("value",v)?;},MetadataValue::Float(v)=>{d.set_item("value",v)?;},MetadataValue::Strings(v)=>{d.set_item("value",v)?;},MetadataValue::Unsupported{..}|MetadataValue::Corrupt{..}=>{d.set_item("value",py.None())?;},_=>{d.set_item("value",py.None())?;}
-        };d.set_item("capability",capability(py,&c)?)?;Ok(d)
-    }).collect()
+    attrs.iter().map(|a| typed_attribute_dict(py, a)).collect()
+}
+pub(crate) fn typed_attribute_dict<'py>(
+    py: Python<'py>,
+    a: &ras_commander_rust::hdf::metadata::TypedAttribute,
+) -> PyResult<Bound<'py, PyDict>> {
+    let d = dict!(py,"name"=>&a.name,"kind"=>"attribute","shape"=>&a.shape,"attribute_type"=>attribute_type(py,&a.attribute_type)?,"datatype_label"=>&a.datatype_label,"raw_bytes"=>PyBytes::new(py,&a.raw_bytes));
+    let c = a.value.capability();
+    match &a.value {
+        MetadataValue::Signed(v) => {
+            d.set_item("value", v)?;
+        }
+        MetadataValue::Unsigned(v) => {
+            d.set_item("value", v)?;
+        }
+        MetadataValue::Float(v) => {
+            d.set_item("value", v)?;
+        }
+        MetadataValue::Strings(v) => {
+            d.set_item("value", v)?;
+        }
+        MetadataValue::Unsupported { .. } | MetadataValue::Corrupt { .. } => {
+            d.set_item("value", py.None())?;
+        }
+        _ => {
+            d.set_item("value", py.None())?;
+        }
+    };
+    d.set_item("capability", capability(py, &c)?)?;
+    Ok(d)
 }
 fn result_availability<'py>(
     py: Python<'py>,

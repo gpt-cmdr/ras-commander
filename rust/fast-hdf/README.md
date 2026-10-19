@@ -366,3 +366,25 @@ Full-feature MSVC/runtime-capture and real fixture qualification remain Main-own
 Historical W3/W5 sections above describe introductions; this section supersedes
 any earlier wire-shape/default examples. No engine source, optimization, routing,
 public wrapper signatures or publication is changed by this re-pin.
+
+## FIM bridge additions (API_VERSION = 6)
+
+Engine pin: 131910a59f72d2884dc22ba150589bfbce490ff1. TEXT_API_VERSION
+remains 1. The full registration contract now lists 45 entrypoints.
+`src/fim.rs` adds mesh summary/series/BC inventories and reads, extrema with
+first stored indices, geometry arrays and packed families, exact identity
+comparison, layer inventory, and typed run-summary attributes. Numeric buffers
+move into NumPy with their stored dtype; no float widening occurs. Every bounded
+entrypoint defaults its byte budgets to engine DEFAULT_MAX_BYTES (67108864).
+Selections retain element order and duplicates. Capability and Identity dictionaries
+use the API5 shapes. Geometry compound tables include exact raw bytes and typed
+column metadata; Python scalar lists are decoded views, not float-bit oracles.
+
+`fast_hdf.read_dataset` dispatches bounded Base Output summary/series/BC reads
+to typed readers under the existing backend policy. Explicit thread controls and
+reads larger than the typed budget retain the generic native reader. Metadata,
+geometry construction, ghost filtering, timestamps and public exceptions remain
+in the existing Python adapters. h5py remains the automatic unsupported fallback.
+HEC-RAS 7.0 `Cell Hydraulic Depth` is passed through exactly; no `Depth` alias is
+introduced. The existing xarray name normalizer only lowercases and replaces
+punctuation/spaces (producing `cell_hydraulic_depth`).
