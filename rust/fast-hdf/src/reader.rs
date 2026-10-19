@@ -1,7 +1,7 @@
 //! Thin Python conversion layer over the pinned native engine.
-use crate::UnsupportedError;
+use crate::{CorruptDataError, TopologyError, UnsupportedError};
 use numpy::IntoPyArray;
-use pyo3::exceptions::{PyKeyError, PyOSError, PyValueError};
+use pyo3::exceptions::{PyFileNotFoundError, PyKeyError, PyOSError, PyRuntimeError, PyValueError};
 use pyo3::prelude::*;
 use pyo3::types::PyDict;
 use ras_commander_rust::hdf::{
@@ -10,13 +10,47 @@ use ras_commander_rust::hdf::{
 use ras_commander_rust::{Error, ErrorKind};
 const CAPABILITY_SCHEMA_VERSION: u32 = 1;
 pub(crate) fn err(e: Error) -> PyErr {
-    match e.kind {
-        ErrorKind::NotFound => PyKeyError::new_err(e.message),
-        ErrorKind::Io => PyOSError::new_err(e.message),
-        ErrorKind::Unsupported => UnsupportedError::new_err(e.message),
-        _ => PyValueError::new_err(e.message),
-    }
+    let message = e.to_string();
+    let exception = match e.kind {
+        ErrorKind::NotFound => PyKeyError::new_err(message),
+        ErrorKind::FileNotFound => PyFileNotFoundError::new_err((
+            2,
+            message,
+            e.path.as_ref().map(|p| p.to_string_lossy().into_owned()),
+        )),
+        ErrorKind::Io => PyOSError::new_err(message),
+        ErrorKind::Unsupported => UnsupportedError::new_err(message),
+        ErrorKind::InvalidRequest => PyValueError::new_err(message),
+        ErrorKind::Corrupt => CorruptDataError::new_err(message),
+        ErrorKind::StructuralTopology | ErrorKind::InvalidGeometry => {
+            TopologyError::new_err(message)
+        }
+        ErrorKind::Internal => PyRuntimeError::new_err(message),
+        _ => PyRuntimeError::new_err(message),
+    };
+    Python::attach(|py| {
+        let value = exception.value(py);
+        value.setattr("engine_kind", format!("{:?}", e.kind))?;
+        value.setattr("subject", e.subject)?;
+        value.setattr(
+            "source_path",
+            e.path.map(|p| p.to_string_lossy().into_owned()),
+        )?;
+        if matches!(
+            e.kind,
+            ErrorKind::StructuralTopology | ErrorKind::InvalidGeometry
+        ) {
+            value.setattr(
+                "mesh_structure_error",
+                e.kind == ErrorKind::StructuralTopology,
+            )?;
+        }
+        Ok::<_, PyErr>(())
+    })
+    .err()
+    .unwrap_or(exception)
 }
+
 pub(crate) fn threads(value: Option<usize>) -> PyResult<usize> {
     let count =
         value.unwrap_or_else(|| std::thread::available_parallelism().map_or(1, |n| n.get().min(8)));
@@ -25,7 +59,7 @@ pub(crate) fn threads(value: Option<usize>) -> PyResult<usize> {
     }
     Ok(count)
 }
-fn array<'py>(py: Python<'py>, output: NumericArray) -> PyResult<Bound<'py, PyAny>> {
+pub(crate) fn array<'py>(py: Python<'py>, output: NumericArray) -> PyResult<Bound<'py, PyAny>> {
     let shape = output
         .shape
         .into_iter()
@@ -49,6 +83,9 @@ fn array<'py>(py: Python<'py>, output: NumericArray) -> PyResult<Bound<'py, PyAn
         NumericValues::U64(v) => convert!(v),
         NumericValues::F32(v) => convert!(v),
         NumericValues::F64(v) => convert!(v),
+        _ => Err(crate::UnsupportedError::new_err(
+            "future numeric value type",
+        )),
     }
 }
 fn numpy(kind: Native) -> &'static str {
@@ -72,6 +109,7 @@ fn numpy(kind: Native) -> &'static str {
         (Native::U64, false) => ">u8",
         (Native::F32, false) => ">f4",
         (Native::F64, false) => ">f8",
+        _ => "unknown",
     }
 }
 
@@ -79,7 +117,7 @@ fn numpy(kind: Native) -> &'static str {
 #[pyo3(signature=(path,dataset_path,selection=None,threads=None,parallel=true))]
 pub fn read_numeric<'py>(
     py: Python<'py>,
-    path: &str,
+    path: std::path::PathBuf,
     dataset_path: &str,
     selection: Option<Vec<(u64, u64, u64)>>,
     threads: Option<usize>,
@@ -88,12 +126,12 @@ pub fn read_numeric<'py>(
     let threads = self::threads(threads)?;
     let selection = selection.map(|s| {
         s.into_iter()
-            .map(|(start, end, step)| Slice { start, end, step })
+            .map(|(start, end, step)| Slice::new(start, end, step))
             .collect::<Vec<_>>()
     });
     let output = py
         .detach(|| {
-            ReadOnlyHdfSession::with_options(path, threads, parallel)?
+            ReadOnlyHdfSession::with_options(&path, threads, parallel)?
                 .read_numeric(dataset_path, selection.as_deref())
         })
         .map_err(err)?;
@@ -103,7 +141,7 @@ pub fn read_numeric<'py>(
 #[pyo3(signature=(path,dataset_paths,threads=None,parallel=true))]
 pub fn read_numeric_batch<'py>(
     py: Python<'py>,
-    path: &str,
+    path: std::path::PathBuf,
     dataset_paths: Vec<String>,
     threads: Option<usize>,
     parallel: bool,
@@ -111,7 +149,7 @@ pub fn read_numeric_batch<'py>(
     let threads = self::threads(threads)?;
     let output = py
         .detach(|| {
-            let session = ReadOnlyHdfSession::with_options(path, threads, parallel)?;
+            let session = ReadOnlyHdfSession::with_options(&path, threads, parallel)?;
             let paths = dataset_paths.iter().map(String::as_str).collect::<Vec<_>>();
             session.read_numeric_batch(&paths)
         })
@@ -125,14 +163,18 @@ pub fn read_numeric_batch<'py>(
 #[pyfunction]
 pub fn numeric_capability<'py>(
     py: Python<'py>,
-    path: &str,
+    path: std::path::PathBuf,
     dataset_path: &str,
 ) -> PyResult<Bound<'py, PyDict>> {
     let cap = py
-        .detach(|| ReadOnlyHdfSession::open(path)?.numeric_capability(dataset_path))
+        .detach(|| ReadOnlyHdfSession::open(&path)?.numeric_capability(dataset_path))
         .map_err(err)?;
     let out = PyDict::new(py);
     out.set_item("schema_version", CAPABILITY_SCHEMA_VERSION)?;
+    out.set_item(
+        "capability",
+        crate::domain::capability(py, &cap.capability)?,
+    )?;
     out.set_item("dataset", dataset_path)?;
     out.set_item("shape", cap.shape)?;
     out.set_item("max_shape", cap.max_shape)?;
@@ -150,7 +192,7 @@ pub fn numeric_capability<'py>(
     )?;
     out.set_item("signed", signed)?;
     if let Some(enc) = cap.encoding {
-        let class = match enc.class {
+        let class = match enc.class.code() {
             0 => "integer",
             1 => "float",
             2 => "time",
@@ -172,13 +214,13 @@ pub fn numeric_capability<'py>(
         out.set_item("bit_precision", enc.bit_precision)?;
         if let Some(layout) = enc.float {
             let float = PyDict::new(py);
-            float.set_item("sign_location", (enc.flags >> 8) & 0xff)?;
+            float.set_item("sign_location", layout.sign_location)?;
             float.set_item("exponent_location", layout.exponent_location)?;
             float.set_item("exponent_size", layout.exponent_size)?;
             float.set_item("mantissa_location", layout.mantissa_location)?;
             float.set_item("mantissa_size", layout.mantissa_size)?;
             float.set_item("exponent_bias", layout.exponent_bias)?;
-            float.set_item("mantissa_normalization", (enc.flags >> 4) & 0x03)?;
+            float.set_item("mantissa_normalization", layout.normalization)?;
             float.set_item("vax_order", enc.flags & 0x40 != 0)?;
             out.set_item("float_layout", float)?;
         }
@@ -192,8 +234,77 @@ pub fn numeric_capability<'py>(
         None => {
             out.set_item("supported", false)?;
             out.set_item("numpy_dtype", py.None())?;
-            out.set_item("reason", cap.unsupported_reason)?;
+            out.set_item("reason", cap.capability.reason())?;
         }
     }
     Ok(out)
+}
+#[cfg(test)]
+mod error_mapping_tests {
+    use super::*;
+    #[test]
+    fn every_engine_error_kind_has_a_distinct_policy() {
+        pyo3::Python::initialize();
+        Python::attach(|py| {
+            for kind in [
+                ErrorKind::NotFound,
+                ErrorKind::FileNotFound,
+                ErrorKind::Io,
+                ErrorKind::Unsupported,
+                ErrorKind::InvalidRequest,
+                ErrorKind::Corrupt,
+                ErrorKind::StructuralTopology,
+                ErrorKind::InvalidGeometry,
+                ErrorKind::Internal,
+            ] {
+                let e = err(Error::new(kind, "test")
+                    .with_path("missing.h5")
+                    .with_subject("/values"));
+                let valid = match kind {
+                    ErrorKind::NotFound => e.is_instance_of::<PyKeyError>(py),
+                    ErrorKind::FileNotFound => e.is_instance_of::<PyFileNotFoundError>(py),
+                    ErrorKind::Io => e.is_instance_of::<PyOSError>(py),
+                    ErrorKind::Unsupported => e.is_instance_of::<UnsupportedError>(py),
+                    ErrorKind::InvalidRequest => e.is_instance_of::<PyValueError>(py),
+                    ErrorKind::Corrupt => e.is_instance_of::<CorruptDataError>(py),
+                    ErrorKind::StructuralTopology | ErrorKind::InvalidGeometry => {
+                        e.is_instance_of::<TopologyError>(py)
+                    }
+                    _ => e.is_instance_of::<PyRuntimeError>(py),
+                };
+                assert!(valid, "{kind:?}");
+                assert_eq!(
+                    e.value(py)
+                        .getattr("engine_kind")
+                        .unwrap()
+                        .extract::<String>()
+                        .unwrap(),
+                    format!("{kind:?}")
+                );
+                if kind == ErrorKind::FileNotFound {
+                    assert_eq!(
+                        e.value(py)
+                            .getattr("filename")
+                            .unwrap()
+                            .extract::<String>()
+                            .unwrap(),
+                        "missing.h5"
+                    );
+                }
+                if matches!(
+                    kind,
+                    ErrorKind::StructuralTopology | ErrorKind::InvalidGeometry
+                ) {
+                    assert_eq!(
+                        e.value(py)
+                            .getattr("mesh_structure_error")
+                            .unwrap()
+                            .extract::<bool>()
+                            .unwrap(),
+                        kind == ErrorKind::StructuralTopology
+                    );
+                }
+            }
+        });
+    }
 }
