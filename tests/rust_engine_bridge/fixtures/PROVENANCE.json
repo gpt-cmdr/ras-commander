@@ -1,0 +1,27 @@
+{
+  "license": "MIT",
+  "engine_revision": "62fb45d97245d2634f23334b7669e744702575b5",
+  "purpose": "bounded engine-owned supplemental fixtures; real models remain Main qualification",
+  "files": [
+    {
+      "file": "tolerant.h5",
+      "source": "C:\\Users\\jacob\\scratch\\ras-native-successor\\engine-api-harden\\crates\\ras-commander-rust\\tests\\fixtures\\attribute-isolation\\tolerant.h5",
+      "sha256": "2404f5cb8578ac5f7abbeeae42d0a0b722d52df339819fc1421864faffda1fe5"
+    },
+    {
+      "file": "corrupt-projection.h5",
+      "source": "C:\\Users\\jacob\\scratch\\ras-native-successor\\engine-api-harden\\crates\\ras-commander-rust\\tests\\fixtures\\attribute-isolation\\corrupt-projection.h5",
+      "sha256": "48cff7084c919a4cff477fc906eedab098a482a19578d9419b8920d476a2fdd1"
+    },
+    {
+      "file": "steady.h5",
+      "source": "H:\\CLB-Repos\\ras-commander\\working\\ras-native-engine-integration\\runs\\successor-wave2-20261018\\engine-1d-steady\\evidence\\synthetic\\steady.h5",
+      "sha256": "48fb9d53240e6f5752680a938d81fb8e6e55f35d0b4050e2ed23a334ce6e7eb1"
+    },
+    {
+      "file": "unsteady.h5",
+      "source": "H:\\CLB-Repos\\ras-commander\\working\\ras-native-engine-integration\\runs\\successor-wave2-20261018\\engine-1d-steady\\evidence\\synthetic\\unsteady.h5",
+      "sha256": "555c2eb2dae8a9dbd6b45acbbcdd8018d56a428f258ee6e7f1dc7f57cffcb64b"
+    }
+  ]
+}
