@@ -71,9 +71,9 @@ def _native(mode):
         if mode == "rust":
             raise FastHdfError("The optional ras-commander-fast-hdf extension is unavailable") from exc
         return None
-    if getattr(module, "API_VERSION", None) != 1:
+    if getattr(module, "API_VERSION", None) != 2:
         if mode == "rust":
-            raise FastHdfError("Incompatible ras-commander-fast-hdf API; version 1 is required")
+            raise FastHdfError("Incompatible ras-commander-fast-hdf API; version 2 is required")
         logger.warning("Ignoring incompatible ras-commander-fast-hdf extension")
         return None
     return module

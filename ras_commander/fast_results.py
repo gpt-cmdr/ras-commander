@@ -32,6 +32,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 import os
+from time import perf_counter
 from typing import Mapping, Optional, Sequence
 
 import h5py
@@ -107,7 +108,7 @@ def _check_shape(dataset):
 
 @log_call
 def native_temporal_reduce(dataset, offset=None, *, threshold=None, backend="auto",
-                           threads=None, max_block_bytes=_DEFAULT_BLOCK_BYTES):
+                           threads=None, max_block_bytes=_DEFAULT_BLOCK_BYTES, parallel=True):
     """Run the native reduction, or return ``None`` where policy permits Python.
 
     Returns ``None`` in Python mode, or in auto mode when the extension or this
@@ -137,7 +138,7 @@ def native_temporal_reduce(dataset, offset=None, *, threshold=None, backend="aut
     try:
         raw = module.temporal_reduce(
             os.fsdecode(dataset.file.filename), dataset.name, offset=offset,
-            threshold=threshold, max_block_bytes=int(max_block_bytes), threads=threads,
+            threshold=threshold, max_block_bytes=int(max_block_bytes), threads=threads, parallel=parallel,
         )
     except Exception as exc:
         if mode == "auto" and _unsupported(module, exc):
@@ -170,6 +171,7 @@ def native_temporal_reduce(dataset, offset=None, *, threshold=None, backend="aut
 
 
 def _python_reduce(dataset, offset, threshold, max_block_bytes):
+    started = perf_counter()
     times, elements = dataset.shape
     maximum = np.full(elements, np.nan, dtype=np.float32)
     peak = np.full(elements, -1, dtype=np.int64)
@@ -200,16 +202,28 @@ def _python_reduce(dataset, offset, threshold, max_block_bytes):
             exceed += hit.sum(axis=0, dtype=np.uint64)
             new = hit.any(axis=0) & (first < 0)
             first[new] = start + hit.argmax(axis=0)[new]
-    return TemporalReduction(maximum, peak, count, exceed, first, times, "python")
+    chunk = dataset.chunks
+    cache_bytes = dataset.file.id.get_access_plist().get_cache()[2]
+    return TemporalReduction(
+        maximum, peak, count, exceed, first, times, "python",
+        timings={"setup_seconds": float("nan"), "read_seconds": float("nan"),
+                 "reduce_seconds": float("nan"), "engine_seconds": perf_counter() - started},
+        read_plan={"block_rows": rows, "blocks": (times + rows - 1) // rows if elements else 0,
+                   "block_bytes": min(rows, times) * elements * dataset.dtype.itemsize,
+                   "max_block_bytes": max_block_bytes, "chunk_shape": list(chunk) if chunk else None,
+                   "storage_chunk_bytes": int(np.prod(chunk)) * dataset.dtype.itemsize if chunk else None,
+                   "chunk_cache_bytes": cache_bytes, "stored_dtype": dataset.dtype.name,
+                   "timing_scope": "python read+reduce combined; setup/split unavailable"},
+    )
 
 
 @log_call
 def temporal_reduce(dataset, offset=None, *, threshold=None, backend="auto", threads=None,
-                    max_block_bytes=_DEFAULT_BLOCK_BYTES) -> TemporalReduction:
+                    max_block_bytes=_DEFAULT_BLOCK_BYTES, parallel=True) -> TemporalReduction:
     """Reduce a ``(time, element)`` dataset with the module semantics."""
     _check_shape(dataset)
     result = native_temporal_reduce(dataset, offset, threshold=threshold, backend=backend,
-                                    threads=threads, max_block_bytes=max_block_bytes)
+                                    threads=threads, max_block_bytes=max_block_bytes, parallel=parallel)
     if result is not None:
         return result
     if max_block_bytes <= 0:
