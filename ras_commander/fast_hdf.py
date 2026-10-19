@@ -260,8 +260,8 @@ def _assemble(hdf, mesh_name, module, backend, threads, *, diagnostics=False, st
                 raise ValueError(f"Connectivity exceeds int64: {path}")
         args.append(np.ascontiguousarray(values, dtype=np.float64 if index in {0, 3} else np.int64))
     if diagnostics:
-        # API_VERSION 1 predates quarantine. Check the additive binding
-        # signature before requesting it: old wheels remain usable for packed
+        # Check the policy-capable binding
+        # signature before requesting it: compatible wheels remain usable for packed
         # extraction, but cannot claim this policy. Auto may use Python;
         # required native reports an explicit rebuild requirement.
         try:

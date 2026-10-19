@@ -12,6 +12,8 @@ mod text_bindings;
 mod tile_engine;
 mod tiles;
 
+pub(crate) static REGISTERED_BINDINGS: OnceLock<Vec<String>> = OnceLock::new();
+
 pub(crate) const API_VERSION: u32 = 4;
 
 use pyo3::exceptions::PyValueError;
@@ -167,6 +169,28 @@ fn ras_commander_fast_hdf(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(tiles::write_pmtiles, m)?)?;
     fluvial_bindings::register(m)?;
     text_bindings::register(m)?;
+    let mut names = Vec::new();
+    for (name, value) in m.dict().iter() {
+        let is_exception = if let Ok(t) = value.cast::<pyo3::types::PyType>() {
+            t.is_subclass_of::<pyo3::exceptions::PyBaseException>()?
+        } else {
+            false
+        };
+        if value.is_callable() && !is_exception {
+            names.push(name.extract::<String>()?);
+        }
+    }
+    names.sort();
+    if let Some(previous) = REGISTERED_BINDINGS.get() {
+        if previous != &names {
+            return Err(pyo3::exceptions::PyRuntimeError::new_err(
+                "module registrations changed",
+            ));
+        }
+    } else {
+        let _ = REGISTERED_BINDINGS.set(names);
+    }
+
     Ok(())
 }
 
