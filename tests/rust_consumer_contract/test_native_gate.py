@@ -135,7 +135,7 @@ def test_runtime_abi_matches_accepted_inventory(receipt):
     assert inventory["source_commit"] == receipt["accepted_source_commit"]
     assert inventory["native_binary_sha256"] == receipt["native_binary_sha256"]
     pkg = native_package()
-    assert pkg.API_VERSION == inventory["api_version"] == pkg.capabilities()["api_version"] == 3
+    assert pkg.API_VERSION == inventory["api_version"] == pkg.capabilities()["api_version"] == 4
     assert pkg.TEXT_API_VERSION == inventory["text_api_version"] == 1
     runtime = {}
     for name in dir(pkg):
@@ -152,7 +152,7 @@ def test_runtime_abi_matches_accepted_inventory(receipt):
         runtime[name] = entry
     assert sorted(runtime) == sorted(inventory["entrypoints"])
     assert set(runtime) == set(EXPECTED)
-    assert len(runtime) == 31
+    assert len(runtime) == 33
     for name, entry in inventory["entrypoints"].items():
         assert runtime[name]["signature"] == entry["signature"], name
         assert runtime[name]["kind"] == entry["kind"], name

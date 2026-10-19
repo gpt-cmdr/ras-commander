@@ -7,11 +7,12 @@ pub mod fluvial_topology;
 mod mesh;
 pub mod ras_text;
 mod reader;
+mod structures;
 mod text_bindings;
 mod tile_engine;
 mod tiles;
 
-pub(crate) const API_VERSION: u32 = 3;
+pub(crate) const API_VERSION: u32 = 4;
 
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
@@ -147,6 +148,7 @@ fn ras_commander_fast_hdf(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add("API_VERSION", API_VERSION)?;
     m.add("CorruptDataError", m.py().get_type::<CorruptDataError>())?;
     domain::register(m)?;
+    structures::register(m)?;
     #[cfg(feature = "exports-arrow")]
     {
         m.add_function(wrap_pyfunction!(export_ipc_file, m)?)?;
@@ -167,3 +169,4 @@ fn ras_commander_fast_hdf(m: &Bound<'_, PyModule>) -> PyResult<()> {
     text_bindings::register(m)?;
     Ok(())
 }
+

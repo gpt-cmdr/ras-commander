@@ -1,5 +1,7 @@
 """Explicit full-feature native entrypoint contract; additions require review."""
 EXPECTED = {
+    "structure_inventory": ("function", None, "src/structures.rs"),
+    "read_structure_series": ("function", None, "src/structures.rs"),
     # name: (kind, feature gate, registering file)
     "read_numeric": ("function", None, "src/lib.rs"),
     "read_numeric_batch": ("function", None, "src/lib.rs"),
