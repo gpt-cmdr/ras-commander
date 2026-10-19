@@ -30,7 +30,8 @@ pub(crate) fn err(e: Error) -> PyErr {
     };
     let _annotation_result = Python::attach(|py| {
         let value = exception.value(py);
-        value.setattr("engine_kind", error_kind_name(e.kind))?;
+        value.setattr("engine_kind", e.kind.as_str())?;
+        value.setattr("engine_code", e.code.map(|c| c.as_str()))?;
         value.setattr("subject", e.subject)?;
         value.setattr(
             "source_path",
@@ -247,7 +248,7 @@ pub fn numeric_capability<'py>(
                         py,
                         &ras_commander_rust::Capability::unsupported(
                             ras_commander_rust::UnsupportedCode::NotImplemented,
-                            reason.into(),
+                            reason,
                         ),
                     )?,
                 )?;
@@ -256,35 +257,8 @@ pub fn numeric_capability<'py>(
     }
     Ok(out)
 }
-// Preserve existing bridge wire spellings until engine-owned stable names arrive.
-fn error_kind_name(k: ErrorKind) -> &'static str {
-    match k {
-        ErrorKind::Io => "Io",
-        ErrorKind::FileNotFound => "FileNotFound",
-        ErrorKind::Internal => "Internal",
-        ErrorKind::NotFound => "NotFound",
-        ErrorKind::Unsupported => "Unsupported",
-        ErrorKind::Corrupt => "Corrupt",
-        ErrorKind::InvalidRequest => "InvalidRequest",
-        ErrorKind::StructuralTopology => "StructuralTopology",
-        ErrorKind::InvalidGeometry => "InvalidGeometry",
-        _ => "Unknown",
-    }
-}
 pub(crate) fn numeric_kind_name(k: Native) -> &'static str {
-    match k {
-        Native::I8 => "i8",
-        Native::I16 => "i16",
-        Native::I32 => "i32",
-        Native::I64 => "i64",
-        Native::U8 => "u8",
-        Native::U16 => "u16",
-        Native::U32 => "u32",
-        Native::U64 => "u64",
-        Native::F32 => "f32",
-        Native::F64 => "f64",
-        _ => "unknown",
-    }
+    k.as_str()
 }
 
 #[cfg(test)]
@@ -327,7 +301,7 @@ mod error_mapping_tests {
                         .unwrap()
                         .extract::<String>()
                         .unwrap(),
-                    format!("{kind:?}")
+                    kind.as_str()
                 );
                 if kind == ErrorKind::FileNotFound {
                     assert_eq!(

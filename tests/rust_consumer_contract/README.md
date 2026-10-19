@@ -36,7 +36,7 @@ equal output). Its docstring states the measurement limits.
 
 
 Hardened bridge activation: engine commit is read from the activated checkout's
-Cargo.toml; API_VERSION=4, TEXT_API_VERSION=1. expected.py explicitly lists all 33
+Cargo.toml; API_VERSION=5, TEXT_API_VERSION=1. expected.py explicitly lists all 33
 entrypoints, including fourteen hardened domain bindings. Old 17-entry runtime inventories
 are rejected, not silently upgraded. After installing the newly built full-feature wheel,
 run `python tests/rust_consumer_contract/capture_runtime.py --source-commit COMMIT
@@ -44,3 +44,7 @@ run `python tests/rust_consumer_contract/capture_runtime.py --source-commit COMM
 old receipts. The capture fails on any missing/extra entrypoint; retain exact signatures,
 source commit and loaded extension binary hash. Parent still supplies wheel hashes,
 noneditable/isolated import proof, full source tree and fixture evidence.
+
+H5: native/engine API5, TEXT1, 33 explicit full-feature entrypoints. Regenerate runtime
+inventory: optional metadata budgets and keyword-only XS metadata_max_bytes are new.
+Evidence/identity payloads follow engine Reported/Identity; exception classes remain.

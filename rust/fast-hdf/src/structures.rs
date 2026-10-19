@@ -1,89 +1,42 @@
 //! Typed structure conversion; all identity/layout decisions remain in the engine.
-use pyo3::{
-    exceptions::PyValueError,
-    prelude::*,
-    types::{PyBytes, PyDict},
-};
+use pyo3::{exceptions::PyValueError, prelude::*, types::PyDict};
 use ras_commander_rust::hdf::structures::{
-    ColumnLabelSource as S, ColumnLabels as C, NodePointer, StructureFamilyKind as K,
-    StructureSeries,
+    ColumnLabelSource as S, ColumnLabels as C, StructureFamilyKind as K, StructureSeries,
 };
 use ras_commander_rust::hdf::{ReadOnlyHdfSession, Slice};
 use ras_commander_rust::Capability;
 use std::path::PathBuf;
 macro_rules! dict { ($py:expr, $($k:expr => $v:expr),* $(,)?) => {{ let d=PyDict::new($py); $(d.set_item($k,$v)?;)* d }}; }
 pub(crate) fn family_name(k: K) -> &'static str {
-    match k {
-        K::Sa2dAreaConnection => "sa2d_area_connection",
-        K::LateralStructure => "lateral_structure",
-        K::StorageArea => "storage_area",
-        _ => "unknown",
-    }
+    k.as_str()
 }
 fn family(name: &str) -> PyResult<K> {
     match name {
-        "sa2d_area_connection" => Ok(K::Sa2dAreaConnection),
+        "sa2d_area_connection" | "sa_2d_area_connection" => Ok(K::Sa2dAreaConnection),
         "lateral_structure" => Ok(K::LateralStructure),
         "storage_area" => Ok(K::StorageArea),
         _ => Err(PyValueError::new_err(
-            "family must be sa2d_area_connection, lateral_structure, or storage_area",
+            "family must be sa_2d_area_connection, lateral_structure, or storage_area",
         )),
     }
 }
 fn columns<'py>(py: Python<'py>, c: &C) -> PyResult<Bound<'py, PyDict>> {
-    let d = PyDict::new(py);
-    match c {
-        C::Absent => {
-            d.set_item("status", "absent")?;
-        }
-        C::Declared {
-            source,
-            labels,
-            raw_bytes,
-        } => {
-            d.set_item("status", "declared")?;
-            d.set_item(
-                "source_attribute",
-                match source {
-                    S::VariableUnit => "Variable_Unit",
-                    S::Connections => "Connections",
-                    _ => "unknown",
-                },
-            )?;
-            d.set_item("raw_bytes", PyBytes::new(py, raw_bytes))?;
-            d.set_item(
-                "labels",
-                labels
-                    .iter()
-                    .map(|l| Ok(dict!(py,"name"=>&l.name,"unit"=>&l.unit)))
-                    .collect::<PyResult<Vec<_>>>()?,
-            )?;
-        }
-        C::Unsupported {
-            capability,
-            raw_bytes,
-        }
-        | C::Corrupt {
-            capability,
-            raw_bytes,
-        } => {
-            d.set_item(
-                "status",
-                if matches!(c, C::Corrupt { .. }) {
-                    "corrupt"
-                } else {
-                    "unsupported"
-                },
-            )?;
-            d.set_item("capability", crate::domain::capability(py, capability)?)?;
-            d.set_item("raw_bytes", PyBytes::new(py, raw_bytes))?;
-        }
-        _ => {
-            d.set_item("status", "unknown")?;
-        }
-    };
-    if let Some(value) = d.get_item("source_attribute")? {
-        d.set_item("source", value)?;
+    let d = crate::domain::evidence_dict(py, "column_labels", c.raw_bytes(), c.capability())?;
+    if let Some(v) = c.value() {
+        let source = match v.source {
+            S::VariableUnit => "Variable_Unit",
+            S::Connections => "Connections",
+            _ => "unknown",
+        };
+        let labels = v
+            .labels
+            .iter()
+            .map(|l| Ok(dict!(py,"name"=>&l.name,"unit"=>&l.unit)))
+            .collect::<PyResult<Vec<_>>>()?;
+        d.set_item(
+            "value",
+            dict!(py,"source_attribute"=>source,"labels"=>labels),
+        )?;
     }
     Ok(d)
 }
@@ -105,9 +58,9 @@ fn structure_inventory<'py>(
         .detach(|| ReadOnlyHdfSession::open(path)?.structure_inventory(k, max_bytes))
         .map_err(crate::reader::err)?;
     let structures=inv.structures.iter().map(|s| {
-        let pointer=match &s.node_pointer {NodePointer::Declared(v)=>dict!(py,"status"=>"declared","value"=>v),NodePointer::Absent=>dict!(py,"status"=>"absent"),NodePointer::Unsupported(c)=>dict!(py,"status"=>"unsupported","capability"=>crate::domain::capability(py,c)?),_=>dict!(py,"status"=>"unknown")};
+        let pointer=crate::domain::evidence_dict(py,"node_pointer",s.node_pointer.raw_bytes(),s.node_pointer.capability())?;pointer.set_item("value",s.node_pointer.value())?;
         let i=&s.identity;
-        Ok(dict!(py,"name"=>&s.name,"group"=>&s.group,"node_pointer"=>pointer,"identity"=>dict!(py,"row"=>i.row,"river"=>&i.river,"reach"=>&i.reach,"station"=>&i.station,"connection"=>&i.connection,"upstream"=>&i.upstream,"downstream"=>&i.downstream,"name"=>&i.name),"series"=>s.series.iter().map(|s|series(py,s)).collect::<PyResult<Vec<_>>>()?,"static_datasets"=>&s.static_datasets))
+        Ok(dict!(py,"name"=>&s.name,"group"=>&s.group,"node_pointer"=>pointer,"identity"=>dict!(py,"source"=>&i.id.source,"table"=>&i.id.table,"row"=>i.id.row,"river"=>&i.river,"reach"=>&i.reach,"station"=>&i.station,"connection"=>&i.connection,"upstream"=>&i.upstream,"downstream"=>&i.downstream,"name"=>&i.name),"series"=>s.series.iter().map(|s|series(py,s)).collect::<PyResult<Vec<_>>>()?,"static_datasets"=>&s.static_datasets))
     }).collect::<PyResult<Vec<_>>>()?;
     // Preserve series label evidence as diagnostics without changing the successful inventory status.
     let diagnostics = inv
@@ -115,11 +68,13 @@ fn structure_inventory<'py>(
         .iter()
         .flat_map(|s| s.series.iter())
         .chain(inv.family_series.iter())
-        .filter_map(|s| match &s.columns {
-            C::Unsupported { capability, .. } | C::Corrupt { capability, .. } => {
-                Some((s, capability))
+        .filter_map(|s| {
+            let c = s.columns.capability();
+            if c.is_supported() || s.columns.is_unavailable() {
+                None
+            } else {
+                Some((s, c))
             }
-            _ => None,
         })
         .map(|(s, c)| {
             let d = crate::domain::diagnostic(py, Some(&s.path), None, Some(c))?;

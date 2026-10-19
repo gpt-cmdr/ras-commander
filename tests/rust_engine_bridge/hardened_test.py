@@ -45,7 +45,7 @@ def test_log_call_does_not_format_arguments(caplog):
 
 def test_capability_exports(native):
     c = native.capabilities()
-    assert c['engine_commit'] == PIN and c['api_version'] == 4
+    assert c['engine_commit'] == PIN and c['api_version'] == 5
     assert c['engine_features'] == DEP['features']
     assert 'mesh_inventory' in c['bindings']
 
@@ -57,11 +57,11 @@ def test_typed_metadata_and_crs(native):
     assert attrs['Projection']['attribute_type']['kind'] == 'fixed_string'
     assert isinstance(attrs['Projection']['raw_bytes'], bytes)
     crs = native.raw_crs_evidence(FIXTURES/'tolerant.h5')
-    assert crs['status'] == 'unvalidated'
+    assert crs['kind'] == 'unvalidated'
     assert crs['evidence'][0]['exact_wkt'] == 'PROJCS["x"]'
-    assert crs['hydraulic_units_evidence'][0]['status'] == 'unsupported'
+    assert crs['hydraulic_units_evidence'][0]['capability']['status'] == 'unsupported'
     bad = native.raw_crs_evidence(FIXTURES/'corrupt-projection.h5')
-    assert bad['status'] == 'corrupt' and bad['evidence'][0]['raw_bytes']
+    assert bad['kind'] == 'corrupt' and bad['evidence'][0]['raw_bytes']
 
 
 @pytest.mark.parametrize('kind', ['steady','unsteady'])
@@ -145,7 +145,7 @@ def test_real_metadata(native):
     assert files, 'configured fixture root contains no HDF files'
     for path in files[:3]:
         assert isinstance(native.typed_group_attributes(path),list)
-        assert native.raw_crs_evidence(path)['status'] in {'unknown','unvalidated','invalid','conflict','unsupported','corrupt'}
+        assert native.raw_crs_evidence(path)['kind'] in {'unknown','unvalidated','invalid','conflict','unsupported','corrupt'}
 
 def test_vlen_projection_and_names_only_fail_closed(native,tmp_path):
     path=tmp_path/'vlen.h5'
@@ -153,7 +153,7 @@ def test_vlen_projection_and_names_only_fail_closed(native,tmp_path):
         f.attrs.create('Projection','PROJCS["x"]',dtype=h5py.string_dtype())
         f['Geometry/2D Flow Areas/Names']=np.array([b'A'])
     r=native.raw_crs_evidence(path)
-    assert r['status']=='unsupported'
+    assert r['kind']=='unsupported'
     assert r['evidence'][0]['raw_bytes']
     with pytest.raises((KeyError,native.UnsupportedError)):
         native.mesh_inventory(path)

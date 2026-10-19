@@ -71,9 +71,9 @@ def _native(mode):
         if mode == "rust":
             raise FastHdfError("The optional ras-commander-fast-hdf extension is unavailable") from exc
         return None
-    if getattr(module, "API_VERSION", None) != 4:
+    if getattr(module, "API_VERSION", None) != 5:
         if mode == "rust":
-            raise FastHdfError("Incompatible ras-commander-fast-hdf API; version 4 is required")
+            raise FastHdfError("Incompatible ras-commander-fast-hdf API; version 5 is required")
         logger.warning("Ignoring incompatible ras-commander-fast-hdf extension")
         return None
     return module
@@ -279,7 +279,7 @@ def _assemble(hdf, mesh_name, module, backend, threads, *, diagnostics=False, st
     result = {"coordinates": coordinates, "offsets": offsets, "cell_ids": cell_ids}
     if diagnostics:
         records = []
-        invalid = {int(cell): (code, reason) for cell, code, reason in invalid}
+        invalid = {int(d["cell_id"]): (d["kind"], d["message"]) for d in invalid}
         missing = np.ones(len(args[4]), dtype=bool)
         missing[cell_ids] = False
         for cell_id in np.flatnonzero(missing):

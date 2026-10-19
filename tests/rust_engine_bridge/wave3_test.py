@@ -55,15 +55,15 @@ def test_units_raw_provenance(native,name):
     with h5py.File(p) as f:
         for v in report['variables']:
             e=native.dataset_unit_evidence(p,v['dataset']);assert e==v['units']
-            assert e['status'] in {'declared','absent','unsupported','corrupt'}
-            if e['status']=='declared':
+            assert e['capability']['status'] in {'supported','unavailable','unsupported','corrupt'}
+            if e['capability']['status']=='supported':
                 raw=f[v['dataset']].attrs[e['source_attribute']]
                 assert e['raw_bytes']==np.asarray(raw).tobytes()
                 if e['source_attribute']=='Variable':raw=raw[1]
                 encoding=h5py.check_string_dtype(f[v['dataset']].attrs.get_id(e['source_attribute']).dtype).encoding
                 expected=raw.decode(encoding) if isinstance(raw,bytes) else str(raw)
-                assert e['text']==expected
-            else:assert e['text'] is None
+                assert e['value']==expected
+            else:assert e['value'] is None
     flow=native.dataset_unit_evidence(p,BASE+'/Cross Sections/Flow')
     assert flow['source_attribute'] in {'Units','Variable Units'}
 
