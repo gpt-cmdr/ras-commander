@@ -21,7 +21,7 @@ than placing build outputs on SMB. Windows needs Visual Studio C++ BuildTools.
 platform. `extension-module` is enabled by maturin, while plain `cargo test`
 links Python normally.
 
-## Internal contract (API_VERSION = 1)
+## Internal contract (API_VERSION = 2)
 
 The Python module is `ras_commander_fast_hdf`. Applications normally use the
 ras-commander adapter rather than importing these internal primitives.
@@ -31,7 +31,7 @@ read_numeric(path, dataset_path, selection=None, threads=None, parallel=True)
 read_numeric_batch(path, dataset_paths, threads=None, parallel=True)
 assemble_cells(face_points, face_endpoints, face_perimeter_info,
                face_perimeter_values, cell_face_info, cell_face_values,
-               threads=None)
+               threads=None, *, strict=True, return_diagnostics=False)
 write_pmtiles(layers, output, min_zoom, max_zoom, threads=None)
 ```
 
@@ -114,8 +114,11 @@ catch every exception indiscriminately or hide corrupt inputs.
 
 ## Dependency provenance
 
-* hdf5-reader: `gpt-cmdr/netcdf-rust`, revision
+* hdf5-reader/core are vendored inside the pinned ras-commander-rust engine,
+  based on upstream `gpt-cmdr/netcdf-rust` at
   `24ff6fcfcc79a35c30aa5d8cb3028ab4d9d00564`, MIT OR Apache-2.0.
+  Engine PROVENANCE/LOCAL_PATCHES records its reviewed local patches. The bridge
+  has no direct generic-reader dependency or private source copy.
 * freestiler-core: `walkerke/freestiler`, revision
   `beb64b0d4414da895ec67d02b2f91db6ab6acc37`, MIT AND ISC. Its crate is
   unpublished; Cargo resolves the pinned Git source.
@@ -131,3 +134,71 @@ Cargo.lock records exact transitive dependencies. Retain upstream license
 notices when distributing wheels. Consult the repository implementation plan
 and validation report for tested datasets, measured timings, and limitations;
 prior research timings are not measurements of this extension.
+
+
+## Hardened bridge bindings
+
+Cargo.toml is the sole engine pin source; Cargo.lock freezes resolution and build.rs
+exports ENGINE_COMMIT/ENGINE_FEATURES from the dependency declaration. API_VERSION is 2;
+TEXT_API_VERSION remains 1. capabilities() returns the engine pin, feature list and
+implemented binding names. File arguments accept str or os.PathLike via PathBuf.
+
+```python
+numeric_capability(path, dataset_path)
+temporal_reduce(path, dataset_path, offset=None, threshold=None,
+                max_block_bytes=16 << 20, threads=None, parallel=True)
+raw_crs_evidence(path)
+typed_group_attributes(path, group="/")
+mesh_inventory(path)
+cross_sections(path, max_bytes=67108864)
+plan_result_mode(path)
+steady_profile_names(path)
+read_cross_section_result(path, kind, variable, rows, sections,
+                          max_bytes=67108864, threads=None, parallel=True)
+plan_capabilities(path)
+```
+
+rows/sections are (start, exclusive_stop, positive_step). kind is steady/unsteady;
+variable is Water Surface/Flow. Read results are owned NumPy arrays preserving dtype.
+All other new reports use plain dict/list/bytes values. Attribute types and capability
+status/code/reason are explicit; raw bytes remain available for unsupported/corrupt
+attributes. Floating metadata preserves Python float NaN/infinity (not coerced to null).
+CRS statuses are raw lexical evidence: unvalidated never implies EPSG/authority.
+Hydraulic-unit evidence is separate. Cross-section identities and bank/name field
+availability retain engine semantics. Plan capabilities never certify solver success.
+
+mesh_inventory delegates the accepted bounded initial_2d_inventory. It reports
+physical/stored/ghost counts and per-variable capability, but only the qualified
+Unsteady Base Output layout. It does not claim deferred output-block/steady inventory
+or the future mesh-name cross-check. Names-only layouts fail closed.
+
+| Engine error | Native Python exception |
+|---|---|
+| NotFound (object) | KeyError |
+| FileNotFound | FileNotFoundError, filename and errno=2 |
+| Io | OSError |
+| Unsupported | UnsupportedError(ValueError) |
+| InvalidRequest | ValueError |
+| Corrupt | CorruptDataError(ValueError) |
+| StructuralTopology / InvalidGeometry | TopologyError(ValueError), mesh_structure_error True / False |
+| Internal / future kind | RuntimeError |
+
+These Python exception types are exported by the extension. Central mapping attaches
+engine_kind, subject and source_path; reader and mesh use the same mapper. Existing
+public fast_* adapter failure policy and FastHdfError wrapping are preserved. Batch
+read_numeric_batch returns a dict: repeated identical paths collapse to one key (the
+last returned value wins), not separate array entries.
+
+Python temporal fallback now supplies all timing/read-plan keys, with NaN for unavailable
+setup/splits and a timing_scope explaining the combined measurement. Native setup is
+measured; both engines expose engine_seconds. These NaNs are Python float values, not
+strict JSON. Serialize with an explicit missing-value policy. parallel is forwarded to
+native session and reduction; the Python fallback is serial. log_call logs function
+names only and never formats array arguments/results (covered by regression).
+
+Known bounded remainder: temporal reduction still queries numeric capability for the
+existing chunk_shape read-plan field, and the engine internally queries it again. The
+accepted engine TemporalReduction does not return chunk shape; dropping that query would
+change existing metadata. A future engine result-field addition is needed. No engine
+source is changed by this packet. GNU local import/tests are supplementary; authoritative
+MSVC abi3 wheel build and real 5/6/7/Davis qualification remain the fixture owner's gate.
