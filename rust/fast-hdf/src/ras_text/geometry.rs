@@ -603,14 +603,22 @@ impl GeometryIndex {
     }
 
     pub fn station_elevation(&self, node: usize) -> Option<Vec<(f64, f64)>> {
-        self.node_block(node, "#Sta/Elev")
-            .map(|b| b.values.chunks_exact(2).map(|c| (c[0], c[1])).collect())
+        self.node_block(node, "#Sta/Elev").map(|b| {
+            b.values
+                .as_chunks::<2>()
+                .0
+                .iter()
+                .map(|c| (c[0], c[1]))
+                .collect()
+        })
     }
 
     pub fn mannings_n(&self, node: usize) -> Option<Vec<(f64, f64, f64)>> {
         self.node_block(node, "#Mann").map(|b| {
             b.values
-                .chunks_exact(3)
+                .as_chunks::<3>()
+                .0
+                .iter()
                 .map(|c| (c[0], c[1], c[2]))
                 .collect()
         })
