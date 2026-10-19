@@ -30,7 +30,7 @@ CLASS = re.compile(r"add_class::<(\w+)>")
 DELEGATE = re.compile(r"\b(\w+)::register\(m\)")
 REGISTER_FN = re.compile(r"fn register\([^)]*\)[^{]*\{(.*?)\n\}", re.S)
 SIGNATURE = re.compile(r"#\[pyo3\(signature\s*=\s*\((.*?)\)\)\]", re.S)
-METHOD = re.compile(r"(?:#\[pyo3\(signature\s*=\s*\((.*?)\)\)\]\s*)?fn\s+(\w+)\(", re.S)
+METHOD = re.compile(r"(?:#\[pyo3\(signature\s*=\s*\((.*?)\)\)\]\s*)?fn\s+(\w+)(?:<[^>]*>)?\(", re.S)
 
 
 def _git(*args):
