@@ -39,6 +39,8 @@ def test_log_call_does_not_format_arguments(caplog):
     with caplog.at_level(logging.DEBUG):
         value = Dangerous()
         assert operation(value) is value
+    messages = [r.getMessage() for r in caplog.records if r.name == operation.__module__]
+    assert "Calling operation" in messages and "Finished operation" in messages
 
 
 def test_capability_exports(native):
@@ -119,6 +121,10 @@ def test_backend_metadata_parity(native,tmp_path):
     assert py.timings.keys()==rust.timings.keys()
     assert py.read_plan.keys()==rust.read_plan.keys()
     np.testing.assert_array_equal(py.maximum,rust.maximum)
+    np.testing.assert_array_equal(py.peak_index,rust.peak_index)
+    np.testing.assert_array_equal(py.finite_count,rust.finite_count)
+    for key in ["block_rows", "blocks", "block_bytes"]:
+        assert py.read_plan[key] == rust.read_plan[key]
 
 
 @pytest.mark.skipif(not os.environ.get('RAS_1D_UNSTEADY_FIXTURE'),reason='real computed 1D fixture owner gate')
