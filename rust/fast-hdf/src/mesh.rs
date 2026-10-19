@@ -1,11 +1,9 @@
 //! Owned NumPy conversion and error policy around the engine topology API.
-use crate::TopologyError;
 use ndarray::Array2;
 use numpy::{IntoPyArray, PyReadonlyArray2};
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
 use ras_commander_rust::mesh::{GeometryPolicy, OmissionKind, Topology};
-use ras_commander_rust::ErrorKind;
 /// Assemble simple cell boundary rings, retaining every face perimeter vertex.
 #[pyfunction]
 #[pyo3(signature=(face_points,face_endpoints,face_perimeter_info,face_perimeter_values,cell_face_info,cell_face_values,threads=None,*,strict=true,return_diagnostics=false))]
@@ -24,14 +22,14 @@ pub fn assemble_cells<'py>(
 ) -> PyResult<Bound<'py, PyAny>> {
     // Own buffers before releasing Python: callers may mutate original arrays
     // from another thread while this operation runs.
-    let top = Topology {
-        points: face_points.as_array().to_owned(),
-        ends: face_endpoints.as_array().to_owned(),
-        perim_info: face_perimeter_info.as_array().to_owned(),
-        perim: face_perimeter_values.as_array().to_owned(),
-        cell_info: cell_face_info.as_array().to_owned(),
-        cell_faces: cell_face_values.as_array().to_owned(),
-    };
+    let top = Topology::new(
+        face_points.as_array().to_owned(),
+        face_endpoints.as_array().to_owned(),
+        face_perimeter_info.as_array().to_owned(),
+        face_perimeter_values.as_array().to_owned(),
+        cell_face_info.as_array().to_owned(),
+        cell_face_values.as_array().to_owned(),
+    );
     let threads = crate::reader::threads(threads)?;
     let policy = if strict {
         GeometryPolicy::Strict
@@ -40,17 +38,7 @@ pub fn assemble_cells<'py>(
     };
     let packed = py
         .detach(|| top.assemble(policy, threads))
-        .map_err(|error| {
-            let structural = error.kind != ErrorKind::InvalidGeometry;
-            let exception = TopologyError::new_err(error.message);
-            if let Err(error) = exception
-                .value(py)
-                .setattr("mesh_structure_error", structural)
-            {
-                return error;
-            }
-            exception
-        })?;
+        .map_err(crate::reader::err)?;
     let coords = packed.coordinates.into_iter().flatten().collect::<Vec<_>>();
     let offsets = packed
         .offsets

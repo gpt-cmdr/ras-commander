@@ -18,7 +18,7 @@ use std::time::Instant;
 #[allow(clippy::too_many_arguments)]
 pub fn temporal_reduce<'py>(
     py: Python<'py>,
-    path: &str,
+    path: std::path::PathBuf,
     dataset_path: &str,
     offset: Option<PyReadonlyArray1<'py, f32>>,
     threshold: Option<f32>,
@@ -33,7 +33,7 @@ pub fn temporal_reduce<'py>(
     let offset = offset.map(|o| o.as_array().to_vec());
     let opened = Instant::now();
     let session = py
-        .detach(|| ReadOnlyHdfSession::with_options(path, threads, true))
+        .detach(|| ReadOnlyHdfSession::with_options(&path, threads, parallel))
         .map_err(err)?;
     let cap = py
         .detach(|| session.numeric_capability(dataset_path))
@@ -44,12 +44,11 @@ pub fn temporal_reduce<'py>(
         .detach(|| {
             session.reduce_temporal(
                 dataset_path,
-                ReductionRequest {
-                    offset,
-                    threshold,
-                    max_block_bytes,
-                    parallel,
-                },
+                ReductionRequest::new()
+                    .with_offset(offset)
+                    .with_threshold(threshold)
+                    .with_max_block_bytes(max_block_bytes)
+                    .with_parallel(parallel),
             )
         })
         .map_err(err)?;
