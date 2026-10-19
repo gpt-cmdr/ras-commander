@@ -400,13 +400,18 @@ fn text_geometry_edit<'py>(
         let part = match kind.as_str() {
             "station_elevation" => {
                 let v = rows(op, 2)?;
-                let pts: Vec<(f64, f64)> = v.chunks_exact(2).map(|c| (c[0], c[1])).collect();
+                let pts: Vec<(f64, f64)> =
+                    v.as_chunks::<2>().0.iter().map(|c| (c[0], c[1])).collect();
                 index.edit_station_elevation(&doc, node, &pts)
             }
             "mannings_n" => {
                 let v = rows(op, 3)?;
-                let trip: Vec<(f64, f64, f64)> =
-                    v.chunks_exact(3).map(|c| (c[0], c[1], c[2])).collect();
+                let trip: Vec<(f64, f64, f64)> = v
+                    .as_chunks::<3>()
+                    .0
+                    .iter()
+                    .map(|c| (c[0], c[1], c[2]))
+                    .collect();
                 index.edit_mannings_n(&doc, node, &trip)
             }
             _ => {
