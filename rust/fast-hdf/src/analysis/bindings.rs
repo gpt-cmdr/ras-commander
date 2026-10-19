@@ -35,9 +35,6 @@ pub fn temporal_reduce<'py>(
     let session = py
         .detach(|| ReadOnlyHdfSession::with_options(&path, threads, parallel))
         .map_err(err)?;
-    let cap = py
-        .detach(|| session.numeric_capability(dataset_path))
-        .map_err(err)?;
     let setup_seconds = opened.elapsed().as_secs_f64();
     let started = Instant::now();
     let output = py
@@ -53,12 +50,9 @@ pub fn temporal_reduce<'py>(
         })
         .map_err(err)?;
     let engine_seconds = started.elapsed().as_secs_f64();
-    let (Some(&times), Some(&elements)) = (cap.shape.first(), cap.shape.get(1)) else {
-        return Err(err(ras_commander_rust::Error::new(
-            ras_commander_rust::ErrorKind::Corrupt,
-            "reduction capability is missing time/element dimensions",
-        )));
-    };
+    let times = output.values.rows;
+    let elements = u64::try_from(output.values.maximum.len())
+        .map_err(|_| PyValueError::new_err("element count overflow"))?;
     let n = elements;
     let item = output.stored_item_bytes;
     let row_bytes = elements.saturating_mul(item);
@@ -66,9 +60,7 @@ pub fn temporal_reduce<'py>(
     let blocks = output.blocks;
     let storage_chunk_bytes = output.storage_chunk_bytes;
     let cache_bytes = output.chunk_cache_bytes;
-    let chunk = cap
-        .chunks
-        .map(|c| c.into_iter().map(u64::from).collect::<Vec<_>>());
+    let chunk = output.chunk_shape;
     let reduction = output.values;
     // The fixed engine API reports a combined operation, never an invented split.
     let read_seconds = f64::NAN;
