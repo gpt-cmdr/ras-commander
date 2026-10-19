@@ -90,3 +90,16 @@ def test_size_invalidation_with_unchanged_mtime(fixture,monkeypatch):
     with h5py.File(fixture,'r') as f:
         exact(expected,fast.read_dataset(dataset(f),backend='rust'))
     assert first.closed
+
+def test_compute_plan_releases_cache_before_execution_gate(fixture,monkeypatch):
+    import importlib
+    from ras_commander import fast_hdf as fast
+    module=importlib.import_module('ras_commander.RasCmdr')
+    with h5py.File(fixture,'r') as f:fast.read_dataset(dataset(f),backend='rust')
+    session=next(iter(fast._sessions.values()))[0]
+    class StopBeforeExecution(Exception):pass
+    def stop(_):
+        assert not fast._sessions and session.closed
+        raise StopBeforeExecution
+    monkeypatch.setattr(module,'_require_process_supervision',stop)
+    with pytest.raises(StopBeforeExecution):module.RasCmdr.compute_plan('01')
