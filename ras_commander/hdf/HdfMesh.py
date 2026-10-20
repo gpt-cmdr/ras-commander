@@ -1410,10 +1410,12 @@ class HdfMesh:
                 raise ValueError(
                     f"Face endpoint and adjacency counts differ for {mesh_name!r}"
                 )
+            # Read each geometry table once and select rows in NumPy: h5py
+            # point selections and per-face row reads cost one HDF5 read each.
             endpoints = _integral_rows(
-                endpoints_table[face_ids], 2, "Faces FacePoint Indexes"
+                endpoints_table[()][face_ids], 2, "Faces FacePoint Indexes"
             )
-            coordinates = mesh["FacePoints Coordinate"]
+            coordinates = mesh["FacePoints Coordinate"][()]
             if (endpoints >= len(coordinates)).any():
                 raise ValueError(
                     f"Face endpoint exceeds FacePoints Coordinate for {mesh_name!r}"
@@ -1427,21 +1429,22 @@ class HdfMesh:
                 )
             perimeter = (
                 _integral_rows(
-                    mesh["Faces Perimeter Info"][face_ids], 2, "Faces Perimeter Info"
+                    mesh["Faces Perimeter Info"][()][face_ids], 2, "Faces Perimeter Info"
                 )
                 if has_info
                 else np.zeros((len(face_ids), 2), dtype=np.int64)
             )
+            perimeter_values = mesh["Faces Perimeter Values"][()] if has_info else None
             geometries = []
             for (start_point, end_point), (start, size) in zip(endpoints, perimeter):
-                if has_info and start + size > len(mesh["Faces Perimeter Values"]):
+                if has_info and start + size > len(perimeter_values):
                     raise ValueError(
                         f"Face perimeter range exceeds values for {mesh_name!r}"
                     )
                 vertices = [coordinates[start_point, :2]]
                 if size:
                     vertices.extend(
-                        mesh["Faces Perimeter Values"][start : start + size, :2]
+                        perimeter_values[start : start + size, :2]
                     )
                 vertices.append(coordinates[end_point, :2])
                 if not np.isfinite(vertices).all():
@@ -1458,7 +1461,7 @@ class HdfMesh:
                     or len(lengths_table) != len(adjacency)
                 ):
                     raise ValueError(f"Malformed native face lengths for {mesh_name!r}")
-                lengths = np.asarray(lengths_table[face_ids, 2], dtype=np.float64)
+                lengths = np.asarray(lengths_table[:, 2][face_ids], dtype=np.float64)
                 length_source = "native"
             else:
                 lengths = np.asarray([line.length for line in geometries])
