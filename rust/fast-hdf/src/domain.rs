@@ -31,7 +31,7 @@ pub(crate) fn identity<'py>(
 ) -> PyResult<Bound<'py, PyDict>> {
     Ok(dict!(py,"source"=>&id.source,"table"=>&id.table,"row"=>id.row))
 }
-const _: () = assert!(ras_commander_rust::API_VERSION == 6);
+const _: () = assert!(ras_commander_rust::API_VERSION == 7);
 const _: () = assert!(ras_commander_rust::hdf::DEFAULT_MAX_BYTES == 67108864);
 pub(crate) fn attribute_type<'py>(
     py: Python<'py>,
