@@ -1,6 +1,6 @@
 # Native HDF sessions
 
-Bridge API 8 pins engine `0d20b4c8ba122341f82a650777ae46136871cb28`.
+Bridge API 8 pins engine `e9098334a8b988eaeb8c06bf9050601aa32d16bf`.
 `ras_commander_fast_hdf.HdfSession(path, threads=None, parallel=True)` keeps
 one read-only engine session open. Use it as a context manager or call `close()`.
 Closing is idempotent, waits for active native reads and releases file mappings.
@@ -51,3 +51,8 @@ them. Cache defaults derive from the engine/vendor constants. Zero bytes disable
 both decoded-chunk retention and the optional 32 MiB hot-array copy deliberately,
 so zero means no data retention. Non-inline EA indexes now refuse explicitly
 instead of silently returning zeros. No local timing is authorized for this fix.
+
+PERF-3 keeps owned NumPy buffers and the same error/budget contracts. Full-range
+slices reuse the reader hot-array cache (at most 32 MiB per eligible dataset);
+large reads still bypass it, and session close drops all metadata/cache ownership.
+Sparse reads enter the supplied pool only when their bucket needs decoding.

@@ -13,6 +13,7 @@ from contextlib import nullcontext, contextmanager
 from collections import OrderedDict
 from threading import RLock
 import atexit
+import math
 import importlib
 import inspect
 import operator
@@ -150,12 +151,13 @@ def _unsupported(module, exc):
 
 def _safe_file(dataset):
     file = dataset.file
+    filename = file.filename
     # Reopening must never discard dirty state or escape an in-memory file.
     return (
         file.mode == "r"
         and file.driver not in {"core", "fileobj", "family", "split", "mpio"}
-        and isinstance(file.filename, (str, bytes))
-        and Path(os.fsdecode(file.filename)).is_file()
+        and isinstance(filename, (str, bytes))
+        and Path(os.fsdecode(filename)).is_file()
         and not file.swmr_mode
         and not dataset.is_virtual
         and dataset.external is None
@@ -260,17 +262,16 @@ def _read_fim_result(module, dataset, slices, threads):
     # use the engine's session defaults and its fixed 64 MiB output budget.
     if not dataset.shape or threads is not None:
         return None
-    shape = dataset.shape if slices is None else tuple(len(range(*s)) for s in slices)
-    if int(np.prod(shape)) * dataset.dtype.itemsize + shape[-1] * 8 > 67108864:
-        return None
     parts = dataset.name.strip("/").split("/")
     prefix = ["Results", "Unsteady", "Output", "Output Blocks", "Base Output"]
     if parts[:5] != prefix or len(parts) not in {9, 10}:
         return None
+    shape = dataset.shape if slices is None else tuple(len(range(*s)) for s in slices)
+    if math.prod(shape) * dataset.dtype.itemsize + shape[-1] * 8 > 67108864:
+        return None
     block, family, area = parts[5:8]
     if family != "2D Flow Areas":
         return None
-    path = os.fsdecode(dataset.file.filename)
     if block == "Summary Output" and len(parts) == 9 and slices is None:
         return module.read_mesh_summary_values(area, parts[8])
     if block != "Unsteady Time Series" or len(dataset.shape) != 2:
