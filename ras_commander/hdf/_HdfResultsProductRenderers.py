@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any
 
 import h5py
+from ..hdf_io import open_hdf_read
 import numpy as np
 import pandas as pd
 
@@ -51,7 +52,7 @@ class _ProductRenderers:
             "Results/Unsteady/Output/Output Blocks/Base Output/"
             "Unsteady Time Series/2D Flow Areas"
         )
-        with h5py.File(source, "r") as hdf_file:
+        with open_hdf_read(source) as hdf_file:
             for mesh in inspection["meshes"]:
                 mesh_name = mesh["mesh_name"]
                 cell_count = int(mesh["cell_count"])
@@ -450,7 +451,7 @@ class _ProductRenderers:
         )
         frames: list[pd.DataFrame] = []
         units_by_variable: dict[str, list[str]] = {}
-        with h5py.File(source, "r") as hdf_file:
+        with open_hdf_read(source) as hdf_file:
             boundary_group = hdf_file.get(
                 "Results/Unsteady/Output/Output Blocks/Base Output/"
                 "Unsteady Time Series/Boundary Conditions"

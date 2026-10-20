@@ -29,6 +29,7 @@ Technical Notes:
 from pathlib import Path
 from typing import Union, Optional, Dict, Any, List
 import h5py
+from ..hdf_io import open_hdf_read
 import numpy as np
 import pandas as pd
 
@@ -134,7 +135,7 @@ class HdfStruc1D:
             'found': False
         }
 
-        with h5py.File(hdf_path, 'r') as hdf_file:
+        with open_hdf_read(hdf_path) as hdf_file:
             # Determine if unsteady or steady results
             is_unsteady = "Results/Unsteady" in hdf_file
             is_steady = "Results/Steady" in hdf_file
@@ -563,7 +564,7 @@ class HdfStruc1D:
         """
         structures = []
 
-        with h5py.File(hdf_path, 'r') as hdf_file:
+        with open_hdf_read(hdf_path) as hdf_file:
             # Check unsteady results
             unsteady_path = "Results/Unsteady/Output/Output Blocks/Base Output/Unsteady Time Series/Cross Sections/Cross Section Attributes"
             if unsteady_path in hdf_file:

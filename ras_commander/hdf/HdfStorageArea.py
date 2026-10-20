@@ -21,6 +21,7 @@ from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
 import h5py
+from ..hdf_io import open_hdf_read
 import numpy as np
 import pandas as pd
 
@@ -196,7 +197,7 @@ class HdfStorageArea:
         si_units_raw = None
 
         try:
-            with h5py.File(hdf_path, "r") as hdf_file:
+            with open_hdf_read(hdf_path) as hdf_file:
                 units_system_raw = hdf_file.attrs.get("Units System")
                 geom_group = hdf_file.get("Geometry")
                 if geom_group is not None:
@@ -298,7 +299,7 @@ class HdfStorageArea:
         ras_object : RasPrj, optional
             RAS object for multi-project workflows.
         """
-        with h5py.File(hdf_path, "r") as hdf_file:
+        with open_hdf_read(hdf_path) as hdf_file:
             if HdfStorageArea._STORAGE_AREA_PATH not in hdf_file:
                 logger.debug(
                     "Storage areas group '%s' not found in %s.",
@@ -344,7 +345,7 @@ class HdfStorageArea:
         The returned dictionary includes the original HDF field names and common
         snake_case aliases where the fields are present.
         """
-        with h5py.File(hdf_path, "r") as hdf_file:
+        with open_hdf_read(hdf_path) as hdf_file:
             if HdfStorageArea._STORAGE_AREA_PATH not in hdf_file:
                 logger.debug(
                     "Storage areas group '%s' not found in %s.",
@@ -448,7 +449,7 @@ class HdfStorageArea:
         """
         empty = pd.DataFrame(columns=["elevation", "volume"])
         try:
-            with h5py.File(hdf_path, "r") as hdf_file:
+            with open_hdf_read(hdf_path) as hdf_file:
                 if HdfStorageArea._STORAGE_AREA_PATH not in hdf_file:
                     logger.debug(
                         "Storage areas group '%s' not found in %s.",
@@ -556,7 +557,7 @@ class HdfStorageArea:
         When a companion ``.vrt`` exists, this returns the VRT so rasterio can
         sample the underlying terrain rasters directly.
         """
-        with h5py.File(hdf_path, "r") as hdf_file:
+        with open_hdf_read(hdf_path) as hdf_file:
             geom_group = hdf_file.get("Geometry")
             if geom_group is None:
                 logger.debug("Geometry group not found in %s.", hdf_path.name)
@@ -802,7 +803,7 @@ class HdfStorageArea:
         if not target:
             return None
 
-        with h5py.File(hdf_path, "r") as hdf_file:
+        with open_hdf_read(hdf_path) as hdf_file:
             attr_path = "Geometry/Structures/Attributes"
             if attr_path not in hdf_file:
                 return None

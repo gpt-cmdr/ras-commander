@@ -21,6 +21,7 @@ from pathlib import Path
 from typing import List, Union
 
 import h5py
+from ..hdf_io import open_hdf_read
 import numpy as np
 import pandas as pd
 from geopandas import GeoDataFrame
@@ -208,7 +209,7 @@ class HdfStruc:
             connections_df.columns
         ):
             raise ValueError("connections_df requires Name, From, and To columns")
-        with h5py.File(hdf_path, "r") as hdf:
+        with open_hdf_read(hdf_path) as hdf:
             native = []
             attrs_path = "Geometry/Structures/Attributes"
             if attrs_path in hdf:
@@ -379,7 +380,7 @@ class HdfStruc:
         - CRS is preserved from the source file
         """
         try:
-            with h5py.File(hdf_path, 'r') as hdf:
+            with open_hdf_read(hdf_path) as hdf:
                 if "Geometry/Structures" not in hdf:
                     logger.debug(
                         f"No Geometry/Structures group in {hdf_path.name}; "
@@ -624,7 +625,7 @@ class HdfStruc:
         All byte strings in attributes are automatically decoded to UTF-8.
         """
         try:
-            with h5py.File(hdf_path, 'r') as hdf_file:
+            with open_hdf_read(hdf_path) as hdf_file:
                 if "Geometry/Structures" not in hdf_file:
                     logger.debug(f"No structures found in the geometry file: {hdf_path}")
                     return pd.DataFrame()
@@ -677,7 +678,7 @@ class HdfStruc:
         All byte strings are decoded to UTF-8.
         """
         try:
-            with h5py.File(hdf_path, 'r') as hdf_file:
+            with open_hdf_read(hdf_path) as hdf_file:
                 # Check if culvert data exists
                 if "Geometry/Structures" not in hdf_file:
                     logger.debug(f"No structures found in geometry file: {hdf_path}")
@@ -803,7 +804,7 @@ class HdfStruc:
         - Empty list returned if no SA/2D connections in results
         """
         try:
-            with h5py.File(hdf_path, 'r') as hdf_file:
+            with open_hdf_read(hdf_path) as hdf_file:
                 return HdfStruc._list_sa2d_connections_from_hdf(hdf_file, hdf_path)
 
         except Exception as e:
@@ -849,7 +850,7 @@ class HdfStruc:
         - Use in conjunction with RasBreach for reading/modifying breach parameters
         """
         try:
-            with h5py.File(hdf_path, 'r') as hdf_file:
+            with open_hdf_read(hdf_path) as hdf_file:
                 structures = HdfStruc._list_sa2d_connections_from_hdf(hdf_file, hdf_path)
 
                 if not structures:
@@ -941,7 +942,7 @@ class HdfStruc:
             geometry='geometry'
         )
         try:
-            with h5py.File(hdf_path, 'r') as hdf:
+            with open_hdf_read(hdf_path) as hdf:
                 if 'Geometry/Storage Areas' not in hdf:
                     logger.debug(f"No Storage Areas group found in HDF: {hdf_path}")
                     return _empty

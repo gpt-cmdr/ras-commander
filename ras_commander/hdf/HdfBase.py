@@ -42,6 +42,7 @@ Example:
 import xml.etree.ElementTree as ET
 from datetime import datetime, timedelta
 import h5py
+from ..hdf_io import open_hdf_read
 import numpy as np
 import pandas as pd
 from typing import TYPE_CHECKING, List, Tuple, Union, Optional, Dict, Any
@@ -226,7 +227,7 @@ class HdfBase:
         cell_info_path = f"{flow_area_2d_path}/Cell Info"
 
         try:
-            with h5py.File(hdf_path, 'r') as hdf_file:
+            with open_hdf_read(hdf_path) as hdf_file:
                 if flow_area_2d_path not in hdf_file:
                     return []
 
@@ -299,7 +300,7 @@ class HdfBase:
         hdf_path: Path,
     ) -> Optional[str]:
         try:
-            with h5py.File(hdf_path, 'r') as hdf_file:
+            with open_hdf_read(hdf_path) as hdf_file:
                 proj_wkt = hdf_file.attrs.get("Projection")
                 if proj_wkt is None:
                     return None
@@ -659,7 +660,7 @@ class HdfBase:
             source evidence, and contradictions.
         """
         source = Path(hdf_path)
-        with h5py.File(source, "r") as hdf_file:
+        with open_hdf_read(source) as hdf_file:
             return HdfBase._result_unit_metadata_from_file(
                 hdf_file,
                 source_file=source,
@@ -729,7 +730,7 @@ class HdfBase:
             group_path = "/"
 
         try:
-            with h5py.File(file_path, 'r') as hdf_file:
+            with open_hdf_read(file_path) as hdf_file:
                 if group_path not in hdf_file:
                     raise KeyError(
                         f"Group path '{group_path}' not found in "
@@ -830,7 +831,7 @@ class HdfBase:
         polyline_points_path = f"{path}/{points_name}"
 
         try:
-            with h5py.File(hdf_path, 'r') as hdf_file:
+            with open_hdf_read(hdf_path) as hdf_file:
                 if path not in hdf_file:
                     logger.debug(
                         "Polyline group '%s' not found in %s.",

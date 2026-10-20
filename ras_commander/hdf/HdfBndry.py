@@ -30,6 +30,7 @@ from typing import ClassVar, Literal, Optional, Union
 
 import geopandas as gpd
 import h5py
+from ..hdf_io import open_hdf_read
 import numpy as np
 import pandas as pd
 from shapely.geometry import LineString, MultiLineString, MultiPolygon, Point, Polygon
@@ -270,7 +271,7 @@ class HdfBndry:
         """
         if on_duplicate_ownership not in ("raise", "report"):
             raise ValueError("on_duplicate_ownership must be 'raise' or 'report'")
-        with h5py.File(hdf_path, "r") as hdf_file:
+        with open_hdf_read(hdf_path) as hdf_file:
             if HdfBndry._BC_EXTERNAL_FACES_PATH not in hdf_file:
                 logger.debug(
                     "Native BC external-face association '%s' not found in %s.",
@@ -696,7 +697,7 @@ class HdfBndry:
         """
         bc_lines_path = "Geometry/Boundary Condition Lines"
         try:
-            with h5py.File(hdf_path, 'r') as hdf_file:
+            with open_hdf_read(hdf_path) as hdf_file:
                 if bc_lines_path not in hdf_file:
                     logger.debug(
                         "Boundary condition lines group '%s' not found in %s.",
@@ -777,7 +778,7 @@ class HdfBndry:
         """
         breaklines_path = "Geometry/2D Flow Area Break Lines"
         try:
-            with h5py.File(hdf_path, 'r') as hdf_file:
+            with open_hdf_read(hdf_path) as hdf_file:
                 if breaklines_path not in hdf_file:
                     logger.debug(
                         "Breaklines group '%s' not found in %s.",
@@ -941,7 +942,7 @@ class HdfBndry:
         """
         refinement_regions_path = "/Geometry/2D Flow Area Refinement Regions"
         try:
-            with h5py.File(hdf_path, 'r') as hdf_file:
+            with open_hdf_read(hdf_path) as hdf_file:
                 if refinement_regions_path not in hdf_file:
                     logger.debug(
                         "Refinement regions group '%s' not found in %s.",
@@ -1042,7 +1043,7 @@ class HdfBndry:
         reference_lines_path = "Geometry/Reference Lines"
         attributes_path = f"{reference_lines_path}/Attributes"
         try:
-            with h5py.File(hdf_path, 'r') as hdf_file:
+            with open_hdf_read(hdf_path) as hdf_file:
                 if attributes_path not in hdf_file:
                     logger.debug(
                         "Reference lines attributes group '%s' not found in %s.",
@@ -1123,7 +1124,7 @@ class HdfBndry:
         reference_points_path = "Geometry/Reference Points"
         attributes_path = f"{reference_points_path}/Attributes"
         try:
-            with h5py.File(hdf_path, 'r') as hdf_file:
+            with open_hdf_read(hdf_path) as hdf_file:
                 if attributes_path not in hdf_file:
                     logger.debug(
                         "Reference points attributes group '%s' not found in %s.",

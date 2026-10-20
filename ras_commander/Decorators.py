@@ -3,6 +3,7 @@ from pathlib import Path
 from typing import Union
 import logging
 import h5py
+from .hdf_io import h5py_file_read, open_hdf_read
 import inspect
 import pandas as pd
 from numbers import Number
@@ -60,7 +61,7 @@ def standardize_input(file_type: str = 'plan_hdf'):
                     hdf_file_path = Path(str(hdf_arg).strip())
                     if not hdf_file_path.is_file():
                         raise FileNotFoundError(f"HDF file not found: {hdf_file_path}")
-                    with h5py.File(hdf_file_path, 'r') as hdf:
+                    with open_hdf_read(hdf_file_path) as hdf:
                         return func(hdf, *rest, **kwargs)
                 else:
                     raise ValueError(f"Expected h5py.File or path, got {type(hdf_arg)}")
@@ -285,7 +286,7 @@ def standardize_input(file_type: str = 'plan_hdf'):
             # Validate HDF file structure (only for HDF types)
             if 'hdf' in file_type:
                 try:
-                    with h5py.File(hdf_path, 'r') as test_file:
+                    with h5py_file_read(hdf_path) as test_file:
                         # Just open to verify it's a valid HDF5 file
                         logger.debug(f"Successfully opened HDF file for validation: {hdf_path}")
                 except Exception as e:

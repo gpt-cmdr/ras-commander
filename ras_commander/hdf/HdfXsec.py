@@ -37,6 +37,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple, Union
 
 import h5py
+from ..hdf_io import open_hdf_read
 import numpy as np
 import pandas as pd
 from geopandas import GeoDataFrame
@@ -507,7 +508,7 @@ class HdfXsec:
         hdf_path = Path(hdf_path)
         resolved_crs = horizontal_crs or HdfBase.get_projection(hdf_path)
 
-        with h5py.File(hdf_path, "r") as hdf_file:
+        with open_hdf_read(hdf_path) as hdf_file:
             group_path = f"/{HdfXsec.CROSS_SECTION_GROUP}"
             if group_path not in hdf_file:
                 raise ValueError(f"No {HdfXsec.CROSS_SECTION_GROUP} group in {hdf_path}.")
@@ -733,7 +734,7 @@ class HdfXsec:
             geometry HDF file.
         """
         try:
-            with h5py.File(hdf_path, 'r') as hdf:
+            with open_hdf_read(hdf_path) as hdf:
                 if HdfXsec.CROSS_SECTION_GROUP not in hdf:
                     logger.debug(
                         "No Geometry/Cross Sections group in %s; returning empty GeoDataFrame.",
@@ -1016,7 +1017,7 @@ class HdfXsec:
         All string attributes are stripped of whitespace.
         """
         try:
-            with h5py.File(hdf_path, 'r') as hdf_file:
+            with open_hdf_read(hdf_path) as hdf_file:
                 if "Geometry/River Centerlines" not in hdf_file:
                     logger.debug(
                         "No Geometry/River Centerlines group in %s; returning empty GeoDataFrame.",
@@ -1299,7 +1300,7 @@ class HdfXsec:
             may be included depending on HEC-RAS version.
         """
         try:
-            with h5py.File(hdf_path, 'r') as hdf_file:
+            with open_hdf_read(hdf_path) as hdf_file:
                 if "Geometry/River Edge Lines" not in hdf_file:
                     logger.debug(
                         "No Geometry/River Edge Lines group in %s; returning empty GeoDataFrame.",
@@ -1379,7 +1380,7 @@ class HdfXsec:
             exist, the bank_side pattern may not align perfectly.
         """
         try:
-            with h5py.File(hdf_path, 'r') as hdf_file:
+            with open_hdf_read(hdf_path) as hdf_file:
                 if "Geometry/River Bank Lines" not in hdf_file:
                     logger.debug(
                         "No Geometry/River Bank Lines group in %s; returning empty GeoDataFrame.",
@@ -1463,7 +1464,7 @@ class HdfXsec:
             are stored.
         """
         try:
-            with h5py.File(hdf_path, 'r') as hdf_file:
+            with open_hdf_read(hdf_path) as hdf_file:
                 if "Geometry/River Flow Paths" not in hdf_file:
                     logger.warning("No river flow paths found in geometry file")
                     return GeoDataFrame()
@@ -1521,7 +1522,7 @@ class HdfXsec:
         """
         base = "Geometry/Cross Section Interpolation Surfaces"
         try:
-            with h5py.File(hdf_path, 'r') as hdf_file:
+            with open_hdf_read(hdf_path) as hdf_file:
                 if base not in hdf_file:
                     logger.warning("No XS interpolation surface found in geometry file")
                     return GeoDataFrame()

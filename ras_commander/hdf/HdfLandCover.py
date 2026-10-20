@@ -31,6 +31,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, Callable, Dict, List, Mapping, Optional, Union
 
 import h5py
+from ..hdf_io import open_hdf_read
 import numpy as np
 import pandas as pd
 
@@ -169,7 +170,7 @@ class HdfLandCover:
         ]
         expected_cell = [float(value) for value in (expected_cell_values or [])]
         records = []
-        with h5py.File(hdf_path, "r") as hdf:
+        with open_hdf_read(hdf_path) as hdf:
             areas_path = "Geometry/2D Flow Areas"
             if areas_path not in hdf:
                 raise RuntimeError(f"No 2D flow areas in {hdf_path.name}.")
@@ -339,7 +340,7 @@ class HdfLandCover:
         results = []
 
         try:
-            with h5py.File(hdf_path, 'r') as hdf_file:
+            with open_hdf_read(hdf_path) as hdf_file:
                 areas_path = "Geometry/2D Flow Areas"
                 if areas_path not in hdf_file:
                     logger.debug(f"No 2D Flow Areas found in {hdf_path}")
@@ -408,7 +409,7 @@ class HdfLandCover:
         """
 
         try:
-            with h5py.File(hdf_path, 'r') as hdf_file:
+            with open_hdf_read(hdf_path) as hdf_file:
                 table_path = "Geometry/Land Cover (Manning's n)/Calibration Table"
                 if table_path not in hdf_file:
                     logger.debug(f"No Manning's n calibration table in {hdf_path}")
@@ -459,7 +460,7 @@ class HdfLandCover:
         rows = []
         nodata_threshold = np.finfo(np.float32).max * 0.5
 
-        with h5py.File(landcover_hdf_path, "r") as hdf_file:
+        with open_hdf_read(landcover_hdf_path) as hdf_file:
             ids = hdf_file["IDs"][()]
             names = hdf_file["Names"][()]
             mannings_n = hdf_file["ManningsN"][()]
@@ -520,7 +521,7 @@ class HdfLandCover:
         from shapely.geometry import Polygon
 
         try:
-            with h5py.File(hdf_path, 'r') as hdf_file:
+            with open_hdf_read(hdf_path) as hdf_file:
                 lc_path = "Geometry/Land Cover (Manning's n)"
                 if lc_path not in hdf_file:
                     logger.debug(f"No Land Cover (Manning's n) group in {hdf_path}")
@@ -603,7 +604,7 @@ class HdfLandCover:
         """
 
         try:
-            with h5py.File(hdf_path, 'r') as hdf_file:
+            with open_hdf_read(hdf_path) as hdf_file:
                 cells_path = "Geometry/Land Cover (Manning's n)/Internal Cells"
                 if cells_path not in hdf_file:
                     return None
@@ -648,7 +649,7 @@ class HdfLandCover:
         landcover_hdf_path = Path(landcover_hdf_path)
 
         try:
-            with h5py.File(landcover_hdf_path, 'r') as hdf_file:
+            with open_hdf_read(landcover_hdf_path) as hdf_file:
                 # Read raster map: pixel_value -> class_name
                 # HDF path may be "Raster Map" or "//Raster Map" depending on version
                 rmap_path = None
@@ -993,7 +994,7 @@ class HdfLandCover:
         """
 
         try:
-            with h5py.File(hdf_path, 'r') as hdf_file:
+            with open_hdf_read(hdf_path) as hdf_file:
                 geom_group = hdf_file.get('Geometry')
                 if geom_group is None:
                     return None
@@ -1176,7 +1177,7 @@ class HdfLandCover:
         # The full geometry extent can be much larger than the 2D flow area
         clip_bounds = None
         try:
-            with h5py.File(hdf_path, 'r') as hf:
+            with open_hdf_read(hdf_path) as hf:
                 # Try 2D flow area perimeter first (tightest bounds)
                 perim_pts_path = "Geometry/2D Flow Areas/Polygon Points"
                 if perim_pts_path in hf:

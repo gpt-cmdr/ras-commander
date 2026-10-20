@@ -97,6 +97,7 @@ from typing import (
 )
 
 import h5py
+from ..hdf_io import open_hdf_read
 import numpy as np
 import pandas as pd
 
@@ -185,7 +186,7 @@ class HdfResultsMesh:
                 shape.
         """
         try:
-            with h5py.File(hdf_path, "r") as hdf_file:
+            with open_hdf_read(hdf_path) as hdf_file:
                 return HdfResultsMesh._get_mesh_summary_values_output(
                     hdf_file,
                     var,
@@ -225,7 +226,7 @@ class HdfResultsMesh:
             ValueError: If the summary or geometry cannot be read.
         """
         try:
-            with h5py.File(hdf_path, 'r') as hdf_file:
+            with open_hdf_read(hdf_path) as hdf_file:
                 return HdfResultsMesh.get_mesh_summary_output(
                     hdf_file, var, round_to, include_ghost_cells
                 )
@@ -436,7 +437,7 @@ class HdfResultsMesh:
             "Results/Unsteady/Output/Output Blocks/Base Output/"
             "Unsteady Time Series/Time"
         )
-        with h5py.File(source_path, "r") as hdf_file:
+        with open_hdf_read(source_path) as hdf_file:
             if dataset_path not in hdf_file:
                 raise ValueError(f"Path {dataset_path} not found in HDF file")
             if time_path not in hdf_file:
@@ -1075,7 +1076,7 @@ class HdfResultsMesh:
         times = HdfResultsMesh._profile_times_from_hdf(hdf_path, results)[:n_times]
         units = ""
         try:
-            with h5py.File(hdf_path, "r") as hdf_file:
+            with open_hdf_read(hdf_path) as hdf_file:
                 if dataset_path in hdf_file:
                     units = HdfResultsMesh._decode_hdf_attr(
                         hdf_file[dataset_path].attrs.get("Units", "")
@@ -1101,7 +1102,7 @@ class HdfResultsMesh:
     def _profile_times_from_hdf(hdf_path: Path, results: Optional[Any] = None) -> List[pd.Timestamp]:
         """Return unsteady profile timestamps using ras-commander's HDF time helpers."""
         try:
-            with h5py.File(hdf_path, "r") as hdf_file:
+            with open_hdf_read(hdf_path) as hdf_file:
                 start_time = HdfBase.get_simulation_start_time(hdf_file)
                 time_path = (
                     "Results/Unsteady/Output/Output Blocks/Base Output/"
@@ -1191,7 +1192,7 @@ class HdfResultsMesh:
     @staticmethod
     def _hdf_contains_path(hdf_path: Path, hdf_internal_path: str) -> bool:
         try:
-            with h5py.File(hdf_path, "r") as hdf_file:
+            with open_hdf_read(hdf_path) as hdf_file:
                 return hdf_internal_path in hdf_file
         except Exception:
             return False
@@ -1482,7 +1483,7 @@ class HdfResultsMesh:
         """
         datasets = []
 
-        with h5py.File(hdf_path, 'r') as hdf_file:
+        with open_hdf_read(hdf_path) as hdf_file:
             for var in HdfResultsMesh.MESH_FACE_TIME_SERIES_OUTPUT_VARS:
                 path = HdfResultsMesh._get_mesh_timeseries_output_path(mesh_name, var)
                 if path not in hdf_file:
@@ -1567,7 +1568,7 @@ class HdfResultsMesh:
                     - Time series lengths
         """
         try:
-            with h5py.File(hdf_path, 'r') as hdf_path:
+            with open_hdf_read(hdf_path) as hdf_path:
                 return HdfResultsMesh._get_mesh_cells_timeseries_output(
                     hdf_path, mesh_names, var, truncate, include_ghost_cells
                 )
@@ -1620,7 +1621,7 @@ class HdfResultsMesh:
             gpd.GeoDataFrame: GeoDataFrame containing maximum water surface elevations with geometry.
         """
         try:
-            with h5py.File(hdf_path, 'r') as hdf_file:
+            with open_hdf_read(hdf_path) as hdf_file:
                 return HdfResultsMesh.get_mesh_summary_output(
                     hdf_file, "Maximum Water Surface", round_to, include_ghost_cells
                 )
@@ -1656,7 +1657,7 @@ class HdfResultsMesh:
             gpd.GeoDataFrame: GeoDataFrame containing minimum water surface elevations with geometry.
         """
         try:
-            with h5py.File(hdf_path, 'r') as hdf_file:
+            with open_hdf_read(hdf_path) as hdf_file:
                 return HdfResultsMesh.get_mesh_summary_output(
                     hdf_file, "Minimum Water Surface", round_to, include_ghost_cells
                 )
@@ -1681,7 +1682,7 @@ class HdfResultsMesh:
             pd.DataFrame: DataFrame containing maximum face velocities.
         """
         try:
-            with h5py.File(hdf_path, 'r') as hdf_file:
+            with open_hdf_read(hdf_path) as hdf_file:
                 return HdfResultsMesh.get_mesh_summary_output(hdf_file, "Maximum Face Velocity", round_to)
         except OptionalDependencyError:
             raise
@@ -1707,7 +1708,7 @@ class HdfResultsMesh:
             ValueError: If there's an error processing the minimum face velocity data.
         """
         try:
-            with h5py.File(hdf_path, 'r') as hdf_file:
+            with open_hdf_read(hdf_path) as hdf_file:
                 return HdfResultsMesh.get_mesh_summary_output(hdf_file, "Minimum Face Velocity", round_to)
         except OptionalDependencyError:
             raise
@@ -1740,7 +1741,7 @@ class HdfResultsMesh:
             ValueError: If there's an error processing the maximum water surface error data.
         """
         try:
-            with h5py.File(hdf_path, 'r') as hdf_file:
+            with open_hdf_read(hdf_path) as hdf_file:
                 return HdfResultsMesh.get_mesh_summary_output(
                     hdf_file, "Cell Maximum Water Surface Error", round_to, include_ghost_cells
                 )
@@ -1779,7 +1780,7 @@ class HdfResultsMesh:
                 - geometry: Point geometry representing cell center
         """
         try:
-            with h5py.File(hdf_path, 'r') as hdf_file:
+            with open_hdf_read(hdf_path) as hdf_file:
                 return HdfResultsMesh.get_mesh_summary_output(
                     hdf_file, "Cell Last Iteration", round_to, include_ghost_cells
                 )
@@ -1910,7 +1911,7 @@ class HdfResultsMesh:
                 )
 
             dfs = []
-            with h5py.File(hdf_path, 'r') as hdf_file:
+            with open_hdf_read(hdf_path) as hdf_file:
                 crs = HdfBase.get_projection(hdf_file)
                 d2_flow_areas = hdf_file.get("Geometry/2D Flow Areas/Attributes")
                 if d2_flow_areas is None or len(d2_flow_areas) == 0:
@@ -2356,7 +2357,7 @@ class HdfResultsMesh:
         wse_path = HdfResultsMesh._get_mesh_timeseries_output_path(mesh_name, "Water Surface")
         min_elev_path = f"Geometry/2D Flow Areas/{mesh_name}/Cells Minimum Elevation"
 
-        with h5py.File(hdf_path, "r") as result_hdf, h5py.File(geom_source, "r") as geom_hdf:
+        with open_hdf_read(hdf_path) as result_hdf, open_hdf_read(geom_source) as geom_hdf:
             if time_stamp_path in result_hdf:
                 raw_times = result_hdf[time_stamp_path][()]
                 hdf_times = pd.DatetimeIndex(
@@ -2849,7 +2850,7 @@ class HdfResultsMesh:
     @staticmethod
     def _physical_cell_counts_from_path(hdf_path: Union[str, Path]) -> Dict[str, int]:
         """Read physical cell counts from an HDF path."""
-        with h5py.File(hdf_path, "r") as hdf_file:
+        with open_hdf_read(hdf_path) as hdf_file:
             return HdfMesh._physical_cell_counts(hdf_file)
 
     @staticmethod
@@ -3204,7 +3205,7 @@ class HdfResultsMesh:
             >>> upstream_data = bc_data.sel(bc_name='Upstream Inflow')
         """
         try:
-            with h5py.File(hdf_path, 'r') as hdf_file:
+            with open_hdf_read(hdf_path) as hdf_file:
                 # Get the base path and check if boundary conditions exist
                 base_path = "Results/Unsteady/Output/Output Blocks/Base Output/Unsteady Time Series"
                 bc_base_path = f"{base_path}/Boundary Conditions"

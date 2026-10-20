@@ -31,6 +31,7 @@ All of the methods in this class are static and are designed to be used without 
 """
 
 import h5py
+from ..hdf_io import open_hdf_read
 import pandas as pd
 from datetime import datetime
 from pathlib import Path
@@ -130,7 +131,7 @@ class HdfPlan:
             ValueError: If there's an error reading the plan start time.
         """
         try:
-            with h5py.File(hdf_path, 'r') as hdf_file:
+            with open_hdf_read(hdf_path) as hdf_file:
                 return HdfBase.get_simulation_start_time(hdf_file)
         except Exception as e:
             raise ValueError(f"Failed to get plan start time: {str(e)}")
@@ -152,7 +153,7 @@ class HdfPlan:
             ValueError: If there's an error reading the plan end time.
         """
         try:
-            with h5py.File(hdf_path, 'r') as hdf_file:
+            with open_hdf_read(hdf_path) as hdf_file:
                 plan_info = hdf_file.get('Plan Data/Plan Information')
                 if plan_info is None:
                     raise ValueError("Plan Information not found in HDF file")
@@ -178,7 +179,7 @@ class HdfPlan:
             ValueError: If there's an error retrieving the plan timestamps.
         """
         try:
-            with h5py.File(hdf_path, 'r') as hdf_file:
+            with open_hdf_read(hdf_path) as hdf_file:
                 return HdfBase.get_unsteady_timestamps(hdf_file)
         except Exception as e:
             raise ValueError(f"Failed to get plan timestamps: {str(e)}")
@@ -201,7 +202,7 @@ class HdfPlan:
             ValueError: If there's an error retrieving the plan information.
         """
         try:
-            with h5py.File(hdf_path, 'r') as hdf_file:
+            with open_hdf_read(hdf_path) as hdf_file:
                 plan_info_path = "Plan Data/Plan Information"
                 if plan_info_path not in hdf_file:
                     raise ValueError(f"Plan Information not found in {hdf_path}")
@@ -238,7 +239,7 @@ class HdfPlan:
             ValueError: If there's an error retrieving the plan parameter attributes.
         """
         try:
-            with h5py.File(hdf_path, 'r') as hdf_file:
+            with open_hdf_read(hdf_path) as hdf_file:
                 plan_params_path = HdfPlan._PLAN_PARAMETERS_PATH
                 if plan_params_path not in hdf_file:
                     logger.debug(
@@ -322,7 +323,7 @@ class HdfPlan:
                 - ``file_size_mb``: size of the HDF file on disk.
         """
         try:
-            with h5py.File(hdf_path, 'r') as hdf_file:
+            with open_hdf_read(hdf_path) as hdf_file:
                 write_parameters: Dict[str, Any] = {}
                 params_path = HdfPlan._PLAN_PARAMETERS_PATH
                 if params_path in hdf_file:
@@ -520,7 +521,7 @@ class HdfPlan:
         }
 
         try:
-            with h5py.File(hdf_path, 'r') as hdf_file:
+            with open_hdf_read(hdf_path) as hdf_file:
                 params_path = HdfPlan._PLAN_PARAMETERS_PATH
                 if params_path not in hdf_file:
                     raise ValueError(HdfPlan._missing_plan_parameters_message(hdf_path, hdf_file))
@@ -608,7 +609,7 @@ class HdfPlan:
                 no precipitation data exists.
         """
         try:
-            with h5py.File(hdf_path, 'r') as hdf_file:
+            with open_hdf_read(hdf_path) as hdf_file:
                 precip_path = "Event Conditions/Meteorology/Precipitation"
                 if precip_path not in hdf_file:
                     logger.debug(
@@ -664,7 +665,7 @@ class HdfPlan:
                 for key, value in obj.attrs.items()
             }
 
-        with h5py.File(hdf_path, 'r') as hdf:
+        with open_hdf_read(hdf_path) as hdf:
             values_path = group_path + '/Values'
             times_path = group_path + '/Timestamp'
             if values_path not in hdf or times_path not in hdf:
@@ -700,7 +701,7 @@ class HdfPlan:
         """
         logger.debug(f"Getting geometry attributes from {hdf_path}")
         try:
-            with h5py.File(hdf_path, 'r') as hdf_file:
+            with open_hdf_read(hdf_path) as hdf_file:
                 geom_attrs_path = "Geometry"
                 logger.debug(f"Checking for Geometry group in {hdf_path}")
                 if geom_attrs_path not in hdf_file:
@@ -759,7 +760,7 @@ class HdfPlan:
         Returns dict with 'method': 'Unknown' if boundary condition data not found.
         """
         try:
-            with h5py.File(hdf_path, 'r') as hdf_file:
+            with open_hdf_read(hdf_path) as hdf_file:
                 result = {}
 
                 # Try to get starting WSE method from Plan Parameters

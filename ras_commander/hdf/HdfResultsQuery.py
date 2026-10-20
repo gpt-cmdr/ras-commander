@@ -14,6 +14,7 @@ import logging
 import re
 
 import h5py
+from ..hdf_io import open_hdf_read
 import numpy as np
 import pandas as pd
 from scipy.spatial import KDTree
@@ -195,7 +196,7 @@ def _resolve_geometry_hdf(
     missing_geometry_error: Optional[FileNotFoundError] = None
 
     try:
-        with h5py.File(plan_hdf_path, "r") as hdf_file:
+        with open_hdf_read(plan_hdf_path) as hdf_file:
             if (
                 "Geometry/2D Flow Areas" in hdf_file
                 or "Geometry/Pipe Networks" in hdf_file
@@ -223,7 +224,7 @@ def _resolve_geometry_hdf(
         pass
 
     try:
-        with h5py.File(plan_hdf_path, "r") as hdf_file:
+        with open_hdf_read(plan_hdf_path) as hdf_file:
             if "Geometry/2D Flow Areas" in hdf_file:
                 logger.debug(
                     "Using embedded geometry in plan HDF as geometry source: %s",
@@ -398,7 +399,7 @@ def _get_mesh_topology(
         return _topology_cache[cache_key]
 
     base_path = f"Geometry/2D Flow Areas/{mesh_name}"
-    with h5py.File(geom_hdf_path, "r") as hdf_file:
+    with open_hdf_read(geom_hdf_path) as hdf_file:
         required = {
             "cell_centers": "Cells Center Coordinate",
             "cell_face_info": "Cells Face and Orientation Info",
@@ -524,7 +525,7 @@ def _read_geometry_cell_dataset(
 ) -> np.ndarray:
     """Read a per-cell geometry dataset and concatenate in KDTree order."""
     values: List[np.ndarray] = []
-    with h5py.File(geom_hdf_path, "r") as hdf_file:
+    with open_hdf_read(geom_hdf_path) as hdf_file:
         for mesh_name in cache["mesh_order"]:
             dataset_path = (
                 f"Geometry/2D Flow Areas/{mesh_name}/{dataset_name}"
@@ -625,7 +626,7 @@ def _get_steady_variable_values(
     values: List[np.ndarray] = []
     cell_min_elev = None
 
-    with h5py.File(plan_hdf_path, "r") as hdf_file:
+    with open_hdf_read(plan_hdf_path) as hdf_file:
         for mesh_name in cache["mesh_order"]:
             if variable_name == "Depth":
                 ws_values = _read_steady_mesh_dataset(
@@ -673,7 +674,7 @@ def _read_unsteady_direct(
     """Read one timestep of an unsteady 2D result directly from HDF."""
     values: List[np.ndarray] = []
 
-    with h5py.File(plan_hdf_path, "r") as hdf_file:
+    with open_hdf_read(plan_hdf_path) as hdf_file:
         for mesh_name in cache["mesh_order"]:
             dataset_path = _UNSTEADY_2D_PATH.format(
                 mesh_name=mesh_name,
@@ -702,7 +703,7 @@ def _read_face_velocity_values(
     steady_plan: bool,
 ) -> np.ndarray:
     """Read signed face velocity values for one mesh and time/profile."""
-    with h5py.File(plan_hdf_path, "r") as hdf_file:
+    with open_hdf_read(plan_hdf_path) as hdf_file:
         if steady_plan:
             face_values = _read_steady_mesh_dataset(
                 hdf_file,
@@ -981,7 +982,7 @@ def _get_unsteady_variable_max_values(
     """Read per-cell maximum values directly from the unsteady time series."""
     values: List[np.ndarray] = []
 
-    with h5py.File(plan_hdf_path, "r") as hdf_file:
+    with open_hdf_read(plan_hdf_path) as hdf_file:
         for mesh_name in cache["mesh_order"]:
             dataset_path = _UNSTEADY_2D_PATH.format(
                 mesh_name=mesh_name,
@@ -1068,7 +1069,7 @@ def _get_cell_averaged_max_velocity(
         raise ValueError("Maximum Face Velocity summary output is empty")
 
     values: List[np.ndarray] = []
-    with h5py.File(geom_hdf_path, "r") as geom_hdf:
+    with open_hdf_read(geom_hdf_path) as geom_hdf:
         for mesh_name in cache["mesh_order"]:
             mesh_faces = max_face_v[max_face_v["mesh_name"] == mesh_name]
             if mesh_faces.empty:
@@ -1228,7 +1229,7 @@ def _read_unit_metadata(plan_hdf_path: Path) -> Dict[str, str]:
 def _read_ras_version(plan_hdf_path: Path) -> Optional[str]:
     """Read a compact HEC-RAS version string from a plan HDF."""
     candidates: List[Any] = []
-    with h5py.File(plan_hdf_path, "r") as hdf_file:
+    with open_hdf_read(plan_hdf_path) as hdf_file:
         candidates.extend(
             [
                 hdf_file.attrs.get("File Version"),
@@ -1290,7 +1291,7 @@ def _reject_unsupported_2d_bridge_meshes(
     mesh_names: List[str],
 ) -> None:
     """Reject HDFs with native 2D bridge velocity output groups."""
-    with h5py.File(plan_hdf_path, "r") as hdf_file:
+    with open_hdf_read(plan_hdf_path) as hdf_file:
         if "Geometry/2D Bridges" in hdf_file or "Geometry/2D Bridge" in hdf_file:
             raise NotImplementedError(
                 "2D bridge velocity profile extraction is not supported. "

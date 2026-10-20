@@ -18,6 +18,7 @@ from __future__ import annotations
 
 
 import h5py
+from ..hdf_io import open_hdf_read
 import numpy as np
 import pandas as pd
 from pathlib import Path
@@ -98,7 +99,7 @@ class HdfPump:
         shapely_geometry = require_module("shapely.geometry", "Returning GeoDataFrame results from HdfPump")
         Point = shapely_geometry.Point
 
-        with h5py.File(hdf_path, 'r') as hdf:
+        with open_hdf_read(hdf_path) as hdf:
             pump_stations_path = "/Geometry/Pump Stations"
             if pump_stations_path not in hdf:
                 logger.debug("No pump station geometry group found in HDF file")
@@ -160,7 +161,7 @@ class HdfPump:
         Raises:
             KeyError: If the pump group exists but required datasets are missing.
         """
-        with h5py.File(hdf_path, 'r') as hdf:
+        with open_hdf_read(hdf_path) as hdf:
             pump_groups_path = "/Geometry/Pump Stations/Pump Groups"
             if pump_groups_path not in hdf:
                 logger.debug("No pump station pump-group geometry found in HDF file")
@@ -228,7 +229,7 @@ class HdfPump:
             KeyError: If required datasets are not found in the HDF file.
             ValueError: If the specified pump station name is not found.
         """
-        with h5py.File(hdf_path, 'r') as hdf:
+        with open_hdf_read(hdf_path) as hdf:
             pumping_stations_path = (
                 "/Results/Unsteady/Output/Output Blocks/DSS Hydrograph Output/"
                 "Unsteady Time Series/Pumping Stations"
@@ -320,7 +321,7 @@ class HdfPump:
         Notes:
             Missing pump station summary output returns an empty DataFrame.
         """
-        with h5py.File(hdf_path, 'r') as hdf:
+        with open_hdf_read(hdf_path) as hdf:
             # Extract summary data
             summary_path = "/Results/Unsteady/Summary/Pump Station"
             if summary_path not in hdf:
@@ -361,7 +362,7 @@ class HdfPump:
             KeyError: If required datasets are not found in the HDF file.
             ValueError: If the specified pump station name is not found.
         """
-        with h5py.File(hdf_path, 'r') as hdf:
+        with open_hdf_read(hdf_path) as hdf:
             pump_stations_path = (
                 "/Results/Unsteady/Output/Output Blocks/DSS Profile Output/"
                 "Unsteady Time Series/Pumping Stations"

@@ -7,6 +7,7 @@ import math
 from pathlib import Path
 
 import h5py
+from ..hdf_io import open_hdf_read
 import numpy as np
 
 
@@ -36,7 +37,7 @@ def fingerprint_model_inputs(hdf_path: Path, groups, block_bytes: int) -> dict:
         "missing_groups": [],
         "aliases": {},
     }
-    with h5py.File(hdf_path, "r") as hdf:
+    with open_hdf_read(hdf_path) as hdf:
         visited = {}
         active = set()
 

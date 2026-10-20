@@ -35,6 +35,7 @@ Note:
 from typing import Dict, List, Optional, Tuple
 from pathlib import Path
 import h5py
+from ..hdf_io import open_hdf_read
 import pandas as pd
 from ..Decorators import standardize_input, log_call
 from .HdfUtils import HdfUtils
@@ -86,7 +87,7 @@ class HdfResultsPlan:
             KeyError: If the "Results/Unsteady" group is not found in the HDF file.
         """
         try:
-            with h5py.File(hdf_path, 'r') as hdf_file:
+            with open_hdf_read(hdf_path) as hdf_file:
                 if "Results/Unsteady" not in hdf_file:
                     raise KeyError("Results/Unsteady group not found in the HDF file.")
                 
@@ -131,7 +132,7 @@ class HdfResultsPlan:
             KeyError: If the "Results/Unsteady/Summary" group is not found in the HDF file.
         """
         try:           
-            with h5py.File(hdf_path, 'r') as hdf_file:
+            with open_hdf_read(hdf_path) as hdf_file:
                 if "Results/Unsteady/Summary" not in hdf_file:
                     raise KeyError("Results/Unsteady/Summary group not found in the HDF file.")
                 
@@ -176,7 +177,7 @@ class HdfResultsPlan:
             FileNotFoundError: If the specified HDF file is not found.
         """
         try:
-            with h5py.File(hdf_path, 'r') as hdf_file:
+            with open_hdf_read(hdf_path) as hdf_file:
                 if "Results/Unsteady/Summary/Volume Accounting" not in hdf_file:
                     return None
                 
@@ -225,7 +226,7 @@ class HdfResultsPlan:
                 logger.error("Could not find HDF file for input")
                 return None
 
-            with h5py.File(hdf_path, 'r') as hdf_file:
+            with open_hdf_read(hdf_path) as hdf_file:
                 logger.debug(f"Extracting Plan Information from: {Path(hdf_file.filename).name}")
                 plan_info = hdf_file.get('/Plan Data/Plan Information')
                 if plan_info is None:
@@ -399,7 +400,7 @@ class HdfResultsPlan:
             pd.DataFrame: DataFrame containing reference summary data
         """
         try:
-            with h5py.File(hdf_path, 'r') as hdf_file:
+            with open_hdf_read(hdf_path) as hdf_file:
                 base_path = "Results/Unsteady/Output/Output Blocks/Base Output/Summary Output"
                 ref_path = f"{base_path}/Reference {reftype.capitalize()}"
                 
@@ -452,7 +453,7 @@ class HdfResultsPlan:
             - Does not guarantee results are complete or valid
         """
         try:
-            with h5py.File(hdf_path, 'r') as hdf_file:
+            with open_hdf_read(hdf_path) as hdf_file:
                 return "Results/Steady" in hdf_file
         except Exception as e:
             logger.debug(f"Error checking if plan is steady: {str(e)}")
@@ -488,7 +489,7 @@ class HdfResultsPlan:
             ['50Pct', '20Pct', '10Pct', '4Pct', '2Pct', '1Pct', '0.2Pct']
         """
         try:
-            with h5py.File(hdf_path, 'r') as hdf_file:
+            with open_hdf_read(hdf_path) as hdf_file:
                 # Check if this is a steady state plan
                 if "Results/Steady" not in hdf_file:
                     raise ValueError(f"HDF file does not contain steady state results: {hdf_path.name}")
@@ -691,7 +692,7 @@ class HdfResultsPlan:
             >>> wse_df = HdfResultsPlan.get_steady_wse('01')
         """
         try:
-            with h5py.File(hdf_path, 'r') as hdf_file:
+            with open_hdf_read(hdf_path) as hdf_file:
                 # Check if this is a steady state plan
                 if "Results/Steady" not in hdf_file:
                     raise ValueError(f"HDF file does not contain steady state results: {hdf_path.name}")
@@ -837,7 +838,7 @@ class HdfResultsPlan:
             'Steady Finished Successfully'
         """
         try:
-            with h5py.File(hdf_path, 'r') as hdf_file:
+            with open_hdf_read(hdf_path) as hdf_file:
                 # Check if this is a steady state plan
                 if "Results/Steady" not in hdf_file:
                     raise ValueError(f"HDF file does not contain steady state results: {hdf_path.name}")
@@ -930,7 +931,7 @@ class HdfResultsPlan:
             vs RasControl legacy naming (get_comp_msgs) to reflect technological lineage.
         """
         try:
-            with h5py.File(hdf_path, 'r') as hdf_file:
+            with open_hdf_read(hdf_path) as hdf_file:
                 # Define HDF path for compute messages
                 compute_msgs_path = "Results/Summary/Compute Messages (text)"
 
@@ -1049,7 +1050,7 @@ class HdfResultsPlan:
         """
         # Attempt 1: Read from HDF file
         try:
-            with h5py.File(hdf_path, 'r') as hdf_file:
+            with open_hdf_read(hdf_path) as hdf_file:
                 compute_msgs_path = "Results/Summary/Compute Messages (text)"
 
                 if compute_msgs_path in hdf_file:
@@ -1224,7 +1225,7 @@ class HdfResultsPlan:
         get_steady_profile_names : Get list of profile names
         """
         try:
-            with h5py.File(hdf_path, 'r') as hdf_file:
+            with open_hdf_read(hdf_path) as hdf_file:
                 if "Results/Steady" not in hdf_file:
                     raise ValueError(
                         f"HDF file does not contain steady state results: {hdf_path.name}\n"
@@ -1395,7 +1396,7 @@ class HdfResultsPlan:
                 'structures': []
             }
 
-            with h5py.File(hdf_path, 'r') as hdf_file:
+            with open_hdf_read(hdf_path) as hdf_file:
                 if "Results/Steady" not in hdf_file:
                     logger.debug("No steady state results in this file")
                     return result

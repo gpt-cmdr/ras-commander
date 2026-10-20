@@ -34,6 +34,7 @@ Example Usage:
 from pathlib import Path
 from typing import Tuple, Optional, Union, TYPE_CHECKING
 import h5py
+from ..hdf_io import open_hdf_read
 
 from .HdfBase import HdfBase
 from .HdfMesh import HdfMesh
@@ -66,7 +67,7 @@ class HdfProject:
     ) -> bool:
         """Return True when all required HDF paths exist for an optional probe."""
         try:
-            with h5py.File(hdf_path, "r") as hdf_file:
+            with open_hdf_read(hdf_path) as hdf_file:
                 missing = [path for path in paths if path not in hdf_file]
         except Exception as e:
             logger.debug(

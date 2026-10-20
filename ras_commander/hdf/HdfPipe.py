@@ -25,6 +25,7 @@ and the @log_call decorator for logging function calls.
 from __future__ import annotations
 
 import h5py
+from ..hdf_io import open_hdf_read
 import numpy as np
 import pandas as pd
 from pathlib import Path
@@ -107,7 +108,7 @@ class HdfPipe:
         shapely_geometry = require_module("shapely.geometry", "Returning GeoDataFrame results from HdfPipe")
         LineString = shapely_geometry.LineString
 
-        with h5py.File(hdf_path, 'r') as f:
+        with open_hdf_read(hdf_path) as f:
             if '/Geometry/Pipe Conduits' not in f:
                 raise KeyError(_missing_hdf_object_message(
                     "Pipe conduit extraction",
@@ -203,7 +204,7 @@ class HdfPipe:
         shapely_geometry = require_module("shapely.geometry", "Returning GeoDataFrame results from HdfPipe")
         Point = shapely_geometry.Point
 
-        with h5py.File(hdf_path, 'r') as f:
+        with open_hdf_read(hdf_path) as f:
             if '/Geometry/Pipe Nodes' not in f:
                 raise KeyError(_missing_hdf_object_message(
                     "Pipe node extraction",
@@ -271,7 +272,7 @@ class HdfPipe:
         """
         frames = []
 
-        with h5py.File(hdf_path, 'r') as f:
+        with open_hdf_read(hdf_path) as f:
             for inlet_type, group_path in [
                 ('top', '/Geometry/Pipe Nodes/Top Inlets/Attributes'),
                 ('side', '/Geometry/Pipe Nodes/Side Inlets/Attributes'),
@@ -324,7 +325,7 @@ class HdfPipe:
         MultiPolygon = shapely_geometry.MultiPolygon
         Polygon = shapely_geometry.Polygon
 
-        with h5py.File(hdf_path, 'r') as f:
+        with open_hdf_read(hdf_path) as f:
             if '/Geometry/Pipe Networks' not in f:
                 raise KeyError(_missing_hdf_object_message(
                     "Pipe network extraction",
@@ -710,7 +711,7 @@ class HdfPipe:
         profile_info_path = "/Geometry/Pipe Conduits/Terrain Profiles Info"
         profile_values_path = "/Geometry/Pipe Conduits/Terrain Profiles Values"
 
-        with h5py.File(hdf_path, 'r') as hdf:
+        with open_hdf_read(hdf_path) as hdf:
             missing_paths = [
                 path for path in [profile_info_path, profile_values_path] if path not in hdf
             ]
@@ -763,7 +764,7 @@ class HdfPipe:
         Raises:
             KeyError: If the required datasets are not found in the HDF file.
         """
-        with h5py.File(hdf_path, 'r') as hdf:
+        with open_hdf_read(hdf_path) as hdf:
             summary_path = "/Results/Unsteady/Summary/Pipe Network"
             if summary_path not in hdf:
                 raise KeyError(_missing_hdf_object_message(
@@ -892,7 +893,7 @@ class HdfPipe:
         if variable not in valid_variables:
             raise ValueError(f"Invalid variable. Must be one of: {', '.join(valid_variables)}")
 
-        with h5py.File(hdf_path, 'r') as hdf:
+        with open_hdf_read(hdf_path) as hdf:
             pipe_networks_path = (
                 "/Results/Unsteady/Output/Output Blocks/DSS Hydrograph Output/"
                 "Unsteady Time Series/Pipe Networks"

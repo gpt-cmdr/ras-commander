@@ -36,6 +36,7 @@ from typing import Any, List, Optional
 import numpy as np
 import pandas as pd
 import h5py
+from ..hdf_io import open_hdf_read
 
 from .HdfBase import HdfBase
 from .HdfMesh import HdfMesh
@@ -85,7 +86,7 @@ class HdfResultsSediment:
             bool: True if the plan contains 2D mobile-bed results.
         """
         try:
-            with h5py.File(hdf_path, 'r') as f:
+            with open_hdf_read(hdf_path) as f:
                 grp = f.get(_BED_BLOCK)
                 return grp is not None and len(grp.keys()) > 0
         except Exception as e:
@@ -102,7 +103,7 @@ class HdfResultsSediment:
         Returns an empty list if the plan has no 2D mobile-bed results.
         """
         try:
-            with h5py.File(hdf_path, 'r') as f:
+            with open_hdf_read(hdf_path) as f:
                 grp = f.get(_BED_BLOCK)
                 if grp is None:
                     return []
@@ -160,7 +161,7 @@ class HdfResultsSediment:
         (ft/m). No GeoPandas dependency -- callers build the GeoDataFrame so the
         heavy import stays at each public-method boundary.
         """
-        with h5py.File(hdf_path, 'r') as f:
+        with open_hdf_read(hdf_path) as f:
             area = HdfResultsSediment._resolve_area(f, area)
             ds_path = f"{_BED_BLOCK}/{area}/{dataset}"
             if ds_path not in f:
@@ -322,7 +323,7 @@ class HdfResultsSediment:
         """
         cols = ["mesh_name", "length_unit", "n_cells", "net_bed_volume",
                 "erosion_volume", "deposition_volume", "max_scour", "max_deposition"]
-        with h5py.File(hdf_path, 'r') as f:
+        with open_hdf_read(hdf_path) as f:
             grp = f.get(_BED_BLOCK)
             if grp is None:
                 return pd.DataFrame(columns=cols)
@@ -372,7 +373,7 @@ class HdfResultsSediment:
         """
         import xarray as xr
 
-        with h5py.File(hdf_path, 'r') as f:
+        with open_hdf_read(hdf_path) as f:
             area = HdfResultsSediment._resolve_area(f, mesh_name)
             bc = f[f"{_BED_BLOCK}/{area}/Cell Bed Change"][:]
             length_unit = HdfResultsSediment._length_unit(f)

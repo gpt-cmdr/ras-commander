@@ -309,6 +309,7 @@ class HdfChannelCapacity:
         3. Steady Water Surface profile selection or profile-wise max
         """
         import h5py
+        from ..hdf_io import open_hdf_read
 
         summary_path = (
             "Results/Unsteady/Output/Output Blocks/Base Output/"
@@ -322,7 +323,7 @@ class HdfChannelCapacity:
         steady_wse_path = f"{steady_base}/Cross Sections/Water Surface"
         steady_names_path = f"{steady_base}/Profile Names"
 
-        with h5py.File(hdf_path, "r") as hdf:
+        with open_hdf_read(hdf_path) as hdf:
             if summary_path in hdf:
                 wse = HdfChannelCapacity._as_1d_wse(hdf[summary_path][:], reducer="first")
                 attrs = HdfChannelCapacity._read_cross_section_attributes(hdf, len(wse))
@@ -504,6 +505,7 @@ class HdfChannelCapacity:
                        or profile_names length doesn't match profile count.
         """
         import h5py
+        from ..hdf_io import open_hdf_read
         from ras_commander import ras as global_ras
 
         _ras = ras_object if ras_object is not None else global_ras
@@ -522,7 +524,7 @@ class HdfChannelCapacity:
 
         base_steady = "Results/Steady/Output/Output Blocks/Base Output/Steady Profiles"
 
-        with h5py.File(hdf_path, 'r') as hdf:
+        with open_hdf_read(hdf_path) as hdf:
             # Read water surface data: shape (n_profiles, n_xs)
             ws_path = f"{base_steady}/Cross Sections/Water Surface"
             if ws_path not in hdf:

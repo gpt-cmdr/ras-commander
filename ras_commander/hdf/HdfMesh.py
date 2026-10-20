@@ -102,6 +102,7 @@ from typing import (
 from uuid import uuid4
 
 import h5py
+from ..hdf_io import open_hdf_read
 import numpy as np
 import pandas as pd
 
@@ -403,7 +404,7 @@ class HdfMesh:
             raise ValueError("max_chunk_bytes must be a positive integer")
         base = "Geometry/2D Flow Areas"
         rows = []
-        with h5py.File(hdf_path, "r") as hdf:
+        with open_hdf_read(hdf_path) as hdf:
             mesh_group = hdf
             for part in base.split("/"):
                 if part not in mesh_group:
@@ -493,7 +494,7 @@ class HdfMesh:
             Returns an empty list if no 2D areas exist or if there's an error.
         """
         try:
-            with h5py.File(hdf_path, 'r') as hdf_file:
+            with open_hdf_read(hdf_path) as hdf_file:
                 if "Geometry/2D Flow Areas" not in hdf_file:
                     return list()
                 return list(
@@ -540,7 +541,7 @@ class HdfMesh:
         base = "Geometry/2D Flow Areas"
         records: List[Dict[str, Any]] = []
         try:
-            with h5py.File(hdf_path, "r") as hdf_file:
+            with open_hdf_read(hdf_path) as hdf_file:
                 geometry_group = hdf_file.get("Geometry")
                 hdf_file_version = _decode_hdf_scalar(
                     hdf_file.attrs.get("File Version")
@@ -769,7 +770,7 @@ class HdfMesh:
         from shapely.geometry import Polygon
 
         try:
-            with h5py.File(hdf_path, 'r') as hdf_file:
+            with open_hdf_read(hdf_path) as hdf_file:
                 mesh_area_names = HdfMesh.get_mesh_area_names(hdf_path)
                 if not mesh_area_names:
                     return GeoDataFrame()
@@ -845,7 +846,7 @@ class HdfMesh:
         from shapely.ops import polygonize
 
         try:
-            with h5py.File(hdf_path, 'r') as hdf_file:
+            with open_hdf_read(hdf_path) as hdf_file:
                 mesh_area_names = HdfMesh.get_mesh_area_names(hdf_path)
                 if not mesh_area_names:
                     return GeoDataFrame()
@@ -1162,7 +1163,7 @@ class HdfMesh:
         from shapely.geometry import Point
 
         try:
-            with h5py.File(hdf_path, 'r') as hdf_file:
+            with open_hdf_read(hdf_path) as hdf_file:
                 mesh_area_names = HdfMesh.get_mesh_area_names(hdf_path)
                 if not mesh_area_names:
                     return GeoDataFrame()
@@ -1227,7 +1228,7 @@ class HdfMesh:
         from shapely.geometry import LineString
 
         try:
-            with h5py.File(hdf_path, 'r') as hdf_file:
+            with open_hdf_read(hdf_path) as hdf_file:
                 mesh_area_names = HdfMesh.get_mesh_area_names(hdf_path)
                 if not mesh_area_names:
                     return GeoDataFrame()
@@ -1351,7 +1352,7 @@ class HdfMesh:
 
         if on_duplicate_ownership not in ("raise", "report"):
             raise ValueError("on_duplicate_ownership must be 'raise' or 'report'")
-        with h5py.File(hdf_path, "r") as hdf:
+        with open_hdf_read(hdf_path) as hdf:
             base = "Geometry/2D Flow Areas"
             attributes = hdf[f"{base}/Attributes"][()]
             names = [_decode_hdf_scalar(value).rstrip() for value in attributes["Name"]]
@@ -1619,7 +1620,7 @@ class HdfMesh:
             - Value: varies - Attribute values (decoded from HDF bytes)
         """
         try:
-            with h5py.File(hdf_path, 'r') as hdf_file:
+            with open_hdf_read(hdf_path) as hdf_file:
                 d2_flow_area = hdf_file.get("Geometry/2D Flow Areas/Attributes")
                 if d2_flow_area is not None and isinstance(d2_flow_area, h5py.Dataset):
                     result = {}
@@ -1675,7 +1676,7 @@ class HdfMesh:
         and 'Geometry/2D Flow Areas/{mesh_name}/Faces Area Elevation Values'.
         """
         try:
-            with h5py.File(hdf_path, 'r') as hdf_file:
+            with open_hdf_read(hdf_path) as hdf_file:
                 mesh_area_names = HdfMesh.get_mesh_area_names(hdf_path)
                 if not mesh_area_names:
                     logger.error(
@@ -1963,7 +1964,7 @@ class HdfMesh:
         ]
 
         try:
-            with h5py.File(hdf_path, 'r') as hdf_file:
+            with open_hdf_read(hdf_path) as hdf_file:
                 ref_path = "Geometry/Reference Lines"
                 attrs_path = f"{ref_path}/Attributes"
                 internal_faces_path = f"{ref_path}/Internal Faces"
@@ -2274,7 +2275,7 @@ class HdfMesh:
         not in the elevation-volume table.
         """
         try:
-            with h5py.File(hdf_path, 'r') as hdf_file:
+            with open_hdf_read(hdf_path) as hdf_file:
                 mesh_area_names = HdfMesh.get_mesh_area_names(hdf_path)
                 if not mesh_area_names:
                     logger.error(
@@ -2778,7 +2779,7 @@ class HdfMesh:
         ```
         """
         try:
-            with h5py.File(hdf_path, 'r') as hdf_file:
+            with open_hdf_read(hdf_path) as hdf_file:
                 # Get mesh area names
                 mesh_area_names = HdfMesh.get_mesh_area_names(hdf_path)
                 if not mesh_area_names:
@@ -2875,7 +2876,7 @@ class HdfMesh:
         ['Land Cover Name', "Base Manning's n Value", ...]
         """
         try:
-            with h5py.File(hdf_path, 'r') as hdf_file:
+            with open_hdf_read(hdf_path) as hdf_file:
                 table_path = "Geometry/Land Cover (Manning's n)/Calibration Table"
                 if table_path not in hdf_file:
                     logger.error(

@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any, Iterator, Optional, SupportsIndex, Union
 
 import h5py
+from ..hdf_io import h5py_file_read
 import numpy as np
 import pandas as pd
 from numpy.typing import DTypeLike
@@ -656,7 +657,7 @@ class HdfResultView:
 
     def _open_source(self):
         self._validate_source_fingerprint()
-        hdf_file = h5py.File(self.source_path, "r")
+        hdf_file = h5py_file_read(self.source_path)
         if self.dataset_path not in hdf_file:
             hdf_file.close()
             raise KeyError(f"Dataset no longer exists: {self.dataset_path}")

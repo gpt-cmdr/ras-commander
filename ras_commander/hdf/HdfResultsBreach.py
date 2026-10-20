@@ -42,6 +42,7 @@ Date: 2025
 from typing import Union, Optional
 from pathlib import Path
 import h5py
+from ..hdf_io import open_hdf_read
 import pandas as pd
 import numpy as np
 
@@ -122,7 +123,7 @@ class HdfResultsBreach:
         - Units depend on project unit system (US Customary or SI)
         """
         try:
-            with h5py.File(hdf_path, 'r') as hdf_file:
+            with open_hdf_read(hdf_path) as hdf_file:
                 base_path = "Results/Unsteady/Output/Output Blocks/Base Output/Unsteady Time Series"
                 sa_conn_path = f"{base_path}/SA 2D Area Conn"
 
@@ -246,7 +247,7 @@ class HdfResultsBreach:
             If specified structure_name doesn't exist in HDF
         """
         try:
-            with h5py.File(hdf_path, 'r') as hdf_file:
+            with open_hdf_read(hdf_path) as hdf_file:
                 base_path = "Results/Unsteady/Output/Output Blocks/Base Output/Unsteady Time Series"
                 sa_conn_path = f"{base_path}/SA 2D Area Conn"
 

@@ -50,6 +50,7 @@ Note:
 """
 from pathlib import Path
 import h5py
+from ..hdf_io import open_hdf_read
 import numpy as np
 import pandas as pd
 from typing import (
@@ -304,7 +305,7 @@ class HdfInfiltration:
         results = []
 
         try:
-            with h5py.File(hdf_path, 'r') as hdf_file:
+            with open_hdf_read(hdf_path) as hdf_file:
                 areas_path = "Geometry/2D Flow Areas"
                 if areas_path not in hdf_file:
                     logger.warning(f"No 2D Flow Areas found in {hdf_path}")
@@ -407,7 +408,7 @@ class HdfInfiltration:
             DataFrame containing infiltration parameters if successful, None if operation fails
         """
         try:
-            with h5py.File(hdf_path, 'r') as hdf_file:
+            with open_hdf_read(hdf_path) as hdf_file:
                 table_path = '/Geometry/Infiltration/Base Overrides'
                 if table_path not in hdf_file:
                     logger.debug(f"No infiltration data found in {hdf_path}")
@@ -462,7 +463,7 @@ class HdfInfiltration:
         ['Grass', 'Paving - Concrete', 'Detention Pond']
         """
         try:
-            with h5py.File(hdf_path, 'r') as hdf_file:
+            with open_hdf_read(hdf_path) as hdf_file:
                 attrs_path = "Geometry/Infiltration/Attributes"
                 if attrs_path not in hdf_file:
                     logger.debug(f"No infiltration attributes found in {hdf_path}")
@@ -502,7 +503,7 @@ class HdfInfiltration:
         dict_keys(['Curve Number', 'Abstraction Ratio', 'Minimum Infiltration Rate'])
         """
         try:
-            with h5py.File(hdf_path, 'r') as hdf_file:
+            with open_hdf_read(hdf_path) as hdf_file:
                 variables_path = "Geometry/Infiltration/Variables"
                 attrs_path = "Geometry/Infiltration/Attributes"
 
@@ -566,7 +567,7 @@ class HdfInfiltration:
         from shapely.geometry import Polygon
 
         try:
-            with h5py.File(hdf_path, 'r') as hdf_file:
+            with open_hdf_read(hdf_path) as hdf_file:
                 infiltration_path = "Geometry/Infiltration"
                 if infiltration_path not in hdf_file:
                     return gpd.GeoDataFrame()
@@ -816,7 +817,7 @@ class HdfInfiltration:
             DataFrame containing infiltration parameters if successful, None if operation fails
         """
         try:
-            with h5py.File(hdf_path, 'r') as hdf_file:
+            with open_hdf_read(hdf_path) as hdf_file:
                 variables_path = '//Variables'
                 if variables_path not in hdf_file:
                     logger.warning(f"No Variables dataset found in {hdf_path}")
@@ -864,7 +865,7 @@ class HdfInfiltration:
     def _native_infiltration_layer_type(hdf_path: Union[str, Path]) -> str:
         """Return the ras-commander native layer-type token for a sidecar."""
         hdf_path = Path(hdf_path)
-        with h5py.File(hdf_path, "r") as hdf_file:
+        with open_hdf_read(hdf_path) as hdf_file:
             raw_value = hdf_file.attrs.get("LC Type")
         if isinstance(raw_value, (bytes, np.bytes_)):
             value = raw_value.decode("utf-8", errors="replace")
@@ -911,7 +912,7 @@ class HdfInfiltration:
             geometry_hdf_path = Path(geometry_hdf_path)
             if geometry_hdf_path.exists():
                 try:
-                    with h5py.File(str(geometry_hdf_path), "r") as geom_hdf:
+                    with open_hdf_read(str(geometry_hdf_path)) as geom_hdf:
                         if "Geometry/Infiltration/Base Overrides" in geom_hdf:
                             logger.warning(
                                 "Base Overrides exist in %s and take precedence "
@@ -1428,7 +1429,7 @@ class HdfInfiltration:
         
         # Get land cover map (raster to ID mapping)
         try:
-            with h5py.File(landcover_hdf_path, 'r') as hdf:
+            with open_hdf_read(landcover_hdf_path) as hdf:
                 if '//Raster Map' not in hdf:
                     logger.error(f"No Raster Map found in {landcover_hdf_path}")
                     return pd.DataFrame()
@@ -1696,7 +1697,7 @@ class HdfInfiltration:
         
         # Get land cover map (raster to ID mapping)
         try:
-            with h5py.File(landcover_hdf_path, 'r') as hdf:
+            with open_hdf_read(landcover_hdf_path) as hdf:
                 if '//Raster Map' not in hdf:
                     logger.error(f"No Raster Map found in {landcover_hdf_path}")
                     return pd.DataFrame()
@@ -1911,7 +1912,7 @@ class HdfInfiltration:
             ras_object,
         )
             
-        with h5py.File(hdf_path, 'r') as hdf:
+        with open_hdf_read(hdf_path) as hdf:
             raster_map_data = hdf['Raster Map'][:]
             return {int(item[0]): item[1].decode('utf-8') for item in raster_map_data}
 
@@ -2046,7 +2047,7 @@ class HdfInfiltration:
             ras_object,
         )
             
-        with h5py.File(hdf_path, 'r') as hdf:
+        with open_hdf_read(hdf_path) as hdf:
             if 'Infiltration Parameters' not in hdf:
                 raise KeyError("No infiltration parameters found in HDF file")
                 
@@ -2195,7 +2196,7 @@ class HdfInfiltration:
         
         # Get land cover map (raster to ID mapping)
         try:
-            with h5py.File(landcover_hdf_path, 'r') as hdf:
+            with open_hdf_read(landcover_hdf_path) as hdf:
                 if '//Raster Map' not in hdf:
                     logger.error(f"No Raster Map found in {landcover_hdf_path}")
                     return pd.DataFrame()

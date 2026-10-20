@@ -71,6 +71,7 @@ References:
 from pathlib import Path
 from typing import Union, Optional, Dict, Tuple
 import h5py
+from ..hdf_io import open_hdf_read
 import pandas as pd
 import numpy as np
 
@@ -359,7 +360,7 @@ class HdfHydraulicTables:
             raise FileNotFoundError(f"Geometry HDF file not found: {hdf_path}")
 
         try:
-            with h5py.File(hdf_path, 'r') as hdf:
+            with open_hdf_read(hdf_path) as hdf:
                 # Find cross section index
                 xs_index = HdfHydraulicTables._get_xs_index(hdf, river, reach, rs)
 
@@ -458,7 +459,7 @@ class HdfHydraulicTables:
             all_htabs = {}
             failed_htabs = []
 
-            with h5py.File(hdf_path, 'r') as hdf:
+            with open_hdf_read(hdf_path) as hdf:
                 # Read attributes to get all river/reach/RS combinations
                 attrs_path = '/Geometry/Cross Sections/Attributes'
                 if attrs_path not in hdf:

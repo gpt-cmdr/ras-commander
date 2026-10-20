@@ -35,6 +35,7 @@ from pathlib import Path
 from typing import Union, Optional, List, Dict, Tuple, Sequence
 
 import h5py
+from ..hdf_io import h5py_file_read, open_hdf_read
 import numpy as np
 import pandas as pd
 
@@ -98,7 +99,7 @@ class HdfResultsXsec:
             Includes maximum values for Water Surface, Flow, Channel Velocity, Total Velocity, and Lateral Flow.
         """
         try:
-            with h5py.File(hdf_path, 'r') as hdf_file:
+            with open_hdf_read(hdf_path) as hdf_file:
                 # Define base paths
                 base_output_path = HdfResultsXsec._XSEC_OUTPUT_PATH
                 time_stamp_path = HdfResultsXsec._TIME_STAMP_PATH
@@ -244,7 +245,7 @@ class HdfResultsXsec:
             raise ValueError("chunk_rows must be at least 1")
 
         requested = HdfResultsXsec._normalize_xsec_variable_filter(variables)
-        with h5py.File(hdf_path, "r") as hdf_file:
+        with open_hdf_read(hdf_path) as hdf_file:
             group = hdf_file.get(HdfResultsXsec._XSEC_OUTPUT_PATH)
             if group is None:
                 return pd.DataFrame()
@@ -626,7 +627,7 @@ class HdfResultsXsec:
         filename = HdfResultsXsec._hdf_filename(hdf_file)
         should_close = not isinstance(hdf_file, h5py.File)
         if should_close:
-            hdf_file = h5py.File(hdf_file, "r")
+            hdf_file = h5py_file_read(hdf_file)
             filename = HdfResultsXsec._hdf_filename(hdf_file)
 
         variable_filter = HdfResultsXsec._normalize_reference_variable_filter(variables)

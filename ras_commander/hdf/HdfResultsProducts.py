@@ -13,6 +13,7 @@ from pathlib import Path
 from typing import Any, Union
 
 import h5py
+from ..hdf_io import open_hdf_read
 import numpy as np
 import pandas as pd
 
@@ -143,7 +144,7 @@ class HdfResultsProducts:
         if source_size <= 0:
             raise ValueError(f"Result HDF is empty: {source}")
 
-        with h5py.File(source, "r") as hdf_file:
+        with open_hdf_read(source) as hdf_file:
             completion = HdfResultsProducts._completion_evidence(hdf_file)
             timestamps, timestamp_datasets = HdfResultsProducts._time_axis(
                 hdf_file
@@ -745,7 +746,7 @@ class HdfResultsProducts:
     def _numerical_qaqc(source: Path) -> dict[str, Any]:
         unsteady_summary = HdfResultsPlan.get_unsteady_summary(source)
         volume_accounting = HdfResultsPlan.get_volume_accounting(source)
-        with h5py.File(source, "r") as hdf_file:
+        with open_hdf_read(source) as hdf_file:
             messages = HdfResultsProducts._dataset_text(
                 hdf_file.get(HdfResultsProducts._COMPUTE_MESSAGES_PATH)
             )

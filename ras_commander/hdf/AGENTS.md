@@ -26,7 +26,13 @@ This file is the canonical local instruction file for `ras_commander/hdf/`.
   - `xarray`
   - `matplotlib`
   - `scipy`
-- Use `h5py.File(..., "r")` context managers for direct inspection. RAS-owned
+- Open plan/geometry HDFs read-only through `ras_commander.hdf_io`:
+  `with open_hdf_read(path) as hdf:` (or `h5py_file_read(path)` when the caller
+  owns the handle). It applies a sized chunk cache (64 MiB / 10,007 slots /
+  w0=1.0; HEC-RAS 2D time series are chunked one timestep x all cells, often
+  larger than h5py's 1 MiB default). Do not route `r+`/`a` write opens, or
+  reads inside write functions, through it.
+- Use these context managers for direct inspection. RAS-owned
   authoring must use the applicable native HEC-RAS API unless a method is
   explicitly version/schema-qualified as a recovery or solver-temporary-file
   operation.
