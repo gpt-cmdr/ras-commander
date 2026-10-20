@@ -6,7 +6,7 @@ successor-perf py-perf-1 packet). Each fixture's SHA-256 is verified before use.
 Without the variable every test here is skipped with that reason.
 
 Modes compared against ``off`` (h5py default cache, no reuse):
-  * ``cache``  - sized chunk cache (the default), no reuse
+  * ``cache``  - explicit sized chunk cache, no reuse
   * ``reuse``  - sized chunk cache plus cached read-only handles
 """
 
@@ -34,7 +34,7 @@ FIXTURES = {
 BASE = "Results/Unsteady/Output/Output Blocks/Base Output/Unsteady Time Series/2D Flow Areas"
 MODES = {
     "off": dict(chunk_cache_bytes=0, handle_cache=False),
-    "cache": dict(chunk_cache_bytes=None, handle_cache=False),
+    "cache": dict(chunk_cache_bytes=64 * 1024 * 1024, handle_cache=False),
     "reuse": dict(chunk_cache_bytes=None, handle_cache=True),
 }
 _verified: dict = {}

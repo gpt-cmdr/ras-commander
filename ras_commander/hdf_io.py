@@ -1,71 +1,48 @@
-"""Shared read-only HDF5 open helper for HEC-RAS plan and geometry HDF files.
+"""Shared read-only HDF opens with optional chunk-cache tuning and handle reuse.
 
-Every read-only ``h5py.File(path, "r")`` in the HDF readers goes through
-:func:`open_hdf_read` (context manager) or :func:`h5py_file_read` (caller-owned
-handle). Both apply a sized HDF5 raw-data chunk cache. Write paths do not use
-this module.
+Fresh opens use stock h5py cache settings. Opt-in reuse automatically selects
+64 MiB / 10007 prime slots / w0=0.75. Explicit cache configuration also enables
+tuning without reuse; MB=0/off restores stock settings. HDF5 allocates raw chunk
+caches per open dataset: six live datasets can retain roughly 384 MiB. Reuse is
+off by default. w0=1 prioritizes eviction of fully consumed chunks for data read
+once; the lower 0.75 default suits rereads as well as partial reads.
 
-Why a sized chunk cache
------------------------
-HEC-RAS stores large 2D time series as one chunk per timestep holding every
-cell or face (for example 1 x 352,141 float32 = 1.4 MB on JUL2020, 1 x
-1,393,564 float32 = 5.6 MB of face velocity on a 586,935-cell eBFE model).
-The HDF5 default cache is 1 MiB / 521 slots, which cannot hold a single such
-chunk, so every partial read re-inflates every chunk it touches. The default
-here is 64 MiB / 10,007 slots / ``w0=1.0``:
+Environment (read on access; configure_hdf_reads overrides it):
+RAS_COMMANDER_HDF_CHUNK_CACHE_MB, _SLOTS, _W0; RAS_COMMANDER_HDF_HANDLE_CACHE;
+RAS_COMMANDER_HDF_HANDLE_CACHE_SIZE. Invalid env values warn once per value and
+fall back to the applicable default. Programmatic invalid values raise ValueError.
 
-* 64 MiB holds at least 11 of the largest chunks seen on the five qualification
-  fixtures and the 24-timestep working sets used by FIM queries. On a reused
-  handle it measured 1733 -> 211 ms (JUL2020) and 432 -> 63 ms (BaldEagle p07)
-  for 10 x 500 random cells x 24 steps. Holding a whole 193 x 1.4 MB dataset
-  needs ~512 MiB, which is too much as a per-dataset default (the cache is
-  allocated per open dataset), so that size stays opt-in.
-* 10,007 is a prime well above the chunk count of any time-series dataset seen
-  (865 timesteps on BaldEagle), so chunk-index hashing does not collide.
-  Slots cost 8 bytes each per open dataset.
-* ``w0=1.0`` is the HDF5-documented setting for read-only access: fully read
-  chunks are evicted first, which keeps partially read (re-usable) chunks.
+Do not hold reused handles or active read contexts across external writes,
+replacement, deletion or compute calls. Close cached handles before any writer,
+including write APIs outside RasCmdr. RasCmdr suspends reuse for the whole compute
+call and closes caches again immediately before launching. Active readers close
+on release; callers must finish them before execution. Dataset/group objects
+must not escape their open_hdf_read context: eviction can invalidate them.
 
-The chunk cache only lives as long as the dataset and file handle, so a fresh
-open per call gains little across calls. Optional handle reuse keeps a small
-LRU of read-only handles keyed by (absolute path, size, mtime_ns, spelling).
-
-Handle reuse is OFF by default. A cached read-only handle (verified on
-Windows, h5py 3.14 / HDF5 1.14.6):
-
-* makes any in-process ``h5py.File(path, "r+")`` or ``"a"`` fail with
-  ``OSError: file is already open for read-only``; and
-* blocks ``os.replace`` onto and ``os.remove`` of the file (WinError 5 / 32),
-  so HEC-RAS or RasProcess cannot rewrite the plan HDF.
-
-Enable it with ``RAS_COMMANDER_HDF_HANDLE_CACHE=1`` or
-``configure_hdf_reads(handle_cache=True)``, and call :func:`close_hdf_handles`
-before writing or replacing an HDF from the same process. ``RasCmdr``
-execution entry points call it automatically before a plan runs.
-
-Environment variables (read on every open, so they can be toggled at run time):
-
-* ``RAS_COMMANDER_HDF_CHUNK_CACHE_MB``: chunk cache size in MiB (default 64).
-  ``0`` or ``off`` restores the plain h5py defaults (no cache arguments).
-* ``RAS_COMMANDER_HDF_CHUNK_CACHE_SLOTS``: slot count (default 10007).
-* ``RAS_COMMANDER_HDF_CHUNK_CACHE_W0``: preemption policy 0..1 (default 1.0).
-* ``RAS_COMMANDER_HDF_HANDLE_CACHE``: ``1``/``on`` enables handle reuse.
-* ``RAS_COMMANDER_HDF_HANDLE_CACHE_SIZE``: maximum cached handles (default 4).
-
-Values passed to :func:`configure_hdf_reads` take precedence over the
-environment.
+Stat invalidation occurs on the next open and cannot detect same-size edits with
+preserved mtime or delayed NTFS timestamps. Concurrent external writers are not
+supported. Do not inherit HDF handles across fork: close before forking and use
+fresh process-local opens (or spawn workers). Existing plain h5py handles to the
+same file can cause HDF5 to reuse their cache policy; close them before changing
+settings. Cached entries may be evicted while active, but close only on release.
 """
 
 from __future__ import annotations
 
 import atexit
-from contextlib import contextmanager
 import os
+import math
+import sys
+from contextlib import contextmanager
 import threading
 from collections import OrderedDict
 from typing import Any, Dict, Optional
 
 import h5py
+
+from .LoggingConfig import get_logger
+
+logger = get_logger(__name__)
 
 __all__ = [
     "DEFAULT_CHUNK_CACHE_BYTES",
@@ -82,7 +59,7 @@ __all__ = [
 
 DEFAULT_CHUNK_CACHE_BYTES = 64 * 1024 * 1024
 DEFAULT_CHUNK_CACHE_SLOTS = 10007
-DEFAULT_CHUNK_CACHE_W0 = 1.0
+DEFAULT_CHUNK_CACHE_W0 = 0.75
 DEFAULT_HANDLE_CACHE_SIZE = 4
 
 _ENV_CACHE_MB = "RAS_COMMANDER_HDF_CHUNK_CACHE_MB"
@@ -104,7 +81,6 @@ _overrides: Dict[str, Any] = {
 }
 
 _UNSET = object()
-_suspend_count = 0
 
 
 def _env(name: str) -> Optional[str]:
@@ -115,43 +91,66 @@ def _env(name: str) -> Optional[str]:
     return value or None
 
 
+_warned_env = set()
+_suspend_count = 0
+
+
+def _bad_env(name, raw):
+    key = (name, raw)
+    if key not in _warned_env:
+        _warned_env.add(key)
+        logger.warning("Invalid %s=%r; using the default HDF read policy", name, raw)
+
+
+def _resolved(key, name, convert, valid):
+    value = _overrides[key]
+    if value is not None:
+        return value
+    raw = _env(name)
+    if raw is None:
+        return None
+    try:
+        value = convert(raw)
+        if not valid(value):
+            raise ValueError("out of range")
+        return value
+    except (ValueError, TypeError, OverflowError):
+        _bad_env(name, raw)
+        return None
+
+
 def _chunk_cache_kwargs() -> Dict[str, Any]:
-    """Resolve rdcc_* keyword arguments for ``h5py.File``; empty means h5py defaults."""
-    nbytes = _overrides["chunk_cache_bytes"]
-    if nbytes is None:
-        raw = _env(_ENV_CACHE_MB)
-        if raw is None:
-            nbytes = DEFAULT_CHUNK_CACHE_BYTES
-        elif raw in _OFF:
-            nbytes = 0
-        else:
-            nbytes = int(float(raw) * 1024 * 1024)
-    if nbytes <= 0:
+    """Empty kwargs preserve stock cache policy for fresh opens."""
+    nbytes = _resolved("chunk_cache_bytes", _ENV_CACHE_MB,
+                       lambda raw: 0 if raw in _OFF else float(raw) * 1024 * 1024,
+                       lambda v: math.isfinite(v) and 0 <= v <= sys.maxsize)
+    nslots = _resolved("chunk_cache_slots", _ENV_CACHE_SLOTS, int,
+                       lambda v: 1 <= v <= 2**31 - 1)
+    w0 = _resolved("chunk_cache_w0", _ENV_CACHE_W0, float,
+                   lambda v: math.isfinite(v) and 0 <= v <= 1)
+    if nbytes == 0:
         return {}
-    nslots = _overrides["chunk_cache_slots"]
-    if nslots is None:
-        raw = _env(_ENV_CACHE_SLOTS)
-        nslots = DEFAULT_CHUNK_CACHE_SLOTS if raw is None else int(raw)
-    w0 = _overrides["chunk_cache_w0"]
-    if w0 is None:
-        raw = _env(_ENV_CACHE_W0)
-        w0 = DEFAULT_CHUNK_CACHE_W0 if raw is None else float(raw)
-    return {"rdcc_nbytes": int(nbytes), "rdcc_nslots": int(nslots), "rdcc_w0": float(w0)}
+    if nbytes is None and nslots is None and w0 is None and not _handle_cache_enabled():
+        return {}
+    return {"rdcc_nbytes": DEFAULT_CHUNK_CACHE_BYTES if nbytes is None else int(nbytes),
+            "rdcc_nslots": DEFAULT_CHUNK_CACHE_SLOTS if nslots is None else nslots,
+            "rdcc_w0": DEFAULT_CHUNK_CACHE_W0 if w0 is None else w0}
 
 
 def _handle_cache_enabled() -> bool:
     enabled = _overrides["handle_cache"]
-    if enabled is not None:
-        return bool(enabled) and _suspend_count == 0
-    return _env(_ENV_HANDLE_CACHE) in _ON and _suspend_count == 0
+    if enabled is None:
+        raw = _env(_ENV_HANDLE_CACHE)
+        if raw is not None and raw not in _ON | _OFF:
+            _bad_env(_ENV_HANDLE_CACHE, raw)
+        enabled = raw in _ON
+    return bool(enabled) and _suspend_count == 0
 
 
 def _handle_cache_size() -> int:
-    size = _overrides["handle_cache_size"]
-    if size is None:
-        raw = _env(_ENV_HANDLE_CACHE_SIZE)
-        size = DEFAULT_HANDLE_CACHE_SIZE if raw is None else int(raw)
-    return max(1, int(size))
+    size = _resolved("handle_cache_size", _ENV_HANDLE_CACHE_SIZE, int,
+                     lambda v: 1 <= v <= 2**31 - 1)
+    return DEFAULT_HANDLE_CACHE_SIZE if size is None else size
 
 
 def configure_hdf_reads(
@@ -186,11 +185,13 @@ def configure_hdf_reads(
                     raise ValueError("chunk_cache_w0 must be between 0 and 1")
             else:
                 value = int(value)
-                if value < 0 or (key in ("chunk_cache_slots", "handle_cache_size") and value < 1):
+                if value < 0 or value > sys.maxsize or (key in ("chunk_cache_slots", "handle_cache_size") and not 1 <= value <= 2**31 - 1):
                     raise ValueError(f"{key} must be a positive integer")
         _overrides[key] = value
     if not _handle_cache_enabled():
         close_hdf_handles()
+    with _lock:
+        _trim_cache()
     return hdf_read_settings()
 
 
@@ -207,10 +208,11 @@ def hdf_read_settings() -> Dict[str, Any]:
 
 
 def h5py_file_read(path: Any) -> h5py.File:
-    """Open ``path`` read-only with the sized chunk cache. The caller owns and closes it.
+    """Open ``path`` read-only with the resolved cache policy. The caller owns and closes it.
 
     Never returns a cached handle. Raises exactly what ``h5py.File(path, "r")`` raises.
     """
+    _handle_cache_size()  # validate dormant env policy too
     return h5py.File(path, "r", **_chunk_cache_kwargs())
 
 
@@ -245,6 +247,18 @@ def _release(entry: _Entry) -> None:
     if entry.users <= 0:
         entry.users = 0
         if entry.doomed:
+            _close_entry(entry)
+    _trim_cache()
+
+
+def _trim_cache():
+    """Bound cached entries even while old readers remain active."""
+    while len(_handles) > _handle_cache_size():
+        key = next((key for key, value in _handles.items() if not value.users), next(iter(_handles)))
+        entry = _handles.pop(key)
+        if entry.users:
+            entry.doomed = True
+        else:
             _close_entry(entry)
 
 
@@ -289,6 +303,7 @@ def close_hdf_handles(path: Any = None) -> int:
 def cached_hdf_handle_count() -> int:
     """Number of read-only handles currently held by the reuse cache."""
     with _lock:
+        _trim_cache()
         return len(_handles)
 
 
@@ -298,7 +313,7 @@ atexit.register(close_hdf_handles)
 class open_hdf_read:
     """Context manager: ``with open_hdf_read(path) as hdf:`` replaces ``with h5py.File(path, "r")``.
 
-    Applies the sized chunk cache. With handle reuse enabled, returns a cached
+    Applies the resolved stock or explicit chunk-cache policy. With handle reuse enabled, returns a cached
     handle (re-opened when the file's size or mtime changes) and leaves it open
     on exit; otherwise opens a fresh handle and closes it on exit. Raises
     exactly what ``h5py.File(path, "r")`` raises.
@@ -347,10 +362,11 @@ class open_hdf_read:
         except OSError:
             close_hdf_handles(spelling)
             return None  # let h5py raise its native error
-        key = (absolute, stat.st_size, stat.st_mtime_ns, spelling)
+        key = (absolute, stat.st_size, stat.st_mtime_ns, spelling, tuple(sorted(_chunk_cache_kwargs().items())))
         with _lock:
             if not _handle_cache_enabled():
                 return None
+            _trim_cache()
             entry = _handles.get(key)
             if entry is not None and entry.file.id.valid:
                 _handles.move_to_end(key)
@@ -358,7 +374,7 @@ class open_hdf_read:
                 return entry
             # Drop stale or dead handles for this file before opening it again.
             for old_key in list(_handles):
-                if old_key[0] == absolute and (old_key[1:3] != key[1:3] or old_key == key):
+                if old_key[0] == absolute and (old_key[1:3] != key[1:3] or old_key[4:] != key[4:] or old_key == key):
                     old = _handles.pop(old_key)
                     if old.users:
                         old.doomed = True
@@ -367,14 +383,5 @@ class open_hdf_read:
             entry = _Entry(h5py_file_read(spelling))
             entry.users = 1
             _handles[key] = entry
-            limit = _handle_cache_size()
-            if len(_handles) > limit:
-                for old_key in list(_handles):
-                    if len(_handles) <= limit:
-                        break
-                    old = _handles[old_key]
-                    if old is entry or old.users:
-                        continue
-                    _handles.pop(old_key)
-                    _close_entry(old)
+            _trim_cache()
             return entry

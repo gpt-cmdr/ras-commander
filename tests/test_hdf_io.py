@@ -63,7 +63,8 @@ def _chunk_cache(hdf: h5py.File) -> tuple:
     return hdf["ts"].id.get_access_plist().get_chunk_cache()
 
 
-def test_default_chunk_cache_is_applied_to_datasets(tmp_path):
+def test_explicit_chunk_cache_is_applied_to_datasets(tmp_path):
+    hdf_io.configure_hdf_reads(chunk_cache_bytes=hdf_io.DEFAULT_CHUNK_CACHE_BYTES)
     path = _make_hdf(tmp_path / "a.hdf")
     with hdf_io.open_hdf_read(path) as hdf:
         assert hdf.mode == "r"
@@ -73,7 +74,7 @@ def test_default_chunk_cache_is_applied_to_datasets(tmp_path):
             hdf_io.DEFAULT_CHUNK_CACHE_W0,
         )
         mdc, nslots, nbytes, w0 = hdf.id.get_access_plist().get_cache()
-        assert (nslots, nbytes, w0) == (10007, 64 * 1024 * 1024, 1.0)
+        assert (nslots, nbytes, w0) == (10007, 64 * 1024 * 1024, 0.75)
     assert not hdf.id.valid  # reuse off: closed on exit
 
 
@@ -277,6 +278,7 @@ def test_cached_read_handle_blocks_inprocess_writer_until_closed(tmp_path):
 
 
 def test_decorator_routes_through_helper(tmp_path):
+    hdf_io.configure_hdf_reads(chunk_cache_bytes=hdf_io.DEFAULT_CHUNK_CACHE_BYTES)
     from ras_commander.Decorators import standardize_input
 
     path = _make_hdf(tmp_path / "a.hdf")
@@ -355,3 +357,59 @@ def test_windows_replace_and_delete_after_close_on_real_fixture(tmp_path):
     hdf_io.close_hdf_handles()
     os.remove(target)
     assert not target.exists()
+
+
+def test_fresh_default_is_stock_and_reuse_selects_sized(tmp_path):
+    path = _make_hdf(tmp_path / 'policy.hdf')
+    with h5py.File(path) as plain:
+        stock = _chunk_cache(plain)
+    with hdf_io.open_hdf_read(path) as f:
+        assert _chunk_cache(f) == stock
+    assert hdf_io.hdf_read_settings()['chunk_cache_bytes'] is None
+    hdf_io.configure_hdf_reads(handle_cache=True)
+    with hdf_io.open_hdf_read(path) as f:
+        assert _chunk_cache(f) == (10007,64*1024*1024,0.75)
+
+
+@pytest.mark.parametrize('name,value', [
+    ('CHUNK_CACHE_MB','64MB'),('CHUNK_CACHE_MB','-1'),('CHUNK_CACHE_MB','inf'),
+    ('CHUNK_CACHE_SLOTS','0'),('CHUNK_CACHE_SLOTS','x'),('CHUNK_CACHE_SLOTS',str(2**64)),
+    ('CHUNK_CACHE_W0','nan'),('CHUNK_CACHE_W0','1.01'),('CHUNK_CACHE_W0','-1'),
+    ('HANDLE_CACHE','typo'),('HANDLE_CACHE_SIZE','0'),('HANDLE_CACHE_SIZE','x')])
+def test_bad_environment_warns_once_and_uses_default(tmp_path,monkeypatch,name,value):
+    path=_make_hdf(tmp_path/'bad-env.hdf');warnings=[]
+    hdf_io._warned_env.clear()
+    monkeypatch.setattr(hdf_io.logger,'warning',lambda *args:warnings.append(args))
+    monkeypatch.setenv('RAS_COMMANDER_HDF_'+name,value)
+    for _ in range(2):
+        with hdf_io.open_hdf_read(path) as f:assert f['ts'].shape==(8,64)
+    assert len(warnings)==1
+    assert hdf_io.hdf_read_settings()['chunk_cache_bytes'] is None
+    assert hdf_io.hdf_read_settings()['handle_cache_size']==4
+
+
+def test_busy_entries_do_not_escape_lru_limit(tmp_path):
+    from contextlib import ExitStack
+    hdf_io.configure_hdf_reads(handle_cache=True,handle_cache_size=2)
+    with ExitStack() as stack:
+        files=[stack.enter_context(hdf_io.open_hdf_read(_make_hdf(tmp_path/f'{i}.hdf'))) for i in range(5)]
+        assert all(f.id.valid for f in files)
+        assert hdf_io.cached_hdf_handle_count()==2
+        hdf_io.configure_hdf_reads(handle_cache_size=1)
+        assert hdf_io.cached_hdf_handle_count()==1
+    assert hdf_io.cached_hdf_handle_count()==1
+    assert sum(bool(f.id.valid) for f in files)==1
+
+
+def test_nested_suspension_covers_worker_threads_and_restores_policy(tmp_path):
+    from concurrent.futures import ThreadPoolExecutor
+    path=_make_hdf(tmp_path/'suspend.hdf');hdf_io.configure_hdf_reads(handle_cache=True)
+    def read():
+        with hdf_io.open_hdf_read(path) as f:assert f['ts'].shape==(8,64)
+    with hdf_io.suspend_hdf_reuse():
+        with hdf_io.suspend_hdf_reuse(), ThreadPoolExecutor(2) as pool:
+            list(pool.map(lambda _:read(),range(4)))
+        assert not hdf_io.hdf_read_settings()['handle_cache']
+        assert hdf_io.cached_hdf_handle_count()==0
+    assert hdf_io.hdf_read_settings()['handle_cache']
+    read();assert hdf_io.cached_hdf_handle_count()==1
