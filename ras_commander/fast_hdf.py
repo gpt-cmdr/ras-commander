@@ -225,33 +225,41 @@ def read_dataset(dataset: h5py.Dataset, selection=None, *, backend="auto", threa
     """
     if not isinstance(dataset, h5py.Dataset):
         raise TypeError("dataset must be an open h5py.Dataset")
+    from ._fast_hdf_typed import _record
     mode, threads = _mode(backend), _threads(threads)
     module = _native(mode)
     key = () if selection is None else selection
     if module is None:
+        _record(dataset.name, "h5py")
         return dataset[key]
     if not _safe_file(dataset) or not _numeric(dataset) or dataset.shape is None:
         if mode == "rust":
             raise FastHdfError(f"Dataset cannot be safely read by Rust: {dataset.name}")
         logger.debug("h5py fallback for unsupported dataset %s", dataset.name)
+        _record(dataset.name, "h5py-fallback", "unsupported-dataset")
         return dataset[key]
     try:
         slices, squeeze = _selection(dataset.shape, selection)
     except NotImplementedError as exc:
         if mode == "rust":
             raise FastHdfError(str(exc)) from exc
+        _record(dataset.name, "h5py-fallback", "advanced-selection")
         return dataset[key]
     expected = dataset.shape if slices is None else tuple(len(range(*item)) for item in slices)
     try:
         with _session(module, os.fsdecode(dataset.file.filename), threads) as session:
             values = _read_fim_result(session, dataset, slices, threads)
+            served = ("native-typed", "mesh_result")
             if values is None:
+                served = ("native-generic", None)
                 values = session.read_numeric(dataset.name, selection=slices)
     except Exception as exc:
         if mode == "auto" and _unsupported(module, exc):
             logger.debug("h5py fallback for %s: %s", dataset.name, exc)
+            _record(dataset.name, "h5py-fallback", "mesh_result")
             return dataset[key]
         raise FastHdfError(f"Native read failed for {dataset.name}: {exc}") from exc
+    _record(dataset.name, *served)
     values = _checked_array(values, dataset.dtype, expected)
     if squeeze:
         values = np.squeeze(values, axis=squeeze)
