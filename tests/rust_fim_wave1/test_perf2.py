@@ -78,7 +78,10 @@ def test_requested_bc_does_not_decode_corrupt_sibling(fixture):
         expected=root[name][()]
         address=h5py.h5o.get_info(root[names[-1]].id).addr
     with fixture.open('r+b') as stream:
-        stream.seek(address);stream.write(b'BAD!')
+        stream.seek(address)
+        assert stream.read(1)==b'\x01', 'fixture uses a v1 object header'
+        # Preserve supported version; make the first message exceed its chunk.
+        stream.seek(address+18);stream.write((65528).to_bytes(2,'little'))
     with native.HdfSession(fixture) as s:
         exact(s.read_mesh_boundary_series(area,name,(0,len(expected),1))['values'],expected)
         exact(s.read_mesh_boundary_batch(area,(0,len(expected),1),[name])[name]['values'],expected)
