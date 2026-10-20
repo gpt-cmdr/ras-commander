@@ -43,6 +43,7 @@ from .HdfBase import HdfBase
 from .HdfUtils import HdfUtils
 from ..Decorators import standardize_input, log_call
 from ..LoggingConfig import get_logger
+from ..fast_hdf import read_typed
 
 xr = optional_module("xarray", "Returning xarray results from HdfResultsXsec")
 
@@ -137,11 +138,11 @@ class HdfResultsXsec:
                 times = pd.to_datetime(time_stamps, format='%d%b%Y %H:%M:%S:%f')
                 
                 # Extract Required Datasets
-                water_surface = hdf_file[f"{base_output_path}/Water Surface"][:]
-                velocity_total = hdf_file[f"{base_output_path}/Velocity Total"][:]
-                velocity_channel = hdf_file[f"{base_output_path}/Velocity Channel"][:]
-                flow_lateral = hdf_file[f"{base_output_path}/Flow Lateral"][:]
-                flow = hdf_file[f"{base_output_path}/Flow"][:]
+                water_surface = read_typed(hdf_file[f"{base_output_path}/Water Surface"], slice(None))
+                velocity_total = read_typed(hdf_file[f"{base_output_path}/Velocity Total"], slice(None))
+                velocity_channel = read_typed(hdf_file[f"{base_output_path}/Velocity Channel"], slice(None))
+                flow_lateral = read_typed(hdf_file[f"{base_output_path}/Flow Lateral"], slice(None))
+                flow = read_typed(hdf_file[f"{base_output_path}/Flow"], slice(None))
                 
                 # Calculate maximum values along time axis
                 max_water_surface = np.max(water_surface, axis=0)
@@ -406,7 +407,7 @@ class HdfResultsXsec:
 
         for start in range(0, int(dataset.shape[0]), chunk_rows):
             stop = min(int(dataset.shape[0]), start + chunk_rows)
-            block = np.asarray(dataset[start:stop], dtype="float64")
+            block = np.asarray(read_typed(dataset, slice(start, stop)), dtype="float64")
             valid = np.isfinite(block) & (np.abs(block) < 1.0e30)
             maximum_block = np.where(valid, block, -np.inf)
             minimum_block = np.where(valid, block, np.inf)

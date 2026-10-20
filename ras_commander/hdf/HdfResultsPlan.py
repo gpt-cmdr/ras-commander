@@ -39,6 +39,7 @@ import pandas as pd
 from ..Decorators import standardize_input, log_call
 from .HdfUtils import HdfUtils
 from ..LoggingConfig import get_logger
+from ..fast_hdf import read_typed
 import numpy as np
 from datetime import datetime
 
@@ -543,7 +544,7 @@ class HdfResultsPlan:
             if attribute_path not in hdf_file:
                 continue
 
-            attributes = hdf_file[attribute_path][()]
+            attributes = read_typed(hdf_file[attribute_path])
             field_names = attributes.dtype.names or ()
             field_lookup = {name.lower(): name for name in field_names}
             station_field = field_lookup.get("station") or field_lookup.get("rs")
@@ -590,7 +591,7 @@ class HdfResultsPlan:
         if geometry_path not in hdf_file:
             return np.full(len(result_attributes), np.nan, dtype=float)
 
-        geometry_attributes = hdf_file[geometry_path][()]
+        geometry_attributes = read_typed(hdf_file[geometry_path])
         field_names = geometry_attributes.dtype.names or ()
         field_lookup = {name.strip().lower(): name for name in field_names}
         geometry_fields = {
@@ -705,7 +706,7 @@ class HdfResultsPlan:
                     raise KeyError(f"WSE data not found at: {wse_path}")
                 # Get WSE dataset (shape: num_profiles × num_cross_sections)
                 wse_ds = hdf_file[wse_path]
-                wse_data = wse_ds[()]
+                wse_data = read_typed(wse_ds)
                 num_profiles, num_xs = wse_data.shape
 
                 # Get profile names
@@ -1249,9 +1250,9 @@ class HdfResultsPlan:
 
                 # Get main variables (WSE, Flow)
                 wse_data = np.asarray(
-                    hdf_file[f"{xs_path}/Water Surface"][()]
+                    read_typed(hdf_file[f"{xs_path}/Water Surface"])
                 )
-                flow_data = np.asarray(hdf_file[f"{xs_path}/Flow"][()])
+                flow_data = np.asarray(read_typed(hdf_file[f"{xs_path}/Flow"]))
                 if wse_data.ndim != 2:
                     raise ValueError(
                         "Steady Water Surface dataset must be a 2D "
@@ -1284,7 +1285,7 @@ class HdfResultsPlan:
                 def get_additional_var(var_name, default=np.nan):
                     path = f"{add_vars_path}/{var_name}"
                     if path in hdf_file:
-                        values = np.asarray(hdf_file[path][()])
+                        values = np.asarray(read_typed(hdf_file[path]))
                         expected_shape = (num_profiles, num_xs)
                         if values.shape != expected_shape:
                             raise ValueError(

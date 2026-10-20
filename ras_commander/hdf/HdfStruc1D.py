@@ -36,6 +36,7 @@ from .HdfBase import HdfBase
 from .HdfUtils import HdfUtils
 from ..Decorators import standardize_input, log_call
 from ..LoggingConfig import get_logger
+from ..fast_hdf import FastHdfError, read_typed
 
 logger = get_logger(__name__)
 
@@ -260,7 +261,7 @@ class HdfStruc1D:
             # Water Surface for headwater
             ws_path = f"{base_path}/Water Surface"
             if ws_path in hdf_file:
-                ws_data = hdf_file[ws_path][:]
+                ws_data = read_typed(hdf_file[ws_path], slice(None))
                 if hw_idx < ws_data.shape[1]:
                     result['max_hw'] = float(np.nanmax(ws_data[:, hw_idx]))
                     result['found'] = True
@@ -269,7 +270,7 @@ class HdfStruc1D:
             # Flow for headwater location
             flow_path = f"{base_path}/Flow"
             if flow_path in hdf_file:
-                flow_data = hdf_file[flow_path][:]
+                flow_data = read_typed(hdf_file[flow_path], slice(None))
                 if hw_idx < flow_data.shape[1]:
                     result['max_flow'] = float(np.nanmax(flow_data[:, hw_idx]))
                     result['flow_source'] = result['hw_source']
@@ -279,7 +280,7 @@ class HdfStruc1D:
             # Water Surface for tailwater
             ws_path = f"{base_path}/Water Surface"
             if ws_path in hdf_file:
-                ws_data = hdf_file[ws_path][:]
+                ws_data = read_typed(hdf_file[ws_path], slice(None))
                 if tw_idx < ws_data.shape[1]:
                     result['max_tw'] = float(np.nanmax(ws_data[:, tw_idx]))
                     result['found'] = True
@@ -425,7 +426,7 @@ class HdfStruc1D:
         if hw_idx is not None:
             ws_path = f"{base_path}/Water Surface"
             if ws_path in hdf_file:
-                ws_data = hdf_file[ws_path][:]
+                ws_data = read_typed(hdf_file[ws_path], slice(None))
                 if hw_idx < ws_data.shape[1]:
                     result['max_hw'] = float(np.nanmax(ws_data[:, hw_idx]))
                     result['found'] = True
@@ -437,7 +438,7 @@ class HdfStruc1D:
                 flow_path = f"{base_path}/Additional Variables/Flow"
 
             if flow_path in hdf_file:
-                flow_data = hdf_file[flow_path][:]
+                flow_data = read_typed(hdf_file[flow_path], slice(None))
                 if hw_idx < flow_data.shape[1]:
                     result['max_flow'] = float(np.nanmax(flow_data[:, hw_idx]))
                     result['flow_source'] = result['hw_source']
@@ -480,26 +481,28 @@ class HdfStruc1D:
                         source = f"{river}/{reach}/{rs} (Structure output)"
 
                         if "Headwater" in struct_group:
-                            hw_data = struct_group["Headwater"][:]
+                            hw_data = read_typed(struct_group["Headwater"], slice(None))
                             if i < hw_data.shape[1]:
                                 result['max_hw'] = float(np.nanmax(hw_data[:, i]))
                                 result['hw_source'] = source
                                 result['found'] = True
 
                         if "Tailwater" in struct_group:
-                            tw_data = struct_group["Tailwater"][:]
+                            tw_data = read_typed(struct_group["Tailwater"], slice(None))
                             if i < tw_data.shape[1]:
                                 result['max_tw'] = float(np.nanmax(tw_data[:, i]))
                                 result['tw_source'] = source
 
                         if "Flow" in struct_group:
-                            flow_data = struct_group["Flow"][:]
+                            flow_data = read_typed(struct_group["Flow"], slice(None))
                             if i < flow_data.shape[1]:
                                 result['max_flow'] = float(np.nanmax(flow_data[:, i]))
                                 result['flow_source'] = source
 
                         break
 
+        except FastHdfError:
+            raise
         except Exception as e:
             logger.debug(f"Could not extract from Structures group: {e}")
 

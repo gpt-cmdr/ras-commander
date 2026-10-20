@@ -27,6 +27,7 @@ import pandas as pd
 from .HdfStruc import HdfStruc
 from ..Decorators import log_call, standardize_input
 from ..LoggingConfig import get_logger
+from ..fast_hdf import FastHdfError, read_typed
 
 logger = get_logger(__name__)
 
@@ -201,6 +202,8 @@ class HdfStorageArea:
                 geom_group = hdf_file.get("Geometry")
                 if geom_group is not None:
                     si_units_raw = geom_group.attrs.get("SI Units")
+        except FastHdfError:
+            raise
         except Exception as exc:
             logger.debug(
                 "Unable to read storage unit metadata from %s: %s",
@@ -315,7 +318,7 @@ class HdfStorageArea:
                 )
                 return []
 
-            attrs = sa_group["Attributes"][()]
+            attrs = read_typed(sa_group["Attributes"])
             if not getattr(attrs.dtype, "names", None) or "Name" not in attrs.dtype.names:
                 logger.debug(
                     "Storage area attributes in %s do not include a Name field.",
@@ -362,7 +365,7 @@ class HdfStorageArea:
                 )
                 return {}
 
-            attrs = sa_group["Attributes"][()]
+            attrs = read_typed(sa_group["Attributes"])
             names = attrs.dtype.names or ()
             if "Name" not in names:
                 logger.debug(
@@ -465,7 +468,7 @@ class HdfStorageArea:
                         HdfStorageArea._STORAGE_AREA_PATH,
                     )
                     return empty
-                attrs = sa_group["Attributes"][()]
+                attrs = read_typed(sa_group["Attributes"])
                 field_names = getattr(attrs.dtype, "names", None)
                 if not field_names or "Name" not in field_names:
                     logger.debug(
@@ -507,7 +510,7 @@ class HdfStorageArea:
                     )
                     return empty
 
-                info = sa_group[HdfStorageArea._VOLUME_ELEVATION_INFO][()]
+                info = read_typed(sa_group[HdfStorageArea._VOLUME_ELEVATION_INFO])
                 start, count = int(info[sa_index, 0]), int(info[sa_index, 1])
                 if count == 0:
                     HdfStorageArea._log_missing_volume_elevation_curve(
@@ -517,9 +520,9 @@ class HdfStorageArea:
                     )
                     return empty
 
-                values = sa_group[HdfStorageArea._VOLUME_ELEVATION_VALUES][
-                    start:start + count
-                ]
+                values = read_typed(
+                    sa_group[HdfStorageArea._VOLUME_ELEVATION_VALUES], slice(start, start + count)
+                )
                 df = pd.DataFrame(
                     {"elevation": values[:, 1].astype("float64"),
                      "volume": values[:, 0].astype("float64")},
@@ -530,6 +533,8 @@ class HdfStorageArea:
                 )
                 return df
 
+        except FastHdfError:
+            raise
         except Exception as e:
             logger.error(
                 "Error reading volume-elevation curve for SA '%s' from %s "
@@ -763,6 +768,8 @@ class HdfStorageArea:
 
         except (FileNotFoundError, ValueError):
             raise
+        except FastHdfError:
+            raise
         except Exception as e:
             logger.debug(
                 "Error computing stage-storage curve for SA '%s' in %s: %s",
@@ -807,7 +814,7 @@ class HdfStorageArea:
             if attr_path not in hdf_file:
                 return None
 
-            attributes = hdf_file[attr_path][()]
+            attributes = read_typed(hdf_file[attr_path])
             field_names = attributes.dtype.names or ()
             if not field_names:
                 return None
