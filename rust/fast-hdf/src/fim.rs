@@ -230,7 +230,7 @@ fn run_summary(py: Python<'_>, path: PathBuf, max_bytes: usize) -> PyResult<Boun
     }
     Ok(d)
 }
-fn compound<'py>(py: Python<'py>, t: &ExactCompound) -> PyResult<Bound<'py, PyDict>> {
+pub(crate) fn compound<'py>(py: Python<'py>, t: &ExactCompound) -> PyResult<Bound<'py, PyDict>> {
     let columns=t.table.columns.iter().map(|c| {
  let d=dict!(py,"name"=>&c.name,"byte_offset"=>c.byte_offset,"attribute_type"=>attribute_type(py,&c.attribute_type)?,"datatype_label"=>&c.datatype_label,"capability"=>capability(py,&c.value.capability())?);
  use ras_commander_rust::hdf::metadata::MetadataValue as V;
@@ -322,6 +322,77 @@ fn layer_inventory(
  }).collect()
 }
 
+#[pyfunction]
+#[pyo3(signature=(path,area,max_bytes=67108864))]
+fn mesh_geometry<'py>(
+    py: Python<'py>,
+    path: PathBuf,
+    area: &str,
+    max_bytes: usize,
+) -> PyResult<Bound<'py, PyDict>> {
+    let g = py
+        .detach(|| ReadOnlyHdfSession::open(path)?.mesh_geometry(area, max_bytes))
+        .map_err(crate::reader::err)?;
+    let m = &g.mesh;
+    let fields=g.fields.iter().map(|f|Ok(dict!(py,"field"=>f.field.as_str(),"path"=>&f.path,"shape"=>&f.shape,"kind"=>f.kind.map(crate::reader::numeric_kind_name),"dtype"=>f.kind.and_then(crate::reader::numpy),"capability"=>capability(py,&f.capability)?))).collect::<PyResult<Vec<_>>>()?;
+    Ok(
+        dict!(py,"identity"=>identity(py,&m.id)?,"mesh_name"=>&m.mesh_name,"physical_cells"=>m.physical_cells,"stored_cells"=>m.stored_cells,"ghost_cells"=>m.ghost_cells,"fields"=>fields),
+    )
+}
+#[pyfunction]
+#[pyo3(signature=(path,max_bytes=67108864))]
+fn mesh_geometry_tables(
+    py: Python<'_>,
+    path: PathBuf,
+    max_bytes: usize,
+) -> PyResult<Bound<'_, PyDict>> {
+    let t = py
+        .detach(|| ReadOnlyHdfSession::open(path)?.mesh_geometry_tables(max_bytes))
+        .map_err(crate::reader::err)?;
+    let cell = dict!(py,"capability"=>capability(py,t.cell_info.capability())?,"value"=>py.None());
+    let attributes = compound(py, &t.attributes)?;
+    if let Some(a) = t.cell_info.into_value() {
+        cell.set_item("value", crate::reader::array(py, a)?)?;
+    }
+    Ok(dict!(py,"attributes"=>attributes,"cell_info"=>cell))
+}
+#[pyfunction]
+#[pyo3(signature=(path,family,max_bytes=67108864))]
+fn geometry_family_capability<'py>(
+    py: Python<'py>,
+    path: PathBuf,
+    family: &str,
+    max_bytes: usize,
+) -> PyResult<Bound<'py, PyDict>> {
+    let family = GEOMETRY_FAMILIES
+        .iter()
+        .find(|f| f.as_str() == family)
+        .copied()
+        .ok_or_else(|| PyValueError::new_err("unknown geometry family"))?;
+    let c = py
+        .detach(|| ReadOnlyHdfSession::open(path)?.geometry_family_capability(family, max_bytes))
+        .map_err(crate::reader::err)?;
+    capability(py, &c)
+}
+#[pyfunction]
+#[pyo3(signature=(path,area,max_bytes=67108864))]
+fn mesh_boundary_links<'py>(
+    py: Python<'py>,
+    path: PathBuf,
+    area: &str,
+    max_bytes: usize,
+) -> PyResult<Bound<'py, PyDict>> {
+    let r = py
+        .detach(|| ReadOnlyHdfSession::open(path)?.mesh_boundary_links(area, max_bytes))
+        .map_err(crate::reader::err)?;
+    let d = dict!(py,"capability"=>capability(py,r.capability())?,"value"=>py.None());
+    if let Some(l) = r.value() {
+        let matched=l.matched.iter().map(|m|Ok(dict!(py,"name"=>&m.name,"geometry"=>identity(py,&m.geometry)?,"series_path"=>&m.series_path))).collect::<PyResult<Vec<_>>>()?;
+        d.set_item("value",dict!(py,"area"=>&l.area,"geometry_capability"=>capability(py,&l.geometry_capability)?,"series_capability"=>capability(py,&l.series_capability)?,"matched"=>matched,"unmatched_geometry"=>&l.unmatched_geometry,"unmatched_series"=>&l.unmatched_series))?;
+    }
+    Ok(d)
+}
+
 pub(crate) fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(mesh_summary_inventory, m)?)?;
     m.add_function(wrap_pyfunction!(mesh_series_inventory, m)?)?;
@@ -335,5 +406,9 @@ pub(crate) fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(geometry_family, m)?)?;
     m.add_function(wrap_pyfunction!(compare_mesh_identity, m)?)?;
     m.add_function(wrap_pyfunction!(layer_inventory, m)?)?;
+    m.add_function(wrap_pyfunction!(mesh_geometry, m)?)?;
+    m.add_function(wrap_pyfunction!(mesh_geometry_tables, m)?)?;
+    m.add_function(wrap_pyfunction!(geometry_family_capability, m)?)?;
+    m.add_function(wrap_pyfunction!(mesh_boundary_links, m)?)?;
     Ok(())
 }

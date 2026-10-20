@@ -1,4 +1,4 @@
-"""Explicit API7 full-feature native entrypoint contract (46); additions require review."""
+"""Explicit API9 full-feature native entrypoint contract (67); additions require review."""
 EXPECTED = {
     "HdfSession": ("class", None, "src/session.rs"),
     "mesh_summary_inventory": ("function", None, "src/fim.rs"),
@@ -13,6 +13,27 @@ EXPECTED = {
     "geometry_family": ("function", None, "src/fim.rs"),
     "compare_mesh_identity": ("function", None, "src/fim.rs"),
     "layer_inventory": ("function", None, "src/fim.rs"),
+    "mesh_geometry": ("function", None, "src/fim.rs"),
+    "mesh_geometry_tables": ("function", None, "src/fim.rs"),
+    "geometry_family_capability": ("function", None, "src/fim.rs"),
+    "mesh_boundary_links": ("function", None, "src/fim.rs"),
+    "xs_geometry_inventory": ("function", None, "src/one_d.rs"),
+    "read_xs_geometry": ("function", None, "src/one_d.rs"),
+    "one_d_line_family": ("function", None, "src/one_d.rs"),
+    "river_reaches": ("function", None, "src/one_d.rs"),
+    "river_junctions": ("function", None, "src/one_d.rs"),
+    "xs_interpolation_surfaces": ("function", None, "src/one_d.rs"),
+    "xs_result_inventory": ("function", None, "src/one_d.rs"),
+    "read_xs_result": ("function", None, "src/one_d.rs"),
+    "unsteady_row_window": ("function", None, "src/one_d.rs"),
+    "one_d_summary_inventory": ("function", None, "src/one_d.rs"),
+    "read_one_d_summary": ("function", None, "src/one_d.rs"),
+    "structure_geometry": ("function", None, "src/one_d.rs"),
+    "one_d_geometry_group": ("function", None, "src/one_d.rs"),
+    "pump_stations": ("function", None, "src/one_d.rs"),
+    "one_d_structure_inventory": ("function", None, "src/one_d.rs"),
+    "one_d_structure_capabilities": ("function", None, "src/one_d.rs"),
+    "read_one_d_structure_series": ("function", None, "src/one_d.rs"),
 
     "structure_inventory": ("function", None, "src/structures.rs"),
     "read_structure_series": ("function", None, "src/structures.rs"),

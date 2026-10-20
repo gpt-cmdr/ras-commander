@@ -388,3 +388,25 @@ in the existing Python adapters. h5py remains the automatic unsupported fallback
 HEC-RAS 7.0 `Cell Hydraulic Depth` is passed through exactly; no `Depth` alias is
 introduced. The existing xarray name normalizer only lowercases and replaces
 punctuation/spaces (producing `cell_hydraulic_depth`).
+
+## Wave 2 / Wave 8 typed bindings (API_VERSION = 9)
+
+Engine pin 527bdf39c95ec86d235291e07e3a33b6ce21ca58 (integration/w2-perf3, engine API 7).
+TEXT_API_VERSION remains 1. Full-feature registration set: 67 entrypoints.
+
+Wave 8 additions (src/fim.rs): `mesh_geometry` (field descriptors), `mesh_geometry_tables`
+(exact Attributes compound + Cell Info), `geometry_family_capability`, `mesh_boundary_links`.
+Wave 2 additions (src/one_d.rs): `xs_geometry_inventory`, `read_xs_geometry`,
+`one_d_line_family`, `river_reaches`, `river_junctions`, `xs_interpolation_surfaces`,
+`xs_result_inventory`, `read_xs_result`, `unsteady_row_window`, `one_d_summary_inventory`,
+`read_one_d_summary`, `structure_geometry`, `one_d_geometry_group`, `pump_stations`,
+`one_d_structure_inventory`, `one_d_structure_capabilities` (with the engine
+`OneDStructureKind::qualified` flag), `read_one_d_structure_series`.
+
+Conventions are unchanged: path-first module functions, `max_bytes`/`metadata_max_bytes`
+default to DEFAULT_MAX_BYTES (64 MiB), capability dicts `{status, code, reason}`, Identity
+`{source, table, row}`, enum strings from engine `as_str()`, `Reported<T>` as
+`{capability, value}`, compounds as `{shape, raw_bytes, columns}` with exact stored bytes,
+numeric arrays in their stored NumPy dtype, and the existing typed exception mapping
+(engine_kind/engine_code annotations). Python routing lives in
+`ras_commander/_fast_hdf_typed.py` (`fast_hdf.read_typed`).

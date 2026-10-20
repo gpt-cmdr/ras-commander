@@ -6,6 +6,7 @@ mod fluvial_bindings;
 pub mod fluvial_geometry;
 pub mod fluvial_topology;
 mod mesh;
+mod one_d;
 pub mod ras_text;
 mod reader;
 mod session;
@@ -16,7 +17,7 @@ mod tiles;
 
 pub(crate) static REGISTERED_BINDINGS: OnceLock<Vec<String>> = OnceLock::new();
 
-pub(crate) const API_VERSION: u32 = 8;
+pub(crate) const API_VERSION: u32 = 9;
 
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
@@ -155,6 +156,7 @@ fn ras_commander_fast_hdf(m: &Bound<'_, PyModule>) -> PyResult<()> {
     fim::register(m)?;
     session::register(m)?;
     structures::register(m)?;
+    one_d::register(m)?;
     #[cfg(feature = "exports-arrow")]
     {
         m.add_function(wrap_pyfunction!(export_ipc_file, m)?)?;
