@@ -222,16 +222,24 @@ class HdfPipe:
             # --- Read Terrain Profiles Data (optional) ---
             attr_df['Polyline'] = polyline_geometries
 
-            if 'Terrain Profiles Info' in group and 'Terrain Profiles Values' in group:
+            has_profile_info = 'Terrain Profiles Info' in group
+            has_profile_values = 'Terrain Profiles Values' in group
+            if has_profile_info != has_profile_values:
+                raise KeyError(
+                    "Pipe conduit terrain profiles are partially present: both "
+                    "'Terrain Profiles Info' and 'Terrain Profiles Values' are required")
+            if has_profile_info and has_profile_values:
                 terrain_info = group['Terrain Profiles Info'][:]
                 terrain_values = group['Terrain Profiles Values'][:]
+                if len(terrain_info) != len(attr_df):
+                    raise ValueError("Pipe conduit Attributes/Terrain Profiles Info row mismatch")
                 terrain_coords = list(zip(terrain_values[:, 0], terrain_values[:, 1]))
 
                 terrain_profiles_list: List[List[Tuple[float, float]]] = []
                 for i in range(len(terrain_info)):
-                    info = terrain_info[i]
-                    start_idx = info[0]
-                    count = info[1]
+                    start_idx, count = map(int, terrain_info[i])
+                    if start_idx < 0 or count < 0 or start_idx + count > len(terrain_coords):
+                        raise ValueError(f"Pipe terrain profile slice is out of bounds for conduit row {i}")
                     segment = terrain_coords[start_idx : start_idx + count]
                     terrain_profiles_list.append(segment)
 
@@ -713,7 +721,10 @@ class HdfPipe:
         receives an invented time row. Labels/units are literal source metadata,
         even where the file's labels appear inconsistent. Summary datasets without
         Location do not claim a node/conduit domain or stored-ID mapping.
-        Volume-accounting attributes use null row/location. DataFrame.attrs retains
+        Volume-accounting attributes use null row/location/units: the group's
+        'Vol Accounting in' attribute (itself returned as a row) names the volume
+        unit and is not applied per attribute (e.g. 'Error Percent' is a
+        percentage). DataFrame.attrs retains
         source shapes and complete dataset/group attributes. Missing both sources
         raises KeyError; malformed present datasets raise ValueError. A legacy
         Summary/Pipe Network table without geometry identities retains its original
@@ -752,7 +763,7 @@ class HdfPipe:
                     if np.asarray(value).ndim != 0:
                         raise ValueError(f"{volume}: non-scalar volume attribute {key!r}")
                     records.append(dict(network=name, source='volume_accounting', path=hdf[volume].name,
-                        row=None, location=None, row_variable=key, units=_text(attrs.get('Vol Accounting in', '')),
+                        row=None, location=None, row_variable=key, units=None,
                         value=_text(value) if isinstance(value, bytes) else value))
         df = pd.DataFrame(records, columns=['network', 'source', 'path', 'row', 'location', 'row_variable', 'units', 'value'])
         df.attrs['source_metadata'] = metadata

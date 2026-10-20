@@ -145,7 +145,10 @@ This file is the canonical local instruction file for `ras_commander/hdf/`.
   accept network/block options and raise for unknown IDs.
 - `get_pipe_network_summary(..., pipe_network_name=None)` returns literal Base
   summary rows and volume-accounting attributes in long form. Row/column ordinals,
-  labels, units, values, shapes and raw metadata are retained. The legacy
+  labels, units, values, shapes and raw metadata are retained. Volume-accounting
+  rows carry null units; the `Vol Accounting in` row names the volume unit.
+  `get_pipe_conduits` validates terrain-profile start/count slices and refuses
+  partially present profile tables. The legacy
   Summary/Pipe Network table keeps its historical return shape when present
   without geometry network identities. One-row minima never
   receive a fabricated time row; absent Location does not imply a typed domain.
