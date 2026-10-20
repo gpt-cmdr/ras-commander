@@ -331,10 +331,21 @@ def read_datasets(hdf_path, dataset_paths: Sequence[str], *, backend="auto", thr
                             del groups[key]
                     native_values = session.read_numeric_batch(generic) if generic else {}
                     for (area, rows), requests in groups.items():
-                        values = session.read_mesh_boundary_batch(area, (0, rows, 1),
-                                                                  [name for _, name in requests])
-                        for path, name in requests:
-                            native_values[path] = values[name]["values"]
+                        try:
+                            values = session.read_mesh_boundary_batch(
+                                area, (0, rows, 1), [name for _, name in requests])
+                        except Exception as exc:
+                            # Auto retains API7 generic-read semantics on typed
+                            # qualification refusals, but never hides host failures.
+                            if mode != "auto" or getattr(exc, "engine_kind", None) not in {
+                                    "unsupported", "corrupt", "not_found", "invalid_request",
+                                    "structural_topology", "invalid_geometry"}:
+                                raise
+                            native_values.update(session.read_numeric_batch(
+                                [path for path, _ in requests]))
+                        else:
+                            for path, name in requests:
+                                native_values[path] = values[name]["values"]
             except Exception as exc:
                 if mode != "auto" or not _unsupported(module, exc):
                     raise FastHdfError(f"Native batch read failed for {hdf.filename}: {exc}") from exc
