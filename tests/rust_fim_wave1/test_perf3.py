@@ -57,8 +57,14 @@ def test_complete_cell_points_frame_matches_previous_h5py_in_both_backends(path,
         for backend in ("python", "rust"):
             fast_hdf.close_sessions()
             monkeypatch.setenv("RAS_COMMANDER_FAST_HDF", backend)
-            actual = HdfMesh.get_mesh_cell_points(path, include_ghost_cells=ghosts)
-            assert bool(fast_hdf._sessions) == (backend == "rust"), "required backend must actually execute"
+            with fast_hdf.trace_reads() as trace:
+                actual = HdfMesh.get_mesh_cell_points(path, include_ghost_cells=ghosts)
+            # PY-ROUTE-1: cell centers come from the typed engine reader (path-level
+            # binding, no cached HdfSession), so execution is proven by the read trace.
+            native = any(r["backend"] == "native-typed" and r["path"].endswith("/Cells Center Coordinate")
+                         for r in trace)
+            assert native == (backend == "rust"), "required backend must actually execute"
+            assert all(r["backend"] == "h5py" for r in trace) == (backend == "python")
             assert_geodataframe_equal(actual, expected, check_dtype=True,
                                       check_index_type="exact", check_column_type="exact",
                                       check_frame_type=True, check_like=False,
