@@ -16,7 +16,7 @@ mod tiles;
 
 pub(crate) static REGISTERED_BINDINGS: OnceLock<Vec<String>> = OnceLock::new();
 
-pub(crate) const API_VERSION: u32 = 7;
+pub(crate) const API_VERSION: u32 = 8;
 
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;

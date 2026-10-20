@@ -74,9 +74,9 @@ def _native(mode):
         if mode == "rust":
             raise FastHdfError("The optional ras-commander-fast-hdf extension is unavailable") from exc
         return None
-    if getattr(module, "API_VERSION", None) != 7:
+    if getattr(module, "API_VERSION", None) != 8:
         if mode == "rust":
-            raise FastHdfError("Incompatible ras-commander-fast-hdf API; version 7 is required")
+            raise FastHdfError("Incompatible ras-commander-fast-hdf API; version 8 is required")
         logger.warning("Ignoring incompatible ras-commander-fast-hdf extension")
         return None
     return module
@@ -272,7 +272,7 @@ def _read_fim_result(module, dataset, slices, threads):
         return None
     path = os.fsdecode(dataset.file.filename)
     if block == "Summary Output" and len(parts) == 9 and slices is None:
-        return module.read_mesh_summary(area, parts[8])["values"]
+        return module.read_mesh_summary_values(area, parts[8])
     if block != "Unsteady Time Series" or len(dataset.shape) != 2:
         return None
     rows, columns = slices or [(0, n, 1) for n in dataset.shape]
@@ -308,7 +308,33 @@ def read_datasets(hdf_path, dataset_paths: Sequence[str], *, backend="auto", thr
         if eligible:
             try:
                 with _session(module, os.fsdecode(hdf.filename), threads) as session:
-                    native_values = session.read_numeric_batch(eligible)
+                    # Canonical per-area BC series share qualification/time work in one call.
+                    groups = {}
+                    generic = []
+                    for path in eligible:
+                        ds = datasets[path]
+                        parts = ds.name.strip("/").split("/")
+                        if (threads is None and len(parts) == 10 and parts[:5] ==
+                                ["Results", "Unsteady", "Output", "Output Blocks", "Base Output"]
+                                and parts[5:7] == ["Unsteady Time Series", "2D Flow Areas"]
+                                and parts[8] == "Boundary Conditions" and len(ds.shape) == 2):
+                            groups.setdefault((parts[7], ds.shape[0]), []).append((path, parts[9]))
+                        else:
+                            generic.append(path)
+                    # Keep the generic reader's unbounded full-read contract for
+                    # batches exceeding the typed result API's output budget.
+                    for key, requests in list(groups.items()):
+                        size = sum(datasets[path].size * datasets[path].dtype.itemsize
+                                   + datasets[path].shape[-1] * 8 for path, _ in requests)
+                        if size > 67108864:
+                            generic.extend(path for path, _ in requests)
+                            del groups[key]
+                    native_values = session.read_numeric_batch(generic) if generic else {}
+                    for (area, rows), requests in groups.items():
+                        values = session.read_mesh_boundary_batch(area, (0, rows, 1),
+                                                                  [name for _, name in requests])
+                        for path, name in requests:
+                            native_values[path] = values[name]["values"]
             except Exception as exc:
                 if mode != "auto" or not _unsupported(module, exc):
                     raise FastHdfError(f"Native batch read failed for {hdf.filename}: {exc}") from exc

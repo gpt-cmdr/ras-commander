@@ -35,20 +35,88 @@ impl HdfSession {
 #[pymethods]
 impl HdfSession {
     #[new]
-    #[pyo3(signature=(path,threads=None,parallel=true))]
+    #[pyo3(signature=(path,threads=None,parallel=true,*,cache_bytes=67108864,cache_slots=521))]
     fn new(
         py: Python<'_>,
         path: PathBuf,
         threads: Option<usize>,
         parallel: bool,
+        cache_bytes: usize,
+        cache_slots: usize,
     ) -> PyResult<Self> {
         let count = crate::reader::threads(threads)?;
         let s = py
-            .detach(|| ReadOnlyHdfSession::with_options(path, count, parallel))
+            .detach(|| {
+                ReadOnlyHdfSession::with_cache_options(
+                    path,
+                    count,
+                    parallel,
+                    cache_bytes,
+                    cache_slots,
+                )
+            })
             .map_err(crate::reader::err)?;
         Ok(Self {
             inner: Mutex::new(Some(s)),
         })
+    }
+    fn cache_stats<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDict>> {
+        let c = self.with(py, |s| Ok(s.chunk_cache_stats()))?;
+        Ok(
+            dict!(py,"hits"=>c.hits,"misses"=>c.misses,"inserts"=>c.inserts,"evictions"=>c.evictions,"retained_bytes"=>c.retained_bytes,"entries"=>c.entries,"max_bytes"=>c.max_bytes,"max_slots"=>c.max_slots),
+        )
+    }
+    #[pyo3(signature=(area,variable,elements=None,*,metadata_max_bytes=67108864,max_bytes=67108864))]
+    fn read_mesh_summary_values<'py>(
+        &self,
+        py: Python<'py>,
+        area: &str,
+        variable: &str,
+        elements: Option<numpy::PyReadonlyArray1<'_, u64>>,
+        metadata_max_bytes: usize,
+        max_bytes: usize,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        let elements = elements
+            .map(|a| a.as_slice().map(|s| s.to_vec()))
+            .transpose()?;
+        let a = self.with(py, |s| {
+            s.read_mesh_summary_values(
+                area,
+                variable,
+                elements.as_deref(),
+                metadata_max_bytes,
+                max_bytes,
+            )
+        })?;
+        crate::reader::array(py, a)
+    }
+    #[pyo3(signature=(area,rows,names=None,*,metadata_max_bytes=67108864,max_bytes=67108864))]
+    fn read_mesh_boundary_batch<'py>(
+        &self,
+        py: Python<'py>,
+        area: &str,
+        rows: (u64, u64, u64),
+        names: Option<Vec<String>>,
+        metadata_max_bytes: usize,
+        max_bytes: usize,
+    ) -> PyResult<Bound<'py, PyDict>> {
+        let names = names
+            .as_ref()
+            .map(|n| n.iter().map(String::as_str).collect::<Vec<_>>());
+        let result = self.with(py, |s| {
+            s.read_mesh_boundary_batch(
+                area,
+                names.as_deref(),
+                slice(rows),
+                metadata_max_bytes,
+                max_bytes,
+            )
+        })?;
+        let d = PyDict::new(py);
+        for (name, r) in result {
+            d.set_item(name, selection(py, r)?)?;
+        }
+        Ok(d)
     }
     fn close(&self, py: Python<'_>) -> PyResult<()> {
         py.detach(|| {

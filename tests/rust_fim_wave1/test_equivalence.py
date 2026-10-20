@@ -22,7 +22,7 @@ def exact(a, b):
 @pytest.mark.parametrize('fixture', FIXTURES, ids=[Path(f['path']).name for f in FIXTURES])
 def test_typed_reads(fixture):
     native = pytest.importorskip('ras_commander_fast_hdf')
-    assert native.API_VERSION == 7
+    assert native.API_VERSION == 8
     path = fixture['path']
     with h5py.File(path, 'r') as f:
         for mesh in native.mesh_inventory(path):
