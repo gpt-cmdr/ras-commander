@@ -35,6 +35,7 @@ from ..LoggingConfig import get_logger
 from .HdfBase import HdfBase
 from .HdfUtils import HdfUtils
 from ._packed_parts import _nonnegative_index, resolve_feature_part_ranges
+from ..fast_hdf import FastHdfError, read_typed
 
 logger = get_logger(__name__)
 
@@ -95,8 +96,8 @@ class HdfStruc:
             return (), (), (), "Native side datasets or active-cell topology absent"
         if any(not isinstance(hdf[path], h5py.Dataset) for path in required):
             return (), (), tuple(required), "Unsupported native dataset objects"
-        cells = hdf[cell_path][()]
-        points = hdf[point_path][()]
+        cells = read_typed(hdf[cell_path])
+        points = read_typed(hdf[point_path])
         if (
             cells.ndim != 1
             or points.ndim != 1
@@ -115,8 +116,8 @@ class HdfStruc:
                 tuple(required),
                 "Unsupported native active-cell or face-point layout",
             )
-        faces = hdf[f"{mesh_path}/Faces FacePoint Indexes"][()]
-        adjacency = hdf[f"{mesh_path}/Faces Cell Indexes"][()]
+        faces = read_typed(hdf[f"{mesh_path}/Faces FacePoint Indexes"])
+        adjacency = read_typed(hdf[f"{mesh_path}/Faces Cell Indexes"])
         point_count = len(coordinates)
         if (
             faces.ndim != 2
@@ -215,7 +216,7 @@ class HdfStruc:
             attrs_path = "Geometry/Structures/Attributes"
             if attrs_path in hdf:
                 attrs = HdfStruc._decode_bytes_columns(
-                    pd.DataFrame(hdf[attrs_path][()])
+                    pd.DataFrame(read_typed(hdf[attrs_path]))
                 )
                 required = {"Type", "Connection", "US SA/2D", "DS SA/2D"}
                 if required.issubset(attrs.columns):
@@ -462,7 +463,7 @@ class HdfStruc:
                         )
                         return pd.DataFrame()
                     
-                    data = hdf[path][()]
+                    data = read_typed(hdf[path])
                     
                     if data.dtype.names:
                         df = pd.DataFrame(data)
@@ -495,10 +496,10 @@ class HdfStruc:
                     return GeoDataFrame()
 
                 # Get centerline geometry
-                centerline_info = hdf["Geometry/Structures/Centerline Info"][()]
-                centerline_points = hdf["Geometry/Structures/Centerline Points"][()]
+                centerline_info = read_typed(hdf["Geometry/Structures/Centerline Info"])
+                centerline_points = read_typed(hdf["Geometry/Structures/Centerline Points"])
                 centerline_parts = (
-                    hdf["Geometry/Structures/Centerline Parts"][()]
+                    read_typed(hdf["Geometry/Structures/Centerline Parts"])
                     if "Centerline Parts" in structure_group
                     else None
                 )
@@ -671,6 +672,8 @@ class HdfStruc:
                 
                 return struct_gdf
 
+        except FastHdfError:
+            raise
         except Exception as e:
             logger.error(f"Error reading structures from {hdf_path} (Geometry/Structures): {str(e)}")
             raise
@@ -763,7 +766,7 @@ class HdfStruc:
                     logger.debug(f"No structure attributes found: {hdf_path}")
                     return pd.DataFrame()
 
-                struct_attrs = hdf_file["Geometry/Structures/Attributes"][()]
+                struct_attrs = read_typed(hdf_file["Geometry/Structures/Attributes"])
                 struct_df = pd.DataFrame(struct_attrs)
                 struct_df = HdfStruc._decode_bytes_columns(struct_df)
 
@@ -791,7 +794,7 @@ class HdfStruc:
                 # Extract culvert-specific data if available
                 culvert_data_path = "Geometry/Structures/Culvert Data"
                 if culvert_data_path in hdf_file:
-                    culvert_data = hdf_file[culvert_data_path][()]
+                    culvert_data = read_typed(hdf_file[culvert_data_path])
                     culvert_data_df = pd.DataFrame(culvert_data)
                     culvert_data_df = HdfStruc._decode_bytes_columns(culvert_data_df)
 
@@ -838,6 +841,8 @@ class HdfStruc:
                 logger.debug(f"Successfully extracted hydraulic data for {len(result_df)} culverts")
                 return result_df
 
+        except FastHdfError:
+            raise
         except Exception as e:
             logger.error(f"Error reading culvert hydraulics from {hdf_path}: {str(e)}")
             return pd.DataFrame()
@@ -881,6 +886,8 @@ class HdfStruc:
             with h5py.File(hdf_path, 'r') as hdf_file:
                 return HdfStruc._list_sa2d_connections_from_hdf(hdf_file, hdf_path)
 
+        except FastHdfError:
+            raise
         except Exception as e:
             logger.error(f"Error listing SA/2D connection structures: {e}")
             return []
@@ -970,6 +977,8 @@ class HdfStruc:
 
                 return pd.DataFrame(info_list)
 
+        except FastHdfError:
+            raise
         except Exception as e:
             logger.error(f"Error getting SA/2D breach info: {e}")
             raise
@@ -1031,18 +1040,18 @@ class HdfStruc:
                     )
                     return _empty
 
-                polygon_points = sa_group['Polygon Points'][:]   # (total_pts, 2) float64
-                polygon_info   = sa_group['Polygon Info'][:]     # (num_sa, 4) int32
+                polygon_points = read_typed(sa_group['Polygon Points'], slice(None))   # (total_pts, 2) float64
+                polygon_info   = read_typed(sa_group['Polygon Info'], slice(None))     # (num_sa, 4) int32
 
                 # Polygon Parts for multi-ring (holes) support
                 polygon_parts = None
                 if 'Polygon Parts' in sa_group:
-                    polygon_parts = sa_group['Polygon Parts'][:]  # (total_parts, 2) int32
+                    polygon_parts = read_typed(sa_group['Polygon Parts'], slice(None))  # (total_parts, 2) int32
 
                 # Attributes: Name S16, Mode S16, Avg Area f4, Min Elev f4, ...
                 attrs = None
                 if 'Attributes' in sa_group:
-                    attrs = sa_group['Attributes'][:]
+                    attrs = read_typed(sa_group['Attributes'], slice(None))
 
                 num_sa = len(polygon_info)
                 records = []
@@ -1118,6 +1127,8 @@ class HdfStruc:
                 )
                 return gdf
 
+        except FastHdfError:
+            raise
         except Exception as e:
             logger.error(f"Error reading storage area polygons from {hdf_path}: {str(e)}")
             raise

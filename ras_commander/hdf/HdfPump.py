@@ -27,6 +27,7 @@ from .HdfUtils import HdfUtils
 from .HdfBase import HdfBase
 from ..Decorators import standardize_input, log_call
 from ..LoggingConfig import get_logger
+from ..fast_hdf import read_typed
 
 gpd = optional_module("geopandas", "Returning GeoDataFrame results from HdfPump")
 xr = optional_module("xarray", "Returning xarray results from HdfPump")
@@ -113,8 +114,8 @@ class HdfPump:
                         "Verify the HDF was written with pump station geometry data.",
                     ))
 
-            attributes = group['Attributes'][()]
-            points = group['Points'][()]
+            attributes = read_typed(group['Attributes'])
+            points = read_typed(group['Points'])
 
             # Create geometries
             geometries = [Point(x, y) for x, y in points]
@@ -184,9 +185,9 @@ class HdfPump:
                     "Verify the HDF was written with pump group geometry data."
                 )
 
-            attributes = group['Attributes'][()]
-            efficiency_curves_info = group['Efficiency Curves Info'][()]
-            efficiency_curves_values = group['Efficiency Curves Values'][()]
+            attributes = read_typed(group['Attributes'])
+            efficiency_curves_info = read_typed(group['Efficiency Curves Info'])
+            efficiency_curves_values = read_typed(group['Efficiency Curves Values'])
 
             # Create DataFrame and decode byte strings
             df = pd.DataFrame(attributes)
