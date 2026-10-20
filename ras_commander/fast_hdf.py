@@ -32,6 +32,7 @@ logger = get_logger(__name__)
 
 __all__ = [
     "FastHdfError", "available", "close_sessions", "read_dataset", "read_datasets",
+    "read_typed", "trace_reads",
     "packed_meshes", "mesh_polygons", "export_pmtiles", "export_mesh_pmtiles",
 ]
 
@@ -75,9 +76,9 @@ def _native(mode):
         if mode == "rust":
             raise FastHdfError("The optional ras-commander-fast-hdf extension is unavailable") from exc
         return None
-    if getattr(module, "API_VERSION", None) != 8:
+    if getattr(module, "API_VERSION", None) != 9:
         if mode == "rust":
-            raise FastHdfError("Incompatible ras-commander-fast-hdf API; version 8 is required")
+            raise FastHdfError("Incompatible ras-commander-fast-hdf API; version 9 is required")
         logger.warning("Ignoring incompatible ras-commander-fast-hdf extension")
         return None
     return module
@@ -104,6 +105,8 @@ def close_sessions(path=None):
     by their caller and must be closed separately.
     """
     resolved = None if path is None else str(Path(path).resolve())
+    from . import _fast_hdf_typed
+    _fast_hdf_typed.clear_cache(path)
     with _sessions_lock:
         for key in list(_sessions):
             if resolved is None or key[0] == resolved:
@@ -283,6 +286,25 @@ def _read_fim_result(module, dataset, slices, threads):
     if parts[8] == "Boundary Conditions":
         return module.read_mesh_boundary_series(area, parts[9], rows, elements)["values"]
     return None
+
+
+def read_typed(dataset: h5py.Dataset, selection=None, *, backend="auto"):
+    """Read exactly like ``dataset[selection]``, served by typed engine families.
+
+    Wave 8 / Wave 2 typed families (mesh geometry, 2D line families, 1D
+    geometry, XS results, 1D summaries, 1D structures) supply the values; other
+    numeric datasets use :func:`read_dataset`; compound/string metadata without
+    an engine raw reader stays on h5py. Auto falls back to h5py on any engine
+    refusal; ``rust`` raises :class:`FastHdfError`. See ``_fast_hdf_typed``.
+    """
+    from . import _fast_hdf_typed
+    return _fast_hdf_typed.read(dataset, selection, backend=backend)
+
+
+def trace_reads():
+    """Context manager recording which backend served each ``read_typed`` call."""
+    from . import _fast_hdf_typed
+    return _fast_hdf_typed.trace_reads()
 
 
 @log_call
