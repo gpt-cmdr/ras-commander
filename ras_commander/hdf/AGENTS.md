@@ -133,3 +133,26 @@ This file is the canonical local instruction file for `ras_commander/hdf/`.
 
 - Use real example HDF files when validating behavior.
 - Prefer targeted tests over synthetic HDF fixtures unless a regression cannot be reproduced against real examples.
+
+## Pipe network reads
+
+- `HdfPipe.get_pipe_network_timeseries(..., pipe_network_name=None,
+  output_block="DSS Hydrograph Output")` defaults to the first geometry Attributes
+  network. Base and DSS use only their own timestamps; absent/mismatched axes raise.
+- Domain comes from stored Location plus geometry count. Positional `location`
+  remains available; `node_id`/`conduit_id` hold exact Node/Conduit Indices.
+  `extract_timeseries_for_node` and `extract_timeseries_for_conduit` select stored IDs,
+  accept network/block options and raise for unknown IDs.
+- `get_pipe_network_summary(..., pipe_network_name=None)` returns literal Base
+  summary rows and volume-accounting attributes in long form. Row/column ordinals,
+  labels, units, values, shapes and raw metadata are retained. The legacy
+  Summary/Pipe Network table keeps its historical return shape when present
+  without geometry network identities. One-row minima never
+  receive a fabricated time row; absent Location does not imply a typed domain.
+- Pipe geometry defaults to the stored CRS; explicit `crs` overrides it. Parts
+  offsets are relative to each feature's Points slice. Unqualified multipart polygon
+  topology refuses. Network Node Points resolve global stored IDs, and Cell Property
+  Table rows align by cell position, not their separate lookup-table Info Index.
+- `get_pipe_profile` uses a global conduit geometry row (the stored conduit ID),
+  not its position in a selected network. Optional inlets can be absent; a present
+  inlet group missing Attributes raises rather than disappearing silently.
