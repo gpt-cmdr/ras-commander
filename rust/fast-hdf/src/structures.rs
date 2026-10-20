@@ -20,7 +20,7 @@ fn family(name: &str) -> PyResult<K> {
         )),
     }
 }
-fn columns<'py>(py: Python<'py>, c: &C) -> PyResult<Bound<'py, PyDict>> {
+pub(crate) fn columns<'py>(py: Python<'py>, c: &C) -> PyResult<Bound<'py, PyDict>> {
     let d = crate::domain::evidence_dict(py, "column_labels", c.raw_bytes(), c.capability())?;
     if let Some(v) = c.value() {
         let source = match v.source {
@@ -40,9 +40,25 @@ fn columns<'py>(py: Python<'py>, c: &C) -> PyResult<Bound<'py, PyDict>> {
     }
     Ok(d)
 }
-fn series<'py>(py: Python<'py>, s: &StructureSeries) -> PyResult<Bound<'py, PyDict>> {
+pub(crate) fn series<'py>(py: Python<'py>, s: &StructureSeries) -> PyResult<Bound<'py, PyDict>> {
     Ok(
         dict!(py,"path"=>&s.path,"dataset_path"=>&s.path,"relative"=>&s.relative,"shape"=>&s.shape,"kind"=>s.kind.map(crate::reader::numeric_kind_name),"dtype"=>s.kind.and_then(crate::reader::numpy),"capability"=>crate::domain::capability(py,&s.capability)?,"columns"=>columns(py,&s.columns)?,"units"=>crate::domain::dataset_units(py,&s.units.units,&s.units.source,&s.units.quantity_name)?),
+    )
+}
+pub(crate) fn descriptor<'py>(
+    py: Python<'py>,
+    s: &ras_commander_rust::hdf::structures::StructureDescriptor,
+) -> PyResult<Bound<'py, PyDict>> {
+    let pointer = crate::domain::evidence_dict(
+        py,
+        "node_pointer",
+        s.node_pointer.raw_bytes(),
+        s.node_pointer.capability(),
+    )?;
+    pointer.set_item("value", s.node_pointer.value())?;
+    let i = &s.identity;
+    Ok(
+        dict!(py,"name"=>&s.name,"group"=>&s.group,"node_pointer"=>pointer,"identity"=>dict!(py,"source"=>&i.id.source,"table"=>&i.id.table,"row"=>i.id.row,"river"=>&i.river,"reach"=>&i.reach,"station"=>&i.station,"connection"=>&i.connection,"upstream"=>&i.upstream,"downstream"=>&i.downstream,"name"=>&i.name),"series"=>s.series.iter().map(|s|series(py,s)).collect::<PyResult<Vec<_>>>()?,"static_datasets"=>&s.static_datasets),
     )
 }
 #[pyfunction]
@@ -57,11 +73,11 @@ fn structure_inventory<'py>(
     let inv = py
         .detach(|| ReadOnlyHdfSession::open(path)?.structure_inventory(k, max_bytes))
         .map_err(crate::reader::err)?;
-    let structures=inv.structures.iter().map(|s| {
-        let pointer=crate::domain::evidence_dict(py,"node_pointer",s.node_pointer.raw_bytes(),s.node_pointer.capability())?;pointer.set_item("value",s.node_pointer.value())?;
-        let i=&s.identity;
-        Ok(dict!(py,"name"=>&s.name,"group"=>&s.group,"node_pointer"=>pointer,"identity"=>dict!(py,"source"=>&i.id.source,"table"=>&i.id.table,"row"=>i.id.row,"river"=>&i.river,"reach"=>&i.reach,"station"=>&i.station,"connection"=>&i.connection,"upstream"=>&i.upstream,"downstream"=>&i.downstream,"name"=>&i.name),"series"=>s.series.iter().map(|s|series(py,s)).collect::<PyResult<Vec<_>>>()?,"static_datasets"=>&s.static_datasets))
-    }).collect::<PyResult<Vec<_>>>()?;
+    let structures = inv
+        .structures
+        .iter()
+        .map(|s| descriptor(py, s))
+        .collect::<PyResult<Vec<_>>>()?;
     // Preserve series label evidence as diagnostics without changing the successful inventory status.
     let diagnostics = inv
         .structures

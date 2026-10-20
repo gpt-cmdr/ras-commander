@@ -225,6 +225,12 @@ fn cross_sections(py: Python<'_>, path: PathBuf, max_bytes: usize) -> PyResult<B
     let g = py
         .detach(|| ReadOnlyHdfSession::open(path)?.cross_sections(max_bytes))
         .map_err(crate::reader::err)?;
+    cross_section_geometry(py, g)
+}
+pub(crate) fn cross_section_geometry(
+    py: Python<'_>,
+    g: ras_commander_rust::hdf::xs1d::CrossSectionGeometry,
+) -> PyResult<Bound<'_, PyDict>> {
     let sections = g
         .sections
         .into_iter()
