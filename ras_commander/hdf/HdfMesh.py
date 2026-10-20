@@ -1167,7 +1167,7 @@ class HdfMesh:
         """
         # Lazy imports for heavy dependencies
         from geopandas import GeoDataFrame
-        from shapely.geometry import Point
+        from shapely import points
 
         try:
             with h5py.File(hdf_path, 'r') as hdf_file:
@@ -1193,7 +1193,7 @@ class HdfMesh:
                     # Extend lists efficiently
                     all_mesh_names.extend([mesh_name] * cell_count)
                     all_cell_ids.extend(range(cell_count))
-                    all_points.extend(Point(coords) for coords in cell_centers)
+                    all_points.extend(points(cell_centers))
 
                 # Create GeoDataFrame in one go
                 return GeoDataFrame(
