@@ -61,6 +61,10 @@ LINE_GROUPS = {
     "Geometry/River Edge Lines": ("river_edge_lines", "Polyline"),
     "Geometry/River Flow Paths": ("river_flow_paths", "Flow Path Lines"),
 }
+LINE_FAMILY_IN_GROUPS = {
+    "Geometry/Structures": ("structure_centerlines", "Centerline"),
+    "Geometry/Storage Areas": ("storage_area_polygons", "Polygon"),
+}
 GEOMETRY_GROUPS = {
     "Geometry/Structures": "structures",
     "Geometry/Pump Stations": "pump_stations",
@@ -195,6 +199,11 @@ def route_for(name):
         rel = path[len("Geometry/Cross Sections/"):]
         if rel in XS_FIELDS:
             return ("xs_geometry",) + XS_FIELDS[rel]
+    if parent in LINE_FAMILY_IN_GROUPS:
+        family, prefix = LINE_FAMILY_IN_GROUPS[parent]
+        if leaf in {f"{prefix} {s}" for s in ("Info", "Parts", "Points")}:
+            # Packed geometry is served by the validated line family, not the raw group dump.
+            return ("line_family", family, leaf)
     for group, family in GEOMETRY_GROUPS.items():
         if path.startswith(group + "/"):
             return ("geometry_group", family, path[len(group) + 1:])
@@ -441,9 +450,9 @@ def read(dataset, selection=None, *, backend="auto"):
             return dataset[key]
     if route is None:
         if fast_hdf._numeric(dataset) and dataset.shape is not None:
-            values = fast_hdf.read_dataset(dataset, selection, backend=backend)
-            _record(dataset.name, "native-generic")
-            return values
+            # read_dataset records the backend that served it (typed mesh
+            # results, generic native, or h5py fallback).
+            return fast_hdf.read_dataset(dataset, selection, backend=backend)
         _record(dataset.name, "h5py-metadata")
         return dataset[key]
     try:
