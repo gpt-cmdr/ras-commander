@@ -32,6 +32,12 @@ This file is the canonical local instruction file for `ras_commander/hdf/`.
   w0=1.0; HEC-RAS 2D time series are chunked one timestep x all cells, often
   larger than h5py's 1 MiB default). Do not route `r+`/`a` write opens, or
   reads inside write functions, through it.
+- Handle reuse (`RAS_COMMANDER_HDF_HANDLE_CACHE=1` or
+  `configure_hdf_reads(handle_cache=True)`) is opt-in: a cached read-only
+  handle makes in-process `r+`/`a` opens fail and blocks Windows
+  replace/delete of the file. Call `hdf_io.close_hdf_handles()` before writing
+  or replacing an HDF; `RasCmdr.compute_plan/compute_parallel/compute_test_mode`
+  call it before a plan runs.
 - Use these context managers for direct inspection. RAS-owned
   authoring must use the applicable native HEC-RAS API unless a method is
   explicitly version/schema-qualified as a recovery or solver-temporary-file

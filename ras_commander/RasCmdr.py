@@ -67,6 +67,7 @@ from .ComputeResults import (
     RasProcessRecord,
 )
 from .Decorators import log_call
+from .hdf_io import close_hdf_handles
 from .ExecutionEvidence import (
     ExecutionEvidence,
     inspect_execution_evidence as _inspect_execution_evidence,
@@ -3210,6 +3211,8 @@ class RasCmdr:
         """
         if type(disable_omp_affinity) is not bool:
             raise TypeError("disable_omp_affinity must be a bool")
+        # Release cached read-only HDF handles so HEC-RAS can rewrite plan HDFs.
+        close_hdf_handles()
         _require_process_supervision("RasCmdr.compute_plan()")
         max_runtime_seconds = RasCmdr._normalize_max_runtime(max_runtime)
         _success = False
@@ -4465,6 +4468,8 @@ class RasCmdr:
 
             - verify is passed through to compute_plan() for each worker execution.
         """
+        # Release cached read-only HDF handles so HEC-RAS can rewrite plan HDFs.
+        close_hdf_handles()
         _require_process_supervision("RasCmdr.compute_parallel()")
         execution_results: Dict[str, bool] = {}
         execution_details_by_plan: Dict[str, Dict[str, Any]] = {}
@@ -5326,6 +5331,8 @@ class RasCmdr:
 
             - verify is passed through to compute_plan() for each plan execution.
         """
+        # Release cached read-only HDF handles so HEC-RAS can rewrite plan HDFs.
+        close_hdf_handles()
         _require_process_supervision("RasCmdr.compute_test_mode()")
         promotion_lock_lease: Optional[Dict[str, Any]] = None
         try:
