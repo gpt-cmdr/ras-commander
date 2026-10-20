@@ -12,6 +12,8 @@ import sys
 from types import ModuleType
 from .LoggingConfig import setup_logging, get_logger
 from .Decorators import log_call, standardize_input
+from . import hdf_io
+from .hdf_io import close_hdf_handles, configure_hdf_reads, hdf_read_settings
 
 try:
     __version__ = version("ras-commander")
@@ -436,6 +438,7 @@ sys.modules[__name__].__class__ = _LazyRasCommanderModule
 
 # Define __all__ to specify what should be imported when using "from ras_commander import *"
 __all__ = [
+    "hdf_io", "close_hdf_handles", "configure_hdf_reads", "hdf_read_settings",
     'RasDocker', 'ContainerResult', 'ContainerEvent', 'ContainerBatchResult',
     # Core functionality
     'RasPrj', 'init_ras_project', 'get_ras_exe', 'ras', 'create_project_from_template',

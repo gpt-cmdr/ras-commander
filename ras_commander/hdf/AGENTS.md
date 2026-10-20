@@ -28,8 +28,8 @@ This file is the canonical local instruction file for `ras_commander/hdf/`.
   - `scipy`
 - Open plan/geometry HDFs read-only through `ras_commander.hdf_io`:
   `with open_hdf_read(path) as hdf:` (or `h5py_file_read(path)` when the caller
-  owns the handle). It applies a sized chunk cache (64 MiB / 10,007 slots /
-  w0=1.0; HEC-RAS 2D time series are chunked one timestep x all cells, often
+  owns the handle). Fresh opens keep stock settings; reuse or explicit configuration
+  selects 64 MiB / 10,007 slots / w0=0.75 (HEC-RAS 2D time series are chunked one timestep x all cells, often
   larger than h5py's 1 MiB default). Do not route `r+`/`a` write opens, or
   reads inside write functions, through it.
 - Handle reuse (`RAS_COMMANDER_HDF_HANDLE_CACHE=1` or
@@ -37,7 +37,8 @@ This file is the canonical local instruction file for `ras_commander/hdf/`.
   handle makes in-process `r+`/`a` opens fail and blocks Windows
   replace/delete of the file. Call `hdf_io.close_hdf_handles()` before writing
   or replacing an HDF; `RasCmdr.compute_plan/compute_parallel/compute_test_mode`
-  call it before a plan runs.
+  suspend reuse throughout compute and close again at launch. Do not hold reused
+  handles across external writes or fork; finish active contexts before compute.
 - Use these context managers for direct inspection. RAS-owned
   authoring must use the applicable native HEC-RAS API unless a method is
   explicitly version/schema-qualified as a recovery or solver-temporary-file
