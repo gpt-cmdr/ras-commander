@@ -59,6 +59,7 @@ environment.
 from __future__ import annotations
 
 import atexit
+from contextlib import contextmanager
 import os
 import threading
 from collections import OrderedDict
@@ -103,6 +104,7 @@ _overrides: Dict[str, Any] = {
 }
 
 _UNSET = object()
+_suspend_count = 0
 
 
 def _env(name: str) -> Optional[str]:
@@ -140,8 +142,8 @@ def _chunk_cache_kwargs() -> Dict[str, Any]:
 def _handle_cache_enabled() -> bool:
     enabled = _overrides["handle_cache"]
     if enabled is not None:
-        return bool(enabled)
-    return _env(_ENV_HANDLE_CACHE) in _ON
+        return bool(enabled) and _suspend_count == 0
+    return _env(_ENV_HANDLE_CACHE) in _ON and _suspend_count == 0
 
 
 def _handle_cache_size() -> int:
@@ -246,6 +248,21 @@ def _release(entry: _Entry) -> None:
             _close_entry(entry)
 
 
+@contextmanager
+def suspend_hdf_reuse():
+    """Suspend reuse process-wide for a complete compute call, including workers."""
+    global _suspend_count
+    with _lock:
+        _suspend_count += 1
+        close_hdf_handles()
+    try:
+        yield
+    finally:
+        with _lock:
+            close_hdf_handles()
+            _suspend_count -= 1
+
+
 def close_hdf_handles(path: Any = None) -> int:
     """Close cached read-only handles (all, or those for ``path``).
 
@@ -332,6 +349,8 @@ class open_hdf_read:
             return None  # let h5py raise its native error
         key = (absolute, stat.st_size, stat.st_mtime_ns, spelling)
         with _lock:
+            if not _handle_cache_enabled():
+                return None
             entry = _handles.get(key)
             if entry is not None and entry.file.id.valid:
                 _handles.move_to_end(key)

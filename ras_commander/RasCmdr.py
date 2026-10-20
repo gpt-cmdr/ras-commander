@@ -67,7 +67,7 @@ from .ComputeResults import (
     RasProcessRecord,
 )
 from .Decorators import log_call
-from .hdf_io import close_hdf_handles
+from .hdf_io import close_hdf_handles, suspend_hdf_reuse
 from .ExecutionEvidence import (
     ExecutionEvidence,
     inspect_execution_evidence as _inspect_execution_evidence,
@@ -3020,6 +3020,7 @@ class RasCmdr:
     
     @staticmethod
     @log_call
+    @suspend_hdf_reuse()
     def compute_plan(
         plan_number: Union[str, Number, Path],
         dest_folder=None,
@@ -3670,6 +3671,7 @@ class RasCmdr:
                     _did_execute = True
                     _execution_details["calculation_attempted"] = True
                     _active_failure_stage = "launcher_start"
+                    close_hdf_handles()
                     process = subprocess.Popen(
                         command_line,
                         executable=str(selected_executable),
@@ -4313,6 +4315,7 @@ class RasCmdr:
 
     @staticmethod
     @log_call
+    @suspend_hdf_reuse()
     def compute_parallel(
         plan_number: Union[str, Number, List[Union[str, Number]], None] = None,
         max_workers: int = 2,
@@ -5181,6 +5184,7 @@ class RasCmdr:
 
     @staticmethod
     @log_call
+    @suspend_hdf_reuse()
     def compute_test_mode(
         plan_number: Union[str, Number, List[Union[str, Number]], None] = None,
         dest_folder_suffix="[Test]",
@@ -6138,6 +6142,7 @@ class RasCmdr:
                         output_format="hdf",
                         ras_object=ras_obj,
                     )
+                    close_hdf_handles()
                     proc = subprocess.Popen(
                         [str(ras_exe), *ras_args],
                         stdout=log_fh,
@@ -6688,6 +6693,7 @@ class RasCmdr:
         try:
             start_time = time.time()
             with open(log_path, "w") as log_fh:
+                close_hdf_handles()
                 proc = subprocess.Popen(
                     [str(geom_exe), str(tmp_hdf), f"x{geom_num}"],
                     stdout=log_fh,
@@ -7513,6 +7519,7 @@ exit "$solver_rc"
             proc = None
             launcher_pid = None
             try:
+                close_hdf_handles()
                 proc = subprocess.Popen(
                     ["wsl", "bash", "-lc", script],
                     stdout=subprocess.PIPE,

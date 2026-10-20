@@ -4050,3 +4050,44 @@ def test_compute_plan_openmp_override_reaches_only_engine_environment(monkeypatc
     assert shim_environment['KMP_AFFINITY'] == 'compact'
     assert rascmdr_module.os.environ['KMP_AFFINITY'] == 'scatter'
     assert result.execution_details['openmp_environment_overrides'] == {'KMP_AFFINITY': 'disabled'}
+
+
+@pytest.mark.parametrize('skip_existing',[False,True])
+def test_reuse_preflight_cannot_recache_hdf_at_launch(monkeypatch,tmp_path,skip_existing):
+    import shutil
+    from ras_commander import hdf_io
+    from ras_commander.RasCurrency import RasCurrency
+    root=os.environ.get('RAS_H5PY_CACHE_FIXTURES')
+    if not root:pytest.skip('RAS_H5PY_CACHE_FIXTURES required for real prelaunch lock regression')
+    ras_obj,_=_make_skip_scenario(monkeypatch,tmp_path)
+    target=tmp_path/'TestProject.p01.hdf';replacement=tmp_path/'replace.hdf'
+    source=Path(root)/'AustinOyster.p01.hdf'
+    shutil.copy2(source,target);shutil.copy2(source,replacement)
+    original_verify=RasCmdr._verify_completion;reads=[];launched=[]
+    def preflight(*args,**kwargs):
+        RasCurrency._get_plan_hdf_incomplete_reason(target)
+        original_verify(target,check_errors=False)
+        reads.append(True)
+        return False,'rerun requested after real preflight reads'
+    monkeypatch.setattr(RasCurrency,'_are_plan_results_current_for_execution',staticmethod(preflight))
+    def verify(*args,**kwargs):
+        original_verify(target,check_errors=False)
+        reads.append(True)
+        return False
+    monkeypatch.setattr(RasCmdr,'_verify_completion',staticmethod(verify))
+    def launch(*args,**kwargs):
+        assert reads
+        assert hdf_io.cached_hdf_handle_count()==0
+        assert not hdf_io.hdf_read_settings()['handle_cache']
+        os.replace(replacement,target);target.unlink()
+        launched.append(True)
+        raise OSError('test launch checkpoint; no process started')
+    monkeypatch.setattr(rascmdr_module.subprocess,'Popen',launch)
+    hdf_io.configure_hdf_reads(handle_cache=True)
+    try:
+        with hdf_io.open_hdf_read(target):pass
+        result=RasCmdr.compute_plan('01',ras_object=ras_obj,skip_existing=skip_existing,verify=False,dialog_watchdog=False)
+        assert launched==[True]
+        assert result.execution_details['failure_stage']=='launcher_start'
+    finally:
+        hdf_io.close_hdf_handles();hdf_io.configure_hdf_reads(handle_cache=None)
