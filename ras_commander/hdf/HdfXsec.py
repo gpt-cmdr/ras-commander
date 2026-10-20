@@ -47,6 +47,7 @@ from ..Decorators import standardize_input, log_call
 from . import _HdfXsecSchema
 from .HdfBase import HdfBase
 from .HdfUtils import HdfUtils
+from ..fast_hdf import FastHdfError, read_typed
 from ..LoggingConfig import get_logger
 
 
@@ -97,7 +98,7 @@ class HdfXsec:
         """Read one required cross-section dataset and validate its shape."""
         if name not in group or not isinstance(group[name], h5py.Dataset):
             raise ValueError(f"Missing cross-section dataset: {group.name}/{name}")
-        values = group[name][()]
+        values = read_typed(group[name])
         if values.ndim == 0:
             raise ValueError(f"Cross-section dataset is scalar: {group.name}/{name}")
         if columns and (values.ndim != 2 or values.shape[1] < columns):
@@ -520,14 +521,14 @@ class HdfXsec:
                     f"{hdf_path}: {', '.join(missing)}"
                 )
 
-            xs_attrs = hdf_file[f"{group_path}/Attributes"][:]
-            poly_info = hdf_file[f"{group_path}/Polyline Info"][:]
-            poly_parts = hdf_file[f"{group_path}/Polyline Parts"][:]
-            poly_points = hdf_file[f"{group_path}/Polyline Points"][:]
-            station_info = hdf_file[f"{group_path}/Station Elevation Info"][:]
-            station_values = hdf_file[f"{group_path}/Station Elevation Values"][:]
-            mann_info = hdf_file[f"{group_path}/Manning's n Info"][:]
-            mann_values = hdf_file[f"{group_path}/Manning's n Values"][:]
+            xs_attrs = read_typed(hdf_file[f"{group_path}/Attributes"], slice(None))
+            poly_info = read_typed(hdf_file[f"{group_path}/Polyline Info"], slice(None))
+            poly_parts = read_typed(hdf_file[f"{group_path}/Polyline Parts"], slice(None))
+            poly_points = read_typed(hdf_file[f"{group_path}/Polyline Points"], slice(None))
+            station_info = read_typed(hdf_file[f"{group_path}/Station Elevation Info"], slice(None))
+            station_values = read_typed(hdf_file[f"{group_path}/Station Elevation Values"], slice(None))
+            mann_info = read_typed(hdf_file[f"{group_path}/Manning's n Info"], slice(None))
+            mann_values = read_typed(hdf_file[f"{group_path}/Manning's n Values"], slice(None))
 
             count = len(xs_attrs)
             aligned = {
@@ -976,6 +977,10 @@ class HdfXsec:
                     result = HdfUtils.convert_df_datetimes_to_str(result)
                 return result
                 
+        except FastHdfError:
+                
+            raise
+                
         except Exception as e:
             logger.error(f"Error processing cross-section data from {hdf_path}: {str(e)}")
             return gpd.GeoDataFrame()
@@ -1118,6 +1123,10 @@ class HdfXsec:
                 logger.debug(f"Extracted {len(centerline_gdf)} river centerlines")
                 return centerline_gdf
 
+        except FastHdfError:
+
+            raise
+
         except Exception as e:
             logger.error(f"Error reading river centerlines from {hdf_path}: {str(e)}")
             return GeoDataFrame()
@@ -1193,6 +1202,10 @@ class HdfXsec:
             
             return result_gdf
 
+        except FastHdfError:
+
+            raise
+
         except Exception as e:
             logger.error(f"Error calculating river stationing: {str(e)}")
             return centerlines_gdf
@@ -1266,6 +1279,8 @@ class HdfXsec:
             river_gdf = river_gdf.copy()
             river_gdf.insert(0, "river_id", range(len(river_gdf)))
             return river_gdf
+        except FastHdfError:
+            raise
         except Exception as e:
             logger.error(f"Error reading river reaches from {hdf_path}: {str(e)}")
             return GeoDataFrame()
@@ -1320,7 +1335,7 @@ class HdfXsec:
                 # geometry count is the source of truth for edge_id/bank_side (bank
                 # side alternates Left/Right per reach: RASEdgeLines' IsLeft = i % 2 == 0).
                 if "Attributes" in edge_data:
-                    attrs = edge_data["Attributes"][()]
+                    attrs = read_typed(edge_data["Attributes"])
 
                     # Create dictionary of attributes
                     edge_dict = {"edge_id": list(range(attrs.shape[0]))}
@@ -1347,6 +1362,10 @@ class HdfXsec:
                     edge_gdf['length'] = edge_gdf.geometry.length
 
                 return edge_gdf
+
+        except FastHdfError:
+
+            raise
 
         except Exception as e:
             logger.error(f"Error reading river edge lines from {hdf_path}: {str(e)}")
@@ -1431,6 +1450,10 @@ class HdfXsec:
 
                 return bank_gdf
 
+        except FastHdfError:
+
+            raise
+
         except Exception as e:
             logger.error(f"Error reading river bank lines from {hdf_path}: {str(e)}")
             return GeoDataFrame()
@@ -1486,6 +1509,10 @@ class HdfXsec:
             flow_gdf['length'] = flow_gdf.geometry.length
             return flow_gdf
 
+        except FastHdfError:
+
+            raise
+
         except Exception as e:
             logger.error(f"Error reading river flow paths: {str(e)}")
             return GeoDataFrame()
@@ -1529,11 +1556,11 @@ class HdfXsec:
                 if "TIN Info" not in grp or "TIN Points" not in grp or "TIN Triangles" not in grp:
                     logger.warning("XS interpolation surface group missing TIN datasets")
                     return GeoDataFrame()
-                tin_info = grp["TIN Info"][()]
-                tin_points = grp["TIN Points"][()]
-                tin_tris = grp["TIN Triangles"][()]
-                xsids = grp["XSIDs"][()] if "XSIDs" in grp else None
-                areas = grp["Areas"][()] if "Areas" in grp else None
+                tin_info = read_typed(grp["TIN Info"])
+                tin_points = read_typed(grp["TIN Points"])
+                tin_tris = read_typed(grp["TIN Triangles"])
+                xsids = read_typed(grp["XSIDs"]) if "XSIDs" in grp else None
+                areas = read_typed(grp["Areas"]) if "Areas" in grp else None
 
             from shapely.ops import unary_union
 
@@ -1580,6 +1607,10 @@ class HdfXsec:
             if not rows:
                 return GeoDataFrame()
             return GeoDataFrame(rows, geometry="geometry", crs=HdfBase.get_projection(hdf_path))
+
+        except FastHdfError:
+
+            raise
 
         except Exception as e:
             logger.error(f"Error reading XS interpolation surface: {str(e)}")
@@ -1843,6 +1874,8 @@ class HdfXsec:
         if use_stored:
             try:
                 stored = HdfXsec.get_river_edge_lines(hdf_path)
+            except FastHdfError:
+                raise
             except Exception as e:
                 logger.debug(f"Could not read stored river edge lines: {e}")
                 stored = GeoDataFrame()
