@@ -104,6 +104,9 @@ def assert_identical(a, b, where="result"):
     if isinstance(a, np.generic):
         assert a.dtype == b.dtype and a.tobytes() == b.tobytes(), f"{where}: scalar {a!r} != {b!r}"
         return
+    if a is pd.NA or b is pd.NA:
+        assert a is b, f"{where}: {a!r} != {b!r}"
+        return
     if a is pd.NaT or a is None:
         assert b is a, f"{where}: {a!r} != {b!r}"
         return

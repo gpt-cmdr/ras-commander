@@ -242,7 +242,7 @@ class HdfBase:
                         f"{missing} in {Path(hdf_path).name}."
                     )
 
-                attributes = hdf_file[attributes_path][()]
+                attributes = read_typed(hdf_file[attributes_path])
                 if "Name" not in attributes.dtype.names:
                     raise ValueError(
                         f"2D flow area attributes at '{attributes_path}' in "
@@ -250,7 +250,7 @@ class HdfBase:
                     )
                 names = [HdfUtils.convert_ras_string(name) for name in attributes["Name"]]
 
-                cell_info = hdf_file[cell_info_path][()]
+                cell_info = read_typed(hdf_file[cell_info_path])
                 cell_counts = [info[1] for info in cell_info]
                 if len(names) != len(cell_counts):
                     raise ValueError(
@@ -259,7 +259,7 @@ class HdfBase:
                     )
 
                 return list(zip(names, cell_counts))
-        except ValueError:
+        except (ValueError, FastHdfError):
             raise
         except Exception as e:
             raise ValueError(

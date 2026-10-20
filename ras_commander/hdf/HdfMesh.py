@@ -107,6 +107,7 @@ import pandas as pd
 
 from ..Decorators import log_call, standardize_input
 from ..fast_hdf import read_dataset
+from ..fast_hdf import FastHdfError, read_typed
 from ..LoggingConfig import get_logger
 from .HdfBase import HdfBase
 from .HdfUtils import HdfUtils
@@ -180,14 +181,14 @@ def _strict_collection_perimeters(group, mesh_area_names: List[str]):
             "collection-level perimeter datasets are missing: " + ", ".join(missing)
         )
 
-    info = _integral_rows(group["Polygon Info"][()], 4, "Polygon Info")
+    info = _integral_rows(read_typed(group["Polygon Info"]), 4, "Polygon Info")
     if len(info) != len(mesh_area_names):
         raise _MeshLayoutError(
             "Attributes and Polygon Info row counts differ "
             f"({len(mesh_area_names)} != {len(info)})"
         )
 
-    points = np.asarray(group["Polygon Points"][()], dtype=float)
+    points = np.asarray(read_typed(group["Polygon Points"]), dtype=float)
     if points.ndim != 2 or points.shape[1] < 2:
         raise _MeshLayoutError("Polygon Points must be an Nx2 coordinate table")
     points = points[:, :2]
@@ -199,7 +200,7 @@ def _strict_collection_perimeters(group, mesh_area_names: List[str]):
 
     parts = None
     if "Polygon Parts" in group:
-        parts = _integral_rows(group["Polygon Parts"][()], 2, "Polygon Parts")
+        parts = _integral_rows(read_typed(group["Polygon Parts"]), 2, "Polygon Parts")
     part_ranges = [(int(row[2]), int(row[3])) for row in info]
     if any(count for _, count in part_ranges):
         if parts is None:
@@ -470,9 +471,11 @@ class HdfMesh:
                 return list(
                     [
                         HdfUtils.convert_ras_string(n.decode('utf-8'))
-                        for n in hdf_file["Geometry/2D Flow Areas/Attributes"][()]["Name"]
+                        for n in read_typed(hdf_file["Geometry/2D Flow Areas/Attributes"])["Name"]
                     ]
                 )
+        except FastHdfError:
+            raise
         except Exception as e:
             logger.error(f"Error reading mesh area names from {hdf_path}: {str(e)}")
             return list()
@@ -558,7 +561,7 @@ class HdfMesh:
                 attributes_path = f"{base}/Attributes"
                 if "Attributes" not in group:
                     raise _MeshLayoutError("2D Flow Areas/Attributes is missing")
-                attributes = group["Attributes"][()]
+                attributes = read_typed(group["Attributes"])
                 if (
                     attributes.dtype.names is None
                     or "Name" not in attributes.dtype.names
@@ -695,6 +698,8 @@ class HdfMesh:
                         "reason_codes": ";".join(dict.fromkeys(reasons)),
                         "compatibility_warning": compatibility_warning,
                     })
+        except FastHdfError:
+            raise
         except Exception as exc:
             logger.error("Error diagnosing mesh layout from %s: %s", hdf_path, exc)
             return pd.DataFrame([{
@@ -755,7 +760,7 @@ class HdfMesh:
                 for index, name in enumerate(mesh_area_names):
                     perimeter_path = f"{name}/Perimeter"
                     if perimeter_path in group:
-                        mesh_area_polygons.append(Polygon(read_dataset(group[perimeter_path])))
+                        mesh_area_polygons.append(Polygon(read_typed(group[perimeter_path])))
                         continue
                     if fallback_polygons is None:
                         fallback_polygons = _strict_collection_perimeters(
@@ -773,6 +778,8 @@ class HdfMesh:
                     geometry="geometry",
                     crs=HdfBase.get_projection(hdf_file),
                 )
+        except FastHdfError:
+            raise
         except Exception as e:
             logger.error(f"Error reading mesh areas from {hdf_path}: {str(e)}")
             return GeoDataFrame()
@@ -886,8 +893,8 @@ class HdfMesh:
                             f"Cell-polygon topology is partial for mesh {mesh_name!r}"
                         )
                     # Get cell face info in one read
-                    cell_face_info = hdf_file[cell_info_path][()]
-                    cell_face_values = hdf_file[cell_values_path][()][:, 0]
+                    cell_face_info = read_typed(hdf_file[cell_info_path])
+                    cell_face_values = read_typed(hdf_file[cell_values_path])[:, 0]
 
                     # Create face lookup dictionary for this mesh
                     mesh_faces_dict = dict(face_gdf[face_gdf.mesh_name == mesh_name][["face_id", "geometry"]].values)
@@ -1037,6 +1044,8 @@ class HdfMesh:
                 )
                 return result
 
+        except FastHdfError:
+            raise
         except Exception as e:
             if strict:
                 if isinstance(e, MeshCellPolygonError):
@@ -1185,7 +1194,7 @@ class HdfMesh:
 
                 for mesh_name in mesh_area_names:
                     # Get all cell centers in one read
-                    cell_centers = read_dataset(hdf_file[f"Geometry/2D Flow Areas/{mesh_name}/Cells Center Coordinate"])
+                    cell_centers = read_typed(hdf_file[f"Geometry/2D Flow Areas/{mesh_name}/Cells Center Coordinate"])
                     if mesh_name in physical_counts:
                         cell_centers = cell_centers[:physical_counts[mesh_name]]
                     cell_count = len(cell_centers)
@@ -1206,6 +1215,8 @@ class HdfMesh:
                     crs=HdfBase.get_projection(hdf_file)
                 )
 
+        except FastHdfError:
+            raise
         except Exception as e:
             logger.error(f"Error reading mesh cell points from {hdf_path}: {str(e)}")
             return GeoDataFrame()
@@ -1271,10 +1282,10 @@ class HdfMesh:
                             f"Face topology is partial for mesh {mesh_name!r}"
                         )
                     # Read all data at once
-                    facepoints_index = read_dataset(hdf_file[dataset_paths[0]])
-                    facepoints_coords = read_dataset(hdf_file[dataset_paths[1]])
-                    faces_perim_info = read_dataset(hdf_file[dataset_paths[2]])
-                    faces_perim_values = read_dataset(hdf_file[dataset_paths[3]])
+                    facepoints_index = read_typed(hdf_file[dataset_paths[0]])
+                    facepoints_coords = read_typed(hdf_file[dataset_paths[1]])
+                    faces_perim_info = read_typed(hdf_file[dataset_paths[2]])
+                    faces_perim_values = read_typed(hdf_file[dataset_paths[3]])
 
                     # Process each face
                     for face_id, ((pnt_a_idx, pnt_b_idx), (start_row, count)) in enumerate(zip(facepoints_index, faces_perim_info)):
@@ -1300,6 +1311,8 @@ class HdfMesh:
                     crs=HdfBase.get_projection(hdf_file)
                 )
 
+        except FastHdfError:
+            raise
         except Exception as e:
             logger.error(f"Error reading mesh cell faces from {hdf_path}: {str(e)}")
             return GeoDataFrame()
@@ -1361,7 +1374,7 @@ class HdfMesh:
             raise ValueError("on_duplicate_ownership must be 'raise' or 'report'")
         with h5py.File(hdf_path, "r") as hdf:
             base = "Geometry/2D Flow Areas"
-            attributes = hdf[f"{base}/Attributes"][()]
+            attributes = read_typed(hdf[f"{base}/Attributes"])
             names = [_decode_hdf_scalar(value).rstrip() for value in attributes["Name"]]
             if mesh_name not in names:
                 raise KeyError(f"Unknown 2D flow area {mesh_name!r} in {hdf_path}")
@@ -1380,7 +1393,7 @@ class HdfMesh:
                 )
             cell_count = int(count_value)
             mesh = hdf[f"{base}/{mesh_name}"]
-            adjacency_raw = np.asarray(mesh["Faces Cell Indexes"][()])
+            adjacency_raw = np.asarray(read_typed(mesh["Faces Cell Indexes"]))
             if adjacency_raw.ndim != 2 or adjacency_raw.shape[1] != 2:
                 raise ValueError(f"Faces Cell Indexes must be Nx2 for {mesh_name!r}")
             if (
@@ -1398,7 +1411,7 @@ class HdfMesh:
                 )
             if "Cells Face and Orientation Info" in mesh:
                 cell_info = _integral_rows(
-                    mesh["Cells Face and Orientation Info"][()],
+                    read_typed(mesh["Cells Face and Orientation Info"]),
                     2,
                     "Cells Face and Orientation Info",
                 )
@@ -1504,7 +1517,7 @@ class HdfMesh:
                         f"BC lines lack Attributes needed to establish ownership in {hdf_path}"
                     )
                 if bc_path in hdf:
-                    bc_attrs = hdf[bc_path][()]
+                    bc_attrs = read_typed(hdf[bc_path])
                     mesh_field = HdfBndry._find_structured_field(
                         bc_attrs.dtype.names or (), "SA-2D", "Mesh Name"
                     )
@@ -1633,7 +1646,7 @@ class HdfMesh:
                     result = {}
                     for name in d2_flow_area.dtype.names:
                         try:
-                            value = d2_flow_area[name][()]
+                            value = read_typed(d2_flow_area)[name][()]
                             if isinstance(value, bytes):
                                 value = value.decode('utf-8')  # Decode as UTF-8
                             result[name] = value if not isinstance(value, bytes) else value.decode('utf-8')
@@ -1643,6 +1656,8 @@ class HdfMesh:
                 else:
                     logger.debug("No 2D Flow Area attributes found or invalid dataset.")
                     return pd.DataFrame()  # Return an empty DataFrame
+        except FastHdfError:
+            raise
         except Exception as e:
             logger.error(f"Error reading 2D flow area attributes from {hdf_path}: {str(e)}")
             return pd.DataFrame()  # Return an empty DataFrame
@@ -1708,8 +1723,8 @@ class HdfMesh:
                         result[mesh_name] = pd.DataFrame(columns=['Face ID', 'Elevation', 'Area', 'Wetted Perimeter', "Manning's n"])
                         continue
 
-                    area_elevation_info = hdf_file[info_path][()]
-                    area_elevation_values = hdf_file[values_path][()]
+                    area_elevation_info = read_typed(hdf_file[info_path])
+                    area_elevation_values = read_typed(hdf_file[values_path])
 
                     face_data = []
                     for face_id, (start_index, count) in enumerate(area_elevation_info):
@@ -1727,6 +1742,8 @@ class HdfMesh:
 
                 return result
 
+        except FastHdfError:
+            raise
         except Exception as e:
             logger.error(f"Error extracting face property tables from {hdf_path}: {str(e)}")
             return {}
@@ -1979,8 +1996,8 @@ class HdfMesh:
                 if attrs_path not in hdf_file or internal_faces_path not in hdf_file:
                     return pd.DataFrame(columns=columns)
 
-                attributes = hdf_file[attrs_path][()]
-                internal_faces = hdf_file[internal_faces_path][()]
+                attributes = read_typed(hdf_file[attrs_path])
+                internal_faces = read_typed(hdf_file[internal_faces_path])
                 if len(attributes) == 0 or len(internal_faces) == 0:
                     return pd.DataFrame(columns=columns)
 
@@ -2040,6 +2057,8 @@ class HdfMesh:
 
                 return pd.DataFrame(rows, columns=columns)
 
+        except FastHdfError:
+            raise
         except Exception as e:
             logger.error(
                 f"Error reading reference line internal faces from {hdf_path}: {str(e)}"
@@ -2307,8 +2326,8 @@ class HdfMesh:
                         result[mesh_name] = pd.DataFrame(columns=['Cell ID', 'Elevation', 'Volume'])
                         continue
 
-                    cell_elevation_info = hdf_file[info_path][()]
-                    cell_elevation_values = hdf_file[values_path][()]
+                    cell_elevation_info = read_typed(hdf_file[info_path])
+                    cell_elevation_values = read_typed(hdf_file[values_path])
 
                     cell_data = []
                     for cell_id, (start_index, count) in enumerate(cell_elevation_info):
@@ -2324,6 +2343,8 @@ class HdfMesh:
 
                 return result
 
+        except FastHdfError:
+            raise
         except Exception as e:
             logger.error(f"Error extracting cell property tables from {hdf_path}: {str(e)}")
             return {}
@@ -2808,18 +2829,18 @@ class HdfMesh:
                 base_path = f"Geometry/2D Flow Areas/{mesh_name}"
 
                 # Read all datasets in single file context
-                cell_centers = hdf_file[f"{base_path}/Cells Center Coordinate"][()]
-                cell_min_elev = hdf_file[f"{base_path}/Cells Minimum Elevation"][()]
-                cell_face_info = hdf_file[f"{base_path}/Cells Face and Orientation Info"][()]
-                cell_face_values = hdf_file[f"{base_path}/Cells Face and Orientation Values"][()]
+                cell_centers = read_typed(hdf_file[f"{base_path}/Cells Center Coordinate"])
+                cell_min_elev = read_typed(hdf_file[f"{base_path}/Cells Minimum Elevation"])
+                cell_face_info = read_typed(hdf_file[f"{base_path}/Cells Face and Orientation Info"])
+                cell_face_values = read_typed(hdf_file[f"{base_path}/Cells Face and Orientation Values"])
 
-                face_min_elev = hdf_file[f"{base_path}/Faces Minimum Elevation"][()]
-                face_cells = hdf_file[f"{base_path}/Faces Cell Indexes"][()]
-                face_facepoints = hdf_file[f"{base_path}/Faces FacePoint Indexes"][()]
+                face_min_elev = read_typed(hdf_file[f"{base_path}/Faces Minimum Elevation"])
+                face_cells = read_typed(hdf_file[f"{base_path}/Faces Cell Indexes"])
+                face_facepoints = read_typed(hdf_file[f"{base_path}/Faces FacePoint Indexes"])
 
-                facepoint_coords = hdf_file[f"{base_path}/FacePoints Coordinate"][()]
-                facepoint_face_info = hdf_file[f"{base_path}/FacePoints Face and Orientation Info"][()]
-                facepoint_face_values = hdf_file[f"{base_path}/FacePoints Face and Orientation Values"][()]
+                facepoint_coords = read_typed(hdf_file[f"{base_path}/FacePoints Coordinate"])
+                facepoint_face_info = read_typed(hdf_file[f"{base_path}/FacePoints Face and Orientation Info"])
+                facepoint_face_values = read_typed(hdf_file[f"{base_path}/FacePoints Face and Orientation Values"])
 
                 # Build result dictionary
                 return {
@@ -2853,6 +2874,8 @@ class HdfMesh:
         except KeyError as e:
             logger.error(f"Missing required dataset in {hdf_path}: {e}")
             return {}
+        except FastHdfError:
+            raise
         except Exception as e:
             logger.error(f"Error reading sloped topology from {hdf_path}: {e}")
             return {}
@@ -2893,7 +2916,7 @@ class HdfMesh:
                     )
                     return None
 
-                data = hdf_file[table_path][()]
+                data = read_typed(hdf_file[table_path])
 
                 df_dict = {}
                 for field_name in data.dtype.names:
@@ -2904,6 +2927,8 @@ class HdfMesh:
 
                 return pd.DataFrame(df_dict)
 
+        except FastHdfError:
+            raise
         except Exception as e:
             logger.error(f"Error reading Manning's n calibration table from {hdf_path}: {str(e)}")
             return None

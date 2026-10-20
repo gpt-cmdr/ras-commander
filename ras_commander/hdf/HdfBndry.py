@@ -35,7 +35,7 @@ import pandas as pd
 from shapely.geometry import LineString, MultiLineString, MultiPolygon, Point, Polygon
 
 from ..Decorators import log_call, standardize_input
-from ..fast_hdf import read_dataset
+from ..fast_hdf import FastHdfError, read_typed
 from ..LoggingConfig import get_logger
 from .HdfBase import HdfBase
 from .HdfUtils import HdfUtils
@@ -310,7 +310,7 @@ class HdfBndry:
                     report_ownership=on_duplicate_ownership == "report",
                 )
 
-            native = hdf_file[HdfBndry._BC_EXTERNAL_FACES_PATH][()]
+            native = read_typed(hdf_file[HdfBndry._BC_EXTERNAL_FACES_PATH])
             if len(native) == 0:
                 return HdfBndry._empty_bc_external_faces(
                     "empty",
@@ -402,7 +402,7 @@ class HdfBndry:
             result["bc_line_type"] = pd.Series(pd.NA, index=result.index, dtype="string")
 
             if HdfBndry._BC_ATTRIBUTES_PATH in hdf_file:
-                attributes = hdf_file[HdfBndry._BC_ATTRIBUTES_PATH][()]
+                attributes = read_typed(hdf_file[HdfBndry._BC_ATTRIBUTES_PATH])
                 attribute_fields = attributes.dtype.names or ()
                 name_field = HdfBndry._find_structured_field(attribute_fields, "Name")
                 mesh_field = HdfBndry._find_structured_field(
@@ -736,7 +736,7 @@ class HdfBndry:
                 geoms = HdfBase.get_polylines_from_parts(hdf_path, bc_lines_path)
                 
                 # Get attributes
-                attributes = pd.DataFrame(bc_line_data["Attributes"][()])
+                attributes = pd.DataFrame(read_typed(bc_line_data["Attributes"]))
                 
                 # Convert string columns
                 str_columns = ['Name', 'SA-2D', 'Type']
@@ -757,6 +757,8 @@ class HdfBndry:
                     
                 return gdf
 
+        except FastHdfError:
+            raise
         except Exception as e:
             logger.error(
                 "Error reading boundary condition lines from %s (%s): %s",
@@ -815,8 +817,8 @@ class HdfBndry:
                     return result
 
                 bl_line_data = hdf_file[breaklines_path]
-                attributes = bl_line_data["Attributes"][()]
-                source_points = read_dataset(bl_line_data["Polyline Points"])
+                attributes = read_typed(bl_line_data["Attributes"])
+                source_points = read_typed(bl_line_data["Polyline Points"])
                 diagnostics = []
 
                 # Initialize lists to store valid breakline data
@@ -829,7 +831,7 @@ class HdfBndry:
                 valid_geoms = []
 
                 # Process each breakline
-                for idx, (pnt_start, pnt_cnt, part_start, part_cnt) in enumerate(read_dataset(bl_line_data["Polyline Info"])):
+                for idx, (pnt_start, pnt_cnt, part_start, part_cnt) in enumerate(read_typed(bl_line_data["Polyline Info"])):
                     name = HdfUtils.convert_ras_string(attributes["Name"][idx])
 
                     # Validate the native span before tolerating a degenerate
@@ -880,7 +882,7 @@ class HdfBndry:
                     if part_cnt == 1:
                         geom = LineString(points)
                     else:
-                        parts = read_dataset(bl_line_data["Polyline Parts"])[part_start:part_start + part_cnt]
+                        parts = read_typed(bl_line_data["Polyline Parts"])[part_start:part_start + part_cnt]
                         if part_start < 0 or part_cnt < 1 or len(parts) != part_cnt:
                             raise ValueError(f"Invalid parts for breakline {idx} ({name})")
                         lines = []
@@ -938,6 +940,8 @@ class HdfBndry:
                 result.attrs["breakline_diagnostics"] = diagnostics
                 return result
 
+        except FastHdfError:
+            raise
         except Exception as e:
             logger.error(
                 "Error reading breaklines from %s (%s): %s",
@@ -983,13 +987,13 @@ class HdfBndry:
                     )
                     return gpd.GeoDataFrame()
                 rr_data = hdf_file[refinement_regions_path]
-                attributes = rr_data["Attributes"][()]
+                attributes = read_typed(rr_data["Attributes"])
                 rr_ids = range(len(attributes))
                 names = [HdfUtils.convert_ras_string(name) for name in attributes["Name"]]
-                polygon_points = read_dataset(rr_data["Polygon Points"])
-                polygon_parts = read_dataset(rr_data["Polygon Parts"]) if "Polygon Parts" in rr_data else None
+                polygon_points = read_typed(rr_data["Polygon Points"])
+                polygon_parts = read_typed(rr_data["Polygon Parts"]) if "Polygon Parts" in rr_data else None
                 geoms = list()
-                for pnt_start, pnt_cnt, part_start, part_cnt in read_dataset(rr_data["Polygon Info"]):
+                for pnt_start, pnt_cnt, part_start, part_cnt in read_typed(rr_data["Polygon Info"]):
                     try:
                         pnt_start, pnt_cnt = map(_nonnegative_index, (pnt_start, pnt_cnt))
                     except ValueError as exc:
@@ -1030,6 +1034,8 @@ class HdfBndry:
                     geometry="geometry",
                     crs=HdfBase.get_projection(hdf_file),
                 )
+        except FastHdfError:
+            raise
         except Exception as e:
             logger.error(
                 "Error reading refinement regions from %s (%s): %s",
@@ -1070,7 +1076,7 @@ class HdfBndry:
                     )
                     return gpd.GeoDataFrame()
                 
-                attributes = hdf_file[attributes_path][()]
+                attributes = read_typed(hdf_file[attributes_path])
                 refline_ids = range(attributes.shape[0])
                 v_conv_str = np.vectorize(HdfUtils.convert_ras_string)
                 names = v_conv_str(attributes["Name"])
@@ -1107,6 +1113,8 @@ class HdfBndry:
                 
                 return gdf
                 
+        except FastHdfError:
+            raise
         except Exception as e:
             logger.error(
                 "Error reading reference lines from %s (%s): %s",
