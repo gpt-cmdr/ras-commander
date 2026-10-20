@@ -132,3 +132,7 @@ See `.claude/rules/hec-ras/land-cover-mannings-n.md` for full documentation.
   storage areas or calibration regions. That is a separate feature gap.
 - Notebook 207 demonstrates native point/line authoring, in-mesh checks and a
   one-day RasCmdr computation in a separate destination, followed by HDF reads.
+
+Native Reference Point blocks terminate connection ownership/rewrite slices. Preserve
+them in all connection editing paths. GeomProjection transforms their Position
+records alongside IC Point Position; the two feature types remain distinct.

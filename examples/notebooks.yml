@@ -816,8 +816,8 @@ notebooks:
   title: Reference Lines and Points for 2D Calibration
   series: 200
   series_name: Geometry & Calibration
-  summary: Author and read back reference lines and points in geometry text; prepare locations for a subsequent
-    model run.
+  summary: Author native reference lines and points, compute a one-day copied plan, and read recorded
+    HDF output.
   tags:
   - 2d
   - calibration
@@ -832,8 +832,16 @@ notebooks:
   - GeomReferenceFeatures.add_reference_points
   - GeomReferenceFeatures.get_reference_lines
   - GeomReferenceFeatures.get_reference_points
+  - HdfBndry.get_reference_points
+  - HdfMesh.get_mesh_cell_polygons
+  - HdfResultsXsec.get_ref_lines_timeseries
+  - HdfResultsXsec.get_ref_points_timeseries
+  - RasCmdr.compute_plan
   - RasExamples.extract_project
-  - ras.geom_df
+  - RasExamples.get_example_projects
+  - RasPlan.set_hdf_output_variable
+  - RasPlan.update_simulation_date
+  - ras.plan_df
   hec_refs: []
   learning_paths: []
   excluded: false
@@ -843,13 +851,15 @@ notebooks:
   operations:
   - Write reference locations
   - Read geometry text back
+  - Compute copied plan and inspect native HDF results
   outputs:
   - Updated geometry text
   - Reference location inventories
+  - Native point geometry and recorded time series
   runtime_requirements:
-  - Python geometry authoring; solver required separately for new reference results
-  evidence_scope: Retained outputs demonstrate text authoring and readback, not reference hydrographs
-    or a fresh solve.
+  - Installed HEC-RAS 6.6; RasCmdr computes a separate one-day destination
+  evidence_scope: Fresh HEC-RAS 6.6 computation with native point geometry and recorded point/line series;
+    not hydraulic acceptance.
   code_cells: 6
   executed_cells: 6
 - id: 208_bridge_method_comparison
