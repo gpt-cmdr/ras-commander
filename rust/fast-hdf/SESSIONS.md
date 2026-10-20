@@ -1,6 +1,6 @@
 # Native HDF sessions
 
-Bridge API 7 pins engine `dbb0e52e0965a463b9c730b843bd0e3a2a2b9f6c`.
+Bridge API 8 pins engine `b39966c3204c6bf74ac90dd3a2ac2942ce5f2f03`.
 `ras_commander_fast_hdf.HdfSession(path, threads=None, parallel=True)` keeps
 one read-only engine session open. Use it as a context manager or call `close()`.
 Closing is idempotent, waits for active native reads and releases file mappings.
@@ -28,3 +28,15 @@ serialized with cache eviction; native session methods serialize against close.
 Public pandas/xarray construction and automatic unsupported-layout fallback are
 unchanged. A read-only h5py handle used by the caller must also be closed before
 replacing a file on Windows.
+
+
+API 8 adds keyword-only `cache_bytes` (default 64 MiB) and `cache_slots`
+(default 521) to `HdfSession`, plus `cache_stats()`. Full reads above that byte
+limit bypass retention. `read_mesh_summary_values` returns the same numeric array
+without allocating element identities or a result dictionary. Existing summary
+methods keep their return contract. `read_mesh_boundary_batch(area, rows,
+names=None)` returns a name-keyed dictionary of existing selection results for
+all lines or a named subset; its output budget is shared across the batch.
+`fast_hdf.read_datasets` groups canonical per-area BC paths into these calls.
+Legacy non-area BC paths retain the generic numeric batch. Decoder scratch
+remains additional to the configured retained cache and result-byte budgets.
