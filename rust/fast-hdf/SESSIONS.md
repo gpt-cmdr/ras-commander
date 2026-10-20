@@ -40,3 +40,14 @@ all lines or a named subset; its output budget is shared across the batch.
 `fast_hdf.read_datasets` groups canonical per-area BC paths into these calls.
 Legacy non-area BC paths retain the generic numeric batch. Decoder scratch
 remains additional to the configured retained cache and result-byte budgets.
+
+
+PERF-2 review fixes: engine API6. Auto-mode BC batch dispatch retries typed
+qualification refusals through the generic batch reader, preserving API7/h5py
+values and ordering. Required/rust mode stays strict; host I/O, closed-session
+and internal failures are not retried. Requested-only BC reads and named subsets
+ignore corrupt unrequested siblings; inventories and all-lines batches report
+them. Cache defaults derive from the engine/vendor constants. Zero bytes disables
+both decoded-chunk retention and the optional 32 MiB hot-array copy deliberately,
+so zero means no data retention. Non-inline EA indexes now refuse explicitly
+instead of silently returning zeros. No local timing is authorized for this fix.

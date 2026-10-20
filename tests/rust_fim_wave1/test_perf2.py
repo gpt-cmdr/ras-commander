@@ -87,3 +87,21 @@ def test_requested_bc_does_not_decode_corrupt_sibling(fixture):
         exact(s.read_mesh_boundary_batch(area,(0,len(expected),1),[name])[name]['values'],expected)
         with pytest.raises(Exception) as error:s.mesh_boundary_inventory(area)
         assert error.value.engine_kind=='corrupt'
+
+@pytest.mark.parametrize('mutation',['time_rows','geometry'])
+def test_auto_bc_batch_retains_generic_results_on_typed_refusal(fixture,mutation):
+    from ras_commander import fast_hdf as fast
+    with h5py.File(fixture,'r+') as f:
+        area=dataset(f).name.split('/')[-2]
+        root=f[f'{BASE}/Unsteady Time Series/2D Flow Areas/{area}/Boundary Conditions']
+        paths=[root[n].name for n in root]
+        if mutation=='geometry':f.move(f'Geometry/2D Flow Areas/{area}',f'Geometry/2D Flow Areas/{area}_moved')
+        else:
+            d=f[paths[0]];a=d[()];attrs=dict(d.attrs);del f[paths[0]]
+            d=f.create_dataset(paths[0],data=np.vstack([a,a[-1:]]))
+            for k,v in attrs.items():d.attrs[k]=v
+    with h5py.File(fixture) as f:
+        actual=fast.read_datasets(f,paths,backend='auto')
+        assert list(actual)==paths
+        for path in paths:exact(actual[path],f[path][()])
+        with pytest.raises(fast.FastHdfError):fast.read_datasets(f,paths,backend='rust')

@@ -35,14 +35,14 @@ impl HdfSession {
 #[pymethods]
 impl HdfSession {
     #[new]
-    #[pyo3(signature=(path,threads=None,parallel=true,*,cache_bytes=67108864,cache_slots=521))]
+    #[pyo3(signature=(path,threads=None,parallel=true,*,cache_bytes=None,cache_slots=None))]
     fn new(
         py: Python<'_>,
         path: PathBuf,
         threads: Option<usize>,
         parallel: bool,
-        cache_bytes: usize,
-        cache_slots: usize,
+        cache_bytes: Option<usize>,
+        cache_slots: Option<usize>,
     ) -> PyResult<Self> {
         let count = crate::reader::threads(threads)?;
         let s = py
@@ -51,8 +51,8 @@ impl HdfSession {
                     path,
                     count,
                     parallel,
-                    cache_bytes,
-                    cache_slots,
+                    cache_bytes.unwrap_or(ras_commander_rust::hdf::DEFAULT_CHUNK_CACHE_BYTES),
+                    cache_slots.unwrap_or(ras_commander_rust::hdf::DEFAULT_CHUNK_CACHE_SLOTS),
                 )
             })
             .map_err(crate::reader::err)?;
