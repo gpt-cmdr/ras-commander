@@ -49,6 +49,7 @@ from pathlib import Path
 import logging
 
 from .HdfUtils import HdfUtils
+from ..fast_hdf import FastHdfError, read_typed
 from ..Decorators import standardize_input, log_call
 from ..LoggingConfig import setup_logging, get_logger
 
@@ -833,9 +834,9 @@ class HdfBase:
                         f"{missing} under '{path}' in {Path(hdf_path).name}."
                     )
 
-                polyline_info = hdf_file[polyline_info_path][()]
-                polyline_parts = hdf_file[polyline_parts_path][()]
-                polyline_points = hdf_file[polyline_points_path][()]
+                polyline_info = read_typed(hdf_file[polyline_info_path])
+                polyline_parts = read_typed(hdf_file[polyline_parts_path])
+                polyline_points = read_typed(hdf_file[polyline_points_path])
 
                 geoms = []
                 for pnt_start, pnt_cnt, part_start, part_cnt in polyline_info:
@@ -857,7 +858,7 @@ class HdfBase:
                             )
                         )
                 return geoms
-        except ValueError:
+        except (ValueError, FastHdfError):
             raise
         except Exception as e:
             raise ValueError(
