@@ -1,6 +1,6 @@
 # Native HDF sessions
 
-Bridge API 8 pins engine `b39966c3204c6bf74ac90dd3a2ac2942ce5f2f03`.
+Bridge API 8 pins engine `b2fe41d2b93f0c678b7fba47601c103677566866`.
 `ras_commander_fast_hdf.HdfSession(path, threads=None, parallel=True)` keeps
 one read-only engine session open. Use it as a context manager or call `close()`.
 Closing is idempotent, waits for active native reads and releases file mappings.

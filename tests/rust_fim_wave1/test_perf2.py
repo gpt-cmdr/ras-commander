@@ -105,3 +105,18 @@ def test_auto_bc_batch_retains_generic_results_on_typed_refusal(fixture,mutation
         assert list(actual)==paths
         for path in paths:exact(actual[path],f[path][()])
         with pytest.raises(fast.FastHdfError):fast.read_datasets(f,paths,backend='rust')
+
+
+def test_non_inline_ea_auto_uses_h5py_instead_of_silent_fill(tmp_path):
+    import ras_commander_fast_hdf as native
+    from ras_commander import fast_hdf as fast
+    path=tmp_path/'ea.h5'
+    expected=np.arange(50*101,dtype='f4').reshape(50,101)+1
+    with h5py.File(path,'w',libver='latest') as f:
+        f.create_dataset('data',data=expected,chunks=(1,101),maxshape=(None,101))
+    with pytest.raises(native.UnsupportedError) as error:native.read_numeric(path,'data')
+    assert error.value.engine_kind=='unsupported'
+    with h5py.File(path) as f:
+        exact(fast.read_dataset(f['data'],backend='auto'),expected)
+        with pytest.raises(fast.FastHdfError):fast.read_dataset(f['data'],backend='rust')
+    fast.close_sessions()
