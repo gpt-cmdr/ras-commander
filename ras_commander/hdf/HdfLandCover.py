@@ -43,6 +43,7 @@ from ..Decorators import log_call, standardize_input
 from ..LoggingConfig import get_logger
 from .HdfBase import HdfBase
 from .HdfUtils import HdfUtils
+from ..fast_hdf import FastHdfError, read_typed
 
 logger = get_logger(__name__)
 
@@ -200,12 +201,12 @@ class HdfLandCover:
                 ):
                     face_values = np.array([], dtype=np.float64)
                 else:
-                    face_values = np.asarray(face_dataset[:, 3], dtype=np.float64)
+                    face_values = np.asarray(read_typed(face_dataset, (slice(None), 3)), dtype=np.float64)
                 face_distinct = _materially_distinct(face_values, tolerance)
 
                 cell_dataset = area.get("Cells Center Manning's n")
                 cell_values = (
-                    np.asarray(cell_dataset[()], dtype=np.float64)
+                    np.asarray(read_typed(cell_dataset), dtype=np.float64)
                     if cell_dataset is not None
                     else np.array([], dtype=np.float64)
                 )
@@ -361,7 +362,7 @@ class HdfLandCover:
                         logger.debug(f"No Manning's n data for mesh '{area_name}'")
                         continue
 
-                    n_values = area[mann_path][()]
+                    n_values = read_typed(area[mann_path])
                     n_cells = len(n_values)
 
                     area_df = pd.DataFrame({
@@ -371,6 +372,8 @@ class HdfLandCover:
                     })
                     results.append(area_df)
 
+        except FastHdfError:
+            raise
         except Exception as e:
             logger.error(f"Error reading preprocessed Manning's n from {hdf_path}: {e}")
             return pd.DataFrame(columns=['mesh_name', 'cell_id', 'mannings_n'])
@@ -414,7 +417,7 @@ class HdfLandCover:
                     logger.debug(f"No Manning's n calibration table in {hdf_path}")
                     return None
 
-                data = hdf_file[table_path][()]
+                data = read_typed(hdf_file[table_path])
 
                 df_dict = {}
                 for field_name in data.dtype.names:
@@ -425,6 +428,8 @@ class HdfLandCover:
 
                 return pd.DataFrame(df_dict)
 
+        except FastHdfError:
+            raise
         except Exception as e:
             logger.error(f"Error reading calibration table from {hdf_path}: {e}")
             return None
@@ -535,7 +540,7 @@ class HdfLandCover:
                 if missing:
                     raise ValueError(f"Missing polygon datasets: {missing}")
 
-                attrs = lc_group["Attributes"][()]
+                attrs = read_typed(lc_group["Attributes"])
                 names = [HdfUtils.convert_ras_string(name) for name in attrs["Name"]]
 
                 area_names = None
@@ -543,9 +548,9 @@ class HdfLandCover:
                     area_names = [HdfUtils.convert_ras_string(name) for name in attrs["2D Area Name"]]
 
                 geoms = []
-                for pnt_start, pnt_cnt, part_start, part_cnt in lc_group["Polygon Info"][()]:
+                for pnt_start, pnt_cnt, part_start, part_cnt in read_typed(lc_group["Polygon Info"]):
                     points = HdfBase.plan_vertex_ordinates(
-                        lc_group["Polygon Points"][()][pnt_start:pnt_start + pnt_cnt]
+                        read_typed(lc_group["Polygon Points"])[pnt_start:pnt_start + pnt_cnt]
                     )
                     if pnt_start < 0 or pnt_cnt < 3 or len(points) != pnt_cnt:
                         raise ValueError("Invalid region polygon point range")
@@ -554,7 +559,7 @@ class HdfLandCover:
                     elif "Polygon Parts" not in lc_group:
                         raise ValueError("Multipart Manning's region is missing Polygon Parts")
                     else:
-                        parts = lc_group["Polygon Parts"][()][part_start:part_start + part_cnt]
+                        parts = read_typed(lc_group["Polygon Parts"])[part_start:part_start + part_cnt]
                         rings = [points[ps:ps + pc] for ps, pc in parts]
                         if len(rings) == 1:
                             geoms.append(Polygon(rings[0]))
@@ -576,6 +581,8 @@ class HdfLandCover:
                     crs=HdfBase.get_projection(hdf_file),
                 )
 
+        except FastHdfError:
+            raise
         except Exception as e:
             logger.error(f"Error reading Manning's region polygons from {hdf_path} (Geometry/Land Cover (Manning's n)): {e}")
             raise
@@ -608,12 +615,14 @@ class HdfLandCover:
                 if cells_path not in hdf_file:
                     return None
 
-                data = hdf_file[cells_path][()]
+                data = read_typed(hdf_file[cells_path])
                 return pd.DataFrame({
                     'region_id': data['Region ID'],
                     'cell_index': data['Cell Index'],
                 })
 
+        except FastHdfError:
+            raise
         except Exception as e:
             logger.error(f"Error reading region cell mapping from {hdf_path}: {e}")
             return None

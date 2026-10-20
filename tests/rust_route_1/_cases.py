@@ -52,6 +52,34 @@ def _breach_id(path):
     return "__absent__"
 
 
+def _mesh_first(path):
+    return _first(_texts(path, "Geometry/2D Flow Areas/Attributes", "Name"))
+
+
+def _face_ids_in_box(path):
+    from shapely.geometry import box
+    mesh = _mesh_first(path)
+    with h5py.File(path, "r") as f:
+        key = f"Geometry/2D Flow Areas/{mesh}/Cells Center Coordinate"
+        if key not in f:
+            return _hdf().HdfMesh.get_face_ids_in_polygon(Path(path), mesh, box(0, 0, 1, 1))
+        x, y = (float(v) for v in f[key][0])
+    return _hdf().HdfMesh.get_face_ids_in_polygon(Path(path), mesh, box(x - 250, y - 250, x + 250, y + 250))
+
+
+def _face_properties_at_stage(path):
+    import pytest
+    if Path(path).stat().st_size > 100_000_000:
+        # h5py-mode run alone takes 6-50 minutes on these files (iter4 log); bounded
+        # suite runs them only on fixtures below 100 MB. iter4 covered all 28 (passed).
+        pytest.skip("face property interpolation bounded to fixtures < 100 MB")
+    mesh = _mesh_first(path)
+    with h5py.File(path, "r") as f:
+        key = f"Geometry/2D Flow Areas/{mesh}/Faces Minimum Elevation"
+        stages = (f[key][:3].astype(float) + 1.0) if key in f else [1.0, 1.0, 1.0]
+    return _hdf().HdfMesh.get_mesh_face_hydraulic_properties_at_stage(Path(path), mesh, [0, 1, 2], list(stages))
+
+
 def _hdf():
     from ras_commander import hdf
     return hdf
@@ -101,4 +129,44 @@ CASES = {
     "HdfStruc1D.get_structure_max_values": lambda p: _hdf().HdfStruc1D.get_structure_max_values(Path(p), *_structure_first(p)),
     "HdfPump.get_pump_stations": lambda p: _hdf().HdfPump.get_pump_stations(Path(p)),
     "HdfPump.get_pump_groups": lambda p: _hdf().HdfPump.get_pump_groups(Path(p)),
+    "HdfBndry.get_bc_lines": lambda p: _hdf().HdfBndry.get_bc_lines(Path(p)),
+    "HdfBndry.get_breaklines": lambda p: _hdf().HdfBndry.get_breaklines(Path(p)),
+    "HdfBndry.get_refinement_regions": lambda p: _hdf().HdfBndry.get_refinement_regions(Path(p)),
+    "HdfBndry.get_reference_lines": lambda p: _hdf().HdfBndry.get_reference_lines(Path(p)),
+    "HdfBndry.get_bc_external_faces": lambda p: _hdf().HdfBndry.get_bc_external_faces(Path(p), on_duplicate_ownership="report"),
+    "HdfBndry.get_bc_external_faces[geometry]": lambda p: _hdf().HdfBndry.get_bc_external_faces(Path(p), include_geometry=True, on_duplicate_ownership="report"),
+    "HdfMesh.get_mesh_area_names": lambda p: _hdf().HdfMesh.get_mesh_area_names(Path(p)),
+    "HdfMesh.get_mesh_areas": lambda p: _hdf().HdfMesh.get_mesh_areas(Path(p)),
+    "HdfMesh.diagnose_mesh_layout": lambda p: _hdf().HdfMesh.diagnose_mesh_layout(Path(p)),
+    "HdfMesh.get_mesh_geometry_inventory": lambda p: _hdf().HdfMesh.get_mesh_geometry_inventory(Path(p)),
+    "HdfMesh.get_mesh_cell_points": lambda p: _hdf().HdfMesh.get_mesh_cell_points(Path(p)),
+    "HdfMesh.get_mesh_cell_faces": lambda p: _hdf().HdfMesh.get_mesh_cell_faces(Path(p)),
+    "HdfMesh.get_mesh_perimeter_faces": lambda p: _hdf().HdfMesh.get_mesh_perimeter_faces(Path(p), _mesh_first(p), on_duplicate_ownership="report"),
+    "HdfMesh.get_mesh_area_attributes": lambda p: _hdf().HdfMesh.get_mesh_area_attributes(Path(p)),
+    "HdfMesh.get_mesh_face_property_tables": lambda p: _hdf().HdfMesh.get_mesh_face_property_tables(Path(p)),
+    "HdfMesh.get_mesh_cell_property_tables": lambda p: _hdf().HdfMesh.get_mesh_cell_property_tables(Path(p)),
+    "HdfMesh.get_reference_line_internal_faces": lambda p: _hdf().HdfMesh.get_reference_line_internal_faces(Path(p)),
+    "HdfMesh.get_mesh_sloped_topology": lambda p: _hdf().HdfMesh.get_mesh_sloped_topology(Path(p), _mesh_first(p)),
+    "HdfMesh.get_mannings_calibration_table": lambda p: _hdf().HdfMesh.get_mannings_calibration_table(Path(p)),
+    "HdfResultsMesh.get_mesh_max_ws": lambda p: _hdf().HdfResultsMesh.get_mesh_max_ws(Path(p)),
+    "HdfResultsMesh.get_mesh_min_ws": lambda p: _hdf().HdfResultsMesh.get_mesh_min_ws(Path(p)),
+    "HdfResultsMesh.get_mesh_max_face_v": lambda p: _hdf().HdfResultsMesh.get_mesh_max_face_v(Path(p)),
+    "HdfResultsMesh.get_mesh_min_face_v": lambda p: _hdf().HdfResultsMesh.get_mesh_min_face_v(Path(p)),
+    "HdfResultsMesh.get_mesh_max_ws_err": lambda p: _hdf().HdfResultsMesh.get_mesh_max_ws_err(Path(p)),
+    "HdfResultsMesh.get_mesh_max_iter": lambda p: _hdf().HdfResultsMesh.get_mesh_max_iter(Path(p)),
+    "HdfResultsMesh.get_mesh_last_iter": lambda p: _hdf().HdfResultsMesh.get_mesh_last_iter(Path(p)),
+    "HdfResultsMesh.get_mesh_summary_values[Maximum Water Surface]": lambda p: _hdf().HdfResultsMesh.get_mesh_summary_values(Path(p), "Maximum Water Surface"),
+    "HdfResultsMesh.get_mesh_summary[Maximum Face Velocity]": lambda p: _hdf().HdfResultsMesh.get_mesh_summary(Path(p), "Maximum Face Velocity"),
+    "HdfResultsMesh.get_mesh_timeseries[Water Surface]": lambda p: _hdf().HdfResultsMesh.get_mesh_timeseries(Path(p), _mesh_first(p), "Water Surface"),
+    "HdfResultsMesh.get_mesh_timeseries[Face Velocity]": lambda p: _hdf().HdfResultsMesh.get_mesh_timeseries(Path(p), _mesh_first(p), "Face Velocity"),
+    "HdfResultsMesh.get_mesh_faces_timeseries": lambda p: _hdf().HdfResultsMesh.get_mesh_faces_timeseries(Path(p), _mesh_first(p)),
+    "HdfResultsMesh.get_mesh_cells_timeseries[Water Surface]": lambda p: _hdf().HdfResultsMesh.get_mesh_cells_timeseries(Path(p), var="Water Surface"),
+    "HdfMesh.get_face_ids_in_polygon": _face_ids_in_box,
+    "HdfMesh.get_mesh_face_hydraulic_properties_at_stage": _face_properties_at_stage,
+    "HdfBase.get_2d_flow_area_names_and_counts": lambda p: _hdf().HdfBase.get_2d_flow_area_names_and_counts(Path(p)),
+    "HdfLandCover.get_preprocessed_mannings_n": lambda p: _hdf().HdfLandCover.get_preprocessed_mannings_n(Path(p)),
+    "HdfLandCover.get_mannings_calibration_table": lambda p: _hdf().HdfLandCover.get_mannings_calibration_table(Path(p)),
+    "HdfLandCover.get_mannings_region_polygons": lambda p: _hdf().HdfLandCover.get_mannings_region_polygons(Path(p)),
+    "HdfLandCover.get_mannings_region_cell_mapping": lambda p: _hdf().HdfLandCover.get_mannings_region_cell_mapping(Path(p)),
+    "HdfLandCover.audit_final_mannings_n": lambda p: _hdf().HdfLandCover.audit_final_mannings_n(Path(p)),
 }
