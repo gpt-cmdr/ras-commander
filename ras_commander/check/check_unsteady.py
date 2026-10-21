@@ -13,6 +13,7 @@ import h5py
 
 from ..Decorators import standardize_input, log_call
 from ..LoggingConfig import get_logger
+from ..fast_hdf import reraise_required
 from .types import Severity, FlowType, CheckMessage, CheckResults
 from .thresholds import ValidationThresholds, get_default_thresholds
 from .messages import get_message_template, get_help_text, format_message
@@ -180,6 +181,7 @@ class CheckUnsteady:
                 results.messages.append(msg)
 
         except Exception as e:
+            reraise_required(e)
             logger.error("Failed to check mass balance")
             logger.debug("Mass balance check failure for %s: %s", plan_hdf, e)
             msg = CheckMessage(
@@ -328,6 +330,7 @@ class CheckUnsteady:
                 results.messages.append(msg)
 
         except Exception as e:
+            reraise_required(e)
             logger.warning("Could not check computation messages")
             logger.debug("Computation-message check failure for %s: %s", plan_hdf, e)
 
@@ -387,6 +390,7 @@ class CheckUnsteady:
                     try:
                         xs_geom = HdfXsec.get_cross_sections(geom_hdf)
                     except Exception as e:
+                        reraise_required(e)
                         logger.debug(
                             "Could not read XS geometry for bounds checking from %s: %s",
                             geom_hdf,
@@ -495,6 +499,7 @@ class CheckUnsteady:
                         results.messages.append(msg)
 
             except Exception as e:
+                reraise_required(e)
                 logger.debug(f"Could not read 1D results: {e}")
 
             # Check for max velocity threshold (from profiles thresholds)
@@ -510,6 +515,7 @@ class CheckUnsteady:
                 results.messages.append(msg)
 
         except Exception as e:
+            reraise_required(e)
             logger.error("Failed to check peaks")
             logger.debug(
                 "Peak check failure for plan %s and geometry %s: %s",
@@ -714,6 +720,7 @@ class CheckUnsteady:
                         results.messages.append(msg)
 
             except Exception as e:
+                reraise_required(e)
                 logger.debug(f"Could not read 2D stability metrics: {e}")
 
             if not stability_checks_performed:
@@ -726,6 +733,7 @@ class CheckUnsteady:
                 results.messages.append(msg)
 
         except Exception as e:
+            reraise_required(e)
             logger.error("Failed to check stability")
             logger.debug("Stability check failure for %s: %s", plan_hdf, e)
             msg = CheckMessage(
@@ -887,6 +895,7 @@ class CheckUnsteady:
                     }])
 
             except Exception as e:
+                reraise_required(e)
                 logger.debug(f"Could not read mesh geometry: {e}")
 
             # Check face velocities
@@ -930,6 +939,7 @@ class CheckUnsteady:
                                 mesh_issues_found = True
 
             except Exception as e:
+                reraise_required(e)
                 logger.debug(f"Could not read face velocities: {e}")
 
             if not mesh_issues_found:
@@ -942,6 +952,7 @@ class CheckUnsteady:
                 results.messages.append(msg)
 
         except Exception as e:
+            reraise_required(e)
             logger.error("Failed to check mesh quality")
             logger.debug("Mesh quality check failure for %s: %s", plan_hdf, e)
             msg = CheckMessage(

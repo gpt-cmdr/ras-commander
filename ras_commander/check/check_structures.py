@@ -13,6 +13,7 @@ import h5py
 
 from ..Decorators import standardize_input, log_call
 from ..LoggingConfig import get_logger
+from ..fast_hdf import read_attr, read_attrs, read_typed, reraise_required
 from .types import Severity, FlowType, CheckMessage, CheckResults
 from .thresholds import ValidationThresholds, get_default_thresholds
 from .messages import get_message_template, get_help_text, format_message
@@ -63,6 +64,7 @@ class CheckStructures:
         try:
             struct_gdf = HdfStruc.get_structures(geom_hdf)
         except Exception as e:
+            reraise_required(e)
             logger.warning("Could not read structures; structure checks will be skipped")
             logger.debug("Structure read failure for %s: %s", geom_hdf, e)
             struct_gdf = None
@@ -175,7 +177,7 @@ class CheckStructures:
         try:
             with h5py.File(geom_hdf, 'r') as hdf:
                 if 'Geometry/Structures/Attributes' in hdf:
-                    struct_attrs = hdf['Geometry/Structures/Attributes'][:]
+                    struct_attrs = read_typed(hdf['Geometry/Structures/Attributes'], slice(None))
 
                     for i, attr in enumerate(struct_attrs):
                         struct_type = attr['Type'].decode().strip() if isinstance(attr['Type'], bytes) else str(attr['Type']).strip()
@@ -470,6 +472,7 @@ class CheckStructures:
                             messages.append(msg)
 
         except Exception as e:
+            reraise_required(e)
             logger.debug(f"Could not perform additional structure checks: {e}")
 
         # =====================================================================
@@ -551,7 +554,7 @@ class CheckStructures:
                 if 'Geometry/Structures/Attributes' not in geom_h:
                     return messages
 
-                struct_attrs = geom_h['Geometry/Structures/Attributes'][:]
+                struct_attrs = read_typed(geom_h['Geometry/Structures/Attributes'], slice(None))
                 attr_names = struct_attrs.dtype.names
 
                 # Find culverts
@@ -584,7 +587,7 @@ class CheckStructures:
                 # Check for Culvert Groups dataset
                 culvert_groups_path = 'Geometry/Structures/Culvert Groups'
                 if culvert_groups_path in geom_h:
-                    culvert_groups = geom_h[culvert_groups_path][:]
+                    culvert_groups = read_typed(geom_h[culvert_groups_path], slice(None))
                     cg_names = culvert_groups.dtype.names if culvert_groups.dtype.names else []
 
                     # Match culvert groups to structures
@@ -672,6 +675,7 @@ class CheckStructures:
                             break
 
         except Exception as e:
+            reraise_required(e)
             logger.debug(f"Could not read culvert geometry data: {e}")
 
         # Check results if plan HDF is available
@@ -719,7 +723,7 @@ class CheckStructures:
 
                         # Check for flow type indicators
                         # HEC-RAS stores: Culvert Q, HW Elev, TW Elev, Flow Type, etc.
-                        result_attrs = dict(culvert_result.attrs) if hasattr(culvert_result, 'attrs') else {}
+                        result_attrs = read_attrs(culvert_result) if hasattr(culvert_result, 'attrs') else {}
 
                         flow_type = result_attrs.get('Flow Type', None)
                         if flow_type is not None:
@@ -835,6 +839,7 @@ class CheckStructures:
                                 pass
 
         except Exception as e:
+            reraise_required(e)
             logger.debug(f"Could not read culvert results: {e}")
 
         return messages
@@ -878,7 +883,7 @@ class CheckStructures:
                 if 'Geometry/Structures/Attributes' not in geom_h:
                     return messages
 
-                struct_attrs = geom_h['Geometry/Structures/Attributes'][:]
+                struct_attrs = read_typed(geom_h['Geometry/Structures/Attributes'], slice(None))
                 attr_names = struct_attrs.dtype.names
 
                 # Find inline weirs
@@ -958,10 +963,10 @@ class CheckStructures:
 
                             # Look for weir flow data
                             if 'Weir Flow' in struct_group:
-                                weir_flow_data = struct_group['Weir Flow'][:]
+                                weir_flow_data = read_typed(struct_group['Weir Flow'], slice(None))
                                 # Find profile index
                                 if 'Results/Steady/Output/Output Blocks/Steady Profiles/Profile Names' in plan_h:
-                                    profile_names = plan_h['Results/Steady/Output/Output Blocks/Steady Profiles/Profile Names'][:]
+                                    profile_names = read_typed(plan_h['Results/Steady/Output/Output Blocks/Steady Profiles/Profile Names'], slice(None))
                                     profile_names = [p.decode('utf-8').strip() if isinstance(p, bytes) else str(p).strip()
                                                    for p in profile_names]
                                     if profile in profile_names:
@@ -971,9 +976,9 @@ class CheckStructures:
 
                             # Look for gate flow data
                             if 'Gate Flow' in struct_group:
-                                gate_flow_data = struct_group['Gate Flow'][:]
+                                gate_flow_data = read_typed(struct_group['Gate Flow'], slice(None))
                                 if 'Results/Steady/Output/Output Blocks/Steady Profiles/Profile Names' in plan_h:
-                                    profile_names = plan_h['Results/Steady/Output/Output Blocks/Steady Profiles/Profile Names'][:]
+                                    profile_names = read_typed(plan_h['Results/Steady/Output/Output Blocks/Steady Profiles/Profile Names'], slice(None))
                                     profile_names = [p.decode('utf-8').strip() if isinstance(p, bytes) else str(p).strip()
                                                    for p in profile_names]
                                     if profile in profile_names:
@@ -1045,13 +1050,13 @@ class CheckStructures:
 
                             # Try to get headwater/tailwater elevations
                             if 'HW Elev' in struct_group:
-                                hw_data = struct_group['HW Elev'][:]
+                                hw_data = read_typed(struct_group['HW Elev'], slice(None))
                                 # Get profile-specific value
                                 profile_names_path = 'Results/Steady/Output/Output Blocks/Steady Profiles/Profile Names'
                                 alt_profile_path = 'Results/Steady/Output/Output Blocks/Base Output/Steady Profiles/Profile Names'
                                 for ppath in [profile_names_path, alt_profile_path]:
                                     if ppath in plan_h:
-                                        profile_names = plan_h[ppath][:]
+                                        profile_names = read_typed(plan_h[ppath], slice(None))
                                         profile_names = [p.decode('utf-8').strip() if isinstance(p, bytes) else str(p).strip()
                                                        for p in profile_names]
                                         if profile in profile_names:
@@ -1061,10 +1066,10 @@ class CheckStructures:
                                         break
 
                             if 'TW Elev' in struct_group:
-                                tw_data = struct_group['TW Elev'][:]
+                                tw_data = read_typed(struct_group['TW Elev'], slice(None))
                                 for ppath in [profile_names_path, alt_profile_path]:
                                     if ppath in plan_h:
-                                        profile_names = plan_h[ppath][:]
+                                        profile_names = read_typed(plan_h[ppath], slice(None))
                                         profile_names = [p.decode('utf-8').strip() if isinstance(p, bytes) else str(p).strip()
                                                        for p in profile_names]
                                         if profile in profile_names:
@@ -1075,7 +1080,7 @@ class CheckStructures:
 
                             # Try to get crest elevation from geometry
                             if 'Crest Elev' in struct_group.attrs:
-                                crest_elev = float(struct_group.attrs['Crest Elev'])
+                                crest_elev = float(read_attr(struct_group, 'Crest Elev'))
                             elif 'Weir Crest' in attr_names:
                                 crest_elev = float(attr['Weir Crest']) if 'Weir Crest' in attr_names else None
 
@@ -1103,6 +1108,7 @@ class CheckStructures:
                                     messages.append(msg)
 
         except Exception as e:
+            reraise_required(e)
             logger.warning("Could not check inline weir flow types")
             logger.debug("Inline weir flow-type check failure: %s", e)
 
@@ -1168,7 +1174,7 @@ class CheckStructures:
                 if 'Geometry/Structures/Attributes' not in geom_h:
                     return messages
 
-                struct_attrs = geom_h['Geometry/Structures/Attributes'][:]
+                struct_attrs = read_typed(geom_h['Geometry/Structures/Attributes'], slice(None))
                 attr_names = struct_attrs.dtype.names
 
                 # Collect bridge information
@@ -1306,6 +1312,7 @@ class CheckStructures:
                     })
 
         except Exception as e:
+            reraise_required(e)
             logger.warning("Could not read bridge attributes for flow type check")
             logger.debug("Bridge attribute read failure for flow type check: %s", e)
             return messages
@@ -1330,7 +1337,7 @@ class CheckStructures:
                 available_profiles = []
                 for ppath in [profile_path, alt_profile_path]:
                     if ppath in plan_h:
-                        profile_names = plan_h[ppath][:]
+                        profile_names = read_typed(plan_h[ppath], slice(None))
                         available_profiles = [p.decode('utf-8').strip() if isinstance(p, bytes) else str(p).strip()
                                              for p in profile_names]
                         break
@@ -1377,24 +1384,24 @@ class CheckStructures:
 
                                 # Get pressure flow
                                 if 'Pressure Flow' in struct_data:
-                                    pf_data = struct_data['Pressure Flow'][:]
+                                    pf_data = read_typed(struct_data['Pressure Flow'], slice(None))
                                     if prof_idx < len(pf_data):
                                         pressure_flow = float(pf_data[prof_idx])
 
                                 # Get weir flow
                                 if 'Weir Flow' in struct_data:
-                                    wf_data = struct_data['Weir Flow'][:]
+                                    wf_data = read_typed(struct_data['Weir Flow'], slice(None))
                                     if prof_idx < len(wf_data):
                                         weir_flow = float(wf_data[prof_idx])
 
                                 # Get US/DS WSE if available
                                 if 'US WSE' in struct_data:
-                                    us_wse_data = struct_data['US WSE'][:]
+                                    us_wse_data = read_typed(struct_data['US WSE'], slice(None))
                                     if prof_idx < len(us_wse_data):
                                         us_wse = float(us_wse_data[prof_idx])
 
                                 if 'DS WSE' in struct_data:
-                                    ds_wse_data = struct_data['DS WSE'][:]
+                                    ds_wse_data = read_typed(struct_data['DS WSE'], slice(None))
                                     if prof_idx < len(ds_wse_data):
                                         ds_wse = float(ds_wse_data[prof_idx])
 
@@ -1655,6 +1662,7 @@ class CheckStructures:
                             messages.append(msg)
 
         except Exception as e:
+            reraise_required(e)
             logger.warning("Could not check bridge flow types from results")
             logger.debug("Bridge result flow-type check failure: %s", e)
 
@@ -1690,7 +1698,7 @@ class CheckStructures:
                 if 'Geometry/Structures/Attributes' not in hdf:
                     return messages
 
-                struct_attrs = hdf['Geometry/Structures/Attributes'][:]
+                struct_attrs = read_typed(hdf['Geometry/Structures/Attributes'], slice(None))
                 attr_names = struct_attrs.dtype.names
 
                 for i, attr in enumerate(struct_attrs):
@@ -1763,6 +1771,7 @@ class CheckStructures:
                         messages.append(msg)
 
         except Exception as e:
+            reraise_required(e)
             logger.warning("Could not check structure distances")
             logger.debug("Structure distance check failure: %s", e)
 
@@ -1793,7 +1802,7 @@ class CheckStructures:
                 if 'Geometry/Structures/Attributes' not in hdf:
                     return messages
 
-                struct_attrs = hdf['Geometry/Structures/Attributes'][:]
+                struct_attrs = read_typed(hdf['Geometry/Structures/Attributes'], slice(None))
                 attr_names = struct_attrs.dtype.names
 
                 for i, attr in enumerate(struct_attrs):
@@ -1850,6 +1859,7 @@ class CheckStructures:
                             messages.append(msg)
 
         except Exception as e:
+            reraise_required(e)
             logger.warning("Could not check Section 3 ineffective flow")
             logger.debug("Section 3 ineffective-flow check failure: %s", e)
 
@@ -1882,7 +1892,7 @@ class CheckStructures:
                 if 'Geometry/Structures/Attributes' not in hdf:
                     return messages
 
-                struct_attrs = hdf['Geometry/Structures/Attributes'][:]
+                struct_attrs = read_typed(hdf['Geometry/Structures/Attributes'], slice(None))
                 attr_names = struct_attrs.dtype.names
 
                 for i, attr in enumerate(struct_attrs):
@@ -1918,6 +1928,7 @@ class CheckStructures:
                         messages.append(msg)
 
         except Exception as e:
+            reraise_required(e)
             logger.warning("Could not check permanent ineffective flow")
             logger.debug("Permanent ineffective-flow check failure: %s", e)
 
@@ -1949,7 +1960,7 @@ class CheckStructures:
                 if 'Geometry/Structures/Attributes' not in hdf:
                     return messages
 
-                struct_attrs = hdf['Geometry/Structures/Attributes'][:]
+                struct_attrs = read_typed(hdf['Geometry/Structures/Attributes'], slice(None))
                 attr_names = struct_attrs.dtype.names
 
                 for i, attr in enumerate(struct_attrs):
@@ -2039,6 +2050,7 @@ class CheckStructures:
                             messages.append(msg)
 
         except Exception as e:
+            reraise_required(e)
             logger.warning("Could not check structure geometry alignment")
             logger.debug("Structure geometry alignment check failure: %s", e)
 
@@ -2086,7 +2098,7 @@ class CheckStructures:
                 if 'Geometry/Structures/Attributes' not in hdf:
                     return messages
 
-                struct_attrs = hdf['Geometry/Structures/Attributes'][:]
+                struct_attrs = read_typed(hdf['Geometry/Structures/Attributes'], slice(None))
                 attr_names = struct_attrs.dtype.names
 
                 # Get cross section data for approach section comparisons
@@ -2094,37 +2106,38 @@ class CheckStructures:
                 xs_sta_elev_info = None
                 xs_sta_elev_values = None
                 if 'Geometry/Cross Sections/Attributes' in hdf:
-                    xs_attrs = hdf['Geometry/Cross Sections/Attributes'][:]
+                    xs_attrs = read_typed(hdf['Geometry/Cross Sections/Attributes'], slice(None))
                 if 'Geometry/Cross Sections/Station Elevation Info' in hdf:
-                    xs_sta_elev_info = hdf['Geometry/Cross Sections/Station Elevation Info'][:]
+                    xs_sta_elev_info = read_typed(hdf['Geometry/Cross Sections/Station Elevation Info'], slice(None))
                 if 'Geometry/Cross Sections/Station Elevation Values' in hdf:
-                    xs_sta_elev_values = hdf['Geometry/Cross Sections/Station Elevation Values'][:]
+                    xs_sta_elev_values = read_typed(hdf['Geometry/Cross Sections/Station Elevation Values'], slice(None))
 
                 # Check for structure ground data
                 struct_ground_data = None
                 struct_ground_info = None
                 if 'Geometry/Structures/Ground Data' in hdf:
-                    struct_ground_data = hdf['Geometry/Structures/Ground Data'][:]
+                    struct_ground_data = read_typed(hdf['Geometry/Structures/Ground Data'], slice(None))
                 if 'Geometry/Structures/Ground Info' in hdf:
-                    struct_ground_info = hdf['Geometry/Structures/Ground Info'][:]
+                    struct_ground_info = read_typed(hdf['Geometry/Structures/Ground Info'], slice(None))
 
                 # Check deck/roadway data
                 deck_data = None
                 deck_info = None
                 if 'Geometry/Structures/Deck Data' in hdf:
-                    deck_data = hdf['Geometry/Structures/Deck Data'][:]
+                    deck_data = read_typed(hdf['Geometry/Structures/Deck Data'], slice(None))
                 if 'Geometry/Structures/Deck Info' in hdf or 'Geometry/Structures/Table Info' in hdf:
                     deck_info = hdf.get('Geometry/Structures/Deck Info', hdf.get('Geometry/Structures/Table Info', None))
                     if deck_info is not None:
-                        deck_info = deck_info[:]
+                        deck_info = (read_typed(deck_info, slice(None)) if isinstance(deck_info, h5py.Dataset)
+                                     else deck_info[:])
 
                 # Check pier data
                 pier_data = None
                 pier_info = None
                 if 'Geometry/Structures/Pier Data' in hdf:
-                    pier_data = hdf['Geometry/Structures/Pier Data'][:]
+                    pier_data = read_typed(hdf['Geometry/Structures/Pier Data'], slice(None))
                 if 'Geometry/Structures/Pier Info' in hdf:
-                    pier_info = hdf['Geometry/Structures/Pier Info'][:]
+                    pier_info = read_typed(hdf['Geometry/Structures/Pier Info'], slice(None))
 
                 for i, attr in enumerate(struct_attrs):
                     struct_type = attr['Type'].decode('utf-8').strip() if isinstance(attr['Type'], bytes) else str(attr['Type']).strip()
@@ -2700,6 +2713,7 @@ class CheckStructures:
                             messages.append(msg)
 
         except Exception as e:
+            reraise_required(e)
             logger.warning("Could not check structure ground data")
             logger.debug("Structure ground-data check failure: %s", e)
 
