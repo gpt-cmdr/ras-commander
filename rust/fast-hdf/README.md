@@ -393,7 +393,7 @@ punctuation/spaces (producing `cell_hydraulic_depth`).
 
 Bridge API 9 added these with engine pin 527bdf3 (engine API 7). Bridge API 10 re-pins to
 e9afad3d3271adfc5ea7ac05546cc50312c4bb5e (ras-commander-rust main, engine API 8); see "Wave 3 typed bindings" below.
-TEXT_API_VERSION remains 1. Full-feature registration set: 67 entrypoints.
+TEXT_API_VERSION remains 1. Full-feature registration set at API 9: 67 entrypoints.
 
 Wave 8 additions (src/fim.rs): `mesh_geometry` (field descriptors), `mesh_geometry_tables`
 (exact Attributes compound + Cell Info), `geometry_family_capability`, `mesh_boundary_links`.
@@ -411,3 +411,37 @@ default to DEFAULT_MAX_BYTES (64 MiB), capability dicts `{status, code, reason}`
 numeric arrays in their stored NumPy dtype, and the existing typed exception mapping
 (engine_kind/engine_code annotations). Python routing lives in
 `ras_commander/_fast_hdf_typed.py` (`fast_hdf.read_typed`).
+
+## Wave 3 typed bindings (API_VERSION = 10)
+
+Engine pin e9afad3d3271adfc5ea7ac05546cc50312c4bb5e (ras-commander-rust main; Wave 3, 3B,
+3C and 3D merged with Wave 2 and PERF-3; engine API 8). Full-feature registration set:
+75 entrypoints. New module `src/wave3.rs`:
+
+| Binding | Engine API | Returns |
+|---|---|---|
+| `read_families()` | `READ_FAMILIES` | family names (`pipe_geometry`, `pipe_results`, `reference_line_results`, `reference_point_results`, `breach`, `plan_metadata`, `land_cover`, `infiltration`, `sediment`, `encroachments`, `terrain`, `event_conditions`, `steady_output`, ...) |
+| `read_family_inventory(path, family, metadata_max_bytes)` | `read_family_inventory` | `{family, capability, datasets, groups}`; each dataset has path, identity, shape, kind/dtype, storage, capability, typed attributes, role, domain, time_group, identity_table, locations, names, geometry_locations, `stored_location_ids` (stored-dtype array or None), time_of_extreme_row |
+| `read_family_dataset(path, family, dataset, slices=None, metadata_max_bytes, max_bytes)` | `read_family_dataset` | stored values (below) |
+| `output_block_inventory(path, max_bytes)` | `output_block_inventory` | non-Base blocks with stored descriptors |
+| `read_output_block(path, block, relative, slices=None, max_bytes)` | `read_output_block` | stored values |
+| `reference_point_geometry(path, max_bytes)` | `reference_point_geometry` | `Reported`: Attributes compound, Points array, features (identity, name, area, stored i32 cell_index, point_row) |
+| `classification_catalogue(path, family, max_bytes)` | `classification_catalogue` | `Reported`: layout, entries (pixel_id as stored int, name, variable_rows, capability), unmatched_variables |
+| `stored_family_index(path, metadata_max_bytes)` | all family inventories + output blocks | compact routing index: `{datasets: [{owner, path, storage, shape, dtype, status, code}], failures, output_blocks}` |
+
+Stored values are `{"storage": "numeric", "values": ndarray}` (stored dtype),
+`{"storage": "compound", "values": {shape, raw_bytes, columns}}`,
+`{"storage": "bitfield_bytes", "shape", "raw_bytes"}` (exact bytes; h5py reads these
+1-byte bitfields as `uint8`) or `{"storage": "strings", "shape", "values"}` (engine-decoded
+text, trailing NULs removed). Slices are `(start, stop, step)` per dimension and apply to
+numeric storage only. Family-level errors in `stored_family_index` are reported in
+`failures`, never dropped.
+
+`fast_hdf.read_typed` uses `stored_family_index` as the membership oracle for datasets
+outside the Wave 8/Wave 2 routes: supported numeric, compound and bitfield datasets are
+read typed; listed-but-unqualified datasets (for example Davis pipe summaries with no
+stored `Location`) keep their exact literal values through the generic reader; strings
+stay on h5py (the documented metadata exception), because decoded text cannot prove
+h5py's fixed-length bytes. Compound members stored NULLTERM or SPACEPAD are converted the
+way HDF5 converts them into h5py's NULLPAD memory type (cut at the first NUL / strip
+trailing spaces, zero-fill), from the engine's member padding evidence.

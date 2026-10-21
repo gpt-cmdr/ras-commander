@@ -41,7 +41,7 @@ def test_registrations_kinds_gates_and_delegation(inventory):
     found = {e["name"]: (e["kind"], e["feature"], e["registered_in"])
              for e in inventory["python_entry_points"]}
     assert found == EXPECTED
-    assert len(inventory["python_entry_points"]) == 67 == len(EXPECTED)  # explicit full-feature set, no duplicates
+    assert len(inventory["python_entry_points"]) == 75 == len(EXPECTED)  # explicit full-feature set, no duplicates
 
 
 def test_module_constants(inventory):

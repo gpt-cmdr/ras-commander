@@ -14,6 +14,7 @@ mod structures;
 mod text_bindings;
 mod tile_engine;
 mod tiles;
+mod wave3;
 
 pub(crate) static REGISTERED_BINDINGS: OnceLock<Vec<String>> = OnceLock::new();
 
@@ -157,6 +158,7 @@ fn ras_commander_fast_hdf(m: &Bound<'_, PyModule>) -> PyResult<()> {
     session::register(m)?;
     structures::register(m)?;
     one_d::register(m)?;
+    wave3::register(m)?;
     #[cfg(feature = "exports-arrow")]
     {
         m.add_function(wrap_pyfunction!(export_ipc_file, m)?)?;
