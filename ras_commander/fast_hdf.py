@@ -34,7 +34,7 @@ logger = get_logger(__name__)
 
 __all__ = [
     "FastHdfError", "available", "close_sessions", "read_dataset", "read_datasets",
-    "read_typed", "read_attrs", "read_attr", "trace_reads",
+    "read_typed", "read_attrs", "read_attr", "mesh_series_domain", "trace_reads",
     "native_required", "reraise_required",
     "packed_meshes", "mesh_polygons", "export_pmtiles", "export_mesh_pmtiles",
 ]
@@ -368,6 +368,16 @@ def read_attr(obj, name, default=_NO_DEFAULT, *, backend="auto"):
     if default is _NO_DEFAULT:
         return _fast_hdf_typed.read_attr(obj, name, backend=backend)
     return _fast_hdf_typed.read_attr(obj, name, default, backend=backend)
+
+
+def mesh_series_domain(dataset: h5py.Dataset, *, backend="auto"):
+    """Engine-typed element domain and ``domain_rule`` of a Base Output 2D mesh series.
+
+    ``{"id_dim", "domain", "domain_rule", "capability"}``; ``None`` in python mode
+    (and in auto mode on an engine failure). See ``_fast_hdf_typed.mesh_series_domain``.
+    """
+    from . import _fast_hdf_typed
+    return _fast_hdf_typed.mesh_series_domain(dataset, backend=backend)
 
 
 def native_required() -> bool:
