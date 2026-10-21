@@ -596,8 +596,6 @@ def _selection_shape(dataset, key):
     non-integer vectors such as an empty list, indexing a scalar dataspace): a refusal in required
     mode and an h5py read in auto mode.
     """
-    from h5py._hl import selections
-
     args = key if isinstance(key, tuple) else (key,)
     if dataset.shape is None or any(isinstance(a, (str, bytes)) for a in args):
         return None
@@ -606,7 +604,28 @@ def _selection_shape(dataset, key):
     for arg in args:
         if isinstance(arg, (list, np.ndarray)) and np.asarray(arg).dtype.kind not in "iu":
             return None
-    return tuple(selections.select(dataset.shape, args, dataset).array_shape)
+    return h5py_selection_shape(dataset, args)
+
+
+def h5py_selection_shape(dataset, args):
+    """Result shape of ``dataset[args]`` per h5py's own selector, without I/O.
+
+    The single place that touches private h5py API: ``h5py._hl.selections.select
+    (shape, args, dataset).array_shape``, verified on h5py 3.14 (the version this
+    branch is qualified with; the module has had this form throughout h5py 3.x).
+    Invalid selections raise h5py's own exception. If a future h5py moves or
+    changes it, this returns ``None``: the selection is then left to h5py (an h5py
+    read in auto mode, a refusal in required mode), never guessed natively.
+    """
+    try:
+        from h5py._hl import selections
+        select = selections.select
+    except (ImportError, AttributeError):  # pragma: no cover - h5py layout change
+        logger.debug("h5py selection helper unavailable; selection left to h5py")
+        return None
+    selection = select(dataset.shape, args, dataset)
+    shape = getattr(selection, "array_shape", None)
+    return None if shape is None else tuple(shape)
 
 
 def _fancy(key):

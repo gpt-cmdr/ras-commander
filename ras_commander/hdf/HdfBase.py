@@ -49,7 +49,7 @@ from pathlib import Path
 import logging
 
 from .HdfUtils import HdfUtils
-from ..fast_hdf import FastHdfError, read_typed, reraise_required
+from ..fast_hdf import read_typed, reraise_required
 from ..Decorators import standardize_input, log_call
 from ..LoggingConfig import setup_logging, get_logger
 

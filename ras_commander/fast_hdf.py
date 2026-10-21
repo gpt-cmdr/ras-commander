@@ -346,15 +346,21 @@ def native_required() -> bool:
         return False
 
 
-def reraise_required(exc: BaseException) -> None:
+def reraise_required(exc: BaseException, backend: str = "auto") -> None:
     """Re-raise ``exc`` when it is a native refusal in required-native mode.
 
     Public readers keep their established h5py failure policy (empty result,
     logged error or wrapped exception) in python and auto modes. Required-native
     mode must surface :class:`FastHdfError` unchanged instead, so their broad
     ``except Exception`` handlers call this first.
+
+    Required mode is either an explicit ``backend="rust"`` passed by a reader
+    that takes a backend argument, or, with the default ``backend="auto"``,
+    ``RAS_COMMANDER_FAST_HDF=required``. ``backend="python"`` never re-raises.
     """
-    if isinstance(exc, FastHdfError) and native_required():
+    if not isinstance(exc, FastHdfError):
+        return
+    if backend == "rust" or (backend == "auto" and native_required()):
         raise exc
 
 
