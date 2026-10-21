@@ -80,6 +80,12 @@ pub(crate) fn attribute_type<'py>(
                 },
             )?;
         }
+        AttributeType::Bitfield { size, order: o } => {
+            // h5py exposes a bitfield as the unsigned integer of the same size and order.
+            d.set_item("kind", "bitfield")?;
+            d.set_item("bytes", size)?;
+            d.set_item("byte_order", order(*o))?;
+        }
         AttributeType::Compound => d.set_item("kind", "compound")?,
         AttributeType::Unsupported { .. } => {
             d.set_item("kind", "unsupported")?;
@@ -156,11 +162,68 @@ fn typed_group_attributes<'py>(
         .map_err(crate::reader::err)?;
     attrs.iter().map(|a| typed_attribute_dict(py, a)).collect()
 }
+/// Engine API 9 `typed_dataset_attributes`: every attribute of one dataset, typed with the
+/// family encoding proof. `{capability, value: [typed attribute] | None}`.
+#[pyfunction]
+#[pyo3(signature=(path,dataset,max_bytes=67108864))]
+fn typed_dataset_attributes<'py>(
+    py: Python<'py>,
+    path: PathBuf,
+    dataset: &str,
+    max_bytes: usize,
+) -> PyResult<Bound<'py, PyDict>> {
+    let r = py
+        .detach(|| ReadOnlyHdfSession::open(path)?.typed_dataset_attributes(dataset, max_bytes))
+        .map_err(crate::reader::err)?;
+    let d = dict!(py,"capability"=>capability(py,r.capability())?,"value"=>py.None());
+    if let Some(attrs) = r.value() {
+        let values = attrs
+            .iter()
+            .map(|a| typed_attribute_dict(py, a))
+            .collect::<PyResult<Vec<_>>>()?;
+        d.set_item("value", values)?;
+    }
+    Ok(d)
+}
+/// Engine API 9 `raw_fixed_strings`: a fixed-length string dataset as stored (padding kept).
+/// `{capability, value: {shape, dataspace, width, padding, charset, raw_bytes} | None}`.
+#[pyfunction]
+#[pyo3(signature=(path,dataset,max_bytes=67108864))]
+fn raw_fixed_strings<'py>(
+    py: Python<'py>,
+    path: PathBuf,
+    dataset: &str,
+    max_bytes: usize,
+) -> PyResult<Bound<'py, PyDict>> {
+    use ras_commander_rust::hdf::{StringCharset as C, StringPadding as P};
+    let r = py
+        .detach(|| ReadOnlyHdfSession::open(path)?.raw_fixed_strings(dataset, max_bytes))
+        .map_err(crate::reader::err)?;
+    let d = dict!(py,"capability"=>capability(py,r.capability())?,"value"=>py.None());
+    if let Some(v) = r.value() {
+        let charset = match v.charset {
+            C::Ascii => "ascii",
+            C::Utf8 => "utf8",
+            _ => "unknown",
+        };
+        let padding = match v.padding {
+            P::NullTerminate => "null_terminate",
+            P::NullPad => "null_pad",
+            P::SpacePad => "space_pad",
+            _ => "unknown",
+        };
+        d.set_item(
+            "value",
+            dict!(py,"shape"=>&v.shape,"dataspace"=>v.dataspace.as_str(),"width"=>v.width,"padding"=>padding,"charset"=>charset,"raw_bytes"=>PyBytes::new(py,&v.raw_bytes)),
+        )?;
+    }
+    Ok(d)
+}
 pub(crate) fn typed_attribute_dict<'py>(
     py: Python<'py>,
     a: &ras_commander_rust::hdf::metadata::TypedAttribute,
 ) -> PyResult<Bound<'py, PyDict>> {
-    let d = dict!(py,"name"=>&a.name,"kind"=>"attribute","shape"=>&a.shape,"attribute_type"=>attribute_type(py,&a.attribute_type)?,"datatype_label"=>&a.datatype_label,"raw_bytes"=>PyBytes::new(py,&a.raw_bytes));
+    let d = dict!(py,"name"=>&a.name,"kind"=>"attribute","shape"=>&a.shape,"dataspace"=>a.dataspace.as_str(),"attribute_type"=>attribute_type(py,&a.attribute_type)?,"datatype_label"=>&a.datatype_label,"raw_bytes"=>PyBytes::new(py,&a.raw_bytes));
     let c = a.value.capability();
     match &a.value {
         MetadataValue::Signed(v) => {
@@ -174,6 +237,9 @@ pub(crate) fn typed_attribute_dict<'py>(
         }
         MetadataValue::Strings(v) => {
             d.set_item("value", v)?;
+        }
+        MetadataValue::Bitfield(v) => {
+            d.set_item("value", PyBytes::new(py, v))?;
         }
         MetadataValue::Unsupported { .. } | MetadataValue::Corrupt { .. } => {
             d.set_item("value", py.None())?;
@@ -467,6 +533,8 @@ pub(crate) fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(capabilities, m)?)?;
     m.add_function(wrap_pyfunction!(raw_crs_evidence, m)?)?;
     m.add_function(wrap_pyfunction!(typed_group_attributes, m)?)?;
+    m.add_function(wrap_pyfunction!(typed_dataset_attributes, m)?)?;
+    m.add_function(wrap_pyfunction!(raw_fixed_strings, m)?)?;
     m.add_function(wrap_pyfunction!(mesh_inventory, m)?)?;
     m.add_function(wrap_pyfunction!(cross_sections, m)?)?;
     m.add_function(wrap_pyfunction!(plan_result_mode, m)?)?;

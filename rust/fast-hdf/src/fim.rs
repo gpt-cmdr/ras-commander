@@ -22,7 +22,7 @@ pub(crate) fn inventory<'py>(
 ) -> PyResult<Bound<'py, PyDict>> {
     let vars=i.variables.into_iter().map(|v| {
  let attrs=v.attributes.iter().map(|a|typed_attribute_dict(py,a)).collect::<PyResult<Vec<_>>>()?;
- Ok(dict!(py,"name"=>v.name,"path"=>v.path,"domain"=>v.domain.as_str(),"shape"=>v.shape,"kind"=>v.kind.map(crate::reader::numeric_kind_name),"dtype"=>v.kind.and_then(crate::reader::numpy),"chunks"=>v.chunks,"capability"=>capability(py,&v.capability)?,"attributes"=>attrs,"time_of_extreme_row"=>v.time_of_extreme_row))
+ Ok(dict!(py,"name"=>v.name,"path"=>v.path,"domain"=>v.domain.as_str(),"domain_rule"=>v.domain_rule.as_str(),"shape"=>v.shape,"kind"=>v.kind.map(crate::reader::numeric_kind_name),"dtype"=>v.kind.and_then(crate::reader::numpy),"chunks"=>v.chunks,"capability"=>capability(py,&v.capability)?,"attributes"=>attrs,"time_of_extreme_row"=>v.time_of_extreme_row))
  }).collect::<PyResult<Vec<_>>>()?;
     Ok(dict!(py,"group"=>i.group,"capability"=>capability(py,&i.capability)?,"variables"=>vars))
 }
@@ -234,10 +234,10 @@ pub(crate) fn compound<'py>(py: Python<'py>, t: &ExactCompound) -> PyResult<Boun
     let columns=t.table.columns.iter().map(|c| {
  let d=dict!(py,"name"=>&c.name,"byte_offset"=>c.byte_offset,"attribute_type"=>attribute_type(py,&c.attribute_type)?,"datatype_label"=>&c.datatype_label,"capability"=>capability(py,&c.value.capability())?);
  use ras_commander_rust::hdf::metadata::MetadataValue as V;
- match &c.value { V::Signed(v)=>d.set_item("value",v)?,V::Unsigned(v)=>d.set_item("value",v)?,V::Float(v)=>d.set_item("value",v)?,V::Strings(v)=>d.set_item("value",v)?,_=>d.set_item("value",py.None())? };Ok(d)
+ match &c.value { V::Signed(v)=>d.set_item("value",v)?,V::Unsigned(v)=>d.set_item("value",v)?,V::Float(v)=>d.set_item("value",v)?,V::Strings(v)=>d.set_item("value",v)?,V::Bitfield(v)=>d.set_item("value",PyBytes::new(py,v))?,_=>d.set_item("value",py.None())? };Ok(d)
  }).collect::<PyResult<Vec<_>>>()?;
     Ok(
-        dict!(py,"shape"=>&t.table.shape,"raw_bytes"=>PyBytes::new(py,&t.raw_bytes),"columns"=>columns),
+        dict!(py,"shape"=>&t.table.shape,"dataspace"=>t.table.dataspace.as_str(),"raw_bytes"=>PyBytes::new(py,&t.raw_bytes),"columns"=>columns),
     )
 }
 #[pyfunction]
@@ -318,7 +318,7 @@ fn layer_inventory(
         .map_err(crate::reader::err)?;
     r.into_iter().map(|l| {
  let fields=l.fields.iter().map(|f|Ok(dict!(py,"name"=>&f.name,"dataset"=>&f.dataset,"numeric_kind"=>f.numeric_kind.map(crate::reader::numeric_kind_name),"row_count"=>f.row_count,"capability"=>capability(py,&f.capability)?))).collect::<PyResult<Vec<_>>>()?;
- Ok(dict!(py,"family"=>l.family,"area"=>l.area,"name"=>l.name,"identity"=>l.identity.as_ref().map(|i|identity(py,i)).transpose()?,"element_domain"=>l.element_domain,"geometry_type"=>l.geometry_type,"row_count"=>l.row_count,"fields"=>fields,"capability"=>capability(py,&l.capability)?))
+ Ok(dict!(py,"family"=>l.family,"area"=>l.area,"name"=>l.name,"identity"=>l.identity.as_ref().map(|i|identity(py,i)).transpose()?,"element_domain"=>l.element_domain,"domain_rule"=>l.mesh_result.as_ref().map(|m|m.domain_rule.as_str()),"geometry_type"=>l.geometry_type,"row_count"=>l.row_count,"fields"=>fields,"capability"=>capability(py,&l.capability)?))
  }).collect()
 }
 

@@ -1,4 +1,4 @@
-"""Explicit API10 full-feature native entrypoint contract (75); additions require review."""
+"""Explicit API11 full-feature native entrypoint contract (77); additions require review."""
 EXPECTED = {
     "HdfSession": ("class", None, "src/session.rs"),
     "mesh_summary_inventory": ("function", None, "src/fim.rs"),
@@ -66,6 +66,8 @@ EXPECTED = {
     "capabilities": ("function", None, "src/domain.rs"),
     "raw_crs_evidence": ("function", None, "src/domain.rs"),
     "typed_group_attributes": ("function", None, "src/domain.rs"),
+    "typed_dataset_attributes": ("function", None, "src/domain.rs"),
+    "raw_fixed_strings": ("function", None, "src/domain.rs"),
     "mesh_inventory": ("function", None, "src/domain.rs"),
     "cross_sections": ("function", None, "src/domain.rs"),
     "plan_result_mode": ("function", None, "src/domain.rs"),

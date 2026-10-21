@@ -41,7 +41,7 @@ fn stored_dict<'py>(py: Python<'py>, d: &StoredDataset) -> PyResult<Bound<'py, P
         .map(|a| typed_attribute_dict(py, a))
         .collect::<PyResult<Vec<_>>>()?;
     Ok(dict!(py,
-        "path"=>&d.path,"identity"=>identity(py,&d.id)?,"shape"=>&d.shape,
+        "path"=>&d.path,"identity"=>identity(py,&d.id)?,"shape"=>&d.shape,"dataspace"=>d.dataspace.as_str(),
         "kind"=>d.kind.map(crate::reader::numeric_kind_name),
         "dtype"=>d.kind.and_then(crate::reader::numpy),
         "storage"=>&d.storage,"capability"=>capability(py,&d.capability)?,"attributes"=>attrs))
