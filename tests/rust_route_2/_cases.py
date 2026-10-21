@@ -158,3 +158,32 @@ PROJECT_CASES = {
     "HdfLandCover.compute_final_mannings_raster": lambda j: HdfLandCover.compute_final_mannings_raster(
         j["geom"], landcover_hdf_path=j["landcover"]),
 }
+
+
+# ---------------------------------------------------------------- terrain (storage stage-storage)
+from ras_commander.hdf import HdfStorageArea  # noqa: E402
+
+
+def _stage_storage(path):
+    with h5py.File(path, "r") as f:
+        key = "Geometry/Storage Areas/Attributes"
+        name = f[key][()]["Name"][0].decode().strip() if key in f and len(f[key]) else "__absent__"
+    return HdfStorageArea.compute_stage_storage_curve(path, name, elevation_interval=2.0)
+
+
+CASES["HdfStorageArea.compute_stage_storage_curve"] = _stage_storage
+
+
+# ---------------------------------------------------------------- sediment
+from ras_commander.hdf.HdfResultsSediment import HdfResultsSediment  # noqa: E402
+
+CASES.update({
+    "HdfResultsSediment.is_sediment_plan": lambda p: HdfResultsSediment.is_sediment_plan(p),
+    "HdfResultsSediment.get_sediment_mesh_areas": lambda p: HdfResultsSediment.get_sediment_mesh_areas(p),
+    "HdfResultsSediment.get_cell_bed_change": lambda p: HdfResultsSediment.get_cell_bed_change(p),
+    "HdfResultsSediment.get_cell_bed_change[first]": lambda p: HdfResultsSediment.get_cell_bed_change(p, time_index=0),
+    "HdfResultsSediment.get_cell_bed_elevation": lambda p: HdfResultsSediment.get_cell_bed_elevation(p),
+    "HdfResultsSediment.get_active_layer_grain_class": lambda p: HdfResultsSediment.get_active_layer_grain_class(p),
+    "HdfResultsSediment.get_bed_change_volumes": lambda p: HdfResultsSediment.get_bed_change_volumes(p),
+    "HdfResultsSediment.get_cell_bed_change_timeseries": lambda p: HdfResultsSediment.get_cell_bed_change_timeseries(p),
+})
