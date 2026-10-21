@@ -106,6 +106,28 @@ required/rust mode rejects. Missing fixtures are reported as skipped
 `tests/rust_distribution/test_dependency_preparation.py` needs only git and
 pytest; set `RAS_DIST_DEP_SOURCE` to also prepare the real dependency.
 
+## Routed reads: what required mode proves
+
+Routed `Hdf*` readers use `fast_hdf.read_typed`. The routing policy and backend
+modes are described in the HDF API reference (*Routed HDF reads and backend
+modes*). In short:
+
+- Auto falls back to h5py on any native failure of a routed read, so public
+  outcomes are the h5py ones. `HdfResultsMesh` result readers are the exception:
+  they keep the earlier `read_dataset` rule that a native Corrupt refusal is an
+  error in auto mode too.
+- Required mode raises `FastHdfError` on any refusal. It reads all numeric
+  values natively. Strings, compound identity/attribute tables without an engine
+  raw reader, attributes and structure walks stay on h5py (the documented
+  metadata exception).
+- `trace_reads()` records only reads made through the adapter. It is not a
+  complete I/O audit. `tests/rust_route_1` independently intercepts
+  `h5py.Dataset.__getitem__`/`read_direct` in required mode. It also checks
+  injected engine failures and physically damaged copies (a flipped Fletcher32
+  checksum byte, and a virtual dataset).
+- H5PY in the coverage inventory is a qualification label, not an enforced
+  backend selection.
+
 ## Platform status
 
 Only configurations that were actually built and tested are qualified. See
