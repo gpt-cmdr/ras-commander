@@ -110,7 +110,15 @@ from .._rasmap_schema import rasmap_dataframe_is_usable
 from ..Decorators import log_call, standardize_input
 from ..LoggingConfig import get_logger
 from .. import fast_results
-from ..fast_hdf import FastHdfError, read_attr, read_attrs, read_dataset, read_typed, reraise_required
+from ..fast_hdf import (
+    FastHdfError,
+    mesh_series_domain,
+    read_attr,
+    read_attrs,
+    read_dataset,
+    read_typed,
+    reraise_required,
+)
 from .HdfBase import HdfBase
 from .HdfMesh import HdfMesh
 from .HdfResultView import HdfResultView, Selection
@@ -2622,6 +2630,13 @@ class HdfResultsMesh:
         canonical namespace. Geometry counts include ghosts; physical-cell
         filtering occurs after qualification. Cell centers are numeric coordinate
         pairs; face-point indexes are integer pairs. Time-only series have no domain.
+
+        With the native engine, the domain of a canonical Base Output series comes
+        from ``fast_hdf.mesh_series_domain`` (engine ``stored_location`` or
+        ``legacy_exact_name`` rule, the same rule as below). When the engine does
+        not qualify a domain, or in python mode, the stored ``Location`` is read
+        through ``fast_hdf.read_attr`` and the rule below decides, so refusals keep
+        their exact ``ValueError``. Geometry checks always run.
         """
         if not isinstance(dataset, h5py.Dataset) or dataset.ndim not in (1, 2) or dataset.dtype.kind not in "iuf":
             raise ValueError(f"Unsupported numeric time/element schema: {dataset.name}")
@@ -2631,8 +2646,14 @@ class HdfResultsMesh:
         if (not isinstance(time, h5py.Dataset) or time.ndim != 1
                 or time.dtype.kind not in "iuf" or dataset.shape[0] != len(time)):
             raise ValueError(f"Series rows differ from Base Output Time axis: {dataset.name}")
-        if "Location" in dataset.attrs:
-            location = np.asarray(dataset.attrs["Location"])
+        native = HdfResultsMesh._native_series_domain(dataset)
+        if native is not None and native["id_dim"] in {"cell_id", "face_id"} and dataset.ndim == 2:
+            id_dim = native["id_dim"]
+        elif (native is not None and native["domain"] == "other" and dataset.ndim == 1
+                and "Location" not in dataset.attrs):
+            return "time"
+        elif "Location" in dataset.attrs:
+            location = np.asarray(read_attr(dataset, "Location"))
             if location.shape not in ((), (1,)):
                 raise ValueError(f"Location requires one stored text value: {dataset.name}")
             location = location.reshape(-1)[0]
@@ -2676,6 +2697,19 @@ class HdfResultsMesh:
             if physical_count is not None and not 0 <= physical_count <= len(geometry):
                 raise ValueError(f"Physical Cell Count contradicts stored geometry: {dataset.name}")
         return "cell_id" if is_cell else "face_id"
+
+    @staticmethod
+    def _native_series_domain(dataset: h5py.Dataset) -> Optional[Dict[str, Any]]:
+        """Engine domain of a canonical Base Output mesh series, or None.
+
+        None in python mode, for non-canonical paths, and (auto mode) when the
+        engine cannot describe the series; required mode raises FastHdfError.
+        """
+        try:
+            return mesh_series_domain(dataset)
+        except ValueError:
+            # Not a canonical Base Output 2D mesh series path.
+            return None
 
     @staticmethod
     def _discover_mesh_series(hdf_file: h5py.File, mesh_name: str) -> Dict[str, str]:

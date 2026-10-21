@@ -15,9 +15,14 @@ which this branch's base does not contain. Two tests compare the pathways:
   the canonical path; numeric rank-two data, canonical Base Output ``Time`` rows,
   stored geometry counts (ghosts included) and the physical Cell Count bound are
   required on both paths; rank-one series are time-only.
-- ``test_native_domain_matches_h5py_reader`` is marked ``requires_pr565`` and
-  skips until ``HdfResultsMesh._mesh_series_id_dim`` exists (after R2.4), then
-  compares the library's own h5py rule with the native domain.
+- ``test_native_domain_matches_h5py_reader`` is marked ``requires_pr565``. Since
+  R2.4 (#565 merged) it runs: the library's own rule, evaluated in python mode so
+  it never consults the engine, is compared with the native domain.
+- ``test_library_domain_identical_across_modes`` (R2.4) calls the library's
+  ``HdfResultsMesh._mesh_series_id_dim``, which takes the native domain when the
+  engine qualifies one, in auto and required mode, and asserts the python-mode
+  outcome (``id_dim`` or the exact ``ValueError`` text). Required mode may only
+  differ by raising ``FastHdfError`` (an engine refusal); those are counted.
 
 Agreement means: a qualified h5py domain equals the engine ``id_dim`` with the
 matching ``domain_rule`` (``stored_location`` when ``Location`` is present, else
@@ -200,7 +205,64 @@ def test_native_domain_matches_h5py_reader(path, label):
     from ras_commander.hdf.HdfResultsMesh import HdfResultsMesh
     if not hasattr(HdfResultsMesh, "_mesh_series_id_dim"):
         pytest.skip("requires ras-commander PR #565 (HdfResultsMesh._mesh_series_id_dim); reconcile at R2.4")
-    _compare(path, label, HdfResultsMesh._mesh_series_id_dim)
+
+    def h5py_rule(hdf_file, mesh, dataset):
+        with _env_mode("0"):
+            return HdfResultsMesh._mesh_series_id_dim(hdf_file, mesh, dataset)
+    _compare(path, label, h5py_rule)
+
+
+class _env_mode:
+    def __init__(self, value):
+        self.value = value
+
+    def __enter__(self):
+        self.old = os.environ.get("RAS_COMMANDER_FAST_HDF")
+        os.environ["RAS_COMMANDER_FAST_HDF"] = self.value
+
+    def __exit__(self, *exc):
+        if self.old is None:
+            os.environ.pop("RAS_COMMANDER_FAST_HDF", None)
+        else:
+            os.environ["RAS_COMMANDER_FAST_HDF"] = self.old
+
+
+def _outcome(call, mode):
+    from ras_commander import fast_hdf
+    with _env_mode(mode):
+        try:
+            return ("value", call())
+        except fast_hdf.FastHdfError as exc:
+            return ("FastHdfError", str(exc)[:200])
+        except ValueError as exc:
+            return ("ValueError", str(exc))
+
+
+@pytest.mark.requires_pr565
+@pytest.mark.skipif(not CASES, reason="Set RAS_ROUTE2_FIXTURES and/or RAS_ROUTE3_LEGACY_EXCERPTS")
+@pytest.mark.parametrize("path,label", CASES, ids=[c[1] for c in CASES])
+def test_library_domain_identical_across_modes(path, label):
+    from ras_commander.hdf.HdfResultsMesh import HdfResultsMesh
+    series = _series(path)
+    if not series:
+        pytest.skip(f"{label}: no Base Output 2D mesh series")
+    rows = []
+    with h5py.File(path, "r") as f:
+        for mesh, name in series:
+            ds = f[_get_mesh_timeseries_output_path(mesh, name)]
+            call = lambda: HdfResultsMesh._mesh_series_id_dim(f, mesh, ds)  # noqa: E731
+            python = _outcome(call, "0")
+            auto = _outcome(call, "auto")
+            required = _outcome(call, "rust")
+            assert python[0] != "FastHdfError"
+            assert auto == python, (name, python, auto)
+            assert required == python or required[0] == "FastHdfError", (name, python, required)
+            rows.append({"fixture": label, "mesh": mesh, "series": name, "python": python,
+                         "required_refused": required[0] == "FastHdfError"})
+    if RESULTS:
+        with open(f"{RESULTS}.modes", "a", encoding="utf-8") as fh:
+            for row in rows:
+                fh.write(json.dumps(row, default=str) + "\n")
 
 
 def test_python_mode_has_no_engine_domain(monkeypatch):

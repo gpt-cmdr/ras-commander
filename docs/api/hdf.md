@@ -836,8 +836,11 @@ Routing policy:
   `stored_location` or `legacy_exact_name` (HEC-RAS 5.0.7 series without a
   stored `Location`: `Depth`/`Water Surface` cells; `Face Velocity`,
   `Face Shear Stress`, `Face Area`, `Face Manning's n` faces). It is the
-  native counterpart of the h5py rule of ras-commander PR #565 and is not yet
-  consumed by `HdfResultsMesh`.
+  native counterpart of the h5py rule of ras-commander PR #565.
+  `HdfResultsMesh._mesh_series_id_dim` takes the domain from it when the engine
+  qualifies one; otherwise (python mode, engine refusal in auto mode) the stored
+  `Location` is read through `read_attr` and the #565 rule decides, so refusals
+  keep their `ValueError`. Geometry-count checks run on both paths.
 - `HdfResultsMesh` result readers use `read_dataset`, which follows the same
   rule: in auto mode any native failure, Corrupt or checksum refusals included,
   falls back to h5py, so the public result or exception is the h5py one.
