@@ -117,15 +117,17 @@ modes*). In short:
   result readers: `read_dataset` (and the native temporal reduction) no longer
   treat a native Corrupt refusal as fatal in auto mode.
 - Required mode raises `FastHdfError` on any refusal. It reads all numeric
-  values natively. Text datasets, text-only compound identity tables,
-  structure walks and attributes of datasets outside every engine family stay
-  on h5py (the documented metadata exception); a compound with a numeric
-  member and no typed route is refused. Group attributes and attributes of
-  Wave 3 family/output-block datasets read through `fast_hdf.read_attrs` are
-  native and refuse in required mode when a value cannot be reproduced.
+  values and all attribute values natively. Text datasets, text-only compound
+  identity tables and structure walks stay on h5py (the documented metadata
+  exception); a compound with a numeric member and no typed route is refused.
+  Attributes of every group and dataset come from `fast_hdf.read_attrs` /
+  `read_attr` (engine typed group and dataset attributes, bridge API 11) and
+  refuse in required mode when a value cannot be reproduced or the dataset is
+  virtual/external.
 - `trace_reads()` records only reads made through the adapter. It is not a
   complete I/O audit. `tests/rust_route_1` independently intercepts
-  `h5py.Dataset.__getitem__`/`read_direct` in required mode. It also checks
+  `h5py.Dataset.__getitem__`/`read_direct` and `h5py.AttributeManager.__getitem__`
+  in required mode; every attribute value read through h5py is an offender. It also checks
   injected engine failures and physically damaged copies (a flipped Fletcher32
   checksum byte, and a virtual dataset).
 - `tests/rust_route_2` (gate `RAS_ROUTE2_FIXTURES`; optional `projects` for
@@ -133,6 +135,12 @@ modes*). In short:
   h5py-interception and injected-failure contract to the Wave 3 families
   (bridge API 10, engine `e9afad3`), plus binding-boundary tests and an edited
   sediment copy whose contradictory unit attribute is removed.
+- `tests/rust_route_3` (bridge API 11, engine `435ddb4`, engine API 9):
+  attribute fidelity on a synthetic h5py fixture (NULL dataspaces, bitfields,
+  vlen, virtual datasets), engine family failures in refusals, the API 9
+  binding boundary, and the native 2D series domain against PR #565's rule
+  (`RAS_ROUTE3_LEGACY_EXCERPTS` adds the engine's legacy-Location excerpts; a
+  `requires_pr565` test compares the library's own rule after #565 merges).
 - H5PY in the coverage inventory is a qualification label, not an enforced
   backend selection.
 
