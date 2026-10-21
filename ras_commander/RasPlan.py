@@ -256,6 +256,28 @@ class RasPlan:
         "time_step_residence_courant": {"plan_key": "Computation Time Step Residence Courant", "type": "bool", "min_version": 5.0},
     }
 
+    # Baseline 2D results, observed in both 6.6 and 7.0.1 pilot runs. Requests
+    # for these names are accepted no-ops, not additional-output UI labels.
+    HDF_DEFAULT_OUTPUT_VARIABLES = frozenset({"Water Surface", "Face Velocity"})
+
+    # These labels first appear in HEC-RAS 7.0 and require secondary-flow physics.
+    HDF_OUTPUT_VARIABLE_MIN_VERSIONS = {
+        "Cell Dispersion Terms": 7.0,
+        "Cell Effective Flow Curvature": 7.0,
+        "Cell Effective Radius of Curvature": 7.0,
+        "Cell Equilibrium Spiral Intensity": 7.0,
+        "Cell Flow Curvature": 7.0,
+        "Cell Momentum Dispersive Stresses": 7.0,
+        "Cell Radius of Curvature": 7.0,
+        "Cell Spiral Intensity": 7.0,
+        "Cell Spiral Intensity Adaptation Length": 7.0,
+        "Face Momentum Dispersion": 7.0,
+        "Face Near-bed Velocity": 7.0,
+        "Face Spiral Intensity Diffusion Coefficient": 7.0,
+        "Face Spiral Velocity": 7.0,
+        "Face Surface Velocity": 7.0,
+    }
+
     HDF_ADDITIONAL_OUTPUT_VARIABLES = [
         "Cell Cumulative Excess Depth",
         "Cell Cumulative Infiltration Depth",
@@ -301,7 +323,49 @@ class RasPlan:
         "Face Wind Velocity",
         "Face Yield Stress",
         "Governing Equation Terms",
+        *HDF_OUTPUT_VARIABLE_MIN_VERSIONS,
     ]
+
+    # HEC-RAS silently drops these short tokens; write their full UI labels.
+    HDF_OUTPUT_VARIABLE_ALIASES = {
+        "Cell Flow Balance": "Cell Flow Balance (inflows - outflows)",
+        "Cell Invert Depth": "Cell Invert Depth (WSE - Cell Min Elev)",
+        "Face Tangential Velocity": "Face Tangential Velocity (Both sides of each face)",
+        "Cell Cumulative Precipitation": "Cell Cumulative Precipitation Depth",
+    }
+
+    # Observed label -> one/many dataset basenames in Base Output/Unsteady Time
+    # Series/2D Flow Areas/<area> (6.6 and 7.0.1 pilot). This is a partial map,
+    # not a guarantee of output: physics/version/plan settings control presence.
+    # Unlisted labels have no qualified mapping here. The empty node tuple
+    # records that the pilot produced no dataset; its working token is unresolved.
+    HDF_OUTPUT_VARIABLE_DATASETS = {
+        "Cell Courant": ("Cell Courant",),
+        "Cell Eddy Viscosity": ("Cell Eddy Viscosity - Eddy Viscosity X", "Cell Eddy Viscosity - Eddy Viscosity Y"),
+        "Cell Flow Balance (inflows - outflows)": ("Cell Flow Balance",),
+        "Cell Hydraulic Depth": ("Cell Hydraulic Depth",),
+        "Cell Invert Depth (WSE - Cell Min Elev)": ("Cell Invert Depth",),
+        "Cell Velocity": ("Cell Velocity - Velocity X", "Cell Velocity - Velocity Y"),
+        "Cell Volume": ("Cell Volume",),
+        "Cell Volume Error": ("Cell Volume Error",),
+        "Cell Water Surface Error": ("Cell Water Surface Error",),
+        "Face Area": ("Face Area",),
+        "Face Courant": ("Face Courant",),
+        "Face Cumulative Volume": ("Face Cumulative Volume",),
+        "Face Eddy Viscosity": ("Face Eddy Viscosity",),
+        "Face Flow": ("Face Flow",),
+        "Face Period-Average Flow": ("Face Flow Period Average",),
+        "Face Manning's n": ("Face Manning's n",),
+        # Also produces Summary Output/.../Maximum Face Shear Stress.
+        "Face Shear Stress": ("Face Shear Stress",),
+        "Face Tangential Velocity (Both sides of each face)": ("Face Tangential Velocity",),
+        "Face Water Surface": ("Face Water Surface",),
+        "Governing Equation Terms": (
+            "Cell Divergence Term", "Cell Storage Term", "Cell Water Source Term",
+            "Face Friction Term", "Face Pressure Gradient Term", "Face Wind Term",
+        ),
+        "Face Point (Node) Velocities*": (),
+    }
 
     RESTART_OUTPUT_PARAMETER_KEYS = {
         "enabled": "Write IC File",
@@ -3355,11 +3419,73 @@ class RasPlan:
         """
         List additional 2D HDF output variables known to HEC-RAS plan files.
 
+        Baseline results ``Water Surface`` and ``Face Velocity`` are excluded
+        from this additional-output catalogue. Enabling them is an accepted
+        no-op: they are always written for computed 2D results, an INFO message
+        explains this, and existing plan text is preserved.
+
+        The catalogue includes 14 secondary-flow labels requiring HEC-RAS 7.0+
+        (``HDF_OUTPUT_VARIABLE_MIN_VERSIONS``). Writers check the plan's declared
+        Program Version; an unknown version warns. Required physics must also
+        be active. ``HDF_OUTPUT_VARIABLE_DATASETS`` documents observed one-to-many
+        dataset basenames, including the six Governing Equation Terms arrays;
+        presence and compatible time axes must be checked in the results.
+
+        ``Face Point (Node) Velocities*`` remains for compatibility, but writes
+        no dataset in the 6.6/7.0.1 pilot (recorded as ``Face Point  Velocities``).
+        Its working token is unresolved; enabling it warns instead of promising
+        node velocities. Unmapped labels have no qualified dataset mapping here.
+
         Returns:
             List[str]: Variable names accepted by
                 ``HDF Additional Output Variable=...`` plan-file entries.
         """
         return list(RasPlan.HDF_ADDITIONAL_OUTPUT_VARIABLES)
+
+    @staticmethod
+    def _normalize_hdf_output_variable(variable: str) -> str:
+        """Validate an additional-output label or recognized baseline result name."""
+        if not isinstance(variable, str):
+            raise ValueError("HDF output variable must be a full UI label string")
+        variable = variable.strip()
+        canonical = RasPlan.HDF_OUTPUT_VARIABLE_ALIASES.get(variable, variable)
+        if canonical != variable:
+            logger.warning("Normalizing HDF output variable %r to full label %r", variable, canonical)
+        if (canonical not in RasPlan.HDF_ADDITIONAL_OUTPUT_VARIABLES
+                and canonical not in RasPlan.HDF_DEFAULT_OUTPUT_VARIABLES):
+            raise ValueError(
+                f"Unknown HDF output variable {variable!r}; use a full label from "
+                "RasPlan.list_available_hdf_output_variables()"
+            )
+        if canonical == 'Face Point (Node) Velocities*':
+            logger.warning(
+                "HDF output label %r produced no node velocity datasets in the "
+                "HEC-RAS 6.6/7.0.1 pilot; the working token is unresolved", canonical
+            )
+        return canonical
+
+    @staticmethod
+    def _check_hdf_output_versions(variables: List[str], lines: List[str]) -> None:
+        """Gate new labels on the declared version, ignoring Description text."""
+        program_version = next(
+            (value for _, key, value in _iter_plan_key_lines(lines) if key == 'Program Version'),
+            None,
+        )
+        version = RasPlan._version_to_float(program_version)
+        for variable in variables:
+            minimum = RasPlan.HDF_OUTPUT_VARIABLE_MIN_VERSIONS.get(variable)
+            if minimum is None:
+                continue
+            if version is None:
+                logger.warning(
+                    "HDF output variable %r requires HEC-RAS %g+ and secondary flow; "
+                    "plan Program Version is unknown", variable, minimum
+                )
+            elif version < minimum:
+                raise ValueError(
+                    f"HDF output variable {variable!r} requires HEC-RAS {minimum:g}+; "
+                    f"plan Program Version is {program_version}"
+                )
 
     @staticmethod
     @log_call
@@ -4118,6 +4244,9 @@ class RasPlan:
         """
         Apply a named HDF write-parameter profile and optional output variables.
 
+        All requested labels and version gates are checked before any writes;
+        see ``add_hdf_output_variable`` for normalization and physics limits.
+
         Args:
             plan_number_or_path: Plan number or path to the plan file.
             profile: One of ``balanced``, ``speed``, ``size``, or ``nas``.
@@ -4133,6 +4262,22 @@ class RasPlan:
             raise ValueError(f"Unknown HDF output profile '{profile}'. Valid profiles: {valid}")
 
         settings = RasPlan.HDF_OUTPUT_SETTING_PROFILES[profile_key]
+        # Validate the entire request before changing either options or labels.
+        additional_variables = [
+            RasPlan._normalize_hdf_output_variable(v) for v in additional_variables or []
+        ]
+        if additional_variables:
+            ras_obj = ras_object or ras
+            ras_obj.check_initialized()
+            plan_path = RasPlan._resolve_plan_file_path(plan_number_or_path, ras_obj)
+            if not plan_path or not plan_path.exists():
+                return False
+            try:
+                lines = plan_path.read_text(encoding='utf-8', errors='replace').splitlines(True)
+            except IOError as exc:
+                logger.error("Error reading HDF output plan %s: %s", plan_path, exc)
+                return False
+            RasPlan._check_hdf_output_versions(additional_variables, lines)
         success = RasPlan.set_hdf_write_parameters(
             plan_number_or_path,
             ras_object=ras_object,
@@ -4183,6 +4328,9 @@ class RasPlan:
     ) -> bool:
         """
         Enable or disable one additional HDF output variable in a plan file.
+
+        Enabling follows ``add_hdf_output_variable`` label/version validation;
+        disabling follows ``remove_hdf_output_variable`` legacy-token cleanup.
         """
         if enabled:
             return RasPlan.add_hdf_output_variable(
@@ -4238,7 +4386,27 @@ class RasPlan:
     ) -> bool:
         """
         Enable or disable multiple additional HDF output variables in a plan file.
+
+        Enabling prevalidates all labels and version gates before any writes.
+        Known short tokens normalize with a warning; unknown labels raise
+        ValueError. Disabling also accepts literal legacy labels for cleanup.
+        Enabling baseline ``Water Surface`` or ``Face Velocity`` is a no-op
+        with an INFO message; it preserves any existing lines for those names.
         """
+        if enabled:
+            variables = [RasPlan._normalize_hdf_output_variable(v) for v in variables]
+            if variables:
+                ras_obj = ras_object or ras
+                ras_obj.check_initialized()
+                plan_path = RasPlan._resolve_plan_file_path(plan_number_or_path, ras_obj)
+                if not plan_path or not plan_path.exists():
+                    return False
+                try:
+                    lines = plan_path.read_text(encoding='utf-8', errors='replace').splitlines(True)
+                except IOError as exc:
+                    logger.error("Error reading HDF output plan %s: %s", plan_path, exc)
+                    return False
+                RasPlan._check_hdf_output_versions(variables, lines)
         success = True
         for variable in variables:
             success = (
@@ -4271,14 +4439,29 @@ class RasPlan:
             ras_object (Optional[RasPrj]): The RAS project object. If None, uses the global 'ras' object.
 
         Returns:
-            bool: True if variable was added or already exists, False on error.
+            bool: True if added, already present, or an always-written default;
+                False on error.
 
         Supported Variables:
             - "Face Flow" - Flow rate across each face (needed for discharge-weighted velocity)
             - "Face Shear Stress" - Shear stress at each face
             - "Face Cumulative Volume" - Cumulative volume through each face
-            - "Cell Cumulative Precipitation" - Cumulative precipitation per cell
+            - "Cell Cumulative Precipitation Depth" - Cumulative precipitation per cell
             - "Cell Courant" - Courant number per cell
+
+        Notes:
+            Catalogue labels and the baseline result names ``Water Surface``
+            and ``Face Velocity`` are accepted. Enabling either baseline name
+            logs at INFO that it is always written for computed 2D results and
+            leaves the plan unchanged, including any existing line for that
+            name. Known legacy short tokens are
+            normalized to full labels with a warning, including existing matching
+            short-token records. Unknown labels raise ValueError before writing.
+            The 14 spiral/curvature labels require a declared Program Version of
+            7.0+; unknown versions warn. Required physics still controls output.
+            See ``HDF_OUTPUT_VARIABLE_DATASETS`` for observed dataset basenames.
+            ``Face Point (Node) Velocities*`` is retained with a warning: the
+            6.6/7.0.1 pilot wrote no node data, and its working token is unresolved.
 
         Example:
             >>> # Enable Face Flow output before running a plan
@@ -4286,6 +4469,7 @@ class RasPlan:
             >>> RasCmdr.compute_plan('02')
         """
         logger = get_logger(__name__)
+        variable = RasPlan._normalize_hdf_output_variable(variable)
         ras_obj = ras_object or ras
         ras_obj.check_initialized()
 
@@ -4294,22 +4478,37 @@ class RasPlan:
             logger.error(f"Plan file not found: {plan_number_or_path}")
             return False
 
+        if variable in RasPlan.HDF_DEFAULT_OUTPUT_VARIABLES:
+            logger.info(
+                "Default 2D HDF result %r is always written for computed 2D results; "
+                "leaving the plan unchanged", variable
+            )
+            return True
+
         try:
             # Read the file
             with open(plan_file_path, 'r', encoding='utf-8', errors='replace') as file:
                 lines = file.readlines()
 
+            RasPlan._check_hdf_output_versions([variable], lines)
+
             # Check only real plan keys; a Description block may contain an
             # illustrative HDF Additional Output Variable line.
             target_key = "HDF Additional Output Variable"
             target_line = f"{target_key}={variable}"
-            for _, key, raw_value in _iter_plan_key_lines(lines):
-                if key == target_key and raw_value.strip() == variable:
-                    logger.debug("HDF output variable %r already exists in plan", variable)
-                    return True
+            matches = [
+                i for i, key, raw_value in _iter_plan_key_lines(lines)
+                if key == target_key
+                and RasPlan.HDF_OUTPUT_VARIABLE_ALIASES.get(raw_value.strip(), raw_value.strip()) == variable
+            ]
+            if len(matches) == 1 and lines[matches[0]].strip() == target_line:
+                logger.debug("HDF output variable %r already exists in plan", variable)
+                return True
 
             # Reuse the Description-aware placement used for HDF write keys.
-            insert_index = RasPlan._find_hdf_insert_index(lines)
+            insert_index = matches[0] if matches else RasPlan._find_hdf_insert_index(lines)
+            if matches:
+                lines = [line for i, line in enumerate(lines) if i not in matches]
 
             # Insert the new variable
             RasPlan._terminate_line_before(lines, insert_index)
@@ -4449,6 +4648,9 @@ class RasPlan:
         """
         Remove an HDF output variable from a HEC-RAS plan file.
 
+        Known short aliases and their full labels remove either stored form.
+        Unknown literal labels remain removable without catalogue/version checks.
+
         Args:
             plan_number_or_path (Union[str, Number, Path]): The plan number or path to the plan file.
             variable (str): The variable name to remove.
@@ -4461,6 +4663,8 @@ class RasPlan:
             >>> RasPlan.remove_hdf_output_variable('02', 'Face Flow')
         """
         logger = get_logger(__name__)
+        # Cleanup must remain possible for unknown/obsolete literal tokens.
+        variable = RasPlan.HDF_OUTPUT_VARIABLE_ALIASES.get(variable, variable)
         ras_obj = ras_object or ras
         ras_obj.check_initialized()
 
@@ -4478,7 +4682,8 @@ class RasPlan:
             target_key = "HDF Additional Output Variable"
             remove_indices = {
                 i for i, key, raw_value in _iter_plan_key_lines(lines)
-                if key == target_key and raw_value.strip() == variable
+                if key == target_key
+                and RasPlan.HDF_OUTPUT_VARIABLE_ALIASES.get(raw_value.strip(), raw_value.strip()) == variable
             }
             removed = bool(remove_indices)
             new_lines = [line for i, line in enumerate(lines) if i not in remove_indices]

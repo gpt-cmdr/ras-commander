@@ -2629,8 +2629,14 @@ def _hdf_polygon_features(
     hdf: Any,
     group_path: str,
 ) -> list[dict[str, Any]]:
-    """Read a native HEC-RAS polygon collection with strict schema checks."""
-    from shapely.geometry import MultiPolygon, Polygon
+    """Read packed polygons with feature-local ring offsets and preserved holes.
+
+    Negative, truncated or out-of-feature spans raise; invalid ring geometry
+    remains available to the containment audit as a geometry violation.
+    """
+    import numpy as np
+    from shapely.geometry import Polygon
+    from ..hdf.HdfBndry import _assemble_polygon_rings
 
     if group_path not in hdf:
         return []
@@ -2649,43 +2655,58 @@ def _hdf_polygon_features(
             f"{group_path} Attributes rows ({len(attributes)}) do not match "
             f"Polygon Info rows ({len(info)})"
         )
+    if points.ndim != 2 or points.shape[1] < 2:
+        raise RuntimeError(f"{group_path}/Polygon Points must contain XY coordinates")
     parts = group["Polygon Parts"][()] if "Polygon Parts" in group else None
     features: list[dict[str, Any]] = []
     for index, row in enumerate(info):
-        if len(row) < 2:
+        if len(row) < 2 or any(
+            not np.isfinite(value) or int(value) != value for value in row
+        ):
             raise RuntimeError(f"{group_path}/Polygon Info row {index} is malformed")
         point_start, point_count = int(row[0]), int(row[1])
         part_start = int(row[2]) if len(row) > 2 else 0
         part_count = int(row[3]) if len(row) > 3 else 1
-        feature_points = points[point_start : point_start + point_count]
+        if min(point_start, point_count, part_start, part_count) < 0 or (
+            point_start + point_count > len(points)
+        ):
+            raise RuntimeError(f"{group_path}/Polygon Info row {index} has an invalid range")
+        feature_points = points[point_start : point_start + point_count, :2]
         geometry = None
         parse_error = ""
-        if len(feature_points) < 4:
-            parse_error = "fewer_than_four_polygon_points"
-        elif part_count <= 1:
-            geometry = Polygon(feature_points)
-        else:
-            if parts is None:
+        if parts is None or part_count == 0:
+            if part_count > 1:
                 raise RuntimeError(
                     f"{group_path}/Polygon Parts is required for multipart feature {index}"
                 )
-            polygons = []
-            for part_row in parts[part_start : part_start + part_count]:
-                raw_start, relative_count = int(part_row[0]), int(part_row[1])
-                relative_start = (
-                    raw_start - point_start
-                    if point_start <= raw_start < point_start + point_count
-                    else raw_start
-                )
-                part_points = feature_points[
-                    relative_start : relative_start + relative_count
-                ]
-                if len(part_points) >= 4:
-                    polygons.append(Polygon(part_points))
-            if polygons:
-                geometry = polygons[0] if len(polygons) == 1 else MultiPolygon(polygons)
+            ring_ranges = [(0, point_count)]
+        else:
+            if part_start + part_count > len(parts):
+                raise RuntimeError(f"{group_path}/Polygon Parts is truncated at feature {index}")
+            ring_ranges = parts[part_start : part_start + part_count]
+        polygons = []
+        expected_offset = 0
+        for part_row in ring_ranges:
+            if len(part_row) != 2 or any(
+                not np.isfinite(value) or int(value) != value for value in part_row
+            ):
+                raise RuntimeError(f"{group_path}/Polygon Parts is malformed at feature {index}")
+            offset, count = map(int, part_row)
+            if offset != expected_offset or count < 0 or offset + count > point_count:
+                raise RuntimeError(f"{group_path}/Polygon Parts has an invalid local span at feature {index}")
+            ring = feature_points[offset : offset + count]
+            expected_offset += count
+            if len(ring) < 4:
+                parse_error = "fewer_than_four_polygon_points"
+            elif not np.isfinite(ring).all():
+                parse_error = "non_finite_polygon_points"
             else:
-                parse_error = "multipart_feature_has_no_valid_parts"
+                polygons.append(Polygon(ring))
+        if expected_offset != point_count:
+            raise RuntimeError(f"{group_path}/Polygon Parts does not cover feature {index}")
+        if not parse_error and polygons:
+            geometry = _assemble_polygon_rings(polygons)
+
         features.append(
             {
                 "index": index,
@@ -3672,6 +3693,9 @@ class GeomMesh:
         require_complete_products: bool = False,
     ) -> DomainContainmentResult:
         """Audit mesh features before point generation.
+
+        Packed refinement regions retain interior rings, disjoint shells and
+        islands using feature-local Parts offsets. Malformed ranges raise.
 
         The admissible geometry is the exact compiled 2D perimeter buffered
         *inward* by one base mesh-cell spacing. Every breakline and
