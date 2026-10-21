@@ -44,7 +44,7 @@ _ABC_FILES = {"<frozen _collections_abc>",
 # Attribute classes that may be read through h5py in required mode, each with its reason.
 ATTRIBUTE_ALLOWED_KINDS = {}
 _ROUTER = os.path.join("ras_commander", "_fast_hdf_typed.py")
-_HARNESS = tuple(os.path.join("tests", suite, "_cases.py") for suite in ("rust_route_1", "rust_route_2"))
+_HARNESS = tuple(os.path.join("tests", suite, "_cases.py") for suite in ("rust_route_1", "rust_route_2", "rust_route_extents"))
 
 
 def _caller():
