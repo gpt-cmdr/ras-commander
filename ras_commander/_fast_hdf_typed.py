@@ -1,4 +1,4 @@
-"""Typed native dataset routing for public HDF readers (bridge API 10).
+"""Typed native dataset and attribute routing for public HDF readers (bridge API 11).
 
 ``read(dataset, selection)`` returns exactly what ``dataset[selection]`` returns
 with h5py: same dtype (compounds included), shape, values and bits. When the
@@ -27,6 +27,15 @@ compound identity tables stay on h5py in every mode (recorded as
 ``h5py-metadata``): this is the documented required-mode metadata exception. A
 compound with any numeric member and no typed route is value data: auto reads it
 with h5py (``h5py-fallback``/``untyped-compound``) and required mode refuses.
+When the engine failed a whole read family (``stored_family_index`` failures),
+that failure is reported in the required-mode refusal and in the trace
+(``diagnostic`` entries) instead of being dropped.
+
+Attributes (:func:`read_attrs`, :func:`read_attr`) come from the engine's typed
+group and dataset attributes in every mode, including datasets outside every
+read family; NULL dataspaces become ``h5py.Empty`` and bitfields the matching
+unsigned integers, exactly as h5py. Values the engine cannot reproduce fall back
+to h5py in auto mode and are refused in required mode.
 
 Selections are validated with h5py's own selector before any native read, so an
 invalid selection raises h5py's exact exception in every mode. Basic selections
@@ -142,7 +151,10 @@ class TypedRouteError(RuntimeError):
 # --------------------------------------------------------------------------- trace
 @contextmanager
 def trace_reads():
-    """Record ``{"path", "backend", "route"}`` for every read served here."""
+    """Record ``{"path", "backend", "route"}`` (plus ``detail`` when set) for every read served here.
+
+    ``backend == "diagnostic"`` entries carry no read: they report engine family
+    failures that explain how a dataset was served (``detail``)."""
     records = []
     token = _TRACE.set(records)
     try:
@@ -151,10 +163,13 @@ def trace_reads():
         _TRACE.reset(token)
 
 
-def _record(path, backend, route=None):
+def _record(path, backend, route=None, detail=None):
     records = _TRACE.get()
     if records is not None:
-        records.append({"path": path, "backend": backend, "route": route})
+        record = {"path": path, "backend": backend, "route": route}
+        if detail is not None:
+            record["detail"] = detail
+        records.append(record)
 
 
 # --------------------------------------------------------------------------- cache
@@ -480,7 +495,23 @@ def _stored_index(module, file_path):
 
     The engine inventories decide membership and qualification; rows carry storage,
     shape, dtype and capability. Read families take precedence over output blocks.
+    Family-level failures are kept separately (:func:`_stored_failures`).
     """
+    return _stored_family_index(module, file_path)["rows"]
+
+
+def _stored_failures(module, file_path):
+    """Engine ``stored_family_index`` failures: whole families the engine could not inventory.
+
+    One damaged member (for example a virtual ``Variables`` dataset in a sidecar)
+    makes the engine fail its entire family, which then lists no datasets. The
+    router reports these failures in required-mode refusals and in the trace
+    (``detail``) instead of dropping them (review P3-B).
+    """
+    return _stored_family_index(module, file_path)["failures"]
+
+
+def _stored_family_index(module, file_path):
     def load():
         index = module.stored_family_index(file_path)
         rows = {}
@@ -489,8 +520,20 @@ def _stored_index(module, file_path):
             if current is None or (current["owner"].startswith("output_block:")
                                    and not row["owner"].startswith("output_block:")):
                 rows[row["path"]] = row
-        return rows
+        return {"rows": rows, "failures": list(index.get("failures", []))}
     return _cached(file_path, ("stored_family_index",), load)
+
+
+def _failure_text(failures, limit=3):
+    """One-line summary of engine family failures for messages and the trace."""
+    if not failures:
+        return None
+    parts = [f"{f['owner']}: {f['kind']}"
+             + (f"/{f['code']}" if f.get("code") else "") + f" ({f['message']})"
+             for f in failures[:limit]]
+    more = len(failures) - limit
+    return "engine stored_family_index failures: " + "; ".join(parts) + (
+        f"; and {more} more" if more > 0 else "")
 
 
 def _stored_route(module, dataset):
@@ -565,28 +608,45 @@ def _stored_read(module, file_path, route, dataset, key):
 
 # ------------------------------------------------------------------ attributes
 def _typed_attributes(module, obj):
-    """Engine typed attributes of a group, or of a dataset in a Wave 3 family."""
+    """Engine typed attributes of a group or dataset, keyed by attribute name.
+
+    Groups use ``typed_group_attributes``. Every dataset, inside or outside the
+    engine read families, uses ``typed_dataset_attributes`` (engine API 9): the
+    same encoding proof as the family descriptors, with the exact stored bytes.
+    """
     file_path = os.fsdecode(obj.file.filename)
     name = obj.name
     if isinstance(obj, h5py.Group):
         return _cached(file_path, ("group_attrs", name),
                        lambda: {a["name"]: a for a in module.typed_group_attributes(file_path, name)})
-    path = name.strip("/")
-    row = _stored_index(module, file_path).get(path)
-    if row is None:
+
+    def load():
+        reported = module.typed_dataset_attributes(file_path, name.strip("/"), _DEFAULT_MAX_BYTES)
+        if reported["value"] is None:
+            raise TypedRouteError(f"{name}: typed dataset attributes {reported['capability']}")
+        return {a["name"]: a for a in reported["value"]}
+    return _cached(file_path, ("dataset_attrs", name), load)
+
+
+def _attr_source(obj, module, mode, fast_hdf):
+    """Engine typed attributes for ``obj``, or ``None`` when auto must use h5py.
+
+    A virtual, external or SWMR dataset (or an unsafe file) is not read by the
+    engine: required mode refuses it (review P3-A) and auto uses h5py.
+    """
+    if not fast_hdf._safe_file(obj):
+        if mode == "rust":
+            raise fast_hdf.FastHdfError(
+                f"{obj.name}: attributes of a virtual/external/SWMR dataset or unsafe file "
+                "are not read by the engine")
         return None
-    if row["owner"].startswith("output_block:"):
-        blocks = _cached(file_path, ("output_block_inventory",),
-                         lambda: module.output_block_inventory(file_path))
-        datasets = [d for b in blocks for d in b["datasets"]]
-    else:
-        inventory = _cached(file_path, ("family_inventory", row["owner"]),
-                            lambda: module.read_family_inventory(file_path, row["owner"]))
-        datasets = inventory["datasets"]
-    for dataset in datasets:
-        if dataset["path"] == path:
-            return {a["name"]: a for a in dataset["attributes"]}
-    return None
+    try:
+        return _typed_attributes(module, obj)
+    except Exception as exc:
+        if mode == "rust":
+            raise fast_hdf.FastHdfError(f"Typed attributes failed for {obj.name}: {exc}") from exc
+        logger.debug("h5py fallback for attributes of %s: %s", obj.name, exc)
+        return None
 
 
 def read_attrs(obj, *, backend="auto"):
@@ -594,12 +654,13 @@ def read_attrs(obj, *, backend="auto"):
 
     Attribute names and their order come from h5py (a key walk, no value read);
     each value is rebuilt from the engine's typed attribute by
-    :func:`attribute_value`. Groups use ``typed_group_attributes``; datasets use
-    their Wave 3 family inventory or non-Base output-block descriptor. A dataset outside every family has no engine
-    attribute reader: its attributes stay on h5py in every mode (the documented
-    metadata exception, traced ``h5py-metadata``/``attrs``). For a value the engine
-    cannot reproduce exactly, auto reads that attribute with h5py and required
-    mode raises ``FastHdfError``.
+    :func:`attribute_value`. Groups use ``typed_group_attributes`` and datasets
+    ``typed_dataset_attributes``. For a value the engine cannot reproduce exactly
+    (variable-length text, compound, enum, opaque, references, unproven layouts),
+    auto reads that attribute with h5py and required mode raises ``FastHdfError``
+    for the whole object; use :func:`read_attr` to read one attribute. Attributes of
+    virtual, external or SWMR datasets are refused in required mode and read with
+    h5py in auto mode.
     """
     from . import fast_hdf
 
@@ -611,15 +672,9 @@ def read_attrs(obj, *, backend="auto"):
     if module is None:
         _record(obj.name, "h5py", "attrs")
         return {k: obj.attrs[k] for k in names}
-    try:
-        typed = (_typed_attributes(module, obj) if fast_hdf._safe_file(obj) else None)
-    except Exception as exc:
-        if mode == "rust":
-            raise fast_hdf.FastHdfError(f"Typed attributes failed for {obj.name}: {exc}") from exc
-        _record(obj.name, "h5py-fallback", "attrs")
-        return {k: obj.attrs[k] for k in names}
+    typed = _attr_source(obj, module, mode, fast_hdf)
     if typed is None:
-        _record(obj.name, "h5py-metadata", "attrs")
+        _record(obj.name, "h5py-fallback", "attrs")
         return {k: obj.attrs[k] for k in names}
     out = {}
     fallback = False
@@ -637,34 +692,105 @@ def read_attrs(obj, *, backend="auto"):
     return out
 
 
+_MISSING = object()
+
+
+def read_attr(obj, name, default=_MISSING, *, backend="auto"):
+    """Exactly ``obj.attrs[name]`` (or ``obj.attrs.get(name, default)``), value from the engine.
+
+    Only the requested attribute is rebuilt, so an unreproducible sibling (for
+    example a variable-length string) does not refuse it. Presence is a key check
+    (no value read): an absent name returns ``default`` when given, else raises
+    h5py's ``KeyError``. Backend policy as :func:`read_attrs`.
+    """
+    from . import fast_hdf
+
+    if not isinstance(obj, (h5py.Group, h5py.Dataset)):
+        raise TypeError("obj must be an open h5py.Group or h5py.Dataset")
+    if name not in obj.attrs:
+        if default is _MISSING:
+            return obj.attrs[name]  # h5py's own KeyError (type and message); no value is read
+        return default
+    mode = fast_hdf._mode(backend)
+    module = fast_hdf._native(mode)
+    if module is None:
+        _record(obj.name, "h5py", f"attr:{name}")
+        return obj.attrs[name]
+    typed = _attr_source(obj, module, mode, fast_hdf)
+    try:
+        if typed is None:
+            raise TypedRouteError(f"{obj.name}: attributes left to h5py")
+        if name not in typed:
+            raise TypedRouteError(f"attribute {name!r} missing from the engine reader")
+        value = attribute_value(typed[name])
+    except TypedRouteError as exc:
+        if mode == "rust":
+            raise fast_hdf.FastHdfError(f"{obj.name}: {exc}") from exc
+        _record(obj.name, "h5py-fallback", f"attr:{name}")
+        return obj.attrs[name]
+    _record(obj.name, "native-typed", f"attr:{name}")
+    return value
+
+
+def _attribute_dtype(typed):
+    """NumPy dtype h5py uses for one engine attribute type, or ``None``."""
+    kind = typed["attribute_type"]
+    if kind["kind"] in {"integer", "float", "bitfield"}:
+        order = {"little": "<", "big": ">"}.get(kind.get("byte_order"))
+        if order is None:
+            raise TypedRouteError(f"attribute {typed['name']!r}: byte order {kind.get('byte_order')}")
+        size = int(kind["bytes"])
+        if kind["kind"] == "bitfield":
+            # h5py maps an HDF5 bitfield to the unsigned integer of the same size and order.
+            if size not in {1, 2, 4, 8}:
+                raise TypedRouteError(f"attribute {typed['name']!r}: bitfield of {size} bytes")
+            return np.dtype(f"{order}u{size}")
+        code = "f" if kind["kind"] == "float" else ("i" if kind["signed"] else "u")
+        return np.dtype(f"{order}{code}{size}")
+    if kind["kind"] == "fixed_string":
+        return np.dtype(f"S{max(int(kind['width']), 1)}")
+    return None
+
+
 def attribute_value(typed):
     """Exact ``obj.attrs[name]`` value from one engine typed attribute.
 
-    Reproduces h5py 3 semantics from the stored bytes and declared type: numeric
-    attributes become a NumPy scalar (scalar dataspace) or array in the stored
-    dtype and byte order; fixed-length strings become ``numpy.bytes_`` (or an
-    ``S{width}`` array) after HDF5's conversion into h5py's NULLPAD memory type
-    (NULLTERM: cut at the first NUL; SPACEPAD: trailing spaces removed; NULLPAD:
-    unchanged), with NumPy's trailing-NUL stripping. Any other class (variable-
-    length, compound, bitfield, enum, references) or an unsupported/corrupt value
-    raises :class:`TypedRouteError`, so the caller falls back or refuses.
+    Reproduces h5py 3 semantics from the stored bytes, declared type and
+    dataspace class:
+
+    - an H5S_NULL dataspace (engine ``dataspace == "null"``) is ``h5py.Empty(dtype)``,
+      never confused with a zero-length simple array (``array([], dtype)``);
+    - numeric attributes become a NumPy scalar (scalar dataspace) or array in the
+      stored dtype and byte order;
+    - bitfields become the unsigned integer of the same size and byte order, as
+      h5py reads them;
+    - fixed-length strings become ``numpy.bytes_`` (or an ``S{width}`` array)
+      after HDF5's conversion into h5py's NULLPAD memory type (NULLTERM: cut at
+      the first NUL; SPACEPAD: trailing spaces removed; NULLPAD: unchanged), with
+      NumPy's trailing-NUL stripping.
+
+    Any other class (variable-length, compound, enum, references), an unknown
+    dataspace class or an unsupported/corrupt value raises :class:`TypedRouteError`,
+    so the caller falls back or refuses.
     """
     if typed.get("capability", {}).get("status") != "supported":
         raise TypedRouteError(f"attribute {typed.get('name')!r}: {typed.get('capability')}")
     kind = typed["attribute_type"]
-    shape = tuple(int(n) for n in typed["shape"])
+    dtype = _attribute_dtype(typed)
+    if dtype is None:
+        raise TypedRouteError(f"attribute {typed['name']!r}: {kind['kind']} attributes are not reproduced")
+    space = typed.get("dataspace")
     raw = bytes(typed["raw_bytes"])
+    if space == "null":
+        if raw:
+            raise TypedRouteError(f"attribute {typed['name']!r}: NULL dataspace with {len(raw)} bytes")
+        return h5py.Empty(dtype)
+    if space not in {"scalar", "simple"}:
+        raise TypedRouteError(f"attribute {typed['name']!r}: dataspace class {space!r}")
+    shape = tuple(int(n) for n in typed["shape"])
+    if (space == "scalar") != (shape == ()):
+        raise TypedRouteError(f"attribute {typed['name']!r}: {space} dataspace with shape {shape}")
     count = int(np.prod(shape, dtype=np.int64)) if shape else 1
-    if kind["kind"] in {"integer", "float"}:
-        order = {"little": "<", "big": ">"}.get(kind.get("byte_order"))
-        if order is None:
-            raise TypedRouteError(f"attribute {typed['name']!r}: byte order {kind.get('byte_order')}")
-        code = "f" if kind["kind"] == "float" else ("i" if kind["signed"] else "u")
-        dtype = np.dtype(f"{order}{code}{int(kind['bytes'])}")
-        if len(raw) != count * dtype.itemsize:
-            raise TypedRouteError(f"attribute {typed['name']!r}: {len(raw)} bytes for {count} x {dtype}")
-        values = np.frombuffer(raw, dtype=dtype).copy()
-        return values[0] if not shape else values.reshape(shape)
     if kind["kind"] == "fixed_string":
         width = int(kind["width"])
         padding = kind.get("padding")
@@ -679,10 +805,13 @@ def attribute_value(typed):
                 cut = data.find(bytes(1))
                 data = data if cut < 0 else data[:cut]
             items.append(data)
-        values = np.array(items, dtype=f"S{max(width, 1)}")
+        values = np.array(items, dtype=dtype)
         # h5py returns arr[()] of an S{width} array: same scalar construction.
         return values.reshape(())[()] if not shape else values.reshape(shape)
-    raise TypedRouteError(f"attribute {typed['name']!r}: {kind['kind']} attributes are not reproduced")
+    if len(raw) != count * dtype.itemsize:
+        raise TypedRouteError(f"attribute {typed['name']!r}: {len(raw)} bytes for {count} x {dtype}")
+    values = np.frombuffer(raw, dtype=dtype).copy()
+    return values[0] if not shape else values.reshape(shape)
 
 
 def _has_numeric_field(dtype):
@@ -806,9 +935,14 @@ def read(dataset, selection=None, *, backend="auto"):
             logger.debug("h5py fallback for typed inventory %s: %s", dataset.name, exc)
             _record(dataset.name, "h5py-fallback", route[0])
             return dataset[key]
+    stored_detail = None
     if route is None and not metadata and hasattr(module, "stored_family_index"):
         try:
             route = _stored_route(module, dataset)
+            if route is None and fast_hdf._safe_file(dataset):
+                # A failed family lists no datasets; say so instead of a bare "no route".
+                stored_detail = _failure_text(
+                    _stored_failures(module, os.fsdecode(dataset.file.filename)))
         except Exception as exc:
             if mode == "rust":
                 raise fast_hdf.FastHdfError(f"Stored family index failed for {dataset.name}: {exc}") from exc
@@ -816,6 +950,8 @@ def read(dataset, selection=None, *, backend="auto"):
             _record(dataset.name, "h5py-fallback", "stored_family")
             return dataset[key]
     if route is None:
+        if stored_detail:
+            _record(dataset.name, "diagnostic", "stored_family_index", stored_detail)
         if fast_hdf._numeric(dataset) and dataset.shape is not None:
             return _generic(dataset, selection, key, shape, backend, mode)
         if dtype.names is not None and _has_numeric_field(dtype):
@@ -823,8 +959,9 @@ def read(dataset, selection=None, *, backend="auto"):
             # a typed engine route required mode refuses instead of reading h5py.
             if mode == "rust":
                 raise fast_hdf.FastHdfError(
-                    f"{dataset.name}: numeric compound has no typed engine route")
-            _record(dataset.name, "h5py-fallback", "untyped-compound")
+                    f"{dataset.name}: numeric compound has no typed engine route"
+                    + (f"; {stored_detail}" if stored_detail else ""))
+            _record(dataset.name, "h5py-fallback", "untyped-compound", stored_detail)
             return dataset[key]
         _record(dataset.name, "h5py-metadata")
         return dataset[key]
