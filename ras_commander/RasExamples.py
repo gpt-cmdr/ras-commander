@@ -535,7 +535,8 @@ class RasExamples:
             except Exception as exc:
                 logger.debug("Refreshing unreadable example index: %s", exc)
         cls._extract_folder_structure()
-        if cls._folder_df is not None and not cls._folder_df.equals(cached):
+        if cls._folder_df is not None and (cached is None or not
+                cls._folder_df.reset_index(drop=True).equals(cached.reset_index(drop=True))):
             cls._save_to_csv()
 
     @classmethod
