@@ -3595,7 +3595,9 @@ class RasControl:
             dataset = source.get("Results/Summary/Compute Messages (text)")
             if dataset is None:
                 return ""
-            data = dataset[()]
+            from .fast_hdf import read_typed
+
+            data = read_typed(dataset)
             if getattr(data, "ndim", 0) > 0:
                 if data.size == 0:
                     return ""

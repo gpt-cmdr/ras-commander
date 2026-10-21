@@ -21,6 +21,7 @@ import pandas as pd
 from scipy.optimize import minimize
 
 from .Decorators import log_call
+from .fast_hdf import reraise_required
 from .LoggingConfig import get_logger
 from .RasCmdr import RasCmdr
 from .RasPermutation import RasPermutation
@@ -738,6 +739,7 @@ def _get_reference_dataset(
         if len(dataset.data_vars) > 0:
             return dataset
     except Exception as exc:
+        reraise_required(exc)
         logger.debug(
             "Reference %s getter failed for %s; falling back to internal "
             "helper: %s",

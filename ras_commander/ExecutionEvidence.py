@@ -17,6 +17,7 @@ import numpy as np
 import pandas as pd
 
 from .LoggingConfig import get_logger
+from .fast_hdf import read_attr, read_typed, reraise_required
 from .ExecutionArtifacts import (
     normalize_program_version,
     resolve_plan_result_artifact,
@@ -477,11 +478,11 @@ def _parse_hdf_datetime(value: Any) -> datetime:
 
 
 def _hdf_window(plan_info: Any) -> tuple[Optional[datetime], Optional[datetime]]:
-    start_raw = plan_info.attrs.get("Simulation Start Time")
-    end_raw = plan_info.attrs.get("Simulation End Time")
+    start_raw = read_attr(plan_info, "Simulation Start Time", None)
+    end_raw = read_attr(plan_info, "Simulation End Time", None)
     if start_raw is not None and end_raw is not None:
         return _parse_hdf_datetime(start_raw), _parse_hdf_datetime(end_raw)
-    time_window = plan_info.attrs.get("Time Window")
+    time_window = read_attr(plan_info, "Time Window", None)
     if time_window is None:
         return None, None
     parts = re.split(r"\s+to\s+", _decode(time_window).strip(), maxsplit=1)
@@ -501,9 +502,9 @@ def _structured_runtime_seconds(hdf_file: h5py.File) -> Optional[float]:
     if isinstance(processes, h5py.Group):
         dataset = processes.get("Compute Time (ms)")
         if dataset is not None:
-            values = dataset[:]
+            values = read_typed(dataset, slice(None))
     elif processes.dtype.names and "Compute Time (ms)" in processes.dtype.names:
-        values = processes["Compute Time (ms)"]
+        values = read_typed(processes)["Compute Time (ms)"]
     if values is None:
         return None
     numeric = np.asarray(values, dtype=float)
@@ -525,7 +526,7 @@ def _observed_hdf_version(hdf_file: h5py.File) -> Optional[str]:
         group = hdf_file if not group_path else hdf_file.get(group_path)
         if group is None:
             continue
-        raw = group.attrs.get(attribute)
+        raw = read_attr(group, attribute, None)
         if raw is not None and _decode(raw).strip():
             return _decode(raw).strip()
     return None
@@ -874,7 +875,7 @@ def inspect_execution_evidence(
                 raw_completed = (
                     None
                     if event is None
-                    else event.attrs.get("Completed Successfully")
+                    else read_attr(event, "Completed Successfully", None)
                 )
                 capability_version = _normalize_version(
                     observed_hdf_version or declared_version
@@ -977,6 +978,7 @@ def inspect_execution_evidence(
                     try:
                         hdf_start, hdf_end = _hdf_window(plan_info)
                     except Exception as exc:
+                        reraise_required(exc)
                         hdf_window_error = str(exc)
             if hash_files:
                 result_hash = _stable_sha256(hdf_path)
@@ -997,6 +999,7 @@ def inspect_execution_evidence(
                     result_hash,
                 )
         except Exception as exc:
+            reraise_required(exc)
             hdf_stable = False
             detail = str(exc)[:1000]
             # A digest produced anywhere in a failed outer stability window
