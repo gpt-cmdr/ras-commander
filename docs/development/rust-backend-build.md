@@ -118,13 +118,21 @@ modes*). In short:
   treat a native Corrupt refusal as fatal in auto mode.
 - Required mode raises `FastHdfError` on any refusal. It reads all numeric
   values natively. Text datasets, text-only compound identity tables,
-  attributes and structure walks stay on h5py (the documented metadata
-  exception); a compound with a numeric member and no typed route is refused.
+  structure walks and attributes of datasets outside every engine family stay
+  on h5py (the documented metadata exception); a compound with a numeric
+  member and no typed route is refused. Group attributes and attributes of
+  Wave 3 family/output-block datasets read through `fast_hdf.read_attrs` are
+  native and refuse in required mode when a value cannot be reproduced.
 - `trace_reads()` records only reads made through the adapter. It is not a
   complete I/O audit. `tests/rust_route_1` independently intercepts
   `h5py.Dataset.__getitem__`/`read_direct` in required mode. It also checks
   injected engine failures and physically damaged copies (a flipped Fletcher32
   checksum byte, and a virtual dataset).
+- `tests/rust_route_2` (gate `RAS_ROUTE2_FIXTURES`; optional `projects` for
+  multi-file land-cover/infiltration methods) applies the same three-mode,
+  h5py-interception and injected-failure contract to the Wave 3 families
+  (bridge API 10, engine `e9afad3`), plus binding-boundary tests and an edited
+  sediment copy whose contradictory unit attribute is removed.
 - H5PY in the coverage inventory is a qualification label, not an enforced
   backend selection.
 
