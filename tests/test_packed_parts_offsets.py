@@ -51,12 +51,18 @@ def test_nonzero_feature_start_with_numerically_overlapping_offsets(tmp_path, co
 
 @pytest.mark.parametrize("parts", [
     [[-1, 4], [4, 4]], [[0, -1]], [[0, 9]], [[0.5, 8]],
-    [[0, 3], [4, 4]], [[0, 5], [4, 3]], [[0, 4], [4, 3]],
     [[4, 4], [9, 3]], [[4, 5], [8, 3]], [[4, 4], [8, 5]],
 ])
-def test_whole_feature_rejects_negative_fractional_gap_overlap_and_truncation(parts):
+def test_whole_feature_rejects_invalid_bounds_and_noncovering_legacy_global(parts):
     with pytest.raises(ValueError):
         HdfBase._feature_part_ranges(np.array(parts), 4, 8)
+
+
+@pytest.mark.parametrize("parts", [
+    [[0, 3], [4, 4]], [[0, 5], [4, 3]], [[0, 4], [4, 3]],
+])
+def test_feature_local_gaps_shared_and_unused_vertices_preserve_exact_ranges(parts):
+    assert HdfBase._feature_part_ranges(np.array(parts), 4, 8) == [tuple(p) for p in parts]
 
 
 @pytest.mark.parametrize("consumer", ["collection", "polyline"])
@@ -79,7 +85,7 @@ def test_consumer_rejects_truncated_parts_table(tmp_path, consumer):
 
 
 @pytest.mark.parametrize("consumer", ["collection", "polyline"])
-@pytest.mark.parametrize("defect", ["negative", "gap", "overlap", "outside", "point_slice"])
+@pytest.mark.parametrize("defect", ["negative", "out_of_bounds_gap", "outside", "point_slice"])
 def test_consumers_do_not_return_partial_geometry_for_malformed_slices(tmp_path, caplog, consumer, defect):
     path = tmp_path / "malformed.g01.hdf"
     polygon = consumer == "collection"
@@ -91,10 +97,8 @@ def test_consumers_do_not_return_partial_geometry_for_malformed_slices(tmp_path,
     info = [[0, count, 0, 1], [count, 2 * count, 1, 2]]
     if defect == "negative":
         parts[1][0] = -1
-    elif defect == "gap":
+    elif defect == "out_of_bounds_gap":
         parts[2][0] += 1
-    elif defect == "overlap":
-        parts[2][0] -= 1
     elif defect == "outside":
         parts[2][1] += 1
     else:

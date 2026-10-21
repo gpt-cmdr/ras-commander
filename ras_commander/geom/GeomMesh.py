@@ -2515,8 +2515,10 @@ def _hdf_polyline_features(
 ) -> list[dict[str, Any]]:
     """Read native polylines, resolving Parts offsets for the complete feature.
 
-    Local offsets take precedence; a legacy global layout must cover the whole
-    feature. Malformed spans raise instead of truncating individual parts.
+    Local offsets are valid when every part lies within the feature's point
+    count and take precedence; a legacy global layout must cover the whole
+    feature exactly. Malformed spans raise instead of truncating individual
+    parts.
     """
     import numpy as np
     from shapely.geometry import LineString, MultiLineString
@@ -3689,7 +3691,8 @@ class GeomMesh:
         native preprocessing when ``recompile_via_rasexe=True`` permits mutation.
 
         Packed polyline Parts offsets resolve for each complete feature. Native
-        local offsets take precedence over legacy whole-feature global offsets.
+        local offsets, valid when every part lies within the feature's point
+        count, take precedence over legacy whole-feature global offsets.
         """
         geom_path = _resolve_geom_text_path(geom_number, ras_object)
         hdf_path = _ensure_hdf(

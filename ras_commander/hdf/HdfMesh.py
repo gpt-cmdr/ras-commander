@@ -722,10 +722,12 @@ class HdfMesh:
     @standardize_input(file_type='geom_hdf')
     def get_mesh_areas(hdf_path: Path) -> 'GeoDataFrame':
         """
-
-        Collection-level Parts offsets are feature-local. Legacy global offsets
-        are accepted only when all parts together cover the feature point range.
         Return 2D flow area perimeter polygons.
+
+        Collection-level Parts offsets are feature-local and valid when every
+        part lies within the feature's point count. Legacy global offsets are
+        accepted only when all parts together cover the feature point range
+        exactly; any other layout fails closed.
 
         Parameters
         ----------
