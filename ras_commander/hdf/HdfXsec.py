@@ -47,7 +47,7 @@ from ..Decorators import standardize_input, log_call
 from . import _HdfXsecSchema
 from .HdfBase import HdfBase
 from .HdfUtils import HdfUtils
-from ..fast_hdf import FastHdfError, read_typed
+from ..fast_hdf import FastHdfError, read_typed, reraise_required
 from ..LoggingConfig import get_logger
 
 
@@ -977,11 +977,8 @@ class HdfXsec:
                     result = HdfUtils.convert_df_datetimes_to_str(result)
                 return result
                 
-        except FastHdfError:
-                
-            raise
-                
         except Exception as e:
+            reraise_required(e)
             logger.error(f"Error processing cross-section data from {hdf_path}: {str(e)}")
             return gpd.GeoDataFrame()
 
@@ -1123,11 +1120,8 @@ class HdfXsec:
                 logger.debug(f"Extracted {len(centerline_gdf)} river centerlines")
                 return centerline_gdf
 
-        except FastHdfError:
-
-            raise
-
         except Exception as e:
+            reraise_required(e)
             logger.error(f"Error reading river centerlines from {hdf_path}: {str(e)}")
             return GeoDataFrame()
 
@@ -1202,11 +1196,8 @@ class HdfXsec:
             
             return result_gdf
 
-        except FastHdfError:
-
-            raise
-
         except Exception as e:
+            reraise_required(e)
             logger.error(f"Error calculating river stationing: {str(e)}")
             return centerlines_gdf
 
@@ -1279,9 +1270,8 @@ class HdfXsec:
             river_gdf = river_gdf.copy()
             river_gdf.insert(0, "river_id", range(len(river_gdf)))
             return river_gdf
-        except FastHdfError:
-            raise
         except Exception as e:
+            reraise_required(e)
             logger.error(f"Error reading river reaches from {hdf_path}: {str(e)}")
             return GeoDataFrame()
 
@@ -1363,11 +1353,8 @@ class HdfXsec:
 
                 return edge_gdf
 
-        except FastHdfError:
-
-            raise
-
         except Exception as e:
+            reraise_required(e)
             logger.error(f"Error reading river edge lines from {hdf_path}: {str(e)}")
             return GeoDataFrame()
 
@@ -1450,11 +1437,8 @@ class HdfXsec:
 
                 return bank_gdf
 
-        except FastHdfError:
-
-            raise
-
         except Exception as e:
+            reraise_required(e)
             logger.error(f"Error reading river bank lines from {hdf_path}: {str(e)}")
             return GeoDataFrame()
 
@@ -1509,11 +1493,8 @@ class HdfXsec:
             flow_gdf['length'] = flow_gdf.geometry.length
             return flow_gdf
 
-        except FastHdfError:
-
-            raise
-
         except Exception as e:
+            reraise_required(e)
             logger.error(f"Error reading river flow paths: {str(e)}")
             return GeoDataFrame()
 
@@ -1608,11 +1589,8 @@ class HdfXsec:
                 return GeoDataFrame()
             return GeoDataFrame(rows, geometry="geometry", crs=HdfBase.get_projection(hdf_path))
 
-        except FastHdfError:
-
-            raise
-
         except Exception as e:
+            reraise_required(e)
             logger.error(f"Error reading XS interpolation surface: {str(e)}")
             return GeoDataFrame()
 
@@ -1874,9 +1852,8 @@ class HdfXsec:
         if use_stored:
             try:
                 stored = HdfXsec.get_river_edge_lines(hdf_path)
-            except FastHdfError:
-                raise
             except Exception as e:
+                reraise_required(e)
                 logger.debug(f"Could not read stored river edge lines: {e}")
                 stored = GeoDataFrame()
             if stored is not None and not stored.empty and len(stored) % 2 == 0:

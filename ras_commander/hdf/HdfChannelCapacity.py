@@ -40,7 +40,7 @@ import numpy as np
 import pandas as pd
 
 from ..LoggingConfig import log_call, get_logger
-from ..fast_hdf import FastHdfError, read_typed
+from ..fast_hdf import FastHdfError, read_typed, reraise_required
 
 logger = get_logger(__name__)
 
@@ -691,9 +691,8 @@ class HdfChannelCapacity:
                 logger.debug(
                     f"  Format: {source} ({len(max_wse_values)} XS)"
                 )
-            except FastHdfError:
-                raise
             except Exception as exc:
+                reraise_required(exc)
                 logger.warning(
                     f"Could not extract WSE from {hdf_path.name}: {exc}. "
                     f"Compute the plan and verify the HDF contains steady profiles "

@@ -43,7 +43,7 @@ from ..Decorators import log_call, standardize_input
 from ..LoggingConfig import get_logger
 from .HdfBase import HdfBase
 from .HdfUtils import HdfUtils
-from ..fast_hdf import FastHdfError, read_typed
+from ..fast_hdf import FastHdfError, read_typed, reraise_required
 
 logger = get_logger(__name__)
 
@@ -372,9 +372,8 @@ class HdfLandCover:
                     })
                     results.append(area_df)
 
-        except FastHdfError:
-            raise
         except Exception as e:
+            reraise_required(e)
             logger.error(f"Error reading preprocessed Manning's n from {hdf_path}: {e}")
             return pd.DataFrame(columns=['mesh_name', 'cell_id', 'mannings_n'])
 
@@ -428,9 +427,8 @@ class HdfLandCover:
 
                 return pd.DataFrame(df_dict)
 
-        except FastHdfError:
-            raise
         except Exception as e:
+            reraise_required(e)
             logger.error(f"Error reading calibration table from {hdf_path}: {e}")
             return None
 
@@ -581,9 +579,8 @@ class HdfLandCover:
                     crs=HdfBase.get_projection(hdf_file),
                 )
 
-        except FastHdfError:
-            raise
         except Exception as e:
+            reraise_required(e)
             logger.error(f"Error reading Manning's region polygons from {hdf_path} (Geometry/Land Cover (Manning's n)): {e}")
             raise
 
@@ -621,9 +618,8 @@ class HdfLandCover:
                     'cell_index': data['Cell Index'],
                 })
 
-        except FastHdfError:
-            raise
         except Exception as e:
+            reraise_required(e)
             logger.error(f"Error reading region cell mapping from {hdf_path}: {e}")
             return None
 

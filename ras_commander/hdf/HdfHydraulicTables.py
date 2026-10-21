@@ -76,7 +76,7 @@ import numpy as np
 
 from ..LoggingConfig import get_logger
 from ..Decorators import log_call, standardize_input
-from ..fast_hdf import FastHdfError, read_typed
+from ..fast_hdf import FastHdfError, read_typed, reraise_required
 
 logger = get_logger(__name__)
 
@@ -170,9 +170,8 @@ class HdfHydraulicTables:
             logger.debug(f"Cross section not found: {river}/{reach}/RS {rs}")
             return None
 
-        except FastHdfError:
-            raise
         except Exception as e:
+            reraise_required(e)
             logger.debug(f"Error finding XS index: {str(e)}")
             return None
 
@@ -266,9 +265,8 @@ class HdfHydraulicTables:
 
             return df
 
-        except FastHdfError:
-            raise
         except Exception as e:
+            reraise_required(e)
             logger.debug(f"Error extracting property table: {str(e)}", exc_info=True)
             return None
 
@@ -401,9 +399,8 @@ class HdfHydraulicTables:
             raise
         except ValueError:
             raise
-        except FastHdfError:
-            raise
         except Exception as e:
+            reraise_required(e)
             logger.error(f"Error reading HTAB property table from {hdf_path.name}: {str(e)}")
             raise IOError(f"Failed to read property table: {str(e)}")
 
@@ -515,8 +512,7 @@ class HdfHydraulicTables:
 
         except FileNotFoundError:
             raise
-        except FastHdfError:
-            raise
         except Exception as e:
+            reraise_required(e)
             logger.error(f"Error reading property tables from HDF: {str(e)}")
             raise IOError(f"Failed to read property tables: {str(e)}")

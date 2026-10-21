@@ -49,7 +49,7 @@ from pathlib import Path
 import logging
 
 from .HdfUtils import HdfUtils
-from ..fast_hdf import FastHdfError, read_typed
+from ..fast_hdf import FastHdfError, read_typed, reraise_required
 from ..Decorators import standardize_input, log_call
 from ..LoggingConfig import setup_logging, get_logger
 
@@ -259,9 +259,10 @@ class HdfBase:
                     )
 
                 return list(zip(names, cell_counts))
-        except (ValueError, FastHdfError):
+        except ValueError:
             raise
         except Exception as e:
+            reraise_required(e)
             raise ValueError(
                 f"Failed to read 2D flow area names/counts from "
                 f"{Path(hdf_path).name}: {e}"
@@ -858,9 +859,10 @@ class HdfBase:
                             )
                         )
                 return geoms
-        except (ValueError, FastHdfError):
+        except ValueError:
             raise
         except Exception as e:
+            reraise_required(e)
             raise ValueError(
                 f"Failed to extract polylines from '{path}' in "
                 f"{Path(hdf_path).name}: {e}"

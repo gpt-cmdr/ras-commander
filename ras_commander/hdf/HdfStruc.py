@@ -35,7 +35,7 @@ from ..LoggingConfig import get_logger
 from .HdfBase import HdfBase
 from .HdfUtils import HdfUtils
 from ._packed_parts import _nonnegative_index, resolve_feature_part_ranges
-from ..fast_hdf import FastHdfError, read_typed
+from ..fast_hdf import FastHdfError, read_typed, reraise_required
 
 logger = get_logger(__name__)
 
@@ -672,9 +672,8 @@ class HdfStruc:
                 
                 return struct_gdf
 
-        except FastHdfError:
-            raise
         except Exception as e:
+            reraise_required(e)
             logger.error(f"Error reading structures from {hdf_path} (Geometry/Structures): {str(e)}")
             raise
 
@@ -841,9 +840,8 @@ class HdfStruc:
                 logger.debug(f"Successfully extracted hydraulic data for {len(result_df)} culverts")
                 return result_df
 
-        except FastHdfError:
-            raise
         except Exception as e:
+            reraise_required(e)
             logger.error(f"Error reading culvert hydraulics from {hdf_path}: {str(e)}")
             return pd.DataFrame()
 
@@ -886,9 +884,8 @@ class HdfStruc:
             with h5py.File(hdf_path, 'r') as hdf_file:
                 return HdfStruc._list_sa2d_connections_from_hdf(hdf_file, hdf_path)
 
-        except FastHdfError:
-            raise
         except Exception as e:
+            reraise_required(e)
             logger.error(f"Error listing SA/2D connection structures: {e}")
             return []
 
@@ -977,9 +974,8 @@ class HdfStruc:
 
                 return pd.DataFrame(info_list)
 
-        except FastHdfError:
-            raise
         except Exception as e:
+            reraise_required(e)
             logger.error(f"Error getting SA/2D breach info: {e}")
             raise
 
@@ -1127,8 +1123,7 @@ class HdfStruc:
                 )
                 return gdf
 
-        except FastHdfError:
-            raise
         except Exception as e:
+            reraise_required(e)
             logger.error(f"Error reading storage area polygons from {hdf_path}: {str(e)}")
             raise
