@@ -63,3 +63,39 @@ def test_invalid_centerline_parts_raise(tmp_path, info, parts):
     _write(path, info, parts)
     with pytest.raises(ValueError, match="centerline parts"):
         HdfStruc.get_structures(path)
+
+
+@pytest.mark.parametrize(
+    "info, parts",
+    [
+        ([[0, 0, 0, 1], [0, 8, 1, 1]], [[0, 0], [0, 8]]),  # Muncie-style empty row
+        ([[0, 8, 0, 1], [8, 0, 1, 1]], [[0, 8], [0, 0]]),  # empty row at array end
+        ([[0, 8, 0, 1], [4, 0, 1, 1]], [[0, 8], [4, 0]]),  # legacy global empty part
+        ([[0, 8, 0, 1], [4, 0, 0, 0]], [[0, 8]]),  # empty row without parts
+    ],
+)
+def test_zero_point_centerline_returns_none_geometry(tmp_path, info, parts):
+    path = tmp_path / "empty.g01.hdf"
+    _write(path, info, parts)
+    gdf = HdfStruc.get_structures(path)
+    empty = [i for i, row in enumerate(info) if row[1] == 0]
+    assert [i for i, g in enumerate(gdf.geometry) if g is None] == empty
+    other = [i for i in range(len(info)) if i not in empty][0]
+    assert np.asarray(gdf.geometry.iloc[other].coords).tolist() == POINTS
+
+
+@pytest.mark.parametrize(
+    "info, parts, match",
+    [
+        ([[9, 0, 0, 1]], [[0, 0]], "point range"),  # start beyond Points
+        ([[-1, 0, 0, 1]], [[0, 0]], "point range"),  # negative start
+        ([[0, 0, 0, 1]], [[0, 3]], "centerline parts"),  # part exceeds empty range
+        ([[0, 0, 1, 1]], [[0, 0]], "centerline parts"),  # truncated Parts
+        ([[0, 1, 0, 1]], [[0, 1]], "point range"),  # one-point centerline
+    ],
+)
+def test_inconsistent_empty_or_short_centerline_raises(tmp_path, info, parts, match):
+    path = tmp_path / "bad-empty.g01.hdf"
+    _write(path, info, parts)
+    with pytest.raises(ValueError, match=match):
+        HdfStruc.get_structures(path)
