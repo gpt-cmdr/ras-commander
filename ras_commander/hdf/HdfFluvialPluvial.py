@@ -13,6 +13,7 @@ List of Functions in HdfFluvialPluvial:
 """
 
 from typing import Dict, List, Tuple, Set, Optional
+from math import isfinite
 import pandas as pd
 import geopandas as gpd
 from collections import defaultdict
@@ -154,6 +155,9 @@ class HdfFluvialPluvial:
         Optionally, for polygons classified as fluvial or pluvial, if their area is less than
         min_polygon_area_acres, they are reclassified to the opposite type and merged with
         adjacent polygons of that type. Ambiguous polygons are exempt from this logic.
+        Acreage uses the projected CRS axis units converted to square meters.
+        Missing or geographic CRS skips filtering with a warning. Unresolved
+        projected units log an error and return an empty GeoDataFrame.
 
         Args:
             hdf_path (Path): Path to the HEC-RAS plan HDF file.
@@ -279,9 +283,25 @@ class HdfFluvialPluvial:
                         f"skipped area filter min_polygon_area_acres={min_polygon_area_acres}."
                     )
                 else:
+                    axes = final_regions_gdf.crs.axis_info[:2]
+                    if len(axes) != 2 or any(
+                        not axis.unit_name or axis.unit_name.lower() == 'unknown'
+                        or axis.unit_conversion_factor is None
+                        or not isfinite(axis.unit_conversion_factor)
+                        or axis.unit_conversion_factor <= 0
+                        for axis in axes
+                    ):
+                        raise ValueError(
+                            "Acre filtering requires known projected horizontal CRS units"
+                        )
+                    square_metres_per_native_area = (
+                        axes[0].unit_conversion_factor * axes[1].unit_conversion_factor
+                    )
                     # Explode to individual polygons for area filtering
                     exploded = final_regions_gdf.explode(index_parts=False, ignore_index=True)
-                    exploded['area_acres'] = exploded.geometry.area / 4046.8564224
+                    exploded['area_acres'] = (
+                        exploded.geometry.area * square_metres_per_native_area / 4046.8564224
+                    )
 
                     # Only consider fluvial and pluvial polygons for area filtering
                     mask_fluvial = (exploded['classification'] == 'fluvial') & (exploded['area_acres'] < min_polygon_area_acres)
