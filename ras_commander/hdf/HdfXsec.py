@@ -964,13 +964,7 @@ class HdfXsec:
                         data[field_name] = [default_value] * len(geometries)
                         logger.debug(f"Field {attr_name} not found in attributes, using default value")
 
-                projection = None
-                if "Geometry" in hdf and "Projection" in hdf["Geometry"].attrs:
-                    projection = HdfXsec._convert_hdf_value(
-                        hdf["Geometry"].attrs["Projection"]
-                    )
-                if not projection:
-                    projection = HdfBase.get_projection(Path(hdf_path))
+                projection = HdfBase.get_projection(Path(hdf_path))
                 result = gpd.GeoDataFrame(data, crs=projection)
                 if datetime_to_str:
                     result = HdfUtils.convert_df_datetimes_to_str(result)

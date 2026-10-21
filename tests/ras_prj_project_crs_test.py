@@ -113,10 +113,22 @@ def _init_project(project_dir: Path) -> RasPrj:
     return project
 
 
-def test_project_crs_prefers_geometry_hdf_over_plan_hdf(tmp_path):
+def test_project_crs_conflict_between_geometry_and_plan_hdf_is_none(tmp_path):
     project_name = _write_project_files(tmp_path, include_geom_entry=True)
     _write_hdf(tmp_path / f"{project_name}.g01.hdf", epsg=2278)
     _write_hdf(tmp_path / f"{project_name}.p01.hdf", epsg=26915)
+
+    project = _init_project(tmp_path)
+
+    assert project.project_crs is None
+    assert project.project_crs_source is None
+    assert project.project_crs_status == "conflict"
+
+
+def test_project_crs_prefers_geometry_hdf_when_plan_hdf_agrees(tmp_path):
+    project_name = _write_project_files(tmp_path, include_geom_entry=True)
+    _write_hdf(tmp_path / f"{project_name}.g01.hdf", epsg=2278)
+    _write_hdf(tmp_path / f"{project_name}.p01.hdf", epsg=2278)
 
     project = _init_project(tmp_path)
 
