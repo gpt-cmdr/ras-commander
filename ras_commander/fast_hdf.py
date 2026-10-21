@@ -587,11 +587,26 @@ def packed_meshes(hdf_path, *, mesh_names=None, backend="auto", threads=None):
 
 
 def _try_mesh_polygons(hdf_path, *, backend="auto", threads=None, strict=None):
-    """Internal compatibility hook; None means use the original polygonizer."""
+    """Internal compatibility hook; None means use the original polygonizer.
+
+    In auto mode *any* native failure returns None, so the Python polygonizer
+    produces the result (or the exception) the library has always produced.
+    Explicit ``rust`` and required mode raise instead.
+    """
     mode, threads = _mode(backend), _threads(threads)
     module = _native(mode)
     if module is None:
         return None
+    try:
+        return _native_mesh_polygons(module, mode, hdf_path, backend, threads, strict)
+    except Exception as exc:
+        if mode != "auto":
+            raise
+        logger.debug("Python polygonizer after native mesh polygon failure in %s: %s", hdf_path, exc)
+        return None
+
+
+def _native_mesh_polygons(module, mode, hdf_path, backend, threads, strict):
     from geopandas import GeoDataFrame
     import shapely
     from .hdf.HdfBase import HdfBase
