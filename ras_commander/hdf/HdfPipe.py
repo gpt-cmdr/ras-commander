@@ -10,13 +10,12 @@ Geometry Retrieval Functions:
 - get_pipe_inlets() - Get top and side inlet attributes for pipe nodes
 - get_pipe_network() - Get complete pipe network data
 - get_pipe_profile() - Get elevation profile for a specific conduit
-- extract_pipe_network_data() - Extract both nodes and conduits data
 
 Results Retrieval Functions:
 - get_pipe_network_timeseries() - Get timeseries data for pipe network variables
 - get_pipe_network_summary() - Get summary statistics for pipe networks
-- get_pipe_node_timeseries() - Get timeseries data for a specific node
-- get_pipe_conduit_timeseries() - Get timeseries data for a specific conduit
+- extract_timeseries_for_node() - Get timeseries data for a specific node
+- extract_timeseries_for_conduit() - Get timeseries data for a specific conduit
 
 Note: All functions use the @standardize_input decorator to validate input paths
 and the @log_call decorator for logging function calls.
@@ -24,17 +23,18 @@ and the @log_call decorator for logging function calls.
 
 from __future__ import annotations
 
+from pathlib import Path
+from typing import Dict, List, Optional, Tuple, Union
+
 import h5py
 import numpy as np
 import pandas as pd
-from pathlib import Path
-from typing import List, Dict, Any, Optional, Union, Tuple
+
 from .._optional_deps import optional_module, require_module
+from ..Decorators import log_call, standardize_input
+from ..LoggingConfig import get_logger
 from .HdfBase import HdfBase
 from .HdfUtils import HdfUtils
-from ..Decorators import standardize_input, log_call
-from ..LoggingConfig import get_logger
-from .HdfResultsMesh import HdfResultsMesh
 
 gpd = optional_module("geopandas", "Returning GeoDataFrame results from HdfPipe")
 xr = optional_module("xarray", "Returning xarray results from HdfPipe")
@@ -74,6 +74,81 @@ def _list_hdf_datasets(group: h5py.Group) -> List[str]:
     return sorted(datasets)
 
 
+def _text(value) -> str:
+    return value.decode("utf-8").rstrip("\x00") if isinstance(value, bytes) else str(value)
+
+
+def _network_name(hdf, requested):
+    path = "Geometry/Pipe Networks/Attributes"
+    if path not in hdf:
+        raise KeyError(f"Pipe network selection requires '{path}'")
+    names = [_text(row['Name']) for row in hdf[path][()]]
+    if not names:
+        raise ValueError("No pipe networks in Geometry/Pipe Networks/Attributes")
+    name = names[0] if requested is None else str(requested)
+    if name not in names:
+        raise ValueError(f"Pipe network '{name}' not found. Available networks: {', '.join(names)}")
+    if f"Geometry/Pipe Networks/{name}" not in hdf:
+        raise KeyError(f"Pipe network geometry group '{name}' is missing")
+    return name
+
+
+# Stored Location is authoritative, never a variable-name or count heuristic.
+_PIPE_DOMAINS = {
+    "Cell Water Surface": ("cell", "Cell Polygons Info", None),
+    "Face Flow": ("face", "Face Polylines Info", None),
+    "Face Velocity": ("face", "Face Polylines Info", None),
+    "Face Water Surface": ("face", "Face Polylines Info", None),
+    "Nodes": ("node", "Node Indices", "node_id"),
+    "Pipe Links": ("conduit", "Conduit Indices", "conduit_id"),
+}
+
+
+def _domain(hdf, dataset, network):
+    raw = np.asarray(dataset.attrs.get("Location", []))
+    if raw.shape not in [(), (1,)] or raw.size != 1:
+        raise ValueError(f"{dataset.name}: missing or non-scalar stored Location")
+    location = _text(raw.reshape(-1)[0])
+    if location not in _PIPE_DOMAINS:
+        raise ValueError(f"{dataset.name}: unsupported stored Location {location!r}")
+    domain, table, coord = _PIPE_DOMAINS[location]
+    identity = hdf[f"Geometry/Pipe Networks/{network}/{table}"]
+    if dataset.ndim != 2 or dataset.shape[1] != identity.shape[0]:
+        raise ValueError(f"{dataset.name}: stored Location {location!r} contradicts geometry count")
+    ids = None
+    if coord:
+        ids = identity[()]
+        if ids.ndim != 1 or ids.dtype.kind not in 'iu' or len(np.unique(ids)) != len(ids):
+            raise ValueError(f"{identity.name}: expected unique rank-one integer stored IDs")
+    return domain, location, coord, ids
+
+
+def _part_geometries(info, parts, points, polygon=False):
+    from shapely.geometry import LineString, MultiLineString, Polygon
+    result = []
+    for start, count, part_start, part_count in info:
+        start, count, part_start, part_count = map(int, (start, count, part_start, part_count))
+        if min(start, count, part_start, part_count) < 0 or start + count > len(points) or part_start + part_count > len(parts):
+            raise ValueError("Pipe geometry Info slice is out of bounds")
+        feature = points[start:start + count, :2]
+        geometries = []
+        for offset, size in parts[part_start:part_start + part_count]:
+            offset, size = int(offset), int(size)
+            if offset < 0 or size < (3 if polygon else 2) or offset + size > count:
+                raise ValueError("Pipe geometry Parts slice is out of bounds")
+            coords = feature[offset:offset + size]
+            geometries.append(Polygon(coords) if polygon else LineString(coords))
+        if not geometries:
+            result.append(None)
+        elif len(geometries) == 1:
+            result.append(geometries[0])
+        else:
+            if polygon:
+                raise ValueError("Multipart pipe cell polygon topology is unqualified")
+            result.append(MultiLineString(geometries))
+    return result
+
+
 class HdfPipe:
     """
     Static methods for handling pipe network data from HEC-RAS HDF files.
@@ -90,23 +165,27 @@ class HdfPipe:
     @staticmethod
     @log_call
     @standardize_input(file_type='plan_hdf')
-    def get_pipe_conduits(hdf_path: Path, crs: Optional[str] = "EPSG:4326") -> gpd.GeoDataFrame:
+    def get_pipe_conduits(hdf_path: Union[str, Path, int, h5py.File], crs: Optional[str] = None) -> gpd.GeoDataFrame:
         """
         Extracts pipe conduit geometries and attributes from HDF5 file.
 
         Parameters:
-            hdf_path: Path to the HDF5 file
-            crs: Coordinate Reference System (default: "EPSG:4326")
+            hdf_path: HDF path (str or Path), open h5py.File, or plan number
+            crs: Coordinate Reference System override (default: stored projection)
 
         Returns:
             GeoDataFrame with columns:
             - Attributes from HDF5
             - Polyline: LineString geometries
             - Terrain_Profiles: List of (station, elevation) tuples
-        """
-        shapely_geometry = require_module("shapely.geometry", "Returning GeoDataFrame results from HdfPipe")
-        LineString = shapely_geometry.LineString
 
+        Raises:
+            KeyError: If required geometry or one terrain-profile table is missing.
+            ValueError: If geometry rows or profile slices are inconsistent.
+
+        Example:
+            >>> conduits = HdfPipe.get_pipe_conduits("model.p02.hdf")
+        """
         with h5py.File(hdf_path, 'r') as f:
             if '/Geometry/Pipe Conduits' not in f:
                 raise KeyError(_missing_hdf_object_message(
@@ -138,39 +217,41 @@ class HdfPipe:
             polyline_info = group['Polyline Info'][:]  # Shape (132,4) - point_start_idx, point_count, part_start_idx, part_count
             polyline_points = group['Polyline Points'][:]  # Shape (396,2) - x,y coordinates
             
-            polyline_geometries = []
-            for info in polyline_info:
-                point_start_idx = info[0]
-                point_count = info[1]
-                
-                # Extract coordinates for this polyline directly using start index and count
-                coords = polyline_points[point_start_idx:point_start_idx + point_count]
-                
-                if len(coords) < 2:
-                    polyline_geometries.append(None)
-                else:
-                    polyline_geometries.append(LineString(coords))
-            
+            if 'Polyline Parts' not in group:
+                raise KeyError("Pipe conduit geometry requires Polyline Parts")
+            polyline_geometries = _part_geometries(
+                polyline_info, group['Polyline Parts'][()], polyline_points)
+            if len(attributes) != len(polyline_geometries):
+                raise ValueError("Pipe conduit Attributes/Polyline row mismatch")
+
             # --- Read Terrain Profiles Data (optional) ---
             attr_df['Polyline'] = polyline_geometries
 
-            if 'Terrain Profiles Info' in group and 'Terrain Profiles Values' in group:
+            has_profile_info = 'Terrain Profiles Info' in group
+            has_profile_values = 'Terrain Profiles Values' in group
+            if has_profile_info != has_profile_values:
+                raise KeyError(
+                    "Pipe conduit terrain profiles are partially present: both "
+                    "'Terrain Profiles Info' and 'Terrain Profiles Values' are required")
+            if has_profile_info and has_profile_values:
                 terrain_info = group['Terrain Profiles Info'][:]
                 terrain_values = group['Terrain Profiles Values'][:]
+                if len(terrain_info) != len(attr_df):
+                    raise ValueError("Pipe conduit Attributes/Terrain Profiles Info row mismatch")
                 terrain_coords = list(zip(terrain_values[:, 0], terrain_values[:, 1]))
 
                 terrain_profiles_list: List[List[Tuple[float, float]]] = []
                 for i in range(len(terrain_info)):
-                    info = terrain_info[i]
-                    start_idx = info[0]
-                    count = info[1]
+                    start_idx, count = map(int, terrain_info[i])
+                    if start_idx < 0 or count < 0 or start_idx + count > len(terrain_coords):
+                        raise ValueError(f"Pipe terrain profile slice is out of bounds for conduit row {i}")
                     segment = terrain_coords[start_idx : start_idx + count]
                     terrain_profiles_list.append(segment)
 
                 attr_df['Terrain_Profiles'] = terrain_profiles_list
             
             # Initialize GeoDataFrame with Polyline geometries
-            gdf = gpd.GeoDataFrame(attr_df, geometry='Polyline', crs=crs)
+            gdf = gpd.GeoDataFrame(attr_df, geometry='Polyline', crs=crs if crs is not None else HdfBase.get_projection(hdf_path))
             
             return gdf
 
@@ -178,7 +259,7 @@ class HdfPipe:
     @staticmethod
     @log_call
     @standardize_input(file_type='plan_hdf')
-    def get_pipe_nodes(hdf_path: Path, crs: Optional[str] = "EPSG:4326") -> gpd.GeoDataFrame:
+    def get_pipe_nodes(hdf_path: Union[str, Path, int, h5py.File], crs: Optional[str] = None) -> gpd.GeoDataFrame:
         """
         Creates a GeoDataFrame for Pipe Node points and their attributes from an HDF5 file.
 
@@ -187,8 +268,8 @@ class HdfPipe:
         single GeoDataFrame.
 
         Args:
-            hdf_path (Union[str, Path]): Path to the HDF5 file.
-            crs (Optional[str]): Coordinate Reference System (default: "EPSG:4326").
+            hdf_path (Union[str, Path, int, h5py.File]): HDF path, open file, or plan number.
+            crs (Optional[str]): Coordinate Reference System override (default: stored projection).
 
         Returns:
             gpd.GeoDataFrame: GeoDataFrame containing pipe node attributes and
@@ -233,10 +314,12 @@ class HdfPipe:
             # --- Read Points Data ---
             points = group['Points'][:]
             # Create Shapely Point geometries
+            if len(points) != len(attributes):
+                raise ValueError("Pipe node Attributes/Points row mismatch")
             geometries = [Point(xy) for xy in points]
 
             # --- Combine Attributes and Geometries into GeoDataFrame ---
-            gdf = gpd.GeoDataFrame(attr_df, geometry=geometries, crs=crs)
+            gdf = gpd.GeoDataFrame(attr_df, geometry=geometries, crs=crs if crs is not None else HdfBase.get_projection(hdf_path))
 
             return gdf
         
@@ -246,7 +329,7 @@ class HdfPipe:
     @staticmethod
     @log_call
     @standardize_input(file_type='plan_hdf')
-    def get_pipe_inlets(hdf_path: Path) -> pd.DataFrame:
+    def get_pipe_inlets(hdf_path: Union[str, Path, int, h5py.File]) -> pd.DataFrame:
         """
         Reads top and side inlet attributes from a HEC-RAS geometry HDF file.
 
@@ -256,7 +339,7 @@ class HdfPipe:
         ``'side'``.
 
         Args:
-            hdf_path (Union[str, Path]): Path to the HDF5 file.
+            hdf_path (Union[str, Path, int, h5py.File]): HDF path, open file, or plan number.
 
         Returns:
             pd.DataFrame: DataFrame containing inlet attributes with an
@@ -277,6 +360,8 @@ class HdfPipe:
                 ('side', '/Geometry/Pipe Nodes/Side Inlets/Attributes'),
             ]:
                 if group_path not in f:
+                    if group_path.rsplit("/", 1)[0] in f:
+                        raise KeyError(f"Pipe inlet group is missing {group_path}")
                     logger.debug(f"{group_path} not found in HDF file, skipping")
                     continue
 
@@ -302,28 +387,29 @@ class HdfPipe:
     @staticmethod
     @log_call
     @standardize_input(file_type='plan_hdf')
-    def get_pipe_network(hdf_path: Path, pipe_network_name: Optional[str] = None, crs: Optional[str] = "EPSG:4326") -> gpd.GeoDataFrame:
+    def get_pipe_network(hdf_path: Union[str, Path, int, h5py.File], pipe_network_name: Optional[str] = None, crs: Optional[str] = None) -> gpd.GeoDataFrame:
         """
         Creates a GeoDataFrame for a pipe network's geometry.
 
         Parameters:
-            hdf_path: Path to the HDF5 file
+            hdf_path: HDF path (str or Path), open h5py.File, or plan number
             pipe_network_name: Name of network (uses first if None)
-            crs: Coordinate Reference System (default: "EPSG:4326")
+            crs: Coordinate Reference System override (default: stored projection)
 
         Returns:
             GeoDataFrame containing:
             - Cell polygons (primary geometry)
             - Face polylines
-            - Node points
+            - Node points resolved through stored Node Indices
             - Associated attributes
-        """
-        shapely_geometry = require_module("shapely.geometry", "Returning GeoDataFrame results from HdfPipe")
-        LineString = shapely_geometry.LineString
-        MultiLineString = shapely_geometry.MultiLineString
-        MultiPolygon = shapely_geometry.MultiPolygon
-        Polygon = shapely_geometry.Polygon
 
+        Raises:
+            KeyError: If required network geometry is missing.
+            ValueError: If the network name, stored IDs, or geometry slices are invalid.
+
+        Example:
+            >>> cells = HdfPipe.get_pipe_network("model.p02.hdf")
+        """
         with h5py.File(hdf_path, 'r') as f:
             if '/Geometry/Pipe Networks' not in f:
                 raise KeyError(_missing_hdf_object_message(
@@ -334,40 +420,8 @@ class HdfPipe:
 
             pipe_networks_group = f['/Geometry/Pipe Networks/']
 
-            # --- Determine Pipe Network to Use ---
-            if "Attributes" not in pipe_networks_group:
-                raise KeyError(_missing_hdf_object_message(
-                    "Pipe network extraction",
-                    "/Geometry/Pipe Networks/Attributes",
-                    _PIPE_GEOMETRY_PREPROCESSOR_ACTION,
-                ))
-
-            attributes = pipe_networks_group['Attributes'][:]
-            attr_df = pd.DataFrame(attributes)
-            
-            # Decode 'Name' from byte strings to UTF-8
-            attr_df['Name'] = attr_df['Name'].apply(lambda x: x.decode('utf-8') if isinstance(x, bytes) else x)
-            
-            if pipe_network_name:
-                if pipe_network_name not in attr_df['Name'].values:
-                    raise ValueError(f"Pipe network '{pipe_network_name}' not found in the HDF5 file.")
-                network_idx = attr_df.index[attr_df['Name'] == pipe_network_name][0]
-            else:
-                network_idx = 0  # Default to first network
-            
-            # Get the name of the selected pipe network
-            selected_network_name = attr_df.at[network_idx, 'Name']
-            logger.debug("Selected pipe network: %s", selected_network_name)
-            
-            # Access the selected pipe network group
+            selected_network_name = _network_name(f, pipe_network_name)
             network_group_path = f"/Geometry/Pipe Networks/{selected_network_name}"
-            if network_group_path not in f:
-                raise KeyError(_missing_hdf_object_message(
-                    "Pipe network extraction",
-                    network_group_path,
-                    _PIPE_GEOMETRY_PREPROCESSOR_ACTION,
-                ))
-
             network_group = f[network_group_path]
 
             required_network_datasets = [
@@ -414,76 +468,12 @@ class HdfPipe:
                     df[col] = df[col].apply(lambda x: x.decode('utf-8') if isinstance(x, bytes) else x)
                 return df
             
-            def build_polygons(info, parts, points) -> List[Optional[Polygon or MultiPolygon]]:
-                """Build Shapely Polygon or MultiPolygon geometries from HDF5 datasets."""
-                poly_coords = list(zip(points[:, 0], points[:, 1]))
-                geometries = []
-                for i in range(len(info)):
-                    cell_info = info[i]
-                    point_start_idx = cell_info[0]
-                    point_count = cell_info[1]
-                    part_start_idx = cell_info[2]
-                    part_count = cell_info[3]
-                    
-                    parts_list = []
-                    for p in range(part_start_idx, part_start_idx + part_count):
-                        if p >= len(parts):
-                            continue  # Prevent index out of range
-                        part_info = parts[p]
-                        part_point_start = part_info[0]
-                        part_point_count = part_info[1]
-                        
-                        coords = poly_coords[part_point_start : part_point_start + part_point_count]
-                        if len(coords) < 3:
-                            continue  # Not a valid polygon part
-                        parts_list.append(coords)
-                    
-                    if not parts_list:
-                        geometries.append(None)
-                    elif len(parts_list) == 1:
-                        try:
-                            geometries.append(Polygon(parts_list[0]))
-                        except ValueError:
-                            geometries.append(None)
-                    else:
-                        try:
-                            geometries.append(MultiPolygon([Polygon(p) for p in parts_list if len(p) >= 3]))
-                        except ValueError:
-                            geometries.append(None)
-                return geometries
-            
-            def build_multilinestring(info, parts, points) -> List[Optional[LineString or MultiLineString]]:
-                """Build Shapely LineString or MultiLineString geometries from HDF5 datasets."""
-                line_coords = list(zip(points[:, 0], points[:, 1]))
-                geometries = []
-                for i in range(len(info)):
-                    face_info = info[i]
-                    point_start_idx = face_info[0]
-                    point_count = face_info[1]
-                    part_start_idx = face_info[2]
-                    part_count = face_info[3]
-                    
-                    parts_list = []
-                    for p in range(part_start_idx, part_start_idx + part_count):
-                        if p >= len(parts):
-                            continue  # Prevent index out of range
-                        part_info = parts[p]
-                        part_point_start = part_info[0]
-                        part_point_count = part_info[1]
-                        
-                        coords = line_coords[part_point_start : part_point_start + part_point_count]
-                        if len(coords) < 2:
-                            continue  # Cannot form LineString with fewer than 2 points
-                        parts_list.append(coords)
-                    
-                    if not parts_list:
-                        geometries.append(None)
-                    elif len(parts_list) == 1:
-                        geometries.append(LineString(parts_list[0]))
-                    else:
-                        geometries.append(MultiLineString(parts_list))
-                return geometries
-            
+            def build_polygons(info, parts, points):
+                return _part_geometries(info, parts, points, polygon=True)
+
+            def build_multilinestring(info, parts, points):
+                return _part_geometries(info, parts, points)
+
             # --- Read and Process Cell Polygons ---
             cell_polygons_info = network_group['Cell Polygons Info'][:]
             cell_polygons_parts = network_group['Cell Polygons Parts'][:]
@@ -498,39 +488,14 @@ class HdfPipe:
             
             face_polylines_geometries = build_multilinestring(face_polylines_info, face_polylines_parts, face_polylines_points)
             
-            # --- Read and Process Node Points ---
-            node_surface_connectivity_group = network_group.get('Node Surface Connectivity', None)
-            if node_surface_connectivity_group is not None:
-                node_surface_connectivity = node_surface_connectivity_group[:]
-            else:
-                node_surface_connectivity = None
-            
-            # Assuming Node Connectivity Info and Values contain node coordinates
-            node_connectivity_info = network_group['Node Connectivity Info'][:]
-            node_connectivity_values = network_group['Node Connectivity Values'][:]
-            node_indices = network_group['Node Indices'][:]
-            node_surface_connectivity = network_group['Node Surface Connectivity'][:]
-            
-            # For simplicity, assuming that node connectivity includes X and Y coordinates
-            # This may need to be adjusted based on actual data structure
-            # Here, we'll create dummy points as placeholder
-            # Replace with actual coordinate extraction logic as per data structure
-            # For demonstration, we'll create random points
-            # You should replace this with actual data extraction
-            # Example:
-            # node_points = network_group['Node Coordinates'][:]
-            # node_geometries = [Point(x, y) for x, y in node_points]
-            
-            # Placeholder for node geometries
-            # Assuming node_indices contains Node IDs and coordinates
-            # Adjust based on actual dataset structure
-            # Here, we assume that node_indices has columns: [Node ID, X, Y]
-            # But based on the log, Node Surface Connectivity has ['Node ID', 'Layer', 'Layer ID', 'Sublayer ID']
-            # No coordinates are provided, so we cannot create Point geometries unless coordinates are available elsewhere
-            # Therefore, this part may need to be adapted based on actual data
-            # For now, we'll skip node points geometries
-            node_geometries = [None] * len(node_indices)  # Placeholder
-            
+            # Network Node Indices are stored IDs into the global Pipe Nodes rows.
+            node_indices = network_group['Node Indices'][()]
+            points = f['Geometry/Pipe Nodes/Points'][()]
+            if node_indices.dtype.kind not in 'iu' or np.any(node_indices < 0) or np.any(node_indices >= len(points)):
+                raise ValueError("Pipe network Node Indices exceed global Pipe Nodes/Points")
+            from shapely.geometry import Point
+            node_geometries = {int(i): Point(points[i]) for i in node_indices}
+
             # --- Read and Process Cell Property Table ---
             cell_property_table = network_group['Cell Property Table'][:]
             cell_property_df = pd.DataFrame(cell_property_table)
@@ -632,8 +597,10 @@ class HdfPipe:
                 # Add other cell properties as needed
             })
             
-            # Merge with cell property table
-            cells_df = cells_df.merge(cell_property_df, left_on='Cell_Property_Info_Index', right_index=True, how='left')
+            if len(cell_property_df) != len(cells_df):
+                raise ValueError("Cell Property Table/geometry row mismatch")
+            # Property rows align with cells; Info Index addresses a separate lookup table.
+            cells_df = pd.concat([cells_df, cell_property_df], axis=1)
             
             # --- Combine All Face-Related Data ---
             faces_df = pd.DataFrame({
@@ -648,7 +615,7 @@ class HdfPipe:
             })
             
             # Merge with face property table
-            faces_df = faces_df.merge(face_property_df, left_on='Face_Property_Info_Index', right_index=True, how='left')
+            faces_df = pd.concat([faces_df, face_property_df], axis=1)
             
             # --- Combine All Node-Related Data ---
             nodes_df = pd.DataFrame({
@@ -665,14 +632,13 @@ class HdfPipe:
             cells_df['Cell_Polygon'] = cell_polygons_geometries
             
             # Add face polylines as a separate column (list of geometries)
-            cells_df['Face_Polylines'] = cells_df['Face_Indices'].apply(lambda indices: [face_polylines_geometries[i] for i in indices if i < len(face_polylines_geometries)])
+            cells_df['Face_Polylines'] = cells_df['Face_Indices'].apply(lambda indices: [face_polylines_geometries[i] for i in indices if 0 <= i < len(face_polylines_geometries)])
             
-            # Add node points if geometries are available
-            # Currently, node_geometries are placeholders (None). Replace with actual geometries if available.
-            cells_df['Node_Point'] = cells_df['Node_ID'].apply(lambda nid: node_geometries[nid] if nid < len(node_geometries) else None)
+            # Negative cell node IDs indicate that a cell belongs to a conduit.
+            cells_df['Node_Point'] = cells_df['Node_ID'].apply(lambda nid: node_geometries.get(int(nid)))
             
             # Initialize GeoDataFrame with Cell Polygons
-            gdf = gpd.GeoDataFrame(cells_df, geometry='Cell_Polygon', crs=crs)
+            gdf = gpd.GeoDataFrame(cells_df, geometry='Cell_Polygon', crs=crs if crs is not None else HdfBase.get_projection(hdf_path))
             
             # Optionally, add Face Polylines and Node Points as separate columns
             # Note: GeoPandas primarily supports one geometry column, so these are stored as object columns
@@ -692,13 +658,13 @@ class HdfPipe:
     @staticmethod
     @log_call
     @standardize_input(file_type='plan_hdf')
-    def get_pipe_profile(hdf_path: Path, conduit_id: int) -> pd.DataFrame:
+    def get_pipe_profile(hdf_path: Union[str, Path, int, h5py.File], conduit_id: int) -> pd.DataFrame:
         """
         Extract the profile data for a specific pipe conduit.
 
         Args:
-            hdf_path (Path): Path to the HDF file.
-            conduit_id (int): ID of the conduit to extract profile for.
+            hdf_path (Union[str, Path, int, h5py.File]): HDF path, open file, or plan number.
+            conduit_id (int): Stored conduit ID (global Geometry/Pipe Conduits row, not network position).
 
         Returns:
             pd.DataFrame: DataFrame containing the pipe profile data.
@@ -706,6 +672,10 @@ class HdfPipe:
         Raises:
             KeyError: If the required datasets are not found in the HDF file.
             IndexError: If the specified conduit_id is out of range.
+            ValueError: If the terrain profile slice is out of bounds.
+
+        Example:
+            >>> profile = HdfPipe.get_pipe_profile("model.p02.hdf", 0)
         """
         profile_info_path = "/Geometry/Pipe Conduits/Terrain Profiles Info"
         profile_values_path = "/Geometry/Pipe Conduits/Terrain Profiles Values"
@@ -729,7 +699,9 @@ class HdfPipe:
                     f"{len(terrain_profiles_info)} pipe terrain profiles."
                 )
 
-            start, count = terrain_profiles_info[conduit_id]
+            start, count = map(int, terrain_profiles_info[conduit_id])
+            if start < 0 or count < 0 or start + count > len(hdf[profile_values_path]):
+                raise ValueError("Pipe terrain profile slice is out of bounds")
             profile_values = hdf[profile_values_path][start:start+count]
 
             return pd.DataFrame(profile_values, columns=['Station', 'Elevation'])
@@ -750,55 +722,100 @@ class HdfPipe:
     @staticmethod
     @log_call
     @standardize_input(file_type='plan_hdf')
-    def get_pipe_network_summary(hdf_path: Path) -> pd.DataFrame:
-        """
-        Extract results summary data for pipe networks from the HDF file.
+    def get_pipe_network_summary(hdf_path: Union[str, Path, int, h5py.File], pipe_network_name: Optional[str] = None) -> pd.DataFrame:
+        """Read literal Base summary rows and pipe-network volume-accounting attributes.
+
+        Select the first geometry network when pipe_network_name is omitted.
+        Return long-form columns network, source, path, row, location, row_variable,
+        units, value. Each stored summary row is retained; a one-row minimum never
+        receives an invented time row. Labels/units are literal source metadata,
+        even where the file's labels appear inconsistent. Summary datasets without
+        Location do not claim a node/conduit domain or stored-ID mapping.
+        Volume-accounting attributes use null row/location/units: the group's
+        'Vol Accounting in' attribute (itself returned as a row) names the volume
+        unit and is not applied per attribute (e.g. 'Error Percent' is a
+        percentage). DataFrame.attrs retains
+        source shapes and complete dataset/group attributes. Missing both sources
+        raises KeyError; malformed present datasets raise ValueError. A legacy
+        Summary/Pipe Network table without geometry identities retains its original
+        DataFrame shape when no network name is requested.
 
         Args:
-            hdf_path (Path): Path to the HDF file.
+            hdf_path: HDF path (str or Path), open h5py.File, or plan number.
+            pipe_network_name: Network name; defaults to the first geometry network.
 
         Returns:
-            pd.DataFrame: DataFrame containing pipe network summary data.
+            pd.DataFrame: Literal summary rows and volume-accounting attributes.
 
         Raises:
-            KeyError: If the required datasets are not found in the HDF file.
+            KeyError: If the network or both summary sources are missing.
+            ValueError: If a stored summary or volume attribute is malformed.
+
+        Example:
+            >>> summary = HdfPipe.get_pipe_network_summary("model.p02.hdf")
         """
+        records, metadata = [], {}
         with h5py.File(hdf_path, 'r') as hdf:
-            summary_path = "/Results/Unsteady/Summary/Pipe Network"
-            if summary_path not in hdf:
-                raise KeyError(_missing_hdf_object_message(
-                    "Pipe network summary extraction",
-                    summary_path,
-                    "Compute an unsteady plan with pipe-network summary output available, then retry.",
-                ))
-
-            summary_data = hdf[summary_path][()]
-            df = pd.DataFrame(summary_data)
-
-            # Convert column names
-            df.columns = [
-                col.decode('utf-8') if isinstance(col, bytes) else str(col)
-                for col in df.columns
-            ]
-
-            return df
-
-
+            legacy = "Results/Unsteady/Summary/Pipe Network"
+            if "Geometry/Pipe Networks/Attributes" not in hdf:
+                if legacy in hdf and pipe_network_name is None:
+                    # Retain the historical table contract when that dataset exists.
+                    return pd.DataFrame(hdf[legacy][()])
+                raise KeyError("No pipe-network summary output with geometry network identities")
+            name = _network_name(hdf, pipe_network_name)
+            base = f"Results/Unsteady/Output/Output Blocks/Base Output/Summary Output/Pipe Networks/{name}"
+            volume = f"Results/Unsteady/Summary/Volume Accounting/Volume Accounting Pipe Networks/{name}"
+            if base not in hdf and volume not in hdf:
+                raise KeyError(f"No pipe-network summary or volume accounting for {name!r}")
+            if base in hdf:
+                for variable in _list_hdf_datasets(hdf[base]):
+                    ds = hdf[f"{base}/{variable}"]
+                    if ds.ndim != 2 or ds.shape[0] not in (1, 2) or ds.dtype.kind not in 'iuf':
+                        raise ValueError(f"{ds.name}: unqualified pipe summary shape/type {ds.shape}")
+                    attrs = dict(ds.attrs);metadata[ds.name] = dict(shape=ds.shape, attributes=attrs)
+                    labels = np.asarray(attrs.get('Rows Variables', [])).reshape(-1)
+                    units = np.asarray(attrs.get('Units', [])).reshape(-1)
+                    values = ds[()]
+                    for row in range(ds.shape[0]):
+                        for col, value in enumerate(values[row]):
+                            records.append(dict(network=name, source='summary', path=ds.name,
+                                row=row, location=col, row_variable=_text(labels[row]) if row < len(labels) else None,
+                                units=_text(units[row]) if row < len(units) else None, value=value))
+            if volume in hdf:
+                attrs = dict(hdf[volume].attrs);metadata[hdf[volume].name] = dict(attributes=attrs)
+                for key, value in attrs.items():
+                    if np.asarray(value).ndim != 0:
+                        raise ValueError(f"{volume}: non-scalar volume attribute {key!r}")
+                    records.append(dict(network=name, source='volume_accounting', path=hdf[volume].name,
+                        row=None, location=None, row_variable=key, units=None,
+                        value=_text(value) if isinstance(value, bytes) else value))
+        df = pd.DataFrame(records, columns=['network', 'source', 'path', 'row', 'location', 'row_variable', 'units', 'value'])
+        df.attrs['source_metadata'] = metadata
+        df.attrs['pipe_network'] = name
+        return df
 
 
     @staticmethod
     @log_call
     @standardize_input(file_type='plan_hdf')
-    def extract_timeseries_for_node(plan_hdf_path: Path, node_id: int) -> Dict[str, xr.DataArray]:
+    def extract_timeseries_for_node(plan_hdf_path: Union[str, Path, int, h5py.File], node_id: int, pipe_network_name: Optional[str] = None,
+                                    output_block: str = "DSS Hydrograph Output", *,
+                                    ras_object=None) -> Dict[str, xr.DataArray]:
         """
         Extract time series data for a specific node.
         
         Parameters:
         -----------
-        plan_hdf_path : Path
-            Path to HEC-RAS results HDF file
+        plan_hdf_path : str, Path, int or h5py.File
+            Results HDF path, open file, or plan number resolved against ras_object.
         node_id : int
-            ID of the node to extract data for
+            Stored node ID from Node Indices, not a network column position.
+        pipe_network_name : Optional[str]
+            Network name (default: first geometry network).
+        output_block : str
+            Base Output or DSS Hydrograph Output (default).
+        ras_object : RasPrj, optional
+            Project used to resolve plan numbers; defaults to the global project.
             
         Returns:
         --------
@@ -806,14 +823,22 @@ class HdfPipe:
             - Depth
             - Drop Inlet Flow
             - Water Surface
+
+        Raises:
+            KeyError: If the stored node ID, network, or variable is missing.
+            ValueError: If the output block, domain, or timestamps are invalid.
+
+        Example:
+            >>> series = HdfPipe.extract_timeseries_for_node("model.p02.hdf", 121)
         """
         node_variables = ["Nodes/Depth", "Nodes/Drop Inlet Flow", "Nodes/Water Surface"]
         node_data = {}
 
         for variable in node_variables:
-            data = HdfPipe.get_pipe_network_timeseries(plan_hdf_path, variable=variable)
+            data = HdfPipe.get_pipe_network_timeseries(plan_hdf_path, variable=variable,
+                pipe_network_name=pipe_network_name, output_block=output_block, ras_object=ras_object)
             try:
-                node_data[variable] = data.sel(location=node_id)
+                node_data[variable] = data.swap_dims({"location": "node_id"}).sel(node_id=node_id)
             except KeyError as exc:
                 raise KeyError(
                     f"Pipe node id {node_id} was not found in timeseries variable '{variable}'."
@@ -824,31 +849,47 @@ class HdfPipe:
     @staticmethod
     @log_call
     @standardize_input(file_type='plan_hdf')
-    def extract_timeseries_for_conduit(plan_hdf_path: Path, conduit_id: int) -> Dict[str, xr.DataArray]:
+    def extract_timeseries_for_conduit(plan_hdf_path: Union[str, Path, int, h5py.File], conduit_id: int, pipe_network_name: Optional[str] = None,
+                                    output_block: str = "DSS Hydrograph Output", *,
+                                    ras_object=None) -> Dict[str, xr.DataArray]:
         """
         Extract time series data for a specific conduit.
         
         Parameters:
         -----------
-        plan_hdf_path : Path
-            Path to HEC-RAS results HDF file
+        plan_hdf_path : str, Path, int or h5py.File
+            Results HDF path, open file, or plan number resolved against ras_object.
         conduit_id : int
-            ID of the conduit to extract data for
+            Stored conduit ID from Conduit Indices, not a network column position.
+        pipe_network_name : Optional[str]
+            Network name (default: first geometry network).
+        output_block : str
+            Base Output or DSS Hydrograph Output (default).
+        ras_object : RasPrj, optional
+            Project used to resolve plan numbers; defaults to the global project.
             
         Returns:
         --------
         Dict[str, xr.DataArray]: Dictionary containing time series data for:
             - Pipe Flow (US/DS)
             - Velocity (US/DS)
+
+        Raises:
+            KeyError: If the stored conduit ID, network, or variable is missing.
+            ValueError: If the output block, domain, or timestamps are invalid.
+
+        Example:
+            >>> series = HdfPipe.extract_timeseries_for_conduit("model.p02.hdf", 85)
         """
         conduit_variables = ["Pipes/Pipe Flow DS", "Pipes/Pipe Flow US",
                             "Pipes/Vel DS", "Pipes/Vel US"]
         conduit_data = {}
 
         for variable in conduit_variables:
-            data = HdfPipe.get_pipe_network_timeseries(plan_hdf_path, variable=variable)
+            data = HdfPipe.get_pipe_network_timeseries(plan_hdf_path, variable=variable,
+                pipe_network_name=pipe_network_name, output_block=output_block, ras_object=ras_object)
             try:
-                conduit_data[variable] = data.sel(location=conduit_id)
+                conduit_data[variable] = data.swap_dims({"location": "conduit_id"}).sel(conduit_id=conduit_id)
             except KeyError as exc:
                 raise KeyError(
                     f"Pipe conduit id {conduit_id} was not found in timeseries variable '{variable}'."
@@ -861,26 +902,39 @@ class HdfPipe:
     @log_call
     @standardize_input(file_type='plan_hdf')
     def get_pipe_network_timeseries(
-        hdf_path: Path,
+        hdf_path: Union[str, Path, int, h5py.File],
         variable: str,
         pipe_network_name: Optional[str] = None,
+        output_block: str = "DSS Hydrograph Output",
     ) -> xr.DataArray:
         """
         Extracts timeseries data for a pipe network variable.
 
         Parameters:
-            hdf_path: Path to the HDF5 file
+            hdf_path: HDF path (str or Path), open h5py.File, or plan number
             variable: Variable name to extract. Valid options:
                 - Cell: Courant, Water Surface
                 - Face: Flow, Velocity, Water Surface
                 - Pipes: Pipe Flow (DS/US), Vel (DS/US)
                 - Nodes: Depth, Drop Inlet Flow, Water Surface
-            pipe_network_name: Pipe network to read. When omitted, the sole
-                available network is selected automatically. Projects with
-                multiple networks must specify the desired name.
+            pipe_network_name: Pipe network to read. When omitted, the first
+                Geometry/Pipe Networks/Attributes entry is selected.
+            output_block: Base Output or DSS Hydrograph Output. DSS remains the
+                default for compatibility. Timestamps come only from that block;
+                absent or mismatched timestamps raise ValueError.
+                location remains positional; node_id/conduit_id are stored IDs.
+                attrs records domain, stored_location, network and output_block.
 
         Returns:
-            xarray.DataArray with dimensions (time, location)
+            xarray.DataArray with dimensions (time, location).
+
+        Raises:
+            KeyError: If the network geometry or requested results are missing.
+            ValueError: If the variable, output block, domain, or timestamps are invalid.
+
+        Example:
+            >>> depth = HdfPipe.get_pipe_network_timeseries(
+            ...     "model.p02.hdf", "Nodes/Depth", output_block="Base Output")
         """
         valid_variables = [
             "Cell Courant", "Cell Water Surface", "Face Flow", "Face Velocity",
@@ -892,97 +946,38 @@ class HdfPipe:
         if variable not in valid_variables:
             raise ValueError(f"Invalid variable. Must be one of: {', '.join(valid_variables)}")
 
+        if output_block not in ("Base Output", "DSS Hydrograph Output"):
+            raise ValueError("output_block must be 'Base Output' or 'DSS Hydrograph Output'")
         with h5py.File(hdf_path, 'r') as hdf:
-            pipe_networks_path = (
-                "/Results/Unsteady/Output/Output Blocks/DSS Hydrograph Output/"
-                "Unsteady Time Series/Pipe Networks"
-            )
-            available_networks = (
-                sorted(str(name) for name in hdf[pipe_networks_path].keys())
-                if pipe_networks_path in hdf
-                else []
-            )
-            if pipe_network_name is None:
-                if len(available_networks) == 1:
-                    network_name = available_networks[0]
-                elif not available_networks:
-                    raise KeyError(
-                        "No pipe-network timeseries groups were found. "
-                        f"{_PIPE_RESULTS_ACTION}"
-                    )
-                else:
-                    raise ValueError(
-                        "Multiple pipe networks are available; pass pipe_network_name. "
-                        f"Available networks: {_format_available_items(available_networks)}"
-                    )
-            else:
-                network_name = str(pipe_network_name)
-                if network_name not in available_networks:
-                    raise ValueError(
-                        f"Pipe network '{network_name}' was not found. Available networks: "
-                        f"{_format_available_items(available_networks)}"
-                    )
-            network_path = f"{pipe_networks_path}/{network_name}"
-            data_path = f"{network_path}/{variable}"
-
-            if data_path not in hdf:
-                if network_path in hdf:
-                    available = _list_hdf_datasets(hdf[network_path])
-                    available_detail = (
-                        f" Available variables for pipe network '{network_name}': "
-                        f"{_format_available_items(available)}."
-                    )
-                elif pipe_networks_path in hdf:
-                    available_networks = sorted(hdf[pipe_networks_path].keys())
-                    available_detail = (
-                        f" Available pipe networks: {_format_available_items(available_networks)}."
-                    )
-                else:
-                    available_detail = " No pipe-network timeseries group was found in the HDF file."
-
-                raise KeyError(
-                    f"Pipe network timeseries variable '{variable}' was not found "
-                    f"under pipe network '{network_name}'.{available_detail} "
-                    f"{_PIPE_RESULTS_ACTION}"
-                )
-
-            data = hdf[data_path][()]
-
-            # Extract time information - try DSS-specific timestamps first
-            dss_time_path = "/Results/Unsteady/Output/Output Blocks/DSS Hydrograph Output/Unsteady Time Series/Time Date Stamp (ms)"
-
-            if dss_time_path in hdf:
-                # Use DSS Hydrograph Output timestamps
-                raw_datetimes = hdf[dss_time_path][:]
-                time = [HdfUtils.parse_ras_datetime_ms(x.decode("utf-8")) for x in raw_datetimes]
-            else:
-                # Fallback to Base Output timestamps
-                time = HdfBase.get_unsteady_timestamps(hdf)
-
-            # Verify time dimension matches data, use index if mismatch
-            if len(time) != data.shape[0]:
-                logger.warning(
-                    "Pipe timeseries timestamp mismatch: timestamps=%d rows=%d; using numeric time index",
-                    len(time),
-                    data.shape[0],
-                )
-                time = list(range(data.shape[0]))
-
-            # Create DataArray
-            da = xr.DataArray(
-                data=data,
-                dims=['time', 'location'],
-                coords={'time': time, 'location': range(data.shape[1])},
-                name=variable
-            )
-
-            # Add attributes
-            units = hdf[data_path].attrs.get('Units', b'')
-            da.attrs['units'] = units.decode('utf-8') if isinstance(units, bytes) else str(units)
-            da.attrs['variable'] = variable
-
+            if "Geometry/Pipe Networks/Attributes" not in hdf:
+                root = f"Results/Unsteady/Output/Output Blocks/{output_block}/Unsteady Time Series/Pipe Networks"
+                available = _list_hdf_datasets(hdf[root]) if root in hdf else []
+                raise KeyError(f"Cannot qualify pipe variable '{variable}': geometry network Attributes absent. "
+                    f"Available result datasets: {_format_available_items(available)}. {_PIPE_RESULTS_ACTION}")
+            network_name = _network_name(hdf, pipe_network_name)
+            base = f"Results/Unsteady/Output/Output Blocks/{output_block}/Unsteady Time Series"
+            path = f"{base}/Pipe Networks/{network_name}/{variable}"
+            if path not in hdf:
+                raise KeyError(f"Pipe timeseries dataset '{path}' not found. {_PIPE_RESULTS_ACTION}")
+            dataset = hdf[path]
+            domain, location, coord, ids = _domain(hdf, dataset, network_name)
+            time = None
+            for stamp, parse in [("Time Date Stamp (ms)", HdfUtils.parse_ras_datetime_ms),
+                                 ("Time Date Stamp", HdfUtils.parse_ras_datetime)]:
+                if f"{base}/{stamp}" in hdf:
+                    ds = hdf[f"{base}/{stamp}"]
+                    if ds.shape != (dataset.shape[0],):
+                        raise ValueError(f"{path}: {output_block} timestamp count/shape mismatch")
+                    time = [parse(_text(x)) for x in ds[()]]
+                    break
+            if time is None:
+                raise ValueError(f"{path}: no timestamps in selected output block")
+            if f"{base}/Time" in hdf and hdf[f"{base}/Time"].shape != (dataset.shape[0],):
+                raise ValueError(f"{path}: selected block Time row mismatch")
+            coords = {'time': time, 'location': np.arange(dataset.shape[1])}
+            if coord:
+                coords[coord] = ('location', ids)
+            da = xr.DataArray(dataset[()], dims=['time', 'location'], coords=coords, name=variable)
+            da.attrs.update(units=_text(dataset.attrs.get('Units', b'')), variable=variable,
+                domain=domain, stored_location=location, pipe_network=network_name, output_block=output_block)
             return da
-
-
-
-
