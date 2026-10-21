@@ -81,6 +81,8 @@ research/**/__pycache__/
 !/feature_dev_notes/structured_execution_evidence/*.md
 !/feature_dev_notes/Mesh_Grid_Anchor/
 !/feature_dev_notes/Mesh_Grid_Anchor/**
+!/feature_dev_notes/rust_hdf_acceleration/
+!/feature_dev_notes/rust_hdf_acceleration/*.md
 /research
 !/research/
 !/research/fixtures/
