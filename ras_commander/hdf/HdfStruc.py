@@ -26,6 +26,7 @@ import pandas as pd
 from geopandas import GeoDataFrame
 from shapely.geometry import (
     LineString,
+    MultiLineString,
     Polygon,
 )
 
@@ -33,6 +34,7 @@ from ..Decorators import log_call, standardize_input
 from ..LoggingConfig import get_logger
 from .HdfBase import HdfBase
 from .HdfUtils import HdfUtils
+from ._packed_parts import resolve_feature_part_ranges
 
 logger = get_logger(__name__)
 
@@ -365,7 +367,10 @@ class HdfStruc:
         GeoDataFrame
             Structure data with columns:
             - Structure ID: unique identifier
-            - Geometry: LineString of structure centerline
+            - Geometry: LineString of structure centerline, or a
+              MultiLineString when the stored Centerline Info Part Count
+              is greater than 1 (one line per stored part, no connecting
+              segment between parts)
             - Various attribute columns from the HDF file
             - Profile_Data: list of station/elevation dictionaries
             - Bridge coefficient attributes (if present)
@@ -375,6 +380,10 @@ class HdfStruc:
         -----
         - Group-level attributes are stored in GeoDataFrame.attrs['group_attributes']
         - Invalid centerline geometry raises an exception
+        - Centerline Parts offsets are relative to each structure's point
+          slice; legacy global offsets are accepted only when all parts
+          together cover that slice exactly. Single-part centerlines are
+          unchanged LineStrings.
         - All byte strings are decoded to UTF-8
         - CRS is preserved from the source file
         """
@@ -480,8 +489,14 @@ class HdfStruc:
                 # Get centerline geometry
                 centerline_info = hdf["Geometry/Structures/Centerline Info"][()]
                 centerline_points = hdf["Geometry/Structures/Centerline Points"][()]
-                
-                # Create LineString geometries for each structure
+                centerline_parts = (
+                    hdf["Geometry/Structures/Centerline Parts"][()]
+                    if "Centerline Parts" in structure_group
+                    else None
+                )
+
+                # Create LineString geometries for each structure; a stored
+                # Part Count > 1 yields a MultiLineString of its parts.
                 geoms = []
                 for i in range(len(centerline_info)):
                     start_idx = centerline_info[i][0]  # Point Starting Index
@@ -491,7 +506,36 @@ class HdfStruc:
                     )
                     if start_idx < 0 or point_count < 2 or len(points) != point_count:
                         raise ValueError(f"Invalid centerline point range for structure {i}")
-                    geoms.append(LineString(points))
+                    part_start, part_count = (
+                        (int(centerline_info[i][2]), int(centerline_info[i][3]))
+                        if len(centerline_info[i]) > 3
+                        else (0, 1)
+                    )
+                    if part_count <= 1:
+                        geoms.append(LineString(points))
+                        continue
+                    if centerline_parts is None:
+                        raise ValueError(
+                            f"Multipart centerline for structure {i} is missing Centerline Parts"
+                        )
+                    parts = centerline_parts[part_start:part_start + part_count]
+                    if part_start < 0 or len(parts) != part_count:
+                        raise ValueError(f"Invalid centerline parts for structure {i}")
+                    # Parts are feature-local; a legacy global layout is
+                    # accepted only when the whole feature reconciles.
+                    try:
+                        part_ranges = resolve_feature_part_ranges(
+                            parts, int(start_idx), int(point_count)
+                        )
+                    except ValueError as exc:
+                        raise ValueError(
+                            f"Invalid centerline parts for structure {i}: {exc}"
+                        ) from exc
+                    if any(count < 2 for _, count in part_ranges):
+                        raise ValueError(f"Invalid centerline parts for structure {i}")
+                    geoms.append(MultiLineString(
+                        [points[offset:offset + count] for offset, count in part_ranges]
+                    ))
 
                 # Create base GeoDataFrame with Structures Attributes and geometries
                 struct_gdf = GeoDataFrame(

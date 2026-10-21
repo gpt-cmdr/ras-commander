@@ -38,6 +38,7 @@ from ..Decorators import log_call, standardize_input
 from ..LoggingConfig import get_logger
 from .HdfBase import HdfBase
 from .HdfUtils import HdfUtils
+from ._packed_parts import resolve_feature_part_ranges
 
 logger = get_logger(__name__)
 
@@ -938,6 +939,13 @@ class HdfBndry:
         gpd.GeoDataFrame
             A GeoDataFrame containing the refinement regions. Missing layers
             return an empty frame; malformed present layers raise an exception.
+
+        Notes
+        -----
+        Multipart ``Polygon Parts`` offsets are relative to each feature's
+        point slice, as HEC-RAS writes them. Legacy global offsets are
+        accepted only when all of the feature's parts together cover its
+        point slice exactly; otherwise out-of-range parts raise.
         """
         refinement_regions_path = "/Geometry/2D Flow Area Refinement Regions"
         try:
@@ -968,17 +976,20 @@ class HdfBndry:
                         if polygon_parts is None:
                             raise ValueError("Multipart refinement region is missing Polygon Parts")
                         parts = polygon_parts[part_start : part_start + part_cnt]
-                        global_offsets = bool(
-                            len(parts) and np.all(parts[:, 0] >= pnt_start)
-                            and np.all(parts[:, 0] + parts[:, 1] <= pnt_start + pnt_cnt)
-                        )
+                        if part_start < 0 or len(parts) != part_cnt:
+                            raise ValueError("Invalid refinement region polygon part")
+                        # Parts are feature-local; a legacy global layout is
+                        # accepted only when the whole feature reconciles.
+                        try:
+                            part_ranges = resolve_feature_part_ranges(
+                                parts, int(pnt_start), int(pnt_cnt)
+                            )
+                        except ValueError as exc:
+                            raise ValueError(
+                                f"Invalid refinement region polygon part: {exc}"
+                            ) from exc
                         polygons = []
-                        for part_pnt_start, part_pnt_cnt in parts:
-                            # Native collections may index globally or relative
-                            # to this feature's point slice.
-                            offset = int(part_pnt_start)
-                            if global_offsets:
-                                offset -= int(pnt_start)
+                        for offset, part_pnt_cnt in part_ranges:
                             ring = points[offset : offset + part_pnt_cnt]
                             if len(ring) != part_pnt_cnt or len(ring) < 3:
                                 raise ValueError("Invalid refinement region polygon part")
