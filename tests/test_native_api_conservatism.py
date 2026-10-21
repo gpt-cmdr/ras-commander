@@ -517,3 +517,142 @@ def test_auto_temporal_reduce_ignores_a_malformed_native_result(tmp_path, monkey
         assert fast_results.native_temporal_reduce(dataset) is None
         with pytest.raises(fast_results.FastHdfError):
             fast_results.native_temporal_reduce(dataset, backend="rust")
+
+
+# ---------------------------------------------------------------------------
+# 3. No HDF stays open after a public call (Windows locks / network shares)
+# ---------------------------------------------------------------------------
+
+@pytest.fixture
+def session_spy(monkeypatch, native_module):
+    """Count native session opens while leaving the real implementation in place."""
+    import contextlib
+    from ras_commander import fast_hdf
+    fast_hdf.close_sessions()
+    opened = []
+    real = fast_hdf._session
+
+    @contextlib.contextmanager
+    def spy(module, path, threads=None):
+        before = set(fast_hdf._sessions)
+        with real(module, path, threads) as session:
+            if set(fast_hdf._sessions) - before:
+                opened.append(str(path))
+            yield session
+
+    monkeypatch.setattr(fast_hdf, "_session", spy)
+    monkeypatch.delenv("RAS_COMMANDER_FAST_HDF", raising=False)
+    monkeypatch.delenv("RAS_COMMANDER_HDF_SESSION_CACHE", raising=False)
+    yield opened
+    fast_hdf.close_sessions()
+
+
+PUBLIC_READS = {
+    "cell_polygons": lambda p: HdfMesh.get_mesh_cell_polygons(p),
+    "max_ws": lambda p: HdfResultsMesh.get_mesh_max_ws(p),
+    "cells_timeseries": lambda p: HdfResultsMesh.get_mesh_cells_timeseries(p),
+    "max_face_v": lambda p: HdfResultsMesh.get_mesh_max_face_v(p),
+}
+
+
+def _project_with(tmp_path, writer, name):
+    folder = tmp_path / "project"
+    folder.mkdir()
+    return writer(folder / name)
+
+
+@pytest.mark.parametrize("call", sorted(PUBLIC_READS))
+def test_public_read_leaves_no_native_session_open(tmp_path, session_spy, call):
+    from ras_commander import fast_hdf
+    path = _write_mesh_results_hdf(tmp_path / "results.p01.hdf")
+    _write_polygon_mesh_into(path)
+    PUBLIC_READS[call](path)
+    assert not fast_hdf._sessions
+
+
+def _write_polygon_mesh_into(path):
+    """Add polygon topology to a results file so one file serves every read."""
+    other = _write_polygon_mesh(path.with_name("poly-source.hdf"), CLEAN_CELLS)
+    with h5py.File(other, "r") as src, h5py.File(path, "a") as dst:
+        for group in ("Faces FacePoint Indexes", "FacePoints Coordinate", "Faces Perimeter Info",
+                      "Faces Perimeter Values", "Cells Face and Orientation Info",
+                      "Cells Face and Orientation Values"):
+            source = f"Geometry/2D Flow Areas/Poly Mesh/{group}"
+            target = f"Geometry/2D Flow Areas/{MESH_NAME}/{group}"
+            if target in dst:
+                del dst[target]
+            dst.create_dataset(target, data=src[source][()])
+        dst.attrs["Projection"] = CRS.from_epsg(26915).to_wkt()
+
+
+def test_project_folder_can_be_renamed_deleted_and_re_extracted_after_reads(tmp_path, session_spy):
+    import shutil
+    path = _project_with(tmp_path, _write_mesh_results_hdf, "model.p01.hdf")
+    folder = path.parent
+    for call in PUBLIC_READS.values():
+        try:
+            call(path)
+        except Exception:  # noqa: BLE001 - the synthetic file need not satisfy every reader
+            pass
+    assert session_spy, "no native session was opened; the test would prove nothing"
+    renamed = tmp_path / "renamed"
+    os.rename(folder, renamed)          # fails on Windows while a handle is open
+    os.rename(renamed, folder)
+    os.remove(path)                      # fails on network shares while a handle is open
+    _write_mesh_results_hdf(path)       # same name again
+    shutil.rmtree(folder)               # RasExamples.extract_project does exactly this
+    assert not folder.exists()
+
+
+def test_one_session_serves_every_read_of_a_public_call(tmp_path, session_spy):
+    path = _write_mesh_results_hdf(tmp_path / "results.p01.hdf")
+    HdfResultsMesh.get_mesh_cells_timeseries(path)
+    assert len(session_spy) == 1
+
+
+def test_session_is_released_when_a_public_call_raises(tmp_path, session_spy, monkeypatch):
+    from ras_commander import fast_hdf
+    path = _write_mesh_results_hdf(tmp_path / "results.p01.hdf")
+    real = HdfResultsMesh._mesh_series_id_dim
+
+    def read_then_fail(*args, **kwargs):
+        fast_hdf.read_dataset(args[2])           # open a session inside the public call
+        assert fast_hdf._sessions
+        raise RuntimeError("late failure")
+
+    monkeypatch.setattr(HdfResultsMesh, "_mesh_series_id_dim", staticmethod(read_then_fail))
+    with pytest.raises(Exception):
+        HdfResultsMesh.get_mesh_cells_timeseries(path, mesh_names=MESH_NAME, var="Water Surface", truncate=False)
+    assert not fast_hdf._sessions
+    monkeypatch.setattr(HdfResultsMesh, "_mesh_series_id_dim", real)
+
+
+def test_direct_low_level_reads_keep_their_documented_cache(tmp_path, session_spy):
+    from ras_commander import fast_hdf
+    path = _write_mesh_results_hdf(tmp_path / "results.p01.hdf")
+    name = f"{BASE_TS_PATH}/2D Flow Areas/{MESH_NAME}/Water Surface"
+    with h5py.File(path, "r") as hdf:
+        fast_hdf.read_dataset(hdf[name])
+        assert len(fast_hdf._sessions) == 1
+    fast_hdf.close_sessions(path)
+    assert not fast_hdf._sessions
+
+
+def test_persist_setting_keeps_sessions_across_public_calls(tmp_path, session_spy, monkeypatch):
+    from ras_commander import fast_hdf
+    monkeypatch.setenv("RAS_COMMANDER_HDF_SESSION_CACHE", "persist")
+    path = _write_mesh_results_hdf(tmp_path / "results.p01.hdf")
+    HdfResultsMesh.get_mesh_max_ws(path)
+    assert len(fast_hdf._sessions) == 1
+    HdfResultsMesh.get_mesh_max_ws(path)
+    assert len(session_spy) == 1
+    fast_hdf.close_sessions()
+    assert not fast_hdf._sessions
+
+
+def test_cache_off_opens_per_read_and_holds_nothing(tmp_path, session_spy, monkeypatch):
+    from ras_commander import fast_hdf
+    monkeypatch.setenv("RAS_COMMANDER_HDF_SESSION_CACHE", "0")
+    path = _write_mesh_results_hdf(tmp_path / "results.p01.hdf")
+    HdfResultsMesh.get_mesh_max_ws(path)
+    assert not fast_hdf._sessions
