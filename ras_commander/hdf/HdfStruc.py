@@ -33,7 +33,7 @@ from ..Decorators import log_call, standardize_input
 from ..LoggingConfig import get_logger
 from .HdfBase import HdfBase
 from .HdfUtils import HdfUtils
-from ..fast_hdf import read_typed, reraise_required
+from ..fast_hdf import read_attrs, read_typed, reraise_required
 
 logger = get_logger(__name__)
 
@@ -876,20 +876,20 @@ class HdfStruc:
                         info['has_breach'] = True
 
                         # Extract breach metadata from attributes
-                        breach_dataset = hdf_file[breach_var_path]
-                        if 'Breach at' in breach_dataset.attrs:
-                            breach_at = breach_dataset.attrs['Breach at']
+                        breach_dataset = read_attrs(hdf_file[breach_var_path])
+                        if 'Breach at' in breach_dataset:
+                            breach_at = breach_dataset['Breach at']
                             info['breach_at_date'] = breach_at.decode('utf-8') if isinstance(breach_at, bytes) else breach_at
                         else:
                             info['breach_at_date'] = None
 
-                        if 'Breach at Time (Days)' in breach_dataset.attrs:
-                            info['breach_at_time'] = float(breach_dataset.attrs['Breach at Time (Days)'])
+                        if 'Breach at Time (Days)' in breach_dataset:
+                            info['breach_at_time'] = float(breach_dataset['Breach at Time (Days)'])
                         else:
                             info['breach_at_time'] = None
 
-                        if 'Centerline Breach' in breach_dataset.attrs:
-                            info['centerline_breach'] = float(breach_dataset.attrs['Centerline Breach'])
+                        if 'Centerline Breach' in breach_dataset:
+                            info['centerline_breach'] = float(breach_dataset['Centerline Breach'])
                         else:
                             info['centerline_breach'] = None
                     else:
