@@ -679,11 +679,70 @@ def _read_unsteady_direct(
                 mesh_name=mesh_name,
                 variable_name=variable_name,
             )
+            if variable_name in {"Velocity X", "Velocity Y"}:
+                stored_path = _UNSTEADY_2D_PATH.format(
+                    mesh_name=mesh_name,
+                    variable_name=f"Cell Velocity - {variable_name}",
+                )
+                if stored_path in hdf_file:
+                    dataset_path = stored_path
+                    dataset = hdf_file[dataset_path]
+                    location = np.asarray(dataset.attrs.get("Location", ""))
+                    if location.shape not in ((), (1,)):
+                        raise ValueError(f"Invalid Location for {dataset_path}")
+                    location = location.reshape(-1)[0]
+                    if isinstance(location, bytes):
+                        location = location.decode("utf-8")
+                    if location not in {"Cells", "Cell"}:
+                        raise ValueError(f"Expected cell Location for {dataset_path}")
+                    centers = hdf_file.get(
+                        f"Geometry/2D Flow Areas/{mesh_name}/Cells Center Coordinate"
+                    )
+                    time = hdf_file.get(
+                        "Results/Unsteady/Output/Output Blocks/Base Output/"
+                        "Unsteady Time Series/Time"
+                    )
+                    physical = cache["mesh_slices"][mesh_name]
+                    if (dataset.ndim != 2 or centers is None or time is None
+                            or dataset.shape != (len(time), len(centers))
+                            or not 0 < physical.stop - physical.start <= len(centers)):
+                        raise ValueError(f"Invalid time/cell axes for {dataset_path}")
+                    units = np.asarray(dataset.attrs.get("Units", ""))
+                    if units.shape not in ((), (1,)):
+                        raise ValueError(f"Invalid velocity units for {dataset_path}")
+                    units = units.reshape(-1)[0]
+                    if isinstance(units, bytes):
+                        units = units.decode("utf-8")
+                    if units not in {"ft/s", "m/s"}:
+                        raise ValueError(f"Unqualified velocity units for {dataset_path}: {units}")
+                    other_component = "Velocity Y" if variable_name == "Velocity X" else "Velocity X"
+                    other_path = _UNSTEADY_2D_PATH.format(
+                        mesh_name=mesh_name, variable_name=f"Cell Velocity - {other_component}",
+                    )
+                    if other_path in hdf_file:
+                        other_units = HdfResultsMesh._decode_hdf_attr(
+                            hdf_file[other_path].attrs.get("Units", "")
+                        )
+                        if other_units != units:
+                            raise ValueError(f"Cell velocity component units differ for mesh '{mesh_name}'")
+                    unit_metadata = HdfBase._result_unit_metadata_from_file(
+                        hdf_file, source_file=plan_hdf_path, strict=False,
+                    )
+                    if unit_metadata.get("contradictions"):
+                        raise ValueError(f"Contradictory result unit metadata for {dataset_path}")
+                    expected_units = unit_metadata.get("velocity_units")
+                    if expected_units is not None and units != expected_units:
+                        raise ValueError(f"Contradictory velocity units for {dataset_path}")
             if dataset_path not in hdf_file:
                 raise KeyError(
                     f"Dataset not found in plan HDF: {dataset_path}"
                 )
-            dataset_values = np.asarray(hdf_file[dataset_path][()], dtype=float)
+            dataset = hdf_file[dataset_path]
+            # Read only the requested row; a point query does not need all times.
+            dataset_values = np.asarray(
+                dataset[time_index, :] if dataset.ndim == 2 else dataset[()],
+                dtype=float,
+            )
             values.append(
                 _physical_mesh_values(
                     _select_time_slice(dataset_values, time_index),
@@ -899,6 +958,27 @@ def _get_unsteady_variable_values(
     directly in the plan HDF (e.g., Depth from WSE minus cell min elevation,
     Velocity magnitude from X/Y components).
     """
+    # Scope fallbacks to each mesh so a missing component in one area cannot
+    # discard the stored solver components from another area.
+    if variable_name in {"Velocity", "Velocity X", "Velocity Y"} and len(cache["mesh_order"]) > 1:
+        return np.concatenate([
+            _get_unsteady_variable_values(
+                plan_hdf_path, dict(cache, mesh_order=[mesh]), variable_name,
+                time_index, geom_hdf_path,
+            ) for mesh in cache["mesh_order"]
+        ])
+    if variable_name == "Velocity":
+        with h5py.File(plan_hdf_path, "r") as hdf_file:
+            stored_components = all(
+                _UNSTEADY_2D_PATH.format(
+                    mesh_name=mesh, variable_name=f"Cell Velocity - Velocity {axis}",
+                ) in hdf_file
+                for mesh in cache["mesh_order"] for axis in ("X", "Y")
+            )
+        if stored_components:
+            vx = _read_unsteady_direct(plan_hdf_path, cache, "Velocity X", time_index)
+            vy = _read_unsteady_direct(plan_hdf_path, cache, "Velocity Y", time_index)
+            return np.hypot(vx, vy)
     try:
         return _read_unsteady_direct(
             plan_hdf_path, cache, variable_name, time_index,
@@ -925,12 +1005,6 @@ def _get_unsteady_variable_values(
         return np.maximum(wse - cell_min_elev, 0.0)
 
     if variable_name in {"Velocity", "Velocity X", "Velocity Y"}:
-        if geom_hdf_path is None:
-            raise KeyError(
-                f"Variable '{variable_name}' not found in plan HDF and "
-                "geometry HDF path was not provided for face-velocity "
-                "fallback computation."
-            ) from direct_read_error
         try:
             logger.debug(
                 "Requested velocity result '%s' not found directly; "
@@ -949,6 +1023,11 @@ def _get_unsteady_variable_values(
                 return vy
             return np.sqrt(vx**2 + vy**2)
         except KeyError:
+            if geom_hdf_path is None:
+                raise KeyError(
+                    f"Variable '{variable_name}' not found in plan HDF and "
+                    "geometry HDF path was not provided for face-velocity fallback."
+                ) from direct_read_error
             logger.debug(
                 "Neither 'Velocity' nor 'Velocity X'/'Velocity Y' found "
                 "in plan HDF time series; reconstructing components from "
@@ -1695,6 +1774,12 @@ class HdfResultsQuery:
         """
         Query one arbitrary point against the nearest mesh cell or IDW.
 
+        At integer time indexes, unsteady velocity queries prefer stored
+        ``Cell Velocity - Velocity X/Y``
+        components with validated cell/time axes, Location and velocity units.
+        Speed is their magnitude. Legacy components and face reconstruction
+        remain fallbacks when stored cell components are absent.
+
         Returns:
             dict with keys: value, cell_id, mesh_name, distance, x, y
         """
@@ -1730,6 +1815,9 @@ class HdfResultsQuery:
     ) -> pd.DataFrame:
         """
         Query many points against the nearest mesh cells in one call.
+
+        At integer time indexes, unsteady velocities use the stored-component precedence and validation
+        documented by :meth:`query_point`, independently for each mesh.
 
         Accepted point formats:
         - list of (x, y) tuples
