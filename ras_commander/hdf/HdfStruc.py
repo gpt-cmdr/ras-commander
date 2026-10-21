@@ -26,6 +26,7 @@ import pandas as pd
 from geopandas import GeoDataFrame
 from shapely.geometry import (
     LineString,
+    MultiLineString,
     Polygon,
 )
 
@@ -33,6 +34,7 @@ from ..Decorators import log_call, standardize_input
 from ..LoggingConfig import get_logger
 from .HdfBase import HdfBase
 from .HdfUtils import HdfUtils
+from ._packed_parts import _nonnegative_index, resolve_feature_part_ranges
 
 logger = get_logger(__name__)
 
@@ -365,7 +367,11 @@ class HdfStruc:
         GeoDataFrame
             Structure data with columns:
             - Structure ID: unique identifier
-            - Geometry: LineString of structure centerline
+            - Geometry: LineString of structure centerline, or a
+              MultiLineString when the stored Centerline Info Part Count
+              is greater than 1 (one line per stored part, no connecting
+              segment between parts), or None when the structure stores
+              an empty (zero-point) centerline
             - Various attribute columns from the HDF file
             - Profile_Data: list of station/elevation dictionaries
             - Bridge coefficient attributes (if present)
@@ -374,7 +380,15 @@ class HdfStruc:
         Notes
         -----
         - Group-level attributes are stored in GeoDataFrame.attrs['group_attributes']
-        - Invalid centerline geometry raises an exception
+        - Invalid centerline geometry raises an exception. A zero-point
+          centerline (Centerline Info Point Count 0, as HEC-RAS stores for
+          some lateral structures) is a valid empty range and yields None
+          geometry, the missing-geometry convention of the other hdf
+          readers; its start index and Parts must still be in range.
+        - Centerline Parts offsets are relative to each structure's point
+          slice; legacy global offsets are accepted only when all parts
+          together cover that slice exactly. Single-part centerlines are
+          unchanged LineStrings.
         - All byte strings are decoded to UTF-8
         - CRS is preserved from the source file
         - Public Structure IDs remain one-based. Bridge coefficients are joined
@@ -483,18 +497,64 @@ class HdfStruc:
                 # Get centerline geometry
                 centerline_info = hdf["Geometry/Structures/Centerline Info"][()]
                 centerline_points = hdf["Geometry/Structures/Centerline Points"][()]
-                
-                # Create LineString geometries for each structure
+                centerline_parts = (
+                    hdf["Geometry/Structures/Centerline Parts"][()]
+                    if "Centerline Parts" in structure_group
+                    else None
+                )
+
+                # Create LineString geometries for each structure; a stored
+                # Part Count > 1 yields a MultiLineString of its parts.
                 geoms = []
                 for i in range(len(centerline_info)):
-                    start_idx = centerline_info[i][0]  # Point Starting Index
-                    point_count = centerline_info[i][1]  # Point Count
+                    try:
+                        start_idx = _nonnegative_index(centerline_info[i][0])
+                        point_count = _nonnegative_index(centerline_info[i][1])
+                    except ValueError as exc:
+                        raise ValueError(f"Invalid centerline point range for structure {i}: {exc}") from exc
+                    if start_idx > len(centerline_points) or point_count > len(centerline_points) - start_idx or point_count == 1:
+                        raise ValueError(f"Invalid centerline point range for structure {i}")
+                    try:
+                        part_start, part_count = (
+                            tuple(_nonnegative_index(value) for value in centerline_info[i][2:4])
+                            if len(centerline_info[i]) > 3
+                            else (0, 1)
+                        )
+                        part_ranges = None
+                        if centerline_parts is not None:
+                            if part_start > len(centerline_parts) or part_count > len(centerline_parts) - part_start:
+                                raise ValueError("Parts slice is out of bounds")
+                            parts = centerline_parts[part_start:part_start + part_count]
+                            part_ranges = resolve_feature_part_ranges(parts, start_idx, point_count)
+                        elif part_count > 1:
+                            raise ValueError("Multipart centerline is missing Centerline Parts")
+                        if point_count and part_count == 0:
+                            raise ValueError("Nonempty centerline has no parts")
+                        if point_count and part_ranges is not None and any(count < 2 for _, count in part_ranges):
+                            raise ValueError("Centerline part requires at least two points")
+                    except ValueError as exc:
+                        raise ValueError(f"Invalid centerline parts for structure {i}: {exc}") from exc
+                    if point_count == 0:
+                        # HEC-RAS stores structures without a drawn centerline
+                        # (e.g. some lateral structures) as an empty range,
+                        # Info [start, 0, k, 1] with Parts [[0, 0]]. Return
+                        # None geometry, as the other hdf readers do, but keep
+                        # rejecting out-of-range or inconsistent counts.
+                        if not 0 <= start_idx <= len(centerline_points) or part_count < 0:
+                            raise ValueError(f"Invalid centerline point range for structure {i}")
+                        geoms.append(None)
+                        continue
                     points = HdfBase.plan_vertex_ordinates(
                         centerline_points[start_idx:start_idx + point_count]
                     )
                     if start_idx < 0 or point_count < 2 or len(points) != point_count:
                         raise ValueError(f"Invalid centerline point range for structure {i}")
-                    geoms.append(LineString(points))
+                    if part_count <= 1:
+                        geoms.append(LineString(points))
+                        continue
+                    geoms.append(MultiLineString(
+                        [points[offset:offset + count] for offset, count in part_ranges]
+                    ))
 
                 # Create base GeoDataFrame with Structures Attributes and geometries
                 struct_gdf = GeoDataFrame(

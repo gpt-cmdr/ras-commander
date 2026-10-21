@@ -52,6 +52,20 @@ This file is the canonical local instruction file for `ras_commander/hdf/`.
 - Accept the flexible HDF-facing input forms already used in this package: plan numbers, prefixed plan numbers, paths, and open HDF handles where the decorator pattern already allows them.
 - Return pandas or GeoPandas objects in the shapes established by nearby code. Do not invent a new container style for one method unless the surrounding API also changes.
 - Log read failures with enough file context to debug the issue.
+- Packed `Info`/`Parts`/`Points` features: Parts offsets are relative to the
+  feature's own point slice and bounded by its point count. Resolve offsets for
+  the complete feature, never per part or by whether values fit the global
+  range; legacy global offsets are accepted only when all parts together cover
+  the point slice exactly. `_packed_parts.resolve_feature_part_ranges()` does
+  this for `HdfBndry.get_refinement_regions()` and `HdfStruc.get_structures()`.
+- `HdfStruc.get_structures()` returns a MultiLineString (one line per stored
+  part, no connecting segment) for a structure whose Centerline Info Part
+  Count is greater than 1; single-part centerlines remain LineStrings.
+- A zero-point centerline (Info Point Count 0, e.g. lateral structures in
+  Muncie, Baxter, OrleansEx) is a valid empty range, as in the native engine.
+  `get_structures()` returns None geometry for it (the missing-geometry
+  convention used by `HdfPipe` and the other readers). Out-of-range starts,
+  negative counts, one-point centerlines and inconsistent Parts still raise.
 
 ## Common Entry Points
 
