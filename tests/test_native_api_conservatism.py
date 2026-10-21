@@ -294,3 +294,85 @@ def test_auto_polygons_on_unreadable_file_equal_python(tmp_path, monkeypatch, na
         except Exception as exc:  # noqa: BLE001 - compare whatever main did
             outcomes.append(("raise", type(exc).__name__, str(exc)))
     assert outcomes[0] == outcomes[1]
+
+
+# ---------------------------------------------------------------------------
+# 4. An unrecognised RAS_COMMANDER_FAST_HDF value is "auto" plus one warning
+# ---------------------------------------------------------------------------
+
+@pytest.mark.parametrize("value", ["yes", "enabled", "2", "Auto!"])
+def test_invalid_fast_hdf_value_behaves_as_auto_and_warns_once(tmp_path, monkeypatch, caplog, value):
+    from ras_commander import fast_hdf
+    monkeypatch.setattr(fast_hdf, "_warned_modes", set())
+    path = _write_polygon_mesh(tmp_path / "clean.g01.hdf", CLEAN_CELLS)
+    monkeypatch.delenv("RAS_COMMANDER_FAST_HDF", raising=False)
+    expected_names = HdfMesh.get_mesh_area_names(path)
+    expected = HdfMesh.get_mesh_cell_polygons(path, backend="python")
+    monkeypatch.setenv("RAS_COMMANDER_FAST_HDF", value)
+    with caplog.at_level("WARNING", logger="ras_commander.fast_hdf"):
+        assert fast_hdf._mode("auto") == "auto"
+        assert HdfMesh.get_mesh_area_names(path) == expected_names == ["Poly Mesh"]
+        _same_polygons(HdfMesh.get_mesh_cell_polygons(path), expected)
+        assert fast_hdf.native_required() is False
+    warnings = [r for r in caplog.records if "RAS_COMMANDER_FAST_HDF" in r.getMessage()]
+    assert len(warnings) == 1
+
+
+def test_valid_fast_hdf_values_do_not_warn(monkeypatch, caplog):
+    from ras_commander import fast_hdf
+    monkeypatch.setattr(fast_hdf, "_warned_modes", set())
+    expected = {"": "auto", "auto": "auto", " AUTO ": "auto", "1": "auto", "on": "auto", "true": "auto",
+                "0": "python", "off": "python", "false": "python", "python": "python",
+                "required": "rust", "rust": "rust"}
+    with caplog.at_level("WARNING", logger="ras_commander.fast_hdf"):
+        for value, mode in expected.items():
+            monkeypatch.setenv("RAS_COMMANDER_FAST_HDF", value)
+            assert fast_hdf._mode("auto") == mode
+    assert not caplog.records
+
+
+def test_invalid_explicit_backend_still_raises():
+    from ras_commander import fast_hdf
+    with pytest.raises(ValueError, match="backend must be"):
+        fast_hdf._mode("fast")
+
+
+# ---------------------------------------------------------------------------
+# 5. A failed extension import is attempted once per process
+# ---------------------------------------------------------------------------
+
+def test_missing_extension_is_imported_once(monkeypatch):
+    import importlib
+    import time
+    from ras_commander import fast_hdf
+    monkeypatch.setattr(fast_hdf, "_native_state", None)
+    attempts = []
+
+    def failing_import(name, *args, **kwargs):
+        attempts.append(name)
+        raise ModuleNotFoundError(name)
+
+    monkeypatch.setattr(importlib, "import_module", failing_import)
+    started = time.perf_counter()
+    for _ in range(20000):
+        assert fast_hdf._native("auto") is None
+    elapsed = time.perf_counter() - started
+    assert attempts == ["ras_commander_fast_hdf"]
+    assert elapsed / 20000 < 20e-6
+    with pytest.raises(fast_hdf.FastHdfError, match="unavailable"):
+        fast_hdf._native("rust")
+    assert len(attempts) == 1
+
+
+def test_incompatible_extension_warns_once(monkeypatch, caplog):
+    import importlib
+    import types
+    from ras_commander import fast_hdf
+    monkeypatch.setattr(fast_hdf, "_native_state", None)
+    monkeypatch.setattr(importlib, "import_module", lambda name: types.SimpleNamespace(API_VERSION=3))
+    with caplog.at_level("WARNING", logger="ras_commander.fast_hdf"):
+        for _ in range(50):
+            assert fast_hdf._native("auto") is None
+    assert len([r for r in caplog.records if "incompatible" in r.getMessage()]) == 1
+    with pytest.raises(fast_hdf.FastHdfError, match="version 11"):
+        fast_hdf._native("rust")
