@@ -129,7 +129,7 @@ class CrsResolution:
             return None
         if self.epsg is not None:
             return f"EPSG:{self.epsg}"
-        return self.crs
+        return HdfUtils.format_crs(self.crs)
 
 
 def _equivalent_epsg(crs) -> Optional[int]:
@@ -860,7 +860,16 @@ class HdfUtils:
         if epsg is not None:
             return f"EPSG:{epsg}"
         if isinstance(crs_input, str):
-            return crs_input
+            from pyproj import CRS
+
+            try:
+                CRS.from_wkt(crs_input)
+            except Exception:
+                # Authority identifiers and other recognized definitions need
+                # WKT serialization; preserve actual source WKT verbatim.
+                pass
+            else:
+                return crs_input
         try:
             return HdfUtils._to_crs(crs_input).to_wkt()
         except Exception:

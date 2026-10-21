@@ -496,3 +496,20 @@ def test_real_project_conflicting_projection_file_returns_none(tmp_path):
 
     assert _resolve(hdf).status == CRS_CONFLICT
     assert HdfBase.get_projection(hdf) is None
+
+
+@pytest.mark.parametrize("definition", ["ESRI:102003", b"ESRI:102003"])
+def test_non_epsg_authority_is_serialized_to_wkt(tmp_path, definition):
+    expected = CRS.from_user_input("ESRI:102003")
+    value = HdfUtils.format_crs(definition)
+    assert not value.startswith(("ESRI:", "EPSG:"))
+    assert CRS.from_wkt(value).equals(expected)
+
+    path = _write_hdf(tmp_path / "Authority.p01.hdf", definition)
+    value = HdfBase.get_projection(path)
+    assert not value.startswith(("ESRI:", "EPSG:"))
+    assert CRS.from_wkt(value).equals(expected)
+    resolution = HdfUtils.resolve_crs_evidence([
+        HdfUtils.read_crs_evidence(path)
+    ])
+    assert resolution.to_crs_string() == value
