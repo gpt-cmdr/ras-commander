@@ -1,0 +1,10 @@
+{% extends "_base/class.html.jinja" %}
+
+{% block source scoped %}
+  {# Method-group directives repeat a class with its root heading hidden.
+     Keep member source blocks, but do not repeat the complete class source
+     (and its identical line IDs) for every group on the same page. #}
+  {% if not root or config.show_root_heading %}
+    {{ super() }}
+  {% endif %}
+{% endblock source %}
