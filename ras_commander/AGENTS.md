@@ -49,9 +49,11 @@ This file is the canonical local instruction file for the `ras_commander/` packa
   spiral/curvature labels in `HDF_OUTPUT_VARIABLE_MIN_VERSIONS` require a plan
   Program Version of 7.0+ (unknown versions warn) and active secondary flow.
   The enabling writers (`add_/set_/enable_hdf_output_variable(s)`,
-  `apply_hdf_output_profile`, `use_optimal_hdf_settings`) accept an opt-in
-  `target_ras_version` (`"7.0"`, `"7.0.1"`, `"70"`, or a versioned `Ras.exe`
-  path) that replaces the declared version as the gate, because shipped plans
+  `apply_hdf_output_profile`, `use_optimal_hdf_settings`) accept an opt-in,
+  keyword-only `target_ras_version` (`"7.0"`, `"7.0.1"`, `"70"`, or a
+  `Ras.exe` path whose parent folder is a version such as `7.0` or
+  `6.7 Beta 5`; other folder names such as `x86` do not parse) that replaces
+  the declared version as the gate, because shipped plans
   declare 5.x/6.x even when 7.0+ runs them. `RasCmdr.compute_plan` passes the
   executing engine version automatically, but only when it is newer than the
   declared version, so it never rejects what the declared gate accepted.

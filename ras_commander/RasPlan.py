@@ -79,7 +79,7 @@ List of Functions in RasPlan:
 import os
 import re
 import logging
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 import shutil
 from typing import Union, Optional, List, Dict, Any, Tuple
 from numbers import Integral, Number
@@ -3464,25 +3464,40 @@ class RasPlan:
             )
         return canonical
 
+    # A versioned HEC-RAS install folder name, e.g. "6.6", "7.0.1", "6.7 Beta 5".
+    _RAS_VERSION_FOLDER_RE = re.compile(r"\d{1,2}\.\d+(?:\.\d+)?(?: Beta \d+)?", re.IGNORECASE)
+
     @staticmethod
-    def _target_ras_version_to_float(target_ras_version: Any) -> Optional[float]:
+    def _target_ras_version_to_float(
+        target_ras_version: Optional[Union[str, float, Path]],
+    ) -> Optional[float]:
         """
         Convert a target HEC-RAS version to a major.minor float for HDF label gates.
 
         Accepts a version string (``"7.0"``, ``"7.0.1"``, ``"6.7 Beta 5"``), a
         compact version (``"70"``, ``"701"``, ``"66"``), a number (``7.0``), or a
         path to ``Ras.exe`` inside a versioned install folder
-        (``.../HEC-RAS/7.0/Ras.exe``). Returns None when no version is evident.
+        (``.../HEC-RAS/7.0/Ras.exe``; backslash paths are read as Windows
+        paths on any host). The whole value, or the exe's parent folder name,
+        must match one of those forms; anything else (``.../x86/Ras.exe``,
+        ``"1000"``, ``"latest"``) returns None.
         """
         if target_ras_version is None or isinstance(target_ras_version, bool):
             return None
-        if isinstance(target_ras_version, Number):
-            return RasPlan._version_to_float(str(target_ras_version))
         text = str(target_ras_version).strip()
         if text.lower().endswith(".exe"):
-            text = Path(text).parent.name
+            exe_path = PureWindowsPath(text) if "\\" in text else Path(text)
+            folder = exe_path.parent.name.strip()
+            if not RasPlan._RAS_VERSION_FOLDER_RE.fullmatch(folder):
+                return None
+            return RasPlan._version_to_float(folder)
         if re.fullmatch(r"\d{2,3}", text):
             text = f"{text[0]}.{text[1]}"
+        elif not (
+            re.fullmatch(r"\d{1,2}", text)
+            or RasPlan._RAS_VERSION_FOLDER_RE.fullmatch(text)
+        ):
+            return None
         return RasPlan._version_to_float(text)
 
     @staticmethod
@@ -3503,16 +3518,25 @@ class RasPlan:
             lines = Path(plan_path).read_text(encoding='utf-8', errors='replace').splitlines(True)
         except (IOError, OSError, TypeError):
             return None
-        declared = RasPlan._version_to_float(RasPlan._parse_plan_program_version(lines))
+        declared = RasPlan._version_to_float(RasPlan._declared_program_version(lines))
         if declared is None or engine <= declared:
             return None
         return str(engine)
 
     @staticmethod
+    def _declared_program_version(lines: List[str]) -> Optional[str]:
+        """Plan ``Program Version=`` value, ignoring Description text."""
+        program_version = next(
+            (value for _, key, value in _iter_plan_key_lines(lines) if key == 'Program Version'),
+            None,
+        )
+        return program_version.strip() if program_version is not None else None
+
+    @staticmethod
     def _check_hdf_output_versions(
         variables: List[str],
         lines: List[str],
-        target_ras_version: Any = None,
+        target_ras_version: Optional[Union[str, float, Path]] = None,
     ) -> None:
         """
         Gate version-limited labels, ignoring Description text.
@@ -3522,12 +3546,7 @@ class RasPlan:
         declared version as the gate; a target older than a label's minimum
         raises, and an unparseable target raises ValueError.
         """
-        program_version = next(
-            (value for _, key, value in _iter_plan_key_lines(lines) if key == 'Program Version'),
-            None,
-        )
-        if program_version is not None:
-            program_version = program_version.strip()
+        program_version = RasPlan._declared_program_version(lines)
         version = RasPlan._version_to_float(program_version)
         if target_ras_version is not None:
             target = RasPlan._target_ras_version_to_float(target_ras_version)
@@ -4321,7 +4340,8 @@ class RasPlan:
         profile: str = "balanced",
         additional_variables: Optional[List[str]] = None,
         ras_object=None,
-        target_ras_version: Any = None,
+        *,
+        target_ras_version: Optional[Union[str, float, Path]] = None,
     ) -> bool:
         """
         Apply a named HDF write-parameter profile and optional output variables.
@@ -4395,7 +4415,8 @@ class RasPlan:
         profile: str = "balanced",
         additional_variables: Optional[List[str]] = None,
         ras_object=None,
-        target_ras_version: Any = None,
+        *,
+        target_ras_version: Optional[Union[str, float, Path]] = None,
     ) -> bool:
         """
         Apply ras-commander's recommended HDF write settings to a plan file.
@@ -4419,7 +4440,8 @@ class RasPlan:
         variable: str,
         enabled: bool = True,
         ras_object=None,
-        target_ras_version: Any = None,
+        *,
+        target_ras_version: Optional[Union[str, float, Path]] = None,
     ) -> bool:
         """
         Enable or disable one additional HDF output variable in a plan file.
@@ -4447,7 +4469,8 @@ class RasPlan:
         plan_number_or_path: Union[str, Number, Path],
         variable_name: str,
         ras_object=None,
-        target_ras_version: Any = None,
+        *,
+        target_ras_version: Optional[Union[str, float, Path]] = None,
     ) -> bool:
         """
         Enable one additional HDF output variable in a plan file.
@@ -4484,7 +4507,8 @@ class RasPlan:
         variables: List[str],
         enabled: bool = True,
         ras_object=None,
-        target_ras_version: Any = None,
+        *,
+        target_ras_version: Optional[Union[str, float, Path]] = None,
     ) -> bool:
         """
         Enable or disable multiple additional HDF output variables in a plan file.
@@ -4542,7 +4566,8 @@ class RasPlan:
         plan_number_or_path: Union[str, Number, Path],
         variable: str,
         ras_object=None,
-        target_ras_version: Any = None,
+        *,
+        target_ras_version: Optional[Union[str, float, Path]] = None,
     ) -> bool:
         """
         Add an HDF output variable to a HEC-RAS plan file.
