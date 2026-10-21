@@ -101,6 +101,13 @@ This file is the canonical local instruction file for `ras_commander/hdf/`.
   `region_name` parameters for selective face application (precedence:
   `face_ids` > `region_name` > `polygon` > all faces).
 - 2D results extraction: `HdfResultsMesh`
+- `HdfFluvialPluvial` retains `(mesh_name, cell_id)` through time lookups,
+  adjacency, region growth and classification joins. Coincident edges from
+  different meshes are never neighbors. Polygon dissolution groups by mesh and
+  classification; native cell IDs remain unchanged. Both analysis entry points
+  log processing failures at ERROR with path, parameters, stage and traceback,
+  then return an empty GeoDataFrame, discarding partial geometry. Input/decorator
+  validation exceptions remain unchanged. No status/error attributes are added.
 - Mesh time-series domains use authoritative stored scalar `Location`: `Cells`
   and `Cell` mean cells; `Faces` means faces. Invalid, unknown, nonscalar or
   contradictory present Location is refused, never bypassed with a name rule.
@@ -135,6 +142,16 @@ This file is the canonical local instruction file for `ras_commander/hdf/`.
   handle and validates its source fingerprint whenever it reads.
 - 2D mobile-bed (sediment) results: `HdfResultsSediment` (`is_sediment_plan()`, `get_sediment_mesh_areas()`, `get_cell_bed_change()`/`get_cell_bed_elevation()`/`get_active_layer_grain_class()` -> GeoDataFrame, `get_bed_change_volumes()` -> erosion/deposition/net volume per area, `get_cell_bed_change_timeseries()` -> xr.DataArray). Reads the `Sediment Bed` output block; per-cell arrays align with computed `Cells Surface Area` (zero-area ghost cells drop out of volume integrals). Covered by `examples/230_mesh_sensitivity_analysis.ipynb`.
 - 1D cross section geometry and results: `HdfXsec`, `HdfResultsXsec`
+- `HdfStruc1D.list_1d_structures()` and `get_structure_max_values()` prefer
+  unsteady Base Output `Inline Structures`, `Bridges`, `Culverts` and `Pumping
+  Stations`. Match exact, unique geometry Type/River/Reach/RS or pump Name;
+  validate local time rows and primary `Variable_Unit` columns. Use Stage HW,
+  Stage TW and Total Flow (inline) or Flow in native units. Direct results never
+  estimate TW from HW or substitute nearby XS values; missing/all-NaN quantities
+  remain None. Pumps use empty River/Reach and Name as RS in the existing schema
+  and lookup signature. Malformed direct layouts raise ValueError. Legacy generic
+  Structures and cross-section fallbacks remain; empty inventories keep their
+  five documented columns. Nested gate/pump component series are not aggregated.
 - `HdfStruc.get_structures()` keeps one-based public `Structure ID` values,
   joining bridge coefficients by their native zero-based Attributes row IDs.
   Duplicate, noninteger or out-of-range coefficient IDs are errors.
@@ -194,6 +211,16 @@ This file is the canonical local instruction file for `ras_commander/hdf/`.
 
 - Use real example HDF files when validating behavior.
 - Prefer targeted tests over synthetic HDF fixtures unless a regression cannot be reproduced against real examples.
+
+## Packed perimeter offsets
+
+- Collection-level `HdfMesh.get_mesh_areas()` resolves Parts offsets for each
+  complete feature through `HdfBase._feature_part_ranges()`. Native local
+  offsets are valid when every part lies within the feature's point count
+  (gaps and unused vertices allowed, as in the native engine) and take
+  precedence. Legacy global offsets remain supported only when all parts
+  exactly cover the feature's point slice. Any other layout, including mixed
+  conventions, fails closed.
 
 ## Pipe network reads
 
