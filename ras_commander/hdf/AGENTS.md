@@ -16,6 +16,14 @@ This file is the canonical local instruction file for `ras_commander/hdf/`.
 - Infrastructure and land surface: `HdfPipe`, `HdfPump`, `HdfInfiltration`, `HdfLandCover`
 - Plotting and analysis: `HdfPlot`, `HdfResultsPlot`, `HdfBenefitAreas`, `HdfChannelCapacity`, `HdfFluvialPluvial`
 
+- `HdfFluvialPluvial.generate_fluvial_pluvial_polygons()` converts native polygon
+  areas using both projected horizontal CRS axis factors before applying acre
+  thresholds. Missing/geographic CRS skips filtering with a warning; unresolved
+  projected units and other processing failures log contextual ERROR plus traceback
+  and return an empty GeoDataFrame, discarding partial output. Existing upstream
+  input/decorator validation exceptions remain unchanged. No status attributes are added.
+
+
 ## Implementation Rules
 
 - Follow the existing static-class pattern.
