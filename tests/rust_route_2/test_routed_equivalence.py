@@ -32,6 +32,9 @@ FIXTURES = _MANIFEST.get("fixtures", [])
 # Read-only project folders for multi-file land-cover/infiltration methods.
 PROJECTS = _MANIFEST.get("projects", [])
 RESULTS = os.environ.get("RAS_ROUTE2_RESULTS")
+# One JSONL file per pytest-xdist worker (RESULTS.gwN); merge them after the run.
+if RESULTS and os.environ.get("PYTEST_XDIST_WORKER"):
+    RESULTS = f"{RESULTS}.{os.environ['PYTEST_XDIST_WORKER']}"
 pytestmark = pytest.mark.skipif(
     not MANIFEST, reason="Set RAS_ROUTE2_FIXTURES to the PY-ROUTE-2 real-fixture JSON manifest")
 
