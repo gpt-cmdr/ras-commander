@@ -32,6 +32,9 @@ from ._h5py_guard import offending, watch_h5py_reads
 MANIFEST = os.environ.get("RAS_ROUTE1_FIXTURES")
 FIXTURES = json.loads(Path(MANIFEST).read_text())["fixtures"] if MANIFEST else []
 RESULTS = os.environ.get("RAS_ROUTE1_RESULTS")
+# One JSONL file per pytest-xdist worker (RESULTS.gwN); merge them after the run.
+if RESULTS and os.environ.get("PYTEST_XDIST_WORKER"):
+    RESULTS = f"{RESULTS}.{os.environ['PYTEST_XDIST_WORKER']}"
 pytestmark = pytest.mark.skipif(
     not MANIFEST, reason="Set RAS_ROUTE1_FIXTURES to the PY-ROUTE-1 real-fixture JSON manifest")
 
