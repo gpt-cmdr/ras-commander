@@ -213,20 +213,26 @@ class HdfPump:
         """
         Extract timeseries results data for a specific pump station.
 
+        Time comes only from DSS Hydrograph Output: stored timestamps, or its
+        numeric Time in days when timestamps are absent (time.units='days').
+        Missing or malformed axes raise; Base Output and integer row indexes
+        are never substituted. DSS timestamp text may have seconds or milliseconds.
+
         Args:
             hdf_path (Path): Path to the HEC-RAS HDF file.
             pump_station (str): Name or identifier of the pump station.
 
         Returns:
             xr.DataArray: DataArray containing the timeseries data with dimensions:
-                - time: Timestamps of simulation
+                - time: Stored simulation timestamps, or elapsed days if absent
                 - variable: Variables including ['Flow', 'Stage HW', 'Stage TW', 
                            'Pump Station', 'Pumps on']
             Attributes include units and pump station name.
 
         Raises:
             KeyError: If required datasets are not found in the HDF file.
-            ValueError: If the specified pump station name is not found.
+            ValueError: If the station is absent or its block-local time axis
+                is malformed or has a different row count from the results.
         """
         with h5py.File(hdf_path, 'r') as hdf:
             pumping_stations_path = (
@@ -258,28 +264,7 @@ class HdfPump:
 
             data = hdf[data_path][()]
 
-            # Extract time information - try DSS-specific timestamps first
-            dss_time_path = "/Results/Unsteady/Output/Output Blocks/DSS Hydrograph Output/Unsteady Time Series/Time Date Stamp (ms)"
-
-            if dss_time_path in hdf:
-                # Use DSS Hydrograph Output timestamps
-                raw_datetimes = hdf[dss_time_path][:]
-                time = [HdfUtils.parse_ras_datetime_ms(x.decode("utf-8")) for x in raw_datetimes]
-            else:
-                # Fallback to Base Output timestamps
-                time = HdfBase.get_unsteady_timestamps(hdf)
-
-            # Verify time dimension matches data, use index if mismatch
-            if len(time) != data.shape[0]:
-                logger.warning(
-                    "Pump station timeseries timestamp mismatch for '%s' at '%s': "
-                    "timestamps=%d rows=%d; using numeric time index",
-                    pump_station,
-                    data_path,
-                    len(time),
-                    data.shape[0],
-                )
-                time = list(range(data.shape[0]))
+            time, time_units = HdfPump._pump_block_time(hdf, data_path, data.shape)
 
             variable_units = hdf[data_path].attrs.get('Variable_Unit', None)
             variable_names, unit_by_variable = HdfPump._pump_variable_columns(
@@ -299,6 +284,8 @@ class HdfPump:
             da.attrs['units'] = variable_units
             da.attrs['unit_by_variable'] = unit_by_variable
             da.attrs['pump_station'] = pump_station
+            if time_units:
+                da.coords['time'].attrs['units'] = time_units
 
             return da
 
@@ -344,13 +331,18 @@ class HdfPump:
         """
         Extract detailed pump operation results data for a specific pump station.
 
+        Time comes only from DSS Profile Output: stored timestamps, or its
+        numeric Time in days when timestamps are absent (attrs['time_units']='days').
+        Missing or malformed axes raise; Base Output and integer row indexes
+        are never substituted. DSS timestamp text may have seconds or milliseconds.
+
         Args:
             hdf_path (Path): Path to the HEC-RAS HDF file.
             pump_station (str): Name or identifier of the pump station.
 
         Returns:
             pd.DataFrame: DataFrame containing pump operation data with columns:
-                - Time: Simulation timestamps
+                - Time: Stored simulation timestamps, or elapsed days if absent
                 - Flow: Pump flow rate
                 - Stage HW: Headwater stage
                 - Stage TW: Tailwater stage
@@ -359,7 +351,8 @@ class HdfPump:
 
         Raises:
             KeyError: If required datasets are not found in the HDF file.
-            ValueError: If the specified pump station name is not found.
+            ValueError: If the station is absent or its block-local time axis
+                is malformed or has a different row count from the results.
         """
         with h5py.File(hdf_path, 'r') as hdf:
             pump_stations_path = (
@@ -392,8 +385,7 @@ class HdfPump:
 
             data = hdf[data_path][()]
 
-            # Extract time information - Updated to use new method name
-            time = HdfBase.get_unsteady_timestamps(hdf)
+            time, time_units = HdfPump._pump_block_time(hdf, data_path, data.shape)
 
             variable_units = hdf[data_path].attrs.get('Variable_Unit', None)
             variable_names, unit_by_variable = HdfPump._pump_variable_columns(
@@ -409,8 +401,53 @@ class HdfPump:
 
             df['Time'] = time
             df.attrs['unit_by_variable'] = unit_by_variable
+            if time_units:
+                df.attrs['time_units'] = time_units
 
             return df
+
+    @staticmethod
+    def _pump_block_time(hdf: h5py.File, data_path: str, data_shape: tuple):
+        """Read and validate only the owning block's stored time axis."""
+        if len(data_shape) != 2:
+            raise ValueError(f"Pump results at '{data_path}' must have time/variable axes")
+        block_path = data_path.split('/Pumping Stations/', 1)[0]
+        for name in ('Time Date Stamp (ms)', 'Time Date Stamp', 'Time'):
+            path = f"{block_path}/{name}"
+            if path not in hdf:
+                continue
+            dataset = hdf[path]
+            if dataset.shape != (data_shape[0],):
+                raise ValueError(
+                    f"Pump time axis '{path}' has shape {dataset.shape}; "
+                    f"expected ({data_shape[0]},) for '{data_path}'"
+                )
+            values = dataset[()]
+            if name == 'Time':
+                units = HdfPump._decode_hdf_text(dataset.attrs.get('Time', ''))
+                if (values.dtype.kind != 'f' or units.lower() != 'days'
+                        or not np.all(np.isfinite(values)) or np.any(np.diff(values) < 0)):
+                    raise ValueError(f"Pump time axis '{path}' requires finite nondecreasing days")
+                return values, 'days'
+            times = []
+            for value in values:
+                text = HdfPump._decode_hdf_text(value)
+                try:
+                    # DSS may store second-resolution text even in the (ms) dataset.
+                    if text.count(':') == 3:
+                        parsed = HdfUtils.parse_ras_datetime_ms(text)
+                    else:
+                        parsed = HdfUtils.parse_ras_datetime(text)
+                except (TypeError, ValueError) as exc:
+                    raise ValueError(f"Invalid pump timestamp {text!r} at '{path}'") from exc
+                times.append(parsed)
+            if any(right < left for left, right in zip(times, times[1:])):
+                raise ValueError(f"Pump timestamps at '{path}' must be nondecreasing")
+            return times, None
+        raise KeyError(
+            f"Pump results at '{data_path}' require a stored timestamp or Time axis "
+            f"in '{block_path}'; another output block cannot supply it"
+        )
 
     @staticmethod
     def _pump_variable_columns(variable_units: Any, column_count: int) -> tuple[List[str], Dict[str, str]]:

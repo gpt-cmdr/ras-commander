@@ -16,6 +16,14 @@ This file is the canonical local instruction file for `ras_commander/hdf/`.
 - Infrastructure and land surface: `HdfPipe`, `HdfPump`, `HdfInfiltration`, `HdfLandCover`
 - Plotting and analysis: `HdfPlot`, `HdfResultsPlot`, `HdfBenefitAreas`, `HdfChannelCapacity`, `HdfFluvialPluvial`
 
+- `HdfFluvialPluvial.generate_fluvial_pluvial_polygons()` converts native polygon
+  areas using both projected horizontal CRS axis factors before applying acre
+  thresholds. Missing/geographic CRS skips filtering with a warning; unresolved
+  projected units and other processing failures log contextual ERROR plus traceback
+  and return an empty GeoDataFrame, discarding partial output. Existing upstream
+  input/decorator validation exceptions remain unchanged. No status attributes are added.
+
+
 ## Implementation Rules
 
 - Follow the existing static-class pattern.
@@ -34,9 +42,30 @@ This file is the canonical local instruction file for `ras_commander/hdf/`.
 
 ## Input And Output Rules
 
+- Pump operation and hydrograph readers use only their owning DSS Profile or
+  DSS Hydrograph block's stored timestamps (seconds or milliseconds), falling
+  back to that block's finite nondecreasing numeric `Time` in days only when
+  timestamps are absent. Numeric axes expose `time_units` on DataFrames or
+  `time.units` on DataArrays. Missing, malformed or mismatched axes raise;
+  never borrow Base Output time or synthesize integer row indexes.
+
 - Accept the flexible HDF-facing input forms already used in this package: plan numbers, prefixed plan numbers, paths, and open HDF handles where the decorator pattern already allows them.
 - Return pandas or GeoPandas objects in the shapes established by nearby code. Do not invent a new container style for one method unless the surrounding API also changes.
 - Log read failures with enough file context to debug the issue.
+- Packed `Info`/`Parts`/`Points` features: Parts offsets are relative to the
+  feature's own point slice and bounded by its point count. Resolve offsets for
+  the complete feature, never per part or by whether values fit the global
+  range; legacy global offsets are accepted only when all parts together cover
+  the point slice exactly. `_packed_parts.resolve_feature_part_ranges()` does
+  this for `HdfBndry.get_refinement_regions()` and `HdfStruc.get_structures()`.
+- `HdfStruc.get_structures()` returns a MultiLineString (one line per stored
+  part, no connecting segment) for a structure whose Centerline Info Part
+  Count is greater than 1; single-part centerlines remain LineStrings.
+- A zero-point centerline (Info Point Count 0, e.g. lateral structures in
+  Muncie, Baxter, OrleansEx) is a valid empty range, as in the native engine.
+  `get_structures()` returns None geometry for it (the missing-geometry
+  convention used by `HdfPipe` and the other readers). Out-of-range starts,
+  negative counts, one-point centerlines and inconsistent Parts still raise.
 
 ## Common Entry Points
 
@@ -72,6 +101,12 @@ This file is the canonical local instruction file for `ras_commander/hdf/`.
   `region_name` parameters for selective face application (precedence:
   `face_ids` > `region_name` > `polygon` > all faces).
 - 2D results extraction: `HdfResultsMesh`
+- Unsteady `HdfResultsQuery` velocity queries at integer time indexes prefer stored
+  `Cell Velocity - Velocity X/Y` components per mesh. Validate their stored
+  cell Location, time/geometry axes, physical count and velocity units; compute
+  speed from those components. Legacy components and face reconstruction remain
+  fallbacks when the stored components are absent. Malformed stored components
+  raise errors instead of silently selecting reconstruction.
 - Large 2D result access: `HdfResultsMesh.get_mesh_timeseries(...,
   return_type="view")` returns an immutable `HdfResultView`;
   `iter_mesh_timeseries()` emits untruncated bounded batches; and
@@ -125,6 +160,9 @@ This file is the canonical local instruction file for `ras_commander/hdf/`.
   aligning exactly — it drops interior rings only, never disconnected parts of a multipart model;
   pass `fill_holes=False` to keep the raw union. `geometry_type='bbox'` returns the legacy buffered
   bounding box (still used by `get_project_bounds_latlon` for data downloads).
+- `HdfStruc.get_storage_area_polygons()` attaches the available project CRS
+  through `HdfBase.get_projection()` without transforming the stored coordinates.
+  Unknown CRS remains unset; no geographic default is assigned.
 - Land cover and infiltration preprocessing: `HdfLandCover`, `HdfInfiltration`
 - Native infiltration geometry authoring:
   `HdfInfiltration.create_infiltration_override_regions()`,
