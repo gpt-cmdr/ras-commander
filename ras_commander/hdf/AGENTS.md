@@ -87,6 +87,12 @@ This file is the canonical local instruction file for `ras_commander/hdf/`.
   `region_name` parameters for selective face application (precedence:
   `face_ids` > `region_name` > `polygon` > all faces).
 - 2D results extraction: `HdfResultsMesh`
+- Unsteady `HdfResultsQuery` velocity queries at integer time indexes prefer stored
+  `Cell Velocity - Velocity X/Y` components per mesh. Validate their stored
+  cell Location, time/geometry axes, physical count and velocity units; compute
+  speed from those components. Legacy components and face reconstruction remain
+  fallbacks when the stored components are absent. Malformed stored components
+  raise errors instead of silently selecting reconstruction.
 - Large 2D result access: `HdfResultsMesh.get_mesh_timeseries(...,
   return_type="view")` returns an immutable `HdfResultView`;
   `iter_mesh_timeseries()` emits untruncated bounded batches; and
