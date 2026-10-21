@@ -53,7 +53,7 @@ def test_project_method(case, project, monkeypatch):
 
 def _check(case, call, path, label, monkeypatch):
     native = pytest.importorskip("ras_commander_fast_hdf")
-    assert native.API_VERSION == 10
+    assert native.API_VERSION == 11
     from ras_commander import fast_hdf
     py, py_trace, _ = _run(monkeypatch, "0", call, path)
     assert all(r["backend"] == "h5py" for r in py_trace), "h5py mode performed a native read"

@@ -24,7 +24,7 @@ DAVIS_TS = ("Results/Unsteady/Output/Output Blocks/DSS Hydrograph Output/"
 @pytest.fixture
 def native():
     module = pytest.importorskip("ras_commander_fast_hdf")
-    assert module.API_VERSION == 10
+    assert module.API_VERSION == 11
     return module
 
 

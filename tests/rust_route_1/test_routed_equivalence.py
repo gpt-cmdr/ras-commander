@@ -98,7 +98,7 @@ def _same(a, b):
 @pytest.mark.parametrize("case", sorted(CASES), ids=sorted(CASES))
 def test_public_method(case, fixture, monkeypatch):
     native = pytest.importorskip("ras_commander_fast_hdf")
-    assert native.API_VERSION == 10
+    assert native.API_VERSION == 11
     from ras_commander import fast_hdf
     call = CASES[case]
     path = fixture["path"]
