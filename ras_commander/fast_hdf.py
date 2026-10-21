@@ -34,7 +34,7 @@ logger = get_logger(__name__)
 
 __all__ = [
     "FastHdfError", "available", "close_sessions", "read_dataset", "read_datasets",
-    "read_typed", "trace_reads", "native_required", "reraise_required",
+    "read_typed", "read_attrs", "trace_reads", "native_required", "reraise_required",
     "packed_meshes", "mesh_polygons", "export_pmtiles", "export_mesh_pmtiles",
 ]
 
@@ -174,8 +174,9 @@ def _safe_file(dataset):
         and isinstance(filename, (str, bytes))
         and Path(os.fsdecode(filename)).is_file()
         and not file.swmr_mode
-        and not dataset.is_virtual
-        and dataset.external is None
+        # Groups (attribute reads) have no layout of their own.
+        and (isinstance(dataset, h5py.Group)
+             or (not dataset.is_virtual and dataset.external is None))
     )
 
 
@@ -336,6 +337,19 @@ def read_typed(dataset: h5py.Dataset, selection=None, *, backend="auto"):
     """
     from . import _fast_hdf_typed
     return _fast_hdf_typed.read(dataset, selection, backend=backend)
+
+
+def read_attrs(obj, *, backend="auto") -> dict:
+    """Return ``{name: obj.attrs[name]}`` exactly as h5py, values from the engine.
+
+    Groups use the engine's typed group attributes; datasets in a Wave 3 read
+    family use that family's typed attributes; other datasets keep h5py (the
+    documented metadata exception). Auto falls back to h5py per attribute when the
+    engine cannot reproduce a value exactly; ``rust`` raises :class:`FastHdfError`.
+    See ``_fast_hdf_typed.read_attrs``.
+    """
+    from . import _fast_hdf_typed
+    return _fast_hdf_typed.read_attrs(obj, backend=backend)
 
 
 def native_required() -> bool:
