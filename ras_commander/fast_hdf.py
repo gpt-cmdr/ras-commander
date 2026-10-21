@@ -44,7 +44,18 @@ class FastHdfError(RuntimeError):
     """The explicitly requested native operation could not be completed."""
 
 
+_warned_modes = set()
+
+
 def _mode(backend):
+    """Resolve the backend policy: "python", "auto" or "rust" (required).
+
+    An unrecognised ``RAS_COMMANDER_FAST_HDF`` value must never change what a
+    read returns, so it is treated as ``auto`` after one logged warning per
+    value. (Raising here would be swallowed by the readers' broad handlers and
+    turn into empty results.) Only an invalid explicit ``backend`` argument,
+    a programming error, raises.
+    """
     if backend not in {"auto", "python", "rust"}:
         raise ValueError("backend must be 'auto', 'python', or 'rust'")
     if backend != "auto":
@@ -54,9 +65,12 @@ def _mode(backend):
         return "python"
     if value in {"required", "rust"}:
         return "rust"
-    if value in {"", "auto", "1", "on", "true"}:
-        return "auto"
-    raise ValueError("Invalid RAS_COMMANDER_FAST_HDF value: " + repr(value))
+    if value not in {"", "auto", "1", "on", "true"} and value not in _warned_modes:
+        _warned_modes.add(value)
+        logger.warning(
+            "Ignoring unrecognised RAS_COMMANDER_FAST_HDF=%r; using 'auto'. "
+            "Valid values: auto (default), 0/off/false/python, required/rust.", value)
+    return "auto"
 
 
 def _threads(threads):
@@ -70,21 +84,41 @@ def _threads(threads):
     return value
 
 
+# Outcome of the extension import, cached for the process so a missing or
+# incompatible extension costs nothing on the (often hot-loop) routed reads:
+# (module or None, failure message, import exception).
+_native_state = None
+
+
+def _load_native():
+    global _native_state
+    if _native_state is None:
+        try:
+            module = importlib.import_module("ras_commander_fast_hdf")
+        except (ImportError, OSError) as exc:
+            _native_state = (None, "The optional ras-commander-fast-hdf extension is unavailable", exc)
+        else:
+            if getattr(module, "API_VERSION", None) != 11:
+                logger.warning("Ignoring incompatible ras-commander-fast-hdf extension")
+                _native_state = (None, "Incompatible ras-commander-fast-hdf API; version 11 is required", None)
+            else:
+                _native_state = (module, None, None)
+    return _native_state
+
+
 def _native(mode):
     if mode == "python":
         return None
-    try:
-        module = importlib.import_module("ras_commander_fast_hdf")
-    except (ImportError, OSError) as exc:
-        if mode == "rust":
-            raise FastHdfError("The optional ras-commander-fast-hdf extension is unavailable") from exc
-        return None
-    if getattr(module, "API_VERSION", None) != 11:
-        if mode == "rust":
-            raise FastHdfError("Incompatible ras-commander-fast-hdf API; version 11 is required")
-        logger.warning("Ignoring incompatible ras-commander-fast-hdf extension")
-        return None
+    module, failure, exc = _load_native()
+    if module is None and mode == "rust":
+        raise FastHdfError(failure) from exc
     return module
+
+
+def _reset_native():
+    """Forget the cached import outcome (tests; or after installing the extension)."""
+    global _native_state
+    _native_state = None
 
 
 @log_call
