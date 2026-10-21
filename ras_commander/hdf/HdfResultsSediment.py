@@ -65,22 +65,34 @@ class HdfResultsSediment:
         """Return the ``.prj`` of the project that owns ``hdf_path``, if known.
 
         An explicit ``ras_object`` supplies its project file. Otherwise the
-        initialized global ``ras`` is used only when the HDF sits in its
-        project folder. No folder is searched for ``.prj`` files.
+        initialized global ``ras`` is used only when its plan DataFrame
+        identifies the HDF as a result file. Sharing a folder is insufficient.
+        No folder is searched for ``.prj`` files.
         """
         project = ras_object
         if project is None:
             from ..RasPrj import ras as project
             if not getattr(project, "initialized", False):
                 return None
-            try:
-                same_folder = (
-                    Path(hdf_path).resolve().parent
-                    == Path(project.project_folder).resolve()
-                )
-            except (OSError, TypeError, AttributeError):
+            plans = getattr(project, "plan_df", None)
+            if not isinstance(plans, pd.DataFrame):
                 return None
-            if not same_folder:
+            owned_paths = []
+            for column in ("HDF_Results_Path", "full_path"):
+                for value in plans.get(column, []):
+                    if isinstance(value, (str, Path)) and str(value).strip():
+                        candidate = Path(value)
+                        if column == "full_path":
+                            candidate = Path(str(candidate) + ".hdf")
+                        owned_paths.append(candidate)
+            try:
+                belongs_to_project = any(
+                    Path(hdf_path).resolve() == candidate.resolve()
+                    for candidate in owned_paths
+                )
+            except (OSError, ValueError):
+                return None
+            if not belongs_to_project:
                 return None
         prj_file = getattr(project, "prj_file", None)
         return Path(prj_file) if prj_file else None

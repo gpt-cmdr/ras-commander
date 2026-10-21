@@ -130,3 +130,24 @@ def test_result_unit_metadata_rejects_geometry_only_hdf(tmp_path):
     metadata = HdfBase.get_result_unit_metadata(hdf_path, strict=False)
     assert metadata["status"] == "unrecognized"
     assert metadata["length_units"] is None
+
+
+@pytest.mark.parametrize("dataset_unit", [None, "m", "ft"])
+def test_geometry_default_exception_requires_dataset_evidence(tmp_path, dataset_unit):
+    path = _write_result_hdf(
+        tmp_path / "SI.p01.hdf", si_units=False, unit_system="SI Units"
+    )
+    with h5py.File(path, "r+") as hdf:
+        group = hdf.require_group("Results/Unsteady")
+        group.attrs["Units"] = "m"
+        if dataset_unit is not None:
+            group.create_dataset("Water Surface", data=[[1.0]]).attrs["Units"] = dataset_unit
+    metadata = HdfBase.get_result_unit_metadata(path, strict=False)
+    if dataset_unit == "m":
+        assert metadata["status"] == "resolved"
+        assert metadata["length_units"] == "m"
+        assert "1 result dataset" in metadata["warnings"][0]
+    else:
+        assert metadata["status"] == "contradictory"
+        with pytest.raises(ValueError, match="unit_system="):
+            HdfBase.get_result_unit_metadata(path)

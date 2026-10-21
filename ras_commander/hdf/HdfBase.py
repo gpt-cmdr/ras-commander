@@ -513,7 +513,7 @@ class HdfBase:
 
     @staticmethod
     def _length_unit_labels(hdf_file: h5py.File) -> Dict[str, List[str]]:
-        """Return result objects whose own ``Units`` attribute is ``m`` or ``ft``.
+        """Return result datasets whose own ``Units`` attribute is ``m`` or ``ft``.
 
         Only exact length labels count, including elements of array labels
         such as ``['m', 'Days']``. Unlabelled tables are never used.
@@ -524,7 +524,7 @@ class HdfBase:
             return labels
 
         def visit(name: str, obj: Any) -> None:
-            if "Units" not in obj.attrs:
+            if not isinstance(obj, h5py.Dataset) or "Units" not in obj.attrs:
                 return
             values = {
                 HdfBase._decode_unit_attribute(item).casefold()
