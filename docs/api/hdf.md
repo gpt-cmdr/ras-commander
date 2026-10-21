@@ -769,6 +769,55 @@ The native export path repairs quantized rings on the integer tile grid.
 Very small cells can become one-pixel centroid squares at low zoom to preserve
 visibility. PMTiles are for visualization; use source polygons for analysis.
 The exporter retains source geometry in memory and spools encoded tile batches.
+
+### Routed HDF reads and backend modes
+
+Public `Hdf*` readers whose data the pinned engine reads as a typed family call
+`fast_hdf.read_typed(dataset, selection)` at their value reads. It returns
+exactly what `dataset[selection]` returns, so public signatures, columns,
+dtypes, index, CRS, attrs and exceptions do not change. The backend follows
+`RAS_COMMANDER_FAST_HDF`:
+
+| Mode | Values | Behavior |
+|------|--------|----------|
+| Python | `0`, `off`, `false`, `python` | h5py for every read. |
+| Auto | unset, empty, `auto`, `1`, `on`, `true` | Native read when the extension is installed; **any** native failure, including Corrupt or checksum refusals, falls back to h5py, so the public result or exception is the h5py one. |
+| Required | `required`, `rust` | Native reads must succeed; a refusal raises `FastHdfError`, which routed readers surface unchanged instead of returning an empty result or wrapping it. |
+
+Routing policy:
+
+- Datasets in a typed engine family (2D mesh geometry and line families, 1D
+  geometry, XS results, 1D summaries and structure series) are served by the
+  typed reader, after the stored dtype layout and shape are checked.
+- Other numeric datasets use the generic native reader (`read_dataset`).
+- Selections are validated with h5py's own selector before any native read.
+  Invalid selections (for example a negative step) raise h5py's exception in
+  every mode. Basic selections and single increasing integer vectors are read
+  natively. Field names, boolean masks and non-integer vectors stay on h5py,
+  and are refusals in required mode.
+- **Required-mode metadata exception.** String datasets, and compound
+  identity/attribute tables for which the engine has no exact raw reader, are
+  read through h5py in every mode (`h5py-metadata` in the trace). HDF
+  attributes, group/key walks and shape probes also stay on h5py. Required
+  mode therefore guarantees native *numeric value* reads, not that h5py is
+  never opened.
+- `HdfResultsMesh` result readers keep the earlier `read_dataset` policy: a
+  native Corrupt refusal is an error in auto mode too (native exceptions are
+  never converted to successful empty results). Only Unsupported and Topology
+  refusals fall back to h5py.
+
+`fast_hdf.trace_reads()` records which backend served each read made through
+`read_typed` and `read_dataset`. **It is not a complete I/O audit.** Reads a
+caller makes directly with h5py do not appear in it. The route-1 qualification
+gate therefore also intercepts `h5py.Dataset.__getitem__` and `read_direct` in
+required mode. A method labelled NATIVE may read through h5py only the metadata
+listed above.
+
+In the coverage inventory, **H5PY is an inventory (qualification) label, not an
+enforced backend selection.** It means a method was not qualified as an exact
+native reader. Such a method can still use native helpers in auto mode; for
+example, `get_mesh_cell_polygons` uses native ring assembly. Set
+`RAS_COMMANDER_FAST_HDF=0` to force h5py for everything.
 Successful exports atomically replace the destination; failed exports preserve
 an existing destination. Exporting over the source HDF file is rejected.
 Run `scripts/benchmark_fast_hdf.py --help` for the reproducible benchmark driver.
