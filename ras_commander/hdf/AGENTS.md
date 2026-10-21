@@ -80,6 +80,9 @@ This file is the canonical local instruction file for `ras_commander/hdf/`.
   handle and validates its source fingerprint whenever it reads.
 - 2D mobile-bed (sediment) results: `HdfResultsSediment` (`is_sediment_plan()`, `get_sediment_mesh_areas()`, `get_cell_bed_change()`/`get_cell_bed_elevation()`/`get_active_layer_grain_class()` -> GeoDataFrame, `get_bed_change_volumes()` -> erosion/deposition/net volume per area, `get_cell_bed_change_timeseries()` -> xr.DataArray). Reads the `Sediment Bed` output block; per-cell arrays align with computed `Cells Surface Area` (zero-area ghost cells drop out of volume integrals). Covered by `examples/230_mesh_sensitivity_analysis.ipynb`.
 - 1D cross section geometry and results: `HdfXsec`, `HdfResultsXsec`
+- `HdfStruc.get_structures()` keeps one-based public `Structure ID` values,
+  joining bridge coefficients by their native zero-based Attributes row IDs.
+  Duplicate, noninteger or out-of-range coefficient IDs are errors.
 - 1D river edge lines: `HdfXsec.get_river_edge_lines()` (stored `Geometry/River Edge Lines`);
   `HdfXsec.generate_river_edge_lines()` builds them from XS cut-line end points when none are
   stored (pure-Python equivalent of RASMapper "Create Edge Lines at XS Limits") — it returns a
