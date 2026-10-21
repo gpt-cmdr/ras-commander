@@ -122,7 +122,11 @@ def regions(gdf: gpd.GeoDataFrame) -> dict:
 
 def segment_set(gdf: gpd.GeoDataFrame, precision: int = 6) -> set:
     """Boundary lines as a set of undirected segments (agnostic to line merging)."""
-    assert not gdf.empty, "boundary frame empty"
+    # A successful analysis with no qualifying edges (e.g. Homewood at dt=12h) returns an
+    # empty frame that still has a geometry column and CRS; a swallowed processing
+    # failure returns a bare GeoDataFrame() with neither.
+    if gdf.empty:
+        assert "geometry" in gdf.columns and gdf.crs is not None, "boundary frame is a processing-failure return"
     segs = set()
     for geom in gdf.geometry:
         for line in getattr(geom, "geoms", [geom]):
