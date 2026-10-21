@@ -1,0 +1,632 @@
+{
+  "source": "Wave 2 h5py frozen oracle; historical evidence, not independently rerun qualification",
+  "source_manifest_sha256": "7ae4c1ee0f0c5054de87793eb529ba4c30c6e7815b6077d9dfa56ad5f157b7c1",
+  "source_manifest": "working/ras-native-engine-integration/runs/successor-parity-w2-20261020/evidence/oracle/oracle.json",
+  "cases": [
+    {
+      "name": "BaldEagle.p01",
+      "path": "parity-w2-work/computed/Balde_Eagle_Creek_p01/BaldEagle.p01.hdf",
+      "sha256": "13ddd5df72fdf242073786e2e77c4b547ad3c244c9cb731a08f8971807445ff3",
+      "records": [
+        {
+          "identity": [
+            "Bald Eagle",
+            "Loc Hav",
+            "81500"
+          ],
+          "type": "Inline",
+          "geometry_row": 1,
+          "geometry_table": "Geometry/Structures/Attributes",
+          "dataset": "Results/Unsteady/Output/Output Blocks/Base Output/Unsteady Time Series/Inline Structures/Bald Eagle Loc Hav 81500/Structure Variables",
+          "shape": [
+            150,
+            5
+          ],
+          "dtype": "<f4",
+          "sha256": "f09dbbaadfaec00774a170fba104bbb9e8e627da19e360ebf4064ac3f4a49a47",
+          "labels": [
+            [
+              "Total Flow",
+              "cfs"
+            ],
+            [
+              "Stage HW",
+              "ft"
+            ],
+            [
+              "Stage TW",
+              "ft"
+            ],
+            [
+              "Weir Flow",
+              "cfs"
+            ],
+            [
+              "Total Gate Flow",
+              "cfs"
+            ]
+          ]
+        },
+        {
+          "identity": [
+            "Bald Eagle",
+            "Loc Hav",
+            "103245"
+          ],
+          "type": "Bridge",
+          "geometry_row": 0,
+          "geometry_table": "Geometry/Structures/Attributes",
+          "dataset": "Results/Unsteady/Output/Output Blocks/Base Output/Unsteady Time Series/Bridges/Bald Eagle Loc Hav 103245/Bridge Variables",
+          "shape": [
+            150,
+            3
+          ],
+          "dtype": "<f4",
+          "sha256": "d428ebcd12e25fc190b7eadc8e25c6021346d8d3cae58eefc72640e83685dd2d",
+          "labels": [
+            [
+              "Flow",
+              "cfs"
+            ],
+            [
+              "Stage HW",
+              "ft"
+            ],
+            [
+              "Stage TW",
+              "ft"
+            ]
+          ]
+        },
+        {
+          "identity": [
+            "Bald Eagle",
+            "Loc Hav",
+            "11985"
+          ],
+          "type": "Bridge",
+          "geometry_row": 8,
+          "geometry_table": "Geometry/Structures/Attributes",
+          "dataset": "Results/Unsteady/Output/Output Blocks/Base Output/Unsteady Time Series/Bridges/Bald Eagle Loc Hav 11985/Bridge Variables",
+          "shape": [
+            150,
+            3
+          ],
+          "dtype": "<f4",
+          "sha256": "1b8f4623ca7222f1d1f80d5cf1d6b87678445b1a4ac6f0612f2a5622cc15d006",
+          "labels": [
+            [
+              "Flow",
+              "cfs"
+            ],
+            [
+              "Stage HW",
+              "ft"
+            ],
+            [
+              "Stage TW",
+              "ft"
+            ]
+          ]
+        },
+        {
+          "identity": [
+            "Bald Eagle",
+            "Loc Hav",
+            "15100"
+          ],
+          "type": "Bridge",
+          "geometry_row": 7,
+          "geometry_table": "Geometry/Structures/Attributes",
+          "dataset": "Results/Unsteady/Output/Output Blocks/Base Output/Unsteady Time Series/Bridges/Bald Eagle Loc Hav 15100/Bridge Variables",
+          "shape": [
+            150,
+            3
+          ],
+          "dtype": "<f4",
+          "sha256": "e85b31163e4f0398d211e99a7d9769c42bbae950c03b5b241e3474162c7a8f38",
+          "labels": [
+            [
+              "Flow",
+              "cfs"
+            ],
+            [
+              "Stage HW",
+              "ft"
+            ],
+            [
+              "Stage TW",
+              "ft"
+            ]
+          ]
+        },
+        {
+          "identity": [
+            "Bald Eagle",
+            "Loc Hav",
+            "21241"
+          ],
+          "type": "Bridge",
+          "geometry_row": 6,
+          "geometry_table": "Geometry/Structures/Attributes",
+          "dataset": "Results/Unsteady/Output/Output Blocks/Base Output/Unsteady Time Series/Bridges/Bald Eagle Loc Hav 21241/Bridge Variables",
+          "shape": [
+            150,
+            3
+          ],
+          "dtype": "<f4",
+          "sha256": "23a6a3b85b3d61ed244de028c2f6fb0be6dd0ce1bdac079f99bcb07f8d79313c",
+          "labels": [
+            [
+              "Flow",
+              "cfs"
+            ],
+            [
+              "Stage HW",
+              "ft"
+            ],
+            [
+              "Stage TW",
+              "ft"
+            ]
+          ]
+        },
+        {
+          "identity": [
+            "Bald Eagle",
+            "Loc Hav",
+            "23828"
+          ],
+          "type": "Bridge",
+          "geometry_row": 5,
+          "geometry_table": "Geometry/Structures/Attributes",
+          "dataset": "Results/Unsteady/Output/Output Blocks/Base Output/Unsteady Time Series/Bridges/Bald Eagle Loc Hav 23828/Bridge Variables",
+          "shape": [
+            150,
+            3
+          ],
+          "dtype": "<f4",
+          "sha256": "7a9eff61a2e3f271bdb2026f20141a12b889e2c98855d1a8e9d80e05e2cd577d",
+          "labels": [
+            [
+              "Flow",
+              "cfs"
+            ],
+            [
+              "Stage HW",
+              "ft"
+            ],
+            [
+              "Stage TW",
+              "ft"
+            ]
+          ]
+        },
+        {
+          "identity": [
+            "Bald Eagle",
+            "Loc Hav",
+            "2436"
+          ],
+          "type": "Bridge",
+          "geometry_row": 10,
+          "geometry_table": "Geometry/Structures/Attributes",
+          "dataset": "Results/Unsteady/Output/Output Blocks/Base Output/Unsteady Time Series/Bridges/Bald Eagle Loc Hav 2436/Bridge Variables",
+          "shape": [
+            150,
+            3
+          ],
+          "dtype": "<f4",
+          "sha256": "d38b48756fc7f8560873836884120940ce588530935cfc09c09c4a4d057560ee",
+          "labels": [
+            [
+              "Flow",
+              "cfs"
+            ],
+            [
+              "Stage HW",
+              "ft"
+            ],
+            [
+              "Stage TW",
+              "ft"
+            ]
+          ]
+        },
+        {
+          "identity": [
+            "Bald Eagle",
+            "Loc Hav",
+            "2920"
+          ],
+          "type": "Bridge",
+          "geometry_row": 9,
+          "geometry_table": "Geometry/Structures/Attributes",
+          "dataset": "Results/Unsteady/Output/Output Blocks/Base Output/Unsteady Time Series/Bridges/Bald Eagle Loc Hav 2920/Bridge Variables",
+          "shape": [
+            150,
+            3
+          ],
+          "dtype": "<f4",
+          "sha256": "34002cf5f41c2b015f072ccf3ff9dfab8f3a1f4eb19bf5be6d453281a71a2e46",
+          "labels": [
+            [
+              "Flow",
+              "cfs"
+            ],
+            [
+              "Stage HW",
+              "ft"
+            ],
+            [
+              "Stage TW",
+              "ft"
+            ]
+          ]
+        },
+        {
+          "identity": [
+            "Bald Eagle",
+            "Loc Hav",
+            "36713"
+          ],
+          "type": "Bridge",
+          "geometry_row": 4,
+          "geometry_table": "Geometry/Structures/Attributes",
+          "dataset": "Results/Unsteady/Output/Output Blocks/Base Output/Unsteady Time Series/Bridges/Bald Eagle Loc Hav 36713/Bridge Variables",
+          "shape": [
+            150,
+            3
+          ],
+          "dtype": "<f4",
+          "sha256": "2e41cc6dc792c66c973de988394953a97522c118f4c4d22a01b82c24ecc193a3",
+          "labels": [
+            [
+              "Flow",
+              "cfs"
+            ],
+            [
+              "Stage HW",
+              "ft"
+            ],
+            [
+              "Stage TW",
+              "ft"
+            ]
+          ]
+        },
+        {
+          "identity": [
+            "Bald Eagle",
+            "Loc Hav",
+            "58780"
+          ],
+          "type": "Bridge",
+          "geometry_row": 3,
+          "geometry_table": "Geometry/Structures/Attributes",
+          "dataset": "Results/Unsteady/Output/Output Blocks/Base Output/Unsteady Time Series/Bridges/Bald Eagle Loc Hav 58780/Bridge Variables",
+          "shape": [
+            150,
+            3
+          ],
+          "dtype": "<f4",
+          "sha256": "af1f82f17bbe0c2cb195ac6fd8c5f327f010de0806a92d972447c9839a016d74",
+          "labels": [
+            [
+              "Flow",
+              "cfs"
+            ],
+            [
+              "Stage HW",
+              "ft"
+            ],
+            [
+              "Stage TW",
+              "ft"
+            ]
+          ]
+        },
+        {
+          "identity": [
+            "Bald Eagle",
+            "Loc Hav",
+            "75960"
+          ],
+          "type": "Bridge",
+          "geometry_row": 2,
+          "geometry_table": "Geometry/Structures/Attributes",
+          "dataset": "Results/Unsteady/Output/Output Blocks/Base Output/Unsteady Time Series/Bridges/Bald Eagle Loc Hav 75960/Bridge Variables",
+          "shape": [
+            150,
+            3
+          ],
+          "dtype": "<f4",
+          "sha256": "59295f341c788902e5311d7d4e657e9d200d17af5fe6ff87e738edf0012f09d0",
+          "labels": [
+            [
+              "Flow",
+              "cfs"
+            ],
+            [
+              "Stage HW",
+              "ft"
+            ],
+            [
+              "Stage TW",
+              "ft"
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "name": "beaver.p03",
+      "path": "parity-w2-work/computed/Bridge_Hydraulics_p03/beaver.p03.hdf",
+      "sha256": "78bd29a95d29307f6e3372249b3df798930ccb64076c330883843330045fad70",
+      "records": [
+        {
+          "identity": [
+            "Beaver Creek",
+            "Kentwood",
+            "5.4"
+          ],
+          "type": "Bridge",
+          "geometry_row": 0,
+          "geometry_table": "Geometry/Structures/Attributes",
+          "dataset": "Results/Unsteady/Output/Output Blocks/Base Output/Unsteady Time Series/Bridges/Beaver Creek Kentwood 5.4/Bridge Variables",
+          "shape": [
+            49,
+            3
+          ],
+          "dtype": "<f4",
+          "sha256": "acc6aa05ca135b238328bbc00325e13d66c84e7aff48a4568fba047d42eb2155",
+          "labels": [
+            [
+              "Flow",
+              "cfs"
+            ],
+            [
+              "Stage HW",
+              "ft"
+            ],
+            [
+              "Stage TW",
+              "ft"
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "name": "OrleansEx.p02",
+      "path": "parity-w2-work/computed/Example_23_-_Urban_Modeling_p02/OrleansEx.p02.hdf",
+      "sha256": "d27f6c42ca66c4479f219f9abbd274b3e155c8d93b737b9264e311fd0819ae2b",
+      "records": [
+        {
+          "identity": [
+            "17th Street",
+            "2",
+            "21150"
+          ],
+          "type": "Inline",
+          "geometry_row": 13,
+          "geometry_table": "Geometry/Structures/Attributes",
+          "dataset": "Results/Unsteady/Output/Output Blocks/Base Output/Unsteady Time Series/Inline Structures/17th Street 2 21150/Structure Variables",
+          "shape": [
+            127,
+            5
+          ],
+          "dtype": "<f4",
+          "sha256": "0fe7458a55be51d777b20f1d2b31a49a91b475ff6088d8c71c38fb59de1cfa8c",
+          "labels": [
+            [
+              "Total Flow",
+              "cfs"
+            ],
+            [
+              "Stage HW",
+              "ft"
+            ],
+            [
+              "Stage TW",
+              "ft"
+            ],
+            [
+              "Weir Flow",
+              "cfs"
+            ],
+            [
+              "Total Gate Flow",
+              "cfs"
+            ]
+          ]
+        },
+        {
+          "identity": [
+            "",
+            "",
+            "17thPumpSta"
+          ],
+          "type": "Pump",
+          "geometry_row": 0,
+          "geometry_table": "Geometry/Pump Stations/Attributes",
+          "dataset": "Results/Unsteady/Output/Output Blocks/Base Output/Unsteady Time Series/Pumping Stations/17thPumpSta/Structure Variables",
+          "shape": [
+            127,
+            5
+          ],
+          "dtype": "<f4",
+          "sha256": "8fa9999546b6ccb8ea80b2aeff1407baa7aa383581c902e64afa37e27043aa5d",
+          "labels": [
+            [
+              "Flow",
+              "cfs"
+            ],
+            [
+              "Stage HW",
+              "ft"
+            ],
+            [
+              "Stage TW",
+              "ft"
+            ],
+            [
+              "Group #1",
+              "cfs"
+            ],
+            [
+              "Group #1",
+              "Pumps on"
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Inline_3Gates.p01",
+      "path": "parity-w2-work/computed/Inline_Structure_with_Gated_Spillways_p01/Inline_3Gates.p01.hdf",
+      "sha256": "b5b541e386c8e6fc68044099b46a3e219f5a705205324762e0a0c48c564a0003",
+      "records": [
+        {
+          "identity": [
+            "Nittany River",
+            "Weir Reach",
+            "41.75"
+          ],
+          "type": "Inline",
+          "geometry_row": 0,
+          "geometry_table": "Geometry/Structures/Attributes",
+          "dataset": "Results/Unsteady/Output/Output Blocks/Base Output/Unsteady Time Series/Inline Structures/Nittany River Weir Reach 41.75/Structure Variables",
+          "shape": [
+            97,
+            5
+          ],
+          "dtype": "<f4",
+          "sha256": "2dc9f7fc831bcfde957a79446432d73e0eaa0dcb0642f760f4e3919eef333bcb",
+          "labels": [
+            [
+              "Total Flow",
+              "cfs"
+            ],
+            [
+              "Stage HW",
+              "ft"
+            ],
+            [
+              "Stage TW",
+              "ft"
+            ],
+            [
+              "Weir Flow",
+              "cfs"
+            ],
+            [
+              "Total Gate Flow",
+              "cfs"
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "name": "JunctionHydraulics.p01",
+      "path": "parity-w2-work/computed/JunctionHydraulics_p01/JunctionHydraulics.p01.hdf",
+      "sha256": "f04fb1fe32017078a10443a6f49f46cc02d843868cea6dc417d8bdbf515b83fb",
+      "records": [
+        {
+          "identity": [
+            "Butte Cr.",
+            "Butte Cr.",
+            "0.22"
+          ],
+          "type": "Bridge",
+          "geometry_row": 0,
+          "geometry_table": "Geometry/Structures/Attributes",
+          "dataset": "Results/Unsteady/Output/Output Blocks/Base Output/Unsteady Time Series/Bridges/Butte Cr. Butte Cr. 0.22/Bridge Variables",
+          "shape": [
+            73,
+            3
+          ],
+          "dtype": "<f4",
+          "sha256": "e2c9b22cb263d1f126eb5eb508bb823bab8fcb9aa89896316b454c205c82bed2",
+          "labels": [
+            [
+              "Flow",
+              "cfs"
+            ],
+            [
+              "Stage HW",
+              "ft"
+            ],
+            [
+              "Stage TW",
+              "ft"
+            ]
+          ]
+        },
+        {
+          "identity": [
+            "Fall River",
+            "Lower Reach",
+            "9.55"
+          ],
+          "type": "Bridge",
+          "geometry_row": 2,
+          "geometry_table": "Geometry/Structures/Attributes",
+          "dataset": "Results/Unsteady/Output/Output Blocks/Base Output/Unsteady Time Series/Bridges/Fall River Lower Reach 9.55/Bridge Variables",
+          "shape": [
+            73,
+            3
+          ],
+          "dtype": "<f4",
+          "sha256": "283f62e1308a2cf2094b3c60928be3e4f3700e490542dfb57f230d04ae0376ad",
+          "labels": [
+            [
+              "Flow",
+              "cfs"
+            ],
+            [
+              "Stage HW",
+              "ft"
+            ],
+            [
+              "Stage TW",
+              "ft"
+            ]
+          ]
+        },
+        {
+          "identity": [
+            "Fall River",
+            "Upper Reach",
+            "10.1"
+          ],
+          "type": "Culvert",
+          "geometry_row": 1,
+          "geometry_table": "Geometry/Structures/Attributes",
+          "dataset": "Results/Unsteady/Output/Output Blocks/Base Output/Unsteady Time Series/Culverts/Fall River Upper Reach 10.1/Culvert Variables",
+          "shape": [
+            73,
+            3
+          ],
+          "dtype": "<f4",
+          "sha256": "cb13df9bc013cc5b2915ed95cfd9c255091a2963c16a5a6289da0607f1ece338",
+          "labels": [
+            [
+              "Flow",
+              "cfs"
+            ],
+            [
+              "Stage HW",
+              "ft"
+            ],
+            [
+              "Stage TW",
+              "ft"
+            ]
+          ]
+        }
+      ]
+    }
+  ]
+}
