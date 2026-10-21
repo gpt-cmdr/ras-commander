@@ -49,7 +49,7 @@ from pathlib import Path
 import logging
 
 from .HdfUtils import HdfUtils
-from ..fast_hdf import read_typed, reraise_required
+from ..fast_hdf import read_attrs, read_typed, reraise_required
 from ..Decorators import standardize_input, log_call
 from ..LoggingConfig import setup_logging, get_logger
 
@@ -146,14 +146,15 @@ class HdfBase:
         plan_info = hdf_file.get("Plan Data/Plan Information")
         if plan_info is None:
             raise ValueError("Plan Information not found in HDF file")
+        plan_attrs = read_attrs(plan_info)
 
         # Primary (HEC-RAS 6.x): explicit 'Simulation Start Time' attribute.
-        time_str = plan_info.attrs.get('Simulation Start Time')
+        time_str = plan_attrs.get('Simulation Start Time')
         if time_str is not None:
             return HdfUtils.parse_ras_datetime(_decode(time_str))
 
         # Fallback 1 (HEC-RAS 5.0.x): 'Time Window' = "<start> to <end>".
-        time_window = plan_info.attrs.get('Time Window')
+        time_window = plan_attrs.get('Time Window')
         if time_window is not None:
             start_str = _decode(time_window).split(" to ")[0].strip()
             if start_str:
