@@ -39,7 +39,7 @@ import pandas as pd
 from ..Decorators import standardize_input, log_call
 from .HdfUtils import HdfUtils
 from ..LoggingConfig import get_logger
-from ..fast_hdf import read_typed, reraise_required
+from ..fast_hdf import read_attrs, read_typed, reraise_required
 import numpy as np
 from datetime import datetime
 
@@ -93,7 +93,7 @@ class HdfResultsPlan:
                 
                 # Create dictionary from attributes and decode byte strings
                 attrs_dict = {}
-                for key, value in dict(hdf_file["Results/Unsteady"].attrs).items():
+                for key, value in read_attrs(hdf_file["Results/Unsteady"]).items():
                     if isinstance(value, bytes):
                         attrs_dict[key] = value.decode('utf-8')
                     else:
@@ -108,6 +108,7 @@ class HdfResultsPlan:
                 f"See: https://rascommander.info/ras/user-guide/hdf-data-extraction/"
             )
         except Exception as e:
+            reraise_required(e)
             raise RuntimeError(f"Error reading unsteady attributes: {str(e)}")
         
     @staticmethod
@@ -138,7 +139,7 @@ class HdfResultsPlan:
                 
                 # Create dictionary from attributes and decode byte strings
                 attrs_dict = {}
-                for key, value in dict(hdf_file["Results/Unsteady/Summary"].attrs).items():
+                for key, value in read_attrs(hdf_file["Results/Unsteady/Summary"]).items():
                     if isinstance(value, bytes):
                         attrs_dict[key] = value.decode('utf-8')
                     else:
@@ -153,6 +154,7 @@ class HdfResultsPlan:
                 f"See: https://rascommander.info/ras/user-guide/hdf-data-extraction/"
             )
         except Exception as e:
+            reraise_required(e)
             raise RuntimeError(f"Error reading unsteady summary attributes: {str(e)}")
         
     @staticmethod
@@ -183,7 +185,7 @@ class HdfResultsPlan:
                 
                 # Get attributes and decode byte strings
                 attrs_dict = {}
-                for key, value in dict(hdf_file["Results/Unsteady/Summary/Volume Accounting"].attrs).items():
+                for key, value in read_attrs(hdf_file["Results/Unsteady/Summary/Volume Accounting"]).items():
                     if isinstance(value, bytes):
                         attrs_dict[key] = value.decode('utf-8')
                     else:
@@ -197,6 +199,7 @@ class HdfResultsPlan:
                 f"See: https://rascommander.info/ras/user-guide/hdf-data-extraction/"
             )
         except Exception as e:
+            reraise_required(e)
             raise RuntimeError(f"Error reading volume accounting attributes: {str(e)}")
 
     @staticmethod
@@ -238,9 +241,10 @@ class HdfResultsPlan:
                     return None
 
                 # Extract plan information
-                plan_name = HdfUtils.convert_ras_string(plan_info.attrs.get('Plan Name', 'Unknown'))
-                start_time_str = HdfUtils.convert_ras_string(plan_info.attrs.get('Simulation Start Time', 'Unknown'))
-                end_time_str = HdfUtils.convert_ras_string(plan_info.attrs.get('Simulation End Time', 'Unknown'))
+                plan_attrs = read_attrs(plan_info)
+                plan_name = HdfUtils.convert_ras_string(plan_attrs.get('Plan Name', 'Unknown'))
+                start_time_str = HdfUtils.convert_ras_string(plan_attrs.get('Simulation Start Time', 'Unknown'))
+                end_time_str = HdfUtils.convert_ras_string(plan_attrs.get('Simulation End Time', 'Unknown'))
 
                 try:
                     # Check if times are already datetime objects
@@ -274,9 +278,11 @@ class HdfResultsPlan:
                     return None
 
                 # Process compute times
-                process_names = [HdfUtils.convert_ras_string(name) for name in compute_processes['Process'][:]]
-                filenames = [HdfUtils.convert_ras_string(filename) for filename in compute_processes['Filename'][:]]
-                completion_times = compute_processes['Compute Time (ms)'][:]
+                # One typed read of the whole table (plan_metadata family), then fields.
+                compute_table = read_typed(compute_processes, slice(None))
+                process_names = [HdfUtils.convert_ras_string(name) for name in compute_table['Process']]
+                filenames = [HdfUtils.convert_ras_string(filename) for filename in compute_table['Filename']]
+                completion_times = compute_table['Compute Time (ms)']
 
                 compute_processes_df = pd.DataFrame({
                     'Process': process_names,
@@ -329,6 +335,7 @@ class HdfResultsPlan:
                 return pd.DataFrame(compute_processes_summary)
 
         except Exception as e:
+            reraise_required(e)
             logger.error(f"Error in get_runtime_data: {str(e)}")
             return None
 
@@ -852,7 +859,7 @@ class HdfResultsPlan:
                 output_path = "Results/Steady/Output"
                 if output_path in hdf_file:
                     output_group = hdf_file[output_path]
-                    for key, value in output_group.attrs.items():
+                    for key, value in read_attrs(output_group).items():
                         if isinstance(value, bytes):
                             attrs_dict[key] = value.decode('utf-8')
                         else:
@@ -862,7 +869,7 @@ class HdfResultsPlan:
                 summary_path = "Results/Steady/Summary"
                 if summary_path in hdf_file:
                     summary_group = hdf_file[summary_path]
-                    for key, value in summary_group.attrs.items():
+                    for key, value in read_attrs(summary_group).items():
                         if isinstance(value, bytes):
                             attrs_dict[key] = value.decode('utf-8')
                         else:
@@ -871,10 +878,10 @@ class HdfResultsPlan:
                 # Add flow file information from Plan Data
                 plan_info_path = "Plan Data/Plan Information"
                 if plan_info_path in hdf_file:
-                    plan_info = hdf_file[plan_info_path]
+                    plan_info = read_attrs(hdf_file[plan_info_path])
                     for key in ['Flow Filename', 'Flow Title']:
-                        if key in plan_info.attrs:
-                            value = plan_info.attrs[key]
+                        if key in plan_info:
+                            value = plan_info[key]
                             if isinstance(value, bytes):
                                 attrs_dict[key] = value.decode('utf-8')
                             else:
@@ -895,6 +902,7 @@ class HdfResultsPlan:
         except KeyError as e:
             raise KeyError(f"Error accessing steady state info: {str(e)}")
         except Exception as e:
+            reraise_required(e)
             raise RuntimeError(f"Error reading steady state info: {str(e)}")
 
     @staticmethod

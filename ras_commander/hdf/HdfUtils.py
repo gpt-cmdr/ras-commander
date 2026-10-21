@@ -941,8 +941,9 @@ class HdfUtils:
     def get_units_system(hdf_path: Union[str, Path]) -> Optional[str]:
         """Return the HDF root ``Units System`` attribute (e.g. ``"SI Units"``,
         ``"US Customary"``), or ``None`` when it is not stored."""
+        from ..fast_hdf import read_attrs
         with h5py.File(hdf_path, "r") as hdf_file:
-            value = hdf_file.attrs.get("Units System")
+            value = read_attrs(hdf_file).get("Units System")
         if value is None:
             return None
         if isinstance(value, (bytes, np.bytes_)):
@@ -1014,8 +1015,9 @@ class HdfUtils:
     def get_stored_ras_version(hdf_path: Union[str, Path]) -> Optional[str]:
         """Return the HDF root ``File Version`` attribute written by HEC-RAS
         (e.g. ``"HEC-RAS 5.0.7 November 2018"``), or ``None``."""
+        from ..fast_hdf import read_attrs
         with h5py.File(hdf_path, "r") as hdf_file:
-            value = hdf_file.attrs.get("File Version")
+            value = read_attrs(hdf_file).get("File Version")
         if value is None:
             return None
         if isinstance(value, (bytes, np.bytes_)):

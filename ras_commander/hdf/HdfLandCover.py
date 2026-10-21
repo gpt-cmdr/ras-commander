@@ -43,7 +43,7 @@ from ..Decorators import log_call, standardize_input
 from ..LoggingConfig import get_logger
 from .HdfBase import HdfBase
 from .HdfUtils import HdfUtils
-from ..fast_hdf import read_typed, reraise_required
+from ..fast_hdf import read_attrs, read_typed, reraise_required
 
 logger = get_logger(__name__)
 
@@ -1004,7 +1004,7 @@ class HdfLandCover:
                 if geom_group is None:
                     return None
 
-                lc_attr = geom_group.attrs.get('Land Cover Filename')
+                lc_attr = read_attrs(geom_group).get('Land Cover Filename')
                 if lc_attr is None:
                     return None
 
@@ -1027,6 +1027,7 @@ class HdfLandCover:
                     return None
 
         except Exception as e:
+            reraise_required(e)
             logger.error(f"Error reading land cover association from {hdf_path}: {e}")
             return None
 

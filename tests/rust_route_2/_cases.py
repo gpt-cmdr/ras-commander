@@ -237,3 +237,20 @@ CASES.update({
     "HdfPump.get_pump_operation_timeseries": lambda p: HdfPump.get_pump_operation_timeseries(p, _pump_station(p)),
     "HdfResultsMesh.get_boundary_conditions_timeseries": lambda p: HdfResultsMesh.get_boundary_conditions_timeseries(p),
 })
+
+
+# ---------------------------------------------------------------- route-1 attribute readers (now native)
+from ras_commander.hdf import HdfResultsPlan as _HRP, HdfUtils  # noqa: E402
+
+CASES.update({
+    "HdfResultsPlan.get_unsteady_info": lambda p: _HRP.get_unsteady_info(p),
+    "HdfResultsPlan.get_unsteady_summary": lambda p: _HRP.get_unsteady_summary(p),
+    "HdfResultsPlan.get_volume_accounting": lambda p: _HRP.get_volume_accounting(p),
+    "HdfResultsPlan.get_steady_info": lambda p: _HRP.get_steady_info(p),
+    "HdfResultsPlan.get_runtime_data": lambda p: _HRP.get_runtime_data(p),
+    "HdfStruc.get_geom_structures_attrs": lambda p: HdfStruc.get_geom_structures_attrs(p),
+    "HdfUtils.get_units_system": lambda p: HdfUtils.get_units_system(p),
+    "HdfUtils.get_stored_ras_version": lambda p: HdfUtils.get_stored_ras_version(p),
+    "HdfLandCover.get_landcover_association": lambda p: HdfLandCover.get_landcover_association(p),
+    "HdfStorageArea.get_terrain_path_from_geom_hdf": lambda p: HdfStorageArea.get_terrain_path_from_geom_hdf(p),
+})

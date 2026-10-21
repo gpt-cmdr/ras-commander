@@ -27,7 +27,7 @@ import pandas as pd
 from .HdfStruc import HdfStruc
 from ..Decorators import log_call, standardize_input
 from ..LoggingConfig import get_logger
-from ..fast_hdf import read_typed, reraise_required
+from ..fast_hdf import read_attrs, read_typed, reraise_required
 
 logger = get_logger(__name__)
 
@@ -565,9 +565,9 @@ class HdfStorageArea:
                 logger.debug("Geometry group not found in %s.", hdf_path.name)
                 return None
 
-            terrain_raw = geom_group.attrs.get("Terrain Filename")
+            terrain_raw = read_attrs(geom_group).get("Terrain Filename")
             if terrain_raw is None:
-                terrain_raw = hdf_file.attrs.get("Terrain Filename")
+                terrain_raw = read_attrs(hdf_file).get("Terrain Filename")
             if terrain_raw is None:
                 logger.debug("Terrain Filename attribute not found in %s.", hdf_path.name)
                 return None
