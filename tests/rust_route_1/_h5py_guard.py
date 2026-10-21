@@ -28,7 +28,7 @@ import h5py
 
 _H5PY_DIR = os.path.dirname(h5py.__file__)
 _ROUTER = os.path.join("ras_commander", "_fast_hdf_typed.py")
-_HARNESS = os.path.join("tests", "rust_route_1", "_cases.py")
+_HARNESS = tuple(os.path.join("tests", suite, "_cases.py") for suite in ("rust_route_1", "rust_route_2"))
 
 
 def _caller():
@@ -56,7 +56,7 @@ def _record(records, dataset, how):
         "path": dataset.name, "kind": kind, "how": how,
         "caller": f"{os.path.basename(filename)}:{function}:{line}",
         "via_router": filename.replace("/", os.sep).endswith(_ROUTER),
-        "harness": filename.replace("/", os.sep).endswith(_HARNESS),
+        "harness": filename.replace("/", os.sep).endswith(_HARNESS),  # either suite's cases
     })
 
 
