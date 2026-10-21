@@ -950,6 +950,8 @@ class HdfStruc:
         Multi-part polygons (rings/holes) are fully supported via the
         ``Polygon Parts`` dataset; the first ring is the exterior, subsequent
         rings are interiors (holes).
+        The available project CRS is attached without transforming coordinates;
+        the CRS remains unset when no projection can be resolved.
         """
         _empty = GeoDataFrame(
             columns=['Name', 'geometry', 'avg_area', 'min_elev', 'mode'],
@@ -1048,7 +1050,9 @@ class HdfStruc:
                 if not records:
                     return _empty
 
-                gdf = GeoDataFrame(records, geometry='geometry')
+                gdf = GeoDataFrame(
+                    records, geometry='geometry', crs=HdfBase.get_projection(hdf)
+                )
                 logger.debug(
                     f"Found {len(gdf)} storage area polygon(s) in {hdf_path.name}"
                 )
