@@ -112,6 +112,9 @@ This file is the canonical local instruction file for `ras_commander/hdf/`.
   aligning exactly — it drops interior rings only, never disconnected parts of a multipart model;
   pass `fill_holes=False` to keep the raw union. `geometry_type='bbox'` returns the legacy buffered
   bounding box (still used by `get_project_bounds_latlon` for data downloads).
+- `HdfStruc.get_storage_area_polygons()` attaches the available project CRS
+  through `HdfBase.get_projection()` without transforming the stored coordinates.
+  Unknown CRS remains unset; no geographic default is assigned.
 - Land cover and infiltration preprocessing: `HdfLandCover`, `HdfInfiltration`
 - Native infiltration geometry authoring:
   `HdfInfiltration.create_infiltration_override_regions()`,
