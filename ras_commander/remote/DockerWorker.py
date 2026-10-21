@@ -598,10 +598,13 @@ def execute_docker_plan(
         if worker.preprocess_on_host:
             logger.info("Running preprocessing locally (not on network share)...")
             from ..RasPreprocess import RasPreprocess
-            from ..RasPrj import RasPrj, init_ras_project
+            from ..RasPrj import RasPrj, _matching_copied_prj_file, init_ras_project
             temp_ras = RasPrj()
+            staged_prj = _matching_copied_prj_file(
+                local_input_staging, getattr(ras_obj, "prj_file", None)
+            )
             init_ras_project(
-                str(local_input_staging),
+                str(staged_prj or local_input_staging),
                 ras_obj.ras_version,
                 ras_object=temp_ras,
                 hide_intro=True,
@@ -639,7 +642,8 @@ def execute_docker_plan(
         # Extract geometry number
         from ..RasPreprocess import RasPreprocess
         plan_pattern = f"*.p{plan_number}"
-        plan_files = list(input_staging.glob(plan_pattern))
+        own_plan = input_staging / f"{project_name}.p{plan_number}"
+        plan_files = [own_plan] if own_plan.is_file() else list(input_staging.glob(plan_pattern))
         if plan_files:
             geometry_number = RasPreprocess._extract_geometry_number(plan_files[0])
         else:
@@ -690,6 +694,10 @@ def execute_docker_plan(
         environment = {
             'MAX_RUNTIME_MINUTES': str(worker.max_runtime_minutes),
             'GEOMETRY_NUMBER': geometry_number,
+            # run_ras.sh uses this to pick the project's own .prj when the
+            # staged folder holds several projects (images built before this
+            # variable existed ignore it and still take the first .prj).
+            'PROJECT_NAME': project_name,
         }
 
         # Container configuration
@@ -969,10 +977,13 @@ def execute_docker_plan_linux(
         # RasUnsteady needs, which are then uploaded.
         if worker.preprocess_on_host:
             logger.info("Running Windows preprocessing locally before upload...")
-            from ..RasPrj import RasPrj, init_ras_project
+            from ..RasPrj import RasPrj, _matching_copied_prj_file, init_ras_project
             temp_ras = RasPrj()
+            staged_prj = _matching_copied_prj_file(
+                local_input_staging, getattr(ras_obj, "prj_file", None)
+            )
             init_ras_project(
-                str(local_input_staging),
+                str(staged_prj or local_input_staging),
                 ras_obj.ras_version,
                 ras_object=temp_ras,
                 hide_intro=True,
@@ -996,7 +1007,12 @@ def execute_docker_plan_linux(
         )
 
         # Extract geometry number from the local plan file.
-        plan_files = list(local_input_staging.glob(f"*.p{plan_number}"))
+        own_plan = local_input_staging / f"{project_name}.p{plan_number}"
+        plan_files = (
+            [own_plan]
+            if own_plan.is_file()
+            else list(local_input_staging.glob(f"*.p{plan_number}"))
+        )
         geometry_number = (
             RasPreprocess._extract_geometry_number(plan_files[0])
             if plan_files
@@ -1029,6 +1045,7 @@ def execute_docker_plan_linux(
         environment = {
             "MAX_RUNTIME_MINUTES": str(worker.max_runtime_minutes),
             "GEOMETRY_NUMBER": geometry_number,
+            "PROJECT_NAME": project_name,
         }
         container_kwargs = {
             "image": worker.docker_image,

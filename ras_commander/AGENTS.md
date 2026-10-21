@@ -82,6 +82,7 @@ This file is the canonical local instruction file for the `ras_commander/` packa
 ## Execution Rules
 
 - Preserve originals when practical. Prefer `dest_folder=` for plan execution and isolated working directories for derived artifacts.
+- Copied project folders (`compute_plan`/`compute_parallel` `dest_folder`, parallel worker folders, `compute_test_mode`, permutation batches, local/Docker/PsExec remote staging) and in-place `RasPlan` refreshes re-initialize against the source project's own `.prj` file name via the module-level `ras_commander.RasPrj._matching_copied_prj_file()` (also reachable as the `RasPrj` static alias; call the module-level function so code paths that substitute the `RasPrj` class keep working). `DockerWorker` also passes `PROJECT_NAME` to the container, and `run_ras.sh` uses `${PROJECT_NAME}.prj` when it exists; images built before this change ignore it and still take the first `.prj`, so rebuild the image for multi-project folders. This only changes behavior when the folder holds several `.prj` files; single-project folders still use the normal `find_ras_prj()` folder search. New code that re-initializes a copied project must do the same instead of initializing by folder.
 - Be conservative with `max_workers * num_cores` when parallelizing runs.
 - Remote execution details live in [ras_commander/remote/AGENTS.md](remote/AGENTS.md).
 

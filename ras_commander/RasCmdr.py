@@ -85,7 +85,13 @@ from .LoggingConfig import get_logger
 from ._optional_deps import require_module
 from .RasBco import BcoMonitor
 from .RasPlan import RasPlan
-from .RasPrj import RasPrj, init_ras_project, ras
+from .RasPrj import (
+    RasPrj,
+    _copied_prj_init_kwargs,
+    _matching_copied_prj_file,
+    init_ras_project,
+    ras,
+)
 from .RasTcu import RasTcu
 from .RasUtils import RasUtils
 
@@ -3054,6 +3060,9 @@ class RasCmdr:
                 If a string is provided, it will be created in the same parent directory as the project folder.
                 If a full path is provided, it will be used as is.
                 If None, computation occurs in the original project folder, modifying the original project.
+                The copy is re-initialized against the same .prj file name as the source project, so a
+                project folder holding several projects (several .prj files) computes the project that
+                ``ras_object`` points to rather than the first .prj found.
             ras_object (RasPrj, optional): Specific RAS object to use. If None, uses the global ras instance.
                 Useful when working with multiple projects simultaneously.
             clear_geompre (bool, optional): Whether to clear geometry preprocessor files (.c## files). Defaults to False.
@@ -3311,8 +3320,17 @@ class RasCmdr:
                     logger.info("Copied project folder to destination: %s", dest_folder.name)
                     logger.debug(f"Copied project folder to destination path: {dest_folder}")
 
+                    # Re-initialize against the copy of the SAME project. A
+                    # folder search would pick an arbitrary .prj when the
+                    # project folder holds several projects.
                     compute_ras = RasPrj()
-                    compute_ras.initialize(dest_folder, ras_obj.ras_exe_path)
+                    compute_ras.initialize(
+                        dest_folder,
+                        ras_obj.ras_exe_path,
+                        **_copied_prj_init_kwargs(
+                            dest_folder, ras_obj.prj_file
+                        ),
+                    )
                     compute_prj_path = compute_ras.prj_file
             if dest_folder is None:
                 compute_ras = ras_obj
@@ -4375,6 +4393,8 @@ class RasCmdr:
                 If None, results are consolidated back to the original project folder.
                 If string, creates folder in the project's parent directory.
                 If Path, uses the exact path provided.
+                Worker folders and the destination are re-initialized against the source
+                project's .prj file name, so multi-project folders stay on the same project.
             overwrite_dest (bool): Whether to overwrite existing destination folder.
                 Set to True to replace an existing destination folder with the same name.
             skip_existing (bool): If True, skip computation for plans whose
@@ -4592,8 +4612,11 @@ class RasCmdr:
 
                 try:
                     worker_ras = RasPrj()
+                    worker_prj = _matching_copied_prj_file(
+                        worker_folder, ras_obj.prj_file
+                    )
                     worker_ras_object = init_ras_project(
-                        ras_project_folder=worker_folder,
+                        ras_project_folder=worker_prj or worker_folder,
                         ras_version=ras_obj.ras_exe_path,
                         ras_object=worker_ras,
                         hide_intro=True,
@@ -5102,7 +5125,13 @@ class RasCmdr:
             # This ensures results_df reflects results in the destination folder
             if dest_folder is not None:
                 try:
-                    ras_obj.initialize(final_dest_folder, ras_obj.ras_exe_path)
+                    ras_obj.initialize(
+                        final_dest_folder,
+                        ras_obj.ras_exe_path,
+                        **_copied_prj_init_kwargs(
+                            final_dest_folder, ras_obj.prj_file
+                        ),
+                    )
                     logger.info("Re-initialized ras_object from destination folder: %s", final_dest_folder.name)
                     logger.debug(f"Re-initialized ras_object from destination path: {final_dest_folder}")
                 except Exception as e:
@@ -5370,7 +5399,13 @@ class RasCmdr:
 
             try:
                 compute_ras = RasPrj()
-                compute_ras.initialize(compute_folder, ras_obj.ras_exe_path)
+                compute_ras.initialize(
+                    compute_folder,
+                    ras_obj.ras_exe_path,
+                    **_copied_prj_init_kwargs(
+                        compute_folder, ras_obj.prj_file
+                    ),
+                )
                 compute_prj_path = compute_ras.prj_file
                 execution_result_format = infer_execution_result_format(
                     compute_ras

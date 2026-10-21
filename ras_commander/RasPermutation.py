@@ -522,7 +522,7 @@ class RasPermutation:
         Generate plan permutations from a template plan.
         """
         from .RasPlan import RasPlan
-        from .RasPrj import RasPrj, init_ras_project, ras
+        from .RasPrj import RasPrj, _matching_copied_prj_file, init_ras_project, ras
         from .RasUtils import RasUtils
 
         if not callable(apply_fn):
@@ -603,8 +603,11 @@ class RasPermutation:
             )
 
             batch_ras = RasPrj()
+            batch_prj = _matching_copied_prj_file(
+                batch_folder, getattr(source_ras, "prj_file", None)
+            )
             init_ras_project(
-                batch_folder,
+                batch_prj or batch_folder,
                 getattr(source_ras, "ras_exe_path", None),
                 ras_object=batch_ras,
                 load_results_summary=False,
@@ -788,7 +791,7 @@ class RasPermutation:
                 instead of local compute_parallel().
         """
         from .RasCmdr import RasCmdr
-        from .RasPrj import RasPrj, init_ras_project, ras
+        from .RasPrj import RasPrj, _matching_copied_prj_file, init_ras_project, ras
 
         if "master_log" not in plan_matrix:
             raise ValueError("plan_matrix must contain a 'master_log' entry")
@@ -818,8 +821,11 @@ class RasPermutation:
             )
 
             batch_ras = RasPrj()
+            batch_prj = _matching_copied_prj_file(
+                batch_folder, getattr(source_ras, "prj_file", None)
+            )
             init_ras_project(
-                batch_folder,
+                batch_prj or batch_folder,
                 ras_exe_path,
                 ras_object=batch_ras,
                 load_results_summary=False,
