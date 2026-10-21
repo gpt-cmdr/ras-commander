@@ -39,6 +39,7 @@ from .HdfBase import HdfBase
 from .HdfMesh import HdfMesh
 from .HdfXsec import HdfXsec
 from ..Decorators import standardize_input, log_call
+from ..fast_hdf import reraise_required
 from ..LoggingConfig import get_logger
 
 if TYPE_CHECKING:
@@ -69,6 +70,7 @@ class HdfProject:
             with h5py.File(hdf_path, "r") as hdf_file:
                 missing = [path for path in paths if path not in hdf_file]
         except Exception as e:
+            reraise_required(e)
             logger.debug(
                 "Could not inspect %s paths in %s: %s",
                 label,
@@ -237,6 +239,7 @@ class HdfProject:
                     used_hdf = True
                     logger.debug(f"Found {len(mesh_polygons)} 2D flow areas")
             except Exception as e:
+                reraise_required(e)
                 logger.debug(f"No 2D areas found or error: {e}")
 
         if include_storage and hdf_path is not None:
@@ -254,6 +257,7 @@ class HdfProject:
                         crs = storage_areas.crs
                     logger.debug(f"Found {len(storage_polygons)} HDF storage areas")
             except Exception as e:
+                reraise_required(e)
                 logger.debug(f"No HDF storage areas found or error: {e}")
 
         # Get 1D cross sections and river centerlines
@@ -283,6 +287,7 @@ class HdfProject:
                         used_hdf = True
                         logger.debug(f"Found {len(cross_sections)} cross sections")
                 except Exception as e:
+                    reraise_required(e)
                     logger.debug(
                         "Could not extract cross sections from %s: %s",
                         hdf_path,
@@ -305,6 +310,7 @@ class HdfProject:
                             crs = centerlines.crs
                         logger.debug(f"Found {len(centerlines)} river centerlines")
                 except Exception as e:
+                    reraise_required(e)
                     logger.debug(
                         "Could not extract river centerlines from %s: %s",
                         hdf_path,
@@ -327,6 +333,7 @@ class HdfProject:
                 geometries.extend(text_polygons)
                 used_plaintext |= bool(text_polygons)
             except Exception as e:
+                reraise_required(e)
                 logger.debug(
                     "Plain-text 2D/storage extent fallback failed for %s: %s",
                     geom_path,
@@ -346,6 +353,7 @@ class HdfProject:
                     used_plaintext = True
                     logger.debug("BBox extent: using plain-text 1D footprint fallback")
             except Exception as e:
+                reraise_required(e)
                 logger.debug(
                     "Plain-text 1D extent fallback failed for %s: %s",
                     geom_path,
@@ -475,6 +483,7 @@ class HdfProject:
                 try:
                     ras_obj.check_initialized()
                 except Exception as exc:
+                    reraise_required(exc)
                     raise ValueError(f"RAS object is not initialized: {exc}") from exc
 
             plan_df = getattr(ras_obj, "plan_df", None)
@@ -602,6 +611,7 @@ class HdfProject:
                 if crs is not None:
                     return crs
             except Exception as exc:
+                reraise_required(exc)
                 logger.debug("Could not resolve extent CRS from HDF: %s", exc)
         if ras_object is not None:
             return getattr(ras_object, "project_crs", None)
@@ -756,6 +766,7 @@ class HdfProject:
                         crs = mesh_areas.crs
                     logger.debug(f"Footprint: {len(hdf_polygons)} HDF 2D flow areas")
             except Exception as e:
+                reraise_required(e)
                 logger.debug(f"No 2D areas found or error: {e}")
 
         if include_storage and hdf_path is not None:
@@ -775,6 +786,7 @@ class HdfProject:
                         f"Footprint: {len(storage_polygons)} HDF storage areas"
                     )
             except Exception as e:
+                reraise_required(e)
                 logger.debug(f"No HDF storage areas found or error: {e}")
 
         if geom_path is not None and (
@@ -797,6 +809,7 @@ class HdfProject:
                         len(text_polygons),
                     )
             except Exception as e:
+                reraise_required(e)
                 logger.debug(
                     "Plain-text 2D/storage footprint fallback failed for %s: %s",
                     geom_path,
@@ -824,6 +837,7 @@ class HdfProject:
                             f"Footprint: {len(hdf_polygons)} HDF 1D reach footprints"
                         )
                 except Exception as e:
+                    reraise_required(e)
                     logger.debug(f"No 1D HDF footprint or error: {e}")
 
             if not found_1d_polygon and geom_path is not None:
@@ -845,6 +859,7 @@ class HdfProject:
                             len(text_polygons),
                         )
                 except Exception as e:
+                    reraise_required(e)
                     logger.debug(
                         "Plain-text 1D footprint fallback failed for %s: %s",
                         geom_path,
@@ -863,6 +878,7 @@ class HdfProject:
                             if crs is None:
                                 crs = lines.crs
                     except Exception as e:
+                        reraise_required(e)
                         logger.debug(f"1D line fallback getter failed: {e}")
 
         # Resolve the core footprint geometry.
@@ -1070,6 +1086,8 @@ class HdfProject:
             return (west, south, east, north)
             
         except Exception as e:
+            
+            reraise_required(e)
             bounds = extent_gdf.total_bounds
             west, south, east, north = bounds
             logger.error(
