@@ -183,26 +183,17 @@ def test_successful_pump_results_do_not_log_by_default(tmp_path, caplog):
     assert _records(caplog) == []
 
 
-def test_timestamp_mismatch_warning_is_specific_and_path_concise(tmp_path, caplog):
+def test_timestamp_mismatch_error_is_block_local_and_path_concise(tmp_path, caplog):
     hdf_path = _write_pump_results_hdf(
-        tmp_path / "mismatch.p01.hdf",
-        station_name="Pump A",
-        rows=2,
-        timestamp_count=1,
+        tmp_path / "mismatch.p01.hdf", station_name="Pump A", rows=2, timestamp_count=1,
     )
-
     with caplog.at_level(logging.WARNING, logger=LOGGER_NAME):
-        timeseries = HdfPump.get_pump_station_timeseries(
-            hdf_path,
-            pump_station="Pump A",
-        )
-
-    records = _records(caplog)
-    assert len(records) == 1
-    message = records[0].getMessage()
-    assert records[0].levelno == logging.WARNING
-    assert "Pump A" in message
-    assert "Structure Variables" in message
-    assert "timestamps=1 rows=2" in message
+        with pytest.raises(ValueError) as exc_info:
+            HdfPump.get_pump_station_timeseries(hdf_path, pump_station="Pump A")
+    message = str(exc_info.value)
+    assert "DSS Hydrograph Output/Unsteady Time Series/Time Date Stamp (ms)" in message
+    assert "has shape (1,); expected (2,)" in message
+    assert "Pumping Stations/Pump A/Structure Variables" in message
     assert str(hdf_path) not in message
-    assert timeseries.coords["time"].values.tolist() == [0, 1]
+    assert str(hdf_path.parent) not in message
+    assert _records(caplog) == []

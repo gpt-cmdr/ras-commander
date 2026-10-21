@@ -165,7 +165,7 @@ def _bc_line_insertion_index(file_lines: List[str]) -> int:
             last_bc_text_idx = i
         if stripped.startswith("Reference Line Name=") and first_refline_idx == -1:
             first_refline_idx = i
-        if stripped.startswith("IC Point Name=") and first_ic_point_idx == -1:
+        if stripped.startswith(("IC Point Name=", "Reference Point Name=")) and first_ic_point_idx == -1:
             first_ic_point_idx = i
         if stripped.startswith("LCMann ") and first_lcmann_idx == -1:
             first_lcmann_idx = i

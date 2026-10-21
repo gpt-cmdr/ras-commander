@@ -8,7 +8,7 @@ Reference points provide WSE/depth extraction at specific cell locations.
 
 Format discovered from BayouConway production model (2026-04-08):
   Reference Line: keyword-value pairs + fixed-width coordinate block
-  Reference Point: stored as IC Points with "Reference Point" name prefix
+  Reference Point: native Reference Point Name/Position records
 
 All methods are static. Do not instantiate.
 """
@@ -218,7 +218,7 @@ def _reference_line_insert_index(file_lines: List[str]) -> int:
             and first_existing_refline_idx == -1
         ):
             first_existing_refline_idx = idx
-        if stripped.startswith("IC Point Name=") and first_ic_point_idx == -1:
+        if stripped.startswith(("IC Point Name=", "Reference Point Name=")) and first_ic_point_idx == -1:
             first_ic_point_idx = idx
         if stripped.startswith("LCMann ") and first_lcmann_idx == -1:
             first_lcmann_idx = idx
@@ -270,8 +270,8 @@ def _build_reference_line_block(
     x_mid, y_mid = coords[mid_idx]
 
     lines = []
-    lines.append(f"Reference Line Name={name:<40s}")
-    lines.append(f"Reference Line Storage Area={storage_area:<16s}")
+    lines.append("Reference Line Name=" + name + " " * (40 - len(name.encode("utf-8"))))
+    lines.append("Reference Line Storage Area=" + storage_area + " " * (16 - len(storage_area.encode("utf-8"))))
     lines.append(
         f"Reference Line Start Position= {x_start} , {y_start} "
     )
@@ -298,18 +298,34 @@ def _build_reference_line_block(
     return lines
 
 
-def _build_ic_point_block(name: str, x: float, y: float) -> List[str]:
-    """
-    Build a reference point (IC Point) plain text block.
-
-    Format:
-        IC Point Name=<name padded to 40>
-        IC Point Position=X,Y
-    """
+def _build_reference_point_block(name: str, x: float, y: float) -> List[str]:
+    """Native 6.6/7.0.1 two-line record, with a 40-byte name field."""
     return [
-        f"IC Point Name={name:<40s}",
-        f"IC Point Position={x},{y}",
+        "Reference Point Name=" + name + " " * (40 - len(name.encode("utf-8"))),
+        f"Reference Point Position={x},{y}",
     ]
+
+
+def _reference_point_records(file_lines: List[str]) -> List[dict]:
+    records = []
+    names = set()
+    for i, line in enumerate(file_lines):
+        if not line.startswith("Reference Point Name="):
+            continue
+        name = _validate_reference_line_field(line.split("=", 1)[1].strip(), "point name", 40)
+        if name in names:
+            raise ValueError(f"Duplicate native reference point name {name!r}")
+        names.add(name)
+        if i + 1 >= len(file_lines) or not file_lines[i + 1].startswith("Reference Point Position="):
+            raise ValueError(f"Native reference point {name!r} is missing its Position record")
+        xy = file_lines[i + 1].split("=", 1)[1].strip().split(",")
+        if len(xy) != 2:
+            raise ValueError(f"Native reference point {name!r} requires exactly X,Y")
+        x, y = map(float, xy)
+        if not math.isfinite(x) or not math.isfinite(y):
+            raise ValueError(f"Native reference point {name!r} has non-finite coordinates")
+        records.append(dict(name=name, x=x, y=y))
+    return records
 
 
 def _point_xy(point: Any) -> tuple[float, float]:
@@ -1012,12 +1028,17 @@ class GeomReferenceFeatures:
         with open(geom_file, "r", encoding="utf-8", errors="ignore", newline="") as f:
             file_lines = f.readlines()
 
+        names = {b['name'] for b in _reference_line_blocks(file_lines)}
         # Build reference line blocks
         new_blocks = []
         for item in lines:
-            name = str(item["name"]).strip()
+            name = _validate_reference_line_field(item["name"], "line name", 40, allow_commas=True)
+            storage_area = _validate_reference_line_field(storage_area, "storage_area", 16)
+            if name in names:
+                raise ValueError(f"Duplicate reference line name {name!r}")
+            names.add(name)
             coords = np.asarray(item["coordinates"], dtype=np.float64)
-            if coords.ndim != 2 or coords.shape[1] != 2 or len(coords) < 2:
+            if coords.ndim != 2 or coords.shape[1] != 2 or len(coords) < 2 or not np.isfinite(coords).all():
                 raise ValueError(
                     f"Reference line '{name}' needs at least 2 points as (N,2) array"
                 )
@@ -1036,7 +1057,7 @@ class GeomReferenceFeatures:
             stripped = line.rstrip("\r\n")
             if stripped.startswith("BC Line Text Position="):
                 last_bc_line_idx = i
-            if stripped.startswith("IC Point Name=") and first_ic_point_idx == -1:
+            if stripped.startswith(("IC Point Name=", "Reference Point Name=")) and first_ic_point_idx == -1:
                 first_ic_point_idx = i
             if stripped.startswith("LCMann ") and first_lcmann_idx == -1:
                 first_lcmann_idx = i
@@ -1247,199 +1268,61 @@ class GeomReferenceFeatures:
         geom_file: Union[str, Path],
         points: List[dict],
     ) -> int:
-        """
-        Insert reference points into a plain text geometry file.
+        """Append native Reference Point Name/Position records to geometry.
 
-        This helper writes IC Point records with names starting with
-        "Reference Point" in the geometry's IC Point section. Text readback
-        does not establish that HEC-RAS recognizes them as native result
-        reference points. A successful subsequent run is also insufficient:
-        the retained HEC-RAS 7.0 run in example 314 did not produce a native
-        Reference Points result group. Check for recorded output explicitly;
-        nearest-cell sampling is a different extraction method.
+        points contains unique name (at most 40 UTF-8 bytes), finite x and y in
+        project coordinates. Names are preserved without a prefix. Native records
+        are placed before LCMann, after existing reference features. An existing
+        .bak is preserved; validation completes before writing. Returns the number
+        inserted. Duplicate names, invalid fields or coordinates raise ValueError.
 
-        Args:
-            geom_file: Path to geometry file (.g##)
-            points: List of dicts with:
-                - 'name': str -- unique name (will be prefixed with
-                  "Reference Point " if not already)
-                - 'x': float -- X coordinate
-                - 'y': float -- Y coordinate
-
-        Returns:
-            int: Number of reference points inserted
-
-        Example:
-            >>> GeomReferenceFeatures.add_reference_points(
-            ...     "model.g01",
-            ...     points=[
-            ...         {"name": "Gauge_01", "x": 1685000, "y": 145000},
-            ...     ],
-            ... )
+        Before this fix the method wrote IC Point records. Existing IC Points are
+        preserved and are not converted or returned as native reference points.
+        To migrate, explicitly supply desired names/coordinates to this method.
+        Mesh membership and solver-recorded output require preprocessing and a new
+        computation; a text round trip alone does not establish output validity.
         """
         geom_file = Path(geom_file)
         if not geom_file.exists():
             raise FileNotFoundError(f"Geometry file not found: {geom_file}")
-
         if not points:
             raise ValueError("points must contain at least one reference point")
-
-        # Create backup
-        backup_path = Path(str(geom_file) + ".bak")
-        if not backup_path.exists():
-            shutil.copy2(geom_file, backup_path)
-            logger.debug(f"Created backup: {backup_path}")
-
-        with open(geom_file, "r", encoding="utf-8", errors="ignore", newline="") as f:
+        with open(geom_file, "r", encoding="utf-8", newline="") as f:
             file_lines = f.readlines()
-
-        # Build IC Point blocks
-        new_blocks = []
+        names = {p["name"] for p in _reference_point_records(file_lines)}
+        blocks = []
         for item in points:
-            name = str(item["name"]).strip()
-            if not name.startswith("Reference Point"):
-                name = f"Reference Point {name}"
-            x = float(item["x"])
-            y = float(item["y"])
-            block = _build_ic_point_block(name, x, y)
-            new_blocks.extend(block)
-
-        # Find insertion point: at existing IC Points or before LCMann
-        insert_idx = len(file_lines)
-        first_ic_point_idx = -1
-        first_lcmann_idx = -1
-
-        for i, line in enumerate(file_lines):
-            stripped = line.rstrip("\r\n")
-            if stripped.startswith("IC Point Name=") and first_ic_point_idx == -1:
-                first_ic_point_idx = i
-            if stripped.startswith("LCMann ") and first_lcmann_idx == -1:
-                first_lcmann_idx = i
-
-        if first_ic_point_idx >= 0:
-            insert_idx = first_ic_point_idx
-        elif first_lcmann_idx >= 0:
-            insert_idx = first_lcmann_idx
-
-        line_ending = "\r\n" if file_lines and "\r\n" in file_lines[0] else "\n"
-        insert_lines = [block_line + line_ending for block_line in new_blocks]
-        file_lines[insert_idx:insert_idx] = insert_lines
-
-        _write_ras_text(geom_file, "".join(file_lines), encoding="utf-8")
-
-        logger.debug(
-            f"Inserted {len(points)} reference point(s) into {geom_file.name} "
-            f"at line {insert_idx + 1}"
-        )
+            name = _validate_reference_line_field(item['name'], "point name", 40)
+            if name in names:
+                raise ValueError(f"Duplicate native reference point name {name!r}")
+            names.add(name)
+            x, y = float(item['x']), float(item['y'])
+            if not math.isfinite(x) or not math.isfinite(y):
+                raise ValueError(f"Reference point {name!r} needs finite X,Y")
+            blocks.extend(_build_reference_point_block(name, x, y))
+        insert = next((i for i, line in enumerate(file_lines) if line.startswith("LCMann ")), len(file_lines))
+        ending = "\r\n" if file_lines and file_lines[0].endswith("\r\n") else "\n"
+        file_lines[insert:insert] = [line + ending for line in blocks]
+        GeomParser.safe_write_geometry(geom_file, file_lines, create_backup=True)
         return len(points)
 
     @staticmethod
     @log_call
-    def get_reference_lines(
-        geom_file: Union[str, Path],
-    ) -> List[dict]:
-        """
-        Read reference lines from a plain text geometry file.
-
-        Returns:
-            List of dicts with 'name', 'storage_area', 'coordinates' keys.
-        """
+    def get_reference_lines(geom_file: Union[str, Path]) -> List[dict]:
+        """Read named area-associated lines; reject malformed coordinate blocks."""
         geom_file = Path(geom_file)
-        if not geom_file.exists():
-            raise FileNotFoundError(f"Geometry file not found: {geom_file}")
-
-        with open(geom_file, "r", encoding="utf-8", errors="ignore") as f:
-            file_lines = f.readlines()
-
-        results = []
-        i = 0
-        while i < len(file_lines):
-            line = file_lines[i].rstrip("\r\n")
-            if line.startswith("Reference Line Name="):
-                name = line.split("=", 1)[1].strip()
-                storage_area = ""
-                n_pts = 0
-
-                # Read subsequent keywords
-                j = i + 1
-                while j < len(file_lines):
-                    sub = file_lines[j].rstrip("\r\n")
-                    if sub.startswith("Reference Line Storage Area="):
-                        storage_area = sub.split("=", 1)[1].strip()
-                    elif sub.startswith("Reference Line Arc="):
-                        n_pts = int(sub.split("=", 1)[1].strip())
-                        break
-                    j += 1
-
-                # Read coordinate block
-                coords = []
-                k = j + 1
-                while len(coords) < n_pts and k < len(file_lines):
-                    coord_line = file_lines[k].rstrip("\r\n")
-                    if coord_line.startswith("Reference Line"):
-                        break
-                    # Parse 16-char fixed-width fields
-                    vals = []
-                    for start in range(0, len(coord_line), 16):
-                        chunk = coord_line[start : start + 16].strip()
-                        if chunk:
-                            try:
-                                vals.append(float(chunk))
-                            except ValueError:
-                                break
-                    for vi in range(0, len(vals) - 1, 2):
-                        coords.append((vals[vi], vals[vi + 1]))
-                    k += 1
-
-                results.append({
-                    "name": name,
-                    "storage_area": storage_area,
-                    "coordinates": coords,
-                })
-                i = k
-            else:
-                i += 1
-
-        return results
+        with open(geom_file, "r", encoding="utf-8", newline="") as f:
+            blocks = _reference_line_blocks(f.readlines())
+        return [dict(name=b['name'], storage_area=b['storage_area'], coordinates=b['coordinates']) for b in blocks]
 
     @staticmethod
     @log_call
-    def get_reference_points(
-        geom_file: Union[str, Path],
-    ) -> List[dict]:
+    def get_reference_points(geom_file: Union[str, Path]) -> List[dict]:
+        """Read native Reference Point records as name/x/y dictionaries.
+
+        IC Point records are separate initial-condition features and are ignored,
+        even when their names start with 'Reference Point'. No inferred conversion
+        occurs. Malformed native records or duplicate names raise ValueError.
         """
-        Read reference points (IC Points with "Reference Point" names)
-        from a plain text geometry file.
-
-        Returns:
-            List of dicts with 'name', 'x', 'y' keys.
-        """
-        geom_file = Path(geom_file)
-        if not geom_file.exists():
-            raise FileNotFoundError(f"Geometry file not found: {geom_file}")
-
-        with open(geom_file, "r", encoding="utf-8", errors="ignore") as f:
-            file_lines = f.readlines()
-
-        results = []
-        i = 0
-        while i < len(file_lines):
-            line = file_lines[i].rstrip("\r\n")
-            if line.startswith("IC Point Name=") and "Reference Point" in line:
-                name = line.split("=", 1)[1].strip()
-                if i + 1 < len(file_lines):
-                    pos_line = file_lines[i + 1].rstrip("\r\n")
-                    if pos_line.startswith("IC Point Position="):
-                        xy = pos_line.split("=", 1)[1]
-                        parts = xy.split(",")
-                        if len(parts) >= 2:
-                            results.append({
-                                "name": name,
-                                "x": float(parts[0]),
-                                "y": float(parts[1]),
-                            })
-                i += 2
-            else:
-                i += 1
-
-        return results
+        with open(Path(geom_file), "r", encoding="utf-8", newline="") as f:
+            return _reference_point_records(f.readlines())

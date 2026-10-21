@@ -1,0 +1,62 @@
+Geom Title=Single 2D Area - Internal Dam Structure
+Program Version=5.07
+Storage Area=BaldEagleCr     ,,
+Connection=Sayers Dam      ,2003113.8419933,323189.7248082
+Connection Desc=
+Connection Line=41
+      2002713.51       323365.78      2002741.38       323338.79
+     2002786.294     323318.4554     2002861.192     323282.8787
+     2002947.325      323247.302     2003016.606     323213.5978
+     2003091.505     323178.0211     2003168.275     323149.9342
+     2003254.408     323121.8473     2003325.562      323112.485
+     2003396.715     323110.6126     2003469.741     323116.2299
+     2003531.532     323121.8473     2003617.665     323146.1893
+     2003690.691     323179.8935     2003761.845     323222.9601
+     2003819.891     323256.6643     2003885.427     323282.8787
+     2003952.835     323301.6033     2004003.392     323314.7105
+     2004065.183      323316.583     2004134.464     323314.7105
+     2004237.449     323303.4758     2004376.011     323273.5164
+     2004965.835     323153.6791     2005156.826     323118.1024
+     2005265.429     323086.2706     2005447.057     323018.8621
+     2005583.747     322951.4536     2005677.369     322889.6625
+       2005784.1     322816.6366      2005890.83     322726.7586
+     2006006.922     322614.4111     2006068.713     322550.7475
+     2006220.382     322395.3335     2006411.373     322194.9804
+     2006583.639     322015.2244     2006900.085     321693.1616
+     2007325.133     321253.1339     2008274.469     320270.0933
+      2008312.81       320226.29
+Connection Last Edited Time=Dec/10/2015 10:51:59
+Conn Near Repeats=1
+Conn Protection Radius=-1
+Connection Up SA=BaldEagleCr     
+Connection Dn SA=BaldEagleCr     
+Conn Routing Type= 1 
+Conn Use RC Family=False
+Conn OverFlow Method 2D=True
+Conn Weir WD=80
+Conn Weir Coef=3.1
+Conn Weir Is Ogee=-1 
+Conn Weir Design EG=20
+Conn Weir Design HT=12
+Conn Simple Spill Pos Coef=0.05
+Conn Simple Spill Neg Coef=0.05
+Conn Weir SE= 6 
+       0     683  1774.3     683  1774.3     657  2374.3     657  2374.3     683
+ 6882.06     683
+Conn Gate Name Wd,H,Inv,GCoef,Exp_T,Exp_O,Exp_H,Type,WCoef,Is_Ogee,SpillHt,DesHd,#Openings
+Gate #1     ,7,15,593,0.65,0,1,0.5, 0 ,3, 0 ,,, 2 ,0,0.8, 0 ,0.65,,0,0,0, 0 
+    5258    5278
+Conn Gate Opening=1,Opening #1,0
+Conn Gate Opening=2,Opening #2,0
+
+Conn Outlet Rating Curve= 0 ,False,,
+Reference Point Name=RP_Upper                                
+Reference Point Position=2000000.0,312250.0
+Reference Point Name=RP_Middle                               
+Reference Point Position=2030250.0,335250.0
+Reference Point Name=RP_Lower                                
+Reference Point Position=2063500.0,352250.0
+IC Point Name=Reference Point RP_Upper                
+IC Point Position=2000000,312250
+IC Point Elev=615.25
+LCMann Time=Dec/10/2015 10:56:21

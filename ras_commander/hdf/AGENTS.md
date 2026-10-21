@@ -16,6 +16,14 @@ This file is the canonical local instruction file for `ras_commander/hdf/`.
 - Infrastructure and land surface: `HdfPipe`, `HdfPump`, `HdfInfiltration`, `HdfLandCover`
 - Plotting and analysis: `HdfPlot`, `HdfResultsPlot`, `HdfBenefitAreas`, `HdfChannelCapacity`, `HdfFluvialPluvial`
 
+- `HdfFluvialPluvial.generate_fluvial_pluvial_polygons()` converts native polygon
+  areas using both projected horizontal CRS axis factors before applying acre
+  thresholds. Missing/geographic CRS skips filtering with a warning; unresolved
+  projected units and other processing failures log contextual ERROR plus traceback
+  and return an empty GeoDataFrame, discarding partial output. Existing upstream
+  input/decorator validation exceptions remain unchanged. No status attributes are added.
+
+
 ## Implementation Rules
 
 - Follow the existing static-class pattern.
@@ -34,9 +42,30 @@ This file is the canonical local instruction file for `ras_commander/hdf/`.
 
 ## Input And Output Rules
 
+- Pump operation and hydrograph readers use only their owning DSS Profile or
+  DSS Hydrograph block's stored timestamps (seconds or milliseconds), falling
+  back to that block's finite nondecreasing numeric `Time` in days only when
+  timestamps are absent. Numeric axes expose `time_units` on DataFrames or
+  `time.units` on DataArrays. Missing, malformed or mismatched axes raise;
+  never borrow Base Output time or synthesize integer row indexes.
+
 - Accept the flexible HDF-facing input forms already used in this package: plan numbers, prefixed plan numbers, paths, and open HDF handles where the decorator pattern already allows them.
 - Return pandas or GeoPandas objects in the shapes established by nearby code. Do not invent a new container style for one method unless the surrounding API also changes.
 - Log read failures with enough file context to debug the issue.
+- Packed `Info`/`Parts`/`Points` features: Parts offsets are relative to the
+  feature's own point slice and bounded by its point count. Resolve offsets for
+  the complete feature, never per part or by whether values fit the global
+  range; legacy global offsets are accepted only when all parts together cover
+  the point slice exactly. `_packed_parts.resolve_feature_part_ranges()` does
+  this for `HdfBndry.get_refinement_regions()` and `HdfStruc.get_structures()`.
+- `HdfStruc.get_structures()` returns a MultiLineString (one line per stored
+  part, no connecting segment) for a structure whose Centerline Info Part
+  Count is greater than 1; single-part centerlines remain LineStrings.
+- A zero-point centerline (Info Point Count 0, e.g. lateral structures in
+  Muncie, Baxter, OrleansEx) is a valid empty range, as in the native engine.
+  `get_structures()` returns None geometry for it (the missing-geometry
+  convention used by `HdfPipe` and the other readers). Out-of-range starts,
+  negative counts, one-point centerlines and inconsistent Parts still raise.
 
 ## Common Entry Points
 
@@ -79,6 +108,12 @@ This file is the canonical local instruction file for `ras_commander/hdf/`.
   log processing failures at ERROR with path, parameters, stage and traceback,
   then return an empty GeoDataFrame, discarding partial geometry. Input/decorator
   validation exceptions remain unchanged. No status/error attributes are added.
+- Unsteady `HdfResultsQuery` velocity queries at integer time indexes prefer stored
+  `Cell Velocity - Velocity X/Y` components per mesh. Validate their stored
+  cell Location, time/geometry axes, physical count and velocity units; compute
+  speed from those components. Legacy components and face reconstruction remain
+  fallbacks when the stored components are absent. Malformed stored components
+  raise errors instead of silently selecting reconstruction.
 - Large 2D result access: `HdfResultsMesh.get_mesh_timeseries(...,
   return_type="view")` returns an immutable `HdfResultView`;
   `iter_mesh_timeseries()` emits untruncated bounded batches; and
@@ -87,6 +122,9 @@ This file is the canonical local instruction file for `ras_commander/hdf/`.
   handle and validates its source fingerprint whenever it reads.
 - 2D mobile-bed (sediment) results: `HdfResultsSediment` (`is_sediment_plan()`, `get_sediment_mesh_areas()`, `get_cell_bed_change()`/`get_cell_bed_elevation()`/`get_active_layer_grain_class()` -> GeoDataFrame, `get_bed_change_volumes()` -> erosion/deposition/net volume per area, `get_cell_bed_change_timeseries()` -> xr.DataArray). Reads the `Sediment Bed` output block; per-cell arrays align with computed `Cells Surface Area` (zero-area ghost cells drop out of volume integrals). Covered by `examples/230_mesh_sensitivity_analysis.ipynb`.
 - 1D cross section geometry and results: `HdfXsec`, `HdfResultsXsec`
+- `HdfStruc.get_structures()` keeps one-based public `Structure ID` values,
+  joining bridge coefficients by their native zero-based Attributes row IDs.
+  Duplicate, noninteger or out-of-range coefficient IDs are errors.
 - 1D river edge lines: `HdfXsec.get_river_edge_lines()` (stored `Geometry/River Edge Lines`);
   `HdfXsec.generate_river_edge_lines()` builds them from XS cut-line end points when none are
   stored (pure-Python equivalent of RASMapper "Create Edge Lines at XS Limits") — it returns a
@@ -119,6 +157,9 @@ This file is the canonical local instruction file for `ras_commander/hdf/`.
   aligning exactly — it drops interior rings only, never disconnected parts of a multipart model;
   pass `fill_holes=False` to keep the raw union. `geometry_type='bbox'` returns the legacy buffered
   bounding box (still used by `get_project_bounds_latlon` for data downloads).
+- `HdfStruc.get_storage_area_polygons()` attaches the available project CRS
+  through `HdfBase.get_projection()` without transforming the stored coordinates.
+  Unknown CRS remains unset; no geographic default is assigned.
 - Land cover and infiltration preprocessing: `HdfLandCover`, `HdfInfiltration`
 - Native infiltration geometry authoring:
   `HdfInfiltration.create_infiltration_override_regions()`,
@@ -140,3 +181,30 @@ This file is the canonical local instruction file for `ras_commander/hdf/`.
 
 - Use real example HDF files when validating behavior.
 - Prefer targeted tests over synthetic HDF fixtures unless a regression cannot be reproduced against real examples.
+
+## Pipe network reads
+
+- `HdfPipe.get_pipe_network_timeseries(..., pipe_network_name=None,
+  output_block="DSS Hydrograph Output")` defaults to the first geometry Attributes
+  network. Base and DSS use only their own timestamps; absent/mismatched axes raise.
+- Domain comes from stored Location plus geometry count. Positional `location`
+  remains available; `node_id`/`conduit_id` hold exact Node/Conduit Indices.
+  `extract_timeseries_for_node` and `extract_timeseries_for_conduit` select stored IDs,
+  accept network/block options and raise for unknown IDs. Both preserve the
+  explicit `ras_object` for positional and keyword `plan_hdf_path` plan numbers.
+- `get_pipe_network_summary(..., pipe_network_name=None)` returns literal Base
+  summary rows and volume-accounting attributes in long form. Row/column ordinals,
+  labels, units, values, shapes and raw metadata are retained. Volume-accounting
+  rows carry null units; the `Vol Accounting in` row names the volume unit.
+  `get_pipe_conduits` validates terrain-profile start/count slices and refuses
+  partially present profile tables. The legacy
+  Summary/Pipe Network table keeps its historical return shape when present
+  without geometry network identities. One-row minima never
+  receive a fabricated time row; absent Location does not imply a typed domain.
+- Pipe geometry defaults to the stored CRS; explicit `crs` overrides it. Parts
+  offsets are relative to each feature's Points slice. Unqualified multipart polygon
+  topology refuses. Network Node Points resolve global stored IDs, and Cell Property
+  Table rows align by cell position, not their separate lookup-table Info Index.
+- `get_pipe_profile` uses a global conduit geometry row (the stored conduit ID),
+  not its position in a selected network. Optional inlets can be absent; a present
+  inlet group missing Attributes raises rather than disappearing silently.

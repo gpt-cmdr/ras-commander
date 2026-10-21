@@ -231,9 +231,11 @@ they are proposals to inspect, not proof of a valid hydraulic section.
 See [314 — reference-line generation](../notebooks/314_reference_line_generation.md)
 and [207 — reference lines and points](../notebooks/207_reference_lines_and_points.md).
 
-The adjacent `add_reference_points` writer currently writes IC-point records.
-Do not assume recomputing those records produces native reference-point output:
-example 314 retained a HEC-RAS 7.0 run with no native Reference Points group.
+The `add_reference_points` writer now writes native Reference Point records and
+preserves literal names. Existing IC-prefixed records are unchanged and excluded
+from native readback; migrate explicitly by supplying native names/coordinates.
+Notebook 207 demonstrates a fresh 6.6 compute. Example 314 retains its earlier
+IC-authored 7.0 run; its nearest-cell product is not a new native-point history.
 Inspect the actual result groups with the reference readers; nearest-cell WSE
 sampling is a different quantity, not evidence that native point output exists.
 

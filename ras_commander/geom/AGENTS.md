@@ -44,6 +44,13 @@ This file is the canonical local instruction file for `ras_commander/geom/`.
 - Culvert GIS reconstruction / hydraulic-validity checks: `GeomCulvertGIS`
 - HTAB optimization from results: `GeomHtab`
 
+## Packed refinement-region audits
+
+- `GeomMesh.audit_domain_containment()` assembles refinement rings by containment,
+  preserving holes, disjoint shells and islands without changing coordinates.
+  Parts offsets are local to each feature's Info point range; malformed spans
+  raise instead of silently dropping or truncating rings.
+
 ## Culvert GIS Validation (`GeomCulvertGIS`)
 
 Reconstruct and validate culvert placement from geometry; complements `GeomCulvert`
@@ -109,3 +116,30 @@ See `.claude/rules/hec-ras/land-cover-mannings-n.md` for full documentation.
 
 - Validate geometry changes against real `.g##` files.
 - Re-run geometry preprocessing or model execution when a change can affect HEC-RAS interpretation.
+
+## Reference features
+
+- `GeomReferenceFeatures.add_reference_points` writes native `Reference Point Name=`
+  (40-byte padded field) and `Reference Point Position=X,Y` before LCMann. It keeps
+  literal names, validates finite coordinates and duplicate names before writing,
+  and uses atomic geometry writes with preserved numbered backups.
+- `get_reference_points` reads only native records. IC Points are separate initial
+  condition features; even old `IC Point Name=Reference Point ...` records are left
+  untouched and excluded. No automatic migration or prefix insertion occurs.
+- Both point APIs retain their signatures. Callers migrating old IC-authored gauges
+  must explicitly supply the intended native names/coordinates. A text round trip
+  is not sufficient: check mesh membership, preprocess and compute a new plan, then
+  inspect `HdfBndry.get_reference_points` and `HdfResultsXsec.get_ref_points_timeseries`.
+- Reference-line authoring validates field widths, finite coordinates and duplicate
+  names. The getter uses the strict fixed-width parser and rejects truncated data.
+  Native point blocks are recognised as insertion boundaries. Preserve vertex order
+  and signed stored flow. The add method does not establish mesh membership or area
+  semantics; computation/geometry validation remains necessary.
+- Reference Areas have no authoring/reading API in this module; do not substitute
+  storage areas or calibration regions. That is a separate feature gap.
+- Notebook 207 demonstrates native point/line authoring, in-mesh checks and a
+  one-day RasCmdr computation in a separate destination, followed by HDF reads.
+
+Native Reference Point blocks terminate connection ownership/rewrite slices. Preserve
+them in all connection editing paths. GeomProjection transforms their Position
+records alongside IC Point Position; the two feature types remain distinct.

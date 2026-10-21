@@ -135,8 +135,9 @@ so duplicate names across meshes are ambiguous. Its `face_count=0` and empty
 
 Generate proposed lines first, inspect them, then write to a working geometry.
 Recompute and inspect the resulting reference output groups. In particular,
-`add_reference_points` writes IC-point records; example 314's retained HEC-RAS
-7.0 run did not produce a native Reference Points output group from these.
+`add_reference_points` writes native Reference Point Name/Position records with
+literal names. Notebook 207 demonstrates a fresh 6.6 compute and native HDF reads.
+Example 314's retained historical IC-authored run is separate evidence.
 Authored point records plus a successful run do not guarantee recorded point
 results. A profile line
 used only for postprocessing does not retroactively become a recorded reference
