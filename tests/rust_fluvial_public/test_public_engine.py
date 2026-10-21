@@ -200,11 +200,7 @@ def test_p07_auto_selects_native():
 
 @contextlib.contextmanager
 def single_mesh_inputs(hdf, mesh_name):
-    """Legacy Python restricted to one mesh's rows: an independent per-mesh oracle.
-
-    Whole-file legacy keys by local cell_id, so repeated IDs across meshes
-    collide; one mesh at a time it runs unmodified on unambiguous IDs.
-    """
+    """Python restricted to one mesh's rows: an independent per-mesh oracle."""
     from ras_commander.hdf import HdfMesh, HdfResultsMesh
     polygons = HdfMesh.get_mesh_cell_polygons(hdf)
     max_ws = HdfResultsMesh.get_mesh_max_ws(hdf)
@@ -217,23 +213,32 @@ def single_mesh_inputs(hdf, mesh_name):
         yield len(polygons)
 
 
-def test_p18_two_meshes_public_python_and_auto_unchanged():
-    """Python keys by local cell_id; with two meshes it fails and returns empty.
+def test_p18_two_meshes_auto_native_equals_mesh_scoped_python(tmp_path):
+    """Python keys cells by (mesh_name, cell_id) (#564), so two meshes are defined.
 
-    The default and engine='auto' keep that legacy result; only an explicit
-    engine='native' request analyses each mesh in isolation.
+    engine='auto' now selects the native composite analysis and returns the
+    Python reference's polygons and lines.
     """
     hdf = fixture("BaldEagleDamBrk.p18.hdf")
-    calls = native_calls()
+    reference = _python_polygons(hdf)
+    assert reference["mesh_name"].nunique() == 2
     auto = HdfFluvialPluvial.generate_fluvial_pluvial_polygons(hdf, engine="auto")
-    assert delta(calls) == {}, "the auto multi-mesh gate runs before any native work"
-    assert auto.attrs["fluvial_engine"]["used"] == "python"
-    assert "2 meshes" in auto.attrs["fluvial_engine"]["fallback_reason"]
-    boundary = HdfFluvialPluvial.calculate_fluvial_pluvial_boundary(hdf, engine="auto")
-    assert boundary.attrs["fluvial_engine"]["used"] == "python"
-    # Measured legacy behavior on this computed 7.0 model: repeated cell IDs
-    # make its per-cell lookups ambiguous, so it logs an error and returns empty.
-    assert HdfFluvialPluvial.generate_fluvial_pluvial_polygons(hdf).empty and auto.empty
+    assert auto.attrs["fluvial_engine"] == {"requested": "auto", "used": "native", "fallback_reason": None}
+    assert list(auto.columns) == list(reference.columns)
+    assert list(zip(auto["mesh_name"], auto["classification"])) == list(
+        zip(reference["mesh_name"], reference["classification"]))
+    for name in sorted(set(reference["mesh_name"])):
+        result = qualify.compare_polygons(
+            save(reference[reference["mesh_name"] == name].reset_index(drop=True), tmp_path / f"{name}-p.parquet"),
+            save(auto[auto["mesh_name"] == name].reset_index(drop=True), tmp_path / f"{name}-a.parquet"))
+        assert result["equal"], json.dumps(result, default=str)
+    lines = HdfFluvialPluvial.calculate_fluvial_pluvial_boundary(hdf, engine="auto")
+    assert lines.attrs["fluvial_engine"]["used"] == "native"
+    python_lines = HdfFluvialPluvial.calculate_fluvial_pluvial_boundary(hdf, engine="python")
+    assert not python_lines.empty
+    result = qualify.compare_boundary(save(python_lines, tmp_path / "pl.parquet"),
+                                      save(lines, tmp_path / "al.parquet"))
+    assert result["equal"], result
 
 
 def test_p18_two_meshes_native_composite_equals_per_mesh_python(tmp_path):

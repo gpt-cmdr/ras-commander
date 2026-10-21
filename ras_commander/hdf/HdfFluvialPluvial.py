@@ -62,12 +62,12 @@ def _hours_to_ms(value, name):
     return int(ms)
 
 
-def _native_snapshot(hdf_path, retain_faces, composite_meshes=False):
-    """Immutable native snapshot built from legacy-compatible inputs, or unsupported.
+def _native_snapshot(hdf_path, retain_faces):
+    """Immutable native snapshot built from Python-compatible inputs, or unsupported.
 
-    With composite_meshes=True (explicit engine="native" only) several meshes
-    are analysed in isolation under (mesh_name, cell_id) identities; the face
-    graph never connects cells of different meshes.
+    Several meshes are analysed in isolation under (mesh_name, cell_id)
+    identities, as the Python reference keys them; the face graph never
+    connects cells of different meshes.
     """
     try:
         from .HdfFluvialNative import Analysis
@@ -75,14 +75,8 @@ def _native_snapshot(hdf_path, retain_faces, composite_meshes=False):
         raise FluvialNativeUnsupportedError(f"native fluvial extension unavailable: {exc}") from exc
     from pyproj import CRS
     from .HdfBase import HdfBase
-    counts = HdfBase.get_2d_flow_area_names_and_counts(hdf_path)
-    if len(counts) > 1 and not composite_meshes:
-        # Legacy Python keys cells and peak times by local cell_id alone, so
-        # repeated IDs across meshes collide. Composite identities would be
-        # different science; HdfFluvialNative.Analysis provides them explicitly.
-        raise FluvialNativeUnsupportedError(
-            f"legacy cell_id-keyed semantics are undefined for {len(counts)} meshes with "
-            "repeated local cell IDs; engine='native' analyses each mesh in isolation instead")
+    # Validates the file before the CRS probe: corrupt input is fatal, never unsupported.
+    HdfBase.get_2d_flow_area_names_and_counts(hdf_path)
     projection = HdfBase.get_projection(hdf_path)
     if not projection or not CRS.from_user_input(projection).is_projected:
         raise FluvialNativeUnsupportedError(f"native engine requires a projected CRS; got {projection!r}")
@@ -187,8 +181,7 @@ class HdfFluvialPluvial:
         _check_engine(engine)
         if engine != "python":
             try:
-                result = HdfFluvialPluvial._native_boundary(hdf_path, delta_t, min_line_length,
-                                                            composite_meshes=engine == "native")
+                result = HdfFluvialPluvial._native_boundary(hdf_path, delta_t, min_line_length)
                 return _engine_attrs(result, engine, "native")
             except FluvialNativeUnsupportedError as exc:
                 if engine == "native":
@@ -301,10 +294,11 @@ class HdfFluvialPluvial:
                           result, otherwise Python; recorded in
                           ``result.attrs["fluvial_engine"]``). For cells seeded both fluvial
                           and pluvial, the native engine replays Python's own tie-break
-                          (Python keeps the last write in its pair order). It raises
-                          FluvialNativeUnsupportedError for multiple meshes (Python keys by
-                          local cell_id), unprojected CRSs, thresholds that are not exact
-                          milliseconds, and any min_polygon_area_acres (the legacy class
+                          (Python keeps the last write in its pair order). Several meshes
+                          are analysed in isolation under (mesh_name, cell_id), as Python
+                          does. It raises FluvialNativeUnsupportedError for unprojected
+                          CRSs, thresholds that are not exact milliseconds, and any
+                          min_polygon_area_acres (the class
                           swap keeps attributes that depend on union part order; polygon
                           removal is not a substitute). Native polygons are topologically
                           equal to Python's; part order inside a MultiPolygon may differ.
@@ -321,8 +315,7 @@ class HdfFluvialPluvial:
         if engine != "python":
             try:
                 result = HdfFluvialPluvial._native_polygons(
-                    hdf_path, delta_t, temporal_tolerance_hours, min_polygon_area_acres,
-                    composite_meshes=engine == "native")
+                    hdf_path, delta_t, temporal_tolerance_hours, min_polygon_area_acres)
                 return _engine_attrs(result, engine, "native")
             except FluvialNativeUnsupportedError as exc:
                 if engine == "native":
@@ -544,28 +537,35 @@ class HdfFluvialPluvial:
         snapshot's, so every other result still comes from the Rust kernels.
         """
         from .HdfFluvialNative import integer_milliseconds
-        all_polygons = HdfMesh.get_mesh_cell_polygons(hdf_path)
-        all_max_ws = HdfResultsMesh.get_mesh_max_ws(hdf_path)
-        all_max_ws['maximum_water_surface_time'] = all_max_ws['maximum_water_surface_time'].apply(
+        polygons = HdfMesh.get_mesh_cell_polygons(hdf_path)
+        max_ws = HdfResultsMesh.get_mesh_max_ws(hdf_path)
+        max_ws['maximum_water_surface_time'] = max_ws['maximum_water_surface_time'].apply(
             lambda x: HdfUtils.parse_ras_datetime(x) if isinstance(x, str) else x
         )
-        # Python keys cells by local cell_id, so each mesh is replayed on its own
-        # rows; results are keyed by (mesh index, cell_id). One mesh is unchanged.
-        pairs, common_edges, cell_times, legacy_edges = [], {}, {}, set()
-        for m, name in enumerate(analysis.meshes):
-            if len(analysis.meshes) == 1:
-                polygons, max_ws = all_polygons, all_max_ws
-            else:
-                polygons = all_polygons[all_polygons['mesh_name'] == name]
-                max_ws = all_max_ws[all_max_ws['mesh_name'] == name]
-            times = max_ws.set_index('cell_id')['maximum_water_surface_time'].to_dict()
-            adjacency, edges = HdfFluvialPluvial._process_cell_adjacencies(polygons)
-            pairs.extend(((m, int(a)), (m, int(b)))
-                         for a, b in HdfFluvialPluvial._get_boundary_cell_pairs(adjacency, times, delta_t))
-            common_edges[m] = edges
-            cell_times.update({(m, int(c)): t for c, t in times.items()})
-            legacy_edges.update((m, min(int(a), int(b)), max(int(a), int(b)))
-                                for a, neighbors in adjacency.items() for b in neighbors)
+        # Python keys cells by (mesh_name, cell_id) and its adjacency never
+        # crosses meshes; replay results are keyed by (native mesh index, cell_id).
+        mesh_index = {name: m for m, name in enumerate(analysis.meshes)}
+
+        def key(cell):
+            return mesh_index[cell[0]], int(cell[1])
+
+        times = max_ws.set_index(['mesh_name', 'cell_id'])['maximum_water_surface_time'].to_dict()
+        adjacency, edges = HdfFluvialPluvial._process_cell_adjacencies(polygons)
+        pairs = [(key(a), key(b))
+                 for a, b in HdfFluvialPluvial._get_boundary_cell_pairs(adjacency, times, delta_t)]
+        common_edges = defaultdict(lambda: defaultdict(dict))
+        for a, neighbors in edges.items():
+            for b, line in neighbors.items():
+                (m, ka), (_, kb) = key(a), key(b)
+                common_edges[m][ka][kb] = line
+        cell_times = {key(cell): t for cell, t in times.items() if cell[0] in mesh_index}
+        legacy_edges = set()
+        for a, neighbors in adjacency.items():
+            for b in neighbors:
+                (m, ka), (n, kb) = key(a), key(b)
+                if m != n:
+                    raise ValueError(f"Python adjacency links meshes {m} and {n}")
+                legacy_edges.add((m, min(ka, kb), max(ka, kb)))
         vertex = {(m, row): i for i, (m, row) in enumerate(analysis.sources)}
         native_edges = set()
         for i in range(len(analysis.keys)):
@@ -587,8 +587,7 @@ class HdfFluvialPluvial:
         return {"pairs": pairs, "common_edges": common_edges, "cell_times": cell_times, "vertex": vertex}
 
     @staticmethod
-    def _native_polygons(hdf_path, delta_t, temporal_tolerance_hours, min_polygon_area_acres,
-                         composite_meshes=False):
+    def _native_polygons(hdf_path, delta_t, temporal_tolerance_hours, min_polygon_area_acres):
         """Rust classification and polygon assembly reproducing the Python result.
 
         Native seeding equals Python's except for cells that receive both a
@@ -613,7 +612,7 @@ class HdfFluvialPluvial:
                 "delta_t=0 seeds equal-time pairs whose Python labels depend on pair order")
         timings = {}
         begin = time.perf_counter()
-        analysis = _native_snapshot(hdf_path, retain_faces=False, composite_meshes=composite_meshes)
+        analysis = _native_snapshot(hdf_path, retain_faces=False)
         timings["snapshot_seconds"] = time.perf_counter() - begin
         labels, diagnostics, timings["classify_kernel_seconds"] = analysis.classify(delta_ms, tolerance_ms)
         overrides = []
@@ -647,22 +646,20 @@ class HdfFluvialPluvial:
         begin = time.perf_counter()
         names = {1: "fluvial", 2: "pluvial", 3: "ambiguous"}
         rows = []
-        # One mesh: one row per class, as Python. Several meshes: one row per
-        # (mesh, class), each dissolved within its own mesh only.
-        for m, mesh_name in enumerate(analysis.meshes):
+        # One row per (mesh, class), each dissolved within its own mesh only, in
+        # Python's dissolve(by=['mesh_name', 'classification']) group order.
+        for m, mesh_name in sorted(enumerate(analysis.meshes), key=lambda item: item[1]):
             for label in sorted({value for i, value in enumerate(final) if analysis.sources[i][0] == m},
                                 key=lambda value: names[value]):
-                mask = regions["classification"] == names[label]
-                if len(analysis.meshes) > 1:
-                    mask &= regions["mesh_name"] == mesh_name
+                mask = (regions["classification"] == names[label]) & (regions["mesh_name"] == mesh_name)
                 shapes = list(regions.geometry[mask])
                 # Python's 'first' aggregation keeps the first cell row of each class.
                 first = min(analysis.sources[i][1] for i, value in enumerate(final)
                             if value == label and analysis.sources[i][0] == m)
-                rows.append({"classification": names[label],
+                rows.append({"mesh_name": mesh_name, "classification": names[label],
                              "geometry": shapes[0] if len(shapes) == 1 else MultiPolygon(shapes),
-                             "mesh_name": mesh_name, "cell_id": first})
-        final_regions_gdf = gpd.GeoDataFrame(rows, columns=["classification", "geometry", "mesh_name", "cell_id"],
+                             "cell_id": first})
+        final_regions_gdf = gpd.GeoDataFrame(rows, columns=["mesh_name", "classification", "geometry", "cell_id"],
                                              geometry="geometry", crs=analysis.crs)
         timings["python_frame_assembly_seconds"] = time.perf_counter() - begin
         HdfFluvialPluvial._log_polygon_summary(
@@ -675,7 +672,7 @@ class HdfFluvialPluvial:
         return final_regions_gdf
 
     @staticmethod
-    def _native_boundary(hdf_path, delta_t, min_line_length, composite_meshes=False):
+    def _native_boundary(hdf_path, delta_t, min_line_length):
         """Rust face graph and threshold predicate reproducing the Python lines.
 
         A straight shared face yields Python's rounded two-point segment directly.
@@ -686,7 +683,7 @@ class HdfFluvialPluvial:
         delta_ms = _hours_to_ms(delta_t, "delta_t")
         timings = {}
         begin = time.perf_counter()
-        analysis = _native_snapshot(hdf_path, retain_faces=True, composite_meshes=composite_meshes)
+        analysis = _native_snapshot(hdf_path, retain_faces=True)
         timings["snapshot_seconds"] = time.perf_counter() - begin
         begin = time.perf_counter()
         edges = analysis.qualifying_edges(delta_ms)

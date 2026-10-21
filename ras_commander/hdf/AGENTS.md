@@ -108,6 +108,10 @@ This file is the canonical local instruction file for `ras_commander/hdf/`.
   log processing failures at ERROR with path, parameters, stage and traceback,
   then return an empty GeoDataFrame, discarding partial geometry. Input/decorator
   validation exceptions remain unchanged. No status/error attributes are added.
+  The opt-in `engine="native"`/`"auto"` paths reproduce this mesh-scoped reference
+  (several meshes are analysed in isolation; frames keep the
+  `mesh_name, classification, geometry, cell_id` dissolve layout) and record
+  `attrs["fluvial_engine"]`; the default `engine="python"` is the reference.
 - Mesh time-series domains use authoritative stored scalar `Location`: `Cells`
   and `Cell` mean cells; `Faces` means faces. Invalid, unknown, nonscalar or
   contradictory present Location is refused, never bypassed with a name rule.
