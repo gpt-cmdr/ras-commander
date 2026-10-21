@@ -37,6 +37,19 @@ This file is the canonical local instruction file for the `ras_commander/` packa
 
 ## Coding Rules
 
+- `RasPlan` additional-HDF-output writers accept catalogue UI labels only:
+  known short aliases normalize with warnings and unknown labels raise before
+  writing. Batch/profile enabling prevalidates the entire request. Existing
+  matching short records are rewritten to the full label; removal matches both
+  forms and still permits unknown literal tokens for cleanup. The 14
+  spiral/curvature labels in `HDF_OUTPUT_VARIABLE_MIN_VERSIONS` require a plan
+  Program Version of 7.0+ (unknown versions warn) and active secondary flow.
+  `HDF_OUTPUT_VARIABLE_DATASETS` is a partial, observed one-to-many map of Base
+  Output mesh dataset basenames, not a promise of presence or compatible time
+  axes. The node-velocity label is retained with a warning: the 6.6/7.0.1 pilot
+  produced no dataset and its working token remains unresolved. Do not infer
+  mappings for unobserved conditional/spiral outputs from their UI labels.
+
 - Prefer the existing static-class pattern. Most `Ras*` and `Hdf*` classes should be called directly, not instantiated.
 - Use DataFrame-backed project metadata first. Prefer `ras.plan_df`, `ras.geom_df`, `ras.flow_df`, `ras.unsteady_df`, `ras.boundaries_df`, and related helpers over ad hoc filesystem scanning.
 - `rasmap_df` is always one row; use `rasmap_status` (or the shared schema
