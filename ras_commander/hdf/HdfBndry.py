@@ -42,6 +42,30 @@ from .HdfUtils import HdfUtils
 logger = get_logger(__name__)
 
 
+def _assemble_polygon_rings(polygons):
+    """Assemble shells, holes and islands by ring containment, preserving vertices."""
+    containers = [
+        [j for j, outer in enumerate(polygons)
+         if i != j and outer.contains(ring)]
+        for i, ring in enumerate(polygons)
+    ]
+    parents = [
+        min(indices, key=lambda j: polygons[j].area)
+        if indices else None
+        for indices in containers
+    ]
+    shells = [
+        Polygon(
+            ring.exterior.coords,
+            [hole.exterior.coords for j, hole in enumerate(polygons)
+             if parents[j] == i and len(containers[j]) % 2 == 1],
+        )
+        for i, ring in enumerate(polygons)
+        if len(containers[i]) % 2 == 0
+    ]
+    return shells[0] if len(shells) == 1 else MultiPolygon(shells)
+
+
 class HdfBndry:
     """
     A class for handling boundary-related data from HEC-RAS HDF files.
@@ -983,29 +1007,7 @@ class HdfBndry:
                             if len(ring) != part_pnt_cnt or len(ring) < 3:
                                 raise ValueError("Invalid refinement region polygon part")
                             polygons.append(Polygon(ring))
-                        # Parts are rings: nested rings are holes, not additional
-                        # shells. Containment also preserves islands within holes
-                        # and disjoint shells without depending on winding order.
-                        containers = [
-                            [j for j, outer in enumerate(polygons)
-                             if i != j and outer.contains(ring)]
-                            for i, ring in enumerate(polygons)
-                        ]
-                        parents = [
-                            min(indices, key=lambda j: polygons[j].area)
-                            if indices else None
-                            for indices in containers
-                        ]
-                        shells = [
-                            Polygon(
-                                ring.exterior.coords,
-                                [hole.exterior.coords for j, hole in enumerate(polygons)
-                                 if parents[j] == i and len(containers[j]) % 2 == 1],
-                            )
-                            for i, ring in enumerate(polygons)
-                            if len(containers[i]) % 2 == 0
-                        ]
-                        geoms.append(shells[0] if len(shells) == 1 else MultiPolygon(shells))
+                        geoms.append(_assemble_polygon_rings(polygons))
                 return gpd.GeoDataFrame(
                     {"rr_id": rr_ids, "Name": names, "geometry": geoms},
                     geometry="geometry",

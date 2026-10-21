@@ -44,6 +44,13 @@ This file is the canonical local instruction file for `ras_commander/geom/`.
 - Culvert GIS reconstruction / hydraulic-validity checks: `GeomCulvertGIS`
 - HTAB optimization from results: `GeomHtab`
 
+## Packed refinement-region audits
+
+- `GeomMesh.audit_domain_containment()` assembles refinement rings by containment,
+  preserving holes, disjoint shells and islands without changing coordinates.
+  Parts offsets are local to each feature's Info point range; malformed spans
+  raise instead of silently dropping or truncating rings.
+
 ## Culvert GIS Validation (`GeomCulvertGIS`)
 
 Reconstruct and validate culvert placement from geometry; complements `GeomCulvert`
