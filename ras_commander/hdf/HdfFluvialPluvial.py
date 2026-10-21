@@ -157,7 +157,8 @@ class HdfFluvialPluvial:
         adjacent polygons of that type. Ambiguous polygons are exempt from this logic.
         Acreage uses the projected CRS axis units converted to square meters.
         Missing or geographic CRS skips filtering with a warning. Unresolved
-        projected units log an error and return an empty GeoDataFrame.
+        projected units raise ValueError. Processing errors are logged and
+        propagated to the caller.
 
         Args:
             hdf_path (Path): Path to the HEC-RAS plan HDF file.
@@ -174,6 +175,9 @@ class HdfFluvialPluvial:
         Returns:
             gpd.GeoDataFrame: A GeoDataFrame with dissolved polygons for 'fluvial', 'pluvial',
                               and 'ambiguous' zones.
+
+        Raises:
+            ValueError: Projected horizontal CRS units cannot be resolved for acre filtering.
         """
         try:
             # --- 1. Data Loading and Preparation ---
@@ -341,7 +345,7 @@ class HdfFluvialPluvial:
                 f"min_polygon_area_acres={min_polygon_area_acres}): {str(e)}",
                 exc_info=True,
             )
-            return gpd.GeoDataFrame()
+            raise
         
         
     @staticmethod

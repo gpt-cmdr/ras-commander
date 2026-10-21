@@ -19,7 +19,8 @@ This file is the canonical local instruction file for `ras_commander/hdf/`.
 - `HdfFluvialPluvial.generate_fluvial_pluvial_polygons()` converts native polygon
   areas using both projected horizontal CRS axis factors before applying acre
   thresholds. Missing/geographic CRS skips filtering with a warning; unresolved
-  projected units follow the method's logged-error/empty-frame failure contract.
+  projected units raise `ValueError`. Processing failures are logged and propagated
+  to the caller.
 
 
 ## Implementation Rules
