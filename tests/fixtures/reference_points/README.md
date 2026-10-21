@@ -24,3 +24,19 @@ reference-line blocks, to reproduce the connection ownership regression.
 
 This is a parser/editing fixture, not a complete or compute-ready model. Tests
 copy it to pytest temporary directories and never preprocess or execute HEC-RAS.
+
+## Retained native-output evidence
+
+`qualification_evidence.json` anchors notebook 207's saved outputs to the
+retrievable PR #553 head, with notebook and canonical saved-output checksums.
+It records the displayed 145 time steps, three literal native point names,
+and signed reference-line flow without rerunning the solver. The notebook is
+retained in Git at the manifest's immutable permalink. This supersedes reliance
+on the unavailable historical commit cited in the original PR description.
+
+The original computed HDF has not been independently located or hashed on this
+review workstation. Its recorded relative path is included for recovery; a null
+HDF checksum is an explicit evidence gap, not an empty or passing validation.
+Saved notebook displays do not provide every source array. Keep that gap open
+when assessing native qualification or issue #466; parser regressions and stored
+notebook output alone do not establish hydraulic acceptance.

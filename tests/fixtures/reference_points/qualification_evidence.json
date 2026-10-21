@@ -1,0 +1,46 @@
+{
+  "schema_version": 1,
+  "evidence_kind": "retained_notebook_outputs_not_independent_solver_requalification",
+  "repository": "https://github.com/gpt-cmdr/ras-commander",
+  "source_commit": "f8a62b1a296ebe2347c1a0373bbd248118c0a44e",
+  "notebook": "examples/207_reference_lines_and_points.ipynb",
+  "permalink": "https://github.com/gpt-cmdr/ras-commander/blob/f8a62b1a296ebe2347c1a0373bbd248118c0a44e/examples/207_reference_lines_and_points.ipynb",
+  "notebook_sha256": "e0e1e2c0c8c38c4ca9924a7caf949bff22536ffd73cdd4a9e75dcd9443642ae9",
+  "notebook_git_blob_sha1": "b92a91aa1efa8636b5a6c81b35d801e38f5b50c9",
+  "saved_outputs_canonical_json_sha256": "8c77fade06cea7d6801d0b3785c056ca7fe944fc0955b855803bdea44afb323e",
+  "canonical_json_serialization": "UTF-8; sorted keys; ensure_ascii=False; separators comma and colon; list of cell_index, execution_count, outputs for cells with outputs",
+  "recorded_runtime": "HEC-RAS 6.6; notebook source names explicit executable",
+  "recorded_plan": "03",
+  "recorded_simulation_window": [
+    "1999-01-01T12:00:00",
+    "1999-01-02T12:00:00"
+  ],
+  "recorded_hdf_relative_to_work_root": "computed_d8a51a03/BaldEagleDamBrk.p03.hdf",
+  "recorded_work_root": "working/reference_points_207",
+  "saved_result_cell_index": 11,
+  "saved_result_summary": {
+    "time_steps": 145,
+    "reference_points": [
+      "RP_Upper",
+      "RP_Middle",
+      "RP_Lower"
+    ],
+    "reference_point_variables": [
+      "Velocity",
+      "Water Surface"
+    ],
+    "reference_lines": [
+      "RL_Mid"
+    ],
+    "reference_line_flow_is_signed": true
+  },
+  "computed_hdf_independently_verified": false,
+  "computed_hdf_sha256": null,
+  "limitations": [
+    "Original computed HDF was not located on the review workstation; no HDF bytes or checksum is asserted.",
+    "No new solver run or full notebook execution was performed.",
+    "Saved displays are not a complete replacement for source HDF arrays.",
+    "This evidence does not establish hydraulic acceptance or cross-version qualification.",
+    "Historical PR-body commit 6d9ff17217df0f4a9778b3be861c1925a5d87049 was unavailable from GitHub; the retrievable PR head above anchors the actual retained notebook instead."
+  ]
+}
