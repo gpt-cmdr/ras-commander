@@ -210,56 +210,26 @@ def _strict_collection_perimeters(group, mesh_area_names: List[str]):
         point_start, point_count, part_start, part_count = (
             int(value) for value in info[mesh_index]
         )
-        point_end = point_start + point_count
         if point_count < 4:
             raise _MeshLayoutError(
                 f"2D flow area {mesh_name!r} has fewer than four perimeter points"
             )
 
-        raw_ranges: List[Tuple[int, int]]
         if part_count:
-            raw_ranges = [
-                (int(start), int(count))
-                for start, count in parts[part_start : part_start + part_count]
-            ]
+            raw_ranges = parts[part_start : part_start + part_count]
         else:
-            raw_ranges = [(point_start, point_count)]
-
-        absolute_ranges: List[Tuple[int, int]] = []
-        for raw_start, count in raw_ranges:
-            absolute_valid = (
-                point_start <= raw_start and raw_start + count <= point_end
+            raw_ranges = [(0, point_count)]
+        try:
+            local_ranges = HdfBase._feature_part_ranges(
+                raw_ranges, point_start, point_count
             )
-            relative_start = point_start + raw_start
-            relative_valid = 0 <= raw_start and relative_start + count <= point_end
-            if absolute_valid:
-                start = raw_start
-            elif relative_valid:
-                start = relative_start
-            else:
-                raise _MeshLayoutError(
-                    f"2D flow area {mesh_name!r} has an out-of-range polygon part"
-                )
-            absolute_ranges.append((start, count))
-
-        ordered_ranges = sorted(absolute_ranges)
-        if ordered_ranges[0][0] != point_start:
+        except ValueError as exc:
             raise _MeshLayoutError(
-                f"2D flow area {mesh_name!r} polygon parts do not start "
-                "at its point slice"
-            )
-        expected_start = point_start
-        for start, count in ordered_ranges:
-            if start != expected_start:
-                raise _MeshLayoutError(
-                    f"2D flow area {mesh_name!r} polygon parts overlap or leave gaps"
-                )
-            expected_start = start + count
-        if expected_start != point_end:
-            raise _MeshLayoutError(
-                f"2D flow area {mesh_name!r} polygon parts do not reconcile "
-                "with its point slice"
-            )
+                f"2D flow area {mesh_name!r} has invalid polygon parts: {exc}"
+            ) from exc
+        absolute_ranges = [
+            (point_start + start, count) for start, count in local_ranges
+        ]
 
         rings = []
         ring_polygons = []
@@ -752,6 +722,9 @@ class HdfMesh:
     @standardize_input(file_type='geom_hdf')
     def get_mesh_areas(hdf_path: Path) -> 'GeoDataFrame':
         """
+
+        Collection-level Parts offsets are feature-local. Legacy global offsets
+        are accepted only when all parts together cover the feature point range.
         Return 2D flow area perimeter polygons.
 
         Parameters

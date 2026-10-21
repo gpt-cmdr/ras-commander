@@ -799,6 +799,40 @@ class HdfBase:
         return array[:, :3]
 
     @staticmethod
+    def _feature_part_ranges(parts, point_start: int, point_count: int):
+        """Resolve one complete packed feature to local point ranges.
+
+        Native Parts are feature-local. Legacy global ranges are accepted only
+        when the entire collection of parts covers the feature exactly. Never
+        choose an offset convention independently for individual parts.
+        """
+        ranges = []
+        for row in parts:
+            if len(row) != 2 or any(
+                not np.isfinite(value) or int(value) != value for value in row
+            ):
+                raise ValueError("Packed feature parts require integer offsets and counts")
+            start, count = map(int, row)
+            if start < 0 or count <= 0:
+                raise ValueError("Packed feature parts require nonnegative offsets and positive counts")
+            ranges.append((start, count))
+
+        def covers_feature(candidate):
+            expected = 0
+            for start, count in sorted(candidate):
+                if start != expected or start + count > point_count:
+                    return False
+                expected += count
+            return bool(candidate) and expected == point_count
+
+        if covers_feature(ranges):
+            return ranges
+        local_ranges = [(start - point_start, count) for start, count in ranges]
+        if covers_feature(local_ranges):
+            return local_ranges
+        raise ValueError("Packed feature parts overlap, leave gaps, or exceed the feature point range")
+
+    @staticmethod
     @log_call
     @standardize_input(file_type='plan_hdf')
     def get_polylines_from_parts(hdf_path: Path, path: str, info_name: str = "Polyline Info", 
