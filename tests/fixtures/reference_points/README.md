@@ -27,16 +27,24 @@ copy it to pytest temporary directories and never preprocess or execute HEC-RAS.
 
 ## Retained native-output evidence
 
-`qualification_evidence.json` anchors notebook 207's saved outputs to the
-retrievable PR #553 head, with notebook and canonical saved-output checksums.
-It records the displayed 145 time steps, three literal native point names,
-and signed reference-line flow without rerunning the solver. The notebook is
-retained in Git at the manifest's immutable permalink. This supersedes reliance
-on the unavailable historical commit cited in the original PR description.
+`qualification_evidence.json` anchors notebook 207's saved output to its retrievable
+PR #553 head and records notebook/canonical-output checksums. The exact computed
+HDF was recovered read-only from CLB-JACOB at:
 
-The original computed HDF has not been independently located or hashed on this
-review workstation. Its recorded relative path is included for recovery; a null
-HDF checksum is an explicit evidence gap, not an empty or passing validation.
-Saved notebook displays do not provide every source array. Keep that gap open
-when assessing native qualification or issue #466; parser regressions and stored
-notebook output alone do not establish hydraulic acceptance.
+`D:/CLB-Dev/ras-commander-refpoints/working/reference_points_207/computed_d8a51a03/BaldEagleDamBrk.p03.hdf`
+
+The manifest records its whole-file SHA256, stored point names/coordinates/cell
+IDs, 145 ten-minute timestamps over one day, signed reference-line flow, and
+complete API-returned array fingerprints. Source and retained-copy hashes matched
+before and after verification. Geometry, shapes, names, cadence and sampled values
+match notebook cell 11's saved display at its printed precision.
+
+Run the read-only retained-output test with `RAS_REFERENCE_POINT_HDF` pointing to
+that exact file or a byte-identical copy. The large HDF remains outside Git. An
+explicitly configured missing/wrong file fails; an unset path skips this optional
+producer-evidence test.
+
+This supersedes reliance on the unavailable historical commit cited in the PR
+body. Recovery and inspection do not constitute a new solver run, hydraulic
+acceptance or cross-version qualification. The recorded permalink retains the
+notebook independently of the original workstation path.
