@@ -1,4 +1,4 @@
-"""Explicit API9 full-feature native entrypoint contract (67); additions require review."""
+"""Explicit API10 full-feature native entrypoint contract (75); additions require review."""
 EXPECTED = {
     "HdfSession": ("class", None, "src/session.rs"),
     "mesh_summary_inventory": ("function", None, "src/fim.rs"),
@@ -34,6 +34,14 @@ EXPECTED = {
     "one_d_structure_inventory": ("function", None, "src/one_d.rs"),
     "one_d_structure_capabilities": ("function", None, "src/one_d.rs"),
     "read_one_d_structure_series": ("function", None, "src/one_d.rs"),
+    "read_families": ("function", None, "src/wave3.rs"),
+    "read_family_inventory": ("function", None, "src/wave3.rs"),
+    "read_family_dataset": ("function", None, "src/wave3.rs"),
+    "output_block_inventory": ("function", None, "src/wave3.rs"),
+    "read_output_block": ("function", None, "src/wave3.rs"),
+    "reference_point_geometry": ("function", None, "src/wave3.rs"),
+    "classification_catalogue": ("function", None, "src/wave3.rs"),
+    "stored_family_index": ("function", None, "src/wave3.rs"),
 
     "structure_inventory": ("function", None, "src/structures.rs"),
     "read_structure_series": ("function", None, "src/structures.rs"),
