@@ -333,6 +333,7 @@ class HdfUtils:
 
 # Rename to convert_timesteps_to_datetimes and make public
     @staticmethod
+    @log_call
     def convert_timesteps_to_datetimes(timesteps: np.ndarray, start_time: datetime, time_unit: str = "days", round_to: str = "100ms") -> pd.DatetimeIndex:
         """
         Convert RAS timesteps to datetime objects.
@@ -345,23 +346,50 @@ class HdfUtils:
 
         Returns:
             pd.DatetimeIndex: DatetimeIndex of converted and rounded datetimes.
-                Uses millisecond resolution so dates beyond 2262 remain
-                representable while preserving the default 100 ms precision.
+                Preserves existing conversion precision and rounding for ordinary
+                dates. If pandas cannot represent the full sequence (e.g. outside
+                its nanosecond range, roughly 1677-2262), falls back to microsecond
+                resolution throughout. Fallback offsets have at most half a
+                microsecond of rounding error; finer round_to values cannot
+                recover that information. Fallback dates beyond Python datetime
+                bounds raise OverflowError instead of wrapping. Pandas versions
+                with wider native date support retain their existing behavior.
         """
-        unit_seconds = {"days": 86400.0, "hours": 3600.0}.get(time_unit)
-        if unit_seconds is None:
+        units = {"days": "D", "hours": "h"}
+        if time_unit not in units:
             raise ValueError(f"Unsupported time unit: {time_unit}")
 
-        # pandas' default datetime64[ns] range ends in 2262. Keep HEC-RAS
-        # calendar dates in datetime64[ms], which spans a much wider range and
-        # is finer than the default 100 ms rounding interval.
-        start = np.datetime64(start_time, "ms")
-        offsets_ms = np.rint(
-            np.asarray(timesteps, dtype=np.float64) * unit_seconds * 1000.0
-        ).astype("timedelta64[ms]")
-        timestamps = start + offsets_ms
-        index = pd.DatetimeIndex(timestamps.astype("datetime64[ms]"))
-        return index.round(round_to)
+        # Preserve the established pandas conversion and rounding, including
+        # sub-millisecond values, whenever its native arithmetic succeeds.
+        try:
+            datetimes = start_time + pd.to_timedelta(timesteps, unit=units[time_unit])
+            return pd.DatetimeIndex(datetimes).round(round_to)
+        except (pd.errors.OutOfBoundsDatetime, pd.errors.OutOfBoundsTimedelta, OverflowError):
+            pass
+
+        # Python datetime arithmetic checks overflow rather than silently wrapping
+        # a NumPy integer. It also handles a sequence crossing either ns boundary.
+        # Only the exceptional wider-range path rounds offsets to microseconds.
+        datetimes = [
+            pd.NaT if pd.isna(value) else start_time + timedelta(**{time_unit: float(value)})
+            for value in timesteps
+        ]
+        return HdfUtils._datetime_index(datetimes, round_to=round_to)
+
+    @staticmethod
+    def _datetime_index(datetimes, round_to: Optional[str] = None) -> pd.DatetimeIndex:
+        """Preserve pandas resolution, falling back to us for out-of-range dates."""
+        try:
+            index = pd.DatetimeIndex(datetimes)
+            return index.round(round_to) if round_to is not None else index
+        except (pd.errors.OutOfBoundsDatetime, OverflowError):
+            # NumPy cannot cast pd.NaT directly to datetime64 on all versions.
+            values = [
+                np.datetime64("NaT", "us") if pd.isna(value) else value
+                for value in datetimes
+            ]
+            index = pd.DatetimeIndex(np.asarray(values, dtype="datetime64[us]"))
+            return index.round(round_to) if round_to is not None else index
     
 # rename to convert_hdf5_attrs_to_dict and make public
 
