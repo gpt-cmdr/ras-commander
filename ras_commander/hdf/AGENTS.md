@@ -72,17 +72,26 @@ This file is the canonical local instruction file for `ras_commander/hdf/`.
   `region_name` parameters for selective face application (precedence:
   `face_ids` > `region_name` > `polygon` > all faces).
 - 2D results extraction: `HdfResultsMesh`
-- Mesh time-series domains come from a stored scalar `Location`: `Cells` and
-  the observed singular `Cell` mean cells; `Faces` means faces. Numeric series
-  must have rank two, match the Base Output Time rows, and match the selected
-  domain's stored geometry count (including ghosts). Names, allowlists and
-  coincident counts do not choose a domain. Missing/unknown Location and
-  incompatible layouts are refused. Default cell/face enumeration discovers
-  actual qualified datasets and logs skipped entries; explicit malformed reads
-  raise `ValueError`. One-row outputs are not broadcast. Physical-cell filtering
-  and `is_ghost_cell` flags still apply after validation. Convenience variable
-  lists are examples, not discovery gates. `Cell Hydraulic Depth` stays distinct
-  from `Depth` and the existing WSE-minus-minimum-elevation depth calculation.
+- Mesh time-series domains use authoritative stored scalar `Location`: `Cells`
+  and `Cell` mean cells; `Faces` means faces. Invalid, unknown, nonscalar or
+  contradictory present Location is refused, never bypassed with a name rule.
+  Only absent Location permits the immutable exact-name stable-core schema in
+  Base Output/Unsteady Time Series/2D Flow Areas: `Depth`/`Water Surface` are
+  cells; `Face Velocity`, `Face Shear Stress`, `Face Area`, and `Face Manning's n`
+  are faces. Provenance: unlabelled JUL 5.0.7 output and shared names compatible
+  with supported 6.x/7.x output/API fixtures; excerpts without File Version use
+  only this core table. Future version-specific names need qualified entries.
+  Both domain paths require numeric rank-two data, matching canonical Time rows,
+  stored geometry counts including ghosts, and valid physical-cell bounds.
+  A debug log identifies legacy rule use. Shapes, substrings and mutable
+  convenience lists never choose a domain. Unknown missing-Location names fail.
+  Numeric rank-one series matching Time retain `(time,)` for explicit eager,
+  lazy and streamed reads, without ghost flags or spatial coordinates. Default
+  cell/face discovery skips time-only diagnostics and reports invalid entries;
+  explicit malformed reads raise `ValueError`. One-row outputs are not broadcast.
+  Ghost filtering follows qualification. `Cell Hydraulic Depth` remains distinct
+  from `Depth` and WSE-minus-minimum-elevation depth. Summary wrappers retain
+  their separate existing schemas and are unchanged by these series rules.
 - Large 2D result access: `HdfResultsMesh.get_mesh_timeseries(...,
   return_type="view")` returns an immutable `HdfResultView`;
   `iter_mesh_timeseries()` emits untruncated bounded batches; and

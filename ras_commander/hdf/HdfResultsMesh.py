@@ -84,6 +84,7 @@ from __future__ import annotations
 
 import operator
 from pathlib import Path
+from types import MappingProxyType
 from typing import (
     Any,
     Dict,
@@ -122,6 +123,21 @@ logger = get_logger(__name__)
 _UNKNOWN_CELL_COUNT_WARNED: set = set()
 
 HdfInput = Union[int, str, Path, h5py.File]
+
+
+# Stable-core schema for Base Output/Unsteady Time Series/2D Flow Areas only.
+# Observed without Location in HEC-RAS 5.0.7 (JUL2020_D100RAS.p04.hdf);
+# shared names remain compatible with supported 6.x/7.x output and API fixtures.
+# Minimal excerpts may omit File Version. These exact rules still apply; future
+# version-specific names require separate qualification, not convenience lists.
+_LEGACY_MESH_SERIES_DOMAINS = MappingProxyType({
+    "Depth": "cell_id",
+    "Water Surface": "cell_id",
+    "Face Velocity": "face_id",
+    "Face Shear Stress": "face_id",
+    "Face Area": "face_id",
+    "Face Manning's n": "face_id",
+})
 
 
 class HdfResultsMesh:
@@ -287,11 +303,17 @@ class HdfResultsMesh:
         """
         Get timeseries output for a specific mesh and variable.
 
-        Series require numeric rank-two (time, element) data, matching Base
-        Output Time rows, and stored scalar ``Location`` of ``Cells``, ``Cell``
-        or ``Faces`` matching the corresponding stored geometry count. Names
-        and coincident counts never select a domain. Missing/unknown Location
-        or contradictory axes raise ValueError. ``Cell Hydraulic Depth`` is
+        Numeric series must match canonical Base Output Time rows. Rank-one
+        time-only series return ``(time,)`` without ghost or spatial coordinates.
+        Rank-two series use authoritative scalar ``Location`` (``Cells``,
+        ``Cell`` or ``Faces``). Only absent Location permits the immutable
+        exact-name legacy schema: Depth/Water Surface are cells; Face Velocity,
+        Face Shear Stress, Face Area and Face Manning's n are faces. These
+        canonical stable-core names support observed 5.0.7 and compatible
+        6.x/7.x output, including excerpts without File Version. Both paths
+        require matching stored geometry counts. Invalid present Location,
+        unknown legacy names and contradictory axes raise ValueError; shape
+        and name substrings never select a domain. ``Cell Hydraulic Depth`` is
         a literal variable distinct from ``Depth``; no alias is applied.
 
         Args:
@@ -1463,8 +1485,9 @@ class HdfResultsMesh:
         """
         Get timeseries output for all face-based variables of a specific mesh.
 
-        Discover numeric datasets with stored ``Location=Faces`` and validated
-        time/face counts. Unqualified entries are skipped with diagnostics;
+        Discover numeric datasets qualified by authoritative ``Location=Faces``
+        or the exact-name legacy face schema when Location is absent, with
+        validated time/face counts. Unqualified entries are skipped with diagnostics;
         one-row datasets are never broadcast onto the full Time axis.
 
         Args:
@@ -1545,8 +1568,10 @@ class HdfResultsMesh:
         Get mesh cells timeseries output.
 
         With ``var=None``, discover actual numeric cell and face datasets using
-        stored ``Location`` (``Cells``/``Cell``/``Faces``), matching geometry
-        counts and the Base Output Time axis. This can return more variables
+        authoritative stored ``Location`` (``Cells``/``Cell``/``Faces``) or the
+        exact-name stable-core legacy schema when Location is absent (see
+        ``get_mesh_timeseries``), matching geometry counts and Base Output Time.
+        Time-only diagnostics are available by explicit selection. This can return more variables
         and use more memory than a fixed convenience list; select ``var`` for
         focused reads. Unqualified datasets are skipped with diagnostics.
         An explicitly selected malformed dataset raises ValueError. No times
@@ -2569,33 +2594,55 @@ class HdfResultsMesh:
 
     @staticmethod
     def _mesh_series_id_dim(hdf_file: h5py.File, mesh_name: str, dataset: h5py.Dataset) -> str:
-        """Qualify a stored series domain using the engine's Location rules.
+        """Qualify time-only data or a Location/exact legacy schema domain.
 
-        Geometry counts refer to all stored rows, including cell ghosts.
-        Physical-cell filtering is a separate operation after qualification.
+        Present Location is authoritative and cannot fall back to a name rule.
+        Missing Location uses only the immutable stable-core table in the
+        canonical namespace. Geometry counts include ghosts; physical-cell
+        filtering occurs after qualification. Time-only series have no domain.
         """
-        if not isinstance(dataset, h5py.Dataset) or dataset.ndim != 2 or dataset.dtype.kind not in "iuf":
+        if not isinstance(dataset, h5py.Dataset) or dataset.ndim not in (1, 2) or dataset.dtype.kind not in "iuf":
             raise ValueError(f"Unsupported numeric time/element schema: {dataset.name}")
         time = hdf_file.get(
             "Results/Unsteady/Output/Output Blocks/Base Output/Unsteady Time Series/Time"
         )
-        if time is None or time.ndim != 1 or dataset.shape[0] != len(time):
+        if (not isinstance(time, h5py.Dataset) or time.ndim != 1
+                or time.dtype.kind not in "iuf" or dataset.shape[0] != len(time)):
             raise ValueError(f"Series rows differ from Base Output Time axis: {dataset.name}")
-        location = np.asarray(dataset.attrs.get("Location", ""))
-        if location.shape not in ((), (1,)):
-            raise ValueError(f"Location requires one stored text value: {dataset.name}")
-        location = location.reshape(-1)[0]
-        if isinstance(location, bytes):
-            location = location.decode("utf-8")
-        if not isinstance(location, str) or location not in {"Cells", "Cell", "Faces"}:
-            raise ValueError(f"Missing or unqualified stored Location: {dataset.name}")
-        is_cell = location in {"Cells", "Cell"}
+        if "Location" in dataset.attrs:
+            location = np.asarray(dataset.attrs["Location"])
+            if location.shape not in ((), (1,)):
+                raise ValueError(f"Location requires one stored text value: {dataset.name}")
+            location = location.reshape(-1)[0]
+            if isinstance(location, bytes):
+                try:
+                    location = location.decode("utf-8")
+                except UnicodeDecodeError as exc:
+                    raise ValueError(f"Invalid stored Location text: {dataset.name}") from exc
+            if not isinstance(location, str) or location not in {"Cells", "Cell", "Faces"}:
+                raise ValueError(f"Invalid or unqualified stored Location: {dataset.name}")
+            if dataset.ndim != 2:
+                raise ValueError(f"Stored Location contradicts time-only schema: {dataset.name}")
+            id_dim = "cell_id" if location in {"Cells", "Cell"} else "face_id"
+        elif dataset.ndim == 1:
+            return "time"
+        else:
+            name = dataset.name.rsplit("/", 1)[-1]
+            canonical_path = "/" + HdfResultsMesh._get_mesh_timeseries_output_path(mesh_name, name)
+            id_dim = _LEGACY_MESH_SERIES_DOMAINS.get(name)
+            if dataset.name != canonical_path or id_dim is None:
+                raise ValueError(f"Missing Location and no qualified legacy schema: {dataset.name}")
+            logger.debug(
+                "Legacy stable-core mesh series schema supplies %s for exact name '%s' at '%s'",
+                id_dim, name, dataset.name,
+            )
+        is_cell = id_dim == "cell_id"
         geometry_name = "Cells Center Coordinate" if is_cell else "Faces FacePoint Indexes"
         geometry = hdf_file.get(f"Geometry/2D Flow Areas/{mesh_name}/{geometry_name}")
         if geometry is None or not isinstance(geometry, h5py.Dataset) or geometry.ndim < 1:
-            raise ValueError(f"Geometry count for stored Location absent: {dataset.name}")
+            raise ValueError(f"Geometry count for qualified series domain absent: {dataset.name}")
         if dataset.shape[1] != len(geometry):
-            raise ValueError(f"Stored Location contradicts geometry count: {dataset.name}")
+            raise ValueError(f"Qualified series domain contradicts geometry count: {dataset.name}")
         if is_cell:
             physical_count = HdfResultsMesh._physical_cell_counts(hdf_file).get(mesh_name)
             if physical_count is not None and not 0 <= physical_count <= len(geometry):
@@ -2614,7 +2661,9 @@ class HdfResultsMesh:
             if not isinstance(dataset, h5py.Dataset) or dataset.dtype.kind not in "iuf":
                 continue
             try:
-                variables[name] = HdfResultsMesh._mesh_series_id_dim(hdf_file, mesh_name, dataset)
+                id_dim = HdfResultsMesh._mesh_series_id_dim(hdf_file, mesh_name, dataset)
+                if id_dim != "time":
+                    variables[name] = id_dim
             except ValueError as exc:
                 logger.warning("Skipping unqualified mesh series '%s': %s", dataset.name, exc)
         return variables
@@ -2728,8 +2777,9 @@ class HdfResultsMesh:
 
                         data_array = xr.DataArray(
                             data=values,
-                            dims=['time', id_dim],
-                            coords={'time': truncated_time_stamps, id_dim: np.arange(values.shape[1])},
+                            dims=['time', id_dim] if values.ndim == 2 else ['time'],
+                            coords=({'time': truncated_time_stamps, id_dim: np.arange(values.shape[1])}
+                                    if values.ndim == 2 else {'time': truncated_time_stamps}),
                             attrs={'units': units}
                         )
                         data_vars[variable] = HdfResultsMesh._flag_ghost_cell_coord(
