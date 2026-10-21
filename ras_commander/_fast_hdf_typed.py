@@ -22,9 +22,11 @@ Backend policy follows :mod:`ras_commander.fast_hdf`:
 
 Datasets outside every typed family use the generic native reader
 (``fast_hdf.read_dataset``); in auto mode any native failure there (including
-Corrupt/checksum refusals) also falls back to h5py. Compound or string metadata
-without an engine raw-byte reader stays on h5py in every mode (recorded as
-``h5py-metadata``): this is the documented required-mode metadata exception.
+Corrupt/checksum refusals) also falls back to h5py. Text datasets and text-only
+compound identity tables stay on h5py in every mode (recorded as
+``h5py-metadata``): this is the documented required-mode metadata exception. A
+compound with any numeric member and no typed route is value data: auto reads it
+with h5py (``h5py-fallback``/``untyped-compound``) and required mode refuses.
 
 Selections are validated with h5py's own selector before any native read, so an
 invalid selection raises h5py's exact exception in every mode. Basic selections
@@ -561,6 +563,22 @@ def _stored_read(module, file_path, route, dataset, key):
     return values[()] if values.ndim == 0 else values
 
 
+def _has_numeric_field(dtype):
+    """Whether a compound dtype has any member that is not fixed or vlen text."""
+    for name in dtype.names:
+        field = dtype.fields[name][0]
+        if field.names is not None:
+            if _has_numeric_field(field):
+                return True
+        elif field.subdtype is not None:
+            base = field.subdtype[0]
+            if base.kind not in "SU" and h5py.check_string_dtype(base) is None:
+                return True
+        elif field.kind not in "SU" and h5py.check_string_dtype(field) is None:
+            return True
+    return False
+
+
 def _value(reported, dataset):
     if reported.get("value") is None:
         raise TypedRouteError(f"{dataset.name}: typed family {reported.get('capability')}")
@@ -659,6 +677,14 @@ def read(dataset, selection=None, *, backend="auto"):
     if route is None:
         if fast_hdf._numeric(dataset) and dataset.shape is not None:
             return _generic(dataset, selection, key, shape, backend, mode)
+        if dtype.names is not None and _has_numeric_field(dtype):
+            # A compound with numeric members is value data, not metadata: without
+            # a typed engine route required mode refuses instead of reading h5py.
+            if mode == "rust":
+                raise fast_hdf.FastHdfError(
+                    f"{dataset.name}: numeric compound has no typed engine route")
+            _record(dataset.name, "h5py-fallback", "untyped-compound")
+            return dataset[key]
         _record(dataset.name, "h5py-metadata")
         return dataset[key]
     try:

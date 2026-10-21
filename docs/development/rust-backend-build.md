@@ -117,9 +117,9 @@ modes*). In short:
   result readers: `read_dataset` (and the native temporal reduction) no longer
   treat a native Corrupt refusal as fatal in auto mode.
 - Required mode raises `FastHdfError` on any refusal. It reads all numeric
-  values natively. Strings, compound identity/attribute tables without an engine
-  raw reader, attributes and structure walks stay on h5py (the documented
-  metadata exception).
+  values natively. Text datasets, text-only compound identity tables,
+  attributes and structure walks stay on h5py (the documented metadata
+  exception); a compound with a numeric member and no typed route is refused.
 - `trace_reads()` records only reads made through the adapter. It is not a
   complete I/O audit. `tests/rust_route_1` independently intercepts
   `h5py.Dataset.__getitem__`/`read_direct` in required mode. It also checks

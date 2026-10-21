@@ -795,12 +795,14 @@ Routing policy:
   every mode. Basic selections and single increasing integer vectors are read
   natively. Field names, boolean masks and non-integer vectors stay on h5py,
   and are refusals in required mode.
-- **Required-mode metadata exception.** String datasets, and compound
-  identity/attribute tables for which the engine has no exact raw reader, are
-  read through h5py in every mode (`h5py-metadata` in the trace). HDF
-  attributes, group/key walks and shape probes also stay on h5py. Required
-  mode therefore guarantees native *numeric value* reads, not that h5py is
-  never opened.
+- **Required-mode metadata exception.** Text datasets and compound tables
+  whose every member is text (identity tables such as XS `River/Reach/RS`
+  rows) are read through h5py in every mode (`h5py-metadata` in the trace).
+  HDF attributes, group/key walks and shape probes also stay on h5py. A
+  compound with any numeric member is value data: without a typed engine route
+  it is an h5py fallback in auto mode and a `FastHdfError` refusal in required
+  mode. Required mode therefore guarantees native *numeric value* reads, not
+  that h5py is never opened.
 - `HdfResultsMesh` result readers use `read_dataset`, which follows the same
   rule: in auto mode any native failure, Corrupt or checksum refusals included,
   falls back to h5py, so the public result or exception is the h5py one.
