@@ -376,3 +376,144 @@ def test_incompatible_extension_warns_once(monkeypatch, caplog):
     assert len([r for r in caplog.records if "incompatible" in r.getMessage()]) == 1
     with pytest.raises(fast_hdf.FastHdfError, match="version 11"):
         fast_hdf._native("rust")
+
+
+# ---------------------------------------------------------------------------
+# 6. Native-only errors never abort calls that main tolerates (python/auto)
+# ---------------------------------------------------------------------------
+
+SUMMARY_PATH = ("Results/Unsteady/Output/Output Blocks/Base Output/Summary Output/"
+                f"2D Flow Areas/{MESH_NAME}")
+
+
+def _write_mesh_results_hdf(path):
+    _write_results_hdf(path, 2020)
+    with h5py.File(path, "a") as hdf:
+        group = hdf.require_group(SUMMARY_PATH)
+        group.create_dataset("Maximum Water Surface", data=np.array([[5.0], [1.0]]))
+        group.create_dataset("Maximum Face Velocity", data=np.array([[0.3], [2.0]]))
+        group.create_dataset("Minimum Water Surface", data=np.array([[0.5], [1.0]]))
+    return path
+
+
+class _BrokenSession:
+    """A binding that answers every read with a wrong-typed array."""
+
+    calls = 0
+
+    def __getattr__(self, name):
+        def call(*args, **kwargs):
+            type(self).calls += 1
+            if name == "read_numeric_batch":
+                return {}
+            junk = np.zeros(1, dtype=np.float16)
+            return {"values": junk} if name.startswith("read_mesh") else junk
+        return call
+
+    def close(self):
+        pass
+
+
+def _install_broken_session(monkeypatch):
+    import contextlib
+    from ras_commander import fast_hdf
+
+    _BrokenSession.calls = 0
+
+    @contextlib.contextmanager
+    def session(*args, **kwargs):
+        yield _BrokenSession()
+
+    monkeypatch.setattr(fast_hdf, "_session", session)
+
+
+def _outcome(call):
+    try:
+        value = call()
+    except Exception as exc:  # noqa: BLE001 - the exception type/text is the contract
+        return ("raise", type(exc).__name__, str(exc))
+    if isinstance(value, dict):
+        return ("ok", {k: _digest(v) for k, v in value.items()})
+    return ("ok", _digest(value))
+
+
+def _digest(value):
+    if isinstance(value, xr.Dataset):
+        return {name: (var.dims, var.values.tolist()) for name, var in value.data_vars.items()}, \
+            {name: coord.values.tolist() for name, coord in value.coords.items()}
+    if isinstance(value, pd.DataFrame):
+        return value.to_dict(orient="list"), dict(value.attrs)
+    return repr(value)
+
+
+MESH_RESULT_CALLS = {
+    "cells_timeseries": lambda p: HdfResultsMesh.get_mesh_cells_timeseries(
+        p, mesh_names=MESH_NAME, var="Water Surface", truncate=False),
+    "cells_timeseries_all": lambda p: HdfResultsMesh.get_mesh_cells_timeseries(p),
+    "max_ws": lambda p: HdfResultsMesh.get_mesh_max_ws(p),
+    "max_face_v": lambda p: HdfResultsMesh.get_mesh_max_face_v(p),
+    "min_ws": lambda p: HdfResultsMesh.get_mesh_min_ws(p),
+}
+
+
+@pytest.mark.parametrize("call", sorted(MESH_RESULT_CALLS))
+def test_auto_mesh_results_ignore_a_misbehaving_binding(tmp_path, monkeypatch, native_module, call):
+    path = _write_mesh_results_hdf(tmp_path / "results.p01.hdf")
+    monkeypatch.setenv("RAS_COMMANDER_FAST_HDF", "0")
+    reference = _outcome(lambda: MESH_RESULT_CALLS[call](path))
+    monkeypatch.delenv("RAS_COMMANDER_FAST_HDF")
+    _install_broken_session(monkeypatch)
+    assert _outcome(lambda: MESH_RESULT_CALLS[call](path)) == reference
+    assert _BrokenSession.calls > 0, "the injected failure was never exercised"
+
+
+@pytest.mark.parametrize("call", ["cells_timeseries", "max_ws"])
+def test_required_mesh_results_surface_native_failure(tmp_path, monkeypatch, native_module, call):
+    from ras_commander.fast_hdf import FastHdfError
+    path = _write_mesh_results_hdf(tmp_path / "results.p01.hdf")
+    _install_broken_session(monkeypatch)
+    monkeypatch.setenv("RAS_COMMANDER_FAST_HDF", "required")
+    with pytest.raises(FastHdfError):
+        MESH_RESULT_CALLS[call](path)
+
+
+def test_auto_datasets_with_a_broken_binding_read_like_h5py(tmp_path, monkeypatch, native_module):
+    from ras_commander import fast_hdf
+    path = _write_mesh_results_hdf(tmp_path / "results.p01.hdf")
+    _install_broken_session(monkeypatch)
+    names = [SUMMARY_PATH + "/Maximum Water Surface", SUMMARY_PATH + "/Maximum Face Velocity",
+             f"{BASE_TS_PATH}/2D Flow Areas/{MESH_NAME}/Water Surface"]
+    with h5py.File(path, "r") as hdf:
+        expected = {n: hdf[n][()] for n in names}
+        for name in names:
+            np.testing.assert_array_equal(fast_hdf.read_dataset(hdf[name]), expected[name])
+        batch = fast_hdf.read_datasets(hdf, names)
+        for name in names:
+            np.testing.assert_array_equal(batch[name], expected[name])
+        with pytest.raises(fast_hdf.FastHdfError):
+            fast_hdf.read_dataset(hdf[names[0]], backend="rust")
+
+
+def test_auto_attribute_reads_survive_a_malformed_engine_descriptor(tmp_path, monkeypatch, native_module):
+    from ras_commander import _fast_hdf_typed, fast_hdf
+    path = tmp_path / "attrs.hdf"
+    with h5py.File(path, "w") as hdf:
+        hdf.attrs["a"] = 3
+        hdf.attrs["b"] = "text"
+    monkeypatch.setattr(_fast_hdf_typed, "_typed_attributes", lambda module, obj: {"a": None, "b": object()})
+    with h5py.File(path, "r") as hdf:
+        assert fast_hdf.read_attrs(hdf) == {"a": 3, "b": "text"}
+        assert fast_hdf.read_attr(hdf, "a") == 3
+        with pytest.raises(fast_hdf.FastHdfError):
+            fast_hdf.read_attrs(hdf, backend="rust")
+
+
+def test_auto_temporal_reduce_ignores_a_malformed_native_result(tmp_path, monkeypatch, native_module):
+    from ras_commander import fast_results
+    path = _write_mesh_results_hdf(tmp_path / "results.p01.hdf")
+    monkeypatch.setattr(native_module, "temporal_reduce", lambda *a, **k: {"rows": 3})
+    with h5py.File(path, "r") as hdf:
+        dataset = hdf[f"{BASE_TS_PATH}/2D Flow Areas/{MESH_NAME}/Water Surface"]
+        assert fast_results.native_temporal_reduce(dataset) is None
+        with pytest.raises(fast_results.FastHdfError):
+            fast_results.native_temporal_reduce(dataset, backend="rust")
