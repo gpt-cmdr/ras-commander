@@ -109,7 +109,7 @@ from .._rasmap_schema import rasmap_dataframe_is_usable
 from ..Decorators import log_call, standardize_input
 from ..LoggingConfig import get_logger
 from .. import fast_results
-from ..fast_hdf import FastHdfError, read_dataset, read_typed
+from ..fast_hdf import FastHdfError, read_dataset, read_typed, reraise_required
 from .HdfBase import HdfBase
 from .HdfMesh import HdfMesh
 from .HdfResultView import HdfResultView, Selection
@@ -195,6 +195,7 @@ class HdfResultsMesh:
                     include_ghost_cells,
                 )
         except Exception as exc:
+            reraise_required(exc)
             logger.error("Error reading geometry-free mesh summary: %s", exc)
             raise ValueError(f"Failed to get mesh summary values: {exc}") from exc
 
