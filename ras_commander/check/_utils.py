@@ -13,6 +13,7 @@ import numpy as np
 import h5py
 
 from ..LoggingConfig import get_logger
+from ..fast_hdf import read_typed, reraise_required
 from .types import Severity, FlowType, CheckMessage, CheckResults
 
 logger = get_logger(__name__)
@@ -131,10 +132,10 @@ def get_available_profiles(plan_hdf: Path) -> List[str]:
         with h5py.File(plan_hdf, 'r') as hdf:
             path = 'Results/Steady/Output/Output Blocks/Base Output/Steady Profiles/Profile Names'
             if path in hdf:
-                names = hdf[path][:]
+                names = read_typed(hdf[path], slice(None))
                 return [n.decode('utf-8').strip() for n in names]
-    except Exception:
-        pass
+    except Exception as e:
+        reraise_required(e)
     return []
 
 
@@ -169,7 +170,7 @@ def get_structure_locations(geom_hdf: Path) -> Optional[pd.DataFrame]:
             if 'Geometry/Structures/Attributes' not in hdf:
                 return None
 
-            attrs = hdf['Geometry/Structures/Attributes'][:]
+            attrs = read_typed(hdf['Geometry/Structures/Attributes'], slice(None))
 
             records = []
             for attr in attrs:
@@ -192,6 +193,7 @@ def get_structure_locations(geom_hdf: Path) -> Optional[pd.DataFrame]:
             return pd.DataFrame(records)
 
     except Exception as e:
+        reraise_required(e)
         logger.debug(f"Could not get structure locations: {e}")
         return None
 

@@ -19,7 +19,8 @@ allow. The documented required-mode metadata exception is:
 - fixed or variable-length text datasets (names, profile names, labels);
 - compound tables whose every member is text (identity tables such as XS
   ``River/Reach/RS`` rows), served as ``h5py-metadata`` by the router;
-- reads made by the test harness itself (argument discovery in ``_cases``).
+- reads made by the test harness itself (argument discovery in ``_cases``, and in the
+  ROUTE-NONHDF ``tests/rust_route_nonhdf/_cases_*.py`` modules).
 
 Any numeric value read (integer, float, bool, complex, enum, vlen numeric), any
 compound with a numeric member, and any opaque/unknown class is an offender,
@@ -45,6 +46,14 @@ _ABC_FILES = {"<frozen _collections_abc>",
 ATTRIBUTE_ALLOWED_KINDS = {}
 _ROUTER = os.path.join("ras_commander", "_fast_hdf_typed.py")
 _HARNESS = tuple(os.path.join("tests", suite, "_cases.py") for suite in ("rust_route_1", "rust_route_2"))
+# ROUTE-NONHDF: the non-Hdf* suite keeps one case module per module group (_cases_<group>.py).
+_HARNESS_PREFIX = os.path.join("tests", "rust_route_nonhdf", "_cases")
+
+
+def _is_harness(filename):
+    filename = filename.replace("/", os.sep)
+    return filename.endswith(_HARNESS) or (
+        _HARNESS_PREFIX in filename and filename.endswith(".py"))
 
 
 def _caller():
@@ -99,7 +108,7 @@ def _record(records, dataset, how):
         "path": dataset.name, "kind": kind, "how": how,
         "caller": f"{os.path.basename(filename)}:{function}:{line}",
         "via_router": filename.replace("/", os.sep).endswith(_ROUTER),
-        "harness": filename.replace("/", os.sep).endswith(_HARNESS),  # either suite's cases
+        "harness": _is_harness(filename),  # any suite's case modules
     })
 
 
@@ -133,7 +142,7 @@ def _record_attr(records, attrs, name):
         "path": f"{owner}@{name}", "kind": kind, "how": "attribute", "target": "attribute",
         "caller": f"{os.path.basename(filename)}:{function}:{line}",
         "via_router": filename.replace("/", os.sep).endswith(_ROUTER),
-        "harness": filename.replace("/", os.sep).endswith(_HARNESS),
+        "harness": _is_harness(filename),
     })
 
 
