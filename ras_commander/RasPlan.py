@@ -84,7 +84,7 @@ import shutil
 from typing import Union, Optional, List, Dict, Any, Tuple
 from numbers import Integral, Number
 import pandas as pd
-from .RasPrj import RasPrj, ras
+from .RasPrj import RasPrj, _matching_copied_prj_file, ras
 from .RasUtils import RasUtils
 from pathlib import Path
 from datetime import datetime
@@ -1167,7 +1167,7 @@ class RasPlan:
             ras_obj.project_folder,
             ras_obj.ras_exe_path,
             suppress_logging=getattr(ras_obj, "suppress_logging", True),
-            prj_file=RasPrj._matching_copied_prj_file(
+            prj_file=_matching_copied_prj_file(
                 ras_obj.project_folder, ras_obj.prj_file
             ),
             load_results_summary=getattr(
@@ -4850,7 +4850,7 @@ class RasPlan:
             ras_obj.project_folder,
             ras_obj.ras_exe_path,
             suppress_logging=getattr(ras_obj, "suppress_logging", True),
-            prj_file=RasPrj._matching_copied_prj_file(
+            prj_file=_matching_copied_prj_file(
                 ras_obj.project_folder, ras_obj.prj_file
             ),
             load_results_summary=getattr(

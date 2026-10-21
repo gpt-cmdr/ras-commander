@@ -85,7 +85,13 @@ from .LoggingConfig import get_logger
 from ._optional_deps import require_module
 from .RasBco import BcoMonitor
 from .RasPlan import RasPlan
-from .RasPrj import RasPrj, init_ras_project, ras
+from .RasPrj import (
+    RasPrj,
+    _copied_prj_init_kwargs,
+    _matching_copied_prj_file,
+    init_ras_project,
+    ras,
+)
 from .RasTcu import RasTcu
 from .RasUtils import RasUtils
 
@@ -3321,7 +3327,7 @@ class RasCmdr:
                     compute_ras.initialize(
                         dest_folder,
                         ras_obj.ras_exe_path,
-                        prj_file=RasPrj._matching_copied_prj_file(
+                        **_copied_prj_init_kwargs(
                             dest_folder, ras_obj.prj_file
                         ),
                     )
@@ -4606,7 +4612,7 @@ class RasCmdr:
 
                 try:
                     worker_ras = RasPrj()
-                    worker_prj = RasPrj._matching_copied_prj_file(
+                    worker_prj = _matching_copied_prj_file(
                         worker_folder, ras_obj.prj_file
                     )
                     worker_ras_object = init_ras_project(
@@ -5122,7 +5128,7 @@ class RasCmdr:
                     ras_obj.initialize(
                         final_dest_folder,
                         ras_obj.ras_exe_path,
-                        prj_file=RasPrj._matching_copied_prj_file(
+                        **_copied_prj_init_kwargs(
                             final_dest_folder, ras_obj.prj_file
                         ),
                     )
@@ -5396,7 +5402,7 @@ class RasCmdr:
                 compute_ras.initialize(
                     compute_folder,
                     ras_obj.ras_exe_path,
-                    prj_file=RasPrj._matching_copied_prj_file(
+                    **_copied_prj_init_kwargs(
                         compute_folder, ras_obj.prj_file
                     ),
                 )
