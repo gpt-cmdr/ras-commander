@@ -814,6 +814,73 @@ def attribute_value(typed):
     return values[0] if not shape else values.reshape(shape)
 
 
+# ------------------------------------------------------------------ mesh series domains
+MESH_SERIES_PREFIX = ["Results", "Unsteady", "Output", "Output Blocks", "Base Output",
+                      "Unsteady Time Series", "2D Flow Areas"]
+_ELEMENT_ID_DIMS = {"cell": "cell_id", "face": "face_id"}
+
+
+def mesh_series_domain(dataset, *, backend="auto"):
+    """Engine-typed element domain of one Base Output 2D mesh time series.
+
+    Returns ``{"id_dim", "domain", "domain_rule", "capability"}`` from the
+    engine's ``mesh_series_inventory`` (engine API 9):
+
+    - ``domain``: ``cell``, ``face`` or ``other`` (time-only diagnostics such as
+      ``Time Step``);
+    - ``domain_rule``: ``stored_location`` (stored scalar ``Location``),
+      ``legacy_exact_name`` (``Location`` absent; one of the six stable-core names
+      ``Depth``/``Water Surface`` -> cells, ``Face Velocity``/``Face Shear Stress``/
+      ``Face Area``/``Face Manning's n`` -> faces, with matching geometry counts and
+      physical Cell Count bound), or ``unqualified``;
+    - ``id_dim``: ``cell_id``/``face_id`` when the engine qualifies the domain
+      (``capability.status == "supported"``), else ``None``.
+
+    This is the native counterpart of the h5py domain rule of ras-commander PR #565
+    (``HdfResultsMesh._mesh_series_id_dim``), so both pathways can be reconciled
+    (roadmap R2.4). ``python`` mode returns ``None`` (no engine); auto returns
+    ``None`` on an engine failure; required mode raises :class:`FastHdfError`.
+    """
+    from . import fast_hdf
+
+    if not isinstance(dataset, h5py.Dataset):
+        raise TypeError("dataset must be an open h5py.Dataset")
+    parts = dataset.name.strip("/").split("/")
+    if parts[:7] != MESH_SERIES_PREFIX or len(parts) != 9:
+        raise ValueError(f"{dataset.name} is not a Base Output 2D mesh time series")
+    area, name = parts[7], parts[8]
+    mode = fast_hdf._mode(backend)
+    module = fast_hdf._native(mode)
+    if module is None:
+        _record(dataset.name, "h5py", "mesh_series_domain")
+        return None
+    try:
+        if not fast_hdf._safe_file(dataset):
+            raise TypedRouteError(f"{dataset.name}: file cannot be reopened safely by the engine")
+        file_path = os.fsdecode(dataset.file.filename)
+        inventory = _cached(file_path, ("mesh_series_inventory", area),
+                            lambda: module.mesh_series_inventory(file_path, area))
+        rows = [v for v in inventory["variables"] if v["name"] == name]
+        if len(rows) != 1:
+            raise TypedRouteError(f"{dataset.name}: {len(rows)} engine series descriptors")
+        row = rows[0]
+    except Exception as exc:
+        if mode == "rust":
+            raise fast_hdf.FastHdfError(f"Mesh series domain failed for {dataset.name}: {exc}") from exc
+        logger.debug("no engine mesh series domain for %s: %s", dataset.name, exc)
+        _record(dataset.name, "h5py-fallback", "mesh_series_domain")
+        return None
+    supported = row["capability"]["status"] == "supported"
+    out = {
+        "id_dim": _ELEMENT_ID_DIMS.get(row["domain"]) if supported else None,
+        "domain": row["domain"],
+        "domain_rule": row.get("domain_rule"),
+        "capability": row["capability"],
+    }
+    _record(dataset.name, "native-typed", "mesh_series_domain", out["domain_rule"])
+    return out
+
+
 def _has_numeric_field(dtype):
     """Whether a compound dtype has any member that is not fixed or vlen text."""
     for name in dtype.names:
