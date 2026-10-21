@@ -143,7 +143,13 @@ class HdfResultsMesh:
         "Precipitation Rate", "Infiltration Rate", "Evaporation Rate",
         "Percolation Rate", "Groundwater Elevation", "Groundwater Depth",
         "Groundwater Flow", "Groundwater Velocity", "Groundwater Velocity X",
-        "Groundwater Velocity Y"
+        "Groundwater Velocity Y", "Cell Courant",
+        "Cell Divergence Term", "Cell Storage Term", "Cell Water Source Term",
+        "Cell Eddy Viscosity - Eddy Viscosity X",
+        "Cell Eddy Viscosity - Eddy Viscosity Y",
+        "Cell Velocity - Velocity X", "Cell Velocity - Velocity Y",
+        "Cell Volume", "Cell Volume Error", "Cell Water Surface Error",
+        "Cell Flow Balance", "Cell Invert Depth", "Cell Hydraulic Depth",
     ]
 
     MESH_FACE_TIME_SERIES_OUTPUT_VARS = [
@@ -151,7 +157,7 @@ class HdfResultsMesh:
         "Face Manning's n", "Face Courant", "Face Cumulative Volume",
         "Face Eddy Viscosity", "Face Flow Period Average",
         "Face Friction Term", "Face Pressure Gradient Term",
-        "Face Shear Stress", "Face Tangential Velocity"
+        "Face Shear Stress", "Face Tangential Velocity", "Face Wind Term",
     ]
 
     @staticmethod
@@ -281,6 +287,13 @@ class HdfResultsMesh:
         """
         Get timeseries output for a specific mesh and variable.
 
+        Series require numeric rank-two (time, element) data, matching Base
+        Output Time rows, and stored scalar ``Location`` of ``Cells``, ``Cell``
+        or ``Faces`` matching the corresponding stored geometry count. Names
+        and coincident counts never select a domain. Missing/unknown Location
+        or contradictory axes raise ValueError. ``Cell Hydraulic Depth`` is
+        a literal variable distinct from ``Depth``; no alias is applied.
+
         Args:
             hdf_path: Plan number, plan-result HDF path, or open HDF handle.
             mesh_name: Name of the 2D flow area.
@@ -334,7 +347,7 @@ class HdfResultsMesh:
             RuntimeError: If a lazy view's source changes after creation.
 
         Valid variables include:
-            "Water Surface", "Face Velocity", "Cell Velocity X"...
+            "Water Surface", "Face Velocity", "Cell Velocity - Velocity X"...
         """
         if return_type not in ("xarray", "view"):
             raise ValueError("return_type must be 'xarray' or 'view'")
@@ -442,16 +455,12 @@ class HdfResultsMesh:
             if time_path not in hdf_file:
                 raise ValueError(f"Path {time_path} not found in HDF file")
             dataset = hdf_file[dataset_path]
-            if dataset.ndim not in (1, 2):
-                raise ValueError(
-                    f"Expected a 1D or 2D result dataset, got {dataset.shape}"
-                )
+            id_dim = HdfResultsMesh._mesh_series_id_dim(hdf_file, mesh_name, dataset)
             units = HdfResultsMesh._decode_hdf_attr(
                 dataset.attrs.get("Units", "")
             )
             shape = tuple(int(value) for value in dataset.shape)
             dtype = dataset.dtype.str
-            id_dim = "face_id" if "Face" in var else "cell_id"
             cell_count = None
             if id_dim == "cell_id" and len(shape) == 2:
                 cell_count = HdfResultsMesh._physical_cell_count(
@@ -1454,6 +1463,10 @@ class HdfResultsMesh:
         """
         Get timeseries output for all face-based variables of a specific mesh.
 
+        Discover numeric datasets with stored ``Location=Faces`` and validated
+        time/face counts. Unqualified entries are skipped with diagnostics;
+        one-row datasets are never broadcast onto the full Time axis.
+
         Args:
             hdf_path (Path): Path to the HDF file.
             mesh_name (str): Name of the mesh.
@@ -1466,8 +1479,7 @@ class HdfResultsMesh:
                 Use Dataset when extracting MULTIPLE variables for a SINGLE mesh area.
 
                 Data variables:
-                    Any available face-based HDF time-series outputs listed in
-                    MESH_FACE_TIME_SERIES_OUTPUT_VARS, normalized to lowercase
+                    Any qualified face-based HDF time-series outputs, normalized to lowercase
                     names such as face_velocity, face_flow,
                     face_water_surface, face_area, and face_mannings_n.
                     Each variable shares common dimensions.
@@ -1483,7 +1495,9 @@ class HdfResultsMesh:
         datasets = []
 
         with h5py.File(hdf_path, 'r') as hdf_file:
-            for var in HdfResultsMesh.MESH_FACE_TIME_SERIES_OUTPUT_VARS:
+            for var, id_dim in HdfResultsMesh._discover_mesh_series(hdf_file, mesh_name).items():
+                if id_dim != "face_id":
+                    continue
                 path = HdfResultsMesh._get_mesh_timeseries_output_path(mesh_name, var)
                 if path not in hdf_file:
                     logger.debug(f"Variable '{var}' not found for mesh '{mesh_name}'. Skipping.")
@@ -1529,6 +1543,15 @@ class HdfResultsMesh:
     ) -> Dict[str, xr.Dataset]:
         """
         Get mesh cells timeseries output.
+
+        With ``var=None``, discover actual numeric cell and face datasets using
+        stored ``Location`` (``Cells``/``Cell``/``Faces``), matching geometry
+        counts and the Base Output Time axis. This can return more variables
+        and use more memory than a fixed convenience list; select ``var`` for
+        focused reads. Unqualified datasets are skipped with diagnostics.
+        An explicitly selected malformed dataset raises ValueError. No times
+        are invented for one-row outputs. Hydraulic depth remains distinct
+        from ``Depth``. Ghost-cell defaults and flags apply after validation.
 
         Args:
             hdf_path (Path): Path to HDF file
@@ -2544,6 +2567,58 @@ class HdfResultsMesh:
         """
         return f"Results/Unsteady/Output/Output Blocks/Base Output/Unsteady Time Series/2D Flow Areas/{mesh_name}/{var_name}"
 
+    @staticmethod
+    def _mesh_series_id_dim(hdf_file: h5py.File, mesh_name: str, dataset: h5py.Dataset) -> str:
+        """Qualify a stored series domain using the engine's Location rules.
+
+        Geometry counts refer to all stored rows, including cell ghosts.
+        Physical-cell filtering is a separate operation after qualification.
+        """
+        if not isinstance(dataset, h5py.Dataset) or dataset.ndim != 2 or dataset.dtype.kind not in "iuf":
+            raise ValueError(f"Unsupported numeric time/element schema: {dataset.name}")
+        time = hdf_file.get(
+            "Results/Unsteady/Output/Output Blocks/Base Output/Unsteady Time Series/Time"
+        )
+        if time is None or time.ndim != 1 or dataset.shape[0] != len(time):
+            raise ValueError(f"Series rows differ from Base Output Time axis: {dataset.name}")
+        location = np.asarray(dataset.attrs.get("Location", ""))
+        if location.shape not in ((), (1,)):
+            raise ValueError(f"Location requires one stored text value: {dataset.name}")
+        location = location.reshape(-1)[0]
+        if isinstance(location, bytes):
+            location = location.decode("utf-8")
+        if not isinstance(location, str) or location not in {"Cells", "Cell", "Faces"}:
+            raise ValueError(f"Missing or unqualified stored Location: {dataset.name}")
+        is_cell = location in {"Cells", "Cell"}
+        geometry_name = "Cells Center Coordinate" if is_cell else "Faces FacePoint Indexes"
+        geometry = hdf_file.get(f"Geometry/2D Flow Areas/{mesh_name}/{geometry_name}")
+        if geometry is None or not isinstance(geometry, h5py.Dataset) or geometry.ndim < 1:
+            raise ValueError(f"Geometry count for stored Location absent: {dataset.name}")
+        if dataset.shape[1] != len(geometry):
+            raise ValueError(f"Stored Location contradicts geometry count: {dataset.name}")
+        if is_cell:
+            physical_count = HdfResultsMesh._physical_cell_counts(hdf_file).get(mesh_name)
+            if physical_count is not None and not 0 <= physical_count <= len(geometry):
+                raise ValueError(f"Physical Cell Count contradicts stored geometry: {dataset.name}")
+        return "cell_id" if is_cell else "face_id"
+
+    @staticmethod
+    def _discover_mesh_series(hdf_file: h5py.File, mesh_name: str) -> Dict[str, str]:
+        """Enumerate actual numeric datasets and report per-entry refusals."""
+        group_path = HdfResultsMesh._get_mesh_timeseries_output_path(mesh_name, "")
+        group = hdf_file.get(group_path)
+        if group is None:
+            return {}
+        variables = {}
+        for name, dataset in group.items():
+            if not isinstance(dataset, h5py.Dataset) or dataset.dtype.kind not in "iuf":
+                continue
+            try:
+                variables[name] = HdfResultsMesh._mesh_series_id_dim(hdf_file, mesh_name, dataset)
+            except ValueError as exc:
+                logger.warning("Skipping unqualified mesh series '%s': %s", dataset.name, exc)
+        return variables
+
 
     @staticmethod
     def _get_mesh_cells_timeseries_output(hdf_path: h5py.File,
@@ -2579,11 +2654,6 @@ class HdfResultsMesh:
         Raises:
             ValueError: If there's an error processing the timeseries output data.
         """
-        TIME_SERIES_OUTPUT_VARS = {
-            "cell": HdfResultsMesh.MESH_CELL_TIME_SERIES_OUTPUT_VARS,
-            "face": HdfResultsMesh.MESH_FACE_TIME_SERIES_OUTPUT_VARS
-        }
-
         try:
             start_time = HdfBase.get_simulation_start_time(hdf_path)
             time_stamps = HdfBase.get_unsteady_timestamps(hdf_path)
@@ -2597,11 +2667,11 @@ class HdfResultsMesh:
             explicit_var = var is not None
             if explicit_var:
                 variables = [var]
-            else:
-                variables = TIME_SERIES_OUTPUT_VARS["cell"] + TIME_SERIES_OUTPUT_VARS["face"]
 
             datasets = {}
             for mesh_name in mesh_names:
+                if not explicit_var:
+                    variables = list(HdfResultsMesh._discover_mesh_series(hdf_path, mesh_name))
                 cell_count = cell_counts.get(mesh_name)
                 data_vars = {}
                 missing_optional_variables = []
@@ -2620,10 +2690,8 @@ class HdfResultsMesh:
                                 missing_optional_variables.append(variable)
                             continue
 
-                        # Determine if this is a face-based or cell-based variable
-                        id_dim = "face_id" if variable in TIME_SERIES_OUTPUT_VARS["face"] else "cell_id"
-
                         dataset = hdf_path[path]
+                        id_dim = HdfResultsMesh._mesh_series_id_dim(hdf_path, mesh_name, dataset)
                         if id_dim == "cell_id" and dataset.ndim == 2:
                             physical_count = HdfResultsMesh._physical_cell_count(
                                 cell_counts, mesh_name, include_ghost_cells
@@ -2679,18 +2747,19 @@ class HdfResultsMesh:
                     except OptionalDependencyError:
                         raise
                     except Exception as e:
+                        if explicit_var:
+                            raise
                         logger.error(f"Error processing variable '{variable}' for mesh '{mesh_name}': {str(e)}")
 
-                if missing_optional_variables:
-                    logger.debug(
-                        "Mesh '%s' time-series probe found %s variable(s) and skipped %s unavailable variable(s). "
-                        "Available: %s. Missing: %s",
-                        mesh_name,
-                        len(data_vars),
-                        len(missing_optional_variables),
-                        ", ".join(data_vars.keys()) if data_vars else "none",
-                        ", ".join(missing_optional_variables),
-                    )
+                logger.debug(
+                    "Mesh '%s' time-series probe found %s variable(s) and skipped %s unavailable variable(s). "
+                    "Available: %s. Missing: %s",
+                    mesh_name,
+                    len(data_vars),
+                    len(missing_optional_variables),
+                    ", ".join(data_vars.keys()) if data_vars else "none",
+                    ", ".join(missing_optional_variables),
+                )
 
                 if data_vars:
                     datasets[mesh_name] = xr.Dataset(
@@ -2751,6 +2820,7 @@ class HdfResultsMesh:
                 raise ValueError(f"Path {path} not found in HDF file")
 
             dataset = hdf_path[path]
+            id_dim = HdfResultsMesh._mesh_series_id_dim(hdf_path, mesh_name, dataset)
             values = dataset[:]
             units = HdfResultsMesh._decode_hdf_attr(
                 dataset.attrs.get("Units", "")
@@ -2771,8 +2841,6 @@ class HdfResultsMesh:
                     values = values[start:end]
                     timesteps = timesteps[start:end]
 
-            # Determine if this is a face-based or cell-based variable
-            id_dim = "face_id" if "Face" in var else "cell_id"
             dims = ["time", id_dim] if values.ndim == 2 else ["time"]
             coords = {"time": timesteps}
             if values.ndim == 2:

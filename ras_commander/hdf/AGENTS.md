@@ -72,6 +72,17 @@ This file is the canonical local instruction file for `ras_commander/hdf/`.
   `region_name` parameters for selective face application (precedence:
   `face_ids` > `region_name` > `polygon` > all faces).
 - 2D results extraction: `HdfResultsMesh`
+- Mesh time-series domains come from a stored scalar `Location`: `Cells` and
+  the observed singular `Cell` mean cells; `Faces` means faces. Numeric series
+  must have rank two, match the Base Output Time rows, and match the selected
+  domain's stored geometry count (including ghosts). Names, allowlists and
+  coincident counts do not choose a domain. Missing/unknown Location and
+  incompatible layouts are refused. Default cell/face enumeration discovers
+  actual qualified datasets and logs skipped entries; explicit malformed reads
+  raise `ValueError`. One-row outputs are not broadcast. Physical-cell filtering
+  and `is_ghost_cell` flags still apply after validation. Convenience variable
+  lists are examples, not discovery gates. `Cell Hydraulic Depth` stays distinct
+  from `Depth` and the existing WSE-minus-minimum-elevation depth calculation.
 - Large 2D result access: `HdfResultsMesh.get_mesh_timeseries(...,
   return_type="view")` returns an immutable `HdfResultView`;
   `iter_mesh_timeseries()` emits untruncated bounded batches; and
