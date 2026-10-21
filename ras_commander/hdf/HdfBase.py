@@ -802,9 +802,12 @@ class HdfBase:
     def _feature_part_ranges(parts, point_start: int, point_count: int):
         """Resolve one complete packed feature to local point ranges.
 
-        Native Parts are feature-local. Legacy global ranges are accepted only
-        when the entire collection of parts covers the feature exactly. Never
-        choose an offset convention independently for individual parts.
+        Native Parts are feature-local and valid when every part lies within
+        the feature's point count (the HEC-RAS / native engine rule); gaps,
+        unused vertices and shared vertices are allowed. Legacy global ranges
+        are accepted only when the entire collection of parts, shifted by the
+        feature point start, covers the feature exactly. Never choose an offset
+        convention independently for individual parts.
         """
         ranges = []
         for row in parts:
@@ -813,24 +816,28 @@ class HdfBase:
             ):
                 raise ValueError("Packed feature parts require integer offsets and counts")
             start, count = map(int, row)
-            if start < 0 or count <= 0:
-                raise ValueError("Packed feature parts require nonnegative offsets and positive counts")
+            if start < 0 or count < 0:
+                raise ValueError("Packed feature parts require nonnegative offsets and counts")
             ranges.append((start, count))
 
-        def covers_feature(candidate):
-            expected = 0
-            for start, count in sorted(candidate):
-                if start != expected or start + count > point_count:
-                    return False
-                expected += count
-            return bool(candidate) and expected == point_count
-
-        if covers_feature(ranges):
+        # Native rule. When point_start > 0, an exact legacy global cover always
+        # has a part ending past point_count, so it can never also match here.
+        if ranges and all(start + count <= point_count for start, count in ranges):
             return ranges
+
         local_ranges = [(start - point_start, count) for start, count in ranges]
-        if covers_feature(local_ranges):
-            return local_ranges
-        raise ValueError("Packed feature parts overlap, leave gaps, or exceed the feature point range")
+        expected = 0
+        for start, count in sorted(local_ranges):
+            if start != expected:
+                break
+            expected += count
+        else:
+            if local_ranges and expected == point_count:
+                return local_ranges
+        raise ValueError(
+            "Packed feature parts exceed the feature point range and are not a "
+            "legacy global layout covering the feature exactly"
+        )
 
     @staticmethod
     @log_call

@@ -113,6 +113,7 @@ See `.claude/rules/hec-ras/land-cover-mannings-n.md` for full documentation.
 ## Packed polyline audit offsets
 
 - `GeomMesh.audit_domain_containment()` uses feature-local offsets for packed
-  polylines. Legacy global offsets remain supported when the complete feature
-  reconciles; individual parts never guess their offset convention by numeric
+  polylines, valid when every part lies within the feature's point count.
+  Legacy global offsets remain supported when the complete feature reconciles
+  exactly; individual parts never guess their offset convention by numeric
   overlap. Invalid or truncated spans raise.
