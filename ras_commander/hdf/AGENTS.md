@@ -34,6 +34,13 @@ This file is the canonical local instruction file for `ras_commander/hdf/`.
 
 ## Input And Output Rules
 
+- Pump operation and hydrograph readers use only their owning DSS Profile or
+  DSS Hydrograph block's stored timestamps (seconds or milliseconds), falling
+  back to that block's finite nondecreasing numeric `Time` in days only when
+  timestamps are absent. Numeric axes expose `time_units` on DataFrames or
+  `time.units` on DataArrays. Missing, malformed or mismatched axes raise;
+  never borrow Base Output time or synthesize integer row indexes.
+
 - Accept the flexible HDF-facing input forms already used in this package: plan numbers, prefixed plan numbers, paths, and open HDF handles where the decorator pattern already allows them.
 - Return pandas or GeoPandas objects in the shapes established by nearby code. Do not invent a new container style for one method unless the surrounding API also changes.
 - Log read failures with enough file context to debug the issue.
