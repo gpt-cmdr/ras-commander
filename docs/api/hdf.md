@@ -576,6 +576,12 @@ Pump station analysis.
 
 Fluvial-pluvial boundary analysis.
 
+Polygon acreage thresholds use both projected horizontal CRS axis conversion factors.
+Missing or geographic CRS skips the filter with a warning. Unknown projected units
+fail processing: the method logs ERROR with traceback, path, parameters and stage,
+then returns an empty GeoDataFrame and discards partial geometry. Input/decorator
+validation exceptions remain unchanged; no result status attributes are added.
+
 - `calculate_fluvial_pluvial_boundary(hdf_path, delta_t)` - Calculate boundary
 
 ### HdfInfiltration
