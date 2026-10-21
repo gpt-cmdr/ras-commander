@@ -573,11 +573,17 @@ def _typed_attributes(module, obj):
                        lambda: {a["name"]: a for a in module.typed_group_attributes(file_path, name)})
     path = name.strip("/")
     row = _stored_index(module, file_path).get(path)
-    if row is None or row["owner"].startswith("output_block:"):
+    if row is None:
         return None
-    inventory = _cached(file_path, ("family_inventory", row["owner"]),
-                        lambda: module.read_family_inventory(file_path, row["owner"]))
-    for dataset in inventory["datasets"]:
+    if row["owner"].startswith("output_block:"):
+        blocks = _cached(file_path, ("output_block_inventory",),
+                         lambda: module.output_block_inventory(file_path))
+        datasets = [d for b in blocks for d in b["datasets"]]
+    else:
+        inventory = _cached(file_path, ("family_inventory", row["owner"]),
+                            lambda: module.read_family_inventory(file_path, row["owner"]))
+        datasets = inventory["datasets"]
+    for dataset in datasets:
         if dataset["path"] == path:
             return {a["name"]: a for a in dataset["attributes"]}
     return None
@@ -589,7 +595,7 @@ def read_attrs(obj, *, backend="auto"):
     Attribute names and their order come from h5py (a key walk, no value read);
     each value is rebuilt from the engine's typed attribute by
     :func:`attribute_value`. Groups use ``typed_group_attributes``; datasets use
-    their Wave 3 family inventory. A dataset outside every family has no engine
+    their Wave 3 family inventory or non-Base output-block descriptor. A dataset outside every family has no engine
     attribute reader: its attributes stay on h5py in every mode (the documented
     metadata exception, traced ``h5py-metadata``/``attrs``). For a value the engine
     cannot reproduce exactly, auto reads that attribute with h5py and required

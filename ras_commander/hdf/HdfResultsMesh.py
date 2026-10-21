@@ -109,7 +109,7 @@ from .._rasmap_schema import rasmap_dataframe_is_usable
 from ..Decorators import log_call, standardize_input
 from ..LoggingConfig import get_logger
 from .. import fast_results
-from ..fast_hdf import FastHdfError, read_dataset, read_typed, reraise_required
+from ..fast_hdf import FastHdfError, read_attrs, read_dataset, read_typed, reraise_required
 from .HdfBase import HdfBase
 from .HdfMesh import HdfMesh
 from .HdfResultView import HdfResultView, Selection
@@ -3238,7 +3238,7 @@ class HdfResultsMesh:
                 
                 # Get timestamps
                 start_time = HdfBase.get_simulation_start_time(hdf_file)
-                time_data = hdf_file[f"{base_path}/Time"][:]
+                time_data = read_typed(hdf_file[f"{base_path}/Time"], slice(None))
                 timestamps = HdfUtils.convert_timesteps_to_datetimes(time_data, start_time)
                 
                 # Get all boundary condition names (excluding those with " - Flow per Face" or " - Stage per Face" suffix)
@@ -3271,8 +3271,8 @@ class HdfResultsMesh:
                     
                     try:
                         # Extract main boundary data
-                        bc_data = hdf_file[bc_path][:]
-                        bc_attrs = dict(hdf_file[bc_path].attrs)
+                        bc_data = read_typed(hdf_file[bc_path], slice(None))
+                        bc_attrs = read_attrs(hdf_file[bc_path])
                         
                         # Store metadata
                         bc_metadata[bc_name] = {
@@ -3296,8 +3296,8 @@ class HdfResultsMesh:
                         # Extract Flow per Face data
                         flow_face_path = f"{bc_path} - Flow per Face"
                         if flow_face_path in hdf_file:
-                            flow_face_data = hdf_file[flow_face_path][:]
-                            flow_face_attrs = dict(hdf_file[flow_face_path].attrs)
+                            flow_face_data = read_typed(hdf_file[flow_face_path], slice(None))
+                            flow_face_attrs = read_attrs(hdf_file[flow_face_path])
                             
                             # Get face IDs
                             face_ids = flow_face_attrs.get('Faces', [])
@@ -3318,8 +3318,8 @@ class HdfResultsMesh:
                         # Extract Stage per Face data
                         stage_face_path = f"{bc_path} - Stage per Face"
                         if stage_face_path in hdf_file:
-                            stage_face_data = hdf_file[stage_face_path][:]
-                            stage_face_attrs = dict(hdf_file[stage_face_path].attrs)
+                            stage_face_data = read_typed(hdf_file[stage_face_path], slice(None))
+                            stage_face_attrs = read_attrs(hdf_file[stage_face_path])
                             
                             # Get face IDs
                             face_ids = stage_face_attrs.get('Faces', [])

@@ -27,7 +27,7 @@ from .HdfUtils import HdfUtils
 from .HdfBase import HdfBase
 from ..Decorators import standardize_input, log_call
 from ..LoggingConfig import get_logger
-from ..fast_hdf import read_typed
+from ..fast_hdf import read_attrs, read_typed
 
 gpd = optional_module("geopandas", "Returning GeoDataFrame results from HdfPump")
 xr = optional_module("xarray", "Returning xarray results from HdfPump")
@@ -257,14 +257,14 @@ class HdfPump:
                     _PUMP_RESULTS_ACTION,
                 ))
 
-            data = hdf[data_path][()]
+            data = read_typed(hdf[data_path])
 
             # Extract time information - try DSS-specific timestamps first
             dss_time_path = "/Results/Unsteady/Output/Output Blocks/DSS Hydrograph Output/Unsteady Time Series/Time Date Stamp (ms)"
 
             if dss_time_path in hdf:
                 # Use DSS Hydrograph Output timestamps
-                raw_datetimes = hdf[dss_time_path][:]
+                raw_datetimes = read_typed(hdf[dss_time_path], slice(None))
                 time = [HdfUtils.parse_ras_datetime_ms(x.decode("utf-8")) for x in raw_datetimes]
             else:
                 # Fallback to Base Output timestamps
@@ -282,7 +282,7 @@ class HdfPump:
                 )
                 time = list(range(data.shape[0]))
 
-            variable_units = hdf[data_path].attrs.get('Variable_Unit', None)
+            variable_units = read_attrs(hdf[data_path]).get('Variable_Unit', None)
             variable_names, unit_by_variable = HdfPump._pump_variable_columns(
                 variable_units,
                 data.shape[1],
@@ -328,7 +328,7 @@ class HdfPump:
                 logger.debug("Pump station summary data not found in HDF file")
                 return pd.DataFrame()
 
-            summary_data = hdf[summary_path][()]
+            summary_data = read_typed(hdf[summary_path])
 
             # Create DataFrame and decode byte strings
             df = pd.DataFrame(summary_data)
@@ -391,12 +391,12 @@ class HdfPump:
                     _PUMP_RESULTS_ACTION,
                 ))
 
-            data = hdf[data_path][()]
+            data = read_typed(hdf[data_path])
 
             # Extract time information - Updated to use new method name
             time = HdfBase.get_unsteady_timestamps(hdf)
 
-            variable_units = hdf[data_path].attrs.get('Variable_Unit', None)
+            variable_units = read_attrs(hdf[data_path]).get('Variable_Unit', None)
             variable_names, unit_by_variable = HdfPump._pump_variable_columns(
                 variable_units,
                 data.shape[1],
