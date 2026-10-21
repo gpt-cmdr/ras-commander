@@ -76,7 +76,9 @@ This file is the canonical local instruction file for `ras_commander/hdf/`.
   adjacency, region growth and classification joins. Coincident edges from
   different meshes are never neighbors. Polygon dissolution groups by mesh and
   classification; native cell IDs remain unchanged. Both analysis entry points
-  propagate failures instead of returning an empty success-shaped result.
+  log processing failures at ERROR with path, parameters, stage and traceback,
+  then return an empty GeoDataFrame, discarding partial geometry. Input/decorator
+  validation exceptions remain unchanged. No status/error attributes are added.
 - Large 2D result access: `HdfResultsMesh.get_mesh_timeseries(...,
   return_type="view")` returns an immutable `HdfResultView`;
   `iter_mesh_timeseries()` emits untruncated bounded batches; and

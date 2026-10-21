@@ -82,8 +82,9 @@ class HdfFluvialPluvial:
 
         Cell identity is scoped by ``(mesh_name, cell_id)``. Adjacency never
         crosses mesh boundaries, even when coordinates or native IDs coincide.
-        Invalid input or analysis failures raise an exception; a successful
-        analysis with no qualifying edges returns an empty GeoDataFrame.
+        Processing failures log contextual ERROR with traceback and return an empty
+        GeoDataFrame, discarding partial output. A successful analysis with no
+        qualifying edges also returns empty. Input/decorator validation can raise.
 
         Args:
             hdf_path (Path): Path to the HEC-RAS plan HDF file.
@@ -95,6 +96,7 @@ class HdfFluvialPluvial:
         Returns:
             gpd.GeoDataFrame: GeoDataFrame containing the fluvial-pluvial boundary lines.
         """
+        stage = "data loading"
         try:
             logger.debug("Getting cell polygons from HDF file...")
             cell_polygons_gdf = HdfMesh.get_mesh_cell_polygons(hdf_path)
@@ -111,20 +113,24 @@ class HdfFluvialPluvial:
                 lambda x: HdfUtils.parse_ras_datetime(x) if isinstance(x, str) else x
             )
 
+            stage = "adjacency"
             logger.debug("Processing cell adjacencies...")
             cell_adjacency, common_edges = HdfFluvialPluvial._process_cell_adjacencies(cell_polygons_gdf)
 
+            stage = "time lookup"
             logger.debug("Extracting cell times from maximum water surface data...")
             times = max_ws_df.set_index(['mesh_name', 'cell_id'])['maximum_water_surface_time']
             if not times.index.is_unique:
                 raise ValueError("Duplicate mesh/cell identities in maximum water surface data")
             cell_times = times.to_dict()
 
+            stage = "boundary edges"
             logger.debug("Identifying boundary edges...")
             boundary_edges = HdfFluvialPluvial._identify_boundary_edges(
                 cell_adjacency, common_edges, cell_times, delta_t, min_line_length=min_line_length
             )
 
+            stage = "boundary output"
             logger.debug("Creating final GeoDataFrame for boundaries...")
             boundary_gdf = gpd.GeoDataFrame(
                 geometry=boundary_edges, 
@@ -140,10 +146,10 @@ class HdfFluvialPluvial:
         except Exception as e:
             logger.error(
                 f"Error calculating fluvial-pluvial boundary lines for {hdf_path} "
-                f"(delta_t={delta_t} hr, min_line_length={min_line_length}): {str(e)}",
+                f"(delta_t={delta_t} hr, min_line_length={min_line_length}, stage={stage}): {str(e)}",
                 exc_info=True,
             )
-            raise
+            return gpd.GeoDataFrame()
 
     @staticmethod
     @log_call
@@ -162,7 +168,9 @@ class HdfFluvialPluvial:
 
         Times, adjacency and classifications retain ``(mesh_name, cell_id)``
         identity. Dissolved regions remain separate per mesh and classification;
-        native cell IDs are not renumbered. Analysis failures raise an exception.
+        native cell IDs are not renumbered. Processing failures log contextual ERROR
+        with traceback and return an empty GeoDataFrame, discarding partial output.
+        Existing input/decorator validation exceptions can still raise.
 
         Optionally, for polygons classified as fluvial or pluvial, if their area is less than
         min_polygon_area_acres, they are reclassified to the opposite type and merged with
@@ -182,8 +190,10 @@ class HdfFluvialPluvial:
 
         Returns:
             gpd.GeoDataFrame: A GeoDataFrame with dissolved polygons for 'fluvial', 'pluvial',
-                              and 'ambiguous' zones.
+                              and 'ambiguous' zones. Processing failure returns an empty
+                              GeoDataFrame; partial geometry is never returned as complete.
         """
+        stage = "data loading"
         try:
             # --- 1. Data Loading and Preparation ---
             logger.debug("Loading mesh and results data...")
@@ -197,9 +207,11 @@ class HdfFluvialPluvial:
                 raise ValueError("Duplicate mesh/cell identities in maximum water surface data")
             cell_times = times.to_dict()
             
+            stage = "adjacency"
             logger.debug("Processing cell adjacencies...")
             cell_adjacency, _ = HdfFluvialPluvial._process_cell_adjacencies(cell_polygons_gdf)
 
+            stage = "seeding"
             # --- 2. Seeding the Classifications ---
             logger.debug(f"Identifying initial boundary seeds with delta_t = {delta_t} hours...")
             boundary_pairs = HdfFluvialPluvial._get_boundary_cell_pairs(cell_adjacency, cell_times, delta_t)
@@ -217,6 +229,7 @@ class HdfFluvialPluvial:
                     classifications.loc[cell1] = 'pluvial'
                     classifications.loc[cell2] = 'fluvial'
             
+            stage = "region growth"
             # --- 3. Iterative Region Growth ---
             logger.debug(f"Starting iterative region growth with tolerance = {temporal_tolerance_hours} hours...")
             fluvial_frontier = set(classifications[classifications == 'fluvial'].index)
@@ -277,6 +290,7 @@ class HdfFluvialPluvial:
             
             logger.debug(f"Region growing completed in {iteration} iterations.")
             
+            stage = "dissolve"
             # --- 4. Finalization and Dissolving ---
             # Classify any remaining unclassified (likely isolated) cells as ambiguous
             classifications[classifications == 'unclassified'] = 'ambiguous'
@@ -290,6 +304,7 @@ class HdfFluvialPluvial:
             logger.debug("Dissolving polygons by classification...")
             final_regions_gdf = classified_gdf.dissolve(by=['mesh_name', 'classification'], aggfunc='first').reset_index()
 
+            stage = "acreage filtering"
             # --- 5. Minimum Polygon Area Filtering and Merging (if requested) ---
             if min_polygon_area_acres is not None:
                 logger.debug(f"Applying minimum polygon area filter: {min_polygon_area_acres} acres")
@@ -322,6 +337,7 @@ class HdfFluvialPluvial:
                     final_regions_gdf = exploded.dissolve(by=['mesh_name', 'classification'], aggfunc='first').reset_index()
                     logger.debug("Redissolved polygons after reclassification of small areas.")
 
+            stage = "summary"
             component_counts = (
                 final_regions_gdf.explode(index_parts=False)
                 .groupby("classification", sort=True)
@@ -340,10 +356,10 @@ class HdfFluvialPluvial:
             logger.error(
                 f"Error generating fluvial-pluvial polygons for {hdf_path} "
                 f"(delta_t={delta_t} hr, tolerance={temporal_tolerance_hours} hr, "
-                f"min_polygon_area_acres={min_polygon_area_acres}): {str(e)}",
+                f"min_polygon_area_acres={min_polygon_area_acres}, stage={stage}): {str(e)}",
                 exc_info=True,
             )
-            raise
+            return gpd.GeoDataFrame()
         
         
     @staticmethod
