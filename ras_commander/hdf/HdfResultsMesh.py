@@ -100,6 +100,7 @@ from typing import (
 import h5py
 import numpy as np
 import pandas as pd
+from pandas.errors import OutOfBoundsDatetime
 
 from .._optional_deps import (
     OptionalDependencyError,
@@ -2431,14 +2432,14 @@ class HdfResultsMesh:
                 parsed_times = [
                     _parse_timestamp(value.decode("utf-8")) for value in raw_times
                 ]
-                if parsed_times:
-                    # The source stamps need not have a fixed interval. Preserve
-                    # their exact values at millisecond resolution.
+                try:
+                    hdf_times = pd.DatetimeIndex(parsed_times).round("s")
+                except (OutOfBoundsDatetime, OverflowError):
+                    # Stamps beyond the nanosecond range (year 2262): keep them
+                    # exactly at millisecond resolution instead of failing.
                     hdf_times = pd.DatetimeIndex(
                         np.asarray(parsed_times, dtype="datetime64[ms]")
                     ).round("s")
-                else:
-                    hdf_times = pd.DatetimeIndex([], dtype="datetime64[ms]")
             elif time_path in result_hdf:
                 start_time = HdfBase.get_simulation_start_time(result_hdf)
                 hdf_times = HdfUtils.convert_timesteps_to_datetimes(
@@ -2699,6 +2700,21 @@ class HdfResultsMesh:
         return "cell_id" if is_cell else "face_id"
 
     @staticmethod
+    def _time_coordinate_values(time_stamps):
+        """Unsteady timestamps as they are handed to xarray as the ``time`` coordinate.
+
+        The list of datetimes is returned unchanged, so the coordinate dtype is
+        whatever xarray/pandas have always produced for it. Only when pandas
+        cannot represent the stamps (beyond the nanosecond range, year 2262)
+        are they converted to a ``datetime64[ms]`` array.
+        """
+        try:
+            pd.DatetimeIndex(time_stamps)
+        except (OutOfBoundsDatetime, OverflowError):
+            return np.asarray(time_stamps, dtype="datetime64[ms]")
+        return time_stamps
+
+    @staticmethod
     def _native_series_domain(dataset: h5py.Dataset) -> Optional[Dict[str, Any]]:
         """Engine domain of a canonical Base Output mesh series, or None.
 
@@ -2767,8 +2783,8 @@ class HdfResultsMesh:
         """
         try:
             start_time = HdfBase.get_simulation_start_time(hdf_path)
-            time_stamps = np.asarray(
-                HdfBase.get_unsteady_timestamps(hdf_path), dtype="datetime64[ms]"
+            time_stamps = HdfResultsMesh._time_coordinate_values(
+                HdfBase.get_unsteady_timestamps(hdf_path)
             )
             cell_counts = HdfResultsMesh._physical_cell_counts(hdf_path)
 

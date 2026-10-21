@@ -61,6 +61,7 @@ import xml.etree.ElementTree as ET
 import h5py
 import numpy as np
 import pandas as pd
+from pandas.errors import OutOfBoundsDatetime, OutOfBoundsTimedelta
 from datetime import datetime, timedelta
 from typing import Union, Optional, Dict, List, Tuple, Any, Sequence
 import re
@@ -406,24 +407,45 @@ class HdfUtils:
 
         Returns:
             pd.DatetimeIndex: DatetimeIndex of converted and rounded datetimes.
-                Uses millisecond resolution so dates beyond 2262 remain
-                representable while preserving the default 100 ms precision.
+                For every date pandas can represent at nanosecond resolution
+                (1677-2262) the result is exactly what it has always been
+                (``datetime64[ns]`` under pandas 2.x). Only when the simulation
+                reaches beyond that range, where pandas raises an out-of-bounds
+                error, is the index built at ``datetime64[ms]`` resolution
+                (``datetime64[us]`` if ``round_to`` is finer than 1 ms) so such
+                dates remain representable.
         """
-        unit_seconds = {"days": 86400.0, "hours": 3600.0}.get(time_unit)
-        if unit_seconds is None:
+        if time_unit not in ("days", "hours"):
             raise ValueError(f"Unsupported time unit: {time_unit}")
+        try:
+            if time_unit == "days":
+                datetimes = start_time + pd.to_timedelta(timesteps, unit='D')
+            else:
+                datetimes = start_time + pd.to_timedelta(timesteps, unit='H')
+            return pd.DatetimeIndex(datetimes).round(round_to)
+        except (OutOfBoundsDatetime, OutOfBoundsTimedelta, OverflowError):
+            return HdfUtils._convert_timesteps_beyond_ns(timesteps, start_time, time_unit, round_to)
 
-        # pandas' default datetime64[ns] range ends in 2262. Keep HEC-RAS
-        # calendar dates in datetime64[ms], which spans a much wider range and
-        # is finer than the default 100 ms rounding interval.
-        start = np.datetime64(start_time, "ms")
-        offsets_ms = np.rint(
-            np.asarray(timesteps, dtype=np.float64) * unit_seconds * 1000.0
-        ).astype("timedelta64[ms]")
-        timestamps = start + offsets_ms
-        index = pd.DatetimeIndex(timestamps.astype("datetime64[ms]"))
-        return index.round(round_to)
-    
+    @staticmethod
+    def _convert_timesteps_beyond_ns(timesteps: np.ndarray, start_time: datetime, time_unit: str, round_to: str) -> pd.DatetimeIndex:
+        """Build the datetime index for dates beyond the nanosecond range.
+
+        Offsets are rounded once, at microsecond resolution, and the index is
+        then rounded with ``round_to`` exactly as the nanosecond path does.
+        """
+        unit_seconds = 86400.0 if time_unit == "days" else 3600.0
+        tz = getattr(start_time, "tzinfo", None)
+        start = np.datetime64(start_time.replace(tzinfo=None), "us")
+        offsets_us = np.rint(
+            np.asarray(timesteps, dtype=np.float64) * unit_seconds * 1.0e6
+        ).astype("timedelta64[us]")
+        index = pd.DatetimeIndex(start + offsets_us).round(round_to)
+        if tz is not None:
+            index = index.tz_localize(tz)
+        if index.floor("ms").equals(index):
+            index = index.as_unit("ms")
+        return index
+
 # rename to convert_hdf5_attrs_to_dict and make public
 
     @staticmethod
