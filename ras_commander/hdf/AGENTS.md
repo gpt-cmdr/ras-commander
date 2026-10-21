@@ -46,6 +46,11 @@ This file is the canonical local instruction file for `ras_commander/hdf/`.
 - `HdfStruc.get_structures()` returns a MultiLineString (one line per stored
   part, no connecting segment) for a structure whose Centerline Info Part
   Count is greater than 1; single-part centerlines remain LineStrings.
+- A zero-point centerline (Info Point Count 0, e.g. lateral structures in
+  Muncie, Baxter, OrleansEx) is a valid empty range, as in the native engine.
+  `get_structures()` returns None geometry for it (the missing-geometry
+  convention used by `HdfPipe` and the other readers). Out-of-range starts,
+  negative counts, one-point centerlines and inconsistent Parts still raise.
 
 ## Common Entry Points
 

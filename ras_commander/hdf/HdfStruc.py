@@ -370,7 +370,8 @@ class HdfStruc:
             - Geometry: LineString of structure centerline, or a
               MultiLineString when the stored Centerline Info Part Count
               is greater than 1 (one line per stored part, no connecting
-              segment between parts)
+              segment between parts), or None when the structure stores
+              an empty (zero-point) centerline
             - Various attribute columns from the HDF file
             - Profile_Data: list of station/elevation dictionaries
             - Bridge coefficient attributes (if present)
@@ -379,7 +380,11 @@ class HdfStruc:
         Notes
         -----
         - Group-level attributes are stored in GeoDataFrame.attrs['group_attributes']
-        - Invalid centerline geometry raises an exception
+        - Invalid centerline geometry raises an exception. A zero-point
+          centerline (Centerline Info Point Count 0, as HEC-RAS stores for
+          some lateral structures) is a valid empty range and yields None
+          geometry, the missing-geometry convention of the other hdf
+          readers; its start index and Parts must still be in range.
         - Centerline Parts offsets are relative to each structure's point
           slice; legacy global offsets are accepted only when all parts
           together cover that slice exactly. Single-part centerlines are
@@ -501,16 +506,40 @@ class HdfStruc:
                 for i in range(len(centerline_info)):
                     start_idx = centerline_info[i][0]  # Point Starting Index
                     point_count = centerline_info[i][1]  # Point Count
-                    points = HdfBase.plan_vertex_ordinates(
-                        centerline_points[start_idx:start_idx + point_count]
-                    )
-                    if start_idx < 0 or point_count < 2 or len(points) != point_count:
-                        raise ValueError(f"Invalid centerline point range for structure {i}")
                     part_start, part_count = (
                         (int(centerline_info[i][2]), int(centerline_info[i][3]))
                         if len(centerline_info[i]) > 3
                         else (0, 1)
                     )
+                    if point_count == 0:
+                        # HEC-RAS stores structures without a drawn centerline
+                        # (e.g. some lateral structures) as an empty range,
+                        # Info [start, 0, k, 1] with Parts [[0, 0]]. Return
+                        # None geometry, as the other hdf readers do, but keep
+                        # rejecting out-of-range or inconsistent counts.
+                        if not 0 <= start_idx <= len(centerline_points) or part_count < 0:
+                            raise ValueError(f"Invalid centerline point range for structure {i}")
+                        if part_count > 1 and centerline_parts is None:
+                            raise ValueError(
+                                f"Multipart centerline for structure {i} is missing Centerline Parts"
+                            )
+                        if part_count and centerline_parts is not None:
+                            parts = centerline_parts[part_start:part_start + part_count]
+                            if part_start < 0 or len(parts) != part_count:
+                                raise ValueError(f"Invalid centerline parts for structure {i}")
+                            try:
+                                resolve_feature_part_ranges(parts, int(start_idx), 0)
+                            except ValueError as exc:
+                                raise ValueError(
+                                    f"Invalid centerline parts for structure {i}: {exc}"
+                                ) from exc
+                        geoms.append(None)
+                        continue
+                    points = HdfBase.plan_vertex_ordinates(
+                        centerline_points[start_idx:start_idx + point_count]
+                    )
+                    if start_idx < 0 or point_count < 2 or len(points) != point_count:
+                        raise ValueError(f"Invalid centerline point range for structure {i}")
                     if part_count <= 1:
                         geoms.append(LineString(points))
                         continue
