@@ -2385,6 +2385,8 @@ Step 5: Configure (optional — auto-detection usually works)
             ProjectionInfo containing the projection path and every terrain
             raster associated with the rasmap terrain layers.
         """
+        from ._land_classification_helper import resolve_rasmap_relative_path
+
         try:
             rasmap_path = Path(rasmap_path)
             tree = ET.parse(_windows_extended_length_path(rasmap_path))
@@ -2396,10 +2398,12 @@ Step 5: Configure (optional — auto-detection usually works)
             if proj_elem is not None:
                 filename = proj_elem.get("Filename")
                 if filename:
-                    prj_path = rasmap_path.parent / filename.replace(".\\", "").replace(
-                        "./", ""
+                    prj_path = resolve_rasmap_relative_path(
+                        rasmap_path.parent, filename
                     )
-                    if not os.path.exists(_windows_extended_length_path(prj_path)):
+                    if prj_path is None or not os.path.exists(
+                        _windows_extended_length_path(prj_path)
+                    ):
                         prj_path = None
 
             terrain_paths: List[Path] = []
@@ -2408,10 +2412,12 @@ Step 5: Configure (optional — auto-detection usually works)
                     continue
                 filename = layer.get("Filename")
                 if filename:
-                    terrain_hdf = rasmap_path.parent / filename.replace(
-                        ".\\", ""
-                    ).replace("./", "")
-                    if os.path.exists(_windows_extended_length_path(terrain_hdf)):
+                    terrain_hdf = resolve_rasmap_relative_path(
+                        rasmap_path.parent, filename
+                    )
+                    if terrain_hdf is not None and os.path.exists(
+                        _windows_extended_length_path(terrain_hdf)
+                    ):
                         terrain_dir = terrain_hdf.parent
                         layer_tifs = _glob_paths(
                             terrain_dir,

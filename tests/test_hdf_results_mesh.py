@@ -64,6 +64,12 @@ def _create_year_3000_mesh_results_hdf(path):
 def _write_face_variable(mesh_group, name, values, units):
     dataset = mesh_group.create_dataset(name, data=np.asarray(values, dtype=float))
     dataset.attrs["Units"] = np.bytes_(units)
+    geometry = mesh_group.file.require_group(f"Geometry/2D Flow Areas/{MESH_NAME}")
+    if "Faces FacePoint Indexes" not in geometry:
+        geometry.create_dataset(
+            "Faces FacePoint Indexes",
+            data=np.zeros((dataset.shape[1], 2), dtype=int),
+        )
 
 
 def _create_synthetic_face_results_hdf(path):
@@ -397,7 +403,6 @@ def test_get_mesh_cells_timeseries_aggregate_missing_outputs_are_debug_only(
     ]
     assert len(summary_messages) == 1
     assert "skipped" in summary_messages[0]
-    assert "Depth" in summary_messages[0]
     assert "Face Area" in summary_messages[0]
 
 

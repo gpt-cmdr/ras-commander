@@ -54,10 +54,10 @@ These optional contracts are curated in `examples/notebooks.yml` and published u
     | Contract | Scope |
     | --- | --- |
     | Inputs | Working geometry text; Named line and point coordinates in model CRS |
-    | Operations | Write reference locations; Read geometry text back |
-    | Outputs | Updated geometry text; Reference location inventories |
-    | Runtime requirements | Python geometry authoring; solver required separately for new reference results |
-    | Evidence scope | Retained outputs demonstrate text authoring and readback, not reference hydrographs or a fresh solve. |
+    | Operations | Write reference locations; Read geometry text back; Compute copied plan and inspect native HDF results |
+    | Outputs | Updated geometry text; Reference location inventories; Native point geometry and recorded time series |
+    | Runtime requirements | Installed HEC-RAS 6.6; RasCmdr computes a separate one-day destination |
+    | Evidence scope | Fresh HEC-RAS 6.6 computation with native point geometry and recorded point/line series; not hydraulic acceptance. |
 
 ??? info "212 - Native NLCD Land Cover Authoring and Controlled Manning Validation"
 
@@ -338,7 +338,7 @@ These optional contracts are curated in `examples/notebooks.yml` and published u
 | [204 - Culvert GIS Reconstruction and Hydraulic-Validity Checks (1D)](../notebooks/204_culvert_gis_validation.md)<br>Reconstruct 1D culvert barrel locations from geometry, screen invert placement, and compare a pipe-to-box retrofit using computed steady profiles. | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/204_culvert_gis_validation.ipynb) | 14 s |
 | [205 - Extract Cross Section XYZ Coordinates from Plain Text Geometry](../notebooks/205_extract_xs_xyz_from_geometry.md)<br>geometry and HTAB workflows | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/205_extract_xs_xyz_from_geometry.ipynb) | 4 s |
 | [206 - Structures and Metadata from Geometry Files](../notebooks/206_structures_and_metadata.md)<br>This notebook demonstrates parsing bridge, culvert, inline weir, and geometry metadata from HEC-RAS plain text geometry files, including: - GeomMetadata: Efficient geometry element counts (HDF-first with text fallback) - GeomBridge: Brid... | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/206_structures_and_metadata.ipynb) | 4 s |
-| [207 - Reference Lines and Points for 2D Calibration](../notebooks/207_reference_lines_and_points.md)<br>Author and read back reference lines and points in geometry text; prepare locations for a subsequent model run. | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/207_reference_lines_and_points.ipynb) | 3 s |
+| [207 - Reference Lines and Points for 2D Calibration](../notebooks/207_reference_lines_and_points.md)<br>Author native reference lines and points, compute a one-day copied plan, and read recorded HDF output. | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/207_reference_lines_and_points.ipynb) | 1.5 min |
 | [208 - Bridge Method Comparison](../notebooks/208_bridge_method_comparison.md)<br>Compare bridge hydraulic method selections with a real HEC-RAS bridge example and show the effect on computed WSE. | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/208_bridge_method_comparison.ipynb) | 1.7 min |
 | [209 - Culvert Authoring](../notebooks/209_culvert_authoring.md)<br>Write taxonomy-checked culvert records and adjacent ineffective-flow areas, inspect spatial placement, and compute an edited plan for result review. | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/209_culvert_authoring.ipynb) | 8 s |
 | [210 - Cross-Section Interpolation Settings](../notebooks/210_xs_interpolation_settings.md)<br>Interpolate cross sections and update bank stations, station/elevation arrays, and expansion/contraction coefficients in an example geometry. | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/210_xs_interpolation_settings.ipynb) | 18 s |

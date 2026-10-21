@@ -79,12 +79,12 @@ List of Functions in RasPlan:
 import os
 import re
 import logging
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 import shutil
 from typing import Union, Optional, List, Dict, Any, Tuple
 from numbers import Integral, Number
 import pandas as pd
-from .RasPrj import RasPrj, ras
+from .RasPrj import RasPrj, _matching_copied_prj_file, ras
 from .RasUtils import RasUtils
 from pathlib import Path
 from datetime import datetime
@@ -256,6 +256,28 @@ class RasPlan:
         "time_step_residence_courant": {"plan_key": "Computation Time Step Residence Courant", "type": "bool", "min_version": 5.0},
     }
 
+    # Baseline 2D results, observed in both 6.6 and 7.0.1 pilot runs. Requests
+    # for these names are accepted no-ops, not additional-output UI labels.
+    HDF_DEFAULT_OUTPUT_VARIABLES = frozenset({"Water Surface", "Face Velocity"})
+
+    # These labels first appear in HEC-RAS 7.0 and require secondary-flow physics.
+    HDF_OUTPUT_VARIABLE_MIN_VERSIONS = {
+        "Cell Dispersion Terms": 7.0,
+        "Cell Effective Flow Curvature": 7.0,
+        "Cell Effective Radius of Curvature": 7.0,
+        "Cell Equilibrium Spiral Intensity": 7.0,
+        "Cell Flow Curvature": 7.0,
+        "Cell Momentum Dispersive Stresses": 7.0,
+        "Cell Radius of Curvature": 7.0,
+        "Cell Spiral Intensity": 7.0,
+        "Cell Spiral Intensity Adaptation Length": 7.0,
+        "Face Momentum Dispersion": 7.0,
+        "Face Near-bed Velocity": 7.0,
+        "Face Spiral Intensity Diffusion Coefficient": 7.0,
+        "Face Spiral Velocity": 7.0,
+        "Face Surface Velocity": 7.0,
+    }
+
     HDF_ADDITIONAL_OUTPUT_VARIABLES = [
         "Cell Cumulative Excess Depth",
         "Cell Cumulative Infiltration Depth",
@@ -301,7 +323,49 @@ class RasPlan:
         "Face Wind Velocity",
         "Face Yield Stress",
         "Governing Equation Terms",
+        *HDF_OUTPUT_VARIABLE_MIN_VERSIONS,
     ]
+
+    # HEC-RAS silently drops these short tokens; write their full UI labels.
+    HDF_OUTPUT_VARIABLE_ALIASES = {
+        "Cell Flow Balance": "Cell Flow Balance (inflows - outflows)",
+        "Cell Invert Depth": "Cell Invert Depth (WSE - Cell Min Elev)",
+        "Face Tangential Velocity": "Face Tangential Velocity (Both sides of each face)",
+        "Cell Cumulative Precipitation": "Cell Cumulative Precipitation Depth",
+    }
+
+    # Observed label -> one/many dataset basenames in Base Output/Unsteady Time
+    # Series/2D Flow Areas/<area> (6.6 and 7.0.1 pilot). This is a partial map,
+    # not a guarantee of output: physics/version/plan settings control presence.
+    # Unlisted labels have no qualified mapping here. The empty node tuple
+    # records that the pilot produced no dataset; its working token is unresolved.
+    HDF_OUTPUT_VARIABLE_DATASETS = {
+        "Cell Courant": ("Cell Courant",),
+        "Cell Eddy Viscosity": ("Cell Eddy Viscosity - Eddy Viscosity X", "Cell Eddy Viscosity - Eddy Viscosity Y"),
+        "Cell Flow Balance (inflows - outflows)": ("Cell Flow Balance",),
+        "Cell Hydraulic Depth": ("Cell Hydraulic Depth",),
+        "Cell Invert Depth (WSE - Cell Min Elev)": ("Cell Invert Depth",),
+        "Cell Velocity": ("Cell Velocity - Velocity X", "Cell Velocity - Velocity Y"),
+        "Cell Volume": ("Cell Volume",),
+        "Cell Volume Error": ("Cell Volume Error",),
+        "Cell Water Surface Error": ("Cell Water Surface Error",),
+        "Face Area": ("Face Area",),
+        "Face Courant": ("Face Courant",),
+        "Face Cumulative Volume": ("Face Cumulative Volume",),
+        "Face Eddy Viscosity": ("Face Eddy Viscosity",),
+        "Face Flow": ("Face Flow",),
+        "Face Period-Average Flow": ("Face Flow Period Average",),
+        "Face Manning's n": ("Face Manning's n",),
+        # Also produces Summary Output/.../Maximum Face Shear Stress.
+        "Face Shear Stress": ("Face Shear Stress",),
+        "Face Tangential Velocity (Both sides of each face)": ("Face Tangential Velocity",),
+        "Face Water Surface": ("Face Water Surface",),
+        "Governing Equation Terms": (
+            "Cell Divergence Term", "Cell Storage Term", "Cell Water Source Term",
+            "Face Friction Term", "Face Pressure Gradient Term", "Face Wind Term",
+        ),
+        "Face Point (Node) Velocities*": (),
+    }
 
     RESTART_OUTPUT_PARAMETER_KEYS = {
         "enabled": "Write IC File",
@@ -1103,6 +1167,9 @@ class RasPlan:
             ras_obj.project_folder,
             ras_obj.ras_exe_path,
             suppress_logging=getattr(ras_obj, "suppress_logging", True),
+            prj_file=_matching_copied_prj_file(
+                ras_obj.project_folder, ras_obj.prj_file
+            ),
             load_results_summary=getattr(
                 ras_obj, "load_results_summary", True
             ),
@@ -3355,11 +3422,173 @@ class RasPlan:
         """
         List additional 2D HDF output variables known to HEC-RAS plan files.
 
+        Baseline results ``Water Surface`` and ``Face Velocity`` are excluded
+        from this additional-output catalogue. Enabling them is an accepted
+        no-op: they are always written for computed 2D results, an INFO message
+        explains this, and existing plan text is preserved.
+
+        The catalogue includes 14 secondary-flow labels requiring HEC-RAS 7.0+
+        (``HDF_OUTPUT_VARIABLE_MIN_VERSIONS``). Writers check the plan's declared
+        Program Version; an unknown version warns. Required physics must also
+        be active. ``HDF_OUTPUT_VARIABLE_DATASETS`` documents observed one-to-many
+        dataset basenames, including the six Governing Equation Terms arrays;
+        presence and compatible time axes must be checked in the results.
+
+        ``Face Point (Node) Velocities*`` remains for compatibility, but writes
+        no dataset in the 6.6/7.0.1 pilot (recorded as ``Face Point  Velocities``).
+        Its working token is unresolved; enabling it warns instead of promising
+        node velocities. Unmapped labels have no qualified dataset mapping here.
+
         Returns:
             List[str]: Variable names accepted by
                 ``HDF Additional Output Variable=...`` plan-file entries.
         """
         return list(RasPlan.HDF_ADDITIONAL_OUTPUT_VARIABLES)
+
+    @staticmethod
+    def _normalize_hdf_output_variable(variable: str) -> str:
+        """Validate an additional-output label or recognized baseline result name."""
+        if not isinstance(variable, str):
+            raise ValueError("HDF output variable must be a full UI label string")
+        variable = variable.strip()
+        canonical = RasPlan.HDF_OUTPUT_VARIABLE_ALIASES.get(variable, variable)
+        if canonical != variable:
+            logger.warning("Normalizing HDF output variable %r to full label %r", variable, canonical)
+        if (canonical not in RasPlan.HDF_ADDITIONAL_OUTPUT_VARIABLES
+                and canonical not in RasPlan.HDF_DEFAULT_OUTPUT_VARIABLES):
+            raise ValueError(
+                f"Unknown HDF output variable {variable!r}; use a full label from "
+                "RasPlan.list_available_hdf_output_variables()"
+            )
+        if canonical == 'Face Point (Node) Velocities*':
+            logger.warning(
+                "HDF output label %r produced no node velocity datasets in the "
+                "HEC-RAS 6.6/7.0.1 pilot; the working token is unresolved", canonical
+            )
+        return canonical
+
+    # A versioned HEC-RAS install folder name, e.g. "6.6", "7.0.1", "6.7 Beta 5".
+    _RAS_VERSION_FOLDER_RE = re.compile(r"\d{1,2}\.\d+(?:\.\d+)?(?: Beta \d+)?", re.IGNORECASE)
+
+    @staticmethod
+    def _target_ras_version_to_float(
+        target_ras_version: Optional[Union[str, float, Path]],
+    ) -> Optional[float]:
+        """
+        Convert a target HEC-RAS version to a major.minor float for HDF label gates.
+
+        Accepts a version string (``"7.0"``, ``"7.0.1"``, ``"6.7 Beta 5"``), a
+        compact version (``"70"``, ``"701"``, ``"66"``), a number (``7.0``), or a
+        path to ``Ras.exe`` inside a versioned install folder
+        (``.../HEC-RAS/7.0/Ras.exe``; backslash paths are read as Windows
+        paths on any host). The whole value, or the exe's parent folder name,
+        must match one of those forms; anything else (``.../x86/Ras.exe``,
+        ``"1000"``, ``"latest"``) returns None.
+        """
+        if target_ras_version is None or isinstance(target_ras_version, bool):
+            return None
+        text = str(target_ras_version).strip()
+        if text.lower().endswith(".exe"):
+            exe_path = PureWindowsPath(text) if "\\" in text else Path(text)
+            folder = exe_path.parent.name.strip()
+            if not RasPlan._RAS_VERSION_FOLDER_RE.fullmatch(folder):
+                return None
+            return RasPlan._version_to_float(folder)
+        if re.fullmatch(r"\d{2,3}", text):
+            text = f"{text[0]}.{text[1]}"
+        elif not (
+            re.fullmatch(r"\d{1,2}", text)
+            or RasPlan._RAS_VERSION_FOLDER_RE.fullmatch(text)
+        ):
+            return None
+        return RasPlan._version_to_float(text)
+
+    @staticmethod
+    def _engine_hdf_target_version(plan_path: Union[str, Path], ras_exe_path: Any) -> Optional[str]:
+        """
+        Return the executing engine version to use as an HDF label gate, or None.
+
+        Used by ``RasCmdr.compute_plan`` where the HEC-RAS version that will
+        run is known. The engine version is returned only when it parses and is
+        NEWER than the plan's declared Program Version (HEC-RAS upgrades older
+        plans on open). Otherwise None keeps the declared-version gate, so this
+        never rejects a request the declared-version gate would accept.
+        """
+        engine = RasPlan._target_ras_version_to_float(ras_exe_path)
+        if engine is None:
+            return None
+        try:
+            lines = Path(plan_path).read_text(encoding='utf-8', errors='replace').splitlines(True)
+        except (IOError, OSError, TypeError):
+            return None
+        declared = RasPlan._version_to_float(RasPlan._declared_program_version(lines))
+        if declared is None or engine <= declared:
+            return None
+        return str(engine)
+
+    @staticmethod
+    def _declared_program_version(lines: List[str]) -> Optional[str]:
+        """Plan ``Program Version=`` value, ignoring Description text."""
+        program_version = next(
+            (value for _, key, value in _iter_plan_key_lines(lines) if key == 'Program Version'),
+            None,
+        )
+        return program_version.strip() if program_version is not None else None
+
+    @staticmethod
+    def _check_hdf_output_versions(
+        variables: List[str],
+        lines: List[str],
+        target_ras_version: Optional[Union[str, float, Path]] = None,
+    ) -> None:
+        """
+        Gate version-limited labels, ignoring Description text.
+
+        With ``target_ras_version=None`` the plan's declared Program Version is
+        the gate (unknown versions warn). An explicit target replaces the
+        declared version as the gate; a target older than a label's minimum
+        raises, and an unparseable target raises ValueError.
+        """
+        program_version = RasPlan._declared_program_version(lines)
+        version = RasPlan._version_to_float(program_version)
+        if target_ras_version is not None:
+            target = RasPlan._target_ras_version_to_float(target_ras_version)
+            if target is None:
+                raise ValueError(
+                    f"Could not determine a HEC-RAS version from target_ras_version={target_ras_version!r}"
+                )
+            for variable in variables:
+                minimum = RasPlan.HDF_OUTPUT_VARIABLE_MIN_VERSIONS.get(variable)
+                if minimum is None:
+                    continue
+                if target < minimum:
+                    raise ValueError(
+                        f"HDF output variable {variable!r} requires HEC-RAS {minimum:g}+; "
+                        f"target HEC-RAS version is {target_ras_version}"
+                    )
+                if version is None or version < minimum:
+                    logger.info(
+                        "Allowing HDF output variable %r for target HEC-RAS %s "
+                        "(plan Program Version is %s); it still requires active "
+                        "secondary flow", variable, target_ras_version, program_version
+                    )
+            return
+        for variable in variables:
+            minimum = RasPlan.HDF_OUTPUT_VARIABLE_MIN_VERSIONS.get(variable)
+            if minimum is None:
+                continue
+            if version is None:
+                logger.warning(
+                    "HDF output variable %r requires HEC-RAS %g+ and secondary flow; "
+                    "plan Program Version is unknown", variable, minimum
+                )
+            elif version < minimum:
+                raise ValueError(
+                    f"HDF output variable {variable!r} requires HEC-RAS {minimum:g}+; "
+                    f"plan Program Version is {program_version}. If HEC-RAS "
+                    f"{minimum:g}+ will run this plan, pass target_ras_version "
+                    f"(for example '7.0')"
+                )
 
     @staticmethod
     @log_call
@@ -4113,16 +4342,27 @@ class RasPlan:
         plan_number_or_path: Union[str, Number, Path],
         profile: str = "balanced",
         additional_variables: Optional[List[str]] = None,
-        ras_object=None
+        ras_object=None,
+        *,
+        target_ras_version: Optional[Union[str, float, Path]] = None,
     ) -> bool:
         """
         Apply a named HDF write-parameter profile and optional output variables.
+
+        All requested labels and version gates are checked before any writes;
+        see ``add_hdf_output_variable`` for normalization and physics limits.
 
         Args:
             plan_number_or_path: Plan number or path to the plan file.
             profile: One of ``balanced``, ``speed``, ``size``, or ``nas``.
             additional_variables: Optional additional HDF output variables to enable.
             ras_object (RasPrj, optional): Optional RAS project object. If None, uses global ``ras``.
+            target_ras_version (str, float, or Path, optional): HEC-RAS version
+                that will run the plan (``"7.0"``, ``"7.0.1"``, ``"70"``, or a
+                versioned ``Ras.exe`` path). When given, it replaces the plan's
+                declared Program Version for the version-limited labels in
+                ``HDF_OUTPUT_VARIABLE_MIN_VERSIONS``. None (default) keeps the
+                declared-version gate.
 
         Returns:
             bool: True when all requested updates succeeded.
@@ -4133,6 +4373,24 @@ class RasPlan:
             raise ValueError(f"Unknown HDF output profile '{profile}'. Valid profiles: {valid}")
 
         settings = RasPlan.HDF_OUTPUT_SETTING_PROFILES[profile_key]
+        # Validate the entire request before changing either options or labels.
+        additional_variables = [
+            RasPlan._normalize_hdf_output_variable(v) for v in additional_variables or []
+        ]
+        if additional_variables:
+            ras_obj = ras_object or ras
+            ras_obj.check_initialized()
+            plan_path = RasPlan._resolve_plan_file_path(plan_number_or_path, ras_obj)
+            if not plan_path or not plan_path.exists():
+                return False
+            try:
+                lines = plan_path.read_text(encoding='utf-8', errors='replace').splitlines(True)
+            except IOError as exc:
+                logger.error("Error reading HDF output plan %s: %s", plan_path, exc)
+                return False
+            RasPlan._check_hdf_output_versions(
+                additional_variables, lines, target_ras_version=target_ras_version
+            )
         success = RasPlan.set_hdf_write_parameters(
             plan_number_or_path,
             ras_object=ras_object,
@@ -4145,7 +4403,8 @@ class RasPlan:
                     plan_number_or_path,
                     variable,
                     enabled=True,
-                    ras_object=ras_object
+                    ras_object=ras_object,
+                    target_ras_version=target_ras_version,
                 )
                 and success
             )
@@ -4158,19 +4417,23 @@ class RasPlan:
         plan_number_or_path: Union[str, Number, Path],
         profile: str = "balanced",
         additional_variables: Optional[List[str]] = None,
-        ras_object=None
+        ras_object=None,
+        *,
+        target_ras_version: Optional[Union[str, float, Path]] = None,
     ) -> bool:
         """
         Apply ras-commander's recommended HDF write settings to a plan file.
 
         This is an alias for ``apply_hdf_output_profile()`` using the balanced
-        profile by default.
+        profile by default. ``target_ras_version`` is passed through; see
+        ``apply_hdf_output_profile()``.
         """
         return RasPlan.apply_hdf_output_profile(
             plan_number_or_path,
             profile=profile,
             additional_variables=additional_variables,
-            ras_object=ras_object
+            ras_object=ras_object,
+            target_ras_version=target_ras_version,
         )
 
     @staticmethod
@@ -4179,16 +4442,23 @@ class RasPlan:
         plan_number_or_path: Union[str, Number, Path],
         variable: str,
         enabled: bool = True,
-        ras_object=None
+        ras_object=None,
+        *,
+        target_ras_version: Optional[Union[str, float, Path]] = None,
     ) -> bool:
         """
         Enable or disable one additional HDF output variable in a plan file.
+
+        Enabling follows ``add_hdf_output_variable`` label/version validation
+        (including ``target_ras_version``); disabling follows
+        ``remove_hdf_output_variable`` legacy-token cleanup and ignores it.
         """
         if enabled:
             return RasPlan.add_hdf_output_variable(
                 plan_number_or_path,
                 variable,
-                ras_object=ras_object
+                ras_object=ras_object,
+                target_ras_version=target_ras_version,
             )
         return RasPlan.remove_hdf_output_variable(
             plan_number_or_path,
@@ -4201,15 +4471,20 @@ class RasPlan:
     def enable_hdf_output_variable(
         plan_number_or_path: Union[str, Number, Path],
         variable_name: str,
-        ras_object=None
+        ras_object=None,
+        *,
+        target_ras_version: Optional[Union[str, float, Path]] = None,
     ) -> bool:
         """
         Enable one additional HDF output variable in a plan file.
+
+        ``target_ras_version`` is passed through to ``add_hdf_output_variable``.
         """
         return RasPlan.add_hdf_output_variable(
             plan_number_or_path,
             variable_name,
-            ras_object=ras_object
+            ras_object=ras_object,
+            target_ras_version=target_ras_version,
         )
 
     @staticmethod
@@ -4234,11 +4509,46 @@ class RasPlan:
         plan_number_or_path: Union[str, Number, Path],
         variables: List[str],
         enabled: bool = True,
-        ras_object=None
+        ras_object=None,
+        *,
+        target_ras_version: Optional[Union[str, float, Path]] = None,
     ) -> bool:
         """
         Enable or disable multiple additional HDF output variables in a plan file.
+
+        Enabling prevalidates all labels and version gates before any writes.
+        Known short tokens normalize with a warning; unknown labels raise
+        ValueError. Disabling also accepts literal legacy labels for cleanup.
+        Enabling baseline ``Water Surface`` or ``Face Velocity`` is a no-op
+        with an INFO message; it preserves any existing lines for those names.
+
+        Version gate: the 14 HEC-RAS 7.0 secondary-flow labels are gated on the
+        plan's declared ``Program Version`` by default. Shipped example plans
+        declare 5.x/6.x even when HEC-RAS 7.0+ will run them, so pass
+        ``target_ras_version`` (e.g. ``"7.0"``, ``"7.0.1"``, or a versioned
+        ``Ras.exe`` path) to gate on the version that will actually run.
+        Disabling ignores ``target_ras_version``.
+
+        Example:
+            >>> RasPlan.set_hdf_output_variables(
+            ...     "03", ["Cell Vorticity"], target_ras_version="7.0.1")
         """
+        if enabled:
+            variables = [RasPlan._normalize_hdf_output_variable(v) for v in variables]
+            if variables:
+                ras_obj = ras_object or ras
+                ras_obj.check_initialized()
+                plan_path = RasPlan._resolve_plan_file_path(plan_number_or_path, ras_obj)
+                if not plan_path or not plan_path.exists():
+                    return False
+                try:
+                    lines = plan_path.read_text(encoding='utf-8', errors='replace').splitlines(True)
+                except IOError as exc:
+                    logger.error("Error reading HDF output plan %s: %s", plan_path, exc)
+                    return False
+                RasPlan._check_hdf_output_versions(
+                    variables, lines, target_ras_version=target_ras_version
+                )
         success = True
         for variable in variables:
             success = (
@@ -4246,7 +4556,8 @@ class RasPlan:
                     plan_number_or_path,
                     variable,
                     enabled=enabled,
-                    ras_object=ras_object
+                    ras_object=ras_object,
+                    target_ras_version=target_ras_version if enabled else None,
                 )
                 and success
             )
@@ -4257,7 +4568,9 @@ class RasPlan:
     def add_hdf_output_variable(
         plan_number_or_path: Union[str, Number, Path],
         variable: str,
-        ras_object=None
+        ras_object=None,
+        *,
+        target_ras_version: Optional[Union[str, float, Path]] = None,
     ) -> bool:
         """
         Add an HDF output variable to a HEC-RAS plan file.
@@ -4269,16 +4582,39 @@ class RasPlan:
             plan_number_or_path (Union[str, Number, Path]): The plan number or path to the plan file.
             variable (str): The variable name to add (e.g., "Face Flow", "Face Shear Stress").
             ras_object (Optional[RasPrj]): The RAS project object. If None, uses the global 'ras' object.
+            target_ras_version (str, float, or Path, optional): HEC-RAS version
+                that will run the plan (``"7.0"``, ``"7.0.1"``, ``"70"``, or a
+                versioned ``Ras.exe`` path). When given, it replaces the plan's
+                declared Program Version for the version-limited labels in
+                ``HDF_OUTPUT_VARIABLE_MIN_VERSIONS``. None (default) keeps the
+                declared-version gate.
 
         Returns:
-            bool: True if variable was added or already exists, False on error.
+            bool: True if added, already present, or an always-written default;
+                False on error.
 
         Supported Variables:
             - "Face Flow" - Flow rate across each face (needed for discharge-weighted velocity)
             - "Face Shear Stress" - Shear stress at each face
             - "Face Cumulative Volume" - Cumulative volume through each face
-            - "Cell Cumulative Precipitation" - Cumulative precipitation per cell
+            - "Cell Cumulative Precipitation Depth" - Cumulative precipitation per cell
             - "Cell Courant" - Courant number per cell
+
+        Notes:
+            Catalogue labels and the baseline result names ``Water Surface``
+            and ``Face Velocity`` are accepted. Enabling either baseline name
+            logs at INFO that it is always written for computed 2D results and
+            leaves the plan unchanged, including any existing line for that
+            name. Known legacy short tokens are
+            normalized to full labels with a warning, including existing matching
+            short-token records. Unknown labels raise ValueError before writing.
+            The 14 spiral/curvature labels require a declared Program Version of
+            7.0+ (unknown versions warn) unless ``target_ras_version`` names the
+            version that will run, in which case that version is the gate.
+            Required physics still controls output.
+            See ``HDF_OUTPUT_VARIABLE_DATASETS`` for observed dataset basenames.
+            ``Face Point (Node) Velocities*`` is retained with a warning: the
+            6.6/7.0.1 pilot wrote no node data, and its working token is unresolved.
 
         Example:
             >>> # Enable Face Flow output before running a plan
@@ -4286,6 +4622,7 @@ class RasPlan:
             >>> RasCmdr.compute_plan('02')
         """
         logger = get_logger(__name__)
+        variable = RasPlan._normalize_hdf_output_variable(variable)
         ras_obj = ras_object or ras
         ras_obj.check_initialized()
 
@@ -4294,22 +4631,39 @@ class RasPlan:
             logger.error(f"Plan file not found: {plan_number_or_path}")
             return False
 
+        if variable in RasPlan.HDF_DEFAULT_OUTPUT_VARIABLES:
+            logger.info(
+                "Default 2D HDF result %r is always written for computed 2D results; "
+                "leaving the plan unchanged", variable
+            )
+            return True
+
         try:
             # Read the file
             with open(plan_file_path, 'r', encoding='utf-8', errors='replace') as file:
                 lines = file.readlines()
 
+            RasPlan._check_hdf_output_versions(
+                [variable], lines, target_ras_version=target_ras_version
+            )
+
             # Check only real plan keys; a Description block may contain an
             # illustrative HDF Additional Output Variable line.
             target_key = "HDF Additional Output Variable"
             target_line = f"{target_key}={variable}"
-            for _, key, raw_value in _iter_plan_key_lines(lines):
-                if key == target_key and raw_value.strip() == variable:
-                    logger.debug("HDF output variable %r already exists in plan", variable)
-                    return True
+            matches = [
+                i for i, key, raw_value in _iter_plan_key_lines(lines)
+                if key == target_key
+                and RasPlan.HDF_OUTPUT_VARIABLE_ALIASES.get(raw_value.strip(), raw_value.strip()) == variable
+            ]
+            if len(matches) == 1 and lines[matches[0]].strip() == target_line:
+                logger.debug("HDF output variable %r already exists in plan", variable)
+                return True
 
             # Reuse the Description-aware placement used for HDF write keys.
-            insert_index = RasPlan._find_hdf_insert_index(lines)
+            insert_index = matches[0] if matches else RasPlan._find_hdf_insert_index(lines)
+            if matches:
+                lines = [line for i, line in enumerate(lines) if i not in matches]
 
             # Insert the new variable
             RasPlan._terminate_line_before(lines, insert_index)
@@ -4449,6 +4803,9 @@ class RasPlan:
         """
         Remove an HDF output variable from a HEC-RAS plan file.
 
+        Known short aliases and their full labels remove either stored form.
+        Unknown literal labels remain removable without catalogue/version checks.
+
         Args:
             plan_number_or_path (Union[str, Number, Path]): The plan number or path to the plan file.
             variable (str): The variable name to remove.
@@ -4461,6 +4818,8 @@ class RasPlan:
             >>> RasPlan.remove_hdf_output_variable('02', 'Face Flow')
         """
         logger = get_logger(__name__)
+        # Cleanup must remain possible for unknown/obsolete literal tokens.
+        variable = RasPlan.HDF_OUTPUT_VARIABLE_ALIASES.get(variable, variable)
         ras_obj = ras_object or ras
         ras_obj.check_initialized()
 
@@ -4478,7 +4837,8 @@ class RasPlan:
             target_key = "HDF Additional Output Variable"
             remove_indices = {
                 i for i, key, raw_value in _iter_plan_key_lines(lines)
-                if key == target_key and raw_value.strip() == variable
+                if key == target_key
+                and RasPlan.HDF_OUTPUT_VARIABLE_ALIASES.get(raw_value.strip(), raw_value.strip()) == variable
             }
             removed = bool(remove_indices)
             new_lines = [line for i, line in enumerate(lines) if i not in remove_indices]
@@ -4642,6 +5002,9 @@ class RasPlan:
             ras_obj.project_folder,
             ras_obj.ras_exe_path,
             suppress_logging=getattr(ras_obj, "suppress_logging", True),
+            prj_file=_matching_copied_prj_file(
+                ras_obj.project_folder, ras_obj.prj_file
+            ),
             load_results_summary=getattr(
                 ras_obj, "load_results_summary", True
             ),

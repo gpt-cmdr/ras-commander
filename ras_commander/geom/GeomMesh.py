@@ -2513,8 +2513,17 @@ def _hdf_polyline_features(
     parts_name: str = "Polyline Parts",
     points_name: str = "Polyline Points",
 ) -> list[dict[str, Any]]:
-    """Read a native HEC-RAS polyline collection with strict schema checks."""
+    """Read native polylines, resolving Parts offsets for the complete feature.
+
+    Local offsets are valid when every part lies within the feature's point
+    count and take precedence; a legacy global layout must cover the whole
+    feature exactly. Malformed spans raise instead of truncating individual
+    parts.
+    """
+    import numpy as np
     from shapely.geometry import LineString, MultiLineString
+
+    from ..hdf.HdfBase import HdfBase
 
     if group_path not in hdf:
         return []
@@ -2551,44 +2560,46 @@ def _hdf_polyline_features(
     parts = group[parts_name][()] if parts_name in group else None
     features: list[dict[str, Any]] = []
     for index, row in enumerate(info):
-        if len(row) < 2:
+        if len(row) < 2 or any(
+            not np.isfinite(value) or int(value) != value for value in row
+        ):
             raise RuntimeError(f"{group_path}/{info_name} row {index} is malformed")
         point_start, point_count = int(row[0]), int(row[1])
         part_start = int(row[2]) if len(row) > 2 else 0
         part_count = int(row[3]) if len(row) > 3 else 1
+        if min(point_start, point_count, part_start, part_count) < 0 or (
+            point_start + point_count > len(points)
+        ):
+            raise RuntimeError(f"{group_path}/{info_name} row {index} has an invalid range")
         feature_points = points[point_start : point_start + point_count]
         geometry = None
         parse_error = ""
+        if point_count >= 2 and part_count > 1 and parts is None:
+            raise RuntimeError(
+                f"{group_path}/{parts_name} is required for multipart feature {index}"
+            )
+        if point_count >= 2 and parts is not None and part_count > 0:
+            if part_start + part_count > len(parts):
+                raise RuntimeError(f"{group_path}/{parts_name} is truncated at feature {index}")
+            try:
+                local_ranges = HdfBase._feature_part_ranges(
+                    parts[part_start : part_start + part_count], point_start, point_count
+                )
+            except ValueError as exc:
+                raise RuntimeError(f"{group_path}/{parts_name} feature {index}: {exc}") from exc
+        else:
+            local_ranges = [(0, point_count)]
         if len(feature_points) < 2:
             parse_error = "fewer_than_two_points"
-        elif part_count <= 1:
-            geometry = LineString(feature_points)
+        elif any(count < 2 for _, count in local_ranges):
+            parse_error = "multipart_feature_has_degenerate_part"
         else:
-            if parts is None:
-                raise RuntimeError(
-                    f"{group_path}/{parts_name} is required for multipart feature {index}"
-                )
-            line_parts = []
-            for part_row in parts[part_start : part_start + part_count]:
-                raw_start, relative_count = int(part_row[0]), int(part_row[1])
-                relative_start = (
-                    raw_start - point_start
-                    if point_start <= raw_start < point_start + point_count
-                    else raw_start
-                )
-                part_points = feature_points[
-                    relative_start : relative_start + relative_count
-                ]
-                if len(part_points) >= 2:
-                    line_parts.append(LineString(part_points))
-            if line_parts:
-                geometry = (
-                    line_parts[0]
-                    if len(line_parts) == 1
-                    else MultiLineString(line_parts)
-                )
-            else:
-                parse_error = "multipart_feature_has_no_valid_parts"
+            line_parts = [
+                LineString(feature_points[offset : offset + count])
+                for offset, count in local_ranges
+            ]
+            geometry = line_parts[0] if len(line_parts) == 1 else MultiLineString(line_parts)
+
         features.append(
             {
                 "index": index,
@@ -2618,8 +2629,14 @@ def _hdf_polygon_features(
     hdf: Any,
     group_path: str,
 ) -> list[dict[str, Any]]:
-    """Read a native HEC-RAS polygon collection with strict schema checks."""
-    from shapely.geometry import MultiPolygon, Polygon
+    """Read packed polygons with feature-local ring offsets and preserved holes.
+
+    Negative, truncated or out-of-feature spans raise; invalid ring geometry
+    remains available to the containment audit as a geometry violation.
+    """
+    import numpy as np
+    from shapely.geometry import Polygon
+    from ..hdf.HdfBndry import _assemble_polygon_rings
 
     if group_path not in hdf:
         return []
@@ -2638,43 +2655,58 @@ def _hdf_polygon_features(
             f"{group_path} Attributes rows ({len(attributes)}) do not match "
             f"Polygon Info rows ({len(info)})"
         )
+    if points.ndim != 2 or points.shape[1] < 2:
+        raise RuntimeError(f"{group_path}/Polygon Points must contain XY coordinates")
     parts = group["Polygon Parts"][()] if "Polygon Parts" in group else None
     features: list[dict[str, Any]] = []
     for index, row in enumerate(info):
-        if len(row) < 2:
+        if len(row) < 2 or any(
+            not np.isfinite(value) or int(value) != value for value in row
+        ):
             raise RuntimeError(f"{group_path}/Polygon Info row {index} is malformed")
         point_start, point_count = int(row[0]), int(row[1])
         part_start = int(row[2]) if len(row) > 2 else 0
         part_count = int(row[3]) if len(row) > 3 else 1
-        feature_points = points[point_start : point_start + point_count]
+        if min(point_start, point_count, part_start, part_count) < 0 or (
+            point_start + point_count > len(points)
+        ):
+            raise RuntimeError(f"{group_path}/Polygon Info row {index} has an invalid range")
+        feature_points = points[point_start : point_start + point_count, :2]
         geometry = None
         parse_error = ""
-        if len(feature_points) < 4:
-            parse_error = "fewer_than_four_polygon_points"
-        elif part_count <= 1:
-            geometry = Polygon(feature_points)
-        else:
-            if parts is None:
+        if parts is None or part_count == 0:
+            if part_count > 1:
                 raise RuntimeError(
                     f"{group_path}/Polygon Parts is required for multipart feature {index}"
                 )
-            polygons = []
-            for part_row in parts[part_start : part_start + part_count]:
-                raw_start, relative_count = int(part_row[0]), int(part_row[1])
-                relative_start = (
-                    raw_start - point_start
-                    if point_start <= raw_start < point_start + point_count
-                    else raw_start
-                )
-                part_points = feature_points[
-                    relative_start : relative_start + relative_count
-                ]
-                if len(part_points) >= 4:
-                    polygons.append(Polygon(part_points))
-            if polygons:
-                geometry = polygons[0] if len(polygons) == 1 else MultiPolygon(polygons)
+            ring_ranges = [(0, point_count)]
+        else:
+            if part_start + part_count > len(parts):
+                raise RuntimeError(f"{group_path}/Polygon Parts is truncated at feature {index}")
+            ring_ranges = parts[part_start : part_start + part_count]
+        polygons = []
+        expected_offset = 0
+        for part_row in ring_ranges:
+            if len(part_row) != 2 or any(
+                not np.isfinite(value) or int(value) != value for value in part_row
+            ):
+                raise RuntimeError(f"{group_path}/Polygon Parts is malformed at feature {index}")
+            offset, count = map(int, part_row)
+            if offset != expected_offset or count < 0 or offset + count > point_count:
+                raise RuntimeError(f"{group_path}/Polygon Parts has an invalid local span at feature {index}")
+            ring = feature_points[offset : offset + count]
+            expected_offset += count
+            if len(ring) < 4:
+                parse_error = "fewer_than_four_polygon_points"
+            elif not np.isfinite(ring).all():
+                parse_error = "non_finite_polygon_points"
             else:
-                parse_error = "multipart_feature_has_no_valid_parts"
+                polygons.append(Polygon(ring))
+        if expected_offset != point_count:
+            raise RuntimeError(f"{group_path}/Polygon Parts does not cover feature {index}")
+        if not parse_error and polygons:
+            geometry = _assemble_polygon_rings(polygons)
+
         features.append(
             {
                 "index": index,
@@ -3662,6 +3694,9 @@ class GeomMesh:
     ) -> DomainContainmentResult:
         """Audit mesh features before point generation.
 
+        Packed refinement regions retain interior rings, disjoint shells and
+        islands using feature-local Parts offsets. Malformed ranges raise.
+
         The admissible geometry is the exact compiled 2D perimeter buffered
         *inward* by one base mesh-cell spacing. Every breakline and
         structure associated with the selected 2D area must be
@@ -3678,6 +3713,10 @@ class GeomMesh:
         A missing, stale, malformed, or ambiguous geometry HDF fails closed.
         ``require_complete_products`` defaults to False and is forwarded to
         native preprocessing when ``recompile_via_rasexe=True`` permits mutation.
+
+        Packed polyline Parts offsets resolve for each complete feature. Native
+        local offsets, valid when every part lies within the feature's point
+        count, take precedence over legacy whole-feature global offsets.
         """
         geom_path = _resolve_geom_text_path(geom_number, ras_object)
         hdf_path = _ensure_hdf(

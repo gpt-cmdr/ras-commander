@@ -519,31 +519,27 @@ class RasExamples:
 
     @classmethod
     def _load_project_data(cls):
-        """Load project data from CSV if up-to-date, otherwise extract from zip."""
-        logger.debug("Loading project data")
-        
-        try:
-            zip_modified_time = os.path.getmtime(cls._zip_file_path)
-        except FileNotFoundError:
-            logger.error(f"Zip file not found at {cls._zip_file_path}.")
-            return
-        
-        if cls.csv_file_path.exists():
-            csv_modified_time = os.path.getmtime(cls.csv_file_path)
-            
-            if csv_modified_time >= zip_modified_time:
-                logger.debug("Loading project data from CSV...")
-                try:
-                    cls._folder_df = pd.read_csv(cls.csv_file_path)
-                    logger.debug(f"Loaded {len(cls._folder_df)} projects from CSV.")
-                    return
-                except Exception as e:
-                    logger.error(f"Failed to read CSV file: {e}")
-                    cls._folder_df = None
+        """Validate the CSV against the selected ZIP's central-directory index.
 
-        logger.debug("Extracting folder structure from zip file...")
+        A newer CSV may belong to a different archive or an obsolete index. ZIP
+        timestamps alone cannot establish cache identity. Listing the directory
+        does not extract model files or read their payloads.
+        """
+        if cls._zip_file_path is None or not Path(cls._zip_file_path).is_file():
+            logger.error("Example project ZIP not found: %s", cls._zip_file_path)
+            return
+        cached = None
+        if cls.csv_file_path.exists():
+            try:
+                cached = pd.read_csv(cls.csv_file_path, dtype=str, keep_default_na=False)
+            except Exception as exc:
+                logger.debug("Refreshing unreadable example index: %s", exc)
         cls._extract_folder_structure()
-        cls._save_to_csv()
+        if cls._folder_df is not None and (
+            cached is None
+            or cls._folder_df.to_dict('records') != cached.to_dict('records')
+        ):
+            cls._save_to_csv()
 
     @classmethod
     def _extract_folder_structure(cls):
