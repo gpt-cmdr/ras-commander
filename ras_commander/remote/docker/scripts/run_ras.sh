@@ -26,8 +26,17 @@ GEOMETRY_NUMBER=${GEOMETRY_NUMBER:-${2:-""}}
 # Navigate to input directory
 cd /app/input
 
-# Find project file
-PRJ_FILE=$(ls *.prj 2>/dev/null | head -1)
+# Find project file. DockerWorker passes PROJECT_NAME so a staged folder that
+# holds several projects (several .prj files) runs the requested project;
+# without it, fall back to the first .prj.
+if [ -n "$PROJECT_NAME" ] && [ -f "${PROJECT_NAME}.prj" ]; then
+    PRJ_FILE="${PROJECT_NAME}.prj"
+else
+    if [ -n "$PROJECT_NAME" ]; then
+        echo "$(date '+%Y-%m-%d %H:%M:%S') - Warning: ${PROJECT_NAME}.prj not found; using the first .prj"
+    fi
+    PRJ_FILE=$(ls *.prj 2>/dev/null | head -1)
+fi
 if [ -z "$PRJ_FILE" ]; then
     echo "$(date '+%Y-%m-%d %H:%M:%S') - Error: No project file (.prj) found in /app/input"
     exit 1

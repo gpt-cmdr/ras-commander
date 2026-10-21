@@ -120,5 +120,7 @@ def test_real_boundary_matches_independent_shared_edge_time_oracle(real_davis, d
         actual = HdfFluvialPluvial.calculate_fluvial_pluvial_boundary(path, delta_t=delta_t)
     assert not actual.empty and len(actual) == expected_count
     assert actual.crs == cells.crs
-    assert sorted(tuple(sorted(g.coords)) for g in actual.geometry) == sorted(expected)
+    # Lines now carry exact stored face coordinates; the oracle rounds to 8 dp.
+    rounded = [tuple(sorted(tuple(round(x, 8) for x in c) for c in g.coords)) for g in actual.geometry]
+    assert sorted(rounded) == sorted(expected)
     assert not [r for r in caplog.records if r.name == LOGGER and r.levelno >= logging.ERROR]

@@ -34,6 +34,7 @@ from ..ExecutionArtifacts import (
 )
 from ..RasCurrency import RasCurrency
 from ..RasPlan import RasPlan
+from ..RasPrj import _matching_copied_prj_file
 from ..RasUtils import RasUtils
 from ..geom import GeomPreprocessor
 
@@ -512,7 +513,10 @@ def execute_psexec_plan(
             worker_project_path / f"{project_name}.p{plan_number}.tmp.hdf"
         )
 
-        prj_file = list(worker_project_path.glob("*.prj"))[0]
+        prj_file = (
+            _matching_copied_prj_file(worker_project_path, getattr(ras_obj, "prj_file", None))
+            or list(worker_project_path.glob("*.prj"))[0]
+        )
         plan_file = worker_project_path / f"{project_name}.p{plan_number}"
 
         # Clear only the staged worker copy. Mutating the source before staging
