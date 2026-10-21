@@ -35,7 +35,7 @@ from .HdfBase import HdfBase
 from .HdfUtils import HdfUtils
 from ..Decorators import standardize_input, log_call
 from ..LoggingConfig import get_logger
-from ..fast_hdf import read_typed, reraise_required
+from ..fast_hdf import read_attr, read_typed, reraise_required
 
 logger = get_logger(__name__)
 
@@ -185,7 +185,8 @@ class HdfStruc1D:
         for record, dataset in matches:
             flow_label = 'Total Flow' if record['Type'] == 'Inline' else 'Flow'
             quantities = {'Stage HW': 'hw', 'Stage TW': 'tw', flow_label: 'flow'}
-            labels = dataset.attrs['Variable_Unit']
+            labels = read_attr(dataset, 'Variable_Unit')
+            values_2d = None
             selected = set()
             for i, label in enumerate(labels):
                 name = HdfStruc1D._identity_text(label[0])
@@ -195,7 +196,9 @@ class HdfStruc1D:
                 if quantity in selected:
                     raise ValueError(f"{dataset.name}: ambiguous {name} columns")
                 selected.add(quantity)
-                values = dataset[:, i]
+                if values_2d is None:
+                    values_2d = read_typed(dataset)
+                values = values_2d[:, i]
                 if values.size and not np.isnan(values).all():
                     result[f'max_{quantity}'] = float(np.nanmax(values))
                     result[f'{quantity}_source'] = f"{dataset.name} [{name}]"
@@ -365,7 +368,7 @@ class HdfStruc1D:
                     or not set(fields).issubset(table.dtype.names or ())):
                 raise ValueError(f'{table_path}: invalid structure identity columns')
             identities = {}
-            for row in table[()]:
+            for row in read_typed(table):
                 if struct_type == 'Pump':
                     name = text(row['Name'])
                     # Pumps have a Name identity, not a river station. Keep the
@@ -403,7 +406,7 @@ class HdfStruc1D:
                 if not isinstance(structure, h5py.Group):
                     raise ValueError(f'{path}/{name}: expected a structure group')
                 if 'Node Pointer' in structure.attrs:
-                    pointer = np.asarray(structure.attrs['Node Pointer'])
+                    pointer = np.asarray(read_attr(structure, 'Node Pointer'))
                     if pointer.size != 1 or pointer.dtype.kind not in 'iu':
                         raise ValueError(f'{structure.name}: invalid Node Pointer')
                     pointer = int(pointer.item())
@@ -417,7 +420,7 @@ class HdfStruc1D:
                         or dataset.dtype.kind not in 'fi'
                         or dataset.shape[0] != time_rows[0]):
                     raise ValueError(f'{structure.name}/{variable}: invalid numeric time/column layout')
-                labels = np.asarray(dataset.attrs.get('Variable_Unit', []))
+                labels = np.asarray(read_attr(dataset, 'Variable_Unit', []))
                 if labels.shape != (dataset.shape[1], 2):
                     raise ValueError(f'{dataset.name}: invalid or missing Variable_Unit labels')
                 for label in labels.flat:
