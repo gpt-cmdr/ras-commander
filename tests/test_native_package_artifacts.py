@@ -7,6 +7,7 @@ import sys
 
 
 NATIVE_HELPERS = (
+    "RasMetImportHelper.cs",
     "InvokeRas5GeometryLandCover.ps1",
     "InvokeRas5LandCover.ps1",
 )

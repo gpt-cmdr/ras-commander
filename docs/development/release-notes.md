@@ -9,6 +9,524 @@ alone does not identify a development checkout.
 
 ### Unreleased
 
+**Fluvial/pluvial classification no longer depends on input order (behavior change)**
+
+`HdfFluvialPluvial.generate_fluvial_pluvial_polygons()` and
+`calculate_fluvial_pluvial_boundary()` depended on GeoDataFrame row order and
+ring vertex order. Reversing the rows of identical cell polygons moved 54,980
+sq ft between classes on AustinOyster at `delta_t=1`, and 432,713 sq ft on
+DavisStormSystem `area2`. The python and native polygon backends also gave
+different classifications. Two mechanisms caused it:
+
+- A cell in several boundary pairs kept the label of the last pair processed.
+- Only the last shared ring segment between two cells was kept.
+
+Results now depend only on the stored mesh and results:
+
+- Adjacency comes from the stored `Faces Cell Indexes` topology. An
+  order-invariant shared-ring-segment fallback is used, with a WARNING, only
+  when a mesh lacks that dataset.
+- In each boundary pair, the later-peaking cell is `fluvial` evidence and the
+  earlier one `pluvial` evidence. A cell with evidence for both is seeded
+  `ambiguous` and does not grow. Equal times, which are possible only with
+  `delta_t <= 0`, seed nothing.
+- There is one boundary line per cell pair, holding every face the pair
+  shares, with the stored coordinates. It is a MultiLineString when the shared
+  faces are not contiguous.
+- Cells are dissolved in sorted `(mesh_name, cell_id)` order with normalized
+  rings. The `cell_id` column is the smallest cell in each class.
+
+Public signatures are unchanged. `(mesh_name, cell_id)` keying and
+projected-unit acreage are preserved. Results change once. The change is
+concentrated at small `delta_t`, almost entirely in the cells now seeded
+`ambiguous`. Class areas on the original presentation, before and after, in
+sq ft:
+
+| Fixture | `delta_t` | ambiguous | fluvial | pluvial |
+|---|---|---:|---:|---:|
+| AustinOyster p01 | 1 h | +215,969 | −137,884 | −78,085 |
+| AustinOyster p01 | 12 h | 0 | 0 | 0 |
+| BaldEagleDamBrk p07 | 1 h | +189,972 | −119,459 | −70,513 |
+| BaldEagleDamBrk p07 | 12 h | +30,000 | −20,000 | −10,000 |
+| BaldEagleDamBrk refpts p03 | 1 h | +347,820 | −222,821 | −125,000 |
+| BaldEagleDamBrk refpts p03 | 12 h | 0 | 0 | 0 |
+| DavisStormSystem p02 `area2` | 1 h | +2,216,417 | −1,258,980 | −957,437 |
+| DavisStormSystem p02 (both meshes) | 12 h | 0 | 0 | 0 |
+| Homewood p02 | 1 h | +22,212 | −24,655 | +2,444 |
+| Homewood p02 | 12 h | 0 | 0 | 0 |
+
+Boundary-line geometry also changes: lines carry exact stored face coordinates
+instead of values rounded to 8 decimals, and a curved shared face is returned
+whole instead of as one segment.
+
+### v0.106.1 (October 2026)
+
+**Point-precipitation preprocessing repairs HEC-RAS's intermittent failure**
+
+HEC-RAS's own `RasProcess.exe CompletePreProcess` intermittently writes no
+point precipitation for identical inputs ("No valid precipitation time-series
+data found for this time-window") while Ras.exe exits 0. #511 rejects that
+temporary HDF. #510 suspected the early-stop logic as one cause; the failure
+originates in HEC-RAS.
+`RasPreprocess.preprocess_plan()` now re-runs only `CompletePreProcess` on the
+same temporary HDF, from the project folder, and re-validates after each
+attempt. `precipitation_repair_attempts` (default 6; 0 disables) and
+`precipitation_repair_timeout` (default `max_wait`) bound the repair.
+`PreprocessResult.precipitation_repair_attempts` records each attempt, and a
+repaired result reports `signal_source="completepreprocess_repair"`. Gridded
+precipitation is unchanged. See
+[point precipitation repair](../user-guide/slurm-apptainer-execution.md#point-precipitation-repair).
+
+**2D cell results exclude ghost cells by default (behavior change)**
+
+HEC-RAS writes cell results for the physical cells of a 2D flow area followed
+by ghost cells outside the perimeter. `Geometry/2D Flow Areas/Attributes`
+`Cell Count` is the physical count. Ghost values are placeholders, not
+solution results: summary maximum and minimum water surface are 0.0, and
+minimum elevation is NaN. Including them produced wrong results. On
+DavisStormSystem p02, the `HdfResultsProducts` maximum-WSE raster published
+73,004 pixels at 0.0. `HdfResultsQuery` point queries near the perimeter
+snapped to ghost centers and returned a maximum WSE of 0.0. Monte Carlo
+statistics also carried permanently-zero columns.
+
+- Cell results from `get_mesh_summary()`, `get_mesh_summary_values()`,
+  `get_mesh_max_ws()`, `get_mesh_min_ws()`, `get_mesh_max_ws_err()`,
+  `get_mesh_max_iter()`, `get_mesh_last_iter()`, `get_mesh_max_depth()`,
+  `get_mesh_timeseries()`, `iter_mesh_timeseries()`, and
+  `get_mesh_cells_timeseries()` now contain physical cells only. Pass
+  `include_ghost_cells=True` for the previous shapes.
+- Results carry an `is_ghost_cell` column, or a `cell_id` coordinate for
+  xarray results.
+- For `get_mesh_timeseries()` and `iter_mesh_timeseries()`, negative
+  `spatial_selection` positions now count back from the last physical cell.
+- When an HDF has no `Cell Count`, every cell is kept and a warning is logged.
+- Face results are unchanged.
+- `HdfMesh.get_mesh_cell_points()` accepts `include_ghost_cells=False`; its
+  default is unchanged.
+- `HdfResultsQuery`, `HdfResultsProducts`, `PrecipMrms` flood animation,
+  `RasMonteCarlo` full-domain extraction, `export_depth_rasters_at_times()`,
+  and `HdfResultsSediment` now use physical cells only. The depth-raster grid
+  extent is unchanged; only ghost-derived values are removed.
+- `check_stability` iteration averages no longer include ghost zeros.
+- **Migration:** code that pairs cell results by position with the full
+  `Cells Center Coordinate` array must join on `cell_id`, use
+  `HdfMesh.get_mesh_cell_points(..., include_ghost_cells=False)`, or pass
+  `include_ghost_cells=True`.
+
+**Unreadable boundary groups raise instead of returning an empty frame**
+
+`HdfBndry.get_bc_lines()`, `get_reference_lines()`, and `get_reference_points()`
+caught every read error and returned an empty GeoDataFrame. A malformed or
+unreadable group was therefore indistinguishable from a geometry with no
+features. As `get_breaklines()` and `get_refinement_regions()` already do, they
+now raise a `ValueError` naming the HDF and group. An HDF without the group
+still returns an empty GeoDataFrame.
+
+**AORC precipitation works with current xarray**
+
+The `precip`, `notebooks`, and `all` extras pinned `zarr<3`, but current
+xarray releases require zarr 3 and pass `zarr_format` to `zarr.open_group()`.
+A fresh install therefore paired xarray 2026.9 with zarr 2.18 and failed every
+AORC read with `TypeError: open_group() got an unexpected keyword argument
+'zarr_format'`. The cap is removed (`zarr>=2.14.0`). AORC downloads were
+verified with xarray 2026.9.0 and zarr 3.4.1.
+
+**HdfBase timestamp readers accept paths**
+
+`HdfBase.get_unsteady_timestamps()` and `HdfBase.get_simulation_start_time()`
+accept a `str` or `Path` as well as an open `h5py.File`. A path previously
+failed with `TypeError: string indices must be integers`.
+`get_unsteady_timestamps()` also reads `Time Date Stamp` when a plan HDF has
+no `Time Date Stamp (ms)` dataset, as in HEC-RAS 5.0.x, and raises a
+`ValueError` naming both datasets when neither exists.
+
+**Missing optional packages name the extra to install**
+
+A public export whose module needs a package outside the core install now
+raises an `ImportError` naming the package and the extra that provides it,
+instead of a bare `ModuleNotFoundError`. psutil and pywin32 point to
+`pip install "ras-commander[compute]"`; other packages point to
+`pip install "ras-commander[full]"`. `RasCmdr.compute_plan()`,
+`compute_parallel()`, `compute_test_mode()`, and `inspect_plan_processes()`
+check for psutil before launching HEC-RAS, and `RasControl` reports missing
+pywin32 before opening the COM interface.
+
+**Terrain qualification evidence and limits are documented**
+
+The terrain subset guide records the paired-sampling and complete-polygon evidence,
+retains known whole-support collar differences, and separates those checks from
+fresh runtime qualification and hydraulic acceptance. See
+[receipt-bound downstream qualification](../terrain-input-subsets.md#receipt-bound-downstream-qualification).
+
+### v0.106.0 (October 2026)
+
+**Multi-area computation points regenerate correctly**
+
+`GeomMesh.generate()` now regenerates the selected 2D area's computation
+points on geometries with multiple 2D areas. Previously, RAS Mapper caught
+its own multiple-multipoint error and the library accepted the stored points
+as regenerated. The seed helper merges the editing collection in memory,
+clears the selected area's old points, and returns only that area's regenerated
+points. Other areas retain their points. A native call that leaves the selected
+area empty returns an error instead of falling back to a plain lattice.
+Public signatures and the grid-anchor path are unchanged.
+
+**HDF result classes import under the compute install**
+
+`HdfResultsMesh`, `HdfResultsXsec`, `HdfResultView`, `HdfPipe`, and `HdfPump`
+now import without xarray, geopandas, or shapely. DataFrame results, such as
+`HdfResultsMesh.get_mesh_summary_values()`, work with the `compute` extra.
+Functions that return xarray objects or GeoDataFrames raise an `ImportError`
+that names the missing package and `pip install "ras-commander[full]"`. The
+installation guide no longer states that the `compute` extra covers all
+direct HDF result extraction.
+
+**Stage hydrograph edits stay within the selected boundary**
+
+Stage hydrograph authoring now bounds every edit to the selected boundary block,
+including long inline tables and repeated edits. The new
+`RasUnsteady.set_stage_hydrograph_initial_stage()` setter can preserve dry
+initialization when an owned 2D child changes from normal depth to a stage
+hydrograph. It preserves sibling boundaries and source bytes and reports
+pre/post digests; it does not resolve native HEC-RAS `USXSID` solver errors
+(#517).
+
+**Removed unimplemented remote worker stubs**
+
+Removed: unimplemented SlurmWorker, SshWorker, WinrmWorker, AwsEc2Worker and
+AzureFrWorker stubs and the remote-ssh/remote-winrm/remote-aws/remote-azure
+extras. `init_ras_worker()` now accepts only `"psexec"`, `"local"`, and
+`"docker"`; other worker types raise `ValueError`. For Slurm/HPC clusters use
+`RasSlurm` or `RasApptainer`.
+
+**Slurm and Apptainer parity with the Docker workflow**
+
+- `RasApptainer.render_prepare_job()` and `collect_prepare()` run Windows
+  HEC-RAS preprocessing under Wine on Slurm in a Wine executor SIF and assemble
+  a prepared project for `render_job()`, mirroring `RasDocker.preprocess_plan()`
+  followed by `compute_plan()`. New optional profile fields: `prepare_image`,
+  `prepare_image_sha256`, `prepare_ras_executable`, `prepare_python_executable`,
+  `prepare_timeout_seconds`.
+- `RasApptainer` profiles accept native HEC-RAS 7.x (`ras_version="7.0.1"`).
+- `RasSlurm` adds `execution_mode="array"` with `array_throttle`: one Slurm array
+  task per request, validated with the same per-request step accounting.
+- Every portable Slurm step now runs `apptainer exec --contain --cleanenv` with a
+  step-private `<node_scratch_root>/<jobid>/ras-commander-<execution_id>-*` bound as
+  `/tmp` (new `SlurmSiteConfig.node_scratch_root`, default `/tmp`), so Wine
+  prefixes never share host `/tmp`. The launcher is now
+  `ras-portable-slurm-launcher/v2`.
+- The portable executor preloads a CPU-numbering shim named by
+  `RAS_COMMANDER_WINE_CPU_SHIM` for Wine processes, fixing intermittent
+  `RasProcess.exe` `0xC0000005` crashes in Slurm CPU sets that do not start at
+  CPU 0, and disables the Wine debugger so crashes exit.
+- New container recipes: `containers/hecras-wine-precompute` (source of the
+  `rascommander/hec-ras-wine-precompute` images, now with the CPU shim),
+  `containers/hecras-wine-executor` (portable executor derived from it), and
+  `containers/apptainer/build_sif_from_archive.sbatch` (daemon-free archive to
+  SIF conversion as a Slurm job). See *Apptainer Images* in the user guide.
+- `remote/docker/setup_docker.py` lists its HEC-RAS 6.6 entry under `6.6`
+  again; it was mislabeled `7.0`, so `--version 6.6` was rejected.
+
+- `RasContainerImages` adds a packaged, digest-pinned image catalog and a
+  local SIF cache: `resolve_sif(role, version, sif_path=..., cache_dir=...,
+  pull="never"|"missing"|"always")` uses a supplied or cached SIF before
+  pulling, and `ensure_sif_command()` fills a shared cluster cache over SSH.
+  `applicable_roles()` reports which image roles apply to HEC-RAS 5.0 through
+  7.x: `wine-executor` for every release, and `wine-precompute` +
+  `linux-unsteady` only where HEC publishes a Linux engine (5.0.7, 6.1, 6.5,
+  6.6, 7.x). HEC-RAS 4.x versions are refused with a pointer to `RasControl`
+  (4.x computes only through COM on Windows).
+- `containers/hecras-wine-runtime/build_release_images.sh` builds the
+  pre-compute and executor images for any Windows release from 5.0 through 7.x
+  from HEC's official installer; all of them (and native 5.0.7, 6.1, 6.5, 6.6,
+  7.0, 7.0.1) were qualified live on Slurm on October 13–14, 2026.
+- HEC-RAS 5.0.7 runs natively: `RasApptainer`, `RasCmdr.compute_plan_linux`, and
+  `RasDocker` support HEC's `bin_ras` layout with the `.c##` solver arguments,
+  and 6.1 uses the same `cfile` arguments with the canonical layout.
+- HEC-RAS 6.0 and earlier record terms acceptance per machine: set
+  `RAS_COMMANDER_WINE_ACCEPT_TCU=1` (under Apptainer,
+  `APPTAINERENV_RAS_COMMANDER_WINE_ACCEPT_TCU=1`) to accept them through
+  HEC-RAS's dialog in each task; without it the executor refuses to start.
+- `validate_unsteady_results()` reads HEC-RAS 5.x volume accounting
+  (`Vol Accounting …` attributes on `Results/Unsteady/Summary`).
+- The Wine executor sets `KMP_AFFINITY=disabled` unless set, avoiding
+  HEC-RAS 7.0's `OMP: Error #179` under Wine.
+- `ensure_sif_command(..., work_dir=...)` unpacks image layers outside a
+  network-backed cache.
+
+**Breaking changes**
+
+- Removed `SlurmSiteConfig.memory_per_task`, which never set memory; use
+  `slurm_memory`. Slurm submission handles and batch manifests are now
+  `ras-commander-slurm-submission/v2` and `ras-commander-slurm-batch/v2`; a v1
+  handle is rejected with an explanation. Check status and collect in-flight v1
+  submissions with the version that rendered them. Execution requests and
+  receipts are unchanged.
+- `RasApptainer` profiles no longer accept fim-commander-only fields
+  (`memory_per_task`, `max_concurrent`, `ras_executable`, `transfer_mode`,
+  `timeout_seconds`, `rsync_executable`, `launcher_python_executable`) as
+  no-ops; unknown fields are rejected.
+
+**Parent-grid mesh anchoring and geometry reliability**
+
+`GeomMesh.get_grid_anchor()` and `GeomMesh.generate(..., grid_anchor=...)` let
+child meshes follow a parent's regular grid while RAS Mapper applies
+refinement regions and breaklines. `RasBreakout2D.prepare_cloned_geometry()`
+can pass the parent anchor through; an optional breakline perimeter-crossing
+limit can discard lines that weave across a child trim boundary (#529).
+Multi-area geometries now regenerate the selected area's computation points
+instead of silently retaining stale points (#531).
+
+**Clear compiled 2D-area infiltration associations**
+
+`RasMap.clear_geometry_infiltration()` now removes stale infiltration
+associations from both geometry-level and per-area HDF attributes while
+preserving unrelated area attributes. It refuses redirected paths and unsafe
+HDF/filesystem links before writing (#530).
+
+**Native GDAL NetCDF precipitation import**
+
+`RasUnsteady.configure_gridded_gdal_precipitation()` and
+`import_gridded_gdal_precipitation()` add a vendor-GDAL route for cumulative
+depth and interval-ending hourly average rates. The import validates CF time
+and units, stages the accumulated-raster sidecar, then atomically replaces it
+after validation. Qualification is limited to the documented platform and
+release profiles and requires physical-input and hydraulic gates. Wine 7.0
+rate-attempt intermittency remains under investigation (#536), and Wine 6.0
+preprocessing/startup remains unqualified (#532); neither limitation is
+resolved by this release (#533).
+
+### v0.105.0 (October 2026)
+
+**HDF structure types appear in geometry summaries**
+
+Geometry HDF structure `Type` values are now decoded as text, so bridges,
+culverts, inline weirs, lateral structures, and connections contribute to
+their corresponding `geom_df` counts. Legacy integer codes remain supported,
+and text fallback runs only when the HDF field is absent to prevent
+double-counting (#520).
+
+**Core installation supports project inspection**
+
+Geometry HDF cross-section counts now use a lightweight schema helper, so
+`geom_df` can inspect HDF files without importing geopandas. `RasExamples`
+loads without optional `requests` and `tqdm`; downloading without `requests`
+now gives an actionable installation error, and progress output is skipped
+when `tqdm` is unavailable. The installation guide and README clarify that
+the `full` extra provides the geospatial stack used by examples (#521).
+
+**Read-only initialization is quieter without HEC-RAS**
+
+On non-Windows hosts without a discovered HEC-RAS installation, project
+initialization now reports one warning that read-only file and HDF operations
+remain available. Executable discovery details stay at DEBUG; Windows and
+hosts with a discovered installation keep their existing behavior (#522).
+
+**Portable project asset references**
+
+Project inventory now resolves supported Windows-style relative paths on
+POSIX and preserves foreign Windows anchors as lexical evidence. Foreign
+anchors receive the additive `reference_foreign_windows_anchor` reason code
+without invented local file facts or changes to public columns and signatures
+(#471).
+
+**Traceable native terrain input and verification**
+
+Terrain primitives now support shared-coordinate point sampling, relative
+terrain registration, result-map reassociation and audits, polygon-complete
+modification handling, and lossless native terrain creation and queries
+(#504, #515). These primitives provide input and inspection evidence; each
+model child still requires its own qualification before hydraulic acceptance.
+
+**Geometry and mesh reliability**
+
+Mesh generation follows HEC-RAS constraint semantics and includes opt-in
+robustness screening and recorded seed repairs. Polygon unions preserve
+containment and native breakline flags; bounded geometry authoring, breakout
+identity, gate GIS support, connection endpoints, and cloned-geometry
+infiltration association handling received fixes (#496, #499–#506).
+Geometry reference feature names may contain commas (#494).
+
+**Execution and forcing fixes**
+
+Boundary-only children no longer inherit meteorological forcing (#514).
+Point-rainfall workflows reject incomplete preprocessing and event conditions
+(#511), and RASMapper HDF5 access isolates its runtime while recovering
+regional mappings (#512). Apptainer receipts now escape backslashes correctly
+(#492).
+
+**Documentation**
+
+Docker Hub and Slurm/Apptainer execution paths are documented (#493), and the
+library guide credits the Rivia query design and related companion libraries
+(#519).
+
+**Remaining fixed-width table writers reject overflow**
+
+The USGS flow/stage table generator, central geometry formatter (including
+storage elevation-volume, cross-section station/elevation, bridge, culvert,
+lateral connection, and pump tables), Manning's n triplets, blocked-obstruction
+writers, and breach table writer now share PR #488's field-fitting loop. They
+retain requested decimals where they fit, reduce one decimal at a time, and
+raise `ValueError` if even an integer cannot fit. Overflow never introduces
+scientific notation or truncates a numeric field. For example, an 8-character
+field writes `108765.38` as `108765.4` and `163148.07725` as `163148.1`.
+
+Already-fitting finite fields keep their previous bytes, including signed
+zero in geometry/USGS tables and already-fitting legacy breach notation.
+Geometry, USGS, and private fixit formatters preserve `Decimal` rounding;
+for example, `Decimal('1.015')` writes `    1.02` at the default precision
+with the default decimal context.
+PR #488's unsteady formatter and the steady-flow formatter keep their existing
+behavior. Non-finite values raise `ValueError`.
+
+The remaining defects are present in the inspected release tags v0.99.1
+through v0.104.0: geometry and USGS writers could silently shift adjacent
+fields, obstruction writers emitted `********`, and breach writers could
+truncate scientific notation into a different value. Earlier versions were
+not surveyed. PR #488 fixed unsteady overflow after v0.104.0 was tagged; a
+release containing both fixes is needed. Re-author affected tables from
+their original numeric inputs; these fixes do not recover corrupted files.
+
+Opt-in HEC-RAS 6.6 read-back tests in
+`tests/test_remaining_fixed_width_native.py` compile disposable public Bald
+Eagle and Muncie examples through `RasPreprocess`. Enable them with
+`RAS_COMMANDER_RUN_HECRAS_INTEGRATION=1`. They check compiled storage volumes
+and a USGS-generated flow hydrograph with ordinates above 100,000, using a
+0.02-unit tolerance for the engine's float32 representation. These are
+format-interpretation checks, not hydraulic acceptance.
+
+**Refinement-region constraints and child areas**
+
+`GeomMesh.generate()` and `generate_all()` now default to saved-point compile
+constraints: breaklines and structures, with refinement regions shaping point
+generation. Pass `refinement_region_constraints=True` for the earlier RAS
+Mapper mesh with constrained region edges. Point writes refresh the native
+mesh timestamp; successful generation persists the effective face-length ratio.
+Valid regions may extend beyond the 2D perimeter, and generated outside/boundary
+points are removed. `strict_refinement_containment=True` retains the earlier
+one-cell inward region margin.
+
+`clip_refinement_regions()` prepares delivered regions for a child perimeter
+and reports each source region's disposition. `replace_refinement_regions()`
+now preserves optional native transition and protection properties. Clipping
+can change grid origins and perimeter transitions; spacing preservation does
+not reproduce the original point pattern exactly. See the
+[meshing guide](../api/meshing.md#carry-refinement-regions-into-a-child-area).
+
+### v0.104.0 (October 2026)
+
+**Read-only text metadata API**
+
+`RasText.read_project_metadata()` and `RasText.read_plan_metadata()` read
+selected project and plan fields from caller-supplied text or bytes. They do
+not open files, initialize projects or resolve component references; the
+caller owns file access and size limits. Results keep source strings, list
+repeated occurrences and report absent fields. Bytes decode as UTF-8 (with or
+without a byte-order mark) and fall back to Latin-1 with a warning. The
+constrained ras-commander-mcp 0.4 server uses this API (#482).
+
+**Frequency storms from depth-duration inputs**
+
+`FrequencyStormDdf.generate_hyetograph()` builds balanced storms from eight or
+ten explicitly labelled depth-duration values, with 50% or 67% peak placement
+and optional dry tails. `Tp40Reduction` applies a bounded, explicit
+point-to-area reduction for 0–400 mi². Results were compared against HEC-HMS
+4.10 reference series (#480, #481).
+
+**Gridded precipitation writing and consumer checks**
+
+`RasDss.write_precip_grid_arrays()` writes interval-depth arrays to DSS7
+through the optional native backend (`ras-commander[dss-native]`); the existing
+Monolith writer is unchanged (#476). Native precipitation writing accepts
+`grid_reference_origin` so receiving models keep fixed global cell indexes,
+midnight DSS paths are returned exactly, conflicting legacy precipitation
+hydrographs are rejected before mutation, and
+`HdfPlan.get_plan_met_precip_values()` inspects the solver's precipitation
+datasets (#483).
+
+**Plan output intervals and HDF compression**
+
+`RasPlan.get_plan_intervals()`, `validate_plan_intervals()` and
+`interval_to_seconds()` read and check plan intervals; `update_plan_intervals()`
+validates the result unless `validate=False`. `get_hdf_compression()` and
+`set_hdf_compression()` manage HDF write settings, and `plan_df` exposes the
+interval and HDF write keys (#473).
+
+**Slurm/Apptainer execution (offline-tested)**
+
+`RasApptainer` renders, submits, polls and collects one native HEC-RAS 6.6
+unsteady plan per Slurm allocation from Windows preprocessing artifacts, with
+hash-verified inputs and outputs. Testing so far is offline only (#484).
+
+**Gridded precipitation rejects an inherited non-unit ratio**
+
+The gridded NetCDF, GeoTIFF, GRIB, and DSS setters, and the direct native-HDF
+writer, reject an omitted `ratio` when either the unsteady file or its HDF
+sidecar retains a non-unit precipitation ratio. The error identifies the
+retained value and requires an explicit decision: `historic=True` (or
+`ratio=1.0`) for observed/analysis rainfall, or `ratio=<value>` to deliberately
+keep a design-storm ARF. The boundary setters write the chosen ratio to both
+text and HDF. The payload-only direct writer writes an explicit ratio to HDF
+only after verifying that the sibling text already matches; otherwise it raises
+without changing either file and directs callers to `RasUnsteady`. On an
+existing payload it can repair that HDF attribute without rewriting the raster.
+`historic=True` requires 1.0; an explicit non-unit design ratio remains
+supported when both representations agree.
+
+**Report duplicate native BC face ownership during read-only inspection**
+
+`HdfBndry.get_bc_external_faces()` and `HdfMesh.get_mesh_perimeter_faces()` accept
+`on_duplicate_ownership="report"` for delivered geometry with repeated native
+BC face associations. Default `"raise"` remains unchanged. Report mode marks
+`duplicate_ownership`, lists `owning_bc_line_ids` / `owning_bc_line_names`, and
+records the duplicate summary in DataFrame attrs. The association reader keeps
+every native row; the perimeter inventory keeps one row per face and nulls
+scalar BC fields when ownership is ambiguous. Other validation stays active
+and source files are read-only. The legacy `validate_unique_faces=False`
+diagnostic shape is preserved. DataFrame schema contract version is 1.20.
+
+**Empty SA/2D profile records no longer block retention**
+
+`GeomLateral.get_connection_data()` reports explicit zero-count centerline and
+BR/XS profiles, and complete empty bridge skeletons, in `EmptyRecords` with their
+raw text preserved. These records contribute no spatial support and no longer
+block connection retention. Nonzero, malformed and unfamiliar records still fail
+closed; native mesh attachment verification remains a separate requirement.
+
+**Complete SA/2D connections, retention on clip and breakout, native attachment checks**
+
+`GeomLateral` reads every SA/2D connection completely as a DataFrame (crest and terrain profiles,
+culverts, gates, breach and unknown records) and writes them back losslessly. `GeomLateral.set_connection`
+now requires explicit width, coefficient and crest profile; `allow_defaults=True` requests and records the
+legacy defaults, and area names are validated instead of silently truncated (intentionally stricter).
+`GeomStorage.clip_2d_flow_area` keeps complete internal connections unchanged, reports external removals and
+rejects partial or unknown support before writing. `RasBreakout2D` retains qualified internal connections and
+returns native attachment evidence separately from text retention; missing evidence reports
+`CONNECTION_ATTACHMENT_UNVERIFIED`.
+
+**Cross-platform HEC-RAS text serialization**
+
+Model text writers now serialize CRLF on every platform, including steady flow,
+plan, project, geometry, and unsteady flow files. Existing LF and CRLF inputs
+remain readable; fields, encodings, and terminal-newline state are preserved.
+This fixes Linux-authored steady flow files failing to load in HEC-RAS 6.6 under
+Wine. The native-Linux solver path still converts to LF at execution
+(`dos2unix=True` and `fix_line_endings=True` remain the defaults).
+
+**Complete 2D perimeter inventory and area-scoped BC replacement**
+
+`HdfMesh.get_mesh_perimeter_faces()` returns all native perimeter faces of a
+named area, including unassigned faces, with native topology, full geometry,
+length, and exact BC ownership. It rejects duplicate/stale ownership and
+unavailable association evidence. `GeomBcLines.replace_bc_lines()` stages
+complete target-area geometry and unsteady forcing replacement with backups
+and rollback, preserving other areas and area-wide rainfall. Explicit clone
+paths are required; native preprocessing remains a separate step. Existing
+upsert and boundary-location methods retain their behavior. See the
+[geometry API](../api/geometry.md#geombclines) and
+[HDF API](../api/hdf.md#hdfmesh).
+
 **Inline precipitation timing and input validation**
 
 `RasUnsteady.set_precipitation_hyetograph()` now preserves one zero-depth start
@@ -66,6 +584,12 @@ Notebook inventory now counts recorded `execution_count` values, including
 silent definition cells, rather than counting only cells with saved output.
 Execution counts do not establish success or freshness; evidence scope remains
 explicit in the catalog.
+
+**Fixes and documentation**
+
+- `StormGenerator` Atlas 14 return-period labels started one class too high;
+  PDS and AMS columns now match NOAA's labelled export (#470).
+- API reference reorganized, with mesh diagnostics and repair coverage (#474).
 
 ### v0.103.0 (September 2026)
 

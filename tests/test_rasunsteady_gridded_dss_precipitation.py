@@ -350,6 +350,42 @@ def test_hec_ras_61_explicit_unit_dss_ratio_clears_retained_value(tmp_path):
         assert ratio == pytest.approx(1.0)
 
 
+def test_historic_dss_precipitation_resets_cloned_ratio_in_text_and_hdf(
+    tmp_path, caplog
+):
+    from ras_commander import RasUnsteady
+
+    unsteady_file = _write_unsteady_file(
+        tmp_path / "historic_dss.u01",
+        "Flow Title=Ratio\n"
+        "Program Version=6.60\n"
+        "Met BC=Precipitation|Ratio=0.8768\n",
+    )
+    hdf_path = Path(str(unsteady_file) + ".hdf")
+    with h5py.File(hdf_path, "w") as hdf:
+        hdf.require_group("Event Conditions/Meteorology/Precipitation").attrs[
+            "Ratio"
+        ] = 0.8768
+
+    with caplog.at_level("WARNING"):
+        RasUnsteady.configure_gridded_dss_precipitation(
+            unsteady_file,
+            "rain.dss",
+            BALD_EAGLE_DSS_PATHNAME,
+            historic=True,
+        )
+
+    assert "Met BC=Precipitation|Ratio=1\n" in unsteady_file.read_text(
+        encoding="utf-8"
+    )
+    with h5py.File(hdf_path, "r") as hdf:
+        ratio = hdf["Event Conditions/Meteorology/Precipitation"].attrs["Ratio"]
+        assert ratio == pytest.approx(1.0)
+    warnings = "\n".join(record.getMessage() for record in caplog.records)
+    assert unsteady_file.name in warnings
+    assert "0.8768" in warnings
+
+
 def test_explicit_dss_ratio_preserves_native_crlf_line_endings(tmp_path):
     """HEC-RAS may reject otherwise valid boundary blocks after LF conversion."""
     from ras_commander import RasUnsteady

@@ -222,7 +222,7 @@ def test_extraction_rejects_invalid_source_label(source_datum):
 
 @pytest.mark.parametrize('newline', [b'\n', b'\r\n'])
 @pytest.mark.parametrize('terminal_newline', [True, False])
-def test_authoring_preserves_newline_style(stage_file, wse, newline, terminal_newline):
+def test_authoring_enforces_crlf_and_preserves_terminal_newline(stage_file, wse, newline, terminal_newline):
     original = stage_file.read_text().rstrip('\n').replace('\n', newline.decode()).encode()
     if terminal_newline:
         original += newline
@@ -230,13 +230,10 @@ def test_authoring_preserves_newline_style(stage_file, wse, newline, terminal_ne
     CoastalBoundary.generate_stage_bc(wse.iloc[:3], stage_file, ' Outlet ',
                                       source_datum=' NAVD88 ', target_datum=' NAVD88 ')
     written = stage_file.read_bytes()
-    assert written.endswith(newline) == terminal_newline
-    if newline == b'\r\n':
-        assert b'\n' not in written.replace(b'\r\n', b'')
-    else:
-        assert b'\r' not in written
+    assert written.endswith(b'\r\n') == terminal_newline
+    assert b'\n' not in written.replace(b'\r\n', b'')
     marker = b'Boundary Location=,,,,,Bay,,Other,'
-    assert written.split(marker)[1] == original.split(marker)[1]
+    assert written.split(marker)[1] == original.replace(b'\r\n', b'\n').replace(b'\n', b'\r\n').split(marker)[1]
 
 @pytest.mark.parametrize('encoding', ['cp1252', 'utf-8'])
 @pytest.mark.parametrize('newline', ['\n', '\r\n'])
@@ -248,17 +245,15 @@ def test_native_encoding_and_accented_boundary_roundtrip(stage_file, wse, encodi
     stage_file.write_bytes(original)
     CoastalBoundary.generate_stage_bc(wse.iloc[:3], stage_file, 'Déversoir', target_datum='NAVD88')
     written = stage_file.read_bytes()
-    # Header and adjacent boundary retain their original native bytes exactly.
+    # Header and adjacent boundary retain native content with CRLF serialization.
+    original = original.replace(b'\r\n', b'\n').replace(b'\n', b'\r\n')
     marker = 'Boundary Location=,,,,,Baie côtière,,Autre,'.encode(encoding)
     assert written.split(marker)[1] == original.split(marker)[1]
     assert written.split(b'Boundary Location=')[0] == original.split(b'Boundary Location=')[0]
     assert 'Bay,,Déversoir'.encode(encoding) in written
-    assert ('Stage Hydrograph= 3' + newline).encode(encoding) in written
-    assert written.endswith(newline.encode())
-    if newline == '\r\n':
-        assert b'\n' not in written.replace(b'\r\n', b'')
-    else:
-        assert b'\r' not in written
+    assert ('Stage Hydrograph= 3\r\n').encode(encoding) in written
+    assert written.endswith(b'\r\n')
+    assert b'\n' not in written.replace(b'\r\n', b'')
 
 
 def test_unassigned_legacy_bytes_preserved(stage_file, wse):

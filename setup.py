@@ -69,7 +69,7 @@ class CustomBuildPy(build_py):
 
 setup(
     name="ras-commander",
-    version="0.103.0",
+    version="0.106.1",
     packages=find_packages(include=['ras_commander', 'ras_commander.*']),
     include_package_data=True,
     package_data={
@@ -84,6 +84,7 @@ setup(
             "RasStoreMapHelper.exe",
             "RasStoreMapHelper.exe.config",
             "RasStoreMapHelper.cs",
+            "RasMetImportHelper.cs",
             "RasMapperTerrainExportHelper.exe",
             "RasMapperTerrainExportHelper.cs",
             "BuildRasMapperTerrainExportHelper.ps1",
@@ -118,18 +119,11 @@ setup(
         'full': FULL_FEATURE_DEPENDENCIES + COMPUTE_DEPENDENCIES,
         # Remote execution backends (PsExec worker has no extra deps)
         'remote': [],  # Base remote - PsExec only, no additional deps
-        'remote-ssh': ['paramiko>=3.0'],
-        'remote-winrm': ['pywinrm>=0.4.3'],
         'remote-docker': ['docker>=6.0'],
-        'remote-aws': ['boto3>=1.28'],
-        'remote-azure': ['azure-identity>=1.14', 'azure-mgmt-compute>=30.0'],
+        # paramiko backs DockerWorker SSH/SFTP staging for ssh:// Docker hosts.
         'remote-all': [
             'paramiko>=3.0',
-            'pywinrm>=0.4.3',
             'docker>=6.0',
-            'boto3>=1.28',
-            'azure-identity>=1.14',
-            'azure-mgmt-compute>=30.0',
         ],
         # GUI automation and screenshot capture (Windows only)
         'gui': [
@@ -154,7 +148,7 @@ setup(
             'cfgrib>=0.9.10',
             'eccodes>=2.28',
             'pyproj',
-            'zarr>=2.14.0,<3',
+            'zarr>=2.14.0',
             's3fs>=2023.0.0',
             'netCDF4>=1.6.0',
         ],
@@ -170,7 +164,7 @@ setup(
             'pyproj',
             'aiohttp',
             'dataretrieval>=1.0',
-            'zarr>=2.14.0,<3',
+            'zarr>=2.14.0',
             's3fs>=2023.0.0',
             'netCDF4>=1.6.0',
             'pygeohydro>=0.19.0',
@@ -181,18 +175,16 @@ setup(
         'mesh': ['pythonnet>=3.0.5'],
         # DSS file operations (requires Java JRE/JDK 8+)
         'dss': ['pyjnius'],
+        # Native direct NumPy -> DSS7 grids, without Java/Vortex (optional wheels).
+        'dss-native': ['pydsstools>=3.1.0,<4', 'pyproj', 'affine'],
         # Everything (all optional dependencies)
         'all': FULL_FEATURE_DEPENDENCIES + COMPUTE_DEPENDENCIES + [
             'paramiko>=3.0',
-            'pywinrm>=0.4.3',
             'docker>=6.0',
-            'boto3>=1.28',
-            'azure-identity>=1.14',
-            'azure-mgmt-compute>=30.0',
             'Pillow>=9.0',
             'comtypes>=1.4.0; sys_platform == "win32"',
             'dataretrieval>=1.0',
-            'zarr>=2.14.0,<3',
+            'zarr>=2.14.0',
             's3fs>=2023.0.0',
             'netCDF4>=1.6.0',
             'pygeohydro>=0.19.0',

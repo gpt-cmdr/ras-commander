@@ -628,7 +628,7 @@ def test_set_met_precipitation_mode_creates_precipitation_block_from_scratch(tmp
 
 @pytest.mark.parametrize("newline", [b"\n", b"\r\n", b"\r"])
 @pytest.mark.parametrize("terminal_newline", [False, True])
-def test_set_met_precipitation_mode_preserves_newline_convention_and_terminal_state(
+def test_set_met_precipitation_mode_writes_crlf_and_preserves_terminal_state(
     tmp_path,
     newline,
     terminal_newline,
@@ -653,12 +653,12 @@ def test_set_met_precipitation_mode_preserves_newline_convention_and_terminal_st
     )
 
     updated = unsteady_file.read_bytes()
-    assert updated.endswith(newline) is terminal_newline
-    content_without_separators = updated.replace(newline, b"")
+    assert updated.endswith(b"\r\n") is terminal_newline
+    content_without_separators = updated.replace(b"\r\n", b"")
     assert b"\r" not in content_without_separators
     assert b"\n" not in content_without_separators
 
-    updated_records = updated.split(newline)
+    updated_records = updated.split(b"\r\n")
     if terminal_newline:
         assert updated_records.pop() == b""
     assert sentinel in updated_records
@@ -670,7 +670,7 @@ def test_set_met_precipitation_mode_preserves_newline_convention_and_terminal_st
 
 
 @pytest.mark.parametrize("original", [b"", b"Flow Title=Minimal"])
-def test_set_met_precipitation_mode_uses_lf_for_input_without_a_newline(
+def test_set_met_precipitation_mode_uses_crlf_for_input_without_a_newline(
     tmp_path,
     original,
 ):
@@ -680,9 +680,11 @@ def test_set_met_precipitation_mode_uses_lf_for_input_without_a_newline(
     RasUnsteady.set_met_precipitation_mode(unsteady_file, "None")
 
     updated = unsteady_file.read_bytes()
-    assert b"\r" not in updated
+    assert b"\r\n" in updated
+    assert b"\r" not in updated.replace(b"\r\n", b"")
+    assert b"\n" not in updated.replace(b"\r\n", b"")
     assert not updated.endswith(b"\n")
-    records = updated.split(b"\n")
+    records = updated.split(b"\r\n")
     if original:
         assert original in records
     assert b"Precipitation Mode=Enable" in records

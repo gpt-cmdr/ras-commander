@@ -454,7 +454,9 @@ class PrecipMrms:
         """
         Export MRMS QPE grids to a HEC-RAS GDAL-raster NetCDF input.
 
-        The export path is intended for ``RasUnsteady.set_gridded_precipitation``.
+        The export path is intended for ``RasUnsteady.set_gridded_precipitation``
+        with ``historic=True`` so a cloned design-storm plan cannot retain an
+        areal-reduction ratio.
         MRMS interval-ending depths are accumulated in millimeters and a zero
         cumulative frame is prepended so HEC-RAS does not treat the first QPE
         amount as the import datum. When ``first_timestep_hours`` is omitted it
@@ -1165,7 +1167,8 @@ class PrecipMrms:
         from ..hdf.HdfResultsMesh import HdfResultsMesh
 
         plan_hdf = Path(plan_hdf)
-        cell_points = HdfMesh.get_mesh_cell_points(plan_hdf)
+        # Physical cells only, matching the ghost-free get_mesh_timeseries().
+        cell_points = HdfMesh.get_mesh_cell_points(plan_hdf, include_ghost_cells=False)
         if cell_points.empty:
             raise ValueError(f"No 2D mesh cell centers found in {plan_hdf}")
 

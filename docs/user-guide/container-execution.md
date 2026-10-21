@@ -30,6 +30,12 @@ Published native images install library source `604704d440c49a39d6f6e8bae262e223
 
 ## Select matching images
 
+See the [Docker Hub catalog](container-images.md) for direct repository links,
+immutable digests, embedded source revisions, and the retained qualification
+record. Compare [execution backends](execution-backends.md) before using these
+images with a different API. The [rendered RasDocker reference](../api/containers.md)
+documents method parameters and result records.
+
 **Qualification status:** All three matching versions passed the full 266-hour Linux sample and the one-hour Windows Docker Desktop notebook, using two CPUs per container. Linux results contained 267 output times; Windows results contained two, with 6,548 finite water-surface values at every time. Live progress, resume and sequential batch checks passed on both hosts; the six Linux Wine LF/CRLF cases also passed. The images are published on Docker Hub, and anonymous pulls verified all six matching payloads.
 
 | HEC-RAS | Wine preprocessing image | Native unsteady image |
@@ -48,6 +54,20 @@ docker pull rascommander/hec-ras-linux-unsteady_6.5:v1
 For 6.6 or 7.0.1, change the version in both repository names. Wine `v4` and native `v1` also have matching `latest` tags. The API examples use `pull="always"` to refresh the selected image.
 
 Use matching HEC-RAS versions. A missing image fails explicitly; the API does not choose another version. The native worker requires populated 2D meshes and validates their complete water-surface output.
+
+Other releases with a HEC Linux engine (5.0.7, 6.1, 7.0) use the GHCR images in the
+[packaged catalog](apptainer-images.md#which-images-apply-to-which-hec-ras-release); pass
+`image=` to use a local build instead. The preparation container reads the project's
+geometry HDF (`.g##.hdf`) and checks that preprocessing keeps its 2D mesh. HEC's 6.1 example
+archive and the 5.0.x/6.0 installer examples omit those files, as can models saved by older
+releases; open and save the geometry once (or compute the plan once under `RasSlurm` or
+`RasPortableDocker`, whose result project includes it) first.
+
+On a Linux host whose default Docker AppArmor profile denies Wine's sockets, preparation
+fails with `wineserver: socket: Permission denied`. Pass `apparmor_profile="unconfined"`
+(or the name of a site profile that allows Unix sockets) to `preprocess_plan`,
+`compute_plan`, or `run_plan`; it adds `--security-opt apparmor=<profile>` and is off by
+default.
 
 ## Prepare a complete working copy
 
@@ -265,8 +285,10 @@ container. Resume records remain available for a later invocation.
 
 For TACC, use an external scheduler to distribute independent runs. The
 [implementation comparison and TACC design notes](container-hpc-design.md)
-describe the proposed Apptainer/Slurm integration and the staging changes
-needed in ras2fim. That backend has not yet been implemented or qualified.
+describe the Apptainer/Slurm staging design and ras2fim changes. The separate
+[`RasApptainer`](slurm-apptainer-execution.md) API now renders, submits, and
+collects one native-Linux unsteady Slurm allocation; it remains offline-tested
+only and requires site/image qualification.
 
 ## What runs inside each container
 

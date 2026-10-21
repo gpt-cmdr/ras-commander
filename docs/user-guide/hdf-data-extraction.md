@@ -88,6 +88,16 @@ created. Repository tests label temporary, synthetic HDF artifacts separately
 from pre-existing producer HDFs written by HEC-RAS. Reading either kind of file
 does not run HEC-RAS or generate model output.
 
+`get_mesh_max_ws()` and `get_mesh_max_face_v()` read HEC-RAS Summary Output
+maxima tracked across the computation, so they can include a peak between the
+mapping/output timestamps retained in the regular time series. In contrast,
+`get_mesh_max_depth()` reduces the stored `Depth` or `Water Surface` series and
+can miss a peak between those output times. Do not assume all methods named
+`get_mesh_max_*()` share the same time basis. A maximum envelope also is not a
+simultaneous profile: different cells can reach their maxima at different
+times. For the profile and extraction workflow, see
+[2D profiles and reference results](2d-profile-and-reference-workflows.md#read-maximum-result-datasets).
+
 ### Time Series
 
 ```python
@@ -142,10 +152,21 @@ default to truncation, while the multi-mesh reader defaults to no truncation.
 
 ### Profile-Line Flow and Peak Q
 
-Use the profile-line helpers when you need modeled Q across a named RAS Mapper
-profile/reference line. The API uses native HDF reference-line internal faces
-when present. If those are absent, pass a RAS Mapper Profile Lines feature file
-or initialize a project whose `rasmap_df` resolves `profile_lines_path`.
+Choose between **recorded reference hydrographs**, **native mapped profiles**,
+and **face aggregation** before extracting Q. HDF stores all of these underlying
+results; the file format alone does not establish the hydraulic method.
+See [2D profiles and reference workflows](2d-profile-and-reference-workflows.md)
+for batch plotting and the input/output decision table.
+
+The canonical named-line helper below requires pythonnet and installed
+RasMapperLib components. It first tries a native-associated precomputed hydrograph
+whose provenance has not been independently qualified as solver-recorded,
+then native face selection/aggregation. Supply `profile_lines_path` for an ad
+hoc line absent from the native reference geometry. This native-associated
+hydrograph may be observed data. To read explicit solver-recorded Reference Lines
+output offline, use `HdfResultsXsec.get_ref_lines_timeseries()`; an explicitly
+named `get_profile_line_flow_timeseries_legacy()` provides offline face-based
+analysis with different method provenance.
 
 ```python
 from ras_commander import HdfResultsMesh
@@ -166,9 +187,13 @@ peak_q = HdfResultsMesh.get_profile_line_peak_flow(
 )
 ```
 
-`direction="absolute"` sums absolute face flows to avoid cancellation from
-opposing face-normal signs. `direction="signed"` preserves native HEC-RAS face
-signs, so the line orientation and face normals control the sign convention.
+Inspect `flow_ts["selection_source"]` and preserve it with the exported result.
+For `try_read_ref_line_flow`, absolute mode takes the magnitude of the
+native-associated hydrograph, without establishing its solver/observed provenance.
+For face aggregation it sums absolute face flows; signed mode sums native face
+signs without line-normal correction. Neither fallback automatically reproduces
+solver-weighted net flow across the line. The peak helper inherits the same
+extraction semantics. See the [profile API reference](../api/results-queries.md).
 
 ## 1D Cross-Section Results
 

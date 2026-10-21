@@ -7,6 +7,7 @@ import json
 import math
 import numbers
 import os
+import re
 import uuid
 from dataclasses import dataclass
 from pathlib import Path
@@ -602,6 +603,11 @@ class RasPrecipGrid:
                     return False
                 if precip.attrs.get("source_value_type") != cube.source_value_type:
                     return False
+                time_ns = np.asarray(cube.timestamps.values).astype("datetime64[ns]").astype(np.int64)
+                if np.all(time_ns % 1_000_000_000 == 0):
+                    raw_time_units = str(dataset["time"].encoding.get("units", ""))
+                    if not re.search(r"since\s+\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2}", raw_time_units):
+                        return False
                 if "spatial_ref" not in dataset:
                     return False
                 spatial_attrs = dataset["spatial_ref"].attrs
@@ -696,6 +702,22 @@ class RasPrecipGrid:
                 "GeoTransform": " ".join(str(float(value)) for value in cube.transform.to_gdal()),
             },
         )
+        # HEC's GDAL timestamp parser requires an explicit date AND time in
+        # CF units. xarray can shorten midnight epochs to a date-only string.
+        # Author a numeric, exact whole-second axis to retain the required form
+        # with either supported NetCDF backend (including NetCDF3/scipy).
+        time_ns = np.asarray(cube.timestamps.values).astype("datetime64[ns]").astype(np.int64)
+        time_coordinate = cube.timestamps
+        if np.all(time_ns % 1_000_000_000 == 0):
+            seconds = (time_ns - time_ns[0]) // 1_000_000_000
+            epoch = pd.Timestamp(cube.timestamps[0]).strftime("%Y-%m-%d %H:%M:%S")
+            # Int32 offsets also avoid the vendor utility's Int64-only parse
+            # of GDAL band metadata and work in NetCDF3/scipy after 2038.
+            if seconds.max() <= np.iinfo(np.int32).max:
+                time_coordinate = (
+                    "time", seconds.astype(np.int32),
+                    {"units": f"seconds since {epoch}", "calendar": "proleptic_gregorian"},
+                )
         dataset = xr.Dataset(
             data_vars={
                 "precipitation": (
@@ -711,7 +733,7 @@ class RasPrecipGrid:
                 ),
                 "spatial_ref": spatial_ref,
             },
-            coords={"time": cube.timestamps, "y": cube.y, "x": cube.x},
+            coords={"time": time_coordinate, "y": cube.y, "x": cube.x},
             attrs={
                 "title": "HEC-RAS gridded precipitation forcing",
                 "ras_commander_precip_schema": "2",

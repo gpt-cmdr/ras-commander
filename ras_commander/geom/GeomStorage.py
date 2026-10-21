@@ -14,7 +14,9 @@ List of Functions:
 - repair_viewing_rectangle_from_2d_areas() - Explicitly repair pathological
   2D-only viewing/global extents from authored perimeters
 - set_2d_flow_area_perimeter() - Create/update 2D flow area perimeter geometry
+- plan_2d_flow_area_perimeter() - Inspect serialization and adjacent duplicate removal
 - get_2d_flow_area_settings() - Read 2D flow area cell/face property settings
+- get_2d_flow_area_cell_spacing() - Read persisted base mesh spacing
 - set_2d_flow_area_settings() - Write 2D flow area cell/face property settings
 - set_breaklines() - Write breakline blocks into a 2D flow area geometry file
 - replace_breaklines() - Atomically replace the geometry-wide breakline collection
@@ -40,17 +42,22 @@ Example Usage:
     ... )
 """
 
+import hashlib
 import math
+import tempfile
 from datetime import datetime
 from pathlib import Path
-from typing import TYPE_CHECKING, Union, Optional, List, Sequence
+from typing import TYPE_CHECKING, List, Optional, Sequence, Union
+
 import pandas as pd
 
 if TYPE_CHECKING:
     from geopandas import GeoDataFrame
+    from shapely.geometry.base import BaseGeometry
 
-from ..LoggingConfig import get_logger
+from .._ras_text import _write_ras_text
 from ..Decorators import log_call
+from ..LoggingConfig import get_logger
 from .GeomParser import GeomParser
 
 logger = get_logger(__name__)
@@ -62,6 +69,103 @@ class GeomStorage:
 
     All methods are static and designed to be used without instantiation.
     """
+
+    @staticmethod
+    @log_call
+    def clip_2d_flow_area(
+        geom_file: Union[str, Path],
+        flow_area_name: str,
+        geometry: "BaseGeometry",
+        *,
+        containment_tolerance: float = 0.0,
+        create_backup: bool = True,
+    ) -> "GeoDataFrame":
+        """Clip a named area while preserving complete internal connection records.
+
+        Args:
+            geom_file: Geometry text in a disposable working project (str or Path).
+            flow_area_name: Exact existing 2D area name; other areas stay unchanged.
+            geometry: Child Polygon in the source geometry's horizontal CRS/units.
+            containment_tolerance: Nonnegative external-separation guard in model
+                units. Does not excuse a footprint crossing the child perimeter.
+            create_backup: Back up the original before the final atomic write.
+
+        Returns:
+            GeoDataFrame: Affected connections, with Name, From, To, action,
+            reason and physical support geometry. Fully contained records are
+            kept, disjoint records dropped. The frame's attrs contain backup_path.
+            Native attachment remains unverified until fresh preprocessing.
+
+        Raises:
+            FileNotFoundError: If the source geometry is absent.
+            ValueError: If the child is invalid/not contained, an area is missing,
+                or a connection crosses the cut or has unknown physical support.
+        """
+        from shapely.geometry import Polygon
+
+        from .GeomLateral import GeomLateral
+
+        geom_file = Path(geom_file)
+        source_bytes = geom_file.read_bytes()
+        if (
+            not isinstance(geometry, Polygon)
+            or geometry.is_empty
+            or not geometry.is_valid
+        ):
+            raise ValueError("geometry must be a valid nonempty Polygon")
+        if geometry.interiors:
+            raise ValueError("Hole-aware 2D perimeter authoring is not qualified")
+        if not math.isfinite(containment_tolerance) or containment_tolerance < 0:
+            raise ValueError("containment_tolerance must be finite and nonnegative")
+        areas = GeomStorage.get_storage_area_polygons(geom_file, exclude_2d=False)
+        selected = areas[areas["Name"] == flow_area_name]
+        if len(selected) != 1:
+            raise ValueError(f"2D area must exist uniquely: {flow_area_name!r}")
+        settings = GeomStorage.get_2d_flow_area_settings(geom_file)
+        if flow_area_name not in settings["name"].values:
+            raise ValueError(f"Not a 2D flow area: {flow_area_name!r}")
+        if not selected.geometry.iloc[0].covers(geometry):
+            raise ValueError(
+                "Child perimeter must be completely contained by the source area"
+            )
+
+        data = GeomLateral.get_connection_data(geom_file)
+        decisions = GeomLateral.classify_connections(
+            geom_file, geometry, tolerance=containment_tolerance
+        )
+        affected = decisions[
+            (decisions["From"] == flow_area_name) | (decisions["To"] == flow_area_name)
+        ].copy()
+        blocked = affected[~affected["action"].isin(["keep", "drop"])]
+        if not blocked.empty:
+            reasons = "; ".join(f"{r.Name}: {r.reason}" for r in blocked.itertuples())
+            raise ValueError(f"Connection clipping blocked before mutation: {reasons}")
+        dropped = set(affected.loc[affected["action"] == "drop", "Name"])
+        retained = data[~data["Name"].isin(dropped)].copy()
+        # Stage every edit and the exact record readback before touching the caller's file.
+        with tempfile.TemporaryDirectory(
+            prefix=".sa2d-clip-", dir=geom_file.parent
+        ) as work:
+            staged = Path(work) / geom_file.name
+            staged.write_bytes(source_bytes)
+            GeomStorage.set_2d_flow_area_perimeter(
+                staged, flow_area_name, geometry=geometry, create_backup=False
+            )
+            GeomLateral.write_connection_data(staged, retained, create_backup=False)
+            actual = GeomLateral.get_connection_data(staged)
+            if dict(zip(actual["Name"], actual["RawBlock"])) != dict(
+                zip(retained["Name"], retained["RawBlock"])
+            ):
+                raise RuntimeError(
+                    "Staged clipping changed a retained connection record"
+                )
+            if geom_file.read_bytes() != source_bytes:
+                raise RuntimeError("Source geometry changed during staged clipping")
+            backup = GeomParser.create_backup(geom_file) if create_backup else None
+            staged.replace(geom_file)
+        affected.attrs["backup_path"] = backup
+        affected.attrs["attachment_status"] = "CONNECTION_ATTACHMENT_UNVERIFIED"
+        return affected
 
     # HEC-RAS format constants
     FIXED_WIDTH_COLUMN = 8      # Character width for numeric data in geometry files
@@ -424,6 +528,81 @@ class GeomStorage:
 
         area = twice_area / 2.0
         return centroid_x / (6.0 * area), centroid_y / (6.0 * area)
+
+    @staticmethod
+    @log_call
+    def plan_2d_flow_area_perimeter(
+        coordinates: Optional[Sequence[Sequence[float]]] = None, geometry=None
+    ) -> dict:
+        """Plan a closed native ring without mutation, in source horizontal units.
+
+        Removes adjacent vertices whose serialized XY pairs are identical or
+        within the existing native near-duplicate tolerance (1e-6 horizontal
+        units). Comparison uses the last retained vertex, preventing chained
+        removal from accumulating displacement. Other close vertices remain.
+        Returns coordinates, original removed indexes, ring hashes, tolerance,
+        boundary displacement and area change for recorded authoring. Records
+        source validity; requires a valid authored polygon and at least three
+        retained vertices. A numeric closing overlap can itself be repaired.
+        No CRS conversion or general simplification is performed.
+        """
+        from shapely.geometry import Polygon
+        from .GeomMesh import PERIMETER_NEAR_DUPLICATE_TOL
+
+        coords = GeomStorage._normalize_perimeter_coords(coordinates, geometry)
+        def key(point):
+            return tuple(
+                f"{v:.{GeomStorage._max_precision_for_field(v, GeomStorage.SURFACE_LINE_COLUMN)}f}"
+                for v in point
+            )
+        def serialized(point):
+            return tuple(float(value) for value in key(point))
+
+        def near(a, b):
+            return math.dist(serialized(a), serialized(b)) <= PERIMETER_NEAR_DUPLICATE_TOL
+
+        kept, kept_indexes, removed = [], [], []
+        near_removed = False
+        for index, point in enumerate(coords[:-1]):
+            if kept and near(point, kept[-1]):
+                near_removed |= key(point) != key(kept[-1])
+                removed.append(index)
+            else:
+                kept.append(point)
+                kept_indexes.append(index)
+        while len(kept) > 1 and near(kept[-1], kept[0]):
+            near_removed |= key(kept[-1]) != key(kept[0])
+            removed.append(kept_indexes.pop())
+            kept.pop()
+        if len({key(p) for p in kept}) < 3:
+            raise ValueError("2D flow area perimeter needs three distinct serialized vertices")
+        source = Polygon(coords)
+        authored = Polygon([serialized(point) for point in kept])
+        if not authored.is_valid or source.is_empty or authored.is_empty:
+            raise ValueError("2D flow area perimeter normalization requires valid polygons")
+        displacement = source.boundary.hausdorff_distance(authored.boundary)
+        # Field rounding is measured separately from adjacent-vertex removal;
+        # no chain may turn this numerical repair into general simplification.
+        removal = source.boundary.hausdorff_distance(Polygon(kept).boundary)
+        if removal > PERIMETER_NEAR_DUPLICATE_TOL:
+            raise ValueError("2D flow area perimeter repair exceeds near-duplicate tolerance")
+        return {
+            'coordinates': kept + [kept[0]],
+            'source_vertex_count': len(coords) - 1,
+            'authored_vertex_count': len(kept),
+            'removed_adjacent_vertex_indexes': sorted(removed),
+            'serialization': 'adaptive_precision_16_character_xy_fields',
+            'reason_code': ('ADJACENT_NEAR_DUPLICATE_PERIMETER' if near_removed else
+                            'ADJACENT_SERIALIZED_PERIMETER_DUPLICATE' if removed else None),
+            'near_duplicate_tolerance': PERIMETER_NEAR_DUPLICATE_TOL,
+            'source_ring_wkb_sha256': hashlib.sha256(source.wkb).hexdigest(),
+            'authored_ring_wkb_sha256': hashlib.sha256(authored.wkb).hexdigest(),
+            'boundary_displacement': displacement,
+            'removal_boundary_displacement': removal,
+            'area_change': authored.area - source.area,
+            'source_valid': bool(source.is_valid),
+            'authored_valid': True,
+        }
 
     @staticmethod
     def _format_scalar_value(value) -> str:
@@ -1029,8 +1208,7 @@ class GeomStorage:
             )
 
             # Write modified file
-            with open(geom_file, 'w', encoding='utf-8') as f:
-                f.writelines(new_lines)
+            _write_ras_text(geom_file, "".join(new_lines), encoding="utf-8")
 
             logger.info(
                 f"Updated elevation-volume curve for {storage_name}: "
@@ -1298,7 +1476,7 @@ class GeomStorage:
                 geom_file,
                 geom_file.with_suffix(geom_file.suffix + ".bak"),
             )
-        geom_file.write_text("".join(lines), encoding="utf-8")
+        _write_ras_text(geom_file, "".join(lines), encoding="utf-8")
 
         if update_hdf:
             geom_hdf = Path(str(geom_file) + ".hdf")
@@ -1375,6 +1553,32 @@ class GeomStorage:
         return df
 
     @staticmethod
+    def get_2d_flow_area_cell_spacing(
+        geom_file: Union[str, Path], flow_area_name: str
+    ) -> tuple[float, float]:
+        """Return persisted base ``(dx, dy)`` in the geometry's horizontal units.
+
+        Reads the named storage-area-backed 2D area without mutation or output
+        artifacts. CRS and units remain those of the source project. Missing,
+        duplicate, malformed, nonfinite or nonpositive spacing fails closed.
+        """
+        settings = GeomStorage.get_2d_flow_area_settings(geom_file)
+        selected = settings.loc[settings['name'].astype(str).eq(str(flow_area_name))]
+        if len(selected) != 1:
+            raise ValueError(f"Base cell spacing is unavailable for {flow_area_name!r}")
+        raw = selected.iloc[0]['point_generation_data']
+        parts = str(raw).split(',')
+        try:
+            if len(parts) != 4:
+                raise ValueError('expected four point-generation values')
+            dx, dy = float(parts[2]), float(parts[3])
+        except (TypeError, ValueError) as exc:
+            raise ValueError(f"Malformed base cell spacing for {flow_area_name!r}: {raw!r}") from exc
+        if not all(math.isfinite(v) and v > 0 for v in (dx, dy)):
+            raise ValueError(f"Base cell spacing must be finite and positive for {flow_area_name!r}")
+        return dx, dy
+
+    @staticmethod
     def _coords_match(coords_a: List[tuple[float, float]], coords_b: List[tuple[float, float]]) -> bool:
         """Return True if two closed coordinate rings are identical within float tolerance."""
         if len(coords_a) != len(coords_b):
@@ -1408,10 +1612,16 @@ class GeomStorage:
 
         GeomStorage._validate_flow_area_name(flow_area_name)
 
-        coords = GeomStorage._normalize_perimeter_coords(
+        plan = GeomStorage.plan_2d_flow_area_perimeter(
             coordinates=coordinates,
             geometry=geometry,
         )
+        coords = plan['coordinates']
+        if plan['removed_adjacent_vertex_indexes']:
+            logger.info(
+                "Removed %d adjacent serialized perimeter duplicates for %s",
+                len(plan['removed_adjacent_vertex_indexes']), flow_area_name,
+            )
         centroid_x, centroid_y = GeomStorage._polygon_centroid(coords)
         normalized_point_generation_data = GeomStorage._normalize_point_generation_data(
             point_generation_data
@@ -1523,8 +1733,7 @@ class GeomStorage:
             )
             new_lines = lines[:start_idx] + new_block_lines + lines[end_idx:]
 
-        with open(geom_file, 'w', encoding='utf-8') as f:
-            f.writelines(new_lines)
+        _write_ras_text(geom_file, "".join(new_lines), encoding="utf-8")
 
         logger.info(
             f"Upserted 2D flow area perimeter for {flow_area_name}: "
@@ -1652,8 +1861,7 @@ class GeomStorage:
             logger.debug(f"Created backup: {backup_path}")
 
         new_lines = lines[:start_idx] + updated_block_lines + lines[end_idx:]
-        with open(geom_file, 'w', encoding='utf-8') as f:
-            f.writelines(new_lines)
+        _write_ras_text(geom_file, "".join(new_lines), encoding="utf-8")
 
         logger.info(f"Updated 2D flow area settings for {flow_area_name}")
         return backup_path if backup_path else geom_file
@@ -1790,21 +1998,23 @@ class GeomStorage:
                     )
                 cell_sizes[field_name] = value
 
-            def bounded_integer(field_name: str, maximum: int) -> int:
+            def bounded_integer(field_name: str, maximum: int, minimum: int = 0) -> int:
                 raw_value = raw.get(field_name, 0)
                 value = int(raw_value)
                 if isinstance(raw_value, float) and not raw_value.is_integer():
                     raise ValueError(
                         f"Breakline {name!r} {field_name} must be an integer"
                     )
-                if value < 0 or value > maximum:
+                if value < minimum or value > maximum:
                     raise ValueError(
-                        f"Breakline {name!r} {field_name} must be between 0 and {maximum}"
+                        f"Breakline {name!r} {field_name} must be between {minimum} and {maximum}"
                     )
                 return value
 
             near_repeats = bounded_integer("near_repeats", 255)
-            protection_radius = bounded_integer("protection_radius", 1)
+            # Delivered HEC-RAS text uses -1 for enabled Boolean controls;
+            # native HDF stores the same enabled flag as 1. Preserve text bytes.
+            protection_radius = bounded_integer("protection_radius", 1, -1)
 
             normalized.append(
                 {
@@ -1838,6 +2048,8 @@ class GeomStorage:
         ``expected_existing_names`` is an optimistic-concurrency guard. When
         supplied, the existing names and order must match before any write.
         Passing an empty ``breaklines`` sequence removes the collection.
+        ``protection_radius`` accepts the native Boolean text encodings -1
+        (enabled), 0 (disabled), and 1 (enabled), preserving the supplied value.
         """
         geom_file = Path(geom_file)
         if not geom_file.exists():
@@ -1999,8 +2211,7 @@ class GeomStorage:
             logger.debug(f"Created backup: {backup_path}")
 
         new_lines = lines[:insert_idx] + new_blocks + lines[insert_idx:]
-        with open(geom_file, 'w', encoding='utf-8') as f:
-            f.writelines(new_lines)
+        _write_ras_text(geom_file, "".join(new_lines), encoding="utf-8")
 
         logger.info(
             "Inserted %d breaklines for %s into %s",

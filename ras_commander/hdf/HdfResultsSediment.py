@@ -12,8 +12,9 @@ HEC-RAS writes per-cell mobile-bed results for 2D sediment runs under::
         Cell Active Layer Percentile Diameters - D10/D50/D90  (n_time, n_cell)  mm
 
 The per-cell arrays align with the *computed* geometry's ``Cells Surface Area``
-and ``Cells Center Coordinate`` (zero-area perimeter/ghost cells drop out of
-volume integrals automatically).
+and ``Cells Center Coordinate``. Results cover the physical cells only: the
+ghost cells HEC-RAS lists after them (IDs at or above the area's
+``Attributes`` ``Cell Count``) are dropped.
 
 All methods are static and follow the package conventions: ``@log_call`` for
 logging and ``@standardize_input(file_type='plan_hdf')`` to accept plan numbers,
@@ -37,6 +38,7 @@ import pandas as pd
 import h5py
 
 from .HdfBase import HdfBase
+from .HdfMesh import HdfMesh
 from ..Decorators import log_call, standardize_input
 from ..LoggingConfig import get_logger
 
@@ -167,6 +169,7 @@ class HdfResultsSediment:
             row = HdfResultsSediment._select_time_row(arr, time_index, dataset, area)
             sa, cc, crs = HdfResultsSediment._cell_geometry(f, area)
             length_unit = HdfResultsSediment._length_unit(f)
+            physical_count = HdfMesh._physical_cell_counts(f).get(area)
 
         values = np.asarray(row, dtype=float)
         sa = np.asarray(sa, dtype=float)
@@ -176,6 +179,11 @@ class HdfResultsSediment:
             raise ValueError(
                 f"Cell array length mismatch in area '{area}': {dataset}={len(values)}, "
                 f"Cells Surface Area={len(sa)}, Cells Center Coordinate={len(cc)}.")
+        if physical_count is not None:
+            # Ghost cells follow the physical cells and carry no solution.
+            values, sa, cc = (
+                values[:physical_count], sa[:physical_count], cc[:physical_count]
+            )
         return {
             "area": area,
             "values": values,
@@ -279,7 +287,7 @@ class HdfResultsSediment:
 
         Returns:
             GeoDataFrame: Columns ``mesh_name, cell_id, d<NN>_mm, surface_area, geometry``
-            (grain diameters are always mm regardless of the model unit system).
+                Grain diameters are always mm regardless of the model unit system.
         """
         pct = percentile.upper()
         if pct not in ("D10", "D50", "D90"):
@@ -302,8 +310,8 @@ class HdfResultsSediment:
         """
         Summarize bed-change volumes per 2D sediment area at a time index.
 
-        Integrates ``Cell Bed Change`` against ``Cells Surface Area`` (zero-area
-        ghost cells drop out). One row per area with columns:
+        Integrates ``Cell Bed Change`` against ``Cells Surface Area`` over the
+        physical cells (ghost cells are dropped). One row per area with columns:
         ``mesh_name, length_unit, n_cells, net_bed_volume, erosion_volume,
         deposition_volume, max_scour, max_deposition``.
 
@@ -375,6 +383,9 @@ class HdfResultsSediment:
                 raise ValueError(
                     f"Unexpected rank {bc.ndim} for 'Cell Bed Change' in area '{area}'.")
             t = HdfResultsSediment._read_time_vector(f, bc.shape[0])
+            physical_count = HdfMesh._physical_cell_counts(f).get(area)
+        if physical_count is not None:
+            bc = bc[:, :physical_count]  # drop ghost cells after the physical cells
         da = xr.DataArray(
             bc,
             dims=("time", "cell_id"),

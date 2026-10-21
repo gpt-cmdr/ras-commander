@@ -62,6 +62,8 @@ import pandas as pd
 import numpy as np
 import math
 
+from .._fixed_width import _format_fixed_width_value
+from .._ras_text import _write_ras_text
 from ..LoggingConfig import get_logger
 from ..Decorators import log_call
 from .GeomParser import GeomParser
@@ -608,10 +610,10 @@ class GeomCrossSection:
     @staticmethod
     def _format_blocked_obstruction_value(value: float) -> str:
         """Format one blocked-obstruction scalar into an 8-character field."""
-        text = f"{float(value):.2f}"
-        if len(text) > GeomCrossSection.FIXED_WIDTH_COLUMN:
-            return "*" * GeomCrossSection.FIXED_WIDTH_COLUMN
-        return text.rjust(GeomCrossSection.FIXED_WIDTH_COLUMN)
+        return _format_fixed_width_value(
+            float(value), width=GeomCrossSection.FIXED_WIDTH_COLUMN,
+            normalize_negative_zero=False,
+        )
 
     @staticmethod
     def _normalize_blocked_obstructions(obstructions: Any) -> List[Any]:
@@ -910,7 +912,8 @@ class GeomCrossSection:
         """
         Format Manning's n triplets using HEC-RAS-compatible 3-triplet wrapping.
 
-        Station fields keep two decimals, n-values keep three decimals, and the
+        Station fields request two decimals and n-values three, reducing precision
+        only when needed to fit. Unrepresentable values raise ValueError. The
         per-triplet change flag is written as zero unless a ChangeFlag column is
         supplied.
         """
@@ -919,9 +922,9 @@ class GeomCrossSection:
         for _, row in mann_df.iterrows():
             change = row["ChangeFlag"] if "ChangeFlag" in mann_df.columns else 0.0
             fields.extend([
-                f"{float(row['Station']):8.2f}",
-                f"{float(row['n_value']):8.3f}",
-                f"{float(change):8.0f}",
+                _format_fixed_width_value(float(row['Station']), normalize_negative_zero=False),
+                _format_fixed_width_value(float(row['n_value']), max_decimals=3, normalize_negative_zero=False),
+                _format_fixed_width_value(float(change), max_decimals=0, normalize_negative_zero=False),
             ])
 
         for idx in range(0, len(fields), GeomCrossSection.MANNINGS_VALUES_PER_LINE):
@@ -1831,15 +1834,15 @@ class GeomCrossSection:
 
         Manning's n resolution follows ``mannings_strategy``:
             - ``auto``/``landcover``: land cover, neighbor interpolation, user,
-              defaults.
+                defaults.
             - ``neighbor``/``adjacent``: neighbor interpolation, user, land cover,
-              defaults.
+                defaults.
             - ``user``: user, land cover, neighbor, defaults.
             - ``default``: logged defaults only.
 
         Parameters:
             input_spec: Optional dataclass or mapping of builder inputs.
-            **kwargs: Builder fields; see :class:`CrossSectionBuildInput`.
+            **kwargs (Any): Builder fields; see :class:`CrossSectionBuildInput`.
 
         Returns:
             CrossSectionBuildResult with resolved DataFrames and formatted lines.
@@ -2305,7 +2308,7 @@ class GeomCrossSection:
             xs_id: Optional cross-section identifier. Accepts the ``xs_id``
                 returned by this method, a unique RS string, ``(river, reach,
                 rs)``, or a mapping with River/Reach/RS fields.
-            ras_object: Optional ``RasPrj`` instance for geometry-number
+            ras_object (RasPrj, optional): Optional ``RasPrj`` instance for geometry-number
                 resolution.
 
         Returns:
@@ -2393,7 +2396,7 @@ class GeomCrossSection:
             obstructions: DataFrame/list containing ``start_sta``, ``end_sta``,
                 and ``elevation`` values, or ``BlockedObstruction`` objects.
             create_backup: Whether to create a ``.bak`` backup before writing.
-            ras_object: Optional ``RasPrj`` instance for geometry-number
+            ras_object (RasPrj, optional): Optional ``RasPrj`` instance for geometry-number
                 resolution.
 
         Returns:
@@ -2484,7 +2487,7 @@ class GeomCrossSection:
             geom_number: Geometry number or direct ``.g##`` text path.
             hdf_path: Optional explicit geometry HDF path. If omitted,
                 ``<geom_file>.hdf`` is used.
-            ras_object: Optional ``RasPrj`` instance for geometry-number
+            ras_object (RasPrj, optional): Optional ``RasPrj`` instance for geometry-number
                 resolution.
 
         Returns:
@@ -2883,8 +2886,9 @@ class GeomCrossSection:
                             )
 
                     # Write modified file
-                    with open(geom_file, 'w', encoding='utf-8') as f:
-                        f.writelines(modified_lines)
+                    _write_ras_text(
+                        geom_file, "".join(modified_lines), encoding="utf-8"
+                    )
 
                     logger.debug(
                         f"Updated station/elevation for {river}/{reach}/RS {rs}: "
@@ -3209,7 +3213,7 @@ class GeomCrossSection:
             rs: Optional river-station filter. If supplied, ``river`` and
                 ``reach`` are required.
             xs_id: Optional exact ID from the returned ``xs_id`` column.
-            ras_object: Optional RasPrj instance for API consistency (unused)
+            ras_object (RasPrj, optional): Optional RasPrj instance for API consistency (unused)
 
         Returns:
             pd.DataFrame: Columns ``xs_id``, ``left_station``,
@@ -3349,7 +3353,7 @@ class GeomCrossSection:
             reach: Optional target reach
             rs: Optional target river station
             create_backup: Whether to create a .bak backup before modification
-            ras_object: Optional RasPrj instance for API consistency (unused)
+            ras_object (RasPrj, optional): Optional RasPrj instance for API consistency (unused)
 
         Returns:
             Optional[Path]: Backup path if ``create_backup=True``, otherwise None.
@@ -3695,6 +3699,7 @@ class GeomCrossSection:
                 - Subsection (str): 'LOB' (Left Overbank), 'Channel', or 'ROB' (Right Overbank)
 
         Example:
+            ```python
             >>> mann = GeomCrossSection.get_mannings_n("BaldEagle.g01", "Bald Eagle", "Loc Hav", "138154.4")
             >>> print(mann)
                Station  n_value Subsection
@@ -3704,6 +3709,7 @@ class GeomCrossSection:
             >>>
             >>> # Calculate average channel Manning's n
             >>> channel_n = mann[mann['Subsection'] == 'Channel']['n_value'].mean()
+            ```
         """
         geom_file = Path(geom_file)
 
@@ -3793,253 +3799,276 @@ class GeomCrossSection:
             raise IOError(f"Failed to read Manning's n: {str(e)}")
 
     @staticmethod
-    @log_call
-    def get_ineffective_flow(geom_file: Union[str, Path],
-                             river: str,
-                             reach: str,
-                             rs: str) -> Tuple[Optional[pd.DataFrame], Optional[int], Optional[List[bool]]]:
-        """
-        Read ineffective flow area data for a cross section.
+    def _validate_ineffective_values(values: np.ndarray, fmt_flag: int) -> None:
+        """Validate native blank boundary slots without inventing extents."""
+        if fmt_flag not in (0, -1):
+            raise ValueError("Ineffective flow format flag must be 0 or -1")
+        if np.isinf(values).any():
+            raise ValueError("Ineffective flow values must be finite or blank")
+        if not np.isnan(values).any():
+            return  # Preserve compatibility with existing full-triplet callers.
+        if fmt_flag != 0 or values.shape != (2, 3):
+            raise ValueError("Blank ineffective flow slots require two normal L/R rows")
+        for row_number, row in enumerate(values):
+            outer_column = 0 if row_number == 0 else 1
+            outer_value = row[outer_column]
+            missing_pair = np.isnan(row[[1 - outer_column, 2]])
+            if (not np.isnan(outer_value) and outer_value != 0) or (
+                missing_pair.any() and not missing_pair.all()
+            ):
+                raise ValueError(
+                    "Normal ineffective flow needs a station and elevation per side"
+                )
 
-        Parses the ``#XS Ineff= N , F`` block, which contains N triplets of
-        (left_station, right_station, elevation) followed by a ``Permanent Ineff=``
-        boolean line.
+    @staticmethod
+    def _read_ineffective_block(
+        lines: list[str], header_idx: int, end_idx: int
+    ) -> tuple[pd.DataFrame, int, list[bool], int, int | None, int | None]:
+        """Read fixed-width slots and return their exact replacement boundaries."""
+        header = GeomParser.extract_keyword_value(lines[header_idx], "#XS Ineff")
+        parts = [part.strip() for part in header.split(",")]
+        count = int(parts[0])
+        fmt_flag = int(parts[1]) if len(parts) > 1 else 0
+        if count < 0:
+            raise ValueError("Ineffective flow count cannot be negative")
+        total_slots = count * 3
+        data_end = (
+            header_idx + 1 + math.ceil(total_slots / GeomCrossSection.VALUES_PER_LINE)
+        )
+        if data_end > end_idx:
+            raise ValueError("Incomplete ineffective flow data block")
+        values = []
+        for line_idx in range(header_idx + 1, data_end):
+            line = lines[line_idx].rstrip("\r\n")
+            slots_on_line = min(
+                GeomCrossSection.VALUES_PER_LINE, total_slots - len(values)
+            )
+            if len(line) > slots_on_line * 8 and line[slots_on_line * 8 :].strip():
+                raise ValueError("Too many ineffective flow values")
+            if len(line) < slots_on_line * 8 and fmt_flag != 0:
+                raise ValueError("Incomplete ineffective flow data block")
+            line = line.ljust(slots_on_line * 8)
+            for slot_idx in range(slots_on_line):
+                slot = line[slot_idx * 8 : (slot_idx + 1) * 8]
+                # The generic parser salvages embedded numbers from malformed
+                # tokens; a native scalar slot must instead be wholly numeric.
+                value = float(slot) if slot.strip() else np.nan
+                if slot.strip() and not np.isfinite(value):
+                    raise ValueError("Numeric ineffective flow slots must be finite")
+                values.append(value)
+        array = np.asarray(values, dtype=float).reshape(count, 3)
+        GeomCrossSection._validate_ineffective_values(array, fmt_flag)
+        frame = pd.DataFrame(
+            array, columns=["left_station", "right_station", "elevation"]
+        )
 
-        Parameters:
-            geom_file: Path to HEC-RAS geometry file
-            river: River name
-            reach: Reach name
-            rs: River station
-
-        Returns:
-            Tuple of:
-                - DataFrame with columns left_station, right_station, elevation
-                  (or None if no ineffective areas defined)
-                - format_flag (int, 0 or -1)
-                - permanent_flags (list of bool, one per pair)
-
-        Example:
-            >>> df, fmt, flags = GeomCrossSection.get_ineffective_flow(
-            ...     "model.g01", "Hunting Bayou", "Mainstem", "65919"
-            ... )
-            >>> if df is not None:
-            ...     bad = df[df['right_station'] == 0]
-            ...     print(f"Found {len(bad)} pairs with right_station=0")
-        """
-        geom_file = Path(geom_file)
-        if not geom_file.exists():
-            raise FileNotFoundError(f"Geometry file not found: {geom_file}")
-
-        try:
-            with open(geom_file, 'r', encoding='utf-8', errors='replace') as f:
-                lines = f.readlines()
-
-            xs_idx = GeomCrossSection._find_cross_section(lines, river, reach, rs)
-            if xs_idx is None:
-                raise ValueError(f"Cross section not found: {river}/{reach}/RS {rs}")
-
-            end_idx = GeomCrossSection._find_xs_section_end(lines, xs_idx)
-
-            for j in range(xs_idx, end_idx):
-                if lines[j].startswith('#XS Ineff='):
-                    # Parse header: "#XS Ineff= N , F"
-                    value_str = GeomParser.extract_keyword_value(lines[j], '#XS Ineff')
-                    parts = [p.strip() for p in value_str.split(',')]
-                    count = int(parts[0])
-                    fmt_flag = int(parts[1]) if len(parts) > 1 else 0
-
-                    # Parse N*3 values (N triplets of left_sta, right_sta, elevation)
-                    total_values = count * 3
-                    values = GeomCrossSection._parse_data_block(lines, j + 1, total_values)
-
-                    if len(values) < total_values:
-                        logger.warning(
-                            f"Expected {total_values} ineff values, got {len(values)} "
-                            f"for {river}/{reach}/RS {rs}"
-                        )
-
-                    df = pd.DataFrame({
-                        'left_station': values[0::3],
-                        'right_station': values[1::3],
-                        'elevation': values[2::3]
-                    })
-
-                    # Read Permanent Ineff= boolean flags
-                    permanent_flags = [False] * count
-                    for k in range(j + 1, end_idx):
-                        if lines[k].startswith('Permanent Ineff='):
-                            if k + 1 < end_idx:
-                                flag_line = lines[k + 1].rstrip('\n')
-                                flags = []
-                                for m in range(0, len(flag_line), 8):
-                                    token = flag_line[m:m + 8].strip()
-                                    if token in ('T', 'F'):
-                                        flags.append(token == 'T')
-                                if flags:
-                                    permanent_flags = flags
-                            break
-
-                    logger.info(
-                        f"Read {count} ineffective flow pairs for {river}/{reach}/RS {rs}"
+        flags = [False] * count
+        permanent_idx = None
+        permanent_end = None
+        for line_idx in range(data_end, end_idx):
+            if lines[line_idx].startswith("Permanent Ineff="):
+                permanent_idx = line_idx
+                permanent_end = line_idx + 1
+                if count == 0:
+                    if permanent_end < end_idx and not lines[permanent_end].strip():
+                        permanent_end += 1
+                    break
+                tokens = []
+                while len(tokens) < count and permanent_end < end_idx:
+                    line = lines[permanent_end].rstrip("\r\n")
+                    tokens.extend(
+                        line[offset : offset + 8].strip()
+                        for offset in range(0, len(line), 8)
                     )
-                    return df, fmt_flag, permanent_flags
-
-            # No #XS Ineff= found
-            return None, None, None
-
-        except FileNotFoundError:
-            raise
-        except ValueError:
-            raise
-        except Exception as e:
-            logger.error(f"Error reading ineffective flow: {str(e)}")
-            raise IOError(f"Failed to read ineffective flow: {str(e)}")
+                    permanent_end += 1
+                if len(tokens) != count or any(
+                    token not in ("T", "F") for token in tokens
+                ):
+                    raise ValueError(
+                        "Permanent ineffective flags must contain one T/F per row"
+                    )
+                flags = [token == "T" for token in tokens]
+                break
+        return frame, fmt_flag, flags, data_end, permanent_idx, permanent_end
 
     @staticmethod
     @log_call
-    def set_ineffective_flow(geom_file: Union[str, Path],
-                             river: str,
-                             reach: str,
-                             rs: str,
-                             ineff_df: pd.DataFrame,
-                             fmt_flag: int = 0,
-                             permanent_flags: Optional[List[bool]] = None) -> None:
-        """
-        Write ineffective flow area data to a cross section.
+    def get_ineffective_flow(
+        geom_file: str | Path, river: str, reach: str, rs: str
+    ) -> tuple[pd.DataFrame | None, int | None, list[bool] | None]:
+        """Read normal left/right or multiple-block ineffective flow areas.
 
-        Replaces the ``#XS Ineff=`` data block in the geometry file. The count
-        in the ``#XS Ineff=`` header is updated to match the length of
-        ``ineff_df``. Creates a ``.bak`` backup before modifying.
+        The returned tuple is ``(DataFrame, format_flag, permanent_flags)``.
+        Columns remain ``left_station``, ``right_station`` and ``elevation``.
+        Multiple blocks (flag -1) contain explicit interval endpoints. Native
+        normal format (flag 0) retains two rows in left/right order: the left
+        activation station is ``right_station`` in row 0, and the right
+        activation station is ``left_station`` in row 1. The unbounded outer
+        endpoint is NaN or a native zero placeholder. An undefined side has
+        NaN activation station and elevation, retaining its outer placeholder.
+        Blanks and zero placeholders must be retained when writing; no
+        cross-section extents are inferred.
 
         Parameters:
-            geom_file: Path to HEC-RAS geometry file
-            river: River name
-            reach: Reach name
-            rs: River station
-            ineff_df: DataFrame with columns left_station, right_station, elevation
-            fmt_flag: Format flag written to header (0 or -1). Preserves original if None.
-            permanent_flags: List of bool for each pair (default all False)
+            geom_file: Path to HEC-RAS geometry file.
+            river: Exact river name.
+            reach: Exact reach name.
+            rs: Exact river station.
+
+        Returns:
+            DataFrame, native format flag (0 or -1), and one permanent bool per
+            row. Returns ``(None, None, None)`` when there is no ineff record.
+            Passing all three results to ``set_ineffective_flow`` without edits
+            preserves the geometry file byte for byte.
 
         Raises:
-            FileNotFoundError: If geometry file not found
-            ValueError: If cross section or ineff block not found
-
-        Example:
-            >>> df, fmt, flags = GeomCrossSection.get_ineffective_flow(
-            ...     "model.g01", "Hunting Bayou", "Mainstem", "65919"
-            ... )
-            >>> # Fix right_station=0 -> rightmost station
-            >>> sta_elev = GeomCrossSection.get_station_elevation(
-            ...     "model.g01", "Hunting Bayou", "Mainstem", "65919"
-            ... )
-            >>> rightmost = sta_elev['Station'].max()
-            >>> df.loc[df['right_station'] == 0, 'right_station'] = rightmost
-            >>> GeomCrossSection.set_ineffective_flow(
-            ...     "model.g01", "Hunting Bayou", "Mainstem", "65919", df, fmt, flags
-            ... )
+            FileNotFoundError: Geometry file does not exist.
+            ValueError: Cross section missing or malformed ineffective data.
         """
         geom_file = Path(geom_file)
-        if not geom_file.exists():
-            raise FileNotFoundError(f"Geometry file not found: {geom_file}")
+        with geom_file.open(
+            "r", encoding="utf-8", errors="surrogateescape", newline=""
+        ) as stream:
+            lines = stream.readlines()
+        xs_idx = GeomCrossSection._find_cross_section(lines, river, reach, rs)
+        if xs_idx is None:
+            raise ValueError(f"Cross section not found: {river}/{reach}/RS {rs}")
+        end_idx = GeomCrossSection._find_xs_section_end(lines, xs_idx)
+        for header_idx in range(xs_idx, end_idx):
+            if lines[header_idx].startswith("#XS Ineff="):
+                frame, fmt_flag, flags, *_ = GeomCrossSection._read_ineffective_block(
+                    lines, header_idx, end_idx
+                )
+                logger.info(
+                    f"Read {len(frame)} ineffective flow rows for {river}/{reach}/RS {rs}"
+                )
+                return frame, fmt_flag, flags
+        return None, None, None
 
-        count = len(ineff_df)
+    @staticmethod
+    @log_call
+    def set_ineffective_flow(
+        geom_file: str | Path,
+        river: str,
+        reach: str,
+        rs: str,
+        ineff_df: pd.DataFrame,
+        fmt_flag: int | None = 0,
+        permanent_flags: list[bool] | None = None,
+    ) -> None:
+        """Write normal L/R or multiple-block ineffective flow areas.
+
+        Parameters:
+            geom_file: Path to HEC-RAS geometry file.
+            river: Exact river name.
+            reach: Exact reach name.
+            rs: Exact river station.
+            ineff_df: Columns ``left_station``, ``right_station``, ``elevation``.
+                Native normal rows retain NaN outer endpoints and undefined
+                sides as documented by ``get_ineffective_flow``.
+            fmt_flag: Native flag (0 or -1), or None to preserve the original.
+            permanent_flags: One bool per row; omitted means all False.
+
+        Passing the unchanged reader results performs no write, preserving all
+        bytes, whitespace, numeric precision and line endings. Actual edits
+        create a .bak backup and use native CRLF serialization. A permanent-only
+        edit retains the numeric record verbatim. Changing the block count
+        replaces only its records, preserving subsequent cross-section data.
+
+        Raises:
+            FileNotFoundError: Geometry file does not exist.
+            ValueError: Missing cross section/record, invalid fields or flags.
+                Validation completes before backup creation or mutation.
+        """
+        geom_file = Path(geom_file)
+        with geom_file.open(
+            "r", encoding="utf-8", errors="surrogateescape", newline=""
+        ) as stream:
+            lines = stream.readlines()
+        columns = ["left_station", "right_station", "elevation"]
+        if not all(column in ineff_df.columns for column in columns):
+            raise ValueError(f"Ineffective flow DataFrame requires columns {columns}")
+        array = ineff_df[columns].to_numpy(dtype=float)
+        count = len(array)
         if permanent_flags is None:
             permanent_flags = [False] * count
+        if len(permanent_flags) != count or any(
+            not isinstance(flag, (bool, np.bool_)) for flag in permanent_flags
+        ):
+            raise ValueError("Permanent ineffective flags require one bool per row")
+        permanent_flags = list(permanent_flags)
+        xs_idx = GeomCrossSection._find_cross_section(lines, river, reach, rs)
+        if xs_idx is None:
+            raise ValueError(f"Cross section not found: {river}/{reach}/RS {rs}")
+        end_idx = GeomCrossSection._find_xs_section_end(lines, xs_idx)
+        for header_idx in range(xs_idx, end_idx):
+            if not lines[header_idx].startswith("#XS Ineff="):
+                continue
+            old_frame, old_fmt, old_flags, data_end, permanent_idx, permanent_end = (
+                GeomCrossSection._read_ineffective_block(lines, header_idx, end_idx)
+            )
+            write_fmt = old_fmt if fmt_flag is None else fmt_flag
+            GeomCrossSection._validate_ineffective_values(array, write_fmt)
+            same_values = np.array_equal(array, old_frame.to_numpy(), equal_nan=True)
+            if same_values and write_fmt == old_fmt and permanent_flags == old_flags:
+                return
 
-        try:
+            # Prepare all replacements before any destructive operation.
+            replacements = []
+            if not same_values:
+                fields = []
+                for value in array.ravel():
+                    field = (
+                        " " * 8
+                        if np.isnan(value)
+                        else GeomParser.format_fixed_width(
+                            [value], column_width=8, precision=2
+                        )[0].rstrip("\n")
+                    )
+                    if len(field) != 8:
+                        raise ValueError(
+                            "Ineffective flow value exceeds its 8-character field"
+                        )
+                    fields.append(field)
+                data_lines = [
+                    "".join(fields[offset : offset + GeomCrossSection.VALUES_PER_LINE])
+                    + "\n"
+                    for offset in range(
+                        0, len(fields), GeomCrossSection.VALUES_PER_LINE
+                    )
+                ]
+                replacements.append((header_idx + 1, data_end, data_lines))
+            if count != len(old_frame) or write_fmt != old_fmt:
+                replacements.append(
+                    (
+                        header_idx,
+                        header_idx + 1,
+                        [f"#XS Ineff= {count} ,{write_fmt} \n"],
+                    )
+                )
+            if permanent_flags != old_flags or count != len(old_frame):
+                flag_line = (
+                    "".join(f"{'T' if flag else 'F':>8}" for flag in permanent_flags)
+                    + "\n"
+                )
+                if permanent_idx is None:
+                    replacements.append(
+                        (data_end, data_end, ["Permanent Ineff=\n", flag_line])
+                    )
+                else:
+                    replacements.append((permanent_idx + 1, permanent_end, [flag_line]))
+            for start_idx, stop_idx, replacement in sorted(replacements, reverse=True):
+                lines[start_idx:stop_idx] = replacement
             backup_path = GeomParser.create_backup(geom_file)
             logger.debug(f"Created backup: {backup_path}")
-
-            with open(geom_file, 'r', encoding='utf-8', errors='replace') as f:
-                lines = f.readlines()
-
-            xs_idx = GeomCrossSection._find_cross_section(lines, river, reach, rs)
-            if xs_idx is None:
-                raise ValueError(f"Cross section not found: {river}/{reach}/RS {rs}")
-
-            end_idx = GeomCrossSection._find_xs_section_end(lines, xs_idx)
-
-            for j in range(xs_idx, end_idx):
-                if lines[j].startswith('#XS Ineff='):
-                    # Get existing header to preserve count/flag info
-                    value_str = GeomParser.extract_keyword_value(lines[j], '#XS Ineff')
-                    parts = [p.strip() for p in value_str.split(',')]
-                    old_count = int(parts[0])
-                    orig_fmt_flag = int(parts[1]) if len(parts) > 1 else 0
-
-                    # Use provided fmt_flag (or preserve original)
-                    write_fmt_flag = fmt_flag if fmt_flag is not None else orig_fmt_flag
-
-                    # Calculate old and new data line counts
-                    old_data_lines = math.ceil(old_count * 3 / GeomCrossSection.VALUES_PER_LINE)
-
-                    # Build new value list: left_sta, right_sta, elev per row
-                    new_values = []
-                    for _, row in ineff_df.iterrows():
-                        new_values.extend([
-                            row['left_station'],
-                            row['right_station'],
-                            row['elevation']
-                        ])
-
-                    new_data_lines = GeomParser.format_fixed_width(
-                        new_values,
-                        column_width=GeomCrossSection.FIXED_WIDTH_COLUMN,
-                        values_per_line=GeomCrossSection.VALUES_PER_LINE,
-                        precision=2
-                    )
-
-                    # Format Permanent Ineff= boolean line (8-char per flag)
-                    perm_str = ''.join(
-                        f"{'       T' if p else '       F'}" for p in permanent_flags
-                    ) + '\n'
-
-                    modified_lines = lines.copy()
-
-                    # Update header line
-                    modified_lines[j] = f"#XS Ineff= {count} ,{write_fmt_flag} \n"
-
-                    # Mark old data lines for deletion
-                    for k in range(old_data_lines):
-                        if j + 1 + k < len(modified_lines):
-                            modified_lines[j + 1 + k] = None
-
-                    # Insert new data lines
-                    for k, data_line in enumerate(new_data_lines):
-                        if j + 1 + k < len(modified_lines):
-                            modified_lines[j + 1 + k] = data_line
-                        else:
-                            modified_lines.append(data_line)
-
-                    # Clean up None entries
-                    modified_lines = [ln for ln in modified_lines if ln is not None]
-
-                    # Update Permanent Ineff= data line
-                    end_idx2 = GeomCrossSection._find_xs_section_end(modified_lines, xs_idx)
-                    for k in range(xs_idx, end_idx2):
-                        if modified_lines[k].startswith('Permanent Ineff='):
-                            if k + 1 < end_idx2:
-                                modified_lines[k + 1] = perm_str
-                            break
-
-                    with open(geom_file, 'w', encoding='utf-8') as f:
-                        f.writelines(modified_lines)
-
-                    logger.info(
-                        f"Updated ineffective flow for {river}/{reach}/RS {rs}: "
-                        f"{count} pairs written"
-                    )
-                    return
-
-            raise ValueError(f"#XS Ineff block not found for {river}/{reach}/RS {rs}")
-
-        except FileNotFoundError:
-            raise
-        except ValueError:
-            raise
-        except Exception as e:
-            logger.error(f"Error writing ineffective flow: {str(e)}")
-            raise IOError(f"Failed to write ineffective flow: {str(e)}")
+            _write_ras_text(
+                geom_file, "".join(lines), encoding="utf-8", errors="surrogateescape"
+            )
+            logger.info(
+                f"Updated ineffective flow for {river}/{reach}/RS {rs}: {count} rows written"
+            )
+            return
+        raise ValueError(f"#XS Ineff block not found for {river}/{reach}/RS {rs}")
 
     @staticmethod
     @log_call
@@ -4134,8 +4163,9 @@ class GeomCrossSection:
                         + lines[old_data_end:]
                     )
 
-                    with open(geom_file, 'w', encoding='utf-8') as f:
-                        f.writelines(modified_lines)
+                    _write_ras_text(
+                        geom_file, "".join(modified_lines), encoding="utf-8"
+                    )
 
                     logger.info(
                         f"Updated Manning's n for {river}/{reach}/RS {rs}: "
@@ -4173,7 +4203,7 @@ class GeomCrossSection:
             river (Optional[str]): Filter by specific river name. If None, returns all rivers.
             reach (Optional[str]): Filter by specific reach name. If None, returns all reaches.
             rs (Optional[str]): Filter by specific river station. If None, returns all stations.
-            ras_object: Optional RasPrj instance for multi-project workflows (unused, for API consistency)
+            ras_object (RasPrj, optional): Optional RasPrj instance for multi-project workflows (unused, for API consistency)
 
         Returns:
             pd.DataFrame: DataFrame with columns:
@@ -4357,10 +4387,10 @@ class GeomCrossSection:
 
         Notes:
             - Handles two geometry file formats:
-              1. Combined format: "XS HTab Starting El and Incr=val1,val2, val3"
-              2. Separate format: "HTAB Starting El and Incr=" and "HTAB Number of Points="
+                1. Combined format: "XS HTab Starting El and Incr=val1,val2, val3"
+                2. Separate format: "HTAB Starting El and Incr=" and "HTAB Number of Points="
             - If HTAB lines are not present, starting_el/increment/num_points will be None
-              (HEC-RAS uses defaults: starting=invert+0.5-1.0, increment=1.0, points~20)
+                (HEC-RAS uses defaults: starting=invert+0.5-1.0, increment=1.0, points~20)
             - invert/top are always computed from station-elevation data
 
         Example:
@@ -4536,7 +4566,7 @@ class GeomCrossSection:
             - If HTAB lines don't exist in the file, they are inserted
             - Geometry file is modified in-place with backup (.bak) created
             - HTAB lines are inserted after "Type RM Length" line, before
-              "XS GIS Cut Line" or "#Sta/Elev"
+                "XS GIS Cut Line" or "#Sta/Elev"
 
         File Format:
             HTAB Starting El and Incr=     580.0,      0.1
@@ -4780,8 +4810,7 @@ class GeomCrossSection:
                             )
 
             # Write modified file
-            with open(geom_file, 'w', encoding='utf-8') as f:
-                f.writelines(modified_lines)
+            _write_ras_text(geom_file, "".join(modified_lines), encoding="utf-8")
 
             logger.info(
                 f"Updated HTAB params for {river}/{reach}/RS {rs}: "
@@ -5526,8 +5555,7 @@ class GeomCrossSection:
         # Step 6: Write all modifications to geometry file
         if modifications:
             try:
-                with open(geom_file, 'w', encoding='utf-8') as f:
-                    f.writelines(modified_lines)
+                _write_ras_text(geom_file, "".join(modified_lines), encoding="utf-8")
 
                 logger.debug(f"Wrote {len(modifications)} HTAB modifications to {geom_file.name}")
 

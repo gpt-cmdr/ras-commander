@@ -19,6 +19,7 @@ from typing import TYPE_CHECKING, Any, Literal, Optional
 
 import pandas as pd
 
+from ._ras_text import _normalize_ras_newlines
 from .LoggingConfig import get_logger
 from .schemas import DATAFRAME_SCHEMAS
 
@@ -1011,7 +1012,7 @@ def _build_plan(
 ) -> tuple[bytes, tuple[_BoundaryBlock, ...]]:
     prefix = snapshot.raw[: block.start_byte]
     suffix = snapshot.raw[block.end_byte_exclusive :]
-    predicted = prefix + suffix
+    predicted = _normalize_ras_newlines(prefix + suffix)
     predicted_sha256 = _sha256(predicted)
     _, _, _, after_blocks = _parse_boundary_bytes(
         predicted,
@@ -1020,7 +1021,11 @@ def _build_plan(
         snapshot.identity,
     )
     expected_digests = [
-        candidate.block_sha256
+        _sha256(
+            _normalize_ras_newlines(
+                snapshot.raw[candidate.start_byte : candidate.end_byte_exclusive]
+            )
+        )
         for candidate in snapshot.blocks
         if candidate.boundary_index != block.boundary_index
     ]
@@ -1035,7 +1040,7 @@ def _build_plan(
         _raise(
             BoundaryFormatError,
             "post_reparse_identity_mismatch",
-            "The predicted splice changed an unselected boundary block",
+            "The predicted splice changed retained content beyond CRLF normalization",
         )
     if any(candidate.boundary_id == block.boundary_id for candidate in after_blocks):
         _raise(
@@ -1077,7 +1082,7 @@ def _result(
         prefix_sha256=_sha256(snapshot.raw[: block.start_byte]),
         suffix_sha256=_sha256(snapshot.raw[block.end_byte_exclusive :]),
         encoding=snapshot.encoding,
-        newline=snapshot.newline,
+        newline="CRLF",
         manifest_verified=True,
         reparse_verified=True,
         target_identity_reverified=state == "applied",
@@ -1441,7 +1446,7 @@ def delete_boundary(
             temp_raw != predicted
             or temp_encoding != snapshot.encoding
             or temp_bom != snapshot.has_bom
-            or temp_newline != snapshot.newline
+            or temp_newline != "CRLF"
             or [item.block_sha256 for item in temp_blocks]
             != [item.block_sha256 for item in expected_after_blocks]
         ):

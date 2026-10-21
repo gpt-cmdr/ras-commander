@@ -1,0 +1,326 @@
+# Lossless native terrain modification subsets
+
+## Portable native verification helpers
+
+`RasMap.create_terrain_sampling_map(source_mapper, terrain_hdf, projection_prj,
+output_mapper)` writes a new export-only Mapper containing one unchanged native
+terrain registration. It matches one unique terrain basename, repairs stale
+source directory spellings in the sampling copy, and preserves modification
+enable flags. The source Mapper/terrain remain read-only. Grid, CRS, units and
+native modification records are unchanged. The output must not exist.
+
+`RasMap.relocate_rasmap_assets(rasmap_path, assets)` updates only Filename
+attributes in a caller-owned clone. Supplied asset basenames must be unique and
+files must exist; duplicate names are rejected before mutation. Paths become
+relative to the clone Mapper. Result-map profile and other parameters retain
+their semantics. The return value lists changed elements and filenames.
+
+`RasMap.audit_terrain_associations(rasmap_path, geometry_hdfs)` reads the final
+material terrain/classification/projection references and native geometry
+association attributes. It returns `status: pass|hold`, registered terrain
+names, every material path's existence and relative state, problems, and stale
+result-map terrain names. It changes no files or coordinates. Unrelated display
+layers and missing parent result files are outside this terrain-specific audit.
+A pass after the complete bundle is renamed verifies portability of the
+relative material links; it is not hydraulic approval.
+
+FIM's exact native verification uses the existing public
+`RasTerrain.export_rasmapper_terrain` for parent/child/base exports and
+`RasTerrainMod.get_terrain_profile` for retained complete modification profiles.
+Source-derived crops require their original 256-pixel tile phase and the
+H5Assist-compatible chunked modification writer. No polygon record is truncated
+or dropped to make a subset succeed. Complete original-grid point evaluation
+can verify polygon interiors and native singleton support; these records do
+not have a line-profile qualification claim.
+
+`RasTerrainMod.iter_terrain_point_elevations(..., isolated=True)` and
+`get_terrain_profile(..., isolated=True)` run native queries in a separate
+HEC-RAS 6.6 process without importing h5py or Python GIS libraries there.
+The process reuses the property-computation DLL identity checks: managed and
+explicitly loaded HDF5 calls must share object/reference state, match the bundled
+version and use its thread-safe runtime. Point queries load one terrain per
+iterator and use serial native calls of at most 65536 coordinates, preserving
+binary64 coordinates, order and complete caller-batch cardinality.
+`timeout_seconds` defaults to 7200 and bounds native worker lifetime with an
+independent watchdog, including blocked pipe writes. Caller batch production
+time is charged to the deadline; the caller's Python iterator cannot be preempted.
+An optional new `runtime_record` writes initialized-loader JSON
+(`ras-commander-native-terrain-runtime/v1`); it is not completion evidence.
+Its fields are `schema`, `status: initialized`, `managed_hdf5_version`,
+`managed_hdf5_threadsafe`, `dll_identity_verified`, `loaded_hdf5_modules` and
+`python_gis_hdf_imported: false`. Source CRS/vertical units and elevations are
+unchanged; only temporary process state is created. The default remains the
+in-process route; a runtime_record requires isolated=True.
+
+These experimental boundary APIs support native polyline/profile modification
+records and constant-elevation `SetValue` polygon records. The latter have
+Attributes and Polygon Info/Parts/Points tables, valid closed rings, unchanged
+elevation parameters, and zero extra native support distance. Their entire
+polygon is the footprint, including its holes. Boundary-generated, shape-Z,
+multipoint and unknown polygon layouts raise `ValueError` before mutation.
+Native replay and engineering acceptance require project qualification.
+Synthetic tests establish record preservation, not native hydraulic equivalence.
+
+```python
+from ras_commander import RasMap
+from ras_commander.terrain import RasTerrain, RasTerrainModWriter
+
+features = RasTerrainModWriter.get_modification_features(source_hdf, terrain_crs)
+# CRS must be the terrain CRS. support_distance uses its horizontal units.
+footprints = features.geometry.buffer(features.support_distance)
+selected = features.loc[footprints.intersects(buffered_domain)]
+indexes = selected.groupby("group_name").feature_index.apply(list).to_dict()
+# Keep complete feature geometry; expand terrain support for crossing features.
+RasTerrainModWriter.export_modification_features(
+    source_hdf, source_mapper, new_bundle_dir, indexes
+)
+RasTerrain.create_terrain_hdf(
+    precut_source_tiffs, child_hdf, projection_prj,
+    units="Feet", stitch=True, hecras_version="6.6"
+)
+# Only on a versioned child clone; source files remain immutable.
+RasMap.remove_terrain_layers(child_mapper)
+RasMap.add_terrain_layer(child_hdf, rasmap_path=child_mapper, layer_name="Child")
+local_indexes = {name: list(range(len(ids))) for name, ids in indexes.items() if ids}
+RasTerrainModWriter.copy_modification_features(
+    new_bundle_dir / "modifications.hdf", child_hdf,
+    new_bundle_dir / "modifications.rasmap", child_mapper, local_indexes
+)
+RasMap.reassign_result_map_terrains(
+    child_mapper, {"Source": "Child", "Source.Modified": "Child"}
+)
+for child_geometry in child_geometry_hdfs:
+    RasMap.set_geometry_association(child_geometry, terrain_hdf_path=child_hdf)
+```
+
+`terrain_modification_features` is registered in `ras_commander.schemas`.
+Its exact columns are `group_name` (native group), `feature_index` (zero-based
+Attributes row), `support_distance` (Max Reach/Max Extent in horizontal CRS units),
+and `geometry` (complete LineString/MultiLineString, Polygon, or Point for a native
+single-vertex record). Polygon support_distance is zero. The caller supplies the CRS;
+there is no reprojection or inference. Empty frames keep their columns and CRS.
+
+Export creates a new folder with `modifications.hdf` and `modifications.rasmap`.
+Copy/export return one summary per requested group with `geometry_type`:
+`Polygon` or `Polyline` names the native table layout; a singleton record
+retains `Polyline` storage even though its support geometry is a Point.
+`copy_modification_features(..., group_prefix="owner_")` optionally namespaces
+destination groups and Mapper layer names, recording `destination_group_name`
+in each summary. Attributes, coordinates and source group priorities are unchanged.
+`append=True` adds unique groups after existing Mapper layers while retaining
+source order within the added collection. Duplicate target names, different
+collection enable settings, collection-level controls when merging an existing collection and incompatible root
+attributes fail before either destination file changes. The default remains
+refusal of existing modifications. These options preserve records and order;
+they do not provide spatial partition masks or qualify a multi-parent terrain.
+The HDF contains source root metadata and complete selected native modification
+records, without terrain grid/index data. This is a method-native boundary input,
+not an executable terrain. Copy preserves native feature order, structured
+attributes, coordinates, profiles, priorities, enabled flags, dataset values,
+dtypes and HDF attributes. Nonempty native tables are recreated with the shared
+writer's H5Assist-compatible chunked storage; empty tables use its existing
+fallback. Physical storage layout is not preserved. These storage checks do not
+establish native terrain identity.
+It rewrites compact feature-level point/part/profile offsets and Mapper filenames
+only. Polyline Parts offsets remain feature-local and byte-preserved. Caller
+indexes must be unique integers; unknown groups and invalid offsets fail.
+Existing output folders are refused; destination modifications are refused
+unless copy explicitly sets append=True. Failed copies
+restore the destination pair; completed export uses an atomic folder rename.
+This is single-writer mutation, not a concurrent transaction or crash-recovery
+protocol. The caller must isolate and claim its destination.
+
+`remove_terrain_layers` changes only terrain registrations in the supplied Mapper
+XML and returns removed names. It leaves geometry/plan registrations and all asset
+files intact. It does not update geometry HDFs. The caller explicitly registers
+the replacement and reassigns every geometry referenced by plans, then verifies
+native readback. These methods never convert elevations or units.
+
+`reassign_result_map_terrains(rasmap_path, terrain_names)` replaces exact terrain
+names in result-map `MapParameters.Terrain` attributes and calculated-layer
+`Terrain.Name` attributes. Supply an explicit old-to-new dictionary; every new
+name must already be registered. Other map parameters, formulas, result/plan
+filenames and geometry associations remain unchanged. The helper validates the
+complete mapping before mutation, atomically writes the Mapper clone only when
+references change, and returns records containing `plan_name`, `element`,
+`attribute`, `old_terrain_name` and `new_terrain_name`. Repeating the same mapping
+returns an empty list and preserves the file bytes. Geometry HDF associations
+still require `set_geometry_association`; this helper never opens plan-result HDFs.
+
+Source Mapper lookup prefers exactly one resolved path. If none matches, a single
+basename registration may support a caller-verified stale delivered layout; its
+source bytes/provenance must be verified by the caller. Multiple exact or fallback
+matches fail before mutation. Destination lookup requires one exact path.
+Returned decisions record source registration name and matching basis. The reader
+supports the six native Attributes/Polyline Info/Parts/Points/Profile Info/Values
+tables or the four Attributes/Polygon Info/Parts/Points SetValue tables. Extra
+native tables fail pending an explicit supported layout.
+
+Native single-vertex polyline records return Point support geometry for conservative
+selection, preserving the complete original native record. They are not repaired
+or promoted to valid channel lines; native execution may still reject a retained
+record. Mixed multipart lines containing isolated single vertices are unsupported.
+
+
+For a cloned bundle whose terrain is beside the project folder, register it with
+`RasMap.add_terrain_layer(..., relative_paths=True)`. This keeps same-drive terrain
+and projection references relative, including sibling folders, so renaming the
+run's temporary folder does not invalidate its Mapper. Different-drive assets
+keep absolute references. This option does not change geometry associations;
+set those separately and verify the finalized bundle.
+
+`RasMap.create_terrain_sampling_map(..., geometry_hdf=None)` creates a new
+isolated Mapper without geometry by default. Supplying an existing caller-owned
+geometry copy registers it for native profile sampling; source files are never
+changed. `RasMap.audit_terrain_associations(mapper, geometry_hdfs)` requires at
+least one geometry and checks each terrain association resolves to a registered
+native terrain HDF. Missing, wrong-but-existing, absolute, or unresolved material
+paths hold; result-map names must also be registered. This read-only audit does
+not qualify elevations or hydraulic acceptance.
+## Terrain import dependencies
+
+Terrain creation, modification inspection and replay do not load the USGS
+downloader. `Usgs3depAws` and `TerrainBuildError` remain public class exports and
+load their downloader module on first access. That module requires `requests`;
+an absent HTTP dependency produces an actionable import error when the downloader
+is requested, without blocking local terrain operations.
+
+## Explicit original-coordinate native readback
+
+`RasTerrainMod.iter_terrain_point_elevations(mapper, terrain_name, point_batches,
+cell_size, use_obstructions=True, nodata_values=(-9999.0,))` evaluates supplied
+Float64 `(n, 2)` coordinate batches using the public native
+`TerrainLayer.ComputePointElevations(PointM[], Boolean, Double)` overload.
+The selected registered terrain is loaded once. Each PointM's X/Y values are
+checked against the supplied binary64 bytes before sampling. Returned Float32
+arrays preserve caller batch order and cardinality. Each caller batch is evaluated
+in serial native calls of at most 65536 points. Every internal call must return
+all its values before the caller batch is assembled; a failed call raises
+without yielding a partial caller batch. Coordinates, native resolution and
+modification parameters remain unchanged. Missing, nonfinite, specified
+nodata and Single endpoint sentinel values raise; no profile interpolation or
+source-value replacement occurs.
+Points outside the selected native terrain extent are rejected before native
+evaluation; this does not fill missing data inside its envelope.
+
+Coordinates and `cell_size` use the selected terrain's horizontal CRS units;
+elevations retain its vertical units/datum. `cell_size` is the explicit native
+evaluation resolution, not a coordinate rounding or output-grid operation.
+`use_obstructions` is the qualified native switch for applying modifications/
+obstructions. Sources remain read-only; callers own output artifacts and the
+support-footprint/CRS/provenance checks. Iterate serially in an isolated HEC-RAS
+6.6 Windows or owned Wine worker; SharedData is process-global.
+
+Bounded native control 8840 retained 46 original UPGU3 grid centres. All input
+coordinate bytes survived PointM construction, all parent/child values matched
+exactly, 17-point/whole batches and reverse order agreed, and both native
+modified terrains lowered the same 38 centres relative to their unmodified
+readback. This supports the native overload and switch at those coordinates;
+it does not establish complete-support or corpus acceptance. The production
+wrapper still requires frozen-runtime qualification and every-centre evidence.
+
+
+For isolated workers, wrap eager profile and point readback in
+`RasTerrainMod.run_serial_native_sampling(operation)` and retain the returned
+execution evidence. This public execution control addresses nested native
+parallel HDF access; the 65536-point bound still applies inside each supplied
+point batch. Stored records, order, coordinates and native hydraulic parameters
+remain unchanged. The single worker, process-affinity selection and restoration
+must be read back successfully. Fresh source-parent first-profile controls pass
+under this execution mode; complete-support and corpus checks remain necessary.
+
+The worker runs on the explicit default CLR Task scheduler. The caller first
+waits for worker entry, then for the managed delegate to return completely before
+restoring controls or exiting. A Python-body completion event alone does not
+cover Python.NET's delegate conversion and return; the managed Task barrier
+prevents that completion gap without changing coordinates or native parameters.
+
+The corrected implementation is also qualified in a separately frozen installed
+runtime. Paired parent, child and unmodified-child reads complete at all 1,024
+delivered-parent centres with zero difference or nodata and three lowered centres.
+An independent Linux check confirms the original affine, foot CRS and exact
+readback. Installed module hashes and completed native execution records bind
+the result; the earlier source-overlay diagnostics are separate. This small
+control qualifies the callback completion path. Every derived terrain still
+requires its own complete spatial, profile and association gates, and none of
+these checks constitutes hydraulic approval.
+
+
+The isolated query reader also applies the public serial sampling controls in its
+native-only process. The ready message records entry on the sole CLR pool worker;
+the finish message records control restoration. A runtime_record starts with
+status=initialized and becomes status=completed only after a valid finish message and successful process exit.
+Failed or interrupted queries retain initialized diagnostics. A completed query
+record is not paired-elevation QA or hydraulic acceptance. The direct-file helper
+path skips package initialization only after its native loader has established
+bundled HDF5 object identity; no Python GIS/HDF modules enter that process.
+
+
+RasTerrainMod.iter_terrain_profiles(mapper, geometry_hdf, profiles,
+filter_tolerance=0.01, *, timeout_seconds=7200, runtime_record=None) evaluates
+complete XY lines through one native-only session. It returns one ordered
+station/elevation DataFrame per input line, with attrs.warning preserving the
+native message. Coordinates must be finite N-by-2 arrays with N at least two,
+and filter_tolerance finite/nonnegative, in source horizontal/vertical units.
+Native TerrainProfile results are unchanged; no elevation interpolation occurs
+in this reader. Empty native profiles remain empty for caller QA. Fully exhaust
+or close the iterator. A partially consumed session cannot establish completion.
+
+## Register an unrounded raster
+
+Use `RasTerrain.create_terrain_hdf_lossless(input_raster, output_hdf,
+projection_prj, units="Feet", hecras_version="6.6")` when a derived Float32 DEM
+must preserve every stored input value. The source must have square north-up
+pixels, nodata=-9999 without an explicit validity mask, and the same projected
+foot CRS as the PRJ. Provide a new
+output prefix. Input elevations must already be in feet; no vertical datum or
+unit conversion is performed.
+
+The isolated native creator uses `TerrainComputable` with `RoundTo.None`,
+256-pixel tiles and no warp, stitch or tile arithmetic. It creates the raster,
+overviews and dependent native HDF metadata together. Exact stored pixel bits,
+grid, CRS and nodata are checked after creation; native centre and hydraulic
+qualification remain separate checks. The original input file hash must stay
+unchanged. This method requires Windows/Wine Python, pythonnet, rasterio,
+NumPy, h5py and HEC-RAS 6.6. Other runtimes, metre units and multi-raster registration
+are outside this method's scope.
+
+The method emits `.creation.json` and `.creation.log` beside the HDF. The receipt
+schema is `ras-commander-lossless-terrain-creation/v1`: status, input grid and
+file hash, native runtime/rounding controls, equal source/created pixel hashes,
+pixel count, native HDF structure and relative HDF/VRT bindings to the generated
+TIFF. Failed attempts retain a failed receipt;
+successful process exit alone does not establish preservation. A timeout cleans
+only the launched process tree. The existing `create_terrain_hdf` API and its
+defaults remain unchanged.
+
+HEC documents terrain rounding at 1/32 of a map unit by default, which can change
+a value by as much as 0.015625 map units (feet in a foot CRS). A TIFF can therefore
+use lossless compression
+while storing rounded elevations. See the [HEC-RAS 6.6 Terrain Layer manual](https://www.hec.usace.army.mil/confluence/rasdocs/rmum/6.6/terrain-layer).
+
+## Receipt-bound downstream qualification
+
+The `fim-commander` HG cohort qualifies the frozen sampling implementation at
+`a778591974f12706a2fd24e48471851500cc32d4`. All 22 original profile holds
+clear when both terrains receive identical binary64 XY coordinates through the
+same native Float32 point reader. Independent native profile station sets followed
+by secondary Float64 interpolation caused the earlier comparison residuals;
+no elevation tolerance is introduced. Original failed receipts remain immutable,
+and the QA-only successors do not rebuild the carriers.
+
+The complete-polygon sample replays one unchanged 20,296-vertex polygon and twelve
+unchanged channels. Its final comparison passes all 5,980,124 centres inside the
+child domain and complete replayed footprints, plus twelve exact channel profiles.
+Domain-only selection and a fixed 1,000-foot raster buffer are downstream policies;
+this library preserves each selected native record in full. Historical
+whole-support collar differences remain retained and are not relabeled as equality.
+See the [original cohort audit](https://github.com/CLB-Engineering-Corporation/fim-commander/blob/gen3/input-pack-polygons-unions/docs/reviews/gen3-domain-input-pack/HG_API_ORIGINAL_COHORT.md)
+and [polygon audit](https://github.com/CLB-Engineering-Corporation/fim-commander/blob/gen3/input-pack-polygons-unions/docs/reviews/gen3-domain-input-pack/HG_API_POLYGON_EVIDENCE.md)
+for immutable request, image and receipt identities.
+
+These frozen receipts precede the managed Task completion implementation at
+`7ad83a39a`. They establish neither its native qualification nor the cause of prior
+Python.NET dispatcher crashes. The isolated worker deadline and fresh
+receipt-bound native qualification remain required. Terrain comparison is not
+hydraulic acceptance or H&H engineering approval.

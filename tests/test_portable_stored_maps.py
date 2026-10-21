@@ -23,7 +23,7 @@ from ras_commander.remote.RasPortableDocker import RasPortableDocker
 
 
 OCI = "registry.example/hecras/steady@sha256:" + "a" * 64
-LAUNCHER_SHA256 = "39fe0f12038e54be05ff4a58d5d91398189bfc00d543cd6164fc0765fcf2ffb1"
+LAUNCHER_SHA256 = "7dab4a39f5a4b6c8bb2caa96b829f946797e32aa389ba2ab5eaf97aa26e9c8b8"
 FIXTURES = Path(__file__).parent / "data" / "portable_execution"
 MAPS = {"terrain_name": "Terrain 1m", "profiles": ["PF 1", 1], "timeout_seconds": 900}
 
@@ -463,7 +463,8 @@ def test_slurm_step_budget_includes_maps_and_launcher_is_unchanged(tmp_path):
     assert submission.launcher_sha256 == LAUNCHER_SHA256
 
 
-def test_wine_handoff_timeout_includes_stored_maps_budget(tmp_path, monkeypatch):
+@pytest.mark.parametrize("prefix_safe", [True, False])
+def test_wine_handoff_timeout_includes_stored_maps_budget(tmp_path, monkeypatch, prefix_safe):
     cli = importlib.import_module("ras_commander.remote.execute_request")
     bundle = tmp_path / "bundle"
     source = bundle / "input" / "sample.prj"
@@ -490,18 +491,27 @@ def test_wine_handoff_timeout_includes_stored_maps_budget(tmp_path, monkeypatch)
     timeouts = {}
 
     def run(command, **kwargs):
+        # winepath translates the request and the private prefix separately.
         if command[0].endswith("winepath"):
-            return subprocess.CompletedProcess(
-                command, 0, stdout=r"Z:\job\request.json" + "\n", stderr=""
-            )
+            if command[-1].endswith("request.json"):
+                converted = r"Z:\job\request.json"
+            elif prefix_safe:
+                converted = rf"Z:\runtime-temp\{Path(command[-1]).parent.name}\prefix"
+            else:
+                converted = r"Z:\job\request.json"
+            return subprocess.CompletedProcess(command, 0, stdout=converted + "\n", stderr="")
         if command[0].endswith("xvfb-run"):
             timeouts["delegate"] = kwargs["timeout"]
         return subprocess.CompletedProcess(command, 0)
 
     monkeypatch.setattr(cli.subprocess, "run", run)
 
-    assert cli.main(["execute-request", str(request_path)]) == 0
-    assert timeouts["delegate"] == 60 + 900 + 300
+    if prefix_safe:
+        assert cli.main(["execute-request", str(request_path)]) == 0
+        assert timeouts["delegate"] == 60 + 900 + 300
+    else:
+        assert cli.main(["execute-request", str(request_path)]) == 2
+        assert "delegate" not in timeouts
 
 
 def _one_row_store(name="PF 1", index=0, filename="Depth (PF 1).vrt", map_type="depth"):

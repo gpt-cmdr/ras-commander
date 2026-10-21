@@ -21,6 +21,7 @@ from typing import Union, Optional, Any, Dict, List, Tuple
 from datetime import datetime, timedelta
 import pandas as pd
 
+from .._ras_text import _write_ras_text
 from ..LoggingConfig import get_logger
 from ..Decorators import log_call
 
@@ -350,8 +351,9 @@ class InitialConditions:
             final_lines = new_lines[:header_end_idx] + ic_lines + new_lines[header_end_idx:]
 
             # Write modified file
-            with open(unsteady_path, 'w', encoding='utf-8', errors='replace') as f:
-                f.writelines(final_lines)
+            _write_ras_text(
+                unsteady_path, "".join(final_lines), encoding="utf-8", errors="replace"
+            )
 
             logger.info(f"Wrote {len(ic_entries)} initial condition entries to {unsteady_path.name}")
 

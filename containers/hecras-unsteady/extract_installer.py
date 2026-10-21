@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Extract the verified official HEC-RAS 7.0.1 combined installer, without running it.
+"""Extract a verified official HEC-RAS 7.x combined installer (7.0, 7.0.1), without running it.
 
 Python 3.11+; standard library only. Output must be a new directory outside Git.
 The ISSetupStream v4 archive decoding follows ISx by YX Hao/lifenjoiner:
@@ -38,9 +38,17 @@ import tempfile
 import zlib
 
 
+# Official HEC combined ("with Linux") installers: installer SHA-256 ->
+# (MSI member name, MSI SHA-256 or None when only the installer is pinned).
+VERIFIED_INSTALLERS = {
+    "f3d28695bd98cbc7a1bcb5bdaea073c5c512a071a22a9d3bfd90a3309f405003": (
+        "HEC-RAS 7.0.1.msi", "0aad915440bb8826386dfaa93b026c662ab6d5a0a73399a6efb90b452fb65e43"),
+    "17d1523f7ad845cc92b845679f199b1603048bae364b9e00d654631e59b8c98d": (
+        "HEC-RAS 7.0.msi", "8511bca1364366ae37bdf7d5c3dbb7a91ef9c9baec8ffd3981d51de5f536c581"),
+}
 INSTALLER_SHA256 = "f3d28695bd98cbc7a1bcb5bdaea073c5c512a071a22a9d3bfd90a3309f405003"
-MSI_SHA256 = "0aad915440bb8826386dfaa93b026c662ab6d5a0a73399a6efb90b452fb65e43"
-MSI_NAME = "HEC-RAS 7.0.1.msi"
+MSI_SHA256 = VERIFIED_INSTALLERS[INSTALLER_SHA256][1]
+MSI_NAME = VERIFIED_INSTALLERS[INSTALLER_SHA256][0]
 CHUNK = 1024 * 1024
 MAX_MEMBER_BYTES = 512 * 1024 * 1024
 
@@ -63,8 +71,8 @@ def _members(data):
                   for i in range(count))
     _require(payload + 46 <= len(data), "Missing installer payload")
     signature, count, kind = struct.unpack_from("<14sHI", data, payload)
-    _require(signature == b"ISSetupStream\0" and count == 10 and kind == 4,
-             "Expected the official 7.0.1 ISSetupStream v4 archive")
+    _require(signature == b"ISSetupStream\0" and 0 < count <= 64 and kind == 4,
+             "Expected an official HEC ISSetupStream v4 archive")
     offset = payload + 46
     members = []
     names = set()
@@ -126,17 +134,20 @@ def extract_installer(installer, output):
     checkout = Path(__file__).resolve().parents[2]
     _require(not output.resolve().is_relative_to(checkout), "Keep vendor files outside the source checkout")
     with installer.open("rb") as stream:
-        _require(hashlib.file_digest(stream, "sha256").hexdigest() == INSTALLER_SHA256,
-                 "Installer checksum differs from the verified official 7.0.1 combined release")
+        installer_sha256 = hashlib.file_digest(stream, "sha256").hexdigest()
+    _require(installer_sha256 in VERIFIED_INSTALLERS,
+             "Installer checksum is not a verified official HEC combined release")
+    msi_name, msi_sha256 = VERIFIED_INSTALLERS[installer_sha256]
     output.parent.mkdir(parents=True, exist_ok=True)
     temporary = Path(tempfile.mkdtemp(prefix="." + output.name + "-", dir=output.parent))
     try:
         with installer.open("rb") as stream, mmap.mmap(stream.fileno(), 0, access=mmap.ACCESS_READ) as data:
             records = [_extract_member(data, name, offset, length, temporary / name)
                        for name, offset, length in _members(data)]
-        msi = next((record for record in records if record["name"] == MSI_NAME), None)
-        _require(msi and msi["sha256"] == MSI_SHA256, "Extracted MSI checksum mismatch")
-        receipt = {"installer_sha256": INSTALLER_SHA256, "format": "ISSetupStream v4",
+        msi = next((record for record in records if record["name"] == msi_name), None)
+        _require(msi is not None, f"Installer does not contain {msi_name}")
+        _require(msi_sha256 is None or msi["sha256"] == msi_sha256, "Extracted MSI checksum mismatch")
+        receipt = {"installer_sha256": installer_sha256, "format": "ISSetupStream v4",
                    "operation": "archive extraction only", "members": records}
         (temporary / "extraction.json").write_text(json.dumps(receipt, indent=2) + "\n", encoding="utf-8")
         temporary.rename(output)

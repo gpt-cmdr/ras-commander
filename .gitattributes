@@ -1,3 +1,17 @@
 # The Slurm launcher is staged byte-for-byte to Linux compute nodes and its
 # SHA-256 is recorded in each submission, so keep LF on every checkout.
 ras_commander/remote/portable_slurm_launcher.py text eol=lf
+# Retain the canary's exact CRLF bytes and intentional native fixed-width padding.
+tests/fixtures/ras_text_crlf/canary_86.f01 -text -diff
+# Native ineffective-flow excerpts retain CRLF and meaningful blank 8-char slots.
+tests/fixtures/ineffective_flow/*.g01 -text -diff
+# FEMA BLE UPGU1 plan (HEC-RAS 6.6 upgrade); byte-exact so CRLF/padding round-trip is testable.
+tests/fixtures/plan_output_intervals/UPGU1.p01 -text -diff
+# HEC-RAS example BaldEagleDamBrk.u02 (gate openings); byte-exact CRLF for fixed-width round-trip tests.
+tests/fixtures/rasunsteady_fixed_width/*.u02 -text -diff
+# Reference-line regression retains CRLF, padding, and native coordinate precision.
+tests/fixtures/reference_lines/*.g01 -text -diff
+# Native reference-point adjacency excerpt retains CRLF and fixed-width connection records.
+tests/fixtures/reference_points/*.g09 -text -diff
+# Synthetic gate-clipping compatibility input retains its exact hash and native padding.
+tests/data/gate_clip_compatibility.g01 -text -diff

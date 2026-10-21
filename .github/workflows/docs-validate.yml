@@ -71,3 +71,6 @@ jobs:
       - name: Build — no deploy
         run: |
           mkdocs build --strict
+
+      - name: Verify rendered RASMapper API methods
+        run: python .claude/scripts/validate_rasmapper_api_rendering.py

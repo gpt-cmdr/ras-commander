@@ -1,3 +1,4 @@
+import logging
 from pathlib import Path
 import shutil
 from types import SimpleNamespace
@@ -314,6 +315,51 @@ def test_direct_geotiff_api_writes_durable_netcdf_and_native_hdf(tmp_path):
 
 
 @pytest.mark.parametrize(
+    ("writer_name", "source_name"),
+    [
+        ("set_gridded_precipitation_geotiff", "observed.tif"),
+        ("set_gridded_precipitation_grib", "observed.grib2"),
+    ],
+)
+def test_historic_raster_adapters_reset_cloned_ratio(
+    tmp_path, caplog, writer_name, source_name
+):
+    source = _write_tiff(tmp_path / source_name, np.ones((2, 2)), units="mm")
+    unsteady = tmp_path / "GeoTiffRain.u01"
+    unsteady.write_text(
+        "Flow Title=Historic rain\n"
+        "Program Version=6.60\n"
+        "Met BC=Precipitation|Ratio=0.8768\n",
+        encoding="ascii",
+    )
+    hdf_path = Path(str(unsteady) + ".hdf")
+    with h5py.File(hdf_path, "w") as hdf:
+        hdf.require_group("Event Conditions/Meteorology/Precipitation").attrs[
+            "Ratio"
+        ] = 0.8768
+
+    with caplog.at_level(logging.WARNING, logger="ras_commander.RasUnsteady"):
+        getattr(RasUnsteady, writer_name)(
+            unsteady,
+            source,
+            timestamps=["2024-01-01 01:00"],
+            units="mm",
+            value_type="amount",
+            first_timestep_hours=1.0,
+            historic=True,
+            ras_object=_dummy_project(tmp_path),
+        )
+
+    assert "Met BC=Precipitation|Ratio=1\n" in unsteady.read_text(encoding="utf-8")
+    with h5py.File(hdf_path, "r") as hdf:
+        ratio = hdf["Event Conditions/Meteorology/Precipitation"].attrs["Ratio"]
+        assert ratio == pytest.approx(1.0)
+    warnings = "\n".join(record.getMessage() for record in caplog.records)
+    assert unsteady.name in warnings
+    assert "0.8768" in warnings
+
+
+@pytest.mark.parametrize(
     "version, ratio, message",
     [
         ("5.0.7", 1.0, "uniform-per-area"),
@@ -518,3 +564,27 @@ def test_non_hourly_rate_metadata_requires_explicit_conversion(tmp_path):
             value_type="rate",
             first_timestep_hours=1.0,
         )
+
+
+def test_midnight_cache_keeps_explicit_vendor_compatible_cf_time_units(tmp_path):
+    import xarray as xr
+
+    frames = np.ones((3, 2, 2))
+    frames[0] = 0.0
+    source = _write_tiff(tmp_path / "midnight.tif", frames, units="mm")
+    times = pd.date_range("2040-01-01", periods=3, freq="30min")
+    cube = RasPrecipGrid.from_geotiff(
+        source, timestamps=times, units="mm", value_type="amount")
+    path = RasPrecipGrid.to_ras_netcdf(cube, tmp_path / "midnight.nc").path
+    with xr.open_dataset(path, decode_times=False) as raw:
+        assert raw.time.attrs["units"] == "seconds since 2040-01-01 00:00:00"
+    with xr.open_dataset(path) as decoded:
+        np.testing.assert_array_equal(decoded.time.values.astype("datetime64[ns]"), times.values)
+    assert RasPrecipGrid._valid_cached_netcdf(path, cube)
+    with h5py.File(path, "a") as hdf:
+        hdf["time"].attrs["units"] = np.bytes_("seconds since 2040-01-01")
+    assert not RasPrecipGrid._valid_cached_netcdf(path, cube)
+    rebuilt = RasPrecipGrid.to_ras_netcdf(cube, path)
+    assert rebuilt.reused is False
+    with xr.open_dataset(path, decode_times=False) as raw:
+        assert raw.time.attrs["units"] == "seconds since 2040-01-01 00:00:00"

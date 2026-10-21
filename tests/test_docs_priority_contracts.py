@@ -104,7 +104,7 @@ def test_reference_member_lists_resolve():
         for method in re.findall(r"^- `(\w+)\(", section, re.M):
             assert callable(getattr(getattr(ras, name), method)), f"{name}.{method}"
     core_page = (ROOT / "docs/api/core.md").read_text(encoding="utf-8")
-    section = core_page.split("::: ras_commander.RasPlan\n", 1)[1].split("\n###", 1)[0]
+    section = core_page.split("::: ras_commander.RasPlan.RasPlan\n", 1)[1].split("\n###", 1)[0]
     for method in re.findall(r"^        - (\w+)$", section, re.M):
         assert callable(getattr(ras.RasPlan, method)), method
 

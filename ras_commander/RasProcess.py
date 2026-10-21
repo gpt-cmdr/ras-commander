@@ -106,6 +106,7 @@ class WineConfig:
     ras_install_dir: Optional[Path] = None
 
 
+from ._ras_text import _normalize_ras_newlines, _write_ras_text, _write_ras_xml
 from .RasPrj import ras
 from .RasMap import RasMap
 from .RasBenefits import BenefitAreaConfig, RasBenefits
@@ -1498,7 +1499,12 @@ Step 5: Configure (optional — auto-detection usually works)
         working_dir: Path,
         semantic_stable_seconds: float,
     ) -> Tuple[subprocess.CompletedProcess, str, Dict[str, Any]]:
-        """Run CompleteGeometry until exit or stable semantic HDF completion."""
+        """Wait for exit, or witnessed completion plus fresh stable geometry.
+
+        Existing tables and a pause between processing stages cannot establish
+        completion. The Wine fallback also requires this invocation's terminal
+        geometry message and a changed file signature.
+        """
         if IS_LINUX:
             wine_config = RasProcess._get_wine_config()
             if wine_config is None:
@@ -1520,10 +1526,16 @@ Step 5: Configure (optional — auto-detection usually works)
         if semantic_stable_seconds < 0:
             raise ValueError("semantic_stable_seconds must be non-negative")
 
-        with tempfile.TemporaryFile(
-            mode="w+", encoding="utf-8", errors="replace"
-        ) as stdout_file, tempfile.TemporaryFile(
-            mode="w+", encoding="utf-8", errors="replace"
+        try:
+            before = geom_hdf_path.stat()
+            initial_signature = (before.st_size, before.st_mtime_ns)
+        except OSError:
+            initial_signature = None
+
+        with tempfile.TemporaryDirectory(prefix="ras-geometry-") as log_directory, open(
+            Path(log_directory) / "stdout.log", "w+", encoding="utf-8", errors="replace"
+        ) as stdout_file, open(
+            Path(log_directory) / "stderr.log", "w+", encoding="utf-8", errors="replace"
         ) as stderr_file:
             process = subprocess.Popen(
                 command,
@@ -1548,13 +1560,21 @@ Step 5: Configure (optional — auto-detection usually works)
                 semantics = RasProcess._geometry_completion_semantics(
                     geom_hdf_path
                 )
-                if semantics["success"]:
-                    try:
-                        stat = geom_hdf_path.stat()
-                        signature = (stat.st_size, stat.st_mtime_ns)
-                    except OSError:
-                        signature = None
-                    if signature is not None and signature == ready_signature:
+                # Reopen independently: seeking the handle shared with the
+                # writer would change its output offset and corrupt its log.
+                with (Path(log_directory) / "stdout.log").open("rb") as reader:
+                    reader.seek(0, os.SEEK_END)
+                    reader.seek(max(0, reader.tell() - 65536))
+                    tail = reader.read().decode("utf-8", errors="replace")
+                terminal_message = tail.rstrip().endswith("Completed Writing Geometry")
+                try:
+                    stat = geom_hdf_path.stat()
+                    signature = (stat.st_size, stat.st_mtime_ns)
+                except OSError:
+                    signature = None
+                fresh_geometry = signature is not None and signature != initial_signature
+                if semantics["success"] and terminal_message and fresh_geometry:
+                    if signature == ready_signature:
                         ready_since = ready_since or time.monotonic()
                     else:
                         ready_signature = signature
@@ -1647,7 +1667,7 @@ Step 5: Configure (optional — auto-detection usually works)
             sediment_soils_hdf_path: Optional sediment bed-material soils HDF.
             ras_version: Optional HEC-RAS version for RasProcess.exe lookup.
             timeout: Command timeout in seconds.
-            ras_object: Optional RasPrj object. Present for API consistency.
+            ras_object (RasPrj, optional): Optional RasPrj object. Present for API consistency.
 
         Returns:
             Dict containing command args, return code, stdout/stderr,
@@ -1798,9 +1818,10 @@ Step 5: Configure (optional — auto-detection usually works)
             Command timeout in seconds (default 1800).
         semantic_stable_seconds : float, optional
             Under Wine, terminate only the owned ``RasProcess.exe`` tree after
-            the completed HDF semantics and file size/mtime remain stable for
-            this many seconds (default 10). Native Windows continues to wait
-            for normal process exit.
+            this invocation reports ``Completed Writing Geometry``, changes the
+            geometry file, and leaves valid HDF semantics and size/mtime stable
+            for this many seconds (default 10). Preexisting tables cannot trigger
+            this fallback. Native Windows waits for normal process exit.
 
         Returns
         -------
@@ -1953,7 +1974,7 @@ Step 5: Configure (optional — auto-detection usually works)
 
         Args:
             plan_number: Plan number (e.g., "01", "06")
-            ras_object: Optional RAS object instance
+            ras_object (RasPrj, optional): Optional RAS object instance
 
         Returns:
             List of timestamp strings in format "DDMMMYYYY HH:MM:SS" (e.g., "10SEP2018 02:30:00")
@@ -2364,6 +2385,8 @@ Step 5: Configure (optional — auto-detection usually works)
             ProjectionInfo containing the projection path and every terrain
             raster associated with the rasmap terrain layers.
         """
+        from ._land_classification_helper import resolve_rasmap_relative_path
+
         try:
             rasmap_path = Path(rasmap_path)
             tree = ET.parse(_windows_extended_length_path(rasmap_path))
@@ -2375,10 +2398,12 @@ Step 5: Configure (optional — auto-detection usually works)
             if proj_elem is not None:
                 filename = proj_elem.get("Filename")
                 if filename:
-                    prj_path = rasmap_path.parent / filename.replace(".\\", "").replace(
-                        "./", ""
+                    prj_path = resolve_rasmap_relative_path(
+                        rasmap_path.parent, filename
                     )
-                    if not os.path.exists(_windows_extended_length_path(prj_path)):
+                    if prj_path is None or not os.path.exists(
+                        _windows_extended_length_path(prj_path)
+                    ):
                         prj_path = None
 
             terrain_paths: List[Path] = []
@@ -2387,10 +2412,12 @@ Step 5: Configure (optional — auto-detection usually works)
                     continue
                 filename = layer.get("Filename")
                 if filename:
-                    terrain_hdf = rasmap_path.parent / filename.replace(
-                        ".\\", ""
-                    ).replace("./", "")
-                    if os.path.exists(_windows_extended_length_path(terrain_hdf)):
+                    terrain_hdf = resolve_rasmap_relative_path(
+                        rasmap_path.parent, filename
+                    )
+                    if terrain_hdf is not None and os.path.exists(
+                        _windows_extended_length_path(terrain_hdf)
+                    ):
                         terrain_dir = terrain_hdf.parent
                         layer_tifs = _glob_paths(
                             terrain_dir,
@@ -2958,7 +2985,8 @@ Step 5: Configure (optional — auto-detection usually works)
             f".{rasmap_path.name}.{os.getpid()}.{uuid.uuid4().hex}.tmp"
         )
         try:
-            tree.write(
+            _write_ras_xml(
+                tree,
                 _windows_extended_length_path(temporary_path),
                 encoding="utf-8",
                 xml_declaration=True,
@@ -3098,7 +3126,8 @@ Step 5: Configure (optional — auto-detection usually works)
                 map_params.set(attr_name, str(attr_value))
 
             # Write back
-            tree.write(
+            _write_ras_xml(
+                tree,
                 _windows_extended_length_path(rasmap_path),
                 encoding="utf-8",
                 xml_declaration=True,
@@ -3157,7 +3186,8 @@ Step 5: Configure (optional — auto-detection usually works)
                     removed_count += 1
 
             if removed_count > 0:
-                tree.write(
+                _write_ras_xml(
+                    tree,
                     _windows_extended_length_path(rasmap_path),
                     encoding="utf-8",
                     xml_declaration=True,
@@ -3759,15 +3789,16 @@ Step 5: Configure (optional — auto-detection usually works)
                 BenefitArea raster is calculated.
             clear_existing: Clear existing stored maps before adding new ones (default: True)
             fix_georef: Apply georeferencing fix to output TIFs (default: True)
-            ras_object: Optional RAS object instance
+            ras_object (RasPrj, optional): Optional RAS object instance
             ras_version: Optional specific HEC-RAS mapping-runtime version
             timeout: Command timeout in seconds (default: 600)
             performance: Keyword-only StoreMap execution and resource policy.
                 The default preserves serial StoreAllMaps behavior. Use
                 ``StoreMapPerformanceOptions(max_workers=None)`` for automatic
                 memory- and CPU-bounded map-level parallelism.
-            max_workers, memory_per_worker_mb, reserve_memory_mb: Deprecated
-                keyword-only migration aliases. Do not combine them with
+            max_workers: Deprecated keyword-only worker-count migration alias.
+            memory_per_worker_mb: Deprecated keyword-only per-worker memory alias.
+            reserve_memory_mb: Deprecated keyword-only reserved-memory alias. Do not combine them with
                 ``performance``.
 
         Returns:
@@ -4691,7 +4722,7 @@ Step 5: Configure (optional — auto-detection usually works)
                 the temporary configuration.
             fix_georef: Apply the existing terrain georeferencing repair to
                 generated TIFF tiles.
-            ras_object: Optional initialized project object.
+            ras_object (RasPrj, optional): Optional initialized project object.
             ras_version: Optional installed HEC-RAS mapping-runtime version.
             timeout: Aggregate helper timeout in seconds.
             terrain_name: Optional registered RASMapper terrain to select.
@@ -5157,14 +5188,24 @@ Step 5: Configure (optional — auto-detection usually works)
                 integer indices, exact RASMapper timestamp strings, or datetimes.
                 If omitted, all available output timesteps are used.
             max_timesteps: Optional cap applied after timestep selection.
-            wse, depth, velocity, froude, shear_stress, depth_x_velocity,
-                depth_x_velocity_sq: Map types to export. Defaults to Depth only.
-            render_mode, clear_existing, fix_georef, ras_object, ras_version,
-                timeout: Passed through to ``store_maps``.
+            wse: Generate WSE maps (default: False).
+            depth: Generate Depth maps (default: True).
+            velocity: Generate Velocity maps (default: False).
+            froude: Generate Froude maps (default: False).
+            shear_stress: Generate Shear Stress maps (default: False).
+            depth_x_velocity: Generate depth-times-velocity maps (default: False).
+            depth_x_velocity_sq: Generate depth-times-velocity-squared maps (default: False).
+            render_mode: Rendering mode passed through to ``store_maps``.
+            clear_existing: Clear existing stored maps, passed to ``store_maps``.
+            fix_georef: Georeferencing fix flag passed to ``store_maps``.
+            ras_object (RasPrj, optional): Project object passed to ``store_maps``.
+            ras_version: Mapping-runtime version passed to ``store_maps``.
+            timeout: Per-call timeout in seconds passed to ``store_maps``.
             performance: StoreMap execution and memory policy for every
                 timestep.
-            max_workers, memory_per_worker_mb, reserve_memory_mb: Deprecated
-                keyword-only migration aliases.
+            max_workers: Deprecated keyword-only worker-count migration alias.
+            memory_per_worker_mb: Deprecated keyword-only per-worker memory alias.
+            reserve_memory_mb: Deprecated keyword-only reserved-memory alias.
 
         Returns:
             Dict keyed by RASMapper timestamp string. Each value is the
@@ -5339,12 +5380,13 @@ Step 5: Configure (optional — auto-detection usually works)
             depth_x_velocity: Generate D*V maps (default: False)
             depth_x_velocity_sq: Generate D*V² maps (default: False)
             fix_georef: Apply georeferencing fix (default: True)
-            ras_object: Optional RAS object instance
+            ras_object (RasPrj, optional): Optional RAS object instance
             ras_version: Optional specific HEC-RAS version
             timeout: Timeout per plan in seconds (default: 1800)
             performance: StoreMap execution and memory policy for every plan.
-            max_workers, memory_per_worker_mb, reserve_memory_mb: Deprecated
-                keyword-only migration aliases.
+            max_workers: Deprecated keyword-only worker-count migration alias.
+            memory_per_worker_mb: Deprecated keyword-only per-worker memory alias.
+            reserve_memory_mb: Deprecated keyword-only reserved-memory alias.
 
         Returns:
             Dict mapping plan numbers to their generated files dict.
@@ -5466,16 +5508,15 @@ Step 5: Configure (optional — auto-detection usually works)
                 temp_dir = wine_config.wine_prefix / "drive_c" / "temp"
                 temp_dir.mkdir(parents=True, exist_ok=True)
                 xml_path = temp_dir / f"rasprocess_cmd_{os.getpid()}.xml"
-                with open(xml_path, "w", encoding="utf-8") as f:
-                    f.write(command_xml)
+                _write_ras_text(xml_path, command_xml, encoding="utf-8")
                 xml_wine_path = RasProcess._linux_to_wine_path(xml_path)
             else:
                 raise RuntimeError("Wine not configured on Linux")
         else:
             f = tempfile.NamedTemporaryFile(
-                mode="w", suffix=".xml", delete=False, encoding="utf-8"
+                mode="w", suffix=".xml", delete=False, encoding="utf-8", newline=""
             )
-            f.write(command_xml)
+            f.write(_normalize_ras_newlines(command_xml))
             f.close()
             xml_path = Path(f.name)
             xml_wine_path = str(xml_path)

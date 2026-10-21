@@ -239,7 +239,7 @@ RasCmdr.compute_plan(
 - `.claude/rules/hec-ras/remote.md` -- Read when remote execution is needed
 
 **Agents** (delegate when needed):
-- `hecras-general-agent` -- Full workflow coordinator
+- `ras-commander` -- Full workflow coordinator
 - `hecras-project-inspector` -- Project analysis to inform mode selection
 - `remote-executor` -- Remote execution setup and management
 

@@ -17,18 +17,24 @@ List of Functions in HdfStruc:
 - get_culvert_hydraulics()
 - get_storage_area_polygons()
 """
-from typing import Dict, Any, List, Union
 from pathlib import Path
+from typing import List, Union
+
 import h5py
 import numpy as np
 import pandas as pd
 from geopandas import GeoDataFrame
-from shapely.geometry import LineString, MultiLineString, Polygon, MultiPolygon, Point, GeometryCollection
-from .HdfUtils import HdfUtils
-from .HdfXsec import HdfXsec
+from shapely.geometry import (
+    LineString,
+    MultiLineString,
+    Polygon,
+)
+
+from ..Decorators import log_call, standardize_input
+from ..LoggingConfig import get_logger
 from .HdfBase import HdfBase
-from ..Decorators import standardize_input, log_call
-from ..LoggingConfig import setup_logging, get_logger
+from .HdfUtils import HdfUtils
+from ._packed_parts import _nonnegative_index, resolve_feature_part_ranges
 
 logger = get_logger(__name__)
 
@@ -52,6 +58,256 @@ class HdfStruc:
         "Results/Unsteady/Output/Output Blocks/Base Output/Unsteady Time Series/"
         "SA 2D Area Conn"
     )
+
+    CONNECTION_ATTACHMENT_COLUMNS = [
+        "Name",
+        "From",
+        "To",
+        "from_cells",
+        "from_faces",
+        "to_cells",
+        "to_faces",
+        "attachment_verified",
+        "reason_code",
+        "orientation_verified",
+        "flux_sign_verified",
+        "evidence_paths",
+        "details",
+        "source_hdf",
+        "native_version",
+    ]
+
+    @staticmethod
+    def _connection_side_attachment(hdf, result_group, area_name, side):
+        """Read schema-qualified 6.6 native cell IDs and exact mesh topology."""
+        cell_path = f"{result_group.name}/{side} Cells"
+        point_path = f"{result_group.name}/Geometric Info/{side} Face Points"
+        mesh_path = f"Geometry/2D Flow Areas/{area_name}"
+        required = [
+            cell_path,
+            point_path,
+            f"{mesh_path}/Faces FacePoint Indexes",
+            f"{mesh_path}/Faces Cell Indexes",
+            f"{mesh_path}/Cells Surface Area",
+            f"{mesh_path}/FacePoints Coordinate",
+        ]
+        if any(path not in hdf for path in required):
+            return (), (), (), "Native side datasets or active-cell topology absent"
+        if any(not isinstance(hdf[path], h5py.Dataset) for path in required):
+            return (), (), tuple(required), "Unsupported native dataset objects"
+        cells = hdf[cell_path][()]
+        points = hdf[point_path][()]
+        if (
+            cells.ndim != 1
+            or points.ndim != 1
+            or cells.dtype.kind not in "iu"
+            or points.dtype.kind not in "iu"
+            or not len(cells)
+            or len(points) != len(cells) + 1
+        ):
+            return (), (), tuple(required), "Unsupported native side dataset layout"
+        surface = hdf[f"{mesh_path}/Cells Surface Area"]
+        coordinates = hdf[f"{mesh_path}/FacePoints Coordinate"]
+        if surface.ndim != 1 or coordinates.ndim != 2 or coordinates.shape[1] != 2:
+            return (
+                (),
+                (),
+                tuple(required),
+                "Unsupported native active-cell or face-point layout",
+            )
+        faces = hdf[f"{mesh_path}/Faces FacePoint Indexes"][()]
+        adjacency = hdf[f"{mesh_path}/Faces Cell Indexes"][()]
+        point_count = len(coordinates)
+        if (
+            faces.ndim != 2
+            or faces.shape[1] != 2
+            or adjacency.shape != faces.shape
+            or faces.dtype.kind not in "iu"
+            or adjacency.dtype.kind not in "iu"
+            or np.any(points < 0)
+            or np.any(points >= point_count)
+            or np.any(faces < 0)
+            or np.any(faces >= point_count)
+            or np.any(adjacency < -1)
+            or np.any(adjacency >= len(surface))
+            or np.any(cells < 0)
+            or np.any(cells >= len(surface))
+        ):
+            return (), (), tuple(required), "Invalid native cells or face topology"
+        if any(
+            not np.isfinite(surface[int(cell)]) or surface[int(cell)] <= 0
+            for cell in cells
+        ):
+            return (
+                (),
+                (),
+                tuple(required),
+                "Native attachment references inactive cells",
+            )
+        lookup = {}
+        for face_id, pair in enumerate(faces):
+            lookup.setdefault(tuple(sorted(map(int, pair))), []).append(face_id)
+        face_ids = []
+        for cell, first, second in zip(cells, points[:-1], points[1:]):
+            candidates = lookup.get(tuple(sorted((int(first), int(second)))), [])
+            matches = [face for face in candidates if int(cell) in adjacency[face]]
+            if len(matches) != 1:
+                return (
+                    tuple(map(int, cells)),
+                    (),
+                    tuple(required),
+                    "Ambiguous or missing native face/cell incidence",
+                )
+            face_ids.append(matches[0])
+        return tuple(map(int, cells)), tuple(face_ids), tuple(required), ""
+
+    @staticmethod
+    @log_call
+    @standardize_input(file_type="plan_hdf")
+    def get_connection_attachments(
+        hdf_path: str | Path,
+        connections_df: pd.DataFrame | None = None,
+        *,
+        ras_object=None,
+    ) -> pd.DataFrame:
+        """Verify both SA/2D ends from native result cell and face receipts.
+
+        Args:
+            hdf_path: Geometry or result HDF path (str or Path), or a plan
+                number resolved to result HDF by the input decorator.
+                Geometry-only preprocessing normally lacks solver receipts.
+            connections_df: Expected Name/From/To inventory. Every expected
+                connection receives a row, including missing native ones.
+            ras_object (RasPrj, optional): Explicit project context for resolving plan numbers.
+
+        Returns:
+            DataFrame with Name, From, To, from_cells, from_faces, to_cells,
+            to_faces, attachment_verified, reason_code, orientation_verified,
+            flux_sign_verified, evidence_paths, details, source_hdf and
+            native_version. IDs are zero-based mesh-local native indices;
+            repeated segment cell IDs are preserved. No mutation is performed.
+
+        Raises:
+            FileNotFoundError: The resolved HDF is absent.
+            ValueError: Expected identity columns are missing or input cannot
+                be resolved by the HDF decorator.
+            OSError: Native HDF cannot be read.
+
+        Notes
+        -----
+        The supported result layout is qualified against HEC-RAS 6.6 native
+        BaldEagleCrkMulti2D output. Other versions fail closed until qualified.
+        Storage-area ends, missing/ambiguous identities, absent native datasets,
+        and invalid cell/face incidence return
+        ``CONNECTION_ATTACHMENT_UNVERIFIED``. No distance or geometric proximity
+        establishes attachment. Exact native face-point IDs map to mesh faces;
+        cells must be active and incident to those faces. Attachment alone does
+        not qualify hydraulic equivalence, flow sign, or head loss. Orientation
+        and flux sign remain explicitly unverified by this method.
+        """
+        columns = HdfStruc.CONNECTION_ATTACHMENT_COLUMNS
+        if connections_df is not None and not {"Name", "From", "To"}.issubset(
+            connections_df.columns
+        ):
+            raise ValueError("connections_df requires Name, From, and To columns")
+        with h5py.File(hdf_path, "r") as hdf:
+            native = []
+            attrs_path = "Geometry/Structures/Attributes"
+            if attrs_path in hdf:
+                attrs = HdfStruc._decode_bytes_columns(
+                    pd.DataFrame(hdf[attrs_path][()])
+                )
+                required = {"Type", "Connection", "US SA/2D", "DS SA/2D"}
+                if required.issubset(attrs.columns):
+                    native = [
+                        {
+                            "Name": row["Connection"].strip(),
+                            "From": row["US SA/2D"].strip(),
+                            "To": row["DS SA/2D"].strip(),
+                        }
+                        for _, row in attrs.iterrows()
+                        if row["Type"].strip() == "Connection"
+                    ]
+            expected = (
+                connections_df[["Name", "From", "To"]].to_dict("records")
+                if connections_df is not None
+                else native
+            )
+            version = HdfUtils.convert_ras_string(hdf.attrs.get("File Version", ""))
+            file_type = HdfUtils.convert_ras_string(hdf.attrs.get("File Type", ""))
+            qualified = (
+                str(version).startswith("HEC-RAS 6.6 ")
+                and file_type == "HEC-RAS Results"
+            )
+            result_base = hdf.get(HdfStruc.SA_2D_CONN_RESULTS_PATH)
+            rows = []
+            for connection in expected:
+                record = dict(
+                    connection,
+                    from_cells=(),
+                    from_faces=(),
+                    to_cells=(),
+                    to_faces=(),
+                    attachment_verified=False,
+                    reason_code="CONNECTION_ATTACHMENT_UNVERIFIED",
+                    orientation_verified=False,
+                    flux_sign_verified=False,
+                    evidence_paths=(),
+                    details="Native result attachment evidence absent",
+                    source_hdf=str(hdf_path),
+                    native_version=str(version),
+                )
+                matches = [
+                    item for item in native if item["Name"] == connection["Name"]
+                ]
+                duplicated = (
+                    sum(item["Name"] == connection["Name"] for item in expected) != 1
+                )
+                if duplicated or len(matches) != 1 or matches[0] != connection:
+                    record["details"] = (
+                        "Missing, ambiguous, or mismatched native connection identity"
+                    )
+                elif not qualified:
+                    record["details"] = (
+                        "Native attachment schema is not qualified for this HEC-RAS version"
+                    )
+                elif result_base is not None:
+                    candidates = {
+                        connection["Name"],
+                        f"{connection['From']} {connection['Name']}",
+                    }
+                    groups = [
+                        result_base[name] for name in candidates if name in result_base
+                    ]
+                    if len(groups) != 1:
+                        record["details"] = (
+                            "Missing or ambiguous native result connection group"
+                        )
+                    else:
+                        evidence, problems = [], []
+                        for end, side in (("from", "Headwater"), ("to", "Tailwater")):
+                            cells, faces, paths, problem = (
+                                HdfStruc._connection_side_attachment(
+                                    hdf,
+                                    groups[0],
+                                    connection["From" if end == "from" else "To"],
+                                    side,
+                                )
+                            )
+                            record[f"{end}_cells"], record[f"{end}_faces"] = (
+                                cells,
+                                faces,
+                            )
+                            evidence.extend(paths)
+                            if problem:
+                                problems.append(f"{end}: {problem}")
+                        record["evidence_paths"] = tuple(evidence)
+                        record["details"] = "; ".join(problems)
+                        record["attachment_verified"] = not problems
+                        if not problems:
+                            record["reason_code"] = "CONNECTION_ATTACHMENT_VERIFIED"
+                rows.append(record)
+            return pd.DataFrame(rows, columns=columns)
 
     @staticmethod
     def _decode_bytes_columns(df: pd.DataFrame) -> pd.DataFrame:
@@ -87,13 +343,21 @@ class HdfStruc:
     @staticmethod
     @log_call
     @standardize_input(file_type='geom_hdf')
-    def get_structures(hdf_path: Path, datetime_to_str: bool = False) -> GeoDataFrame:
+    def get_structures(hdf_path: Union[Path, str], datetime_to_str: bool = False) -> GeoDataFrame:
         """
         Extracts structure data from a HEC-RAS geometry HDF5 file.
 
+        Missing structure layers return an empty frame. A present empty group,
+        or one containing only an empty ``Property Tables`` subgroup, returns
+        a typed empty GeoDataFrame preserving source CRS/group attributes with
+        ``attrs["structure_status"]="empty_placeholder"``. Populated property
+        tables, unknown child layouts, missing required datasets in nonempty
+        layers and read errors are logged and raised. This is read-only; native
+        coordinate/elevation units are unchanged.
+
         Parameters
         ----------
-        hdf_path : Path
+        hdf_path : Path or str
             Path to the HEC-RAS geometry HDF5 file
         datetime_to_str : bool, optional
             If True, converts datetime objects to ISO format strings, by default False
@@ -103,7 +367,11 @@ class HdfStruc:
         GeoDataFrame
             Structure data with columns:
             - Structure ID: unique identifier
-            - Geometry: LineString of structure centerline
+            - Geometry: LineString of structure centerline, or a
+              MultiLineString when the stored Centerline Info Part Count
+              is greater than 1 (one line per stored part, no connecting
+              segment between parts), or None when the structure stores
+              an empty (zero-point) centerline
             - Various attribute columns from the HDF file
             - Profile_Data: list of station/elevation dictionaries
             - Bridge coefficient attributes (if present)
@@ -112,9 +380,20 @@ class HdfStruc:
         Notes
         -----
         - Group-level attributes are stored in GeoDataFrame.attrs['group_attributes']
-        - Invalid geometries are dropped with warning
+        - Invalid centerline geometry raises an exception. A zero-point
+          centerline (Centerline Info Point Count 0, as HEC-RAS stores for
+          some lateral structures) is a valid empty range and yields None
+          geometry, the missing-geometry convention of the other hdf
+          readers; its start index and Parts must still be in range.
+        - Centerline Parts offsets are relative to each structure's point
+          slice; legacy global offsets are accepted only when all parts
+          together cover that slice exactly. Single-part centerlines are
+          unchanged LineStrings.
         - All byte strings are decoded to UTF-8
         - CRS is preserved from the source file
+        - Public Structure IDs remain one-based. Bridge coefficients are joined
+          by their native zero-based Attributes row IDs, not the display IDs.
+          Duplicate or out-of-range coefficient IDs raise ValueError.
         """
         try:
             with h5py.File(hdf_path, 'r') as hdf:
@@ -125,6 +404,26 @@ class HdfStruc:
                     )
                     return GeoDataFrame()
                 
+                # Native geometry may retain an empty Structures placeholder
+                # containing only an empty Property Tables group. This is not a
+                # partially populated structure layer. Reject every other layout
+                # lacking required datasets rather than discarding structures.
+                structure_group = hdf["Geometry/Structures"]
+                empty_placeholder = len(structure_group) == 0 or (
+                    set(structure_group.keys()) == {"Property Tables"}
+                    and isinstance(structure_group["Property Tables"], h5py.Group)
+                    and len(structure_group["Property Tables"]) == 0
+                )
+                if empty_placeholder:
+                    logger.debug("Empty Geometry/Structures placeholder in %s", hdf_path.name)
+                    result = GeoDataFrame(
+                        {"Structure ID": pd.Series(dtype="int64")},
+                        geometry=[], crs=HdfBase.get_projection(hdf),
+                    )
+                    result.attrs["group_attributes"] = HdfBase.get_attrs(hdf, "Geometry/Structures")
+                    result.attrs["structure_status"] = "empty_placeholder"
+                    return result
+
                 # Check if required datasets exist
                 required_datasets = [
                     "Geometry/Structures/Attributes",
@@ -134,11 +433,7 @@ class HdfStruc:
                 
                 for dataset in required_datasets:
                     if dataset not in hdf:
-                        logger.warning(
-                            f"Required structure dataset missing in {hdf_path.name}: "
-                            f"{dataset}; returning empty GeoDataFrame."
-                        )
-                        return GeoDataFrame()
+                        raise ValueError(f"Required structure dataset missing: {dataset}")
 
                 def get_dataset_df(path: str) -> pd.DataFrame:
                     """
@@ -202,23 +497,64 @@ class HdfStruc:
                 # Get centerline geometry
                 centerline_info = hdf["Geometry/Structures/Centerline Info"][()]
                 centerline_points = hdf["Geometry/Structures/Centerline Points"][()]
-                
-                # Create LineString geometries for each structure
+                centerline_parts = (
+                    hdf["Geometry/Structures/Centerline Parts"][()]
+                    if "Centerline Parts" in structure_group
+                    else None
+                )
+
+                # Create LineString geometries for each structure; a stored
+                # Part Count > 1 yields a MultiLineString of its parts.
                 geoms = []
-                invalid_indices = []
                 for i in range(len(centerline_info)):
-                    start_idx = centerline_info[i][0]  # Point Starting Index
-                    point_count = centerline_info[i][1]  # Point Count
-                    points = centerline_points[start_idx:start_idx + point_count]
-                    if len(points) >= 2:
-                        geoms.append(LineString(points))
-                    else:
-                        invalid_indices.append(i)
-                        logger.debug(
-                            f"Structure index {i} in {hdf_path.name} has "
-                            f"{len(points)} centerline point(s); LineString requires at least 2."
+                    try:
+                        start_idx = _nonnegative_index(centerline_info[i][0])
+                        point_count = _nonnegative_index(centerline_info[i][1])
+                    except ValueError as exc:
+                        raise ValueError(f"Invalid centerline point range for structure {i}: {exc}") from exc
+                    if start_idx > len(centerline_points) or point_count > len(centerline_points) - start_idx or point_count == 1:
+                        raise ValueError(f"Invalid centerline point range for structure {i}")
+                    try:
+                        part_start, part_count = (
+                            tuple(_nonnegative_index(value) for value in centerline_info[i][2:4])
+                            if len(centerline_info[i]) > 3
+                            else (0, 1)
                         )
+                        part_ranges = None
+                        if centerline_parts is not None:
+                            if part_start > len(centerline_parts) or part_count > len(centerline_parts) - part_start:
+                                raise ValueError("Parts slice is out of bounds")
+                            parts = centerline_parts[part_start:part_start + part_count]
+                            part_ranges = resolve_feature_part_ranges(parts, start_idx, point_count)
+                        elif part_count > 1:
+                            raise ValueError("Multipart centerline is missing Centerline Parts")
+                        if point_count and part_count == 0:
+                            raise ValueError("Nonempty centerline has no parts")
+                        if point_count and part_ranges is not None and any(count < 2 for _, count in part_ranges):
+                            raise ValueError("Centerline part requires at least two points")
+                    except ValueError as exc:
+                        raise ValueError(f"Invalid centerline parts for structure {i}: {exc}") from exc
+                    if point_count == 0:
+                        # HEC-RAS stores structures without a drawn centerline
+                        # (e.g. some lateral structures) as an empty range,
+                        # Info [start, 0, k, 1] with Parts [[0, 0]]. Return
+                        # None geometry, as the other hdf readers do, but keep
+                        # rejecting out-of-range or inconsistent counts.
+                        if not 0 <= start_idx <= len(centerline_points) or part_count < 0:
+                            raise ValueError(f"Invalid centerline point range for structure {i}")
                         geoms.append(None)
+                        continue
+                    points = HdfBase.plan_vertex_ordinates(
+                        centerline_points[start_idx:start_idx + point_count]
+                    )
+                    if start_idx < 0 or point_count < 2 or len(points) != point_count:
+                        raise ValueError(f"Invalid centerline point range for structure {i}")
+                    if part_count <= 1:
+                        geoms.append(LineString(points))
+                        continue
+                    geoms.append(MultiLineString(
+                        [points[offset:offset + count] for offset, count in part_ranges]
+                    ))
 
                 # Create base GeoDataFrame with Structures Attributes and geometries
                 struct_gdf = GeoDataFrame(
@@ -227,26 +563,25 @@ class HdfStruc:
                     crs=HdfBase.get_projection(hdf_path)
                 )
 
-                # Drop entries with invalid geometries
-                initial_count = len(struct_gdf)
-                struct_gdf = struct_gdf.dropna(subset=['geometry']).reset_index(drop=True)
-                final_count = len(struct_gdf)
-                if final_count < initial_count:
-                    preview = invalid_indices[:5]
-                    suffix = "..." if len(invalid_indices) > 5 else ""
-                    logger.warning(
-                        f"Dropped {initial_count - final_count} structure(s) from "
-                        f"{hdf_path.name} due to invalid centerline geometry "
-                        f"(indices: {preview}{suffix})."
-                    )
-
-                # Merge Bridge Coefficient Attributes on 'Structure ID'
+                # Native coefficient IDs refer to zero-based Attributes rows;
+                # the public Structure ID column is a one-based display ID.
                 if not bridge_coef.empty and 'Structure ID' in bridge_coef.columns:
+                    native_ids = bridge_coef['Structure ID']
+                    if (not pd.api.types.is_integer_dtype(native_ids.dtype)
+                            or native_ids.duplicated().any()
+                            or (native_ids < 0).any()
+                            or (native_ids >= len(struct_attrs)).any()):
+                        raise ValueError(
+                            "Invalid native Structure ID in Bridge Coefficient Attributes: "
+                            "expected unique zero-based Structures/Attributes row IDs"
+                        )
                     struct_gdf = struct_gdf.merge(
-                        bridge_coef,
-                        on='Structure ID',
+                        bridge_coef.set_index('Structure ID'),
+                        left_index=True,
+                        right_index=True,
                         how='left',
-                        suffixes=('', '_bridge_coef')
+                        suffixes=('', '_bridge_coef'),
+                        validate='one_to_one',
                     )
                     logger.debug("Merged Bridge Coefficient Attributes successfully.")
                 else:
@@ -337,7 +672,7 @@ class HdfStruc:
                 return struct_gdf
 
         except Exception as e:
-            logger.error(f"Error reading structures from {hdf_path}: {str(e)}")
+            logger.error(f"Error reading structures from {hdf_path} (Geometry/Structures): {str(e)}")
             raise
 
     @staticmethod
@@ -576,9 +911,11 @@ class HdfStruc:
 
         Examples
         --------
+        ```python
         >>> info = HdfStruc.get_sa2d_breach_info("02")
         >>> breach_dams = info[info['has_breach']]['structure'].tolist()
         >>> print(f"Breach structures: {breach_dams}")
+        ```
 
         Notes
         -----
@@ -673,6 +1010,8 @@ class HdfStruc:
         Multi-part polygons (rings/holes) are fully supported via the
         ``Polygon Parts`` dataset; the first ring is the exterior, subsequent
         rings are interiors (holes).
+        The available project CRS is attached without transforming coordinates;
+        the CRS remains unset when no projection can be resolved.
         """
         _empty = GeoDataFrame(
             columns=['Name', 'geometry', 'avg_area', 'min_elev', 'mode'],
@@ -771,7 +1110,9 @@ class HdfStruc:
                 if not records:
                     return _empty
 
-                gdf = GeoDataFrame(records, geometry='geometry')
+                gdf = GeoDataFrame(
+                    records, geometry='geometry', crs=HdfBase.get_projection(hdf)
+                )
                 logger.debug(
                     f"Found {len(gdf)} storage area polygon(s) in {hdf_path.name}"
                 )

@@ -441,3 +441,95 @@ class _FakeWinregModule:
         key.data["values"] = [
             value for value in key.data.get("values", []) if value[0] != name
         ]
+
+
+def test_private_runtime_can_use_verified_standard_installation_donor(monkeypatch):
+    fake = SimpleNamespace(HKEY_CURRENT_USER=1, HKEY_USERS=2)
+    monkeypatch.setitem(sys.modules, "winreg", fake)
+    donor = r"standard\6.4.1\ras.exe"
+    visited = []
+    def accepted(_hive, parent):
+        visited.append(parent)
+        return iter([donor] if "Program Files (x86)" in parent else [])
+    monkeypatch.setattr(RasTcu, "_iter_accepted_nodes", staticmethod(accepted))
+    hive, selected = RasTcu._find_donor("/private/HEC-RAS/6.4")
+    assert (hive, selected) == (fake.HKEY_CURRENT_USER, donor)
+    assert len(visited) == 2
+
+
+def _acceptance_export():
+    return {
+        "schema": "ras-commander-tcu-acceptance-v1",
+        "source_version": "6.6", "source_runtime_sha256": "a" * 64,
+        "source_host": "accepted-test-profile", "system_statistic": "660",
+    }
+
+
+def test_acceptance_export_requires_existing_verified_acceptance(monkeypatch):
+    monkeypatch.setattr(RasTcu, "status", staticmethod(lambda *a: TcuStatus(False, "6.6", _INSTALL, "node", "unaccepted")))
+    with pytest.raises(ValueError, match="verified, existing"):
+        RasTcu.export_acceptance(ras_version="6.6")
+
+
+def test_acceptance_export_excludes_personal_settings(monkeypatch, tmp_path):
+    import hashlib
+    executable = tmp_path / "Ras.exe"
+    executable.write_bytes(b"runtime")
+    fake = _FakeWinregModule({(1, r"node\Projects"): {"values": [
+        ("System Statistic", "660", 1), ("MRU", "personal-project-path", 1)
+    ]}})
+    fake.QueryValueEx = lambda key, name: next((value, kind) for field, value, kind in key.data["values"] if field == name)
+    monkeypatch.setitem(sys.modules, "winreg", fake)
+    monkeypatch.setattr(RasTcu, "status", staticmethod(lambda *a: TcuStatus(True, "6.6", _INSTALL, "node", "accepted")))
+    monkeypatch.setattr(RasTcu, "_resolve_exe", staticmethod(lambda *a: executable))
+    record = RasTcu.export_acceptance(ras_version="6.6")
+    assert record["system_statistic"] == "660"
+    assert record["source_runtime_sha256"] == hashlib.sha256(b"runtime").hexdigest()
+    assert "personal-project-path" not in str(record)
+    assert "node" not in record
+
+
+@pytest.mark.parametrize("field,value", [("schema", "wrong"), ("source_version", "5.0.7"),
+                                         ("system_statistic", "659"), ("source_runtime_sha256", "unknown")])
+def test_import_acceptance_rejects_invalid_export_before_registry_access(monkeypatch, field, value):
+    record = dict(_acceptance_export(), **{field: value})
+    monkeypatch.setattr(RasTcu, "status", staticmethod(lambda *a: pytest.fail("Registry accessed before record validation")))
+    with pytest.raises(ValueError, match="valid RasTcu.export"):
+        RasTcu.import_acceptance(record, ras_version="6.0")
+
+
+def test_import_acceptance_writes_only_target_sentinel_and_rechecks(monkeypatch):
+    states = iter([TcuStatus(False, "6.0", _INSTALL, "target", "unaccepted"),
+                   TcuStatus(True, "6.0", _INSTALL, "target", "accepted")])
+    monkeypatch.setattr(RasTcu, "status", staticmethod(lambda *a: next(states)))
+    monkeypatch.setitem(sys.modules, "winreg", SimpleNamespace(HKEY_CURRENT_USER=1))
+    writes = []
+    monkeypatch.setattr(RasTcu, "_write_target_sentinel", staticmethod(lambda *a: writes.append(a)))
+    monkeypatch.setattr(RasTcu, "_copy_key", staticmethod(lambda *a: pytest.fail("Personal settings copied")))
+    result = RasTcu.import_acceptance(_acceptance_export(), ras_version="6.0", write_ack=False)
+    assert result.accepted is True
+    assert result.reason == "accepted-from-export"
+    assert writes == [(1, "target", "6.0")]
+
+
+def test_import_acceptance_dry_run_does_not_write(monkeypatch):
+    monkeypatch.setattr(RasTcu, "status", staticmethod(lambda *a: TcuStatus(False, "6.0", _INSTALL, "target", "unaccepted")))
+    monkeypatch.setattr(RasTcu, "_write_target_sentinel", staticmethod(lambda *a: pytest.fail("dry-run wrote registry")))
+    result = RasTcu.import_acceptance(_acceptance_export(), ras_version="6.0", dry_run=True)
+    assert result.accepted is False
+    assert result.reason == "dry-run"
+
+
+def test_import_acceptance_refuses_unknown_beta_sentinel(monkeypatch):
+    monkeypatch.setattr(RasTcu, "status", staticmethod(lambda *a: TcuStatus(False, "6.7 Beta 5", _INSTALL, "target", "unaccepted")))
+    with pytest.raises(ValueError, match="stable target"):
+        RasTcu.import_acceptance(_acceptance_export(), ras_version="6.7 Beta 5")
+
+
+def test_import_acceptance_never_claims_success_without_verified_target(monkeypatch):
+    monkeypatch.setattr(RasTcu, "status", staticmethod(lambda *a: TcuStatus(False, "6.0", _INSTALL, "target", "unaccepted")))
+    monkeypatch.setitem(sys.modules, "winreg", SimpleNamespace(HKEY_CURRENT_USER=1))
+    monkeypatch.setattr(RasTcu, "_write_target_sentinel", staticmethod(lambda *a: True))
+    result = RasTcu.import_acceptance(_acceptance_export(), ras_version="6.0", write_ack=False)
+    assert result.accepted is None
+    assert result.reason == "seeded-unverified"

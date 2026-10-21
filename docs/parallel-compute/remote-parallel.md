@@ -89,7 +89,7 @@ psexec = init_ras_worker(
     cores_per_plan=4,
 )
 
-# Docker worker - Container execution
+# Docker worker - local image implementing the worker shell-runner contract
 docker = init_ras_worker(
     "docker",
     docker_image="hecras:6.6",
@@ -341,6 +341,11 @@ query user
     execution.
 
 ### Docker Worker Requirements
+
+`hecras:6.6` in this page is a local image example, not a published Docker Hub
+tag. For the published Wine/native pair, use [RasDocker](../user-guide/container-execution.md).
+See [backend selection](../user-guide/execution-backends.md) and the
+[image catalog](../user-guide/container-images.md) before selecting an image.
 
 1. **Docker daemon** available locally or through `docker_host`
 2. **HEC-RAS Docker image** available (native Linux binaries from HEC)

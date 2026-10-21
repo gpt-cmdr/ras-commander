@@ -202,7 +202,7 @@ def execute_local_plan(
 
         # Step 3: Execute using RasCmdr.compute_plan()
         from ..RasCmdr import RasCmdr
-        from ..RasPrj import RasPrj, init_ras_project
+        from ..RasPrj import RasPrj, _matching_copied_prj_file, init_ras_project
 
         # Initialize project in worker folder
         logger.debug("Initializing project in local worker folder")
@@ -222,8 +222,11 @@ def execute_local_plan(
             raise ValueError(
                 "Local worker requires an explicit HEC-RAS version or executable"
             )
+        worker_prj = _matching_copied_prj_file(
+            worker_project_path, getattr(ras_obj, "prj_file", None)
+        )
         init_ras_project(
-            str(worker_project_path),
+            str(worker_prj or worker_project_path),
             execution_engine,
             ras_object=temp_ras,
             hide_intro=True,

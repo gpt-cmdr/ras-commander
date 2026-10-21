@@ -56,8 +56,14 @@ def _write_export_hdf(
     *,
     stored_depth: bool = False,
     negative_depth: bool = False,
+    ghost_cell: bool = False,
 ) -> None:
-    """Generate a compact synthetic result-shaped HDF for contract tests."""
+    """Generate a compact synthetic result-shaped HDF for contract tests.
+
+    ``ghost_cell`` appends one ghost cell after the two physical cells, laid
+    out as HEC-RAS writes it: a center on the perimeter, a 0.0 summary
+    maximum, a NaN minimum elevation, and a non-solution time-series WSE.
+    """
     with h5py.File(path, "w") as hdf_file:
         hdf_file.attrs["Projection"] = CRS.from_epsg(3451).to_wkt()
         hdf_file.attrs["Units System"] = "US Customary"
@@ -105,16 +111,23 @@ def _write_export_hdf(
         )
         hdf_file.create_dataset(
             f"{geometry_base}/Cells Center Coordinate",
-            data=np.asarray([[0.0, 0.0], [1.0, 1.0]], dtype=np.float64),
+            data=np.asarray(
+                [[0.0, 0.0], [1.0, 1.0]] + ([[2.0, 0.5]] if ghost_cell else []),
+                dtype=np.float64,
+            ),
         )
         hdf_file.create_dataset(
             f"{geometry_base}/Cells Face and Orientation Info",
-            data=np.asarray([[0, 2], [2, 2]], dtype=np.int32),
+            data=np.asarray(
+                [[0, 2], [2, 2]] + ([[4, 1]] if ghost_cell else []),
+                dtype=np.int32,
+            ),
         )
         hdf_file.create_dataset(
             f"{geometry_base}/Cells Face and Orientation Values",
             data=np.asarray(
-                [[0, 1], [1, 1], [1, -1], [2, 1]],
+                [[0, 1], [1, 1], [1, -1], [2, 1]]
+                + ([[2, -1]] if ghost_cell else []),
                 dtype=np.int32,
             ),
         )
@@ -133,7 +146,8 @@ def _write_export_hdf(
             ),
         )
         water_surface = np.asarray(
-            [[-10.0, -8.0], [-9.0, -7.0]],
+            [[-10.0, -8.0] + ([40.0] if ghost_cell else []),
+             [-9.0, -7.0] + ([40.0] if ghost_cell else [])],
             dtype=np.float32,
         )
         hdf_file.create_dataset(
@@ -148,6 +162,8 @@ def _write_export_hdf(
             ),
         )
         if stored_depth:
+            if ghost_cell:
+                raise ValueError("ghost_cell fixture uses derived depth")
             depth = np.asarray(
                 [[2.0, 0.0], [4.0, 1.0]],
                 dtype=np.float32,
@@ -161,13 +177,17 @@ def _write_export_hdf(
         else:
             hdf_file.create_dataset(
                 f"{geometry_base}/Cells Minimum Elevation",
-                data=np.asarray([-12.0, -8.0], dtype=np.float32),
+                data=np.asarray(
+                [-12.0, -8.0] + ([np.nan] if ghost_cell else []),
+                dtype=np.float32,
+            ),
             )
 
         maximum_wse = hdf_file.create_dataset(
             f"{SUMMARY_BASE}/2D Flow Areas/Mesh/Maximum Water Surface",
             data=np.asarray(
-                [[-9.0, -7.0], [1.0 / 24.0, 1.0 / 24.0]],
+                [[-9.0, -7.0] + ([0.0] if ghost_cell else []),
+                 [1.0 / 24.0, 1.0 / 24.0] + ([0.0] if ghost_cell else [])],
                 dtype=np.float32,
             ),
         )
@@ -177,7 +197,10 @@ def _write_export_hdf(
         hdf_file.create_dataset(
             f"{SUMMARY_BASE}/2D Flow Areas/Mesh/"
             "Cell Maximum Water Surface Error",
-            data=np.asarray([0.01, 0.02], dtype=np.float32),
+            data=np.asarray(
+                [0.01, 0.02] + ([0.0] if ghost_cell else []),
+                dtype=np.float32,
+            ),
         )
 
 
@@ -545,6 +568,32 @@ def test_export_excludes_nonfinite_points_from_all_raster_interpolation(
             assert np.allclose(values, expected)
 
 
+def test_export_excludes_ghost_cells_from_products(tmp_path):
+    """Ghost cells must not publish their 0.0 summary WSE as a valid pixel."""
+    source = tmp_path / "ghost-cell.p01.hdf"
+    output = tmp_path / "products"
+    _write_export_hdf(source, ghost_cell=True)
+
+    inspection = HdfResultsProducts.inspect_result(source)
+    mesh = inspection["meshes"][0]
+    assert (mesh["cell_count"], mesh["declared_cell_count"]) == (3, 2)
+
+    HdfResultsProducts.export(
+        source,
+        output,
+        max_dimension=64,
+        include_preview=False,
+    )
+
+    with rasterio.open(output / "maximum-wse.tif") as raster:
+        wse = raster.read(1, masked=True).compressed()
+    assert wse.size > 0
+    assert set(np.unique(wse)) <= {-9.0, -7.0}
+    with rasterio.open(output / "maximum-depth.tif") as raster:
+        depth = raster.read(1, masked=True).compressed()
+    assert set(np.unique(depth)) <= {3.0, 1.0}
+
+
 def test_export_rejects_negative_stored_depth_without_publishing(tmp_path):
     source = tmp_path / "negative-depth.p01.hdf"
     output = tmp_path / "products"
@@ -846,7 +895,8 @@ def test_export_existing_producer_hdfs_read_only(tmp_path):
                 (output / "numerical-qaqc.json").read_text(encoding="utf-8")
             )
             wse_error = qaqc["mesh"]["maximum_water_surface_error"]
-            assert wse_error["row_count"] == 2977
+            # Physical cells only: area2 2,705 + DS Channel 11 (ghosts excluded).
+            assert wse_error["row_count"] == 2716
             assert wse_error["maximum"] == pytest.approx(0.00999111)
             assert wse_error["missing_meshes"] == []
         if source.name == "Spring.p06.hdf":

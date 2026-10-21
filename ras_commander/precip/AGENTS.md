@@ -11,8 +11,14 @@ This file is the canonical local instruction file for `ras_commander/precip/`.
 
 - Use `Atlas14Storm`, `FrequencyStorm`, or `ScsTypeStorm` when the task requires HMS-equivalent design-storm behavior.
 - Use `StormGenerator` when the task needs flexible peak placement and does not need HMS equivalence.
+- Use `FrequencyStormDdf` for the duration-dependent Hydro-35 configuration qualified
+  for 24h/5min, eight or ten knots, 50%/67% placement, and optional bounded
+  TP-40 reduction. The sub-30-minute factor follows the explicit HMS compatibility
+  convention; statistical-series conversion remains the caller's responsibility. `FrequencyStorm`
+  is fixed-pattern scaling; do not treat it as a general DDF frequency-storm solver.
 - Use `PrecipAorc` for historical precipitation and calibration workflows.
 - Use `Atlas14Grid`, `Atlas14Variance`, and `AbmHyetographGrid` for spatial Atlas 14 analysis and rain-on-grid workflows.
+- Use `Atlas14HyetographGrid` for a single-duration spatial depth raster multiplied by one explicitly selected NOAA temporal distribution. It does not construct per-cell depth-duration storms. Preserve the distinction from `AbmHyetographGrid`; do not silently switch methods or infer a temporal region.
 - Use `AbmHyetographGrid.to_ras_netcdf()` to convert interval-ending ABM rate grids to projected HEC-RAS GDAL NetCDF forcing; keep storm-end and forcing-end metadata distinct when extending zero-rate frames through the plan end.
 - Use `PrecipHrrr` for HRRR forecast download and `VortexCli` when the workflow needs gridded met conversion to DSS.
 - Use `RasPrecipGrid` for explicit projected GeoTIFF/GRIB normalization and
@@ -29,6 +35,10 @@ This file is the canonical local instruction file for `ras_commander/precip/`.
 - Inline precipitation uses interval-end depths and one zero-depth start ordinate.
   Align observed timestamps to the existing boundary start, cover the simulation
   window explicitly, and compare native cumulative forcing at matching times.
+- Observed or analysis gridded precipitation must use `historic=True` (or an
+  explicit `ratio=1.0`). Generic boundary setters reject a retained non-unit
+  text or HDF ratio until the caller explicitly chooses unit observed rainfall
+  or a deliberate design-storm ARF.
 - Preserve exact-depth conservation behavior for storm-generation methods that promise it.
 - Do not describe `StormGenerator` as HMS-equivalent.
 - Respect NOAA data-source assumptions, bounds, and duration limitations when exposing Atlas 14 methods.

@@ -14,4 +14,5 @@ markers = [
     "transport: remote, container, WSL, Wine, or worker transport qualification",
     "failure_injection: controlled qualification failure or interruption boundary",
     "slow: long-duration qualification test",
+    "packaged_catalog: reads the packaged container image catalog instead of the fixed test catalog",
 ]

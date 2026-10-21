@@ -5,14 +5,15 @@ This file is the canonical local instruction file for `ras_commander/remote/`.
 ## Scope
 
 - Parent guidance from `ras_commander/AGENTS.md` and the repo root still applies.
-- This directory handles distributed HEC-RAS execution across local, PsExec, Docker, and future worker backends.
+- This directory handles distributed HEC-RAS execution across local, PsExec, and Docker worker backends.
 
 ## Worker Structure
 
 - Base worker and factory: `RasWorker.py`
 - Implemented workers: `PsexecWorker.py`, `LocalWorker.py`, `DockerWorker.py`
-- Stub or optional backends: `SshWorker.py`, `WinrmWorker.py`, `SlurmWorker.py`, `AwsEc2Worker.py`, `AzureFrWorker.py`
+- `init_ras_worker()` accepts only `psexec`, `local`, and `docker`; other types raise `ValueError`. Slurm/HPC execution is not a worker: use `RasSlurm` or `RasApptainer`.
 - Dispatch and orchestration: `Execution.py`, `Utils.py`
+- Slurm + Apptainer native-Linux unsteady (profile, sbatch renderer, SSH transport, receipts): `ras_commander/RasApptainer.py`; guide in `docs/user-guide/slurm-apptainer-execution.md`. Its engine command is isolated in `ENGINE_SCRIPT_TEMPLATE`.
 
 ## Critical Rules
 
@@ -35,4 +36,4 @@ This file is the canonical local instruction file for `ras_commander/remote/`.
 ## Testing
 
 - Validate remote behavior against the real backend that the code targets.
-- Do not claim a stub backend works unless its execution path is actually implemented.
+- Do not add stub worker backends; add a worker only with a working, tested execution path.

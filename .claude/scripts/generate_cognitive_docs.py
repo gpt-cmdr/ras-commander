@@ -146,12 +146,13 @@ def get_command_files(claude_dir: Path) -> List[Dict]:
 
 
 def categorize_agents(agents: List[Dict]) -> Dict[str, List[Dict]]:
-    """Categorize agents by their type/model."""
+    """Categorize agents by responsibility, independent of provider/model selection."""
     categories = {
-        'Domain Specialists (Sonnet)': [],
-        'Knowledge Management (Opus)': [],
-        'Utility Agents (Sonnet)': [],
-        'Review Agents (Haiku)': [],
+        'Coordinators': [],
+        'Domain Specialists': [],
+        'Knowledge Management': [],
+        'Utility Agents': [],
+        'Review Agents': [],
         'Analysis Agents': [],
     }
 
@@ -164,16 +165,17 @@ def categorize_agents(agents: List[Dict]) -> Dict[str, List[Dict]]:
 
     for agent in agents:
         name = agent['name'].lower()
-        model = agent['frontmatter'].get('model', 'sonnet')
 
-        if any(kw in name for kw in knowledge_keywords):
-            categories['Knowledge Management (Opus)'].append(agent)
+        if name in ('ras-commander', 'cloud-native-gis') or 'coordinator' in name:
+            categories['Coordinators'].append(agent)
+        elif any(kw in name for kw in knowledge_keywords):
+            categories['Knowledge Management'].append(agent)
         elif any(kw in name for kw in domain_keywords):
-            categories['Domain Specialists (Sonnet)'].append(agent)
+            categories['Domain Specialists'].append(agent)
         elif any(kw in name for kw in utility_keywords):
-            categories['Utility Agents (Sonnet)'].append(agent)
-        elif any(kw in name for kw in review_keywords) or model == 'haiku':
-            categories['Review Agents (Haiku)'].append(agent)
+            categories['Utility Agents'].append(agent)
+        elif any(kw in name for kw in review_keywords):
+            categories['Review Agents'].append(agent)
         else:
             categories['Analysis Agents'].append(agent)
 
@@ -199,10 +201,11 @@ ras-commander includes **{len(agents)} agents** organized into specialized categ
 
 | Category | Count | Description |
 |----------|-------|-------------|
-| Domain Specialists | {len(categorized.get('Domain Specialists (Sonnet)', []))} | HEC-RAS domain expertise |
-| Knowledge Management | {len(categorized.get('Knowledge Management (Opus)', []))} | Hierarchical knowledge organization |
-| Utility Agents | {len(categorized.get('Utility Agents (Sonnet)', []))} | Development and documentation |
-| Review Agents | {len(categorized.get('Review Agents (Haiku)', []))} | Output validation and review |
+| Coordinators | {len(categorized.get('Coordinators', []))} | Task intake, routing, and handoffs |
+| Domain Specialists | {len(categorized.get('Domain Specialists', []))} | HEC-RAS domain expertise |
+| Knowledge Management | {len(categorized.get('Knowledge Management', []))} | Hierarchical knowledge organization |
+| Utility Agents | {len(categorized.get('Utility Agents', []))} | Development and documentation |
+| Review Agents | {len(categorized.get('Review Agents', []))} | Output validation and review |
 | Analysis Agents | {len(categorized.get('Analysis Agents', []))} | Research and pattern extraction |
 
 ---
@@ -222,7 +225,7 @@ ras-commander includes **{len(agents)} agents** organized into specialized categ
                 if len(description) > 300:
                     description = description[:297] + '...'
 
-            model = fm.get('model', 'sonnet')
+            model = fm.get('model', 'host default')
             tools = fm.get('tools', [])
             if isinstance(tools, list):
                 tools_str = ', '.join(tools[:5])
@@ -235,7 +238,7 @@ ras-commander includes **{len(agents)} agents** organized into specialized categ
 
             content += f"""### {name}
 
-**Model**: `{model}` | **Working Directory**: `{working_dir}`
+**Claude adapter model setting**: `{model}` | **Working Directory**: `{working_dir}`
 
 **Tools**: {tools_str}
 
@@ -250,29 +253,9 @@ ras-commander includes **{len(agents)} agents** organized into specialized categ
     content += """
 ## Agent Invocation
 
-### From Orchestrator
+Use the current harness's native specialist/worker mechanism. Claude definitions are host adapters; shared entry workflows live in `.claude/skills/`. Codex uses the shared skill bridge and native workers. The model setting shown above describes an adapter configuration; it does not define a capability ranking or a cross-harness requirement.
 
-```python
-from Task import Task
-
-# Invoke domain specialist
-result = Task(
-    subagent_type="hdf-analyst",
-    model="sonnet",  # Optional: override default model
-    prompt="Analyze water surface elevations in project.p01.hdf"
-)
-```
-
-### Model Override
-
-```python
-# Escalate to more capable model if needed
-result = Task(
-    subagent_type="notebook-output-auditor",
-    model="opus",  # Override default haiku
-    prompt="Perform deep analysis of notebook outputs"
-)
-```
+Delegate a focused question with project root, versions, allowed operations, and bounded output. Project MCP tools are exposed only to an informational subagent under the shared runtime contract. Use public Python APIs for binary, GIS, execution, or modifying work.
 
 ## Creating New Agents
 
@@ -283,7 +266,6 @@ See [Contributing Guide](../development/contributing.md) for instructions on cre
 ```yaml
 ---
 name: my-agent
-model: sonnet
 tools:
   - Read
   - Grep

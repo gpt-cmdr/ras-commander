@@ -792,14 +792,25 @@ class PreprocessResult:
         x_file_path: Path to the generated .x## file, or None on failure.
         elapsed_seconds: Wall-clock time for preprocessing.
         signal_source: ``bco``, ``owned_process_artifacts``,
-            ``materialized_gridded_precipitation``,
-            ``bco_materialized_precipitation``, ``natural_completion``,
-            ``full_result_copy``, ``timeout``, or a blocking-condition
-            identifier.
+            ``completepreprocess_writer_quiescent``,
+            ``bco_completepreprocess_writer_quiescent``, ``natural_completion``,
+            ``full_result_copy``, ``completepreprocess_repair``, ``timeout``,
+            or a blocking-condition identifier.
         full_result_copied: Whether a naturally completed ``p##.hdf`` supplied
             the temporary HDF fallback.
         timed_out: Whether preprocessing exceeded its bounded wait.
         error: Error message if preprocessing failed, None on success.
+        tcu_acceptance_receipts: Explicit operator-authorized TCU actions during
+            this preprocessing launch; empty when no action was attempted.
+        precipitation_repair_attempts: One dictionary per
+            ``RasProcess.exe CompletePreProcess`` re-run made to complete
+            point precipitation in the temporary HDF, in order. Keys:
+            ``attempt``, ``return_code``, ``elapsed_seconds``,
+            ``no_valid_precipitation`` (HEC-RAS printed "No valid
+            precipitation"), ``validation_errors`` (Event Conditions problems
+            after the attempt; empty when complete), ``timed_out`` and
+            ``error`` (launch, legal-dialog or cleanup failure). Empty when
+            no repair was attempted.
 
     Examples:
         # Simple usage (bool-compatible):
@@ -825,6 +836,8 @@ class PreprocessResult:
     full_result_copied: bool = False
     timed_out: bool = False
     error: Optional[str] = None
+    tcu_acceptance_receipts: List[Dict[str, Any]] = field(default_factory=list)
+    precipitation_repair_attempts: List[Dict[str, Any]] = field(default_factory=list)
 
     def __bool__(self) -> bool:
         return self.success
@@ -871,6 +884,10 @@ class GeometryPreprocessResult:
     warning_count: int = 0
     first_error_line: Optional[str] = None
     error: Optional[str] = None
+
+    missing_geometry_inventory: list[str] = field(default_factory=list)
+    missing_geometry_products: list[str] = field(default_factory=list)
+    completion_contract: dict = field(default_factory=dict)
 
     def __bool__(self) -> bool:
         return self.success

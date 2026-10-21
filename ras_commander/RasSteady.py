@@ -16,6 +16,7 @@ from typing import Any, Mapping, Optional, Sequence, Union
 
 from .Decorators import log_call
 from .LoggingConfig import get_logger
+from ._ras_text import _write_ras_text
 
 
 logger = get_logger(__name__)
@@ -308,7 +309,7 @@ class RasSteady:
         for key, value in dss_import.items():
             lines.append(f"{key}={value}\n")
 
-        flow_path.write_text("".join(lines), encoding="utf-8")
+        _write_ras_text(flow_path, "".join(lines), encoding="utf-8")
         logger.debug("Wrote steady flow file %s", flow_path)
         return flow_path
 

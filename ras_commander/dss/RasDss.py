@@ -352,17 +352,19 @@ class RasDss:
 
             - ``dss_file``: Absolute DSS file path.
             - ``pathname``: Exact pathname requested.
-            - ``data``: Two-dimensional ``float32`` array in row-major order.
-              The HEC grid no-data sentinel is represented as ``numpy.nan``.
+            - ``data``: Two-dimensional ``float32`` array in HEC row-major order.
+                Row zero is south, columns run west to east. Flip rows before
+                using a north-up raster transform or the native precipitation writer.
+                The HEC grid no-data sentinel is represented as ``numpy.nan``.
             - ``shape``: ``(rows, columns)``.
             - ``units`` and ``data_type``: DSS parameter metadata.
             - ``grid_type``: ``"albers"``, ``"specified"``, ``"hrap"``, or
-              the runtime grid-info class name for another grid type.
+                the runtime grid-info class name for another grid type.
             - ``crs`` and ``cell_size``: Spatial reference and resolution.
             - ``start_time`` and ``end_time``: Naive ``pandas.Timestamp``
-              values parsed from pathname parts D and E when present.
+                values parsed from pathname parts D and E when present.
             - ``metadata``: Grid dimensions, cell indexes, origin/projection,
-              compression, type codes, missing-value count, and raw timing.
+                compression, type codes, missing-value count, and raw timing.
 
         Raises:
             FileNotFoundError: If ``dss_file`` does not exist.
@@ -638,7 +640,7 @@ class RasDss:
         Args:
             boundaries_df: DataFrame from ras.boundaries_df
             project_dir: Project directory (for resolving relative DSS paths)
-            ras_object: RasPrj object (alternative to project_dir)
+            ras_object (RasPrj, optional): RasPrj object (alternative to project_dir)
 
         Returns:
             Enhanced DataFrame with 'dss_timeseries' column containing extracted data
@@ -761,7 +763,7 @@ class RasDss:
             pathname: DSS pathname to validate
 
         Returns:
-            ValidationResult with detailed diagnostics
+            ValidationResult: Result with detailed diagnostics
 
         Example:
             >>> from ras_commander.dss import RasDss
@@ -874,7 +876,7 @@ class RasDss:
             dss_file: Path to DSS file (str or Path)
 
         Returns:
-            ValidationResult with file existence check outcome
+            ValidationResult: Result with file existence check outcome
 
         Example:
             >>> from pathlib import Path
@@ -952,7 +954,7 @@ class RasDss:
             pathname: DSS pathname to check
 
         Returns:
-            ValidationResult with existence check outcome
+            ValidationResult: Result with existence check outcome
 
         Example:
             >>> result = RasDss.check_pathname_exists(
@@ -1063,7 +1065,7 @@ class RasDss:
             expected_end: Expected end date (optional, datetime or string)
 
         Returns:
-            ValidationResult with data availability check outcome
+            ValidationResult: Result with data availability check outcome
 
         Example:
             >>> from datetime import datetime
@@ -1183,7 +1185,7 @@ class RasDss:
             end_date: Optional end date for availability check
 
         Returns:
-            ValidationReport with all validation results
+            ValidationReport: Result with all validation results
 
         Example:
             >>> report = RasDss.check_pathname(
@@ -1308,6 +1310,84 @@ class RasDss:
 
     @staticmethod
     @log_call
+    def write_precip_grid_arrays(
+        dss_file: Union[str, Path],
+        pathname: str,
+        data: np.ndarray,
+        interval_bounds: Union[List, np.ndarray, pd.DatetimeIndex],
+        *,
+        transform: Any,
+        crs: Any,
+        units: str,
+        nodata: Optional[float] = None,
+        overwrite: bool = False,
+        grid_reference_origin: Optional[Tuple[float, float]] = None,
+    ) -> List[str]:
+        """Write interval precipitation arrays directly to a new native DSS7 file.
+
+        Uses optional MIT-licensed gyanz/pydsstools, without Java or Vortex.
+        Install ``ras-commander[dss-native]`` on a supported Python/platform.
+        NetCDF precipitation generation and existing Java DSS APIs are unchanged.
+
+        Args:
+            dss_file: Output file. Existing files require explicit overwrite;
+                overwrite replaces the entire file, it does not append records.
+            pathname: Six-part template, e.g. ``/UTM15/BASIN/PRECIP///ATLAS14/``.
+                D/E must be blank and become each interval's start/end.
+            data: Nonnegative interval depths, shape (time, row, column).
+                Row zero is north, columns run west to east. NaN and masked
+                cells are NoData. Infinity and negative depths are rejected.
+            interval_bounds: Exactly n_times+1 increasing, timezone-naive,
+                whole-minute datetimes. No timezone conversion is performed;
+                use the same clock as the receiving model. Unequal intervals
+                are supported; DSS end-of-day timestamps use 2400.
+            transform: Rasterio/Affine transform or six coefficients in
+                (a,b,c,d,e,f) order (not GDAL geotransform order), mapping
+                pixel corners. Requires north-up, unrotated square cells.
+            crs: Explicit projected CRS accepted by pyproj. No reprojection
+                occurs. Reproject geographic Atlas 14 grids before calling.
+            units: ``inches``/``IN`` or ``mm``. Numeric values are unchanged;
+                the records represent PER-CUM depth over each D/E interval,
+                not cumulative storm totals or precipitation rates.
+            nodata: Optional input sentinel, in the same units as data.
+            overwrite: Replace the whole output file after successful writing.
+            grid_reference_origin: Optional physical (x, y) coordinate of the
+                lower-left corner of cell (0, 0), in CRS units. The raster's
+                lower-left corner must
+                align with this reference at whole-cell offsets. Required when
+                a receiving model addresses rainfall by fixed grid-cell indexes,
+                such as legacy HMS HRAP file discretizations; use the model's
+                reference, commonly (0, 0). None preserves local indexing from
+                the raster lower-left corner. Neither choice reprojects data.
+
+        Returns:
+            Exact record pathnames written. Output uses DSS7 specified-time
+            grids; no generic promise of RAS/HMS version compatibility is made.
+
+        Raises:
+            ImportError: Native optional dependencies are unavailable.
+            ValueError: Array, pathname, units, geometry, or times are invalid.
+            FileExistsError: Output exists and overwrite is false.
+            RuntimeError: Written records could not be read back.
+
+        Notes:
+            A temporary sibling file is closed and its record metadata read
+            back before publication. No per-timestep raster files are created.
+            New output publication requires filesystem hard-link support to
+            refuse a concurrently created target atomically.
+            See https://github.com/gyanz/pydsstools for the upstream library.
+        """
+        from ._native_grid import write_precip_grid_arrays
+
+        return write_precip_grid_arrays(
+            dss_file, pathname, data, interval_bounds,
+            transform=transform, crs=crs, units=units,
+            nodata=nodata, overwrite=overwrite,
+            grid_reference_origin=grid_reference_origin,
+        )
+
+    @staticmethod
+    @log_call
     def write_grid_timeseries(
         dss_file: Union[str, Path],
         pathname: str,
@@ -1334,6 +1414,8 @@ class RasDss:
                 preserved; Parts D and E are replaced with each timestep's
                 start/end window.
             data: 3-D array with shape ``(n_times, n_rows, n_cols)``.
+                HEC row order: row zero is south, columns run west to east.
+                For north-up raster arrays pass ``data[:, ::-1, :]``.
                 NaN/inf values and values equal to ``grid_info["nodata_value"]``
                 are written as the HEC grid no-data sentinel.
             times: Timezone-naive datetime values. Pass ``n_times + 1`` values
@@ -1471,7 +1553,7 @@ class RasDss:
 
             for index, (start_time, end_time) in enumerate(time_windows):
                 d_part = RasDss._format_grid_dss_datetime(start_time)
-                e_part = RasDss._format_grid_dss_datetime(end_time)
+                e_part = RasDss._format_native_grid_end_datetime(end_time)
                 record_parts = list(path_parts)
                 record_parts[3] = d_part
                 record_parts[4] = e_part

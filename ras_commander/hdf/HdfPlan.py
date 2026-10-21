@@ -17,7 +17,9 @@ All of the methods in this class are static and are designed to be used without 
 - get_plan_timestamps_list()
 - get_plan_information()
 - get_plan_parameters()
+- get_hdf_output_settings()
 - get_plan_met_precip()
+- get_plan_met_precip_values()
 - get_geometry_information()
 - get_starting_wse_method()
 
@@ -295,6 +297,81 @@ class HdfPlan:
             raise ValueError(f"Failed to get plan parameter attributes: {str(e)}")
 
     @staticmethod
+    @log_call
+    @standardize_input(file_type='plan_hdf')
+    def get_hdf_output_settings(hdf_path: Path) -> Dict[str, Any]:
+        """
+        Report how a computed plan HDF was actually written (compression and cadence).
+
+        Use this to confirm that the plan-file settings written by
+        ``RasPlan.set_hdf_compression`` / ``RasPlan.update_plan_intervals`` were honored.
+
+        Args:
+            hdf_path (Path): Path to the HEC-RAS plan HDF file.
+
+        Returns:
+            dict with:
+                - ``write_parameters``: ``HDF ...`` attributes from
+                  ``Plan Data/Plan Parameters`` (compression, chunk size, ...).
+                - ``time_series``: DataFrame, one row per 2D/1D unsteady time-series
+                  dataset (``name``, ``shape``, ``chunks``, ``compression``,
+                  ``compression_opts``, ``shuffle``, ``stored_mb``, ``raw_mb``,
+                  ``ratio``).
+                - ``n_timesteps``: length of ``Time Date Stamp`` under Base Output
+                  (the mapping-interval cadence, not the Hydrograph Output Interval), or None.
+                - ``file_size_mb``: size of the HDF file on disk.
+        """
+        try:
+            with h5py.File(hdf_path, 'r') as hdf_file:
+                write_parameters: Dict[str, Any] = {}
+                params_path = HdfPlan._PLAN_PARAMETERS_PATH
+                if params_path in hdf_file:
+                    for key in hdf_file[params_path].attrs.keys():
+                        if key.startswith("HDF "):
+                            write_parameters[key] = HdfPlan._decode_hdf_attr_value(
+                                hdf_file[params_path].attrs[key]
+                            )
+
+                rows: List[Dict[str, Any]] = []
+                ts_root = "Results/Unsteady/Output/Output Blocks/Base Output/Unsteady Time Series"
+                n_timesteps = None
+                if ts_root in hdf_file:
+                    stamp_path = f"{ts_root}/Time Date Stamp"
+                    if stamp_path in hdf_file:
+                        n_timesteps = int(hdf_file[stamp_path].shape[0])
+
+                    def _collect(name, obj):
+                        if isinstance(obj, h5py.Dataset) and obj.ndim == 2 and obj.size > 0:
+                            raw = obj.size * obj.dtype.itemsize
+                            stored = obj.id.get_storage_size()
+                            rows.append({
+                                "name": name,
+                                "shape": obj.shape,
+                                "chunks": obj.chunks,
+                                "compression": obj.compression,
+                                "compression_opts": obj.compression_opts,
+                                "shuffle": obj.shuffle,
+                                "stored_mb": stored / 1e6,
+                                "raw_mb": raw / 1e6,
+                                "ratio": stored / raw if raw else None,
+                            })
+
+                    hdf_file[ts_root].visititems(_collect)
+
+            return {
+                "write_parameters": write_parameters,
+                "time_series": pd.DataFrame(
+                    rows,
+                    columns=["name", "shape", "chunks", "compression", "compression_opts",
+                             "shuffle", "stored_mb", "raw_mb", "ratio"],
+                ),
+                "n_timesteps": n_timesteps,
+                "file_size_mb": Path(hdf_path).stat().st_size / 1e6,
+            }
+        except Exception as e:
+            raise ValueError(f"Failed to get HDF output settings: {str(e)}")
+
+    @staticmethod
     def _decode_hdf_attr_value(value: Any) -> Any:
         """
         Convert HDF attribute scalars/arrays to Python values.
@@ -552,6 +629,58 @@ class HdfPlan:
             logger.error(f"Failed to get precipitation attributes: {str(e)}")
             return {}
         
+    @staticmethod
+    @log_call
+    @standardize_input(file_type='plan_hdf')
+    def get_plan_met_precip_values(
+        hdf_path: Union[str, Path, int, h5py.File], *, ras_object=None,
+    ) -> Dict[str, Any]:
+        """Read materialized solver precipitation arrays without unit conversion.
+
+        Args:
+            hdf_path: Plan HDF path, plan identifier or open HDF handle accepted
+                by the HDF input decorator.
+            ras_object: Optional RasPrj context for resolving plan identifiers.
+
+        Returns:
+            Dictionary with ``values`` (time by precipitation-grid cell), raw
+            ``timestamps``, group ``attributes``, ``value_attributes`` and
+            ``timestamp_attributes``. Arrays are independent copies. Attribute
+            byte strings are decoded; timestamp encodings and numerical values
+            are preserved. Cell columns are precipitation-grid indexes, not
+            hydraulic mesh-cell indexes. No depth/rate or time-unit inference
+            is made. Native materialization was checked on HEC-RAS 6.6.
+
+        Raises:
+            KeyError: Solver Values/Timestamp datasets are absent. An imported
+                raster sidecar alone is not materialized solver precipitation.
+            ValueError: Dataset dimensions or time-axis lengths are inconsistent.
+        """
+        group_path = "Event Conditions/Meteorology/Precipitation"
+
+        def attributes(obj):
+            return {
+                key: value.decode('utf-8') if isinstance(value, bytes) else value
+                for key, value in obj.attrs.items()
+            }
+
+        with h5py.File(hdf_path, 'r') as hdf:
+            values_path = group_path + '/Values'
+            times_path = group_path + '/Timestamp'
+            if values_path not in hdf or times_path not in hdf:
+                raise KeyError(f"Materialized precipitation Values/Timestamp absent in {hdf_path}")
+            values = hdf[values_path]
+            times = hdf[times_path]
+            if (values.ndim != 2 or not all(values.shape) or times.ndim != 1
+                    or values.shape[0] != times.shape[0]):
+                raise ValueError(f"Inconsistent precipitation shapes: {values.shape}, {times.shape}")
+            return {
+                'values': values[...], 'timestamps': times[...],
+                'attributes': attributes(hdf[group_path]),
+                'value_attributes': attributes(values),
+                'timestamp_attributes': attributes(times),
+            }
+
     @staticmethod
     @log_call
     @standardize_input(file_type='geom_hdf')

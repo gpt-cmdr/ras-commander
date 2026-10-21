@@ -1,5 +1,10 @@
 # Contributing to ras-commander
 
+Technical prose contributed to this repository follows the [writing guide](.claude/references/writing/technical-writing-guide.md) and
+[extended standard](.claude/references/writing/technical-writing-standard.md). Use relevant HEC documentation
+as the primary source for HEC-RAS content, provide passive references, and maintain the project's
+independent third-party voice. These rules do not govern users’ external work. The shared `technical-writing-auditor` skill supports writing reviews.
+
 ## Our Philosophy: Don't Ask Me, Ask a GPT!
 
 ras-commander was **built by LLMs**, is **designed for LLM workflows**, and **welcomes contributions prepared with LLM agent assistance**.

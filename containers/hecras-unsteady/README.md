@@ -13,6 +13,16 @@ require Wine or a host HEC-RAS installation.
 
 ## Image status
 
+The [public container catalog](https://rascommander.info/ras/user-guide/container-images/)
+provides Docker Hub links, immutable digests, and qualification scope for all
+six matching images. The [backend comparison](https://rascommander.info/ras/user-guide/execution-backends/)
+explains which runtime contracts each API requires. For prepared native plans,
+see [Slurm + Apptainer](https://rascommander.info/ras/user-guide/slurm-apptainer-execution/);
+Docker qualification does not qualify a SIF through that API.
+
+Maintainers can use the [Docker Hub description packet](../DOCKERHUB.md) to
+link all six listings to the published guides after documentation deployment.
+
 Use the matching preprocessing and compute image pair for the selected HEC-RAS
 version. Image qualification and publication evidence are maintained separately
 from this source tree.
@@ -24,6 +34,12 @@ from this source tree.
 | 7.0.1 | `rascommander/hec-ras-wine-precompute_7.0.1:v4` | `rascommander/hec-ras-linux-unsteady_7.0.1:v1` |
 
 The published native images install source `604704d440c49a39d6f6e8bae262e2233d895dd0`; Wine controller source is `dc60b219091e85bcb4564eca45313475c39ce58a`, with Windows library source `9e4217713e954236b0c16023e1815c6f2b7a5309`. Those revisions identify the published image payloads. The host API follows the installed ras-commander release. Use the public image references below with `pull="always"`.
+
+The successor Wine preprocessing recipe is [hecras-wine-precompute](../hecras-wine-precompute/README.md);
+its next tag, `v5`, adds a CPU-numbering shim that the published `v4`
+images lack. For Slurm, [hecras-wine-executor](../hecras-wine-executor/README.md)
+derives a portable-executor image and [apptainer](../apptainer/README.md) converts
+images to SIFs.
 
 ## Run through the Python API
 
@@ -165,7 +181,7 @@ The exact image source revision is recorded in its OCI revision label.
 | Generated `runtime.json` | `/opt/hecras-runtime/runtime.json`; declares native runtime type, matching HEC-RAS version, and installed artifacts. Generated from external files, not a vendor binary stored in Git. |
 
 The base is Python 3.13.15 on Debian trixie, pinned in the
-[Dockerfile][dockerfile]. Additional Linux packages are `tini` 0.19.0-3+b7,
+[Dockerfile][dockerfile]. Additional Linux packages are `tini` 0.19.0-3+b8,
 `libgfortran5` 14.2.0-19, and `libgomp1` 14.2.0-19. `tini` forwards process
 signals and reaps child processes; the GCC runtime packages support the
 Fortran/OpenMP solver.

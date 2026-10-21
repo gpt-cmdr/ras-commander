@@ -1,5 +1,6 @@
 import importlib
 import json
+import os
 from pathlib import Path
 import subprocess
 import threading
@@ -285,7 +286,7 @@ def test_slurm_render_stages_portable_relative_bundles(tmp_path):
     # Slurm executes a spool copy of the script, so dirname($0) is not the
     # submission directory. submit() supplies the working directory instead.
     assert "dirname" not in script
-    assert payload["launcher"]["version"] == "ras-portable-slurm-launcher/v1"
+    assert payload["launcher"]["version"] == "ras-portable-slurm-launcher/v2"
     assert "module load apptainer/1.3" in script
     assert all(path.is_file() for path in submission.request_paths)
     rehydrated = type(submission).read(
@@ -819,3 +820,216 @@ def test_slurm_collect_rejects_duplicate_correlated_step_records(
     assert not collection.success
     assert collection.receipts["job-a"] is None
     assert "exactly one" in collection.errors["job-a"]
+
+
+def _with_job(rendered, job_id="900"):
+    return type(rendered)(
+        submission_id=rendered.submission_id,
+        submission_directory=rendered.submission_directory,
+        request_paths=rendered.request_paths,
+        site=rendered.site,
+        batch_sha256=rendered.batch_sha256,
+        launcher_sha256=rendered.launcher_sha256,
+        submit_sha256=rendered.submit_sha256,
+        launcher_version=rendered.launcher_version,
+        transport=rendered.transport,
+        job_id=job_id,
+    )
+
+
+def test_slurm_array_mode_renders_one_bounded_task_per_request(tmp_path):
+    paths = [_request(tmp_path, name) for name in ("job-a", "job-b", "job-c")]
+    submission = RasSlurm.render_submission(
+        paths,
+        tmp_path / "submission",
+        site=_site(execution_mode="array", array_throttle=2, slurm_memory="3200M"),
+        submission_id="arr-1",
+    )
+    script = (submission.submission_directory / "submit.sbatch").read_text()
+
+    assert "#SBATCH --array=0-2%2" in script
+    assert "#SBATCH --ntasks=1" in script
+    assert "#SBATCH --mem=3200M" in script
+    assert "--exclusive" not in script
+    assert "#SBATCH --output=slurm-%A_%a.out" in script
+    assert script.rstrip().endswith(
+        'portable_slurm_launcher.py slurm_batch.json --array-index "$SLURM_ARRAY_TASK_ID"'
+    )
+
+
+@pytest.mark.parametrize(
+    "kwargs, message",
+    [
+        ({"execution_mode": "mpi"}, "execution_mode"),
+        ({"array_throttle": 2}, "requires execution_mode='array'"),
+        ({"execution_mode": "array", "array_throttle": 0}, "positive integer"),
+        ({"node_scratch_root": "scratch"}, "node_scratch_root"),
+        ({"node_scratch_root": "/scratch/../tmp"}, "node_scratch_root"),
+    ],
+)
+def test_slurm_site_rejects_invalid_scheduling_settings(kwargs, message):
+    with pytest.raises(ValueError, match=message):
+        _site(**kwargs)
+
+
+def _launcher_batch(tmp_path, monkeypatch, *, mode):
+    launcher = importlib.import_module(
+        "ras_commander.remote.portable_slurm_launcher"
+    )
+    paths = [_request(tmp_path, name) for name in ("job-a", "job-b")]
+    sif = tmp_path / "image.sif"
+    sif.write_bytes(b"image")
+    scratch_root = tmp_path / "node-scratch"
+    scratch_root.mkdir()
+    rendered = RasSlurm.render_submission(
+        paths,
+        tmp_path / "submission",
+        site=_site(
+            apptainer_image=str(sif),
+            execution_mode=mode,
+            node_scratch_root=str(scratch_root),
+        ),
+    )
+    monkeypatch.setenv("SLURM_JOB_ID", "77")
+    commands = []
+
+    def run(command, **kwargs):
+        commands.append(command)
+        binds = [command[i + 1] for i, item in enumerate(command) if item == "--bind"]
+        assert Path(binds[2].split(":")[0]).is_dir() and binds[2].endswith(":/tmp:rw")
+        output = Path(binds[1].split(":")[0])
+        (output / "execution_receipt.json").write_text("{}")
+        return subprocess.CompletedProcess(command, 0, "", "")
+
+    monkeypatch.setattr(launcher.subprocess, "run", run)
+    return launcher, rendered, scratch_root, commands
+
+
+def test_launcher_binds_private_node_scratch_as_contained_tmp(tmp_path, monkeypatch):
+    launcher, rendered, scratch_root, commands = _launcher_batch(
+        tmp_path, monkeypatch, mode="pool"
+    )
+
+    assert launcher.run(rendered.submission_directory / "slurm_batch.json")
+
+    assert len(commands) == 2
+    for command in commands:
+        assert command[command.index("exec") + 1 : command.index("exec") + 3] == [
+            "--contain",
+            "--cleanenv",
+        ]
+        tmp_bind = [item for item in command if item.endswith(":/tmp:rw")]
+        assert len(tmp_bind) == 1
+        assert tmp_bind[0].startswith(str(scratch_root / "77" / "ras-commander-job-"))
+    # Step scratch (the Wine prefix copy) and the job directory the launcher
+    # created are removed; outputs are kept.
+    assert list(scratch_root.iterdir()) == []
+
+
+def test_launcher_uses_prolog_job_scratch_under_root_owned_parent(tmp_path, monkeypatch):
+    launcher, rendered, scratch_root, commands = _launcher_batch(
+        tmp_path, monkeypatch, mode="pool"
+    )
+    (scratch_root / "77").mkdir(mode=0o700)  # created by the Slurm prolog
+    scratch_root.chmod(0o555)  # parent not writable by the job user
+    try:
+        assert launcher.run(rendered.submission_directory / "slurm_batch.json")
+    finally:
+        scratch_root.chmod(0o755)
+    assert len(commands) == 2
+    # The prolog's directory is kept for the epilog; step directories are removed.
+    assert list((scratch_root / "77").iterdir()) == []
+
+
+def test_launcher_rejects_job_scratch_owned_by_someone_else(tmp_path, monkeypatch):
+    launcher, rendered, scratch_root, commands = _launcher_batch(
+        tmp_path, monkeypatch, mode="pool"
+    )
+    (scratch_root / "77").mkdir()
+    real_lstat = os.lstat
+    monkeypatch.setattr(
+        launcher.os, "lstat",
+        lambda path: type("S", (), {"st_uid": os.getuid() + 1})()
+        if str(path).endswith("/77") else real_lstat(path),
+    )
+    assert not launcher.run(rendered.submission_directory / "slurm_batch.json")
+    assert commands == []
+
+
+def test_launcher_array_index_runs_exactly_one_request(tmp_path, monkeypatch):
+    launcher, rendered, _, commands = _launcher_batch(
+        tmp_path, monkeypatch, mode="array"
+    )
+    batch = rendered.submission_directory / "slurm_batch.json"
+
+    assert launcher.main([str(batch), "--array-index", "1"]) == 0
+    assert len(commands) == 1
+    assert any("/bundles/job-b:/job:ro" in item for item in commands[0])
+    assert launcher.main([str(batch)]) == 2
+    assert launcher.main([str(batch), "--array-index", "2"]) == 2
+    assert launcher.main([str(batch), "--array-index", "-1"]) == 2
+
+
+def test_launcher_scratch_requires_slurm_job(tmp_path, monkeypatch):
+    launcher, rendered, _, commands = _launcher_batch(
+        tmp_path, monkeypatch, mode="pool"
+    )
+    monkeypatch.delenv("SLURM_JOB_ID")
+
+    assert not launcher.run(rendered.submission_directory / "slurm_batch.json")
+    assert commands == []
+    failure = rendered.submission_directory / "bundles/job-a/output/job-a/launcher_failure.json"
+    assert json.loads(failure.read_text())["reason_code"] == "SLURM_STEP_SCRATCH_FAILED"
+
+
+@pytest.mark.parametrize(
+    "sacct, expected",
+    [
+        ("901|arr-1|COMPLETED|0:0||00:01:00\n902|arr-1|RUNNING|0:0||00:00:10\n", "RUNNING"),
+        ("901|arr-1|COMPLETED|0:0||00:01:00\n", "RUNNING"),
+        (
+            "901|arr-1|COMPLETED|0:0||00:01:00\n901.batch|batch|COMPLETED|0:0|1G|00:01:00\n"
+            "902|arr-1|COMPLETED|0:0||00:01:00\n",
+            "COMPLETED",
+        ),
+        ("901|arr-1|COMPLETED|0:0||00:01:00\n902|arr-1|OUT_OF_MEMORY|0:125||00:01:00\n", "OUT_OF_MEMORY"),
+        ("901|arr-1|COMPLETED|0:0||00:01:00\n902|arr-1|PENDING|0:0||00:00:00\n", "PENDING"),
+        ("901|arr-1|COMPLETED|0:0||00:01:00\n902|arr-1|COMPLETING|0:0||00:01:00\n", "COMPLETING"),
+        ("901|arr-1|CANCELLED|0:0||00:00:00\n", "CANCELLED"),
+    ],
+)
+def test_slurm_array_status_summarizes_every_task(tmp_path, monkeypatch, sacct, expected):
+    paths = [_request(tmp_path, name) for name in ("job-a", "job-b")]
+    rendered = RasSlurm.render_submission(
+        paths,
+        tmp_path / "submission",
+        site=_site(execution_mode="array"),
+        submission_id="arr-1",
+    )
+    submission = _with_job(rendered)
+
+    def run(command, **kwargs):
+        if command[0] == "sacct":
+            return subprocess.CompletedProcess(command, 0, sacct, "")
+        if command[0] == "squeue":
+            return subprocess.CompletedProcess(command, 0, "", "")
+        raise AssertionError(command)
+
+    module = importlib.import_module("ras_commander.RasSlurm")
+    monkeypatch.setattr(module.subprocess, "run", run)
+
+    assert RasSlurm.status(submission).allocation_state == expected
+
+
+def test_launcher_accepts_a_symlinked_node_scratch_root(tmp_path, monkeypatch):
+    launcher, rendered, scratch_root, commands = _launcher_batch(
+        tmp_path, monkeypatch, mode="pool"
+    )
+    batch = rendered.submission_directory / "slurm_batch.json"
+    payload = json.loads(batch.read_text())
+    link = tmp_path / "scratch-link"
+    link.symlink_to(scratch_root)
+    payload["site"]["node_scratch_root"] = str(link)
+    batch.write_text(json.dumps(payload))
+    assert launcher.run(batch)
+    assert len(commands) == 2

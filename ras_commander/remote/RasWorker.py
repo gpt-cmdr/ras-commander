@@ -32,7 +32,7 @@ class RasWorker:
     connection, deployment, and execution logic.
 
     Attributes:
-        worker_type: Type identifier ("psexec", "ssh", "local", etc.)
+        worker_type: Type identifier ("psexec", "local", or "docker")
         worker_id: Unique identifier for this worker instance
         hostname: Remote machine hostname or IP (None for local)
         ras_exe_path: Path to HEC-RAS.exe on target machine (optional, obtained from ras object)
@@ -57,6 +57,9 @@ class RasWorker:
 # WORKER FACTORY FUNCTION
 # =============================================================================
 
+#: Worker types accepted by :func:`init_ras_worker`.
+SUPPORTED_WORKER_TYPES = ("psexec", "local", "docker")
+
 @log_call
 def init_ras_worker(
     worker_type: str,
@@ -70,10 +73,10 @@ def init_ras_worker(
     connectivity, and ensures HEC-RAS is available on the target system.
 
     Args:
-        worker_type: Type of worker - "psexec", "local", "ssh", "winrm", "docker",
-                     "slurm", "aws_ec2", "azure_fr"
-        ras_object: RasPrj object to get ras_exe_path from. If None, uses global ras.
-        **kwargs: Worker-type specific configuration parameters
+        worker_type: Type of worker - "psexec", "local", or "docker". For HPC
+                     clusters use RasSlurm or RasApptainer instead of a worker.
+        ras_object (RasPrj, optional): RasPrj object to get ras_exe_path from. If None, uses global ras.
+        **kwargs (Any): Worker-type specific configuration parameters
 
     Common kwargs (all worker types):
         ras_exe_path: Path to HEC-RAS.exe on target machine (optional - obtained from ras object if not provided)
@@ -106,7 +109,6 @@ def init_ras_worker(
         ConnectionError: Cannot connect to remote machine
         FileNotFoundError: PsExec.exe or RAS.exe not found
         PermissionError: Insufficient permissions for remote execution
-        NotImplementedError: Worker type not yet implemented
 
     Example:
         # Initialize PsExec worker - ras_exe_path obtained from ras object
@@ -128,11 +130,12 @@ def init_ras_worker(
     logger.debug(f"Initializing {worker_type} worker")
 
     # Validate worker_type
-    valid_types = ["psexec", "local", "ssh", "winrm", "docker", "slurm", "aws_ec2", "azure_fr"]
-    if worker_type not in valid_types:
+    if worker_type not in SUPPORTED_WORKER_TYPES:
         raise ValueError(
             f"Invalid worker_type '{worker_type}'. "
-            f"Valid types: {', '.join(valid_types)}"
+            f"Supported types: {', '.join(SUPPORTED_WORKER_TYPES)}. "
+            "For Slurm/HPC clusters use RasSlurm (portable request pool) or "
+            "RasApptainer (Apptainer containers) instead of a worker."
         )
 
     # Get ras_exe_path from ras object if not provided
@@ -167,29 +170,9 @@ def init_ras_worker(
         from .LocalWorker import init_local_worker
         return init_local_worker(**kwargs)
 
-    elif worker_type == "ssh":
-        from .SshWorker import init_ssh_worker
-        return init_ssh_worker(**kwargs)
-
-    elif worker_type == "winrm":
-        from .WinrmWorker import init_winrm_worker
-        return init_winrm_worker(**kwargs)
-
     elif worker_type == "docker":
         from .DockerWorker import init_docker_worker
         return init_docker_worker(**kwargs)
-
-    elif worker_type == "slurm":
-        from .SlurmWorker import init_slurm_worker
-        return init_slurm_worker(**kwargs)
-
-    elif worker_type == "aws_ec2":
-        from .AwsEc2Worker import init_aws_ec2_worker
-        return init_aws_ec2_worker(**kwargs)
-
-    elif worker_type == "azure_fr":
-        from .AzureFrWorker import init_azure_fr_worker
-        return init_azure_fr_worker(**kwargs)
 
 
 @log_call
@@ -203,7 +186,7 @@ def load_workers_from_json(
 
     Args:
         json_path: Path to JSON file containing worker configurations
-        ras_object: RasPrj object to get ras_exe_path from. If None, uses global ras.
+        ras_object (RasPrj, optional): RasPrj object to get ras_exe_path from. If None, uses global ras.
         enabled_only: If True, only load workers with "enabled": true (default True)
 
     Returns:
@@ -296,8 +279,6 @@ def load_workers_from_json(
             worker = init_ras_worker(worker_type, ras_object=ras_object, **kwargs)
             workers.append(worker)
             logger.debug(f"Loaded worker: {worker.worker_id} ({worker_type})")
-        except NotImplementedError as e:
-            logger.warning(f"Skipping unimplemented worker type '{worker_type}': {e}")
         except Exception as e:
             worker_name = worker_config.get('name', 'unnamed')
             logger.error(

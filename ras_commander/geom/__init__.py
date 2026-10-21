@@ -68,12 +68,14 @@ from .GeomMetadata import GeomMetadata
 from .GeomReferenceFeatures import GeomReferenceFeatures
 from .GeomBcLines import GeomBcLines
 from .GeomMesh import GeomMesh
+from .GeomMeshRepair import GeomMeshRepair
 from .GeomPipeNetwork import GeomPipeNetwork
 from .GeomMeshDataclasses import (
     BCConflict,
     BCFixResult,
     DomainContainmentResult,
     DomainContainmentViolation,
+    GridAnchor,
     MeshResult,
 )
 
@@ -101,10 +103,12 @@ __all__ = [
     'GeomReferenceFeatures',
     'GeomBcLines',
     'GeomMesh',
+    'GeomMeshRepair',
     'GeomPipeNetwork',
     'MeshResult',
     'BCConflict',
     'BCFixResult',
     'DomainContainmentResult',
     'DomainContainmentViolation',
+    'GridAnchor',
 ]

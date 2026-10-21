@@ -6,7 +6,7 @@ Docs: https://rascommander.info/ras
 GitHub: https://github.com/gpt-cmdr/ras-commander
 """
 
-from importlib import import_module
+from ._optional_deps import import_feature_module
 from importlib.metadata import version, PackageNotFoundError
 import sys
 from types import ModuleType
@@ -17,7 +17,7 @@ try:
     __version__ = version("ras-commander")
 except PackageNotFoundError:
     # package is not installed
-    __version__ = "0.103.0"
+    __version__ = "0.106.1"
 
 # Canonical machine-readable agent index (see docs() helper below)
 __llms_txt__ = "https://rascommander.info/ras/llms.txt"
@@ -101,6 +101,7 @@ from .callbacks import (
 from .RasBco import BcoMonitor
 
 _LAZY_EXPORTS = {
+    "RasText": (".RasText", "RasText"),
     'RasDocker': ('.RasDocker', 'RasDocker'),
     'RasSlurm': ('.RasSlurm', 'RasSlurm'),
     'SlurmSiteConfig': ('.RasSlurm', 'SlurmSiteConfig'),
@@ -109,6 +110,17 @@ _LAZY_EXPORTS = {
     'SlurmStatus': ('.RasSlurm', 'SlurmStatus'),
     'SlurmTaskAccounting': ('.RasSlurm', 'SlurmTaskAccounting'),
     'SlurmCollection': ('.RasSlurm', 'SlurmCollection'),
+    'RasApptainer': ('.RasApptainer', 'RasApptainer'),
+    'ApptainerSiteProfile': ('.RasApptainer', 'ApptainerSiteProfile'),
+    'ApptainerJob': ('.RasApptainer', 'ApptainerJob'),
+    'ApptainerStatus': ('.RasApptainer', 'ApptainerStatus'),
+    'ApptainerCollection': ('.RasApptainer', 'ApptainerCollection'),
+    'ApptainerPrepareCollection': ('.RasApptainer', 'ApptainerPrepareCollection'),
+    'RasContainerImages': ('.RasContainerImages', 'RasContainerImages'),
+    'ApptainerTransport': ('.RasApptainer', 'ApptainerTransport'),
+    'SshApptainerTransport': ('.RasApptainer', 'SshApptainerTransport'),
+    'ApptainerProfileError': ('.RasApptainer', 'ApptainerProfileError'),
+    'InputCheckError': ('.RasApptainer', 'InputCheckError'),
     'ContainerResult': ('.RasDocker', 'ContainerResult'),
     'ContainerEvent': ('.RasDocker', 'ContainerEvent'),
     'ContainerBatchResult': ('.RasDocker', 'ContainerBatchResult'),
@@ -287,9 +299,9 @@ _LAZY_EXPORTS = {
             'CrossSectionReachLengths', 'GeomStorage', 'GeomProjection',
             'GeomLateral', 'GeomInlineWeir', 'GeomBridge', 'GeomCulvert',
             'GeomCulvertGIS', 'GeomReferenceFeatures', 'GeomBcLines',
-            'GeomMesh', 'GeomPipeNetwork', 'MeshResult', 'BCConflict',
+            'GeomMesh', 'GeomMeshRepair', 'GeomPipeNetwork', 'MeshResult', 'BCConflict',
             'BCFixResult', 'DomainContainmentResult',
-            'DomainContainmentViolation',
+            'DomainContainmentViolation', 'GridAnchor',
         )
     },
     **{
@@ -311,8 +323,7 @@ _LAZY_EXPORTS = {
 # Remote execution - lazy loaded to avoid importing until needed
 # This reduces import time and allows optional dependencies to be truly optional
 _REMOTE_EXPORTS = {
-    'RasWorker', 'PsexecWorker', 'LocalWorker', 'SshWorker', 'WinrmWorker',
-    'DockerWorker', 'SlurmWorker', 'AwsEc2Worker', 'AzureFrWorker',
+    'RasWorker', 'PsexecWorker', 'LocalWorker', 'DockerWorker',
     'init_ras_worker', 'load_workers_from_json', 'compute_parallel_remote',
     'ExecutionResult', 'get_worker_status', 'validate_steady_results', 'validate_unsteady_results',
     'PreprocessPolicy', 'RasExecutionRequest', 'RasExecutionReceipt',
@@ -358,7 +369,10 @@ def _load_export(name):
     if target is None:
         raise AttributeError(f"module 'ras_commander' has no attribute '{name}'")
     module_name, attribute_name = target
-    value = getattr(import_module(module_name, __name__), attribute_name)
+    module = import_feature_module(
+        module_name, __name__, f"ras_commander.{name}"
+    )
+    value = getattr(module, attribute_name)
     globals()[name] = value
     return value
 
@@ -368,37 +382,37 @@ def __getattr__(name):
     if name in _LAZY_EXPORTS:
         return _load_export(name)
     if name in _REMOTE_EXPORTS:
-        from . import remote
+        remote = import_feature_module(".remote", __name__, f"ras_commander.{name}")
         value = getattr(remote, name)
         globals()[name] = value
         return value
     if name in _DSS_EXPORTS:
-        from . import dss
+        dss = import_feature_module(".dss", __name__, f"ras_commander.{name}")
         value = getattr(dss, name)
         globals()[name] = value
         return value
     if name in _CHECK_EXPORTS:
-        from . import check
+        check = import_feature_module(".check", __name__, f"ras_commander.{name}")
         value = getattr(check, name)
         globals()[name] = value
         return value
     if name in _FIXIT_EXPORTS:
-        from . import fixit
+        fixit = import_feature_module(".fixit", __name__, f"ras_commander.{name}")
         value = getattr(fixit, name)
         globals()[name] = value
         return value
     if name in _TERRAIN_EXPORTS:
-        from . import terrain
+        terrain = import_feature_module(".terrain", __name__, f"ras_commander.{name}")
         value = getattr(terrain, name)
         globals()[name] = value
         return value
     if name in _RESULTS_EXPORTS:
-        from . import results
+        results = import_feature_module(".results", __name__, f"ras_commander.{name}")
         value = getattr(results, name)
         globals()[name] = value
         return value
     if name in _GUI_EXPORTS:
-        from . import gui
+        gui = import_feature_module(".gui", __name__, f"ras_commander.{name}")
         value = getattr(gui, name)
         globals()[name] = value
         return value
@@ -425,7 +439,7 @@ __all__ = [
     'RasDocker', 'ContainerResult', 'ContainerEvent', 'ContainerBatchResult',
     # Core functionality
     'RasPrj', 'init_ras_project', 'get_ras_exe', 'ras', 'create_project_from_template',
-    'RasPlan', 'RasUnsteady', 'RasSteady', 'RasUtils', 'RasHydroCompare',
+    'RasText', 'RasPlan', 'RasUnsteady', 'RasSteady', 'RasUtils', 'RasHydroCompare',
     'ProjectStageError', 'ProjectPopulationError', 'ProjectPathAmbiguityError',
     'ProjectLockedError', 'ProjectDriftError', 'ProjectCopyVerificationError',
     'ProjectPublicationError',
@@ -485,17 +499,16 @@ __all__ = [
     'CrossSectionBuildResult', 'CrossSectionManningsN', 'CrossSectionReachLengths',
     'GeomStorage', 'GeomProjection', 'GeomLateral',
     'GeomInlineWeir', 'GeomBridge', 'GeomCulvert', 'GeomCulvertGIS',
-    'GeomReferenceFeatures', 'GeomBcLines', 'GeomMesh',
+    'GeomReferenceFeatures', 'GeomBcLines', 'GeomMesh', 'GeomMeshRepair',
     'GeomPipeNetwork',
     'MeshResult', 'BCConflict', 'BCFixResult', 'DomainContainmentResult',
-    'DomainContainmentViolation',
+    'DomainContainmentViolation', 'GridAnchor',
 
     # Deprecated geometry classes (will be removed before v1.0)
     'RasGeo', 'RasGeometry', 'RasGeometryUtils',
 
     # Remote execution (lazy loaded)
-    'RasWorker', 'PsexecWorker', 'LocalWorker', 'SshWorker', 'WinrmWorker',
-    'DockerWorker', 'SlurmWorker', 'AwsEc2Worker', 'AzureFrWorker',
+    'RasWorker', 'PsexecWorker', 'LocalWorker', 'DockerWorker',
     'init_ras_worker', 'load_workers_from_json', 'compute_parallel_remote',
     'ExecutionResult', 'get_worker_status', 'validate_steady_results', 'validate_unsteady_results',
     'PreprocessPolicy', 'RasExecutionRequest', 'RasExecutionReceipt',
@@ -503,6 +516,7 @@ __all__ = [
     'RasPortableDocker', 'PortableDockerExecutionResult', 'PortableDockerPoolResult',
     'RasSlurm', 'SlurmSiteConfig', 'SlurmTransportConfig', 'SlurmSubmission',
     'SlurmStatus', 'SlurmTaskAccounting', 'SlurmCollection',
+    'RasApptainer', 'ApptainerSiteProfile', 'ApptainerJob', 'ApptainerStatus', 'ApptainerCollection', 'ApptainerPrepareCollection', 'RasContainerImages', 'ApptainerTransport', 'SshApptainerTransport', 'ApptainerProfileError', 'InputCheckError',
 
     # DSS operations (lazy loaded)
     'RasDss',

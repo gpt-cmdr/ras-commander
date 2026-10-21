@@ -7,7 +7,31 @@ Classes for reading and writing HEC-DSS files.
 Read HEC-DSS files for boundary condition extraction and write DSS time-series
 or gridded precipitation records.
 
+`write_grid_timeseries()` already supports direct array-to-grid writing using
+HEC Monolith. `write_precip_grid_arrays()` is an optional native alternative;
+pydsstools is not required for existing Monolith users.
+
 ### Methods
+
+#### write_precip_grid_arrays(dss_file, pathname, data, interval_bounds, *, transform, crs, units, nodata=None, overwrite=False)
+
+Write NumPy interval-depth arrays directly to DSS7 specified-time grids using
+optional `ras-commander[dss-native]` (gyanz/pydsstools). Requires no Java/Vortex.
+Windows still requires the Visual C runtime and UCRT; a compatible wheel does
+not require a compiler. Tested pydsstools 3.1.0 provides Windows x64 wheels for
+CPython 3.9–3.13, not 3.14. See the
+[runtime and Python dependency details](../user-guide/dss-operations.md#direct-precipitation-arrays-to-dss7)
+before selecting this backend.
+`data` is `(time, row, column)` with row zero north. Provide `n_times+1`
+timezone-naive whole-minute boundaries, projected CRS, square north-up Affine
+transform, and explicit inches or mm units. Records use PER-CUM depth. No
+reprojection or numeric unit conversion is performed. NaN/masked values and
+`nodata` become native DSS missing values. Existing files fail unless
+`overwrite=True`, which replaces the whole file after writing and readback.
+
+Returns exact pathnames with D/E interval start/end times. See
+[Direct precipitation arrays](../user-guide/dss-operations.md#direct-precipitation-arrays-to-dss7)
+for an example and compatibility limits.
 
 #### get_catalog(dss_file)
 Get catalog of all paths in a DSS file.
@@ -15,7 +39,7 @@ Get catalog of all paths in a DSS file.
 **Parameters:**
 - `dss_file` (str|Path): Path to DSS file
 
-**Returns:** DataFrame with columns A, B, C, D, E, F parts
+**Returns:** DataFrame with one `pathname` column containing full DSS paths
 
 #### read_timeseries(dss_file, pathname)
 Read a single time series from DSS.
@@ -220,14 +244,19 @@ grid_info = {
 }
 ```
 
-#### extract_boundary_timeseries(boundaries_df, ras_object)
+<a id="extract_boundary_timeseriesboundaries_df-ras_object"></a>
+
+#### extract_boundary_timeseries(boundaries_df, project_dir=None, ras_object=None)
 Extract all DSS boundary conditions from a project.
 
 **Parameters:**
 - `boundaries_df` (DataFrame): From ras.boundaries_df
-- `ras_object` (RasPrj): Project object
+- `project_dir` (str|Path|None): Directory for resolving relative DSS paths
+- `ras_object` (RasPrj|None): Project object, passed by keyword
 
-**Returns:** Dict of {boundary_name: DataFrame}
+**Returns:** Copy of the boundary DataFrame with a `dss_timeseries`
+column. Unread or unsuccessful entries remain `None`; inspect logged warnings
+for missing paths and read failures.
 
 #### get_info(dss_file)
 Get DSS file information.
@@ -276,7 +305,7 @@ print(written)
 # Extract all boundary conditions from project
 from ras_commander import init_ras_project, ras
 init_ras_project("/path/to/project", "6.5")
-bc_data = RasDss.extract_boundary_timeseries(ras.boundaries_df, ras)
+bc_data = RasDss.extract_boundary_timeseries(ras.boundaries_df, ras_object=ras)
 ```
 
 ## Grid Java API Mapping
@@ -318,8 +347,49 @@ example, pass `sa_2d_name=row["area_2d"]` and
 `bc_line=row["bc_line_name"]` to `set_boundary_dss_link()`. Canonical mutation
 keyword aliases are not added in this release.
 
+## Read behavior
+
+`read_timeseries()` accepts `start_date` and `end_date`, but the current
+implementation returns the complete series without applying those filters.
+Select the desired window from the returned DatetimeIndex explicitly. Returned
+`attrs` retain pathname, units, type, interval, and source path.
+
+Java DSS handles are write-capable. Check that a source exists before opening it;
+some read paths can create a missing file. Use a verified disposable copy when
+source immutability is required. These APIs do not guarantee read-only file access.
+
 ## Requirements
 
 - `pip install pyjnius`
 - Java 8+ (JRE or JDK)
 - HEC Monolith libraries (auto-downloaded on first use)
+
+## Complete source reference
+
+### RasDss source reference
+
+::: ras_commander.dss.RasDss.RasDss
+    options:
+      show_root_heading: false
+      heading_level: 3
+      show_source: false
+      members:
+        - check_data_availability
+        - check_file_exists
+        - check_pathname
+        - check_pathname_exists
+        - check_pathname_format
+        - copy_grid_with_zero_tail
+        - extract_boundary_timeseries
+        - get_catalog
+        - get_file_version
+        - get_info
+        - is_pathname_available
+        - is_valid_pathname
+        - read_grid
+        - read_multiple_timeseries
+        - read_timeseries
+        - shutdown_jvm
+        - write_grid_timeseries
+        - write_timeseries
+        - write_timeseries_from_dataframe

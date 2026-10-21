@@ -41,7 +41,11 @@ central-directory record. Deferred-size Deflate64 members in archives with no
 central directory are reported as unsupported because the dependency does not
 expose the exact compressed boundary.
 
-This is a direct recovery API. `RasEbfeModels` does not automatically invoke it.
+This is a direct recovery API. `RasEbfeModels` validates every central-directory
+path before extracting. When a complete ZIP contains Deflate64 members and the
+optional decoder is absent, its verified extraction path can use a locally
+installed 7-Zip CLI, then performs the same size and CRC32 audit before atomic
+promotion. Without either decoder it fails without promoting files.
 Archive member names are untrusted input. A `sink_factory` must normalize each
 name and verify that its output path remains below the intended destination.
 
@@ -68,3 +72,135 @@ bundle = load_audit_bundle(audit_folder)
     encoding="utf-8",
 )
 ```
+
+## Complete source reference
+
+### RasEbfeModels source reference
+
+::: ras_commander.sources.federal.ebfe_models.RasEbfeModels
+    options:
+      show_root_heading: false
+      heading_level: 3
+      show_source: false
+      members:
+        - available_models
+        - download_model
+        - download_source_asset
+        - get_model_metadata
+        - get_source_status
+        - list_models
+        - normalize_model_key
+        - organize_amite
+        - organize_austin_oyster
+        - organize_bayou_darbonne
+        - organize_boeuf
+        - organize_cibolo
+        - organize_east_galveston_bay
+        - organize_double_mountain_fork_brazos
+        - organize_eleven_point
+        - organize_lake_maurepas
+        - organize_lower_brazos
+        - organize_lower_colorado_cummins
+        - organize_lower_ouachita
+        - organize_lower_ouachita_bayou_deloutre
+        - organize_medina
+        - organize_model
+        - organize_models
+        - organize_north_galveston_bay
+        - organize_pedernales
+        - organize_rio_hondo
+        - organize_san_gabriel
+        - organize_spring_creek
+        - organize_spring_river
+        - organize_tickfaw
+        - organize_upper_guadalupe
+        - repair_project_paths
+
+
+### StreamingZipReader source reference
+
+::: ras_commander.sources.federal.ebfe_extract.StreamingZipReader
+    options:
+      show_root_heading: false
+      heading_level: 3
+      show_source: false
+      members:
+        - probe
+        - supported_methods
+        - walk
+
+
+### ArchiveSurvey source reference
+
+::: ras_commander.sources.federal.ebfe_extract.ArchiveSurvey
+    options:
+      show_root_heading: false
+      heading_level: 3
+      show_source: false
+
+
+### ExtractStats source reference
+
+::: ras_commander.sources.federal.ebfe_extract.ExtractStats
+    options:
+      show_root_heading: false
+      heading_level: 3
+      show_source: false
+      members:
+        - failures_of
+
+
+### ZipMemberInfo source reference
+
+::: ras_commander.sources.federal.ebfe_extract.ZipMemberInfo
+    options:
+      show_root_heading: false
+      heading_level: 3
+      show_source: false
+
+
+### load_audit_bundle source reference
+
+::: ras_commander.sources.federal.ebfe_audit.load_audit_bundle
+    options:
+      show_root_heading: false
+      heading_level: 3
+      show_source: false
+
+
+### render_audit_markdown source reference
+
+::: ras_commander.sources.federal.ebfe_audit.render_audit_markdown
+    options:
+      show_root_heading: false
+      heading_level: 3
+      show_source: false
+
+
+### actions_from_bundle source reference
+
+::: ras_commander.sources.federal.ebfe_audit.actions_from_bundle
+    options:
+      show_root_heading: false
+      heading_level: 3
+      show_source: false
+
+
+### AuditBundle source reference
+
+::: ras_commander.sources.federal.ebfe_audit.AuditBundle
+    options:
+      show_root_heading: false
+      heading_level: 3
+      show_source: false
+
+
+### RepairAction source reference
+
+::: ras_commander.sources.federal.ebfe_audit.RepairAction
+    options:
+      show_root_heading: false
+      heading_level: 3
+      show_source: false
+      members:
+        - as_record

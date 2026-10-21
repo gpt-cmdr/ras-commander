@@ -1,0 +1,408 @@
+{
+  "provenance": {
+    "model": "BaldEagleDamBrk p06",
+    "release": "6.6",
+    "runtime": "Wine 11 / Slurm",
+    "job": "10960_0",
+    "case": "Raw vendor raster writer omitted cumulative metadata; completed run delivered excess cell rain"
+  },
+  "routes": {
+    "configured_only": {
+      "execution_returncode": 1,
+      "before_import": {
+        "exists": true,
+        "datasets": {},
+        "event_completed": false
+      },
+      "after_import": {
+        "exists": true,
+        "datasets": {},
+        "event_completed": false
+      },
+      "final": {
+        "exists": true,
+        "datasets": {}
+      },
+      "execution_receipt": {
+        "success": false,
+        "solver_verified": false
+      }
+    },
+    "vendor_gdal": {
+      "execution_returncode": 0,
+      "before_import": {
+        "exists": true,
+        "datasets": {},
+        "event_completed": false
+      },
+      "after_import": {
+        "exists": true,
+        "datasets": {
+          "Event Conditions/Meteorology/Precipitation/Imported Raster Data/Values": {
+            "shape": [
+              4,
+              408
+            ],
+            "dtype": "float32",
+            "sha256": "d325e8f563a8fe46f25f0d52c624731ba45cf009d5036262494f5f2e82415f26",
+            "finite_count": 1632,
+            "nonzero": 1224,
+            "minimum": 0.0,
+            "maximum": 3.0,
+            "final_maximum": 3.0,
+            "final_nonzero": 408,
+            "times": [
+              "2018-09-09 18:00:00",
+              "2018-09-09 19:00:00",
+              "2018-09-09 20:00:00",
+              "2018-09-09 21:00:00"
+            ],
+            "semantics": {
+              "Units": "mm",
+              "Data Type": "cumulative"
+            }
+          },
+          "Event Conditions/Meteorology/Precipitation/Imported Raster Data/Values (Vertical)": {
+            "shape": [
+              4,
+              408
+            ],
+            "dtype": "float32",
+            "sha256": "d325e8f563a8fe46f25f0d52c624731ba45cf009d5036262494f5f2e82415f26",
+            "finite_count": 1632,
+            "nonzero": 1224,
+            "minimum": 0.0,
+            "maximum": 3.0,
+            "final_maximum": 3.0,
+            "final_nonzero": 408,
+            "times": [
+              "2018-09-09 18:00:00",
+              "2018-09-09 19:00:00",
+              "2018-09-09 20:00:00",
+              "2018-09-09 21:00:00"
+            ],
+            "semantics": {
+              "Units": "mm",
+              "Data Type": "cumulative"
+            }
+          }
+        },
+        "event_completed": false
+      },
+      "final": {
+        "exists": true,
+        "datasets": {
+          "Event Conditions/Meteorology/Precipitation/Imported Raster Data/Values": {
+            "shape": [
+              4,
+              408
+            ],
+            "dtype": "float32",
+            "sha256": "d325e8f563a8fe46f25f0d52c624731ba45cf009d5036262494f5f2e82415f26",
+            "finite_count": 1632,
+            "nonzero": 1224,
+            "minimum": 0.0,
+            "maximum": 3.0,
+            "final_maximum": 3.0,
+            "final_nonzero": 408,
+            "times": [
+              "2018-09-09 18:00:00",
+              "2018-09-09 19:00:00",
+              "2018-09-09 20:00:00",
+              "2018-09-09 21:00:00"
+            ]
+          },
+          "Event Conditions/Meteorology/Precipitation/Imported Raster Data/Values (Vertical)": {
+            "shape": [
+              4,
+              408
+            ],
+            "dtype": "float32",
+            "sha256": "d325e8f563a8fe46f25f0d52c624731ba45cf009d5036262494f5f2e82415f26",
+            "finite_count": 1632,
+            "nonzero": 1224,
+            "minimum": 0.0,
+            "maximum": 3.0,
+            "final_maximum": 3.0,
+            "final_nonzero": 408,
+            "times": [
+              "2018-09-09 18:00:00",
+              "2018-09-09 19:00:00",
+              "2018-09-09 20:00:00",
+              "2018-09-09 21:00:00"
+            ]
+          },
+          "Event Conditions/Meteorology/Precipitation/Values": {
+            "shape": [
+              4,
+              408
+            ],
+            "dtype": "float32",
+            "sha256": "04e14d9286fd9d13cd65e27483ad07c526a158598a48a16b7e6b070ac69712c6",
+            "finite_count": 1632,
+            "nonzero": 1224,
+            "minimum": 0.0,
+            "maximum": 0.1181102991104126,
+            "final_maximum": 0.1181102991104126,
+            "final_nonzero": 408
+          },
+          "Event Conditions/Meteorology/Precipitation/Timestamp": {
+            "shape": [
+              4
+            ],
+            "dtype": "|S22",
+            "sha256": "82a69363431ca8bd3ddd1b018b526c80c8c382cb775e1c154a0370903ed10621",
+            "finite_count": 0,
+            "nonzero": 0,
+            "minimum": null,
+            "maximum": null
+          },
+          "Results/Unsteady/Output/Output Blocks/Base Output/Unsteady Time Series/2D Flow Areas/BaldEagleCr/Cell Cumulative Precipitation Depth": {
+            "shape": [
+              19,
+              19597
+            ],
+            "dtype": "float32",
+            "sha256": "703f8282987008b445ca68b8f5294250c802e75b19862ad1c322e299b0c44d0d",
+            "finite_count": 372343,
+            "nonzero": 325188,
+            "minimum": 0.0,
+            "maximum": 0.23385605216026306,
+            "final_maximum": 0.23385605216026306,
+            "final_nonzero": 18066
+          },
+          "Results/Unsteady/Output/Output Blocks/Base Output/Unsteady Time Series/2D Flow Areas/BaldEagleCr/Cell Hydraulic Depth": {
+            "shape": [
+              19,
+              19597
+            ],
+            "dtype": "float32",
+            "sha256": "b62af91eda15d8942041a638778197ec722c55b9503cf519a1c888b0d3cf4a0c",
+            "finite_count": 372343,
+            "nonzero": 127945,
+            "minimum": 0.0,
+            "maximum": 7.327579975128174,
+            "final_maximum": 7.327579975128174,
+            "final_nonzero": 7699
+          },
+          "Results/Unsteady/Output/Output Blocks/Base Output/Unsteady Time Series/2D Flow Areas/BaldEagleCr/Water Surface": {
+            "shape": [
+              19,
+              19597
+            ],
+            "dtype": "float32",
+            "sha256": "41973e86f3597abec660635128a37fe9dee7543a0af64a3ed217fbba00dc6a57",
+            "finite_count": 372343,
+            "nonzero": 372343,
+            "minimum": 527.1317138671875,
+            "maximum": 923.1984252929688,
+            "final_maximum": 923.1984252929688,
+            "final_nonzero": 19597
+          }
+        },
+        "event_completed": true
+      },
+      "execution_receipt": {
+        "success": true,
+        "solver_verified": true
+      },
+      "native_import": {
+        "success": true,
+        "bands": 4,
+        "shape": [
+          4,
+          408
+        ],
+        "times": [
+          "2018-09-09T18:00:00",
+          "2018-09-09T19:00:00",
+          "2018-09-09T20:00:00",
+          "2018-09-09T21:00:00"
+        ]
+      }
+    },
+    "python_hdf": {
+      "execution_returncode": 0,
+      "before_import": {
+        "exists": true,
+        "datasets": {},
+        "event_completed": false
+      },
+      "after_import": {
+        "exists": true,
+        "datasets": {
+          "Event Conditions/Meteorology/Precipitation/Imported Raster Data/Values": {
+            "shape": [
+              4,
+              408
+            ],
+            "dtype": "float32",
+            "sha256": "d325e8f563a8fe46f25f0d52c624731ba45cf009d5036262494f5f2e82415f26",
+            "finite_count": 1632,
+            "nonzero": 1224,
+            "minimum": 0.0,
+            "maximum": 3.0,
+            "final_maximum": 3.0,
+            "final_nonzero": 408,
+            "times": [
+              "2018-09-09 18:00:00",
+              "2018-09-09 19:00:00",
+              "2018-09-09 20:00:00",
+              "2018-09-09 21:00:00"
+            ],
+            "semantics": {
+              "Time Series Data Type": "Amount",
+              "Rate Time Units": "Hour",
+              "Units": "mm",
+              "Data Type": "cumulative"
+            }
+          },
+          "Event Conditions/Meteorology/Precipitation/Imported Raster Data/Values (Vertical)": {
+            "shape": [
+              4,
+              408
+            ],
+            "dtype": "float32",
+            "sha256": "d325e8f563a8fe46f25f0d52c624731ba45cf009d5036262494f5f2e82415f26",
+            "finite_count": 1632,
+            "nonzero": 1224,
+            "minimum": 0.0,
+            "maximum": 3.0,
+            "final_maximum": 3.0,
+            "final_nonzero": 408,
+            "times": [
+              "2018-09-09 18:00:00",
+              "2018-09-09 19:00:00",
+              "2018-09-09 20:00:00",
+              "2018-09-09 21:00:00"
+            ],
+            "semantics": {
+              "Time Series Data Type": "Amount",
+              "Rate Time Units": "Hour",
+              "Units": "mm",
+              "Data Type": "cumulative"
+            }
+          }
+        },
+        "event_completed": false
+      },
+      "final": {
+        "exists": true,
+        "datasets": {
+          "Event Conditions/Meteorology/Precipitation/Imported Raster Data/Values": {
+            "shape": [
+              4,
+              408
+            ],
+            "dtype": "float32",
+            "sha256": "d325e8f563a8fe46f25f0d52c624731ba45cf009d5036262494f5f2e82415f26",
+            "finite_count": 1632,
+            "nonzero": 1224,
+            "minimum": 0.0,
+            "maximum": 3.0,
+            "final_maximum": 3.0,
+            "final_nonzero": 408,
+            "times": [
+              "2018-09-09 18:00:00",
+              "2018-09-09 19:00:00",
+              "2018-09-09 20:00:00",
+              "2018-09-09 21:00:00"
+            ]
+          },
+          "Event Conditions/Meteorology/Precipitation/Imported Raster Data/Values (Vertical)": {
+            "shape": [
+              4,
+              408
+            ],
+            "dtype": "float32",
+            "sha256": "d325e8f563a8fe46f25f0d52c624731ba45cf009d5036262494f5f2e82415f26",
+            "finite_count": 1632,
+            "nonzero": 1224,
+            "minimum": 0.0,
+            "maximum": 3.0,
+            "final_maximum": 3.0,
+            "final_nonzero": 408,
+            "times": [
+              "2018-09-09 18:00:00",
+              "2018-09-09 19:00:00",
+              "2018-09-09 20:00:00",
+              "2018-09-09 21:00:00"
+            ]
+          },
+          "Event Conditions/Meteorology/Precipitation/Values": {
+            "shape": [
+              4,
+              408
+            ],
+            "dtype": "float32",
+            "sha256": "a1ca2ebb9cab5f309b74e08ecdc6ab510079ac1a19be0f16fe82f6a43eb235ee",
+            "finite_count": 1632,
+            "nonzero": 1224,
+            "minimum": 0.0,
+            "maximum": 0.0393701009452343,
+            "final_maximum": 0.0393701009452343,
+            "final_nonzero": 408
+          },
+          "Event Conditions/Meteorology/Precipitation/Timestamp": {
+            "shape": [
+              4
+            ],
+            "dtype": "|S22",
+            "sha256": "82a69363431ca8bd3ddd1b018b526c80c8c382cb775e1c154a0370903ed10621",
+            "finite_count": 0,
+            "nonzero": 0,
+            "minimum": null,
+            "maximum": null
+          },
+          "Results/Unsteady/Output/Output Blocks/Base Output/Unsteady Time Series/2D Flow Areas/BaldEagleCr/Cell Cumulative Precipitation Depth": {
+            "shape": [
+              19,
+              19597
+            ],
+            "dtype": "float32",
+            "sha256": "01ae1a427c34db9b1659de47e47fd90696068a549d933d0fb1471ea722df946e",
+            "finite_count": 372343,
+            "nonzero": 325188,
+            "minimum": 0.0,
+            "maximum": 0.11574575304985046,
+            "final_maximum": 0.11574575304985046,
+            "final_nonzero": 18066
+          },
+          "Results/Unsteady/Output/Output Blocks/Base Output/Unsteady Time Series/2D Flow Areas/BaldEagleCr/Cell Hydraulic Depth": {
+            "shape": [
+              19,
+              19597
+            ],
+            "dtype": "float32",
+            "sha256": "a62af10e69865534f005b9821cf1817a1470440514a77e38e71094212b7d8b89",
+            "finite_count": 372343,
+            "nonzero": 125715,
+            "minimum": 0.0,
+            "maximum": 7.327579975128174,
+            "final_maximum": 7.327579975128174,
+            "final_nonzero": 7327
+          },
+          "Results/Unsteady/Output/Output Blocks/Base Output/Unsteady Time Series/2D Flow Areas/BaldEagleCr/Water Surface": {
+            "shape": [
+              19,
+              19597
+            ],
+            "dtype": "float32",
+            "sha256": "8ecbebcc52a890a5d7b1cdd5b24c55aca209b9295fe332943c4d774d066d10e8",
+            "finite_count": 372343,
+            "nonzero": 372343,
+            "minimum": 527.1317138671875,
+            "maximum": 923.1984252929688,
+            "final_maximum": 923.1984252929688,
+            "final_nonzero": 19597
+          }
+        },
+        "event_completed": true
+      },
+      "execution_receipt": {
+        "success": true,
+        "solver_verified": true
+      }
+    }
+  }
+}

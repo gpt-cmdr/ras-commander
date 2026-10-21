@@ -54,13 +54,16 @@ Date: 2025
 """
 
 from typing import Dict, List, Union, Optional, Tuple, Literal
+import math
 from pathlib import Path
 import warnings
 from dataclasses import dataclass
 
+from ._fixed_width import _format_fixed_width_value
 from .Decorators import log_call
 from .LoggingConfig import get_logger
 from .RasPrj import ras, read_file_with_fallback_encoding
+from ._ras_text import _write_ras_text
 
 logger = get_logger(__name__)
 
@@ -796,8 +799,7 @@ class RasBreach:
                 output = "\r\n".join(lines)
 
             # Use open() with newline='' to preserve CRLF
-            with open(plan_path, 'w', encoding='utf-8', newline='') as f:
-                f.write(output)
+            _write_ras_text(plan_path, output, encoding="utf-8")
 
             # Validate CRLF preservation
             if not RasBreach._validate_crlf(plan_path):
@@ -1264,8 +1266,7 @@ class RasBreach:
                 output = "\r\n".join(lines)
 
             # Use open() with newline='' to preserve CRLF
-            with open(plan_path, 'w', encoding='utf-8', newline='') as f:
-                f.write(output)
+            _write_ras_text(plan_path, output, encoding="utf-8")
 
             # Validate CRLF preservation
             if not RasBreach._validate_crlf(plan_path):
@@ -1498,11 +1499,14 @@ class RasBreach:
             text = f"{numeric:.3e}"
         else:
             text = f"{numeric:.6g}"
-        if len(text) > width:
-            text = f"{numeric:.6e}"
-        if len(text) > width:
-            text = text[:width]
-        return text.rjust(width)
+        # Preserve already-fitting legacy text, as PR #488's general-value
+        # formatter does. Never introduce or truncate an exponent on overflow.
+        if len(text) <= width and math.isfinite(numeric):
+            return text.rjust(width)
+        return _format_fixed_width_value(
+            numeric, width=width, max_decimals=6, trim_trailing_zeros=True,
+            normalize_negative_zero=False,
+        )
 
     @staticmethod
     def _format_csv(values: List) -> str:

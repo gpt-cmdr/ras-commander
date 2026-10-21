@@ -18,6 +18,22 @@ This library was initially conceptualized in the Australian Water School course 
 
 **March 2026 Update:** RAS Commander now supports a fully agentic engineering experience using CLI coding agents and agent SDK's to extend library functions and assist H&H engineers with common modeling tasks such as importing external data, performing QAQC reviews, validating project file paths, AEP and historic storm modeling, or any of the other functionality supported by, or imminently extendable from existing functions, in composable long form agentic workflows. Agents are instructed to work with humans in the loop: demonstrating their steps, maintaining modeling logs, and creating reproducible deliverables that can be externally verified directly in the HEC-RAS GUI. Long term memory is arranged in a hierarchical knowledge structure with progressive disclosure. Agents, skills, rules and cognitive memory systems are included to assist the user with solidifying LLM-written code into deterministic workflows in a continual learning loop, along with a file-based memory system to assist with long term task planning and execution across many conversations and subagents.
 
+## Docker, Slurm, and Apptainer
+
+Use `RasDocker` for Wine preprocessing and native Linux unsteady computation
+on Windows or Linux, `RasApptainer` for one prepared native unsteady plan per
+Slurm allocation, or `RasSlurm` for portable execution request pools.
+
+- [Choose an execution backend](https://rascommander.info/ras/user-guide/execution-backends/)
+- [Docker setup and two-stage workflow](https://rascommander.info/ras/user-guide/container-execution/)
+- [Docker Hub images, digests, and qualification](https://rascommander.info/ras/user-guide/container-images/)
+- [Slurm + Apptainer tutorial](https://rascommander.info/ras/user-guide/slurm-apptainer-execution/)
+- [Portable Slurm execution](https://rascommander.info/ras/user-guide/slurm-portable-execution/)
+
+Published matching Wine/native image pairs cover HEC-RAS 6.5, 6.6, and 7.0.1
+on linux/amd64. Docker qualification and live qualification of a specific
+Slurm/SIF workflow are separate; see each guide's limits.
+
 ## LLM Forward Engineering
 
 <a href="https://clbengineering.com/">
@@ -165,7 +181,9 @@ pip install ras-commander[all]
 pip install --upgrade ras-commander
 ```
 
-The standard install provides project inventory and direct HDF access. For a
+The standard install provides project inventory and direct HDF access.
+Downloading example projects with `RasExamples` and running the example
+notebooks need the `full` extra (`pip install "ras-commander[full]"`). For a
 lean batch runner that also executes plans through `RasCmdr.compute_plan()`, use:
 
 ```bash
@@ -173,7 +191,9 @@ pip install --upgrade "ras-commander[compute]"
 ```
 
 The `compute` surface excludes RasControl/COM and the geospatial and plotting
-stacks. It does not bypass ras-commander: `RasCmdr` still constructs and owns
+stacks. HDF result functions that return xarray objects or GeoDataFrames need
+the `full` extra; use `pip install "ras-commander[compute,full]"` to run plans
+and extract those results in one environment. It does not bypass ras-commander: `RasCmdr` still constructs and owns
 the HEC-RAS command-line execution, message handling, verification options, and
 normal post-compute DataFrame refreshes.
 
@@ -189,7 +209,7 @@ Install only what you need using pip extras:
 | `execution` | Alias for `compute` | `pip install ras-commander[execution]` |
 | `full` | Historical ras-commander feature dependency set | `pip install ras-commander[full]` |
 | `all` | Full feature set plus every optional integration below | `pip install ras-commander[all]` |
-| `remote-all` | All remote backends (SSH, WinRM, Docker, AWS, Azure) | `pip install ras-commander[remote-all]` |
+| `remote-all` | All remote worker dependencies (Docker, plus paramiko for SSH-hosted Docker staging) | `pip install ras-commander[remote-all]` |
 | `gui` | GUI automation & screenshots (Pillow) | `pip install ras-commander[gui]` |
 | `usgs` | USGS gauge data (dataretrieval) | `pip install ras-commander[usgs]` |
 | `notebooks` | Example notebook deps (rasterio, pyproj, aiohttp, dataretrieval) | `pip install ras-commander[notebooks]` |
@@ -685,7 +705,7 @@ These acknowledgments recognize the contributions and inspirations that have hel
 
 6. Attribution: Glenn Heistand's [`ras-agent`](https://github.com/gheistand/ras-agent) (CHAMP -- Illinois State Water Survey) -- an automated HEC-RAS pipeline that converts pour points into flood maps. The ras-agent pipeline's Linux execution patterns (`runner.py`), HDF results extraction (`results.py`), and Cloud-Optimized GeoTIFF rasterization directly informed the development of several ras-commander methods including `RasCmdr.compute_plan_linux()`, `HdfResultsMesh.get_mesh_max_depth()`, `HdfResultsMesh.export_max_depth_raster()`, `RasUtils.dos2unix()`, and `HdfBase.strip_results()`.
 
-7. Attribution and Contribution: Gyan Basyal's [`pydsstools`](https://github.com/gyanz/pydsstools) and [`rivia`](https://github.com/gyanz/rivia) packages. Gyan's pydsstools was particularly influential in ras-commander's DSS handling approach -- its cross-version DSS6/DSS7 support philosophy, HEC epoch time conversion pattern, catalog-based lazy loading design, and TimeSeriesContainer wrapping informed the architecture of ras-commander's `RasDss` module. Gyan's rivia package is the source of the StoreAllMaps approach implemented in the ras-commander RasProcess module. 
+7. Attribution and Contribution: Gyan Basyal's [`pydsstools`](https://github.com/gyanz/pydsstools) and [`rivia`](https://github.com/gyanz/rivia) packages. Gyan's pydsstools was particularly influential in ras-commander's DSS handling approach -- its cross-version DSS6/DSS7 support philosophy, HEC epoch time conversion pattern, catalog-based lazy loading design, and TimeSeriesContainer wrapping informed the architecture of ras-commander's `RasDss` module. Gyan's rivia package is the source of the StoreAllMaps approach implemented in the ras-commander RasProcess module. Rivia's elegant spatial, profile, velocity, and flow query functions also provided the conceptual basis for `HdfResultsQuery`. We gratefully acknowledge Gyan and WEST Consultants, Inc., credited by Rivia's license. See [Related Hydraulic Python Libraries](https://rascommander.info/ras/about/related-libraries/) for comparisons and companion-library examples.
 
 8. Attribution: Michael Koohafkan's [`dssrip2`](https://github.com/mkoohafkan/dssrip2) -- an R package for reading and writing HEC-DSS files. The dssrip2 project's HEC Monolith JAR download and management approach was directly replicated in ras-commander's `_hec_monolith.py` module, including the Maven artifact specifications, platform-specific native library handling, and automatic download/cache strategy. This enabled ras-commander to provide a pure-Python DSS reading capability via the same Java bridge architecture that dssrip2 pioneered for R.
 

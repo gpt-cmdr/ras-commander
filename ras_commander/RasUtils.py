@@ -78,6 +78,7 @@ from datetime import timedelta
 from numbers import Number
 from .LoggingConfig import get_logger
 from .Decorators import log_call
+from ._ras_text import _write_ras_text
 
 
 logger = get_logger(__name__)
@@ -634,8 +635,7 @@ class RasUtils:
             )
 
         try:
-            with plan_file_path.open('w') as file:
-                file.writelines(lines)
+            _write_ras_text(plan_file_path, "".join(lines))
             logger.info(f"Successfully updated plan file: {plan_file_path}")
         except Exception as e:
             logger.exception(f"Failed to write updates to plan file {plan_file_path}")
@@ -886,8 +886,9 @@ class RasUtils:
 
             updated_lines = update_function(lines, *args) if args else update_function(lines)
 
-            with open(file_path, 'w', encoding='utf-8', errors='replace') as f:
-                f.writelines(updated_lines)
+            _write_ras_text(
+                file_path, "".join(updated_lines), encoding="utf-8", errors="replace"
+            )
             logger.debug("Successfully updated file: %s", Path(file_path).name)
             logger.debug(f"Successfully updated file path: {file_path}")
         except Exception as e:
@@ -970,8 +971,9 @@ class RasUtils:
             new_line = f"{file_type} File={file_type[0].lower()}{new_num}\n"
             lines.append(new_line)
 
-            with open(prj_file, 'w', encoding='utf-8', errors='replace') as f:
-                f.writelines(lines)
+            _write_ras_text(
+                prj_file, "".join(lines), encoding="utf-8", errors="replace"
+            )
             logger.debug(f"Project file updated with new {file_type} entry: {new_num}")
         except Exception as e:
             logger.exception(f"Failed to update project file {prj_file}")
@@ -1010,8 +1012,9 @@ class RasUtils:
                 logger.warning(f"Entry '{target}' not found in {prj_file}")
                 return
 
-            with open(prj_file, 'w', encoding='utf-8', errors='replace') as f:
-                f.writelines(new_lines)
+            _write_ras_text(
+                prj_file, "".join(new_lines), encoding="utf-8", errors="replace"
+            )
             logger.info(f"Removed {file_type} entry {number} from project file")
         except Exception as e:
             logger.exception(f"Failed to remove entry from project file {prj_file}")
@@ -1056,8 +1059,9 @@ class RasUtils:
                 logger.warning(f"Entry '{old_line}' not found in {prj_file}")
                 return
 
-            with open(prj_file, 'w', encoding='utf-8', errors='replace') as f:
-                f.writelines(lines)
+            _write_ras_text(
+                prj_file, "".join(lines), encoding="utf-8", errors="replace"
+            )
             logger.info(f"Renamed {file_type} entry {old_number} to {new_number} in project file")
         except Exception as e:
             logger.exception(f"Failed to rename entry in project file {prj_file}")
@@ -1599,8 +1603,7 @@ class RasUtils:
 
             # Step 2: Write to temp file
             temp_path = geom_file.parent / f"{geom_file.name}.tmp"
-            with open(temp_path, 'w', encoding='utf-8', newline='') as f:
-                f.writelines(modified_lines)
+            _write_ras_text(temp_path, "".join(modified_lines), encoding="utf-8")
             logger.debug(f"Temp file written: {temp_path}")
 
             # Step 3: Basic validation
@@ -1907,8 +1910,7 @@ class RasUtils:
             new_lines = lines[:insertion_idx] + description_block + lines[insertion_idx:]
 
         try:
-            with open(file_path, 'w', encoding='utf-8') as f:
-                f.writelines(new_lines)
+            _write_ras_text(file_path, "".join(new_lines), encoding="utf-8")
             logger.info(f"Updated description in {file_path}")
             return True
         except IOError as e:

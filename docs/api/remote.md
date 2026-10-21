@@ -61,7 +61,11 @@ destination messages, and retains the worker copy if publication fails.
 
 ### DockerWorker
 
-Run plans with a local Docker daemon and an HEC-RAS Linux image:
+Run plans with a local Docker daemon and an image implementing the
+`DockerWorker` shell-runner contract. `hecras:6.6` below is an illustrative
+local image tag, not a public Docker Hub reference. For the published paired
+images, use [RasDocker](containers.md) and the
+[container catalog](../user-guide/container-images.md):
 
 ```python
 from ras_commander.remote import init_ras_worker
@@ -74,6 +78,16 @@ docker = init_ras_worker(
     cores_per_plan=4,
 )
 ```
+
+### Supported worker types
+
+`init_ras_worker()` accepts `"psexec"`, `"local"`, and `"docker"`. Any other
+worker type raises `ValueError`. Slurm/HPC execution is not a worker backend:
+use the `RasSlurm` portable-request adapter below
+([Slurm Portable Execution](../user-guide/slurm-portable-execution.md)) or
+`RasApptainer`, a static API for one native-Linux unsteady solve per Slurm
+allocation with an optional Wine prepare job
+([Slurm + Apptainer Execution](../user-guide/slurm-apptainer-execution.md)).
 
 ## Execution
 
@@ -126,6 +140,11 @@ continue mutating copied project outputs after the API call has returned.
 
 ## Portable Plan Execution
 
+Use the [portable Slurm tutorial](../user-guide/slurm-portable-execution.md)
+for site configuration, rendering, staging, submission, and collection.
+The [backend comparison](../user-guide/execution-backends.md) explains how
+this contract differs from `RasDocker`, `DockerWorker`, and `RasApptainer`.
+
 Portable execution runs one prepared steady or unsteady plan per request,
 always with one CPU core, inside a pinned container. Requests and receipts are
 versioned JSON (`ras-commander-execution-request/v1`,
@@ -176,13 +195,30 @@ docker_result = RasPortableDocker.execute_request(request_path)
   Linux, a Windows `ras_executable` is run through Windows Python under Wine.
   This needs the image variables `RAS_COMMANDER_WINE_PREFIX_SEED` and
   `RAS_COMMANDER_WINE_PYTHON`, plus `RAS_COMMANDER_WINE_ARCH` (optional,
-  default `win64`). Each request gets its own copy of the Wine prefix.
+  default `win64`) and `RAS_COMMANDER_WINE_CPU_SHIM` (optional absolute path to
+  the [CPU-numbering shim](../user-guide/apptainer-images.md#cpu-numbering-shim),
+  preloaded for Wine processes; empty or `0` disables it). The executor also
+  disables the Wine debugger (`winedbg.exe=d`) so a crash exits instead of
+  waiting. The [Wine executor image](../user-guide/apptainer-images.md#wine-executor-image)
+  sets all four. Each request gets its own copy of the Wine prefix in
+  Python's temporary directory, selected through the process `TMPDIR` where
+  applicable. Fleet runners should bind that directory to writable node-local
+  scratch. The temporary parent must be an absolute regular directory outside
+  the request bundle and image seed. The executor maps the actual copied prefix
+  into Windows, removes it after the attempt, and keeps project results and
+  receipts in the declared output directory. Runtime staging messages identify
+  prefix-copy start, completion, and delegated execution start. Solver deadlines
+  and the requirement for an absent or empty output directory remain unchanged.
 - `RasPortableDocker.execute_request()` and `execute_pool(max_concurrent=8)`
   mount the bundle read-only and only the output directory writable.
 - `RasSlurm.render_submission()`, `stage()`, `submit()`, `status()`,
-  `cancel()`, `collect()`, and `submit_batch()` run one exclusive-node Slurm
-  allocation. `SlurmTransportConfig` supports `mode="local"` or `mode="ssh"`,
-  with `transfer_mode="rsync"` or `"scp"`.
+  `cancel()`, `collect()`, and `submit_batch()` run requests as one
+  exclusive-node pool (`execution_mode="pool"`) or a throttled job array
+  (`execution_mode="array"`, `array_throttle`). Each step runs
+  `apptainer exec --contain --cleanenv` with a private
+  `<node_scratch_root>/<jobid>/ras-commander-<execution_id>-*` bound as `/tmp`.
+  `SlurmTransportConfig` supports `mode="local"` or `mode="ssh"`, with
+  `transfer_mode="rsync"` or `"scp"`.
 - `validate_execution_receipt()` checks that a receipt belongs to its request
   and container image. Pass `verify_result_hdf_digest=True` after results cross
   a transfer boundary.
@@ -267,3 +303,281 @@ pip install ras-commander
 pip install ras-commander[remote-docker]
 pip install ras-commander[remote-all]
 ```
+
+## Complete source reference
+
+### init_ras_worker source reference
+
+::: ras_commander.remote.RasWorker.init_ras_worker
+    options:
+      show_root_heading: false
+      heading_level: 3
+      show_source: false
+
+### load_workers_from_json source reference
+
+::: ras_commander.remote.RasWorker.load_workers_from_json
+    options:
+      show_root_heading: false
+      heading_level: 3
+      show_source: false
+
+### compute_parallel_remote source reference
+
+::: ras_commander.remote.Execution.compute_parallel_remote
+    options:
+      show_root_heading: false
+      heading_level: 3
+      show_source: false
+
+### get_worker_status source reference
+
+::: ras_commander.remote.Execution.get_worker_status
+    options:
+      show_root_heading: false
+      heading_level: 3
+      show_source: false
+
+### LocalWorker source reference
+
+::: ras_commander.remote.LocalWorker.LocalWorker
+    options:
+      show_root_heading: false
+      heading_level: 3
+      show_source: false
+
+### PsexecWorker source reference
+
+::: ras_commander.remote.PsexecWorker.PsexecWorker
+    options:
+      show_root_heading: false
+      heading_level: 3
+      show_source: false
+
+### DockerWorker source reference
+
+::: ras_commander.remote.DockerWorker.DockerWorker
+    options:
+      show_root_heading: false
+      heading_level: 3
+      show_source: false
+
+### ExecutionResult source reference
+
+::: ras_commander.remote.Execution.ExecutionResult
+    options:
+      show_root_heading: false
+      heading_level: 3
+      show_source: false
+
+### PreprocessPolicy source reference
+
+::: ras_commander.remote.ExecutionContract.PreprocessPolicy
+    options:
+      show_root_heading: false
+      heading_level: 3
+      show_source: false
+
+### RasExecutionRequest source reference
+
+::: ras_commander.remote.ExecutionContract.RasExecutionRequest
+    options:
+      show_root_heading: false
+      heading_level: 3
+      show_source: false
+      members:
+        - create
+        - from_dict
+        - read
+        - resolve_paths
+        - to_dict
+        - write
+
+### RasExecutionReceipt source reference
+
+::: ras_commander.remote.ExecutionContract.RasExecutionReceipt
+    options:
+      show_root_heading: false
+      heading_level: 3
+      show_source: false
+      members:
+        - read
+        - to_dict
+        - write
+
+### StoredMapsRequest source reference
+
+::: ras_commander.remote.ExecutionContract.StoredMapsRequest
+    options:
+      show_root_heading: false
+      heading_level: 3
+      show_source: false
+      members:
+        - from_dict
+        - to_dict
+
+### validate_execution_receipt source reference
+
+::: ras_commander.remote.ExecutionContract.validate_execution_receipt
+    options:
+      show_root_heading: false
+      heading_level: 3
+      show_source: false
+
+### validate_steady_results source reference
+
+::: ras_commander.remote.PortableExecution.validate_steady_results
+    options:
+      show_root_heading: false
+      heading_level: 3
+      show_source: false
+
+### validate_unsteady_results source reference
+
+::: ras_commander.remote.PortableExecution.validate_unsteady_results
+    options:
+      show_root_heading: false
+      heading_level: 3
+      show_source: false
+
+### RasPortableDocker source reference
+
+::: ras_commander.remote.RasPortableDocker.RasPortableDocker
+    options:
+      show_root_heading: false
+      heading_level: 3
+      show_source: false
+      members:
+        - build_execute_command
+        - execute_pool
+        - execute_request
+
+### PortableDockerExecutionResult source reference
+
+::: ras_commander.remote.RasPortableDocker.PortableDockerExecutionResult
+    options:
+      show_root_heading: false
+      heading_level: 3
+      show_source: false
+
+### PortableDockerPoolResult source reference
+
+::: ras_commander.remote.RasPortableDocker.PortableDockerPoolResult
+    options:
+      show_root_heading: false
+      heading_level: 3
+      show_source: false
+
+### RasSlurm source reference
+
+::: ras_commander.RasSlurm.RasSlurm
+    options:
+      show_root_heading: false
+      heading_level: 3
+      show_source: false
+      members:
+        - cancel
+        - collect
+        - render_submission
+        - stage
+        - status
+        - submit
+        - submit_batch
+
+### RasApptainer source reference
+
+::: ras_commander.RasApptainer.RasApptainer
+    options:
+      show_root_heading: false
+      heading_level: 3
+      show_source: false
+      members:
+        - cancel
+        - check_solver_ready
+        - collect
+        - collect_prepare
+        - load_profile
+        - pull_command
+        - render_job
+        - render_prepare_job
+        - status
+        - submit
+
+### RasContainerImages source reference
+
+::: ras_commander.RasContainerImages.RasContainerImages
+    options:
+      show_root_heading: false
+      heading_level: 3
+      show_source: false
+      members:
+        - applicable_roles
+        - cache_directory
+        - catalog
+        - ensure_sif_command
+        - get
+        - normalize_version
+        - resolve_sif
+
+### SlurmSiteConfig source reference
+
+::: ras_commander.RasSlurm.SlurmSiteConfig
+    options:
+      show_root_heading: false
+      heading_level: 3
+      show_source: false
+
+### SlurmTransportConfig source reference
+
+::: ras_commander.RasSlurm.SlurmTransportConfig
+    options:
+      show_root_heading: false
+      heading_level: 3
+      show_source: false
+
+### SlurmSubmission source reference
+
+::: ras_commander.RasSlurm.SlurmSubmission
+    options:
+      show_root_heading: false
+      heading_level: 3
+      show_source: false
+      members:
+        - from_dict
+        - read
+        - to_dict
+        - write
+
+### SlurmStatus source reference
+
+::: ras_commander.RasSlurm.SlurmStatus
+    options:
+      show_root_heading: false
+      heading_level: 3
+      show_source: false
+
+### SlurmTaskAccounting source reference
+
+::: ras_commander.RasSlurm.SlurmTaskAccounting
+    options:
+      show_root_heading: false
+      heading_level: 3
+      show_source: false
+
+### SlurmCollection source reference
+
+::: ras_commander.RasSlurm.SlurmCollection
+    options:
+      show_root_heading: false
+      heading_level: 3
+      show_source: false
+
+### Wine request path translation
+
+On POSIX hosts, the portable CLI checks the copied task-private prefix's `Z:`
+symlink. When it resolves to the POSIX root, an absolute request path without
+parent traversal or Windows drive/separator syntax in a POSIX component is translated directly to the equivalent `Z:` path. This
+avoids a separate cold Wine startup just to translate a path. Prefixes with
+other drive mappings or incompatible component names retain `winepath` conversion and its error handling.
+Delegated Windows Python execution, request validation, execution deadlines,
+source immutability and task-private wineserver shutdown stay unchanged.

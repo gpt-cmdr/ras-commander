@@ -30,6 +30,10 @@ or [Installation and runtime requirements](getting-started/installation.md).
 
     Extract and analyze 1D/2D results directly from HDF files - water surfaces, velocities, depths, and more.
 
+- :material-chart-line: **[2D Profiles and Reference Results](user-guide/2d-profile-and-reference-workflows.md)**
+
+    Automate plots across many lines. Choose saved-result sampling, native RASMapper profiles, or solver-recorded reference hydrographs, with explicit terrain, time, and flow conventions.
+
 - :material-vector-polygon: **[Geometry Operations](user-guide/geometry-operations.md)**
 
     Parse and modify geometry files including cross-sections, storage areas, connections, and inline structures.
@@ -44,7 +48,11 @@ or [Installation and runtime requirements](getting-started/installation.md).
 
 - :material-cloud-sync: **[Remote Execution](user-guide/remote-execution.md)**
 
-    Distribute computations across multiple machines using PsExec, Docker, or SSH workers.
+    Distribute computations with local, PsExec, or Docker workers. Use the separate Slurm APIs for cluster execution.
+
+- :material-server: **[Docker and Slurm](user-guide/execution-backends.md)**
+
+    Prepare and compute with published Docker Hub images, or submit prepared native plans and portable requests through Slurm and Apptainer.
 
 - :material-wrench: **[Geometry Repair](api/fixit.md)**
 
@@ -89,6 +97,7 @@ success = RasCmdr.compute_plan("01")
 - **[Example Notebooks](examples/index.md)**: 100+ working examples covering all major features
 - **[API Reference](api/index.md)**: Complete function and class documentation
 - **[AI-Assisted Development](development/llm-development.md)**: Use [Claude Code](https://claude.ai/code) or [Codex CLI](https://github.com/openai/codex) with built-in `AGENTS.md` and `CLAUDE.md` context
+- **[Agent Plugin and MCPs](agent-plugin.md)**: Install the RAS Commander plugin for local Claude Code or Codex agents, with read-only RAS and HMS text MCP servers
 
 ## About CLB Engineering
 

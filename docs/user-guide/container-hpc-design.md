@@ -1,8 +1,19 @@
 # Container implementation comparison and TACC design
 
-This is a source review and proposed HPC integration, checked September 11,
-2026. The Docker API changes are described in [container execution](container-execution.md).
-Our images have not yet been qualified on TACC or under Apptainer.
+The implementation comparison was checked September 11, 2026. This page
+retains the proposed TACC/PyLauncher integration, with implementation status
+updated October 13, 2026. [RasApptainer](slurm-apptainer-execution.md)
+implements one native unsteady plan per Slurm allocation and an optional Wine
+prepare job; [RasSlurm](slurm-portable-execution.md) implements portable
+request pools and job arrays. Their contracts differ from the proposed
+worker integration below.
+
+The [Docker image pairs](container-images.md) have Docker qualification. CLB
+has run both Slurm APIs live with site-built SIFs (see
+[execution backends](execution-backends.md#image-compatibility-and-qualification));
+the published native 6.6 SIF and an executor built from this repository were
+run live through both APIs on October 13, 2026. None of these images has been
+qualified on TACC.
 
 ## Useful patterns from public implementations
 
@@ -53,10 +64,12 @@ flowchart TD
     R --> O["Validated final HDF, logs and receipt on host storage"]
 ```
 
-The host `RasDocker` class currently constructs Docker commands. An
-Apptainer adapter should invoke the same native Python worker, preserving
-its request, receipt and validation behavior. No Docker daemon or MPI pool
-is needed inside the solver container.
+The host `RasDocker` class constructs Docker commands. The proposed TACC
+worker adapter would invoke the same native Python worker and preserve its
+request, receipt, and validation behavior. That adapter is distinct from the
+implemented `RasApptainer` API, which stages solver-ready artifacts and invokes
+the native engine, and `RasSlurm`, which uses the portable Python executor.
+No Docker daemon or MPI pool is needed inside the solver container.
 
 Configure PyLauncher with `cores=2` per command and verify CPU binding on
 the target system. Its documentation says that Slurm `-n` and
@@ -95,8 +108,12 @@ select the final HDF named by a successful compute receipt. Merely changing
 the Docker image would leave the collector reading uncomputed input.
 
 Qualify native Apptainer execution first using a prepared model. Wine
-preprocessing can continue in the tested Docker environment while the model
-and receipt are transferred to TACC. Running Wine preparation under
-Apptainer needs separate qualification: its private Wine prefix must be
-placed on writable scratch, rather than relying on the image's default
-`/run/ras-job` directory being writable to an arbitrary host user.
+preparation can then move to the cluster with
+`RasApptainer.render_prepare_job`, which uses the
+[Wine executor image](apptainer-images.md#wine-executor-image): the SIF stays
+read-only, and each task copies the baked prefix into its own node-scratch
+`/tmp` under `apptainer exec --contain --cleanenv`. This replaces relying on
+the pre-compute image's default `/run/ras-job` directory, which an arbitrary
+host user cannot write under Apptainer. Wine needs a CPU-numbering shim when a
+Slurm CPU set does not start at CPU 0; see
+[the CPU shim](apptainer-images.md#cpu-numbering-shim).

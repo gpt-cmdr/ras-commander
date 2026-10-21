@@ -73,12 +73,58 @@ class HdfBase:
     """
 
     @staticmethod
-    def get_simulation_start_time(hdf_file: h5py.File) -> datetime:
+    @log_call
+    def fingerprint_model_inputs(
+        hdf_path: Union[str, Path],
+        *,
+        groups: Tuple[str, ...] = ("Geometry", "Plan Data"),
+        block_bytes: int = 1048576,
+    ) -> Dict[str, Any]:
+        """Fingerprint selected compiled model inputs after native writers exit.
+
+        Numeric hashes preserve exact values. Compound fields are hashed without
+        padding; string hashes preserve record boundaries. Attributes are retained
+        separately so callers can distinguish changed paths/timestamps from changed
+        hydraulic inputs. No equality tolerance or ignored attribute is implied.
+
+        Args:
+            hdf_path: Existing geometry, temporary or result HDF, as str or Path.
+            groups: Disjoint absolute or relative group paths to inspect.
+            block_bytes: Maximum fixed-width row block size, at least 1024 bytes.
+                Variable-length strings are read one block of records at a time;
+                their individual allocation size is controlled by HDF5.
+
+        Returns:
+            JSON-safe dataset hashes, shapes, dtypes, group/dataset attributes,
+            hard-link aliases and missing group paths. This receipt does not establish model equivalence.
+
+        Raises:
+            ValueError: Invalid limits, overlapping groups, non-hard links,
+                external/virtual datasets or a row exceeding the block limit.
+            OSError: The file cannot be read. Native writers must already be stopped.
+            RuntimeError: The file changes during inspection.
+            TypeError: Unsupported attributes or nested/object compound fields.
+        """
+        if isinstance(block_bytes, bool) or not isinstance(block_bytes, int) or block_bytes < 1024:
+            raise ValueError("block_bytes must be an integer of at least 1024")
+        if isinstance(groups, str) or not groups or any(not isinstance(g, str) or not g.strip('/') for g in groups):
+            raise ValueError("groups must contain nonempty HDF group paths")
+        normalized = ['/' + g.strip('/') for g in groups]
+        if any(a == b or b.startswith(a + '/') or a.startswith(b + '/')
+               for index, a in enumerate(normalized) for b in normalized[index + 1:]):
+            raise ValueError("groups must be distinct and must not overlap")
+        from ._fingerprint import fingerprint_model_inputs
+        return fingerprint_model_inputs(Path(hdf_path), normalized, block_bytes)
+
+    @staticmethod
+    @standardize_input(file_type='plan_hdf')
+    def get_simulation_start_time(hdf_file: Union[h5py.File, str, Path]) -> datetime:
         """
         Extract the simulation start time from the HDF file.
 
         Args:
-            hdf_file: Open HDF file object containing RAS simulation data.
+            hdf_file: Open plan HDF handle, or a path (``str`` or ``Path``) to
+                one. A path is opened read-only for the duration of the call.
 
         Returns:
             datetime: Simulation start time as a datetime object.
@@ -126,19 +172,39 @@ class HdfBase:
         )
 
     @staticmethod
-    def get_unsteady_timestamps(hdf_file: h5py.File) -> List[datetime]:
+    @standardize_input(file_type='plan_hdf')
+    def get_unsteady_timestamps(hdf_file: Union[h5py.File, str, Path]) -> List[datetime]:
         """
         Extract the list of unsteady timestamps from the HDF file.
 
         Args:
-            hdf_file (h5py.File): Open HDF file object.
+            hdf_file: Open plan HDF handle, or a path (``str`` or ``Path``) to
+                one. A path is opened read-only for the duration of the call.
 
         Returns:
             List[datetime]: A list of datetime objects representing the unsteady timestamps.
+
+        Raises:
+            ValueError: If the plan HDF has no unsteady output timestamps.
+
+        Note:
+            Reads 'Time Date Stamp (ms)' and falls back to 'Time Date Stamp'
+            when a plan HDF does not write the millisecond dataset.
         """
-        group_path = "Results/Unsteady/Output/Output Blocks/Base Output/Unsteady Time Series/Time Date Stamp (ms)"
-        raw_datetimes = hdf_file[group_path][:]
-        return [HdfUtils.parse_ras_datetime_ms(x.decode("utf-8")) for x in raw_datetimes]
+        base = "Results/Unsteady/Output/Output Blocks/Base Output/Unsteady Time Series"
+        for ts_name, parse in (
+            ("Time Date Stamp (ms)", HdfUtils.parse_ras_datetime_ms),
+            ("Time Date Stamp", HdfUtils.parse_ras_datetime),
+        ):
+            dataset = hdf_file.get(f"{base}/{ts_name}")
+            if dataset is not None:
+                return [parse(x.decode("utf-8")) for x in dataset[:]]
+        file_label = Path(getattr(hdf_file, "filename", "HDF file")).name
+        raise ValueError(
+            f"No unsteady output timestamps in {file_label}: neither "
+            f"'{base}/Time Date Stamp (ms)' nor '{base}/Time Date Stamp' exists. "
+            "The plan may be steady or may not have been computed."
+        )
 
     @staticmethod
     @standardize_input(file_type='plan_hdf')
@@ -687,6 +753,94 @@ class HdfBase:
 
     @staticmethod
     @log_call
+    def plan_vertex_ordinates(points: "np.ndarray") -> "np.ndarray":
+        """Reduce an HDF vertex array to ordinates Shapely accepts.
+
+        HEC-RAS writes some geometry point tables with four ordinates per
+        vertex. Shapely's constructors take two or three and raise
+        ``ValueError: The ordinate (last) dimension should be 2 or 3, got 4``
+        on anything wider, which aborts the whole layer for the caller.
+
+        Observed on the FEMA eBFE submittal for HUC8 12090106, model
+        ``MidCo_0601_A1``: ``/Geometry/2D Flow Area Refinement Regions/Polygon
+        Points`` is ``(21592, 4)`` and the third and fourth columns are
+        entirely NaN. There they are padding, not Z and M, so keeping three
+        ordinates would manufacture NaN-Z geometry out of nothing and push the
+        failure downstream into whatever consumes the GeoDataFrame.
+
+        The rule is therefore: a real Z is kept, a padding or measure column is
+        not.
+
+        - Fewer than four ordinates: returned unchanged. Two and three are what
+          Shapely already accepts, so nothing that reads today changes.
+        - Four or more: the trailing ordinates past the third are dropped as M
+          and beyond. The third is kept only when it holds at least one finite
+          value; when it is entirely NaN or infinite it is padding and the
+          result is planar XY.
+
+        Parameters
+        ----------
+        points : np.ndarray
+            A 2-D array of vertices, ``(n_vertices, n_ordinates)``, sliced
+            straight out of an HDF point dataset.
+
+        Returns
+        -------
+        np.ndarray
+            The same array when it already fits, otherwise a view holding its
+            first two or three ordinates.
+        """
+        array = np.asarray(points)
+        if array.ndim != 2 or array.shape[1] < 4:
+            return array
+        third = array[:, 2]
+        if np.issubdtype(array.dtype, np.floating) and not np.isfinite(third).any():
+            return array[:, :2]
+        return array[:, :3]
+
+    @staticmethod
+    def _feature_part_ranges(parts, point_start: int, point_count: int):
+        """Resolve one complete packed feature to local point ranges.
+
+        Native Parts are feature-local and valid when every part lies within
+        the feature's point count (the HEC-RAS / native engine rule); gaps,
+        unused vertices and shared vertices are allowed. Legacy global ranges
+        are accepted only when the entire collection of parts, shifted by the
+        feature point start, covers the feature exactly. Never choose an offset
+        convention independently for individual parts.
+        """
+        ranges = []
+        for row in parts:
+            if len(row) != 2 or any(
+                not np.isfinite(value) or int(value) != value for value in row
+            ):
+                raise ValueError("Packed feature parts require integer offsets and counts")
+            start, count = map(int, row)
+            if start < 0 or count < 0:
+                raise ValueError("Packed feature parts require nonnegative offsets and counts")
+            ranges.append((start, count))
+
+        # Native rule. When point_start > 0, an exact legacy global cover always
+        # has a part ending past point_count, so it can never also match here.
+        if ranges and all(start + count <= point_count for start, count in ranges):
+            return ranges
+
+        local_ranges = [(start - point_start, count) for start, count in ranges]
+        expected = 0
+        for start, count in sorted(local_ranges):
+            if start != expected:
+                break
+            expected += count
+        else:
+            if local_ranges and expected == point_count:
+                return local_ranges
+        raise ValueError(
+            "Packed feature parts exceed the feature point range and are not a "
+            "legacy global layout covering the feature exactly"
+        )
+
+    @staticmethod
+    @log_call
     @standardize_input(file_type='plan_hdf')
     def get_polylines_from_parts(hdf_path: Path, path: str, info_name: str = "Polyline Info", 
                               parts_name: str = "Polyline Parts", 
@@ -747,7 +901,11 @@ class HdfBase:
 
                 geoms = []
                 for pnt_start, pnt_cnt, part_start, part_cnt in polyline_info:
-                    points = polyline_points[pnt_start : pnt_start + pnt_cnt]
+                    points = HdfBase.plan_vertex_ordinates(
+                        polyline_points[pnt_start : pnt_start + pnt_cnt]
+                    )
+                    if pnt_start < 0 or pnt_cnt < 2 or len(points) != pnt_cnt:
+                        raise ValueError("Invalid polyline point range")
                     if part_cnt == 1:
                         geoms.append(LineString(points))
                     else:

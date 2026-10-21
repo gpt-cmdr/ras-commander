@@ -4,12 +4,24 @@ from pathlib import Path
 
 import pandas as pd
 import psutil
+import h5py
+import pytest
 
 
 raspreprocess_module = importlib.import_module("ras_commander.RasPreprocess")
 RasPreprocess = raspreprocess_module.RasPreprocess
 
 PREPROCESS_LOGGER = "ras_commander.RasPreprocess"
+
+
+@pytest.fixture(autouse=True)
+def _available_owned_tcu_supervision(monkeypatch):
+    """Logging units simulate the Windows supervision available to their launcher."""
+    monkeypatch.setattr(
+        RasPreprocess,
+        "_tcu_supervision_availability_error",
+        staticmethod(lambda: None),
+    )
 
 
 class _FakeRasProject:
@@ -53,7 +65,9 @@ def _seed_project(tmp_path: Path) -> _FakeRasProject:
 
 
 def _write_preprocess_outputs(project_folder: Path):
-    (project_folder / "PreprocessProject.p01.tmp.hdf").write_bytes(b"t" * 1024 * 1024)
+    with h5py.File(project_folder / "PreprocessProject.p01.tmp.hdf", "w") as hdf:
+        hdf.create_group("Event Conditions").attrs["Completed Successfully"] = True
+        hdf.create_dataset("Payload", data=b"t" * 1024 * 1024)
     (project_folder / "PreprocessProject.b01").write_bytes(b"b" * 2048)
     (project_folder / "PreprocessProject.x03").write_bytes(b"x" * 4096)
 
@@ -174,9 +188,8 @@ def test_full_simulation_fallback_warning_is_concise(
         def monitor_until_signal(self, _process):
             # Represent the full simulation writing a fresh final HDF after
             # preprocessing began.
-            (ras_obj.project_folder / "PreprocessProject.p01.hdf").write_bytes(
-                b"fresh full result" * 1024
-            )
+            with h5py.File(ras_obj.project_folder / "PreprocessProject.p01.hdf", "w") as hdf:
+                hdf.create_group("Event Conditions").attrs["Completed Successfully"] = True
             return True
 
     monkeypatch.setattr(raspreprocess_module, "BcoMonitor", FakeBcoMonitor)

@@ -37,6 +37,8 @@ import pandas as pd
 if TYPE_CHECKING:
     import geopandas as gpd
 
+    from .._landcover_native import LandCoverSanitizationResult
+
 from ..Decorators import log_call, standardize_input
 from ..LoggingConfig import get_logger
 from .HdfBase import HdfBase
@@ -509,6 +511,8 @@ class HdfLandCover:
         Returns:
             GeoDataFrame with columns: region_id, Name, 2D_Area_Name, geometry
 
+        Read errors and malformed present polygon layers are logged and raised.
+
         Example:
             >>> regions = HdfLandCover.get_mannings_region_polygons("01")
         """
@@ -524,28 +528,31 @@ class HdfLandCover:
 
                 lc_group = hdf_file[lc_path]
 
-                if ("Polygon Info" not in lc_group or
-                    "Attributes" not in lc_group or
-                    "Polygon Points" not in lc_group):
-                    logger.debug(f"Missing polygon datasets in {lc_path}")
+                polygon_datasets = ("Polygon Info", "Attributes", "Polygon Points")
+                if "Polygon Info" not in lc_group and "Polygon Points" not in lc_group:
                     return gpd.GeoDataFrame()
+                missing = [name for name in polygon_datasets if name not in lc_group]
+                if missing:
+                    raise ValueError(f"Missing polygon datasets: {missing}")
 
                 attrs = lc_group["Attributes"][()]
-                names = np.vectorize(HdfUtils.convert_ras_string)(attrs["Name"])
+                names = [HdfUtils.convert_ras_string(name) for name in attrs["Name"]]
 
                 area_names = None
                 if "2D Area Name" in attrs.dtype.names:
-                    area_names = np.vectorize(HdfUtils.convert_ras_string)(attrs["2D Area Name"])
+                    area_names = [HdfUtils.convert_ras_string(name) for name in attrs["2D Area Name"]]
 
                 geoms = []
-                missing_parts_regions = []
                 for pnt_start, pnt_cnt, part_start, part_cnt in lc_group["Polygon Info"][()]:
-                    points = lc_group["Polygon Points"][()][pnt_start:pnt_start + pnt_cnt]
+                    points = HdfBase.plan_vertex_ordinates(
+                        lc_group["Polygon Points"][()][pnt_start:pnt_start + pnt_cnt]
+                    )
+                    if pnt_start < 0 or pnt_cnt < 3 or len(points) != pnt_cnt:
+                        raise ValueError("Invalid region polygon point range")
                     if part_cnt == 1:
                         geoms.append(Polygon(points))
                     elif "Polygon Parts" not in lc_group:
-                        missing_parts_regions.append(len(geoms))
-                        geoms.append(Polygon(points))
+                        raise ValueError("Multipart Manning's region is missing Polygon Parts")
                     else:
                         parts = lc_group["Polygon Parts"][()][part_start:part_start + part_cnt]
                         rings = [points[ps:ps + pc] for ps, pc in parts]
@@ -554,17 +561,6 @@ class HdfLandCover:
                         else:
                             # First ring is exterior, rest are holes
                             geoms.append(Polygon(rings[0], rings[1:]))
-
-                if missing_parts_regions:
-                    logger.warning(
-                        "'Polygon Parts' dataset missing for "
-                        f"{len(missing_parts_regions)} multi-part Manning's n "
-                        "calibration polygon(s); using raw point order as polygon shells"
-                    )
-                    logger.debug(
-                        "Manning's n calibration polygon indices missing parts: "
-                        f"{missing_parts_regions}"
-                    )
 
                 data = {
                     "region_id": range(len(names)),
@@ -581,8 +577,8 @@ class HdfLandCover:
                 )
 
         except Exception as e:
-            logger.error(f"Error reading Manning's region polygons from {hdf_path}: {e}")
-            return gpd.GeoDataFrame()
+            logger.error(f"Error reading Manning's region polygons from {hdf_path} (Geometry/Land Cover (Manning's n)): {e}")
+            raise
 
     @staticmethod
     @log_call
@@ -802,6 +798,61 @@ class HdfLandCover:
             hecras_version=hecras_version,
             ras_object=ras_object,
         )
+
+    @staticmethod
+    @log_call
+    def sanitize_classification_names(
+        landcover_hdf_path: Union[str, Path],
+        raster_path: Optional[Union[str, Path]] = None,
+        hecras_version: Optional[str] = None,
+        ras_object: Any = None,
+    ) -> "LandCoverSanitizationResult":
+        """Sanitize land-cover labels through the native HEC-RAS 6.6 editor.
+
+        This labels-only operation preserves classification IDs, all numeric
+        class parameters, and the companion TIFF.  It is qualified only for
+        HEC-RAS 6.6/6.6.0 because it calls RASMapper's native sanitizer and writes
+        a legacy V1 sidecar back in the current V2 schema.  It does not
+        recreate or resample the raster.
+
+        Args:
+            landcover_hdf_path: Native RASMapper land-cover sidecar.
+            raster_path: Exact companion TIFF path. When omitted, the wrapper
+                resolves the path registered by RASMapper and records it in the
+                result; supplied paths must match that native association.
+            hecras_version: Explicit HEC-RAS 6.6 or 6.6.0 version. Required when
+                ``ras_object`` does not provide ``ras_version``.
+            ras_object: Initialized project object used to infer ``ras_version``.
+
+        Returns:
+            A ``LandCoverSanitizationResult`` containing native rename records,
+            complete before/after class-parameter snapshots, sidecar schema
+            versions, a durable backup path, and matching companion-TIFF
+            SHA-256 values.
+        """
+        version = hecras_version
+        if version is None and ras_object is not None:
+            version = getattr(ras_object, "ras_version", None)
+        if not version:
+            raise ValueError(
+                "hecras_version is required for native land-cover "
+                "classification-name sanitization."
+            )
+        from .._landcover_native import sanitize_landcover_classification_names
+
+        result = sanitize_landcover_classification_names(
+            landcover_hdf_path,
+            raster_path=raster_path,
+            hecras_version=str(version),
+        )
+        logger.info(
+            "Sanitized land-cover labels through RASMapper %s: %d rename(s), "
+            "TIFF unchanged=%s",
+            version,
+            len(result.renames),
+            result.tiff_sha256_before == result.tiff_sha256_after,
+        )
+        return result
 
 
     # ---- Phase 3: Comparison and Statistics ----

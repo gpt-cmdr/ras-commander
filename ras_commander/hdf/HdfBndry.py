@@ -26,7 +26,7 @@ List of Functions in HdfBndry:
 
 """
 from pathlib import Path
-from typing import ClassVar, Optional, Union
+from typing import ClassVar, Literal, Optional, Union
 
 import geopandas as gpd
 import h5py
@@ -38,8 +38,33 @@ from ..Decorators import log_call, standardize_input
 from ..LoggingConfig import get_logger
 from .HdfBase import HdfBase
 from .HdfUtils import HdfUtils
+from ._packed_parts import _nonnegative_index, resolve_feature_part_ranges
 
 logger = get_logger(__name__)
+
+
+def _assemble_polygon_rings(polygons):
+    """Assemble shells, holes and islands by ring containment, preserving vertices."""
+    containers = [
+        [j for j, outer in enumerate(polygons)
+         if i != j and outer.contains(ring)]
+        for i, ring in enumerate(polygons)
+    ]
+    parents = [
+        min(indices, key=lambda j: polygons[j].area)
+        if indices else None
+        for indices in containers
+    ]
+    shells = [
+        Polygon(
+            ring.exterior.coords,
+            [hole.exterior.coords for j, hole in enumerate(polygons)
+             if parents[j] == i and len(containers[j]) % 2 == 1],
+        )
+        for i, ring in enumerate(polygons)
+        if len(containers[i]) % 2 == 0
+    ]
+    return shells[0] if len(shells) == 1 else MultiPolygon(shells)
 
 
 class HdfBndry:
@@ -77,6 +102,7 @@ class HdfBndry:
         *,
         include_geometry: bool = False,
         crs=None,
+        report_ownership: bool = False,
     ) -> pd.DataFrame:
         """Build a typed empty native-association result."""
         result = pd.DataFrame(
@@ -126,7 +152,47 @@ class HdfBndry:
                     "duplicate_face_row_count": 0,
                 }
             )
+        if report_ownership:
+            HdfBndry._report_bc_face_ownership(result)
         return result
+
+    @staticmethod
+    def _report_bc_face_ownership(result: pd.DataFrame) -> None:
+        """Annotate all association rows without choosing or discarding an owner."""
+        keys = (
+            ["mesh_name", "face_id"]
+            if result["mesh_name"].notna().all()
+            else ["face_id"]
+        )
+        result["duplicate_ownership"] = result.duplicated(keys, keep=False)
+        result["owning_bc_line_ids"] = pd.Series(
+            [[] for _ in range(len(result))], index=result.index, dtype="object"
+        )
+        result["owning_bc_line_names"] = pd.Series(
+            [[] for _ in range(len(result))], index=result.index, dtype="object"
+        )
+        summary = []
+        for _, rows in result.groupby(keys, sort=False, dropna=False):
+            owners = rows[["bc_line_id", "bc_line_name"]].drop_duplicates()
+            ids = [None if pd.isna(value) else int(value) for value in owners.bc_line_id]
+            names = [None if pd.isna(value) else str(value) for value in owners.bc_line_name]
+            for index in rows.index:
+                result.at[index, "owning_bc_line_ids"] = ids.copy()
+                result.at[index, "owning_bc_line_names"] = names.copy()
+            if rows["duplicate_ownership"].any():
+                summary.append(
+                    {
+                        "mesh_name": (
+                            str(rows.mesh_name.iloc[0])
+                            if rows.mesh_name.notna().all() and rows.mesh_name.nunique() == 1
+                            else None
+                        ),
+                        "face_id": int(rows.face_id.iloc[0]),
+                        "owning_bc_line_ids": ids,
+                        "owning_bc_line_names": names,
+                    }
+                )
+        result.attrs["duplicate_ownership"] = summary
 
     @staticmethod
     def _find_structured_field(
@@ -156,6 +222,8 @@ class HdfBndry:
         hdf_path: Union[str, Path],
         include_geometry: bool = False,
         validate_unique_faces: bool = True,
+        *,
+        on_duplicate_ownership: Literal["raise", "report"] = "raise",
     ) -> Union[pd.DataFrame, gpd.GeoDataFrame]:
         """Return native BC-line-to-external-face associations.
 
@@ -182,6 +250,17 @@ class HdfBndry:
             Require each mesh-local face to be owned by exactly one native BC
             association. Set to ``False`` only for diagnostics: all native rows
             are returned and duplicate counts are reported in ``DataFrame.attrs``.
+            This legacy switch retains the original column shape.
+        on_duplicate_ownership : {"raise", "report"}, default "raise"
+            With ``"report"``, suppress only duplicate-ownership errors, even
+            when ``validate_unique_faces=True``. Preserve every association
+            and add ``duplicate_ownership`` (bool), ``owning_bc_line_ids`` and
+            ``owning_bc_line_names`` (parallel lists in native encounter order,
+            deduplicated by owner ID/name pair; missing values are ``None``).
+            Repeated associations to the same owner are also marked.
+            ``attrs['duplicate_ownership']`` lists duplicate keys and their
+            owner lists, using ``mesh_name=None`` when mesh metadata is unknown.
+            No files are modified; other validation remains active.
 
         Returns
         -------
@@ -214,6 +293,8 @@ class HdfBndry:
         ``Attributes`` dataset.  Name, mesh, and type remain nullable when the
         Attributes dataset or an optional attribute field is unavailable.
         """
+        if on_duplicate_ownership not in ("raise", "report"):
+            raise ValueError("on_duplicate_ownership must be 'raise' or 'report'")
         with h5py.File(hdf_path, "r") as hdf_file:
             if HdfBndry._BC_EXTERNAL_FACES_PATH not in hdf_file:
                 logger.debug(
@@ -225,6 +306,7 @@ class HdfBndry:
                     "absent",
                     include_geometry=include_geometry,
                     crs=HdfBase.get_projection(hdf_file) if include_geometry else None,
+                    report_ownership=on_duplicate_ownership == "report",
                 )
 
             native = hdf_file[HdfBndry._BC_EXTERNAL_FACES_PATH][()]
@@ -233,6 +315,7 @@ class HdfBndry:
                     "empty",
                     include_geometry=include_geometry,
                     crs=HdfBase.get_projection(hdf_file) if include_geometry else None,
+                    report_ownership=on_duplicate_ownership == "report",
                 )
 
             field_names = native.dtype.names
@@ -373,7 +456,11 @@ class HdfBndry:
                 duplicate_ownership,
                 ownership_columns,
             ].drop_duplicates()
-            if validate_unique_faces and len(duplicate_keys):
+            if (
+                validate_unique_faces
+                and on_duplicate_ownership == "raise"
+                and len(duplicate_keys)
+            ):
                 preview = duplicate_keys.head(10).to_dict("records")
                 raise ValueError(
                     f"Native BC external-face association in {hdf_path} does not have unique "
@@ -612,6 +699,8 @@ class HdfBndry:
                     "topology_mismatch_count": topology_mismatch_count,
                 }
             )
+            if on_duplicate_ownership == "report":
+                HdfBndry._report_bc_face_ownership(result)
             return result
 
     @staticmethod
@@ -674,17 +763,22 @@ class HdfBndry:
                 bc_lines_path,
                 str(e),
             )
-            return gpd.GeoDataFrame()
+            # An absent group returns an empty frame above; a group that exists
+            # but cannot be read is an error, not "no boundary condition lines".
+            raise ValueError(
+                f"Failed to read boundary condition lines from {hdf_path} ({bc_lines_path}): {e}"
+            ) from e
 
     @staticmethod
+    @log_call
     @standardize_input(file_type='plan_hdf')
-    def get_breaklines(hdf_path: Path) -> gpd.GeoDataFrame:
+    def get_breaklines(hdf_path: Union[Path, str]) -> gpd.GeoDataFrame:
         """
         Return 2D mesh area breaklines.
 
         Parameters
         ----------
-        hdf_path : Path
+        hdf_path : Path or str
             Path to the HEC-RAS geometry HDF file.
 
         Returns
@@ -694,9 +788,17 @@ class HdfBndry:
 
         Notes
         -----
-        - Zero-length breaklines are logged and skipped. 
-        - Single-point breaklines are logged and skipped.
-        - These invalid breaklines should be removed in RASMapper to prevent potential issues.
+        Read-only: coordinates retain the source CRS and horizontal units.
+        Missing layers return an empty frame. Records with zero or one point
+        are skipped and retained in ``result.attrs["breakline_diagnostics"]``
+        (an empty list when none are skipped), including all-degenerate layers.
+        Each diagnostic contains the zero-based native ``bl_id``, ``Name``,
+        decoded source ``attributes``, ``point_start``, ``point_count``,
+        exclusive ``point_end``, ``part_start``, ``part_count``, and
+        ``reason_code="BREAKLINE_TOO_FEW_POINTS"``. Persist these attrs explicitly
+        when writing artifacts; tabular writers may not retain them.
+        Negative, out-of-range or truncated spans and read errors remain hard
+        errors; no partial layer is returned for corrupted source records.
         """
         breaklines_path = "Geometry/2D Flow Area Break Lines"
         try:
@@ -707,11 +809,15 @@ class HdfBndry:
                         breaklines_path,
                         hdf_path.name,
                     )
-                    return gpd.GeoDataFrame()
+                    result = gpd.GeoDataFrame()
+                    result.attrs["breakline_diagnostics"] = []
+                    return result
 
                 bl_line_data = hdf_file[breaklines_path]
                 attributes = bl_line_data["Attributes"][()]
-                
+                source_points = bl_line_data["Polyline Points"][()]
+                diagnostics = []
+
                 # Initialize lists to store valid breakline data
                 valid_ids = []
                 valid_names = []
@@ -721,106 +827,101 @@ class HdfBndry:
                 valid_protection_radius = []
                 valid_geoms = []
 
-                # Track invalid breaklines for summary
-                zero_length_count = 0
-                single_point_count = 0
-                other_error_count = 0
-
                 # Process each breakline
                 for idx, (pnt_start, pnt_cnt, part_start, part_cnt) in enumerate(bl_line_data["Polyline Info"][()]):
                     name = HdfUtils.convert_ras_string(attributes["Name"][idx])
 
-                    # Check for zero-length breaklines
-                    if pnt_cnt == 0:
-                        zero_length_count += 1
-                        logger.debug(f"Zero-length breakline found (FID: {idx}, Name: {name})")
+                    # Validate the native span before tolerating a degenerate
+                    # feature. Zero points at the end of the array is valid.
+                    if pnt_start < 0 or pnt_cnt < 0 or pnt_start > len(source_points):
+                        raise ValueError(f"Invalid point range for breakline {idx} ({name})")
+                    if pnt_start + pnt_cnt > len(source_points):
+                        raise ValueError(f"Truncated points for breakline {idx} ({name})")
+                    if part_start < 0 or part_cnt < 1:
+                        raise ValueError(f"Invalid parts for breakline {idx} ({name})")
+                    if "Polyline Parts" in bl_line_data:
+                        if part_start + part_cnt > len(bl_line_data["Polyline Parts"]):
+                            raise ValueError(f"Truncated parts for breakline {idx} ({name})")
+                    elif part_cnt != 1:
+                        raise ValueError(f"Missing parts for breakline {idx} ({name})")
+                    if pnt_cnt < 2:
+                        source_attributes = {}
+                        for field in attributes.dtype.names or ():
+                            value = attributes[field][idx]
+                            if isinstance(value, (bytes, str, np.bytes_)):
+                                value = HdfUtils.convert_ras_string(value)
+                            elif isinstance(value, np.generic):
+                                value = value.item()
+                            elif isinstance(value, np.ndarray):
+                                value = value.tolist()
+                            source_attributes[field] = value
+                        diagnostics.append({
+                            "bl_id": idx,
+                            "Name": name,
+                            "attributes": source_attributes,
+                            "point_start": int(pnt_start),
+                            "point_count": int(pnt_cnt),
+                            "point_end": int(pnt_start + pnt_cnt),
+                            "part_start": int(part_start),
+                            "part_count": int(part_cnt),
+                            "reason_code": "BREAKLINE_TOO_FEW_POINTS",
+                        })
+                        logger.warning("Skipping breakline %s (%s): %s points", idx, name, pnt_cnt)
                         continue
 
-                    # Check for single-point breaklines
-                    if pnt_cnt == 1:
-                        single_point_count += 1
-                        logger.debug(f"Single-point breakline found (FID: {idx}, Name: {name})")
-                        continue
-
-                    try:
-                        points = bl_line_data["Polyline Points"][()][pnt_start:pnt_start + pnt_cnt]
-                        
-                        # Additional validation of points array
-                        if len(points) < 2:
-                            single_point_count += 1
-                            logger.debug(f"Invalid point count in breakline (FID: {idx}, Name: {name})")
-                            continue
-
-                        if part_cnt == 1:
-                            geom = LineString(points)
-                        else:
-                            parts = bl_line_data["Polyline Parts"][()][part_start:part_start + part_cnt]
-                            geom = MultiLineString([
-                                points[part_pnt_start:part_pnt_start + part_pnt_cnt]
-                                for part_pnt_start, part_pnt_cnt in parts
-                                if part_pnt_cnt > 1  # Skip single-point parts
-                            ])
-                            # Skip if no valid parts remain
-                            if len(geom.geoms) == 0:
-                                other_error_count += 1
-                                logger.debug(f"No valid parts in multipart breakline (FID: {idx}, Name: {name})")
-                                continue
-
-                        valid_ids.append(idx)
-                        valid_names.append(name)
-                        fields = attributes.dtype.names or ()
-                        valid_spacing_near.append(
-                            float(attributes["Cell Spacing Near"][idx])
-                            if "Cell Spacing Near" in fields
-                            else None
-                        )
-                        valid_spacing_far.append(
-                            float(attributes["Cell Spacing Far"][idx])
-                            if "Cell Spacing Far" in fields
-                            else None
-                        )
-                        valid_near_repeats.append(
-                            int(attributes["Near Repeats"][idx])
-                            if "Near Repeats" in fields
-                            else 0
-                        )
-                        valid_protection_radius.append(
-                            int(attributes["Protection Radius"][idx])
-                            if "Protection Radius" in fields
-                            else 0
-                        )
-                        valid_geoms.append(geom)
-
-                    except Exception as e:
-                        other_error_count += 1
-                        logger.debug(f"Error processing breakline {idx}: {str(e)}")
-                        continue
-
-                # Log summary of invalid breaklines
-                total_invalid = zero_length_count + single_point_count + other_error_count
-                if total_invalid > 0:
-                    logger.debug(
-                        f"Breakline processing summary:\n"
-                        f"- Zero-length breaklines: {zero_length_count}\n"
-                        f"- Single-point breaklines: {single_point_count}\n"
-                        f"- Other invalid breaklines: {other_error_count}\n"
-                        f"Consider removing these invalid breaklines using RASMapper."
+                    points = HdfBase.plan_vertex_ordinates(
+                        source_points[pnt_start:pnt_start + pnt_cnt]
                     )
+
+                    if len(points) != pnt_cnt:
+                        raise ValueError(f"Truncated points for breakline {idx} ({name})")
+
+                    if part_cnt == 1:
+                        geom = LineString(points)
+                    else:
+                        parts = bl_line_data["Polyline Parts"][()][part_start:part_start + part_cnt]
+                        if part_start < 0 or part_cnt < 1 or len(parts) != part_cnt:
+                            raise ValueError(f"Invalid parts for breakline {idx} ({name})")
+                        lines = []
+                        for offset, count in parts:
+                            line = points[offset:offset + count]
+                            if offset < 0 or count < 2 or len(line) != count:
+                                raise ValueError(f"Invalid part for breakline {idx} ({name})")
+                            lines.append(line)
+                        geom = MultiLineString(lines)
+
+                    valid_ids.append(idx)
+                    valid_names.append(name)
+                    fields = attributes.dtype.names or ()
+                    valid_spacing_near.append(
+                        float(attributes["Cell Spacing Near"][idx])
+                        if "Cell Spacing Near" in fields
+                        else None
+                    )
+                    valid_spacing_far.append(
+                        float(attributes["Cell Spacing Far"][idx])
+                        if "Cell Spacing Far" in fields
+                        else None
+                    )
+                    valid_near_repeats.append(
+                        int(attributes["Near Repeats"][idx])
+                        if "Near Repeats" in fields
+                        else 0
+                    )
+                    valid_protection_radius.append(
+                        int(attributes["Protection Radius"][idx])
+                        if "Protection Radius" in fields
+                        else 0
+                    )
+                    valid_geoms.append(geom)
 
                 # Create GeoDataFrame with valid breaklines
                 if not valid_ids:
-                    logger.warning(
-                        "No valid breaklines found in %s; skipped %d invalid "
-                        "breaklines (zero_length=%d, single_point=%d, other=%d).",
-                        hdf_path.name,
-                        total_invalid,
-                        zero_length_count,
-                        single_point_count,
-                        other_error_count,
-                    )
-                    return gpd.GeoDataFrame()
+                    result = gpd.GeoDataFrame()
+                    result.attrs["breakline_diagnostics"] = diagnostics
+                    return result
 
-                return gpd.GeoDataFrame(
+                result = gpd.GeoDataFrame(
                     {
                         "bl_id": valid_ids,
                         "Name": valid_names,
@@ -833,6 +934,8 @@ class HdfBndry:
                     geometry="geometry",
                     crs=HdfBase.get_projection(hdf_file)
                 )
+                result.attrs["breakline_diagnostics"] = diagnostics
+                return result
 
         except Exception as e:
             logger.error(
@@ -841,9 +944,10 @@ class HdfBndry:
                 breaklines_path,
                 str(e),
             )
-            return gpd.GeoDataFrame()
+            raise
 
     @staticmethod
+    @log_call
     @standardize_input(file_type='plan_hdf')
     def get_refinement_regions(hdf_path: Path) -> gpd.GeoDataFrame:
         """
@@ -857,7 +961,15 @@ class HdfBndry:
         Returns
         -------
         gpd.GeoDataFrame
-            A GeoDataFrame containing the refinement regions.
+            A GeoDataFrame containing the refinement regions. Missing layers
+            return an empty frame; malformed present layers raise an exception.
+
+        Notes
+        -----
+        Multipart ``Polygon Parts`` offsets are relative to each feature's
+        point slice, as HEC-RAS writes them. Legacy global offsets are
+        accepted only when all of the feature's parts together cover its
+        point slice exactly; otherwise out-of-range parts raise.
         """
         refinement_regions_path = "/Geometry/2D Flow Area Refinement Regions"
         try:
@@ -877,51 +989,41 @@ class HdfBndry:
                 polygon_parts = rr_data["Polygon Parts"][()] if "Polygon Parts" in rr_data else None
                 geoms = list()
                 for pnt_start, pnt_cnt, part_start, part_cnt in rr_data["Polygon Info"][()]:
-                    points = polygon_points[pnt_start : pnt_start + pnt_cnt]
+                    try:
+                        pnt_start, pnt_cnt = map(_nonnegative_index, (pnt_start, pnt_cnt))
+                    except ValueError as exc:
+                        raise ValueError(f"Invalid refinement region point range: {exc}") from exc
+                    points = HdfBase.plan_vertex_ordinates(
+                        polygon_points[pnt_start : pnt_start + pnt_cnt]
+                    )
+                    if pnt_start < 0 or pnt_cnt < 3 or len(points) != pnt_cnt:
+                        raise ValueError("Invalid refinement region point range")
+                    try:
+                        part_start, part_cnt = map(_nonnegative_index, (part_start, part_cnt))
+                        if part_cnt == 0:
+                            raise ValueError("Nonempty refinement region has no parts")
+                        part_ranges = None
+                        if polygon_parts is not None:
+                            if part_start > len(polygon_parts) or part_cnt > len(polygon_parts) - part_start:
+                                raise ValueError("Parts slice is out of bounds")
+                            parts = polygon_parts[part_start:part_start + part_cnt]
+                            part_ranges = resolve_feature_part_ranges(parts, pnt_start, pnt_cnt)
+                            if any(count < 3 for _, count in part_ranges):
+                                raise ValueError("Polygon part requires at least three points")
+                        elif part_cnt > 1:
+                            raise ValueError("Multipart refinement region is missing Polygon Parts")
+                    except ValueError as exc:
+                        raise ValueError(f"Invalid refinement region polygon part: {exc}") from exc
                     if part_cnt <= 1:
                         geoms.append(Polygon(points))
                     else:
-                        if polygon_parts is None:
-                            raise ValueError("Multipart refinement region is missing Polygon Parts")
-                        parts = polygon_parts[part_start : part_start + part_cnt]
-                        global_offsets = bool(
-                            len(parts) and np.all(parts[:, 0] >= pnt_start)
-                            and np.all(parts[:, 0] + parts[:, 1] <= pnt_start + pnt_cnt)
-                        )
                         polygons = []
-                        for part_pnt_start, part_pnt_cnt in parts:
-                            # Native collections may index globally or relative
-                            # to this feature's point slice.
-                            offset = int(part_pnt_start)
-                            if global_offsets:
-                                offset -= int(pnt_start)
+                        for offset, part_pnt_cnt in part_ranges:
                             ring = points[offset : offset + part_pnt_cnt]
                             if len(ring) != part_pnt_cnt or len(ring) < 3:
                                 raise ValueError("Invalid refinement region polygon part")
                             polygons.append(Polygon(ring))
-                        # Parts are rings: nested rings are holes, not additional
-                        # shells. Containment also preserves islands within holes
-                        # and disjoint shells without depending on winding order.
-                        containers = [
-                            [j for j, outer in enumerate(polygons)
-                             if i != j and outer.contains(ring)]
-                            for i, ring in enumerate(polygons)
-                        ]
-                        parents = [
-                            min(indices, key=lambda j: polygons[j].area)
-                            if indices else None
-                            for indices in containers
-                        ]
-                        shells = [
-                            Polygon(
-                                ring.exterior.coords,
-                                [hole.exterior.coords for j, hole in enumerate(polygons)
-                                 if parents[j] == i and len(containers[j]) % 2 == 1],
-                            )
-                            for i, ring in enumerate(polygons)
-                            if len(containers[i]) % 2 == 0
-                        ]
-                        geoms.append(shells[0] if len(shells) == 1 else MultiPolygon(shells))
+                        geoms.append(_assemble_polygon_rings(polygons))
                 return gpd.GeoDataFrame(
                     {"rr_id": rr_ids, "Name": names, "geometry": geoms},
                     geometry="geometry",
@@ -934,7 +1036,7 @@ class HdfBndry:
                 refinement_regions_path,
                 str(e),
             )
-            return gpd.GeoDataFrame()
+            raise
 
     @staticmethod
     @standardize_input(file_type='plan_hdf')
@@ -1011,7 +1113,11 @@ class HdfBndry:
                 reference_lines_path,
                 str(e),
             )
-            return gpd.GeoDataFrame()
+            # An absent group returns an empty frame above; a group that exists
+            # but cannot be read is an error, not "no reference lines".
+            raise ValueError(
+                f"Failed to read reference lines from {hdf_path} ({reference_lines_path}): {e}"
+            ) from e
 
     @staticmethod
     @standardize_input(file_type='plan_hdf')
@@ -1077,6 +1183,10 @@ class HdfBndry:
                 reference_points_path,
                 str(e),
             )
-            return gpd.GeoDataFrame()
+            # An absent group returns an empty frame above; a group that exists
+            # but cannot be read is an error, not "no reference points".
+            raise ValueError(
+                f"Failed to read reference points from {hdf_path} ({reference_points_path}): {e}"
+            ) from e
 
     

@@ -9,6 +9,9 @@ from various sources for use in HEC-RAS rain-on-grid 2D models:
 - Atlas14Grid - Spatially distributed PFE grids with remote access (HTTP range requests)
 - Atlas14Variance - Spatial variance analysis for uniform vs. distributed rainfall decisions
 - AbmHyetographGrid - Per-pixel Alternating Block Method hyetograph grids (NetCDF for HEC-RAS rain-on-grid)
+- Atlas14HyetographGrid - One duration-total depth raster scaled by a shared NOAA temporal curve
+- FrequencyStormDdf - Balanced depth-duration storms with optional bounded TP-40 reduction
+- Tp40Reduction - Explicit duration-dependent point-to-area factors
 - VortexCli - HEC-Vortex CLI wrapper for converting GRIB2/NetCDF to HEC-DSS
 - PrecipMrms - MRMS QPE catalog, download, HEC-Vortex DSS conversion, direct hyetograph/NetCDF, and MP4 animation helpers
 - RasPrecipGrid - Explicit GeoTIFF/GRIB normalization to durable HEC-RAS NetCDF
@@ -20,7 +23,7 @@ The primary workflow is:
 3. Export as HEC-DSS through HEC-Vortex or NetCDF/direct hyetograph inputs for HEC-RAS
 
 Design Storm Generation:
-Four HMS-validated methods are available for design storm hyetograph generation:
+Design-storm methods have different temporal patterns and qualification scopes:
 
 1. **StormGenerator** (Alternating Block Method):
    - Flexible peak positioning (0-100%)
@@ -47,10 +50,19 @@ Four HMS-validated methods are available for design storm hyetograph generation:
    - Duration: 24-hour only (HMS constraint)
    - Guaranteed exact depth conservation
 
+5. **FrequencyStormDdf** (Balanced Depth-Duration Storm):
+   - Eight or ten cumulative depth-duration knots
+   - 24-hour storms, five-minute intervals, 50% or 67% placement
+   - Optional bounded TP-40 reduction preserves the reduced total
+   - Bounded record comparisons; not universal HMS equivalence
+
 Choose StormGenerator for flexible peak positioning or non-HMS workflows.
 Choose Atlas14Storm for HMS-equivalent workflows with official Atlas 14 patterns (supports 6h, 12h, 24h, 96h).
-Choose FrequencyStorm for TP-40 workflows or when 48-hour duration is needed.
+Choose FrequencyStorm for the fixed TP-40 temporal pattern or when 48-hour duration is needed.
 Choose ScsTypeStorm for SCS Type I/IA/II/III distributions (24-hour only).
+Choose FrequencyStormDdf for the duration-dependent Hydro-35 configuration
+with eight/ten knots, 24h/5min, 50%/67% placement and optional bounded TP-40 reduction.
+FrequencyStorm's fixed pattern is not a general DDF frequency-storm solver.
 
 Spatial Variance Analysis:
 Atlas14Grid and Atlas14Variance provide tools to assess whether uniform rainfall
@@ -207,7 +219,10 @@ from .PrecipAorc import PrecipAorc
 from .PrecipHrrr import PrecipHrrr
 from .PrecipMrms import PrecipMrms
 from .StormGenerator import StormGenerator
+from .FrequencyStormDdf import FrequencyStormDdf
+from .Tp40Reduction import Tp40Reduction
 from .Atlas14Grid import Atlas14Grid
+from .Atlas14HyetographGrid import Atlas14HyetographGrid
 from .Atlas14Variance import Atlas14Variance
 from .AbmHyetographGrid import AbmHyetographGrid
 from .VortexCli import VortexCli
@@ -251,6 +266,8 @@ __all__ = [
     'PrecipHrrr',                  # HRRR real-time forecast download
     'PrecipMrms',                  # MRMS QPE catalog, download, DSS/direct processing, and animation
     'StormGenerator',
+    'FrequencyStormDdf',
+    'Tp40Reduction',
     'VortexCli',                   # HEC-Vortex CLI wrapper for GRIB2/NetCDF → DSS conversion
     'GriddedPrecipitationCapabilities',
     'PrecipCapabilities',
@@ -263,6 +280,7 @@ __all__ = [
     'PrecipitationNetcdfResult',
     'RasPrecipGrid',
     'Atlas14Grid',                 # Remote access to NOAA Atlas 14 CONUS grids
+    'Atlas14HyetographGrid',       # Single-duration depths times an explicitly selected shared NOAA curve
     'Atlas14Variance',             # Spatial variance analysis for precipitation
     'AbmHyetographGrid',           # Per-pixel ABM hyetograph grid generation (NetCDF for HEC-RAS rain-on-grid)
     'Atlas14Storm',                # HMS-equivalent Atlas 14 hyetograph generation

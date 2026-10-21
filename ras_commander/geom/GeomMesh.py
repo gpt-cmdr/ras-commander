@@ -24,13 +24,16 @@ Production Workflow (generate)
 2. **Existing HDF validation** — Require a current .g##.hdf compiled by
    HEC-RAS/Ras.exe before any mesh-generation work begins.
 3. **Containment gate** — Erode the exact compiled 2D perimeter inward by one
-   base-cell spacing. Require every associated breakline, refinement region,
-   and structure to be wholly covered by that admissible polygon. Boundary
+   base-cell spacing. Require every associated breakline and structure to be
+   wholly covered by that admissible polygon. Valid refinement regions can
+   touch or extend beyond the perimeter; the generator filters their points.
+   The old region margin gate is available explicitly. Boundary
    condition lines are checked separately because they belong on the perimeter.
 4. **Text → HDF sync** — Sync per-breakline spacing from text into the HDF so
    RegenerateMeshPoints (which reads HDF, not text) uses correct values.
 5. **Load .NET geometry** — RASGeometry(hdf_path) → D2FlowArea → perimeter,
-   breaklines (merged BreakLines + Regions + Structures via _build_breaklines).
+   breaklines and structures via _build_breaklines. Region edges are included
+   only in the explicit RAS Mapper compatibility mode.
 6. **Generate seeds** — Primary: RegenerateMeshPoints (private .NET method via
    reflection) produces breakline- and refinement-region-aware seeds.
    Fallback: PointGenerator.GeneratePoints(perim, cell_size) for base-grid seeds.
@@ -62,6 +65,8 @@ Ported from G:\\GH\\RASDecomp\\headless_mesh\\mesh_fix.py and mesh_bc_fix.py.
 
 from __future__ import annotations
 
+import hashlib
+import json
 import math
 import os
 import platform
@@ -72,6 +77,7 @@ from pathlib import Path
 from typing import Any, Callable, List, Mapping, Optional, Sequence, Tuple, TYPE_CHECKING, Union
 from uuid import uuid4
 
+from .._ras_text import _write_ras_text
 from ..Decorators import log_call
 from .._gdal_runtime import (
     configure_hecras_gdal_runtime,
@@ -92,15 +98,22 @@ from .GeomMeshDataclasses import (
     BCFixResult,
     DomainContainmentResult,
     DomainContainmentViolation,
+    GridAnchor,
     MeshResult,
 )
 
 if TYPE_CHECKING:
     import numpy
+    import pandas
     from RasMapperLib import PointMs
     from ..RasPrj import RasPrj
 
 logger = get_logger(__name__)
+
+
+class _MeshRegenerationError(RuntimeError):
+    """Native regeneration returned no target points after clearing stale seeds."""
+
 
 # ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -272,21 +285,214 @@ def _generate_seeds_safe(perim, cell_size: float, ns: dict):
     return PointGenerator.GeneratePoints(perim, float(cell_size))
 
 
-def _generate_seeds_via_net(geom_hdf_path: str, ns: dict, fid: int = 0) -> "PointMs":
+def _grid_anchor_from_hdf(
+    hdf_path: Union[str, Path],
+    mesh_name: Optional[str] = None,
+    mesh_index: int = 0,
+) -> GridAnchor:
+    """Return the first regular-grid point RAS Mapper uses for a 2D area.
+
+    RAS Mapper's ``PointGenerator`` seeds the base lattice at the area
+    bounding box's ``(min x + dx/2, max y - dy/2)``. The bounding box is that
+    of the stored perimeter (all parts), and ``Spacing dy`` falls back to
+    ``Spacing dx`` when it is not positive, as in RAS Mapper.
+    """
+    import h5py
+    import numpy as np
+
+    path = Path(hdf_path)
+    with h5py.File(path, "r") as hdf:
+        group = hdf["Geometry/2D Flow Areas"]
+        attrs = group["Attributes"][()]
+        names = [_decode_hdf_text(value).strip() for value in attrs["Name"]]
+        if mesh_name is not None:
+            if mesh_name not in names:
+                raise ValueError(
+                    f"2D flow area {mesh_name!r} not found in {path.name}; "
+                    f"available={names}"
+                )
+            index = names.index(mesh_name)
+        else:
+            if not 0 <= mesh_index < len(names):
+                raise ValueError(f"mesh_index {mesh_index} out of range for {path.name}")
+            index = mesh_index
+        info = group["Polygon Info"][()]
+        points = group["Polygon Points"][()]
+        start, count = int(info[index][0]), int(info[index][1])
+        ring = np.asarray(points[start : start + count], dtype=float)
+        dx = float(attrs["Spacing dx"][index])
+        dy = float(attrs["Spacing dy"][index]) if "Spacing dy" in attrs.dtype.names else dx
+    if not math.isfinite(dx) or dx <= 0:
+        raise ValueError(f"{names[index]}: Spacing dx is not positive in {path.name}")
+    if not math.isfinite(dy) or dy <= 0:
+        dy = dx
+    if len(ring) < 3:
+        raise ValueError(f"{names[index]}: perimeter has fewer than three points")
+    return GridAnchor(
+        x=float(ring[:, 0].min()) + 0.5 * dx,
+        y=float(ring[:, 1].max()) - 0.5 * dy,
+        spacing_dx=dx,
+        spacing_dy=dy,
+        source=f"{path.name}:{names[index]}",
+    )
+
+
+def _coerce_grid_anchor(value: Any, cell_size: float) -> GridAnchor:
+    """Normalize ``grid_anchor`` input to a GridAnchor with the mesh spacing."""
+    if isinstance(value, GridAnchor):
+        anchor = value
+    elif (
+        isinstance(value, (tuple, list))
+        and len(value) == 2
+        and all(isinstance(v, Number) and not isinstance(v, bool) for v in value)
+    ):
+        anchor = GridAnchor(float(value[0]), float(value[1]), cell_size, cell_size)
+    else:
+        raise TypeError("grid_anchor must be a GridAnchor or an (x, y) pair")
+    tolerance = 1e-6 * max(1.0, abs(cell_size))
+    if (
+        abs(anchor.spacing_dx - cell_size) > tolerance
+        or abs(anchor.spacing_dy - cell_size) > tolerance
+    ):
+        raise ValueError(
+            f"grid_anchor spacing ({anchor.spacing_dx:g}, {anchor.spacing_dy:g}) "
+            f"differs from the mesh cell size {cell_size:g}; a lattice anchor "
+            "only applies to grids of the same spacing"
+        )
+    return anchor
+
+
+def _anchored_lattice_points(geom, fid: int, anchor: GridAnchor, ns: dict):
+    """Regular lattice through ``anchor``, filtered exactly as RAS Mapper does.
+
+    Mirrors ``PointGenerator.GeneratePointsInternal`` for a 2D perimeter:
+    a point is kept when the perimeter's development TIN contains it and it
+    is not within ``GetCellSizeDistanceBuffer(dx, dy)`` of the perimeter.
+    Only the lattice origin differs: the anchor's phase instead of the
+    perimeter's bounding box. Rows run top to bottom, columns left to right.
+    """
+    perimeters = geom.MeshPerimeters
+    polygon = perimeters.Polygon(fid)
+    tin = perimeters.GetDevelopmentTin(fid)
+    segments = perimeters.GetSegmentSpatialIndex(fid)
+    if polygon is None or tin is None or segments is None:
+        raise RuntimeError(f"2D perimeter {fid} is not a valid polygon for point generation")
+    size = perimeters.GetCellSize2D(fid)
+    dx = float(size.X)
+    dy = float(size.Y)
+    if not math.isfinite(dy) or dy <= 0:
+        dy = dx
+    tolerance = 1e-6 * max(1.0, dx, dy)
+    if abs(anchor.spacing_dx - dx) > tolerance or abs(anchor.spacing_dy - dy) > tolerance:
+        raise ValueError(
+            f"grid_anchor spacing ({anchor.spacing_dx:g}, {anchor.spacing_dy:g}) "
+            f"differs from the 2D area spacing ({dx:g}, {dy:g})"
+        )
+    buffer = float(ns["PointGenerator"].GetCellSizeDistanceBuffer(dx, dy))
+    extent = polygon.ComputeExtent()
+    left, top = float(extent.Left), float(extent.Top)
+    right, bottom = left + float(extent.Width), top - float(extent.Height)
+    k0 = math.ceil((left - anchor.x) / dx)
+    k1 = math.floor((right - anchor.x) / dx)
+    m0 = math.ceil((anchor.y - top) / dy)
+    m1 = math.floor((anchor.y - bottom) / dy)
+    PointM = ns["PointM"]
+    lattice = ns["PointMs"]()
+    for m in range(m0, m1 + 1):
+        y = anchor.y - dy * m
+        for k in range(k0, k1 + 1):
+            point = PointM(anchor.x + dx * k, y)
+            if tin.ContainsPoint(point) and not polygon.PointCloseToPerimeter(
+                point, buffer, segments
+            ):
+                lattice.Add(point)
+    return lattice
+
+
+def _replace_area_points(geom, fid: int, lattice, ns: dict) -> int:
+    """Replace one area's computation points with ``lattice`` in memory.
+
+    RAS Mapper's ``RegenerateMeshPoints`` works on a single multipoint
+    feature; a geometry HDF loads one per 2D area. Points outside the target
+    perimeter are kept, so other areas are unchanged. Returns the number of
+    points removed from the target area. The HDF is not written.
+    """
+    from RasMapperLib import MultiPoint  # type: ignore
+
+    layer = geom.MeshPoints
+    tin = geom.MeshPerimeters.GetDevelopmentTin(fid)
+    merged = ns["PointMs"]()
+    removed = 0
+    for feature in range(layer.FeatureCount()):
+        points = layer[feature]
+        for i in range(points.PointMCount()):
+            point = points.PointM(i)
+            if tin.ContainsPoint(point):
+                removed += 1
+            else:
+                merged.Add(point)
+    for i in range(lattice.Count):
+        merged.Add(lattice[i])
+    layer.DeleteAllFeatures()
+    layer.AddFeature(MultiPoint(merged))
+    return removed
+
+
+def _features_reach_area(geom, fid: int, tin) -> bool:
+    """Whether any breakline, SA/2D structure line or region reaches area ``fid``."""
+    perimeter = geom.MeshPerimeters.Polygon(fid)
+    lines = geom.BreakLines
+    for i in range(lines.FeatureCount()):
+        line = lines.Polyline(i)
+        if line is None:
+            continue
+        if any(tin.ContainsPoint(line.PointM(j)) for j in range(line.Count)):
+            return True
+        if perimeter.Intersects(line):
+            return True
+    regions = geom.MeshRegions
+    for i in range(regions.FeatureCount()):
+        region = regions.Polygon(i)
+        if region is not None and perimeter.AreaIntersects(region):
+            return True
+    return False
+
+
+def _generate_seeds_via_net(
+    geom_hdf_path: str,
+    ns: dict,
+    fid: int = 0,
+    grid_anchor: Optional[GridAnchor] = None,
+    evidence: Optional[dict] = None,
+) -> "PointMs":
     """Generate breakline- and refinement-region-aware seeds via RAS Mapper.
 
     Calls the private RegenerateMeshPoints instance method via reflection,
     which internally runs the full EnforceBreaklines 5-step pipeline.
+
+    Normal regeneration merges the in-memory editing points and clears the
+    target area before invoking Mapper. Only that area is regenerated; points
+    belonging to other areas are preserved and excluded from the return value.
+    No points in this private geometry instance are saved to the HDF.
 
     Replicates the GUI's SA2DLinesAsBreakLines behavior: SA2D structures
     (internal dams, weirs) are temporarily added as breaklines with their
     spacing parameters (Near Repeats, Protection Radius) so that
     EnforceBreaklines generates the correct corridor seeds.
 
+    With ``grid_anchor``, the area's regular grid is laid on the anchor's
+    lattice instead of the area's bounding box: the anchored lattice
+    replaces the area's points in memory, and RegenerateMeshPoints runs
+    with the area active but not regenerated (the call RAS Mapper's own
+    breakline and refinement-region editors make). RAS Mapper then adds the
+    refinement-region points and enforces the breaklines on that lattice.
+
     Args:
         geom_hdf_path: Path to compiled .g##.hdf file.
         ns: .NET type namespace from _imports().
-        fid: 0-based flow area feature index for MeshPoints lookup.
+        fid: 0-based flow area feature index for perimeter selection.
+        grid_anchor: Optional lattice point to anchor the regular grid on.
+        evidence: Optional dict updated with anchored-generation counts.
 
     Returns PointMs collection of seed points.
     """
@@ -328,6 +534,8 @@ def _generate_seeds_via_net(geom_hdf_path: str, ns: dict, fid: int = 0) -> "Poin
 
         bl_count = bl.FeatureCount()
         perim_count = d2fa.FeatureCount()
+        if not 0 <= fid < perim_count:
+            raise ValueError(f"2D flow area index {fid} out of range ({perim_count} areas)")
 
         bl_idx = NetList[System.Int32]()
         for i in range(bl_count):
@@ -339,6 +547,33 @@ def _generate_seeds_via_net(geom_hdf_path: str, ns: dict, fid: int = 0) -> "Poin
         region_count = geom.MeshRegions.FeatureCount()
         for i in range(region_count):
             region_idx.Add(i)
+
+        regenerate_idx = perim_idx
+        lattice = None
+        if grid_anchor is not None:
+            # Lay the area's regular grid on the anchor's lattice ourselves and
+            # let RAS Mapper regenerate only the other areas' grids.
+            regenerate_idx = NetList[System.Int32]()
+            for i in range(perim_count):
+                if i != fid:
+                    regenerate_idx.Add(i)
+            lattice = _anchored_lattice_points(geom, fid, grid_anchor, ns)
+            replaced = _replace_area_points(geom, fid, lattice, ns)
+        else:
+            # HDF loading creates one multipoint feature per area. Mapper's
+            # regeneration expects one editing multipoint and otherwise catches
+            # its own "multiple multipoints" exception, leaving stale seeds.
+            # Merge in memory and clear only the target, so a swallowed failure
+            # cannot be mistaken for a successful deterministic regeneration.
+            target_tin = geom.MeshPerimeters.GetDevelopmentTin(fid)
+            if target_tin is None:
+                raise _MeshRegenerationError(
+                    f"2D flow area {fid} has no development TIN for regeneration"
+                )
+            _replace_area_points(geom, fid, ns["PointMs"](), ns)
+            perim_idx = NetList[System.Int32]()
+            perim_idx.Add(int(fid))
+            regenerate_idx = perim_idx
 
         pg = ns["PointGenerator"](geom)
         pg_type = pg.GetType()
@@ -353,16 +588,56 @@ def _generate_seeds_via_net(geom_hdf_path: str, ns: dict, fid: int = 0) -> "Poin
 
         # The parameter list grew across releases: 4 in 6.0-6.2, 6 in
         # 6.3-6.3.1 (progress reporters), 7 from 6.4.1 (treatInactiveAsNotPresent).
-        args = [bl_idx, region_idx, perim_idx, perim_idx, None, None, False]
+        args = [bl_idx, region_idx, perim_idx, regenerate_idx, None, None, False]
         method.Invoke(
             pg,
             System.Array[System.Object](args[: len(method.GetParameters())]),
         )
 
-        mp = d2fa.Geometry.MeshPoints[fid]
         seeds_pm = ns["PointMs"]()
+        # Both paths now use one merged editing feature. Its feature index no
+        # longer corresponds to the original flow-area FID (notably fid > 0).
+        mp = d2fa.Geometry.MeshPoints.GetMeshEditingPoints()
+        if mp is None and lattice is None:
+            raise _MeshRegenerationError(
+                f"RAS Mapper regeneration returned no editing points for 2D flow area {fid}"
+            )
         for i in range(mp.PointMCount()):
-            seeds_pm.Add(mp.PointM(i))
+            point = mp.PointM(i)
+            if lattice is not None or target_tin.ContainsPoint(point):
+                seeds_pm.Add(point)
+
+        if lattice is None and seeds_pm.Count == 0:
+            raise _MeshRegenerationError(
+                f"RAS Mapper regeneration produced no computation points for "
+                f"2D flow area {fid}; stale target points were cleared before "
+                "the native call"
+            )
+
+        if lattice is not None:
+            # RegenerateMeshPoints swallows its own exceptions. With features
+            # in this area to enforce, an unchanged lattice means it silently
+            # did nothing.
+            tin = geom.MeshPerimeters.GetDevelopmentTin(fid)
+            area_count = sum(
+                1 for i in range(seeds_pm.Count) if tin.ContainsPoint(seeds_pm[i])
+            )
+            if area_count == lattice.Count and _features_reach_area(geom, fid, tin):
+                raise RuntimeError(
+                    "RegenerateMeshPoints returned the anchored lattice unchanged; "
+                    "RAS Mapper did not enforce breaklines or refinement regions"
+                )
+            if evidence is not None:
+                evidence.update(
+                    {
+                        "anchor": grid_anchor.to_dict(),
+                        "lattice_points": int(lattice.Count),
+                        "replaced_points": int(replaced),
+                        "area_points_after_enforcement": int(area_count),
+                        "breaklines": int(bl_count),
+                        "refinement_regions": int(region_count),
+                    }
+                )
 
         logger.debug(
             f"Seeds via .NET RegenerateMeshPoints: {seeds_pm.Count} "
@@ -378,38 +653,123 @@ def _generate_seeds_via_net(geom_hdf_path: str, ns: dict, fid: int = 0) -> "Poin
                 logger.warning(f"Failed to remove temp breakline FID {rm_fid}")
 
 
-def _build_breaklines(d2fa, ns: dict):
-    """Merge BreakLines + MeshRegions + Structures into multipart Polyline."""
+def _build_breaklines(d2fa, ns: dict, refinement_region_constraints: bool = False,
+                      *, strict: bool = False):
+    """Collect saved-point compile constraints, or the RAS Mapper constraint set.
+
+    Region boundaries influence RegenerateMeshPoints in either mode. The
+    saved-point text compiler does not receive the HDF region polygons.
+    RAS Mapper also constrains their edges when constructing its mesh.
+    """
     Polyline = ns["Polyline"]
     PolylineFeatureLayer = ns["PolylineFeatureLayer"]
 
     combined = PolylineFeatureLayer("bl")
     n = 0
-    try:
-        for bl in d2fa.Geometry.BreakLines.Polylines():
-            if Polyline.IsValidPolyline(bl):
-                combined.AddFeature(bl)
+    layers = [("BreakLines", "Polylines")]
+    if refinement_region_constraints:
+        layers.append(("MeshRegions", "Polygons"))
+    layers.append(("Structures", "Polylines"))
+    for layer_name, accessor in layers:
+        try:
+            layer = getattr(d2fa.Geometry, layer_name)
+            for feature in getattr(layer, accessor)():
+                if not Polyline.IsValidPolyline(feature):
+                    if strict:
+                        raise ValueError(f"Invalid {layer_name} constraint")
+                    continue
+                combined.AddFeature(feature)
                 n += 1
-    except Exception:
-        pass
-    try:
-        for rgn in d2fa.Geometry.MeshRegions.Polygons():
-            if Polyline.IsValidPolyline(rgn):
-                combined.AddFeature(rgn)
-                n += 1
-    except Exception:
-        pass
-    try:
-        for struc in d2fa.Geometry.Structures.Polylines():
-            if Polyline.IsValidPolyline(struc):
-                combined.AddFeature(struc)
-                n += 1
-    except Exception:
-        pass
+        except Exception:
+            if strict:
+                raise
+    return combined.CopyToMultiPartPolyline() if n else None
 
-    if n == 0:
-        return None
-    return combined.CopyToMultiPartPolyline()
+
+def _screen_mesh_robustness(perim, seeds, d2fa, ratio, requested_ratio, ns,
+                            max_iterations, region_constraints, inset, report):
+    """Screen native mesh variants; serialize only the constrained production mesh."""
+    from time import monotonic
+    from shapely.geometry import Point
+
+    if not _meshfv2d_takes_min_face_ratio(ns):
+        raise ValueError("Robustness screening requires the HEC-RAS 6.6+ mesh constructor")
+    if d2fa.FeatureCount() != 1:
+        raise ValueError("Robustness screening currently supports one 2D flow area")
+    constraints = {
+        "saved_points": _build_breaklines(d2fa, ns, False, strict=True),
+        "mapper_regions": _build_breaklines(d2fa, ns, True, strict=True),
+        "unconstrained_stress": None,
+    }
+    ratios = list(dict.fromkeys([requested_ratio, ratio, 0.05, 0.1]))
+    points = [(float(seeds[i].X), float(seeds[i].Y)) for i in range(seeds.Count)]
+    initial_count = len(points)
+    interior = _perimeter_shapely_polygon(perim).buffer(-inset)
+    production_mode = "mapper_regions" if region_constraints else "saved_points"
+    start = monotonic()
+    report.update(initial_seed_count=initial_count, rounds=[], converged=False)
+    try:
+        for iteration in range(max_iterations + 1):
+            existing = {tuple(round(v, 6) for v in p) for p in points}
+            additions = {}
+            checks = []
+            report["rounds"].append(dict(round=iteration, seeds=len(points), checks=checks))
+            production_mesh = None
+            for mode, lines in constraints.items():
+                for test_ratio in ratios:
+                    candidate = ns["PointMs"]()
+                    for x, y in points:
+                        candidate.Add(ns["PointM"](x, y))
+                    mesh = _compute_mesh(perim, candidate, lines, test_ratio, ns)
+                    state = str(mesh.MeshCompletionState)
+                    count = _safe_non_virtual_cell_count(mesh)
+                    if state not in ("Complete", "MaxFacesPerCellExceeded") or count != len(points):
+                        raise RuntimeError(f"Robustness screening: {mode}/{test_ratio}: "
+                                           f"unexpected state/count {state}/{count}")
+                    faces = [int(mesh.CellFacesCount(i)) for i in range(count)]
+                    bad = sum(n > MAX_FACES_PER_CELL for n in faces)
+                    checks.append(dict(mode=mode, ratio=test_ratio, state=state,
+                                       cells=count, max_faces=max(faces, default=0), bad_cells=bad))
+                    if mode == production_mode and test_ratio == ratio:
+                        production_mesh = mesh
+                    if bad:
+                        _, _, mids = _autofix_max_faces(
+                            mesh, [candidate[i] for i in range(candidate.Count)], ns, perimeter=perim)
+                        for point in mids:
+                            xy = (float(point.X), float(point.Y))
+                            key = tuple(round(v, 6) for v in xy)
+                            if key not in existing and interior.contains(Point(*xy)):
+                                additions[key] = xy
+            report["rounds"][-1]["proposed_additions"] = len(additions)
+            if all(c["state"] == "Complete" and not c["bad_cells"] for c in checks):
+                report.update(converged=True, final_seed_count=len(points))
+                return production_mesh
+            if iteration == max_iterations:
+                raise RuntimeError("Robustness screening exhausted its repair budget")
+            if not additions:
+                raise RuntimeError("Robustness screening found no safe new midpoint")
+            if len(points) + len(additions) > 1.5 * initial_count:
+                raise RuntimeError("Robustness screening exceeded 50% seed growth")
+            points.extend(additions.values())
+    except Exception as exc:
+        report["error"] = str(exc)
+        raise
+    finally:
+        report["elapsed_seconds"] = monotonic() - start
+
+
+def _screening_inset(hdf_path):
+    """Return a half-foot inset expressed in geometry length units."""
+    import h5py
+    with h5py.File(hdf_path, "r") as hf:
+        units = hf.attrs.get("Units System", "")
+    if isinstance(units, bytes):
+        units = units.decode("utf-8")
+    if str(units) == "US Customary":
+        return 0.5
+    if str(units) in ("SI", "Metric"):
+        return 0.1524
+    raise ValueError(f"Robustness screening requires known geometry units: {units!r}")
 
 
 def _meshfv2d_takes_min_face_ratio(ns: dict) -> bool:
@@ -519,17 +879,20 @@ def _remove_seed_indexes(seeds_pm, indexes: set[int], ns: dict):
 
 
 
-def _seed_indexes_outside_perimeter(seeds_pm, perimeter) -> set[int]:
+def _seed_indexes_outside_perimeter(
+    seeds_pm, perimeter, strictly_inside: bool = False
+) -> set[int]:
     """Return seed indexes outside an exact .NET perimeter polygon."""
     from shapely.geometry import Point
 
     polygon = _perimeter_shapely_polygon(perimeter)
     if polygon is None:
         return set()
+    contains = polygon.contains if strictly_inside else polygon.covers
     return {
         index
         for index in range(seeds_pm.Count)
-        if not polygon.covers(
+        if not contains(
             Point(float(seeds_pm[index].X), float(seeds_pm[index].Y))
         )
     }
@@ -611,12 +974,15 @@ def _autofix_max_faces(
     ``PERIMETER_MIDPOINT_INSET_RATIO`` of its face length. RasMapperLib accepts
     a seed on the perimeter, but HEC-RAS geometry preprocessing rejects the
     mesh ("1 point(s) detected outside the perimeter of the 2D-area").
-    If ``stats`` is a dict, ``stats["inset"]`` receives the number moved.
+    Midpoints that remain on or outside a valid perimeter are discarded.
+    If ``stats`` is a dict, ``stats["inset"]`` receives the number moved and
+    ``stats["discarded"]`` records rejected midpoints when nonzero.
 
     Returns (combined_seeds, n_added, new_midpoints_only).
     """
     polygon = _perimeter_shapely_polygon(perimeter) if perimeter is not None else None
     n_inset = 0
+    n_discarded = 0
     new_pts = list(seeds_as_list)
     midpoints_only = []
     seen = set()
@@ -656,6 +1022,12 @@ def _autofix_max_faces(
                     mid, moved = _inset_perimeter_midpoint(
                         mid, face_key(fidx), polygon, ns
                     )
+                    from shapely.geometry import Point
+
+                    if not polygon.contains(Point(float(mid.X), float(mid.Y))):
+                        n_discarded += 1
+                        seen.add(fidx)
+                        continue
                     n_inset += int(moved)
                 new_pts.append(mid)
                 midpoints_only.append(mid)
@@ -669,8 +1041,12 @@ def _autofix_max_faces(
         logger.debug(
             f"MaxFaces midpoints moved inside the perimeter: {n_inset} of {n_added}"
         )
+    if n_discarded:
+        logger.debug(f"MaxFaces midpoints discarded outside the perimeter: {n_discarded}")
     if stats is not None:
         stats["inset"] = n_inset
+        if n_discarded:
+            stats["discarded"] = n_discarded
     return new_pts, n_added, midpoints_only
 
 
@@ -1110,7 +1486,7 @@ def _set_breakline_spacing_impl(
     backup = geom_text_path.with_suffix(geom_text_path.suffix + ".bak")
     shutil.copy2(geom_text_path, backup)
     tmp = geom_text_path.with_suffix(geom_text_path.suffix + ".tmp")
-    tmp.write_text("".join(modified), encoding="utf-8")
+    _write_ras_text(tmp, "".join(modified), encoding="utf-8")
     tmp.replace(geom_text_path)
     target = (
         f"FID {breakline_fid}" if breakline_fid is not None
@@ -1183,7 +1559,7 @@ def _set_breakline_name_impl(
     backup = geom_text_path.with_suffix(geom_text_path.suffix + ".bak")
     shutil.copy2(geom_text_path, backup)
     tmp = geom_text_path.with_suffix(geom_text_path.suffix + ".tmp")
-    tmp.write_text("".join(modified), encoding="utf-8")
+    _write_ras_text(tmp, "".join(modified), encoding="utf-8")
     tmp.replace(geom_text_path)
     logger.info(f"Renamed breakline → '{new_name}' in {geom_text_path.name}")
     return backup
@@ -1593,7 +1969,7 @@ def _patch_text_perimeter(
         logger.warning(f"Storage Area Surface Line block not found in {geom_text_path.name}")
         return
 
-    geom_text_path.write_text("".join(modified), encoding="utf-8")
+    _write_ras_text(geom_text_path, "".join(modified), encoding="utf-8")
     logger.debug(f"Patched perimeter → {n} vertices in {geom_text_path.name}")
 
 
@@ -1602,18 +1978,81 @@ def _reseed_after_perimeter_fix(
     hdf_path: Path,
     current_perim,
     cell_size: float,
-    fid: int,
-    mesh_name: str | None,
-    ns: dict,
+    mesh_name: str,
     hecras_dir=None,
-) -> "PointMs":
-    """Reject perimeter fixes that require text-to-HDF regeneration."""
-    raise RuntimeError(
-        "Perimeter repair would require regenerating the compiled geometry HDF "
-        f"from {text_path.name}. ras-commander cannot generate .g##.hdf from "
-        ".g## text with RasMapperLib; create or refresh the geometry HDF through "
-        "full HEC-RAS/Ras.exe behavior, then retry."
+    *,
+    ras_object=None,
+    require_complete_products: bool = False,
+) -> dict[str, Any]:
+    """Persist a repaired perimeter and refresh its compiled HDF via Ras.exe.
+
+    Hashes cover the ordered closed XY ring serialized as compact JSON floats.
+    Displacement is the maximum of vertex-to-opposite-boundary distances in
+    both directions, in project length units. Area change is repaired minus
+    original polygon area, in squared project units. Metrics use the actual
+    written ring, including fixed-width writer rounding.
+    """
+    from shapely.geometry import Point, Polygon
+
+    from .GeomStorage import GeomStorage
+
+    # Resolve the execution context before any destructive geometry write.
+    _find_plan_for_geometry(text_path, ras_object=ras_object)
+    original = _text_flow_area_perimeter(text_path, mesh_name)
+    if original is None:
+        raise ValueError(f"No authored perimeter for 2D flow area '{mesh_name}'")
+    coordinates = [
+        (float(current_perim.PointM(i).X), float(current_perim.PointM(i).Y))
+        for i in range(current_perim.Count)
+    ]
+    candidate = Polygon(coordinates)
+    if candidate.is_empty or not candidate.is_valid or candidate.area <= 0:
+        raise ValueError("Perimeter repair produced an invalid or empty polygon")
+    backup = GeomStorage.set_2d_flow_area_perimeter(
+        text_path,
+        flow_area_name=mesh_name,
+        geometry=candidate,
+        point_generation_data=(None, None, cell_size, cell_size),
+        create_backup=True,
     )
+    repaired = _text_flow_area_perimeter(text_path, mesh_name)
+    if repaired is None:
+        raise RuntimeError("Written repaired perimeter could not be read back")
+    original_polygon = Polygon(original)
+    repaired_polygon = Polygon(repaired)
+
+    def ring_hash(polygon):
+        ring = [[float(x), float(y)] for x, y in polygon.exterior.coords]
+        return hashlib.sha256(
+            json.dumps(ring, separators=(",", ":"), allow_nan=False).encode("utf-8")
+        ).hexdigest()
+
+    evidence = {
+        "original_perimeter_hash": ring_hash(original_polygon),
+        "repaired_perimeter_hash": ring_hash(repaired_polygon),
+        "max_vertex_displacement": max(
+            max(Point(xy).distance(repaired_polygon.boundary) for xy in original),
+            max(Point(xy).distance(original_polygon.boundary) for xy in repaired),
+        ),
+        "area_change": repaired_polygon.area - original_polygon.area,
+        "backup_path": str(backup),
+    }
+    # Log evidence before execution so a failed handoff remains traceable.
+    logger.info("[%s] Persisted perimeter repair: %s", mesh_name, evidence)
+    seeds = GeomMesh.generate_computation_points(
+        text_path,
+        mesh_name=mesh_name,
+        cell_size=cell_size,
+        hecras_dir=hecras_dir,
+        ras_object=ras_object,
+    )
+    if seeds.status != "success" or seeds.cell_count <= 0:
+        raise RuntimeError(
+            f"Repaired perimeter seed generation failed: {seeds.error_message}"
+        )
+    _recompile_geometry_hdf_via_rasexe(text_path, hdf_path, ras_object=ras_object, require_complete_products=require_complete_products)
+    _ensure_hdf(text_path, require_current=True, mesh_name=mesh_name, require_complete_products=require_complete_products)
+    return evidence
 
 
 def _set_point_generation_data(
@@ -1640,7 +2079,7 @@ def _set_point_generation_data(
                 modified.append(line)
         else:
             modified.append(line)
-    geom_text_path.write_text("".join(modified), encoding="utf-8")
+    _write_ras_text(geom_text_path, "".join(modified), encoding="utf-8")
 
 
 def _looks_like_storage_area_seed_line(line: str) -> bool:
@@ -1751,8 +2190,50 @@ def _patch_text_seeds(
             f"Storage Area 2D Points block not found in geometry text: {geom_text_path}"
         )
 
-    geom_text_path.write_text("".join(modified), encoding="utf-8")
+    _write_ras_text(geom_text_path, "".join(modified), encoding="utf-8")
+    _refresh_points_perimeter_time(geom_text_path, mesh_name)
     logger.debug(f"Text seeds patched → {n} points in {geom_text_path.name}")
+
+
+def _refresh_points_perimeter_time(geom_text_path: Path, mesh_name: str | None) -> None:
+    """Invalidate the native mesh cache after writing computation points."""
+    from datetime import datetime, timedelta
+
+    from .GeomStorage import GeomStorage
+
+    lines = geom_text_path.read_text(encoding="utf-8").splitlines(keepends=True)
+    areas_with_time = set()
+    area = None
+    for line in lines:
+        if line.startswith("Storage Area="):
+            area = line.split("=", 1)[1].split(",", 1)[0].strip()
+        elif line.startswith("Storage Area 2D PointsPerimeterTime="):
+            areas_with_time.add(area)
+    current_area = None
+    found_time = False
+    stamp = GeomStorage._current_timestamp()
+    modified = []
+    for line in lines:
+        if line.startswith("Storage Area="):
+            current_area = line.split("=", 1)[1].split(",", 1)[0].strip()
+            found_time = False
+        target = mesh_name is None or current_area == mesh_name
+        if target and line.startswith("Storage Area 2D PointsPerimeterTime="):
+            old_stamp = line.split("=", 1)[1].strip()
+            if stamp == old_stamp:
+                stamp = (datetime.strptime(stamp, "%d%b%Y %H:%M:%S") + timedelta(seconds=1)).strftime(
+                    "%d%b%Y %H:%M:%S"
+                )
+            line = f"Storage Area 2D PointsPerimeterTime={stamp}\n"
+            found_time = True
+        elif (
+            target and not found_time and current_area not in areas_with_time
+            and line.startswith("Storage Area 2D Points=")
+        ):
+            modified.append(f"Storage Area 2D PointsPerimeterTime={stamp}\n")
+            found_time = True
+        modified.append(line)
+    _write_ras_text(geom_text_path, "".join(modified), encoding="utf-8")
 
 
 # ── Public API ────────────────────────────────────────────────────────────────
@@ -1896,6 +2377,7 @@ def _recompile_geometry_hdf_via_rasexe(
     hdf_path: Path,
     *,
     ras_object=None,
+    require_complete_products: bool = False,
 ) -> Path:
     """Refresh a compiled geometry HDF from text through HEC-RAS/Ras.exe."""
     plan_number = _find_plan_for_geometry(geom_text_path, ras_object=ras_object)
@@ -1911,6 +2393,7 @@ def _recompile_geometry_hdf_via_rasexe(
         clear_geompre=True,
         force=True,
         geometry_only=True,
+        require_complete_products=require_complete_products,
     )
     if not preprocess_result.success:
         raise RuntimeError(
@@ -2030,8 +2513,17 @@ def _hdf_polyline_features(
     parts_name: str = "Polyline Parts",
     points_name: str = "Polyline Points",
 ) -> list[dict[str, Any]]:
-    """Read a native HEC-RAS polyline collection with strict schema checks."""
+    """Read native polylines, resolving Parts offsets for the complete feature.
+
+    Local offsets are valid when every part lies within the feature's point
+    count and take precedence; a legacy global layout must cover the whole
+    feature exactly. Malformed spans raise instead of truncating individual
+    parts.
+    """
+    import numpy as np
     from shapely.geometry import LineString, MultiLineString
+
+    from ..hdf.HdfBase import HdfBase
 
     if group_path not in hdf:
         return []
@@ -2068,44 +2560,46 @@ def _hdf_polyline_features(
     parts = group[parts_name][()] if parts_name in group else None
     features: list[dict[str, Any]] = []
     for index, row in enumerate(info):
-        if len(row) < 2:
+        if len(row) < 2 or any(
+            not np.isfinite(value) or int(value) != value for value in row
+        ):
             raise RuntimeError(f"{group_path}/{info_name} row {index} is malformed")
         point_start, point_count = int(row[0]), int(row[1])
         part_start = int(row[2]) if len(row) > 2 else 0
         part_count = int(row[3]) if len(row) > 3 else 1
+        if min(point_start, point_count, part_start, part_count) < 0 or (
+            point_start + point_count > len(points)
+        ):
+            raise RuntimeError(f"{group_path}/{info_name} row {index} has an invalid range")
         feature_points = points[point_start : point_start + point_count]
         geometry = None
         parse_error = ""
+        if point_count >= 2 and part_count > 1 and parts is None:
+            raise RuntimeError(
+                f"{group_path}/{parts_name} is required for multipart feature {index}"
+            )
+        if point_count >= 2 and parts is not None and part_count > 0:
+            if part_start + part_count > len(parts):
+                raise RuntimeError(f"{group_path}/{parts_name} is truncated at feature {index}")
+            try:
+                local_ranges = HdfBase._feature_part_ranges(
+                    parts[part_start : part_start + part_count], point_start, point_count
+                )
+            except ValueError as exc:
+                raise RuntimeError(f"{group_path}/{parts_name} feature {index}: {exc}") from exc
+        else:
+            local_ranges = [(0, point_count)]
         if len(feature_points) < 2:
             parse_error = "fewer_than_two_points"
-        elif part_count <= 1:
-            geometry = LineString(feature_points)
+        elif any(count < 2 for _, count in local_ranges):
+            parse_error = "multipart_feature_has_degenerate_part"
         else:
-            if parts is None:
-                raise RuntimeError(
-                    f"{group_path}/{parts_name} is required for multipart feature {index}"
-                )
-            line_parts = []
-            for part_row in parts[part_start : part_start + part_count]:
-                raw_start, relative_count = int(part_row[0]), int(part_row[1])
-                relative_start = (
-                    raw_start - point_start
-                    if point_start <= raw_start < point_start + point_count
-                    else raw_start
-                )
-                part_points = feature_points[
-                    relative_start : relative_start + relative_count
-                ]
-                if len(part_points) >= 2:
-                    line_parts.append(LineString(part_points))
-            if line_parts:
-                geometry = (
-                    line_parts[0]
-                    if len(line_parts) == 1
-                    else MultiLineString(line_parts)
-                )
-            else:
-                parse_error = "multipart_feature_has_no_valid_parts"
+            line_parts = [
+                LineString(feature_points[offset : offset + count])
+                for offset, count in local_ranges
+            ]
+            geometry = line_parts[0] if len(line_parts) == 1 else MultiLineString(line_parts)
+
         features.append(
             {
                 "index": index,
@@ -2135,8 +2629,14 @@ def _hdf_polygon_features(
     hdf: Any,
     group_path: str,
 ) -> list[dict[str, Any]]:
-    """Read a native HEC-RAS polygon collection with strict schema checks."""
-    from shapely.geometry import MultiPolygon, Polygon
+    """Read packed polygons with feature-local ring offsets and preserved holes.
+
+    Negative, truncated or out-of-feature spans raise; invalid ring geometry
+    remains available to the containment audit as a geometry violation.
+    """
+    import numpy as np
+    from shapely.geometry import Polygon
+    from ..hdf.HdfBndry import _assemble_polygon_rings
 
     if group_path not in hdf:
         return []
@@ -2155,43 +2655,58 @@ def _hdf_polygon_features(
             f"{group_path} Attributes rows ({len(attributes)}) do not match "
             f"Polygon Info rows ({len(info)})"
         )
+    if points.ndim != 2 or points.shape[1] < 2:
+        raise RuntimeError(f"{group_path}/Polygon Points must contain XY coordinates")
     parts = group["Polygon Parts"][()] if "Polygon Parts" in group else None
     features: list[dict[str, Any]] = []
     for index, row in enumerate(info):
-        if len(row) < 2:
+        if len(row) < 2 or any(
+            not np.isfinite(value) or int(value) != value for value in row
+        ):
             raise RuntimeError(f"{group_path}/Polygon Info row {index} is malformed")
         point_start, point_count = int(row[0]), int(row[1])
         part_start = int(row[2]) if len(row) > 2 else 0
         part_count = int(row[3]) if len(row) > 3 else 1
-        feature_points = points[point_start : point_start + point_count]
+        if min(point_start, point_count, part_start, part_count) < 0 or (
+            point_start + point_count > len(points)
+        ):
+            raise RuntimeError(f"{group_path}/Polygon Info row {index} has an invalid range")
+        feature_points = points[point_start : point_start + point_count, :2]
         geometry = None
         parse_error = ""
-        if len(feature_points) < 4:
-            parse_error = "fewer_than_four_polygon_points"
-        elif part_count <= 1:
-            geometry = Polygon(feature_points)
-        else:
-            if parts is None:
+        if parts is None or part_count == 0:
+            if part_count > 1:
                 raise RuntimeError(
                     f"{group_path}/Polygon Parts is required for multipart feature {index}"
                 )
-            polygons = []
-            for part_row in parts[part_start : part_start + part_count]:
-                raw_start, relative_count = int(part_row[0]), int(part_row[1])
-                relative_start = (
-                    raw_start - point_start
-                    if point_start <= raw_start < point_start + point_count
-                    else raw_start
-                )
-                part_points = feature_points[
-                    relative_start : relative_start + relative_count
-                ]
-                if len(part_points) >= 4:
-                    polygons.append(Polygon(part_points))
-            if polygons:
-                geometry = polygons[0] if len(polygons) == 1 else MultiPolygon(polygons)
+            ring_ranges = [(0, point_count)]
+        else:
+            if part_start + part_count > len(parts):
+                raise RuntimeError(f"{group_path}/Polygon Parts is truncated at feature {index}")
+            ring_ranges = parts[part_start : part_start + part_count]
+        polygons = []
+        expected_offset = 0
+        for part_row in ring_ranges:
+            if len(part_row) != 2 or any(
+                not np.isfinite(value) or int(value) != value for value in part_row
+            ):
+                raise RuntimeError(f"{group_path}/Polygon Parts is malformed at feature {index}")
+            offset, count = map(int, part_row)
+            if offset != expected_offset or count < 0 or offset + count > point_count:
+                raise RuntimeError(f"{group_path}/Polygon Parts has an invalid local span at feature {index}")
+            ring = feature_points[offset : offset + count]
+            expected_offset += count
+            if len(ring) < 4:
+                parse_error = "fewer_than_four_polygon_points"
+            elif not np.isfinite(ring).all():
+                parse_error = "non_finite_polygon_points"
             else:
-                parse_error = "multipart_feature_has_no_valid_parts"
+                polygons.append(Polygon(ring))
+        if expected_offset != point_count:
+            raise RuntimeError(f"{group_path}/Polygon Parts does not cover feature {index}")
+        if not parse_error and polygons:
+            geometry = _assemble_polygon_rings(polygons)
+
         features.append(
             {
                 "index": index,
@@ -2209,6 +2724,7 @@ def _audit_domain_containment_hdf(
     hdf_path: Path,
     mesh_name: str,
     base_cell_spacing: float,
+    strict_refinement_containment: bool = False,
 ) -> DomainContainmentResult:
     """Audit mesh-owned features against a one-cell inward domain buffer."""
     import h5py
@@ -2269,7 +2785,10 @@ def _audit_domain_containment_hdf(
             if geometry is not None and not reason:
                 if geometry.is_empty or not geometry.is_valid:
                     reason = "invalid_or_empty_geometry"
-                elif not admissible.covers(geometry):
+                elif (
+                    (feature_type != "refinement_region" or strict_refinement_containment)
+                    and not admissible.covers(geometry)
+                ):
                     reason = "outside_one_cell_inward_buffer"
             if not reason:
                 continue
@@ -2474,6 +2993,7 @@ def _ensure_hdf(
     mesh_name: str | None = None,
     recompile_via_rasexe: bool = False,
     ignore_seed_count: bool = False,
+    require_complete_products: bool = False,
 ) -> Path:
     """Return an existing compiled HDF for *geom_text_path*.
 
@@ -2488,6 +3008,7 @@ def _ensure_hdf(
                 geom_text_path,
                 hdf_path,
                 ras_object=ras_object,
+                require_complete_products=require_complete_products,
             )
             if hdf_path.exists():
                 return hdf_path
@@ -2512,6 +3033,7 @@ def _ensure_hdf(
                 geom_text_path,
                 hdf_path,
                 ras_object=ras_object,
+                require_complete_products=require_complete_products,
             )
             consistency_issues = _mesh_hdf_consistency_issues(
                 geom_text_path,
@@ -2787,6 +3309,53 @@ def _ensure_line_geometry(geometry, source_index):
     return MultiLineString(parts)
 
 
+def _hole_free_refinement_parts(parts):
+    """Partition valid polygon holes without adding or removing positive area."""
+    from shapely.ops import triangulate, unary_union
+
+    output = []
+    for part in parts:
+        if not part.interiors:
+            output.append(part)
+            continue
+        pieces = [
+            p for triangle in triangulate(part)
+            for p in _iter_polygon_geometries(triangle.intersection(part))
+            if p.area > 0
+        ]
+        if any(p.interiors for p in pieces) or not unary_union(pieces).equals(part):
+            raise ValueError("Refinement hole partition did not preserve its exact footprint")
+        output.extend(pieces)
+    return output
+
+
+def _repair_refinement_polygon(region):
+    """Return GEOS-valid polygon coverage and explicit source-condition evidence."""
+    import hashlib
+    from shapely import make_valid
+    from shapely.geometry import GeometryCollection
+    from shapely.ops import unary_union
+    from shapely.validation import explain_validity
+
+    valid = make_valid(region) if not region.is_valid else region
+    parts = list(_iter_polygon_geometries(valid))
+    coverage = unary_union(parts) if parts else GeometryCollection()
+    hole_free = _hole_free_refinement_parts(parts)
+    result = unary_union(hole_free) if hole_free else GeometryCollection()
+    if not result.equals(coverage):
+        raise ValueError("Refinement repair changed GEOS-valid polygon coverage")
+    return result, {
+        "method": "geos_make_valid_polygon_coverage",
+        "source_validity": explain_validity(region),
+        "source_wkb_sha256": hashlib.sha256(region.wkb).hexdigest(),
+        "repaired_wkb_sha256": hashlib.sha256(result.wkb).hexdigest(),
+        "source_area": float(region.area),
+        "repaired_area": float(result.area),
+        "nonpolygon_remnants": valid.difference(coverage).wkt,
+        "positive_area_preserved": True,
+    }
+
+
 def _iter_polygon_geometries(geometry):
     if geometry is None or getattr(geometry, "is_empty", False):
         return
@@ -2892,12 +3461,12 @@ def _refinement_region_attribute_rows(regions: Sequence[Mapping[str, Any]]):
                 str(region["name"]).encode("utf-8"),
                 np.float32(region["spacing_dx"]),
                 np.float32(region["spacing_dy"]),
-                np.float32(np.nan),
-                np.float32(np.nan),
-                np.float32(np.nan),
-                np.int32(0),
-                np.float32(np.nan),
-                np.uint8(0),
+                np.float32(region.get("shift_dx", np.nan)),
+                np.float32(region.get("shift_dy", np.nan)),
+                np.float32(region.get("perimeter_spacing", np.nan)),
+                np.int32(region.get("near_repeats", 0)),
+                np.float32(region.get("far_spacing", np.nan)),
+                np.uint8(region.get("protection_radius", 0)),
             )
             for region in regions
         ],
@@ -3120,18 +3689,34 @@ class GeomMesh:
         cell_size: Optional[float] = None,
         ras_object=None,
         recompile_via_rasexe: bool = False,
+        strict_refinement_containment: bool = False,
+        require_complete_products: bool = False,
     ) -> DomainContainmentResult:
-        """Verify mesh-owned features stay one base cell inside the 2D perimeter.
+        """Audit mesh features before point generation.
+
+        Packed refinement regions retain interior rings, disjoint shells and
+        islands using feature-local Parts offsets. Malformed ranges raise.
 
         The admissible geometry is the exact compiled 2D perimeter buffered
-        *inward* by one base mesh-cell spacing. Every breakline, refinement
-        region, and structure associated with the selected 2D area must be
+        *inward* by one base mesh-cell spacing. Every breakline and
+        structure associated with the selected 2D area must be
         wholly covered by that eroded polygon. Boundary-condition lines are
         intentionally excluded because external BC lines are authored at the
         perimeter and require a separate association audit.
 
+        Valid refinement regions may touch or extend beyond the perimeter;
+        ``generate()`` removes native points outside the 2D area. Set
+        ``strict_refinement_containment=True`` to apply the earlier one-cell
+        inward margin to regions as well.
+
         This read-only check is cross-platform and does not load RasMapperLib.
         A missing, stale, malformed, or ambiguous geometry HDF fails closed.
+        ``require_complete_products`` defaults to False and is forwarded to
+        native preprocessing when ``recompile_via_rasexe=True`` permits mutation.
+
+        Packed polyline Parts offsets resolve for each complete feature. Native
+        local offsets, valid when every part lies within the feature's point
+        count, take precedence over legacy whole-feature global offsets.
         """
         geom_path = _resolve_geom_text_path(geom_number, ras_object)
         hdf_path = _ensure_hdf(
@@ -3141,6 +3726,7 @@ class GeomMesh:
             mesh_name=mesh_name,
             recompile_via_rasexe=recompile_via_rasexe,
             ignore_seed_count=True,
+            require_complete_products=require_complete_products,
         )
         hdf_metadata = _read_mesh_metadata_from_hdf(hdf_path)
         area_names = list(hdf_metadata)
@@ -3178,6 +3764,7 @@ class GeomMesh:
             hdf_path,
             mesh_name,
             cell_size,
+            strict_refinement_containment=strict_refinement_containment,
         )
 
     @staticmethod
@@ -3219,7 +3806,7 @@ class GeomMesh:
                 Most reliable selector — breaklines can be unnamed or
                 have duplicate names.
             all_breaklines: If True, apply spacing to every breakline.
-            ras_object: Optional RasPrj instance for multi-project support.
+            ras_object (RasPrj, optional): Optional RasPrj instance for multi-project support.
 
         Returns:
             Path to .bak backup file created before writing.
@@ -3301,7 +3888,7 @@ class GeomMesh:
                 have duplicate names.
             old_name: Current name of the breakline.  Raises if
                 multiple breaklines share this name.
-            ras_object: Optional RasPrj instance.
+            ras_object (RasPrj, optional): Optional RasPrj instance.
 
         Returns:
             Path to .bak backup file created before writing.
@@ -3415,7 +4002,7 @@ class GeomMesh:
             old_name: Current name of the region.  Raises if multiple
                 regions share this name.
             hecras_dir: Override HEC-RAS installation directory.
-            ras_object: Optional RasPrj instance.
+            ras_object (RasPrj, optional): Optional RasPrj instance.
 
         Raises:
             ValueError: If neither selector is given, both are given,
@@ -3569,7 +4156,7 @@ class GeomMesh:
                 have duplicate names.
             all_regions: If True, apply spacing to every region.
             hecras_dir: Override HEC-RAS installation directory.
-            ras_object: Optional RasPrj instance.
+            ras_object (RasPrj, optional): Optional RasPrj instance.
 
         Raises:
             ValueError: If no target is specified, or if the target is
@@ -3671,6 +4258,174 @@ class GeomMesh:
 
     @staticmethod
     @log_call
+    def clip_refinement_regions(
+        geom_number: str | Number | Path,
+        perimeter,
+        *,
+        min_area: float = 0.0,
+        invalid_regions: str = "raise",
+        hecras_dir: str | Path | None = None,
+        ras_object=None,
+    ) -> tuple[list[dict[str, Any]], pandas.DataFrame]:
+        """Prepare delivered refinement regions for a smaller 2D perimeter.
+
+        Read the source HDF without modifying it. Intersect each region with
+        *perimeter*, retain its native spacing properties, and return mappings
+        for ``replace_refinement_regions()`` plus a per-source-region DataFrame.
+        Disconnected intersections become separate output regions in source
+        order, with the same name and properties. Duplicate names are permitted.
+
+        Args:
+            geom_number: Source geometry number or .g## text path.
+            perimeter (shapely.geometry.Polygon | MultiPolygon | Sequence[Sequence[float]]):
+                Clipping mask or (N, 2) XY coordinates in the
+                source geometry's CRS and project length units. Holes are not
+                supported by the replacement writer. A disconnected inward
+                buffer may be a MultiPolygon; every positive-area intersection
+                fragment is retained by default. This mask does not author the
+                computational-domain perimeter.
+            min_area: Optional fragment area cutoff in squared project units.
+                Default zero retains every positive-area fragment, including
+                regions smaller than one spacing_dx * spacing_dy cell. Such
+                regions do not necessarily produce an interior grid point.
+            invalid_regions: "raise" (default) rejects invalid polygons or
+                unsupported holes; "drop" records them as dropped and continues.
+                "repair" uses GEOS make_valid and partitions holes without
+                filling them. Zero-area remnants are recorded. Repair hashes
+                and areas are returned in report.attrs["repairs"].
+            hecras_dir: Optional HEC-RAS installation for source HDF validation.
+            ras_object (RasPrj | None): Optional source RasPrj context.
+
+        Returns:
+            (regions, report). Regions preserve X/Y spacing, shifts, perimeter
+            spacing, near repeats, far spacing and protection radius. Report
+            columns are source_fid, name, status (kept/clipped/dropped), reason,
+            source_area, retained_area, output_fids, touches_perimeter and
+            below_one_cell_area. Areas use squared project units.
+
+        Raises:
+            ValueError: Invalid perimeter, area cutoff, source polygon or
+                unsupported interior rings. No files are written.
+
+        Notes:
+            Clipping changes the region extent used as the grid origin and
+            creates new perimeter transitions. Retaining spacing and shifts
+            does not reproduce the full region's original points or transitions.
+        """
+        import h5py
+        import numpy as np
+        import pandas as pd
+        from shapely.geometry import MultiPolygon, Polygon
+
+        from ..hdf.HdfBndry import HdfBndry
+
+        child = perimeter if isinstance(perimeter, (Polygon, MultiPolygon)) else Polygon(
+            _normalise_polygon_coords(perimeter)
+        )
+        parts = list(_iter_polygon_geometries(child))
+        if child.is_empty or not child.is_valid or child.area <= 0 or not parts or any(p.interiors for p in parts):
+            raise ValueError("perimeter must be a valid positive-area Polygon or MultiPolygon without holes")
+        min_area = float(min_area)
+        if not math.isfinite(min_area) or min_area < 0:
+            raise ValueError("min_area must be finite and non-negative")
+        if invalid_regions not in ("raise", "drop", "repair"):
+            raise ValueError("invalid_regions must be 'raise', 'drop' or 'repair'")
+        source_path = _resolve_geom_text_path(geom_number, ras_object)
+        hdf_path = _ensure_hdf(
+            source_path, hecras_dir=hecras_dir, ras_object=ras_object,
+            ignore_seed_count=True,
+        )
+        source = HdfBndry.get_refinement_regions(hdf_path)
+        properties = {
+            "Spacing dx": "spacing_dx", "Spacing dy": "spacing_dy",
+            "Shift dx": "shift_dx", "Shift dy": "shift_dy",
+            "Perimeter Spacing": "perimeter_spacing",
+            "Near Spacing Repeats": "near_repeats", "Far Spacing": "far_spacing",
+            "Protection Radius": "protection_radius",
+        }
+        with h5py.File(hdf_path, "r") as hdf:
+            key = "Geometry/2D Flow Area Refinement Regions/Attributes"
+            attributes = _coerce_refinement_region_attributes(hdf[key][()]) if key in hdf else []
+        output: list[dict[str, Any]] = []
+        rows = []
+        repairs = []
+        for fid, row in source.iterrows():
+            region = row.geometry
+            parts = list(_iter_polygon_geometries(region))
+            repaired = False
+            if invalid_regions == "repair" and (
+                region.is_empty or not region.is_valid or not parts or any(p.interiors for p in parts)
+            ):
+                region, evidence = _repair_refinement_polygon(region)
+                repairs.append({"source_fid": int(fid), "name": row["Name"], **evidence})
+                parts = list(_iter_polygon_geometries(region))
+                repaired = True
+                if not parts:
+                    rows.append({
+                        "source_fid": int(fid), "name": row["Name"], "status": "dropped",
+                        "reason": "degenerate_source_no_positive_area", "source_area": float(row.geometry.area),
+                        "retained_area": 0.0, "output_fids": [], "touches_perimeter": False,
+                        "below_one_cell_area": False,
+                    })
+                    continue
+            if region.is_empty or not region.is_valid or not parts or (
+                invalid_regions != "repair" and any(p.interiors for p in parts)
+            ):
+                if invalid_regions == "raise":
+                    raise ValueError(f"Source region FID {fid} is invalid or has unsupported interior rings")
+                reason = "unsupported_interior_rings" if any(p.interiors for p in parts) else "invalid_source_geometry"
+                rows.append({
+                    "source_fid": int(fid), "name": row["Name"], "status": "dropped",
+                    "reason": reason, "source_area": float(region.area),
+                    "retained_area": 0.0, "output_fids": [], "touches_perimeter": False,
+                    "below_one_cell_area": False,
+                })
+                continue
+            native = {target: attributes[fid][field].item() for field, target in properties.items()}
+            dx, dy = float(native["spacing_dx"]), float(native["spacing_dy"])
+            if not np.isfinite([dx, dy]).all() or min(dx, dy) <= 0:
+                raise ValueError(f"Source region FID {fid} has invalid X/Y spacing")
+            intersection = region.intersection(child)
+            fragments = [p for p in _iter_polygon_geometries(intersection) if p.area > 0]
+            kept = [p for p in fragments if p.area >= min_area]
+            if any(p.interiors for p in kept):
+                if invalid_regions != "repair":
+                    raise ValueError(f"Clipped region FID {fid} has unsupported interior rings")
+                kept = _hole_free_refinement_parts(kept)
+            output_fids = []
+            for part in kept:
+                output_fids.append(len(output))
+                output.append({"name": row["Name"], "polygon": part, **native})
+            retained = sum(p.area for p in kept)
+            if not fragments:
+                status, reason = "dropped", "no_polygon_overlap"
+            elif not kept:
+                status, reason = "dropped", "below_min_area"
+            elif region.equals(intersection) and len(kept) == len(fragments):
+                status, reason = "kept", "inside_child_perimeter"
+            else:
+                status, reason = "clipped", "child_perimeter_intersection"
+                if len(kept) != len(fragments):
+                    reason = "intersection_fragments_below_min_area"
+            rows.append({
+                "source_fid": int(fid), "name": row["Name"], "status": status,
+                "reason": ("repaired_source_geometry:" + reason) if repaired else reason, "source_area": float(region.area),
+                "retained_area": float(retained), "output_fids": output_fids,
+                "touches_perimeter": any(p.intersects(child.boundary) for p in kept),
+                "below_one_cell_area": any(p.area < dx * dy for p in kept),
+            })
+        columns = ["source_fid", "name", "status", "reason", "source_area",
+                   "retained_area", "output_fids", "touches_perimeter", "below_one_cell_area"]
+        report = pd.DataFrame(rows, columns=columns).astype({
+            "source_fid": "int64", "source_area": "float64",
+            "retained_area": "float64", "touches_perimeter": "bool",
+            "below_one_cell_area": "bool",
+        })
+        report.attrs["repairs"] = repairs
+        return output, report
+
+    @staticmethod
+    @log_call
     def replace_refinement_regions(
         geom_number: Union[str, Number, Path],
         regions: Sequence[Mapping[str, Any]],
@@ -3686,6 +4441,13 @@ class GeomMesh:
         ``spacing_dx``; ``spacing_dy`` defaults to ``spacing_dx`` and ``name``
         defaults to an empty string. The replacement is built and validated in
         a same-directory temporary HDF before it is promoted over the original.
+
+        Optional native properties are ``shift_dx``, ``shift_dy``,
+        ``perimeter_spacing``, ``near_repeats``, ``far_spacing`` and
+        ``protection_radius``. Missing floating properties default to NaN;
+        missing repeats and protection radius default to zero. Polygon holes
+        are rejected rather than silently filled. Use ``clip_refinement_regions``
+        to prepare a delivered collection for a child perimeter.
 
         ``expected_existing_names`` is an optimistic-concurrency guard. Names
         are compared in HDF/FID order and may contain duplicates or empty
@@ -3736,6 +4498,8 @@ class GeomMesh:
             polygon = raw.get("polygon", raw.get("geometry"))
             if polygon is None:
                 raise ValueError(f"regions[{index}] is missing polygon or geometry")
+            if hasattr(polygon, "interiors") and polygon.interiors:
+                raise ValueError(f"regions[{index}] polygon has unsupported interior rings")
             coords = _normalise_polygon_coords(polygon)
             if len(coords) < 3:
                 raise ValueError(
@@ -3765,6 +4529,20 @@ class GeomMesh:
                     "spacing_dy": spacing_dy,
                 }
             )
+            native = normalized[-1]
+            for key in ("shift_dx", "shift_dy", "perimeter_spacing", "far_spacing"):
+                value = float(raw.get(key, np.nan))
+                if not np.isnan(value) and (
+                    not np.isfinite(value) or abs(value) > np.finfo(np.float32).max
+                    or (key in ("perimeter_spacing", "far_spacing") and value <= 0)
+                ):
+                    raise ValueError(f"regions[{index}] {key} must be valid native spacing/shift or NaN")
+                native[key] = value
+            for key, upper in (("near_repeats", np.iinfo(np.int32).max), ("protection_radius", 1)):
+                value = raw.get(key, 0)
+                if not isinstance(value, (int, np.integer)) or not 0 <= value <= upper:
+                    raise ValueError(f"regions[{index}] {key} must be an integer in [0, {upper}]")
+                native[key] = int(value)
 
         attributes = _refinement_region_attribute_rows(normalized)
         info_rows = []
@@ -3860,7 +4638,7 @@ class GeomMesh:
 
         Args:
             geom_number: Geometry number or path to .g## text file.
-            polygon: Region boundary as a list of (x, y) tuples,
+            polygon (list[tuple[float, float]] | Polygon): Region boundary as a list of (x, y) tuples,
                 a Shapely Polygon, or any object whose
                 ``exterior.coords`` yields (x, y) pairs.
                 The ring is closed automatically if needed.
@@ -3873,7 +4651,7 @@ class GeomMesh:
             name: Region name stored in the HDF ``Name`` field
                 (max 32 bytes UTF-8).  Empty string is valid.
             hecras_dir: Override HEC-RAS installation directory.
-            ras_object: Optional RasPrj instance.
+            ras_object (RasPrj, optional): Optional RasPrj instance.
             use_rasmapper: Force product-backed authoring (True) or the
                 low-level native-schema writer (False). ``None`` selects the
                 product path for real geometry on Windows/Wine and retains the
@@ -4066,7 +4844,7 @@ class GeomMesh:
         Args:
             geom_number: Geometry number, .g## text path, or resolvable geometry
                 selector.  A current compiled .g##.hdf workspace must exist.
-            flowlines: GeoDataFrame, GeoSeries, LineString, MultiLineString,
+            flowlines (GeoDataFrame | GeoSeries | LineString | MultiLineString | Iterable): GeoDataFrame, GeoSeries, LineString, MultiLineString,
                 or iterable of shapely line geometries. GeoDataFrame inputs are
                 reprojected to the project CRS when both CRS values are known;
                 inputs without a CRS are assumed to already be in project CRS.
@@ -4081,7 +4859,7 @@ class GeomMesh:
             simplify_tolerance: Optional line simplification tolerance applied
                 before buffering.
             preserve_topology: Passed to shapely ``simplify()``.
-            trim_geometries: Optional GeoDataFrame, geometry, or iterable of
+            trim_geometries (GeoDataFrame | BaseGeometry | Iterable, optional): Optional GeoDataFrame, geometry, or iterable of
                 geometries to subtract from generated buffers. Use this for
                 bridge, confluence, levee, or other overlap avoidance zones.
             trim_distance: Optional buffer distance applied to
@@ -4104,7 +4882,7 @@ class GeomMesh:
                 the compiled geometry HDF/RASMapper files when needed.
             hecras_dir: Override HEC-RAS installation directory for HDF
                 resolution consistency with other ``GeomMesh`` methods.
-            ras_object: Optional RasPrj instance.
+            ras_object (RasPrj, optional): Optional RasPrj instance.
 
         Returns:
             List of dictionaries mapping each written region to its HDF FID,
@@ -4281,7 +5059,7 @@ class GeomMesh:
         Args:
             geom_number: Geometry number ("01", 1) or path to .g## text file.
             hecras_dir: Override HEC-RAS installation directory.
-            ras_object: Optional RasPrj instance for multi-project support.
+            ras_object (RasPrj, optional): Optional RasPrj instance for multi-project support.
 
         Returns:
             Never returns successfully.
@@ -4315,7 +5093,7 @@ class GeomMesh:
             geom_number: Geometry number, .g## text path, or .g##.hdf path.
                 Text inputs require an existing current .g##.hdf.
             hecras_dir: Kept for API symmetry; no DLLs are loaded here.
-            ras_object: Optional RasPrj instance for geometry-number lookup.
+            ras_object (RasPrj, optional): Optional RasPrj instance for geometry-number lookup.
             resolve_paths: If True, return absolute paths resolved relative to
                 the geometry HDF. If False, return the raw HDF attribute text.
 
@@ -4361,7 +5139,7 @@ class GeomMesh:
                 the HEC-RAS ``SedimentSoilsFilename`` slot, not the hydrologic
                 soils layer used to build infiltration data.
             hecras_dir: Override HEC-RAS installation directory.
-            ras_object: Optional RasPrj instance for geometry-number lookup.
+            ras_object (RasPrj, optional): Optional RasPrj instance for geometry-number lookup.
             validate: Re-read ``/Geometry`` attributes after execution and
                 verify supplied paths were persisted.
 
@@ -4461,7 +5239,7 @@ class GeomMesh:
             mesh_index: Index of the 2D flow area (default 0).
             force: Force recomputation even if tables are up-to-date.
             hecras_dir: Override HEC-RAS installation directory.
-            ras_object: Optional RasPrj instance for multi-project support.
+            ras_object (RasPrj, optional): Optional RasPrj instance for multi-project support.
 
         Returns:
             True if property tables were computed successfully.
@@ -4534,6 +5312,50 @@ class GeomMesh:
 
     @staticmethod
     @log_call
+    def get_grid_anchor(
+        geometry: Union[str, Number, Path],
+        mesh_name: Optional[str] = None,
+        mesh_index: int = 0,
+        ras_object: Optional[RasPrj] = None,
+    ) -> GridAnchor:
+        """Return the regular-grid lattice point of a compiled 2D flow area.
+
+        RAS Mapper starts a 2D area's regular computation-point grid half a
+        cell inside the area's bounding box: at ``(min x + dx/2, max y - dy/2)``
+        of the stored perimeter, then one point every ``Spacing dx`` /
+        ``Spacing dy``. This reads that point and the spacing from the
+        compiled geometry HDF. Pass the result to
+        ``GeomMesh.generate(grid_anchor=...)`` so a child or ensemble member
+        cut from this area re-meshes on the same lattice.
+
+        Read-only; nothing is loaded through .NET, so it runs on any
+        platform with h5py.
+
+        Args:
+            geometry: Compiled geometry HDF path (``.g##.hdf``), geometry
+                text path (``.hdf`` is appended), or geometry number.
+            mesh_name: 2D flow area name (None = use ``mesh_index``).
+            mesh_index: 0-based 2D-area index when ``mesh_name`` is None.
+            ras_object (RasPrj, optional): RasPrj instance for
+                geometry-number lookup; None uses the global project.
+
+        Returns:
+            GridAnchor in the geometry's CRS and horizontal units, with
+            ``source`` naming the HDF file and area.
+
+        Raises:
+            FileNotFoundError: The geometry or its compiled HDF is missing.
+            ValueError: The area is missing or has no positive spacing.
+        """
+        path = Path(geometry) if isinstance(geometry, (str, Path)) else None
+        if path is None or path.suffix.lower() != ".hdf":
+            path = Path(str(_resolve_geom_text_path(geometry, ras_object)) + ".hdf")
+        if not path.is_file():
+            raise FileNotFoundError(f"Compiled geometry HDF not found: {path}")
+        return _grid_anchor_from_hdf(path, mesh_name=mesh_name, mesh_index=mesh_index)
+
+    @staticmethod
+    @log_call
     def generate_computation_points(
         geom_number: Union[str, Number, Path],
         mesh_name: Optional[str] = None,
@@ -4541,6 +5363,9 @@ class GeomMesh:
         cell_size: Optional[float] = None,
         hecras_dir: Optional[Union[str, Path]] = None,
         ras_object=None,
+        repair_generated_points: bool = False,
+        min_face_length_ratio: float = 0.05,
+        evidence_callback: Optional[Callable[[str, Any], None]] = None,
     ) -> "MeshResult":
         """
         Generate initial 2D computation points for a 2D flow area directly from
@@ -4568,7 +5393,17 @@ class GeomMesh:
             cell_size: Regular-interval spacing in project units. When None, it
                 is read from ``Storage Area Point Generation Data`` in the text.
             hecras_dir: Override HEC-RAS installation directory (for RasMapperLib).
-            ras_object: Optional RasPrj instance for multi-project support.
+            ras_object (RasPrj, optional): Optional RasPrj instance for multi-project support.
+            repair_generated_points: Inspect native bootstrap topology and remove
+                only recorded, index-matched seeds implicated by perimeter or
+                fewer-than-three-face errors, with at most five repairs. The
+                authored perimeter is never changed. Default preserves legacy
+                point generation. Final Ras.exe compile and QA remain required.
+            min_face_length_ratio: Dimensionless native preview setting; supply
+                the persisted geometry setting when enabling repairs.
+            evidence_callback: Observer receiving each bootstrap_seed_repair
+                plan before any text mutation. Observer errors abort generation
+                and are reported in the returned MeshResult error message.
 
         Returns:
             MeshResult with status, mesh_name, cell_count (= number of generated
@@ -4633,6 +5468,19 @@ class GeomMesh:
 
             # ── Generate computation points (float32-safe GeneratePoints) ──
             seeds = _generate_seeds_safe(perim, cell_size, ns)
+            if repair_generated_points:
+                from .GeomMeshRepair import GeomMeshRepair
+                for repair_attempt in range(5):
+                    preview = _compute_mesh(perim, seeds, None, min_face_length_ratio, ns)
+                    repair = GeomMeshRepair.plan_native_seed_removal(preview, seeds)
+                    indexes = {p["generated_point_index"] for p in repair["removed_points"]}
+                    if not indexes:
+                        break
+                    repair["attempt"] = repair_attempt
+                    if evidence_callback is not None:
+                        evidence_callback("bootstrap_seed_repair", repair)
+                    seeds, removed = _remove_seed_indexes(seeds, indexes, ns)
+                    result.fixes_applied.append(f"Bootstrap:native-generated-seed-removal(-{removed}pts)")
             n_pts = int(seeds.Count)
             if n_pts <= 0:
                 result.status = "exception"
@@ -4681,6 +5529,11 @@ class GeomMesh:
         ras_object=None,
         recompile_via_rasexe: bool = False,
         _require_current_hdf: bool = True,
+        refinement_region_constraints: bool = False,
+        strict_refinement_containment: bool = False,
+        robustness_screening: bool = False,
+        require_complete_products: bool = False,
+        grid_anchor: Optional[Union[GridAnchor, Tuple[float, float]]] = None,
     ) -> MeshResult:
         """
         Generate or regenerate a 2D mesh headlessly via text-first workflow.
@@ -4722,7 +5575,12 @@ class GeomMesh:
                 None preserves existing values from the .g01 text.
             protection_radius: Enable 1-cell protection radius (0 or 1).
                 None preserves existing values from the .g01 text.
-            min_face_length_ratio: Initial ratio (0.05-0.25).
+            min_face_length_ratio: Positive, finite initial face-length ratio.
+                The first attempt uses this value exactly; ratio escalation uses
+                larger values from 0.05, 0.10, 0.15 and 0.25. Before HEC-RAS
+                6.6, the mesh constructor does not accept a ratio. On success the used
+                ratio is written to geometry text and the Mapper workspace.
+                Native geometry preprocessing remains the validation step.
             max_iterations: Maximum fix-and-retry attempts.
             hecras_dir: HEC-RAS installation whose RasMapperLib to load
                 (6.0 or later). Defaults to the newest installed release
@@ -4732,14 +5590,58 @@ class GeomMesh:
                 are preserved (read from geometry, not defaulted).
             bl_spacing_far: Optional override for far spacing in project units.
                 If omitted, existing per-breakline values are preserved.
-            ras_object: Optional RasPrj instance for multi-project support.
+            ras_object (RasPrj, optional): Optional RasPrj instance for multi-project support.
             recompile_via_rasexe: If True, refresh a missing or content-stale
                 compiled geometry HDF through ``GeomPreprocessor``/Ras.exe.
                 The geometry must be referenced by a plan in *ras_object*.
+            require_complete_products: Forward strict completion to native
+                recompilation and perimeter-repair preprocessing. Defaults False.
+            refinement_region_constraints: If False (default), evaluate and
+                repair the saved-point mesh with breakline/structure constraints.
+                Regions still shape point generation. True retains the earlier
+                RAS Mapper mesh with region-edge constraints. A cached Mapper
+                mesh may differ from a fresh text-point compile.
+            strict_refinement_containment: If True, retain the earlier one-cell
+                inward margin for regions. False permits valid region extents
+                across or outside the perimeter, as RAS Mapper does.
+            robustness_screening: Opt-in ras-commander optimization (default False).
+                Screen requested/accepted ratios, 0.05 and 0.1 with saved-point,
+                region-edge and unconstrained variants. Retain region seeds and
+                structure constraints in production. Requires one 2D area and a
+                ratio-aware native constructor (HEC-RAS 6.6+). Adds up to
+                max_iterations repair rounds and 50% more seeds; failure prevents
+                saving the screened mesh. Native preprocessing is still required.
+                Diagnostics are returned in MeshResult.robustness_screening.
+            grid_anchor: Optional lattice point for the regular (base) grid,
+                as a :class:`GridAnchor` or an ``(x, y)`` pair in the
+                geometry's CRS and units. RAS Mapper otherwise starts the grid
+                half a cell inside the area's own bounding box, so a child cut
+                from a parent gets an offset grid. With an anchor, the grid
+                passes through the anchor's lattice (use
+                :meth:`get_grid_anchor` on the parent geometry), and RAS
+                Mapper still generates the refinement-region and breakline
+                points on it. The anchor spacing must equal ``cell_size``.
+                Requires RegenerateMeshPoints; there is no unanchored
+                fallback. Evidence is returned in ``MeshResult.grid_anchor``.
 
         Returns:
             MeshResult with status, cell_count, face_count, fixes_applied, and
-            the compiled geometry HDF path on success.
+            the compiled geometry HDF path on success. ``perimeter_repairs``
+            records each persisted automatic repair's reason, ordered-ring
+            SHA-256 hashes, maximum vertex-to-opposite-boundary displacement
+            (both directions, project length units), signed area change
+            (squared project units), and backup path. Coordinates retain the
+            project's CRS. Repair mutates text and HDF, with a text backup;
+            supply an initialized project with a referencing plan.
+
+        Raises:
+            ValueError: The face-length ratio is not positive and finite.
+            TypeError: ``grid_anchor`` is not a GridAnchor or ``(x, y)`` pair.
+                (A grid anchor whose spacing differs from the cell size
+                returns ``status="exception"`` with the reason.)
+            RuntimeError: A perimeter repair handoff or subsequent mesh retry
+                fails, chained to the original mesh repair reason. Retries
+                share the existing ``max_iterations`` bound.
         """
         geom_path = _resolve_geom_text_path(geom_number, ras_object)
 
@@ -4749,6 +5651,11 @@ class GeomMesh:
             geom_text_path=str(geom_path),
         )
 
+        min_face_length_ratio = _normalize_positive_value(
+            min_face_length_ratio, "min_face_length_ratio"
+        )
+        if not math.isfinite(min_face_length_ratio):
+            raise ValueError("min_face_length_ratio must be finite")
         cell_size_provided = cell_size is not None
         if cell_size_provided:
             cell_size = _normalize_positive_value(cell_size, "cell_size")
@@ -4768,7 +5675,11 @@ class GeomMesh:
                 bl_spacing_near = legacy_bl_spacing
             if bl_spacing_far is None:
                 bl_spacing_far = legacy_bl_spacing
+        if grid_anchor is not None and not isinstance(grid_anchor, GridAnchor):
+            # Type check now; spacing is checked once the cell size is known.
+            _coerce_grid_anchor(grid_anchor, 1.0)
 
+        repair_reason = None
         try:
             text_path = geom_path
 
@@ -4787,6 +5698,7 @@ class GeomMesh:
                 # computation points. Perimeter and breakline identity remain
                 # mandatory content-current gates.
                 ignore_seed_count=True,
+                require_complete_products=require_complete_products,
             )
 
             # ── Step 1a: Auto-detect cell size from text if not provided ──
@@ -4805,16 +5717,22 @@ class GeomMesh:
                     logger.debug(
                         f"Auto-detected cell size {cell_size} from HDF Spacing dx"
                     )
+            anchor = (
+                _coerce_grid_anchor(grid_anchor, float(cell_size))
+                if grid_anchor is not None
+                else None
+            )
 
             # ── Step 1b: Fail-closed mesh-feature containment gate ───
-            # Breaklines, refinement regions, and SA/2D structures must
-            # remain one full base cell inside the exact new perimeter.
+            # Breaklines and SA/2D structures retain the one-cell margin.
+            # Refinement regions use native extent handling by default.
             # External boundary-condition lines are audited separately.
             domain_containment = _audit_domain_containment_hdf(
                 hdf_path,
                 mesh_name
                 or list(_read_mesh_metadata_from_hdf(hdf_path))[mesh_index],
                 float(cell_size),
+                strict_refinement_containment=strict_refinement_containment,
             )
             result.domain_containment = domain_containment
             result.mesh_name = domain_containment.mesh_name
@@ -4892,35 +5810,79 @@ class GeomMesh:
                 f"[{mesh_name}] {perim.Count}-point perimeter from .NET"
             )
 
-            breaklines = _build_breaklines(d2fa, ns)
+            breaklines = _build_breaklines(
+                d2fa, ns, refinement_region_constraints=refinement_region_constraints
+            )
 
             # ── Step 4: Generate seeds via .NET ──────────────────────────
             # Always try RegenerateMeshPoints first — it uses the correct
             # grid origin from the HDF regardless of whether breaklines exist.
             net_seeds_ok = False
+            anchor_evidence: dict = {}
+            # Pass anchor keywords only when anchoring, so callers that wrap
+            # the seed generator with the original signature keep working.
+            seed_kwargs = (
+                {"grid_anchor": anchor, "evidence": anchor_evidence}
+                if anchor is not None
+                else {}
+            )
             try:
-                seeds_pm = _generate_seeds_via_net(str(hdf_path), ns, fid=fid)
+                seeds_pm = _generate_seeds_via_net(
+                    str(hdf_path), ns, fid=fid, **seed_kwargs
+                )
                 net_seeds_ok = True
                 logger.debug(
                     f"[{mesh_name}] {seeds_pm.Count} seeds via "
                     f".NET RegenerateMeshPoints"
                 )
+            except _MeshRegenerationError as exc:
+                # A known silent native failure must not become an unconstrained
+                # lattice fallback that loses breakline/refinement enforcement.
+                raise _MeshRegenerationError(
+                    f"[{mesh_name}] Native point regeneration failed: {exc}"
+                ) from exc
             except Exception as exc:
+                if anchor is not None:
+                    raise RuntimeError(
+                        f"Anchored point generation failed: {exc}"
+                    ) from exc
                 logger.warning(
                     f"[{mesh_name}] RegenerateMeshPoints failed: {exc}"
                 )
+            if anchor is not None:
+                result.grid_anchor = {**anchor_evidence, "repairs": []}
+                result.fixes_applied.append("grid_anchor:lattice_phase_locked")
 
             if not net_seeds_ok:
+                if robustness_screening:
+                    raise RuntimeError(
+                        "Robustness screening requires RegenerateMeshPoints; "
+                        "fallback points do not preserve refinement-region generation"
+                    )
                 seeds_pm = _generate_seeds_safe(perim, cell_size, ns)
                 logger.debug(
                     f"[{mesh_name}] {seeds_pm.Count} seeds via "
                     f"PointGenerator.GeneratePoints"
                 )
 
+            if net_seeds_ok:
+                # Native region generation can retain points beyond a smaller
+                # area when the source region extends far outside it. Such
+                # points cannot be serialized for a valid text-point compile.
+                outside = _seed_indexes_outside_perimeter(
+                    seeds_pm, perim, strictly_inside=True
+                )
+                if outside:
+                    seeds_pm, removed = _remove_seed_indexes(seeds_pm, outside, ns)
+                    result.fixes_applied.append(f"removed_{removed}_outside_or_boundary_seeds")
+                if seeds_pm.Count == 0:
+                    result.error_message = "Point generation produced no points inside the 2D perimeter"
+                    return result
+
             # ── Fix loop setup (same tier structure as RASDecomp) ────────
-            ratios = [r for r in _RATIO_LADDER if r >= min_face_length_ratio]
-            if not ratios:
-                ratios = _RATIO_LADDER[:]
+            ratios = [min_face_length_ratio] + [
+                r for r in _RATIO_LADDER if r > min_face_length_ratio
+            ]
             if not _meshfv2d_takes_min_face_ratio(ns):
                 # Before HEC-RAS 6.6 MeshFV2D has no minFaceLengthRatio, so
                 # ratio escalation cannot change the mesh.
@@ -4928,6 +5890,70 @@ class GeomMesh:
 
             current_perim = perim
             current_seeds_pm = seeds_pm
+
+            def apply_perimeter_repair(candidate, reason):
+                nonlocal geom, d2fa, fid, breaklines, current_perim, current_seeds_pm
+                nonlocal repair_reason
+                if repair_reason is None:
+                    repair_reason = RuntimeError(reason)
+                # The loop counts mesh attempts, including the post-repair retry.
+                if result.iterations >= max_iterations:
+                    raise RuntimeError(
+                        f"Max iterations ({max_iterations}) reached before repair retry"
+                    )
+                evidence = _reseed_after_perimeter_fix(
+                    text_path,
+                    hdf_path,
+                    candidate,
+                    cell_size,
+                    mesh_name,
+                    hecras_dir,
+                    ras_object=ras_object,
+                    require_complete_products=require_complete_products,
+                )
+                evidence["reason"] = reason
+                result.perimeter_repairs.append(evidence)
+                containment = _audit_domain_containment_hdf(
+                    hdf_path, mesh_name, float(cell_size),
+                    strict_refinement_containment=strict_refinement_containment,
+                )
+                result.domain_containment = containment
+                if not containment:
+                    raise RuntimeError("Repaired perimeter failed mesh-feature containment")
+                # Every object loaded from the old HDF must be replaced before
+                # computing or saving another mesh; candidate-only retries are stale.
+                geom = ns["RASGeometry"](str(hdf_path))
+                d2fa = geom.D2FlowArea
+                fid = d2fa.GetFeatureByName(mesh_name)
+                if fid < 0:
+                    raise RuntimeError(f"Recompiled HDF is missing 2D flow area '{mesh_name}'")
+                current_perim = d2fa.Geometry.MeshPerimeters.Polygon(fid)
+                if current_perim is None or current_perim.Count < 3:
+                    raise RuntimeError("Recompiled HDF has an empty repaired perimeter")
+                breaklines = _build_breaklines(
+                    d2fa, ns, refinement_region_constraints=refinement_region_constraints
+                )
+                repair_evidence: dict = {}
+                current_seeds_pm = _generate_seeds_via_net(
+                    str(hdf_path), ns, fid=fid,
+                    **(
+                        {"grid_anchor": anchor, "evidence": repair_evidence}
+                        if anchor is not None
+                        else {}
+                    ),
+                )
+                if anchor is not None:
+                    result.grid_anchor["repairs"].append(repair_evidence)
+                outside = _seed_indexes_outside_perimeter(
+                    current_seeds_pm, current_perim, strictly_inside=True
+                )
+                if outside:
+                    current_seeds_pm, removed = _remove_seed_indexes(
+                        current_seeds_pm, outside, ns
+                    )
+                    result.fixes_applied.append(f"removed_{removed}_outside_or_boundary_seeds")
+                if current_seeds_pm.Count == 0:
+                    raise RuntimeError("Repaired area has no computation points inside its perimeter")
 
             # Tier 0: Pre-simplify short perimeter segments
             pre_n = current_perim.Count
@@ -4975,7 +6001,7 @@ class GeomMesh:
                 ratio = ratios[min(ratio_idx, len(ratios) - 1)]
                 logger.debug(
                     f"[{mesh_name}] Iteration {iteration + 1}: "
-                    f"{current_seeds_pm.Count} seeds, ratio={ratio:.2f}"
+                    f"{current_seeds_pm.Count} seeds, ratio={ratio:g}"
                 )
 
                 mesh = _compute_mesh(
@@ -4992,6 +6018,13 @@ class GeomMesh:
                 )
 
                 if state_val == complete_val:
+                    if robustness_screening:
+                        mesh = _screen_mesh_robustness(
+                            current_perim, current_seeds_pm, d2fa, ratio,
+                            min_face_length_ratio, ns, max_iterations,
+                            refinement_region_constraints, _screening_inset(hdf_path),
+                            result.robustness_screening,
+                        )
                     # ── Success: extract cell centers → patch .g01 text ──
                     # The .g01 text is the sole deliverable. HEC-RAS
                     # preprocessing reads "Storage Area 2D Points= N"
@@ -5012,9 +6045,26 @@ class GeomMesh:
                             "Mesh reported Complete but RasMapper did not expose "
                             "NonVirtualCellCount."
                         )
+                        if repair_reason is not None:
+                            raise RuntimeError(result.error_message)
                         return result
 
                     # Fast path: geom.Save() → h5py bulk read
+                    # Use the same face-collapse tolerance in the saved geometry
+                    # as in the mesh that the repair loop just evaluated.
+                    from .GeomStorage import GeomStorage
+
+                    settings = GeomStorage.get_2d_flow_area_settings(text_path)
+                    selected = settings.loc[settings["name"] == mesh_name, "min_face_length_ratio"]
+                    text_ratio = selected.iloc[0] if len(selected) else None
+                    if text_ratio is None or not math.isfinite(float(text_ratio)):
+                        text_ratio = 0.05
+                    if not math.isclose(float(text_ratio), ratio, rel_tol=0, abs_tol=1e-8):
+                        GeomStorage.set_2d_flow_area_settings(
+                            text_path, mesh_name, min_face_length_ratio=ratio
+                        )
+                    if hasattr(d2fa, "SetMinFaceLengthRatio"):
+                        d2fa.SetMinFaceLengthRatio(fid, float(ratio))
                     _new_seeds = None
                     try:
                         _save_mesh(geom, d2fa, fid, mesh, ns)
@@ -5177,23 +6227,22 @@ class GeomMesh:
                 if state_val in (face_perim_val, perim_poly_val):
                     bad_indices = _autofix_perimeter(current_perim, ns)
                     if bad_indices:
-                        current_perim = _remove_perimeter_points(
+                        if repair_reason is None:
+                            repair_reason = RuntimeError(f"{state_name}: Perim:remove")
+                        candidate = _remove_perimeter_points(
                             current_perim, bad_indices, ns
                         )
                         fix_msg = f"Perim:remove(-{len(bad_indices)}pts)"
                         result.fixes_applied.append(fix_msg)
                         logger.debug(f"[{mesh_name}] Fix applied: {fix_msg}")
-                        current_seeds_pm = _reseed_after_perimeter_fix(
-                            text_path, hdf_path, current_perim,
-                            cell_size, fid, mesh_name, ns, hecras_dir,
-                        )
+                        apply_perimeter_repair(candidate, f"{state_name}: {fix_msg}")
                         continue
 
                 # ── Ratio escalation (when specific fix didn't apply) ────
                 if ratio_idx < len(ratios) - 1:
                     old_r = ratios[ratio_idx]
                     ratio_idx += 1
-                    fix_msg = f"Ratio:{old_r:.2f}->{ratios[ratio_idx]:.2f}"
+                    fix_msg = f"Ratio:{old_r:g}->{ratios[ratio_idx]:g}"
                     result.fixes_applied.append(fix_msg)
                     logger.debug(f"[{mesh_name}] Fix applied: {fix_msg}")
                     continue
@@ -5203,29 +6252,35 @@ class GeomMesh:
                 tol = cs * min(0.10 * (tier4_count + 1), 0.50)
                 buf_mult = 3.0 + float(tier4_count)
                 tier4_count += 1
-                try:
-                    error_pts = _find_error_locations(mesh, cs, ratio)
-                    if error_pts:
-                        current_perim = _localized_douglas_peucker(
-                            current_perim, error_pts, cs, tol, ns, buf_mult
-                        )
-                        fix_msg = f"DP:local({len(error_pts)}zones)"
-                        result.fixes_applied.append(fix_msg)
-                        logger.debug(f"[{mesh_name}] Fix applied: {fix_msg}")
-                    else:
-                        current_perim = _douglas_peucker_polygon(
-                            current_perim, tol, ns
-                        )
-                        fix_msg = f"DP:global(tol={tol:.1f})"
-                        result.fixes_applied.append(fix_msg)
-                        logger.debug(f"[{mesh_name}] Fix applied: {fix_msg}")
-                    current_seeds_pm = _reseed_after_perimeter_fix(
-                        text_path, hdf_path, current_perim,
-                        cell_size, fid, mesh_name, ns, hecras_dir,
+                if repair_reason is None:
+                    repair_reason = RuntimeError(f"{state_name}: DP(tol={tol:.1f})")
+                error_pts = _find_error_locations(mesh, cs, ratio)
+                if error_pts:
+                    candidate = _localized_douglas_peucker(
+                        current_perim, error_pts, cs, tol, ns, buf_mult
                     )
-                except Exception as exc:
-                    result.error_message = f"Douglas-Peucker failed: {exc}"
-                    break
+                    fix_msg = f"DP:local({len(error_pts)}zones)"
+                    result.fixes_applied.append(fix_msg)
+                    logger.debug(f"[{mesh_name}] Fix applied: {fix_msg}")
+                else:
+                    candidate = _douglas_peucker_polygon(
+                        current_perim, tol, ns
+                    )
+                    fix_msg = f"DP:global(tol={tol:.1f})"
+                    result.fixes_applied.append(fix_msg)
+                    logger.debug(f"[{mesh_name}] Fix applied: {fix_msg}")
+                # No-op simplifications still consume the existing bound,
+                # but do not invoke Ras.exe or overwrite the perimeter.
+                candidate_coords = [
+                    (float(candidate.PointM(i).X), float(candidate.PointM(i).Y))
+                    for i in range(candidate.Count)
+                ]
+                current_coords = [
+                    (float(current_perim.PointM(i).X), float(current_perim.PointM(i).Y))
+                    for i in range(current_perim.Count)
+                ]
+                if candidate_coords != current_coords:
+                    apply_perimeter_repair(candidate, f"{state_name}: {fix_msg}")
             else:
                 result.error_message = (
                     f"Max iterations ({max_iterations}) reached"
@@ -5233,9 +6288,17 @@ class GeomMesh:
 
             result.status = "error"
             result.mesh_state = state_name
+            if repair_reason is not None:
+                raise RuntimeError(
+                    result.error_message or f"Mesh retry failed: {state_name}"
+                )
             return result
 
         except Exception as exc:
+            if repair_reason is not None:
+                raise RuntimeError(
+                    f"Mesh repair/retry failed after {repair_reason}: {exc}"
+                ) from repair_reason
             result.status = "exception"
             result.error_message = str(exc)
             logger.error(f"[{result.mesh_name}] Exception: {exc}")
@@ -5256,6 +6319,10 @@ class GeomMesh:
         hecras_dir: Optional[Union[str, Path]] = None,
         ras_object: Optional['RasPrj'] = None,
         recompile_via_rasexe: bool = False,
+        refinement_region_constraints: bool = False,
+        strict_refinement_containment: bool = False,
+        robustness_screening: bool = False,
+        require_complete_products: bool = False,
     ) -> List[MeshResult]:
         """Generate/repair all 2D mesh areas in a geometry file.
 
@@ -5276,9 +6343,17 @@ class GeomMesh:
             min_face_length_ratio: Minimum face-length ratio for mesh quality.
             max_iterations: Maximum fix-loop iterations per mesh area.
             hecras_dir: Override path to the HEC-RAS installation directory.
-            ras_object: Optional RasPrj instance for multi-project support.
+            ras_object (RasPrj, optional): Optional RasPrj instance for multi-project support.
             recompile_via_rasexe: If True, refresh a missing or content-stale
                 compiled geometry HDF through ``GeomPreprocessor``/Ras.exe.
+            require_complete_products: Forward strict completion to all native
+                recompilation and mesh-repair calls. Defaults False.
+            refinement_region_constraints: Include region edges in mesh
+                constraints (RAS Mapper compatibility); defaults to False.
+            strict_refinement_containment: Apply the old inward region margin;
+                defaults to False.
+            robustness_screening: Forward the opt-in screening described by
+                generate(). Currently requires a single 2D flow area.
 
         Returns:
             List of MeshResult, one per 2D flow area.
@@ -5292,6 +6367,7 @@ class GeomMesh:
             require_current=True,
             ras_object=ras_object,
             recompile_via_rasexe=recompile_via_rasexe,
+            require_complete_products=require_complete_products,
         )
         geom = ns["RASGeometry"](str(hdf_path))
         d2fa = geom.D2FlowArea
@@ -5313,7 +6389,11 @@ class GeomMesh:
                 hecras_dir=hecras_dir,
                 ras_object=ras_object,
                 recompile_via_rasexe=recompile_via_rasexe,
+                refinement_region_constraints=refinement_region_constraints,
+                strict_refinement_containment=strict_refinement_containment,
+                robustness_screening=robustness_screening,
                 _require_current_hdf=False,
+                require_complete_products=require_complete_products,
             )
             results.append(r)
         return results

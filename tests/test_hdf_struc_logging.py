@@ -100,7 +100,7 @@ def test_optional_structure_datasets_absence_quiet_by_default(
     assert any("structures.g01.hdf" in msg for msg in messages)
 
 
-def test_missing_required_structure_dataset_warns_with_filename(
+def test_missing_required_structure_dataset_raises_with_full_context(
     tmp_path,
     caplog,
 ):
@@ -109,10 +109,9 @@ def test_missing_required_structure_dataset_warns_with_filename(
         include_centerline_points=False,
     )
 
-    with caplog.at_level(logging.WARNING, logger=LOGGER_NAME):
-        structures = HdfStruc.get_structures(hdf_path)
+    with caplog.at_level(logging.ERROR, logger=LOGGER_NAME), pytest.raises(ValueError):
+        HdfStruc.get_structures(hdf_path)
 
-    assert structures.empty
     records = [
         record for record in _hdf_struc_records(caplog)
         if record.levelno >= logging.WARNING
@@ -122,10 +121,10 @@ def test_missing_required_structure_dataset_warns_with_filename(
     assert "Required structure dataset missing" in message
     assert "Geometry/Structures/Centerline Points" in message
     assert "malformed.g01.hdf" in message
-    assert str(tmp_path) not in message
+    assert str(hdf_path) in message
 
 
-def test_invalid_centerline_geometry_logs_one_aggregate_warning(
+def test_invalid_centerline_geometry_raises_instead_of_returning_partial_layer(
     tmp_path,
     caplog,
     monkeypatch,
@@ -136,19 +135,21 @@ def test_invalid_centerline_geometry_logs_one_aggregate_warning(
     )
     monkeypatch.setattr(HdfBase, "get_projection", staticmethod(lambda *_args, **_kwargs: None))
 
-    with caplog.at_level(logging.WARNING, logger=LOGGER_NAME):
-        structures = HdfStruc.get_structures(hdf_path)
+    with (
+        caplog.at_level(logging.ERROR, logger=LOGGER_NAME),
+        pytest.raises(ValueError, match="centerline point range"),
+    ):
+        HdfStruc.get_structures(hdf_path)
 
-    assert len(structures) == 1
     records = [
         record for record in _hdf_struc_records(caplog)
         if record.levelno >= logging.WARNING
     ]
     assert len(records) == 1
     message = records[0].getMessage()
-    assert "Dropped 1 structure(s)" in message
-    assert "invalid_centerline.g01.hdf" in message
-    assert "indices: [1]" in message
+    assert "Invalid centerline point range for structure 1" in message
+    assert str(hdf_path) in message
+    assert "Geometry/Structures" in message
 
 
 def test_culvert_hydraulics_decodes_byte_type_values(
@@ -199,3 +200,35 @@ def test_list_sa2d_connections_missing_group_is_debug_only(
         and "No SA 2D Area Conn data found in no_sa2d.p01.hdf" in record.getMessage()
         for record in _hdf_struc_records(caplog)
     )
+
+
+@pytest.mark.parametrize("property_tables", [False, True])
+def test_empty_native_structure_placeholder_preserves_crs_and_evidence(tmp_path, property_tables):
+    from pyproj import CRS
+    path = tmp_path / "empty.g01.hdf"
+    with h5py.File(path, "w") as hdf:
+        hdf.attrs["Projection"] = CRS.from_epsg(2278).to_wkt()
+        group = hdf.create_group("Geometry/Structures")
+        group.attrs["Source"] = "Native empty placeholder"
+        if property_tables:
+            group.create_group("Property Tables")
+    result = HdfStruc.get_structures(path)
+    assert result.empty
+    assert result["Structure ID"].dtype == np.dtype("int64")
+    assert result.geometry.name == "geometry"
+    assert result.crs.to_epsg() == 2278
+    assert result.attrs["structure_status"] == "empty_placeholder"
+    assert result.attrs["group_attributes"]["Source"] == "Native empty placeholder"
+
+
+@pytest.mark.parametrize("child", ["Attributes", "Property Tables/Values", "Unknown"])
+def test_nonempty_or_unrecognized_structure_layout_remains_hard_error(tmp_path, child):
+    path = tmp_path / "partial.g01.hdf"
+    with h5py.File(path, "w") as hdf:
+        group = hdf.create_group("Geometry/Structures")
+        if child == "Unknown":
+            group.create_group(child)
+        else:
+            group.create_dataset(child, data=np.array([1]))
+    with pytest.raises(ValueError, match="Required structure dataset missing"):
+        HdfStruc.get_structures(path)

@@ -409,9 +409,12 @@ class RasPortableDocker:
                 ``execution_id`` and output directory must be unique and no
                 output may overlap any request's source tree.
             max_concurrent (int): Containers run at once (1-256).
-            image, docker_executable, python_executable, memory, pull,
-                security_options: Passed to :meth:`execute_request` for every
-                request.
+            image: Container image passed to ``execute_request``.
+            docker_executable: Docker command passed to ``execute_request``.
+            python_executable: Python command passed to ``execute_request``.
+            memory: Memory limit passed to ``execute_request``.
+            pull: Image pull policy passed to ``execute_request``.
+            security_options: Security options passed to ``execute_request``.
 
         Returns:
             PortableDockerPoolResult: Results keyed by ``execution_id`` in

@@ -28,6 +28,8 @@ from typing import Any, BinaryIO
 from ras_commander.LoggingConfig import get_logger, log_call
 from ras_commander.sources.federal.ebfe_extract import StreamingZipReader
 
+from ..._ras_text import _write_ras_text
+
 logger = get_logger(__name__)
 
 SOURCE_URL = "https://ebfedata.s3.amazonaws.com/12100302_Medina/12100302_Models.zip"
@@ -242,7 +244,7 @@ def _replace_exact(path: Path, old: str, new: str) -> None:
             f"Medina repair pre-state conflict in {path.name}: expected one "
             f"occurrence of {old!r}, found {count}."
         )
-    path.write_text(text.replace(old, new), encoding="utf-8")
+    _write_ras_text(path, text.replace(old, new), encoding="utf-8")
 
 
 def _path_equivalent(actual: Any, expected: str) -> bool:

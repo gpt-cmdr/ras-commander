@@ -355,7 +355,7 @@ def _mock_generate_success(monkeypatch, geom_text_path: Path, *, has_breaklines:
     monkeypatch.setattr(
         geom_mesh_module,
         "_audit_domain_containment_hdf",
-        lambda hdf_path, mesh_name, base_cell_spacing: (
+        lambda hdf_path, mesh_name, base_cell_spacing, **kwargs: (
             geom_mesh_module.DomainContainmentResult(
                 mesh_name=mesh_name,
                 geom_hdf_path=str(hdf_path),
@@ -413,7 +413,7 @@ def _mock_generate_success(monkeypatch, geom_text_path: Path, *, has_breaklines:
     monkeypatch.setattr(
         geom_mesh_module,
         "_build_breaklines",
-        lambda d2fa, ns: "mock_breaklines" if has_breaklines else None,
+        lambda d2fa, ns, **kwargs: "mock_breaklines" if has_breaklines else None,
     )
     monkeypatch.setattr(
         geom_mesh_module,
@@ -807,9 +807,11 @@ class TestPatchTextSeeds:
 
 
 class TestReseedAfterPerimeterFix:
-    """Test perimeter mutation refuses unavailable text-to-HDF regeneration."""
+    """Test perimeter repair requires an execution context before mutation."""
 
     def test_requires_external_geometry_hdf_regeneration(self, monkeypatch, tmp_path):
+        from ras_commander import RasPrj
+
         geom_text_path = tmp_path / "test.g01"
         geom_text_path.write_text("Geom Title=Test\n", encoding="utf-8")
         monkeypatch.setattr(
@@ -818,7 +820,7 @@ class TestReseedAfterPerimeterFix:
             lambda *args, **kwargs: pytest.fail("perimeter text was patched"),
         )
 
-        with pytest.raises(RuntimeError, match="cannot generate .g##.hdf"):
+        with pytest.raises(RuntimeError, match="initialized RasPrj"):
             _reseed_after_perimeter_fix(
                 geom_text_path,
                 geom_text_path.with_suffix(".g01.hdf"),
@@ -826,9 +828,8 @@ class TestReseedAfterPerimeterFix:
                     [(0.0, 0.0), (100.0, 0.0), (100.0, 100.0), (0.0, 100.0)]
                 ),
                 100.0,
-                1,
                 "SecondaryArea",
-                {"RASGeometry": lambda path: MagicMock()},
+                ras_object=RasPrj(),
             )
 
 
@@ -931,7 +932,8 @@ class TestGeometryHdfAvailability:
         hdf_path = breakline_geom_text.with_suffix(breakline_geom_text.suffix + ".hdf")
         calls = []
 
-        def fake_recompile(geom_text_path, compiled_hdf_path, *, ras_object=None):
+        def fake_recompile(geom_text_path, compiled_hdf_path, *, ras_object=None, require_complete_products=False):
+            assert require_complete_products is False
             calls.append((geom_text_path, compiled_hdf_path, ras_object))
             _write_mesh_hdf(
                 compiled_hdf_path,
@@ -1079,6 +1081,7 @@ class TestDomainContainmentAudit:
         result = GeomMesh.audit_domain_containment(
             geom_text,
             mesh_name="MainArea",
+            strict_refinement_containment=True,
         )
 
         assert result.base_cell_spacing == 100.0
@@ -1464,7 +1467,13 @@ class TestRasMapperLibVersionCompat:
         ]
         geometry = MagicMock()
         geometry.D2FlowArea.FeatureCount.return_value = 1
-        geometry.D2FlowArea.Geometry.MeshPoints = {0: mesh_points}
+        geometry.D2FlowArea.Geometry.MeshPoints = types.SimpleNamespace(
+            GetMeshEditingPoints=lambda: mesh_points
+        )
+        geometry.MeshPerimeters.GetDevelopmentTin.return_value.ContainsPoint.return_value = True
+        # This test isolates overload/region argument compatibility; point-layer
+        # normalization is covered by the multi-area regeneration regressions.
+        monkeypatch.setattr(geom_mesh_module, "_replace_area_points", lambda *args: 0)
         geometry.BreakLines.FeatureCount.return_value = 2
         geometry.SA2DStructures.FeatureCount.return_value = 0
         geometry.MeshRegions.FeatureCount.return_value = 3
@@ -1809,7 +1818,10 @@ class TestGenerate:
 
         def fake_generate_seeds_via_net(hdf_path, ns, fid=0):
             seed_calls.append(fid)
-            return FakePointCollection()
+            points = MockPointMs()
+            points.Add(MockPointM(225.0, 25.0))
+            points.Add(MockPointM(275.0, 75.0))
+            return points
 
         monkeypatch.setattr(
             geom_mesh_module,
@@ -2987,3 +2999,108 @@ def test_inset_perimeter_midpoint_uses_segment_length_when_face_length_unknown()
 
     # Nearest perimeter segment is 20 long -> 1% = 0.2 inward.
     assert was_moved and (moved.X, moved.Y) == pytest.approx((10.0, 0.2))
+
+
+@pytest.mark.parametrize("scale", [1.0, 0.3048])
+def test_autofix_discards_midpoint_when_inset_crosses_narrow_perimeter(scale):
+    """A 1% inset can overshoot a narrow neck; never append that seed."""
+    from shapely.geometry import Point
+
+    perimeter = MockPolygon([
+        (0, 0), (20 * scale, 0), (20 * scale, .1 * scale), (0, .1 * scale)
+    ])
+    mesh = _NineSidedCellMesh()
+    mesh._faces = [
+        ((0, 0), (20 * scale, 0)),
+        ((2 * scale, .05 * scale), (8 * scale, .05 * scale)),
+        ((12 * scale, .05 * scale), (18 * scale, .05 * scale)),
+    ] + [((scale, .04 * scale), (1.1 * scale, .04 * scale))] * 6
+    stats = {}
+    original = MockPointM(scale, .05 * scale)
+    points, added, mids = geom_mesh_module._autofix_max_faces(
+        mesh, [original], {"PointM": MockPointM}, perimeter=perimeter, stats=stats
+    )
+    polygon = geom_mesh_module._perimeter_shapely_polygon(perimeter)
+    assert stats["discarded"] == 1
+    assert added == 2  # Continue to the next eligible faces after rejecting one.
+    assert points[0] is original
+    assert all(polygon.contains(Point(p.X, p.Y)) for p in mids)
+
+
+@pytest.mark.parametrize("requested", [.0025, .075, .25, .3])
+def test_generate_uses_and_persists_exact_requested_ratio(
+    monkeypatch, breakline_geom_text, requested
+):
+    from ras_commander.geom.GeomStorage import GeomStorage
+
+    breakline_geom_text.write_text(
+        breakline_geom_text.read_text().replace(
+            "Storage Area=MainArea\n", "Storage Area=MainArea\nStorage Area Is2D=-1\n"
+        )
+    )
+    captured = _mock_generate_success(monkeypatch, breakline_geom_text, has_breaklines=True)
+    ratios = []
+
+    def compute(perimeter, seeds, breaklines, ratio, ns):
+        ratios.append(ratio)
+        return FakeMesh()
+
+    monkeypatch.setattr(geom_mesh_module, "_compute_mesh", compute)
+    result = GeomMesh.generate(breakline_geom_text, min_face_length_ratio=requested)
+    assert result.ok
+    assert ratios == [requested]
+    settings = GeomStorage.get_2d_flow_area_settings(breakline_geom_text)
+    assert settings.loc[settings.name == "MainArea", "min_face_length_ratio"].iloc[0] == requested
+    captured["geom"].D2FlowArea.SetMinFaceLengthRatio.assert_called_once_with(0, requested)
+
+
+@pytest.mark.parametrize("requested", [0, -1, float("nan"), float("inf")])
+def test_generate_rejects_invalid_ratio_before_mutation(breakline_geom_text, requested):
+    original = breakline_geom_text.read_bytes()
+    with pytest.raises(ValueError, match="min_face_length_ratio"):
+        GeomMesh.generate(breakline_geom_text, min_face_length_ratio=requested)
+    assert breakline_geom_text.read_bytes() == original
+
+
+def test_generate_filters_native_outside_and_boundary_seeds(
+    monkeypatch, breakline_geom_text
+):
+    _mock_generate_success(monkeypatch, breakline_geom_text, has_breaklines=True)
+    seeds = MockPointMs()
+    for xy in [(0, 10), (-1, 10), (10, 10), (20, 20)]:
+        seeds.Add(MockPointM(*xy))
+    monkeypatch.setattr(geom_mesh_module, "_generate_seeds_via_net", lambda *a, **k: seeds)
+    received = []
+
+    def compute(perimeter, points, breaklines, ratio, ns):
+        received.extend((points[i].X, points[i].Y) for i in range(points.Count))
+        return FakeMesh()
+
+    monkeypatch.setattr(geom_mesh_module, "_compute_mesh", compute)
+    result = GeomMesh.generate(breakline_geom_text)
+    assert result.ok
+    assert received == [(10, 10), (20, 20)]
+    assert "removed_2_outside_or_boundary_seeds" in result.fixes_applied
+
+
+@pytest.mark.parametrize("requested, expected", [(.0025, [.0025, .05]), (.075, [.075, .1])])
+def test_generate_escalates_from_requested_ratio(monkeypatch, breakline_geom_text, requested, expected):
+    breakline_geom_text.write_text(breakline_geom_text.read_text().replace(
+        "Storage Area=MainArea\n", "Storage Area=MainArea\nStorage Area Is2D=-1\n"
+    ))
+    _mock_generate_success(monkeypatch, breakline_geom_text, has_breaklines=True)
+    monkeypatch.setattr(geom_mesh_module, "_meshfv2d_takes_min_face_ratio", lambda ns: True)
+    ratios = []
+
+    def compute(perimeter, seeds, breaklines, ratio, ns):
+        ratios.append(ratio)
+        mesh = FakeMesh()
+        if len(ratios) == 1:
+            mesh.MeshCompletionState = FakeMeshState(99, "Retry")
+        return mesh
+
+    monkeypatch.setattr(geom_mesh_module, "_compute_mesh", compute)
+    result = GeomMesh.generate(breakline_geom_text, min_face_length_ratio=requested)
+    assert result.ok
+    assert ratios == expected
+    assert f"Ratio:{expected[0]:g}->{expected[1]:g}" in result.fixes_applied

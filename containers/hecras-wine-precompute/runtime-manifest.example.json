@@ -1,0 +1,29 @@
+{
+  "schema": "ras-commander-runtime/v1",
+  "kind": "wine",
+  "hec_ras_version": "6.5",
+  "ras_commander": {
+    "commit": "9e4217713e954236b0c16023e1815c6f2b7a5309",
+    "wheel_sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+  },
+  "artifacts": [
+    {
+      "path": "prefix/drive_c/Python311/python.exe",
+      "sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+    },
+    {
+      "path": "prefix/drive_c/ras2fim-runtime/ras_commander-0.99.2-py3-none-any.whl",
+      "sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+    },
+    {
+      "path": "prefix/drive_c/Program Files (x86)/HEC/HEC-RAS/6.5/Ras.exe",
+      "sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+    }
+  ],
+  "wine": {
+    "prefix_seed": "prefix",
+    "windows_python": "C:\\Python311\\python.exe",
+    "ras_executable": "C:\\Program Files (x86)\\HEC\\HEC-RAS\\6.5\\Ras.exe",
+    "ras_commander_wheel": "C:\\ras2fim-runtime\\ras_commander-0.99.2-py3-none-any.whl"
+  }
+}

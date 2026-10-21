@@ -245,7 +245,12 @@ def test_create_storm_plans_logs_one_summary_per_storm(monkeypatch, tmp_path, ca
     monkeypatch.setattr(rasplan_module.RasPlan, "clone_plan", fake_clone_plan)
     monkeypatch.setattr(rasplan_module.RasPlan, "set_unsteady", lambda *args, **kwargs: None)
     monkeypatch.setattr(rasplan_module.RasPlan, "update_simulation_date", lambda *args, **kwargs: None)
-    monkeypatch.setattr(rasunsteady_module.RasUnsteady, "set_gridded_precipitation", lambda *args, **kwargs: None)
+    configured_precipitation = []
+    monkeypatch.setattr(
+        rasunsteady_module.RasUnsteady,
+        "set_gridded_precipitation",
+        lambda *args, **kwargs: configured_precipitation.append(kwargs),
+    )
     download_calls = []
 
     def fake_download(**kwargs):
@@ -306,6 +311,7 @@ def test_create_storm_plans_logs_one_summary_per_storm(monkeypatch, tmp_path, ca
         pd.Timestamp("2020-01-01 04:00"),
         pd.Timestamp("2020-02-03 04:00"),
     ]
+    assert [call["historic"] for call in configured_precipitation] == [True, True]
 
 
 def test_create_storm_plans_missing_netcdf_fails_before_cloning(monkeypatch, tmp_path):

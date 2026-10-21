@@ -1,0 +1,8 @@
+Geom Title=Native ineffective flow excerpt
+River Reach=COLORADO RIVER  ,Reach-1         
+Type RM Length L Ch R = 1 ,633500  ,2792,2792,2792
+#XS Ineff= 2 , 0 
+       0 4003.75  384.68               0        
+Permanent Ineff=
+       F       F
+Bank Sta=1,2

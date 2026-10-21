@@ -29,7 +29,7 @@ Each entry of :data:`DATAFRAME_SCHEMAS`:
 """
 
 # Schema contract version -- bump when the documented column surface changes meaningfully.
-SCHEMA_VERSION = "1.17"
+SCHEMA_VERSION = "1.25"
 
 _GEOMETRY_ASSOCIATION_COLUMNS = [
     {"name": "geom_number", "dtype": "str", "description": "Normalized geometry identifier."},
@@ -60,6 +60,416 @@ _GEOMETRY_ASSOCIATION_COLUMNS = [
 ]
 
 DATAFRAME_SCHEMAS = {
+    "mesh_geometry_inventory": {
+        "description": "Read-only exact identities of native 2D geometry datasets; no hydraulic acceptance.",
+        "accessor": "HdfMesh.get_mesh_geometry_inventory(hdf_path, dataset_paths=None)",
+        "source": "ras_commander.hdf.HdfMesh.HdfMesh.get_mesh_geometry_inventory()",
+        "extra_columns": False, "dynamic": False,
+        "columns": [
+            {"name": "dataset_path", "dtype": "str", "description": "Exact unique native path below Geometry/2D Flow Areas."},
+            {"name": "dtype", "dtype": "str", "description": "Canonical JSON of fixed-width native dtype descriptors and metadata."},
+            {"name": "shape", "dtype": "tuple[int, ...]", "description": "Native array shape; empty tuple for a scalar."},
+            {"name": "bytes", "dtype": "int", "description": "Uncompressed logical array byte count."},
+            {"name": "sha256", "dtype": "str", "description": "SHA-256 of exact native C-order array bytes."},
+        ],
+    },
+    "connection_gate_lines": {
+        "description": "Explicit native gate opening GIS lines in source coordinates, without an inferred CRS.",
+        "accessor": "GeomLateral.get_connection_gate_lines(geom_file, connection_name)",
+        "source": "ras_commander.geom.GeomLateral.GeomLateral.get_connection_gate_lines()",
+        "extra_columns": False, "dynamic": False,
+        "columns": [
+            {"name": "opening_index", "dtype": "int", "description": "Unique consecutive one-based opening index."},
+            {"name": "opening_name", "dtype": "str", "description": "Delivered opening name."},
+            {"name": "geometry", "dtype": "geometry", "description": "Complete valid opening LineString in model units."},
+        ],
+    },
+    "connection_area_remap": {
+        "description": "Read-only endpoint-name mapping with all other native connection records preserved.",
+        "accessor": "GeomLateral.remap_connection_areas(geom_file, area_name_map)",
+        "source": "ras_commander.geom.GeomLateral.GeomLateral.remap_connection_areas()",
+        "extra_columns": False, "dynamic": False,
+        "columns": [
+            {"name": "Name", "dtype": "str", "description": "Source connection identity."},
+            {"name": "RawBlock", "dtype": "str", "description": "Authoritative native record with only recognized endpoint names replaced."},
+        ],
+    },
+    "connection_classification": {
+        "description": "Fail-closed complete-support decisions against a child in source CRS and units.",
+        "accessor": "GeomLateral.classify_connections(geom_file, child_boundary)",
+        "source": "ras_commander.geom.GeomLateral.GeomLateral.classify_connections()",
+        "extra_columns": False, "dynamic": False,
+        "columns": [
+            {"name": name, "dtype": "str", "description": description}
+            for name, description in (("Name", "Connection identity"), ("From", "Upstream area"),
+                                      ("To", "Downstream area"), ("action", "keep, drop or block"),
+                                      ("reason", "Stable decision reason code"))
+        ] + [
+            {"name": "geometry", "dtype": "geometry | None", "description": "Conservative complete support in source model units when available."},
+        ],
+    },
+    "connection_classification_extended": {
+        "description": "Explicit opt-in complete-support decisions including verified gate GIS support.",
+        "accessor": "GeomLateral.classify_connections(geom_file, child_boundary, allow_extended_support=True)",
+        "source": "ras_commander.geom.GeomLateral.GeomLateral.classify_connections()",
+        "extra_columns": False, "dynamic": False,
+        "columns": [
+            {"name": name, "dtype": "str", "description": description}
+            for name, description in (("Name", "Connection identity"), ("From", "Upstream area"),
+                                      ("To", "Downstream area"), ("action", "keep, drop or block"),
+                                      ("reason", "Stable decision reason code"))
+        ] + [
+            {"name": "gate_group_count", "dtype": "int", "description": "Number of verified gate GIS groups regardless of overall action; other unknown support still blocks."},
+            {"name": "geometry", "dtype": "geometry | None", "description": "Conservative complete support in source model units when available."},
+        ],
+    },
+    "refinement_region_clip_report": {
+        "description": "One disposition row per source refinement region clipped to a child perimeter.",
+        "accessor": "GeomMesh.clip_refinement_regions(geom_number, perimeter, ...)[1]",
+        "source": "GeomMesh.clip_refinement_regions()",
+        "extra_columns": False,
+        "dynamic": False,
+        "columns": [
+            {"name": "source_fid", "dtype": "int64", "description": "Zero-based source refinement-region FID, matching its native Attributes row."},
+            {"name": "name", "dtype": "str", "description": "Source region name; duplicate names are permitted."},
+            {"name": "status", "dtype": "str", "description": "kept for an unchanged region, clipped for retained intersections, or dropped when no output region remains."},
+            {"name": "reason", "dtype": "str", "description": "Disposition reason: inside_child_perimeter, child_perimeter_intersection, intersection_fragments_below_min_area, no_polygon_overlap, below_min_area, invalid_source_geometry, or unsupported_interior_rings."},
+            {"name": "source_area", "dtype": "float64", "description": "Source polygon area in squared project length units."},
+            {"name": "retained_area", "dtype": "float64", "description": "Sum of retained fragment areas in squared project length units; zero for dropped regions."},
+            {"name": "output_fids", "dtype": "list[int]", "description": "Zero-based indices into the returned regions list; one per retained fragment, or an empty list for dropped regions."},
+            {"name": "touches_perimeter", "dtype": "bool", "description": "Whether any retained fragment intersects the child perimeter boundary; False for dropped regions."},
+            {"name": "below_one_cell_area", "dtype": "bool", "description": "Whether any retained fragment area is below source spacing_dx * spacing_dy; False for dropped regions. This does not assert that a grid point will be generated."},
+        ],
+    },
+    "frequency_storm_ddf": {
+        "description": "Duration-dependent frequency storm with a zero start row and interval-end depths.",
+        "accessor": "FrequencyStormDdf.generate_hyetograph(depths_inches, durations_minutes)",
+        "source": "ras_commander.precip.FrequencyStormDdf.generate_hyetograph()",
+        "extra_columns": False,
+        "dynamic": False,
+        "columns": [
+            {"name": "hour", "dtype": "float64", "description": "Elapsed hours; zero start followed by five-minute interval ends."},
+            {"name": "incremental_depth", "dtype": "float64", "description": "Rainfall depth in inches for the ending interval; zero at the start."},
+            {"name": "cumulative_depth", "dtype": "float64", "description": "Cumulative rainfall depth in inches through the interval end."},
+        ],
+    },
+    "mesh_perimeter_faces": {
+        "description": "Every native perimeter face of one 2D area, including confirmed unassigned faces.",
+        "accessor": "HdfMesh.get_mesh_perimeter_faces(hdf_path, mesh_name, ras_object=None)",
+        "source": "HdfMesh.get_mesh_perimeter_faces()",
+        "extra_columns": False,
+        "dynamic": False,
+        "columns": [
+            {
+                "name": "mesh_name",
+                "dtype": "string",
+                "description": "Exact native 2D area name.",
+            },
+            {
+                "name": "face_id",
+                "dtype": "int64",
+                "description": "Zero-based native mesh-local face ID.",
+            },
+            {
+                "name": "cell0",
+                "dtype": "int64",
+                "description": "First native adjacent cell ID.",
+            },
+            {
+                "name": "cell1",
+                "dtype": "int64",
+                "description": "Second native adjacent cell ID.",
+            },
+            {
+                "name": "interior_cell_id",
+                "dtype": "int64",
+                "description": "Physical cell adjacent to the perimeter face.",
+            },
+            {
+                "name": "exterior_cell_id",
+                "dtype": "int64",
+                "description": "Native ghost cell ID or exterior sentinel -1.",
+            },
+            {
+                "name": "fp_start_index",
+                "dtype": "int64",
+                "description": "Native start face-point ID.",
+            },
+            {
+                "name": "fp_end_index",
+                "dtype": "int64",
+                "description": "Native end face-point ID.",
+            },
+            {
+                "name": "face_length",
+                "dtype": "float64",
+                "description": "Native length in model units, geometry fallback indicated in attrs.",
+            },
+            {
+                "name": "bc_line_id",
+                "dtype": "Int64",
+                "description": "Native BC Attributes row ID; null for confirmed unassigned face.",
+            },
+            {
+                "name": "bc_line_name",
+                "dtype": "string",
+                "description": "Native associated BC name, nullable.",
+            },
+            {
+                "name": "bc_line_type",
+                "dtype": "string",
+                "description": "Native geometry BC type, nullable; not the flow forcing type.",
+            },
+            {
+                "name": "geometry",
+                "dtype": "geometry",
+                "description": "Face LineString including stored intermediate perimeter vertices.",
+            },
+        ],
+    },
+    "bc_line_replacement": {
+        "description": "New named-area BC lines and forcing written to explicitly supplied cloned files.",
+        "accessor": "GeomBcLines.replace_bc_lines(geom_file, unsteady_files, area_2d=..., lines=..., ras_object=None)",
+        "source": "GeomBcLines.replace_bc_lines()",
+        "extra_columns": False,
+        "dynamic": False,
+        "columns": [
+            {
+                "name": "geom_file",
+                "dtype": "str",
+                "description": "Explicit cloned geometry path.",
+            },
+            {
+                "name": "unsteady_file",
+                "dtype": "str",
+                "description": "Explicit cloned unsteady flow path.",
+            },
+            {
+                "name": "area_2d",
+                "dtype": "str",
+                "description": "Exact target 2D area name.",
+            },
+            {"name": "bc_line", "dtype": "str", "description": "New BC line name."},
+            {
+                "name": "bc_type",
+                "dtype": "str",
+                "description": "Normal Depth, Flow Hydrograph, or Stage Hydrograph forcing.",
+            },
+        ],
+    },
+    "sa2d_connection_attachments": {
+        "description": "Native named-end SA/2D cell and face evidence, independently qualified from text retention.",
+        "accessor": "HdfStruc.get_connection_attachments(...) or Breakout2DPreparationResult.connection_attachments",
+        "source": "HdfStruc.get_connection_attachments()",
+        "extra_columns": False,
+        "dynamic": False,
+        "columns": [
+            {"name": name, "dtype": dtype, "description": description}
+            for name, dtype, description in (
+                ("Name", "str", "Expected/native connection name."),
+                ("From", "str", "Exact named upstream area."),
+                ("To", "str", "Exact named downstream area."),
+                (
+                    "from_cells",
+                    "object",
+                    "Tuple of native zero-based mesh-local headwater segment cell IDs.",
+                ),
+                (
+                    "from_faces",
+                    "object",
+                    "Tuple of exact headwater face IDs mapped through native point topology.",
+                ),
+                (
+                    "to_cells",
+                    "object",
+                    "Tuple of native zero-based mesh-local tailwater segment cell IDs.",
+                ),
+                (
+                    "to_faces",
+                    "object",
+                    "Tuple of exact tailwater face IDs mapped through native point topology.",
+                ),
+                (
+                    "attachment_verified",
+                    "bool",
+                    "Both named-end active cell and face incidences are verified.",
+                ),
+                (
+                    "reason_code",
+                    "str",
+                    "CONNECTION_ATTACHMENT_VERIFIED or CONNECTION_ATTACHMENT_UNVERIFIED.",
+                ),
+                (
+                    "orientation_verified",
+                    "bool",
+                    "False; attachment does not qualify structure orientation.",
+                ),
+                (
+                    "flux_sign_verified",
+                    "bool",
+                    "False; attachment does not qualify conservative flow sign.",
+                ),
+                (
+                    "evidence_paths",
+                    "object",
+                    "Tuple of native source dataset paths checked.",
+                ),
+                (
+                    "details",
+                    "str",
+                    "Diagnostic for absent, ambiguous or invalid native evidence.",
+                ),
+                (
+                    "source_hdf",
+                    "str",
+                    "Resolved HDF source path; currentness must be established by caller receipts.",
+                ),
+                ("native_version", "str", "Actual HDF native version declaration."),
+            )
+        ],
+        "note": "Positive evidence is currently qualified for HEC-RAS 6.6 result schema; geometry-only preprocessing and storage-area ends remain unverified.",
+    },
+    "sa2d_connection_data": {
+        "description": "Complete SA/2D text connection inventory with authoritative lossless raw blocks.",
+        "accessor": "GeomLateral.get_connection_data(geom_file)",
+        "source": "GeomLateral.get_connection_data()",
+        "extra_columns": False,
+        "dynamic": False,
+        "columns": [
+            {"name": name, "dtype": dtype, "description": description}
+            for name, dtype, description in (
+                ("Name", "str", "Exact stripped connection name."),
+                ("Type", "str", "Named endpoint area-type classification."),
+                ("From", "str | None", "Exact upstream area name."),
+                ("To", "str | None", "Exact downstream area name."),
+                ("NumPoints", "int64", "Declared crest profile point count."),
+                ("Header", "str", "Native connection header keyword."),
+                ("RawName", "str", "Unstripped source name."),
+                (
+                    "CenterX",
+                    "float64 | None",
+                    "Source header X coordinate in model units.",
+                ),
+                (
+                    "CenterY",
+                    "float64 | None",
+                    "Source header Y coordinate in model units.",
+                ),
+                ("LinePoints", "int64 | None", "Declared centerline point count."),
+                (
+                    "Conn Routing Type",
+                    "int64 | None",
+                    "Native routing code; unknown is not defaulted.",
+                ),
+                ("HasGate", "bool", "Whether a gate section occurs."),
+                ("HasCulvert", "bool", "Whether a culvert section occurs."),
+                (
+                    "StartLine",
+                    "int64",
+                    "One-based source start line; positional metadata.",
+                ),
+                (
+                    "EndLine",
+                    "int64",
+                    "One-based last source line; positional metadata.",
+                ),
+                (
+                    "RawBlock",
+                    "str",
+                    "Exact source block, including unknown records/newlines; authoritative for writing.",
+                ),
+                (
+                    "LineCoordinates",
+                    "object",
+                    "Nested X/Y DataFrame in source horizontal CRS/units.",
+                ),
+                (
+                    "CrestProfile",
+                    "object",
+                    "Nested Station/Elevation DataFrame in source model units/datum.",
+                ),
+                (
+                    "WeirWidth",
+                    "float64 | None",
+                    "Physical weir width in source length units.",
+                ),
+                (
+                    "WeirCoefficient",
+                    "float64 | None",
+                    "Source discharge coefficient; units follow source convention.",
+                ),
+                (
+                    "Culverts",
+                    "object",
+                    "Nested culvert/barrel DataFrame from the existing reader.",
+                ),
+                ("Gates", "object", "Nested gate DataFrame from the existing reader."),
+                ("Breach", "object", "Undecoded breach records, preserved exactly."),
+                (
+                    "TerrainProfile",
+                    "object",
+                    "Nested Station/Elevation DataFrame when persisted; no implicit sampling.",
+                ),
+                (
+                    "DefaultsUsed",
+                    "object",
+                    "List of explicitly requested compatibility default fields.",
+                ),
+                (
+                    "EmptyRecords",
+                    "object",
+                    "Raw recognized zero-count profiles and complete empty bridge metadata.",
+                ),
+                (
+                    "UnknownRecords",
+                    "object",
+                    "Preserved records whose support/physics are not decoded.",
+                ),
+                (
+                    "ParseIssues",
+                    "object",
+                    "List of malformed or missing physical-section diagnostics.",
+                ),
+            )
+        ],
+        "note": "RawBlock is authoritative; nested fields must match it when supplied to the lossless writer.",
+    },
+    "sa2d_connection_actions": {
+        "description": "Read-only complete-support connection retention/removal decisions.",
+        "accessor": "GeomLateral.classify_connections(...) or GeomStorage.clip_2d_flow_area(...)",
+        "source": "GeomLateral.classify_connections()",
+        "extra_columns": False,
+        "dynamic": False,
+        "columns": [
+            {"name": "Name", "dtype": "str", "description": "Connection name."},
+            {
+                "name": "From",
+                "dtype": "str | None",
+                "description": "Named upstream area.",
+            },
+            {
+                "name": "To",
+                "dtype": "str | None",
+                "description": "Named downstream area.",
+            },
+            {
+                "name": "action",
+                "dtype": "str",
+                "description": "keep, drop or block; no silent omission.",
+            },
+            {
+                "name": "reason",
+                "dtype": "str",
+                "description": "Stable decision reason code.",
+            },
+            {
+                "name": "geometry",
+                "dtype": "geometry",
+                "description": "Full decoded physical support in source CRS/units, or null if unverified.",
+            },
+        ],
+        "note": "Tolerance guards external separation without expanding retention across physical crossings.",
+    },
     "container_batch_summary": {
         "description": "Ordered outcomes of host-side container jobs, including failures and reused stages.",
         "accessor": "RasDocker.run_batch(...).summary_df",
@@ -243,6 +653,7 @@ DATAFRAME_SCHEMAS = {
             {"name": "source_measure", "dtype": "float64", "description": "Source area or length in project units."},
             {"name": "retained_measure", "dtype": "float64", "description": "Retained area or length after the proposed action."},
             {"name": "retained_fraction", "dtype": "float64", "description": "Retained measure divided by source measure."},
+            {"name": "gate_group_count", "dtype": "int", "description": "Verified gate GIS groups for connections; zero for other features. Overall connection support must also pass."},
             {"name": "geometry", "dtype": "geometry | None", "description": "Retained geometry when the feature has a spatial representation."},
         ],
     },
@@ -576,6 +987,17 @@ DATAFRAME_SCHEMAS = {
             {"name": "Sediment Path", "dtype": "str | None", "description": "Absolute path expected for the selected sediment file; existence/readiness is reported by the asset inventory."},
             {"name": "breach_definition_count", "dtype": "Int64", "description": "Number of stored Breach Loc definitions; zero means none were found and null means inspection failed."},
             {"name": "breach_active_count", "dtype": "Int64", "description": "Number of stored definitions whose local RasBreach is_active flag is true; not evidence that a breach initiated."},
+            {"name": "Output Interval", "dtype": "str | None", "description": "Hydrograph output interval string (`Output Interval=`), e.g. '15MIN'; None when absent."},
+            {"name": "Instantaneous Interval", "dtype": "str | None", "description": "Detailed output interval string (`Instantaneous Interval=`); None when absent."},
+            {"name": "Write Detailed", "dtype": "str | None", "description": "Detailed-log flag string (`Write Detailed=`); None when absent."},
+            {"name": "HDF Write Warmup", "dtype": "str | None", "description": "HDF5 write-warmup toggle as written in the plan (`-1` on, `0` off); None when absent."},
+            {"name": "HDF Write Time Slices", "dtype": "str | None", "description": "HDF5 write-time-slices toggle as written in the plan; None when absent."},
+            {"name": "HDF Flush", "dtype": "str | None", "description": "HDF5 commit-writes toggle as written in the plan; None when absent."},
+            {"name": "HDF Compression", "dtype": "str | None", "description": "HDF5 gzip level string (`HDF Compression=`, 0 = off); None when absent (HEC-RAS default 1)."},
+            {"name": "HDF Chunk Size", "dtype": "str | None", "description": "HDF5 maximum chunk size in MB as written in the plan; None when absent."},
+            {"name": "HDF Spatial Parts", "dtype": "str | None", "description": "HDF5 spatial chunk parts as written in the plan; None when absent."},
+            {"name": "HDF Use Max Rows", "dtype": "str | None", "description": "HDF5 use-maximum-rows toggle as written in the plan; None when absent."},
+            {"name": "HDF Fixed Rows", "dtype": "str | None", "description": "HDF5 fixed time rows per chunk as written in the plan; None when absent."},
             {"name": "full_path", "dtype": "str", "description": "Absolute path to the plan file (e.g. 'project.p01')."},
         ],
     },
@@ -1187,4 +1609,82 @@ DATAFRAME_SCHEMAS = {
             "mutations also add backup_path and recompute_required."
         ),
     },
+}
+
+
+# Explicit report-mode contracts keep the default stable columns unchanged.
+_BC_OWNERSHIP_REPORT_COLUMNS = [
+    {
+        "name": "duplicate_ownership",
+        "dtype": "bool",
+        "description": "Repeated native (mesh, face) association, including repeated rows for one owner.",
+    },
+    {
+        "name": "owning_bc_line_ids",
+        "dtype": "list[int | None]",
+        "description": "Distinct owner ID/name pairs in native encounter order; parallel to owning_bc_line_names.",
+    },
+    {
+        "name": "owning_bc_line_names",
+        "dtype": "list[str | None]",
+        "description": "Native BC names parallel to owning_bc_line_ids; missing metadata is None.",
+    },
+]
+DATAFRAME_SCHEMAS["bc_external_faces"] = {
+    "description": "Every native BC external-face association in native order; no inferred ownership.",
+    "accessor": "HdfBndry.get_bc_external_faces(hdf_path, include_geometry=False)",
+    "source": "HdfBndry.get_bc_external_faces()",
+    "extra_columns": True,
+    "dynamic": False,
+    "columns": [
+        {"name": name, "dtype": dtype, "description": description}
+        for name, dtype, description in (
+            ("bc_line_id", "Int64", "Zero-based native BC Attributes row ID, nullable."),
+            ("bc_line_name", "string", "Native BC name, nullable."),
+            ("mesh_name", "string", "Native mesh name, nullable."),
+            ("bc_line_type", "string", "Native geometry BC type, nullable."),
+            ("face_id", "int64", "Zero-based mesh-local native face ID."),
+            ("fp_start_index", "Int64", "Native start face-point ID, nullable."),
+            ("fp_end_index", "Int64", "Native end face-point ID, nullable."),
+            ("station_start", "float64", "Native start station in model units, nullable."),
+            ("station_end", "float64", "Native end station in model units, nullable."),
+        )
+    ],
+    "note": "Optional geometry is a native face LineString in the HDF CRS. Default raises on repeated face keys; legacy validate_unique_faces=False preserves rows and count attrs with the original columns.",
+}
+DATAFRAME_SCHEMAS["bc_external_faces_report"] = {
+    **DATAFRAME_SCHEMAS["bc_external_faces"],
+    "description": "Lossless native BC associations with explicit duplicate ownership diagnostics.",
+    "accessor": "HdfBndry.get_bc_external_faces(hdf_path, on_duplicate_ownership='report')",
+    "columns": DATAFRAME_SCHEMAS["bc_external_faces"]["columns"] + _BC_OWNERSHIP_REPORT_COLUMNS,
+    "note": "Report mode only: attrs['duplicate_ownership'] is one record per repeated key with mesh_name, face_id and owner lists; [] when absent/empty/unique. Missing mesh metadata uses conservative global face-ID grouping and mesh_name=None. Existing counts/status attrs remain. Other validation stays active; files are read-only.",
+}
+DATAFRAME_SCHEMAS["mesh_perimeter_faces_report"] = {
+    **DATAFRAME_SCHEMAS["mesh_perimeter_faces"],
+    "description": "One row per native perimeter face with explicit ownership diagnostics.",
+    "accessor": "HdfMesh.get_mesh_perimeter_faces(hdf_path, mesh_name, on_duplicate_ownership='report', ras_object=None)",
+    "columns": [
+        {
+            **column,
+            "description": "Scalar native BC ownership; null for unassigned or duplicate-owned faces.",
+        } if column["name"] in ("bc_line_id", "bc_line_name", "bc_line_type") else column
+        for column in DATAFRAME_SCHEMAS["mesh_perimeter_faces"]["columns"]
+    ] + _BC_OWNERSHIP_REPORT_COLUMNS,
+    "note": "Report mode only: unassigned faces have empty owner lists; single-owner faces have singleton lists; repeated native associations have null scalar BC fields and all distinct owners listed. attrs['duplicate_ownership'], duplicate_face_count, duplicate_face_row_count and face_ownership_unique summarize only the requested mesh. Other validation stays active; files are read-only.",
+}
+
+
+DATAFRAME_SCHEMAS["terrain_modification_features"] = {
+    "description": "Complete native polyline and SetValue polygon terrain modification identities and support distances.",
+    "accessor": "RasTerrainModWriter.get_modification_features(terrain_hdf_path, crs)",
+    "source": "ras_commander._terrain_modification_subset.read_features()",
+    "extra_columns": False,
+    "dynamic": False,
+    "columns": [
+        {"name": "group_name", "dtype": "str", "description": "Native modification group name."},
+        {"name": "feature_index", "dtype": "int64", "description": "Zero-based native Attributes row within the group."},
+        {"name": "support_distance", "dtype": "float64", "description": "Native Max Reach/Max Extent in terrain horizontal CRS units; zero for complete SetValue polygons; no conversion."},
+        {"name": "geometry", "dtype": "geometry", "description": "Complete LineString/MultiLineString, Polygon, or Point for a native single-vertex record, in the caller-declared terrain CRS."},
+    ],
+    "note": "Read-only. Unknown layouts or unavailable support fail. No terrain grid is loaded or CRS inferred. Empty frames retain the same columns and explicit CRS.",
 }

@@ -1,0 +1,343 @@
+{
+ "wb-2534836": [
+  {
+   "name": "Stream (484)",
+   "length_ft": 2524.2,
+   "perimeter": 1,
+   "inset_5ft": 1,
+   "trim_300ft": 1
+  },
+  {
+   "name": "Road (99)",
+   "length_ft": 40324.3,
+   "perimeter": 2,
+   "inset_5ft": 2,
+   "trim_300ft": 2
+  }
+ ],
+ "wb-2534838": [
+  {
+   "name": "Stream (525)",
+   "length_ft": 5242.7,
+   "perimeter": 1,
+   "inset_5ft": 1,
+   "trim_300ft": 1
+  },
+  {
+   "name": "Road (95)",
+   "length_ft": 27236.0,
+   "perimeter": 1,
+   "inset_5ft": 1,
+   "trim_300ft": 0
+  },
+  {
+   "name": "Road (100)",
+   "length_ft": 35268.4,
+   "perimeter": 4,
+   "inset_5ft": 10,
+   "trim_300ft": 4
+  },
+  {
+   "name": "Road (114)",
+   "length_ft": 5535.8,
+   "perimeter": 2,
+   "inset_5ft": 2,
+   "trim_300ft": 6
+  }
+ ],
+ "wb-2534846": [
+  {
+   "name": "Stream (1579)",
+   "length_ft": 3578.0,
+   "perimeter": 1,
+   "inset_5ft": 1,
+   "trim_300ft": 1
+  },
+  {
+   "name": "Stream (1389)",
+   "length_ft": 7371.1,
+   "perimeter": 1,
+   "inset_5ft": 1,
+   "trim_300ft": 1
+  }
+ ],
+ "wb-2534852": [
+  {
+   "name": "Stream (1537)",
+   "length_ft": 3485.6,
+   "perimeter": 0,
+   "inset_5ft": 0,
+   "trim_300ft": 1
+  },
+  {
+   "name": "Stream (1443)",
+   "length_ft": 4127.7,
+   "perimeter": 0,
+   "inset_5ft": 0,
+   "trim_300ft": 2
+  },
+  {
+   "name": "Stream (1867)",
+   "length_ft": 9622.3,
+   "perimeter": 0,
+   "inset_5ft": 0,
+   "trim_300ft": 2
+  },
+  {
+   "name": "Road (89)",
+   "length_ft": 31250.3,
+   "perimeter": 1,
+   "inset_5ft": 1,
+   "trim_300ft": 1
+  },
+  {
+   "name": "Stream (1078)",
+   "length_ft": 2374.6,
+   "perimeter": 1,
+   "inset_5ft": 1,
+   "trim_300ft": 1
+  },
+  {
+   "name": "Road (83)",
+   "length_ft": 30612.5,
+   "perimeter": 1,
+   "inset_5ft": 1,
+   "trim_300ft": 1
+  }
+ ],
+ "wb-2516632": [
+  {
+   "name": "Road (292)",
+   "length_ft": 7724.4,
+   "perimeter": 1,
+   "inset_5ft": 1,
+   "trim_300ft": 1
+  },
+  {
+   "name": "Road (300)",
+   "length_ft": 6470.4,
+   "perimeter": 0,
+   "inset_5ft": 0,
+   "trim_300ft": 2
+  },
+  {
+   "name": "Road (287)",
+   "length_ft": 40985.8,
+   "perimeter": 1,
+   "inset_5ft": 1,
+   "trim_300ft": 1
+  },
+  {
+   "name": "Road (387)",
+   "length_ft": 5875.3,
+   "perimeter": 1,
+   "inset_5ft": 1,
+   "trim_300ft": 0
+  },
+  {
+   "name": "Road (437)",
+   "length_ft": 190.2,
+   "perimeter": 0,
+   "inset_5ft": 0,
+   "trim_300ft": 1
+  },
+  {
+   "name": "Road (458)",
+   "length_ft": 487.5,
+   "perimeter": 0,
+   "inset_5ft": 1,
+   "trim_300ft": 0
+  },
+  {
+   "name": "Road (463)",
+   "length_ft": 741.8,
+   "perimeter": 1,
+   "inset_5ft": 0,
+   "trim_300ft": 0
+  },
+  {
+   "name": "Road (353)",
+   "length_ft": 2324.8,
+   "perimeter": 1,
+   "inset_5ft": 1,
+   "trim_300ft": 1
+  },
+  {
+   "name": "Stream (2820)",
+   "length_ft": 2033.4,
+   "perimeter": 1,
+   "inset_5ft": 1,
+   "trim_300ft": 1
+  }
+ ],
+ "wb-2516595": [
+  {
+   "name": "Stream (2399)",
+   "length_ft": 7021.0,
+   "perimeter": 1,
+   "inset_5ft": 1,
+   "trim_300ft": 1
+  },
+  {
+   "name": "Stream (2597)",
+   "length_ft": 15905.9,
+   "perimeter": 0,
+   "inset_5ft": 0,
+   "trim_300ft": 2
+  },
+  {
+   "name": "Road (261)",
+   "length_ft": 8202.9,
+   "perimeter": 1,
+   "inset_5ft": 1,
+   "trim_300ft": 0
+  },
+  {
+   "name": "Road (263)",
+   "length_ft": 13775.1,
+   "perimeter": 3,
+   "inset_5ft": 3,
+   "trim_300ft": 2
+  },
+  {
+   "name": "Road (276)",
+   "length_ft": 7771.6,
+   "perimeter": 0,
+   "inset_5ft": 0,
+   "trim_300ft": 1
+  },
+  {
+   "name": "Road (297)",
+   "length_ft": 4359.4,
+   "perimeter": 1,
+   "inset_5ft": 1,
+   "trim_300ft": 1
+  },
+  {
+   "name": "Road (391)",
+   "length_ft": 4674.6,
+   "perimeter": 1,
+   "inset_5ft": 1,
+   "trim_300ft": 1
+  },
+  {
+   "name": "Road (379)",
+   "length_ft": 8169.6,
+   "perimeter": 1,
+   "inset_5ft": 1,
+   "trim_300ft": 1
+  },
+  {
+   "name": "Rail (8)",
+   "length_ft": 15618.6,
+   "perimeter": 1,
+   "inset_5ft": 1,
+   "trim_300ft": 1
+  },
+  {
+   "name": "Road (270)",
+   "length_ft": 10842.3,
+   "perimeter": 1,
+   "inset_5ft": 1,
+   "trim_300ft": 1
+  },
+  {
+   "name": "Road (269)",
+   "length_ft": 26739.0,
+   "perimeter": 1,
+   "inset_5ft": 1,
+   "trim_300ft": 1
+  },
+  {
+   "name": "Rail (7)",
+   "length_ft": 62459.3,
+   "perimeter": 1,
+   "inset_5ft": 1,
+   "trim_300ft": 1
+  },
+  {
+   "name": "Rail (1)",
+   "length_ft": 59538.0,
+   "perimeter": 1,
+   "inset_5ft": 1,
+   "trim_300ft": 1
+  },
+  {
+   "name": "Stream (2253)",
+   "length_ft": 11135.9,
+   "perimeter": 0,
+   "inset_5ft": 0,
+   "trim_300ft": 4
+  },
+  {
+   "name": "Road (159)",
+   "length_ft": 29945.7,
+   "perimeter": 1,
+   "inset_5ft": 1,
+   "trim_300ft": 1
+  },
+  {
+   "name": "Stream (406)",
+   "length_ft": 1013.4,
+   "perimeter": 0,
+   "inset_5ft": 1,
+   "trim_300ft": 1
+  },
+  {
+   "name": "Stream (834)",
+   "length_ft": 1804.7,
+   "perimeter": 0,
+   "inset_5ft": 1,
+   "trim_300ft": 1
+  },
+  {
+   "name": "Stream (1009)",
+   "length_ft": 3493.5,
+   "perimeter": 0,
+   "inset_5ft": 0,
+   "trim_300ft": 2
+  },
+  {
+   "name": "Road (152)",
+   "length_ft": 14443.0,
+   "perimeter": 1,
+   "inset_5ft": 1,
+   "trim_300ft": 1
+  },
+  {
+   "name": "Road (254)",
+   "length_ft": 22644.9,
+   "perimeter": 1,
+   "inset_5ft": 1,
+   "trim_300ft": 1
+  },
+  {
+   "name": "Road (127)",
+   "length_ft": 59820.1,
+   "perimeter": 2,
+   "inset_5ft": 2,
+   "trim_300ft": 2
+  },
+  {
+   "name": "Road (256)",
+   "length_ft": 22411.9,
+   "perimeter": 1,
+   "inset_5ft": 1,
+   "trim_300ft": 1
+  },
+  {
+   "name": "Road (126)",
+   "length_ft": 53125.7,
+   "perimeter": 1,
+   "inset_5ft": 1,
+   "trim_300ft": 1
+  },
+  {
+   "name": "Road (125)",
+   "length_ft": 76021.1,
+   "perimeter": 1,
+   "inset_5ft": 1,
+   "trim_300ft": 1
+  }
+ ]
+}

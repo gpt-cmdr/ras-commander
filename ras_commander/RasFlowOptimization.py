@@ -19,6 +19,7 @@ import h5py
 import numpy as np
 import pandas as pd
 
+from ._ras_text import _write_ras_text
 from .Decorators import log_call
 from .LoggingConfig import get_logger
 from .RasPlan import RasPlan
@@ -91,7 +92,7 @@ class RasFlowOptimization:
         Args:
             plan_number_or_path: Plan number (``"01"``) or explicit ``.p##``
                 path.
-            ras_object: Optional RAS project object. If None, uses global
+            ras_object (RasPrj, optional): Optional RAS project object. If None, uses global
                 ``ras``.
 
         Returns:
@@ -202,7 +203,7 @@ class RasFlowOptimization:
                 or flow target in the referenced unsteady flow file.
             target_units: Units for the observed target series. Defaults to
                 ``"ft"`` for stage and ``"cfs"`` for flow.
-            ras_object: Optional RAS project object.
+            ras_object (RasPrj, optional): Optional RAS project object.
 
         Returns:
             True when the plan file was written successfully.
@@ -336,7 +337,7 @@ class RasFlowOptimization:
 
         Args:
             plan_number_or_path: Plan number or explicit plan path.
-            ras_object: Optional RAS project object.
+            ras_object (RasPrj, optional): Optional RAS project object.
 
         Returns:
             True when the plan file was updated.
@@ -379,8 +380,8 @@ class RasFlowOptimization:
             target_value: Target stage or flow value.
             new_plan_shortid: Optional new Short Identifier.
             new_title: Optional new Plan Title.
-            ras_object: Optional RAS project object.
-            **settings_kwargs: Additional :meth:`set_settings` options.
+            ras_object (RasPrj, optional): Optional RAS project object.
+            **settings_kwargs (Any): Additional :meth:`set_settings` options.
 
         Returns:
             New plan number.
@@ -833,7 +834,7 @@ class RasFlowOptimization:
 
     @staticmethod
     def _write_text_lines(path: Path, lines: List[str]) -> None:
-        path.write_text("".join(lines), encoding="utf-8")
+        _write_ras_text(path, "".join(lines), encoding="utf-8")
 
     @staticmethod
     def _read_flow_ratio_values(

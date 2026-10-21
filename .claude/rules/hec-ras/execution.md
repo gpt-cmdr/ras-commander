@@ -809,7 +809,7 @@ else:
 - `hecras_compute_remote` -- Remote distributed execution
 
 **Agents** (delegate when needed):
-- `hecras-general-agent` -- Full workflow coordinator
+- `ras-commander` -- Full workflow coordinator
 - `remote-executor` -- Remote execution setup
 
 **Rules** (related):

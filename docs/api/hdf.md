@@ -2,6 +2,84 @@
 
 Classes for reading and processing HEC-RAS HDF result files.
 
+Rivia provided the conceptual basis for `HdfResultsQuery`; pyHMT2D also
+influenced HDF extraction and spatial probing workflows. See
+[Related libraries](../about/related-libraries.md) for author credit,
+query semantics, and companion-library examples.
+
+## Exact native mesh dataset identity
+
+Use `HdfMesh.get_mesh_geometry_inventory(hdf_path)` to inventory every native
+dataset below `Geometry/2D Flow Areas` without modifying the file. The ordered
+DataFrame contains `dataset_path`, `dtype`, `shape`, `bytes` and `sha256`.
+Descriptors and metadata preserve the fixed-width native dtype; SHA-256 covers
+the uncompressed C-order array bytes. HDF compression and storage chunking
+therefore do not affect the dataset identity. Coordinates, units and CRS are
+not converted.
+
+```python
+reference = HdfMesh.get_mesh_geometry_inventory("child.g01.hdf")
+result = HdfMesh.get_mesh_geometry_inventory(
+    "child.p09.hdf", dataset_paths=reference.dataset_path.tolist()
+)
+same_mesh_datasets = reference.to_dict("records") == result.to_dict("records")
+```
+
+Selecting the complete reference paths permits additional result property
+datasets without asserting that those additions match. Missing, duplicate,
+nonlocal or variable-width paths fail explicitly. An empty inventory cannot
+pass. Reads use slabs bounded by `max_chunk_bytes` (default 8 MiB); a native
+row that cannot fit that budget is rejected.
+
+Bind both HDF file digests to fresh native preprocessing or execution receipts
+before using the comparison. Matching dataset rows does not establish whole
+HDF equality, matching attributes or projections, native boundary ownership,
+structure attachment, hydraulic equivalence or engineering approval. Verify
+those independent contracts through their corresponding public APIs. This
+reader performs no native execution and writes no artifact.
+
+## SA/2D native attachment evidence
+
+Call `HdfStruc.get_connection_attachments(hdf_path, connections_df=None,
+ras_object=None)` with an explicit HDF path or plan number. Plan numbers resolve
+through `plan_df` to results; explicit geometry HDF paths are also accepted and
+normally report unverified attachment after preprocessing alone. Supply the
+expected `Name`, `From`, `To` inventory from `GeomLateral.get_connection_data()`
+so a missing imported connection receives a failure row.
+
+The return DataFrame contains those identities, `from_cells`, `from_faces`,
+`to_cells`, `to_faces`, `attachment_verified`, `reason_code`,
+`orientation_verified`, `flux_sign_verified`, `evidence_paths`, `details`,
+`source_hdf` and `native_version`. IDs are tuples of zero-based mesh-local native
+indices; repeated segment cells are preserved. The native headwater/tailwater
+cell lists and face-point chains must map exactly to active cells and their
+incident faces in the named areas. Geographic proximity never establishes
+attachment. Absent, ambiguous, wrong-area, malformed, inactive or unsupported
+native evidence reports `CONNECTION_ATTACHMENT_UNVERIFIED`.
+
+Positive evidence is qualified on actual HEC-RAS 6.6 BaldEagleCrkMulti2D results.
+Three internal levees were verified on both sides. Its geometry-only
+preprocessing output lacked those persisted records. The storage-to-2D dam and
+unqualified versions remain unverified. A caller must establish that results
+are fresh for the authored geometry using input hashes and native compute
+receipts; this reader does not certify source currentness. Orientation and flow
+sign are separate and remain explicitly false in this interface.
+
+Use `scripts/qualify_sa2d_attachment.py` in a fresh disposable workspace:
+
+```text
+uv run python scripts/qualify_sa2d_attachment.py --project <source-copy> --workspace <new-workspace> --plan-number 04 --ras-exe <installed-Ras.exe> --max-wait 120 --compute-start 1999-01-01T12:00:00
+```
+
+The optional five-minute compute collects result-side native connectivity; it
+does not qualify seam conveyance. Without it, the script records preprocessing
+evidence and an explicit unverified outcome. Source hashes, runtime/TCU status,
+elapsed time and native receipts are retained in `sa2d_attachment_receipt.json`.
+Run the script under Wine Python in `fim-hecras-wine:6.6-clb-v8` with the new
+library installed for intended-runtime qualification. Mount source projects
+read-only and choose a fresh output variant; fleet orchestration remains the
+coordinator's responsibility.
+
 ## Core Classes
 
 ### HdfBase
@@ -61,7 +139,34 @@ polygons are preferred and companion text geometry is used only when needed.
 
 ### HdfMesh
 
-Mesh geometry data.
+Mesh geometry data. See [Meshing](meshing.md) for the diagnostic-to-repair
+workflow and operation-specific failure limits.
+
+`get_mesh_perimeter_faces(hdf_path, mesh_name, ras_object=None)` returns every
+native perimeter face of a named 2D area as a GeoDataFrame, including faces
+without an assigned BC line. It preserves native `face_id`, `cell0`, `cell1`,
+`interior_cell_id`, `exterior_cell_id`, face-point endpoint IDs, `face_length`,
+and complete face geometry. Physical cells use native `Attributes/Cell Count`;
+ghost cell IDs are retained rather than classified from surface area.
+
+Nullable `bc_line_id`, `bc_line_name`, and `bc_line_type` come from native BC
+associations. The geometry BC type (for example `External`) is distinct from
+the flow forcing type. Duplicate ownership, stale face/endpoints, non-perimeter
+assignments, and missing association tables when BC lines exist raise errors.
+It does not infer attachment from proximity. Inspect `attrs['association_status']`
+and `attrs['length_source']`; native length is in model units. Interior-hole
+boundary faces are included by topology, but rings are not classified.
+
+```python
+from ras_commander.hdf import HdfMesh
+
+faces = HdfMesh.get_mesh_perimeter_faces("child.g01.hdf", "Perimeter 1")
+unassigned = faces.loc[faces.bc_line_id.isna()]
+```
+
+See `scripts/validate_perimeter_bc.py` for real-example native compilation and
+source-preservation acceptance. Read only a current native compiled HDF after
+editing geometry text.
 
 - `get_mesh_area_names(hdf_path)` - List 2D flow areas
 - `get_mesh_areas(hdf_path)` - Read named-area perimeters, with a strictly
@@ -142,6 +247,8 @@ removed before v1.2.0:
 2D mesh results.
 
 - `get_mesh_max_ws(hdf_path, round_to="100ms")` - GeoDataFrame with `maximum_water_surface` and, when stored, `maximum_water_surface_time`
+- `get_mesh_summary(hdf_path, var)` - GeoDataFrame for a named HEC-RAS summary variable, with cell or face geometry
+- `get_mesh_summary_values(hdf_path, var)` - Read summary values and identifiers without constructing Shapely geometry
 - `get_mesh_max_depth(hdf_path)` - Maximum depth from stored HEC-RAS `Depth`
   when present, otherwise derived in memory from `Water Surface - Cells Minimum
   Elevation`
@@ -152,19 +259,59 @@ removed before v1.2.0:
 - `iter_mesh_timeseries(hdf_path, mesh_name, var, *, time_selection=None,
   spatial_selection=None, batch_size=None, max_chunk_bytes=16777216)` - Stream
   untruncated, bounded, time-major xarray batches
-- `get_mesh_summary_values(hdf_path, var)` - Read summary values and identifiers
-  without constructing Shapely geometry
 
 - `get_mesh_cells_timeseries(hdf_path, mesh_names=None, var=None, truncate=False, ras_object=None)` - Dictionary of mesh Datasets; select cells/faces afterward
 - `get_mesh_faces_timeseries(hdf_path, mesh_name, truncate=True)` - Available face variables as one Dataset; select `face_velocity` and `face_id` afterward
-- `get_profile_line_flow_timeseries(hdf_path, line_name, mesh_name=None, profile_lines_path=None, direction="absolute")` - Flow time series across a RAS Mapper profile/reference line
-- `get_profile_line_peak_flow(hdf_path, line_name, mesh_name=None, profile_lines_path=None, direction="absolute")` - Peak Q and peak time for a profile/reference line
+- `get_profile_line_flow_timeseries(hdf_path, line_name, mesh_name=None, profile_lines_path=None, direction="absolute")` - Native Mapper named-line flow; inspect returned `selection_source`
+- `get_profile_line_peak_flow(hdf_path, line_name, mesh_name=None, profile_lines_path=None, direction="absolute")` - Peak Q and time from the same native named-line extraction path
+
+The canonical profile-line methods above require pythonnet/RasMapperLib. They
+may return a native-associated precomputed hydrograph of unqualified provenance
+or aggregate selected face flows; these have different signed/absolute-flow semantics. The native-associated
+hydrograph is not independently established as solver-recorded and may be
+observed data. Explicit solver-recorded Reference Lines HDF output is read with
+`HdfResultsXsec.get_ref_lines_timeseries()`.
+See [Profiles, hydrographs and reference locations](results-queries.md) for
+method contracts and [batch workflows](../user-guide/2d-profile-and-reference-workflows.md)
+for plot/export examples. HDF storage should not be confused with the method
+used to calculate the stored quantity.
 
 `get_mesh_max_depth()` logs one INFO source message per mesh. Stored `Depth` is
 read only. The fallback is computed only in memory and does not create or write
 `Depth` in the HDF. Temporary synthetic test HDFs are test artifacts; they are
 not producer output and are labeled separately from pre-existing HEC-RAS result
 fixtures.
+
+**Ghost cells.** HEC-RAS writes 2D cell results for the physical cells
+followed by ghost cells outside the mesh perimeter. `Geometry/2D Flow
+Areas/Attributes` `Cell Count` is the physical count; cell IDs at or above it
+are ghost cells. Ghost values are placeholders, not solution results: summary
+maximum and minimum water surface are 0.0, and minimum elevation is NaN. The
+cell-result methods above therefore return physical cells only by default, so
+their rows match the mesh polygons. Results carry an `is_ghost_cell` column
+(DataFrames and GeoDataFrames) or coordinate along `cell_id` (xarray).
+
+- Pass `include_ghost_cells=True` to keep the ghost rows or columns.
+- In `get_mesh_timeseries()` and `iter_mesh_timeseries()`, `spatial_selection`
+  is clipped to the physical cells. Negative positions count back from the last
+  physical cell.
+- An HDF without `Cell Count` keeps every cell and logs a warning.
+- Face results are unaffected.
+- `HdfMesh.get_mesh_cell_points(hdf_path, include_ghost_cells=False)` returns
+  the matching physical cell centers.
+
+```python
+max_ws = HdfResultsMesh.get_mesh_max_ws(hdf_path)  # physical cells only
+everything = HdfResultsMesh.get_mesh_max_ws(hdf_path, include_ghost_cells=True)
+```
+
+The maximum methods have different temporal bases. `get_mesh_max_ws()` and
+`get_mesh_max_face_v()` read native HEC-RAS Summary Output maxima, which are
+tracked across the computation and can include peaks between saved
+mapping/output timestamps. `get_mesh_max_depth()` instead reduces the retained
+`Depth` series or derives depth from retained `Water Surface`; its maximum is
+limited to those stored output times. See [Maximum values](../user-guide/hdf-data-extraction.md#maximum-values)
+for an example and comparison with a time-series reduction.
 
 ### Bounded and lazy result reads
 
@@ -308,7 +455,7 @@ Plan-level results.
 - `get_runtime_data(hdf_path)` - Runtime statistics
 - `get_volume_accounting(hdf_path)` - Volume accounting data
 - `get_compute_messages(hdf_path)` - Computation messages
-- `get_compute_options(hdf_path)` - Computation options used
+- `get_unsteady_info(hdf_path)` - Unsteady result metadata; use `HdfPlan.get_plan_parameters()` for plan parameters
 - `is_steady_plan(hdf_path)` - Check if steady state
 - `get_steady_profile_names(hdf_path)` - Get steady profile names
 - `get_steady_wse(hdf_path)` - Get steady water surface elevations
@@ -345,6 +492,14 @@ Cross-section and river geometry extraction from HDF.
 
 ### HdfStruc
 
+`HdfStruc.get_structures()` treats a native empty `Geometry/Structures` group,
+or one containing only an empty `Property Tables` subgroup, as an empty layer.
+It returns typed `Structure ID`/geometry columns, source CRS/group attributes and
+`attrs["structure_status"]="empty_placeholder"`. Populated property tables,
+unrecognized children, and incomplete nonempty layers remain hard errors; no
+actual structure is silently skipped. Source files and native units are unchanged.
+
+
 Structure geometry and SA/2D connections.
 
 - `list_sa2d_connections(hdf_path, *, ras_object=None)` - List SA/2D connections with time-series results
@@ -375,8 +530,8 @@ Storage area volume-elevation curve extraction from HDF.
 
 1D channel capacity analysis (multi-AEP).
 
-- `get_channel_capacity(hdf_path, river=None, reach=None)` - Compute channel capacity from cross-section geometry and results
-- `get_multi_aep_capacity(hdf_paths, aep_labels)` - Compare capacity across multiple AEP simulations
+- `analyze_channel_capacity(...)` - Run channel capacity analysis from geometry and result inputs; see the full signature below
+- `compare_conditions(existing_results, proposed_results, level="segments")` - Compare previously analyzed channel conditions
 
 ### HdfStruc1D
 
@@ -420,6 +575,17 @@ Pump station analysis.
 ### HdfFluvialPluvial
 
 Fluvial-pluvial boundary analysis.
+
+Both fluvial/pluvial entry points log processing failures at ERROR with traceback,
+path, parameters and stage, then return an empty GeoDataFrame and discard partial
+geometry. Input/decorator validation exceptions remain unchanged. Cell identities
+and polygon dissolution stay scoped to each mesh, including repeated native IDs.
+A successful analysis with no qualifying boundary edges can also return empty.
+Polygon acreage thresholds use both projected horizontal CRS axis conversion factors.
+Missing or geographic CRS skips the filter with a warning. Unknown projected units
+fail processing: the method logs ERROR with traceback, path, parameters and stage,
+then returns an empty GeoDataFrame and discards partial geometry. Input/decorator
+validation exceptions remain unchanged; no result status attributes are added.
 
 - `calculate_fluvial_pluvial_boundary(hdf_path, delta_t)` - Calculate boundary
 
@@ -487,6 +653,7 @@ Land-cover sidecar and final Manning's n extraction.
 
 - `get_landcover_raster_map(hdf_path)` - Read land-cover class IDs, names, and Manning's n values
 - `set_landcover_mannings_n(hdf_path, mapping, hecras_version=...)` - Set sidecar Manning's n through native RASMapper serialization
+- `sanitize_classification_names(hdf_path, raster_path=..., hecras_version="6.6")` - Opt in to HEC-RAS 6.6's native labels-only sanitizer. It preserves IDs, numeric parameters, and exact companion-TIFF bytes; a legacy V1 sidecar is saved as native V2, with the returned result retaining before/after mappings and a durable backup path. This method is qualified only for `6.6`/`6.6.0`; it never rebuilds or resamples the raster.
 - `get_classification_polygons(hdf_path)` - Read land-cover sidecar classification polygon overrides
 - `get_preprocessed_mannings_n(hdf_path)` - Read preprocessed cell-center Manning's n values from geometry HDF
 - `audit_final_mannings_n(hdf_path, ...)` - Strictly audit solver-owned final cell/face Manning arrays
@@ -505,7 +672,15 @@ before v1.2.0:
 Boundary condition geometry.
 
 - `get_bc_lines(hdf_path)` - Get BC lines
-- `get_breaklines(hdf_path)` - Get breaklines
+- `get_breaklines(hdf_path)` - Get breaklines. Zero- and one-point source records
+  are excluded from line geometry and returned in `result.attrs["breakline_diagnostics"]`.
+  Each diagnostic preserves native zero-based `bl_id`, `Name`, all decoded source
+  `attributes`, `point_start`, `point_count`, exclusive `point_end`, `part_start`,
+  `part_count`, and `reason_code="BREAKLINE_TOO_FEW_POINTS"`. The list is empty for
+  clean or absent layers and remains available when every record is degenerate.
+  Persist diagnostics separately before GeoParquet/other tabular export because
+  writers may discard attrs. Negative, truncated or out-of-range spans still
+  raise; this read-only extraction does not change source geometry, units or CRS.
 
 ## Utilities
 
@@ -558,3 +733,505 @@ max_wse = HdfResultsMesh.get_mesh_max_ws(hdf_path)
 # Get runtime stats
 runtime = HdfResultsPlan.get_runtime_data(hdf_path)
 ```
+
+## Complete source reference
+
+The sections above explain common operations. The source-derived reference below
+includes the remaining public methods and their full signatures. Method-specific
+prerequisites and return contracts take precedence over abbreviated summaries.
+
+### HdfBase source reference
+
+::: ras_commander.hdf.HdfBase.HdfBase
+    options:
+      show_root_heading: false
+      heading_level: 3
+      show_source: false
+      members:
+        - get_2d_flow_area_names_and_counts
+        - get_attrs
+        - get_dataset_info
+        - get_polylines_from_parts
+        - get_projection
+        - get_result_unit_metadata
+        - get_simulation_start_time
+        - get_unsteady_timestamps
+        - plan_vertex_ordinates
+        - print_attrs
+        - strip_results
+
+### HdfUtils source reference
+
+::: ras_commander.hdf.HdfUtils.HdfUtils
+    options:
+      show_root_heading: false
+      heading_level: 3
+      show_source: false
+      members:
+        - convert_df_datetimes_to_str
+        - convert_hdf5_attrs_to_dict
+        - convert_ras_hdf_value
+        - convert_ras_string
+        - convert_timesteps_to_datetimes
+        - find_nearest_neighbors
+        - parse_duration
+        - parse_ras_datetime
+        - parse_ras_datetime_ms
+        - parse_ras_window_datetime
+        - parse_run_time_window
+        - perform_kdtree_query
+        - resolve_hdf_paths
+        - scan_hdf_files
+
+### HdfPlan source reference
+
+::: ras_commander.hdf.HdfPlan.HdfPlan
+    options:
+      show_root_heading: false
+      heading_level: 3
+      show_source: false
+      members:
+        - get_2d_flow_options
+        - get_geometry_information
+        - get_plan_end_time
+        - get_plan_information
+        - get_plan_met_precip
+        - get_plan_parameters
+        - get_plan_start_time
+        - get_plan_timestamps_list
+        - get_starting_wse_method
+
+### HdfMesh source reference
+
+::: ras_commander.hdf.HdfMesh.HdfMesh
+    options:
+      show_root_heading: false
+      heading_level: 3
+      show_source: false
+      members:
+        - combine_faces_to_linestring
+        - diagnose_mesh_cell_polygons
+        - diagnose_mesh_layout
+        - extend_face_property_tables
+        - extend_linux_tmp_face_property_tables
+        - find_nearest_cell
+        - find_nearest_face
+        - get_face_ids_in_calibration_region
+        - get_face_ids_in_polygon
+        - get_faces_along_profile_line
+        - get_mannings_calibration_table
+        - get_mesh_area_attributes
+        - get_mesh_area_names
+        - get_mesh_areas
+        - get_mesh_cell_faces
+        - get_mesh_cell_points
+        - get_mesh_cell_polygons
+        - get_mesh_cell_property_tables
+        - get_mesh_face_hydraulic_properties_at_stage
+        - get_mesh_face_property_tables
+        - get_mesh_perimeter_faces
+        - get_mesh_sloped_topology
+        - get_reference_line_internal_faces
+        - pin_property_tables
+        - recompute_face_mannings_n_from_landcover_curves
+        - sample_linux_tmp_face_mannings_n_from_landcover_curves
+        - set_face_mannings_n_values
+        - set_mesh_face_property_tables
+        - set_mesh_pinned_attribute
+        - transform_linux_tmp_face_mannings_n
+        - write_linux_tmp_face_property_tables
+
+### HdfXsec source reference
+
+::: ras_commander.hdf.HdfXsec.HdfXsec
+    options:
+      show_root_heading: false
+      heading_level: 3
+      show_source: false
+      members:
+        - generate_river_edge_lines
+        - get_1d_footprint
+        - get_cross_sections
+        - get_river_bank_lines
+        - get_river_centerlines
+        - get_river_edge_lines
+        - get_river_flow_paths
+        - get_river_reaches
+        - get_river_stationing
+        - get_xs_coords
+        - get_xs_interpolation_surface
+
+### HdfBndry source reference
+
+::: ras_commander.hdf.HdfBndry.HdfBndry
+    options:
+      show_root_heading: false
+      heading_level: 3
+      show_source: false
+      members:
+        - get_bc_external_faces
+        - get_bc_lines
+        - get_breaklines
+        - get_reference_lines
+        - get_reference_points
+        - get_refinement_regions
+
+### HdfStruc source reference
+
+::: ras_commander.hdf.HdfStruc.HdfStruc
+    options:
+      show_root_heading: false
+      heading_level: 3
+      show_source: false
+      members:
+        - get_connection_attachments
+        - get_culvert_hydraulics
+        - get_geom_structures_attrs
+        - get_sa2d_breach_info
+        - get_storage_area_polygons
+        - get_structures
+        - list_sa2d_connections
+
+### HdfStorageArea source reference
+
+::: ras_commander.hdf.HdfStorageArea.HdfStorageArea
+    options:
+      show_root_heading: false
+      heading_level: 3
+      show_source: false
+      members:
+        - compute_stage_storage_curve
+        - compute_volume_below_elevation
+        - get_storage_area_for_breach_structure
+        - get_storage_area_names
+        - get_storage_area_properties
+        - get_terrain_path_from_geom_hdf
+        - get_volume_elevation_curve
+
+### HdfStruc1D source reference
+
+::: ras_commander.hdf.HdfStruc1D.HdfStruc1D
+    options:
+      show_root_heading: false
+      heading_level: 3
+      show_source: false
+      members:
+        - get_structure_max_values
+        - list_1d_structures
+
+### HdfHydraulicTables source reference
+
+::: ras_commander.hdf.HdfHydraulicTables.HdfHydraulicTables
+    options:
+      show_root_heading: false
+      heading_level: 3
+      show_source: false
+      members:
+        - get_all_xs_htabs
+        - get_xs_htab
+
+### HdfResultsPlan source reference
+
+::: ras_commander.hdf.HdfResultsPlan.HdfResultsPlan
+    options:
+      show_root_heading: false
+      heading_level: 3
+      show_source: false
+      members:
+        - get_compute_messages
+        - get_compute_messages_hdf_only
+        - get_reference_summary
+        - get_reference_timeseries
+        - get_runtime_data
+        - get_steady_info
+        - get_steady_profile_names
+        - get_steady_results
+        - get_steady_wse
+        - get_unsteady_info
+        - get_unsteady_summary
+        - get_volume_accounting
+        - is_steady_plan
+        - list_steady_variables
+
+### HdfResultsMesh source reference
+
+::: ras_commander.hdf.HdfResultsMesh.HdfResultsMesh
+    options:
+      show_root_heading: false
+      heading_level: 3
+      show_source: false
+      members:
+        - export_depth_rasters_at_times
+        - export_max_depth_raster
+        - get_boundary_conditions_timeseries
+        - get_flood_extent_polygon
+        - get_mesh_cells_timeseries
+        - get_mesh_faces_timeseries
+        - get_mesh_last_iter
+        - get_mesh_max_depth
+        - get_mesh_max_face_v
+        - get_mesh_max_iter
+        - get_mesh_max_ws
+        - get_mesh_max_ws_err
+        - get_mesh_min_face_v
+        - get_mesh_min_ws
+        - get_mesh_summary
+        - get_mesh_summary_output
+        - get_mesh_summary_output_group
+        - get_mesh_summary_values
+        - get_mesh_timeseries
+        - get_profile_line_flow_timeseries
+        - get_profile_line_flow_timeseries_legacy
+        - get_profile_line_peak_flow
+        - iter_mesh_timeseries
+
+### HdfResultView source reference
+
+::: ras_commander.hdf.HdfResultView.HdfResultView
+    options:
+      show_root_heading: false
+      heading_level: 3
+      show_source: false
+      members:
+        - iter_batches
+        - reduce
+        - select
+        - to_arrow
+        - to_numpy
+        - to_pandas
+        - to_xarray
+
+### HdfResultsXsec source reference
+
+::: ras_commander.hdf.HdfResultsXsec.HdfResultsXsec
+    options:
+      show_root_heading: false
+      heading_level: 3
+      show_source: false
+      members:
+        - get_ref_lines_timeseries
+        - get_ref_points_timeseries
+        - get_xsec_summary
+        - get_xsec_timeseries
+
+### HdfResultsBreach source reference
+
+::: ras_commander.hdf.HdfResultsBreach.HdfResultsBreach
+    options:
+      show_root_heading: false
+      heading_level: 3
+      show_source: false
+      members:
+        - get_breach_summary
+        - get_breach_timeseries
+        - get_breaching_variables
+        - get_structure_variables
+
+### HdfResultsSediment source reference
+
+::: ras_commander.hdf.HdfResultsSediment.HdfResultsSediment
+    options:
+      show_root_heading: false
+      heading_level: 3
+      show_source: false
+      members:
+        - get_active_layer_grain_class
+        - get_bed_change_volumes
+        - get_cell_bed_change
+        - get_cell_bed_change_timeseries
+        - get_cell_bed_elevation
+        - get_sediment_mesh_areas
+        - is_sediment_plan
+
+### HdfResultsProducts source reference
+
+::: ras_commander.hdf.HdfResultsProducts.HdfResultsProducts
+    options:
+      show_root_heading: false
+      heading_level: 3
+      show_source: false
+      members:
+        - export
+        - inspect_result
+
+### HdfPipe source reference
+
+::: ras_commander.hdf.HdfPipe.HdfPipe
+    options:
+      show_root_heading: false
+      heading_level: 3
+      show_source: false
+      members:
+        - extract_timeseries_for_conduit
+        - extract_timeseries_for_node
+        - get_pipe_conduits
+        - get_pipe_inlets
+        - get_pipe_network
+        - get_pipe_network_summary
+        - get_pipe_network_timeseries
+        - get_pipe_nodes
+        - get_pipe_profile
+
+### HdfPump source reference
+
+::: ras_commander.hdf.HdfPump.HdfPump
+    options:
+      show_root_heading: false
+      heading_level: 3
+      show_source: false
+      members:
+        - get_pump_groups
+        - get_pump_operation_timeseries
+        - get_pump_station_summary
+        - get_pump_station_timeseries
+        - get_pump_stations
+
+### HdfInfiltration source reference
+
+::: ras_commander.hdf.HdfInfiltration.HdfInfiltration
+    options:
+      show_root_heading: false
+      heading_level: 3
+      show_source: false
+      members:
+        - calculate_soil_statistics
+        - calculate_total_significant_percentage
+        - calculate_weighted_parameters
+        - create_infiltration_group
+        - create_infiltration_override_regions
+        - get_classification_polygons
+        - get_infiltration_baseoverrides
+        - get_infiltration_calibration_regions
+        - get_infiltration_layer_data
+        - get_infiltration_map
+        - get_infiltration_parameters
+        - get_infiltration_region_names
+        - get_infiltration_region_overrides
+        - get_infiltration_region_polygons
+        - get_infiltration_stats
+        - get_landcover_raster_stats
+        - get_preprocessed_infiltration
+        - get_preprocessed_infiltration_stats
+        - get_significant_mukeys
+        - get_soil_raster_stats
+        - get_soils_raster_stats
+        - save_statistics
+        - scale_infiltration_base_overrides
+        - scale_infiltration_baseoverrides
+        - scale_infiltration_data
+        - scale_infiltration_region_overrides
+        - scale_infiltration_sidecar_parameters
+        - set_infiltration_base_overrides
+        - set_infiltration_baseoverrides
+        - set_infiltration_layer_data
+        - set_infiltration_region_overrides
+        - set_infiltration_sidecar_parameters
+
+### HdfLandCover source reference
+
+::: ras_commander.hdf.HdfLandCover.HdfLandCover
+    options:
+      show_root_heading: false
+      heading_level: 3
+      show_source: false
+      members:
+        - audit_final_mannings_n
+        - build_landcover_depth_roughness_curves
+        - compare_base_vs_calibrated
+        - compute_final_mannings_raster
+        - estimate_final_mannings_raster
+        - get_classification_polygons
+        - get_landcover_association
+        - get_landcover_raster_map
+        - get_mannings_calibration_table
+        - get_mannings_region_cell_mapping
+        - get_mannings_region_polygons
+        - get_preprocessed_mannings_n
+        - get_preprocessed_mannings_stats
+        - set_landcover_mannings_n
+        - set_landcover_raster_map
+        - sanitize_classification_names
+
+### HdfPlot source reference
+
+::: ras_commander.hdf.HdfPlot.HdfPlot
+    options:
+      show_root_heading: false
+      heading_level: 3
+      show_source: false
+      members:
+        - plot_mesh_cells
+        - plot_time_series
+
+### HdfResultsPlot source reference
+
+::: ras_commander.hdf.HdfResultsPlot.HdfResultsPlot
+    options:
+      show_root_heading: false
+      heading_level: 3
+      show_source: false
+      members:
+        - plot_results_max_wsel
+        - plot_results_max_wsel_time
+        - plot_results_mesh_variable
+
+### HdfFluvialPluvial source reference
+
+::: ras_commander.hdf.HdfFluvialPluvial.HdfFluvialPluvial
+    options:
+      show_root_heading: false
+      heading_level: 3
+      show_source: false
+      members:
+        - calculate_fluvial_pluvial_boundary
+        - generate_fluvial_pluvial_polygons
+
+### HdfBenefitAreas source reference
+
+::: ras_commander.hdf.HdfBenefitAreas.HdfBenefitAreas
+    options:
+      show_root_heading: false
+      heading_level: 3
+      show_source: false
+      members:
+        - identify_benefit_areas
+
+### HdfChannelCapacity source reference
+
+::: ras_commander.hdf.HdfChannelCapacity.HdfChannelCapacity
+    options:
+      show_root_heading: false
+      heading_level: 3
+      show_source: false
+      members:
+        - analyze_channel_capacity
+        - compare_conditions
+        - determine_capacity
+        - extract_bank_elevations
+        - extract_max_wse
+        - extract_steady_profile_wse
+        - segment_channel
+        - system_capacity_summary
+
+### HdfResultsAnalysis source reference
+
+::: ras_commander.hdf.HdfResultsAnalysis.HdfResultsAnalysis
+    options:
+      show_root_heading: false
+      heading_level: 3
+      show_source: false
+      members:
+        - analyze_critical_duration
+
+### HdfProject source reference
+
+::: ras_commander.hdf.HdfProject.HdfProject
+    options:
+      show_root_heading: false
+      heading_level: 3
+      show_source: false
+      members:
+        - export_extent_geojson
+        - get_project_bounds_latlon
+        - get_project_crs
+        - get_project_extent

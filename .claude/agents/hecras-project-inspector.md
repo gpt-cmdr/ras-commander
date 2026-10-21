@@ -371,7 +371,7 @@ bc_summary = {
 - `.claude/rules/python/api-first-principle.md` -- API-first mandate
 
 **Agents** (collaborate with):
-- `hecras-general-agent` -- Coordinator that delegates to you for inspection
+- `ras-commander` -- Coordinator that delegates to you for inspection
 - `hecras-results-analyst` -- Downstream: interprets results after execution
 
 **Skills** (invoke these):

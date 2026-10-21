@@ -82,9 +82,16 @@ from .ExecutionArtifacts import (
     remove_plan_execution_artifacts as _remove_plan_execution_artifacts,
 )
 from .LoggingConfig import get_logger
+from ._optional_deps import require_module
 from .RasBco import BcoMonitor
 from .RasPlan import RasPlan
-from .RasPrj import RasPrj, init_ras_project, ras
+from .RasPrj import (
+    RasPrj,
+    _copied_prj_init_kwargs,
+    _matching_copied_prj_file,
+    init_ras_project,
+    ras,
+)
 from .RasTcu import RasTcu
 from .RasUtils import RasUtils
 
@@ -99,6 +106,11 @@ _MAX_SUBPROCESS_WAIT_SECONDS = (2**32 - 2) / 1000.0
 class _RuntimeDeadlineExceeded(TimeoutError):
     """Internal marker for the public ``max_runtime`` deadline."""
 
+
+
+def _require_process_supervision(api_name: str) -> None:
+    """Fail before launch when psutil, required to supervise Ras.exe, is absent."""
+    require_module("psutil", f"{api_name} process supervision")
 
 
 class RasCmdr:
@@ -166,13 +178,34 @@ class RasCmdr:
         )
 
     @staticmethod
+    def _openmp_subprocess_env(
+        environment: Optional[dict[str, str]], disable_omp_affinity: bool,
+    ) -> Optional[dict[str, str]]:
+        """Disable Intel affinity queries only in the selected engine tree.
+
+        Intel documents ``disabled`` as disabling low-level affinity interfaces;
+        ``none`` still queries topology and is insufficient for Wine NUMA gaps.
+        Preserve an existing WMIC PATH shim and never mutate caller state.
+        """
+        if type(disable_omp_affinity) is not bool:
+            raise TypeError("disable_omp_affinity must be a bool")
+        if not disable_omp_affinity:
+            return environment
+        result = dict(os.environ if environment is None else environment)
+        for key in list(result):
+            if key.upper() == "KMP_AFFINITY":
+                del result[key]
+        result["KMP_AFFINITY"] = "disabled"
+        return result
+
+    @staticmethod
     def _legacy_wmic_subprocess_env(
         ras_object: 'RasPrj',
     ) -> tuple[Optional[dict[str, str]], Optional[tempfile.TemporaryDirectory]]:
-        """Supply the CPU-only WMIC surface required by HEC-RAS 6.1-6.3.
+        """Supply the CPU-only WMIC surface required by HEC-RAS 6.0-6.3.1.
 
         Current Windows releases can omit ``wmic.exe``.  The HEC-RAS 6.3
-        unsteady solver and executable qualification of 6.1 and 6.2 invoke five
+        unsteady solver and executable qualification of 6.0, 6.1 and 6.2 invoke five
         read-only ``wmic CPU get`` queries before starting numerical work and
         abort when the resulting ``systemInfo.txt`` is empty.  Provide those
         fields from CIM through a process-local PATH shim; do not install a
@@ -188,7 +221,7 @@ class RasCmdr:
         if (
             not RasCmdr._is_windows()
             or version is None
-            or version not in {(6, 1, 0), (6, 2, 0), (6, 3, 0), (6, 3, 1)}
+            or version not in {(6, 0, 0), (6, 1, 0), (6, 2, 0), (6, 3, 0), (6, 3, 1)}
             or shutil.which("wmic") is not None
         ):
             return None, None
@@ -384,7 +417,7 @@ class RasCmdr:
 
         Args:
             plan_number: Plan number (e.g., "01", 1)
-            ras_object: RasPrj instance
+            ras_object (RasPrj, optional): RasPrj instance
 
         Returns:
             Path to the expected HDF file
@@ -411,7 +444,7 @@ class RasCmdr:
 
         Args:
             plan_number: Plan number or an existing ``.p##`` plan path.
-            ras_object: Explicit initialized :class:`RasPrj`. Uses the package
+            ras_object (RasPrj, optional): Explicit initialized :class:`RasPrj`. Uses the package
                 global project only when omitted.
             result_modified_after: Optional timezone-aware filesystem
                 timestamp threshold. This is not a full RAS input-currency
@@ -450,7 +483,7 @@ class RasCmdr:
                 ``"both"``. This names the result family to remove.
             include_message_sidecars: Also remove the plan's exact
                 ``.comp_msgs.txt``, ``.computeMsgs.txt``, and ``.bco##`` files.
-            ras_object: Explicit initialized :class:`RasPrj`. Uses the package
+            ras_object (RasPrj, optional): Explicit initialized :class:`RasPrj`. Uses the package
                 global project only when omitted.
 
         Returns:
@@ -2439,6 +2472,7 @@ class RasCmdr:
         exact legacy and modern compute/preprocess names whose plan-specific
         command signature is not established.
         """
+        _require_process_supervision("RasCmdr.inspect_plan_processes()")
         import psutil
 
         from ._process_inspection import (
@@ -2459,6 +2493,50 @@ class RasCmdr:
             plan_path=plan_path,
             tmp_hdf_path=tmp_hdf_path,
         )
+
+    @staticmethod
+    @log_call
+    def inspect_plan_windows(
+        plan_number: Union[str, Number],
+        ras_object=None,
+        max_text_chars: int = 4096,
+    ) -> Dict[str, Any]:
+        """Read bounded Windows/Wine dialog text for one exact plan.
+
+        Complete process inventory is required before querying any window.
+        Only exact-plan matched PIDs with revalidated creation times may
+        contribute visible titles, static/button captions, list-box strings
+        and read-only, non-password edit text. Editable/password values and
+        other processes' text are excluded; no UI action is performed. Skipped
+        owned controls retain only class/style/identity metadata.
+
+        ``max_text_chars`` is a total title/caption budget (1..65536). The
+        JSON-safe result has explicit ``complete``, ``inventory``, ``windows``
+        and ``query_errors`` fields. An incomplete result grants no execution,
+        cancellation or result-file inspection permission. This diagnostic
+        does not change solver quiescence or completion requirements.
+
+        Args:
+            plan_number: Plan number resolved through project metadata.
+            ras_object: Optional initialized project.
+            max_text_chars: Total text budget from 1 through 65536 characters.
+
+        Returns:
+            JSON-safe ownership inventory, bounded windows and query errors.
+
+        Raises:
+            ValueError: The budget is invalid or the plan cannot be resolved.
+
+        """
+        if (
+            isinstance(max_text_chars, bool) or not isinstance(max_text_chars, int)
+            or not 1 <= max_text_chars <= 65536
+        ):
+            raise ValueError("max_text_chars must be an integer from 1 to 65536")
+        inventory = RasCmdr.inspect_plan_processes(plan_number, ras_object=ras_object)
+        from ._plan_windows import inspect_owned_plan_windows
+
+        return inspect_owned_plan_windows(inventory, max_text_chars)
 
     @staticmethod
     def _resolve_plan_process_paths(
@@ -2922,7 +3000,7 @@ class RasCmdr:
 
         Args:
             plan_number: Plan number to cancel (for example, ``"01"``).
-            ras_object: Initialized :class:`RasPrj` object. Uses the global
+            ras_object (RasPrj, optional): Initialized :class:`RasPrj` object. Uses the global
                 project when omitted.
             timeout_seconds: Grace period before force-killing only the already
                 matched processes.
@@ -2967,6 +3045,7 @@ class RasCmdr:
         hdf_output_profile: Optional[str] = None,
         dialog_watchdog: bool = True,
         max_runtime: Optional[float] = None,
+        disable_omp_affinity: bool = False,
     ) -> 'ComputeResult':
         """
         Execute a single HEC-RAS plan in a specified location.
@@ -2981,6 +3060,9 @@ class RasCmdr:
                 If a string is provided, it will be created in the same parent directory as the project folder.
                 If a full path is provided, it will be used as is.
                 If None, computation occurs in the original project folder, modifying the original project.
+                The copy is re-initialized against the same .prj file name as the source project, so a
+                project folder holding several projects (several .prj files) computes the project that
+                ``ras_object`` points to rather than the first .prj found.
             ras_object (RasPrj, optional): Specific RAS object to use. If None, uses the global ras instance.
                 Useful when working with multiple projects simultaneously.
             clear_geompre (bool, optional): Whether to clear geometry preprocessor files (.c## files). Defaults to False.
@@ -3032,9 +3114,17 @@ class RasCmdr:
                 use_optimal_hdf_settings=True. Options are "balanced", "speed", "size",
                 and "nas". Defaults to "balanced".
             hdf_additional_variables (List[str], optional): Additional HDF output variables
-                to enable when use_optimal_hdf_settings=True.
+                to enable when use_optimal_hdf_settings=True. Baseline 2D result names
+                "Water Surface" and "Face Velocity" are accepted no-ops: they are
+                always written for computed 2D results and add no plan line.
             hdf_output_variables (List[str], optional): Additional HDF output variables
-                to enable before execution.
+                to enable before execution. The same baseline-name no-op policy
+                applies; existing baseline-name lines are preserved. Unknown labels raise.
+                Version-limited labels (HEC-RAS 7.0 secondary-flow outputs) are gated on
+                the executing HEC-RAS version when it is newer than the plan's declared
+                Program Version (for example a 6.x-declared plan run with 7.0.1);
+                otherwise the declared-version gate applies. Same for
+                hdf_additional_variables.
             hdf_output_options (Dict[str, Any], optional): Explicit HDF output options
                 passed to ``RasPlan.set_hdf_output_options()`` before execution.
             hdf_output_profile (str, optional): Named HDF output profile to apply before
@@ -3048,6 +3138,10 @@ class RasCmdr:
                 historical launcher/callback behavior plus the existing
                 7,200-second asynchronous-solver bound. A timeout uses
                 exact-plan structured cancellation.
+            disable_omp_affinity (bool, optional): Set Intel ``KMP_AFFINITY=disabled``
+                only in the launched engine environment. Defaults to False.
+                Useful when Wine lacks NUMA/affinity APIs used by Intel OpenMP.
+                This preserves the scheduler CPU allocation and plan core count.
         Returns:
             ComputeResult: Result object with ``success`` bool and ``results_df_row`` (pd.Series or None).
                 Backward compatible with bool: ``if RasCmdr.compute_plan("01"):`` still works.
@@ -3064,6 +3158,7 @@ class RasCmdr:
                 every terminal gate.
 
         Raises:
+            TypeError: If ``disable_omp_affinity`` is not a bool.
             ValueError: If ``max_runtime`` is not a positive finite number
                 within the Windows subprocess-wait range, or ``None``.
 
@@ -3111,25 +3206,28 @@ class RasCmdr:
         Notes:
             - For executing multiple plans, consider using compute_parallel() or compute_test_mode().
             - Setting num_cores appropriately is important for performance:
-              * 1-2 cores: Highest efficiency per core, good for small models
-              * 3-8 cores: Good balance for most models
-              * >8 cores: May have diminishing returns due to overhead
+                * 1-2 cores: Highest efficiency per core, good for small models
+                * 3-8 cores: Good balance for most models
+                * >8 cores: May have diminishing returns due to overhead
             - This function updates the RAS object's dataframes (plan_df, geom_df, etc.) after execution.
             - When skip_existing=True with dest_folder, the check happens AFTER copying to destination.
             - Verification is version-aware: modern plans inspect HDF completion;
-              legacy plans require a fresh ``.O##`` and inspect available stored
-              messages for errors.
+                legacy plans require a fresh ``.O##`` and inspect available stored
+                messages for errors.
             - Execution failures are returned as
-              ``ComputeResult(success=False)`` with structured failure evidence.
+                ``ComputeResult(success=False)`` with structured failure evidence.
             - Actual runs permanently remove the opposing result family and
-              stale compute-message sidecars before launch, then remove any
-              opposing result recreated by HEC-RAS after completion. Skipped
-              runs do not mutate execution artifacts.
+                stale compute-message sidecars before launch, then remove any
+                opposing result recreated by HEC-RAS after completion. Skipped
+                runs do not mutate execution artifacts.
             - Exact-plan cancellation and final evidence collection happen
-              after the engine deadline when necessary, so wall-clock return
-              time can exceed ``max_runtime`` while ras-commander proves a
-              safe terminal state.
+                after the engine deadline when necessary, so wall-clock return
+                time can exceed ``max_runtime`` while ras-commander proves a
+                safe terminal state.
         """
+        if type(disable_omp_affinity) is not bool:
+            raise TypeError("disable_omp_affinity must be a bool")
+        _require_process_supervision("RasCmdr.compute_plan()")
         max_runtime_seconds = RasCmdr._normalize_max_runtime(max_runtime)
         _success = False
         _results_df_row = None
@@ -3174,6 +3272,8 @@ class RasCmdr:
             "artifact_finalization_cleanup": None,
             "artifact_finalization_failure": None,
         }
+        if disable_omp_affinity:
+            _execution_details["openmp_environment_overrides"] = {"KMP_AFFINITY": "disabled"}
         _compute_env = None
         _wmic_compat_dir = None
         try:
@@ -3225,8 +3325,17 @@ class RasCmdr:
                     logger.info("Copied project folder to destination: %s", dest_folder.name)
                     logger.debug(f"Copied project folder to destination path: {dest_folder}")
 
+                    # Re-initialize against the copy of the SAME project. A
+                    # folder search would pick an arbitrary .prj when the
+                    # project folder holds several projects.
                     compute_ras = RasPrj()
-                    compute_ras.initialize(dest_folder, ras_obj.ras_exe_path)
+                    compute_ras.initialize(
+                        dest_folder,
+                        ras_obj.ras_exe_path,
+                        **_copied_prj_init_kwargs(
+                            dest_folder, ras_obj.prj_file
+                        ),
+                    )
                     compute_prj_path = compute_ras.prj_file
             if dest_folder is None:
                 compute_ras = ras_obj
@@ -3317,6 +3426,13 @@ class RasCmdr:
 
             # Plan-file execution settings are mutations. Apply them only
             # after every skip path has committed to an actual run.
+            # Gate version-limited HDF labels on the engine that will run when
+            # it is newer than the plan's declared Program Version.
+            hdf_target_version = None
+            if hdf_additional_variables or hdf_output_variables:
+                hdf_target_version = RasPlan._engine_hdf_target_version(
+                    compute_plan_path, getattr(compute_ras, "ras_exe_path", None)
+                )
             if use_optimal_hdf_settings or hdf_output_profile:
                 profile_to_apply = hdf_output_profile or hdf_settings_profile
                 variables_to_apply = hdf_additional_variables or hdf_output_variables
@@ -3324,7 +3440,8 @@ class RasCmdr:
                     compute_plan_path,
                     profile=profile_to_apply,
                     additional_variables=variables_to_apply,
-                    ras_object=compute_ras
+                    ras_object=compute_ras,
+                    target_ras_version=hdf_target_version,
                 )
                 if hdf_settings_success:
                     logger.info(
@@ -3351,7 +3468,8 @@ class RasCmdr:
                     compute_plan_path,
                     hdf_output_variables,
                     enabled=True,
-                    ras_object=compute_ras
+                    ras_object=compute_ras,
+                    target_ras_version=hdf_target_version,
                 )
 
             # Always enable Write Detailed= 1 to ensure .computeMsgs.txt is written
@@ -3445,6 +3563,11 @@ class RasCmdr:
             _compute_env, _wmic_compat_dir = RasCmdr._legacy_wmic_subprocess_env(
                 compute_ras
             )
+            _compute_env = RasCmdr._openmp_subprocess_env(
+                _compute_env, disable_omp_affinity
+            )
+            if disable_omp_affinity:
+                logger.info("Disabling Intel OpenMP affinity interfaces for this engine tree")
 
             # Per-plan stdio log. HEC-RAS stdout/stderr are redirected to this file
             # rather than a PIPE to avoid an inherited-pipe deadlock (CLB-880): with
@@ -4284,6 +4407,8 @@ class RasCmdr:
                 If None, results are consolidated back to the original project folder.
                 If string, creates folder in the project's parent directory.
                 If Path, uses the exact path provided.
+                Worker folders and the destination are re-initialized against the source
+                project's .prj file name, so multi-project folders stay on the same project.
             overwrite_dest (bool): Whether to overwrite existing destination folder.
                 Set to True to replace an existing destination folder with the same name.
             skip_existing (bool): If True, skip computation for plans whose
@@ -4337,46 +4462,47 @@ class RasCmdr:
 
         Notes:
             - Worker Assignment: Plans are assigned to workers in a round-robin fashion.
-              For example, with 3 workers and 5 plans, assignment would be:
-              Worker 1: Plans 1 & 4, Worker 2: Plans 2 & 5, Worker 3: Plan 3.
+                For example, with 3 workers and 5 plans, assignment would be:
+                Worker 1: Plans 1 & 4, Worker 2: Plans 2 & 5, Worker 3: Plan 3.
 
             - Resource Management: Each HEC-RAS instance (worker) typically requires:
-              * 2-4 GB of RAM
-              * 2-4 cores for optimal performance
+                * 2-4 GB of RAM
+                * 2-4 cores for optimal performance
 
             - When to use parallel vs. sequential:
-              * Parallel: For independent plans, faster overall completion
-              * Sequential: For dependent plans, consistent resource usage, easier debugging
+                * Parallel: For independent plans, faster overall completion
+                * Sequential: For dependent plans, consistent resource usage, easier debugging
 
             - The function creates worker folders during execution and consolidates results
-              to the destination folder upon completion.
+                to the destination folder upon completion.
 
             - Promotion is an all-or-none safety gate for the successful
-              candidate plans. Before copying any plan or shared geometry
-              artifact, ras-commander holds a cooperative destination lock and
-              requires a complete, globally empty strict HEC-RAS process
-              inventory. A refusal marks every candidate unsuccessful and
-              retains each computed worker folder; its exact recovery path and
-              gate evidence are recorded in ``execution_details_by_plan``.
-              The lock coordinates ras-commander promotions, but an external
-              GUI or process can still start after the inventory snapshot. Do
-              not run HEC-RAS manually against the destination during
-              promotion.
+                candidate plans. Before copying any plan or shared geometry
+                artifact, ras-commander holds a cooperative destination lock and
+                requires a complete, globally empty strict HEC-RAS process
+                inventory. A refusal marks every candidate unsuccessful and
+                retains each computed worker folder; its exact recovery path and
+                gate evidence are recorded in ``execution_details_by_plan``.
+                The lock coordinates ras-commander promotions, but an external
+                GUI or process can still start after the inventory snapshot. Do
+                not run HEC-RAS manually against the destination during
+                promotion.
 
             - Missing worker results, rejected/failed artifact copies, and
-              finalization errors also retain the affected worker folder and
-              mark unpromoted plans unsuccessful with exact failure evidence.
-              Supporting artifacts are copied before the primary result. If a
-              later step fails, ``promotion_failure`` records whether partial
-              promotion is possible and lists every copied destination path.
+                finalization errors also retain the affected worker folder and
+                mark unpromoted plans unsuccessful with exact failure evidence.
+                Supporting artifacts are copied before the primary result. If a
+                later step fails, ``promotion_failure`` records whether partial
+                promotion is possible and lists every copied destination path.
 
             - This function updates the RAS object's dataframes (plan_df, geom_df, etc.) after execution.
 
             - skip_existing checks the SOURCE folder before creating workers. Plans with existing
-              results are not assigned to workers at all.
+                results are not assigned to workers at all.
 
             - verify is passed through to compute_plan() for each worker execution.
         """
+        _require_process_supervision("RasCmdr.compute_parallel()")
         execution_results: Dict[str, bool] = {}
         execution_details_by_plan: Dict[str, Dict[str, Any]] = {}
         filtered_plan_numbers: List[str] = []
@@ -4500,8 +4626,11 @@ class RasCmdr:
 
                 try:
                     worker_ras = RasPrj()
+                    worker_prj = _matching_copied_prj_file(
+                        worker_folder, ras_obj.prj_file
+                    )
                     worker_ras_object = init_ras_project(
-                        ras_project_folder=worker_folder,
+                        ras_project_folder=worker_prj or worker_folder,
                         ras_version=ras_obj.ras_exe_path,
                         ras_object=worker_ras,
                         hide_intro=True,
@@ -5010,7 +5139,13 @@ class RasCmdr:
             # This ensures results_df reflects results in the destination folder
             if dest_folder is not None:
                 try:
-                    ras_obj.initialize(final_dest_folder, ras_obj.ras_exe_path)
+                    ras_obj.initialize(
+                        final_dest_folder,
+                        ras_obj.ras_exe_path,
+                        **_copied_prj_init_kwargs(
+                            final_dest_folder, ras_obj.prj_file
+                        ),
+                    )
                     logger.info("Re-initialized ras_object from destination folder: %s", final_dest_folder.name)
                     logger.debug(f"Re-initialized ras_object from destination path: {final_dest_folder}")
                 except Exception as e:
@@ -5197,39 +5332,39 @@ class RasCmdr:
 
         Notes:
             - This function was created to replicate the original HEC-RAS command line -test flag,
-              which does not work in recent versions of HEC-RAS.
+                which does not work in recent versions of HEC-RAS.
 
             - Key differences from other compute functions:
-              * compute_plan: Runs a single plan, with option for destination folder
-              * compute_parallel: Runs multiple plans simultaneously in worker folders
-              * compute_test_mode: Runs multiple plans sequentially in a single test folder
+                * compute_plan: Runs a single plan, with option for destination folder
+                * compute_parallel: Runs multiple plans simultaneously in worker folders
+                * compute_test_mode: Runs multiple plans sequentially in a single test folder
 
             - Use cases:
-              * Running plans in a specific order
-              * Ensuring consistent resource usage
-              * Easier debugging (one plan at a time)
-              * Isolated test environment
+                * Running plans in a specific order
+                * Ensuring consistent resource usage
+                * Easier debugging (one plan at a time)
+                * Isolated test environment
 
             - Performance considerations:
-              * Sequential execution is generally slower overall than parallel execution
-              * Each plan gets consistent resource usage
-              * Execution time scales linearly with the number of plans
+                * Sequential execution is generally slower overall than parallel execution
+                * Each plan gets consistent resource usage
+                * Execution time scales linearly with the number of plans
 
             - Promotion is all-or-none for the successful candidate plans.
-              Before copying any plan or shared geometry artifact,
-              ras-commander holds a cooperative destination lock and requires
-              a complete, globally empty strict HEC-RAS process inventory. A
-              refusal marks every candidate unsuccessful and retains the test
-              folder; its exact recovery path and gate evidence are recorded
-              in ``execution_details_by_plan``. The lock coordinates
-              ras-commander promotions, but cannot close the race with a
-              manually launched HEC-RAS GUI/process after the process scan.
+                Before copying any plan or shared geometry artifact,
+                ras-commander holds a cooperative destination lock and requires
+                a complete, globally empty strict HEC-RAS process inventory. A
+                refusal marks every candidate unsuccessful and retains the test
+                folder; its exact recovery path and gate evidence are recorded
+                in ``execution_details_by_plan``. The lock coordinates
+                ras-commander promotions, but cannot close the race with a
+                manually launched HEC-RAS GUI/process after the process scan.
 
             - Missing results, rejected/failed copies, and finalization errors
-              retain the test folder and record its exact path plus structured
-              failure evidence. Supporting artifacts are copied before the
-              primary result; any already copied paths are reported when a
-              later failure makes partial promotion possible.
+                retain the test folder and record its exact path plus structured
+                failure evidence. Supporting artifacts are copied before the
+                primary result; any already copied paths are reported when a
+                later failure makes partial promotion possible.
 
             - This function updates the RAS object's dataframes (plan_df, geom_df, etc.) after execution.
 
@@ -5237,6 +5372,7 @@ class RasCmdr:
 
             - verify is passed through to compute_plan() for each plan execution.
         """
+        _require_process_supervision("RasCmdr.compute_test_mode()")
         promotion_lock_lease: Optional[Dict[str, Any]] = None
         try:
             ras_obj = ras_object or ras
@@ -5277,7 +5413,13 @@ class RasCmdr:
 
             try:
                 compute_ras = RasPrj()
-                compute_ras.initialize(compute_folder, ras_obj.ras_exe_path)
+                compute_ras.initialize(
+                    compute_folder,
+                    ras_obj.ras_exe_path,
+                    **_copied_prj_init_kwargs(
+                        compute_folder, ras_obj.prj_file
+                    ),
+                )
                 compute_prj_path = compute_ras.prj_file
                 execution_result_format = infer_execution_result_format(
                     compute_ras
@@ -5707,17 +5849,35 @@ class RasCmdr:
             - {project}.p{plan_num}.tmp.hdf — preprocessed plan HDF
             - {project}.b{plan_num} — boundary conditions file
             - {project}.x{geom_num} — cross-section preprocessor file
-            - {project}.c{geom_num} — computed-geometry file (5.0.7 layout only)
+            - {project}.c{geom_num} — non-empty computed-geometry file
+              (releases before 6.3.1 only; see "Solver argument convention")
 
-        Supported native Linux install layouts (auto-detected from ``ras_exe_dir``):
+        Supported native Linux install (library) layouts, auto-detected from
+        ``ras_exe_dir``:
 
-        * **canonical (6.3.1-7.0)** — ``RasUnsteady`` at the install root with a
-          sibling ``libs/`` tree (``libs/``, ``libs/mkl/``, ``libs/rhel_8/``).
-          Invoked as ``RasUnsteady {proj}.p{plan}.tmp.hdf x{geom}``.
+        * **canonical (6.1, 6.3.1-7.x)** — ``RasUnsteady`` in ``ras_exe_dir`` with a
+          ``libs/`` tree (``libs/``, ``libs/mkl/``, ``libs/rhel_8/``) beside it, in
+          its parent, or — for HEC's 6.1 ``RAS_Linux_test_setup/Ras_v61/Release``
+          layout — two levels up. When both ``libs/rhel_8`` and ``libs/centos_7``
+          exist only ``rhel_8`` is used, matching HEC's ``run_unsteady.sh``.
         * **bin_ras (5.0.7)** — ``bin_ras/rasUnsteady64`` with libraries colocated
-          in ``bin_ras/`` (no ``libs/`` tree). Invoked as
-          ``rasUnsteady64 {proj}.c{geom} b{plan}`` and additionally requires the
-          ``.c{geom}`` computed-geometry file. (CLB-886)
+          in ``bin_ras/`` (no ``libs/`` tree). (CLB-886)
+
+        Solver argument convention (independent of the library layout), selected
+        from the plan ``*.tmp.hdf`` root ``File Version`` attribute (e.g.
+        ``'HEC-RAS 6.1 ...'``), falling back to the install layout (``bin_ras`` →
+        ``cfile``, otherwise ``tmphdf``) when the attribute is absent or unreadable:
+
+        * **cfile** — releases before 6.3.1 (5.0.7, 6.1; 6.2/6.3 are treated the
+          same): ``<engine> {proj}.c{geom} b{plan}`` with cwd = project folder.
+          The non-empty ``.c{geom}`` file is required, and the compiled-HDF core
+          attributes are not rewritten (``OMP_NUM_THREADS``/``MKL_NUM_THREADS``
+          still carry ``num_cores``).
+        * **tmphdf** — 6.3.1 and later: ``RasUnsteady {proj}.p{plan}.tmp.hdf x{geom}``.
+
+        A ``bin_ras`` (5.0.7) engine refuses a tmp.hdf whose File Version is 6.3.1
+        or later. Both conventions write results into the tmp.hdf, which is then
+        promoted to ``{proj}.p{plan}.hdf``.
 
         Detection and binary resolution mirror
         :meth:`RasUtils._scan_native_linux_ras` (root ``RasUnsteady`` →
@@ -5743,12 +5903,15 @@ class RasCmdr:
         Args:
             plan_number (Union[str, Number]): Plan number to execute (e.g., "01").
             ras_exe_dir (Union[str, Path]): HEC-RAS Linux install directory. For the
-                canonical layout this holds ``RasUnsteady`` + ``libs/``; for the
+                canonical layout this holds ``RasUnsteady`` (with ``libs/`` beside it,
+                in its parent, or two levels up for HEC's 6.1 distribution); for the
                 5.0.7 layout it holds ``bin_ras/rasUnsteady64`` + its libraries.
-            ras_object: Optional RAS project object. If None, uses global ras.
+            ras_object (RasPrj, optional): Optional RAS project object. If None, uses global ras.
             timeout_sec (int): Maximum execution time in seconds (default 14400 = 4 hours).
             dos2unix (bool): Convert CRLF→LF in text files before execution (default True).
-            num_cores (int, optional): Number of cores. If specified, updates plan file.
+            num_cores (int, optional): Number of cores. If specified, updates the
+                plan file, sets OMP/MKL threads and, for 6.3.1+ (``tmphdf``) releases,
+                the compiled ``*.tmp.hdf`` core attributes.
             retry (bool): Retry once on failure after retry_delay_sec (default True).
             retry_delay_sec (int): Seconds to wait before retry (default 30).
 
@@ -5756,7 +5919,9 @@ class RasCmdr:
             ComputeResult: Result object with success bool and results_df_row.
 
         Raises:
-            FileNotFoundError: If RasUnsteady binary, .tmp.hdf, .b, or .x files not found.
+            FileNotFoundError: If the RasUnsteady binary, .tmp.hdf, .b, or .x files
+                are missing, or (pre-6.3.1 releases) the .c file is missing or empty.
+            ValueError: If a ``bin_ras`` (5.0.7) engine is given a 6.3.1+ tmp.hdf.
 
         Example:
             >>> # Phase 1: Preprocess on Windows (generates .tmp.hdf, .b, .x)
@@ -5844,10 +6009,20 @@ class RasCmdr:
         tmp_hdf = project_dir / f"{project_name}.p{plan_num_str}.tmp.hdf"
         b_file = project_dir / f"{project_name}.b{plan_num_str}"
         x_file = project_dir / f"{project_name}.x{geom_num}"
-        # 5.0.7 (bin_ras/rasUnsteady64) additionally consumes the computed-geometry
-        # ".c{geom}" binary file and is invoked as `rasUnsteady64 {proj}.c{geom} b{plan}`
-        # rather than the 6.x/7.0 `RasUnsteady {tmp.hdf} x{geom}` convention (CLB-886).
+        # Releases before 6.3.1 (5.0.7, 6.1) consume the computed-geometry ".c{geom}"
+        # binary file and are invoked as `<engine> {proj}.c{geom} b{plan}` rather than
+        # the 6.3.1+ `RasUnsteady {tmp.hdf} x{geom}` convention (CLB-886). The
+        # convention follows the release that wrote the tmp.hdf, not the lib layout.
         c_file = project_dir / f"{project_name}.c{geom_num}"
+        solver_arguments, solver_arguments_source = RasCmdr._select_linux_solver_arguments(
+            tmp_hdf, layout
+        )
+        logger.info(
+            "Plan %s: native solver argument convention %r (from %s)",
+            plan_num_str,
+            solver_arguments,
+            solver_arguments_source,
+        )
 
         missing = []
         if not tmp_hdf.exists():
@@ -5856,12 +6031,16 @@ class RasCmdr:
             missing.append(f".b{plan_num_str}")
         if not x_file.exists():
             missing.append(f".x{geom_num}")
-        if layout["needs_c_file"] and not c_file.exists():
-            missing.append(f".c{geom_num}")
+        if solver_arguments == "cfile":
+            if not c_file.exists():
+                missing.append(f".c{geom_num}")
+            elif c_file.stat().st_size == 0:
+                missing.append(f".c{geom_num} (empty)")
 
         if missing:
             raise FileNotFoundError(
-                f"Missing prerequisite files for Linux execution ({layout['label']} layout): "
+                f"Missing prerequisite files for Linux execution ({layout['label']} layout, "
+                f"{solver_arguments} solver arguments): "
                 f"{', '.join(missing)}. "
                 f"Run RasPreprocess.preprocess_plan() on Windows first (Phase 1). "
                 f"See examples/510_linux_execution.ipynb for the complete workflow."
@@ -5880,7 +6059,9 @@ class RasCmdr:
                     ras_object=ras_obj,
                 )
                 hdf_core_evidence = None
-                if not layout["needs_c_file"]:
+                # Pre-6.3.1 (cfile) releases are not known to carry the compiled-HDF
+                # core attributes; their threads come from OMP/MKL_NUM_THREADS only.
+                if solver_arguments == "tmphdf":
                     hdf_core_evidence = RasCmdr._set_linux_hdf_num_cores(
                         tmp_hdf,
                         effective_num_cores,
@@ -5916,6 +6097,7 @@ class RasCmdr:
                 retry=retry,
                 retry_delay_sec=retry_delay_sec,
                 ras_obj=ras_obj,
+                solver_arguments=solver_arguments,
             )
 
         # Build LD_LIBRARY_PATH — auto-detect library locations per layout:
@@ -5985,10 +6167,11 @@ class RasCmdr:
 
             try:
                 start_time = time.time()
-                # Argument convention differs by layout (CLB-886):
-                #   5.0.7:    rasUnsteady64 {proj}.c{geom} b{plan}   (cwd-relative basenames)
-                #   6.x/7.0:  RasUnsteady   {proj}.p{plan}.tmp.hdf x{geom}
-                if layout["needs_c_file"]:
+                # Argument convention differs by release (CLB-886):
+                #   cfile  (<6.3.1, e.g. 5.0.7, 6.1): <engine> {proj}.c{geom} b{plan}
+                #                                     (cwd-relative basenames)
+                #   tmphdf (6.3.1+):                  RasUnsteady {proj}.p{plan}.tmp.hdf x{geom}
+                if solver_arguments == "cfile":
                     ras_args = [c_file.name, f"b{plan_num_str}"]
                 else:
                     ras_args = [str(tmp_hdf), f"x{geom_num}"]
@@ -6156,6 +6339,97 @@ class RasCmdr:
             "label": "canonical",
         }
 
+    # Native Linux solver argument conventions (independent of the library layout).
+    LINUX_SOLVER_ARGUMENTS = ("cfile", "tmphdf")
+    # First release invoked as ``RasUnsteady <proj>.p##.tmp.hdf x##``.
+    _LINUX_TMPHDF_FIRST_RELEASE = (6, 3, 1)
+
+    @staticmethod
+    def _ras_release_tuple(value: Any) -> Optional[tuple]:
+        """Parse a HEC-RAS release into ``(major, minor, patch)``.
+
+        Accepts a version/folder name (``'6.1'``, ``'6.3.1'``, ``'7.0.1'``,
+        ``'6.7 Beta 5'``) or a ``File Version`` attribute value
+        (``'HEC-RAS 5.0.7 March 2019'``, ``b'HEC-RAS 6.6 September 2024'``).
+        Returns ``None`` when no release can be parsed.
+        """
+        if isinstance(value, (bytes, bytearray)):
+            value = bytes(value).decode("utf-8", "replace")
+        if not isinstance(value, str):
+            try:
+                import numpy as np
+
+                arr = np.asarray(value)
+                if arr.shape == () or arr.size == 1:
+                    return RasCmdr._ras_release_tuple(arr.reshape(-1)[0].item())
+            except Exception:
+                pass
+            return None
+        text = value.replace("\x00", "").strip()
+        match = re.search(r"hec-ras\s+(\d+)\.(\d+)(?:\.(\d+))?", text, re.IGNORECASE)
+        if match is None:
+            match = re.match(r"(\d+)\.(\d+)(?:\.(\d+))?(?![\d.])", text)
+        if match is None:
+            return None
+        return tuple(int(group or 0) for group in match.groups())
+
+    @staticmethod
+    def _linux_solver_arguments_for_release(release: Any) -> Optional[str]:
+        """Return ``'cfile'`` for releases before 6.3.1, ``'tmphdf'`` otherwise.
+
+        ``release`` may be anything :meth:`_ras_release_tuple` accepts (or such a
+        tuple). 5.0.7 and 6.1 are verified ``cfile`` releases; 6.2/6.3 are treated
+        the same (no HEC Linux builds of those are known). Returns ``None`` when
+        the release cannot be parsed.
+        """
+        parsed = release if isinstance(release, tuple) else RasCmdr._ras_release_tuple(release)
+        if not parsed:
+            return None
+        padded = (tuple(parsed) + (0, 0, 0))[:3]
+        return "cfile" if padded < RasCmdr._LINUX_TMPHDF_FIRST_RELEASE else "tmphdf"
+
+    @staticmethod
+    def _tmp_hdf_ras_release(tmp_hdf: Union[str, Path]) -> Optional[tuple]:
+        """Read the release from a plan HDF root ``File Version``; ``None`` if unknown."""
+        try:
+            import h5py
+
+            with h5py.File(str(tmp_hdf), "r", locking=False) as hdf:
+                return RasCmdr._ras_release_tuple(hdf.attrs.get("File Version"))
+        except Exception:
+            return None
+
+    @staticmethod
+    def _select_linux_solver_arguments(tmp_hdf: Union[str, Path], layout: dict) -> tuple:
+        """Choose the native solver argument convention for one plan.
+
+        The tmp.hdf ``File Version`` release wins; when it is absent or unreadable
+        the install layout decides (``bin_ras`` → ``cfile``, else ``tmphdf``).
+
+        Returns:
+            tuple[str, str]: ``(convention, source)`` where ``source`` describes
+            the evidence used.
+
+        Raises:
+            ValueError: If a ``bin_ras`` (HEC-RAS 5.0.7) engine would be given a
+                6.3.1+ tmp.hdf, which it cannot run.
+        """
+        release = RasCmdr._tmp_hdf_ras_release(tmp_hdf)
+        from_release = RasCmdr._linux_solver_arguments_for_release(release)
+        if from_release is not None:
+            if layout.get("needs_c_file") and from_release != "cfile":
+                raise ValueError(
+                    f"{Path(tmp_hdf).name} was written by HEC-RAS "
+                    f"{'.'.join(str(part) for part in release)}, but the "
+                    f"{layout.get('label', 'bin_ras')} engine runs only HEC-RAS 5.0.7 "
+                    "plans; use a matching HEC-RAS Linux install"
+                )
+            return from_release, (
+                "tmp.hdf File Version " + ".".join(str(part) for part in release)
+            )
+        fallback = "cfile" if layout.get("needs_c_file") else "tmphdf"
+        return fallback, f"{layout.get('label', 'install')} layout (no File Version)"
+
     @staticmethod
     def _effective_linux_core_count(requested_cores: int) -> int:
         """Cap a requested solver core count to the process affinity envelope."""
@@ -6248,14 +6522,22 @@ class RasCmdr:
                 ld_path_parts.append(str(d))
         if ld_path_parts:
             return ":".join(ld_path_parts)
-        # Canonical: auto-detect a libs/ tree next to the binary.
+        # Canonical: auto-detect a libs/ tree next to the binary, in its parent,
+        # or two levels up (HEC's 6.1 RAS_Linux_test_setup/Ras_v61/Release layout).
         lib_base = ras_exe_dir / "libs"
         if not lib_base.exists():
             lib_base = ras_exe_dir.parent / "libs"
+        if not lib_base.exists() and (ras_exe_dir.parent.parent / "libs").exists():
+            lib_base = ras_exe_dir.parent.parent / "libs"
         if lib_base.exists():
             ld_path_parts.append(str(lib_base))
+            # 6.1 ships both rhel_8 and centos_7 variants of the same libraries;
+            # HEC's run_unsteady.sh uses libs:libs/mkl:libs/rhel_8 only.
+            skip_centos_7 = (lib_base / "rhel_8").is_dir()
             for subdir in sorted(lib_base.iterdir()):
                 if subdir.is_dir():
+                    if skip_centos_7 and subdir.name == "centos_7":
+                        continue
                     ld_path_parts.append(str(subdir))
                     logger.debug(f"Added library path: {subdir}")
         else:
@@ -6358,7 +6640,7 @@ class RasCmdr:
             plan_number: Plan number whose ``.tmp.hdf`` to preprocess (e.g. "04").
             ras_exe_dir: Directory containing the ``RasGeomPreprocess`` binary and
                 sibling ``libs/`` directory (e.g. ``/opt/hecras/6.6``).
-            ras_object: Optional RAS project object. If None, uses global ``ras``.
+            ras_object (RasPrj, optional): Optional RAS project object. If None, uses global ``ras``.
             timeout_sec: Maximum preprocessing time in seconds (default 7200).
             dos2unix: Convert CRLF->LF in text files first (default True).
 
@@ -7044,8 +7326,19 @@ printf '__RAS_COMMANDER_WSL_RECOVERY__ status=%s term=%s kill=%s pid=%s start=%s
         retry: bool,
         retry_delay_sec: int,
         ras_obj,
+        solver_arguments: str = "tmphdf",
     ) -> 'ComputeResult':
-        """Run native Linux RasUnsteady from a Windows Python session via WSL."""
+        """Run native Linux RasUnsteady from a Windows Python session via WSL.
+
+        ``solver_arguments`` is the release convention chosen by
+        :meth:`compute_plan_linux`: ``'tmphdf'`` (6.3.1+, default) runs
+        ``RasUnsteady <tmp.hdf> x<geom>``; ``'cfile'`` (pre-6.3.1, e.g. 6.1) runs
+        ``RasUnsteady <proj>.c<geom> b<plan>`` from the project folder.
+        """
+        if solver_arguments not in RasCmdr.LINUX_SOLVER_ARGUMENTS:
+            raise ValueError(
+                f"solver_arguments must be one of {list(RasCmdr.LINUX_SOLVER_ARGUMENTS)}"
+            )
         state_path = project_dir / (
             f".{project_name}.p{plan_number}.ras-commander-wsl.identity"
         )
@@ -7160,9 +7453,14 @@ printf '__RAS_COMMANDER_WSL_RECOVERY__ status=%s term=%s kill=%s pid=%s start=%s
         project_name_q = shlex.quote(project_name)
         ras_exe_q = shlex.quote(ras_exe)
         ras_exe_dir_q = shlex.quote(ras_exe_dir)
-        tmp_hdf_q = shlex.quote(tmp_hdf_wsl)
+        if solver_arguments == "cfile":
+            # Pre-6.3.1: cwd-relative computed geometry and boundary tokens.
+            tmp_hdf_q = shlex.quote(f"{project_name}.c{geom_num}")
+            geom_arg_q = shlex.quote(f"b{plan_number}")
+        else:
+            tmp_hdf_q = shlex.quote(tmp_hdf_wsl)
+            geom_arg_q = shlex.quote(f"x{geom_num}")
         log_path_q = shlex.quote(log_path_wsl)
-        geom_arg_q = shlex.quote(f"x{geom_num}")
         state_file_q = shlex.quote(state_path.name)
         lease_token_q = shlex.quote(str(wsl_plan_lease["token"]))
 

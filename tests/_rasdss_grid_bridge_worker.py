@@ -171,7 +171,24 @@ def _run_exact_path_error(
         RasDss.read_grid(dss_file, written[0].replace("PRECIP", "TEMPERATURE"))
 
 
+def _run_midnight_exact_path(output_dir, _autoclass, _cast):
+    path = output_dir / "midnight.dss"
+    values = np.array([[[1.25, np.nan], [3.5, 4.75]]], dtype=np.float32)
+    written = RasDss.write_grid_timeseries(
+        path, "/SHG/TEST/PRECIP///MIDNIGHT/", values,
+        pd.date_range("2000-01-01 23:00", periods=2, freq="h"),
+        {"cellsize": 2000, "crs": "SHG", "units": "MM", "compression": "ZLIB"},
+        dss_version=7,
+    )
+    assert written == ["/SHG/TEST/PRECIP/01JAN2000:2300/01JAN2000:2400/MIDNIGHT/"]
+    assert written[0] in RasDss.get_catalog(path).pathname.tolist()
+    result = RasDss.read_grid(path, written[0])
+    assert result['end_time'] == pd.Timestamp('2000-01-02')
+    np.testing.assert_array_equal(result['data'], values[0])
+
+
 SCENARIOS = {
+    "midnight_exact_path": _run_midnight_exact_path,
     "shg_round_trip": _run_shg_round_trip,
     "specified_grid_round_trip": _run_specified_grid_round_trip,
     "exact_path_error": _run_exact_path_error,

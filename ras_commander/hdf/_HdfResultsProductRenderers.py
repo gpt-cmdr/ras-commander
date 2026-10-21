@@ -40,7 +40,9 @@ class _ProductRenderers:
     def maximum_velocity_points(source: Path, inspection: dict[str, Any]):
         import geopandas as gpd
 
-        points = HdfMesh.get_mesh_cell_points(source)
+        # Ghost cells outside the perimeter carry no solution; only physical
+        # cells (the first ``Cell Count`` entries) are rendered.
+        points = HdfMesh.get_mesh_cell_points(source, include_ghost_cells=False)
         if points.empty or points.crs is None:
             raise ValueError("Result HDF produced no CRS-aware mesh cell points")
 
@@ -90,8 +92,11 @@ class _ProductRenderers:
                         f"'{mesh_name}'"
                     )
 
-                maximum_cell = np.full(cell_count, np.nan, dtype=np.float32)
-                for cell_id, (start, count) in enumerate(cell_face_info):
+                physical_count = int(mesh.get("declared_cell_count", cell_count))
+                maximum_cell = np.full(physical_count, np.nan, dtype=np.float32)
+                for cell_id, (start, count) in enumerate(
+                    cell_face_info[:physical_count]
+                ):
                     face_ids = cell_face_ids[start : start + count]
                     face_values = maximum_face[face_ids]
                     finite = face_values[np.isfinite(face_values)]
@@ -102,9 +107,9 @@ class _ProductRenderers:
                     points["mesh_name"] == mesh_name,
                     ["mesh_name", "cell_id", "geometry"],
                 ].sort_values("cell_id")
-                if len(mesh_points) != cell_count or not np.array_equal(
+                if len(mesh_points) != physical_count or not np.array_equal(
                     mesh_points["cell_id"].to_numpy(dtype=int),
-                    np.arange(cell_count),
+                    np.arange(physical_count),
                 ):
                     raise ValueError(
                         f"Velocity points do not align with mesh '{mesh_name}'"

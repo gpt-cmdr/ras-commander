@@ -1,0 +1,21 @@
+# Toolchain for building a HEC-RAS Wine runtime profile from an empty prefix.
+# Mirrors the Wine stack of ../hecras-wine-precompute/Dockerfile and adds the
+# installer tools (winetricks, cabextract, 7-Zip, msitools).
+ARG PYTHON_IMAGE=python:3.13.15-slim-trixie@sha256:cc9dffa47c8294ba9bb795a8dfaeb7b76f2b30acade2c52a461a2999d127eb00
+FROM ${PYTHON_IMAGE}
+ARG WINE_VERSION=11.0.0.0~trixie-1
+RUN dpkg --add-architecture i386 \
+    && sed -i "s/Components: main/Components: main contrib/" /etc/apt/sources.list.d/debian.sources \
+    && apt-get update \
+    && apt-get install -y --no-install-recommends ca-certificates gnupg wget \
+    && mkdir -p /etc/apt/keyrings \
+    && wget -qO /etc/apt/keyrings/winehq-archive.key https://dl.winehq.org/wine-builds/winehq.key \
+    && wget -qO /etc/apt/sources.list.d/winehq-trixie.sources \
+        https://dl.winehq.org/wine-builds/debian/dists/trixie/winehq-trixie.sources \
+    && apt-get update \
+    && apt-get install -y --no-install-recommends \
+        "winehq-stable=${WINE_VERSION}" winetricks cabextract p7zip-full msitools \
+        xvfb xauth procps tini unzip \
+    && rm -rf /var/lib/apt/lists/* \
+    && dpkg-query -W -f='${binary:Package}\t${Version}\n' | sort > /toolchain-packages.tsv
+CMD ["bash"]

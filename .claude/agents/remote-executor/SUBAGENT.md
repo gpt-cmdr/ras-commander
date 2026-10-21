@@ -1,7 +1,7 @@
 ---
 name: remote-executor
 description: >
-  Remote and distributed HEC-RAS execution via PsExec, Docker, and cloud workers.
+  Remote and distributed HEC-RAS execution via PsExec, local, and Docker workers.
   Handles worker configuration, session management, network shares, and distributed compute.
   **CRITICAL**: HEC-RAS requires session_id=2 (desktop session), NOT system_account.
   Primary sources: ras_commander/remote/AGENTS.md (patterns), examples/500_remote_execution_psexec.ipynb (workflow),
@@ -13,9 +13,9 @@ working_directory: ras_commander/remote
 
 # Remote Executor Subagent
 
-**Purpose**: Guide implementation and troubleshoot distributed HEC-RAS execution across local, remote, and cloud compute resources.
+**Purpose**: Guide implementation and troubleshoot distributed HEC-RAS execution across local and remote compute resources.
 
-**Status**: 3 workers implemented (PsExec, Docker, Local), 5 stubs (SSH, WinRM, Slurm, AWS, Azure)
+**Status**: 3 workers implemented (PsExec, Docker, Local). For Slurm/HPC use `RasSlurm` or `RasApptainer`, not a worker.
 
 ---
 
@@ -116,11 +116,6 @@ results = compute_parallel_remote(
 | **PsexecWorker** | ✓ Implemented | Windows → Windows | Network share + PsExec |
 | **DockerWorker** | ✓ Implemented | Any → Linux | Containers (local/remote via SSH) |
 | **LocalWorker** | ✓ Implemented | Local machine | Parallel baseline, testing |
-| **SshWorker** | Stub | Any → Unix | Direct SSH execution |
-| **WinrmWorker** | Stub | Windows → Windows | Modern Windows remoting |
-| **SlurmWorker** | Stub | Any → HPC | Cluster job scheduler |
-| **AwsEc2Worker** | Stub | Any → Cloud | AWS EC2 instances |
-| **AzureFrWorker** | Stub | Any → Cloud | Azure Functions/Batch |
 
 ---
 
@@ -258,11 +253,6 @@ ras_commander/remote/
 ├── PsexecWorker.py          # ✓ Windows remote (PsExec)
 ├── DockerWorker.py          # ✓ Container execution
 ├── LocalWorker.py           # ✓ Local parallel
-├── SshWorker.py             # Stub
-├── WinrmWorker.py           # Stub
-├── SlurmWorker.py           # Stub
-├── AwsEc2Worker.py          # Stub
-├── AzureFrWorker.py         # Stub
 ├── Execution.py             # compute_parallel_remote()
 ├── Utils.py                 # Shared utilities
 └── AGENTS.md                # ← Implementation guide
@@ -288,30 +278,11 @@ from ras_commander.remote import PsexecWorker  # If needed
 2. Define dataclass extending `RasWorker`
 3. Implement `check_*_dependencies()` if optional deps required
 4. Add `init_*_worker(**kwargs)` factory function
-5. Implement `execute_*_plan()` if not a stub
+5. Implement and test `execute_*_plan()` (do not add stub workers)
 6. Update `RasWorker.py` factory routing
 7. Update `Execution.py` dispatch in `_execute_single_plan()`
 8. Update `__init__.py` exports
 9. Update `setup.py` extras_require for new deps
-
-**Example stub**:
-```python
-# SshWorker.py
-from dataclasses import dataclass
-from .RasWorker import RasWorker
-
-@dataclass
-class SshWorker(RasWorker):
-    hostname: str = ""
-    ssh_key: str = ""
-
-    def __post_init__(self):
-        super().__post_init__()
-        raise NotImplementedError("SSH worker not yet implemented")
-
-def init_ssh_worker(**kwargs) -> SshWorker:
-    return SshWorker(worker_type="ssh", **kwargs)
-```
 
 ---
 
@@ -321,10 +292,6 @@ def init_ssh_worker(**kwargs) -> SshWorker:
 |--------|----------------|----------|
 | PsexecWorker | (none) | Standard library only |
 | DockerWorker | `pip install ras-commander[remote-docker]` | docker, paramiko |
-| SshWorker | `pip install ras-commander[remote-ssh]` | paramiko>=3.0 |
-| WinrmWorker | `pip install ras-commander[remote-winrm]` | pywinrm>=0.4.3 |
-| AwsEc2Worker | `pip install ras-commander[remote-aws]` | boto3>=1.28 |
-| AzureFrWorker | `pip install ras-commander[remote-azure]` | azure-identity, azure-mgmt-compute |
 
 ---
 
@@ -405,7 +372,7 @@ def init_ssh_worker(**kwargs) -> SshWorker:
 - `hecras_compute_remote` -- Remote execution workflow patterns
 
 **Agents** (collaborate with):
-- `hecras-general-agent` -- Coordinator that delegates remote execution to you
+- `ras-commander` -- Coordinator that delegates remote execution to you
 
 **Primary sources**:
 - `ras_commander/remote/AGENTS.md` -- Remote execution architecture

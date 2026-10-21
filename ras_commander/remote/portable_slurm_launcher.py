@@ -2,6 +2,11 @@
 
 This file intentionally has no ras-commander imports. Compute nodes need only
 Python 3, Slurm, and Apptainer; each hydraulic step runs in the pinned SIF.
+
+Every step runs ``apptainer exec --contain --cleanenv`` with three binds: the
+request bundle read-only at ``/job``, its empty output directory writable, and
+a step-private node-scratch directory as ``/tmp``. Wine copies its prefix
+there, so concurrent steps never share host ``/tmp`` or a writable image.
 """
 
 from __future__ import annotations
@@ -9,14 +14,16 @@ from __future__ import annotations
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import hashlib
 import json
+import os
 from pathlib import Path
 import re
 import shutil
 import subprocess
 import sys
+import tempfile
 
 
-LAUNCHER_VERSION = "ras-portable-slurm-launcher/v1"
+LAUNCHER_VERSION = "ras-portable-slurm-launcher/v2"
 SAFE_ID = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,127}\Z")
 SAFE_STEP = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,30}\Z")
 
@@ -73,6 +80,58 @@ def _run_step_process(
                 shutil.move(str(temporary), str(destination))
 
 
+_CREATED_JOB_SCRATCH: set = set()
+
+
+def _job_scratch(site: dict) -> Path:
+    """Return ``<node_scratch_root>/<SLURM_JOB_ID>``, owned by this user.
+
+    Sites whose prolog creates per-job scratch (``/scratch/$SLURM_JOB_ID``)
+    keep a root-owned parent; elsewhere (for example ``/tmp``) the launcher
+    creates it 0700. Either way it must be a real directory owned by the job
+    user, so another user cannot pre-create or redirect it.
+    """
+    configured = Path(site["node_scratch_root"])
+    job = os.environ.get("SLURM_JOB_ID", "")
+    if not configured.is_absolute():
+        raise ValueError("node_scratch_root must be an absolute directory")
+    # Sites may point /scratch elsewhere (clb07-slurm: /scratch -> /projects/scratch).
+    # The per-job directory below must still be a real directory owned by this user.
+    root = configured.resolve()
+    if not root.is_dir():
+        raise ValueError("node_scratch_root must be an existing absolute directory")
+    if not re.fullmatch(r"[0-9]+", job):
+        raise ValueError("SLURM_JOB_ID is required for step scratch")
+    if any("," in part or ":" in part for part in root.parts):
+        raise ValueError("Apptainer bind host paths cannot contain ',' or ':'")
+    job_dir = root / job
+    try:
+        job_dir.mkdir(mode=0o700)
+        _CREATED_JOB_SCRATCH.add(job_dir)
+    except FileExistsError:
+        pass
+    status = os.lstat(job_dir)
+    if not job_dir.is_dir() or job_dir.is_symlink() or status.st_uid != os.getuid():
+        raise ValueError(f"Job scratch {job_dir} must be a directory owned by this user")
+    return job_dir
+
+
+def _step_scratch(site: dict, execution_id: str) -> Path:
+    """Create the step-private node-scratch directory bound as ``/tmp``."""
+    # mkdtemp creates a new 0700 directory with an unpredictable name.
+    return Path(tempfile.mkdtemp(prefix=f"ras-commander-{execution_id}-", dir=_job_scratch(site)))
+
+
+def _remove_created_job_scratch() -> None:
+    """Remove a job scratch directory this launcher created, once it is empty."""
+    for job_dir in tuple(_CREATED_JOB_SCRATCH):
+        try:
+            job_dir.rmdir()
+        except OSError:
+            pass
+        _CREATED_JOB_SCRATCH.discard(job_dir)
+
+
 def _run_step(root: Path, site: dict, step: dict) -> bool:
     execution_id = str(step["execution_id"])
     if not SAFE_ID.fullmatch(execution_id):
@@ -102,6 +161,11 @@ def _run_step(root: Path, site: dict, step: dict) -> bool:
     if any("," in str(path) or ":" in str(path) for path in (bundle, output)):
         raise ValueError("Apptainer bind host paths cannot contain ',' or ':'")
     output.mkdir(parents=True, exist_ok=True)
+    try:
+        scratch = _step_scratch(site, execution_id)
+    except (OSError, ValueError) as exc:
+        _failure(output, "SLURM_STEP_SCRATCH_FAILED", str(exc))
+        return False
     command = [
         site["srun_executable"],
         "--exclusive",
@@ -112,6 +176,7 @@ def _run_step(root: Path, site: dict, step: dict) -> bool:
         f"--job-name={step['step_name']}",
         site["apptainer_executable"],
         "exec",
+        "--contain",
         "--cleanenv",
         "--env",
         "RAS_COMMANDER_RUNTIME_CONTAINER_IDENTITY="
@@ -120,6 +185,8 @@ def _run_step(root: Path, site: dict, step: dict) -> bool:
         f"{bundle}:/job:ro",
         "--bind",
         f"{output}:/job/{output_relative.as_posix()}:rw",
+        "--bind",
+        f"{scratch}:/tmp:rw",
         site["apptainer_image"],
         site["python_executable"],
         "-m",
@@ -144,6 +211,9 @@ def _run_step(root: Path, site: dict, step: dict) -> bool:
     except OSError as exc:
         _failure(output, "SLURM_STEP_LAUNCH_FAILED", str(exc))
         return False
+    finally:
+        # Wine prefixes are large; results and logs are already in ``output``.
+        shutil.rmtree(scratch, ignore_errors=True)
     receipt = output / "execution_receipt.json"
     if completed.returncode != 0 or not receipt.is_file():
         _failure(
@@ -179,7 +249,14 @@ def _validate_step(step: dict) -> None:
         raise ValueError("Invalid step timeout")
 
 
-def run(batch_path: Path) -> bool:
+def run(batch_path: Path, array_index: int | None = None) -> bool:
+    try:
+        return _run_batch(batch_path, array_index)
+    finally:
+        _remove_created_job_scratch()
+
+
+def _run_batch(batch_path: Path, array_index: int | None) -> bool:
     root = batch_path.resolve().parent
     payload = json.loads(batch_path.read_text(encoding="utf-8"))
     if payload.get("launcher", {}).get("version") != LAUNCHER_VERSION:
@@ -195,6 +272,20 @@ def run(batch_path: Path) -> bool:
     except Exception as exc:
         _failure(root, "SLURM_BATCH_STEP_INVALID", str(exc))
         raise
+    if site.get("execution_mode", "pool") == "array":
+        if array_index is None or not 0 <= array_index < len(steps):
+            raise ValueError("Array batch requires a valid --array-index")
+        step = steps[array_index]
+        try:
+            return _run_step(root, site, step)
+        except Exception as exc:
+            output = root / f"bundles/{step['execution_id']}" / _safe_relative(
+                step["output_directory"]
+            )
+            _failure(output, "SLURM_LAUNCHER_EXCEPTION", str(exc))
+            return False
+    if array_index is not None:
+        raise ValueError("--array-index is only valid for array batches")
     results = {}
     with ThreadPoolExecutor(max_workers=int(site["slots_per_node"])) as executor:
         futures = {
@@ -216,12 +307,22 @@ def run(batch_path: Path) -> bool:
 
 
 def main(argv=None) -> int:
-    arguments = sys.argv[1:] if argv is None else argv
+    arguments = list(sys.argv[1:] if argv is None else argv)
+    array_index = None
+    if len(arguments) == 3 and arguments[1] == "--array-index":
+        if not re.fullmatch(r"[0-9]{1,6}", arguments[2]):
+            print("--array-index must be a non-negative integer", file=sys.stderr)
+            return 2
+        array_index = int(arguments.pop(2))
+        arguments.pop(1)
     if len(arguments) != 1:
-        print("usage: portable_slurm_launcher.py BATCH", file=sys.stderr)
+        print(
+            "usage: portable_slurm_launcher.py BATCH [--array-index N]",
+            file=sys.stderr,
+        )
         return 2
     try:
-        return 0 if run(Path(arguments[0])) else 1
+        return 0 if run(Path(arguments[0]), array_index) else 1
     except Exception as exc:
         print(f"Slurm launcher failed: {type(exc).__name__}: {exc}", file=sys.stderr)
         return 2

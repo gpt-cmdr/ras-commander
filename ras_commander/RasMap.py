@@ -93,6 +93,7 @@ from typing import (
     Union,
 )
 
+from ._ras_text import _write_ras_xml
 from .RasPrj import ras
 from .RasPlan import RasPlan
 from .RasUtils import RasUtils
@@ -346,7 +347,7 @@ class RasMap:
 
         Args:
             rasmap_path (Union[str, Path]): Path to the .rasmap file.
-            ras_object: Optional RAS object instance. Retained for API
+            ras_object (RasPrj, optional): Optional RAS object instance. Retained for API
                 compatibility; parsing does not require project state.
 
         Returns:
@@ -660,7 +661,7 @@ class RasMap:
 
         Args:
             ras_project_path: Project folder, .prj file, or .rasmap file.
-            ras_object: Optional RasPrj object. Present for API consistency.
+            ras_object (RasPrj, optional): Optional RasPrj object. Present for API consistency.
 
         Returns:
             DataFrame with one row per LandCoverLayer entry.
@@ -714,6 +715,98 @@ class RasMap:
 
     @staticmethod
     @log_call
+    def remove_terrain_layers(rasmap_path: str | Path) -> list[str]:
+        """Remove all terrain registrations from a cloned Mapper file.
+
+        Mutates only the supplied XML; never deletes HDF/TIFF files or changes
+        geometry-HDF associations. The caller must register its replacement
+        terrain and explicitly associate every geometry before native execution.
+        No units or coordinates are converted.
+
+        Args:
+            rasmap_path: Explicit Mapper XML in a versioned child clone.
+
+        Returns:
+            Names of removed terrain registrations, in document order.
+
+        Raises:
+            xml.etree.ElementTree.ParseError: Malformed Mapper XML.
+        """
+        from ._terrain_registration import remove_terrain_layers
+
+        return remove_terrain_layers(rasmap_path)
+
+    @staticmethod
+    def create_terrain_sampling_map(
+        source_mapper: str | Path, terrain_hdf: str | Path,
+        projection_prj: str | Path, output_mapper: str | Path,
+        geometry_hdf: str | Path | None = None,
+    ) -> str:
+        """Create a new export-only Mapper with one unchanged native terrain layer.
+
+        Resolves a unique terrain basename from source registrations, including
+        stale delivered directory spellings. Reads source files without mutation;
+        writes only the new Mapper. Returns its native terrain name. Grid, CRS,
+        vertical units and modification enable flags remain unchanged.
+        Optional geometry_hdf registers a caller-owned geometry copy for native
+        profile sampling; it defaults to no geometry registration.
+        """
+        from ._terrain_registration import create_terrain_sampling_map
+        return create_terrain_sampling_map(source_mapper, terrain_hdf, projection_prj, output_mapper, geometry_hdf)
+
+    @staticmethod
+    def relocate_rasmap_assets(rasmap_path: str | Path, assets: list[Path]) -> list[dict]:
+        """Rebind uniquely named copied assets relatively in a caller-owned Mapper.
+
+        Mutates only the supplied clone's Filename attributes. Duplicate asset
+        basenames are rejected before writing. Does not alter grids, CRS, native
+        terrain names, result-map parameters or vertical units.
+        """
+        from ._terrain_registration import relocate_rasmap_assets
+        return relocate_rasmap_assets(rasmap_path, assets)
+
+    @staticmethod
+    def audit_terrain_associations(rasmap_path: str | Path, geometry_hdfs: list[Path]) -> dict:
+        """Read terrain, classification, projection and geometry links after relocation.
+
+        Returns pass/hold with every material path, its existence/relative state,
+        and stale result-map terrain names. No files, grids, CRS or units change.
+        Requires a nonempty geometry list; every geometry terrain association
+        must resolve to one registered native terrain HDF.
+        Unrelated display layers and omitted parent result files are outside scope.
+        """
+        from ._terrain_registration import audit_terrain_associations
+        return audit_terrain_associations(rasmap_path, geometry_hdfs)
+
+    @staticmethod
+    @log_call
+    def reassign_result_map_terrains(
+        rasmap_path: str | Path, terrain_names: Dict[str, str]
+    ) -> List[Dict[str, str]]:
+        """Replace named terrain references in a caller-owned Mapper clone.
+
+        Updates result-map ``MapParameters.Terrain`` and calculated-layer
+        ``Terrain.Name`` references using an explicit old-to-new name mapping.
+        Every destination name must already be registered. Other result-map
+        settings, geometry associations, terrain registrations and native HDFs
+        are unchanged. No CRS, units or elevations are transformed.
+
+        Args:
+            rasmap_path: Writable cloned .rasmap file; never pass a source project.
+            terrain_names: Exact, case-sensitive old-to-new terrain names.
+
+        Returns:
+            Change records with plan_name, element, attribute, old_terrain_name
+            and new_terrain_name. Empty when no references need replacement.
+            Writes only the supplied Mapper file, atomically after validation.
+            Use set_geometry_association separately for geometry HDF terrain links.
+        """
+        from ._terrain_registration import reassign_result_map_terrains
+
+        return reassign_result_map_terrains(rasmap_path, terrain_names)
+
+    @staticmethod
+    @log_call
     def list_terrain_layers(
         ras_project_path: Union[str, Path],
         ras_object=None,
@@ -723,7 +816,7 @@ class RasMap:
 
         Args:
             ras_project_path: Project folder, .prj file, or .rasmap file.
-            ras_object: Optional RasPrj object. Present for API consistency.
+            ras_object (RasPrj, optional): Optional RasPrj object. Present for API consistency.
 
         Returns:
             DataFrame with one row per ``Terrains/Layer`` entry.
@@ -831,7 +924,7 @@ class RasMap:
 
         Args:
             layer_hdf_path: Land-cover, soils, or infiltration sidecar HDF.
-            ras_object: Optional RasPrj object. Present for API consistency.
+            ras_object (RasPrj, optional): Optional RasPrj object. Present for API consistency.
 
         Returns:
             GeoDataFrame with ``polygon_index``, ``class_name``, and geometry.
@@ -1152,6 +1245,50 @@ class RasMap:
 
     @staticmethod
     @log_call
+    def clear_geometry_infiltration(geometry_hdf: str | Path) -> Path:
+        """Clear infiltration association metadata on a cloned .gNN.hdf.
+
+        Args:
+            geometry_hdf: Compiled clone geometry path, as str or Path.
+
+        Returns:
+            Path: Resolved edited geometry path. An absent link is a no-op.
+
+        Raises:
+            ValueError: The filename is not .gNN.hdf, or /Geometry is not a
+                directly linked group owned by the supplied HDF.
+            FileNotFoundError: The supplied HDF does not exist.
+            PermissionError: The supplied HDF is not writable, or the current
+                POSIX user cannot preserve its set-ID mode.
+            KeyError: The HDF has no /Geometry object.
+            OSError: Reading, backing up, editing, validating, or cleanup of
+                the HDF fails.
+            RuntimeError: Infiltration attributes remain after editing, or
+                byte restoration fails (the error identifies the backup).
+
+        Notes:
+            Mutates only infiltration filename, layer name and date attributes.
+            Terrain, roughness, CRS and units are unchanged. Rebuild native
+            property tables afterward; existing infiltration tables are stale.
+            A byte-exact sibling backup is flushed before editing in place.
+            Deletion or validation failures restore and flush the original
+            bytes into the same file object. ACLs, owner, mode, hard links and
+            file identity are preserved; the file is never replaced or renamed.
+            An absent association leaves the file byte-identical. The directory
+            must allow backup creation and removal. Use exclusive access.
+            A process crash between editing and restoration leaves a sibling
+            named .<stem>-infiltration-backup-*.hdf.bak for recovery. Restore
+            its bytes into the original file without replacing that file.
+            If restoration itself fails, the backup is retained and its path
+            is reported. This is exception rollback, not crash atomicity.
+            Never call on a delivered source geometry.
+        """
+        from ._geometry_association import clear_geometry_infiltration
+
+        return clear_geometry_infiltration(geometry_hdf)
+
+    @staticmethod
+    @log_call
     def get_geometry_association(
         geom_number: Union[str, Number, Path],
         hecras_dir: Optional[Union[str, Path]] = None,
@@ -1187,7 +1324,7 @@ class RasMap:
         Args:
             geom_number: Optional geometry number to select. When omitted, all
                 project geometries are inspected.
-            ras_object: Optional initialized :class:`RasPrj` instance.
+            ras_object (RasPrj, optional): Optional initialized :class:`RasPrj` instance.
 
         Returns:
             DataFrame described by the ``geometry_associations`` schema.
@@ -1457,6 +1594,12 @@ class RasMap:
 
         Set ``audit_mannings=True`` to require materially diverse, associated
         final Manning values after the native command.
+
+        Modern native computation runs in an isolated process using the
+        selected HEC-RAS installation's bundled HDF5 DLLs, with a 1,800-second
+        timeout. Mutates the supplied geometry HDF in its existing CRS/units;
+        use a disposable model copy. Process success does not replace the
+        complete-geometry/table-pair checks or hydraulic QA.
         """
         ras_project_path = Path(ras_project_path)
         geom_file = Path(geom_file)
@@ -1478,7 +1621,7 @@ class RasMap:
         Get the path to the .rasmap file based on the current project.
 
         Args:
-            ras_object: Optional RAS object instance.
+            ras_object (RasPrj, optional): Optional RAS object instance.
 
         Returns:
             Optional[Path]: Path to the .rasmap file if found, None otherwise.
@@ -1503,7 +1646,7 @@ class RasMap:
         Initialize the rasmap_df as part of project initialization.
 
         Args:
-            ras_object: Optional RAS object instance.
+            ras_object (RasPrj, optional): Optional RAS object instance.
 
         Returns:
             pd.DataFrame: DataFrame containing information from the .rasmap file.
@@ -1589,7 +1732,7 @@ class RasMap:
             as_dataframe: Return a DataFrame when True. When omitted, explicit
                 ``ras_project_path`` calls return a DataFrame and legacy active-project
                 calls return the historical list-of-dicts shape.
-            ras_object: Optional RasPrj object instance.
+            ras_object (RasPrj, optional): Optional RasPrj object instance.
 
         Returns:
             DataFrame with one row per top-level map layer, or legacy
@@ -1836,7 +1979,7 @@ class RasMap:
             replace_existing: Replace an existing reference layer with the same name.
                 Default False preserves the historical append behavior.
             validate_geojson_wgs84: Raise if a GeoJSON source is not WGS84-compatible.
-            ras_object: Optional RasPrj object instance.
+            ras_object (RasPrj, optional): Optional RasPrj object instance.
 
         Returns:
             bool: True if layer was successfully added.
@@ -1901,7 +2044,7 @@ class RasMap:
 
         Args:
             layer_name: Name of the layer to remove.
-            ras_object: Optional RasPrj object instance.
+            ras_object (RasPrj, optional): Optional RasPrj object instance.
 
         Returns:
             bool: True if layer was found and removed, False if not found.
@@ -1937,7 +2080,9 @@ class RasMap:
         for layer in _mlh.top_level_map_layers(root):
             if layer.get("Name") == layer_name:
                 map_layers.remove(layer)
-                tree.write(rasmap_path, encoding="utf-8", xml_declaration=True)
+                _write_ras_xml(
+                    tree, rasmap_path, encoding="utf-8", xml_declaration=True
+                )
                 logger.info("Removed map layer '%s'", layer_name)
                 logger.debug("Updated RASMapper file: %s", rasmap_path)
                 return True
@@ -1952,7 +2097,7 @@ class RasMap:
         List all geometry layers in the RASMapper configuration file.
 
         Args:
-            ras_object: Optional RasPrj object instance.
+            ras_object (RasPrj, optional): Optional RasPrj object instance.
 
         Returns:
             List[Dict[str, Any]]: List of dicts with geometry info:
@@ -2035,7 +2180,7 @@ class RasMap:
             name: Optional target display name. Defaults to the source name.
             checked: Whether the target geometry is visible.
             expanded: Whether the target geometry tree is expanded.
-            ras_object: Optional initialized :class:`RasPrj` instance.
+            ras_object (RasPrj, optional): Optional initialized :class:`RasPrj` instance.
 
         Returns:
             Dict[str, Any]: Registered layer metadata and the ``.rasmap`` path.
@@ -2096,7 +2241,7 @@ class RasMap:
         target_layer.set("Checked", "True" if checked else "False")
         target_layer.set("Expanded", "True" if expanded else "False")
         target_layer.set("Filename", rel_hdf)
-        tree.write(rasmap_path, encoding="utf-8", xml_declaration=False)
+        _write_ras_xml(tree, rasmap_path, encoding="utf-8", xml_declaration=False)
 
         readback = ET.parse(rasmap_path).getroot().find("Geometries")
         registered = None if readback is None else next(
@@ -2141,7 +2286,7 @@ class RasMap:
                 - Geometry number (e.g., "08" or "g08")
                 - Filename pattern (e.g., "g08.hdf")
             visible: True to show geometry, False to hide.
-            ras_object: Optional RasPrj object instance.
+            ras_object (RasPrj, optional): Optional RasPrj object instance.
 
         Returns:
             bool: True if geometry was found and modified.
@@ -2200,7 +2345,7 @@ class RasMap:
                 break
 
         if found:
-            tree.write(rasmap_path, encoding="utf-8", xml_declaration=True)
+            _write_ras_xml(tree, rasmap_path, encoding="utf-8", xml_declaration=True)
             return True
         else:
             logger.warning(f"Geometry '{geom_identifier}' not found in .rasmap")
@@ -2220,7 +2365,7 @@ class RasMap:
             visible: True to show all geometries, False to hide all.
             except_geom: Optional geometry to exclude from visibility change.
                 Can be geometry name, number (e.g., "08"), or filename pattern.
-            ras_object: Optional RasPrj object instance.
+            ras_object (RasPrj, optional): Optional RasPrj object instance.
 
         Returns:
             int: Number of geometries modified.
@@ -2285,7 +2430,7 @@ class RasMap:
             modified_count += 1
 
         if modified_count > 0:
-            tree.write(rasmap_path, encoding="utf-8", xml_declaration=True)
+            _write_ras_xml(tree, rasmap_path, encoding="utf-8", xml_declaration=True)
             logger.info(f"Modified visibility for {modified_count} geometries")
 
         return modified_count
@@ -2309,7 +2454,7 @@ class RasMap:
         Args:
             ras_project_path: Project folder, ``.prj`` file, or ``.rasmap`` file.
                 If omitted, the active ``RasPrj`` object is used.
-            ras_object: Optional ``RasPrj`` object instance.
+            ras_object (RasPrj, optional): Optional ``RasPrj`` object instance.
 
         Returns:
             pd.DataFrame: One row per top-level geometry and child geometry
@@ -2360,7 +2505,7 @@ class RasMap:
             exclusive: If ``True``, hide all geometries and child elements first,
                 then show only the matching parent geometry and selected child
                 element. This is useful for screenshot workflows.
-            ras_object: Optional ``RasPrj`` object instance.
+            ras_object (RasPrj, optional): Optional ``RasPrj`` object instance.
 
         Returns:
             int: Number of XML visibility attributes modified.
@@ -2538,7 +2683,7 @@ class RasMap:
             exclusive: If ``True``, hide non-matching terrain layers first.
             surface_on: Keep the terrain ``<Surface On="...">`` state aligned
                 with the checked state.
-            ras_object: Optional ``RasPrj`` object instance.
+            ras_object (RasPrj, optional): Optional ``RasPrj`` object instance.
 
         Returns:
             int: Number of XML attributes/elements modified.
@@ -2640,7 +2785,7 @@ class RasMap:
             stitch_edges_enabled: Toggle ``Plot stitch TIN edges``.
             level0_stitch_edges_enabled: Toggle ``Plot Level0 stitch TIN edges``.
             remove_stitch_rendering_enabled: Toggle ``Remove Stitch Rendering``.
-            ras_object: Optional ``RasPrj`` object instance.
+            ras_object (RasPrj, optional): Optional ``RasPrj`` object instance.
 
         Returns:
             int: Number of XML attributes/elements modified.
@@ -3186,7 +3331,7 @@ class RasMap:
         version incompatibility and attempts automatic upgrade via GUI automation.
 
         Args:
-            ras_object: Optional RasPrj object instance (default: global ras).
+            ras_object (RasPrj, optional): Optional RasPrj object instance (default: global ras).
             auto_upgrade (bool): If True, attempt automatic upgrade via GUI automation.
                 If False, only detect version and return status without upgrading.
 
@@ -3799,7 +3944,7 @@ class RasMap:
                         "Filtered terrains, keeping only '%s'", specify_terrain
                     )
 
-            tree.write(rasmap_path, encoding="utf-8", xml_declaration=True)
+            _write_ras_xml(tree, rasmap_path, encoding="utf-8", xml_declaration=True)
 
             # --- 3. Execute HEC-RAS ---
             if auto_click_compute:
@@ -3982,7 +4127,7 @@ class RasMap:
                 ``"01"``) or a plan sequence for ``configured``/``selected``/
                 ``timesteps``. Omit it for ``all_plans``.
             render_mode: Optional water-surface rendering override.
-            ras_object: Initialized project object; defaults to the active project.
+            ras_object (RasPrj, optional): Initialized project object; defaults to the active project.
             timeout: Per-helper timeout in seconds.
             mode: ``auto``, ``configured``, ``selected``, ``timesteps``,
                 ``steady_profiles``, or ``all_plans``. ``native`` remains a
@@ -3996,7 +4141,8 @@ class RasMap:
             profiles: Steady-profile selectors for ``steady_profiles`` mode.
                 ``None`` selects all profiles; exact names and zero-based
                 indexes may be mixed in a sequence.
-            timesteps, max_timesteps: Timestep selectors for ``timesteps`` mode.
+            timesteps: Timestep selectors for ``timesteps`` mode.
+            max_timesteps: Optional cap applied after timestep selection.
             map_types: One product name or a sequence of names. Exactly the
                 listed products are generated. Do not combine with individual
                 raster/product flags, except ``inundation_boundary`` (see
@@ -4004,17 +4150,26 @@ class RasMap:
                 given, are WSE/Depth/Velocity for selected/all-plans, Depth
                 only for timesteps, and Depth plus one inundation boundary for
                 steady_profiles.
-            wse, depth, velocity, froude, shear_stress, depth_x_velocity,
-                depth_x_velocity_sq, inundation_boundary, arrival_time,
-                duration, percent_inundated: Individual product flags. Once any
-                flag is given, only flags set to True are generated.
-                ``inundation_boundary`` may also be passed together with
+            wse: Individual Water Surface Elevation product flag. Once any
+                individual product flag is given, only flags set to True are generated.
+            depth: Individual Depth product flag.
+            velocity: Individual Velocity product flag.
+            froude: Individual Froude number product flag.
+            shear_stress: Individual Shear Stress product flag.
+            depth_x_velocity: Individual depth-times-velocity product flag.
+            depth_x_velocity_sq: Individual depth-times-velocity-squared product flag.
+            arrival_time: Individual Arrival Time product flag.
+            duration: Individual Duration product flag.
+            percent_inundated: Individual Percent Inundated product flag.
+            inundation_boundary: Individual inundation boundary polygon flag.
+                May also be passed together with
                 ``map_types`` to add (True) or explicitly omit (False) the
                 boundary polygon; False conflicts with a ``map_types`` entry of
                 ``"inundation_boundary"``. For steady_profiles,
                 ``map_types=["depth"]`` therefore yields Depth rasters only.
             arrival_depth: Threshold for whole-simulation configured products.
-            clear_existing, fix_georef: Configured-map execution controls.
+            clear_existing: Clear existing stored maps before adding new ones.
+            fix_georef: Apply georeferencing fixes to generated rasters.
             ras_version: Optional installed mapping-runtime version.
             terrain_name: Registered terrain selection for non-timestep modes.
             benefit_area: Optional single-plan benefit-area configuration.
@@ -4562,7 +4717,7 @@ class RasMap:
             plan_number: Plan number(s) to generate maps for (e.g. "01" or ["01", "02"]).
             render_mode: Rendering mode override. If None, reads from .rasmap file.
                 Valid values: "horizontal", "sloping", "slopingPretty".
-            ras_object: Optional RAS project object.
+            ras_object (RasPrj, optional): Optional RAS project object.
             timeout: Timeout in seconds per plan (default: 600).
 
         Returns:
@@ -4740,7 +4895,7 @@ class RasMap:
 
         Args:
             plan_number (Union[str, int, float]): Plan number (accepts flexible formats like 1, "01", "001").
-            ras_object: Optional RAS object instance.
+            ras_object (RasPrj, optional): Optional RAS object instance.
 
         Returns:
             Path: Path to the mapping output folder.
@@ -4860,7 +5015,7 @@ class RasMap:
         Args:
             plan_number (Union[str, int, float]): Plan number (accepts flexible formats).
             variable_name (str): Variable name to search for in VRT filenames (e.g., "WSE", "Depth", "Velocity").
-            ras_object: Optional RAS object instance.
+            ras_object (RasPrj, optional): Optional RAS object instance.
 
         Returns:
             Path: Path to the matching .vrt file.
@@ -4955,7 +5110,7 @@ class RasMap:
             use_depth_weighted_faces (bool): When True, face contributions are
                 weighted by depth. Only applies to slopingPretty mode.
                 Default: False.
-            ras_object: Optional RAS object instance.
+            ras_object (RasPrj, optional): Optional RAS object instance.
 
         Returns:
             bool: True if successful, False otherwise.
@@ -5092,7 +5247,7 @@ class RasMap:
                 )
 
             # Write the modified XML back
-            tree.write(rasmap_path, encoding="utf-8", xml_declaration=True)
+            _write_ras_xml(tree, rasmap_path, encoding="utf-8", xml_declaration=True)
             logger.debug("Updated RASMapper configuration: %s", rasmap_path)
 
             return True
@@ -5108,7 +5263,7 @@ class RasMap:
         Get the current water surface rendering mode from the RASMapper configuration.
 
         Args:
-            ras_object: Optional RAS object instance.
+            ras_object (RasPrj, optional): Optional RAS object instance.
 
         Returns:
             Optional[dict]: Rendering mode configuration with keys:
@@ -5510,6 +5665,7 @@ class RasMap:
         layer_name: str = "Terrain",
         projection_prj: Optional[Union[str, Path]] = None,
         ras_object=None,
+        relative_paths: bool = False,
     ) -> None:
         """
         Add terrain layer to RASMapper configuration.
@@ -5524,7 +5680,11 @@ class RasMap:
             layer_name: Display name for terrain layer (default: "Terrain")
             projection_prj: Path to ESRI PRJ file. If provided, updates
                 RASProjectionFilename element. Default: None (keeps existing).
-            ras_object: Optional RasPrj object instance (default: global ras).
+            ras_object (RasPrj, optional): Optional RasPrj object instance (default: global ras).
+            relative_paths: Include sibling and parent folders in relative terrain
+                and projection references on the same drive. Default False keeps
+                the existing descendant-only behavior. Different drives retain
+                absolute references. Use True for relocatable cloned bundles.
 
         Returns:
             None
@@ -5597,7 +5757,11 @@ class RasMap:
 
         try:
             # Calculate relative path
-            rel_path = terrain_hdf_resolved.relative_to(rasmap_dir)
+            rel_path = (
+                Path(os.path.relpath(terrain_hdf_resolved, rasmap_dir))
+                if relative_paths
+                else terrain_hdf_resolved.relative_to(rasmap_dir)
+            )
             # Format as Windows-style relative path with .\ prefix
             rel_path_str = ".\\" + str(rel_path).replace("/", "\\")
         except ValueError:
@@ -5651,8 +5815,11 @@ class RasMap:
         # Update projection reference if provided
         if projection_prj is not None:
             try:
-                prj_rel_path = RasUtils.safe_resolve(projection_prj).relative_to(
-                    rasmap_dir
+                projection_resolved = RasUtils.safe_resolve(projection_prj)
+                prj_rel_path = (
+                    Path(os.path.relpath(projection_resolved, rasmap_dir))
+                    if relative_paths
+                    else projection_resolved.relative_to(rasmap_dir)
                 )
                 prj_rel_path_str = ".\\" + str(prj_rel_path).replace("/", "\\")
             except ValueError:
@@ -5678,7 +5845,7 @@ class RasMap:
 
         # Write updated rasmap file
         # Use a custom write to preserve XML formatting
-        tree.write(rasmap_path, encoding="utf-8", xml_declaration=False)
+        _write_ras_xml(tree, rasmap_path, encoding="utf-8", xml_declaration=False)
 
         action = "Replaced" if existing_layer is not None else "Added"
         logger.info("%s terrain layer '%s' in .rasmap", action, layer_name)
@@ -5712,7 +5879,7 @@ class RasMap:
                 they are normalized to ``.\\`` relative Windows form.
             rasmap_path: Explicit ``.rasmap`` path. When omitted, resolve it
                 from ``ras_object``.
-            ras_object: Optional initialized project object.
+            ras_object (RasPrj, optional): Optional initialized project object.
             backup: Create a durable sibling backup before mutation.
 
         Returns:
@@ -5808,7 +5975,7 @@ class RasMap:
                     )
                 shutil.copy2(target, backup_path)
             try:
-                tree.write(staging, encoding="utf-8", xml_declaration=False)
+                _write_ras_xml(tree, staging, encoding="utf-8", xml_declaration=False)
                 ET.parse(staging)
                 os.replace(staging, target)
             finally:
@@ -5868,7 +6035,7 @@ class RasMap:
         calculated layers.
 
         Args:
-            ras_object: Optional RasPrj object instance.
+            ras_object (RasPrj, optional): Optional RasPrj object instance.
 
         Returns:
             List[Dict[str, Any]]: List of dicts with keys:
@@ -5984,7 +6151,7 @@ class RasMap:
         layer.set("Expanded", "True" if expanded else "False")
         layer.set("Filename", rel_hdf)
 
-        tree.write(rasmap_path, encoding="utf-8", xml_declaration=False)
+        _write_ras_xml(tree, rasmap_path, encoding="utf-8", xml_declaration=False)
         record = {
             "name": layer_name,
             "filename": rel_hdf,
@@ -6087,7 +6254,7 @@ class RasMap:
             child.set("Type", layer_type)
             child.set("Filename", rel_plan)
 
-        tree.write(rasmap_path, encoding="utf-8", xml_declaration=False)
+        _write_ras_xml(tree, rasmap_path, encoding="utf-8", xml_declaration=False)
         logger.info("Ensured 2D encroachment plan layers")
         logger.debug("Updated RASMapper file: %s", rasmap_path)
         return rasmap_path
@@ -6222,7 +6389,7 @@ class RasMap:
         map_parameters.set("ProfileName", profile_name)
         map_parameters.set("ArrivalDepth", "0")
 
-        tree.write(rasmap_path, encoding="utf-8", xml_declaration=False)
+        _write_ras_xml(tree, rasmap_path, encoding="utf-8", xml_declaration=False)
         record = {
             "name": layer_name,
             "parent_plan": host_plan_name,
@@ -6244,7 +6411,7 @@ class RasMap:
         ``<Layer Type="RASResults">`` blocks.
 
         Args:
-            ras_object: Optional RasPrj object instance.
+            ras_object (RasPrj, optional): Optional RasPrj object instance.
 
         Returns:
             List[Dict[str, Any]]: List of dicts with keys:
@@ -6358,7 +6525,7 @@ class RasMap:
                 indices in the script).
             checked: Whether the layer is visible in RASMapper. Default True.
             profile_index: ProfileIndex attribute for the calculated layer. Default 0.
-            ras_object: Optional RasPrj object instance.
+            ras_object (RasPrj, optional): Optional RasPrj object instance.
 
         Returns:
             bool: True if the layer was successfully added.
@@ -6483,7 +6650,7 @@ class RasMap:
             t_elem.set("Name", terrain_name)
 
         # Write updated rasmap
-        tree.write(rasmap_path, encoding="utf-8", xml_declaration=False)
+        _write_ras_xml(tree, rasmap_path, encoding="utf-8", xml_declaration=False)
         logger.info(f"Added calculated layer '{layer_name}' to plan '{host_plan_name}'")
         return True
 
@@ -6503,7 +6670,7 @@ class RasMap:
             host_plan_name: If provided, only search within that specific RASResults
                 block. If None, searches all RASResults blocks and removes the first match.
             delete_script: If True, also delete the ``.rasscript`` file from disk.
-            ras_object: Optional RasPrj object instance.
+            ras_object (RasPrj, optional): Optional RasPrj object instance.
 
         Returns:
             bool: True if the layer was found and removed, False if not found.
@@ -6551,7 +6718,9 @@ class RasMap:
                     script_filename = child.get("Filename", "")
                     results_layer.remove(child)
 
-                    tree.write(rasmap_path, encoding="utf-8", xml_declaration=False)
+                    _write_ras_xml(
+                        tree, rasmap_path, encoding="utf-8", xml_declaration=False
+                    )
                     logger.info(
                         f"Removed calculated layer '{layer_name}' from "
                         f"'{results_layer.get('Name')}'"
@@ -6603,7 +6772,7 @@ class RasMap:
                 Default: ``"CompareWSE_{tag}"``.
             host_plan: Which plan to host the calculated layer under — ``"proposed"``
                 (default) or ``"existing"``.
-            ras_object: Optional RasPrj object instance.
+            ras_object (RasPrj, optional): Optional RasPrj object instance.
 
         Returns:
             List[str]: Names of successfully created layers.

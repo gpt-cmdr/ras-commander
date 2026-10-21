@@ -39,12 +39,53 @@ preflight.existing_boundaries
 `preflight()` fails closed unless the selected plan is unsteady and pure 2D,
 the source geometry contains exactly one 2D flow area, the named area is
 unique, the child polygon is valid and contained by the
-parent, and no unsupported structure or reference-point edit is required. It
-classifies child-perimeter segments as inherited parent perimeter or artificial
+parent, and no unsupported structure or reference-point edit is required.
+
+SA/2D connections now receive complete-footprint `keep`, `drop` or `block`
+decisions in `feature_actions`. A fully contained internal connection can remain
+in the child, including a control whose From and To are the same retained area.
+Fully external controls are individually reported before removal. Partial or
+unknown physical support still blocks preparation. The single-area breakout
+scope remains unchanged; this is not a multi-area seam authoring workflow.
+
+The default blocks gates and undecoded support records. Set
+`Breakout2DSpec(allow_extended_connection_support=True, ...)` to opt in to
+verified gate opening GIS support, cell-size metadata and the additional empty
+bridge template recognized by `GeomLateral.classify_connections()`. Preflight
+and clone rechecks use the same choice; unrelated callers retain their defaults.
+`feature_actions.gate_group_count` records verified gate groups and is zero for
+other features. This opt-in does not establish native attachment or hydraulic
+acceptance.
+
+Preparation rechecks the approved decisions against the clone, requires fresh
+native HDF refresh for connection edits, and compares the exact retained records
+before and after geometry preparation. `prepared.connection_attachments` reports
+native evidence separately. Rows without both named-end cell/face evidence carry
+`CONNECTION_ATTACHMENT_UNVERIFIED`; successful text retention or preprocessing
+alone cannot establish control qualification.
+
+It classifies child-perimeter segments as inherited parent perimeter or artificial
 cuts. Breaklines, reference lines, and refinement regions are classified as
 keep, clip, or drop against a one-base-cell inward trim plus a small numeric
 round-trip guard. Existing geometry BC lines and unsteady boundary records are
 classified as `preserve`.
+
+For a child that straddles adjacent parents, declare each additional parent's
+geometry HDF in `Breakout2DSpec(contributing_geometry_hdfs=("Adjacent.g01.hdf",))`.
+The default is `()`; relative paths resolve from the caller's current directory.
+Preflight reads their complete native perimeters and checks containment against
+their union with the owner. Each contributor must have exactly one 2D flow area,
+a valid nonempty polygon and the owner's CRS. Contributor paths must end in
+`.gNN.hdf`; `.pNN.hdf` paths are rejected before reading. The manifest records
+each contributor path and SHA-256 captured while reading its perimeter.
+
+This changes only `child_within_parent` to `child_within_parent_union` for that
+preflight. All other checks, owner base spacing, feature actions and perimeter
+segment classification retain their single-parent behavior. The clone still
+contains one 2D flow area. The caller must independently qualify every contributor
+and import its terrain, roughness, features and forcing before remeshing or
+accepting a union child. Passing union containment alone qualifies no combined
+hydraulic model.
 
 ## Clone associations and prepare geometry
 
@@ -99,6 +140,12 @@ geometries while opening a project. HEC-RAS may be opened for the exact
 geometry import, but the hydraulic solver is never invoked. Install the
 declared `gui` and `mesh` optional dependency groups when enabling the exact
 refresh and remesh steps.
+
+For headless refresh, set `refresh_method="rasexe"` and
+`require_complete_products=True` to require qualified geometry completion.
+The latter defaults to False for upstream compatibility and propagates to the
+initial preprocessor call, numeric-repair retry, and mesh-repair preprocessing.
+These completion checks do not establish hydraulic acceptance.
 
 ## Review parent-face flux locations
 

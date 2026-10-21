@@ -1,6 +1,6 @@
 # Atlas 14 Precipitation
 
-NOAA Atlas 14 provides official precipitation frequency estimates for design storm modeling in the United States. The ras-commander precipitation subpackage provides four hyetograph generation methods and two spatial analysis tools for integrating Atlas 14 data into HEC-RAS workflows.
+NOAA Atlas 14 provides precipitation frequency estimates for design storm modeling in the United States. The ras-commander precipitation subpackage provides five single-location hyetograph methods, two explicitly named gridded storm methods, and spatial analysis tools for integrating Atlas 14 data into HEC-RAS workflows.
 
 ## Overview
 
@@ -11,11 +11,18 @@ Atlas 14 is the authoritative source for precipitation frequency estimates, used
 - Dam breach inundation studies (PMF, 0.2% AEP)
 - Sensitivity analysis across multiple AEP events
 
-**Important**: ras-commander hyetograph methods take `total_depth_inches` as an **input parameter**. You specify the depth from the NOAA PFDS website for your location and AEP; the methods generate the temporal distribution for that depth. They do not automatically query NOAA for depth values.
+**Important**: The pattern-based hyetograph methods take `total_depth_inches` as an **input parameter**. You specify the depth from the NOAA PFDS website for your location and AEP; the methods generate the temporal distribution for that depth. They do not automatically query NOAA for depth values. `FrequencyStormDdf` instead takes a cumulative depth-duration vector and preserves its 24-hour total, optionally reduced by an explicit TP-40 area factor.
 
 Verify Atlas 14 depths at: https://hdsc.nws.noaa.gov/pfds/pfds_map_cont.html
 
 ## Quick Start
+
+**Choose the temporal method explicitly.** The alternating-block example below
+builds a synthetic pattern from multiple durations. For a single duration's
+spatial depth grid multiplied by an official NOAA temporal curve, use
+`Atlas14HyetographGrid` as described in [Gridded design-storm methods](#gridded-design-storm-methods).
+These methods answer different design questions; an Atlas 14 depth does not
+uniquely specify a hyetograph or establish the resulting flood's AEP.
 
 Generate a 24-hour, 1% AEP (100-year) design storm using the Alternating Block Method:
 
@@ -62,7 +69,8 @@ if ATLAS14_AVAILABLE:
 | Method | HMS Equivalent | Depth Conservation | Durations | Best For |
 |--------|----------------|-------------------|-----------|----------|
 | **Atlas14Storm** | YES (10^-6) | Exact | 6h, 12h, 24h, 96h | Modern Atlas 14, regulatory submittals |
-| **FrequencyStorm** | YES (10^-6) | Exact | 6-48hr | TP-40 legacy data, variable duration, 48hr gap |
+| **FrequencyStormDdf** | Bounded record agreement | Point or reduced total | 24h / 5min | Depth-duration inputs, 50%/67% placement, optional TP-40 reduction |
+| **FrequencyStorm** | YES (10^-6) | Exact | 6-48hr | Fixed TP-40 temporal pattern, variable duration, 48hr gap |
 | **ScsTypeStorm** | YES (10^-6) | Exact | 24hr only | SCS Type I/IA/II/III distributions |
 | **StormGenerator** | NO | Exact | Any | Flexible peak positioning (0-100%) |
 
@@ -71,12 +79,15 @@ if ATLAS14_AVAILABLE:
 ```
 Need precipitation hyetograph for HEC-RAS?
 |
-+- Need HMS-equivalent results?
++- Have cumulative depth-duration inputs (24h / 5min)?
+|  --> Use FrequencyStormDdf (50%/67%; optional TP-40 area reduction)
+|
++- Need HMS-equivalent temporal patterns?
 |  |
 |  +- Modern Atlas 14 (6h, 12h, 24h, or 96h)?
 |  |  --> Use Atlas14Storm
 |  |
-|  +- TP-40 or variable duration (6-48hr, including 48hr)?
+|  +- Fixed TP-40 pattern or variable duration (6-48hr, including 48hr)?
 |  |  --> Use FrequencyStorm
 |  |
 |  +- SCS Type I/IA/II/III (24hr only)?
@@ -93,7 +104,7 @@ Need precipitation hyetograph for HEC-RAS?
 **Duration coverage**:
 - 6h: Atlas14Storm or FrequencyStorm
 - 12h: Atlas14Storm or FrequencyStorm
-- 24h: Atlas14Storm, FrequencyStorm, or ScsTypeStorm
+- 24h: Atlas14Storm, FrequencyStorm, FrequencyStormDdf, or ScsTypeStorm
 - 48h: FrequencyStorm only
 - 96h: Atlas14Storm only
 
@@ -271,6 +282,129 @@ if SCS_TYPE_AVAILABLE:
 **SCS type options**: `'I'`, `'IA'`, `'II'`, `'III'` (case-insensitive)
 
 **Constraint**: 24-hour duration only (HMS constraint, matches TR-55 specification)
+
+## Gridded design-storm methods
+
+| API | Spatial input | Temporal construction | What varies between cells? |
+|---|---|---|---|
+| `Atlas14HyetographGrid` | One duration-total depth raster | One explicitly selected NOAA cumulative percentage curve, differenced into interval fractions | Depth; normalized temporal fractions are shared |
+| `AbmHyetographGrid` | Multiple duration-depth rasters | Log-log interpolation, differences, descending block sort and alternating placement | Depth and potentially normalized temporal fractions |
+
+### Shared NOAA temporal distribution
+
+Install the optional dependencies with
+`pip install "ras-commander[precip]" "hms-commander>=0.3.1"`.
+
+`Atlas14HyetographGrid` implements `rainfall[t, y, x] = depth[y, x] * fraction[t]`.
+It obtains the dimensionless curve from the existing `Atlas14Storm` API and
+applies it uniformly in time to all valid cells. This is a spatially varying
+depth field with a shared temporal distribution, not uniform rainfall depth
+and not a per-cell alternating-block calculation.
+
+The caller must select temporal `state`, `region`, `quartile`, and
+`probability_column`. Region numbers are NOAA temporal-distribution regions,
+not political districts. The `50%` column is a temporal-curve exceedance
+selection; it is neither a 50% peak-position request nor the storm AEP.
+The selected temporal duration must match the depth raster duration.
+Supported temporal durations are 6, 12, 24 and 96 hours; a 48-hour curve is
+not silently substituted or stretched from another duration.
+
+For an original NOAA ASCII raster, read its `.xml` metadata and `.prj` first:
+
+```python
+from ras_commander.precip import Atlas14HyetographGrid
+
+# The official Texas tx100yr24ha product is 100-year/24-hour PDS,
+# NAD83 geographic coordinates, with integer values in thousandths of inches.
+output = Atlas14HyetographGrid.generate_from_asc_file(
+    asc_path="tx100yr24ha.asc",
+    scale_factor=0.001,
+    source_crs="EPSG:4269",
+    bounds=(-94.8, 29.4, -94.3, 30.0),
+    ari_years=100,
+    storm_duration_hours=24,
+    timestep_minutes=30,
+    state="tx",
+    region=3,
+    quartile="All Cases",
+    probability_column="50%",
+    depth_frequency_basis="PDS",
+    output_netcdf="atlas14_shared_pattern.nc",
+)
+```
+
+Obtain that source from [NOAA's Texas raster archive](https://hdsc.nws.noaa.gov/pub/hdsc/data/tx/tx100yr24ha.zip).
+The corresponding [official temporal CSV](https://hdsc.nws.noaa.gov/pub/hdsc/data/tx/tx_3_24h_temporal.csv)
+contains the five supported tables. The example's selections are explicit
+example values, not automatic geographic recommendations.
+
+`generate(bounds=..., ...)` downloads one requested duration through
+`Atlas14Grid`; `generate_from_depth_grid(depth_grid=..., x=..., y=...,
+source_crs=..., ...)` accepts an already prepared raster in inches.
+Neither entry point guesses a temporal region. The raw-grid route requires
+the caller to identify the input depth duration/frequency correctly.
+
+The NetCDF is a **design-storm data product**, with interval depth, cumulative
+depth, total depth, temporal fractions, CRS and interval bounds. It preserves
+source NoData and cell-center registration. Source raster cropping does not
+reproject or resample the raster. Missing cells are never converted to dry
+cells, and the API adds no artificial missing first interval. Consult the
+interval bounds rather than interpreting a timestamp as an instantaneous rate.
+CF time coordinates use the synthetic origin `1970-01-01 00:00:00` solely to
+encode elapsed time. It is **not an observed event date**. Rebase those
+intervals explicitly to the intended model start when preparing forcing;
+`xr.open_dataset(path, decode_times=False)` exposes the numeric elapsed hours.
+Writing this file does not by itself qualify a HEC-RAS or HEC-HMS import route.
+Consumer conversion must explicitly handle projection, units, timestamps and
+NoData; use the established NetCDF/DSS APIs and verify receiving-engine values.
+
+The API applies **no areal reduction and no AMS/PDS conversion**. Recorded
+frequency-basis metadata describes the supplied depths; it does not convert
+them. This is not a recommendation to omit areal reduction in a study.
+If depths were adjusted upstream, retain that provenance and do not reduce
+them a second time. TP-40's bounded domain is not extended by the grid method.
+
+### Alternating-block and balanced frequency storms
+
+Alternating-block construction from multiple duration depths is established,
+not a newly invented temporal method. The [HEC-HMS Frequency Storm technical
+reference](https://www.hec.usace.army.mil/confluence/hmsdocs/hmstrm/meteorology/precipitation/frequency-storm)
+describes nested or balanced storms, log-log depth-duration interpolation,
+incremental blocks and alternating arrangement. Such storms target multiple
+durations at a common precipitation frequency; that does not imply that an
+observed storm has the same exceedance probability at every duration.
+
+`AbmHyetographGrid` keeps its existing method and defaults. Its name already
+selects alternating-block construction. It is not silently redirected to a
+NOAA empirical temporal curve. Its implementation sorts interval blocks,
+places them left-first around the specified peak, clamps negative increments,
+and rescales to retain the total. Its automatic subhourly inputs are estimated
+from **centroid DDF ratios**; they are not independent subhourly rasters for
+every cell. These choices are disclosed approximations, and total conservation
+does not prove all moving-window duration maxima or full HMS equivalence.
+Use `FrequencyStormDdf` for its separately documented bounded scalar workflow.
+
+HEC also documents the [precipitation-frequency grid plus user-specified
+temporal pattern workflow](https://www.hec.usace.army.mil/confluence/hmsdocs/hmsguides/meteorologic-methods-in-hms/flow-frequency-simulation-options-in-hec-hms/applying-depth-area-analysis-to-precipitation-frequency-grids)
+and [application of NOAA temporal patterns](https://www.hec.usace.army.mil/confluence/hmsdocs/hmsguides/meteorologic-methods-in-hms/flow-frequency-simulation-options-in-hec-hms/applying-noaa-atlas-14-temporal-patterns).
+Choose the shared-pattern API when that is the specified design method; choose
+ABM when a synthetic multi-duration construction is required. Neither is
+universally preferable, and neither establishes spatial storm coherence merely
+by applying point-frequency depths simultaneously across a domain. Select
+duration, temporal pattern, storm area and reduction assumptions for the
+evaluation location and governing study criteria.
+
+### Method provenance and compatibility
+
+New shared-pattern output identifies its temporal/spatial method, curve
+selection, units, CRS and input frequency basis. Its source metadata records
+the ASCII filename, scale and crop or the remote grid URL and selected product.
+Caller-supplied arrays can carry upstream provenance via `source_metadata`.
+ABM output records its
+interpolation, block placement, negative-increment treatment and absence of
+automatic reduction/conversion. There is no common method selector with a
+silent default. Existing ABM calls retain their numerical behavior; selecting
+the new class is an explicit change of methodology.
 
 ## Atlas 14 Grid and Spatial Variance
 
@@ -470,6 +604,116 @@ for aep_pct, total_depth in aep_depths.items():
     print(f"Completed {return_period}-yr ({total_depth} inches)")
 ```
 
+
+## Gridded Atlas 14 units and QC
+
+`AbmHyetographGrid.generate_from_asc_files()` converts raw PFDS ASCII depth
+values to inches using **`scale_factor=0.001`** by default. For example, the
+raw Texas grid value `16905` means **16.905 inches**. NOAA documents these grids
+in thousandths of inches in its
+[Texas grid metadata](https://hdsc.nws.noaa.gov/pfds/meta/na14_vol11_tx_grid_metadata.xml).
+This corrects the previous `0.01` default, which produced ten times the intended
+depth for these files. Regenerate affected ASCII-derived storms. An explicit
+`scale_factor=0.001` used with earlier versions was already correct.
+
+The remotely accessed CONUS NetCDF uses different packing metadata, including
+`scale_factor=0.01`; its decoding is unchanged. Check each source product's
+metadata. For ASCII products intentionally stored in hundredths of inches or
+already in inches, explicitly pass `scale_factor=0.01` or `1.0`, respectively.
+The ASCII `nodata_value` override remains in **post-scaling** units.
+
+Generated incremental and cumulative variables are in inches. Built-in QC
+rejects empty, missing, nonfinite, negative, or incorrectly labelled rainfall
+and compares every stored cumulative value with the cumulative sum of the
+increments. Without an independent depth, a passing result is explicitly
+`internal_consistency_only`: both variables originate from the same generated
+series, so this cannot establish correct source units or product selection.
+
+```python
+qc = AbmHyetographGrid.verify_pixel(
+    "houston.nc", lat=29.75, lon=-95.45,
+    expected_depth_inches=16.905,  # Independently checked value at the selected cell
+)
+assert qc["passed"], qc["failure_reasons"]
+```
+
+Use an independently verified reference for the **selected nearest cell**, return
+period, and storm duration; the number above is an example from a Houston crop.
+Check `lat_actual` and `lon_actual`. This tests total depth and internal
+consistency, not nested-duration frequency matching, areal reduction, the temporal
+pattern, or HEC-RAS ingestion. Zero-depth references require zero computed depth;
+NoData pixels fail QC and are never treated as dry pixels.
+
+
+## Duration-dependent frequency rainfall and TP-40 reduction
+
+
+`FrequencyStormDdf` constructs a balanced storm from cumulative depth-duration
+inputs. It supports 24-hour storms at five-minute intervals, standard eight
+knots or ten explicit knots, and 50% or 67% peak placement. The existing
+`FrequencyStorm` fixed pattern and generic per-cell `AbmHyetographGrid` remain
+separate methods with unchanged behavior.
+
+```python
+from ras_commander.precip import FrequencyStormDdf
+
+hyeto = FrequencyStormDdf.generate_hyetograph(
+    depths_inches=[1.3, 2.58, 5.02, 7.17, 8.74, 11.4, 13.9, 16.4],
+    durations_minutes=[5, 15, 60, 120, 180, 360, 720, 1440],
+    peak_position_percent=50,
+    area_reduction_method="TP-40",
+    storm_area_sqmi=100.0,  # Explicit evaluation-area choice, in square miles
+    simulation_duration_hours=120,
+)
+```
+
+The output columns are `hour`, `incremental_depth` and `cumulative_depth`, with
+depths in inches. Row zero is a zero-depth start marker, followed by interval-end
+values. Do not export that marker as an extra rainfall interval to DSS. The 50%
+placement interval ends at 12:05; 67% ends at 16:05. Dry intervals extend the
+control window without stretching or rescaling the storm.
+
+Hydro-35 supplies absent 10/30-minute knots. Explicit knots are retained. Area
+reduction acts on the augmented cumulative depths, before log-log interpolation
+and differencing. Increments are placed in duration order, alternating left
+first. This ordering matches the independently read reference records even at
+slope transitions. HEC's manual describes sorting; agreement with these records
+does not establish universal equivalence across all settings or software versions.
+
+`Tp40Reduction.factor(duration_minutes, storm_area_sqmi)` exposes the bounded
+HEC-HMS compatibility relation `1 - f_D * (1 - exp(-0.015 * A))`. Area `A` is in
+square miles. Coefficients at 30, 60, 180, 360 and 1440 minutes are respectively
+0.48, 0.35, 0.22, 0.17 and 0.09, interpolated in log-log space. This interface
+accepts 5–1440 minutes and 0–400 square miles and rejects values outside those
+bounds; it neither extrapolates nor silently clamps excessive area.
+
+**Short-duration convention:** the inspected HMS implementation uses the
+30-minute coefficient for 5-, 10- and 15-minute depths. This convention matches
+the delivered reduction records, but differs from the technical manual's prose
+that durations below 30 minutes are unadjusted. This API deliberately implements
+that bounded HMS compatibility convention. It is not a general recommendation
+to apply those factors to every watershed.
+
+Use `area_reduction_method="none"` for already reduced inputs. Supplying an area
+with that option is rejected to avoid ambiguous configuration. The caller must
+choose the documented evaluation storm area; it is not inferred from grid cells
+or subbasin geometry. The reduced total is retained, not normalized back to the
+point total. Attributes record the point/areal totals, area, factors, knot mode,
+placement and actual peak indices. Annual/partial-duration conversion and TP-49
+durations are outside this interface.
+
+Validation includes seven publicly shipped event vectors and private comparisons
+against 436 additional no-reduction vectors and 174 area-reduced vectors, all
+with 288 wet-window intervals. Those additional source vectors are not distributed
+with this repository; the public regression subset includes six neutral fixtures. Maximum observed
+interval differences are below 2.5e-14 inches. Neutral regression fixtures retain
+independently read values or complete-vector digests; no reduction factor was
+fitted to a delivered total. These comparisons establish bounded numerical
+agreement, not hydraulic validation, universal correctness, or a novelty claim.
+
+References: [HEC frequency-storm technical reference](https://www.hec.usace.army.mil/confluence/hmsdocs/hmstrm/meteorology/precipitation/frequency-storm)
+and [HEC-HMS technical reference manual](https://www.hec.usace.army.mil/Software/hec-hms/documentation/HEC-HMS_Technical_Reference_Manual-20231106.pdf).
+
 ## Example Notebooks
 
 Complete workflow demonstrations:
@@ -487,3 +731,7 @@ Complete workflow demonstrations:
 - [Plan Execution](plan-execution.md) - Batch scenario execution
 - `ras_commander/precip/CLAUDE.md` - Complete method comparison and validation details
 - NOAA PFDS: https://hdsc.nws.noaa.gov/pfds/pfds_map_cont.html
+
+### Existing-model shared-pattern notebook
+
+[Notebook 731](../notebooks/731_atlas14_shared_temporal_existing_model.md) applies an original NOAA depth raster and one explicitly selected temporal curve to an existing model footprint. It checks interval depths and masks, serializes Float32 intervals before explicit bilinear SHG conversion, and optionally attaches the resulting DSS to a staged model copy without running a solver.

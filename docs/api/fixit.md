@@ -13,7 +13,26 @@ The `fixit` module provides automated fix capabilities for common HEC-RAS geomet
 
 | Fix Type | Method | Description |
 |----------|--------|-------------|
-| Blocked Obstruction Overlaps | `fix_blocked_obstructions()` | Resolves overlapping obstructions using max elevation envelope |
+| Blocked obstruction overlaps | `fix_blocked_obstructions()` / `detect_obstruction_overlaps()` | Elevation-envelope rewrite and spacing |
+| HTAB starting elevations | `fix_htab_starting_elevations()` / `detect_htab_issues()` | Raise a starting elevation below the invert by the requested margin |
+| Bank stations | `fix_bank_stations()` / `detect_bank_station_issues()` | Normalize station/elevation formatting and insert or snap bank points |
+| Ineffective flow areas | `fix_ineffective_flow()` / `detect_ineffective_flow_issues()` | Repair the documented legacy right-station-zero sentinel case |
+| Manning's n | `fix_mannings_n()` / `detect_mannings_n_issues()` | Reconstruct missing legacy values or align breakpoints with current banks |
+
+All five families operate on plain-text geometry. Writers default to
+`backup=True` and accept `dry_run=True`; detection wrappers use the corresponding
+dry-run path. Bank/ineffective/Manning writers also accept `rs_list`. The
+ineffective-area and Manning repairs target documented legacy upgrade patterns,
+not arbitrary geometry or roughness calibration. HTAB `margin` uses the source
+elevation units. Review the operation-specific messages before writing to a copy.
+
+Dry-run `total_xs_fixed` counts proposed/targeted changes, not saved edits.
+Bank normalization can target every selected Type 1 cross section even when
+its values already appear correct. `FixResults.get_fixed_count()` counts
+non-`NO_ACTION` messages, which need not equal unique cross sections.
+`to_dataframe()` returns no columns when there are no messages.
+
+For 2D mesh diagnostics and repair, use [Meshing](meshing.md).
 
 ## Quick Start
 
@@ -36,13 +55,23 @@ print(f"Visualizations: {results.visualization_folder}")
 
 ## RasFixit
 
-::: ras_commander.fixit.RasFixit
+<a id="ras_commander.fixit.RasFixit"></a>
+
+::: ras_commander.fixit.RasFixit.RasFixit
     options:
       show_root_heading: true
       heading_level: 3
       members:
         - fix_blocked_obstructions
         - detect_obstruction_overlaps
+        - fix_htab_starting_elevations
+        - detect_htab_issues
+        - fix_bank_stations
+        - detect_bank_station_issues
+        - fix_ineffective_flow
+        - detect_ineffective_flow_issues
+        - fix_mannings_n
+        - detect_mannings_n_issues
 
 ### Method Details
 
@@ -173,9 +202,9 @@ if log_parser.has_obstruction_errors("compute.log"):
 The core algorithm for fixing overlapping obstructions:
 
 1. **Collect Critical Stations**: Extract all start/end stations from obstructions
-2. **Find Max Elevation**: For each segment between stations, use the maximum elevation from all overlapping obstructions (hydraulically conservative)
+2. **Find Max Elevation**: For each segment between stations, use the maximum elevation from all overlapping obstructions (preserves the higher blocked elevation)
 3. **Merge Segments**: Combine adjacent segments with identical elevations
-4. **Insert Gaps**: Add 0.02-unit gaps where different elevations meet (HEC-RAS requirement)
+4. **Insert Gaps**: Apply the implementation’s 0.02-unit spacing where different elevations meet
 
 ```
 Original:  [100-120@elev5, 110-130@elev3]  (overlap 110-120)
@@ -200,19 +229,15 @@ Result: [100-120@elev5, 120.02-130@elev3]
 
 ### Why Max Elevation?
 
-Using maximum elevation in overlap zones is **hydraulically conservative**:
-
-- Blocked obstructions represent areas where flow is completely blocked up to the specified elevation
-- Using the maximum ensures we preserve the most restrictive flow condition
-- This prevents underestimating flood impacts
+The envelope retains the higher blocked elevation in overlapping intervals.
+That is an algorithmic choice, not proof of conservative flood levels for every
+model. Review the changed geometry and its hydraulic effects.
 
 ### Gap Insertion
 
-HEC-RAS requires a minimum separation between adjacent obstructions:
-
-- Touching obstructions (e.g., end=100.0, start=100.0) cause errors
-- The algorithm inserts 0.02-unit gaps where obstructions would otherwise touch
-- This is the minimum safe separation that preserves hydraulic behavior
+The implementation inserts 0.02 project station units between adjacent envelope
+segments with different elevations. This spacing is not a universal hydraulic
+tolerance or evidence that the rewrite preserves all model behavior.
 
 ## Integration with Check Module
 
@@ -221,8 +246,8 @@ The `fixit` module complements the `check` module:
 ```python
 from ras_commander import RasCheck, RasFixit
 
-# Detect issues with RasCheck (operates on HDF files)
-check_results = RasCheck.check_xs(geom_hdf)
+# Supply plan and geometry HDF paths plus the selected steady profiles
+check_results = RasCheck.check_xs(plan_hdf, geom_hdf, profiles)
 obstruction_issues = [m for m in check_results.messages
                       if m.message_id.startswith('XS_BO')]
 
@@ -239,7 +264,7 @@ if obstruction_issues:
 
 | Module | Input | Purpose |
 |--------|-------|---------|
-| `RasCheck` | HDF files (.p##.hdf) | Detect issues during results review |
+| `RasCheck.check_xs` | Plan and geometry HDFs plus selected profiles | Detect cross-section issues during results review |
 | `RasFixit` | Geometry files (.g##) | Repair issues in source geometry |
 
 ## Visualization Output

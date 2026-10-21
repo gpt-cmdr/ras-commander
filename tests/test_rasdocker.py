@@ -195,7 +195,7 @@ def test_compute_passes_cores_and_explicit_preparation_receipt(monkeypatch, proj
 
 
 @pytest.mark.parametrize("kwargs", [
-    {"version": "7.0"}, {"timeout": 0}, {"timeout": True}, {"timeout": 1.5},
+    {"version": "7.1"}, {"timeout": 0}, {"timeout": True}, {"timeout": 1.5},
     {"num_cores": 0}, {"num_cores": True}, {"num_cores": 9}, {"num_cores": 2.5},
     {"resume": "yes"}, {"pull": "sometimes"},
     {"replace_generated": "yes"}, {"run_id": "../escape"}, {"run_id": ".hidden"},
@@ -475,3 +475,40 @@ def test_701_cannot_use_a_different_version_image_or_receipt(monkeypatch, projec
     assert not calls
     result = method(project, 1, version=requested, image="local-qualification:custom")
     assert not result and "version does not match" in result.error
+
+
+@pytest.mark.parametrize("version, message", [
+    ("4.1.0", "RasControl"),
+    ("4.1", "RasControl"),
+    ("6.3.1", "has no HEC Linux engine"),
+    ("6.0", "has no HEC Linux engine"),
+    ("7.1", "pass image="),
+    ("66", "install folder name"),
+])
+def test_releases_are_checked_against_native_engines_and_the_catalog(monkeypatch, project, version, message):
+    calls = _fake_run(monkeypatch, project)
+    with pytest.raises(ValueError, match=message):
+        RasDocker.preprocess_plan(project, "01", version=version)
+    assert calls == []
+
+
+def test_explicit_image_supports_a_release_without_published_defaults(monkeypatch, project):
+    calls = _fake_run(monkeypatch, project)
+    try:
+        RasDocker.preprocess_plan(project, "01", version="5.0.7",
+                                  image="local/hec-ras-wine-precompute_5.0.7:v5-test")
+    except Exception:
+        pass
+    assert calls and any("local/hec-ras-wine-precompute_5.0.7:v5-test" in part
+                         for call in calls for part in call)
+
+
+def test_apparmor_profile_is_opt_in_and_validated(monkeypatch, project):
+    calls = _fake_run(monkeypatch, project)
+    assert RasDocker.preprocess_plan(project, 1, run_id="apparmor-default")
+    assert "--security-opt" not in calls[0][0]
+    assert RasDocker.preprocess_plan(project, 1, run_id="apparmor-unconfined", apparmor_profile="unconfined")
+    command = calls[1][0]
+    assert command[command.index("--security-opt") + 1] == "apparmor=unconfined"
+    with pytest.raises(ValueError, match="apparmor_profile"):
+        RasDocker.preprocess_plan(project, 1, apparmor_profile="unconfined --privileged")

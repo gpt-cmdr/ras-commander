@@ -35,6 +35,7 @@ import zipfile
 import requests
 from tqdm.auto import tqdm
 
+from ..._ras_text import _write_ras_text
 from ras_commander import get_logger, log_call
 
 logger = get_logger(__name__)
@@ -1571,7 +1572,9 @@ class UsgsScienceBase:
                 ):
                     updated = payload.replace(old_bytes, new_bytes)
                     temporary = target_file.parent / f".{target_file.name}.repair.tmp"
-                    temporary.write_bytes(updated)
+                    _write_ras_text(
+                        temporary, updated.decode("latin-1"), encoding="latin-1"
+                    )
                     temporary.replace(target_file)
                     replacement_status = "applied"
                     applied_any = True
@@ -1688,7 +1691,9 @@ class UsgsScienceBase:
                     )
                 updated = payload.replace(old_bytes, new_bytes)
                 temporary = target_file.parent / f".{target_file.name}.repair.tmp"
-                temporary.write_bytes(updated)
+                _write_ras_text(
+                    temporary, updated.decode("latin-1"), encoding="latin-1"
+                )
                 temporary.replace(target_file)
                 repair_status = "applied"
             elif old_count == 0 and new_count == expected_count:

@@ -1,0 +1,33 @@
+sequenceDiagram
+    participant Host as Host model folder mounted at /job
+    box Linux controller in container
+        participant L as prepare.py
+    end
+    box Wine environment in same container
+        participant W as Windows Python worker
+        participant C as ras-commander
+        participant H as HEC-RAS
+    end
+    L->>L: Select runtime and copy private WINEPREFIX
+    L->>W: xvfb-run + wine + Windows Python
+    W->>W: Check model dependencies and normalize inputs to CRLF
+    W->>C: RasPrj()
+    W->>C: init_ras_project(..., accept_tcu=True)
+    C->>C: RasTcu.status() and RasTcu.accept() if needed
+    W->>C: RasPlan.get_plan_path(...)
+    W->>C: RasPlan.set_num_cores(..., num_cores, refresh_dataframes=False)
+    W->>C: RasPlan.set_2d_flow_options(..., cores=num_cores, include_default=True)
+    W->>C: RasPlan.get_plan_value(..., "UNET D2 Cores")
+    W->>C: GeomPreprocessor.clear_geompre_files(...)
+    W->>C: RasPlan.update_run_flags(..., geometry_preprocessor=True)
+    W->>C: RasPreprocess.preprocess_plan(...)
+    C->>C: BcoMonitor.enable_detailed_logging(plan_file)
+    C->>H: Ras.exe -c with quoted project and plan paths
+    H->>Host: Read model and write preprocessing files through mount
+    C->>C: BcoMonitor(...).monitor_until_signal(process)
+    Note over C,H: BCO signal or owned unsteady process + fresh files
+    C->>H: RasPreprocess._terminate_process_tree(process) if running
+    C-->>W: PreprocessResult
+    W->>W: Validate 2D mesh and hydraulic tables in both HDF files
+    W-->>L: worker-result.json
+    L->>Host: Confirm output files and write prepare.json through mount

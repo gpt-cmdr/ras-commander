@@ -41,6 +41,10 @@ def test_read_grid_round_trips_specified_grid_and_missing_values(tmp_path):
     _run_bridge_scenario("specified_grid_round_trip", tmp_path)
 
 
+def test_midnight_writer_returns_exact_stored_path(tmp_path):
+    _run_bridge_scenario("midnight_exact_path", tmp_path)
+
+
 def test_read_grid_reports_exact_path_errors(tmp_path):
     missing_file = tmp_path / "missing.dss"
     pathname = "/BASIN/LOCATION/PRECIP/01JAN2020:0000/01JAN2020:0100/TEST/"

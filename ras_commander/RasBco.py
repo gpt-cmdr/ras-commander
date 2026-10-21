@@ -17,6 +17,7 @@ import subprocess
 import time
 import re
 from .LoggingConfig import get_logger
+from ._ras_text import _write_ras_text
 
 logger = get_logger(__name__)
 
@@ -121,7 +122,7 @@ class BcoMonitor:
                     content
                 )
                 if new_content != content:
-                    plan_file_path.write_text(new_content, encoding='utf-8')
+                    _write_ras_text(plan_file_path, new_content, encoding="utf-8")
                     logger.debug(f"Enabled detailed logging in {plan_file_path.name}")
             else:
                 # Add the setting after Run HTab line or at the end
@@ -132,7 +133,7 @@ class BcoMonitor:
                     )
                 else:
                     new_content = content + "\nWrite Detailed= 1\n"
-                plan_file_path.write_text(new_content, encoding='utf-8')
+                _write_ras_text(plan_file_path, new_content, encoding="utf-8")
                 logger.debug(f"Added detailed logging setting to {plan_file_path.name}")
 
             return True

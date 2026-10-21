@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Sequence, Tuple, Union
 import pandas as pd
 
+from .._ras_text import _write_ras_text
 from ..LoggingConfig import get_logger
 from ..Decorators import log_call
 from .GeomParser import GeomParser
@@ -971,11 +972,11 @@ class GeomCulvert:
             - DownstreamInvert: Downstream invert elevation
             - DownstreamStation: Downstream station location
             - ChartNumber: Inlet control chart number (legacy alias of the
-              trailing record field; kept as an int for backward compatibility)
+                trailing record field; kept as an int for backward compatibility)
             - UsDistance: Structure US Distance (float) -- the offset of the
-              culvert's upstream face downstream of the upstream bounding cross
-              section. This is the trailing field of the plain-text record;
-              ``set_culverts`` preserves it. Do not treat it as the chart number.
+                culvert's upstream face downstream of the upstream bounding cross
+                section. This is the trailing field of the plain-text record;
+                ``set_culverts`` preserves it. Do not treat it as the chart number.
             - BottomN: Bottom Manning's n (if different)
             - NumBarrels: Number of barrels
 
@@ -1199,8 +1200,7 @@ class GeomCulvert:
 
             modified_lines = lines[:replace_start] + new_lines + lines[replace_end:]
 
-            with open(geom_file, 'w', encoding='utf-8') as f:
-                f.writelines(modified_lines)
+            _write_ras_text(geom_file, "".join(modified_lines), encoding="utf-8")
 
             result = {
                 'culverts_written': len(normalized_records),

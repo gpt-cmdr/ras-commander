@@ -163,10 +163,17 @@ def python_gdal_bridge_is_usable(
         else Path(sys.executable).parent
     )
     gdal_dir = python_dir / "GDAL"
-    return (
-        (gdal_dir / "bin64").is_dir()
-        and (gdal_dir / "common" / "data").is_dir()
-    )
+    try:
+        return (
+            (gdal_dir / "bin64").is_dir()
+            and (gdal_dir / "common" / "data").is_dir()
+        )
+    except OSError as exc:
+        # Windows can refuse to traverse a junction it does not trust
+        # (WinError 448, "untrusted mount point"), for example from a
+        # non-interactive SSH session. Such a bridge is not usable here.
+        logger.debug("GDAL bridge at %s is not traversable: %s", gdal_dir, exc)
+        return False
 
 
 def ensure_python_gdal_junction(

@@ -122,16 +122,28 @@ def _runtime(manifest_path, expected_version=None):
     if data.get("schema") not in {"ras-commander-native-runtime/v1", "ras-commander-runtime/v1"}:
         raise ValueError("Unsupported native runtime manifest schema")
     version = data.get("hec_ras_version")
-    if data.get("kind") != "native" or version not in {"6.5", "6.6", "7.0.1"}:
-        raise ValueError("Native runtime must declare HEC-RAS 6.5, 6.6 or 7.0.1")
+    from .RasContainerImages import applicable_roles
+
+    try:
+        native_release = "linux-unsteady" in applicable_roles(version)
+    except ValueError:
+        native_release = False
+    if data.get("kind") != "native" or not native_release:
+        raise ValueError("Native runtime must declare a HEC-RAS release with a Linux engine "
+                         "(5.0.7, 6.1, 6.5, 6.6, or 7.x)")
     if expected_version and version != expected_version:
         raise ValueError("Bundled native runtime does not match the image HEC-RAS version")
     root = manifest_path.parent.resolve()
-    engine = _confined(root / data.get("native", {}).get("engine_directory", "engine"), root)
-    executable = _file(engine / "RasUnsteady")
+    native = data.get("native", {})
+    layout = native.get("layout", "canonical")
+    if layout not in {"canonical", "bin_ras"}:
+        raise ValueError("Native runtime layout must be canonical or bin_ras")
+    engine = _confined(root / native.get("engine_directory", "engine"), root)
+    default_executable = "RasUnsteady" if layout == "canonical" else "bin_ras/rasUnsteady64"
+    executable = _file(_confined(engine / native.get("executable", default_executable), root))
     if os.name != "nt" and not os.access(executable, os.X_OK):
-        raise ValueError("Bundled RasUnsteady is not executable")
-    if not (engine / "libs").is_dir():
+        raise ValueError(f"Bundled {executable.name} is not executable")
+    if layout == "canonical" and not (engine / "libs").is_dir():
         raise ValueError("Bundled native runtime is missing its vendor libs directory")
     artifacts = data.get("artifacts", [])
     declared = set()
@@ -148,8 +160,13 @@ def _runtime(manifest_path, expected_version=None):
                     "ras_commander_commit": os.environ.get("RAS_COMMANDER_SOURCE_COMMIT")}
 
 
-def _mesh(path, expected=None):
-    """Validate the populated 2D mesh and bounded hydraulic property tables."""
+def _mesh(path, expected=None, property_tables=True):
+    """Validate the populated 2D mesh and bounded hydraulic property tables.
+
+    ``property_tables=False`` is for pre-6.3.1 (``cfile``) releases such as 5.0.7 and
+    6.1, whose solver reads the 2D property tables from the computed-geometry ``.c##``
+    file rather than the HDF; the cells and their counts are still validated.
+    """
     summary = {}
     with h5py.File(path, "r") as hdf:
         areas = hdf.get("Geometry/2D Flow Areas")
@@ -165,6 +182,8 @@ def _mesh(path, expected=None):
                 raise ValueError(f"Invalid or empty 2D cells in {name}")
             cells = len(coordinates)
             summary[name] = {"cells": cells}
+            if not property_tables:
+                continue
             for label, width, rows in (("Cells Volume Elevation", 2, cells),
                                        ("Faces Area Elevation", 4, None)):
                 info, values = area.get(label + " Info"), area.get(label + " Values")
@@ -325,6 +344,26 @@ def _validate_selected_plan(ras_object, plan, geometry, window):
         raise ValueError("Plan simulation window changed after preprocessing")
 
 
+def _solver_arguments(version, prepared):
+    """Return the solver-argument convention shared with ``RasCmdr.compute_plan_linux``.
+
+    ``cfile`` for releases before 6.3.1 (5.0.7, 6.1), ``tmphdf`` from 6.3.1. The runtime
+    manifest release and the prepared tmp.hdf ``File Version`` must agree when both are
+    known; the HDF wins otherwise, as it does in ``compute_plan_linux``.
+    """
+    from .RasCmdr import RasCmdr
+
+    declared = RasCmdr._linux_solver_arguments_for_release(version)
+    release = RasCmdr._tmp_hdf_ras_release(prepared)
+    written = RasCmdr._linux_solver_arguments_for_release(release)
+    if declared and written and declared != written:
+        raise ValueError(
+            f"Prepared HDF was written by HEC-RAS {'.'.join(map(str, release))} "
+            f"({written} solver arguments) but the native runtime is HEC-RAS {version} "
+            f"({declared})")
+    return written or declared or "tmphdf"
+
+
 def _call_compute(ras_object, engine, plan, timeout, num_cores):
     from .RasCmdr import RasCmdr
 
@@ -416,14 +455,32 @@ def _forward_native_progress(log, *, stream=None, poll_interval=0.1):
         thread.join()
 
 
-def _validate_result(path, log, plan, meshes, window):
+def _any_series_reaches(hdf, end):
+    """Return whether any results ``Time Date Stamp`` series ends exactly at ``end``."""
+    from .hdf.HdfUtils import HdfUtils
+
+    found = []
+
+    def visit(name, node):
+        if (isinstance(node, h5py.Dataset) and name.startswith("Results/Unsteady/")
+                and name.endswith("Time Date Stamp") and node.size):
+            try:
+                found.append(HdfUtils.parse_ras_datetime(_text(node[-1])) == end)
+            except ValueError:
+                pass
+
+    hdf.visititems(visit)
+    return any(found)
+
+
+def _validate_result(path, log, plan, meshes, window, property_tables=True):
     from .RasCmdr import RasCmdr
     from .hdf.HdfUtils import HdfUtils
 
     ok, reason = RasCmdr._validate_linux_solve(log, path, plan)
     if not ok:
         raise ValueError("Native solver did not complete: " + reason)
-    _mesh(path, meshes)
+    _mesh(path, meshes, property_tables)
     validation = {"completion_verified": True, "meshes": {}}
     with h5py.File(path, "r") as hdf:
         base = hdf.get(TIME_SERIES)
@@ -439,7 +496,11 @@ def _validate_result(path, log, plan, meshes, window):
         timestamps = [parse_time(_text(value)) for value in stamps[:]]
         if any(later <= earlier for earlier, later in zip(timestamps, timestamps[1:])):
             raise ValueError("Result timestamps are not strictly increasing")
-        if timestamps[0] != window[0] or timestamps[-1] != window[1]:
+        if timestamps[0] != window[0] or timestamps[-1] > window[1]:
+            raise ValueError("Result timestamps do not cover the full requested simulation window")
+        if timestamps[-1] != window[1] and not _any_series_reaches(hdf, window[1]):
+            # HEC-RAS 6.1 can offset base output by one computation step and omit
+            # the final time; another results series then carries the end.
             raise ValueError("Result timestamps do not cover the full requested simulation window")
         for name, mesh in meshes.items():
             water = base.get("2D Flow Areas/" + name + "/Water Surface")
@@ -517,13 +578,20 @@ def run_compute(*, project, plan, timeout=14400, num_cores=2, run_id=None,
             root, project, plan, identity["hec_ras_version"], prepare_receipt)
         payload.update(preparation_receipt=prep_path.relative_to(root).as_posix(),
                        preparation_run_id=prep["run_id"], geometry=geometry)
-        meshes = _mesh(inputs[0])
+        solver_arguments = _solver_arguments(identity["hec_ras_version"], inputs[0])
+        payload["solver_arguments"] = solver_arguments
+        # cfile releases keep 2D property tables in the .c## file, not the HDF.
+        property_tables = solver_arguments == "tmphdf"
+        meshes = _mesh(inputs[0], property_tables=property_tables)
         window = _prepared_window(inputs[0])
         geometry_hdf = project.with_suffix(f".g{geometry}.hdf")
         if geometry_hdf.exists():
-            _mesh(geometry_hdf, meshes)
+            _mesh(geometry_hdf, meshes, property_tables)
         tracked_inputs = {*inputs, project, project.with_suffix(f".p{plan}"),
                           project.with_suffix(f".g{geometry}")}
+        if solver_arguments == "cfile":
+            # Required, non-empty and snapshot-hashed like the receipt-tracked inputs.
+            tracked_inputs.add(_file(project.with_suffix(f".c{geometry}")))
         if geometry_hdf.exists():
             tracked_inputs.add(geometry_hdf)
         snapshots = {path: _sha256(_file(path)) for path in tracked_inputs}
@@ -548,7 +616,7 @@ def run_compute(*, project, plan, timeout=14400, num_cores=2, run_id=None,
         if not result:
             raise RuntimeError("RasCmdr.compute_plan_linux reported failure; inspect compute_linux log")
         _file(staged_final)
-        validation = _validate_result(staged_final, log, plan, meshes, window)
+        validation = _validate_result(staged_final, log, plan, meshes, window, property_tables)
         # Detect changed handoff inputs before publishing a result from the copied model.
         _preparation_receipt(root, project, plan, identity["hec_ras_version"], prep_path)
         if any(_sha256(_file(path)) != digest for path, digest in snapshots.items()):

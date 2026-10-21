@@ -201,8 +201,10 @@ class GeomCulvertGIS:
 
         Parameters:
             geom_file: Path to geometry file (.g##)
-            river, reach, rs: structure location
-            ras_object: optional RasPrj for multi-project workflows
+            river (str): River identifier.
+            reach (str): Reach identifier.
+            rs (str): River-station identifier.
+            ras_object (RasPrj, optional): optional RasPrj for multi-project workflows
 
         Returns:
             pd.DataFrame with one row per barrel:

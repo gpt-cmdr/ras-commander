@@ -37,6 +37,7 @@ List of Functions in RasExamples:
 - inspect_sciencebase_model()
 - validate_sciencebase_model()
 - download_sciencebase_model()
+- organize_ebfe_model()
 - extract_project()
 - is_project_extracted()
 - clean_projects_directory()
@@ -44,8 +45,18 @@ List of Functions in RasExamples:
 """
 import os
 import sys
-import requests
 import zipfile
+
+# Download dependencies are optional; the core install has only h5py, numpy,
+# and pandas. Extracting from an already-downloaded archive needs neither.
+try:
+    import requests
+except ImportError:
+    requests = None
+try:
+    from tqdm import tqdm
+except ImportError:
+    tqdm = None
 import pandas as pd
 from pathlib import Path
 import shutil
@@ -54,12 +65,50 @@ import csv
 from datetime import datetime
 import logging
 import re
-from tqdm import tqdm
 from ras_commander import get_logger
 from ras_commander.LoggingConfig import log_call
 from ras_commander.RasUtils import RasUtils
 
 logger = get_logger(__name__)
+
+
+_DOWNLOAD_EXTRA_HINT = 'pip install "ras-commander[full]"'
+
+
+def _require_requests():
+    """Return ``requests`` for downloads, or raise an actionable ImportError.
+
+    The core ``ras-commander`` install includes only h5py, numpy, and pandas.
+    Extracting a project from an already-downloaded example archive needs no
+    extra package; downloading one needs ``requests``.
+    """
+    if requests is None:
+        raise ImportError(
+            "Downloading HEC-RAS example projects requires the 'requests' "
+            "package, which the core ras-commander install does not include. "
+            f"Install it with: {_DOWNLOAD_EXTRA_HINT} (or: pip install requests)"
+        )
+    return requests
+
+
+class _NoProgress:
+    """Stand-in for a tqdm progress bar when tqdm is not installed."""
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc_info):
+        return False
+
+    def update(self, n=1):
+        return None
+
+
+def _progress_bar(**kwargs):
+    """Return a tqdm progress bar, or a no-op stand-in without tqdm."""
+    if tqdm is None:
+        return _NoProgress()
+    return tqdm(**kwargs)
 
 
 def _format_log_path(path: Union[str, Path]) -> str:
@@ -133,11 +182,19 @@ class RasExamples:
             "4.1", "4.0", "3.1.3", "3.1.2", "3.1.1", "3.0", "2.2"
         ]
 
-    # GitHub release tags per version (HEC publishes under different tags)
-    _version_release_tags = {
-        "7.0": "1.0.45",
+    # Example-project assets HEC publishes on GitHub: version -> (release tag,
+    # asset name). Earlier releases ship their examples only inside the
+    # installer (Example Projects/Example_Projects.exe).
+    _example_assets = {
+        "6.1": ("1.0.21", "Example_Projects.zip"),
+        "6.2": ("1.0.23", "HEC-RAS_62_Example_Projects.zip"),
+        "6.3": ("1.0.25", "HEC-RAS_63_Example_Projects.zip"),
+        "6.3.1": ("1.0.25", "HEC-RAS_63_Example_Projects.zip"),
+        "6.4.1": ("1.0.28", "HEC-RAS_64_Example_Projects.zip"),
+        "6.5": ("1.0.31", "Example_Projects_6_5.zip"),
+        "6.6": ("1.0.33", "Example_Projects_6_6.zip"),
+        "7.0": ("1.0.45", "Example_Projects_7_0.zip"),
     }
-    _default_release_tag = "1.0.33"
 
     # User data directory for ZIP files and CSV cache (writable without admin)
     _user_data_dir = _get_user_data_dir() / 'examples'
@@ -396,7 +453,7 @@ class RasExamples:
         - Linux: ~/.local/share/ras-commander/examples
 
         Args:
-            version_number: HEC-RAS version (default: '7.0')
+            version_number (str): HEC-RAS version (default: '7.0')
 
         Returns:
             Path: Directory where projects will be extracted
@@ -407,8 +464,15 @@ class RasExamples:
             logger.error(error_msg)
             raise ValueError(error_msg)
 
-        release_tag = cls._version_release_tags.get(version_number, cls._default_release_tag)
-        zip_url = f"{cls.base_url}{release_tag}/Example_Projects_{version_number.replace('.', '_')}.zip"
+        if version_number not in cls._example_assets:
+            raise ValueError(
+                f"HEC does not publish a separate example-project download for HEC-RAS "
+                f"{version_number}; its examples ship inside the installer "
+                f"(Example Projects/Example_Projects.exe). Hosted versions: "
+                f"{', '.join(cls._example_assets)}"
+            )
+        release_tag, asset = cls._example_assets[version_number]
+        zip_url = f"{cls.base_url}{release_tag}/{asset}"
 
         # Create user data directory for ZIP storage (writable without admin)
         try:
@@ -429,6 +493,7 @@ class RasExamples:
             )
             logger.debug("Example projects download URL: %s", zip_url)
             logger.debug("Saving example projects zip to: %s", cls._zip_file_path)
+            _require_requests()
             try:
                 response = requests.get(zip_url, stream=True)
                 response.raise_for_status()
@@ -454,31 +519,27 @@ class RasExamples:
 
     @classmethod
     def _load_project_data(cls):
-        """Load project data from CSV if up-to-date, otherwise extract from zip."""
-        logger.debug("Loading project data")
-        
-        try:
-            zip_modified_time = os.path.getmtime(cls._zip_file_path)
-        except FileNotFoundError:
-            logger.error(f"Zip file not found at {cls._zip_file_path}.")
-            return
-        
-        if cls.csv_file_path.exists():
-            csv_modified_time = os.path.getmtime(cls.csv_file_path)
-            
-            if csv_modified_time >= zip_modified_time:
-                logger.debug("Loading project data from CSV...")
-                try:
-                    cls._folder_df = pd.read_csv(cls.csv_file_path)
-                    logger.debug(f"Loaded {len(cls._folder_df)} projects from CSV.")
-                    return
-                except Exception as e:
-                    logger.error(f"Failed to read CSV file: {e}")
-                    cls._folder_df = None
+        """Validate the CSV against the selected ZIP's central-directory index.
 
-        logger.debug("Extracting folder structure from zip file...")
+        A newer CSV may belong to a different archive or an obsolete index. ZIP
+        timestamps alone cannot establish cache identity. Listing the directory
+        does not extract model files or read their payloads.
+        """
+        if cls._zip_file_path is None or not Path(cls._zip_file_path).is_file():
+            logger.error("Example project ZIP not found: %s", cls._zip_file_path)
+            return
+        cached = None
+        if cls.csv_file_path.exists():
+            try:
+                cached = pd.read_csv(cls.csv_file_path, dtype=str, keep_default_na=False)
+            except Exception as exc:
+                logger.debug("Refreshing unreadable example index: %s", exc)
         cls._extract_folder_structure()
-        cls._save_to_csv()
+        if cls._folder_df is not None and (
+            cached is None
+            or cls._folder_df.to_dict('records') != cached.to_dict('records')
+        ):
+            cls._save_to_csv()
 
     @classmethod
     def _extract_folder_structure(cls):
@@ -575,8 +636,8 @@ class RasExamples:
         only through the lower-level curator API.
 
         Returns:
-            List of ``ModelMetadata`` records from the reviewed ScienceBase
-            registry. No network request or large download is performed.
+            list[ModelMetadata]: Records from the reviewed ScienceBase
+                registry. No network request or large download is performed.
         """
         from ras_commander.sources.federal.usgs_sciencebase import UsgsScienceBase
 
@@ -697,6 +758,37 @@ class RasExamples:
 
     @classmethod
     @log_call(logger)
+    def organize_ebfe_model(
+        cls,
+        model_key: str,
+        output_path: Union[str, Path, None] = None,
+        *,
+        downloaded_folder: Union[str, Path, None] = None,
+        **kwargs,
+    ) -> Path:
+        """Organize a public FEMA eBFE/BLE delivery through its source adapter.
+
+        This convenience method is deliberately separate from
+        :meth:`extract_project`: ``extract_project`` remains limited to the
+        official HEC example release archive. ``output_path`` is the parent
+        directory; the eBFE registry selects the model-specific output name.
+        """
+        from ras_commander.sources.federal.ebfe_models import RasEbfeModels
+
+        output_root = cls.projects_dir if output_path is None else Path(output_path)
+        if not output_root.is_absolute():
+            output_root = Path.cwd() / output_root
+        return RasEbfeModels.organize_model(
+            model_key,
+            output_root=output_root,
+            downloaded_folder=(
+                Path(downloaded_folder) if downloaded_folder is not None else None
+            ),
+            **kwargs,
+        )
+
+    @classmethod
+    @log_call(logger)
     def is_project_extracted(cls, project_name):
         """
         Check if a specific project is already extracted.
@@ -773,10 +865,11 @@ class RasExamples:
         Download a file from a URL to a specified destination folder with progress bar.
         """
         local_filename = dest_folder / url.split('/')[-1]
+        _require_requests()
         try:
             with requests.get(url, stream=True) as r:
                 r.raise_for_status()
-                with open(local_filename, 'wb') as f, tqdm(
+                with open(local_filename, 'wb') as f, _progress_bar(
                     desc=local_filename.name,
                     total=file_size,
                     unit='iB',
@@ -867,6 +960,7 @@ class RasExamples:
         logger.info("Downloading special project '%s'...", project_name)
         logger.debug("Special project download URL: %s", url)
         
+        _require_requests()
         try:
             response = requests.get(url, stream=True, timeout=300)
             response.raise_for_status()
@@ -877,7 +971,7 @@ class RasExamples:
             # Download with progress bar
             with open(zip_file_path, 'wb') as file:
                 if total_size > 0:
-                    with tqdm(
+                    with _progress_bar(
                         desc=f"Downloading {project_name}",
                         total=total_size,
                         unit='iB',

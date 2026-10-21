@@ -38,5 +38,11 @@ This file is the canonical local instruction file for `docs/`.
 
 ## Style
 
+- Follow [the concise writing guide](../.claude/references/writing/technical-writing-guide.md) and
+  [extended writing standard](../.claude/references/writing/technical-writing-standard.md).
+- Use the relevant official HEC document/version for HEC's documented methods and terminology;
+  keep references passive and maintain RAS Commander's independent third-party voice.
+- State supported library capabilities and original observations confidently using project evidence.
+  Match explanation to the audience; do not require HEC endorsement or unnecessary hedging.
 - Keep docs concrete and path-accurate.
 - Prefer relative repository references that stay valid in MkDocs.

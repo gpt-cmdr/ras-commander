@@ -170,18 +170,26 @@ def test_inspect_returns_exact_arrow_snapshot_for_1d_and_2d(tmp_path: Path) -> N
     assert inventory["encoding"].tolist() == ["ascii", "ascii"]
 
 
-def test_preview_is_no_write_and_apply_is_exact_byte_splice(tmp_path: Path) -> None:
-    raw = _default_raw()
+@pytest.mark.parametrize("newline", [b"\r\n", b"\n", b"\r"])
+def test_preview_is_no_write_and_apply_is_exact_byte_splice(
+    tmp_path: Path, newline: bytes
+) -> None:
+    raw = _default_raw(newline)
     stage = _make_stage(tmp_path, raw)
     target = stage.destination_root / "Model.u01"
     inventory = RasUnsteady.inspect_boundary_blocks(stage, unsteady_number="01")
     row = inventory.iloc[0]
-    expected = raw[: int(row["start_byte"])] + raw[int(row["end_byte_exclusive"]) :]
+    retained = raw[: int(row["start_byte"])] + raw[int(row["end_byte_exclusive"]) :]
+    expected = retained.replace(newline, b"\r\n")
 
     preview = RasUnsteady.delete_boundary(stage, **_selector(row))
 
     assert preview.state == "previewed"
     assert preview.result_sha256 == _sha256(expected)
+    assert preview.source_sha256 == _sha256(raw)
+    assert preview.prefix_sha256 == _sha256(raw[: int(row["start_byte"])])
+    assert preview.suffix_sha256 == _sha256(raw[int(row["end_byte_exclusive"]) :])
+    assert preview.newline == "CRLF"
     assert target.read_bytes() == raw
     with pytest.raises(TypeError, match="no truth value"):
         bool(preview)
@@ -193,6 +201,10 @@ def test_preview_is_no_write_and_apply_is_exact_byte_splice(tmp_path: Path) -> N
     assert applied.state == "applied"
     assert applied.boundaries_df_refreshed is True
     assert target.read_bytes() == expected
+    assert applied.result_sha256 == preview.result_sha256
+    assert applied.newline == "CRLF"
+    assert b"\n" not in expected.replace(b"\r\n", b"")
+    assert b"\r" not in expected.replace(b"\r\n", b"")
     assert not Path(str(target) + ".bak").exists()
     assert not list(target.parent.glob(".*.ras-boundary-*.tmp"))
     assert not list(target.parent.parent.glob(".*.boundary-mutation.lock"))
@@ -300,9 +312,10 @@ def test_duplicate_blocks_have_distinct_ids_and_exact_occurrence_is_removed(
     )
 
     assert result.boundary_index == 1
-    assert (stage.destination_root / "Model.u01").read_bytes() == (
+    expected = (
         b"Flow Title=Synthetic\n" + block + b"Precipitation Mode=Disable\n"
-    )
+    ).replace(b"\n", b"\r\n")
+    assert (stage.destination_root / "Model.u01").read_bytes() == expected
 
 
 @pytest.mark.parametrize(
@@ -389,9 +402,10 @@ def test_encoding_and_bom_are_preserved_on_exact_apply(
     stage = _make_stage(tmp_path, raw)
     inventory = RasUnsteady.inspect_boundary_blocks(stage, unsteady_number="01")
     selected = inventory.iloc[1]
-    expected = raw[: int(selected["start_byte"])] + raw[
-        int(selected["end_byte_exclusive"]) :
-    ]
+    expected = (
+        raw[: int(selected["start_byte"])] + raw[int(selected["end_byte_exclusive"]) :]
+    )
+    expected = expected.replace(b"\n", b"\r\n")
 
     result = RasUnsteady.delete_boundary(
         stage,

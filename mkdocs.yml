@@ -34,10 +34,10 @@ theme:
         name: Switch to light mode
   features:
     # navigation.tabs + a lone top-level "Home" left the homepage sidebar empty
-    # (the active "Home" tab has no children). Without tabs, the full section tree
-    # renders in the left sidebar on every page; groups stay collapsible (no
-    # navigation.expand) so the large Example Notebooks tree is scannable.
-    - navigation.sections
+    # (the active "Home" tab has no children), so the section tree lives in the
+    # left sidebar. No navigation.sections / navigation.expand: every group is a
+    # collapsed, expandable item (Material auto-opens the current page's path),
+    # keeping the long User Guide and Example Notebooks trees scannable.
     - navigation.top
     - search.suggest
     - search.highlight
@@ -74,27 +74,48 @@ plugins:
         User Guide:
           - user-guide/overview.md
           - user-guide/plan-execution.md
+          - user-guide/execution-backends.md
+          - user-guide/container-execution.md
+          - user-guide/container-images.md
+          - user-guide/slurm-apptainer-execution.md
+          - user-guide/slurm-portable-execution.md
+          - user-guide/apptainer-images.md
+          - user-guide/plan-output-intervals-hdf-compression.md
           - user-guide/workflows-and-patterns.md
           - user-guide/hdf-data-extraction.md
+          - user-guide/2d-profile-and-reference-workflows.md
           - user-guide/geometry-operations.md
           - user-guide/boundary-conditions.md
         API Reference:
           - api/index.md
           - api/core.md
+          - api/rasmapper/index.md
+          - api/results-queries.md
+          - api/stored-maps.md
+          - api/meshing.md
           - api/hydrofabric.md
           - api/breakout-1d.md
           - api/breakout-2d.md
           - api/benefits.md
           - api/hdf.md
           - api/geometry.md
+          - api/terrain.md
+          - terrain-input-subsets.md
+          - api/fixit.md
+          - api/dss.md
+          - api/containers.md
+          - api/remote.md
           - api/model-sources.md
   - mkdocstrings:
+      custom_templates: docs/overrides/mkdocstrings
       default_handler: python
       handlers:
         python:
           paths: [.]
           options:
             docstring_style: google
+            docstring_options:
+              returns_named_value: false
             show_source: true
             show_root_heading: true
             show_root_full_path: false
@@ -179,95 +200,123 @@ extra:
 
 nav:
   - Home: index.md
-  - Capabilities by Task: capabilities.md
-  - User Guide:
-    - Getting Started:
-      - Installation: getting-started/installation.md
-      - Quick Start: getting-started/quickstart.md
-      - Project Initialization: getting-started/project-initialization.md
+  - Getting Started:
+    - Installation: getting-started/installation.md
+    - Quick Start: getting-started/quickstart.md
+    - Project Initialization: getting-started/project-initialization.md
+    - Capabilities by Task: capabilities.md
     - Architecture Overview: user-guide/overview.md
-    - Plan Execution: user-guide/plan-execution.md
-    - Container Execution: user-guide/container-execution.md
-    - Container HPC Design: user-guide/container-hpc-design.md
     - Workflows & Patterns: user-guide/workflows-and-patterns.md
-    - Boundary Conditions: user-guide/boundary-conditions.md
-    - Spatial Data & RASMapper: user-guide/spatial-data.md
-    - Flowline Refinement Regions: user-guide/flowline-refinement-regions.md
-    - HEC-RAS Supplementary Guide Coverage: user-guide/hec-ras-supplementary-guides.md
-    - eBFE Delivery Validation: user-guide/ebfe-delivery-validation.md
-    - Working with eBFE Models: ebfe_models.md
-    - HDF Data Extraction: user-guide/hdf-data-extraction.md
-    - Parent Display Probes: user-guide/parent-display.md
-    - Geometry Operations: user-guide/geometry-operations.md
-    - Steady Flow Analysis: user-guide/steady-flow-analysis.md
-    - Dam Breach Analysis: user-guide/dam-breach-analysis.md
-    - DSS Operations: user-guide/dss-operations.md
-    - USGS Gauge Data Retrieval: user-guide/usgs-gauge-data.md
-    - Gridded Historic Precipitation: user-guide/gridded-precipitation.md
-    - Coastal Water Levels: user-guide/coastal-boundaries.md
-    - Atlas 14 Precipitation: user-guide/atlas14-precipitation.md
-    - Project File Validation: user-guide/project-file-validation.md
-    - Quality Assurance (RasCheck):
-      - Overview: user-guide/quality-assurance.md
+  - Agent Plugin and MCPs: agent-plugin.md
+  - User Guide:
+    - Running Plans:
+      - Plan Execution: user-guide/plan-execution.md
+      - Output Intervals & HDF Compression: user-guide/plan-output-intervals-hdf-compression.md
+      - Choose an Execution Backend: user-guide/execution-backends.md
+      - Remote Execution: user-guide/remote-execution.md
+      - Legacy COM Interface: user-guide/legacy-com-interface.md
+    - Parallel Compute:
+      - Overview: parallel-compute/index.md
+      - Local Parallel: parallel-compute/local-parallel.md
+      - Remote Parallel: parallel-compute/remote-parallel.md
+      - Scaling Strategies: parallel-compute/scaling-strategies.md
+      - Worker Types: parallel-compute/worker-types.md
+    - Containers & HPC:
+      - Container Execution: user-guide/container-execution.md
+      - Docker Hub Images: user-guide/container-images.md
+      - Slurm + Apptainer Execution: user-guide/slurm-apptainer-execution.md
+      - Portable Slurm Execution: user-guide/slurm-portable-execution.md
+      - Apptainer Images: user-guide/apptainer-images.md
+      - Container HPC Design: user-guide/container-hpc-design.md
+    - Geometry & Spatial:
+      - Geometry Operations: user-guide/geometry-operations.md
+      - Spatial Data & RASMapper: user-guide/spatial-data.md
+      - Flowline Refinement Regions: user-guide/flowline-refinement-regions.md
+    - Flow & Boundary Conditions:
+      - Boundary Conditions: user-guide/boundary-conditions.md
+      - Steady Flow Analysis: user-guide/steady-flow-analysis.md
+      - Dam Breach Analysis: user-guide/dam-breach-analysis.md
+      - DSS Operations: user-guide/dss-operations.md
+    - External Data Sources:
+      - USGS Gauge Data Retrieval: user-guide/usgs-gauge-data.md
+      - Gridded Historic Precipitation: user-guide/gridded-precipitation.md
+      - Atlas 14 Precipitation: user-guide/atlas14-precipitation.md
+      - Coastal Water Levels: user-guide/coastal-boundaries.md
+    - Results & Export:
+      - HDF Data Extraction: user-guide/hdf-data-extraction.md
+      - Parent Display Probes: user-guide/parent-display.md
+      - 2D Profiles and Reference Results: user-guide/2d-profile-and-reference-workflows.md
+      - Cloud-Native Export (ras2cng): user-guide/cloud-native-export.md
+    - Quality Assurance:
+      - Project File Validation: user-guide/project-file-validation.md
+      - RasCheck Overview: user-guide/quality-assurance.md
       - NT Check (Manning's n): user-guide/quality-assurance/nt-check.md
       - XS Check (Cross Sections): user-guide/quality-assurance/xs-check.md
       - Structure Check: user-guide/quality-assurance/structure-check.md
       - Floodway Check: user-guide/quality-assurance/floodway-check.md
       - Profiles Check: user-guide/quality-assurance/profiles-check.md
-    - Legacy COM Interface: user-guide/legacy-com-interface.md
-    - Remote Execution: user-guide/remote-execution.md
-    - Cloud-Native Export (ras2cng): user-guide/cloud-native-export.md
+      - HEC-RAS Supplementary Guide Coverage: user-guide/hec-ras-supplementary-guides.md
+    - eBFE Models:
+      - Working with eBFE Models: ebfe_models.md
+      - eBFE Delivery Validation: user-guide/ebfe-delivery-validation.md
   - Example Notebooks:
     - Overview: examples/index.md
     - Example Projects: examples/example-projects.md
     - Example Project Viewer: examples/example-project-viewer.md
-  - Parallel Compute:
-    - Overview: parallel-compute/index.md
-    - Local Parallel: parallel-compute/local-parallel.md
-    - Remote Parallel: parallel-compute/remote-parallel.md
-    - Scaling Strategies: parallel-compute/scaling-strategies.md
-    - Worker Types: parallel-compute/worker-types.md
   - API Reference:
     - Overview: api/index.md
     - Core Classes: api/core.md
-    - Hydrofabric Conflation: api/hydrofabric.md
-    - 1D Breakout Extraction: api/breakout-1d.md
-    - 2D Breakout Geometry Preparation: api/breakout-2d.md
+    - Geometry & Mesh:
+      - Geometry Modules: api/geometry.md
+      - Meshing: api/meshing.md
+      - Terrain Modules: api/terrain.md
+      - Native Terrain Subsets: terrain-input-subsets.md
+      - Fixit Module: api/fixit.md
+      - Hydrofabric Conflation: api/hydrofabric.md
+      - 1D Breakout Extraction: api/breakout-1d.md
+      - 2D Breakout Geometry Preparation: api/breakout-2d.md
+    - Results & Mapping:
+      - HDF Modules: api/hdf.md
+      - Results Queries: api/results-queries.md
+      - RASMapper: api/rasmapper/index.md
+      - Stored Maps: api/stored-maps.md
+      - DSS Modules: api/dss.md
+    - Execution & Infrastructure:
+      - Docker Container API: api/containers.md
+      - Remote Modules: api/remote.md
+      - Model Source Utilities: api/model-sources.md
     - Benefits Analysis: api/benefits.md
-    - HDF Modules: api/hdf.md
-    - Geometry Modules: api/geometry.md
-    - Terrain Modules: api/terrain.md
-    - Fixit Module: api/fixit.md
-    - DSS Modules: api/dss.md
-    - Remote Modules: api/remote.md
-    - Model Source Utilities: api/model-sources.md
     - DataFrame Reference: reference/dataframe-reference.md
   - RAS Data Formats:
     - Overview: reference/file-formats.md
-    - PRJ File Parsing: reference/prj-parsing.md
-    - Geometry Parsing: reference/geometry-parsing.md
-    - Bridge Geometry Automation Research: reference/bridge-geometry-automation-research.md
-    - Culvert Taxonomy: reference/culvert-taxonomy.md
-    - Unsteady File Parsing: reference/unsteady-parsing.md
-    - Steady File Parsing: reference/steady-parsing.md
-    - HDF Structure: reference/hdf-structure.md
-    - HDF Writing Guide: reference/hdf-writing-guide.md
     - Quick Reference: reference/quick-reference.md
-  - Cognitive Infrastructure:
-    - Overview: cognitive-infrastructure/index.md
-  - LLM Forward Development:
-    - Overview: development/llm-development.md
+    - Text Files:
+      - PRJ File Parsing: reference/prj-parsing.md
+      - Geometry Parsing: reference/geometry-parsing.md
+      - Unsteady File Parsing: reference/unsteady-parsing.md
+      - Steady File Parsing: reference/steady-parsing.md
+    - HDF Files:
+      - HDF Structure: reference/hdf-structure.md
+      - HDF Writing Guide: reference/hdf-writing-guide.md
+    - Research Notes:
+      - Bridge Geometry Automation Research: reference/bridge-geometry-automation-research.md
+      - Culvert Taxonomy: reference/culvert-taxonomy.md
+  - Development:
+    - LLM Forward Development: development/llm-development.md
+    - Cognitive Infrastructure: cognitive-infrastructure/index.md
     - LLM Agent Guide: development/llm-agents.md
     - Agent Infrastructure: development/agent-infrastructure.md
     - Multi-Harness Agent Contract: development/multi-harness-agent-contract.md
     - Contributing: development/contributing.md
     - Architecture: development/architecture.md
-    - HDF Results Query Architecture: development/hdf-results-query-architecture.md
-    - HEC-RAS 6.3.0.2 Wine Compute Qualification: development/hec-ras-6302-wine-compute-plan-qualification.md
-    - Gridded Precipitation Version Matrix: development/gridded-precipitation-version-matrix.md
     - Release Notes: development/release-notes.md
+    - Engineering Notes:
+      - HDF Results Query Architecture: development/hdf-results-query-architecture.md
+      - HEC-RAS 6.3.0.2 Wine Compute Qualification: development/hec-ras-6302-wine-compute-plan-qualification.md
+      - Gridded Precipitation Version Matrix: development/gridded-precipitation-version-matrix.md
   - About:
     - Cite and Support RAS Commander: cite.md
     - Command Line is All You Need: about/command-line-is-all-you-need.md
+    - Related Hydraulic Python Libraries: about/related-libraries.md
     - Acknowledgments: about/acknowledgments.md
     - CLB Engineering: about/clb-engineering.md

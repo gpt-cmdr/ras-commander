@@ -1,13 +1,13 @@
 """Regression coverage for SA/2D connection blocks in .g## geometry files."""
 
-from pathlib import Path
 import shutil
+from pathlib import Path
 
 import pandas as pd
 import pytest
 
-from ras_commander.RasExamples import RasExamples
 from ras_commander.geom.GeomLateral import GeomLateral
+from ras_commander.RasExamples import RasExamples
 
 
 @pytest.fixture(scope="module")
@@ -212,6 +212,7 @@ def test_set_connection_creates_new(tmp_path, bald_eagle_project):
         coords,
         "Reservoir Pool",
         "BaldEagleCr",
+        allow_defaults=True,
         create_backup=False,
     )
 
@@ -236,6 +237,7 @@ def test_set_connection_replaces_existing(tmp_path, bald_eagle_project):
         new_coords,
         "Reservoir Pool",
         "BaldEagleCr",
+        allow_defaults=True,
         create_backup=False,
     )
 
@@ -266,6 +268,7 @@ def test_set_connection_default_profile(tmp_path):
         coords,
         "PoolA",
         "PoolB",
+        allow_defaults=True,
         create_backup=False,
     )
 
@@ -401,6 +404,8 @@ def test_set_connection_insert_order(tmp_path):
         tmp_path,
         [
             "Geom Title=Insert Order Test\n",
+            "Storage Area=PoolA,0,0\n",
+            "Storage Area=PoolB,0,0\n",
             "Connection=Existing         ,100,200\n",
             "Connection Desc=\n",
             "Connection Line=2\n",
@@ -421,6 +426,7 @@ def test_set_connection_insert_order(tmp_path):
         [(500.0, 600.0), (700.0, 800.0)],
         "PoolA",
         "PoolB",
+        allow_defaults=True,
         create_backup=False,
     )
 

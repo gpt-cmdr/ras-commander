@@ -369,15 +369,16 @@ def test_701_runtime_rejects_image_and_preparation_version_mismatches(packet, mo
     assert "versions do not match" in json.loads(receipt.read_text())["error"]["message"]
 
 
-def test_native_runtime_and_bundler_reject_unsupported_70(packet, tmp_path):
+@pytest.mark.parametrize("version", ["6.0", "5.0.6", "4.1.0"])
+def test_native_runtime_and_bundler_reject_releases_without_linux_engine(packet, tmp_path, version):
     manifest = json.loads(packet["manifest"].read_text())
-    manifest["hec_ras_version"] = "7.0"
+    manifest["hec_ras_version"] = version
     worker._atomic_json(packet["manifest"], manifest)
     with pytest.raises(ValueError, match="must declare"):
         worker._runtime(packet["manifest"])
-    with pytest.raises(ValueError, match="currently supports"):
+    with pytest.raises(ValueError, match="Native HEC-RAS engines exist"):
         _bundler_module().bundle_runtime(engine_source=tmp_path, libraries_source=tmp_path,
-                                        notices_source=tmp_path, hec_ras_version="7.0",
+                                        notices_source=tmp_path, hec_ras_version=version,
                                         output=tmp_path / "unsupported")
 
 

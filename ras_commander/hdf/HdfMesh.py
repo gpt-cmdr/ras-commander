@@ -24,6 +24,8 @@ get_mesh_cell_points()
     Returns 2D flow mesh cell center points
 get_mesh_cell_faces()
     Returns 2D flow mesh cell faces
+get_mesh_perimeter_faces()
+    Returns complete native perimeter topology and BC ownership for one mesh
 get_mesh_area_attributes()
     Returns geometry 2D flow area attributes
 get_mesh_face_property_tables()
@@ -84,17 +86,29 @@ import shutil
 import warnings
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Mapping, Optional, Tuple, TYPE_CHECKING, Union
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    Callable,
+    Dict,
+    List,
+    Literal,
+    Mapping,
+    Optional,
+    Sequence,
+    Tuple,
+    Union,
+)
 from uuid import uuid4
 
 import h5py
 import numpy as np
 import pandas as pd
 
-from .HdfBase import HdfBase
-from .HdfUtils import HdfUtils
 from ..Decorators import log_call, standardize_input
 from ..LoggingConfig import get_logger
+from .HdfBase import HdfBase
+from .HdfUtils import HdfUtils
 
 # Type hints only - not imported at runtime
 if TYPE_CHECKING:
@@ -196,56 +210,26 @@ def _strict_collection_perimeters(group, mesh_area_names: List[str]):
         point_start, point_count, part_start, part_count = (
             int(value) for value in info[mesh_index]
         )
-        point_end = point_start + point_count
         if point_count < 4:
             raise _MeshLayoutError(
                 f"2D flow area {mesh_name!r} has fewer than four perimeter points"
             )
 
-        raw_ranges: List[Tuple[int, int]]
         if part_count:
-            raw_ranges = [
-                (int(start), int(count))
-                for start, count in parts[part_start : part_start + part_count]
-            ]
+            raw_ranges = parts[part_start : part_start + part_count]
         else:
-            raw_ranges = [(point_start, point_count)]
-
-        absolute_ranges: List[Tuple[int, int]] = []
-        for raw_start, count in raw_ranges:
-            absolute_valid = (
-                point_start <= raw_start and raw_start + count <= point_end
+            raw_ranges = [(0, point_count)]
+        try:
+            local_ranges = HdfBase._feature_part_ranges(
+                raw_ranges, point_start, point_count
             )
-            relative_start = point_start + raw_start
-            relative_valid = 0 <= raw_start and relative_start + count <= point_end
-            if absolute_valid:
-                start = raw_start
-            elif relative_valid:
-                start = relative_start
-            else:
-                raise _MeshLayoutError(
-                    f"2D flow area {mesh_name!r} has an out-of-range polygon part"
-                )
-            absolute_ranges.append((start, count))
-
-        ordered_ranges = sorted(absolute_ranges)
-        if ordered_ranges[0][0] != point_start:
+        except ValueError as exc:
             raise _MeshLayoutError(
-                f"2D flow area {mesh_name!r} polygon parts do not start "
-                "at its point slice"
-            )
-        expected_start = point_start
-        for start, count in ordered_ranges:
-            if start != expected_start:
-                raise _MeshLayoutError(
-                    f"2D flow area {mesh_name!r} polygon parts overlap or leave gaps"
-                )
-            expected_start = start + count
-        if expected_start != point_end:
-            raise _MeshLayoutError(
-                f"2D flow area {mesh_name!r} polygon parts do not reconcile "
-                "with its point slice"
-            )
+                f"2D flow area {mesh_name!r} has invalid polygon parts: {exc}"
+            ) from exc
+        absolute_ranges = [
+            (point_start + start, count) for start, count in local_ranges
+        ]
 
         rings = []
         ring_polygons = []
@@ -337,6 +321,129 @@ class HdfMesh:
 
     Note: This class relies on HdfBase and HdfUtils for some underlying operations.
     """
+
+    @staticmethod
+    @log_call
+    @standardize_input(file_type="geom_hdf")
+    def get_mesh_geometry_inventory(
+        hdf_path: Union[str, Path],
+        *,
+        dataset_paths: Optional[Sequence[str]] = None,
+        max_chunk_bytes: int = 8 * 1024 * 1024,
+        ras_object=None,
+    ) -> pd.DataFrame:
+        """Inventory exact native 2D dataset identities without changing the HDF.
+
+        Args:
+            hdf_path: Geometry or child-result HDF path, or geometry number
+                resolved by the input decorator with the explicit ras_object.
+            dataset_paths: Exact previously inventoried paths to read. By default,
+                inventory every dataset below ``Geometry/2D Flow Areas``. Supply
+                the reference inventory's paths when results add property tables.
+                Paths must be unique and remain below that native group.
+            max_chunk_bytes: Maximum uncompressed bytes in a read slab; positive
+                integer, default 8 MiB. An indivisible row exceeding it is rejected.
+            ras_object: Explicit project context for geometry-number resolution.
+
+        Returns:
+            DataFrame with dataset_path, dtype, shape, bytes and sha256, ordered
+            by dataset path. Dtype includes native descriptors and metadata;
+            shape is a tuple. The digest covers fixed-width array bytes in C order,
+            independent of HDF compression or storage chunk layout. Coordinates,
+            units and CRS are not transformed. No file or artifact is written.
+
+        Raises:
+            ValueError: Empty/missing inventory, unsafe or linked paths, unsupported
+                variable-width dtype, or invalid read budget.
+            OSError: The HDF or a dataset cannot be read.
+
+        Notes:
+            Matching complete reference rows proves only those dataset identities.
+            It does not compare HDF attributes, projections, boundary associations,
+            additional result datasets, whole-file bytes or hydraulic acceptance.
+            Callers must bind both HDF digests to fresh native execution receipts
+            and validate the surrounding geometry, CRS and attachment contracts.
+        """
+        import hashlib
+        import json
+
+        if isinstance(max_chunk_bytes, bool) or not isinstance(max_chunk_bytes, int):
+            raise ValueError("max_chunk_bytes must be a positive integer")
+        if max_chunk_bytes <= 0:
+            raise ValueError("max_chunk_bytes must be a positive integer")
+        base = "Geometry/2D Flow Areas"
+        rows = []
+        with h5py.File(hdf_path, "r") as hdf:
+            mesh_group = hdf
+            for part in base.split("/"):
+                if part not in mesh_group:
+                    raise ValueError("native Geometry/2D Flow Areas group is absent")
+                if not isinstance(mesh_group.get(part, getlink=True), h5py.HardLink):
+                    raise ValueError("native mesh inventory contains a nonlocal group link")
+                mesh_group = mesh_group[part]
+                if not isinstance(mesh_group, h5py.Group):
+                    raise ValueError("native Geometry/2D Flow Areas group is absent")
+            paths = []
+
+            def inspect_links(group, prefix, ancestors):
+                address = h5py.h5o.get_info(group.id).addr
+                if address in ancestors:
+                    raise ValueError("native mesh inventory contains a cyclic group link")
+                for name in sorted(group):
+                    path = prefix + "/" + name
+                    if not isinstance(group.get(name, getlink=True), h5py.HardLink):
+                        raise ValueError("native mesh inventory contains a nonlocal link: " + path)
+                    item = group[name]
+                    if isinstance(item, h5py.Dataset):
+                        paths.append(path)
+                    elif isinstance(item, h5py.Group):
+                        inspect_links(item, path, ancestors | {address})
+                    else:
+                        raise ValueError("unsupported native mesh object: " + path)
+
+            inspect_links(mesh_group, base, set())
+            if dataset_paths is not None:
+                if isinstance(dataset_paths, (str, bytes)):
+                    raise ValueError("dataset_paths must be a sequence of unique native paths")
+                selected = list(dataset_paths)
+                if any(not isinstance(p, str) for p in selected):
+                    raise ValueError("dataset_paths must contain strings")
+                if len(set(selected)) != len(selected):
+                    raise ValueError("dataset_paths must contain unique native paths")
+                if any(p not in paths for p in selected):
+                    raise ValueError("requested native mesh dataset is missing or outside the group")
+                paths = sorted(selected)
+            if not paths:
+                raise ValueError("native mesh dataset inventory is empty")
+            for path in paths:
+                dataset = hdf[path]
+                if dataset.shape is None or dataset.dtype.hasobject:
+                    raise ValueError("fixed-width native mesh dataset required: " + path)
+                try:
+                    dtype = json.dumps(
+                        {"descr": dataset.dtype.descr, "metadata": dict(dataset.dtype.metadata or {})},
+                        sort_keys=True, separators=(",", ":"),
+                    )
+                except (TypeError, ValueError) as error:
+                    raise ValueError("unsupported native mesh dtype metadata: " + path) from error
+                digest = hashlib.sha256()
+                if dataset.ndim == 0:
+                    if dataset.dtype.itemsize > max_chunk_bytes:
+                        raise ValueError("native dataset scalar exceeds max_chunk_bytes: " + path)
+                    digest.update(np.asarray(dataset[()], dtype=dataset.dtype).tobytes(order="C"))
+                elif dataset.size:
+                    row_bytes = dataset.dtype.itemsize * int(np.prod(dataset.shape[1:], dtype=object))
+                    if row_bytes > max_chunk_bytes:
+                        raise ValueError("native dataset row exceeds max_chunk_bytes: " + path)
+                    slab_rows = max(1, max_chunk_bytes // max(1, row_bytes))
+                    for start in range(0, dataset.shape[0], slab_rows):
+                        digest.update(dataset[start:start + slab_rows].tobytes(order="C"))
+                rows.append({
+                    "dataset_path": path, "dtype": dtype, "shape": tuple(dataset.shape),
+                    "bytes": int(dataset.size) * dataset.dtype.itemsize,
+                    "sha256": digest.hexdigest(),
+                })
+        return pd.DataFrame(rows, columns=["dataset_path", "dtype", "shape", "bytes", "sha256"])
 
     @staticmethod
     @standardize_input(file_type='geom_hdf')
@@ -616,6 +723,11 @@ class HdfMesh:
     def get_mesh_areas(hdf_path: Path) -> 'GeoDataFrame':
         """
         Return 2D flow area perimeter polygons.
+
+        Collection-level Parts offsets are feature-local and valid when every
+        part lies within the feature's point count. Legacy global offsets are
+        accepted only when all parts together cover the feature point range
+        exactly; any other layout fails closed.
 
         Parameters
         ----------
@@ -973,8 +1085,30 @@ class HdfMesh:
         return pd.DataFrame.from_records(diagnostic_records, columns=columns)
         
     @staticmethod
+    def _physical_cell_counts(hdf_file: h5py.File) -> Dict[str, int]:
+        """Return each 2D flow area's physical (non-ghost) cell count by name.
+
+        HEC-RAS lists a 2D area's physical cells first in ``Cells Center
+        Coordinate`` and in cell result arrays, followed by ghost cells outside
+        the perimeter. ``Geometry/2D Flow Areas/Attributes`` ``Cell Count`` is
+        the physical count. Meshes without a recorded count are omitted.
+        """
+        attributes = hdf_file.get("Geometry/2D Flow Areas/Attributes")
+        if attributes is None or "Cell Count" not in (attributes.dtype.names or ()):
+            return {}
+        counts = {}
+        for row in attributes[()]:
+            count = row["Cell Count"]
+            if np.isfinite(count) and count > 0:
+                counts[str(HdfUtils.convert_ras_string(row["Name"]))] = int(count)
+        return counts
+
+    @staticmethod
     @standardize_input(file_type='geom_hdf')
-    def get_mesh_cell_points(hdf_path: Path) -> 'GeoDataFrame':
+    def get_mesh_cell_points(
+        hdf_path: Path,
+        include_ghost_cells: bool = True,
+    ) -> 'GeoDataFrame':
         """
         Return 2D flow mesh cell center points.
 
@@ -982,6 +1116,13 @@ class HdfMesh:
         ----------
         hdf_path : Path
             Path to the HEC-RAS geometry HDF file.
+        include_ghost_cells : bool, optional
+            ``Cells Center Coordinate`` lists the physical cells followed by
+            ghost cells outside the perimeter (IDs at or above the area's
+            ``Attributes`` ``Cell Count``). Default True returns every entry.
+            Pass False to return physical cells only, matching mesh polygons
+            and the default ghost-free ``HdfResultsMesh`` cell results. A mesh
+            whose ``Cell Count`` is not recorded keeps every entry.
 
         Returns
         -------
@@ -1005,10 +1146,15 @@ class HdfMesh:
                 all_mesh_names = []
                 all_cell_ids = []
                 all_points = []
+                physical_counts = (
+                    {} if include_ghost_cells else HdfMesh._physical_cell_counts(hdf_file)
+                )
 
                 for mesh_name in mesh_area_names:
                     # Get all cell centers in one read
                     cell_centers = hdf_file[f"Geometry/2D Flow Areas/{mesh_name}/Cells Center Coordinate"][()]
+                    if mesh_name in physical_counts:
+                        cell_centers = cell_centers[:physical_counts[mesh_name]]
                     cell_count = len(cell_centers)
 
                     # Extend lists efficiently
@@ -1032,6 +1178,7 @@ class HdfMesh:
             return GeoDataFrame()
 
     @staticmethod
+    @log_call
     @standardize_input(file_type='geom_hdf')
     def get_mesh_cell_faces(hdf_path: Path) -> 'GeoDataFrame':
         """
@@ -1123,6 +1270,310 @@ class HdfMesh:
         except Exception as e:
             logger.error(f"Error reading mesh cell faces from {hdf_path}: {str(e)}")
             return GeoDataFrame()
+
+    @staticmethod
+    @log_call
+    @standardize_input(file_type="geom_hdf")
+    def get_mesh_perimeter_faces(
+        hdf_path: str | Path,
+        mesh_name: str,
+        *,
+        ras_object=None,
+        on_duplicate_ownership: Literal["raise", "report"] = "raise",
+    ) -> "GeoDataFrame":
+        """Read every perimeter face of a named 2D area, including unassigned faces.
+
+        ``hdf_path`` accepts geometry/plan HDF paths, open HDF handles, or
+        project numbers resolved by the standard HDF decorator. ``ras_object``
+        selects the project used for number resolution. No files are modified.
+
+        Returns a GeoDataFrame with ``mesh_name``, ``face_id``, ``cell0``,
+        ``cell1``, ``interior_cell_id``, ``exterior_cell_id``,
+        ``fp_start_index``, ``fp_end_index``, ``face_length``, ``bc_line_id``,
+        ``bc_line_name``, ``bc_line_type``, and ``geometry``. IDs retain their
+        native zero-based numbering. Exterior cells retain ghost IDs (or -1).
+        Length is the native ``Faces NormalUnitVector and Length`` value in
+        model units, falling back to complete face geometry length if absent.
+        BC columns are nullable for confirmed unassigned faces.
+        ``on_duplicate_ownership="report"`` keeps one row per face and adds
+        ``duplicate_ownership`` (bool), ``owning_bc_line_ids`` and
+        ``owning_bc_line_names`` (parallel lists in native encounter order).
+        Duplicate-owned faces have null scalar BC ID, name and type; unassigned
+        faces have empty owner lists. Repeated native associations are also
+        marked, even for the same owner. Default ``"raise"`` retains strict
+        validation and the original columns. Other validations remain active.
+        ``attrs['duplicate_ownership']`` lists duplicate faces and owners for
+        the requested mesh, with duplicate face and association-row counts.
+
+        Physical cells are identified by collection ``Attributes/Cell Count``;
+        higher cell IDs identify native ghost cells. Surface area and the
+        sometimes stale ``Cell Maximum Index`` attribute are not used.
+        Faces with one physical cell and one exterior cell form the inventory,
+        including any mesh interior-hole boundary faces. It does not classify
+        perimeter rings or infer associations from geometric proximity.
+
+        Raises KeyError for an unknown mesh or missing required native tables.
+        Raises ValueError for malformed topology, duplicate BC ownership,
+        stale BC face/endpoints, or missing native association evidence when
+        the selected area has boundary lines. Missing preprocessing is never
+        reported as confirmed unassigned ownership. Association availability
+        is also retained in ``attrs['association_status']``.
+        """
+        from geopandas import GeoDataFrame
+        from shapely.geometry import LineString
+
+        from .HdfBndry import HdfBndry
+
+        if on_duplicate_ownership not in ("raise", "report"):
+            raise ValueError("on_duplicate_ownership must be 'raise' or 'report'")
+        with h5py.File(hdf_path, "r") as hdf:
+            base = "Geometry/2D Flow Areas"
+            attributes = hdf[f"{base}/Attributes"][()]
+            names = [_decode_hdf_scalar(value).rstrip() for value in attributes["Name"]]
+            if mesh_name not in names:
+                raise KeyError(f"Unknown 2D flow area {mesh_name!r} in {hdf_path}")
+            if names.count(mesh_name) != 1:
+                raise ValueError(f"Duplicate mesh name {mesh_name!r} in {hdf_path}")
+            if "Cell Count" not in attributes.dtype.names:
+                raise KeyError(f"Missing native Cell Count for {mesh_name!r} in {hdf_path}")
+            count_value = attributes["Cell Count"][names.index(mesh_name)]
+            if (
+                not np.isfinite(count_value)
+                or count_value != int(count_value)
+                or count_value <= 0
+            ):
+                raise ValueError(
+                    f"Invalid native Cell Count for {mesh_name!r}: {count_value}"
+                )
+            cell_count = int(count_value)
+            mesh = hdf[f"{base}/{mesh_name}"]
+            adjacency_raw = np.asarray(mesh["Faces Cell Indexes"][()])
+            if adjacency_raw.ndim != 2 or adjacency_raw.shape[1] != 2:
+                raise ValueError(f"Faces Cell Indexes must be Nx2 for {mesh_name!r}")
+            if (
+                not np.isfinite(adjacency_raw).all()
+                or not np.equal(adjacency_raw, np.floor(adjacency_raw)).all()
+            ):
+                raise ValueError(f"Nonintegral face adjacency for {mesh_name!r}")
+            adjacency = adjacency_raw.astype(np.int64)
+            if (adjacency < -1).any():
+                raise ValueError(f"Invalid negative cell ID for {mesh_name!r}")
+            centers = mesh["Cells Center Coordinate"]
+            if cell_count > len(centers) or (adjacency >= len(centers)).any():
+                raise ValueError(
+                    f"Cell adjacency exceeds native cell table for {mesh_name!r}"
+                )
+            if "Cells Face and Orientation Info" in mesh:
+                cell_info = _integral_rows(
+                    mesh["Cells Face and Orientation Info"][()],
+                    2,
+                    "Cells Face and Orientation Info",
+                )
+                if len(cell_info) != len(centers) or (cell_info[cell_count:, 1] != 1).any():
+                    raise ValueError(
+                        f"Native Cell Count disagrees with ghost-cell topology for {mesh_name!r}"
+                    )
+            physical = (adjacency >= 0) & (adjacency < cell_count)
+            if (~physical.any(axis=1)).any() or (adjacency[:, 0] == adjacency[:, 1]).any():
+                raise ValueError(
+                    f"Face without distinct physical-cell adjacency for {mesh_name!r}"
+                )
+            face_ids = np.flatnonzero(physical.sum(axis=1) == 1)
+            endpoints_table = mesh["Faces FacePoint Indexes"]
+            if endpoints_table.shape != adjacency.shape:
+                raise ValueError(
+                    f"Face endpoint and adjacency counts differ for {mesh_name!r}"
+                )
+            endpoints = _integral_rows(
+                endpoints_table[face_ids], 2, "Faces FacePoint Indexes"
+            )
+            coordinates = mesh["FacePoints Coordinate"]
+            if (endpoints >= len(coordinates)).any():
+                raise ValueError(
+                    f"Face endpoint exceeds FacePoints Coordinate for {mesh_name!r}"
+                )
+            has_info = "Faces Perimeter Info" in mesh
+            if has_info != ("Faces Perimeter Values" in mesh):
+                raise ValueError(f"Partial face perimeter tables for {mesh_name!r}")
+            if has_info and len(mesh["Faces Perimeter Info"]) != len(adjacency):
+                raise ValueError(
+                    f"Face perimeter and adjacency counts differ for {mesh_name!r}"
+                )
+            perimeter = (
+                _integral_rows(
+                    mesh["Faces Perimeter Info"][face_ids], 2, "Faces Perimeter Info"
+                )
+                if has_info
+                else np.zeros((len(face_ids), 2), dtype=np.int64)
+            )
+            geometries = []
+            for (start_point, end_point), (start, size) in zip(endpoints, perimeter):
+                if has_info and start + size > len(mesh["Faces Perimeter Values"]):
+                    raise ValueError(
+                        f"Face perimeter range exceeds values for {mesh_name!r}"
+                    )
+                vertices = [coordinates[start_point, :2]]
+                if size:
+                    vertices.extend(
+                        mesh["Faces Perimeter Values"][start : start + size, :2]
+                    )
+                vertices.append(coordinates[end_point, :2])
+                if not np.isfinite(vertices).all():
+                    raise ValueError(f"Nonfinite perimeter coordinates for {mesh_name!r}")
+                line = LineString(vertices)
+                if line.length <= 0:
+                    raise ValueError(f"Degenerate perimeter face for {mesh_name!r}")
+                geometries.append(line)
+            if "Faces NormalUnitVector and Length" in mesh:
+                lengths_table = mesh["Faces NormalUnitVector and Length"]
+                if (
+                    lengths_table.ndim != 2
+                    or lengths_table.shape[1] < 3
+                    or len(lengths_table) != len(adjacency)
+                ):
+                    raise ValueError(f"Malformed native face lengths for {mesh_name!r}")
+                lengths = np.asarray(lengths_table[face_ids, 2], dtype=np.float64)
+                length_source = "native"
+            else:
+                lengths = np.asarray([line.length for line in geometries])
+                length_source = "geometry"
+            if not np.isfinite(lengths).all() or (lengths <= 0).any():
+                raise ValueError(f"Invalid perimeter face lengths for {mesh_name!r}")
+            selected = adjacency[face_ids]
+            interior_side = np.argmax(physical[face_ids], axis=1)
+            result = GeoDataFrame(
+                {
+                    "mesh_name": pd.Series([mesh_name] * len(face_ids), dtype="string"),
+                    "face_id": face_ids,
+                    "cell0": selected[:, 0],
+                    "cell1": selected[:, 1],
+                    "interior_cell_id": selected[np.arange(len(face_ids)), interior_side],
+                    "exterior_cell_id": selected[
+                        np.arange(len(face_ids)), 1 - interior_side
+                    ],
+                    "fp_start_index": endpoints[:, 0],
+                    "fp_end_index": endpoints[:, 1],
+                    "face_length": lengths,
+                    "geometry": geometries,
+                },
+                geometry="geometry",
+                crs=HdfBase.get_projection(hdf),
+            )
+            association = HdfBndry.get_bc_external_faces(
+                hdf_path, on_duplicate_ownership=on_duplicate_ownership
+            )
+            if len(association) and association["mesh_name"].isna().any():
+                raise ValueError(f"Native BC ownership lacks mesh metadata in {hdf_path}")
+            if association.attrs["association_status"] == "absent":
+                bc_path = "Geometry/Boundary Condition Lines/Attributes"
+                if "Geometry/Boundary Condition Lines" in hdf and bc_path not in hdf:
+                    raise ValueError(
+                        f"BC lines lack Attributes needed to establish ownership in {hdf_path}"
+                    )
+                if bc_path in hdf:
+                    bc_attrs = hdf[bc_path][()]
+                    mesh_field = HdfBndry._find_structured_field(
+                        bc_attrs.dtype.names or (), "SA-2D", "Mesh Name"
+                    )
+                    if len(bc_attrs) and (
+                        mesh_field is None
+                        or any(
+                            HdfBndry._decode_bc_text(value) == mesh_name
+                            for value in bc_attrs[mesh_field]
+                        )
+                    ):
+                        raise ValueError(
+                            f"Native BC external faces absent for {mesh_name!r}; preprocess geometry first"
+                        )
+            owners = association.loc[association["mesh_name"] == mesh_name].copy()
+            if not owners["face_id"].isin(face_ids).all():
+                raise ValueError(
+                    f"BC ownership references non-perimeter faces for {mesh_name!r}"
+                )
+            indexed = result.set_index("face_id")
+            for row in owners.itertuples():
+                if pd.isna(row.bc_line_id) or pd.isna(row.bc_line_name):
+                    raise ValueError(f"Incomplete native BC ownership for {mesh_name!r}")
+                expected = indexed.loc[
+                    row.face_id, ["fp_start_index", "fp_end_index"]
+                ].tolist()
+                if (
+                    not pd.isna(row.fp_start_index)
+                    and not pd.isna(row.fp_end_index)
+                    and sorted(expected) != sorted([row.fp_start_index, row.fp_end_index])
+                ):
+                    raise ValueError(
+                        f"Stale native BC face/endpoints for {mesh_name!r}, face {row.face_id}"
+                    )
+            owner_columns = ["face_id", "bc_line_id", "bc_line_name", "bc_line_type"]
+            if on_duplicate_ownership == "report":
+                owner_columns += [
+                    "duplicate_ownership",
+                    "owning_bc_line_ids",
+                    "owning_bc_line_names",
+                ]
+                # Every native row was validated above. Collapse only the
+                # perimeter join; the association reader remains lossless.
+                duplicate_rows = owners["duplicate_ownership"]
+                owners.loc[
+                    duplicate_rows, ["bc_line_id", "bc_line_name", "bc_line_type"]
+                ] = pd.NA
+                owners = owners.drop_duplicates("face_id")
+            result = result.merge(
+                owners[owner_columns],
+                on="face_id",
+                how="left",
+                validate="one_to_one",
+            )
+            columns = [
+                "mesh_name",
+                "face_id",
+                "cell0",
+                "cell1",
+                "interior_cell_id",
+                "exterior_cell_id",
+                "fp_start_index",
+                "fp_end_index",
+                "face_length",
+                "bc_line_id",
+                "bc_line_name",
+                "bc_line_type",
+                "geometry",
+            ]
+            if on_duplicate_ownership == "report":
+                result["duplicate_ownership"] = result["duplicate_ownership"].eq(True)
+                for column in ("owning_bc_line_ids", "owning_bc_line_names"):
+                    result[column] = result[column].map(
+                        lambda value: value if isinstance(value, list) else []
+                    )
+                columns += [
+                    "duplicate_ownership",
+                    "owning_bc_line_ids",
+                    "owning_bc_line_names",
+                ]
+            result = result[columns]
+            summary = [
+                record
+                for record in association.attrs.get("duplicate_ownership", [])
+                if record["mesh_name"] == mesh_name
+            ]
+            if on_duplicate_ownership == "report":
+                native_duplicates = association.loc[
+                    (association["mesh_name"] == mesh_name)
+                    & association["duplicate_ownership"]
+                ]
+                result.attrs.update(
+                    duplicate_ownership=summary,
+                    duplicate_face_count=len(summary),
+                    duplicate_face_row_count=len(native_duplicates),
+                )
+            result.attrs.update(
+                association_status=association.attrs["association_status"],
+                face_ownership_unique=not summary,
+                length_source=length_source,
+                physical_cell_count=cell_count,
+            )
+            return result
 
     @staticmethod
     @standardize_input(file_type='geom_hdf')
@@ -2291,6 +2742,7 @@ class HdfMesh:
 
         Example
         -------
+        ```python
         >>> topology = HdfMesh.get_mesh_sloped_topology(plan_hdf_path)
         >>> print(f"Mesh: {topology['mesh_name']}")
         >>> print(f"Cells: {topology['n_cells']}, Faces: {topology['n_faces']}")
@@ -2298,6 +2750,7 @@ class HdfMesh:
         >>> # Access faces connected to facepoint 0
         >>> start, count = topology['facepoint_face_info'][0]
         >>> connected_faces = topology['facepoint_face_values'][start:start+count, 0]
+        ```
         """
         try:
             with h5py.File(hdf_path, 'r') as hdf_file:
@@ -3770,10 +4223,10 @@ class HdfMesh:
         List[int]
             Sorted list of face IDs (0-indexed) that satisfy the spatial filter.
         """
-        from shapely.geometry import Point, MultiPolygon
-        from shapely.ops import unary_union
-        from shapely import prepare
         from geopandas import GeoDataFrame
+        from shapely import prepare
+        from shapely.geometry import MultiPolygon, Point
+        from shapely.ops import unary_union
 
         if isinstance(polygon, GeoDataFrame):
             polygon = unary_union(polygon.geometry)

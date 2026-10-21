@@ -393,7 +393,7 @@ print(ras.plan_df)
 - `.claude/rules/python/decorators.md` -- @log_call and @standardize_input usage
 
 **Agents** (delegate when needed):
-- `hecras-general-agent` -- Delegate for full inspect-plan-execute-analyze workflows
+- `ras-commander` -- Delegate for full inspect-plan-execute-analyze workflows
 - `hecras-project-inspector` -- Delegate for project analysis before execution
 
 **Skills** (related workflows):

@@ -213,6 +213,7 @@ Terrain profile and volume comparison with modifications applied. Uses RasMapper
 
 - `get_terrain_extent(rasmap_path, geom_hdf_path, ras_object=None)` - Get terrain bounding box with modifications applied
 - `get_terrain_profile(rasmap_path, geom_hdf_path, x_coords, y_coords, filter_tolerance=0.01, ras_object=None)` - Sample terrain elevation along polyline
+- `iter_terrain_point_elevations(rasmap_path, terrain_name, point_batches, cell_size, use_obstructions=True, nodata_values=(-9999.0,))` - Read bounded original-coordinate Float64 batches as native Float32 elevations; isolated HEC-RAS 6.6, serial native calls of at most 65536 points with caller batch shape/order preserved, no interpolation/fallback.
 - `get_terrain_volume_elevation(rasmap_path, geom_hdf_path, x_coords, y_coords, ...)` - Compute elevation-volume curve for polygon
 
 ### Comparison Methods
@@ -398,3 +399,151 @@ Notebooks 316, 920, 930, and 931 include freshly executed review outputs and
 figures for their bounded terrain workflows. Notebook 612 retains its coherent
 previously computed hydraulic outputs and four final maps; its four hydraulic
 simulations were deliberately not rerun for this terrain-export change.
+
+## Complete source reference
+
+The sections above explain common operations. The source-derived reference below
+includes the remaining public methods and their full signatures. Method-specific
+prerequisites and return contracts take precedence over abbreviated summaries.
+
+### RasTerrain source reference
+
+::: ras_commander.terrain.RasTerrain.RasTerrain
+    options:
+      show_root_heading: false
+      heading_level: 3
+      show_source: false
+      members:
+        - compute_bank_lines
+        - compute_xs_interpolation_surface
+        - create_terrain_from_rasters
+        - create_terrain_hdf
+        - export_rasmapper_terrain
+        - get_available_versions
+        - profile_vrt_to_tiff
+        - vrt_to_tiff
+
+### Usgs3depAws source reference
+
+::: ras_commander.terrain.Usgs3depAws.Usgs3depAws
+    options:
+      show_root_heading: false
+      heading_level: 3
+      show_source: false
+      members:
+        - build_terrain_raster
+        - create_vrt
+        - download_tile_index
+        - download_tiles
+        - find_tiles_for_bbox
+        - list_projects_for_bbox
+        - plan_terrain_tiles
+        - prefetch_terrain_tiles
+        - query_tiles_api
+        - select_projects_for_coverage
+
+### TerrainBuildError source reference
+
+::: ras_commander.terrain.Usgs3depAws.TerrainBuildError
+    options:
+      show_root_heading: false
+      heading_level: 3
+      show_source: false
+
+### RasTerrainMod source reference
+
+::: ras_commander.terrain.RasTerrainMod.RasTerrainMod
+    options:
+      show_root_heading: false
+      heading_level: 3
+      show_source: false
+      members:
+        - compare_terrain_profiles
+        - compare_terrain_volumes
+        - compute_modified_terrain_raster
+        - get_terrain_extent
+        - get_terrain_profile
+        - iter_terrain_point_elevations
+        - get_terrain_volume_elevation
+        - setup_gdal_bridge
+
+### RasTerrainModification source reference
+
+::: ras_commander.terrain.RasTerrainModWriter.RasTerrainModification
+    options:
+      inherited_members: true
+      show_root_heading: false
+      heading_level: 3
+      show_source: false
+      members:
+        - add_channel_modification
+        - add_fill_surface_modification
+        - add_high_ground_modification
+        - add_modification_group
+        - add_modification_polygon
+        - apply_modification_to_profile
+        - compare_before_after_profiles
+        - get_modification_profile
+        - list_modifications
+        - sample_modification_surface
+
+### RasTerrainModWriter source reference
+
+::: ras_commander.terrain.RasTerrainModWriter.RasTerrainModWriter
+    options:
+      show_root_heading: false
+      heading_level: 3
+      show_source: false
+      members:
+        - add_channel_modification
+        - add_fill_surface_modification
+        - add_high_ground_modification
+        - add_modification_group
+        - add_modification_polygon
+        - apply_modification_to_profile
+        - compare_before_after_profiles
+        - get_modification_profile
+        - list_modifications
+        - sample_modification_surface
+
+### TerrainExportResult source reference
+
+::: ras_commander.ComputeResults.TerrainExportResult
+    options:
+      show_root_heading: false
+      heading_level: 3
+      show_source: false
+
+
+### Isolated serial native sampling
+
+`RasTerrainMod.run_serial_native_sampling(operation)` runs an eager callback on
+one CLR ThreadPool worker and returns `(result, execution_evidence)`. Use it only
+inside a caller-owned fresh Windows or Wine process without other native/CLR
+work. Exhaust point iterators inside the callback; do not return a lazy iterator
+or await separately queued CLR work. Calls cannot be concurrent or nested.
+
+The helper selects one already-available processor through the public process
+API, lowers the public CLR worker and completion-port limits to one, verifies
+both controls, and dispatches the callback onto that sole pool worker. Native
+nested `Parallel.For` work then cannot obtain a second pool worker. No HEC private
+cache, coordinates, source records, profile tolerance, cell size or obstruction
+parameter is changed. Runtime limitations fail before the callback is invoked.
+Affinity and original minimum/maximum thread counts are restored and read back
+on success or exception; restoration failure cannot yield a successful result.
+
+Execution evidence records the mode `single-clr-pool-worker-v1`, original and
+sampling processor-affinity masks, reported processor count, original minimum
+and maximum thread limits, the sampling minimum and maximum `[1, 1]`, pool dispatch and
+runtime restoration. The helper writes no artifacts. Units, CRS, mutation policy
+and artifacts remain those of the callback. The caller retains this evidence.
+
+The CLR may reject a requested thread limit; actual return values and readback
+are required, not a presumed one-thread environment. See the public
+[ThreadPool limit contract](https://learn.microsoft.com/en-us/dotnet/api/system.threading.threadpool.setmaxthreads)
+and [default Parallel scheduler behavior](https://github.com/microsoft/referencesource/blob/main/mscorlib/system/threading/Tasks/Parallel.cs).
+Source-parent first-profile controls under the qualified HEC-RAS 6.6 Wine runtime
+crashed in native parallel HDF reads under the ordinary execution mode and
+returned finite nonempty profiles under the verified serial mode. These controls
+qualify the execution experiment; they do not establish complete-support,
+corpus, hydraulic mesh or engineering acceptance.

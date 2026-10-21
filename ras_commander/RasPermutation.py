@@ -21,6 +21,7 @@ import pandas as pd
 
 from .Decorators import log_call
 from .LoggingConfig import get_logger
+from ._ras_text import _write_ras_text
 
 
 logger = get_logger(__name__)
@@ -158,13 +159,7 @@ class RasPermutation:
             for line in lines
         ]
 
-        with open(
-            file_path,
-            "w",
-            encoding="utf-8",
-            newline="",
-        ) as handle:
-            handle.writelines(normalized_lines)
+        _write_ras_text(file_path, "".join(normalized_lines), encoding="utf-8")
 
         if not RasPermutation._has_crlf_only(file_path):
             raise RuntimeError(
@@ -385,6 +380,18 @@ class RasPermutation:
         )
 
     @staticmethod
+    def _rows_for_plans(results_df: pd.DataFrame, plan_numbers) -> pd.DataFrame:
+        """Return the results rows for ``plan_numbers``.
+
+        A results frame without a ``plan_number`` column (for example, when
+        every plan in the batch failed) yields an empty frame, so the batch is
+        reported per permutation instead of raising ``KeyError``.
+        """
+        if results_df is None or "plan_number" not in results_df.columns:
+            return pd.DataFrame()
+        return results_df[results_df["plan_number"].isin(plan_numbers)].copy()
+
+    @staticmethod
     def _derive_status(
         summary_row: pd.Series,
         execution_success: Optional[bool],
@@ -515,7 +522,7 @@ class RasPermutation:
         Generate plan permutations from a template plan.
         """
         from .RasPlan import RasPlan
-        from .RasPrj import RasPrj, init_ras_project, ras
+        from .RasPrj import RasPrj, _matching_copied_prj_file, init_ras_project, ras
         from .RasUtils import RasUtils
 
         if not callable(apply_fn):
@@ -596,8 +603,11 @@ class RasPermutation:
             )
 
             batch_ras = RasPrj()
+            batch_prj = _matching_copied_prj_file(
+                batch_folder, getattr(source_ras, "prj_file", None)
+            )
             init_ras_project(
-                batch_folder,
+                batch_prj or batch_folder,
                 getattr(source_ras, "ras_exe_path", None),
                 ras_object=batch_ras,
                 load_results_summary=False,
@@ -781,7 +791,7 @@ class RasPermutation:
                 instead of local compute_parallel().
         """
         from .RasCmdr import RasCmdr
-        from .RasPrj import RasPrj, init_ras_project, ras
+        from .RasPrj import RasPrj, _matching_copied_prj_file, init_ras_project, ras
 
         if "master_log" not in plan_matrix:
             raise ValueError("plan_matrix must contain a 'master_log' entry")
@@ -811,8 +821,11 @@ class RasPermutation:
             )
 
             batch_ras = RasPrj()
+            batch_prj = _matching_copied_prj_file(
+                batch_folder, getattr(source_ras, "prj_file", None)
+            )
             init_ras_project(
-                batch_folder,
+                batch_prj or batch_folder,
                 ras_exe_path,
                 ras_object=batch_ras,
                 load_results_summary=False,
@@ -838,10 +851,10 @@ class RasPermutation:
                     for plan_num, er in remote_results.items()
                 }
 
-                summary_df = batch_ras.update_results_df(plan_numbers=plan_numbers)
-                summary_df = summary_df[
-                    summary_df["plan_number"].isin(plan_numbers)
-                ].copy()
+                summary_df = RasPermutation._rows_for_plans(
+                    batch_ras.update_results_df(plan_numbers=plan_numbers),
+                    plan_numbers,
+                )
             else:
                 if timeout_sec is not None:
                     logger.warning(
@@ -863,10 +876,10 @@ class RasPermutation:
 
                 summary_df = compute_result.results_df.copy()
                 if summary_df.empty:
-                    summary_df = batch_ras.update_results_df(plan_numbers=plan_numbers)
-                    summary_df = summary_df[
-                        summary_df["plan_number"].isin(plan_numbers)
-                    ].copy()
+                    summary_df = RasPermutation._rows_for_plans(
+                        batch_ras.update_results_df(plan_numbers=plan_numbers),
+                        plan_numbers,
+                    )
 
             if summary_df.empty:
                 batch_summary = batch_log_df[

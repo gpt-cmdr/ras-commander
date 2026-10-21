@@ -40,6 +40,8 @@ from pathlib import Path
 from typing import Any, List, Optional, Tuple, Union
 from datetime import datetime
 
+from .._fixed_width import _format_fixed_width_value
+from .._ras_text import _write_ras_text
 from ..LoggingConfig import get_logger
 from ..Decorators import log_call
 
@@ -124,6 +126,7 @@ class GeomParser:
         return values
 
     @staticmethod
+    @log_call
     def format_fixed_width(values: List[float],
                           column_width: int = 8,
                           values_per_line: int = 10,
@@ -145,6 +148,9 @@ class GeomParser:
         Returns:
             List[str]: Lines with fixed-width formatted values (with newlines)
 
+        Raises:
+            ValueError: A value is non-finite or cannot fit the column.
+
         Example:
             >>> values = [0.0, 963.04, 27.2, 963.04]
             >>> lines = GeomParser.format_fixed_width(values, 8, 10, 2)
@@ -159,7 +165,8 @@ class GeomParser:
 
         Notes:
             - Based on RasUnsteady.write_table_to_file() pattern
-            - Values are formatted as f'{value:{column_width}.{precision}f}'
+            - Requested decimals are retained where they fit, then reduced one
+              at a time; values that cannot fit raise ValueError
             - Right-aligned within column, left-padded with spaces
             - Last line may have fewer than values_per_line values
         """
@@ -168,7 +175,14 @@ class GeomParser:
         for i in range(0, len(values), values_per_line):
             row_values = values[i:i+values_per_line]
             # Format each value with specified width and precision
-            formatted_row = ''.join(f'{value:{column_width}.{precision}f}' for value in row_values)
+            formatted_row = ''.join(
+                _format_fixed_width_value(
+                    value, width=column_width, max_decimals=precision,
+                    normalize_negative_zero=False,
+                    preserve_decimal=True,
+                )
+                for value in row_values
+            )
             lines.append(formatted_row + '\n')
 
         return lines
@@ -567,19 +581,8 @@ class GeomParser:
                 backup_path = GeomParser.create_backup(geom_file)
                 logger.debug(f"Created backup: {backup_path}")
 
-            # Step 2: Preserve the source file's line-ending convention.
-            # Python universal-newline reads normalize CRLF to ``\n``; writing
-            # those lines verbatim makes legacy HEC-RAS/VB6 treat a cloned
-            # geometry as one giant record. Native geometry files are normally
-            # CRLF, so recover that convention from the pre-edit bytes.
-            source_bytes = geom_file.read_bytes()
-            line_ending = "\r\n" if b"\r\n" in source_bytes else "\n"
-            text = "".join(modified_lines)
-            text = text.replace("\r\n", "\n").replace("\r", "\n")
-            if line_ending != "\n":
-                text = text.replace("\n", line_ending)
-            with open(temp_path, 'w', encoding='utf-8', newline='') as f:
-                f.write(text)
+            # Step 2: Write engine records with CRLF on every platform.
+            _write_ras_text(temp_path, "".join(modified_lines), encoding="utf-8")
 
             # Step 3: Basic validation - check temp file has content
             if temp_path.stat().st_size == 0:
@@ -736,7 +739,7 @@ class GeomParser:
 
         Parameters:
             geom_file (Union[str, Path]): Path to geometry file (.g##)
-            ras_object: Optional RasPrj instance (unused, for API consistency)
+            ras_object (RasPrj, optional): Optional RasPrj instance (unused, for API consistency)
 
         Returns:
             gpd.GeoDataFrame: DataFrame with columns: river, reach, station,
@@ -923,8 +926,8 @@ class GeomParser:
 
         Parameters:
             geom_file: Path to the plain-text HEC-RAS geometry file (``.g##``).
-            ras_object: Optional RasPrj instance used for CRS context.
-            crs: Optional CRS assigned to the returned GeoDataFrame. When omitted,
+            ras_object (RasPrj, optional): Optional RasPrj instance used for CRS context.
+            crs (pyproj.CRS or str, optional): Optional CRS assigned to the returned GeoDataFrame. When omitted,
                 ``ras_object.project_crs`` is used if available.
             dissolve: Return one combined footprint row when True; otherwise
                 return one row per river/reach.
@@ -1055,7 +1058,7 @@ class GeomParser:
 
         Parameters:
             geom_file (Union[str, Path]): Path to geometry file (.g##)
-            ras_object: Optional RasPrj instance (unused, for API consistency)
+            ras_object (RasPrj, optional): Optional RasPrj instance (unused, for API consistency)
 
         Returns:
             gpd.GeoDataFrame: DataFrame with columns: river, reach,
