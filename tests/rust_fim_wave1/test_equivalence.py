@@ -22,7 +22,7 @@ def exact(a, b):
 @pytest.mark.parametrize('fixture', FIXTURES, ids=[Path(f['path']).name for f in FIXTURES])
 def test_typed_reads(fixture):
     native = pytest.importorskip('ras_commander_fast_hdf')
-    assert native.API_VERSION == 10
+    assert native.API_VERSION == 11
     path = fixture['path']
     with h5py.File(path, 'r') as f:
         for mesh in native.mesh_inventory(path):
@@ -104,16 +104,9 @@ def test_extrema_and_budget(fixture):
         end=min(len(ds),5)
         expected=ds[:end,:3]
         caps={v['name']:v['capability'] for v in native.mesh_series_inventory(path,area)['variables']}
-        if caps['Water Surface']['status']!='supported':
-            # Engine API 8 (e9afad3): a series without a stored Location attribute is
-            # not domain-qualified (JUL D601). Typed reads refuse; literal values stay
-            # exactly readable through the generic reader.
-            assert caps['Water Surface']['code']=='identity_layout'
-            with pytest.raises(native.UnsupportedError):
-                native.reduce_mesh_series(path,area,'Water Surface',(0,end,1),[0,1,2])
-            with native.HdfSession(path) as s:
-                exact(s.read_numeric(ds.name,selection=[(0,end,1),(0,3,1)]),expected)
-            return
+        # Engine API 9 (7d89bbb): JUL D601 series without a stored Location attribute are
+        # domain-qualified by the absent-Location legacy exact-name rule (API 8 refused them).
+        assert caps['Water Surface']['status']=='supported'
         r=native.reduce_mesh_series(path,area,'Water Surface',(0,end,1),[0,1,2])
         indexes=np.stack([expected.argmin(axis=0),expected.argmax(axis=0)])
         values=np.take_along_axis(expected,indexes,axis=0)
