@@ -1,6 +1,6 @@
 # Parent display: source geometry probe
 
-Status: PROPOSED, tested but uncommitted. `ras_commander.parent_display` adds one primitive.
+`ras_commander.parent_display` provides read-only probes for stored geometry and forcing metadata.
 
 `HdfStruc.get_structures` and `HdfMesh.get_mesh_areas` return an empty GeoDataFrame when a
 feature is absent, when its tables are incomplete, and (for mesh areas) when reading failed.
@@ -17,14 +17,19 @@ probes["structures"].reason_code, probes["structures"].confirmed_zero
 
 | `reason_code` | Meaning | `confirmed_zero` |
 |---|---|---|
-| `FEATURE_PRESENT` | Intact table with rows | no |
+| `FEATURE_PRESENT` | Feature-count table has rows; required supporting datasets have rows | no |
 | `NOT_IN_SOURCE` | The HDF group is absent | yes |
-| `EMPTY_IN_SOURCE` | Intact table, zero rows | yes |
-| `SOURCE_TABLE_INCOMPLETE` | Group present, required datasets missing (`missing_datasets`) | no |
+| `EMPTY_IN_SOURCE` | Required datasets exist; feature-count table has zero rows | yes |
+| `SOURCE_TABLE_INCOMPLETE` | Required datasets missing (`missing_datasets`), malformed, or empty despite declared features (`detail`) | no |
 | `READ_ERROR` | One feature could not be read; the others are still reported | no |
 
 Features: `mesh_areas`, `breaklines`, `refinement_regions`, `structures`. A file that cannot be
 opened raises `OSError`. Parsing remains in `HdfMesh`, `HdfBndry` and `HdfStruc`.
+
+Statuses describe the known HDF layout. `confirmed_zero` does not establish that
+an unsupported layout or another source contains no features. `FEATURE_PRESENT`
+is a metadata check: it does not validate coordinate values, index relationships,
+or whether a geometry reader can construct usable features.
 
 Run the probe on the source geometry HDF outside any container and pass
 `dataclasses.asdict(probe)` to fim-commander's `build_catalog(source_probes=...)`.
@@ -46,6 +51,14 @@ missing, which cannot be told from "no boundary conditions". The probe returns
 `AppliedForcingProbe(reason_code, boundaries, time_steps, time_units, detail)` with the same closed
 codes as `FeatureProbe`; absent attributes stay `None`. This is what the solver *applied*; it is
 neither the configured input (the unsteady flow file) nor a face flux.
+
+A present forcing group requires a one-dimensional Time dataset and two-dimensional
+boundary datasets with matching time-row counts. If `Columns` labels are supplied,
+their count must match the series width. Violations return `SOURCE_TABLE_INCOMPLETE`
+with a diagnostic in `detail`. These checks read shapes and attributes only; they do
+not validate timestamp values, forcing values, units, or hydraulic suitability.
+`NOT_IN_SOURCE` and `EMPTY_IN_SOURCE` describe this output group only; they do not
+prove that the model was run without forcing.
 
 ## Configured boundary descriptors
 

@@ -197,6 +197,7 @@ nav:
     - eBFE Delivery Validation: user-guide/ebfe-delivery-validation.md
     - Working with eBFE Models: ebfe_models.md
     - HDF Data Extraction: user-guide/hdf-data-extraction.md
+    - Parent Display Probes: user-guide/parent-display.md
     - Geometry Operations: user-guide/geometry-operations.md
     - Steady Flow Analysis: user-guide/steady-flow-analysis.md
     - Dam Breach Analysis: user-guide/dam-breach-analysis.md

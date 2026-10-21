@@ -1,4 +1,4 @@
-"""Synthetic tests for the parent-display geometry probe (no HEC-RAS model files)."""
+"""Metadata regressions and real-producer checks for parent display probes."""
 
 import hashlib
 import json
@@ -278,3 +278,86 @@ def test_several_known_tables_leave_the_type_unresolved():
     )
     (descriptor,) = normalize_configured_boundaries(frame)
     assert descriptor["bc_type"] is None and len(descriptor["table_types"]) == 2
+
+
+@pytest.mark.parametrize("table", ["Centerline Info", "Centerline Points"])
+def test_declared_structures_with_empty_support_table_are_incomplete(make_hdf, table):
+    def writer(hdf):
+        _full_structures(hdf, 2)
+        del hdf[f"Geometry/Structures/{table}"]
+        _table(hdf, f"Geometry/Structures/{table}", 0)
+    result = probe_geometry_features(make_hdf(writer), ("structures",))["structures"]
+    assert result.reason_code == SOURCE_TABLE_INCOMPLETE
+    assert result.source_rows == 2 and not result.confirmed_zero
+    assert table in result.detail
+
+
+@pytest.mark.parametrize("defect", ["short_series", "scalar_series", "time_group", "time_matrix", "column_count"])
+def test_applied_forcing_rejects_shape_inconsistency(make_hdf, defect):
+    def writer(hdf):
+        _bc(hdf, "Inflow", 2 if defect == "short_series" else 3)
+        _time(hdf, 3)
+        series = f"{APPLIED_BC_GROUP}/Inflow"
+        time = f"{APPLIED_TIME_SERIES}/Time"
+        if defect == "scalar_series":
+            del hdf[series]
+            hdf.create_dataset(series, data=1.0)
+        elif defect in ("time_group", "time_matrix"):
+            del hdf[time]
+            if defect == "time_group":
+                hdf.create_group(time)
+            else:
+                hdf.create_dataset(time, data=np.zeros((3, 1)))
+        elif defect == "column_count":
+            hdf[series].attrs["Columns"] = [b"Stage"]
+    result = probe_applied_forcing(make_hdf(writer))
+    assert result.reason_code == SOURCE_TABLE_INCOMPLETE
+    assert result.detail and not result.confirmed_zero and not result.boundaries
+
+
+def test_probes_do_not_read_dataset_values(make_hdf, monkeypatch):
+    path = make_hdf(lambda hdf: (_full_structures(hdf, 2), _bc(hdf, "Inflow", 3), _time(hdf, 3)))
+    def reject_values(*args, **kwargs):
+        raise AssertionError("Probe attempted to read a dataset value array")
+    monkeypatch.setattr(h5py.Dataset, "__getitem__", reject_values)
+    assert probe_geometry_features(path)["structures"].reason_code == FEATURE_PRESENT
+    assert probe_applied_forcing(path).reason_code == FEATURE_PRESENT
+
+
+@pytest.mark.parametrize("project,filename,structures,breaklines", [
+    ("BaldEagleCrkMulti2D", "BaldEagleDamBrk.g02.hdf", 2, 7),
+    ("Muncie", "Muncie.g02.hdf", 2, 2),
+])
+def test_real_geometry_producer_metadata(tmp_path, project, filename, structures, breaklines):
+    from pathlib import Path
+    from ras_commander import RasExamples
+    folder = RasExamples.extract_project(project, output_path=tmp_path, suffix="probe")
+    folder = Path(folder[0] if isinstance(folder, list) else folder)
+    path = folder / filename
+    before = hashlib.sha256(path.read_bytes()).hexdigest()
+    result = probe_geometry_features(path)
+    assert result["mesh_areas"].reason_code == FEATURE_PRESENT
+    assert result["structures"].reason_code == FEATURE_PRESENT
+    assert result["structures"].source_rows == structures
+    assert result["breaklines"].reason_code == FEATURE_PRESENT
+    assert result["breaklines"].source_rows == breaklines
+    assert hashlib.sha256(path.read_bytes()).hexdigest() == before
+
+
+def test_real_applied_forcing_metadata():
+    import os
+    from pathlib import Path
+    value = os.environ.get("RAS_PARENT_DISPLAY_PLAN_HDF")
+    if not value:
+        pytest.skip("Set RAS_PARENT_DISPLAY_PLAN_HDF to a computed plan with applied BC series")
+    path = Path(value)
+    before = hashlib.sha256(path.read_bytes()).hexdigest()
+    with h5py.File(path, "r") as hdf:
+        expected_steps = hdf[f"{APPLIED_TIME_SERIES}/Time"].shape[0]
+        names = sorted(n for n in hdf[APPLIED_BC_GROUP] if not n.endswith((" - Flow per Face", " - Stage per Face")))
+    result = probe_applied_forcing(path)
+    assert result.reason_code == FEATURE_PRESENT
+    assert result.time_steps == expected_steps
+    assert [b.name for b in result.boundaries] == names
+    assert all(b.time_steps == expected_steps for b in result.boundaries)
+    assert hashlib.sha256(path.read_bytes()).hexdigest() == before

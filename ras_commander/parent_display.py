@@ -19,6 +19,11 @@ from typing import Mapping
 
 import h5py
 
+from .Decorators import log_call
+from .LoggingConfig import get_logger
+
+logger = get_logger(__name__)
+
 # Closed, stable reason codes. Meaning must not change silently.
 FEATURE_PRESENT = "FEATURE_PRESENT"
 NOT_IN_SOURCE = "NOT_IN_SOURCE"
@@ -61,6 +66,9 @@ class FeatureProbe:
     ``reason_code`` is one of ``PROBE_CODES``. ``confirmed_zero`` is True only
     when the source itself shows no features (group absent, or an intact table
     with zero rows). An incomplete table or a read error is never zero.
+    These statements describe only the known HDF layout, not the entire model.
+    ``FEATURE_PRESENT`` checks required table presence and nonempty supporting
+    rows; it does not validate geometry values or table index relationships.
     """
 
     feature: str
@@ -75,6 +83,7 @@ class FeatureProbe:
         return self.reason_code in (NOT_IN_SOURCE, EMPTY_IN_SOURCE)
 
 
+@log_call
 def probe_geometry_features(
     geometry_hdf: str | Path, features: tuple[str, ...] | None = None
 ) -> dict[str, FeatureProbe]:
@@ -114,9 +123,22 @@ def _probe_one(hdf: h5py.File, name: str) -> FeatureProbe:
                 name, SOURCE_TABLE_INCOMPLETE, None, group_path, missing_datasets=missing
             )
         rows = int(group[count_dataset].shape[0])
+        for item in required:
+            table = group[item]
+            if not isinstance(table, h5py.Dataset) or not table.shape:
+                return FeatureProbe(
+                    name, SOURCE_TABLE_INCOMPLETE, rows, group_path,
+                    detail=f"{item} is not a row-indexed dataset",
+                )
+            if rows > 0 and table.shape[0] == 0:
+                return FeatureProbe(
+                    name, SOURCE_TABLE_INCOMPLETE, rows, group_path,
+                    detail=f"{item} is empty but {count_dataset} declares {rows} features",
+                )
         code = FEATURE_PRESENT if rows > 0 else EMPTY_IN_SOURCE
         return FeatureProbe(name, code, rows, group_path)
     except Exception as exc:  # one bad feature must not hide the others
+        logger.warning("Could not probe %s in %s: %s", group_path, hdf.filename, type(exc).__name__)
         return FeatureProbe(name, READ_ERROR, None, group_path, detail=type(exc).__name__)
 
 
@@ -172,6 +194,7 @@ def _text(value) -> str | None:
     return str(value)
 
 
+@log_call
 def probe_applied_forcing(plan_hdf: str | Path) -> AppliedForcingProbe:
     """Describe the applied boundary-condition series in a plan result HDF.
 
@@ -180,6 +203,10 @@ def probe_applied_forcing(plan_hdf: str | Path) -> AppliedForcingProbe:
     Dataset when the group is missing, which cannot be told from "no boundary
     conditions"; this probe separates absent, empty, incomplete and unreadable.
 
+    ``FEATURE_PRESENT`` requires two-dimensional series whose row counts match
+    the one-dimensional Time dataset, and matching column labels when supplied.
+    It does not validate timestamps, values, units, or hydraulic suitability.
+    Absence and zero statuses refer only to this stored output group.
     Raises ``OSError`` if the file cannot be opened. Never mutates the file.
     """
     with h5py.File(Path(plan_hdf), "r") as hdf:
@@ -196,6 +223,11 @@ def probe_applied_forcing(plan_hdf: str | Path) -> AppliedForcingProbe:
                     SOURCE_TABLE_INCOMPLETE, detail="Unsteady Time Series/Time is missing"
                 )
             time = hdf[time_path]
+            if not isinstance(time, h5py.Dataset) or time.ndim != 1:
+                return AppliedForcingProbe(
+                    SOURCE_TABLE_INCOMPLETE, detail="Time is not a one-dimensional dataset"
+                )
+            time_steps = int(time.shape[0])
             boundaries = []
             for name in names:
                 item = group[name]
@@ -203,7 +235,17 @@ def probe_applied_forcing(plan_hdf: str | Path) -> AppliedForcingProbe:
                     return AppliedForcingProbe(
                         SOURCE_TABLE_INCOMPLETE, detail=f"{name} is not a dataset"
                     )
+                if item.ndim != 2 or item.shape[0] != time_steps:
+                    return AppliedForcingProbe(
+                        SOURCE_TABLE_INCOMPLETE,
+                        detail=f"{name} shape {item.shape} does not match Time ({time_steps} rows)",
+                    )
                 columns = tuple(_text(c) for c in item.attrs.get("Columns", ()))
+                if columns and len(columns) != item.shape[1]:
+                    return AppliedForcingProbe(
+                        SOURCE_TABLE_INCOMPLETE,
+                        detail=f"{name} Columns count does not match its second dimension",
+                    )
                 boundaries.append(
                     AppliedBoundary(
                         name=name,
@@ -217,10 +259,11 @@ def probe_applied_forcing(plan_hdf: str | Path) -> AppliedForcingProbe:
             return AppliedForcingProbe(
                 FEATURE_PRESENT,
                 tuple(boundaries),
-                time_steps=int(time.shape[0]),
+                time_steps=time_steps,
                 time_units=_text(time.attrs.get("Units")),
             )
         except Exception as exc:  # report, never guess
+            logger.warning("Could not probe applied forcing in %s: %s", hdf.filename, type(exc).__name__)
             return AppliedForcingProbe(READ_ERROR, detail=type(exc).__name__)
 
 
@@ -252,6 +295,7 @@ def _cell(value) -> str:
     return value.strip() if isinstance(value, str) else ""
 
 
+@log_call
 def normalize_configured_boundaries(boundaries) -> list[dict]:
     """Reduce ``RasUnsteady.extract_boundary_and_tables`` output to validated descriptors.
 
