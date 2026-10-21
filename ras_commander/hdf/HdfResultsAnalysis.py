@@ -169,6 +169,8 @@ class HdfResultsAnalysis:
                 logger.debug(f"Plan {plan_num} ({label}): extracted peaks for {len(peaks)} locations")
 
             except Exception as e:
+                from ras_commander.fast_hdf import reraise_required
+                reraise_required(e)
                 logger.error(
                     f"Skipping plan {plan_num} ({label}): failed to extract {reftype} "
                     f"reference timeseries variable '{variable}' from {plan_hdf} "

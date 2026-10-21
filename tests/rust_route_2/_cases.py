@@ -7,7 +7,7 @@ guard treats reads made from this module as harness reads.
 """
 import h5py
 
-from ras_commander.hdf import HdfPipe
+from ras_commander.hdf import HdfBndry, HdfPipe, HdfResultsPlan, HdfResultsXsec
 
 PIPE_TS = "Results/Unsteady/Output/Output Blocks/DSS Hydrograph Output/Unsteady Time Series/Pipe Networks"
 PIPE_VARIABLES = [
@@ -49,3 +49,39 @@ CASES = {
 for _variable in PIPE_VARIABLES:
     CASES[f"HdfPipe.get_pipe_network_timeseries[{_variable}]"] = (
         lambda p, v=_variable: HdfPipe.get_pipe_network_timeseries(p, variable=v))
+
+
+# ---------------------------------------------------------------- reference features
+class _PlanProject:
+    """Minimal initialized project whose plan_df points two plans at one fixture."""
+
+    def __init__(self, path):
+        import pandas as pd
+        self.project_folder = str(path.parent) if hasattr(path, "parent") else "."
+        self.project_name = "fixture"
+        self.plan_df = pd.DataFrame({"plan_number": ["01", "02"],
+                                     "HDF_Results_Path": [str(path), str(path)]})
+
+    def check_initialized(self):
+        return True
+
+
+def _critical_duration(path, reftype):
+    from pathlib import Path
+    from ras_commander.hdf.HdfResultsAnalysis import HdfResultsAnalysis
+    return HdfResultsAnalysis.analyze_critical_duration(
+        ["01", "02"], plan_labels={"01": "a", "02": "b"}, reftype=reftype,
+        ras_object=_PlanProject(Path(path)))
+
+
+CASES.update({
+    "HdfBndry.get_reference_points": lambda p: HdfBndry.get_reference_points(p),
+    "HdfResultsXsec.get_ref_lines_timeseries": lambda p: HdfResultsXsec.get_ref_lines_timeseries(p),
+    "HdfResultsXsec.get_ref_points_timeseries": lambda p: HdfResultsXsec.get_ref_points_timeseries(p),
+    "HdfResultsPlan.get_reference_timeseries[lines]": lambda p: HdfResultsPlan.get_reference_timeseries(p, "lines"),
+    "HdfResultsPlan.get_reference_timeseries[points]": lambda p: HdfResultsPlan.get_reference_timeseries(p, "points"),
+    "HdfResultsPlan.get_reference_summary[lines]": lambda p: HdfResultsPlan.get_reference_summary(p, "lines"),
+    "HdfResultsPlan.get_reference_summary[points]": lambda p: HdfResultsPlan.get_reference_summary(p, "points"),
+    "HdfResultsAnalysis.analyze_critical_duration[lines]": lambda p: _critical_duration(p, "lines"),
+    "HdfResultsAnalysis.analyze_critical_duration[points]": lambda p: _critical_duration(p, "points"),
+})
