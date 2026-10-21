@@ -282,9 +282,6 @@ class HdfPipe:
         Example:
             >>> nodes_gdf = HdfPipe.get_pipe_nodes("path/to/plan.hdf")
         """
-        if crs is None:
-            crs = HdfBase.get_projection(hdf_path)
-
         shapely_geometry = require_module("shapely.geometry", "Returning GeoDataFrame results from HdfPipe")
         Point = shapely_geometry.Point
 

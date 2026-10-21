@@ -656,3 +656,33 @@ def test_cache_off_opens_per_read_and_holds_nothing(tmp_path, session_spy, monke
     path = _write_mesh_results_hdf(tmp_path / "results.p01.hdf")
     HdfResultsMesh.get_mesh_max_ws(path)
     assert not fast_hdf._sessions
+
+
+# ---------------------------------------------------------------------------
+# 7. Unrelated changes ride-alongs stay out
+# ---------------------------------------------------------------------------
+
+def test_get_pipe_nodes_resolves_the_projection_last_like_main(tmp_path, monkeypatch):
+    from ras_commander.hdf.HdfPipe import HdfPipe
+    calls = []
+    real = HdfBase.get_projection
+    monkeypatch.setattr(HdfBase, "get_projection", staticmethod(lambda *a, **k: calls.append(a) or real(*a, **k)))
+    path = tmp_path / "no-pipes.g01.hdf"
+    with h5py.File(path, "w") as hdf:
+        hdf.attrs["Projection"] = CRS.from_epsg(26915).to_wkt()
+    with pytest.raises(KeyError, match="Pipe Nodes"):
+        HdfPipe.get_pipe_nodes(path)
+    assert calls == []        # main raised before ever resolving a projection
+    with h5py.File(path, "a") as hdf:
+        attributes = np.zeros(1, dtype=[("Name", "S8")])
+        hdf.create_dataset("Geometry/Pipe Nodes/Attributes", data=attributes)
+        hdf.create_dataset("Geometry/Pipe Nodes/Points", data=np.array([[1.0, 2.0]]))
+    nodes = HdfPipe.get_pipe_nodes(path)
+    assert len(calls) == 1 and nodes.crs is not None
+
+
+def test_geometry_text_output_is_main_s():
+    """GeomCrossSection keeps main's 10-value '#XS Ineff' rows and bank-station rounding."""
+    from ras_commander.geom.GeomCrossSection import GeomCrossSection
+    assert not hasattr(GeomCrossSection, "INEFFECTIVE_VALUES_PER_LINE")
+    assert not hasattr(GeomCrossSection, "_round_trip_decimals")
