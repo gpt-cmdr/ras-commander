@@ -32,7 +32,7 @@ logger = get_logger(__name__)
 
 __all__ = [
     "FastHdfError", "available", "close_sessions", "read_dataset", "read_datasets",
-    "read_typed", "trace_reads",
+    "read_typed", "trace_reads", "native_required", "reraise_required",
     "packed_meshes", "mesh_polygons", "export_pmtiles", "export_mesh_pmtiles",
 ]
 
@@ -307,6 +307,26 @@ def read_typed(dataset: h5py.Dataset, selection=None, *, backend="auto"):
     """
     from . import _fast_hdf_typed
     return _fast_hdf_typed.read(dataset, selection, backend=backend)
+
+
+def native_required() -> bool:
+    """Whether ``RAS_COMMANDER_FAST_HDF`` currently selects required-native mode."""
+    try:
+        return _mode("auto") == "rust"
+    except ValueError:
+        return False
+
+
+def reraise_required(exc: BaseException) -> None:
+    """Re-raise ``exc`` when it is a native refusal in required-native mode.
+
+    Public readers keep their established h5py failure policy (empty result,
+    logged error or wrapped exception) in python and auto modes. Required-native
+    mode must surface :class:`FastHdfError` unchanged instead, so their broad
+    ``except Exception`` handlers call this first.
+    """
+    if isinstance(exc, FastHdfError) and native_required():
+        raise exc
 
 
 def trace_reads():
