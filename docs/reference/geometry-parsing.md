@@ -72,11 +72,12 @@ original padding, positions and coordinate precision. Replacing an unchanged
 ordered collection preserves every byte and its placement; changed collections
 are written with CRLF. Backups follow the existing `create_backup` option.
 
-The text reference-point helper uses `IC Point Name=` with a `Reference Point`
-prefix and a separate `IC Point Position=x,y` record. Its name also ends at the
-record boundary. These IC Point records do not establish native Reference
-Points output; use `HdfBndry.get_reference_points()` to inspect recorded native
-points. Breakline and BC-line text name records likewise retain commas.
+The text reference-point helper writes `Reference Point Name=` (40-byte padded)
+and `Reference Point Position=x,y`. Names are literal, without a prefix. Existing
+IC Point records remain separate and are excluded by the native getter; migrate
+explicitly rather than assuming conversion. Connection edits preserve native point
+blocks, and reprojection transforms their positions. Use
+`HdfBndry.get_reference_points()` to inspect computed native points. Breakline and BC-line text name records likewise retain commas.
 RAS Mapper profile-line feature names and HDF name attributes are separate
 string fields.
 

@@ -377,6 +377,9 @@ class HdfStruc:
         - Invalid centerline geometry raises an exception
         - All byte strings are decoded to UTF-8
         - CRS is preserved from the source file
+        - Public Structure IDs remain one-based. Bridge coefficients are joined
+          by their native zero-based Attributes row IDs, not the display IDs.
+          Duplicate or out-of-range coefficient IDs raise ValueError.
         """
         try:
             with h5py.File(hdf_path, 'r') as hdf:
@@ -500,13 +503,25 @@ class HdfStruc:
                     crs=HdfBase.get_projection(hdf_path)
                 )
 
-                # Merge Bridge Coefficient Attributes on 'Structure ID'
+                # Native coefficient IDs refer to zero-based Attributes rows;
+                # the public Structure ID column is a one-based display ID.
                 if not bridge_coef.empty and 'Structure ID' in bridge_coef.columns:
+                    native_ids = bridge_coef['Structure ID']
+                    if (not pd.api.types.is_integer_dtype(native_ids.dtype)
+                            or native_ids.duplicated().any()
+                            or (native_ids < 0).any()
+                            or (native_ids >= len(struct_attrs)).any()):
+                        raise ValueError(
+                            "Invalid native Structure ID in Bridge Coefficient Attributes: "
+                            "expected unique zero-based Structures/Attributes row IDs"
+                        )
                     struct_gdf = struct_gdf.merge(
-                        bridge_coef,
-                        on='Structure ID',
+                        bridge_coef.set_index('Structure ID'),
+                        left_index=True,
+                        right_index=True,
                         how='left',
-                        suffixes=('', '_bridge_coef')
+                        suffixes=('', '_bridge_coef'),
+                        validate='one_to_one',
                     )
                     logger.debug("Merged Bridge Coefficient Attributes successfully.")
                 else:
