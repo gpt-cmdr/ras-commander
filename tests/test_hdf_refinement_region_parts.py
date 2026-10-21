@@ -47,3 +47,54 @@ def test_refinement_holes_islands_and_disjoint_shells(
     assert len(geometry.geoms) == 3
     assert sum(len(part.interiors) for part in geometry.geoms) == 1
     assert geometry.area == pytest.approx(66)
+
+
+def _write_regions(path, points, info, parts):
+    with h5py.File(path, "w") as hdf:
+        group = hdf.create_group("Geometry/2D Flow Area Refinement Regions")
+        group["Attributes"] = np.array(
+            [(f"r{i}".encode(),) for i in range(len(info))], dtype=[("Name", "S20")]
+        )
+        group["Polygon Points"] = np.asarray(points, dtype=float)
+        group["Polygon Info"] = np.asarray(info, dtype=np.int32)
+        group["Polygon Parts"] = np.asarray(parts, dtype=np.int32)
+
+
+SQUARES = [[0, 0], [2, 0], [2, 2], [0, 2], [5, 0], [7, 0], [7, 2], [5, 2]]
+
+
+def test_local_parts_with_unused_leading_vertices(tmp_path):
+    # Local Parts that also fit the global range must not be shifted.
+    path = tmp_path / "local.g01.hdf"
+    points = [[100, 100], [101, 100], [100, 101], [88, 88], [89, 88], [88, 89]] + SQUARES
+    _write_regions(path, points, [[0, 3, 0, 1], [3, 11, 1, 2]], [[0, 3], [3, 4], [7, 4]])
+    geometry = HdfBndry.get_refinement_regions(path).geometry.iloc[1]
+    assert geometry.wkt == (
+        "MULTIPOLYGON (((0 0, 2 0, 2 2, 0 2, 0 0)), ((5 0, 7 0, 7 2, 5 2, 5 0)))"
+    )
+
+
+def test_legacy_global_parts_covering_the_feature(tmp_path):
+    path = tmp_path / "global.g01.hdf"
+    points = [[100, 100], [101, 100], [100, 101]] + SQUARES
+    _write_regions(path, points, [[0, 3, 0, 1], [3, 8, 1, 2]], [[0, 3], [3, 4], [7, 4]])
+    geometry = HdfBndry.get_refinement_regions(path).geometry.iloc[1]
+    assert geometry.wkt == (
+        "MULTIPOLYGON (((0 0, 2 0, 2 2, 0 2, 0 0)), ((5 0, 7 0, 7 2, 5 2, 5 0)))"
+    )
+
+
+@pytest.mark.parametrize(
+    "parts",
+    [
+        [[0, 3], [3, 4], [9, 4]],  # neither local nor a complete global cover
+        [[0, 3], [0, 4], [7, 4]],  # mixed local and global offsets
+        [[0, 3], [3, 4]],  # truncated Parts dataset
+    ],
+)
+def test_unresolvable_parts_raise(tmp_path, parts):
+    path = tmp_path / "bad.g01.hdf"
+    points = [[100, 100], [101, 100], [100, 101]] + SQUARES
+    _write_regions(path, points, [[0, 3, 0, 1], [3, 8, 1, 2]], parts)
+    with pytest.raises(ValueError, match="polygon part"):
+        HdfBndry.get_refinement_regions(path)
