@@ -24,10 +24,13 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from rust_route_1.test_routed_equivalence import NATIVE, _run, _same  # noqa: E402
 from rust_route_1._h5py_guard import offending  # noqa: E402
 
-from ._cases import CASES  # noqa: E402
+from ._cases import CASES, PROJECT_CASES  # noqa: E402
 
 MANIFEST = os.environ.get("RAS_ROUTE2_FIXTURES")
-FIXTURES = json.loads(Path(MANIFEST).read_text())["fixtures"] if MANIFEST else []
+_MANIFEST = json.loads(Path(MANIFEST).read_text()) if MANIFEST else {}
+FIXTURES = _MANIFEST.get("fixtures", [])
+# Read-only project folders for multi-file land-cover/infiltration methods.
+PROJECTS = _MANIFEST.get("projects", [])
 RESULTS = os.environ.get("RAS_ROUTE2_RESULTS")
 pytestmark = pytest.mark.skipif(
     not MANIFEST, reason="Set RAS_ROUTE2_FIXTURES to the PY-ROUTE-2 real-fixture JSON manifest")
@@ -36,11 +39,19 @@ pytestmark = pytest.mark.skipif(
 @pytest.mark.parametrize("fixture", FIXTURES, ids=[f["name"] for f in FIXTURES])
 @pytest.mark.parametrize("case", sorted(CASES), ids=sorted(CASES))
 def test_public_method(case, fixture, monkeypatch):
+    _check(case, CASES[case], fixture["path"], fixture["name"], monkeypatch)
+
+
+@pytest.mark.parametrize("project", PROJECTS, ids=[p["name"] for p in PROJECTS])
+@pytest.mark.parametrize("case", sorted(PROJECT_CASES), ids=sorted(PROJECT_CASES))
+def test_project_method(case, project, monkeypatch):
+    _check(case, PROJECT_CASES[case], project, project["name"], monkeypatch)
+
+
+def _check(case, call, path, label, monkeypatch):
     native = pytest.importorskip("ras_commander_fast_hdf")
     assert native.API_VERSION == 10
     from ras_commander import fast_hdf
-    call = CASES[case]
-    path = fixture["path"]
     py, py_trace, _ = _run(monkeypatch, "0", call, path)
     assert all(r["backend"] == "h5py" for r in py_trace), "h5py mode performed a native read"
     auto, auto_trace, _ = _run(monkeypatch, "auto", call, path)
@@ -73,7 +84,7 @@ def test_public_method(case, fixture, monkeypatch):
     if RESULTS:
         with open(RESULTS, "a", encoding="utf-8") as fh:
             fh.write(json.dumps({
-                "case": case, "fixture": fixture["name"], "outcome": outcome,
+                "case": case, "fixture": label, "outcome": outcome,
                 "result": py[0] if py[0] == "ok" else f"raise {py[1].__name__}",
                 "typed_reads": len(typed),
                 "typed_routes": sorted({r["route"] for r in typed}),

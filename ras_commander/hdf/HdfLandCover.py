@@ -463,9 +463,9 @@ class HdfLandCover:
         nodata_threshold = np.finfo(np.float32).max * 0.5
 
         with h5py.File(landcover_hdf_path, "r") as hdf_file:
-            ids = hdf_file["IDs"][()]
-            names = hdf_file["Names"][()]
-            mannings_n = hdf_file["ManningsN"][()]
+            ids = read_typed(hdf_file["IDs"])
+            names = read_typed(hdf_file["Names"])
+            mannings_n = read_typed(hdf_file["ManningsN"])
 
         for pixel_value, raw_name, base_n in zip(ids, names, mannings_n):
             class_name = str(HdfUtils.convert_ras_hdf_value(raw_name)).strip()
@@ -669,7 +669,7 @@ class HdfLandCover:
                     logger.debug(f"Land cover sidecar missing Raster Map: {landcover_hdf_path}")
                     return None
 
-                rmap_data = hdf_file[rmap_path][()]
+                rmap_data = read_typed(hdf_file[rmap_path])
                 class_names = [HdfUtils.convert_ras_string(n) for n in rmap_data['Name']]
                 pixel_ids = rmap_data['ID'].tolist()
 
@@ -687,7 +687,7 @@ class HdfLandCover:
                     logger.debug(f"Land cover sidecar missing Variables: {landcover_hdf_path}")
                     return None
 
-                vars_data = hdf_file[vars_path][()]
+                vars_data = read_typed(hdf_file[vars_path])
                 var_names = [HdfUtils.convert_ras_string(n) for n in vars_data['Name']]
 
                 mannings_n = {}
@@ -707,6 +707,7 @@ class HdfLandCover:
                 return pd.DataFrame(rows)
 
         except Exception as e:
+            reraise_required(e)
             logger.error(f"Error reading land cover raster map from {landcover_hdf_path}: {e}")
             return None
 
@@ -1185,7 +1186,7 @@ class HdfLandCover:
                 # Try 2D flow area perimeter first (tightest bounds)
                 perim_pts_path = "Geometry/2D Flow Areas/Polygon Points"
                 if perim_pts_path in hf:
-                    pts = hf[perim_pts_path][()]
+                    pts = read_typed(hf[perim_pts_path])
                     buffer = 500.0  # 500 ft buffer around perimeter
                     clip_bounds = (
                         float(pts[:, 0].min()) - buffer,
@@ -1204,6 +1205,7 @@ class HdfLandCover:
                         )
                         logger.debug("Clipping to geometry extent (no 2D perimeter found)")
         except Exception as e:
+            reraise_required(e)
             logger.debug(f"Could not read clip bounds from geometry HDF: {e}")
 
         # Step 5: Read land cover TIF (clipped to geometry extent) and compute

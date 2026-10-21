@@ -25,6 +25,7 @@ import pandas as pd
 
 from ._ras_text import _write_ras_xml
 from .LoggingConfig import get_logger
+from .fast_hdf import read_typed
 from .RasUtils import RasUtils
 from ._rasmap_schema import create_rasmap_dataframe, expected_rasmap_path
 from ._spatial_extent import _normalize_extent_bounds
@@ -1226,7 +1227,7 @@ def read_land_classification_polygon_records(
         if not required.issubset(set(group.keys())):
             return records
 
-        attributes = group["Attributes"][()]
+        attributes = read_typed(group["Attributes"])
         attr_fields = attributes.dtype.names or ()
         class_field = "Classification" if "Classification" in attr_fields else "Name"
         if class_field not in attr_fields:
@@ -1235,10 +1236,10 @@ def read_land_classification_polygon_records(
                 "a Classification or Name field"
             )
 
-        polygon_info = group["Polygon Info"][()]
-        polygon_points = group["Polygon Points"][()]
+        polygon_info = read_typed(group["Polygon Info"])
+        polygon_points = read_typed(group["Polygon Points"])
         polygon_parts = (
-            group["Polygon Parts"][()]
+            read_typed(group["Polygon Parts"])
             if "Polygon Parts" in group
             else np.zeros((0, 2), dtype=np.int32)
         )
