@@ -789,6 +789,16 @@ Routing policy:
 - Datasets in a typed engine family (2D mesh geometry and line families, 1D
   geometry, XS results, 1D summaries and structure series) are served by the
   typed reader, after the stored dtype layout and shape are checked.
+- Wave 3 stored families (bridge API 10): pipes, reference lines and points,
+  breach, plan metadata tables, land-cover/infiltration sidecars, terrain,
+  sediment, encroachments, Event Conditions, steady output and the non-Base
+  output blocks (DSS Hydrograph/Profile, Computation Block). The engine's
+  `stored_family_index` decides membership; supported numeric, compound and
+  byte-bitfield datasets are read typed. Geometry reference points come from
+  `reference_point_geometry`. Datasets the engine lists but does not qualify
+  (for example pipe summaries without a stored `Location`) keep their exact
+  literal values through the generic reader. Compound text members stored
+  NULLTERM or SPACEPAD receive HDF5's conversion into h5py's NULLPAD type.
 - Other numeric datasets use the generic native reader (`read_dataset`).
 - Selections are validated with h5py's own selector before any native read.
   Invalid selections (for example a negative step) raise h5py's exception in
@@ -803,6 +813,17 @@ Routing policy:
   it is an h5py fallback in auto mode and a `FastHdfError` refusal in required
   mode. Required mode therefore guarantees native *numeric value* reads, not
   that h5py is never opened.
+- **Attributes.** `fast_hdf.read_attrs(obj)` returns `{name: obj.attrs[name]}`
+  in h5py's key order with values rebuilt exactly from the engine's typed
+  attributes (numeric scalars/arrays in the stored dtype and byte order; fixed
+  strings with HDF5's NULLPAD conversion). Groups use the engine's typed group
+  attributes; datasets in a Wave 3 family or output block use their engine
+  descriptors; other datasets keep h5py. Values the engine cannot reproduce
+  (bitfield, variable-length, compound attributes) fall back per attribute in
+  auto mode and raise `FastHdfError` in required mode. Plan metadata,
+  run-summary and association readers (`HdfPlan`, `HdfResultsPlan.get_*_info`,
+  `get_volume_accounting`, `get_runtime_data`, `HdfUtils.get_units_system`, ...)
+  use it.
 - `HdfResultsMesh` result readers use `read_dataset`, which follows the same
   rule: in auto mode any native failure, Corrupt or checksum refusals included,
   falls back to h5py, so the public result or exception is the h5py one.
