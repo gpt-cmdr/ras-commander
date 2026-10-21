@@ -113,9 +113,9 @@ modes are described in the HDF API reference (*Routed HDF reads and backend
 modes*). In short:
 
 - Auto falls back to h5py on any native failure of a routed read, so public
-  outcomes are the h5py ones. `HdfResultsMesh` result readers are the exception:
-  they keep the earlier `read_dataset` rule that a native Corrupt refusal is an
-  error in auto mode too.
+  outcomes are the h5py ones. Since PY-ROUTE-2 this includes `HdfResultsMesh`
+  result readers: `read_dataset` (and the native temporal reduction) no longer
+  treat a native Corrupt refusal as fatal in auto mode.
 - Required mode raises `FastHdfError` on any refusal. It reads all numeric
   values natively. Strings, compound identity/attribute tables without an engine
   raw reader, attributes and structure walks stay on h5py (the documented

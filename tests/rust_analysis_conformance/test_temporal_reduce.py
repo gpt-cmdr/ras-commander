@@ -168,6 +168,8 @@ def test_nonnative_byte_order_falls_back_only_in_auto(tmp_path, native, native_c
 
 @pytest.mark.parametrize("backend", ["auto", "rust"])
 def test_corrupt_chunks_raise_instead_of_empty_result(tmp_path, native, backend):
+    # Required mode raises FastHdfError; auto keeps the Python (h5py) outcome,
+    # which is also an exception, never an empty result (PY-ROUTE-2 contract).
     path = write(tmp_path / "s.h5", adversarial(200, 400), chunks=(10, 400), compression="gzip")
     damaged = tmp_path / "damaged.h5"
     shutil.copyfile(path, damaged)
@@ -179,8 +181,15 @@ def test_corrupt_chunks_raise_instead_of_empty_result(tmp_path, native, backend)
         handle.seek(info.byte_offset)
         handle.write(b"\xff" * info.size)
     with h5py.File(damaged, "r") as hdf:
-        with pytest.raises(FastHdfError):
-            fast_results.temporal_reduce(hdf["series"], backend=backend)
+        if backend == "rust":
+            with pytest.raises(FastHdfError):
+                fast_results.temporal_reduce(hdf["series"], backend=backend)
+        else:
+            with pytest.raises(Exception) as python_error:
+                fast_results.temporal_reduce(hdf["series"], backend="python")
+            with pytest.raises(type(python_error.value)) as auto_error:
+                fast_results.temporal_reduce(hdf["series"], backend=backend)
+            assert str(auto_error.value) == str(python_error.value)
 
 
 def test_invalid_requests(tmp_path, native):

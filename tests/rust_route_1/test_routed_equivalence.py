@@ -40,23 +40,8 @@ NATIVE = {"native-typed", "native-generic"}
 
 # Inventory label H5PY (chunked digest reads stay on h5py); exercised for parity only.
 H5PY_LABELLED = {"HdfMesh.get_mesh_geometry_inventory"}
-# HdfResultsMesh readers keep the FIM-wave1 policy that predates this branch:
-# fast_hdf.read_dataset treats a native Corrupt refusal as fatal in auto mode too
-# ("native exceptions are never converted to successful empty results"); the
-# method may wrap that FastHdfError in its own exception type.
-CORRUPT_FATAL_IN_AUTO = "HdfResultsMesh."
-
-
-def _native_failure(exc):
-    """Whether ``exc`` is, or was raised from, a FastHdfError."""
-    from ras_commander import fast_hdf
-    seen = set()
-    while exc is not None and id(exc) not in seen:
-        if isinstance(exc, fast_hdf.FastHdfError):
-            return True
-        seen.add(id(exc))
-        exc = exc.__cause__ or exc.__context__
-    return False
+# PY-ROUTE-2: read_dataset now gives the h5py outcome in auto mode on any native
+# failure (Corrupt included), so no method is exempt from the auto == h5py rule.
 
 
 class _FailingEngine:
@@ -134,12 +119,8 @@ def test_public_method(case, fixture, monkeypatch):
         outcome = "native-identical" if typed else "no-typed-read"
     # Injected engine failure: every native call raises CorruptDataError.
     inj_auto, _, _ = _run(monkeypatch, "auto", call, path, inject=True)
-    if (case.startswith(CORRUPT_FATAL_IN_AUTO) and inj_auto[0] == "raise"
-            and _native_failure(inj_auto[3])):
-        injected_auto = "corrupt-fatal (FIM-wave1 policy)"
-    else:
-        _same(py, inj_auto)
-        injected_auto = "h5py-outcome"
+    _same(py, inj_auto)
+    injected_auto = "h5py-outcome"
     inj_req, _, _ = _run(monkeypatch, "required", call, path, inject=True)
     if native_reads and case not in H5PY_LABELLED:
         assert inj_req[0] == "raise" and inj_req[1] is fast_hdf.FastHdfError, \
