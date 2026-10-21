@@ -9,6 +9,36 @@ alone does not identify a development checkout.
 
 ### Unreleased
 
+**SI sediment results resolve despite the RasMapper geometry unit flag (behavior change)**
+
+HEC-RAS 6.6 and 7.0 write `/Geometry/@SI Units = False` in every result HDF
+whose geometry RasMapper has saved, including SI projects: RasMapper starts
+the flag at `False` and never updates it from the project units. Since the
+strict unit metadata added in v0.100.0, SI 2D results such as the Weise_2D
+sediment example (root `/@Units System = SI Units`, every dataset labelled
+`m`) were refused as contradictory by `HdfResultsSediment`,
+`HdfResultsQuery` velocity qualification and profile attrs, and
+`HdfResultsProducts`.
+
+- `HdfBase.get_result_unit_metadata()` accepts root `SI Units` with
+  `/Geometry/@SI Units = False` as SI only when at least one result dataset
+  `Units` label in the same file is `m` and none is `ft`. The record carries a
+  `warnings` entry naming the ignored attribute and keeps both attributes in
+  `evidence`; a warning is also logged. Every other disagreement, including
+  root `US Customary` with `/Geometry/@SI Units = True`, still raises.
+- New `project_file=` makes the `.prj` marker authoritative
+  (`source="project_file"`); a root `/@Units System` that disagrees with it
+  raises. New `unit_system="SI"`/`"US Customary"` overrides everything
+  (`source="override"`), and resolution errors name it. All records now
+  include a `warnings` list.
+- `HdfResultsSediment` readers accept `unit_system=` and use the project `.prj`
+  marker when `ras_object` is given, or when the initialized global project
+  contains the HDF.
+- `HdfResultsSediment.get_active_layer_grain_class()` validates diameters
+  against the dataset's own `Units` attribute (`mm`; any other label raises,
+  an unlabelled dataset is read as mm with a warning). Unresolvable model
+  units no longer block it; `attrs["length_unit"]` is then None.
+
 **Project CRS comes from cross-checked evidence (behavior change)**
 
 `HdfBase.get_projection()`, `HdfProject.get_project_crs()` and

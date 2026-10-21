@@ -6,10 +6,14 @@ Class: HdfResultsSediment
 HEC-RAS writes per-cell mobile-bed results for 2D sediment runs under::
 
     Results/Unsteady/Output/Output Blocks/Sediment Bed/Unsteady Time Series/2D Flow Areas/<area>/
-        Cell Bed Change                                   (n_time, n_cell)  ft
-        Cell Bed Elevation                                (n_time, n_cell)  ft
-        Cell Initial Bed Elevation                        (1,      n_cell)  ft
+        Cell Bed Change                                   (n_time, n_cell)  ft or m
+        Cell Bed Elevation                                (n_time, n_cell)  ft or m
+        Cell Initial Bed Elevation                        (1,      n_cell)  ft or m
         Cell Active Layer Percentile Diameters - D10/D50/D90  (n_time, n_cell)  mm
+
+Length datasets are in the model length unit (see ``get_cell_bed_change``);
+active-layer diameters are always mm, checked against each dataset's own
+``Units`` attribute.
 
 The per-cell arrays align with the *computed* geometry's ``Cells Surface Area``
 and ``Cells Center Coordinate``. Results cover the physical cells only: the
@@ -57,14 +61,86 @@ class HdfResultsSediment:
     """Static reader for 2D mobile-bed (sediment) plan-HDF results."""
 
     @staticmethod
-    def _length_unit(f: h5py.File) -> str:
-        """Return the strictly resolved result-HDF model length unit."""
+    def _project_file(hdf_path: Path, ras_object: Optional[Any]) -> Optional[Path]:
+        """Return the ``.prj`` of the project that owns ``hdf_path``, if known.
+
+        An explicit ``ras_object`` supplies its project file. Otherwise the
+        initialized global ``ras`` is used only when its plan DataFrame
+        identifies the HDF as a result file. Sharing a folder is insufficient.
+        No folder is searched for ``.prj`` files.
+        """
+        project = ras_object
+        if project is None:
+            from ..RasPrj import ras as project
+            if not getattr(project, "initialized", False):
+                return None
+            plans = getattr(project, "plan_df", None)
+            if not isinstance(plans, pd.DataFrame):
+                return None
+            owned_paths = []
+            for column in ("HDF_Results_Path", "full_path"):
+                for value in plans.get(column, []):
+                    if isinstance(value, (str, Path)) and str(value).strip():
+                        candidate = Path(value)
+                        if column == "full_path":
+                            candidate = Path(str(candidate) + ".hdf")
+                        owned_paths.append(candidate)
+            try:
+                belongs_to_project = any(
+                    Path(hdf_path).resolve() == candidate.resolve()
+                    for candidate in owned_paths
+                )
+            except (OSError, ValueError):
+                return None
+            if not belongs_to_project:
+                return None
+        prj_file = getattr(project, "prj_file", None)
+        return Path(prj_file) if prj_file else None
+
+    @staticmethod
+    def _length_unit(f: h5py.File, *, unit_system: Optional[str] = None,
+                     project_file: Optional[Path] = None,
+                     strict: bool = True) -> Optional[str]:
+        """Return the resolved model length unit (``ft``/``m``).
+
+        Precedence: ``unit_system`` override, then the project ``.prj``
+        marker, then the embedded result-HDF metadata (see
+        :meth:`HdfBase.get_result_unit_metadata`). With ``strict=False`` an
+        unresolvable unit system returns None and logs a warning.
+        """
         metadata = HdfBase._result_unit_metadata_from_file(
             f,
             source_file=Path(f.filename),
-            strict=True,
+            strict=strict,
+            unit_system=unit_system,
+            project_file=project_file,
         )
+        if metadata["status"] != "resolved":
+            logger.warning(
+                "Model length unit unresolved for %s: %s",
+                Path(f.filename).name, "; ".join(metadata["contradictions"]))
+            return None
         return str(metadata["length_units"])
+
+    @staticmethod
+    def _require_mm_units(dataset: h5py.Dataset, name: str, area: str) -> None:
+        """Validate a grain-diameter dataset against its own ``Units`` label.
+
+        HEC-RAS stores active-layer diameters in mm in SI and US Customary
+        projects alike, so the model unit system is not consulted. A label
+        other than ``mm`` raises; an unlabelled dataset keeps the mm
+        convention with a warning.
+        """
+        if "Units" not in dataset.attrs:
+            logger.warning(
+                "Dataset '%s' in area '%s' has no Units attribute; assuming mm.",
+                name, area)
+            return
+        units = HdfBase._decode_unit_attribute(dataset.attrs["Units"])
+        if units != "mm":
+            raise ValueError(
+                f"Dataset '{name}' in area '{area}' has Units={units!r}; "
+                "active-layer grain diameters must be labelled 'mm'.")
 
     # ------------------------------------------------------------------ #
     # Discovery
@@ -152,13 +228,18 @@ class HdfResultsSediment:
         return sa, cc, crs
 
     @staticmethod
-    def _read_cell_dataset(hdf_path, area, dataset, time_index):
+    def _read_cell_dataset(hdf_path, area, dataset, time_index, *,
+                           unit_system=None, project_file=None,
+                           grain_diameter=False):
         """Read one Sediment Bed per-cell dataset and aligned geometry (numpy only).
 
         Returns a dict with ``area`` (resolved name), ``values`` (per-cell at the
         requested time), ``surface_area``, ``centers``, ``crs``, and ``length_unit``
         (ft/m). No GeoPandas dependency -- callers build the GeoDataFrame so the
         heavy import stays at each public-method boundary.
+
+        ``grain_diameter=True`` validates the dataset's own ``mm`` label and
+        does not block on the model unit system (``length_unit`` may be None).
         """
         with h5py.File(hdf_path, 'r') as f:
             area = HdfResultsSediment._resolve_area(f, area)
@@ -166,9 +247,13 @@ class HdfResultsSediment:
             if ds_path not in f:
                 raise ValueError(f"Dataset '{dataset}' not found for area '{area}'.")
             arr = f[ds_path]
+            if grain_diameter:
+                HdfResultsSediment._require_mm_units(arr, dataset, area)
             row = HdfResultsSediment._select_time_row(arr, time_index, dataset, area)
             sa, cc, crs = HdfResultsSediment._cell_geometry(f, area)
-            length_unit = HdfResultsSediment._length_unit(f)
+            length_unit = HdfResultsSediment._length_unit(
+                f, unit_system=unit_system, project_file=project_file,
+                strict=not grain_diameter)
             physical_count = HdfMesh._physical_cell_counts(f).get(area)
 
         values = np.asarray(row, dtype=float)
@@ -237,19 +322,29 @@ class HdfResultsSediment:
     @log_call
     @standardize_input(file_type='plan_hdf')
     def get_cell_bed_change(hdf_path: Path, mesh_name: Optional[str] = None,
-                            time_index: int = -1, ras_object: Optional[Any] = None):
+                            time_index: int = -1, ras_object: Optional[Any] = None,
+                            unit_system: Optional[str] = None):
         """
-        Return per-cell bed change (ft) at a time index as a GeoDataFrame.
+        Return per-cell bed change at a time index as a GeoDataFrame.
 
         Columns: ``mesh_name, cell_id, bed_change, surface_area, geometry``.
         ``bed_change`` is in the model length unit (ft or m; see
         ``gdf.attrs['length_unit']``). Negative = scour, positive = deposition.
         ``time_index`` indexes the sediment output series (default -1 = final).
+
+        The length unit comes from ``unit_system`` (``"SI"`` or
+        ``"US Customary"``) when given, else from the project ``.prj`` marker
+        when the project is known (``ras_object``, or the initialized global
+        project that contains the HDF), else from the embedded HDF metadata
+        (see :meth:`HdfBase.get_result_unit_metadata`). Unresolvable or
+        contradictory units raise ``ValueError``.
         """
         from geopandas import GeoDataFrame
         from shapely.geometry import Point
         data = HdfResultsSediment._read_cell_dataset(
-            hdf_path, mesh_name, "Cell Bed Change", time_index)
+            hdf_path, mesh_name, "Cell Bed Change", time_index,
+            unit_system=unit_system,
+            project_file=HdfResultsSediment._project_file(hdf_path, ras_object))
         return HdfResultsSediment._build_cell_gdf(
             GeoDataFrame, Point, data, "bed_change", data["length_unit"])
 
@@ -257,17 +352,22 @@ class HdfResultsSediment:
     @log_call
     @standardize_input(file_type='plan_hdf')
     def get_cell_bed_elevation(hdf_path: Path, mesh_name: Optional[str] = None,
-                               time_index: int = -1, ras_object: Optional[Any] = None):
+                               time_index: int = -1, ras_object: Optional[Any] = None,
+                               unit_system: Optional[str] = None):
         """
-        Return per-cell bed elevation (ft) at a time index as a GeoDataFrame.
+        Return per-cell bed elevation at a time index as a GeoDataFrame.
 
         Columns: ``mesh_name, cell_id, bed_elevation, surface_area, geometry``
         (``bed_elevation`` in the model length unit; see ``gdf.attrs['length_unit']``).
+        The length unit resolves as in :meth:`get_cell_bed_change`
+        (``unit_system`` override, project ``.prj``, embedded metadata).
         """
         from geopandas import GeoDataFrame
         from shapely.geometry import Point
         data = HdfResultsSediment._read_cell_dataset(
-            hdf_path, mesh_name, "Cell Bed Elevation", time_index)
+            hdf_path, mesh_name, "Cell Bed Elevation", time_index,
+            unit_system=unit_system,
+            project_file=HdfResultsSediment._project_file(hdf_path, ras_object))
         return HdfResultsSediment._build_cell_gdf(
             GeoDataFrame, Point, data, "bed_elevation", data["length_unit"])
 
@@ -276,18 +376,31 @@ class HdfResultsSediment:
     @standardize_input(file_type='plan_hdf')
     def get_active_layer_grain_class(hdf_path: Path, percentile: str = "D50",
                                      mesh_name: Optional[str] = None, time_index: int = -1,
-                                     ras_object: Optional[Any] = None):
+                                     ras_object: Optional[Any] = None,
+                                     unit_system: Optional[str] = None):
         """
         Return per-cell active-layer grain diameter (mm) at a time index.
+
+        HEC-RAS stores these diameters in mm in SI and US Customary projects
+        alike. The reader validates the dataset's own ``Units`` attribute and
+        raises if it is not ``mm``; an unlabelled dataset is read as mm with a
+        warning. The model unit system is not needed for the diameters, so
+        unresolvable or contradictory model units no longer block this reader.
 
         Args:
             percentile (str): One of ``"D10"``, ``"D50"``, ``"D90"`` (case-insensitive).
             mesh_name (Optional[str]): 2D area name; defaults to the sole sediment area.
             time_index (int): Sediment output time index (default -1 = final).
+            ras_object (Optional[RasPrj]): Project whose ``.prj`` marker sets
+                ``attrs['length_unit']``.
+            unit_system (Optional[str]): ``"SI"`` or ``"US Customary"`` override
+                for ``attrs['length_unit']``.
 
         Returns:
-            GeoDataFrame: Columns ``mesh_name, cell_id, d<NN>_mm, surface_area, geometry``
-                Grain diameters are always mm regardless of the model unit system.
+            GeoDataFrame: Columns ``mesh_name, cell_id, d<NN>_mm, surface_area, geometry``.
+                ``attrs['units']`` is ``"mm"``. ``attrs['length_unit']`` is the
+                resolved model length unit, or None (with a logged warning) when
+                it cannot be resolved.
         """
         pct = percentile.upper()
         if pct not in ("D10", "D50", "D90"):
@@ -295,7 +408,11 @@ class HdfResultsSediment:
         from geopandas import GeoDataFrame
         from shapely.geometry import Point
         dataset = f"Cell Active Layer Percentile Diameters - {pct}"
-        data = HdfResultsSediment._read_cell_dataset(hdf_path, mesh_name, dataset, time_index)
+        data = HdfResultsSediment._read_cell_dataset(
+            hdf_path, mesh_name, dataset, time_index,
+            unit_system=unit_system,
+            project_file=HdfResultsSediment._project_file(hdf_path, ras_object),
+            grain_diameter=True)
         return HdfResultsSediment._build_cell_gdf(
             GeoDataFrame, Point, data, f"{pct.lower()}_mm", "mm")
 
@@ -306,7 +423,8 @@ class HdfResultsSediment:
     @log_call
     @standardize_input(file_type='plan_hdf')
     def get_bed_change_volumes(hdf_path: Path, mesh_name: Optional[str] = None,
-                               time_index: int = -1, ras_object: Optional[Any] = None) -> pd.DataFrame:
+                               time_index: int = -1, ras_object: Optional[Any] = None,
+                               unit_system: Optional[str] = None) -> pd.DataFrame:
         """
         Summarize bed-change volumes per 2D sediment area at a time index.
 
@@ -318,8 +436,10 @@ class HdfResultsSediment:
         Volumes are in native cubic length units (ft^3 or m^3, per
         ``length_unit``); ``max_scour``/``max_deposition`` are in the native
         length unit. Negative values indicate net scour. Callers convert to
-        ac-ft / cubic yards only when ``length_unit == 'ft'``.
+        ac-ft / cubic yards only when ``length_unit == 'ft'``. The length unit
+        resolves as in :meth:`get_cell_bed_change`.
         """
+        project_file = HdfResultsSediment._project_file(hdf_path, ras_object)
         cols = ["mesh_name", "length_unit", "n_cells", "net_bed_volume",
                 "erosion_volume", "deposition_volume", "max_scour", "max_deposition"]
         with h5py.File(hdf_path, 'r') as f:
@@ -338,7 +458,8 @@ class HdfResultsSediment:
         for area in areas:
             # Reuse the shared reader: ndim handling + strict length validation.
             data = HdfResultsSediment._read_cell_dataset(
-                hdf_path, area, "Cell Bed Change", time_index)
+                hdf_path, area, "Cell Bed Change", time_index,
+                unit_system=unit_system, project_file=project_file)
             bc, sa = data["values"], data["surface_area"]
             vol = bc * sa  # native^3 per cell
             wet = sa > 0   # exclude zero-area perimeter/ghost cells
@@ -362,20 +483,23 @@ class HdfResultsSediment:
     @log_call
     @standardize_input(file_type='plan_hdf')
     def get_cell_bed_change_timeseries(hdf_path: Path, mesh_name: Optional[str] = None,
-                                       ras_object: Optional[Any] = None):
+                                       ras_object: Optional[Any] = None,
+                                       unit_system: Optional[str] = None):
         """
         Return the full (time, cell) bed-change series as an xarray.DataArray.
 
         Dimensions ``(time, cell_id)``; ``time`` is the model output time vector
-        (days). Units are the model length unit (ft or m; see ``da.attrs['units']``);
-        negative = scour.
+        (days). Units are the model length unit (ft or m; see ``da.attrs['units']``),
+        resolved as in :meth:`get_cell_bed_change`; negative = scour.
         """
         import xarray as xr
 
+        project_file = HdfResultsSediment._project_file(hdf_path, ras_object)
         with h5py.File(hdf_path, 'r') as f:
             area = HdfResultsSediment._resolve_area(f, mesh_name)
             bc = f[f"{_BED_BLOCK}/{area}/Cell Bed Change"][:]
-            length_unit = HdfResultsSediment._length_unit(f)
+            length_unit = HdfResultsSediment._length_unit(
+                f, unit_system=unit_system, project_file=project_file)
             # Tolerate a 1-D single-snapshot dataset by promoting to (1, n_cell).
             if bc.ndim == 1:
                 bc = bc[np.newaxis, :]

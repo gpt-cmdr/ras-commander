@@ -262,3 +262,31 @@ class TestErrorContracts:
         assert gdf["bed_change"].tolist() == [1.0, 2.0, 3.0]
         ts = HdfResultsSediment.get_cell_bed_change_timeseries(str(p))
         assert ts.shape == (1, 3)
+
+
+@pytest.mark.parametrize("column", ["HDF_Results_Path", "full_path"])
+@pytest.mark.parametrize("owns_result", [False, True])
+def test_implicit_project_units_require_plan_ownership(tmp_path, monkeypatch, column, owns_result):
+    import importlib
+    from types import SimpleNamespace
+    import pandas as pd
+
+    path = _write_synthetic_plan_hdf(tmp_path / "A.p01.hdf", si_units=True)
+    project_file = tmp_path / "B.prj"
+    project_file.write_text("Proj Title=B\nEnglish Units\n")
+    candidate = path if owns_result else tmp_path / "B.p01.hdf"
+    if column == "full_path":
+        candidate = candidate.with_suffix("")
+    project = SimpleNamespace(
+        initialized=True, project_folder=tmp_path, prj_file=project_file,
+        plan_df=pd.DataFrame({column: [str(candidate)]}),
+    )
+    monkeypatch.setattr(importlib.import_module("ras_commander.RasPrj"), "ras", project)
+    if owns_result:
+        # A verified owning project's conflicting units still must raise.
+        with pytest.raises(ValueError, match="Project file marker"):
+            HdfResultsSediment.get_cell_bed_change(path)
+    else:
+        frame = HdfResultsSediment.get_cell_bed_change(path)
+        assert frame.attrs["length_unit"] == "m"
+        assert frame.attrs["units"] == "m"

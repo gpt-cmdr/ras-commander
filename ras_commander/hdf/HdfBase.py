@@ -478,18 +478,100 @@ class HdfBase:
         return None
 
     @staticmethod
+    def _parse_unit_system_override(value: Any) -> bool:
+        """Return True for an SI and False for a US Customary ``unit_system``."""
+        text = HdfBase._decode_unit_attribute(value).casefold()
+        if text in {"si", "si units", "metric", "m"}:
+            return True
+        if text in {"us", "us customary", "english", "english units", "ft"}:
+            return False
+        raise ValueError(
+            f"Unrecognized unit_system {value!r}; use 'SI' or 'US Customary'"
+        )
+
+    @staticmethod
+    def _length_unit_labels(hdf_file: h5py.File) -> Dict[str, List[str]]:
+        """Return result datasets whose own ``Units`` attribute is ``m`` or ``ft``.
+
+        Only exact length labels count, including elements of array labels
+        such as ``['m', 'Days']``. Unlabelled tables are never used.
+        """
+        labels: Dict[str, List[str]] = {"m": [], "ft": []}
+        results = hdf_file.get("Results")
+        if results is None:
+            return labels
+
+        def visit(name: str, obj: Any) -> None:
+            if not isinstance(obj, h5py.Dataset) or "Units" not in obj.attrs:
+                return
+            values = {
+                HdfBase._decode_unit_attribute(item).casefold()
+                for item in np.asarray(obj.attrs["Units"]).reshape(-1)
+            }
+            for unit, paths in labels.items():
+                if unit in values:
+                    paths.append(f"{results.name}/{name}")
+
+        results.visititems(visit)
+        return labels
+
+    @staticmethod
+    def _resolved_unit_metadata(
+        si_units: bool,
+        *,
+        source: str,
+        source_text: str,
+        evidence: List[Dict[str, Optional[str]]],
+        warnings: List[str],
+    ) -> Dict[str, Any]:
+        """Return the normalized record for a resolved unit system."""
+        length_units = "m" if si_units else "ft"
+        return {
+            "status": "resolved",
+            "unit_system": "SI" if si_units else "US Customary",
+            "length_units": length_units,
+            "depth_units": length_units,
+            "velocity_units": "m/s" if si_units else "ft/s",
+            "flow_units": "m3/s" if si_units else "ft3/s",
+            "source": source,
+            "source_file": source_text,
+            "evidence": evidence,
+            "contradictions": [],
+            "warnings": warnings,
+        }
+
+    @staticmethod
     def _result_unit_metadata_from_file(
         hdf_file: h5py.File,
         *,
         source_file: Union[str, Path],
         strict: bool,
+        unit_system: Optional[str] = None,
+        project_file: Optional[Union[str, Path]] = None,
     ) -> Dict[str, Any]:
-        """Build normalized result-HDF unit metadata from an open file."""
+        """Build normalized result-HDF unit metadata from an open file.
+
+        Resolution order:
+
+        1. ``unit_system`` override (``source="override"``).
+        2. The ``project_file`` ``.prj`` marker (``source="project_file"``).
+           A root ``/@Units System`` that disagrees with it is contradictory;
+           a disagreeing ``/Geometry/@SI Units`` is ignored with a warning.
+        3. The embedded attributes (``source="plan_hdf"``). Agreeing evidence
+           resolves. Root ``SI Units`` with ``/Geometry/@SI Units = False`` is
+           the RasMapper geometry default, which HEC-RAS 6.6 and 7.0 never
+           update from the project. It resolves to SI only when at least one
+           result dataset ``Units`` label in the same file is ``m`` and none
+           is ``ft``. Every other disagreement is contradictory.
+
+        Every record carries ``warnings``; the evidence keeps both attributes.
+        """
         source_path = Path(source_file)
         try:
             source_text = str(source_path.resolve())
         except OSError:
             source_text = str(source_path.absolute())
+        warnings: List[str] = []
 
         evidence: List[Dict[str, Optional[str]]] = []
         recognized: List[Tuple[str, bool]] = []
@@ -547,10 +629,98 @@ class HdfBase:
             else:
                 recognized.append(("/@Units System", si_units))
 
+        def label(state: bool) -> str:
+            return "SI" if state else "US Customary"
+
+        if unit_system is not None and "Results" in hdf_file:
+            si_units = HdfBase._parse_unit_system_override(unit_system)
+            ignored = [
+                f"{attribute}={label(state)}"
+                for attribute, state in recognized
+                if state != si_units
+            ]
+            if ignored:
+                warnings.append(
+                    f"unit_system={unit_system!r} override used; ignored "
+                    + ", ".join(ignored)
+                )
+            return HdfBase._resolved_unit_metadata(
+                si_units,
+                source="override",
+                source_text=source_text,
+                evidence=evidence,
+                warnings=warnings,
+            )
+
+        attribute_states = dict(recognized)
+        root_state = attribute_states.get("/@Units System")
+        geometry_state = attribute_states.get("/Geometry/@SI Units")
         states = {state for _, state in recognized}
-        if len(states) > 1:
+        source = "plan_hdf"
+        contradictory = False
+
+        project_units = None
+        if project_file is not None:
+            from ..RasPrj import RasPrj
+
+            project_units = RasPrj.get_project_units(project_file)
+            if project_units is None:
+                logger.debug(
+                    "No unit marker in project file %s; using embedded "
+                    "result-HDF metadata",
+                    project_file,
+                )
+        if project_units is not None:
+            source = "project_file"
+            project_si = project_units == "m"
+            evidence.append(
+                {
+                    "attribute": "project_file",
+                    "raw_value": str(project_file),
+                    "unit_system": label(project_si),
+                }
+            )
+            if root_state is not None and root_state != project_si:
+                contradictory = True
+                problems.append(
+                    f"Project file marker ({label(project_si)}) disagrees "
+                    f"with /@Units System={label(root_state)}"
+                )
+            elif geometry_state is not None and geometry_state != project_si:
+                warnings.append(
+                    f"/Geometry/@SI Units={label(geometry_state)} ignored: "
+                    f"the project file marker ({label(project_si)}) is "
+                    "authoritative"
+                )
+            states = {project_si}
+        elif root_state is True and geometry_state is False and not problems:
+            # Known HEC-RAS pattern: RasMapper writes /Geometry/@SI Units from
+            # a False default and never syncs it with the project unit system.
+            # Accept root SI only when the file's own dataset labels agree.
+            length_labels = HdfBase._length_unit_labels(hdf_file)
+            if length_labels["m"] and not length_labels["ft"]:
+                warning = (
+                    "/Geometry/@SI Units=False ignored: RasMapper geometry "
+                    "default; /@Units System and "
+                    f"{len(length_labels['m'])} result dataset Units labels "
+                    "agree on SI"
+                )
+                warnings.append(warning)
+                logger.warning("%s: %s", source_path.name, warning)
+                states = {True}
+            else:
+                contradictory = True
+                problems.append(
+                    "Result HDF unit-system metadata is contradictory: "
+                    "/Geometry/@SI Units=US Customary, /@Units System=SI, "
+                    "and result dataset Units labels do not corroborate SI "
+                    f"(m: {len(length_labels['m'])}, "
+                    f"ft: {len(length_labels['ft'])})"
+                )
+        elif len(states) > 1:
+            contradictory = True
             detail = ", ".join(
-                f"{attribute}={'SI' if state else 'US Customary'}"
+                f"{attribute}={label(state)}"
                 for attribute, state in recognized
             )
             problems.append(
@@ -561,26 +731,16 @@ class HdfBase:
                 "Result HDF contains no recognized embedded unit-system metadata"
             )
 
-        resolved = not problems and len(states) == 1
-        si_units = states.pop() if resolved else None
-        if resolved:
-            unit_system = "SI" if si_units else "US Customary"
-            length_units = "m" if si_units else "ft"
-            result = {
-                "status": "resolved",
-                "unit_system": unit_system,
-                "length_units": length_units,
-                "depth_units": length_units,
-                "velocity_units": "m/s" if si_units else "ft/s",
-                "flow_units": "m3/s" if si_units else "ft3/s",
-                "source": "plan_hdf",
-                "source_file": source_text,
-                "evidence": evidence,
-                "contradictions": [],
-            }
-            return result
+        if not problems and len(states) == 1:
+            return HdfBase._resolved_unit_metadata(
+                states.pop(),
+                source=source,
+                source_text=source_text,
+                evidence=evidence,
+                warnings=warnings,
+            )
 
-        if len(states) > 1:
+        if contradictory:
             status = "contradictory"
         elif evidence and any(item["unit_system"] is None for item in evidence):
             status = "unrecognized"
@@ -595,15 +755,23 @@ class HdfBase:
             "depth_units": None,
             "velocity_units": None,
             "flow_units": None,
-            "source": "plan_hdf",
+            "source": source,
             "source_file": source_text,
             "evidence": evidence,
             "contradictions": problems,
+            "warnings": warnings,
         }
         if strict:
+            hint = ""
+            if "Results" in hdf_file:
+                hint = (
+                    ". If the true unit system is known, pass "
+                    "unit_system='SI' or unit_system='US Customary'"
+                )
             raise ValueError(
                 f"Could not resolve result-HDF units for {source_path.name}: "
                 + "; ".join(problems)
+                + hint
             )
         return result
 
@@ -614,27 +782,48 @@ class HdfBase:
         hdf_path: Path,
         *,
         strict: bool = True,
+        unit_system: Optional[str] = None,
+        project_file: Optional[Union[str, Path]] = None,
     ) -> Dict[str, Any]:
-        """Read normalized units from a standalone HEC-RAS result HDF.
+        """Read normalized units from a HEC-RAS result HDF.
 
-        This is a fallback for workflows that have only a plan-result HDF. If
-        the full HEC-RAS project is available, use
-        :meth:`RasPrj.get_project_units` instead; the text project marker is
-        authoritative and embedded HDF attributes must not override it.
+        If the full HEC-RAS project is available, pass its ``.prj`` as
+        ``project_file`` (or use :meth:`RasPrj.get_project_units`): the text
+        project marker is authoritative. A root ``/@Units System`` that
+        disagrees with it raises; a disagreeing ``/Geometry/@SI Units`` is
+        ignored with a warning (``source="project_file"``).
 
-        The reader checks both ``/Geometry/@SI Units`` and
-        ``/@Units System``. With ``strict=True`` (default), missing,
-        unrecognized, non-result, or contradictory metadata raises
-        :class:`ValueError`. With ``strict=False``, the same condition returns
-        a JSON-serializable unresolved record with evidence and contradictions.
+        For a standalone HDF the reader checks ``/Geometry/@SI Units`` and
+        ``/@Units System`` (``source="plan_hdf"``). Agreeing evidence
+        resolves. One disagreement is accepted: root ``SI Units`` with
+        ``/Geometry/@SI Units = False``. RasMapper writes that geometry flag
+        from a ``False`` default and HEC-RAS 6.6 and 7.0 never update it from
+        the project units (seen on the Weise_2D sediment example). It resolves
+        to SI only when at least one result dataset ``Units`` label in the same
+        file is ``m`` and none is ``ft``; the record then carries a warning
+        and keeps both attributes in ``evidence``. Every other disagreement,
+        including root ``US Customary`` with ``/Geometry/@SI Units = True``,
+        remains contradictory.
+
+        ``unit_system`` overrides all embedded and project evidence
+        (``source="override"``); disagreeing evidence is listed in
+        ``warnings``.
+
+        With ``strict=True`` (default), missing, unrecognized, non-result, or
+        contradictory metadata raises :class:`ValueError` naming the
+        ``unit_system`` override. With ``strict=False``, the same condition
+        returns a JSON-serializable unresolved record with evidence and
+        contradictions.
 
         Args:
-            hdf_path: Standalone HEC-RAS plan-result HDF path or plan selector.
-            strict: Raise when the embedded metadata cannot be resolved.
+            hdf_path: HEC-RAS plan-result HDF path or plan selector.
+            strict: Raise when the unit system cannot be resolved.
+            unit_system: Explicit ``"SI"`` or ``"US Customary"`` override.
+            project_file: HEC-RAS ``.prj`` whose unit marker is authoritative.
 
         Returns:
-            Dict containing status, normalized unit labels, provenance,
-            source evidence, and contradictions.
+            Dict containing status, normalized unit labels, provenance
+            (``source``), source evidence, contradictions, and warnings.
         """
         source = Path(hdf_path)
         with h5py.File(source, "r") as hdf_file:
@@ -642,6 +831,8 @@ class HdfBase:
                 hdf_file,
                 source_file=source,
                 strict=strict,
+                unit_system=unit_system,
+                project_file=project_file,
             )
 
     @staticmethod
