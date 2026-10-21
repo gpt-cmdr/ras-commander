@@ -68,7 +68,9 @@ def _write(path, group, prefix, *, z=False, records=1, malformed=None):
     )
     parts = np.array([[0, 5] for _ in range(records)], dtype=np.int32).reshape(-1, 2)
     if malformed == "point_count":
-        info[-1, 1] = 1
+        # Exceed the stored point span. An in-bounds one-point breakline is
+        # intentionally retained as a diagnostic, not a corrupt-layer error.
+        info[-1, 1] = len(points) + 1
     elif malformed == "point_width":
         points = points[:, :1]
     attrs = np.array(
