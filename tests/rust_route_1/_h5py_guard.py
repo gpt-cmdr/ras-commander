@@ -10,14 +10,14 @@ read together with the first calling frame outside h5py.
 ``offending(records)`` returns the reads that required-native mode does not
 allow. The documented required-mode metadata exception is:
 
-- string, bytes and other non-numeric datasets (names, profile names, labels);
-- compound tables that the routing layer serves as h5py metadata because the
-  pinned engine has no exact raw reader for them (``h5py-metadata`` in the
-  trace): identity and attribute tables such as XS ``River/Reach/RS`` rows;
+- fixed or variable-length text datasets (names, profile names, labels);
+- compound tables whose every member is text (identity tables such as XS
+  ``River/Reach/RS`` rows), served as ``h5py-metadata`` by the router;
 - reads made by the test harness itself (argument discovery in ``_cases``).
 
-Any numeric (integer/float) value read, and any compound read made directly by
-library code instead of through ``fast_hdf.read_typed``, is an offender. HDF
+Any numeric value read (integer, float, bool, complex, enum, vlen numeric), any
+compound with a numeric member, and any opaque/unknown class is an offender,
+whether or not it came through the router (review-r2 P2-A). HDF
 attributes (``.attrs``) are metadata and are not dataset value reads.
 """
 from contextlib import contextmanager
@@ -40,18 +40,43 @@ def _caller():
     return frame.f_code.co_filename, frame.f_code.co_name, frame.f_lineno
 
 
+def _is_text(dtype):
+    return dtype.kind in "SU" or h5py.check_string_dtype(dtype) is not None
+
+
+def classify(dtype):
+    """Explicit dtype class of a dataset value read (review-r2 P3-A).
+
+    ``string``: fixed or variable-length text. ``compound-text``: a compound whose
+    every member (recursively, arrays included) is text, i.e. an identity table.
+    ``compound-numeric``: any other compound. ``numeric``: integer, float, bool,
+    complex and enum values, and variable-length sequences of them. ``other``:
+    opaque, reference and any unrecognized class. Only the first two are metadata.
+    """
+    if dtype.names is not None:
+        for name in dtype.names:
+            field = dtype.fields[name][0]
+            base = field.subdtype[0] if field.subdtype is not None else field
+            if classify(base) not in {"string", "compound-text"}:
+                return "compound-numeric"
+        return "compound-text"
+    if _is_text(dtype):
+        return "string"
+    if dtype.kind in "iufbc" or h5py.check_enum_dtype(dtype) is not None:
+        return "numeric"
+    vlen = h5py.check_vlen_dtype(dtype)
+    if vlen is not None:
+        return "string" if _is_text(vlen) else "numeric"
+    return "other"
+
+
 def _record(records, dataset, how):
     try:
         dtype = dataset.dtype
     except Exception:  # closed handle: let h5py raise its own error
         return
     filename, function, line = _caller()
-    if dtype.names is not None:
-        kind = "compound"
-    elif dtype.kind in "iuf":
-        kind = "numeric"
-    else:
-        kind = "string"
+    kind = classify(dtype)
     records.append({
         "path": dataset.name, "kind": kind, "how": how,
         "caller": f"{os.path.basename(filename)}:{function}:{line}",
@@ -85,12 +110,11 @@ def watch_h5py_reads():
 
 
 def offending(records):
-    """Reads that violate the required-native value-read guarantee."""
-    bad = []
-    for r in records:
-        if r["harness"] or r["kind"] == "string":
-            continue
-        if r["kind"] == "compound" and r["via_router"]:
-            continue
-        bad.append(r)
-    return bad
+    """Reads that violate the required-native value-read guarantee.
+
+    Allowed (review-r2 P2-A): harness reads, text datasets and text-only compound
+    identity tables. Any numeric value, any compound with a numeric member and any
+    opaque/unknown class read through h5py is an offender, whoever made the read.
+    """
+    return [r for r in records
+            if not r["harness"] and r["kind"] not in {"string", "compound-text"}]
