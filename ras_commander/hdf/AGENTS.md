@@ -185,6 +185,16 @@ This file is the canonical local instruction file for `ras_commander/hdf/`.
 - Use real example HDF files when validating behavior.
 - Prefer targeted tests over synthetic HDF fixtures unless a regression cannot be reproduced against real examples.
 
+## Packed perimeter offsets
+
+- Collection-level `HdfMesh.get_mesh_areas()` resolves Parts offsets for each
+  complete feature through `HdfBase._feature_part_ranges()`. Native local
+  offsets are valid when every part lies within the feature's point count
+  (gaps and unused vertices allowed, as in the native engine) and take
+  precedence. Legacy global offsets remain supported only when all parts
+  exactly cover the feature's point slice. Any other layout, including mixed
+  conventions, fails closed.
+
 ## Pipe network reads
 
 - `HdfPipe.get_pipe_network_timeseries(..., pipe_network_name=None,
