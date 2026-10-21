@@ -219,3 +219,21 @@ CASES.update({
     "HdfResultsBreach.get_breach_summary": lambda p: HdfResultsBreach.get_breach_summary(p),
     "HdfStruc.get_sa2d_breach_info": lambda p: HdfStruc.get_sa2d_breach_info(p),
 })
+
+
+# ---------------------------------------------------------------- pumps / BC hydrographs
+from ras_commander.hdf import HdfPump, HdfResultsMesh  # noqa: E402
+
+
+def _pump_station(path):
+    with h5py.File(path, "r") as f:
+        key = "Geometry/Pump Stations/Attributes"
+        return f[key][()]["Name"][0].decode().strip() if key in f and len(f[key]) else "__absent__"
+
+
+CASES.update({
+    "HdfPump.get_pump_station_timeseries": lambda p: HdfPump.get_pump_station_timeseries(p, _pump_station(p)),
+    "HdfPump.get_pump_station_summary": lambda p: HdfPump.get_pump_station_summary(p),
+    "HdfPump.get_pump_operation_timeseries": lambda p: HdfPump.get_pump_operation_timeseries(p, _pump_station(p)),
+    "HdfResultsMesh.get_boundary_conditions_timeseries": lambda p: HdfResultsMesh.get_boundary_conditions_timeseries(p),
+})
