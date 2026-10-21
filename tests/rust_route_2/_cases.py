@@ -187,3 +187,35 @@ CASES.update({
     "HdfResultsSediment.get_bed_change_volumes": lambda p: HdfResultsSediment.get_bed_change_volumes(p),
     "HdfResultsSediment.get_cell_bed_change_timeseries": lambda p: HdfResultsSediment.get_cell_bed_change_timeseries(p),
 })
+
+
+# ---------------------------------------------------------------- plan metadata / breach
+from ras_commander.hdf import HdfPlan, HdfStruc  # noqa: E402
+from ras_commander.hdf.HdfResultsBreach import HdfResultsBreach  # noqa: E402
+from ras_commander.hdf.HdfBase import HdfBase  # noqa: E402
+
+
+def _plan_start_time_base(path):
+    with h5py.File(path, "r") as f:
+        return HdfBase.get_simulation_start_time(f)
+
+
+CASES.update({
+    "HdfPlan.get_plan_start_time": lambda p: HdfPlan.get_plan_start_time(p),
+    "HdfPlan.get_plan_end_time": lambda p: HdfPlan.get_plan_end_time(p),
+    "HdfPlan.get_plan_timestamps_list": lambda p: HdfPlan.get_plan_timestamps_list(p),
+    "HdfPlan.get_plan_information": lambda p: HdfPlan.get_plan_information(p),
+    "HdfPlan.get_plan_parameters": lambda p: HdfPlan.get_plan_parameters(p),
+    "HdfPlan.get_hdf_output_settings": lambda p: HdfPlan.get_hdf_output_settings(p),
+    "HdfPlan.get_2d_flow_options": lambda p: HdfPlan.get_2d_flow_options(p),
+    "HdfPlan.get_plan_met_precip": lambda p: HdfPlan.get_plan_met_precip(p),
+    "HdfPlan.get_plan_met_precip_values": lambda p: HdfPlan.get_plan_met_precip_values(p),
+    "HdfPlan.get_geometry_information": lambda p: HdfPlan.get_geometry_information(p),
+    "HdfPlan.get_starting_wse_method": lambda p: HdfPlan.get_starting_wse_method(p),
+    "HdfBase.get_simulation_start_time": _plan_start_time_base,
+    "HdfResultsBreach.get_structure_variables": lambda p: HdfResultsBreach.get_structure_variables(p),
+    "HdfResultsBreach.get_breaching_variables": lambda p: HdfResultsBreach.get_breaching_variables(p),
+    "HdfResultsBreach.get_breach_timeseries": lambda p: HdfResultsBreach.get_breach_timeseries(p),
+    "HdfResultsBreach.get_breach_summary": lambda p: HdfResultsBreach.get_breach_summary(p),
+    "HdfStruc.get_sa2d_breach_info": lambda p: HdfStruc.get_sa2d_breach_info(p),
+})
