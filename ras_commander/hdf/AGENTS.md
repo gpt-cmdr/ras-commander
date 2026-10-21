@@ -101,6 +101,13 @@ This file is the canonical local instruction file for `ras_commander/hdf/`.
   `region_name` parameters for selective face application (precedence:
   `face_ids` > `region_name` > `polygon` > all faces).
 - 2D results extraction: `HdfResultsMesh`
+- `HdfFluvialPluvial` retains `(mesh_name, cell_id)` through time lookups,
+  adjacency, region growth and classification joins. Coincident edges from
+  different meshes are never neighbors. Polygon dissolution groups by mesh and
+  classification; native cell IDs remain unchanged. Both analysis entry points
+  log processing failures at ERROR with path, parameters, stage and traceback,
+  then return an empty GeoDataFrame, discarding partial geometry. Input/decorator
+  validation exceptions remain unchanged. No status/error attributes are added.
 - Unsteady `HdfResultsQuery` velocity queries at integer time indexes prefer stored
   `Cell Velocity - Velocity X/Y` components per mesh. Validate their stored
   cell Location, time/geometry axes, physical count and velocity units; compute

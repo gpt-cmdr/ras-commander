@@ -576,6 +576,11 @@ Pump station analysis.
 
 Fluvial-pluvial boundary analysis.
 
+Both fluvial/pluvial entry points log processing failures at ERROR with traceback,
+path, parameters and stage, then return an empty GeoDataFrame and discard partial
+geometry. Input/decorator validation exceptions remain unchanged. Cell identities
+and polygon dissolution stay scoped to each mesh, including repeated native IDs.
+A successful analysis with no qualifying boundary edges can also return empty.
 Polygon acreage thresholds use both projected horizontal CRS axis conversion factors.
 Missing or geographic CRS skips the filter with a warning. Unknown projected units
 fail processing: the method logs ERROR with traceback, path, parameters and stage,
