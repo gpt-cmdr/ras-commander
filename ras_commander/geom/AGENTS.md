@@ -117,6 +117,14 @@ See `.claude/rules/hec-ras/land-cover-mannings-n.md` for full documentation.
 - Validate geometry changes against real `.g##` files.
 - Re-run geometry preprocessing or model execution when a change can affect HEC-RAS interpretation.
 
+## Packed polyline audit offsets
+
+- `GeomMesh.audit_domain_containment()` uses feature-local offsets for packed
+  polylines, valid when every part lies within the feature's point count.
+  Legacy global offsets remain supported when the complete feature reconciles
+  exactly; individual parts never guess their offset convention by numeric
+  overlap. Invalid or truncated spans raise.
+
 ## Reference features
 
 - `GeomReferenceFeatures.add_reference_points` writes native `Reference Point Name=`

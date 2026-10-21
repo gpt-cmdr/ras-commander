@@ -28,6 +28,7 @@ from ..LoggingConfig import get_logger
 from pathlib import Path
 
 logger = get_logger(__name__)
+CellKey = Tuple[str, int]
 
 class HdfFluvialPluvial:
     """
@@ -80,6 +81,12 @@ class HdfFluvialPluvial:
 
         This function is useful for visualizing the line of transition between flooding mechanisms.
 
+        Cell identity is scoped by ``(mesh_name, cell_id)``. Adjacency never
+        crosses mesh boundaries, even when coordinates or native IDs coincide.
+        Processing failures log contextual ERROR with traceback and return an empty
+        GeoDataFrame, discarding partial output. A successful analysis with no
+        qualifying edges also returns empty. Input/decorator validation can raise.
+
         Args:
             hdf_path (Path): Path to the HEC-RAS plan HDF file.
             delta_t (float): Threshold time difference in hours. Cells with time differences
@@ -90,6 +97,7 @@ class HdfFluvialPluvial:
         Returns:
             gpd.GeoDataFrame: GeoDataFrame containing the fluvial-pluvial boundary lines.
         """
+        stage = "data loading"
         try:
             logger.debug("Getting cell polygons from HDF file...")
             cell_polygons_gdf = HdfMesh.get_mesh_cell_polygons(hdf_path)
@@ -106,17 +114,24 @@ class HdfFluvialPluvial:
                 lambda x: HdfUtils.parse_ras_datetime(x) if isinstance(x, str) else x
             )
 
+            stage = "adjacency"
             logger.debug("Processing cell adjacencies...")
             cell_adjacency, common_edges = HdfFluvialPluvial._process_cell_adjacencies(cell_polygons_gdf)
 
+            stage = "time lookup"
             logger.debug("Extracting cell times from maximum water surface data...")
-            cell_times = max_ws_df.set_index('cell_id')['maximum_water_surface_time'].to_dict()
+            times = max_ws_df.set_index(['mesh_name', 'cell_id'])['maximum_water_surface_time']
+            if not times.index.is_unique:
+                raise ValueError("Duplicate mesh/cell identities in maximum water surface data")
+            cell_times = times.to_dict()
 
+            stage = "boundary edges"
             logger.debug("Identifying boundary edges...")
             boundary_edges = HdfFluvialPluvial._identify_boundary_edges(
                 cell_adjacency, common_edges, cell_times, delta_t, min_line_length=min_line_length
             )
 
+            stage = "boundary output"
             logger.debug("Creating final GeoDataFrame for boundaries...")
             boundary_gdf = gpd.GeoDataFrame(
                 geometry=boundary_edges, 
@@ -132,7 +147,7 @@ class HdfFluvialPluvial:
         except Exception as e:
             logger.error(
                 f"Error calculating fluvial-pluvial boundary lines for {hdf_path} "
-                f"(delta_t={delta_t} hr, min_line_length={min_line_length}): {str(e)}",
+                f"(delta_t={delta_t} hr, min_line_length={min_line_length}, stage={stage}): {str(e)}",
                 exc_info=True,
             )
             return gpd.GeoDataFrame()
@@ -151,6 +166,12 @@ class HdfFluvialPluvial:
 
         This function classifies each wetted cell and merges them into three distinct regions
         based on the timing of maximum water surface elevation.
+
+        Times, adjacency and classifications retain ``(mesh_name, cell_id)``
+        identity. Dissolved regions remain separate per mesh and classification;
+        native cell IDs are not renumbered. Processing failures log contextual ERROR
+        with traceback and return an empty GeoDataFrame, discarding partial output.
+        Existing input/decorator validation exceptions can still raise.
 
         Optionally, for polygons classified as fluvial or pluvial, if their area is less than
         min_polygon_area_acres, they are reclassified to the opposite type and merged with
@@ -190,7 +211,10 @@ class HdfFluvialPluvial:
             max_ws_df['maximum_water_surface_time'] = max_ws_df['maximum_water_surface_time'].apply(
                 lambda x: HdfUtils.parse_ras_datetime(x) if isinstance(x, str) else x
             )
-            cell_times = max_ws_df.set_index('cell_id')['maximum_water_surface_time'].to_dict()
+            times = max_ws_df.set_index(['mesh_name', 'cell_id'])['maximum_water_surface_time']
+            if not times.index.is_unique:
+                raise ValueError("Duplicate mesh/cell identities in maximum water surface data")
+            cell_times = times.to_dict()
             
             stage = "adjacency"
             logger.debug("Processing cell adjacencies...")
@@ -201,7 +225,10 @@ class HdfFluvialPluvial:
             logger.debug(f"Identifying initial boundary seeds with delta_t = {delta_t} hours...")
             boundary_pairs = HdfFluvialPluvial._get_boundary_cell_pairs(cell_adjacency, cell_times, delta_t)
 
-            classifications = pd.Series('unclassified', index=cell_polygons_gdf['cell_id'], name='classification')
+            cell_index = pd.MultiIndex.from_frame(cell_polygons_gdf[['mesh_name', 'cell_id']])
+            if not cell_index.is_unique:
+                raise ValueError("Duplicate mesh/cell identities in cell polygons")
+            classifications = pd.Series('unclassified', index=cell_index, name='classification')
             
             for cell1, cell2 in boundary_pairs:
                 if cell_times.get(cell1) > cell_times.get(cell2):
@@ -278,10 +305,13 @@ class HdfFluvialPluvial:
             classifications[classifications == 'unclassified'] = 'ambiguous'
 
             logger.debug("Merging classifications with cell polygons...")
-            classified_gdf = cell_polygons_gdf.merge(classifications.to_frame(), left_on='cell_id', right_index=True)
+            classified_gdf = cell_polygons_gdf.merge(
+                classifications.to_frame(), left_on=['mesh_name', 'cell_id'],
+                right_index=True, validate='one_to_one',
+            )
 
             logger.debug("Dissolving polygons by classification...")
-            final_regions_gdf = classified_gdf.dissolve(by='classification', aggfunc='first').reset_index()
+            final_regions_gdf = classified_gdf.dissolve(by=['mesh_name', 'classification'], aggfunc='first').reset_index()
 
             stage = "acreage filtering"
             # --- 5. Minimum Polygon Area Filtering and Merging (if requested) ---
@@ -329,7 +359,7 @@ class HdfFluvialPluvial:
                     # Ambiguous polygons are not changed
 
                     # Redissolve by classification to merge with adjacent polygons of the same type
-                    final_regions_gdf = exploded.dissolve(by='classification', aggfunc='first').reset_index()
+                    final_regions_gdf = exploded.dissolve(by=['mesh_name', 'classification'], aggfunc='first').reset_index()
                     logger.debug("Redissolved polygons after reclassification of small areas.")
 
             stage = "summary"
@@ -358,9 +388,9 @@ class HdfFluvialPluvial:
         
         
     @staticmethod
-    def _process_cell_adjacencies(cell_polygons_gdf: gpd.GeoDataFrame) -> Tuple[Dict[int, List[int]], Dict[int, Dict[int, LineString]]]:
+    def _process_cell_adjacencies(cell_polygons_gdf: gpd.GeoDataFrame) -> Tuple[Dict[CellKey, List[CellKey]], Dict[CellKey, Dict[CellKey, LineString]]]:
         """
-        Optimized method to process cell adjacencies by extracting shared edges directly.
+        Extract shared edges within each mesh using native mesh/cell identities.
         """
         cell_adjacency = defaultdict(list)
         common_edges = defaultdict(dict)
@@ -372,21 +402,25 @@ class HdfFluvialPluvial:
             return tuple(sorted([coords1, coords2]))
 
         for _, row in cell_polygons_gdf.iterrows():
-            cell_id = row['cell_id']
+            mesh_name = row['mesh_name']
+            cell_id = int(row['cell_id'])
             geom = row['geometry']
             if geom.is_empty or not geom.is_valid:
                 continue
             coords = list(geom.exterior.coords)
             for i in range(len(coords) - 1):
-                key = edge_key(coords[i], coords[i + 1])
+                key = (mesh_name, edge_key(coords[i], coords[i + 1]))
                 edge_to_cells[key].add(cell_id)
 
-        for edge, cells in edge_to_cells.items():
+        for (mesh_name, edge), cells in edge_to_cells.items():
+            # Keep the original native-integer pair order within each mesh;
+            # tuple hashing must not change boundary-seed precedence.
             cell_list = list(cells)
             if len(cell_list) >= 2:
                 for i in range(len(cell_list)):
                     for j in range(i + 1, len(cell_list)):
-                        cell1, cell2 = cell_list[i], cell_list[j]
+                        cell1 = (mesh_name, cell_list[i])
+                        cell2 = (mesh_name, cell_list[j])
                         cell_adjacency[cell1].append(cell2)
                         cell_adjacency[cell2].append(cell1)
                         common_edge = LineString([edge[0], edge[1]])
@@ -397,10 +431,10 @@ class HdfFluvialPluvial:
     
     @staticmethod
     def _get_boundary_cell_pairs(
-        cell_adjacency: Dict[int, List[int]], 
-        cell_times: Dict[int, pd.Timestamp], 
+        cell_adjacency: Dict[CellKey, List[CellKey]],
+        cell_times: Dict[CellKey, pd.Timestamp],
         delta_t: float
-    ) -> List[Tuple[int, int]]:
+    ) -> List[Tuple[CellKey, CellKey]]:
         """
         Identifies pairs of adjacent cell IDs that form a boundary.
 
@@ -408,12 +442,12 @@ class HdfFluvialPluvial:
         between two adjacent cells is greater than delta_t.
         
         Args:
-            cell_adjacency (Dict[int, List[int]]): Dictionary of cell adjacencies.
-            cell_times (Dict[int, pd.Timestamp]): Dictionary mapping cell IDs to their max WSE times.
+            cell_adjacency (Dict[CellKey, List[CellKey]]): Dictionary of cell adjacencies.
+            cell_times (Dict[CellKey, pd.Timestamp]): Dictionary mapping cell IDs to their max WSE times.
             delta_t (float): Time threshold in hours.
 
         Returns:
-            List[Tuple[int, int]]: A list of tuples, where each tuple contains a pair of
+            List[Tuple[CellKey, CellKey]]: A list of tuples, where each tuple contains a pair of
                                    cell IDs forming a boundary.
         """
         boundary_cell_pairs = []
@@ -445,9 +479,9 @@ class HdfFluvialPluvial:
 
     @staticmethod
     def _identify_boundary_edges(
-        cell_adjacency: Dict[int, List[int]], 
-        common_edges: Dict[int, Dict[int, LineString]], 
-        cell_times: Dict[int, pd.Timestamp], 
+        cell_adjacency: Dict[CellKey, List[CellKey]],
+        common_edges: Dict[CellKey, Dict[CellKey, LineString]],
+        cell_times: Dict[CellKey, pd.Timestamp],
         delta_t: float,
         min_line_length: Optional[float] = None
     ) -> List[LineString]:
@@ -457,9 +491,9 @@ class HdfFluvialPluvial:
         This function now uses the helper `_get_boundary_cell_pairs`.
 
         Args:
-            cell_adjacency (Dict[int, List[int]]): Dictionary of cell adjacencies.
-            common_edges (Dict[int, Dict[int, LineString]]): Dictionary of shared edges between cells.
-            cell_times (Dict[int, pd.Timestamp]): Dictionary mapping cell IDs to their max WSE times.
+            cell_adjacency (Dict[CellKey, List[CellKey]]): Dictionary of cell adjacencies.
+            common_edges (Dict[CellKey, Dict[CellKey, LineString]]): Dictionary of shared edges between cells.
+            cell_times (Dict[CellKey, pd.Timestamp]): Dictionary mapping cell IDs to their max WSE times.
             delta_t (float): Time threshold in hours.
             min_line_length (float, optional): Minimum length (in CRS units) for boundary lines to be included.
                                                Lines shorter than this will be dropped. Default is None (no filtering).
