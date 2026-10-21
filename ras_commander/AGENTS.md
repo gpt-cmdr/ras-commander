@@ -87,3 +87,7 @@ This file is the canonical local instruction file for the `ras_commander/` packa
 
 - Shared library rules belong here or in deeper package `AGENTS.md` files.
 - Keep `CLAUDE.md` in this directory as a thin loader only.
+
+RasExamples validates its cached CSV against the selected ZIP central-directory
+index, rather than treating a newer CSV timestamp as archive identity. Switching
+example versions or loading an obsolete cache refreshes the index automatically.
