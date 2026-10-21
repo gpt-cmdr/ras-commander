@@ -98,3 +98,41 @@ def test_unresolvable_parts_raise(tmp_path, parts):
     _write_regions(path, points, [[0, 3, 0, 1], [3, 8, 1, 2]], parts)
     with pytest.raises(ValueError, match="polygon part"):
         HdfBndry.get_refinement_regions(path)
+
+
+@pytest.mark.parametrize("info, parts", [
+    ([0, 8, 0, -1], [[0, 8]]),
+    ([0, 8, -1, 1], [[0, 8]]),
+    ([0, 8, 1, 1], [[0, 8]]),
+    ([0, 8, 0, 1], [[0, 9]]),
+    ([0, 8, 0, 1], [[0, 2]]),
+    ([0, 8, 0, 0], [[0, 8]]),
+])
+def test_single_refinement_region_validates_parts_metadata(tmp_path, info, parts):
+    path = tmp_path / "invalid-single.g01.hdf"
+    _write_regions(path, SQUARES, [info], parts)
+    with pytest.raises(ValueError, match="polygon part"):
+        HdfBndry.get_refinement_regions(path)
+
+
+def test_single_refinement_region_without_parts_remains_supported(tmp_path):
+    path = tmp_path / "no-parts.g01.hdf"
+    _write_regions(path, SQUARES[:4], [[0, 4, 0, 1]], [[0, 4]])
+    with h5py.File(path, "a") as hdf:
+        del hdf["Geometry/2D Flow Area Refinement Regions/Polygon Parts"]
+    assert HdfBndry.get_refinement_regions(path).geometry.iloc[0].area == 4
+
+
+@pytest.mark.parametrize("dataset, values", [
+    ("Polygon Info", [[0, 4, 0.5, 1]]),
+    ("Polygon Parts", [[0.5, 3]]),
+])
+def test_fractional_refinement_metadata_is_not_truncated(tmp_path, dataset, values):
+    path = tmp_path / "fractional.g01.hdf"
+    _write_regions(path, SQUARES[:4], [[0, 4, 0, 1]], [[0, 4]])
+    with h5py.File(path, "a") as hdf:
+        group = hdf["Geometry/2D Flow Area Refinement Regions"]
+        del group[dataset]
+        group[dataset] = np.asarray(values, dtype=float)
+    with pytest.raises(ValueError, match="integers"):
+        HdfBndry.get_refinement_regions(path)

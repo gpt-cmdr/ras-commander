@@ -38,7 +38,7 @@ from ..Decorators import log_call, standardize_input
 from ..LoggingConfig import get_logger
 from .HdfBase import HdfBase
 from .HdfUtils import HdfUtils
-from ._packed_parts import resolve_feature_part_ranges
+from ._packed_parts import _nonnegative_index, resolve_feature_part_ranges
 
 logger = get_logger(__name__)
 
@@ -965,29 +965,34 @@ class HdfBndry:
                 polygon_parts = rr_data["Polygon Parts"][()] if "Polygon Parts" in rr_data else None
                 geoms = list()
                 for pnt_start, pnt_cnt, part_start, part_cnt in rr_data["Polygon Info"][()]:
+                    try:
+                        pnt_start, pnt_cnt = map(_nonnegative_index, (pnt_start, pnt_cnt))
+                    except ValueError as exc:
+                        raise ValueError(f"Invalid refinement region point range: {exc}") from exc
                     points = HdfBase.plan_vertex_ordinates(
                         polygon_points[pnt_start : pnt_start + pnt_cnt]
                     )
                     if pnt_start < 0 or pnt_cnt < 3 or len(points) != pnt_cnt:
                         raise ValueError("Invalid refinement region point range")
+                    try:
+                        part_start, part_cnt = map(_nonnegative_index, (part_start, part_cnt))
+                        if part_cnt == 0:
+                            raise ValueError("Nonempty refinement region has no parts")
+                        part_ranges = None
+                        if polygon_parts is not None:
+                            if part_start > len(polygon_parts) or part_cnt > len(polygon_parts) - part_start:
+                                raise ValueError("Parts slice is out of bounds")
+                            parts = polygon_parts[part_start:part_start + part_cnt]
+                            part_ranges = resolve_feature_part_ranges(parts, pnt_start, pnt_cnt)
+                            if any(count < 3 for _, count in part_ranges):
+                                raise ValueError("Polygon part requires at least three points")
+                        elif part_cnt > 1:
+                            raise ValueError("Multipart refinement region is missing Polygon Parts")
+                    except ValueError as exc:
+                        raise ValueError(f"Invalid refinement region polygon part: {exc}") from exc
                     if part_cnt <= 1:
                         geoms.append(Polygon(points))
                     else:
-                        if polygon_parts is None:
-                            raise ValueError("Multipart refinement region is missing Polygon Parts")
-                        parts = polygon_parts[part_start : part_start + part_cnt]
-                        if part_start < 0 or len(parts) != part_cnt:
-                            raise ValueError("Invalid refinement region polygon part")
-                        # Parts are feature-local; a legacy global layout is
-                        # accepted only when the whole feature reconciles.
-                        try:
-                            part_ranges = resolve_feature_part_ranges(
-                                parts, int(pnt_start), int(pnt_cnt)
-                            )
-                        except ValueError as exc:
-                            raise ValueError(
-                                f"Invalid refinement region polygon part: {exc}"
-                            ) from exc
                         polygons = []
                         for offset, part_pnt_cnt in part_ranges:
                             ring = points[offset : offset + part_pnt_cnt]

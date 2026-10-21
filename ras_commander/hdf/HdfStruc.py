@@ -34,7 +34,7 @@ from ..Decorators import log_call, standardize_input
 from ..LoggingConfig import get_logger
 from .HdfBase import HdfBase
 from .HdfUtils import HdfUtils
-from ._packed_parts import resolve_feature_part_ranges
+from ._packed_parts import _nonnegative_index, resolve_feature_part_ranges
 
 logger = get_logger(__name__)
 
@@ -504,13 +504,33 @@ class HdfStruc:
                 # Part Count > 1 yields a MultiLineString of its parts.
                 geoms = []
                 for i in range(len(centerline_info)):
-                    start_idx = centerline_info[i][0]  # Point Starting Index
-                    point_count = centerline_info[i][1]  # Point Count
-                    part_start, part_count = (
-                        (int(centerline_info[i][2]), int(centerline_info[i][3]))
-                        if len(centerline_info[i]) > 3
-                        else (0, 1)
-                    )
+                    try:
+                        start_idx = _nonnegative_index(centerline_info[i][0])
+                        point_count = _nonnegative_index(centerline_info[i][1])
+                    except ValueError as exc:
+                        raise ValueError(f"Invalid centerline point range for structure {i}: {exc}") from exc
+                    if start_idx > len(centerline_points) or point_count > len(centerline_points) - start_idx or point_count == 1:
+                        raise ValueError(f"Invalid centerline point range for structure {i}")
+                    try:
+                        part_start, part_count = (
+                            tuple(_nonnegative_index(value) for value in centerline_info[i][2:4])
+                            if len(centerline_info[i]) > 3
+                            else (0, 1)
+                        )
+                        part_ranges = None
+                        if centerline_parts is not None:
+                            if part_start > len(centerline_parts) or part_count > len(centerline_parts) - part_start:
+                                raise ValueError("Parts slice is out of bounds")
+                            parts = centerline_parts[part_start:part_start + part_count]
+                            part_ranges = resolve_feature_part_ranges(parts, start_idx, point_count)
+                        elif part_count > 1:
+                            raise ValueError("Multipart centerline is missing Centerline Parts")
+                        if point_count and part_count == 0:
+                            raise ValueError("Nonempty centerline has no parts")
+                        if point_count and part_ranges is not None and any(count < 2 for _, count in part_ranges):
+                            raise ValueError("Centerline part requires at least two points")
+                    except ValueError as exc:
+                        raise ValueError(f"Invalid centerline parts for structure {i}: {exc}") from exc
                     if point_count == 0:
                         # HEC-RAS stores structures without a drawn centerline
                         # (e.g. some lateral structures) as an empty range,
@@ -519,20 +539,6 @@ class HdfStruc:
                         # rejecting out-of-range or inconsistent counts.
                         if not 0 <= start_idx <= len(centerline_points) or part_count < 0:
                             raise ValueError(f"Invalid centerline point range for structure {i}")
-                        if part_count > 1 and centerline_parts is None:
-                            raise ValueError(
-                                f"Multipart centerline for structure {i} is missing Centerline Parts"
-                            )
-                        if part_count and centerline_parts is not None:
-                            parts = centerline_parts[part_start:part_start + part_count]
-                            if part_start < 0 or len(parts) != part_count:
-                                raise ValueError(f"Invalid centerline parts for structure {i}")
-                            try:
-                                resolve_feature_part_ranges(parts, int(start_idx), 0)
-                            except ValueError as exc:
-                                raise ValueError(
-                                    f"Invalid centerline parts for structure {i}: {exc}"
-                                ) from exc
                         geoms.append(None)
                         continue
                     points = HdfBase.plan_vertex_ordinates(
@@ -543,25 +549,6 @@ class HdfStruc:
                     if part_count <= 1:
                         geoms.append(LineString(points))
                         continue
-                    if centerline_parts is None:
-                        raise ValueError(
-                            f"Multipart centerline for structure {i} is missing Centerline Parts"
-                        )
-                    parts = centerline_parts[part_start:part_start + part_count]
-                    if part_start < 0 or len(parts) != part_count:
-                        raise ValueError(f"Invalid centerline parts for structure {i}")
-                    # Parts are feature-local; a legacy global layout is
-                    # accepted only when the whole feature reconciles.
-                    try:
-                        part_ranges = resolve_feature_part_ranges(
-                            parts, int(start_idx), int(point_count)
-                        )
-                    except ValueError as exc:
-                        raise ValueError(
-                            f"Invalid centerline parts for structure {i}: {exc}"
-                        ) from exc
-                    if any(count < 2 for _, count in part_ranges):
-                        raise ValueError(f"Invalid centerline parts for structure {i}")
                     geoms.append(MultiLineString(
                         [points[offset:offset + count] for offset, count in part_ranges]
                     ))

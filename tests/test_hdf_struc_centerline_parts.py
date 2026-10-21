@@ -99,3 +99,52 @@ def test_inconsistent_empty_or_short_centerline_raises(tmp_path, info, parts, ma
     _write(path, info, parts)
     with pytest.raises(ValueError, match=match):
         HdfStruc.get_structures(path)
+
+
+@pytest.mark.parametrize(
+    "info, parts",
+    [
+        ([0, 8, 0, -1], [[0, 8]]),
+        ([0, 8, -1, 1], [[0, 8]]),
+        ([0, 8, 1, 1], [[0, 8]]),
+        ([0, 8, 0, 1], [[0, 9]]),
+        ([0, 8, 0, 1], [[-1, 8]]),
+        ([0, 8, 0, 1], [[0, 1]]),
+        ([0, 8, 0, 0], [[0, 8]]),
+        ([0, 0, -1, 0], [[0, 0]]),
+        ([0, 0, 2, 0], [[0, 0]]),
+    ],
+)
+def test_single_or_empty_centerline_validates_parts_metadata(tmp_path, info, parts):
+    path = tmp_path / "invalid-single.g01.hdf"
+    _write(path, [info], parts)
+    with pytest.raises(ValueError, match="centerline parts"):
+        HdfStruc.get_structures(path)
+
+
+@pytest.mark.parametrize("empty", [False, True])
+def test_single_centerline_without_parts_retains_legacy_support(tmp_path, empty):
+    path = tmp_path / "no-parts.g01.hdf"
+    _write(path, [[0, 0 if empty else 8, 0, 1]], [[0, 8]])
+    with h5py.File(path, "a") as hdf:
+        del hdf["Geometry/Structures/Centerline Parts"]
+    geometry = HdfStruc.get_structures(path).geometry.iloc[0]
+    if empty:
+        assert geometry is None
+    else:
+        assert np.asarray(geometry.coords).tolist() == POINTS
+
+
+@pytest.mark.parametrize("dataset, values", [
+    ("Centerline Info", [[0, 8, 0.5, 1]]),
+    ("Centerline Parts", [[0.5, 7]]),
+])
+def test_fractional_centerline_metadata_is_not_truncated(tmp_path, dataset, values):
+    path = tmp_path / "fractional.g01.hdf"
+    _write(path, [[0, 8, 0, 1]], [[0, 8]])
+    with h5py.File(path, "a") as hdf:
+        group = hdf["Geometry/Structures"]
+        del group[dataset]
+        group[dataset] = np.asarray(values, dtype=float)
+    with pytest.raises(ValueError, match="integers"):
+        HdfStruc.get_structures(path)

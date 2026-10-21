@@ -8,7 +8,19 @@ whole feature, not an individual part, reconciles exactly with its point
 slice. The offset convention is never guessed per part or from whether the
 numbers happen to fit the global range.
 """
+from operator import index
 from typing import List, Tuple
+
+
+def _nonnegative_index(value) -> int:
+    """Validate a stored integer offset/count without truncating floats."""
+    try:
+        result = index(value)
+    except TypeError as exc:
+        raise ValueError("Packed feature offsets and counts must be integers") from exc
+    if result < 0:
+        raise ValueError("Packed feature offsets and counts must be nonnegative")
+    return result
 
 
 def resolve_feature_part_ranges(parts, point_start: int, point_count: int) -> List[Tuple[int, int]]:
@@ -27,13 +39,13 @@ def resolve_feature_part_ranges(parts, point_start: int, point_count: int) -> Li
             feature-local offsets nor a legacy global layout that exactly
             covers the feature's point slice.
     """
+    point_start = _nonnegative_index(point_start)
+    point_count = _nonnegative_index(point_count)
     ranges = []
     for row in parts:
         if len(row) != 2:
             raise ValueError("Packed feature parts require [start, count] rows")
-        start, count = int(row[0]), int(row[1])
-        if start < 0 or count < 0:
-            raise ValueError("Packed feature parts require nonnegative offsets and counts")
+        start, count = _nonnegative_index(row[0]), _nonnegative_index(row[1])
         ranges.append((start, count))
 
     # Native contract: offsets are local and bounded by the feature point count.
