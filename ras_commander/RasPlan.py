@@ -256,6 +256,10 @@ class RasPlan:
         "time_step_residence_courant": {"plan_key": "Computation Time Step Residence Courant", "type": "bool", "min_version": 5.0},
     }
 
+    # Baseline 2D results, observed in both 6.6 and 7.0.1 pilot runs. Requests
+    # for these names are accepted no-ops, not additional-output UI labels.
+    HDF_DEFAULT_OUTPUT_VARIABLES = frozenset({"Water Surface", "Face Velocity"})
+
     # These labels first appear in HEC-RAS 7.0 and require secondary-flow physics.
     HDF_OUTPUT_VARIABLE_MIN_VERSIONS = {
         "Cell Dispersion Terms": 7.0,
@@ -3415,6 +3419,11 @@ class RasPlan:
         """
         List additional 2D HDF output variables known to HEC-RAS plan files.
 
+        Baseline results ``Water Surface`` and ``Face Velocity`` are excluded
+        from this additional-output catalogue. Enabling them is an accepted
+        no-op: they are always written for computed 2D results, an INFO message
+        explains this, and existing plan text is preserved.
+
         The catalogue includes 14 secondary-flow labels requiring HEC-RAS 7.0+
         (``HDF_OUTPUT_VARIABLE_MIN_VERSIONS``). Writers check the plan's declared
         Program Version; an unknown version warns. Required physics must also
@@ -3435,14 +3444,15 @@ class RasPlan:
 
     @staticmethod
     def _normalize_hdf_output_variable(variable: str) -> str:
-        """Validate a full UI label, normalizing only evidenced legacy aliases."""
+        """Validate an additional-output label or recognized baseline result name."""
         if not isinstance(variable, str):
             raise ValueError("HDF output variable must be a full UI label string")
         variable = variable.strip()
         canonical = RasPlan.HDF_OUTPUT_VARIABLE_ALIASES.get(variable, variable)
         if canonical != variable:
             logger.warning("Normalizing HDF output variable %r to full label %r", variable, canonical)
-        if canonical not in RasPlan.HDF_ADDITIONAL_OUTPUT_VARIABLES:
+        if (canonical not in RasPlan.HDF_ADDITIONAL_OUTPUT_VARIABLES
+                and canonical not in RasPlan.HDF_DEFAULT_OUTPUT_VARIABLES):
             raise ValueError(
                 f"Unknown HDF output variable {variable!r}; use a full label from "
                 "RasPlan.list_available_hdf_output_variables()"
@@ -4380,6 +4390,8 @@ class RasPlan:
         Enabling prevalidates all labels and version gates before any writes.
         Known short tokens normalize with a warning; unknown labels raise
         ValueError. Disabling also accepts literal legacy labels for cleanup.
+        Enabling baseline ``Water Surface`` or ``Face Velocity`` is a no-op
+        with an INFO message; it preserves any existing lines for those names.
         """
         if enabled:
             variables = [RasPlan._normalize_hdf_output_variable(v) for v in variables]
@@ -4427,7 +4439,8 @@ class RasPlan:
             ras_object (Optional[RasPrj]): The RAS project object. If None, uses the global 'ras' object.
 
         Returns:
-            bool: True if variable was added or already exists, False on error.
+            bool: True if added, already present, or an always-written default;
+                False on error.
 
         Supported Variables:
             - "Face Flow" - Flow rate across each face (needed for discharge-weighted velocity)
@@ -4437,7 +4450,11 @@ class RasPlan:
             - "Cell Courant" - Courant number per cell
 
         Notes:
-            Only catalogue labels are accepted. Known legacy short tokens are
+            Catalogue labels and the baseline result names ``Water Surface``
+            and ``Face Velocity`` are accepted. Enabling either baseline name
+            logs at INFO that it is always written for computed 2D results and
+            leaves the plan unchanged, including any existing line for that
+            name. Known legacy short tokens are
             normalized to full labels with a warning, including existing matching
             short-token records. Unknown labels raise ValueError before writing.
             The 14 spiral/curvature labels require a declared Program Version of
@@ -4460,6 +4477,13 @@ class RasPlan:
         if not plan_file_path or not plan_file_path.exists():
             logger.error(f"Plan file not found: {plan_number_or_path}")
             return False
+
+        if variable in RasPlan.HDF_DEFAULT_OUTPUT_VARIABLES:
+            logger.info(
+                "Default 2D HDF result %r is always written for computed 2D results; "
+                "leaving the plan unchanged", variable
+            )
+            return True
 
         try:
             # Read the file

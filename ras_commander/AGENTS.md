@@ -37,7 +37,11 @@ This file is the canonical local instruction file for the `ras_commander/` packa
 
 ## Coding Rules
 
-- `RasPlan` additional-HDF-output writers accept catalogue UI labels only:
+- `RasPlan` additional-HDF-output writers accept catalogue UI labels and the
+  baseline 2D result names `Water Surface` and `Face Velocity`. Enabling either
+  baseline name succeeds as a no-op, logs at INFO that it is always written for
+  computed 2D results, and preserves existing plan text. These names remain
+  outside the additional-output catalogue. For additional-output labels,
   known short aliases normalize with warnings and unknown labels raise before
   writing. Batch/profile enabling prevalidates the entire request. Existing
   matching short records are rewritten to the full label; removal matches both
