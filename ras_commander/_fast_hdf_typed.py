@@ -4,7 +4,14 @@
 with h5py: same dtype (compounds included), shape, values and bits. When the
 dataset belongs to a family that the pinned engine reads *typed* (Wave 8 mesh
 geometry and 2D line families, Wave 2 1D geometry/results/summary/structures),
-the values come from that typed engine reader instead of h5py.
+the values come from that typed engine reader instead of h5py. Wave 3 stored
+families (pipes, reference lines/points, breach, plan metadata tables, land
+cover/infiltration sidecars, terrain, sediment, encroachments, Event
+Conditions, steady output, non-Base output blocks) are found through the
+engine's ``stored_family_index``: supported numeric, compound and byte-bitfield
+datasets are read with ``read_family_dataset``/``read_output_block``. Datasets
+the engine lists but does not qualify (for example pipe summaries without a
+stored ``Location``) keep their exact literal values through the generic reader.
 
 Backend policy follows :mod:`ras_commander.fast_hdf`:
 
@@ -253,7 +260,43 @@ def _compound(table, dataset):
     expected = [(n, int(dtype.fields[n][1])) for n in dtype.names]
     if columns != expected:
         raise TypedRouteError(f"{dataset.name}: compound member layout differs from h5py")
-    return np.frombuffer(bytes(raw), dtype=dtype).reshape(shape).copy()
+    values = np.frombuffer(bytes(raw), dtype=dtype).reshape(shape).copy()
+    for column in table["columns"]:
+        _h5py_fixed_text(values, column, dataset)
+    return values
+
+
+def _h5py_fixed_text(values, column, dataset):
+    """Apply HDF5's fixed-string conversion that h5py's NULLPAD memory type triggers.
+
+    h5py reads fixed strings as NumPy ``S`` (HDF5 NULLPAD). A stored NULLPAD member is
+    copied unchanged. A NULLTERM member is cut at its first NUL and a SPACEPAD member
+    loses its trailing spaces; the rest of the field is zero-filled, exactly as
+    HDF5's string conversion does. The engine returns the stored bytes, so the same
+    rule is applied here from the engine's member padding evidence.
+    """
+    kind = column.get("attribute_type") or {}
+    if kind.get("kind") != "fixed_string":
+        return
+    name = column["name"]
+    field = values.dtype.fields[name][0]
+    if field.kind != "S" or field.itemsize != int(kind["width"]):
+        raise TypedRouteError(f"{dataset.name}: member {name} is not a fixed string of the stored width")
+    padding = kind.get("padding")
+    if padding == "null_pad":
+        return
+    if padding not in {"null_terminate", "space_pad"}:
+        raise TypedRouteError(f"{dataset.name}: member {name} has unproven string padding {padding}")
+    raw = np.frombuffer(values[name].tobytes(), dtype=np.uint8).reshape(-1, field.itemsize).copy()
+    for row in raw:
+        data = row.tobytes()
+        if padding == "space_pad":
+            size = len(data.rstrip(b" "))
+        else:
+            cut = data.find(b"\0")
+            size = len(data) if cut < 0 else cut
+        row[size:] = 0
+    values[name] = raw.view(field).reshape(values[name].shape)
 
 
 def _numeric(values, dataset):
@@ -394,7 +437,10 @@ def _member(module, file_path, route):
     if kind == "one_d_summary":
         _, family, name = route
         inv = _cached(file_path, ("suminv",), lambda: module.one_d_summary_inventory(file_path))
-        return any(v["family"] == family and v["name"] == name for v in inv["variables"])
+        # Listed but unqualified (e.g. Pipe Networks summaries) is not membership:
+        # the literal values then come from the generic reader.
+        return any(v["family"] == family and v["name"] == name
+                   and v["capability"]["status"] == "supported" for v in inv["variables"])
     if kind in {"structure_series", "structure_family"}:
         _, skind, mode, structure, relative = route
         inv = _cached(file_path, ("structinv", skind, mode),
@@ -412,6 +458,99 @@ def _member(module, file_path, route):
         # polygons) has no typed reader; its tables stay h5py metadata.
         return data["capability"]["status"] != "unavailable"
     return True
+
+
+# ------------------------------------------------------------------ Wave 3 stored families
+STORED_STORAGE = {"numeric", "compound", "bitfield_bytes"}
+OUTPUT_BLOCKS = "Results/Unsteady/Output/Output Blocks/"
+
+
+def _stored_index(module, file_path):
+    """Per-file map ``path -> row`` over every Wave 3 read family and non-Base output block.
+
+    The engine inventories decide membership and qualification; rows carry storage,
+    shape, dtype and capability. Read families take precedence over output blocks.
+    """
+    def load():
+        index = module.stored_family_index(file_path)
+        rows = {}
+        for row in index["datasets"]:
+            current = rows.get(row["path"])
+            if current is None or (current["owner"].startswith("output_block:")
+                                   and not row["owner"].startswith("output_block:")):
+                rows[row["path"]] = row
+        return rows
+    return _cached(file_path, ("stored_family_index",), load)
+
+
+def _stored_route(module, dataset):
+    """``("stored_family", owner, path, storage)`` for a supported Wave 3 stored dataset.
+
+    Datasets the engine lists but refuses to qualify (for example pipe summaries
+    without a stored ``Location`` attribute) return ``None``: their literal values
+    are then served by the generic native reader. Strings are never routed here
+    (decoded engine text cannot prove h5py's exact fixed-length bytes).
+    """
+    from . import fast_hdf
+
+    if not fast_hdf._safe_file(dataset):
+        return None
+    path = dataset.name.strip("/")
+    row = _stored_index(module, os.fsdecode(dataset.file.filename)).get(path)
+    if row is None or row["status"] != "supported" or row["storage"] not in STORED_STORAGE:
+        return None
+    return ("stored_family", row["owner"], path, row["storage"])
+
+
+def _stored_read(module, file_path, route, dataset, key):
+    """Exact ``dataset[key]`` from the engine's stored family/output-block reader."""
+    from . import fast_hdf
+
+    _, owner, path, storage = route
+    budget = _budget(dataset)
+    slices = squeeze = None
+    if storage == "numeric":
+        try:
+            empty = isinstance(key, tuple) and len(key) == 0
+            slices, squeeze = fast_hdf._selection(dataset.shape, None if empty else key)
+        except (NotImplementedError, IndexError, ValueError):
+            slices = None
+    native_slices = None if slices is None else [tuple(int(v) for v in s) for s in slices]
+    if owner.startswith("output_block:"):
+        block = owner.split(":", 1)[1]
+        prefix = f"{OUTPUT_BLOCKS}{block}/"
+        if not path.startswith(prefix):
+            raise TypedRouteError(f"{dataset.name}: outside output block {block}")
+        out = module.read_output_block(file_path, block, path[len(prefix):], native_slices,
+                                       max_bytes=budget)
+    else:
+        out = module.read_family_dataset(file_path, owner, path, native_slices,
+                                         metadata_max_bytes=budget, max_bytes=budget)
+    if out["storage"] != storage:
+        raise TypedRouteError(f"{dataset.name}: engine storage {out['storage']} versus index {storage}")
+    if storage == "compound":
+        return _compound(out["values"], dataset)[key].copy()
+    if storage == "bitfield_bytes":
+        dtype = dataset.dtype
+        if dtype.names is not None or dtype.kind != "u" or dtype.itemsize != 1:
+            raise TypedRouteError(f"{dataset.name}: bitfield bytes for h5py dtype {dtype}")
+        shape = tuple(int(n) for n in out["shape"])
+        if shape != dataset.shape or len(out["raw_bytes"]) != int(np.prod(shape, dtype=np.int64)):
+            raise TypedRouteError(f"{dataset.name}: bitfield shape {shape} versus {dataset.shape}")
+        return np.frombuffer(bytes(out["raw_bytes"]), dtype=dtype).reshape(shape)[key].copy()
+    values = np.asarray(out["values"])
+    if slices is None:
+        return _numeric(values, dataset)[key].copy()
+    dtype = dataset.dtype
+    if values.dtype.kind != dtype.kind or values.dtype.itemsize != dtype.itemsize:
+        raise TypedRouteError(f"{dataset.name}: dtype {values.dtype} versus {dtype}")
+    expected = tuple(len(range(*s)) for s in slices)
+    if values.shape != expected:
+        raise TypedRouteError(f"{dataset.name}: shape {values.shape} versus {expected}")
+    values = values.astype(dtype, copy=False)
+    if squeeze:
+        values = np.squeeze(values, axis=squeeze)
+    return values[()] if values.ndim == 0 else values
 
 
 def _value(reported, dataset):
@@ -500,6 +639,15 @@ def read(dataset, selection=None, *, backend="auto"):
             logger.debug("h5py fallback for typed inventory %s: %s", dataset.name, exc)
             _record(dataset.name, "h5py-fallback", route[0])
             return dataset[key]
+    if route is None and not metadata and hasattr(module, "stored_family_index"):
+        try:
+            route = _stored_route(module, dataset)
+        except Exception as exc:
+            if mode == "rust":
+                raise fast_hdf.FastHdfError(f"Stored family index failed for {dataset.name}: {exc}") from exc
+            logger.debug("h5py fallback for stored family index %s: %s", dataset.name, exc)
+            _record(dataset.name, "h5py-fallback", "stored_family")
+            return dataset[key]
     if route is None:
         if fast_hdf._numeric(dataset) and dataset.shape is not None:
             return _generic(dataset, selection, key, shape, backend, mode)
@@ -512,8 +660,10 @@ def read(dataset, selection=None, *, backend="auto"):
             raise TypedRouteError(f"{dataset.name}: selection {key!r} is left to h5py")
         import os as _os
         file_path = _os.fsdecode(dataset.file.filename)
-        full = _full(module, file_path, route, dataset)
-        values = full[key]
+        if route[0] == "stored_family":
+            values = _stored_read(module, file_path, route, dataset, key)
+        else:
+            values = _full(module, file_path, route, dataset)[key]
         if np.shape(values) != shape:
             raise TypedRouteError(f"{dataset.name}: selection shape {np.shape(values)} versus h5py {shape}")
         values = values.copy() if hasattr(values, "copy") else values
