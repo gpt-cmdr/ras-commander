@@ -1167,6 +1167,9 @@ class RasPlan:
             ras_obj.project_folder,
             ras_obj.ras_exe_path,
             suppress_logging=getattr(ras_obj, "suppress_logging", True),
+            prj_file=RasPrj._matching_copied_prj_file(
+                ras_obj.project_folder, ras_obj.prj_file
+            ),
             load_results_summary=getattr(
                 ras_obj, "load_results_summary", True
             ),
@@ -4847,6 +4850,9 @@ class RasPlan:
             ras_obj.project_folder,
             ras_obj.ras_exe_path,
             suppress_logging=getattr(ras_obj, "suppress_logging", True),
+            prj_file=RasPrj._matching_copied_prj_file(
+                ras_obj.project_folder, ras_obj.prj_file
+            ),
             load_results_summary=getattr(
                 ras_obj, "load_results_summary", True
             ),

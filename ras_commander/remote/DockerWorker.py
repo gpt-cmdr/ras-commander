@@ -600,8 +600,11 @@ def execute_docker_plan(
             from ..RasPreprocess import RasPreprocess
             from ..RasPrj import RasPrj, init_ras_project
             temp_ras = RasPrj()
+            staged_prj = RasPrj._matching_copied_prj_file(
+                local_input_staging, getattr(ras_obj, "prj_file", None)
+            )
             init_ras_project(
-                str(local_input_staging),
+                str(staged_prj or local_input_staging),
                 ras_obj.ras_version,
                 ras_object=temp_ras,
                 hide_intro=True,
@@ -971,8 +974,11 @@ def execute_docker_plan_linux(
             logger.info("Running Windows preprocessing locally before upload...")
             from ..RasPrj import RasPrj, init_ras_project
             temp_ras = RasPrj()
+            staged_prj = RasPrj._matching_copied_prj_file(
+                local_input_staging, getattr(ras_obj, "prj_file", None)
+            )
             init_ras_project(
-                str(local_input_staging),
+                str(staged_prj or local_input_staging),
                 ras_obj.ras_version,
                 ras_object=temp_ras,
                 hide_intro=True,

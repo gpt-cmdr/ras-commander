@@ -1538,6 +1538,35 @@ class RasPrj:
                     continue
         return None
 
+    @staticmethod
+    def _matching_copied_prj_file(target_folder, source_prj_file):
+        """
+        Select the copied .prj that belongs to a source project.
+
+        When a project folder is copied (``dest_folder``, parallel worker
+        folders, test-mode folders, permutation batches, remote staging),
+        the copy must be re-initialized against the same project, not
+        whichever .prj ``find_ras_prj`` happens to pick. That matters only
+        when the target folder holds more than one .prj file; with a single
+        .prj the folder search is unambiguous and is left unchanged.
+
+        Args:
+            target_folder (str or Path): Folder containing the copied project.
+            source_prj_file (str or Path or None): The source project's .prj file.
+
+        Returns:
+            Path or None: ``target_folder / source_prj_file.name`` when the
+            target folder holds several .prj files and that file exists;
+            otherwise None, meaning "use the normal folder search".
+        """
+        if not source_prj_file:
+            return None
+        target_folder = Path(target_folder)
+        if len(list(target_folder.glob("*.prj"))) <= 1:
+            return None
+        candidate = target_folder / Path(source_prj_file).name
+        return candidate if candidate.is_file() else None
+
 
     @log_call
     def get_project_name(self):

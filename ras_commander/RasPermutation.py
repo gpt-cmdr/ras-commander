@@ -603,8 +603,11 @@ class RasPermutation:
             )
 
             batch_ras = RasPrj()
+            batch_prj = RasPrj._matching_copied_prj_file(
+                batch_folder, getattr(source_ras, "prj_file", None)
+            )
             init_ras_project(
-                batch_folder,
+                batch_prj or batch_folder,
                 getattr(source_ras, "ras_exe_path", None),
                 ras_object=batch_ras,
                 load_results_summary=False,
@@ -818,8 +821,11 @@ class RasPermutation:
             )
 
             batch_ras = RasPrj()
+            batch_prj = RasPrj._matching_copied_prj_file(
+                batch_folder, getattr(source_ras, "prj_file", None)
+            )
             init_ras_project(
-                batch_folder,
+                batch_prj or batch_folder,
                 ras_exe_path,
                 ras_object=batch_ras,
                 load_results_summary=False,
