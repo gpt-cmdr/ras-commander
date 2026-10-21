@@ -35,7 +35,16 @@ Functions:
         explicit zero-valued intervals while preserving NoData cells.
     shutdown_jvm():
         Placeholder for JVM lifecycle management (not typically required with
-        pyjnius).
+        pyjnius). Deprecated no-op under the native backend.
+
+Backends:
+    Read methods (``get_catalog``, ``read_timeseries``,
+    ``read_multiple_timeseries`` and everything built on them) use
+    ``RasDss.backend``: ``"java"`` (default), ``"native"`` (optional
+    dss-commander package, no JVM) or ``"shadow"`` (native result, Java
+    cross-check, differences logged). The environment variable
+    ``RAS_COMMANDER_DSS_BACKEND`` overrides the attribute when set. Writes,
+    ``read_grid`` and ``get_file_version`` stay on Java under every backend.
 
 Lazy Loading:
     This module implements lazy loading for all heavy dependencies:
@@ -67,6 +76,7 @@ import pandas as pd
 
 # Import decorator from parent package
 from ..Decorators import log_call
+from . import _backend
 
 logger = logging.getLogger(__name__)
 
@@ -88,10 +98,35 @@ class RasDss:
 
         # Get catalog
         paths = RasDss.get_catalog("file.dss")
+
+    Backends:
+        ``RasDss.backend`` selects how read methods access DSS files:
+        ``"java"`` (default; HEC Monolith via pyjnius), ``"native"``
+        (dss-commander, no JVM) or ``"shadow"`` (native result plus a logged
+        Java cross-check). ``RAS_COMMANDER_DSS_BACKEND`` overrides it when set.
     """
 
     _jvm_configured = False
     _monolith = None
+
+    #: Read backend: "java" (default in this release), "native" or "shadow".
+    #: The environment variable RAS_COMMANDER_DSS_BACKEND overrides it when set.
+    backend = _backend.DEFAULT_BACKEND
+
+    @staticmethod
+    def get_backend() -> str:
+        """Return the backend the next read call will use.
+
+        Resolution order: ``RAS_COMMANDER_DSS_BACKEND`` (when set), then
+        ``RasDss.backend``. ``"shadow"`` resolves to ``"java"`` when
+        dss-commander is not installed (one warning is logged).
+
+        Raises:
+            ValueError: If the configured name is not java, native or shadow.
+            ImportError: If ``"native"`` is selected and dss-commander is not
+                installed.
+        """
+        return _backend.effective_backend(RasDss.backend)
 
     @staticmethod
     def _ensure_monolith():
@@ -222,7 +257,72 @@ class RasDss:
             print(f"Found {len(catalog)} pathnames")
             for pathname in catalog['pathname']:
                 print(pathname)
+
+        Backends:
+            Under ``"native"`` and ``"shadow"`` a missing file raises
+            ``FileNotFoundError`` (the Java path creates an empty DSS file)
+            and a file that is not DSS raises
+            ``dss_commander.DssFormatError`` (a ``RuntimeError``; Java
+            returns zero rows).
         """
+        backend = RasDss.get_backend()
+        if backend == "native":
+            return RasDss._get_catalog_native(dss_file)
+        if backend == "shadow":
+            return RasDss._get_catalog_shadow(dss_file)
+        return RasDss._get_catalog_java(dss_file)
+
+    @staticmethod
+    def _get_catalog_native(dss_file: Union[str, Path]) -> pd.DataFrame:
+        """Catalog through dss-commander (no JVM). Same frame as the Java path."""
+        from ras_commander.RasUtils import RasUtils
+
+        dc = _backend.import_native()
+        resolved = RasUtils.safe_resolve(Path(dss_file))
+        catalog = dc.get_catalog(resolved)
+        df = catalog[['pathname']].reset_index(drop=True).copy()
+        df.attrs = {}
+        return df
+
+    @staticmethod
+    def _get_catalog_shadow(dss_file: Union[str, Path]) -> pd.DataFrame:
+        """Native catalog, cross-checked against Java. Comparison never raises."""
+        import time
+
+        t0 = time.perf_counter()
+        try:
+            native_df = RasDss._get_catalog_native(dss_file)
+        except Exception as native_exc:
+            # Never run Java here: on a missing file it creates an empty DSS file.
+            _backend.record(
+                "catalog", "skipped",
+                f"java skipped: native {type(native_exc).__name__}",
+                dss_file=dss_file, native_error=native_exc,
+                native_seconds=time.perf_counter() - t0,
+            )
+            raise
+        native_s = time.perf_counter() - t0
+        try:
+            java_df, java_exc = None, None
+            t1 = time.perf_counter()
+            try:
+                java_df = RasDss._get_catalog_java(dss_file)
+            except Exception as exc:
+                java_exc = exc
+            java_s = time.perf_counter() - t1
+            outcome, label, diffs = _backend.classify_catalog(java_df, java_exc, native_df)
+            _backend.record(
+                "catalog", outcome, label, dss_file=dss_file, diffs=diffs,
+                java_seconds=java_s, native_seconds=native_s, java_error=java_exc,
+                detail={"entries": len(native_df)},
+            )
+        except Exception as exc:  # the comparison must never break the read
+            logger.warning("DSS shadow catalog comparison failed for %s: %s", dss_file, exc)
+        return native_df
+
+    @staticmethod
+    def _get_catalog_java(dss_file: Union[str, Path]) -> pd.DataFrame:
+        """Catalog through HEC Monolith (pyjnius)."""
         # Configure JVM (must be before first jnius import)
         RasDss._configure_jvm()
 
@@ -269,17 +369,148 @@ class RasDss:
 
         Args:
             dss_file: Path to DSS file
-            pathname: DSS pathname (e.g., "/BASIN/LOC/FLOW//1HOUR/OBS/")
-            start_date: Optional start date filter
-            end_date: Optional end date filter
+            pathname: DSS pathname (e.g., "/BASIN/LOC/FLOW//1HOUR/OBS/").
+                The D part is ignored: the whole dataset is read.
+            start_date: Optional start of the window (inclusive). HEC strings
+                such as ``"01JAN2020 0000"``, ISO strings and datetimes are
+                accepted. Honored by the native and shadow backends; the Java
+                backend ignores it and returns the whole dataset.
+            end_date: Optional end of the window (inclusive; with both ends
+                given, an end between stamps moves forward to the next stamp).
+                Same backend rules as ``start_date``.
 
         Returns:
             pandas DataFrame with DatetimeIndex and 'value' column
+
+        Backends:
+            ``"native"`` and ``"shadow"`` return NaN for HEC missing values
+            (the Java path returns the raw -3.4028235e38 marker). A pathname
+            without data raises ``dss_commander.DssPathnameNotFoundError``
+            (a ``ValueError`` and ``RuntimeError``); paired data, grids and
+            other non-time-series records raise
+            ``dss_commander.DssUnsupportedRecordError`` (a ``RuntimeError``).
 
         Example:
             df = RasDss.read_timeseries("file.dss", "/BASIN/LOC/FLOW//1HOUR/OBS/")
             print(df.head())
         """
+        backend = RasDss.get_backend()
+        if backend == "native":
+            return RasDss._read_timeseries_native(dss_file, pathname, start_date, end_date)
+        if backend == "shadow":
+            return RasDss._read_timeseries_shadow(dss_file, pathname, start_date, end_date)
+        return RasDss._read_timeseries_java(dss_file, pathname)
+
+    @staticmethod
+    def _read_timeseries_native(
+        dss_file: Union[str, Path],
+        pathname: str,
+        start_date: Optional[str] = None,
+        end_date: Optional[str] = None,
+        dss_handle: Any = None,
+    ) -> pd.DataFrame:
+        """Time series through dss-commander (no JVM).
+
+        ``dss_handle`` is an open ``dss_commander.DssFile`` to reuse; when it is
+        None the file is opened and closed for this call.
+        """
+        from ras_commander.RasUtils import RasUtils
+
+        resolved = RasUtils.safe_resolve(Path(dss_file))
+        if dss_handle is not None:
+            df = dss_handle.read_timeseries(pathname, start_date, end_date)
+        else:
+            dc = _backend.import_native()
+            with dc.open(resolved) as handle:
+                df = handle.read_timeseries(pathname, start_date, end_date)
+        # ras-commander's resolver stays authoritative for the dss_file attribute.
+        df.attrs['dss_file'] = str(resolved)
+        return df
+
+    @staticmethod
+    def _read_timeseries_shadow(
+        dss_file: Union[str, Path],
+        pathname: str,
+        start_date: Optional[str] = None,
+        end_date: Optional[str] = None,
+        dss_handle: Any = None,
+    ) -> pd.DataFrame:
+        """Native time series, cross-checked against Java. Comparison never raises.
+
+        Java ignores the window, so its frame is cut to the same window before
+        comparison.
+        """
+        import time
+
+        dc = _backend.import_native()
+        native_df, native_exc = None, None
+        t0 = time.perf_counter()
+        try:
+            native_df = RasDss._read_timeseries_native(
+                dss_file, pathname, start_date, end_date, dss_handle=dss_handle
+            )
+        except Exception as exc:
+            native_exc = exc
+        native_s = time.perf_counter() - t0
+
+        # Java runs only when it is safe and comparable: it crashes the JVM on
+        # paired data, creates missing files, and has nothing to say about bad
+        # arguments. Not-found is compared (it can expose native false negatives).
+        run_java = native_exc is None or isinstance(native_exc, dc.DssPathnameNotFoundError)
+        if not run_java:
+            _backend.record(
+                "read_timeseries", "skipped",
+                f"java skipped: native {type(native_exc).__name__}",
+                dss_file=dss_file, pathname=pathname, native_error=native_exc,
+                native_seconds=native_s,
+            )
+            raise native_exc
+        try:
+            java_df, java_exc = None, None
+            t1 = time.perf_counter()
+            try:
+                java_df = RasDss._read_timeseries_java(dss_file, pathname)
+            except Exception as exc:
+                java_exc = exc
+            java_s = time.perf_counter() - t1
+            windowed = start_date is not None or end_date is not None
+            if java_df is not None and windowed:
+                source = native_df if native_df is not None else java_df
+                interval = source.attrs.get('interval') or 0
+                java_df = _backend.cut_window(java_df, start_date, end_date, interval, dc)
+                if len(java_df) == 0:
+                    java_df, java_exc = None, ValueError(
+                        f"No data found for pathname: {pathname}"
+                    )
+            outcome, label, diffs = _backend.classify_timeseries(
+                pathname, java_df, java_exc, native_df, native_exc
+            )
+            detail = {"windowed": windowed}
+            if native_df is not None:
+                detail["values"] = len(native_df)
+            if java_df is not None:
+                detail["java_markers"] = _backend.java_marker_count(java_df)
+            _backend.record(
+                "read_timeseries", outcome, label, dss_file=dss_file,
+                pathname=pathname, diffs=diffs, java_seconds=java_s,
+                native_seconds=native_s, java_error=java_exc,
+                native_error=native_exc, detail=detail,
+            )
+        except Exception as exc:  # the comparison must never break the read
+            logger.warning(
+                "DSS shadow read_timeseries comparison failed for %s %s: %s",
+                dss_file, pathname, exc,
+            )
+        if native_exc is not None:
+            raise native_exc
+        return native_df
+
+    @staticmethod
+    def _read_timeseries_java(
+        dss_file: Union[str, Path],
+        pathname: str,
+    ) -> pd.DataFrame:
+        """Time series through HEC Monolith (pyjnius); always the whole dataset."""
         # Configure JVM (must be before first jnius import)
         RasDss._configure_jvm()
 
@@ -640,6 +871,12 @@ class RasDss:
             for path, df in data.items():
                 print(f"{path}: {len(df)} points")
         """
+        backend = RasDss.get_backend()
+        if backend in ("native", "shadow"):
+            return RasDss._read_multiple_timeseries_native(
+                dss_file, pathnames, shadow=(backend == "shadow")
+            )
+
         results = {}
         for pathname in pathnames:
             try:
@@ -649,6 +886,43 @@ class RasDss:
                 logger.debug("DSS read failure for %s: %s", pathname, e)
                 results[pathname] = None
 
+        return results
+
+    @staticmethod
+    def _read_multiple_timeseries_native(
+        dss_file: Union[str, Path],
+        pathnames: List[str],
+        shadow: bool = False,
+    ) -> Dict[str, pd.DataFrame]:
+        """Read several pathnames with one open dss-commander file.
+
+        Keeps the Java contract: a pathname that fails maps to None and logs a
+        warning.
+        """
+        from ras_commander.RasUtils import RasUtils
+
+        dc = _backend.import_native()
+        resolved = RasUtils.safe_resolve(Path(dss_file))
+        reader = (
+            RasDss._read_timeseries_shadow if shadow else RasDss._read_timeseries_native
+        )
+        results = {}
+        try:
+            handle = dc.open(resolved)
+        except Exception as e:
+            for pathname in pathnames:
+                logger.warning("Could not read DSS pathname: %s", pathname)
+                logger.debug("DSS read failure for %s: %s", pathname, e)
+                results[pathname] = None
+            return results
+        with handle:
+            for pathname in pathnames:
+                try:
+                    results[pathname] = reader(dss_file, pathname, dss_handle=handle)
+                except Exception as e:
+                    logger.warning("Could not read DSS pathname: %s", pathname)
+                    logger.debug("DSS read failure for %s: %s", pathname, e)
+                    results[pathname] = None
         return results
 
     @staticmethod
@@ -796,7 +1070,25 @@ class RasDss:
 
         Note: With pyjnius, JVM shutdown is typically not needed.
         This is a placeholder for API compatibility.
+
+        Deprecated: under the native backend no JVM is started and this method
+        is a no-op that emits ``DeprecationWarning``. It will be removed with the
+        Java backend.
         """
+        try:
+            backend = _backend.requested_backend(RasDss.backend)
+        except ValueError:
+            backend = None
+        if backend == "native":
+            import warnings
+
+            warnings.warn(
+                "RasDss.shutdown_jvm() is a no-op under the native DSS backend "
+                "and will be removed with the Java backend.",
+                DeprecationWarning,
+                stacklevel=2,
+            )
+            return
         logger.debug("pyjnius handles JVM lifecycle automatically")
         pass
 

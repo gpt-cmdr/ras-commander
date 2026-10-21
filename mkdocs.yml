@@ -237,6 +237,7 @@ nav:
       - Steady Flow Analysis: user-guide/steady-flow-analysis.md
       - Dam Breach Analysis: user-guide/dam-breach-analysis.md
       - DSS Operations: user-guide/dss-operations.md
+      - DSS Read Backends: user-guide/dss-native-backend.md
     - External Data Sources:
       - USGS Gauge Data Retrieval: user-guide/usgs-gauge-data.md
       - Gridded Historic Precipitation: user-guide/gridded-precipitation.md
