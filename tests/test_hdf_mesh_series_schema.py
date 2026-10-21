@@ -170,3 +170,35 @@ def test_time_only_rejects_contradictory_present_location(source):
         hdf[f"{SERIES}/Time Step"].attrs["Location"] = b"Cells"
     with pytest.raises(ValueError, match="time-only schema"):
         read(source, "Time Step", "lazy")
+
+
+@pytest.mark.parametrize("mode", ["eager", "lazy", "stream"])
+@pytest.mark.parametrize("located", [False, True])
+@pytest.mark.parametrize("domain", ["cell", "face"])
+@pytest.mark.parametrize("schema", ["rank_one", "rank_three", "one_column", "text", "boolean", "complex"])
+def test_matching_geometry_count_does_not_qualify_bad_axes(source, domain, located, mode, schema):
+    name = "Water Surface" if domain == "cell" else "Face Velocity"
+    table = "Cells Center Coordinate" if domain == "cell" else "Faces FacePoint Indexes"
+    values = {
+        "rank_one": np.zeros(4), "rank_three": np.zeros((4, 2, 1)),
+        "one_column": np.zeros((4, 1)), "text": np.full((4, 2), b"0"),
+        "boolean": np.zeros((4, 2), dtype=bool), "complex": np.zeros((4, 2), dtype=complex),
+    }[schema]
+    with h5py.File(source, "r+") as hdf:
+        if located:
+            hdf[f"{SERIES}/{name}"].attrs["Location"] = b"Cells" if domain == "cell" else b"Faces"
+        del hdf[f"{GEOMETRY}/{table}"]
+        hdf.create_dataset(f"{GEOMETRY}/{table}", data=values)
+    with pytest.raises(ValueError, match="geometry schema"):
+        read(source, name, mode)
+    with h5py.File(source, "r") as hdf:
+        assert name not in Mesh._discover_mesh_series(hdf, AREA)
+
+
+@pytest.mark.parametrize("mode", ["eager", "lazy", "stream"])
+def test_face_point_indexes_require_integer_pairs(source, mode):
+    with h5py.File(source, "r+") as hdf:
+        del hdf[f"{GEOMETRY}/Faces FacePoint Indexes"]
+        hdf.create_dataset(f"{GEOMETRY}/Faces FacePoint Indexes", data=np.zeros((4, 2), dtype=float))
+    with pytest.raises(ValueError, match="geometry schema"):
+        read(source, "Face Velocity", mode)

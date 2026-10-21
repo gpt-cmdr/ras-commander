@@ -2599,7 +2599,8 @@ class HdfResultsMesh:
         Present Location is authoritative and cannot fall back to a name rule.
         Missing Location uses only the immutable stable-core table in the
         canonical namespace. Geometry counts include ghosts; physical-cell
-        filtering occurs after qualification. Time-only series have no domain.
+        filtering occurs after qualification. Cell centers are numeric coordinate
+        pairs; face-point indexes are integer pairs. Time-only series have no domain.
         """
         if not isinstance(dataset, h5py.Dataset) or dataset.ndim not in (1, 2) or dataset.dtype.kind not in "iuf":
             raise ValueError(f"Unsupported numeric time/element schema: {dataset.name}")
@@ -2643,6 +2644,12 @@ class HdfResultsMesh:
             raise ValueError(f"Geometry count for qualified series domain absent: {dataset.name}")
         if dataset.shape[1] != len(geometry):
             raise ValueError(f"Qualified series domain contradicts geometry count: {dataset.name}")
+        if (geometry.ndim != 2 or geometry.shape[1] != 2
+                or geometry.dtype.kind not in ("iuf" if is_cell else "iu")):
+            raise ValueError(
+                f"Unqualified geometry schema for series domain: {geometry.name} "
+                f"(shape={geometry.shape}, dtype={geometry.dtype})"
+            )
         if is_cell:
             physical_count = HdfResultsMesh._physical_cell_counts(hdf_file).get(mesh_name)
             if physical_count is not None and not 0 <= physical_count <= len(geometry):
