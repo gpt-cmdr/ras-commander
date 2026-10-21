@@ -15,8 +15,8 @@ def capabilities(value):
         for v in value:capabilities(v)
 
 def test_engine_contract_and_evidence(native):
-    c=native.capabilities();assert c['api_version']==9
-    assert c['engine_api_version']==c['engine_capabilities']['api_version']==7
+    c=native.capabilities();assert c['api_version']==10
+    assert c['engine_api_version']==c['engine_capabilities']['api_version']==8
     assert c['engine_capabilities']['features']==c['engine_features']
     assert any(e['owner']=='ReadOnlyHdfSession' and e['name']=='read_structure_series' for e in c['engine_capabilities']['entrypoints'])
     assert c['default_max_bytes']==64<<20

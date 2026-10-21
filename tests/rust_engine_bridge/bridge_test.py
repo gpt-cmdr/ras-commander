@@ -31,7 +31,7 @@ def native():
     module = pytest.importorskip("ras_commander_fast_hdf")
     assert module.ENGINE_COMMIT == PIN
     assert tuple(module.ENGINE_FEATURES) == ('catalog', 'hdf', 'mesh', 'results')
-    assert module.API_VERSION == 9
+    assert module.API_VERSION == 10
     assert module.TEXT_API_VERSION == 1
     return module
 
