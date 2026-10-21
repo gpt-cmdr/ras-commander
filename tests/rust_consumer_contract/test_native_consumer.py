@@ -109,7 +109,7 @@ def test_required_native_never_falls_back(fixture_dir, monkeypatch):
             monkeypatch.setenv("RAS_COMMANDER_FAST_HDF", "required")
             with pytest.raises(fast_hdf.FastHdfError):
                 fast_hdf.read_dataset(ds, (0, slice(0, 10)))
-            # Auto mode documents h5py fallback for UnsupportedError only.
+            # Auto mode falls back to h5py on any native failure (PY-ROUTE-2).
             monkeypatch.setenv("RAS_COMMANDER_FAST_HDF", "auto")
             assert _bitwise_equal(fast_hdf.read_dataset(ds, (0, slice(0, 10))), ds[0, 0:10])
         with pytest.raises(fast_hdf.FastHdfError):

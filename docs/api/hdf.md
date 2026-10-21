@@ -801,10 +801,15 @@ Routing policy:
   attributes, group/key walks and shape probes also stay on h5py. Required
   mode therefore guarantees native *numeric value* reads, not that h5py is
   never opened.
-- `HdfResultsMesh` result readers keep the earlier `read_dataset` policy: a
-  native Corrupt refusal is an error in auto mode too (native exceptions are
-  never converted to successful empty results). Only Unsupported and Topology
-  refusals fall back to h5py.
+- `HdfResultsMesh` result readers use `read_dataset`, which follows the same
+  rule: in auto mode any native failure, Corrupt or checksum refusals included,
+  falls back to h5py, so the public result or exception is the h5py one.
+  Required mode raises `FastHdfError`.
+- `read_dataset` returns the literal stored selection. When the typed 2D
+  mesh-result reader refuses to qualify a domain (for example a summary or
+  series without a stored `Location` attribute, refused since engine API 8),
+  the exact values come from the generic native reader in every mode
+  (`native-generic` / `mesh_result-literal` in the trace).
 
 `fast_hdf.trace_reads()` records which backend served each read made through
 `read_typed` and `read_dataset`. **It is not a complete I/O audit.** Reads a

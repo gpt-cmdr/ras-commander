@@ -4,7 +4,9 @@ Ordinary installations need no native extension. ``RAS_COMMANDER_FAST_HDF=0``
 disables automatic acceleration; ``required`` proves native execution in
 qualification runs. Explicit ``backend='python'`` or ``'rust'`` overrides the
 environment. Metadata and unsupported HDF types continue to use h5py in auto
-mode. Native exceptions are never converted to successful empty results.
+mode. h5py behaviour is the public contract: in auto mode any native failure
+(Corrupt/checksum refusals included) falls back to the h5py read, so callers see
+the h5py outcome; ``required`` raises :class:`FastHdfError` instead.
 """
 
 from __future__ import annotations
@@ -235,7 +237,8 @@ def read_dataset(dataset: h5py.Dataset, selection=None, *, backend="auto", threa
     refuses to qualify a domain (for example a summary or series without a
     stored ``Location`` attribute) the exact literal values come from the
     generic native reader instead, because this function promises no domain.
-    Auto mode uses h5py for unsupported types, layouts, and advanced indexing.
+    Auto mode uses h5py for unsupported types, layouts, advanced indexing and
+    any native failure (Corrupt included), so the public outcome is h5py's.
     Rust mode raises :class:`FastHdfError` instead, allowing tests to assert
     actual native execution.
     """
@@ -262,6 +265,9 @@ def read_dataset(dataset: h5py.Dataset, selection=None, *, backend="auto", threa
         _record(dataset.name, "h5py-fallback", "advanced-selection")
         return dataset[key]
     expected = dataset.shape if slices is None else tuple(len(range(*item)) for item in slices)
+    route = ("mesh_result" if dataset.name.startswith(
+        "/Results/Unsteady/Output/Output Blocks/Base Output/") and "/2D Flow Areas/" in dataset.name
+        else "generic")
     try:
         with _session(module, os.fsdecode(dataset.file.filename), threads) as session:
             try:
@@ -276,9 +282,10 @@ def read_dataset(dataset: h5py.Dataset, selection=None, *, backend="auto", threa
             if values is None:
                 values = session.read_numeric(dataset.name, selection=slices)
     except Exception as exc:
-        if mode == "auto" and _unsupported(module, exc):
+        if mode == "auto":
+            # h5py is the public contract: any native failure, Corrupt included.
             logger.debug("h5py fallback for %s: %s", dataset.name, exc)
-            _record(dataset.name, "h5py-fallback", "mesh_result")
+            _record(dataset.name, "h5py-fallback", route)
             return dataset[key]
         raise FastHdfError(f"Native read failed for {dataset.name}: {exc}") from exc
     _record(dataset.name, *served)
@@ -422,9 +429,10 @@ def read_datasets(hdf_path, dataset_paths: Sequence[str], *, backend="auto", thr
                             for path, name in requests:
                                 native_values[path] = values[name]["values"]
             except Exception as exc:
-                if mode != "auto" or not _unsupported(module, exc):
+                if mode != "auto":
                     raise FastHdfError(f"Native batch read failed for {hdf.filename}: {exc}") from exc
-                # Isolate unsupported datasets without disabling the whole batch.
+                # Isolate failing datasets without disabling the whole batch;
+                # read_dataset gives each one the h5py outcome on native failure.
                 logger.debug("Native batch needs per-dataset fallback: %s", exc)
                 return {path: read_dataset(ds, backend=backend, threads=threads)
                         for path, ds in datasets.items()}

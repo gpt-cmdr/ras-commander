@@ -40,7 +40,7 @@ import numpy as np
 
 from .Decorators import log_call
 from .LoggingConfig import get_logger
-from .fast_hdf import FastHdfError, _mode, _native, _safe_file, _threads, _unsupported
+from .fast_hdf import FastHdfError, _mode, _native, _safe_file, _threads
 
 logger = get_logger(__name__)
 
@@ -112,7 +112,8 @@ def native_temporal_reduce(dataset, offset=None, *, threshold=None, backend="aut
     """Run the native reduction, or return ``None`` where policy permits Python.
 
     Returns ``None`` in Python mode, or in auto mode when the extension or this
-    dataset is unsupported. Rust mode and native failures raise ``FastHdfError``.
+    dataset is unsupported or the native reduction fails for any reason (Corrupt
+    included), so auto keeps the Python outcome. Rust mode raises ``FastHdfError``.
     """
     mode, threads = _mode(backend), _threads(threads)
     module = _native(mode)
@@ -141,7 +142,7 @@ def native_temporal_reduce(dataset, offset=None, *, threshold=None, backend="aut
             threshold=threshold, max_block_bytes=int(max_block_bytes), threads=threads, parallel=parallel,
         )
     except Exception as exc:
-        if mode == "auto" and _unsupported(module, exc):
+        if mode == "auto":
             logger.debug("Python reduction for %s: %s", dataset.name, exc)
             return None
         raise FastHdfError(f"Native reduction failed for {dataset.name}: {exc}") from exc
