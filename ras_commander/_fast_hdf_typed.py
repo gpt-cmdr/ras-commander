@@ -233,6 +233,8 @@ def route_for(name):
         return ("geometry_family", family, leaf)
     if parent == "Geometry/Junctions" and leaf in {"Attributes", "Points"}:
         return ("junctions", leaf)
+    if parent == "Geometry/Reference Points" and leaf in {"Attributes", "Points"}:
+        return ("reference_point_geometry", leaf)
     if parent == "Geometry/Cross Section Interpolation Surfaces":
         return ("interpolation_surfaces", leaf)
     if path in {"Geometry/2D Flow Areas/Attributes", "Geometry/2D Flow Areas/Cell Info"}:
@@ -383,6 +385,12 @@ def _full(module, file_path, route, dataset):
         raise TypedRouteError(f"{dataset.name}: not returned by the typed group reader ({reason})")
     if kind == "junctions":
         data = _cached(file_path, ("junctions",), lambda: module.river_junctions(file_path))
+        value = _value(data, dataset)
+        return _compound(value["attributes"], dataset) if route[1] == "Attributes" else _numeric(value["points"], dataset)
+    if kind == "reference_point_geometry":
+        if not hasattr(module, "reference_point_geometry"):
+            raise TypedRouteError(f"{dataset.name}: extension lacks reference_point_geometry")
+        data = _cached(file_path, ("refpoints",), lambda: module.reference_point_geometry(file_path))
         value = _value(data, dataset)
         return _compound(value["attributes"], dataset) if route[1] == "Attributes" else _numeric(value["points"], dataset)
     if kind == "interpolation_surfaces":

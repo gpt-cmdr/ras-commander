@@ -1138,12 +1138,12 @@ class HdfBndry:
                     return gpd.GeoDataFrame()
                 
                 ref_points_group = hdf_file[reference_points_path]
-                attributes = ref_points_group["Attributes"][:]
+                attributes = read_typed(ref_points_group["Attributes"], slice(None))
                 v_conv_str = np.vectorize(HdfUtils.convert_ras_string)
                 names = v_conv_str(attributes["Name"])
                 mesh_names = v_conv_str(attributes["SA/2D"])
                 cell_id = attributes["Cell Index"]
-                points = ref_points_group["Points"][()]
+                points = read_typed(ref_points_group["Points"])
                 
                 gdf = gpd.GeoDataFrame(
                     {
@@ -1164,6 +1164,7 @@ class HdfBndry:
                 return gdf
                 
         except Exception as e:
+            reraise_required(e)
             logger.error(
                 "Error reading reference points from %s (%s): %s",
                 hdf_path,

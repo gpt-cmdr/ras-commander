@@ -378,6 +378,7 @@ class HdfResultsPlan:
             return dataset.to_dataframe().reset_index()
 
         except Exception as e:
+            reraise_required(e)
             logger.error(f"Error reading reference {reftype} timeseries: {str(e)}")
             return pd.DataFrame()
 
@@ -412,7 +413,7 @@ class HdfResultsPlan:
                 dfs = []
                 
                 for ref_name in ref_group.keys():
-                    ref_data = ref_group[ref_name][:]
+                    ref_data = read_typed(ref_group[ref_name], slice(None))
                     if ref_data.ndim == 2:
                         df = pd.DataFrame(ref_data.T, columns=['Value', 'Time'])
                     else:
@@ -426,6 +427,7 @@ class HdfResultsPlan:
                 return pd.concat(dfs, ignore_index=True)
 
         except Exception as e:
+            reraise_required(e)
             logger.error(f"Error reading reference {reftype} summary: {str(e)}")
             return pd.DataFrame()
 

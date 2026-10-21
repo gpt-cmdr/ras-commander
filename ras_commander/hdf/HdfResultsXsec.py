@@ -660,7 +660,7 @@ class HdfResultsXsec:
                 logger.error("%s", message)
                 raise KeyError(message)
 
-            reference_names = reference_group["Name"][:]
+            reference_names = read_typed(reference_group["Name"], slice(None))
             names = []
             mesh_areas = []
             for s in reference_names:
@@ -683,7 +683,7 @@ class HdfResultsXsec:
                 ):
                     continue
 
-                values = dataset[:]
+                values = read_typed(dataset, slice(None))
                 units = HdfResultsXsec._decode_reference_attr(
                     dataset.attrs.get("Units", "")
                 )
