@@ -49,7 +49,7 @@ from pathlib import Path
 import logging
 
 from .HdfUtils import HdfUtils
-from ..fast_hdf import read_attrs, read_typed, reraise_required
+from ..fast_hdf import read_attr, read_attrs, read_typed, reraise_required
 from ..Decorators import standardize_input, log_call
 from ..LoggingConfig import setup_logging, get_logger
 
@@ -463,7 +463,7 @@ class HdfBase:
 
         geometry = hdf_file.get("Geometry")
         if geometry is not None and "SI Units" in geometry.attrs:
-            raw_value = geometry.attrs["SI Units"]
+            raw_value = read_attr(geometry, "SI Units")
             si_units = HdfBase._parse_si_units_attribute(raw_value)
             evidence.append(
                 {
@@ -487,7 +487,7 @@ class HdfBase:
                 recognized.append(("/Geometry/@SI Units", si_units))
 
         if "Units System" in hdf_file.attrs:
-            raw_value = hdf_file.attrs["Units System"]
+            raw_value = read_attr(hdf_file, "Units System")
             si_units = HdfBase._parse_unit_system_attribute(raw_value)
             evidence.append(
                 {
@@ -625,8 +625,9 @@ class HdfBase:
                 logger.debug("Attribute path '%s' not found in HDF file", attr_path)
                 return {}
 
-            return HdfUtils.convert_hdf5_attrs_to_dict(hdf_file[attr_path].attrs)
+            return HdfUtils.convert_hdf5_attrs_to_dict(read_attrs(hdf_file[attr_path]))
         except Exception as e:
+            reraise_required(e)
             file_label = Path(getattr(hdf_file, "filename", "HDF file")).name
             raise ValueError(
                 f"Failed to read HDF attributes at '{attr_path}' in "

@@ -27,7 +27,7 @@ import pandas as pd
 from .HdfStruc import HdfStruc
 from ..Decorators import log_call, standardize_input
 from ..LoggingConfig import get_logger
-from ..fast_hdf import read_attrs, read_typed, reraise_required
+from ..fast_hdf import read_attr, read_attrs, read_typed, reraise_required
 
 logger = get_logger(__name__)
 
@@ -198,10 +198,10 @@ class HdfStorageArea:
 
         try:
             with h5py.File(hdf_path, "r") as hdf_file:
-                units_system_raw = hdf_file.attrs.get("Units System")
+                units_system_raw = read_attr(hdf_file, "Units System", None)
                 geom_group = hdf_file.get("Geometry")
                 if geom_group is not None:
-                    si_units_raw = geom_group.attrs.get("SI Units")
+                    si_units_raw = read_attr(geom_group, "SI Units", None)
         except Exception as exc:
             reraise_required(exc)
             logger.debug(

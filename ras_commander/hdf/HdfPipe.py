@@ -35,7 +35,7 @@ from ..Decorators import log_call, standardize_input
 from ..LoggingConfig import get_logger
 from .HdfBase import HdfBase
 from .HdfUtils import HdfUtils
-from ..fast_hdf import read_typed
+from ..fast_hdf import read_attr, read_attrs, read_typed
 
 gpd = optional_module("geopandas", "Returning GeoDataFrame results from HdfPipe")
 xr = optional_module("xarray", "Returning xarray results from HdfPipe")
@@ -106,7 +106,7 @@ _PIPE_DOMAINS = {
 
 
 def _domain(hdf, dataset, network):
-    raw = np.asarray(dataset.attrs.get("Location", []))
+    raw = np.asarray(read_attr(dataset, "Location", []))
     if raw.shape not in [(), (1,)] or raw.size != 1:
         raise ValueError(f"{dataset.name}: missing or non-scalar stored Location")
     location = _text(raw.reshape(-1)[0])
@@ -776,7 +776,7 @@ class HdfPipe:
                     ds = hdf[f"{base}/{variable}"]
                     if ds.ndim != 2 or ds.shape[0] not in (1, 2) or ds.dtype.kind not in 'iuf':
                         raise ValueError(f"{ds.name}: unqualified pipe summary shape/type {ds.shape}")
-                    attrs = dict(ds.attrs);metadata[ds.name] = dict(shape=ds.shape, attributes=attrs)
+                    attrs = read_attrs(ds);metadata[ds.name] = dict(shape=ds.shape, attributes=attrs)
                     labels = np.asarray(attrs.get('Rows Variables', [])).reshape(-1)
                     units = np.asarray(attrs.get('Units', [])).reshape(-1)
                     values = read_typed(ds)
@@ -786,7 +786,7 @@ class HdfPipe:
                                 row=row, location=col, row_variable=_text(labels[row]) if row < len(labels) else None,
                                 units=_text(units[row]) if row < len(units) else None, value=value))
             if volume in hdf:
-                attrs = dict(hdf[volume].attrs);metadata[hdf[volume].name] = dict(attributes=attrs)
+                attrs = read_attrs(hdf[volume]);metadata[hdf[volume].name] = dict(attributes=attrs)
                 for key, value in attrs.items():
                     if np.asarray(value).ndim != 0:
                         raise ValueError(f"{volume}: non-scalar volume attribute {key!r}")
@@ -982,6 +982,6 @@ class HdfPipe:
             if coord:
                 coords[coord] = ('location', ids)
             da = xr.DataArray(read_typed(dataset), dims=['time', 'location'], coords=coords, name=variable)
-            da.attrs.update(units=_text(dataset.attrs.get('Units', b'')), variable=variable,
+            da.attrs.update(units=_text(read_attr(dataset, 'Units', b'')), variable=variable,
                 domain=domain, stored_location=location, pipe_network=network_name, output_block=output_block)
             return da

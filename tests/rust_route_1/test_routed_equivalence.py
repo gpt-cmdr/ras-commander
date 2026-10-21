@@ -10,9 +10,10 @@ raise ``FastHdfError`` while auto then shows an h5py fallback with h5py results.
 
 The trace only sees reads made through the routing wrappers, so required mode
 also runs under ``_h5py_guard.watch_h5py_reads`` (independent interception of
-``h5py.Dataset.__getitem__``/``read_direct``): a NATIVE method may read only the
-documented metadata (strings, routed compound identity/attribute tables) through
-h5py. Finally the engine is replaced by one whose every call raises
+``h5py.Dataset.__getitem__``/``read_direct``, and since PY-ROUTE-3 attribute
+values through ``h5py.AttributeManager.__getitem__``): a NATIVE method may read
+only text datasets and text-only compound identity tables through h5py, and no
+attribute value at all (``fast_hdf.read_attrs``/``read_attr`` serve them). Finally the engine is replaced by one whose every call raises
 ``CorruptDataError``: auto must still return the h5py outcome, and required mode
 must raise ``FastHdfError`` whenever the method performs a native read.
 
@@ -140,6 +141,8 @@ def test_public_method(case, fixture, monkeypatch):
                 "generic_reads": len([r for r in req_trace if r["backend"] == "native-generic"]),
                 "h5py_direct_reads": len(req_direct),
                 "h5py_direct_offending": len(bypass),
+                "h5py_attribute_reads": len([r for r in req_direct if r.get("target") == "attribute"
+                                             and not r["harness"]]),
                 "injected_auto": injected_auto,
                 "injected_required": injected_required,
                 "refusal": str(req[2])[:300] if outcome == "native-refused" else None,

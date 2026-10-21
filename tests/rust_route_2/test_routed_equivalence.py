@@ -95,6 +95,8 @@ def _check(case, call, path, label, monkeypatch):
                 "metadata_reads": sorted({r["path"] for r in req_trace if r["backend"] == "h5py-metadata"}),
                 "h5py_direct_reads": len(req_direct),
                 "h5py_direct_offending": len(bypass),
+                "h5py_attribute_reads": len([r for r in req_direct if r.get("target") == "attribute"
+                                             and not r["harness"]]),
                 "injected_required": f"raise {inj_req[1].__name__}" if inj_req[0] == "raise" else "ok",
                 "refusal": str(req[2])[:300] if outcome == "native-refused" else None,
             }) + "\n")

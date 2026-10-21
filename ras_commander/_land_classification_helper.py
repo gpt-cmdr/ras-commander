@@ -25,7 +25,7 @@ import pandas as pd
 
 from ._ras_text import _write_ras_xml
 from .LoggingConfig import get_logger
-from .fast_hdf import read_typed
+from .fast_hdf import read_attr, read_typed
 from .RasUtils import RasUtils
 from ._rasmap_schema import create_rasmap_dataframe, expected_rasmap_path
 from ._spatial_extent import _normalize_extent_bounds
@@ -1100,7 +1100,7 @@ def _decode_hdf_string(value: Any) -> str:
 def _read_hdf_string_attr(hdf_file: h5py.File, key: str) -> Optional[str]:
     if key not in hdf_file.attrs:
         return None
-    return _decode_hdf_string(hdf_file.attrs[key])
+    return _decode_hdf_string(read_attr(hdf_file, key))
 
 
 def _read_raster_map_rows(hdf_path: Union[str, Path]) -> list[tuple[int, str]]:
