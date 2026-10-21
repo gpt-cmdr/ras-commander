@@ -22,9 +22,11 @@ Backend policy follows :mod:`ras_commander.fast_hdf`:
 
 Datasets outside every typed family use the generic native reader
 (``fast_hdf.read_dataset``); in auto mode any native failure there (including
-Corrupt/checksum refusals) also falls back to h5py. Text datasets and text-only
-compound identity tables stay on h5py in every mode (recorded as
-``h5py-metadata``): this is the documented required-mode metadata exception. A
+Corrupt/checksum refusals) also falls back to h5py. Fixed-length text datasets
+are served by the engine's ``raw_fixed_strings`` with h5py's NULLPAD byte rule
+(:func:`_fixed_strings`). Variable-length text and text-only compound identity
+tables stay on h5py in every mode (recorded as ``h5py-metadata``): this is the
+documented required-mode metadata exception. A
 compound with any numeric member and no typed route is value data: auto reads it
 with h5py (``h5py-fallback``/``untyped-compound``) and required mode refuses.
 When the engine failed a whole read family (``stored_family_index`` failures),
