@@ -317,6 +317,8 @@ def read_dataset(dataset: h5py.Dataset, selection=None, *, backend="auto", threa
                 values, served = None, ("native-generic", "mesh_result-literal")
             if values is None:
                 values = session.read_numeric(dataset.name, selection=slices)
+        # A binding that returns the wrong dtype/shape is a native failure too.
+        values = _checked_array(values, dataset.dtype, expected)
     except Exception as exc:
         if mode == "auto":
             # h5py is the public contract: any native failure, Corrupt included.
@@ -325,7 +327,6 @@ def read_dataset(dataset: h5py.Dataset, selection=None, *, backend="auto", threa
             return dataset[key]
         raise FastHdfError(f"Native read failed for {dataset.name}: {exc}") from exc
     _record(dataset.name, *served)
-    values = _checked_array(values, dataset.dtype, expected)
     if squeeze:
         values = np.squeeze(values, axis=squeeze)
     # h5py returns a NumPy scalar for a scalar dataset/full integer indexing.
@@ -521,9 +522,16 @@ def read_datasets(hdf_path, dataset_paths: Sequence[str], *, backend="auto", thr
         result = {}
         for path, ds in datasets.items():
             if path in eligible:
-                if path not in native_values:
-                    raise FastHdfError(f"Native batch omitted {path}")
-                values = _checked_array(native_values[path], ds.dtype, ds.shape)
+                try:
+                    if path not in native_values:
+                        raise FastHdfError(f"Native batch omitted {path}")
+                    values = _checked_array(native_values[path], ds.dtype, ds.shape)
+                except FastHdfError:
+                    if mode != "auto":
+                        raise
+                    # Auto: a broken binding result for one dataset gets h5py's outcome.
+                    result[path] = ds[()]
+                    continue
                 result[path] = values[()] if values.ndim == 0 else values
             else:
                 result[path] = ds[()]

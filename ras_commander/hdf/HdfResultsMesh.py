@@ -112,7 +112,6 @@ from ..Decorators import log_call, standardize_input
 from ..LoggingConfig import get_logger
 from .. import fast_results
 from ..fast_hdf import (
-    FastHdfError,
     mesh_series_domain,
     read_attr,
     read_attrs,
@@ -263,9 +262,10 @@ class HdfResultsMesh:
                 return HdfResultsMesh.get_mesh_summary_output(
                     hdf_file, var, round_to, include_ghost_cells
                 )
-        except (OptionalDependencyError, FastHdfError):
+        except OptionalDependencyError:
             raise
         except Exception as e:
+            reraise_required(e)
             logger.error(f"Error in get_mesh_summary: {str(e)}")
             logger.error(f"Variable: {var}")
             raise ValueError(f"Failed to get summary output: {str(e)}")
@@ -1548,9 +1548,10 @@ class HdfResultsMesh:
                     # Assign the variable name as the DataArray name
                     da.name = HdfResultsMesh._mesh_data_var_name(var)
                     datasets.append(da)
-                except (OptionalDependencyError, FastHdfError):
+                except OptionalDependencyError:
                     raise
                 except Exception as e:
+                    reraise_required(e)
                     logger.warning(f"Failed to process {var} for mesh {mesh_name}: {str(e)}")
         
         if not datasets:
@@ -1559,9 +1560,10 @@ class HdfResultsMesh:
         
         try:
             return xr.merge(datasets, join="outer")
-        except (OptionalDependencyError, FastHdfError):
+        except OptionalDependencyError:
             raise
         except Exception as e:
+            reraise_required(e)
             logger.error(f"Failed to merge datasets: {str(e)}")
             return xr.Dataset()
 
@@ -1631,9 +1633,10 @@ class HdfResultsMesh:
                 return HdfResultsMesh._get_mesh_cells_timeseries_output(
                     hdf_path, mesh_names, var, truncate, include_ghost_cells
                 )
-        except (OptionalDependencyError, FastHdfError):
+        except OptionalDependencyError:
             raise
         except Exception as e:
+            reraise_required(e)
             logger.error(f"Error in get_mesh_cells_timeseries: {str(e)}")
             raise ValueError(f"Error processing timeseries output data: {e}")
 
@@ -1684,9 +1687,10 @@ class HdfResultsMesh:
                 return HdfResultsMesh.get_mesh_summary_output(
                     hdf_file, "Maximum Water Surface", round_to, include_ghost_cells
                 )
-        except (OptionalDependencyError, FastHdfError):
+        except OptionalDependencyError:
             raise
         except Exception as e:
+            reraise_required(e)
             logger.error(f"Error in get_mesh_max_ws: {str(e)}")
             raise ValueError(f"Failed to get maximum water surface: {str(e)}")
         
@@ -1720,9 +1724,10 @@ class HdfResultsMesh:
                 return HdfResultsMesh.get_mesh_summary_output(
                     hdf_file, "Minimum Water Surface", round_to, include_ghost_cells
                 )
-        except (OptionalDependencyError, FastHdfError):
+        except OptionalDependencyError:
             raise
         except Exception as e:
+            reraise_required(e)
             logger.error(f"Error in get_mesh_min_ws: {str(e)}")
             raise ValueError(f"Failed to get minimum water surface: {str(e)}")
 
@@ -1743,9 +1748,10 @@ class HdfResultsMesh:
         try:
             with h5py.File(hdf_path, 'r') as hdf_file:
                 return HdfResultsMesh.get_mesh_summary_output(hdf_file, "Maximum Face Velocity", round_to)
-        except (OptionalDependencyError, FastHdfError):
+        except OptionalDependencyError:
             raise
         except Exception as e:
+            reraise_required(e)
             logger.error(f"Error in get_mesh_max_face_v: {str(e)}")
             raise ValueError(f"Failed to get maximum face velocity: {str(e)}")
 
@@ -1769,9 +1775,10 @@ class HdfResultsMesh:
         try:
             with h5py.File(hdf_path, 'r') as hdf_file:
                 return HdfResultsMesh.get_mesh_summary_output(hdf_file, "Minimum Face Velocity", round_to)
-        except (OptionalDependencyError, FastHdfError):
+        except OptionalDependencyError:
             raise
         except Exception as e:
+            reraise_required(e)
             logger.error(f"Error in get_mesh_min_face_v: {str(e)}")
             raise ValueError(f"Failed to get minimum face velocity: {str(e)}")
 
@@ -1804,9 +1811,10 @@ class HdfResultsMesh:
                 return HdfResultsMesh.get_mesh_summary_output(
                     hdf_file, "Cell Maximum Water Surface Error", round_to, include_ghost_cells
                 )
-        except (OptionalDependencyError, FastHdfError):
+        except OptionalDependencyError:
             raise
         except Exception as e:
+            reraise_required(e)
             logger.error(f"Error in get_mesh_max_ws_err: {str(e)}")
             raise ValueError(f"Failed to get maximum water surface error: {str(e)}")
 
@@ -1843,9 +1851,10 @@ class HdfResultsMesh:
                 return HdfResultsMesh.get_mesh_summary_output(
                     hdf_file, "Cell Last Iteration", round_to, include_ghost_cells
                 )
-        except (OptionalDependencyError, FastHdfError):
+        except OptionalDependencyError:
             raise
         except Exception as e:
+            reraise_required(e)
             logger.error(f"Error in get_mesh_max_iter: {str(e)}")
             raise ValueError(f"Failed to get maximum iteration count: {str(e)}")
 
@@ -2116,9 +2125,10 @@ class HdfResultsMesh:
             logger.debug(f"Extracted max depth for {len(result)} cells")
             return result
 
-        except (OptionalDependencyError, FastHdfError):
+        except OptionalDependencyError:
             raise
         except Exception as e:
+            reraise_required(e)
             logger.error(f"Error in get_mesh_max_depth: {str(e)}")
             raise ValueError(f"Failed to get maximum depth: {str(e)}") from e
 
@@ -2874,9 +2884,10 @@ class HdfResultsMesh:
                             )
                         else:
                             missing_optional_variables.append(variable)
-                    except (OptionalDependencyError, FastHdfError):
+                    except OptionalDependencyError:
                         raise
                     except Exception as e:
+                        reraise_required(e)
                         if explicit_var:
                             raise
                         logger.error(f"Error processing variable '{variable}' for mesh '{mesh_name}': {str(e)}")
@@ -2907,9 +2918,10 @@ class HdfResultsMesh:
                         logger.warning(f"No valid data variables found for mesh '{mesh_name}'")
 
             return datasets
-        except (OptionalDependencyError, FastHdfError):
+        except OptionalDependencyError:
             raise
         except Exception as e:
+            reraise_required(e)
             logger.error(f"Error in _mesh_cells_timeseries_output: {str(e)}")
             raise ValueError(f"Error processing timeseries output data: {e}")
 
@@ -2982,9 +2994,10 @@ class HdfResultsMesh:
                 dims=dims,
                 attrs={"units": units, "mesh_name": mesh_name, "variable": var},
             )
-        except (OptionalDependencyError, FastHdfError):
+        except OptionalDependencyError:
             raise
         except Exception as e:
+            reraise_required(e)
             logger.error(f"Error in get_mesh_timeseries_output: {str(e)}")
             raise ValueError(f"Failed to get timeseries output: {str(e)}")
 
@@ -3324,9 +3337,10 @@ class HdfResultsMesh:
             logger.debug("Processed %s rows of summary output data", len(result))
             return result
         
-        except (OptionalDependencyError, FastHdfError):
+        except OptionalDependencyError:
             raise
         except Exception as e:
+            reraise_required(e)
             logger.error(f"Error processing summary output data: {e}")
             raise ValueError(f"Error processing summary output data: {e}")
 
@@ -3512,9 +3526,10 @@ class HdfResultsMesh:
                                 }
                             }
                     
-                    except (OptionalDependencyError, FastHdfError):
+                    except OptionalDependencyError:
                         raise
                     except Exception as e:
+                        reraise_required(e)
                         logger.warning(f"Error processing boundary condition '{bc_name}': {str(e)}")
                         continue
                 
@@ -3587,9 +3602,10 @@ class HdfResultsMesh:
                             ds = ds.assign_coords(
                                 {"2d area": ("bc_name", values)}
                             )
-                    except (OptionalDependencyError, FastHdfError):
+                    except OptionalDependencyError:
                         raise
                     except Exception as e:
+                        reraise_required(e)
                         logger.debug(
                             "Could not add canonical metadata coordinate "
                             f"'{key}': {str(e)}"
@@ -3619,9 +3635,10 @@ class HdfResultsMesh:
                         ds = ds.assign_coords(
                             {coordinate_name: ("bc_name", values)}
                         )
-                    except (OptionalDependencyError, FastHdfError):
+                    except OptionalDependencyError:
                         raise
                     except Exception as e:
+                        reraise_required(e)
                         logger.debug(
                             f"Could not add metadata coordinate '{key}': "
                             f"{str(e)}"
@@ -3693,8 +3710,9 @@ class HdfResultsMesh:
                 
                 return ds
                 
-        except (OptionalDependencyError, FastHdfError):
+        except OptionalDependencyError:
             raise
         except Exception as e:
+            reraise_required(e)
             logger.error(f"Error getting all boundary conditions timeseries: {str(e)}")
             return xr.Dataset()
