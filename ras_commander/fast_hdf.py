@@ -27,6 +27,7 @@ from typing import Mapping, Sequence
 import h5py
 import numpy as np
 
+from . import _native_scope
 from .Decorators import log_call
 from .LoggingConfig import get_logger
 
@@ -127,11 +128,31 @@ def available() -> bool:
     return _native("auto") is not None
 
 
-# At most four mapped files. The lock also keeps eviction/close from racing a
+# At most four open files. The lock also keeps eviction/close from racing a
 # cached read; native sessions independently serialize close against reads.
+# A session opened inside a public call is "scoped": it is shared by every read
+# of that call and closed when the outermost public call returns (see
+# ``_native_scope``), so no HDF stays open - and undeletable on Windows - after a
+# public method has returned. Sessions opened by direct use of this module's
+# readers outside a public call, or with RAS_COMMANDER_HDF_SESSION_CACHE=persist,
+# stay cached until ``close_sessions()``.
 _sessions = OrderedDict()
 _sessions_lock = RLock()
 _SESSION_LIMIT = 4
+_scoped_keys = set()
+
+
+def _release_scoped_sessions():
+    """Close the sessions opened inside public calls (the typed-result cache stays)."""
+    with _sessions_lock:
+        for key in list(_scoped_keys):
+            entry = _sessions.pop(key, None)
+            if entry is not None:
+                try:
+                    entry[0].close()
+                except Exception as exc:  # a failing close must not mask the call's outcome
+                    logger.debug("Closing native session %s failed: %s", key[0], exc)
+        _scoped_keys.clear()
 
 
 @log_call
@@ -148,13 +169,15 @@ def close_sessions(path=None):
         for key in list(_sessions):
             if resolved is None or key[0] == resolved:
                 session, _ = _sessions.pop(key)
+                _scoped_keys.discard(key)
                 session.close()
 
 
 @contextmanager
 def _session(module, path, threads=None):
     path = Path(path).resolve()
-    enabled = os.environ.get("RAS_COMMANDER_HDF_SESSION_CACHE", "1").strip().lower() not in {"0", "false", "off"}
+    setting = os.environ.get("RAS_COMMANDER_HDF_SESSION_CACHE", "1").strip().lower()
+    enabled = setting not in {"0", "false", "off"}
     if not enabled:
         close_sessions(path)
         with module.HdfSession(path, threads=threads) as session:
@@ -169,11 +192,17 @@ def _session(module, path, threads=None):
         key = (str(path), stat.st_size, stat.st_mtime_ns)
         for old in list(_sessions):
             if old[0] == str(path) and (old != key or _sessions[old][1] != threads):
+                _scoped_keys.discard(old)
                 _sessions.pop(old)[0].close()
         if key not in _sessions:
             while len(_sessions) >= _SESSION_LIMIT:
-                _sessions.popitem(last=False)[1][0].close()
+                evicted = _sessions.popitem(last=False)
+                _scoped_keys.discard(evicted[0])
+                evicted[1][0].close()
             _sessions[key] = (module.HdfSession(path, threads=threads), threads)
+            if setting != "persist" and _native_scope.active():
+                _scoped_keys.add(key)
+                _native_scope.sessions_opened(_release_scoped_sessions)
         _sessions.move_to_end(key)
         yield _sessions[key][0]
 
@@ -264,7 +293,6 @@ def _checked_array(result, dtype, expected_shape):
     return result.astype(dtype, copy=False)
 
 
-@log_call
 def read_dataset(dataset: h5py.Dataset, selection=None, *, backend="auto", threads=None):
     """Read numeric values without changing dtype, shape, or integer indexing.
 
@@ -447,7 +475,6 @@ def trace_reads():
     return _fast_hdf_typed.trace_reads()
 
 
-@log_call
 def read_datasets(hdf_path, dataset_paths: Sequence[str], *, backend="auto", threads=None):
     """Read multiple datasets with one native file handle; retain h5py metadata.
 

@@ -14,7 +14,14 @@ their element/index outputs to NumPy arrays too.
 `fast_hdf.read_dataset()` and `read_datasets()` reuse at most four sessions in an
 LRU cache. Keys contain resolved path, size and nanosecond modification time.
 Changing explicit thread settings replaces that path's cached session.
-Set `RAS_COMMANDER_HDF_SESSION_CACHE=0` to open and close per operation.
+A session opened inside a public ras-commander call (anything wrapped by
+`log_call` or `standardize_input`) is shared by all reads of that call and is
+closed when the outermost public call returns, so no HDF stays open after a
+public method returns (an open file blocks rename/delete on Windows and network
+shares). Sessions opened by calling the low-level readers directly stay cached.
+`RAS_COMMANDER_HDF_SESSION_CACHE` selects the policy: unset/`1` as above,
+`0` opens and closes per operation, `persist` keeps sessions across public calls
+until `close_sessions()` (fastest for repeated calls; holds the files open).
 `fast_hdf.close_sessions(path=None)` closes one path or all cached sessions.
 Windows `RasCmdr.compute_plan()` closes this cache before preparing execution;
 parallel and test-mode paths delegate there. Explicit native sessions are caller
