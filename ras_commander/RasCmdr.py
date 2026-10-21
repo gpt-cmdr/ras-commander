@@ -3111,6 +3111,11 @@ class RasCmdr:
             hdf_output_variables (List[str], optional): Additional HDF output variables
                 to enable before execution. The same baseline-name no-op policy
                 applies; existing baseline-name lines are preserved. Unknown labels raise.
+                Version-limited labels (HEC-RAS 7.0 secondary-flow outputs) are gated on
+                the executing HEC-RAS version when it is newer than the plan's declared
+                Program Version (for example a 6.x-declared plan run with 7.0.1);
+                otherwise the declared-version gate applies. Same for
+                hdf_additional_variables.
             hdf_output_options (Dict[str, Any], optional): Explicit HDF output options
                 passed to ``RasPlan.set_hdf_output_options()`` before execution.
             hdf_output_profile (str, optional): Named HDF output profile to apply before
@@ -3403,6 +3408,13 @@ class RasCmdr:
 
             # Plan-file execution settings are mutations. Apply them only
             # after every skip path has committed to an actual run.
+            # Gate version-limited HDF labels on the engine that will run when
+            # it is newer than the plan's declared Program Version.
+            hdf_target_version = None
+            if hdf_additional_variables or hdf_output_variables:
+                hdf_target_version = RasPlan._engine_hdf_target_version(
+                    compute_plan_path, getattr(compute_ras, "ras_exe_path", None)
+                )
             if use_optimal_hdf_settings or hdf_output_profile:
                 profile_to_apply = hdf_output_profile or hdf_settings_profile
                 variables_to_apply = hdf_additional_variables or hdf_output_variables
@@ -3410,7 +3422,8 @@ class RasCmdr:
                     compute_plan_path,
                     profile=profile_to_apply,
                     additional_variables=variables_to_apply,
-                    ras_object=compute_ras
+                    ras_object=compute_ras,
+                    target_ras_version=hdf_target_version,
                 )
                 if hdf_settings_success:
                     logger.info(
@@ -3437,7 +3450,8 @@ class RasCmdr:
                     compute_plan_path,
                     hdf_output_variables,
                     enabled=True,
-                    ras_object=compute_ras
+                    ras_object=compute_ras,
+                    target_ras_version=hdf_target_version,
                 )
 
             # Always enable Write Detailed= 1 to ensure .computeMsgs.txt is written
