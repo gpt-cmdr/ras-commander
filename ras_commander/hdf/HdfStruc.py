@@ -636,7 +636,7 @@ class HdfStruc:
                 
                 # Get attributes and decode byte strings
                 attrs_dict = {}
-                for key, value in dict(hdf_file["Geometry/Structures"].attrs).items():
+                for key, value in read_attrs(hdf_file["Geometry/Structures"]).items():
                     if isinstance(value, bytes):
                         attrs_dict[key] = value.decode('utf-8')
                     else:
@@ -646,6 +646,7 @@ class HdfStruc:
                 return pd.DataFrame(attrs_dict, index=[0])
 
         except Exception as e:
+            reraise_required(e)
             logger.error(f"Error reading geometry structures attributes from {hdf_path}: {str(e)}")
             return pd.DataFrame()
 
