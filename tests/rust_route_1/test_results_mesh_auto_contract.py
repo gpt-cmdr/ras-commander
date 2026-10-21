@@ -5,6 +5,11 @@ native Corrupt refusal as fatal in auto mode. h5py behaviour is the public
 contract, so auto now reproduces the h5py outcome on any native failure,
 Corrupt/checksum included; required native still raises ``FastHdfError``.
 
+Review-r2 adds the exception-type cases (h5py ``ValueError``/``OSError`` must not
+become ``FastHdfError`` in auto) and the partial-result cases: h5py's
+``get_mesh_cells_timeseries``/``get_mesh_faces_timeseries`` drop the damaged
+variable and return the rest, and auto must return that same partial result.
+
 Each case rewrites one real 2D result dataset of a *copy* of AustinOyster.p01 with
 its exact values in Fletcher32 chunks, shows required native reads the clean copy
 through the typed mesh-result route, flips one stored checksum byte, then
@@ -29,6 +34,27 @@ CASES = {
         lambda v: (min(16, v.shape[0]), v.shape[1]),
         lambda hdf, path: hdf.HdfResultsMesh.get_mesh_timeseries(path, AREA, "Water Surface"),
     ),
+    # review-r2: exception types (h5py ValueError/OSError) and partial results.
+    "get_mesh_summary[MaxWS]": (
+        f"{BASE}/Summary Output/2D Flow Areas/{AREA}/Maximum Water Surface",
+        lambda v: v.shape,
+        lambda hdf, path: hdf.HdfResultsMesh.get_mesh_summary(path, "Maximum Water Surface"),
+    ),
+    "get_mesh_summary_values[MaxWS]": (
+        f"{BASE}/Summary Output/2D Flow Areas/{AREA}/Maximum Water Surface",
+        lambda v: v.shape,
+        lambda hdf, path: hdf.HdfResultsMesh.get_mesh_summary_values(path, "Maximum Water Surface"),
+    ),
+    "get_mesh_cells_timeseries[partial]": (
+        f"{BASE}/Unsteady Time Series/2D Flow Areas/{AREA}/Water Surface",
+        lambda v: (min(16, v.shape[0]), v.shape[1]),
+        lambda hdf, path: hdf.HdfResultsMesh.get_mesh_cells_timeseries(path),
+    ),
+    "get_mesh_faces_timeseries[partial]": (
+        f"{BASE}/Unsteady Time Series/2D Flow Areas/{AREA}/Face Velocity",
+        lambda v: (min(16, v.shape[0]), v.shape[1]),
+        lambda hdf, path: hdf.HdfResultsMesh.get_mesh_faces_timeseries(path, AREA),
+    ),
 }
 
 
@@ -50,6 +76,10 @@ def test_results_mesh_checksum_damage(case, tmp_path, monkeypatch):
     py, _, _ = _outcome(monkeypatch, "0", call)
     auto, auto_trace, _ = _outcome(monkeypatch, "auto", call)
     req, _, _ = _outcome(monkeypatch, "required", call)
+    if case.endswith("[partial]"):
+        # h5py drops the damaged variable and returns the rest: a successful
+        # partial result that auto must reproduce exactly.
+        assert py[0] == "ok", py[:3]
     _same(py, auto, f"{case}: auto keeps the h5py outcome on checksum damage")
     assert any(r["path"] == "/" + key and r["backend"] == "h5py-fallback" for r in auto_trace), auto_trace
     assert req[0] == "raise" and req[1] is fast_hdf.FastHdfError, req[:3]
