@@ -2407,9 +2407,15 @@ class HdfResultsMesh:
         with h5py.File(hdf_path, "r") as result_hdf, h5py.File(geom_source, "r") as geom_hdf:
             if time_stamp_path in result_hdf:
                 raw_times = result_hdf[time_stamp_path][()]
-                hdf_times = pd.DatetimeIndex(
-                    [_parse_timestamp(value.decode("utf-8")) for value in raw_times]
-                ).round("s")
+                parsed_times = [
+                    _parse_timestamp(value.decode("utf-8")) for value in raw_times
+                ]
+                if parsed_times:
+                    # Preserve irregular source stamps; only out-of-range dates
+                    # require a wider-range, microsecond time axis.
+                    hdf_times = HdfUtils._datetime_index(parsed_times, round_to="s")
+                else:
+                    hdf_times = pd.DatetimeIndex([])
             elif time_path in result_hdf:
                 start_time = HdfBase.get_simulation_start_time(result_hdf)
                 hdf_times = HdfUtils.convert_timesteps_to_datetimes(
@@ -2712,7 +2718,9 @@ class HdfResultsMesh:
         """
         try:
             start_time = HdfBase.get_simulation_start_time(hdf_path)
-            time_stamps = HdfBase.get_unsteady_timestamps(hdf_path)
+            time_stamps = HdfUtils._datetime_index(
+                HdfBase.get_unsteady_timestamps(hdf_path)
+            ).to_numpy()
             cell_counts = HdfResultsMesh._physical_cell_counts(hdf_path)
 
             if mesh_names is None:

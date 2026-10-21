@@ -3,6 +3,7 @@ import warnings
 
 import numpy as np
 import h5py
+import pytest
 
 from ras_commander.hdf.HdfResultsMesh import HdfResultsMesh
 
@@ -13,6 +14,51 @@ BASE_TS_PATH = (
     "Results/Unsteady/Output/Output Blocks/Base Output/"
     "Unsteady Time Series"
 )
+
+
+def _create_year_3000_mesh_results_hdf(path):
+    """Create a minimal future-dated plan HDF with mesh summary/results."""
+    with h5py.File(path, "w") as hdf:
+        plan_info = hdf.require_group("Plan Data/Plan Information")
+        plan_info.attrs["Simulation Start Time"] = np.bytes_("02Jan3000 00:00:00")
+
+        hdf.create_dataset(
+            f"{BASE_TS_PATH}/Time",
+            data=np.array([0.0, 1.0, 2.0]),
+        )
+        hdf.create_dataset(
+            f"{BASE_TS_PATH}/Time Date Stamp (ms)",
+            data=np.array([
+                b"02Jan3000 00:00:00.000",
+                b"03Jan3000 00:00:00.000",
+                b"04Jan3000 00:00:00.000",
+            ]),
+        )
+
+        attrs_dtype = np.dtype([("Name", "S64"), ("Cell Count", "i4")])
+        hdf.create_dataset(
+            "Geometry/2D Flow Areas/Attributes",
+            data=np.array([(MESH_NAME.encode("utf-8"), 1)], dtype=attrs_dtype),
+        )
+        geom_group = hdf.require_group(f"Geometry/2D Flow Areas/{MESH_NAME}")
+        geom_group.create_dataset("Cells Center Coordinate", data=np.array([[0.0, 0.0]]))
+
+        mesh_group = hdf.require_group(f"{BASE_TS_PATH}/2D Flow Areas/{MESH_NAME}")
+        _write_face_variable(mesh_group, "Water Surface", [[1.0], [2.0], [3.0]], "ft")
+        _write_face_variable(mesh_group, "Face Velocity", [[0.1], [0.2], [0.3]], "ft/s")
+
+        summary_group = hdf.require_group(
+            f"Results/Unsteady/Output/Output Blocks/Base Output/Summary Output/"
+            f"2D Flow Areas/{MESH_NAME}"
+        )
+        summary_group.create_dataset(
+            "Maximum Water Surface",
+            data=np.array([[5.0], [1.0]]),
+        )
+        summary_group.create_dataset(
+            "Maximum Face Velocity",
+            data=np.array([[0.3], [2.0]]),
+        )
 
 
 def _write_face_variable(mesh_group, name, values, units):
@@ -147,21 +193,85 @@ def test_get_mesh_faces_timeseries_returns_optional_face_outputs(tmp_path):
     )
 
 
-def test_export_depth_rasters_at_times_computes_depth_from_wse(tmp_path):
+@pytest.mark.parametrize("year", [2020, 1500, 3000])
+def test_future_dated_mesh_summary_and_timeseries_are_supported(tmp_path, year):
+    hdf_path = tmp_path / "year-3000.p01.hdf"
+    _create_year_3000_mesh_results_hdf(hdf_path)
+    with h5py.File(hdf_path, "a") as hdf:
+        hdf["Plan Data/Plan Information"].attrs["Simulation Start Time"] = np.bytes_(f"02Jan{year} 00:00:00")
+        hdf[f"{BASE_TS_PATH}/Time Date Stamp (ms)"][...] = np.array([
+            f"{day:02d}Jan{year} 00:00:00.000".encode() for day in [2, 3, 4]
+        ])
+
+    ws = HdfResultsMesh.get_mesh_max_ws(hdf_path)
+    face_v = HdfResultsMesh.get_mesh_max_face_v(hdf_path)
+    timeseries = HdfResultsMesh.get_mesh_timeseries(
+        hdf_path,
+        MESH_NAME,
+        "Water Surface",
+        truncate=False,
+        time_selection=slice(1, 2),
+    )
+    face_timeseries = HdfResultsMesh.get_mesh_faces_timeseries(
+        hdf_path,
+        MESH_NAME,
+        truncate=False,
+    )
+    cell_timeseries = HdfResultsMesh.get_mesh_cells_timeseries(
+        hdf_path,
+        mesh_names=MESH_NAME,
+        var="Water Surface",
+        truncate=False,
+    )
+
+    lazy_timeseries = HdfResultsMesh.get_mesh_timeseries(
+        hdf_path, MESH_NAME, "Water Surface", truncate=False,
+        return_type="view", time_selection=slice(1, 2),
+    ).to_xarray()
+
+    expected_year = year
+    assert ws["maximum_water_surface_time"].iloc[0].year == expected_year
+    assert face_v["maximum_face_velocity_time"].iloc[0].year == expected_year
+    assert timeseries.sizes["time"] == 1
+    timestamp_year = lambda values: int(
+        values[0].astype("datetime64[Y]").astype(int) + 1970
+    )
+    assert timestamp_year(timeseries.coords["time"].values) == expected_year
+    np.testing.assert_allclose(timeseries.values, [[2.0]])
+    np.testing.assert_array_equal(lazy_timeseries.coords["time"].values, timeseries.coords["time"].values)
+    for result in [timeseries, lazy_timeseries, face_timeseries, cell_timeseries[MESH_NAME]]:
+        assert result.coords["time"].dtype.kind == "M"
+        if year != 2020:
+            assert result.coords["time"].dtype == np.dtype("datetime64[us]")
+    assert timestamp_year(face_timeseries.coords["time"].values) == expected_year
+    assert timestamp_year(cell_timeseries[MESH_NAME].coords["time"].values) == expected_year
+
+
+@pytest.mark.parametrize("year", [2024, 3000])
+@pytest.mark.parametrize("use_stamps", [True, False])
+def test_export_depth_rasters_at_times_computes_depth_from_wse(tmp_path, year, use_stamps):
     import rasterio
 
     hdf_path = tmp_path / "synthetic.p01.hdf"
     _create_synthetic_depth_results_hdf(hdf_path)
+    with h5py.File(hdf_path, "a") as hdf:
+        hdf["Plan Data/Plan Information"].attrs["Simulation Start Time"] = np.bytes_(f"01Jan{year} 00:00:00")
+        if use_stamps:
+            hdf[f"{BASE_TS_PATH}/Time Date Stamp (ms)"][...] = np.array([
+                f"01Jan{year} {hour:02d}:00:00.000".encode() for hour in [0, 1]
+            ])
+        else:
+            del hdf[f"{BASE_TS_PATH}/Time Date Stamp (ms)"]
 
     result = HdfResultsMesh.export_depth_rasters_at_times(
         hdf_path,
-        ["01Jan2024 01:00:00"],
+        [f"01Jan{year} 01:00:00"],
         tmp_path / "rasters",
         mesh_name=MESH_NAME,
         resolution=1.0,
     )
 
-    raster_path = result["01Jan2024 01:00:00"]
+    raster_path = result[f"01Jan{year} 01:00:00"]
     assert raster_path.exists()
     with rasterio.open(raster_path) as src:
         data = src.read(1)
