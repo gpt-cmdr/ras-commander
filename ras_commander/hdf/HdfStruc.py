@@ -133,8 +133,11 @@ class HdfStruc:
             or np.any(cells >= len(surface))
         ):
             return (), (), tuple(required), "Invalid native cells or face topology"
+        # One routed read of the referenced (bounds-checked) cells only.
+        referenced = np.unique(cells.astype(np.int64))
+        areas = dict(zip(referenced.tolist(), read_typed(surface, referenced)))
         if any(
-            not np.isfinite(surface[int(cell)]) or surface[int(cell)] <= 0
+            not np.isfinite(areas[int(cell)]) or areas[int(cell)] <= 0
             for cell in cells
         ):
             return (
