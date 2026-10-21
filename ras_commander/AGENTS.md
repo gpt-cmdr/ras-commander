@@ -48,6 +48,15 @@ This file is the canonical local instruction file for the `ras_commander/` packa
   forms and still permits unknown literal tokens for cleanup. The 14
   spiral/curvature labels in `HDF_OUTPUT_VARIABLE_MIN_VERSIONS` require a plan
   Program Version of 7.0+ (unknown versions warn) and active secondary flow.
+  The enabling writers (`add_/set_/enable_hdf_output_variable(s)`,
+  `apply_hdf_output_profile`, `use_optimal_hdf_settings`) accept an opt-in,
+  keyword-only `target_ras_version` (`"7.0"`, `"7.0.1"`, `"70"`, or a
+  `Ras.exe` path whose parent folder is a version such as `7.0` or
+  `6.7 Beta 5`; other folder names such as `x86` do not parse) that replaces
+  the declared version as the gate, because shipped plans
+  declare 5.x/6.x even when 7.0+ runs them. `RasCmdr.compute_plan` passes the
+  executing engine version automatically, but only when it is newer than the
+  declared version, so it never rejects what the declared gate accepted.
   `HDF_OUTPUT_VARIABLE_DATASETS` is a partial, observed one-to-many map of Base
   Output mesh dataset basenames, not a promise of presence or compatible time
   axes. The node-velocity label is retained with a warning: the 6.6/7.0.1 pilot
@@ -82,6 +91,7 @@ This file is the canonical local instruction file for the `ras_commander/` packa
 ## Execution Rules
 
 - Preserve originals when practical. Prefer `dest_folder=` for plan execution and isolated working directories for derived artifacts.
+- Copied project folders (`compute_plan`/`compute_parallel` `dest_folder`, parallel worker folders, `compute_test_mode`, permutation batches, local/Docker/PsExec remote staging) and in-place `RasPlan` refreshes re-initialize against the source project's own `.prj` file name via the module-level `ras_commander.RasPrj._matching_copied_prj_file()` (also reachable as the `RasPrj` static alias; call the module-level function so code paths that substitute the `RasPrj` class keep working). `DockerWorker` also passes `PROJECT_NAME` to the container, and `run_ras.sh` uses `${PROJECT_NAME}.prj` when it exists; images built before this change ignore it and still take the first `.prj`, so rebuild the image for multi-project folders. This only changes behavior when the folder holds several `.prj` files; single-project folders still use the normal `find_ras_prj()` folder search. New code that re-initializes a copied project must do the same instead of initializing by folder.
 - Be conservative with `max_workers * num_cores` when parallelizing runs.
 - Remote execution details live in [ras_commander/remote/AGENTS.md](remote/AGENTS.md).
 

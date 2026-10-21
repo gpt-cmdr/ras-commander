@@ -85,7 +85,13 @@ from .LoggingConfig import get_logger
 from ._optional_deps import require_module
 from .RasBco import BcoMonitor
 from .RasPlan import RasPlan
-from .RasPrj import RasPrj, init_ras_project, ras
+from .RasPrj import (
+    RasPrj,
+    _copied_prj_init_kwargs,
+    _matching_copied_prj_file,
+    init_ras_project,
+    ras,
+)
 from .RasTcu import RasTcu
 from .RasUtils import RasUtils
 
@@ -3054,6 +3060,9 @@ class RasCmdr:
                 If a string is provided, it will be created in the same parent directory as the project folder.
                 If a full path is provided, it will be used as is.
                 If None, computation occurs in the original project folder, modifying the original project.
+                The copy is re-initialized against the same .prj file name as the source project, so a
+                project folder holding several projects (several .prj files) computes the project that
+                ``ras_object`` points to rather than the first .prj found.
             ras_object (RasPrj, optional): Specific RAS object to use. If None, uses the global ras instance.
                 Useful when working with multiple projects simultaneously.
             clear_geompre (bool, optional): Whether to clear geometry preprocessor files (.c## files). Defaults to False.
@@ -3111,6 +3120,11 @@ class RasCmdr:
             hdf_output_variables (List[str], optional): Additional HDF output variables
                 to enable before execution. The same baseline-name no-op policy
                 applies; existing baseline-name lines are preserved. Unknown labels raise.
+                Version-limited labels (HEC-RAS 7.0 secondary-flow outputs) are gated on
+                the executing HEC-RAS version when it is newer than the plan's declared
+                Program Version (for example a 6.x-declared plan run with 7.0.1);
+                otherwise the declared-version gate applies. Same for
+                hdf_additional_variables.
             hdf_output_options (Dict[str, Any], optional): Explicit HDF output options
                 passed to ``RasPlan.set_hdf_output_options()`` before execution.
             hdf_output_profile (str, optional): Named HDF output profile to apply before
@@ -3311,8 +3325,17 @@ class RasCmdr:
                     logger.info("Copied project folder to destination: %s", dest_folder.name)
                     logger.debug(f"Copied project folder to destination path: {dest_folder}")
 
+                    # Re-initialize against the copy of the SAME project. A
+                    # folder search would pick an arbitrary .prj when the
+                    # project folder holds several projects.
                     compute_ras = RasPrj()
-                    compute_ras.initialize(dest_folder, ras_obj.ras_exe_path)
+                    compute_ras.initialize(
+                        dest_folder,
+                        ras_obj.ras_exe_path,
+                        **_copied_prj_init_kwargs(
+                            dest_folder, ras_obj.prj_file
+                        ),
+                    )
                     compute_prj_path = compute_ras.prj_file
             if dest_folder is None:
                 compute_ras = ras_obj
@@ -3403,6 +3426,13 @@ class RasCmdr:
 
             # Plan-file execution settings are mutations. Apply them only
             # after every skip path has committed to an actual run.
+            # Gate version-limited HDF labels on the engine that will run when
+            # it is newer than the plan's declared Program Version.
+            hdf_target_version = None
+            if hdf_additional_variables or hdf_output_variables:
+                hdf_target_version = RasPlan._engine_hdf_target_version(
+                    compute_plan_path, getattr(compute_ras, "ras_exe_path", None)
+                )
             if use_optimal_hdf_settings or hdf_output_profile:
                 profile_to_apply = hdf_output_profile or hdf_settings_profile
                 variables_to_apply = hdf_additional_variables or hdf_output_variables
@@ -3410,7 +3440,8 @@ class RasCmdr:
                     compute_plan_path,
                     profile=profile_to_apply,
                     additional_variables=variables_to_apply,
-                    ras_object=compute_ras
+                    ras_object=compute_ras,
+                    target_ras_version=hdf_target_version,
                 )
                 if hdf_settings_success:
                     logger.info(
@@ -3437,7 +3468,8 @@ class RasCmdr:
                     compute_plan_path,
                     hdf_output_variables,
                     enabled=True,
-                    ras_object=compute_ras
+                    ras_object=compute_ras,
+                    target_ras_version=hdf_target_version,
                 )
 
             # Always enable Write Detailed= 1 to ensure .computeMsgs.txt is written
@@ -4375,6 +4407,8 @@ class RasCmdr:
                 If None, results are consolidated back to the original project folder.
                 If string, creates folder in the project's parent directory.
                 If Path, uses the exact path provided.
+                Worker folders and the destination are re-initialized against the source
+                project's .prj file name, so multi-project folders stay on the same project.
             overwrite_dest (bool): Whether to overwrite existing destination folder.
                 Set to True to replace an existing destination folder with the same name.
             skip_existing (bool): If True, skip computation for plans whose
@@ -4592,8 +4626,11 @@ class RasCmdr:
 
                 try:
                     worker_ras = RasPrj()
+                    worker_prj = _matching_copied_prj_file(
+                        worker_folder, ras_obj.prj_file
+                    )
                     worker_ras_object = init_ras_project(
-                        ras_project_folder=worker_folder,
+                        ras_project_folder=worker_prj or worker_folder,
                         ras_version=ras_obj.ras_exe_path,
                         ras_object=worker_ras,
                         hide_intro=True,
@@ -5102,7 +5139,13 @@ class RasCmdr:
             # This ensures results_df reflects results in the destination folder
             if dest_folder is not None:
                 try:
-                    ras_obj.initialize(final_dest_folder, ras_obj.ras_exe_path)
+                    ras_obj.initialize(
+                        final_dest_folder,
+                        ras_obj.ras_exe_path,
+                        **_copied_prj_init_kwargs(
+                            final_dest_folder, ras_obj.prj_file
+                        ),
+                    )
                     logger.info("Re-initialized ras_object from destination folder: %s", final_dest_folder.name)
                     logger.debug(f"Re-initialized ras_object from destination path: {final_dest_folder}")
                 except Exception as e:
@@ -5370,7 +5413,13 @@ class RasCmdr:
 
             try:
                 compute_ras = RasPrj()
-                compute_ras.initialize(compute_folder, ras_obj.ras_exe_path)
+                compute_ras.initialize(
+                    compute_folder,
+                    ras_obj.ras_exe_path,
+                    **_copied_prj_init_kwargs(
+                        compute_folder, ras_obj.prj_file
+                    ),
+                )
                 compute_prj_path = compute_ras.prj_file
                 execution_result_format = infer_execution_result_format(
                     compute_ras

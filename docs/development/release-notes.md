@@ -38,6 +38,56 @@ different CRS values.
   and `resolve_ras_relative_path`. RASMapper paths containing `..\` now
   resolve to the parent folder instead of being stripped.
 
+**Fluvial/pluvial classification no longer depends on input order (behavior change)**
+
+`HdfFluvialPluvial.generate_fluvial_pluvial_polygons()` and
+`calculate_fluvial_pluvial_boundary()` depended on GeoDataFrame row order and
+ring vertex order. Reversing the rows of identical cell polygons moved 54,980
+sq ft between classes on AustinOyster at `delta_t=1`, and 432,713 sq ft on
+DavisStormSystem `area2`. The python and native polygon backends also gave
+different classifications. Two mechanisms caused it:
+
+- A cell in several boundary pairs kept the label of the last pair processed.
+- Only the last shared ring segment between two cells was kept.
+
+Results now depend only on the stored mesh and results:
+
+- Adjacency comes from the stored `Faces Cell Indexes` topology. An
+  order-invariant shared-ring-segment fallback is used, with a WARNING, only
+  when a mesh lacks that dataset.
+- In each boundary pair, the later-peaking cell is `fluvial` evidence and the
+  earlier one `pluvial` evidence. A cell with evidence for both is seeded
+  `ambiguous` and does not grow. Equal times, which are possible only with
+  `delta_t <= 0`, seed nothing.
+- There is one boundary line per cell pair, holding every face the pair
+  shares, with the stored coordinates. It is a MultiLineString when the shared
+  faces are not contiguous.
+- Cells are dissolved in sorted `(mesh_name, cell_id)` order with normalized
+  rings. The `cell_id` column is the smallest cell in each class.
+
+Public signatures are unchanged. `(mesh_name, cell_id)` keying and
+projected-unit acreage are preserved. Results change once. The change is
+concentrated at small `delta_t`, almost entirely in the cells now seeded
+`ambiguous`. Class areas on the original presentation, before and after, in
+sq ft:
+
+| Fixture | `delta_t` | ambiguous | fluvial | pluvial |
+|---|---|---:|---:|---:|
+| AustinOyster p01 | 1 h | +215,969 | −137,884 | −78,085 |
+| AustinOyster p01 | 12 h | 0 | 0 | 0 |
+| BaldEagleDamBrk p07 | 1 h | +189,972 | −119,459 | −70,513 |
+| BaldEagleDamBrk p07 | 12 h | +30,000 | −20,000 | −10,000 |
+| BaldEagleDamBrk refpts p03 | 1 h | +347,820 | −222,821 | −125,000 |
+| BaldEagleDamBrk refpts p03 | 12 h | 0 | 0 | 0 |
+| DavisStormSystem p02 `area2` | 1 h | +2,216,417 | −1,258,980 | −957,437 |
+| DavisStormSystem p02 (both meshes) | 12 h | 0 | 0 | 0 |
+| Homewood p02 | 1 h | +22,212 | −24,655 | +2,444 |
+| Homewood p02 | 12 h | 0 | 0 | 0 |
+
+Boundary-line geometry also changes: lines carry exact stored face coordinates
+instead of values rounded to 8 decimals, and a curved shared face is returned
+whole instead of as one segment.
+
 ### v0.106.1 (October 2026)
 
 **Point-precipitation preprocessing repairs HEC-RAS's intermittent failure**

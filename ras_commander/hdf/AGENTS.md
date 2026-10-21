@@ -120,6 +120,19 @@ This file is the canonical local instruction file for `ras_commander/hdf/`.
   log processing failures at ERROR with path, parameters, stage and traceback,
   then return an empty GeoDataFrame, discarding partial geometry. Input/decorator
   validation exceptions remain unchanged. No status/error attributes are added.
+- `HdfFluvialPluvial` results are order-invariant (behavior change after
+  v0.106.1): they depend only on stored mesh/results, never on cell-polygon row
+  order, ring direction or ring start vertex. Adjacency comes from stored
+  `Faces Cell Indexes` restricted to the returned cells; a canonical
+  shared-ring-segment fallback (also order-invariant) is used, with a WARNING,
+  only when a mesh lacks that dataset. Seeding is set-based: in each boundary
+  pair the later-peaking cell is fluvial evidence and the earlier one pluvial
+  evidence; a cell with both is seeded `ambiguous` and does not grow; equal
+  times (only possible with `delta_t <= 0`) seed nothing. Boundary lines are one
+  per boundary pair in sorted pair order and contain every shared face with the
+  stored coordinates (MultiLineString if not contiguous). Dissolve uses sorted
+  `(mesh_name, cell_id)` rows and normalized rings, so the `cell_id` column is
+  the smallest cell in each class.
 - Mesh time-series domains use authoritative stored scalar `Location`: `Cells`
   and `Cell` mean cells; `Faces` means faces. Invalid, unknown, nonscalar or
   contradictory present Location is refused, never bypassed with a name rule.
