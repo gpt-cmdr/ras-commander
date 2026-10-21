@@ -106,8 +106,7 @@ import numpy as np
 import pandas as pd
 
 from ..Decorators import log_call, standardize_input
-from ..fast_hdf import read_dataset
-from ..fast_hdf import FastHdfError, read_attr, read_typed, reraise_required
+from ..fast_hdf import read_attr, read_typed, reraise_required
 from ..LoggingConfig import get_logger
 from .HdfBase import HdfBase
 from .HdfUtils import HdfUtils
