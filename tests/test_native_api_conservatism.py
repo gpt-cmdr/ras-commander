@@ -686,3 +686,52 @@ def test_geometry_text_output_is_main_s():
     from ras_commander.geom.GeomCrossSection import GeomCrossSection
     assert not hasattr(GeomCrossSection, "INEFFECTIVE_VALUES_PER_LINE")
     assert not hasattr(GeomCrossSection, "_round_trip_decimals")
+
+
+# ---------------------------------------------------------------------------
+# 8. Documentation matches the code for the native surface
+# ---------------------------------------------------------------------------
+
+REPO = Path(__file__).resolve().parents[1]
+
+
+def test_every_ras_commander_environment_variable_is_documented():
+    import re
+    variables = set()
+    for source in (REPO / "ras_commander").rglob("*.py"):
+        variables |= set(re.findall(r"RAS_COMMANDER_[A-Z0-9_]+", source.read_text(encoding="utf-8")))
+    native = {v for v in variables if v.startswith(("RAS_COMMANDER_FAST", "RAS_COMMANDER_HDF"))}
+    assert {"RAS_COMMANDER_FAST_HDF", "RAS_COMMANDER_HDF_SESSION_CACHE", "RAS_COMMANDER_FAST_TEXT"} <= native
+    docs = (REPO / "docs" / "api" / "hdf.md").read_text(encoding="utf-8")
+    agents = (REPO / "ras_commander" / "hdf" / "AGENTS.md").read_text(encoding="utf-8")
+    for name in sorted(native):
+        assert name in docs, f"{name} is not in docs/api/hdf.md"
+        assert name in agents, f"{name} is not in ras_commander/hdf/AGENTS.md"
+    assert "close_sessions" in docs and "close_sessions" in agents
+
+
+def test_hdfutils_api_reference_lists_every_public_method():
+    import inspect
+    import re
+    docs = (REPO / "docs" / "api" / "hdf.md").read_text(encoding="utf-8")
+    block = docs.split("::: ras_commander.hdf.HdfUtils.HdfUtils", 1)[1]
+    block = block.split("### ", 1)[0]
+    listed = set(re.findall(r"^\s+- (\w+)\s*$", block, flags=re.M))
+    public = {name for name, member in inspect.getmembers(HdfUtils)
+              if not name.startswith("_") and callable(member)}
+    assert public - listed == set(), f"undocumented HdfUtils methods: {sorted(public - listed)}"
+    assert "::: ras_commander.hdf.HdfUtils.CrsEvidence" in docs
+    assert "::: ras_commander.hdf.HdfUtils.CrsResolution" in docs
+
+
+def test_fast_hdf_public_names_exclude_the_low_level_plumbing():
+    from ras_commander import fast_hdf
+    internal = {"read_typed", "read_attrs", "read_attr", "read_dataset", "read_datasets",
+                "mesh_series_domain", "trace_reads", "native_required", "reraise_required"}
+    assert not internal & set(fast_hdf.__all__)
+    assert len(fast_hdf.__all__) == len(set(fast_hdf.__all__))
+    for name in fast_hdf.__all__:
+        assert hasattr(fast_hdf, name)
+    # still importable by name for the Hdf* classes and the qualification suites
+    for name in internal:
+        assert callable(getattr(fast_hdf, name))
