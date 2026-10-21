@@ -57,6 +57,7 @@ _POSITION_KEYWORDS = (
     "Reference Line Start Position",
     "Reference Line Middle Position",
     "Reference Line End Position",
+    "Reference Point Position",
     "IC Point Position",
 )
 
