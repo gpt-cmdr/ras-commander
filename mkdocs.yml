@@ -107,6 +107,7 @@ plugins:
           - api/remote.md
           - api/model-sources.md
   - mkdocstrings:
+      custom_templates: docs/overrides/mkdocstrings
       default_handler: python
       handlers:
         python:
