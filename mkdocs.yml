@@ -244,6 +244,7 @@ nav:
       - Coastal Water Levels: user-guide/coastal-boundaries.md
     - Results & Export:
       - HDF Data Extraction: user-guide/hdf-data-extraction.md
+      - Parent Display Probes: user-guide/parent-display.md
       - 2D Profiles and Reference Results: user-guide/2d-profile-and-reference-workflows.md
       - Cloud-Native Export (ras2cng): user-guide/cloud-native-export.md
     - Quality Assurance:

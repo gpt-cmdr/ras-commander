@@ -1106,8 +1106,9 @@ class HdfProject:
         Returns
         -------
         str or None
-            CRS as an EPSG string when resolvable, otherwise WKT, or None if
-            not defined
+            Same value as ``HdfBase.get_projection``: ``"EPSG:n"`` when an
+            EPSG code is strictly equivalent, otherwise WKT; None when the HDF,
+            ``.rasmap`` projection and terrain evidence is missing or conflicts.
 
         Examples
         --------

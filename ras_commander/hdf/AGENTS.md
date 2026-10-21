@@ -67,6 +67,18 @@ This file is the canonical local instruction file for `ras_commander/hdf/`.
   convention used by `HdfPipe` and the other readers). Out-of-range starts,
   negative counts, one-point centerlines and inconsistent Parts still raise.
 
+- CRS: `HdfBase.get_projection()`, `HdfProject.get_project_crs()` and
+  `RasPrj.project_crs` use one rule. HDF `Projection` attribute, `.rasmap`
+  projection file and `.rasmap` terrain HDFs are collected by
+  `HdfUtils.collect_hdf_crs_evidence()` and resolved by
+  `HdfUtils.resolve_crs_evidence()`; every CRS found must satisfy
+  `HdfUtils.crs_equivalent()`. Missing or conflicting evidence returns
+  `None` (never a guess, never a transform). The public string form is
+  `HdfUtils.format_crs()`: `"EPSG:n"` only for a strictly equivalent EPSG
+  code, otherwise the source WKT; never `"ESRI:n"`. New CRS-determining code
+  must reuse these helpers rather than reading `Projection` or `.prj` text
+  directly.
+
 ## Common Entry Points
 
 - Plan metadata and compute messages: `HdfResultsPlan`
