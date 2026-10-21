@@ -797,22 +797,36 @@ Routing policy:
 - **Required-mode metadata exception.** Text datasets and compound tables
   whose every member is text (identity tables such as XS `River/Reach/RS`
   rows) are read through h5py in every mode (`h5py-metadata` in the trace).
-  HDF attributes, group/key walks and shape probes also stay on h5py. A
-  compound with any numeric member is value data: without a typed engine route
-  it is an h5py fallback in auto mode and a `FastHdfError` refusal in required
-  mode. Required mode therefore guarantees native *numeric value* reads, not
-  that h5py is never opened.
+  Group/key walks, `in` checks and shape probes also stay on h5py. A compound
+  with any numeric member is value data: without a typed engine route it is an
+  h5py fallback in auto mode and a `FastHdfError` refusal in required mode.
+  Required mode therefore guarantees native numeric *and attribute* value
+  reads, not that h5py is never opened. When the engine fails a whole read
+  family (`stored_family_index` failures), the refusal message and the trace
+  (`diagnostic` entries) say so.
 - **Attributes.** `fast_hdf.read_attrs(obj)` returns `{name: obj.attrs[name]}`
-  in h5py's key order with values rebuilt exactly from the engine's typed
-  attributes (numeric scalars/arrays in the stored dtype and byte order; fixed
-  strings with HDF5's NULLPAD conversion). Groups use the engine's typed group
-  attributes; datasets in a Wave 3 family or output block use their engine
-  descriptors; other datasets keep h5py. Values the engine cannot reproduce
-  (bitfield, variable-length, compound attributes) fall back per attribute in
-  auto mode and raise `FastHdfError` in required mode. Plan metadata,
-  run-summary and association readers (`HdfPlan`, `HdfResultsPlan.get_*_info`,
-  `get_volume_accounting`, `get_runtime_data`, `HdfUtils.get_units_system`, ...)
-  use it.
+  in h5py's key order and `fast_hdf.read_attr(obj, name[, default])` returns
+  one attribute (`obj.attrs[name]` / `obj.attrs.get(name, default)`), with
+  values rebuilt exactly from the engine's typed attributes (bridge API 11):
+  numeric scalars/arrays in the stored dtype and byte order; bitfields as the
+  unsigned integer of the same size and order; fixed strings with HDF5's
+  NULLPAD conversion; an H5S_NULL dataspace as `h5py.Empty(dtype)`, never a
+  zero-length array. Groups use the engine's typed group attributes and every
+  dataset its typed dataset attributes, inside or outside the read families.
+  Values the engine cannot reproduce (variable-length text, compound, enum
+  attributes) fall back to h5py in auto mode and raise `FastHdfError` in
+  required mode; `read_attrs` refuses the whole object, `read_attr` only the
+  requested attribute. Attributes of virtual, external or SWMR datasets are
+  refused in required mode. All `Hdf*` readers qualified NATIVE read
+  attributes through these two functions.
+- **2D mesh series domains.** `fast_hdf.mesh_series_domain(dataset)` returns
+  the engine's typed domain of a Base Output 2D series:
+  `{id_dim, domain, domain_rule, capability}`, where `domain_rule` is
+  `stored_location` or `legacy_exact_name` (HEC-RAS 5.0.7 series without a
+  stored `Location`: `Depth`/`Water Surface` cells; `Face Velocity`,
+  `Face Shear Stress`, `Face Area`, `Face Manning's n` faces). It is the
+  native counterpart of the h5py rule of ras-commander PR #565 and is not yet
+  consumed by `HdfResultsMesh`.
 - `HdfResultsMesh` result readers use `read_dataset`, which follows the same
   rule: in auto mode any native failure, Corrupt or checksum refusals included,
   falls back to h5py, so the public result or exception is the h5py one.
@@ -826,8 +840,8 @@ Routing policy:
 `fast_hdf.trace_reads()` records which backend served each read made through
 `read_typed` and `read_dataset`. **It is not a complete I/O audit.** Reads a
 caller makes directly with h5py do not appear in it. The route-1 qualification
-gate therefore also intercepts `h5py.Dataset.__getitem__` and `read_direct` in
-required mode. A method labelled NATIVE may read through h5py only the metadata
+gate therefore also intercepts `h5py.Dataset.__getitem__` and `read_direct`
+and, since PY-ROUTE-3, `h5py.AttributeManager.__getitem__` in required mode. A method labelled NATIVE may read through h5py only the metadata
 listed above.
 
 In the coverage inventory, **H5PY is an inventory (qualification) label, not an

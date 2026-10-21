@@ -435,7 +435,25 @@ Stored values are `{"storage": "numeric", "values": ndarray}` (stored dtype),
 1-byte bitfields as `uint8`) or `{"storage": "strings", "shape", "values"}` (engine-decoded
 text, trailing NULs removed). Slices are `(start, stop, step)` per dimension and apply to
 numeric storage only. Family-level errors in `stored_family_index` are reported in
-`failures`, never dropped.
+`failures`, never dropped; since bridge API 11 the Python router also surfaces them in
+required-mode refusals and in the trace.
+
+## Engine API 9 bindings (API_VERSION = 11)
+
+Engine pin 435ddb4b35c30507127a2656dae5d85b214553ea (ras-commander-rust engine/route2-gaps-20261021,
+engine API 9). Full-feature registration set: 77 entrypoints.
+
+| Binding | Engine API | Returns |
+|---|---|---|
+| `typed_dataset_attributes(path, dataset, max_bytes)` | `typed_dataset_attributes` | `{capability, value}`; value is a list of typed attributes (as `typed_group_attributes`) for any dataset, inside or outside the read families. Absent dataset: Unavailable; group path: `invalid_request` |
+| `raw_fixed_strings(path, dataset, max_bytes)` | `raw_fixed_strings` | `{capability, value: {shape, dataspace, width, padding, charset, raw_bytes}}`: stored bytes with padding kept (h5py's bytes follow after the NULLPAD conversion) |
+
+Every typed attribute carries `dataspace` (`scalar`, `simple` or `null`; `null` is h5py
+`Empty`) and bitfields are `attribute_type = {kind: "bitfield", bytes, byte_order}` with
+the exact stored bytes as `value`. Compound tables and stored family datasets carry
+`dataspace`. Mesh series descriptors and catalogue mesh-result layers carry
+`domain_rule` (`stored_location`, `legacy_exact_name`, `labelled_summary`,
+`boundary_columns`, `unqualified`).
 
 `fast_hdf.read_typed` uses `stored_family_index` as the membership oracle for datasets
 outside the Wave 8/Wave 2 routes: supported numeric, compound and bitfield datasets are
