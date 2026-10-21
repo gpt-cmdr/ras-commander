@@ -68,6 +68,7 @@ from .HdfBase import HdfBase
 from .HdfUtils import HdfUtils
 from ..Decorators import standardize_input, log_call
 from ..LoggingConfig import get_logger
+from ..fast_hdf import read_typed, reraise_required
 from .._rasmap_schema import rasmap_dataframe_is_usable
 
 if TYPE_CHECKING:
@@ -326,7 +327,7 @@ class HdfInfiltration:
                         logger.debug(f"No '{variable}' data for mesh '{area_name}'")
                         continue
 
-                    values = area[var_path][()]
+                    values = read_typed(area[var_path])
                     n_cells = len(values)
 
                     area_df = pd.DataFrame({
@@ -337,6 +338,7 @@ class HdfInfiltration:
                     results.append(area_df)
 
         except Exception as e:
+            reraise_required(e)
             logger.error(f"Error reading preprocessed infiltration from {hdf_path}: {e}")
             return pd.DataFrame(columns=['mesh_name', 'cell_id', 'value'])
 
@@ -420,7 +422,7 @@ class HdfInfiltration:
                     return None
                     
                 # Read data
-                data = hdf_file[table_path][()]
+                data = read_typed(hdf_file[table_path])
                 
                 # Convert to DataFrame
                 df_dict = {}
@@ -434,6 +436,7 @@ class HdfInfiltration:
                 return pd.DataFrame(df_dict)
 
         except Exception as e:
+            reraise_required(e)
             logger.error(f"Error reading infiltration data from {hdf_path}: {str(e)}")
             return None
         
@@ -468,11 +471,12 @@ class HdfInfiltration:
                     logger.debug(f"No infiltration attributes found in {hdf_path}")
                     return None
 
-                data = hdf_file[attrs_path][()]
+                data = read_typed(hdf_file[attrs_path])
                 names = list(np.vectorize(HdfUtils.convert_ras_string)(data['Name']))
                 return names
 
         except Exception as e:
+            reraise_required(e)
             logger.error(f"Error reading infiltration region names from {hdf_path}: {str(e)}")
             return None
 
@@ -511,14 +515,14 @@ class HdfInfiltration:
                     return None
 
                 # Read region names
-                attrs_data = hdf_file[attrs_path][()]
+                attrs_data = read_typed(hdf_file[attrs_path])
                 region_names = list(np.vectorize(HdfUtils.convert_ras_string)(attrs_data['Name']))
 
                 result = {}
                 variables_group = hdf_file[variables_path]
 
                 for ds_name in variables_group:
-                    data = variables_group[ds_name][()]
+                    data = read_typed(variables_group[ds_name])
                     df_dict = {}
                     for field_name in data.dtype.names:
                         values = data[field_name]
@@ -534,6 +538,7 @@ class HdfInfiltration:
                 return result
 
         except Exception as e:
+            reraise_required(e)
             logger.error(f"Error reading infiltration calibration regions from {hdf_path}: {str(e)}")
             return None
 
@@ -580,13 +585,13 @@ class HdfInfiltration:
                 if missing:
                     raise ValueError(f"Missing polygon datasets: {missing}")
 
-                region_ids = range(infil_data["Attributes"][()].shape[0])
-                names = [HdfUtils.convert_ras_string(name) for name in infil_data["Attributes"][()]["Name"]]
+                region_ids = range(read_typed(infil_data["Attributes"]).shape[0])
+                names = [HdfUtils.convert_ras_string(name) for name in read_typed(infil_data["Attributes"])["Name"]]
 
                 geoms = []
-                for pnt_start, pnt_cnt, part_start, part_cnt in infil_data["Polygon Info"][()]:
+                for pnt_start, pnt_cnt, part_start, part_cnt in read_typed(infil_data["Polygon Info"]):
                     points = HdfBase.plan_vertex_ordinates(
-                        infil_data["Polygon Points"][()][
+                        read_typed(infil_data["Polygon Points"])[
                             pnt_start : pnt_start + pnt_cnt
                         ]
                     )
@@ -600,7 +605,7 @@ class HdfInfiltration:
                     if "Polygon Parts" not in infil_data:
                         raise ValueError("Multipart infiltration region is missing Polygon Parts")
 
-                    parts = infil_data["Polygon Parts"][()][
+                    parts = read_typed(infil_data["Polygon Parts"])[
                         part_start : part_start + part_cnt
                     ]
                     rings = [
@@ -622,6 +627,7 @@ class HdfInfiltration:
                 )
 
         except Exception as e:
+            reraise_required(e)
             logger.error(f"Error reading infiltration region polygons from {hdf_path} (Geometry/Infiltration): {str(e)}")
             raise
 
@@ -823,7 +829,7 @@ class HdfInfiltration:
                     return None
                 
                 # Read data from Variables dataset
-                data = hdf_file[variables_path][()]
+                data = read_typed(hdf_file[variables_path])
                 
                 # Convert to DataFrame
                 df_dict = {}
@@ -837,6 +843,7 @@ class HdfInfiltration:
                 return pd.DataFrame(df_dict)
 
         except Exception as e:
+            reraise_required(e)
             logger.error(f"Error reading infiltration layer data from {hdf_path}: {str(e)}")
             return None
 
@@ -1225,6 +1232,7 @@ class HdfInfiltration:
                 logger.error(f"No infiltration map found in {soil_hdf_path}")
                 return pd.DataFrame()
         except Exception as e:
+            reraise_required(e)
             logger.error(f"Error getting infiltration map: {str(e)}")
             return pd.DataFrame()
         
@@ -1310,6 +1318,7 @@ class HdfInfiltration:
                             'area_sqmiles': area_sqm * HdfInfiltration.SQM_TO_SQMILE
                         })
                 except Exception as e:
+                    reraise_required(e)
                     mesh_errors.append(mesh_name)
                     logger.debug(
                         f"Error calculating soil statistics for mesh {mesh_name}: {str(e)}",
@@ -1433,9 +1442,10 @@ class HdfInfiltration:
                     logger.error(f"No Raster Map found in {landcover_hdf_path}")
                     return pd.DataFrame()
                 
-                landcover_map_data = hdf['//Raster Map'][()]
+                landcover_map_data = read_typed(hdf['//Raster Map'])
                 landcover_map = {int(item[0]): item[1].decode('utf-8').strip() for item in landcover_map_data}
         except Exception as e:
+            reraise_required(e)
             logger.error(f"Error reading land cover data from HDF: {str(e)}")
             return pd.DataFrame()
         
@@ -1446,6 +1456,7 @@ class HdfInfiltration:
                 logger.error(f"No soil map found in {soil_hdf_path}")
                 return pd.DataFrame()
         except Exception as e:
+            reraise_required(e)
             logger.error(f"Error getting soil map: {str(e)}")
             return pd.DataFrame()
         
@@ -1456,6 +1467,7 @@ class HdfInfiltration:
                 logger.warning(f"No infiltration parameters found in {soil_hdf_path}")
                 infiltration_params = pd.DataFrame(columns=['Name', 'Curve Number', 'Abstraction Ratio', 'Minimum Infiltration Rate'])
         except Exception as e:
+            reraise_required(e)
             logger.error(f"Error getting infiltration parameters: {str(e)}")
             infiltration_params = pd.DataFrame(columns=['Name', 'Curve Number', 'Abstraction Ratio', 'Minimum Infiltration Rate'])
         
@@ -1576,6 +1588,7 @@ class HdfInfiltration:
                                     'min_infiltration_rate': min_infiltration_rate
                                 })
                     except Exception as e:
+                        reraise_required(e)
                         mesh_errors.append(mesh_name)
                         logger.debug(
                             f"Error calculating land cover/soil statistics for mesh {mesh_name}: {str(e)}",
@@ -1590,6 +1603,7 @@ class HdfInfiltration:
                     mesh_errors,
                 )
         except Exception as e:
+            reraise_required(e)
             logger.error(f"Error opening raster files: {str(e)}")
             return pd.DataFrame()
         
@@ -1701,9 +1715,10 @@ class HdfInfiltration:
                     logger.error(f"No Raster Map found in {landcover_hdf_path}")
                     return pd.DataFrame()
                 
-                landcover_map_data = hdf['//Raster Map'][()]
+                landcover_map_data = read_typed(hdf['//Raster Map'])
                 landcover_map = {int(item[0]): item[1].decode('utf-8').strip() for item in landcover_map_data}
         except Exception as e:
+            reraise_required(e)
             logger.error(f"Error reading land cover data from HDF: {str(e)}")
             return pd.DataFrame()
         
@@ -1714,6 +1729,7 @@ class HdfInfiltration:
                 logger.error(f"No soil map found in {soil_hdf_path}")
                 return pd.DataFrame()
         except Exception as e:
+            reraise_required(e)
             logger.error(f"Error getting soil map: {str(e)}")
             return pd.DataFrame()
         
@@ -1724,6 +1740,7 @@ class HdfInfiltration:
                 logger.warning(f"No infiltration parameters found in {soil_hdf_path}")
                 infiltration_params = pd.DataFrame(columns=['Name', 'Curve Number', 'Abstraction Ratio', 'Minimum Infiltration Rate'])
         except Exception as e:
+            reraise_required(e)
             logger.error(f"Error getting infiltration parameters: {str(e)}")
             infiltration_params = pd.DataFrame(columns=['Name', 'Curve Number', 'Abstraction Ratio', 'Minimum Infiltration Rate'])
         
@@ -1844,6 +1861,7 @@ class HdfInfiltration:
                                     'min_infiltration_rate': min_infiltration_rate
                                 })
                     except Exception as e:
+                        reraise_required(e)
                         mesh_errors.append(mesh_name)
                         logger.debug(
                             f"Error calculating land cover/soil statistics for mesh {mesh_name}: {str(e)}",
@@ -1858,6 +1876,7 @@ class HdfInfiltration:
                     mesh_errors,
                 )
         except Exception as e:
+            reraise_required(e)
             logger.error(f"Error opening raster files: {str(e)}")
             return pd.DataFrame()
         
@@ -1912,7 +1931,7 @@ class HdfInfiltration:
         )
             
         with h5py.File(hdf_path, 'r') as hdf:
-            raster_map_data = hdf['Raster Map'][:]
+            raster_map_data = read_typed(hdf['Raster Map'], slice(None))
             return {int(item[0]): item[1].decode('utf-8') for item in raster_map_data}
 
     @staticmethod
@@ -2050,7 +2069,7 @@ class HdfInfiltration:
             if 'Infiltration Parameters' not in hdf:
                 raise KeyError("No infiltration parameters found in HDF file")
                 
-            params = hdf['Infiltration Parameters'][:]
+            params = read_typed(hdf['Infiltration Parameters'], slice(None))
             for row in params:
                 if row[0].decode('utf-8') == mukey:
                     return {
@@ -2200,13 +2219,13 @@ class HdfInfiltration:
                     logger.error(f"No Raster Map found in {landcover_hdf_path}")
                     return pd.DataFrame()
                 
-                raster_map_data = hdf['//Raster Map'][()]
+                raster_map_data = read_typed(hdf['//Raster Map'])
                 raster_map = {int(item[0]): item[1].decode('utf-8').strip() for item in raster_map_data}
                 
                 # Get land cover variables (mannings_n and percent_impervious)
                 variables = {}
                 if '//Variables' in hdf:
-                    var_data = hdf['//Variables'][()]
+                    var_data = read_typed(hdf['//Variables'])
                     for row in var_data:
                         name = row[0].decode('utf-8').strip()
                         mannings_n = float(row[1])
@@ -2216,6 +2235,7 @@ class HdfInfiltration:
                             'percent_impervious': percent_impervious
                         }
         except Exception as e:
+            reraise_required(e)
             logger.error(f"Error reading land cover data from HDF: {str(e)}")
             return pd.DataFrame()
         
@@ -2304,6 +2324,7 @@ class HdfInfiltration:
                                     'percent_impervious': percent_impervious
                                 })
                             except Exception as e:
+                                reraise_required(e)
                                 value_errors.append(f"{mesh_name}/{raster_val}")
                                 logger.debug(
                                     f"Error processing land cover raster value {raster_val} "
@@ -2312,6 +2333,7 @@ class HdfInfiltration:
                                 )
                                 continue
                     except Exception as e:
+                        reraise_required(e)
                         mesh_errors.append(mesh_name)
                         logger.debug(
                             f"Error calculating land cover statistics for mesh {mesh_name}: {str(e)}",
@@ -2333,6 +2355,7 @@ class HdfInfiltration:
         except ValueError:
             raise
         except Exception as e:
+            reraise_required(e)
             logger.error(f"Error opening raster file {tif_path}: {str(e)}")
             return pd.DataFrame()
         

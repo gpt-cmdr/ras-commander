@@ -85,3 +85,76 @@ CASES.update({
     "HdfResultsAnalysis.analyze_critical_duration[lines]": lambda p: _critical_duration(p, "lines"),
     "HdfResultsAnalysis.analyze_critical_duration[points]": lambda p: _critical_duration(p, "points"),
 })
+
+
+# ---------------------------------------------------------------- land cover / infiltration
+from ras_commander.hdf import HdfInfiltration, HdfLandCover, HdfMesh  # noqa: E402
+
+
+def _infiltration_variables(path):
+    names = set()
+    with h5py.File(path, "r") as f:
+        areas = f.get("Geometry/2D Flow Areas")
+        if areas is not None:
+            for area in areas.values():
+                if isinstance(area, h5py.Group) and isinstance(area.get("Infiltration"), h5py.Group):
+                    names.update(k for k, v in area["Infiltration"].items() if isinstance(v, h5py.Dataset))
+    return sorted(names) or ["Curve Number"]
+
+
+def _preprocessed_infiltration(path, stats=False):
+    method = (HdfInfiltration.get_preprocessed_infiltration_stats if stats
+              else HdfInfiltration.get_preprocessed_infiltration)
+    return {v: method(path, variable=v) for v in _infiltration_variables(path)}
+
+
+def _calibration_region_faces(path):
+    with h5py.File(path, "r") as f:
+        key = "Geometry/Land Cover (Manning's n)/Attributes"
+        region = (f[key][()]["Name"][0].decode() if key in f and len(f[key])
+                  and "Name" in (f[key].dtype.names or ()) else "__absent__")
+        mesh_key = "Geometry/2D Flow Areas/Attributes"
+        mesh = f[mesh_key][()]["Name"][0].decode() if mesh_key in f and len(f[mesh_key]) else "__absent__"
+    return HdfMesh.get_face_ids_in_calibration_region(path, mesh, region)
+
+
+def _depth_curves(path):
+    return HdfLandCover.build_landcover_depth_roughness_curves(
+        path, [0.0, 1.0, 5.0], lambda depth, base_n, name: base_n * (1.0 + 0.01 * depth))
+
+
+CASES.update({
+    "HdfInfiltration.get_preprocessed_infiltration": _preprocessed_infiltration,
+    "HdfInfiltration.get_preprocessed_infiltration_stats": lambda p: _preprocessed_infiltration(p, stats=True),
+    "HdfInfiltration.get_infiltration_baseoverrides": lambda p: HdfInfiltration.get_infiltration_baseoverrides(p),
+    "HdfInfiltration.get_infiltration_region_names": lambda p: HdfInfiltration.get_infiltration_region_names(p),
+    "HdfInfiltration.get_infiltration_calibration_regions": lambda p: HdfInfiltration.get_infiltration_calibration_regions(p),
+    "HdfInfiltration.get_infiltration_region_polygons": lambda p: HdfInfiltration.get_infiltration_region_polygons(p),
+    "HdfInfiltration.get_infiltration_layer_data": lambda p: HdfInfiltration.get_infiltration_layer_data(p),
+    "HdfInfiltration.get_classification_polygons": lambda p: HdfInfiltration.get_classification_polygons(p),
+    "HdfInfiltration.get_infiltration_map": lambda p: HdfInfiltration.get_infiltration_map(p),
+    "HdfInfiltration.get_infiltration_parameters": lambda p: HdfInfiltration.get_infiltration_parameters(p, mukey="__first__"),
+    "HdfLandCover.build_landcover_depth_roughness_curves": _depth_curves,
+    "HdfLandCover.get_landcover_raster_map": lambda p: HdfLandCover.get_landcover_raster_map(p),
+    "HdfLandCover.get_classification_polygons": lambda p: HdfLandCover.get_classification_polygons(p),
+    "HdfLandCover.compare_base_vs_calibrated": lambda p: HdfLandCover.compare_base_vs_calibrated(p),
+    "HdfLandCover.get_preprocessed_mannings_stats": lambda p: HdfLandCover.get_preprocessed_mannings_stats(p),
+    "HdfMesh.get_face_ids_in_calibration_region": _calibration_region_faces,
+})
+
+# Multi-file methods: called with a project entry {geom, landcover, infiltration}
+# from the manifest's "projects" section (read-only project folders).
+PROJECT_CASES = {
+    "HdfInfiltration.get_soils_raster_stats": lambda j: HdfInfiltration.get_soils_raster_stats(
+        j["geom"], soil_hdf_path=j.get("infiltration")),
+    "HdfInfiltration.get_soil_raster_stats": lambda j: HdfInfiltration.get_soil_raster_stats(
+        j["geom"], landcover_hdf_path=j["landcover"], soil_hdf_path=j.get("infiltration")),
+    "HdfInfiltration.get_infiltration_stats": lambda j: HdfInfiltration.get_infiltration_stats(
+        j["geom"], landcover_hdf_path=j["landcover"], soil_hdf_path=j.get("infiltration")),
+    "HdfInfiltration.get_landcover_raster_stats": lambda j: HdfInfiltration.get_landcover_raster_stats(
+        j["geom"], landcover_hdf_path=j["landcover"]),
+    "HdfLandCover.estimate_final_mannings_raster": lambda j: HdfLandCover.estimate_final_mannings_raster(
+        j["geom"], landcover_hdf_path=j["landcover"]),
+    "HdfLandCover.compute_final_mannings_raster": lambda j: HdfLandCover.compute_final_mannings_raster(
+        j["geom"], landcover_hdf_path=j["landcover"]),
+}
