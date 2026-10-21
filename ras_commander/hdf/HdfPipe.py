@@ -10,13 +10,12 @@ Geometry Retrieval Functions:
 - get_pipe_inlets() - Get top and side inlet attributes for pipe nodes
 - get_pipe_network() - Get complete pipe network data
 - get_pipe_profile() - Get elevation profile for a specific conduit
-- extract_pipe_network_data() - Extract both nodes and conduits data
 
 Results Retrieval Functions:
 - get_pipe_network_timeseries() - Get timeseries data for pipe network variables
 - get_pipe_network_summary() - Get summary statistics for pipe networks
-- get_pipe_node_timeseries() - Get timeseries data for a specific node
-- get_pipe_conduit_timeseries() - Get timeseries data for a specific conduit
+- extract_timeseries_for_node() - Get timeseries data for a specific node
+- extract_timeseries_for_conduit() - Get timeseries data for a specific conduit
 
 Note: All functions use the @standardize_input decorator to validate input paths
 and the @log_call decorator for logging function calls.
@@ -24,16 +23,18 @@ and the @log_call decorator for logging function calls.
 
 from __future__ import annotations
 
+from pathlib import Path
+from typing import Dict, List, Optional, Tuple, Union
+
 import h5py
 import numpy as np
 import pandas as pd
-from pathlib import Path
-from typing import List, Dict, Any, Optional, Union, Tuple
+
 from .._optional_deps import optional_module, require_module
+from ..Decorators import log_call, standardize_input
+from ..LoggingConfig import get_logger
 from .HdfBase import HdfBase
 from .HdfUtils import HdfUtils
-from ..Decorators import standardize_input, log_call
-from ..LoggingConfig import get_logger
 
 gpd = optional_module("geopandas", "Returning GeoDataFrame results from HdfPipe")
 xr = optional_module("xarray", "Returning xarray results from HdfPipe")
@@ -164,12 +165,12 @@ class HdfPipe:
     @staticmethod
     @log_call
     @standardize_input(file_type='plan_hdf')
-    def get_pipe_conduits(hdf_path: Path, crs: Optional[str] = None) -> gpd.GeoDataFrame:
+    def get_pipe_conduits(hdf_path: Union[str, Path, int, h5py.File], crs: Optional[str] = None) -> gpd.GeoDataFrame:
         """
         Extracts pipe conduit geometries and attributes from HDF5 file.
 
         Parameters:
-            hdf_path: Path to the HDF5 file
+            hdf_path: HDF path (str or Path), open h5py.File, or plan number
             crs: Coordinate Reference System override (default: stored projection)
 
         Returns:
@@ -177,10 +178,14 @@ class HdfPipe:
             - Attributes from HDF5
             - Polyline: LineString geometries
             - Terrain_Profiles: List of (station, elevation) tuples
-        """
-        shapely_geometry = require_module("shapely.geometry", "Returning GeoDataFrame results from HdfPipe")
-        LineString = shapely_geometry.LineString
 
+        Raises:
+            KeyError: If required geometry or one terrain-profile table is missing.
+            ValueError: If geometry rows or profile slices are inconsistent.
+
+        Example:
+            >>> conduits = HdfPipe.get_pipe_conduits("model.p02.hdf")
+        """
         with h5py.File(hdf_path, 'r') as f:
             if '/Geometry/Pipe Conduits' not in f:
                 raise KeyError(_missing_hdf_object_message(
@@ -254,7 +259,7 @@ class HdfPipe:
     @staticmethod
     @log_call
     @standardize_input(file_type='plan_hdf')
-    def get_pipe_nodes(hdf_path: Path, crs: Optional[str] = None) -> gpd.GeoDataFrame:
+    def get_pipe_nodes(hdf_path: Union[str, Path, int, h5py.File], crs: Optional[str] = None) -> gpd.GeoDataFrame:
         """
         Creates a GeoDataFrame for Pipe Node points and their attributes from an HDF5 file.
 
@@ -263,7 +268,7 @@ class HdfPipe:
         single GeoDataFrame.
 
         Args:
-            hdf_path (Union[str, Path]): Path to the HDF5 file.
+            hdf_path (Union[str, Path, int, h5py.File]): HDF path, open file, or plan number.
             crs (Optional[str]): Coordinate Reference System override (default: stored projection).
 
         Returns:
@@ -324,7 +329,7 @@ class HdfPipe:
     @staticmethod
     @log_call
     @standardize_input(file_type='plan_hdf')
-    def get_pipe_inlets(hdf_path: Path) -> pd.DataFrame:
+    def get_pipe_inlets(hdf_path: Union[str, Path, int, h5py.File]) -> pd.DataFrame:
         """
         Reads top and side inlet attributes from a HEC-RAS geometry HDF file.
 
@@ -334,7 +339,7 @@ class HdfPipe:
         ``'side'``.
 
         Args:
-            hdf_path (Union[str, Path]): Path to the HDF5 file.
+            hdf_path (Union[str, Path, int, h5py.File]): HDF path, open file, or plan number.
 
         Returns:
             pd.DataFrame: DataFrame containing inlet attributes with an
@@ -382,12 +387,12 @@ class HdfPipe:
     @staticmethod
     @log_call
     @standardize_input(file_type='plan_hdf')
-    def get_pipe_network(hdf_path: Path, pipe_network_name: Optional[str] = None, crs: Optional[str] = None) -> gpd.GeoDataFrame:
+    def get_pipe_network(hdf_path: Union[str, Path, int, h5py.File], pipe_network_name: Optional[str] = None, crs: Optional[str] = None) -> gpd.GeoDataFrame:
         """
         Creates a GeoDataFrame for a pipe network's geometry.
 
         Parameters:
-            hdf_path: Path to the HDF5 file
+            hdf_path: HDF path (str or Path), open h5py.File, or plan number
             pipe_network_name: Name of network (uses first if None)
             crs: Coordinate Reference System override (default: stored projection)
 
@@ -397,13 +402,14 @@ class HdfPipe:
             - Face polylines
             - Node points resolved through stored Node Indices
             - Associated attributes
-        """
-        shapely_geometry = require_module("shapely.geometry", "Returning GeoDataFrame results from HdfPipe")
-        LineString = shapely_geometry.LineString
-        MultiLineString = shapely_geometry.MultiLineString
-        MultiPolygon = shapely_geometry.MultiPolygon
-        Polygon = shapely_geometry.Polygon
 
+        Raises:
+            KeyError: If required network geometry is missing.
+            ValueError: If the network name, stored IDs, or geometry slices are invalid.
+
+        Example:
+            >>> cells = HdfPipe.get_pipe_network("model.p02.hdf")
+        """
         with h5py.File(hdf_path, 'r') as f:
             if '/Geometry/Pipe Networks' not in f:
                 raise KeyError(_missing_hdf_object_message(
@@ -652,12 +658,12 @@ class HdfPipe:
     @staticmethod
     @log_call
     @standardize_input(file_type='plan_hdf')
-    def get_pipe_profile(hdf_path: Path, conduit_id: int) -> pd.DataFrame:
+    def get_pipe_profile(hdf_path: Union[str, Path, int, h5py.File], conduit_id: int) -> pd.DataFrame:
         """
         Extract the profile data for a specific pipe conduit.
 
         Args:
-            hdf_path (Path): Path to the HDF file.
+            hdf_path (Union[str, Path, int, h5py.File]): HDF path, open file, or plan number.
             conduit_id (int): Stored conduit ID (global Geometry/Pipe Conduits row, not network position).
 
         Returns:
@@ -666,6 +672,10 @@ class HdfPipe:
         Raises:
             KeyError: If the required datasets are not found in the HDF file.
             IndexError: If the specified conduit_id is out of range.
+            ValueError: If the terrain profile slice is out of bounds.
+
+        Example:
+            >>> profile = HdfPipe.get_pipe_profile("model.p02.hdf", 0)
         """
         profile_info_path = "/Geometry/Pipe Conduits/Terrain Profiles Info"
         profile_values_path = "/Geometry/Pipe Conduits/Terrain Profiles Values"
@@ -712,7 +722,7 @@ class HdfPipe:
     @staticmethod
     @log_call
     @standardize_input(file_type='plan_hdf')
-    def get_pipe_network_summary(hdf_path: Path, pipe_network_name: Optional[str] = None) -> pd.DataFrame:
+    def get_pipe_network_summary(hdf_path: Union[str, Path, int, h5py.File], pipe_network_name: Optional[str] = None) -> pd.DataFrame:
         """Read literal Base summary rows and pipe-network volume-accounting attributes.
 
         Select the first geometry network when pipe_network_name is omitted.
@@ -729,6 +739,20 @@ class HdfPipe:
         raises KeyError; malformed present datasets raise ValueError. A legacy
         Summary/Pipe Network table without geometry identities retains its original
         DataFrame shape when no network name is requested.
+
+        Args:
+            hdf_path: HDF path (str or Path), open h5py.File, or plan number.
+            pipe_network_name: Network name; defaults to the first geometry network.
+
+        Returns:
+            pd.DataFrame: Literal summary rows and volume-accounting attributes.
+
+        Raises:
+            KeyError: If the network or both summary sources are missing.
+            ValueError: If a stored summary or volume attribute is malformed.
+
+        Example:
+            >>> summary = HdfPipe.get_pipe_network_summary("model.p02.hdf")
         """
         records, metadata = [], {}
         with h5py.File(hdf_path, 'r') as hdf:
@@ -774,21 +798,24 @@ class HdfPipe:
     @staticmethod
     @log_call
     @standardize_input(file_type='plan_hdf')
-    def extract_timeseries_for_node(plan_hdf_path: Path, node_id: int, pipe_network_name: Optional[str] = None,
-                                    output_block: str = "DSS Hydrograph Output") -> Dict[str, xr.DataArray]:
+    def extract_timeseries_for_node(plan_hdf_path: Union[str, Path, int, h5py.File], node_id: int, pipe_network_name: Optional[str] = None,
+                                    output_block: str = "DSS Hydrograph Output", *,
+                                    ras_object=None) -> Dict[str, xr.DataArray]:
         """
         Extract time series data for a specific node.
         
         Parameters:
         -----------
-        plan_hdf_path : Path
-            Path to HEC-RAS results HDF file
+        plan_hdf_path : str, Path, int or h5py.File
+            Results HDF path, open file, or plan number resolved against ras_object.
         node_id : int
             Stored node ID from Node Indices, not a network column position.
         pipe_network_name : Optional[str]
             Network name (default: first geometry network).
         output_block : str
             Base Output or DSS Hydrograph Output (default).
+        ras_object : RasPrj, optional
+            Project used to resolve plan numbers; defaults to the global project.
             
         Returns:
         --------
@@ -796,13 +823,20 @@ class HdfPipe:
             - Depth
             - Drop Inlet Flow
             - Water Surface
+
+        Raises:
+            KeyError: If the stored node ID, network, or variable is missing.
+            ValueError: If the output block, domain, or timestamps are invalid.
+
+        Example:
+            >>> series = HdfPipe.extract_timeseries_for_node("model.p02.hdf", 121)
         """
         node_variables = ["Nodes/Depth", "Nodes/Drop Inlet Flow", "Nodes/Water Surface"]
         node_data = {}
 
         for variable in node_variables:
             data = HdfPipe.get_pipe_network_timeseries(plan_hdf_path, variable=variable,
-                pipe_network_name=pipe_network_name, output_block=output_block)
+                pipe_network_name=pipe_network_name, output_block=output_block, ras_object=ras_object)
             try:
                 node_data[variable] = data.swap_dims({"location": "node_id"}).sel(node_id=node_id)
             except KeyError as exc:
@@ -815,27 +849,37 @@ class HdfPipe:
     @staticmethod
     @log_call
     @standardize_input(file_type='plan_hdf')
-    def extract_timeseries_for_conduit(plan_hdf_path: Path, conduit_id: int, pipe_network_name: Optional[str] = None,
-                                       output_block: str = "DSS Hydrograph Output") -> Dict[str, xr.DataArray]:
+    def extract_timeseries_for_conduit(plan_hdf_path: Union[str, Path, int, h5py.File], conduit_id: int, pipe_network_name: Optional[str] = None,
+                                    output_block: str = "DSS Hydrograph Output", *,
+                                    ras_object=None) -> Dict[str, xr.DataArray]:
         """
         Extract time series data for a specific conduit.
         
         Parameters:
         -----------
-        plan_hdf_path : Path
-            Path to HEC-RAS results HDF file
+        plan_hdf_path : str, Path, int or h5py.File
+            Results HDF path, open file, or plan number resolved against ras_object.
         conduit_id : int
             Stored conduit ID from Conduit Indices, not a network column position.
         pipe_network_name : Optional[str]
             Network name (default: first geometry network).
         output_block : str
             Base Output or DSS Hydrograph Output (default).
+        ras_object : RasPrj, optional
+            Project used to resolve plan numbers; defaults to the global project.
             
         Returns:
         --------
         Dict[str, xr.DataArray]: Dictionary containing time series data for:
             - Pipe Flow (US/DS)
             - Velocity (US/DS)
+
+        Raises:
+            KeyError: If the stored conduit ID, network, or variable is missing.
+            ValueError: If the output block, domain, or timestamps are invalid.
+
+        Example:
+            >>> series = HdfPipe.extract_timeseries_for_conduit("model.p02.hdf", 85)
         """
         conduit_variables = ["Pipes/Pipe Flow DS", "Pipes/Pipe Flow US",
                             "Pipes/Vel DS", "Pipes/Vel US"]
@@ -843,7 +887,7 @@ class HdfPipe:
 
         for variable in conduit_variables:
             data = HdfPipe.get_pipe_network_timeseries(plan_hdf_path, variable=variable,
-                pipe_network_name=pipe_network_name, output_block=output_block)
+                pipe_network_name=pipe_network_name, output_block=output_block, ras_object=ras_object)
             try:
                 conduit_data[variable] = data.swap_dims({"location": "conduit_id"}).sel(conduit_id=conduit_id)
             except KeyError as exc:
@@ -858,7 +902,7 @@ class HdfPipe:
     @log_call
     @standardize_input(file_type='plan_hdf')
     def get_pipe_network_timeseries(
-        hdf_path: Path,
+        hdf_path: Union[str, Path, int, h5py.File],
         variable: str,
         pipe_network_name: Optional[str] = None,
         output_block: str = "DSS Hydrograph Output",
@@ -867,7 +911,7 @@ class HdfPipe:
         Extracts timeseries data for a pipe network variable.
 
         Parameters:
-            hdf_path: Path to the HDF5 file
+            hdf_path: HDF path (str or Path), open h5py.File, or plan number
             variable: Variable name to extract. Valid options:
                 - Cell: Courant, Water Surface
                 - Face: Flow, Velocity, Water Surface
@@ -882,7 +926,15 @@ class HdfPipe:
                 attrs records domain, stored_location, network and output_block.
 
         Returns:
-            xarray.DataArray with dimensions (time, location)
+            xarray.DataArray with dimensions (time, location).
+
+        Raises:
+            KeyError: If the network geometry or requested results are missing.
+            ValueError: If the variable, output block, domain, or timestamps are invalid.
+
+        Example:
+            >>> depth = HdfPipe.get_pipe_network_timeseries(
+            ...     "model.p02.hdf", "Nodes/Depth", output_block="Base Output")
         """
         valid_variables = [
             "Cell Courant", "Cell Water Surface", "Face Flow", "Face Velocity",

@@ -142,7 +142,8 @@ This file is the canonical local instruction file for `ras_commander/hdf/`.
 - Domain comes from stored Location plus geometry count. Positional `location`
   remains available; `node_id`/`conduit_id` hold exact Node/Conduit Indices.
   `extract_timeseries_for_node` and `extract_timeseries_for_conduit` select stored IDs,
-  accept network/block options and raise for unknown IDs.
+  accept network/block options and raise for unknown IDs. Both preserve the
+  explicit `ras_object` for positional and keyword `plan_hdf_path` plan numbers.
 - `get_pipe_network_summary(..., pipe_network_name=None)` returns literal Base
   summary rows and volume-accounting attributes in long form. Row/column ordinals,
   labels, units, values, shapes and raw metadata are retained. Volume-accounting
