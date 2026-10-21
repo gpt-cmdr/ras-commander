@@ -36,7 +36,7 @@ from .HdfBase import HdfBase
 from .HdfUtils import HdfUtils
 from ..Decorators import standardize_input, log_call
 from ..LoggingConfig import get_logger
-from ..fast_hdf import FastHdfError, read_typed
+from ..fast_hdf import FastHdfError, read_typed, reraise_required
 
 logger = get_logger(__name__)
 
@@ -190,7 +190,7 @@ class HdfStruc1D:
                 f"'{attrs_path}'. Confirm the plan HDF includes 1D cross-section output."
             )
 
-        attrs_data = hdf_file[attrs_path][()]
+        attrs_data = read_typed(hdf_file[attrs_path])
 
         # Build location lookup
         xs_locations = []
@@ -335,7 +335,7 @@ class HdfStruc1D:
                     "geometry output."
                 )
 
-        attrs_data = hdf_file[attrs_path][()]
+        attrs_data = read_typed(hdf_file[attrs_path])
 
         xs_locations = []
         for i, attr in enumerate(attrs_data):
@@ -501,9 +501,8 @@ class HdfStruc1D:
 
                         break
 
-        except FastHdfError:
-            raise
         except Exception as e:
+            reraise_required(e)
             logger.debug(f"Could not extract from Structures group: {e}")
 
         return result

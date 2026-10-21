@@ -107,7 +107,7 @@ import pandas as pd
 
 from ..Decorators import log_call, standardize_input
 from ..fast_hdf import read_dataset
-from ..fast_hdf import FastHdfError, read_typed
+from ..fast_hdf import FastHdfError, read_typed, reraise_required
 from ..LoggingConfig import get_logger
 from .HdfBase import HdfBase
 from .HdfUtils import HdfUtils
@@ -504,9 +504,8 @@ class HdfMesh:
                         for n in read_typed(hdf_file["Geometry/2D Flow Areas/Attributes"])["Name"]
                     ]
                 )
-        except FastHdfError:
-            raise
         except Exception as e:
+            reraise_required(e)
             logger.error(f"Error reading mesh area names from {hdf_path}: {str(e)}")
             return list()
 
@@ -728,9 +727,8 @@ class HdfMesh:
                         "reason_codes": ";".join(dict.fromkeys(reasons)),
                         "compatibility_warning": compatibility_warning,
                     })
-        except FastHdfError:
-            raise
         except Exception as exc:
+            reraise_required(exc)
             logger.error("Error diagnosing mesh layout from %s: %s", hdf_path, exc)
             return pd.DataFrame([{
                 "hdf_file_version": None,
@@ -803,9 +801,8 @@ class HdfMesh:
                     geometry="geometry",
                     crs=HdfBase.get_projection(hdf_file),
                 )
-        except FastHdfError:
-            raise
         except Exception as e:
+            reraise_required(e)
             logger.error(f"Error reading mesh areas from {hdf_path}: {str(e)}")
             return GeoDataFrame()
 
@@ -1069,9 +1066,8 @@ class HdfMesh:
                 )
                 return result
 
-        except FastHdfError:
-            raise
         except Exception as e:
+            reraise_required(e)
             if strict:
                 if isinstance(e, MeshCellPolygonError):
                     raise
@@ -1164,7 +1160,7 @@ class HdfMesh:
         if attributes is None or "Cell Count" not in (attributes.dtype.names or ()):
             return {}
         counts = {}
-        for row in attributes[()]:
+        for row in read_typed(attributes):
             count = row["Cell Count"]
             if np.isfinite(count) and count > 0:
                 counts[str(HdfUtils.convert_ras_string(row["Name"]))] = int(count)
@@ -1240,9 +1236,8 @@ class HdfMesh:
                     crs=HdfBase.get_projection(hdf_file)
                 )
 
-        except FastHdfError:
-            raise
         except Exception as e:
+            reraise_required(e)
             logger.error(f"Error reading mesh cell points from {hdf_path}: {str(e)}")
             return GeoDataFrame()
 
@@ -1336,9 +1331,8 @@ class HdfMesh:
                     crs=HdfBase.get_projection(hdf_file)
                 )
 
-        except FastHdfError:
-            raise
         except Exception as e:
+            reraise_required(e)
             logger.error(f"Error reading mesh cell faces from {hdf_path}: {str(e)}")
             return GeoDataFrame()
 
@@ -1456,7 +1450,7 @@ class HdfMesh:
                     f"Face endpoint and adjacency counts differ for {mesh_name!r}"
                 )
             endpoints = _integral_rows(
-                endpoints_table[face_ids], 2, "Faces FacePoint Indexes"
+                read_typed(endpoints_table, face_ids), 2, "Faces FacePoint Indexes"
             )
             coordinates = mesh["FacePoints Coordinate"]
             if (endpoints >= len(coordinates)).any():
@@ -1472,7 +1466,7 @@ class HdfMesh:
                 )
             perimeter = (
                 _integral_rows(
-                    mesh["Faces Perimeter Info"][face_ids], 2, "Faces Perimeter Info"
+                    read_typed(mesh["Faces Perimeter Info"], face_ids), 2, "Faces Perimeter Info"
                 )
                 if has_info
                 else np.zeros((len(face_ids), 2), dtype=np.int64)
@@ -1483,12 +1477,12 @@ class HdfMesh:
                     raise ValueError(
                         f"Face perimeter range exceeds values for {mesh_name!r}"
                     )
-                vertices = [coordinates[start_point, :2]]
+                vertices = [read_typed(coordinates, (start_point, slice(None, 2)))]
                 if size:
                     vertices.extend(
-                        mesh["Faces Perimeter Values"][start : start + size, :2]
+                        read_typed(mesh["Faces Perimeter Values"], (slice(start, start + size), slice(None, 2)))
                     )
-                vertices.append(coordinates[end_point, :2])
+                vertices.append(read_typed(coordinates, (end_point, slice(None, 2))))
                 if not np.isfinite(vertices).all():
                     raise ValueError(f"Nonfinite perimeter coordinates for {mesh_name!r}")
                 line = LineString(vertices)
@@ -1503,7 +1497,7 @@ class HdfMesh:
                     or len(lengths_table) != len(adjacency)
                 ):
                     raise ValueError(f"Malformed native face lengths for {mesh_name!r}")
-                lengths = np.asarray(lengths_table[face_ids, 2], dtype=np.float64)
+                lengths = np.asarray(read_typed(lengths_table, (face_ids, 2)), dtype=np.float64)
                 length_source = "native"
             else:
                 lengths = np.asarray([line.length for line in geometries])
@@ -1676,14 +1670,14 @@ class HdfMesh:
                                 value = value.decode('utf-8')  # Decode as UTF-8
                             result[name] = value if not isinstance(value, bytes) else value.decode('utf-8')
                         except Exception as e:
+                            reraise_required(e)
                             logger.warning(f"Error converting attribute '{name}': {str(e)}")
                     return pd.DataFrame.from_dict(result, orient='index', columns=['Value'])
                 else:
                     logger.debug("No 2D Flow Area attributes found or invalid dataset.")
                     return pd.DataFrame()  # Return an empty DataFrame
-        except FastHdfError:
-            raise
         except Exception as e:
+            reraise_required(e)
             logger.error(f"Error reading 2D flow area attributes from {hdf_path}: {str(e)}")
             return pd.DataFrame()  # Return an empty DataFrame
 
@@ -1767,9 +1761,8 @@ class HdfMesh:
 
                 return result
 
-        except FastHdfError:
-            raise
         except Exception as e:
+            reraise_required(e)
             logger.error(f"Error extracting face property tables from {hdf_path}: {str(e)}")
             return {}
 
@@ -2082,9 +2075,8 @@ class HdfMesh:
 
                 return pd.DataFrame(rows, columns=columns)
 
-        except FastHdfError:
-            raise
         except Exception as e:
+            reraise_required(e)
             logger.error(
                 f"Error reading reference line internal faces from {hdf_path}: {str(e)}"
             )
@@ -2249,7 +2241,7 @@ class HdfMesh:
         face_index = int(face_id)
         if face_index < 0 or face_index >= normals.shape[0] or normals.shape[1] < 3:
             return np.nan
-        return float(normals[face_index, 2])
+        return float(read_typed(normals, (face_index, 2)))
 
     @staticmethod
     def _get_first_hdf_row_value(row, names: List[str], default=None):
@@ -2368,9 +2360,8 @@ class HdfMesh:
 
                 return result
 
-        except FastHdfError:
-            raise
         except Exception as e:
+            reraise_required(e)
             logger.error(f"Error extracting cell property tables from {hdf_path}: {str(e)}")
             return {}
 
@@ -2899,9 +2890,8 @@ class HdfMesh:
         except KeyError as e:
             logger.error(f"Missing required dataset in {hdf_path}: {e}")
             return {}
-        except FastHdfError:
-            raise
         except Exception as e:
+            reraise_required(e)
             logger.error(f"Error reading sloped topology from {hdf_path}: {e}")
             return {}
 
@@ -2952,9 +2942,8 @@ class HdfMesh:
 
                 return pd.DataFrame(df_dict)
 
-        except FastHdfError:
-            raise
         except Exception as e:
+            reraise_required(e)
             logger.error(f"Error reading Manning's n calibration table from {hdf_path}: {str(e)}")
             return None
 

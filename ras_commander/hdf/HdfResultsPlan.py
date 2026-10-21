@@ -39,7 +39,7 @@ import pandas as pd
 from ..Decorators import standardize_input, log_call
 from .HdfUtils import HdfUtils
 from ..LoggingConfig import get_logger
-from ..fast_hdf import read_typed
+from ..fast_hdf import read_typed, reraise_required
 import numpy as np
 from datetime import datetime
 
@@ -802,6 +802,7 @@ class HdfResultsPlan:
         except KeyError as e:
             raise KeyError(f"Error accessing steady state WSE data: {str(e)}")
         except Exception as e:
+            reraise_required(e)
             raise RuntimeError(f"Error reading steady state WSE data: {str(e)}")
 
     @staticmethod

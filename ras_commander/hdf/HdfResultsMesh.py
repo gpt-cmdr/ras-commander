@@ -109,7 +109,7 @@ from .._rasmap_schema import rasmap_dataframe_is_usable
 from ..Decorators import log_call, standardize_input
 from ..LoggingConfig import get_logger
 from .. import fast_results
-from ..fast_hdf import FastHdfError, read_dataset
+from ..fast_hdf import FastHdfError, read_dataset, read_typed
 from .HdfBase import HdfBase
 from .HdfMesh import HdfMesh
 from .HdfResultView import HdfResultView, Selection
@@ -1930,7 +1930,7 @@ class HdfResultsMesh:
                     return empty_result(crs)
                 cell_counts = HdfResultsMesh._physical_cell_counts(hdf_file)
 
-                for d2_flow_area in d2_flow_areas[:]:
+                for d2_flow_area in read_typed(d2_flow_areas, slice(None)):
                     mesh_name = HdfUtils.convert_ras_string(d2_flow_area[0])
 
                     # Read cell centers
@@ -2782,7 +2782,7 @@ class HdfResultsMesh:
             start_time = HdfBase.get_simulation_start_time(hdf_path)
             # Updated to use the new function name from HdfUtils
             timesteps = HdfUtils.convert_timesteps_to_datetimes(
-                np.array(hdf_path["Results/Unsteady/Output/Output Blocks/Base Output/Unsteady Time Series/Time"][:]),
+                np.array(read_typed(hdf_path["Results/Unsteady/Output/Output Blocks/Base Output/Unsteady Time Series/Time"], slice(None))),
                 start_time
             )
 
@@ -2999,7 +2999,7 @@ class HdfResultsMesh:
 
         frames = []
         combined_attrs = {}
-        for d2_flow_area in d2_flow_areas[:]:
+        for d2_flow_area in read_typed(d2_flow_areas, slice(None)):
             mesh_name = HdfUtils.convert_ras_string(d2_flow_area[0])
             try:
                 group = HdfResultsMesh.get_mesh_summary_output_group(

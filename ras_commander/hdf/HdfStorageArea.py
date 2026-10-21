@@ -27,7 +27,7 @@ import pandas as pd
 from .HdfStruc import HdfStruc
 from ..Decorators import log_call, standardize_input
 from ..LoggingConfig import get_logger
-from ..fast_hdf import FastHdfError, read_typed
+from ..fast_hdf import FastHdfError, read_typed, reraise_required
 
 logger = get_logger(__name__)
 
@@ -202,9 +202,8 @@ class HdfStorageArea:
                 geom_group = hdf_file.get("Geometry")
                 if geom_group is not None:
                     si_units_raw = geom_group.attrs.get("SI Units")
-        except FastHdfError:
-            raise
         except Exception as exc:
+            reraise_required(exc)
             logger.debug(
                 "Unable to read storage unit metadata from %s: %s",
                 hdf_path,
@@ -533,9 +532,8 @@ class HdfStorageArea:
                 )
                 return df
 
-        except FastHdfError:
-            raise
         except Exception as e:
+            reraise_required(e)
             logger.error(
                 "Error reading volume-elevation curve for SA '%s' from %s "
                 "(%s): %s",
@@ -768,9 +766,8 @@ class HdfStorageArea:
 
         except (FileNotFoundError, ValueError):
             raise
-        except FastHdfError:
-            raise
         except Exception as e:
+            reraise_required(e)
             logger.debug(
                 "Error computing stage-storage curve for SA '%s' in %s: %s",
                 sa_name, hdf_path, e, exc_info=True,

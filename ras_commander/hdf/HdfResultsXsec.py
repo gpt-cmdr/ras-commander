@@ -120,7 +120,7 @@ class HdfResultsXsec:
                 )
                 
                 # Extract Cross Section Attributes
-                attrs_dataset = hdf_file[f"{base_output_path}/Cross Section Attributes"][:]
+                attrs_dataset = read_typed(hdf_file[f"{base_output_path}/Cross Section Attributes"], slice(None))
                 rivers = [attr['River'].decode('utf-8').strip() for attr in attrs_dataset]
                 reaches = [attr['Reach'].decode('utf-8').strip() for attr in attrs_dataset]
                 stations = [attr['Station'].decode('utf-8').strip() for attr in attrs_dataset]
@@ -257,7 +257,7 @@ class HdfResultsXsec:
                     "required dataset 'Cross Section Attributes'."
                 )
 
-            attribute_rows = attributes[:]
+            attribute_rows = read_typed(attributes, slice(None))
             feature_count = len(attribute_rows)
             frame = pd.DataFrame(
                 {

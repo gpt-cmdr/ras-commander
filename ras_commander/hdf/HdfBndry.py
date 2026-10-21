@@ -35,7 +35,7 @@ import pandas as pd
 from shapely.geometry import LineString, MultiLineString, MultiPolygon, Point, Polygon
 
 from ..Decorators import log_call, standardize_input
-from ..fast_hdf import FastHdfError, read_typed
+from ..fast_hdf import FastHdfError, read_typed, reraise_required
 from ..LoggingConfig import get_logger
 from .HdfBase import HdfBase
 from .HdfUtils import HdfUtils
@@ -495,7 +495,7 @@ class HdfBndry:
                         return_inverse=True,
                     )
                     selected_face_points = np.asarray(
-                        face_points_dataset[unique_face_ids][inverse_unique_faces],
+                        read_typed(face_points_dataset, unique_face_ids)[inverse_unique_faces],
                         dtype=np.int64,
                     )
 
@@ -516,7 +516,7 @@ class HdfBndry:
                                 f"perimeter-info counts for mesh {mesh_name!r}"
                             )
                         unique_perimeter_info = np.asarray(
-                            perimeter_info_dataset[unique_face_ids],
+                            read_typed(perimeter_info_dataset, unique_face_ids),
                             dtype=np.int64,
                         )
                         selected_perimeter_info = unique_perimeter_info[
@@ -552,7 +552,7 @@ class HdfBndry:
                             else np.array([], dtype=np.int64)
                         )
                         selected_perimeter_values = np.asarray(
-                            perimeter_values_dataset[perimeter_value_ids],
+                            read_typed(perimeter_values_dataset, perimeter_value_ids),
                             dtype=np.float64,
                         )
                         perimeter_lookup = {
@@ -601,7 +601,7 @@ class HdfBndry:
 
                     point_ids = np.unique(external_face_points)
                     selected_coordinates = np.asarray(
-                        coordinates_dataset[point_ids], dtype=np.float64
+                        read_typed(coordinates_dataset, point_ids), dtype=np.float64
                     )
                     point_lookup = {
                         int(point_id): selected_coordinates[index]
@@ -732,9 +732,8 @@ class HdfBndry:
                     
                 return gdf
 
-        except FastHdfError:
-            raise
         except Exception as e:
+            reraise_required(e)
             logger.error(
                 "Error reading boundary condition lines from %s (%s): %s",
                 hdf_path,
@@ -915,9 +914,8 @@ class HdfBndry:
                 result.attrs["breakline_diagnostics"] = diagnostics
                 return result
 
-        except FastHdfError:
-            raise
         except Exception as e:
+            reraise_required(e)
             logger.error(
                 "Error reading breaklines from %s (%s): %s",
                 hdf_path,
@@ -1016,9 +1014,8 @@ class HdfBndry:
                     geometry="geometry",
                     crs=HdfBase.get_projection(hdf_file),
                 )
-        except FastHdfError:
-            raise
         except Exception as e:
+            reraise_required(e)
             logger.error(
                 "Error reading refinement regions from %s (%s): %s",
                 hdf_path,
@@ -1095,9 +1092,8 @@ class HdfBndry:
                 
                 return gdf
                 
-        except FastHdfError:
-            raise
         except Exception as e:
+            reraise_required(e)
             logger.error(
                 "Error reading reference lines from %s (%s): %s",
                 hdf_path,
