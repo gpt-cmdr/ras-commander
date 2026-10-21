@@ -141,6 +141,25 @@ This file is the canonical local instruction file for `ras_commander/hdf/`.
   geometry. Eager results remain the default. A view owns no persistent HDF
   handle and validates its source fingerprint whenever it reads.
 - 2D mobile-bed (sediment) results: `HdfResultsSediment` (`is_sediment_plan()`, `get_sediment_mesh_areas()`, `get_cell_bed_change()`/`get_cell_bed_elevation()`/`get_active_layer_grain_class()` -> GeoDataFrame, `get_bed_change_volumes()` -> erosion/deposition/net volume per area, `get_cell_bed_change_timeseries()` -> xr.DataArray). Reads the `Sediment Bed` output block; per-cell arrays align with computed `Cells Surface Area` (zero-area ghost cells drop out of volume integrals). Covered by `examples/230_mesh_sensitivity_analysis.ipynb`.
+  Active-layer diameters are validated against their own dataset `Units`
+  (`mm`; any other label raises) and never against the model unit system.
+  Length results (bed change/elevation, volumes) resolve the model unit as:
+  `unit_system=` override, then the project `.prj` marker (`ras_object`, or
+  the initialized global project that contains the HDF), then embedded HDF
+  metadata.
+- Result-HDF unit resolution (`HdfBase.get_result_unit_metadata()`, shared by
+  `HdfResultsSediment`, `HdfResultsQuery` velocity qualification and profile
+  attrs, and `HdfResultsProducts`): a `project_file` `.prj` marker is
+  authoritative (root `/@Units System` disagreeing with it raises). For a
+  standalone HDF, root `SI Units` with `/Geometry/@SI Units = False` is the
+  RasMapper geometry default that HEC-RAS 6.6/7.0 never updates (Weise_2D).
+  It resolves to SI with a `warnings` entry only when at least one result
+  dataset `Units` label in the file is `m` and none is `ft`; both attributes
+  stay in `evidence`. Every other disagreement (including root US with
+  geometry `True`) raises, and the error names the `unit_system=` override.
+  Never apply the model unit system to unlabelled sediment tables:
+  `Sediment/Grain Class Data/Density Data` is stored in lb/ft3 even in SI
+  projects.
 - 1D cross section geometry and results: `HdfXsec`, `HdfResultsXsec`
 - `HdfStruc1D.list_1d_structures()` and `get_structure_max_values()` prefer
   unsteady Base Output `Inline Structures`, `Bridges`, `Culverts` and `Pumping
