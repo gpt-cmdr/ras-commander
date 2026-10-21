@@ -1027,12 +1027,14 @@ def _generic(dataset, selection, key, shape, backend, mode):
 def _absent_parts_refusal(exc, dataset, route):
     """Whether a packed line/polygon family was refused only for its absent ``Parts`` dataset.
 
-    A single-part family stored without ``<prefix> Parts`` (legacy layout) is legal
-    and h5py readers support it; the engine family requires ``Parts`` and raises
-    its ``not_found`` error. The numeric Info/Points values are then still the
-    exact stored arrays, so the literal generic native reader serves them.
+    Only structure centerlines have a legal legacy layout without ``Centerline
+    Parts`` (single-part records) that the h5py reader supports; the engine family
+    requires ``Parts`` and raises its ``not_found`` error. The numeric Info/Points
+    values are then still the exact stored arrays, so the literal generic native
+    reader serves them. For every other family (river centerlines, breaklines,
+    refinement regions...) a missing ``Parts`` is damage and stays a refusal.
     """
-    if route is None or route[0] not in {"line_family", "geometry_family"}:
+    if route is None or route[0] != "line_family" or route[1] != "structure_centerlines":
         return False
     if getattr(exc, "engine_kind", None) != "not_found" or not _fast_numeric(dataset):
         return False

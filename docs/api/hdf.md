@@ -811,9 +811,11 @@ Routing policy:
   without trailing spaces, each element zero-filled, in the dataset's own dtype
   (`native-typed`/`fixed_strings` in the trace). Auto falls back to h5py on any
   engine refusal; required mode raises `FastHdfError`.
-- **Legacy single-part line/polygon families.** When the engine refuses a
-  packed family only because its `<prefix> Parts` dataset is absent, numeric
-  Info/Points reads use the literal generic native reader.
+- **Legacy single-part structure centerlines.** When the engine refuses the
+  structure centerline family only because `Geometry/Structures/Centerline
+  Parts` is absent (a legal legacy layout), numeric Info/Points reads use the
+  literal generic native reader. A missing `Parts` in any other packed family is
+  damage and remains a refusal in required mode.
 - **Required-mode metadata exception.** Variable-length text datasets and
   compound tables whose every member is text (identity tables such as XS
   `River/Reach/RS` rows) are read through h5py in every mode (`h5py-metadata`
