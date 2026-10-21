@@ -188,7 +188,6 @@ class GeomCrossSection:
     VALUES_PER_LINE = 10        # Number of values per line in fixed-width format
     MANNINGS_VALUES_PER_LINE = 9  # 3 Manning's n triplets per line
     BLOCKED_OBSTRUCTION_VALUES_PER_LINE = 9  # 3 obstructions x 3 values
-    INEFFECTIVE_VALUES_PER_LINE = 9  # HEC-RAS wraps #XS Ineff at 3 triplets per line
     MAX_XS_POINTS = 500         # HEC-RAS computational limit on cross section points
     MAX_MANNINGS_N_BLOCKS = 20  # HEC-RAS 6.6 rejects 21+ blocks per cross section
 
@@ -477,12 +476,6 @@ class GeomCrossSection:
         return len(text.split('.', 1)[1].rstrip('0'))
 
     @staticmethod
-    def _round_trip_decimals(value: float) -> int:
-        """Decimal places of the shortest positional text that round-trips ``value``."""
-        text = np.format_float_positional(float(value), unique=True, trim='-')
-        return len(text.split('.', 1)[1]) if '.' in text else 0
-
-    @staticmethod
     def _find_keyword_index(lines: List[str], start_idx: int, keyword: str) -> Optional[int]:
         """Find a keyword line inside one cross-section block."""
         section_end = GeomCrossSection._find_xs_section_end(lines, start_idx)
@@ -750,16 +743,8 @@ class GeomCrossSection:
             existing = GeomParser.extract_keyword_value(existing_line, "Bank Sta")
             existing_vals = [v.strip() for v in existing.split(',')]
             if len(existing_vals) >= 2:
-                # Keep the existing precision, but never round a requested bank
-                # station: banks must coincide with station/elevation points.
-                left = GeomCrossSection._format_numeric_like(
-                    bank_left, existing_vals[0],
-                    min_decimals=GeomCrossSection._round_trip_decimals(bank_left),
-                )
-                right = GeomCrossSection._format_numeric_like(
-                    bank_right, existing_vals[1],
-                    min_decimals=GeomCrossSection._round_trip_decimals(bank_right),
-                )
+                left = GeomCrossSection._format_numeric_like(bank_left, existing_vals[0])
+                right = GeomCrossSection._format_numeric_like(bank_right, existing_vals[1])
                 return f"Bank Sta={left},{right}\n"
 
         return (
@@ -3848,8 +3833,7 @@ class GeomCrossSection:
             raise ValueError("Ineffective flow count cannot be negative")
         total_slots = count * 3
         data_end = (
-            header_idx + 1
-            + math.ceil(total_slots / GeomCrossSection.INEFFECTIVE_VALUES_PER_LINE)
+            header_idx + 1 + math.ceil(total_slots / GeomCrossSection.VALUES_PER_LINE)
         )
         if data_end > end_idx:
             raise ValueError("Incomplete ineffective flow data block")
@@ -3857,7 +3841,7 @@ class GeomCrossSection:
         for line_idx in range(header_idx + 1, data_end):
             line = lines[line_idx].rstrip("\r\n")
             slots_on_line = min(
-                GeomCrossSection.INEFFECTIVE_VALUES_PER_LINE, total_slots - len(values)
+                GeomCrossSection.VALUES_PER_LINE, total_slots - len(values)
             )
             if len(line) > slots_on_line * 8 and line[slots_on_line * 8 :].strip():
                 raise ValueError("Too many ineffective flow values")
@@ -4046,10 +4030,12 @@ class GeomCrossSection:
                             "Ineffective flow value exceeds its 8-character field"
                         )
                     fields.append(field)
-                per_line = GeomCrossSection.INEFFECTIVE_VALUES_PER_LINE
                 data_lines = [
-                    "".join(fields[offset : offset + per_line]) + "\n"
-                    for offset in range(0, len(fields), per_line)
+                    "".join(fields[offset : offset + GeomCrossSection.VALUES_PER_LINE])
+                    + "\n"
+                    for offset in range(
+                        0, len(fields), GeomCrossSection.VALUES_PER_LINE
+                    )
                 ]
                 replacements.append((header_idx + 1, data_end, data_lines))
             if count != len(old_frame) or write_fmt != old_fmt:
