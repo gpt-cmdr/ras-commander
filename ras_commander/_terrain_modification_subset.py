@@ -12,6 +12,8 @@ from pathlib import Path
 import h5py
 import numpy as np
 
+from .fast_hdf import read_typed
+
 TABLES = frozenset(
     {
         "Attributes",
@@ -34,7 +36,7 @@ def _prefix(arrays):
 def _validated_group(group):
     if set(group.keys()) not in (TABLES, POLYGON_TABLES):
         raise ValueError(f"Unsupported modification layout: {group.name}")
-    arrays = {name: group[name][:] for name in group}
+    arrays = {name: read_typed(group[name], slice(None)) for name in group}
     prefix = _prefix(arrays)
     count = len(arrays["Attributes"])
     if arrays[prefix + " Info"].shape != (count, 4) or (

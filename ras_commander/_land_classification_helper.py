@@ -1106,7 +1106,7 @@ def _read_hdf_string_attr(hdf_file: h5py.File, key: str) -> Optional[str]:
 def _read_raster_map_rows(hdf_path: Union[str, Path]) -> list[tuple[int, str]]:
     hdf_path = Path(hdf_path)
     with h5py.File(hdf_path, "r") as hdf_file:
-        dataset = hdf_file["Raster Map"][()]
+        dataset = read_typed(hdf_file["Raster Map"])
         rows = []
         for row in dataset:
             rows.append(
@@ -1124,7 +1124,7 @@ def _read_layer_ids_for_symbology(hdf_path: Union[str, Path]) -> list[int]:
         if "Raster Map" in hdf_file:
             return [class_id for class_id, _ in _read_raster_map_rows(hdf_path)]
         if "IDs" in hdf_file:
-            return [int(value) for value in hdf_file["IDs"][()]]
+            return [int(value) for value in read_typed(hdf_file["IDs"])]
         if "Variables" in hdf_file:
             return list(range(len(hdf_file["Variables"])))
     return []
@@ -1135,7 +1135,7 @@ def _read_landcover_variable_lookup(hdf_path: Union[str, Path]) -> dict[str, dic
     with h5py.File(hdf_path, "r") as hdf_file:
         if "Variables" not in hdf_file:
             return {}
-        dataset = hdf_file["Variables"][()]
+        dataset = read_typed(hdf_file["Variables"])
         lookup: dict[str, dict[str, float]] = {}
         for row in dataset:
             class_name = row["Name"].decode("utf-8").strip()
@@ -1792,7 +1792,7 @@ def _read_infiltration_variable_rows(
         if "Variables" not in hdf_file:
             raise KeyError(f"No Variables dataset found in {infiltration_hdf_path}")
         dataset = hdf_file["Variables"]
-        data = dataset[()]
+        data = read_typed(dataset)
         names = [row["Name"].decode("utf-8").strip() for row in data]
     return data, names
 
