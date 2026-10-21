@@ -13,11 +13,21 @@ Backend policy follows :mod:`ras_commander.fast_hdf`:
   h5py read, so public results and exceptions stay exactly the h5py ones.
 - ``rust`` (``required``): typed routes must succeed or raise ``FastHdfError``.
 
-Datasets outside every typed family keep the established behaviour: numeric
-arrays use the generic native reader (``fast_hdf.read_dataset``), compound or
-string metadata without an engine raw-byte reader stays on h5py in every mode
-(recorded as ``h5py-metadata``). ``trace_reads()`` records the backend that
-actually served each read so qualification tests can prove execution.
+Datasets outside every typed family use the generic native reader
+(``fast_hdf.read_dataset``); in auto mode any native failure there (including
+Corrupt/checksum refusals) also falls back to h5py. Compound or string metadata
+without an engine raw-byte reader stays on h5py in every mode (recorded as
+``h5py-metadata``): this is the documented required-mode metadata exception.
+
+Selections are validated with h5py's own selector before any native read, so an
+invalid selection raises h5py's exact exception in every mode. Basic selections
+and single increasing integer vectors are served natively; field names, boolean
+masks, non-integer vectors (an empty list included) and scalar-dataspace
+indexing are left to h5py (refused in required mode).
+
+``trace_reads()`` records the backend that served each read made *through these
+wrappers*. It is not a complete I/O audit: reads a caller makes directly with
+h5py are invisible to it (the route-1 gate intercepts h5py separately).
 """
 
 from __future__ import annotations
@@ -367,7 +377,9 @@ def _full(module, file_path, route, dataset):
         return _numeric(cell["value"], dataset)
     if kind == "mesh_geometry":
         _, area, field = route
-        values = module.read_mesh_geometry(file_path, area, field, max_bytes=budget)
+        # Cached so element-wise public readers index one native array.
+        values = _cached(file_path, ("meshgeom", area, field),
+                         lambda: module.read_mesh_geometry(file_path, area, field, max_bytes=budget))
         return _numeric(values, dataset)
     raise TypedRouteError(f"unknown typed route {kind}")
 
@@ -408,17 +420,56 @@ def _value(reported, dataset):
     return reported["value"]
 
 
-def _basic(selection):
-    if selection is None or selection is Ellipsis or selection == ():
-        return True
-    keys = selection if isinstance(selection, tuple) else (selection,)
-    for key in keys:
-        if key is Ellipsis or isinstance(key, slice):
-            continue
-        if isinstance(key, (int, np.integer)) and not isinstance(key, (bool, np.bool_)):
-            continue
-        return False
-    return True
+def _selection_shape(dataset, key):
+    """Validate ``key`` with h5py's own selector (no value I/O); return its shape.
+
+    Invalid selections raise h5py's exact exception (type and message) in every
+    backend mode, e.g. ``ValueError: Step must be >= 1`` for a negative step.
+    Valid basic selections and single increasing integer vectors are served by
+    NumPy indexing of the full stored array and return the h5py result shape.
+    ``None`` marks selections left to h5py (field names, boolean masks,
+    non-integer vectors such as an empty list, indexing a scalar dataspace): a refusal in required
+    mode and an h5py read in auto mode.
+    """
+    from h5py._hl import selections
+
+    args = key if isinstance(key, tuple) else (key,)
+    if dataset.shape is None or any(isinstance(a, (str, bytes)) for a in args):
+        return None
+    if dataset.shape == () and not (args == () or (len(args) == 1 and args[0] is Ellipsis)):
+        return None
+    for arg in args:
+        if isinstance(arg, (list, np.ndarray)) and np.asarray(arg).dtype.kind not in "iu":
+            return None
+    return tuple(selections.select(dataset.shape, args, dataset).array_shape)
+
+
+def _fancy(key):
+    args = key if isinstance(key, tuple) else (key,)
+    return any(isinstance(a, (list, np.ndarray)) for a in args)
+
+
+def _generic(dataset, selection, key, shape, backend, mode):
+    """Numeric dataset outside every typed family: generic native reader."""
+    from . import fast_hdf
+
+    try:
+        if shape is not None and _fancy(key):
+            # h5py point selections (validated increasing vectors) equal NumPy
+            # indexing of the full stored array.
+            values = np.asarray(fast_hdf.read_dataset(dataset, None, backend=backend))[key]
+            return values.copy()
+        # read_dataset records the backend that served it (typed mesh results,
+        # generic native, or its own h5py fallback for unsupported layouts).
+        return fast_hdf.read_dataset(dataset, selection, backend=backend)
+    except fast_hdf.FastHdfError as exc:
+        if mode == "rust":
+            raise
+        # Auto keeps the h5py public outcome for every native failure, including
+        # Corrupt/checksum refusals, exactly like the typed routes.
+        logger.debug("h5py fallback for generic %s: %s", dataset.name, exc)
+        _record(dataset.name, "h5py-fallback", "generic")
+        return dataset[key]
 
 
 def read(dataset, selection=None, *, backend="auto"):
@@ -433,6 +484,7 @@ def read(dataset, selection=None, *, backend="auto"):
     if module is None:
         _record(dataset.name, "h5py")
         return dataset[key]
+    shape = _selection_shape(dataset, key)
     dtype = dataset.dtype
     metadata = dtype.names is None and (dtype.kind not in "iuf" or h5py.check_vlen_dtype(dtype) is not None)
     route = None if metadata or not hasattr(module, "read_xs_geometry") else route_for(dataset.name)
@@ -450,20 +502,20 @@ def read(dataset, selection=None, *, backend="auto"):
             return dataset[key]
     if route is None:
         if fast_hdf._numeric(dataset) and dataset.shape is not None:
-            # read_dataset records the backend that served it (typed mesh
-            # results, generic native, or h5py fallback).
-            return fast_hdf.read_dataset(dataset, selection, backend=backend)
+            return _generic(dataset, selection, key, shape, backend, mode)
         _record(dataset.name, "h5py-metadata")
         return dataset[key]
     try:
         if not fast_hdf._safe_file(dataset):
             raise TypedRouteError(f"{dataset.name}: file cannot be reopened safely by the engine")
-        if not _basic(selection):
-            raise TypedRouteError(f"{dataset.name}: typed routes accept only basic selections")
+        if shape is None:
+            raise TypedRouteError(f"{dataset.name}: selection {key!r} is left to h5py")
         import os as _os
         file_path = _os.fsdecode(dataset.file.filename)
         full = _full(module, file_path, route, dataset)
         values = full[key]
+        if np.shape(values) != shape:
+            raise TypedRouteError(f"{dataset.name}: selection shape {np.shape(values)} versus h5py {shape}")
         values = values.copy() if hasattr(values, "copy") else values
     except Exception as exc:
         if mode == "rust":
