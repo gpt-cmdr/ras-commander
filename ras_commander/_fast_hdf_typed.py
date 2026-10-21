@@ -563,6 +563,122 @@ def _stored_read(module, file_path, route, dataset, key):
     return values[()] if values.ndim == 0 else values
 
 
+# ------------------------------------------------------------------ attributes
+def _typed_attributes(module, obj):
+    """Engine typed attributes of a group, or of a dataset in a Wave 3 family."""
+    file_path = os.fsdecode(obj.file.filename)
+    name = obj.name
+    if isinstance(obj, h5py.Group):
+        return _cached(file_path, ("group_attrs", name),
+                       lambda: {a["name"]: a for a in module.typed_group_attributes(file_path, name)})
+    path = name.strip("/")
+    row = _stored_index(module, file_path).get(path)
+    if row is None or row["owner"].startswith("output_block:"):
+        return None
+    inventory = _cached(file_path, ("family_inventory", row["owner"]),
+                        lambda: module.read_family_inventory(file_path, row["owner"]))
+    for dataset in inventory["datasets"]:
+        if dataset["path"] == path:
+            return {a["name"]: a for a in dataset["attributes"]}
+    return None
+
+
+def read_attrs(obj, *, backend="auto"):
+    """``{name: obj.attrs[name]}`` in h5py's key order, values from the engine.
+
+    Attribute names and their order come from h5py (a key walk, no value read);
+    each value is rebuilt from the engine's typed attribute by
+    :func:`attribute_value`. Groups use ``typed_group_attributes``; datasets use
+    their Wave 3 family inventory. A dataset outside every family has no engine
+    attribute reader: its attributes stay on h5py in every mode (the documented
+    metadata exception, traced ``h5py-metadata``/``attrs``). For a value the engine
+    cannot reproduce exactly, auto reads that attribute with h5py and required
+    mode raises ``FastHdfError``.
+    """
+    from . import fast_hdf
+
+    if not isinstance(obj, (h5py.Group, h5py.Dataset)):
+        raise TypeError("obj must be an open h5py.Group or h5py.Dataset")
+    mode = fast_hdf._mode(backend)
+    module = fast_hdf._native(mode)
+    names = list(obj.attrs)
+    if module is None:
+        _record(obj.name, "h5py", "attrs")
+        return {k: obj.attrs[k] for k in names}
+    try:
+        typed = (_typed_attributes(module, obj) if fast_hdf._safe_file(obj) else None)
+    except Exception as exc:
+        if mode == "rust":
+            raise fast_hdf.FastHdfError(f"Typed attributes failed for {obj.name}: {exc}") from exc
+        _record(obj.name, "h5py-fallback", "attrs")
+        return {k: obj.attrs[k] for k in names}
+    if typed is None:
+        _record(obj.name, "h5py-metadata", "attrs")
+        return {k: obj.attrs[k] for k in names}
+    out = {}
+    fallback = False
+    for key in names:
+        try:
+            if key not in typed:
+                raise TypedRouteError(f"attribute {key!r} missing from the engine reader")
+            out[key] = attribute_value(typed[key])
+        except TypedRouteError as exc:
+            if mode == "rust":
+                raise fast_hdf.FastHdfError(f"{obj.name}: {exc}") from exc
+            out[key] = obj.attrs[key]
+            fallback = True
+    _record(obj.name, "h5py-fallback" if fallback else "native-typed", "attrs")
+    return out
+
+
+def attribute_value(typed):
+    """Exact ``obj.attrs[name]`` value from one engine typed attribute.
+
+    Reproduces h5py 3 semantics from the stored bytes and declared type: numeric
+    attributes become a NumPy scalar (scalar dataspace) or array in the stored
+    dtype and byte order; fixed-length strings become ``numpy.bytes_`` (or an
+    ``S{width}`` array) after HDF5's conversion into h5py's NULLPAD memory type
+    (NULLTERM: cut at the first NUL; SPACEPAD: trailing spaces removed; NULLPAD:
+    unchanged), with NumPy's trailing-NUL stripping. Any other class (variable-
+    length, compound, bitfield, enum, references) or an unsupported/corrupt value
+    raises :class:`TypedRouteError`, so the caller falls back or refuses.
+    """
+    if typed.get("capability", {}).get("status") != "supported":
+        raise TypedRouteError(f"attribute {typed.get('name')!r}: {typed.get('capability')}")
+    kind = typed["attribute_type"]
+    shape = tuple(int(n) for n in typed["shape"])
+    raw = bytes(typed["raw_bytes"])
+    count = int(np.prod(shape, dtype=np.int64)) if shape else 1
+    if kind["kind"] in {"integer", "float"}:
+        order = {"little": "<", "big": ">"}.get(kind.get("byte_order"))
+        if order is None:
+            raise TypedRouteError(f"attribute {typed['name']!r}: byte order {kind.get('byte_order')}")
+        code = "f" if kind["kind"] == "float" else ("i" if kind["signed"] else "u")
+        dtype = np.dtype(f"{order}{code}{int(kind['bytes'])}")
+        if len(raw) != count * dtype.itemsize:
+            raise TypedRouteError(f"attribute {typed['name']!r}: {len(raw)} bytes for {count} x {dtype}")
+        values = np.frombuffer(raw, dtype=dtype).copy()
+        return values[0] if not shape else values.reshape(shape)
+    if kind["kind"] == "fixed_string":
+        width = int(kind["width"])
+        padding = kind.get("padding")
+        if padding not in {"null_terminate", "null_pad", "space_pad"} or len(raw) != count * width:
+            raise TypedRouteError(f"attribute {typed['name']!r}: unproven fixed string layout")
+        items = []
+        for i in range(count):
+            data = raw[i * width:(i + 1) * width]
+            if padding == "space_pad":
+                data = data.rstrip(b" ")
+            elif padding == "null_terminate":
+                cut = data.find(bytes(1))
+                data = data if cut < 0 else data[:cut]
+            items.append(data)
+        values = np.array(items, dtype=f"S{max(width, 1)}")
+        # h5py returns arr[()] of an S{width} array: same scalar construction.
+        return values.reshape(())[()] if not shape else values.reshape(shape)
+    raise TypedRouteError(f"attribute {typed['name']!r}: {kind['kind']} attributes are not reproduced")
+
+
 def _has_numeric_field(dtype):
     """Whether a compound dtype has any member that is not fixed or vlen text."""
     for name in dtype.names:
