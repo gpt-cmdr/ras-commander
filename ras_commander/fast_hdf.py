@@ -7,6 +7,18 @@ environment. Metadata and unsupported HDF types continue to use h5py in auto
 mode. h5py behaviour is the public contract: in auto mode any native failure
 (Corrupt/checksum refusals included) falls back to the h5py read, so callers see
 the h5py outcome; ``required`` raises :class:`FastHdfError` instead.
+
+Public surface: ``__all__`` lists the supported names (``available``,
+``close_sessions``, ``FastHdfError``, ``mesh_polygons``, ``packed_meshes`` and
+the ``export_*`` functions). Everything else here, in particular
+``read_typed``/``read_attrs``/``read_attr``/``read_dataset(s)``,
+``mesh_series_domain``, ``trace_reads``, ``native_required`` and
+``reraise_required``, is internal adapter plumbing for the ``Hdf*`` classes and
+the qualification suites; it may change without notice.
+
+Environment: ``RAS_COMMANDER_FAST_HDF`` (backend policy; an unrecognised value
+is ``auto`` with one logged warning) and ``RAS_COMMANDER_HDF_SESSION_CACHE``
+(native session policy). See ``docs/api/hdf.md``, "Optional Rust acceleration".
 """
 
 from __future__ import annotations
@@ -34,10 +46,9 @@ from .LoggingConfig import get_logger
 logger = get_logger(__name__)
 
 __all__ = [
-    "FastHdfError", "available", "close_sessions", "read_dataset", "read_datasets",
-    "read_typed", "read_attrs", "read_attr", "mesh_series_domain", "trace_reads",
-    "native_required", "reraise_required",
+    "FastHdfError", "available", "close_sessions",
     "packed_meshes", "mesh_polygons", "export_pmtiles", "export_mesh_pmtiles",
+    "export_arrow", "export_arrow_pmtiles",
 ]
 
 
@@ -1065,7 +1076,3 @@ def _export_arrow_transport(output, batches, *, source_crs, format,
             return json.loads(native.export_pmtiles_ipc_file(ipc, output, options, threads=threads))
         return json.loads(native.export_ipc_file(ipc, output, format, max_batch_rows))
 
-
-__all__.append("export_arrow")
-
-__all__.append("export_arrow_pmtiles")

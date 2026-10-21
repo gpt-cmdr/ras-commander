@@ -587,7 +587,19 @@ fail processing: the method logs ERROR with traceback, path, parameters and stag
 then returns an empty GeoDataFrame and discards partial geometry. Input/decorator
 validation exceptions remain unchanged; no result status attributes are added.
 
-- `calculate_fluvial_pluvial_boundary(hdf_path, delta_t)` - Calculate boundary
+- `calculate_fluvial_pluvial_boundary(hdf_path, delta_t, min_line_length=None, *, engine="python")` - Calculate boundary
+- `generate_fluvial_pluvial_polygons(hdf_path, delta_t, temporal_tolerance_hours=1.0, min_polygon_area_acres=None, *, engine="python")` - Boundary polygons
+
+`engine` selects the implementation. The default `"python"` is the reference
+described above (failures are logged and an empty GeoDataFrame is returned).
+`"native"` uses the optional Rust graph kernels and raises
+`FluvialNativeUnsupportedError` (a `ValueError`) when it cannot reproduce the
+reference result; `"auto"` uses native when it can and otherwise falls back to
+the Python engine. Both opt-in engines record the engine that produced the result
+in `result.attrs["fluvial_engine"]`. With `"native"` and `"auto"`, errors other
+than `FluvialNativeUnsupportedError` (invalid data, native failures) propagate
+instead of becoming an empty result. `FluvialNativeUnsupportedError` is defined
+in `ras_commander.hdf.HdfFluvialPluvial`.
 
 ### HdfInfiltration
 
@@ -770,6 +782,47 @@ Very small cells can become one-pixel centroid squares at low zoom to preserve
 visibility. PMTiles are for visualization; use source polygons for analysis.
 The exporter retains source geometry in memory and spools encoded tile batches.
 
+### Environment variables, sessions and internal modules
+
+| Variable | Values | Effect |
+|----------|--------|--------|
+| `RAS_COMMANDER_FAST_HDF` | see the table in the next section | Backend policy for every routed reader. An **unrecognised value** (for example `yes`) is treated as `auto` and logs one warning per value, so a typo can never turn reads into empty results. |
+| `RAS_COMMANDER_HDF_SESSION_CACHE` | unset or `1` (default), `0`/`off`/`false`, `persist` | Native session policy, below. |
+| `RAS_COMMANDER_FAST_TEXT` | `0`/`off`/`false`/`python`, `auto` (default), `required`/`rust` | Same policy for the optional native plain-text index in `ras_commander.fast_text`. It is not wired into any existing `Geom*`/`Ras*` method; only code that calls `fast_text` directly is affected, and there an unrecognised value raises `ValueError`. |
+
+**Native sessions and open files.** The native engine reads through a session
+that keeps the HDF open. By default a session is opened inside the first public
+call that needs it, shared by every read of that call, and closed when that
+public call returns (also when it raises). No HDF stays open after an `Hdf*`
+method returns, so renaming, deleting, replacing or re-extracting a project
+folder afterwards works exactly as without the extension (on Windows and on
+network shares an open file would block these). Sessions are not carried from
+one public call to the next; the measured cost of that is a few percent on
+repeated reads of one file. Choose a different trade-off with
+`RAS_COMMANDER_HDF_SESSION_CACHE`:
+
+- `0`: open and close the file around every individual native read (slowest).
+- `persist`: keep up to four sessions across public calls (fastest for many
+  repeated calls on the same files). The files stay open: call
+  `fast_hdf.close_sessions()` (or `close_sessions(path)`) before replacing,
+  moving or deleting them, and before running HEC-RAS. `RasCmdr.compute_plan()`
+  already does this.
+
+Two small caches also exist: a cache of the engine's decoded layout
+descriptions (at most 16 entries, keyed by file path, size and modification
+time, never holding a file open), and `fast_text.NATIVE_CALLS`, a counter used
+by the qualification tests.
+
+**Public and internal.** `ras_commander.fast_hdf` is optional infrastructure.
+Its supported names are `available`, `close_sessions`, `FastHdfError`,
+`mesh_polygons`, `packed_meshes` and the `export_*` functions (`__all__`).
+Everything else in `fast_hdf`, `fast_results` and `_fast_hdf_typed`
+(`read_typed`, `read_attrs`, `read_attr`, `read_dataset`, `read_datasets`,
+`mesh_series_domain`, `trace_reads`, `native_required`, `reraise_required`,
+the temporal-reduction helpers) is internal adapter code for the `Hdf*`
+classes and the test suites. It is importable but may change in any release;
+use the `Hdf*` methods instead.
+
 ### Routed HDF reads and backend modes
 
 Public `Hdf*` readers whose data the pinned engine reads as a typed family call
@@ -931,15 +984,38 @@ prerequisites and return contracts take precedence over abbreviated summaries.
         - convert_ras_hdf_value
         - convert_ras_string
         - convert_timesteps_to_datetimes
+        - area_to_square_meters
+        - collect_hdf_crs_evidence
+        - crs_equivalent
         - find_nearest_neighbors
+        - get_crs_identity
+        - get_stored_ras_version
+        - get_units_system
+        - linear_unit_to_meters
         - parse_duration
         - parse_ras_datetime
         - parse_ras_datetime_ms
+        - parse_ras_file_version
         - parse_ras_window_datetime
         - parse_run_time_window
         - perform_kdtree_query
+        - read_crs_evidence
+        - resolve_crs_evidence
         - resolve_hdf_paths
+        - resolve_ras_relative_path
         - scan_hdf_files
+
+::: ras_commander.hdf.HdfUtils.CrsEvidence
+    options:
+      show_root_heading: true
+      heading_level: 4
+      show_source: false
+
+::: ras_commander.hdf.HdfUtils.CrsResolution
+    options:
+      show_root_heading: true
+      heading_level: 4
+      show_source: false
 
 ### HdfPlan source reference
 

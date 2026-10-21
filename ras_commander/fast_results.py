@@ -10,7 +10,8 @@ reader's per-file chunk cache (``read_plan["chunk_cache_bytes"]``) retains
 decompressed chunks up to its size. Narrowing copies, finite masks, reduction
 temporaries and accumulators are additional working memory: the block budget
 is not a total process RSS limit. Neither route returns or accumulates the
-complete series. Policy follows :mod:`ras_commander.fast_hdf`:
+complete series. This module is internal plumbing for ``HdfResultsMesh``; only
+the ``Hdf*`` methods that use it are public API. Policy follows :mod:`ras_commander.fast_hdf`:
 ``RAS_COMMANDER_FAST_HDF=0`` selects Python, ``required`` forbids fallback, and
 an explicit ``backend`` overrides the environment.
 
