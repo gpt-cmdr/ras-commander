@@ -664,6 +664,113 @@ def _get_steady_variable_values(
     return np.concatenate(values) if values else np.array([], dtype=float)
 
 
+def _qualify_velocity_dataset(
+    hdf_file: h5py.File,
+    cache: Dict[str, Any],
+    mesh_name: str,
+    dataset_path: str,
+    *,
+    stored: bool,
+) -> None:
+    """Reject present velocity schemas with unqualified time/cell axes.
+
+    Stored components require explicit cell Location and velocity units. Legacy
+    X/Y components retain absent metadata compatibility, but any supplied
+    metadata is authoritative. Counts include ghosts before physical trimming.
+    """
+    dataset = hdf_file[dataset_path]
+    if (not isinstance(dataset, h5py.Dataset) or dataset.ndim != 2
+            or dataset.dtype.kind not in "iuf"):
+        raise ValueError(f"Invalid numeric time/cell velocity schema: {dataset_path}")
+    time = hdf_file.get(
+        "Results/Unsteady/Output/Output Blocks/Base Output/Unsteady Time Series/Time"
+    )
+    if (not isinstance(time, h5py.Dataset) or time.ndim != 1
+            or time.dtype.kind not in "iuf" or dataset.shape[0] != len(time)):
+        raise ValueError(f"Invalid Base Output Time axis for {dataset_path}")
+    centers = hdf_file.get(f"Geometry/2D Flow Areas/{mesh_name}/Cells Center Coordinate")
+    physical = cache["mesh_slices"][mesh_name]
+    if (not isinstance(centers, h5py.Dataset) or centers.ndim != 2
+            or centers.shape[1] != 2 or centers.dtype.kind not in "iuf"
+            or dataset.shape[1] != len(centers)
+            or not 0 < physical.stop - physical.start <= len(centers)):
+        raise ValueError(f"Invalid cell geometry axis for {dataset_path}")
+    if stored or "Location" in dataset.attrs:
+        location = _velocity_text_attribute(dataset, "Location")
+        if location not in {"Cells", "Cell"}:
+            raise ValueError(f"Expected cell Location for {dataset_path}")
+    if stored or "Units" in dataset.attrs:
+        units = _velocity_text_attribute(dataset, "Units")
+        if units not in {"ft/s", "m/s"}:
+            raise ValueError(f"Unqualified velocity units for {dataset_path}: {units}")
+        metadata = HdfBase._result_unit_metadata_from_file(
+            hdf_file, source_file=hdf_file.filename, strict=False,
+        )
+        if metadata.get("contradictions"):
+            raise ValueError(f"Contradictory result unit metadata for {dataset_path}")
+        expected_units = metadata.get("velocity_units")
+        if expected_units is not None and units != expected_units:
+            raise ValueError(f"Contradictory velocity units for {dataset_path}")
+
+
+def _velocity_text_attribute(dataset: h5py.Dataset, name: str) -> str:
+    """Read a scalar or singleton text attribute without coercing invalid types."""
+    value = np.asarray(dataset.attrs.get(name, ""))
+    if value.shape not in ((), (1,)):
+        raise ValueError(f"Invalid {name} for {dataset.name}")
+    value = value.reshape(-1)[0]
+    if isinstance(value, bytes):
+        try:
+            value = value.decode("utf-8")
+        except UnicodeDecodeError as exc:
+            raise ValueError(f"Invalid {name} text for {dataset.name}") from exc
+    if not isinstance(value, str):
+        raise ValueError(f"Invalid {name} text for {dataset.name}")
+    return value
+
+
+def _check_velocity_pair_units(hdf_file: h5py.File, paths: Tuple[str, str]) -> None:
+    """Compare units only within the selected output family."""
+    units = [
+        _velocity_text_attribute(hdf_file[path], "Units")
+        for path in paths if "Units" in hdf_file[path].attrs
+    ]
+    if len(set(units)) > 1:
+        raise ValueError(f"Cell velocity component units differ: {paths}")
+
+
+def _read_unsteady_velocity_pair(
+    plan_hdf_path: Path,
+    cache: Dict[str, Any],
+    mesh_name: str,
+    time_index: int,
+) -> Optional[Tuple[np.ndarray, np.ndarray]]:
+    """Choose a complete qualified stored pair, then a complete legacy pair.
+
+    Validate even incomplete present candidates so corrupt schemas cannot be
+    hidden by falling back. Never select the two axes independently.
+    """
+    with h5py.File(plan_hdf_path, "r") as hdf_file:
+        for stored in (True, False):
+            prefix = "Cell Velocity - " if stored else ""
+            paths = tuple(
+                _UNSTEADY_2D_PATH.format(
+                    mesh_name=mesh_name, variable_name=f"{prefix}Velocity {axis}",
+                ) for axis in ("X", "Y")
+            )
+            for path in paths:
+                if path in hdf_file:
+                    _qualify_velocity_dataset(hdf_file, cache, mesh_name, path, stored=stored)
+            if all(path in hdf_file for path in paths):
+                _check_velocity_pair_units(hdf_file, paths)
+                return tuple(
+                    _physical_mesh_values(
+                        np.asarray(hdf_file[path][time_index, :], dtype=float), cache, mesh_name,
+                    ) for path in paths
+                )
+    return None
+
+
 def _read_unsteady_direct(
     plan_hdf_path: Path,
     cache: Dict[str, Any],
@@ -686,57 +793,22 @@ def _read_unsteady_direct(
                 )
                 if stored_path in hdf_file:
                     dataset_path = stored_path
-                    dataset = hdf_file[dataset_path]
-                    location = np.asarray(dataset.attrs.get("Location", ""))
-                    if location.shape not in ((), (1,)):
-                        raise ValueError(f"Invalid Location for {dataset_path}")
-                    location = location.reshape(-1)[0]
-                    if isinstance(location, bytes):
-                        location = location.decode("utf-8")
-                    if location not in {"Cells", "Cell"}:
-                        raise ValueError(f"Expected cell Location for {dataset_path}")
-                    centers = hdf_file.get(
-                        f"Geometry/2D Flow Areas/{mesh_name}/Cells Center Coordinate"
-                    )
-                    time = hdf_file.get(
-                        "Results/Unsteady/Output/Output Blocks/Base Output/"
-                        "Unsteady Time Series/Time"
-                    )
-                    physical = cache["mesh_slices"][mesh_name]
-                    if (dataset.ndim != 2 or centers is None or time is None
-                            or dataset.shape != (len(time), len(centers))
-                            or not 0 < physical.stop - physical.start <= len(centers)):
-                        raise ValueError(f"Invalid time/cell axes for {dataset_path}")
-                    units = np.asarray(dataset.attrs.get("Units", ""))
-                    if units.shape not in ((), (1,)):
-                        raise ValueError(f"Invalid velocity units for {dataset_path}")
-                    units = units.reshape(-1)[0]
-                    if isinstance(units, bytes):
-                        units = units.decode("utf-8")
-                    if units not in {"ft/s", "m/s"}:
-                        raise ValueError(f"Unqualified velocity units for {dataset_path}: {units}")
-                    other_component = "Velocity Y" if variable_name == "Velocity X" else "Velocity X"
+                    _qualify_velocity_dataset(hdf_file, cache, mesh_name, dataset_path, stored=True)
+                    other_axis = "Y" if variable_name == "Velocity X" else "X"
                     other_path = _UNSTEADY_2D_PATH.format(
-                        mesh_name=mesh_name, variable_name=f"Cell Velocity - {other_component}",
+                        mesh_name=mesh_name, variable_name=f"Cell Velocity - Velocity {other_axis}",
                     )
                     if other_path in hdf_file:
-                        other_units = HdfResultsMesh._decode_hdf_attr(
-                            hdf_file[other_path].attrs.get("Units", "")
-                        )
-                        if other_units != units:
-                            raise ValueError(f"Cell velocity component units differ for mesh '{mesh_name}'")
-                    unit_metadata = HdfBase._result_unit_metadata_from_file(
-                        hdf_file, source_file=plan_hdf_path, strict=False,
-                    )
-                    if unit_metadata.get("contradictions"):
-                        raise ValueError(f"Contradictory result unit metadata for {dataset_path}")
-                    expected_units = unit_metadata.get("velocity_units")
-                    if expected_units is not None and units != expected_units:
-                        raise ValueError(f"Contradictory velocity units for {dataset_path}")
+                        _qualify_velocity_dataset(hdf_file, cache, mesh_name, other_path, stored=True)
+                        _check_velocity_pair_units(hdf_file, (dataset_path, other_path))
             if dataset_path not in hdf_file:
                 raise KeyError(
                     f"Dataset not found in plan HDF: {dataset_path}"
                 )
+            if variable_name in {"Velocity X", "Velocity Y"} and dataset_path == _UNSTEADY_2D_PATH.format(
+                mesh_name=mesh_name, variable_name=variable_name,
+            ):
+                _qualify_velocity_dataset(hdf_file, cache, mesh_name, dataset_path, stored=False)
             dataset = hdf_file[dataset_path]
             # Read only the requested row; a point query does not need all times.
             dataset_values = np.asarray(
@@ -898,38 +970,41 @@ def _get_cell_velocity_components(
     steady_plan: bool,
 ) -> Tuple[np.ndarray, np.ndarray]:
     """Return cell-centered velocity X/Y, reconstructing from faces if needed."""
-    try:
-        if steady_plan:
-            vx = _get_steady_variable_values(
-                plan_hdf_path,
-                geom_hdf_path,
-                cache,
-                "Velocity X",
+    if not steady_plan:
+        if time_index == "max":
+            raise ValueError(
+                "Velocity components require a signed time_index; "
+                "'max' envelopes do not preserve flow direction."
             )
-            vy = _get_steady_variable_values(
-                plan_hdf_path,
-                geom_hdf_path,
-                cache,
-                "Velocity Y",
-            )
-        else:
-            if time_index == "max":
-                raise ValueError(
-                    "Velocity components require a signed time_index; "
-                    "'max' envelopes do not preserve flow direction."
+        components = []
+        for mesh_name in cache["mesh_order"]:
+            mesh_cache = dict(cache, mesh_order=[mesh_name])
+            pair = _read_unsteady_velocity_pair(plan_hdf_path, mesh_cache, mesh_name, int(time_index))
+            if pair is None:
+                if geom_hdf_path is None:
+                    raise KeyError(f"No complete velocity pair or geometry for mesh '{mesh_name}'")
+                logger.debug("No complete velocity pair for mesh '%s'; reconstructing from faces.", mesh_name)
+                pair = _reconstruct_velocity_components_from_faces(
+                    plan_hdf_path, geom_hdf_path, mesh_cache, time_index, steady_plan=False,
                 )
-            vx = _read_unsteady_direct(
-                plan_hdf_path,
-                cache,
-                "Velocity X",
-                int(time_index),
-            )
-            vy = _read_unsteady_direct(
-                plan_hdf_path,
-                cache,
-                "Velocity Y",
-                int(time_index),
-            )
+            components.append(pair)
+        if not components:
+            return np.array([], dtype=float), np.array([], dtype=float)
+        return tuple(np.concatenate([pair[axis] for pair in components]) for axis in (0, 1))
+
+    try:
+        vx = _get_steady_variable_values(
+            plan_hdf_path,
+            geom_hdf_path,
+            cache,
+            "Velocity X",
+        )
+        vy = _get_steady_variable_values(
+            plan_hdf_path,
+            geom_hdf_path,
+            cache,
+            "Velocity Y",
+        )
         return vx, vy
     except KeyError:
         logger.debug(
@@ -969,15 +1044,16 @@ def _get_unsteady_variable_values(
         ])
     if variable_name == "Velocity":
         with h5py.File(plan_hdf_path, "r") as hdf_file:
-            stored_components = all(
+            stored_components = any(
                 _UNSTEADY_2D_PATH.format(
                     mesh_name=mesh, variable_name=f"Cell Velocity - Velocity {axis}",
                 ) in hdf_file
                 for mesh in cache["mesh_order"] for axis in ("X", "Y")
             )
         if stored_components:
-            vx = _read_unsteady_direct(plan_hdf_path, cache, "Velocity X", time_index)
-            vy = _read_unsteady_direct(plan_hdf_path, cache, "Velocity Y", time_index)
+            vx, vy = _get_cell_velocity_components(
+                plan_hdf_path, geom_hdf_path, cache, time_index, steady_plan=False,
+            )
             return np.hypot(vx, vy)
     try:
         return _read_unsteady_direct(
@@ -1005,46 +1081,14 @@ def _get_unsteady_variable_values(
         return np.maximum(wse - cell_min_elev, 0.0)
 
     if variable_name in {"Velocity", "Velocity X", "Velocity Y"}:
-        try:
-            logger.debug(
-                "Requested velocity result '%s' not found directly; "
-                "using Velocity X/Velocity Y component fallback when available.",
-                variable_name,
-            )
-            vx = _read_unsteady_direct(
-                plan_hdf_path, cache, "Velocity X", time_index,
-            )
-            vy = _read_unsteady_direct(
-                plan_hdf_path, cache, "Velocity Y", time_index,
-            )
-            if variable_name == "Velocity X":
-                return vx
-            if variable_name == "Velocity Y":
-                return vy
-            return np.sqrt(vx**2 + vy**2)
-        except KeyError:
-            if geom_hdf_path is None:
-                raise KeyError(
-                    f"Variable '{variable_name}' not found in plan HDF and "
-                    "geometry HDF path was not provided for face-velocity fallback."
-                ) from direct_read_error
-            logger.debug(
-                "Neither 'Velocity' nor 'Velocity X'/'Velocity Y' found "
-                "in plan HDF time series; reconstructing components from "
-                "Face Velocity."
-            )
-            vx, vy = _reconstruct_velocity_components_from_faces(
-                plan_hdf_path,
-                geom_hdf_path,
-                cache,
-                time_index,
-                steady_plan=False,
-            )
-            if variable_name == "Velocity X":
-                return vx
-            if variable_name == "Velocity Y":
-                return vy
-            return np.sqrt(vx**2 + vy**2)
+        vx, vy = _get_cell_velocity_components(
+            plan_hdf_path, geom_hdf_path, cache, time_index, steady_plan=False,
+        )
+        if variable_name == "Velocity X":
+            return vx
+        if variable_name == "Velocity Y":
+            return vy
+        return np.hypot(vx, vy)
 
     raise KeyError(
         f"Variable '{variable_name}' not found in plan HDF and no "
@@ -1778,7 +1822,10 @@ class HdfResultsQuery:
         ``Cell Velocity - Velocity X/Y``
         components with validated cell/time axes, Location and velocity units.
         Speed is their magnitude. Legacy components and face reconstruction
-        remain fallbacks when stored cell components are absent.
+        remain fallbacks when the stored pair is incomplete. Vector queries select
+        a complete pair from one source per mesh; direct single-component
+        queries may use a qualified stored axis alone. Invalid present schemas
+        raise ValueError rather than silently falling back.
 
         Returns:
             dict with keys: value, cell_id, mesh_name, distance, x, y
