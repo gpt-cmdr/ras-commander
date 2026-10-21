@@ -9,6 +9,35 @@ alone does not identify a development checkout.
 
 ### Unreleased
 
+**Project CRS comes from cross-checked evidence (behavior change)**
+
+`HdfBase.get_projection()`, `HdfProject.get_project_crs()` and
+`RasPrj.project_crs` now share one rule. Previously each helper returned the
+first CRS it found, in a different order, so one project could report two
+different CRS values.
+
+- Evidence, strongest first: the HDF `Projection` attribute (root, else the
+  `Geometry` group), the `.rasmap` `RASProjectionFilename` file, then each
+  `.rasmap` terrain HDF. `RasPrj.project_crs` also reads every geometry and
+  plan HDF, and reads terrain rasters only when nothing else has a CRS.
+- All CRSs found must be equivalent (`HdfUtils.crs_equivalent`: WKT dialect
+  and names are ignored; datum realization, projection parameters and units
+  are not). **If they conflict, the result is `None`** and a warning names the
+  sources. `RasPrj.project_crs_status` reports `resolved`, `missing` or
+  `conflict`.
+- The return form is unchanged: `"EPSG:n"` when an EPSG code identifies the
+  CRS, otherwise the source WKT. The EPSG code must now be strictly
+  equivalent rather than a 70%-confidence `pyproj` match. `"ESRI:n"` is never
+  returned.
+- `get_projection()` now consults terrain HDFs, so Baxter (`EPSG:2227`) and
+  Chippewa_2D (Albers WKT) resolve where they returned `None`. On the other
+  56 RasExamples HDFs and 70 projects, results match v0.106.1.
+- New `HdfUtils` helpers: `collect_hdf_crs_evidence`,
+  `collect_rasmap_crs_evidence`, `read_crs_evidence`, `resolve_crs_evidence`,
+  `crs_equivalent`, `get_equivalent_epsg`, `format_crs`, `get_crs_identity`
+  and `resolve_ras_relative_path`. RASMapper paths containing `..\` now
+  resolve to the parent folder instead of being stripped.
+
 ### v0.106.1 (October 2026)
 
 **Point-precipitation preprocessing repairs HEC-RAS's intermittent failure**

@@ -127,6 +127,7 @@ class _ProjectCrsResolution:
     crs: Optional[str]
     source: Optional[str]
     path: Optional[Path] = None
+    status: str = "missing"
 
 def read_file_with_fallback_encoding(file_path, encodings=['utf-8', 'latin1', 'cp1252', 'iso-8859-1']):
     """
@@ -163,6 +164,7 @@ class RasPrj:
         self.suppress_logging = False  # Add suppress_logging as instance variable
         self.project_crs = None
         self.project_crs_source = None
+        self.project_crs_status = None
         self._plan_flow_prefixes = {}
 
     @staticmethod
@@ -243,6 +245,7 @@ class RasPrj:
         self.project_path = self.project_folder  # Alias for compatibility
         self.project_crs = None
         self.project_crs_source = None
+        self.project_crs_status = None
         self.load_hdf_metadata = load_hdf_metadata
 
         # If user specified a .prj file directly, use it (Phase 2 optimization)
@@ -1390,7 +1393,15 @@ class RasPrj:
         return raster_paths
 
     def _resolve_project_crs(self) -> _ProjectCrsResolution:
-        from .hdf.HdfBase import HdfBase
+        """Resolve the project CRS with the ``HdfBase.get_projection`` rule.
+
+        Evidence (geometry HDFs, plan HDFs, the ``.rasmap`` projection file
+        and terrain HDFs) must agree under ``HdfUtils.crs_equivalent``;
+        conflicting evidence resolves to ``None`` with ``status="conflict"``.
+        Terrain rasters are read only when none of that evidence holds a CRS.
+        The CRS string uses ``HdfUtils.format_crs`` semantics.
+        """
+        from .hdf.HdfUtils import HdfUtils
 
         candidates = []
         seen = set()
@@ -1442,39 +1453,50 @@ class RasPrj:
             self._get_terrain_raster_candidates(terrain_hdf_paths),
         )
 
-        for source, path_kind, candidate_path in candidates:
-            if not candidate_path.exists():
-                continue
+        def resolve(selected) -> _ProjectCrsResolution:
+            evidence = [
+                HdfUtils.read_crs_evidence(candidate_path, source)
+                for source, _path_kind, candidate_path in selected
+                if candidate_path.exists()
+            ]
+            resolution = HdfUtils.resolve_crs_evidence(evidence)
+            return _ProjectCrsResolution(
+                crs=resolution.to_crs_string(),
+                source=resolution.source,
+                path=resolution.path,
+                status=resolution.status,
+            )
 
-            if path_kind == 'hdf':
-                crs = HdfBase._get_projection_from_hdf_attribute(candidate_path)
-            elif path_kind == 'prj':
-                crs = HdfBase._get_projection_from_prj_file(candidate_path)
-            else:
-                crs = HdfBase._get_projection_from_raster(candidate_path)
-
-            if crs:
-                return _ProjectCrsResolution(crs=crs, source=source,
-                                             path=candidate_path)
-
-        return _ProjectCrsResolution(crs=None, source=None, path=None)
+        primary = resolve([c for c in candidates if c[1] != 'raster'])
+        if primary.status != "missing":
+            return primary
+        return resolve([c for c in candidates if c[1] == 'raster'])
 
     @log_call
     def refresh_project_crs(self) -> Optional[str]:
         """
         Recompute the resolved project CRS and cache the result on the object.
 
+        The CRS uses the same evidence rule and string form as
+        ``HdfBase.get_projection``: ``"EPSG:n"`` when an EPSG definition is
+        strictly equivalent, otherwise WKT. Conflicting evidence across the
+        project's geometry HDFs, plan HDFs, ``.rasmap`` projection file and
+        terrain HDFs yields ``None`` and ``project_crs_status == "conflict"``
+        (ras-commander <= 0.106.1 returned the first CRS found).
+
         Returns:
             Optional[str]: CRS as an EPSG string, WKT string, or None if not
-            resolvable from project files.
+            resolvable (missing) or ambiguous (conflict) from project files.
         """
         self.check_initialized()
         self.project_crs = None
         self.project_crs_source = None
+        self.project_crs_status = None
 
         resolution = self._resolve_project_crs()
         self.project_crs = resolution.crs
         self.project_crs_source = resolution.source
+        self.project_crs_status = resolution.status
 
         if self.project_crs:
             if not self.suppress_logging:
@@ -1482,6 +1504,13 @@ class RasPrj:
                     f"Resolved project CRS: {self.project_crs} "
                     f"(source={self.project_crs_source})"
                 )
+        elif resolution.status == "conflict":
+            logger.warning(
+                "Conflicting CRS evidence for project %s; project_crs is None. "
+                "Use HdfUtils.read_crs_evidence on the project HDF/.prj files "
+                "to inspect.",
+                self.project_folder.name,
+            )
         else:
             logger.warning(
                 "Could not resolve project CRS for %s",

@@ -13,7 +13,7 @@ import pandas as pd
 
 from .Decorators import log_call
 from .LoggingConfig import get_logger
-from ._rasmap_schema import expected_rasmap_path, rasmap_dataframe_is_usable
+from ._rasmap_schema import expected_rasmap_path
 
 logger = get_logger(__name__)
 
@@ -358,9 +358,16 @@ class RasCrossSections:
 
     @staticmethod
     def _project_mapper_crs(context: _ProjectContext) -> str | None:
-        """Resolve project CRS through the project RASMapper configuration."""
-        from .RasMap import RasMap
-        from .hdf.HdfBase import HdfBase
+        """Resolve project CRS through the project RASMapper configuration.
+
+        Uses the ``HdfBase.get_projection`` rule on the ``.rasmap`` evidence
+        (projection file and terrain HDFs must agree). A project whose
+        ``RasPrj.project_crs_status`` is ``"conflict"`` stays unresolved.
+        """
+        from .hdf.HdfUtils import HdfUtils
+
+        if getattr(context.ras_object, "project_crs_status", None) == "conflict":
+            return None
 
         preferred = expected_rasmap_path(context.folder, context.model_id)
         if preferred.is_file():
@@ -371,19 +378,10 @@ class RasCrossSections:
                 return None
             rasmap_path = candidates[0]
 
-        rasmap = RasMap.parse_rasmap(
-            rasmap_path,
-            ras_object=context.ras_object,
+        resolution = HdfUtils.resolve_crs_evidence(
+            HdfUtils.collect_rasmap_crs_evidence(rasmap_path)
         )
-        if not rasmap_dataframe_is_usable(rasmap) or "projection_path" not in rasmap:
-            return None
-        raw_path = rasmap.iloc[0]["projection_path"]
-        if pd.isna(raw_path) or not str(raw_path).strip():
-            return None
-        projection_path = Path(str(raw_path))
-        if not projection_path.is_file():
-            return None
-        return HdfBase._get_projection_from_prj_file(projection_path)
+        return resolution.to_crs_string()
 
     @staticmethod
     def _point_mannings(stations: np.ndarray, breakpoints: pd.DataFrame) -> np.ndarray:
