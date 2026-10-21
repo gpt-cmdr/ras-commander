@@ -40,7 +40,7 @@ import numpy as np
 import pandas as pd
 
 from ..LoggingConfig import log_call, get_logger
-from ..fast_hdf import FastHdfError, read_typed, reraise_required
+from ..fast_hdf import read_typed, reraise_required
 
 logger = get_logger(__name__)
 

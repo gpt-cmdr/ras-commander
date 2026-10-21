@@ -76,7 +76,7 @@ import numpy as np
 
 from ..LoggingConfig import get_logger
 from ..Decorators import log_call, standardize_input
-from ..fast_hdf import FastHdfError, read_typed, reraise_required
+from ..fast_hdf import read_typed, reraise_required
 
 logger = get_logger(__name__)
 

@@ -1067,7 +1067,7 @@ class HdfMesh:
                 return result
 
         except Exception as e:
-            reraise_required(e)
+            reraise_required(e, backend)
             if strict:
                 if isinstance(e, MeshCellPolygonError):
                     raise

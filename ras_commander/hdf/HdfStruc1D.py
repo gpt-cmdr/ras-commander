@@ -36,7 +36,7 @@ from .HdfBase import HdfBase
 from .HdfUtils import HdfUtils
 from ..Decorators import standardize_input, log_call
 from ..LoggingConfig import get_logger
-from ..fast_hdf import FastHdfError, read_typed, reraise_required
+from ..fast_hdf import read_typed, reraise_required
 
 logger = get_logger(__name__)
 

@@ -27,7 +27,7 @@ import pandas as pd
 from .HdfStruc import HdfStruc
 from ..Decorators import log_call, standardize_input
 from ..LoggingConfig import get_logger
-from ..fast_hdf import FastHdfError, read_typed, reraise_required
+from ..fast_hdf import read_typed, reraise_required
 
 logger = get_logger(__name__)
 

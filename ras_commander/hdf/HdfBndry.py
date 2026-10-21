@@ -35,7 +35,7 @@ import pandas as pd
 from shapely.geometry import LineString, MultiLineString, MultiPolygon, Point, Polygon
 
 from ..Decorators import log_call, standardize_input
-from ..fast_hdf import FastHdfError, read_typed, reraise_required
+from ..fast_hdf import read_typed, reraise_required
 from ..LoggingConfig import get_logger
 from .HdfBase import HdfBase
 from .HdfUtils import HdfUtils
