@@ -79,6 +79,9 @@ def _write_hdf(path: Path, *, with_cell_count: bool = True) -> Path:
             f"{SUMMARY}/Maximum Water Surface",
             data=np.vstack([summary_max, np.full(total, 2 / 24)]),
         )
+        f.create_dataset(
+            f"{geo}/Faces FacePoint Indexes", data=np.zeros((5, 2), dtype=int)
+        )
     return path
 
 

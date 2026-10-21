@@ -108,6 +108,26 @@ This file is the canonical local instruction file for `ras_commander/hdf/`.
   log processing failures at ERROR with path, parameters, stage and traceback,
   then return an empty GeoDataFrame, discarding partial geometry. Input/decorator
   validation exceptions remain unchanged. No status/error attributes are added.
+- Mesh time-series domains use authoritative stored scalar `Location`: `Cells`
+  and `Cell` mean cells; `Faces` means faces. Invalid, unknown, nonscalar or
+  contradictory present Location is refused, never bypassed with a name rule.
+  Only absent Location permits the immutable exact-name stable-core schema in
+  Base Output/Unsteady Time Series/2D Flow Areas: `Depth`/`Water Surface` are
+  cells; `Face Velocity`, `Face Shear Stress`, `Face Area`, and `Face Manning's n`
+  are faces. Provenance: unlabelled JUL 5.0.7 output and shared names compatible
+  with supported 6.x/7.x output/API fixtures; excerpts without File Version use
+  only this core table. Future version-specific names need qualified entries.
+  Both domain paths require numeric rank-two data, matching canonical Time rows,
+  stored geometry counts including ghosts, and valid physical-cell bounds.
+  A debug log identifies legacy rule use. Shapes, substrings and mutable
+  convenience lists never choose a domain. Unknown missing-Location names fail.
+  Numeric rank-one series matching Time retain `(time,)` for explicit eager,
+  lazy and streamed reads, without ghost flags or spatial coordinates. Default
+  cell/face discovery skips time-only diagnostics and reports invalid entries;
+  explicit malformed reads raise `ValueError`. One-row outputs are not broadcast.
+  Ghost filtering follows qualification. `Cell Hydraulic Depth` remains distinct
+  from `Depth` and WSE-minus-minimum-elevation depth. Summary wrappers retain
+  their separate existing schemas and are unchanged by these series rules.
 - Unsteady `HdfResultsQuery` velocity queries at integer time indexes prefer stored
   `Cell Velocity - Velocity X/Y` components per mesh. Validate their stored
   cell Location, time/geometry axes, physical count and velocity units; compute
