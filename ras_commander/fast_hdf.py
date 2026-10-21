@@ -34,7 +34,8 @@ logger = get_logger(__name__)
 
 __all__ = [
     "FastHdfError", "available", "close_sessions", "read_dataset", "read_datasets",
-    "read_typed", "read_attrs", "trace_reads", "native_required", "reraise_required",
+    "read_typed", "read_attrs", "read_attr", "trace_reads",
+    "native_required", "reraise_required",
     "packed_meshes", "mesh_polygons", "export_pmtiles", "export_mesh_pmtiles",
 ]
 
@@ -342,14 +343,31 @@ def read_typed(dataset: h5py.Dataset, selection=None, *, backend="auto"):
 def read_attrs(obj, *, backend="auto") -> dict:
     """Return ``{name: obj.attrs[name]}`` exactly as h5py, values from the engine.
 
-    Groups use the engine's typed group attributes; datasets in a Wave 3 read
-    family use that family's typed attributes; other datasets keep h5py (the
-    documented metadata exception). Auto falls back to h5py per attribute when the
-    engine cannot reproduce a value exactly; ``rust`` raises :class:`FastHdfError`.
-    See ``_fast_hdf_typed.read_attrs``.
+    Groups use the engine's typed group attributes and datasets its typed dataset
+    attributes (every dataset, inside or outside the engine read families). NULL
+    dataspaces become ``h5py.Empty`` and bitfields unsigned integers, as h5py.
+    Auto falls back to h5py per attribute when the engine cannot reproduce a value
+    exactly (or for a virtual/external dataset); ``rust`` raises
+    :class:`FastHdfError`. See ``_fast_hdf_typed.read_attrs``.
     """
     from . import _fast_hdf_typed
     return _fast_hdf_typed.read_attrs(obj, backend=backend)
+
+
+_NO_DEFAULT = object()
+
+
+def read_attr(obj, name, default=_NO_DEFAULT, *, backend="auto"):
+    """Exactly ``obj.attrs[name]``, or ``obj.attrs.get(name, default)`` when a default is given.
+
+    Only the requested attribute is rebuilt from the engine, so an attribute the
+    engine cannot reproduce does not refuse its siblings. Same backend policy as
+    :func:`read_attrs`. See ``_fast_hdf_typed.read_attr``.
+    """
+    from . import _fast_hdf_typed
+    if default is _NO_DEFAULT:
+        return _fast_hdf_typed.read_attr(obj, name, backend=backend)
+    return _fast_hdf_typed.read_attr(obj, name, default, backend=backend)
 
 
 def native_required() -> bool:
