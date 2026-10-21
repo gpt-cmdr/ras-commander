@@ -391,7 +391,8 @@ punctuation/spaces (producing `cell_hydraulic_depth`).
 
 ## Wave 2 / Wave 8 typed bindings (API_VERSION = 9)
 
-Engine pin 527bdf39c95ec86d235291e07e3a33b6ce21ca58 (integration/w2-perf3, engine API 7).
+Bridge API 9 added these with engine pin 527bdf3 (engine API 7). Bridge API 10 re-pins to
+e9afad3d3271adfc5ea7ac05546cc50312c4bb5e (ras-commander-rust main, engine API 8); see "Wave 3 typed bindings" below.
 TEXT_API_VERSION remains 1. Full-feature registration set: 67 entrypoints.
 
 Wave 8 additions (src/fim.rs): `mesh_geometry` (field descriptors), `mesh_geometry_tables`

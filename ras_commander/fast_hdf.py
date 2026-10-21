@@ -76,9 +76,9 @@ def _native(mode):
         if mode == "rust":
             raise FastHdfError("The optional ras-commander-fast-hdf extension is unavailable") from exc
         return None
-    if getattr(module, "API_VERSION", None) != 9:
+    if getattr(module, "API_VERSION", None) != 10:
         if mode == "rust":
-            raise FastHdfError("Incompatible ras-commander-fast-hdf API; version 9 is required")
+            raise FastHdfError("Incompatible ras-commander-fast-hdf API; version 10 is required")
         logger.warning("Ignoring incompatible ras-commander-fast-hdf extension")
         return None
     return module
@@ -152,6 +152,16 @@ def _unsupported(module, exc):
     return bool(classes) and isinstance(exc, classes)
 
 
+def _domain_refusal(exc):
+    """A typed result reader declined to qualify the layout (not a data failure).
+
+    The engine refuses typed domains it cannot prove (for example a mesh summary
+    without a stored ``Location`` attribute) but keeps the literal values readable
+    through its generic reader, which is what literal-value callers need.
+    """
+    return getattr(exc, "engine_kind", None) == "unsupported"
+
+
 def _safe_file(dataset):
     file = dataset.file
     filename = file.filename
@@ -220,8 +230,14 @@ def _checked_array(result, dtype, expected_shape):
 def read_dataset(dataset: h5py.Dataset, selection=None, *, backend="auto", threads=None):
     """Read numeric values without changing dtype, shape, or integer indexing.
 
+    The result is the literal stored selection, exactly ``dataset[selection]``.
+    Canonical 2D mesh results use the typed engine reader; when that reader
+    refuses to qualify a domain (for example a summary or series without a
+    stored ``Location`` attribute) the exact literal values come from the
+    generic native reader instead, because this function promises no domain.
     Auto mode uses h5py for unsupported types, layouts, and advanced indexing.
-    Rust mode raises instead, allowing tests to assert actual native execution.
+    Rust mode raises :class:`FastHdfError` instead, allowing tests to assert
+    actual native execution.
     """
     if not isinstance(dataset, h5py.Dataset):
         raise TypeError("dataset must be an open h5py.Dataset")
@@ -248,10 +264,16 @@ def read_dataset(dataset: h5py.Dataset, selection=None, *, backend="auto", threa
     expected = dataset.shape if slices is None else tuple(len(range(*item)) for item in slices)
     try:
         with _session(module, os.fsdecode(dataset.file.filename), threads) as session:
-            values = _read_fim_result(session, dataset, slices, threads)
-            served = ("native-typed", "mesh_result")
+            try:
+                values = _read_fim_result(session, dataset, slices, threads)
+                served = ("native-typed", "mesh_result") if values is not None else ("native-generic", None)
+            except Exception as exc:
+                if not _domain_refusal(exc):
+                    raise
+                # Typed domain unqualified: the literal generic read is exact.
+                logger.debug("literal generic read for %s: %s", dataset.name, exc)
+                values, served = None, ("native-generic", "mesh_result-literal")
             if values is None:
-                served = ("native-generic", None)
                 values = session.read_numeric(dataset.name, selection=slices)
     except Exception as exc:
         if mode == "auto" and _unsupported(module, exc):
@@ -386,11 +408,13 @@ def read_datasets(hdf_path, dataset_paths: Sequence[str], *, backend="auto", thr
                             values = session.read_mesh_boundary_batch(
                                 area, (0, rows, 1), [name for _, name in requests])
                         except Exception as exc:
-                            # Auto retains API7 generic-read semantics on typed
-                            # qualification refusals, but never hides host failures.
-                            if mode != "auto" or getattr(exc, "engine_kind", None) not in {
-                                    "unsupported", "corrupt", "not_found", "invalid_request",
-                                    "structural_topology", "invalid_geometry"}:
+                            # Typed domain refusals keep exact literal generic reads in
+                            # every mode; auto also does so for other qualification
+                            # refusals, but never hides host failures.
+                            if not _domain_refusal(exc) and (
+                                    mode != "auto" or getattr(exc, "engine_kind", None) not in {
+                                    "corrupt", "not_found", "invalid_request",
+                                    "structural_topology", "invalid_geometry"}):
                                 raise
                             native_values.update(session.read_numeric_batch(
                                 [path for path, _ in requests]))
