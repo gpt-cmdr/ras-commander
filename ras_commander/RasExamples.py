@@ -531,12 +531,14 @@ class RasExamples:
         cached = None
         if cls.csv_file_path.exists():
             try:
-                cached = pd.read_csv(cls.csv_file_path)
+                cached = pd.read_csv(cls.csv_file_path, dtype=str, keep_default_na=False)
             except Exception as exc:
                 logger.debug("Refreshing unreadable example index: %s", exc)
         cls._extract_folder_structure()
-        if cls._folder_df is not None and (cached is None or not
-                cls._folder_df.reset_index(drop=True).equals(cached.reset_index(drop=True))):
+        if cls._folder_df is not None and (
+            cached is None
+            or cls._folder_df.to_dict('records') != cached.to_dict('records')
+        ):
             cls._save_to_csv()
 
     @classmethod
