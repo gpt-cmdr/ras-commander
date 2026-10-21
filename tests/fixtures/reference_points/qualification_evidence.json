@@ -1,0 +1,217 @@
+{
+  "schema_version": 1,
+  "evidence_kind": "recovered_computed_hdf_and_retained_notebook_outputs",
+  "repository": "https://github.com/gpt-cmdr/ras-commander",
+  "source_commit": "f8a62b1a296ebe2347c1a0373bbd248118c0a44e",
+  "notebook": "examples/207_reference_lines_and_points.ipynb",
+  "permalink": "https://github.com/gpt-cmdr/ras-commander/blob/f8a62b1a296ebe2347c1a0373bbd248118c0a44e/examples/207_reference_lines_and_points.ipynb",
+  "notebook_sha256": "e0e1e2c0c8c38c4ca9924a7caf949bff22536ffd73cdd4a9e75dcd9443642ae9",
+  "notebook_git_blob_sha1": "b92a91aa1efa8636b5a6c81b35d801e38f5b50c9",
+  "saved_outputs_canonical_json_sha256": "8c77fade06cea7d6801d0b3785c056ca7fe944fc0955b855803bdea44afb323e",
+  "canonical_json_serialization": "UTF-8; sorted keys; ensure_ascii=False; separators comma and colon; list of cell_index, execution_count, outputs for cells with outputs",
+  "recorded_runtime": "HEC-RAS 6.6; notebook source names explicit executable",
+  "recorded_plan": "03",
+  "recorded_simulation_window": [
+    "1999-01-01T12:00:00",
+    "1999-01-02T12:00:00"
+  ],
+  "recorded_hdf_relative_to_work_root": "computed_d8a51a03/BaldEagleDamBrk.p03.hdf",
+  "recorded_work_root": "working/reference_points_207",
+  "saved_result_cell_index": 11,
+  "saved_result_summary": {
+    "time_steps": 145,
+    "reference_points": [
+      "RP_Upper",
+      "RP_Middle",
+      "RP_Lower"
+    ],
+    "reference_point_variables": [
+      "Velocity",
+      "Water Surface"
+    ],
+    "reference_lines": [
+      "RL_Mid"
+    ],
+    "reference_line_flow_is_signed": true
+  },
+  "computed_hdf_independently_verified": true,
+  "computed_hdf_sha256": "ecda421c4d6bdca93c0e82938a139caca577939db20cc43e16de76997bbdf400",
+  "limitations": [
+    "No new solver run or full notebook execution was performed.",
+    "This evidence does not establish hydraulic acceptance or cross-version qualification.",
+    "Historical PR-body commit 6d9ff17217df0f4a9778b3be861c1925a5d87049 was unavailable from GitHub; the retrievable PR head above anchors the actual retained notebook instead.",
+    "Native output was recovered and inspected; a new solver run, full notebook execution and cross-version qualification were not performed."
+  ],
+  "computed_hdf_bytes": 27550776,
+  "recovered_source": {
+    "host": "CLB-JACOB",
+    "path": "D:/CLB-Dev/ras-commander-refpoints/working/reference_points_207/computed_d8a51a03/BaldEagleDamBrk.p03.hdf"
+  },
+  "verified_output": {
+    "reference_point_names": [
+      "RP_Upper",
+      "RP_Middle",
+      "RP_Lower"
+    ],
+    "reference_points_xy": [
+      [
+        2000000,
+        312250
+      ],
+      [
+        2030250,
+        335250
+      ],
+      [
+        2063500,
+        352250
+      ]
+    ],
+    "point_cell_indices": [
+      14997,
+      9823,
+      5057
+    ],
+    "point_series": {
+      "sizes": {
+        "time": 145,
+        "refpt_id": 3
+      },
+      "time_start": "1999-01-01T12:00:00.000000",
+      "time_end": "1999-01-02T12:00:00.000000",
+      "variables": {
+        "Velocity": {
+          "shape": [
+            145,
+            3
+          ],
+          "dtype": "float32",
+          "values_sha256": "e68db620f81c3fa56ff0f17490459b07a07942c9f0d342994f96d61e4cff8cc2",
+          "first_row": [
+            1.5201516151428223,
+            0.0,
+            0.0
+          ],
+          "last_row": [
+            0.2964435815811157,
+            0.9260143637657166,
+            0.6304970979690552
+          ]
+        },
+        "Water Surface": {
+          "shape": [
+            145,
+            3
+          ],
+          "dtype": "float32",
+          "values_sha256": "3c72b07c245f4d33f5dc3ec5f92fa6d987b0a3ccf74344bb238f872efaed222e",
+          "first_row": [
+            602.0724487304688,
+            554.5960083007812,
+            527.7362060546875
+          ],
+          "last_row": [
+            638.2737426757812,
+            562.0354614257812,
+            536.1629028320312
+          ]
+        }
+      }
+    },
+    "line_series": {
+      "sizes": {
+        "time": 145,
+        "refln_id": 1
+      },
+      "time_start": "1999-01-01T12:00:00.000000",
+      "time_end": "1999-01-02T12:00:00.000000",
+      "variables": {
+        "Flow": {
+          "shape": [
+            145,
+            1
+          ],
+          "dtype": "float32",
+          "values_sha256": "d181eade9646fa470cd7f06f17b517f682b5658761074a98f92fa933f8de45d9",
+          "first_row": [
+            0.0
+          ],
+          "last_row": [
+            -523.4581909179688
+          ]
+        },
+        "Velocity": {
+          "shape": [
+            145,
+            1
+          ],
+          "dtype": "float32",
+          "values_sha256": "a4faa1ba9b00f2eebbbdeb9588caedf522668defc7f3b315c6a65b3cc4e9d49d",
+          "first_row": [
+            0.0
+          ],
+          "last_row": [
+            -0.2246825397014618
+          ]
+        },
+        "Water Surface": {
+          "shape": [
+            145,
+            1
+          ],
+          "dtype": "float32",
+          "values_sha256": "eafb7323213a4fe8058b4b23881418c6284d7fb6b0c679cba5d5f4e116ac6a84",
+          "first_row": [
+            570.8607788085938
+          ],
+          "last_row": [
+            576.6039428710938
+          ]
+        },
+        "Water Surface Conveyance": {
+          "shape": [
+            145,
+            1
+          ],
+          "dtype": "float32",
+          "values_sha256": "cb26d1cb6696d7ea7cd5a7766659bdc3d239ac27d1c702d034d1ff60bf615600",
+          "first_row": [
+            570.8607788085938
+          ],
+          "last_row": [
+            576.5781860351562
+          ]
+        },
+        "Water Surface Max": {
+          "shape": [
+            145,
+            1
+          ],
+          "dtype": "float32",
+          "values_sha256": "f636ddbf8509252fa072c3d4f03f3b56cb48adbc408c89c44ee9baee30f9189f",
+          "first_row": [
+            570.8607788085938
+          ],
+          "last_row": [
+            577.017822265625
+          ]
+        },
+        "Water Surface Min": {
+          "shape": [
+            145,
+            1
+          ],
+          "dtype": "float32",
+          "values_sha256": "b1e9d2ad9b2262fefd827440f17ceeef71f7e8d09798c5cd17bace711d0bee31",
+          "first_row": [
+            570.8607788085938
+          ],
+          "last_row": [
+            575.9229125976562
+          ]
+        }
+      }
+    }
+  },
+  "verification_scope": "Read-only native reference geometry/time-series extraction, notebook-display comparison at saved precision, and complete API array fingerprints. No new solver run or hydraulic acceptance."
+}

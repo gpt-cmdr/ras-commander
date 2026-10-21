@@ -89,6 +89,7 @@ class GeomLateral:
         "Pump Station=",
         "BC Line Name=",
         "Reference Line Name=",
+        "Reference Point Name=",
         "IC Point Name=",
         "LCMann Time=",
         "Chan Stop Cuts=",

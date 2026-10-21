@@ -3105,9 +3105,12 @@ class RasCmdr:
                 use_optimal_hdf_settings=True. Options are "balanced", "speed", "size",
                 and "nas". Defaults to "balanced".
             hdf_additional_variables (List[str], optional): Additional HDF output variables
-                to enable when use_optimal_hdf_settings=True.
+                to enable when use_optimal_hdf_settings=True. Baseline 2D result names
+                "Water Surface" and "Face Velocity" are accepted no-ops: they are
+                always written for computed 2D results and add no plan line.
             hdf_output_variables (List[str], optional): Additional HDF output variables
-                to enable before execution.
+                to enable before execution. The same baseline-name no-op policy
+                applies; existing baseline-name lines are preserved. Unknown labels raise.
             hdf_output_options (Dict[str, Any], optional): Explicit HDF output options
                 passed to ``RasPlan.set_hdf_output_options()`` before execution.
             hdf_output_profile (str, optional): Named HDF output profile to apply before

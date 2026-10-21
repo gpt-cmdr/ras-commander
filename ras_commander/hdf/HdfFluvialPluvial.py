@@ -13,6 +13,7 @@ List of Functions in HdfFluvialPluvial:
 """
 
 from typing import Dict, List, Tuple, Set, Optional
+from math import isfinite
 import pandas as pd
 import geopandas as gpd
 from collections import defaultdict
@@ -154,6 +155,11 @@ class HdfFluvialPluvial:
         Optionally, for polygons classified as fluvial or pluvial, if their area is less than
         min_polygon_area_acres, they are reclassified to the opposite type and merged with
         adjacent polygons of that type. Ambiguous polygons are exempt from this logic.
+        Acreage uses the projected CRS axis units converted to square meters.
+        Missing or geographic CRS skips filtering with a warning. Unresolved
+        projected units or other processing failures log a contextual ERROR with
+        traceback and return an empty GeoDataFrame; partial geometry is discarded.
+        Input validation performed by the input decorator can still raise.
 
         Args:
             hdf_path (Path): Path to the HEC-RAS plan HDF file.
@@ -169,8 +175,13 @@ class HdfFluvialPluvial:
 
         Returns:
             gpd.GeoDataFrame: A GeoDataFrame with dissolved polygons for 'fluvial', 'pluvial',
-                              and 'ambiguous' zones.
+                              and 'ambiguous' zones. Processing failure returns an empty
+                              GeoDataFrame; partial geometry is never returned as complete.
+
+        Raises:
+            Exception: Existing input/decorator validation errors are not suppressed.
         """
+        stage = "data loading"
         try:
             # --- 1. Data Loading and Preparation ---
             logger.debug("Loading mesh and results data...")
@@ -181,9 +192,11 @@ class HdfFluvialPluvial:
             )
             cell_times = max_ws_df.set_index('cell_id')['maximum_water_surface_time'].to_dict()
             
+            stage = "adjacency"
             logger.debug("Processing cell adjacencies...")
             cell_adjacency, _ = HdfFluvialPluvial._process_cell_adjacencies(cell_polygons_gdf)
 
+            stage = "seeding"
             # --- 2. Seeding the Classifications ---
             logger.debug(f"Identifying initial boundary seeds with delta_t = {delta_t} hours...")
             boundary_pairs = HdfFluvialPluvial._get_boundary_cell_pairs(cell_adjacency, cell_times, delta_t)
@@ -198,6 +211,7 @@ class HdfFluvialPluvial:
                     classifications.loc[cell1] = 'pluvial'
                     classifications.loc[cell2] = 'fluvial'
             
+            stage = "region growth"
             # --- 3. Iterative Region Growth ---
             logger.debug(f"Starting iterative region growth with tolerance = {temporal_tolerance_hours} hours...")
             fluvial_frontier = set(classifications[classifications == 'fluvial'].index)
@@ -258,6 +272,7 @@ class HdfFluvialPluvial:
             
             logger.debug(f"Region growing completed in {iteration} iterations.")
             
+            stage = "dissolve"
             # --- 4. Finalization and Dissolving ---
             # Classify any remaining unclassified (likely isolated) cells as ambiguous
             classifications[classifications == 'unclassified'] = 'ambiguous'
@@ -268,6 +283,7 @@ class HdfFluvialPluvial:
             logger.debug("Dissolving polygons by classification...")
             final_regions_gdf = classified_gdf.dissolve(by='classification', aggfunc='first').reset_index()
 
+            stage = "acreage filtering"
             # --- 5. Minimum Polygon Area Filtering and Merging (if requested) ---
             if min_polygon_area_acres is not None:
                 logger.debug(f"Applying minimum polygon area filter: {min_polygon_area_acres} acres")
@@ -279,9 +295,25 @@ class HdfFluvialPluvial:
                         f"skipped area filter min_polygon_area_acres={min_polygon_area_acres}."
                     )
                 else:
+                    axes = final_regions_gdf.crs.axis_info[:2]
+                    if len(axes) != 2 or any(
+                        not axis.unit_name or axis.unit_name.lower() == 'unknown'
+                        or axis.unit_conversion_factor is None
+                        or not isfinite(axis.unit_conversion_factor)
+                        or axis.unit_conversion_factor <= 0
+                        for axis in axes
+                    ):
+                        raise ValueError(
+                            "Acre filtering requires known projected horizontal CRS units"
+                        )
+                    square_metres_per_native_area = (
+                        axes[0].unit_conversion_factor * axes[1].unit_conversion_factor
+                    )
                     # Explode to individual polygons for area filtering
                     exploded = final_regions_gdf.explode(index_parts=False, ignore_index=True)
-                    exploded['area_acres'] = exploded.geometry.area / 4046.8564224
+                    exploded['area_acres'] = (
+                        exploded.geometry.area * square_metres_per_native_area / 4046.8564224
+                    )
 
                     # Only consider fluvial and pluvial polygons for area filtering
                     mask_fluvial = (exploded['classification'] == 'fluvial') & (exploded['area_acres'] < min_polygon_area_acres)
@@ -300,6 +332,7 @@ class HdfFluvialPluvial:
                     final_regions_gdf = exploded.dissolve(by='classification', aggfunc='first').reset_index()
                     logger.debug("Redissolved polygons after reclassification of small areas.")
 
+            stage = "summary"
             component_counts = (
                 final_regions_gdf.explode(index_parts=False)
                 .groupby("classification", sort=True)
@@ -318,7 +351,7 @@ class HdfFluvialPluvial:
             logger.error(
                 f"Error generating fluvial-pluvial polygons for {hdf_path} "
                 f"(delta_t={delta_t} hr, tolerance={temporal_tolerance_hours} hr, "
-                f"min_polygon_area_acres={min_polygon_area_acres}): {str(e)}",
+                f"min_polygon_area_acres={min_polygon_area_acres}, stage={stage}): {str(e)}",
                 exc_info=True,
             )
             return gpd.GeoDataFrame()
