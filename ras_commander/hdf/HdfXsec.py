@@ -47,7 +47,7 @@ from ..Decorators import standardize_input, log_call
 from . import _HdfXsecSchema
 from .HdfBase import HdfBase
 from .HdfUtils import HdfUtils
-from ..fast_hdf import read_typed, reraise_required
+from ..fast_hdf import read_attrs, read_typed, reraise_required
 from ..LoggingConfig import get_logger
 
 
@@ -401,7 +401,7 @@ class HdfXsec:
             objects.append(geometry)
 
         for obj in objects:
-            for name, value in obj.attrs.items():
+            for name, value in read_attrs(obj).items():
                 normalized = str(name).strip().lower().replace("_", " ")
                 if vertical_units is None and normalized in unit_names:
                     vertical_units = HdfXsec._hdf_text(value)

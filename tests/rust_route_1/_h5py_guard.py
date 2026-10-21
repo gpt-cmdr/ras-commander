@@ -7,6 +7,12 @@ h5py directly. ``watch_h5py_reads()`` patches ``h5py.Dataset.__getitem__`` and
 ``fields`` / ``asstr`` wrappers all end in one of these) and records every value
 read together with the first calling frame outside h5py.
 
+PY-ROUTE-3 (review P2-2) extends the watch to attribute values:
+``h5py.AttributeManager.__getitem__`` is the single high-level attribute value
+read (``attrs[name]``, ``attrs.get``, ``attrs.items()``/``values()``, ``dict(attrs)``
+and iteration of the item/value views all end there). Key walks, ``in`` checks,
+``len`` and ``get_id(name).dtype``/``shape`` read no value and are not recorded.
+
 ``offending(records)`` returns the reads that required-native mode does not
 allow. The documented required-mode metadata exception is:
 
@@ -17,8 +23,12 @@ allow. The documented required-mode metadata exception is:
 
 Any numeric value read (integer, float, bool, complex, enum, vlen numeric), any
 compound with a numeric member, and any opaque/unknown class is an offender,
-whether or not it came through the router (review-r2 P2-A). HDF
-attributes (``.attrs``) are metadata and are not dataset value reads.
+whether or not it came through the router (review-r2 P2-A).
+
+Attribute value reads through h5py are offenders whatever their class, numeric
+*and* text (the engine types attributes exactly; ``fast_hdf.read_attrs`` /
+``read_attr`` serve them natively). The only allowances are explicit and narrow:
+reads by the test harness, and the classes listed in ``ATTRIBUTE_ALLOWED_KINDS``.
 """
 from contextlib import contextmanager
 import os
@@ -27,13 +37,21 @@ import sys
 import h5py
 
 _H5PY_DIR = os.path.dirname(h5py.__file__)
+# collections.abc Mapping.get/views call AttributeManager.__getitem__ on behalf of the caller
+# (the module is frozen in CPython 3.11+, so its code objects report "<frozen _collections_abc>").
+_ABC_FILES = {"<frozen _collections_abc>",
+              os.path.normcase(os.path.abspath(__import__("_collections_abc").__file__))}
+# Attribute classes that may be read through h5py in required mode, each with its reason.
+ATTRIBUTE_ALLOWED_KINDS = {}
 _ROUTER = os.path.join("ras_commander", "_fast_hdf_typed.py")
 _HARNESS = tuple(os.path.join("tests", suite, "_cases.py") for suite in ("rust_route_1", "rust_route_2"))
 
 
 def _caller():
     frame = sys._getframe(3)
-    while frame is not None and frame.f_code.co_filename.startswith(_H5PY_DIR):
+    while frame is not None and (frame.f_code.co_filename.startswith(_H5PY_DIR)
+                                 or frame.f_code.co_filename in _ABC_FILES
+                                 or os.path.normcase(frame.f_code.co_filename) in _ABC_FILES):
         frame = frame.f_back
     if frame is None:
         return "?", "?", 0
@@ -85,12 +103,47 @@ def _record(records, dataset, how):
     })
 
 
+def attribute_kind(attrs, name):
+    """Class of one stored attribute, from its type and dataspace (no value read).
+
+    ``classify`` of the stored dtype, refined for text into ``string-fixed`` /
+    ``string-vlen``; a NULL dataspace (h5py ``Empty``) is ``null:<class>``.
+    """
+    attr = attrs.get_id(name)
+    dtype = attr.dtype
+    kind = classify(dtype)
+    if kind == "string":
+        kind = "string-vlen" if h5py.check_vlen_dtype(dtype) is not None else "string-fixed"
+    if attr.get_space().get_simple_extent_type() == h5py.h5s.NULL:
+        kind = f"null:{kind}"
+    return kind
+
+
+def _record_attr(records, attrs, name):
+    try:
+        if name not in attrs:
+            return  # h5py raises its own KeyError; nothing is read
+        kind = attribute_kind(attrs, name)
+        owner = h5py.h5i.get_name(attrs._id)
+        owner = owner.decode("utf-8", "replace") if isinstance(owner, bytes) else str(owner)
+    except Exception:  # closed handle: let h5py raise its own error
+        return
+    filename, function, line = _caller()
+    records.append({
+        "path": f"{owner}@{name}", "kind": kind, "how": "attribute", "target": "attribute",
+        "caller": f"{os.path.basename(filename)}:{function}:{line}",
+        "via_router": filename.replace("/", os.sep).endswith(_ROUTER),
+        "harness": filename.replace("/", os.sep).endswith(_HARNESS),
+    })
+
+
 @contextmanager
 def watch_h5py_reads():
-    """Record every h5py dataset value read made while the context is active."""
+    """Record every h5py dataset and attribute value read made while the context is active."""
     records = []
     getitem = h5py.Dataset.__getitem__
     read_direct = h5py.Dataset.read_direct
+    attr_getitem = h5py.AttributeManager.__getitem__
 
     def watched_getitem(self, args, new_dtype=None):
         _record(records, self, "getitem")
@@ -100,21 +153,37 @@ def watch_h5py_reads():
         _record(records, self, "read_direct")
         return read_direct(self, *args, **kwargs)
 
+    def watched_attr_getitem(self, name):
+        _record_attr(records, self, name)
+        return attr_getitem(self, name)
+
     h5py.Dataset.__getitem__ = watched_getitem
     h5py.Dataset.read_direct = watched_read_direct
+    h5py.AttributeManager.__getitem__ = watched_attr_getitem
     try:
         yield records
     finally:
         h5py.Dataset.__getitem__ = getitem
         h5py.Dataset.read_direct = read_direct
+        h5py.AttributeManager.__getitem__ = attr_getitem
 
 
 def offending(records):
     """Reads that violate the required-native value-read guarantee.
 
-    Allowed (review-r2 P2-A): harness reads, text datasets and text-only compound
-    identity tables. Any numeric value, any compound with a numeric member and any
-    opaque/unknown class read through h5py is an offender, whoever made the read.
+    Datasets (review-r2 P2-A): harness reads, text datasets and text-only compound
+    identity tables are allowed; any numeric value, any compound with a numeric
+    member and any opaque/unknown class read through h5py is an offender, whoever
+    made the read. Attributes (PY-ROUTE-3): every value read through h5py is an
+    offender except harness reads and ``ATTRIBUTE_ALLOWED_KINDS``.
     """
-    return [r for r in records
-            if not r["harness"] and r["kind"] not in {"string", "compound-text"}]
+    out = []
+    for r in records:
+        if r["harness"]:
+            continue
+        if r.get("target") == "attribute":
+            if r["kind"] not in ATTRIBUTE_ALLOWED_KINDS:
+                out.append(r)
+        elif r["kind"] not in {"string", "compound-text"}:
+            out.append(r)
+    return out

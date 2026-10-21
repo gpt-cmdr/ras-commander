@@ -107,7 +107,7 @@ import pandas as pd
 
 from ..Decorators import log_call, standardize_input
 from ..fast_hdf import read_dataset
-from ..fast_hdf import FastHdfError, read_typed, reraise_required
+from ..fast_hdf import FastHdfError, read_attr, read_typed, reraise_required
 from ..LoggingConfig import get_logger
 from .HdfBase import HdfBase
 from .HdfUtils import HdfUtils
@@ -546,15 +546,15 @@ class HdfMesh:
             with h5py.File(hdf_path, "r") as hdf_file:
                 geometry_group = hdf_file.get("Geometry")
                 hdf_file_version = _decode_hdf_scalar(
-                    hdf_file.attrs.get("File Version")
+                    read_attr(hdf_file, "File Version", None)
                 )
                 geometry_version = _decode_hdf_scalar(
-                    geometry_group.attrs.get("Geometry Version")
+                    read_attr(geometry_group, "Geometry Version", None)
                     if geometry_group is not None
                     else None
                 )
                 complete_geometry = _decode_hdf_scalar(
-                    geometry_group.attrs.get("Complete Geometry")
+                    read_attr(geometry_group, "Complete Geometry", None)
                     if geometry_group is not None
                     else None
                 )

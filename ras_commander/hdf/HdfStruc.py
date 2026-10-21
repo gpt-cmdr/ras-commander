@@ -33,7 +33,7 @@ from ..Decorators import log_call, standardize_input
 from ..LoggingConfig import get_logger
 from .HdfBase import HdfBase
 from .HdfUtils import HdfUtils
-from ..fast_hdf import read_attrs, read_typed, reraise_required
+from ..fast_hdf import read_attr, read_attrs, read_typed, reraise_required
 
 logger = get_logger(__name__)
 
@@ -235,8 +235,8 @@ class HdfStruc:
                 if connections_df is not None
                 else native
             )
-            version = HdfUtils.convert_ras_string(hdf.attrs.get("File Version", ""))
-            file_type = HdfUtils.convert_ras_string(hdf.attrs.get("File Type", ""))
+            version = HdfUtils.convert_ras_string(read_attr(hdf, "File Version", ""))
+            file_type = HdfUtils.convert_ras_string(read_attr(hdf, "File Type", ""))
             qualified = (
                 str(version).startswith("HEC-RAS 6.6 ")
                 and file_type == "HEC-RAS Results"

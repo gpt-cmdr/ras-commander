@@ -109,7 +109,7 @@ from .._rasmap_schema import rasmap_dataframe_is_usable
 from ..Decorators import log_call, standardize_input
 from ..LoggingConfig import get_logger
 from .. import fast_results
-from ..fast_hdf import FastHdfError, read_attrs, read_dataset, read_typed, reraise_required
+from ..fast_hdf import FastHdfError, read_attr, read_attrs, read_dataset, read_typed, reraise_required
 from .HdfBase import HdfBase
 from .HdfMesh import HdfMesh
 from .HdfResultView import HdfResultView, Selection
@@ -450,7 +450,7 @@ class HdfResultsMesh:
                     f"Expected a 1D or 2D result dataset, got {dataset.shape}"
                 )
             units = HdfResultsMesh._decode_hdf_attr(
-                dataset.attrs.get("Units", "")
+                read_attr(dataset, "Units", "")
             )
             shape = tuple(int(value) for value in dataset.shape)
             dtype = dataset.dtype.str
@@ -2658,7 +2658,7 @@ class HdfResultsMesh:
                         else:
                             values = read_dataset(dataset)
                         units = HdfResultsMesh._decode_hdf_attr(
-                            dataset.attrs.get("Units", "")
+                            read_attr(dataset, "Units", "")
                         )
 
                         if truncate:
@@ -2776,7 +2776,7 @@ class HdfResultsMesh:
             dataset = hdf_path[path]
             values = read_dataset(dataset)
             units = HdfResultsMesh._decode_hdf_attr(
-                dataset.attrs.get("Units", "")
+                read_attr(dataset, "Units", "")
             )
             
             # Get start time and timesteps
@@ -3049,7 +3049,7 @@ class HdfResultsMesh:
                 )
 
             frame.attrs["mesh_name"] = mesh_name
-            for attr_name, attr_value in group.attrs.items():
+            for attr_name, attr_value in read_attrs(group).items():
                 if isinstance(attr_value, bytes):
                     decoded_value = attr_value.decode("utf-8")
                 elif isinstance(attr_value, np.ndarray):

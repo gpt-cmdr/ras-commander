@@ -43,7 +43,7 @@ from .HdfBase import HdfBase
 from .HdfUtils import HdfUtils
 from ..Decorators import standardize_input, log_call
 from ..LoggingConfig import get_logger
-from ..fast_hdf import read_typed
+from ..fast_hdf import read_attr, read_typed
 
 xr = optional_module("xarray", "Returning xarray results from HdfResultsXsec")
 
@@ -316,7 +316,7 @@ class HdfResultsXsec:
                 frame[f"maximum_{variable_slug}_time"] = maximum_times
 
                 units[variable_slug] = HdfResultsXsec._decode_reference_attr(
-                    dataset.attrs.get("Units", "")
+                    read_attr(dataset, "Units", "")
                 )
                 native_variables[variable_slug] = str(variable_name)
 
@@ -685,7 +685,7 @@ class HdfResultsXsec:
 
                 values = read_typed(dataset, slice(None))
                 units = HdfResultsXsec._decode_reference_attr(
-                    dataset.attrs.get("Units", "")
+                    read_attr(dataset, "Units", "")
                 )
                 da = xr.DataArray(
                     values,

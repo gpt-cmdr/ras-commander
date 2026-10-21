@@ -43,7 +43,7 @@ from ..Decorators import log_call, standardize_input
 from ..LoggingConfig import get_logger
 from .HdfBase import HdfBase
 from .HdfUtils import HdfUtils
-from ..fast_hdf import read_attrs, read_typed, reraise_required
+from ..fast_hdf import read_attr, read_attrs, read_typed, reraise_required
 
 logger = get_logger(__name__)
 
@@ -175,10 +175,8 @@ class HdfLandCover:
             if areas_path not in hdf:
                 raise RuntimeError(f"No 2D flow areas in {hdf_path.name}.")
             geometry = hdf.get("Geometry")
-            attributes = geometry.attrs if geometry is not None else {}
-
             def decode_attribute(name: str) -> Optional[str]:
-                value = attributes.get(name)
+                value = read_attr(geometry, name, None) if geometry is not None else None
                 if value is None:
                     return None
                 if isinstance(value, (bytes, np.bytes_)):

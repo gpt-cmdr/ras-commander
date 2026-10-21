@@ -76,7 +76,7 @@ import numpy as np
 
 from ..LoggingConfig import get_logger
 from ..Decorators import log_call, standardize_input
-from ..fast_hdf import read_typed, reraise_required
+from ..fast_hdf import read_attr, read_typed, reraise_required
 
 logger = get_logger(__name__)
 
@@ -228,7 +228,7 @@ class HdfHydraulicTables:
 
             # Get column names from Variables attribute
             if 'Variables' in xsec_value.attrs:
-                variables = xsec_value.attrs['Variables']
+                variables = read_attr(xsec_value, 'Variables')
                 # Variables is Nx2 array: [name, units]
                 col_names = [var[0].decode('utf-8').strip() for var in variables]
 

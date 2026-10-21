@@ -35,7 +35,7 @@ from .HdfUtils import HdfUtils
 from ..Decorators import standardize_input, log_call
 from ..LoggingConfig import get_logger
 from .HdfResultsMesh import HdfResultsMesh
-from ..fast_hdf import read_typed
+from ..fast_hdf import read_attr, read_typed
 
 gpd = optional_module("geopandas", "Returning GeoDataFrame results from HdfPipe")
 xr = optional_module("xarray", "Returning xarray results from HdfPipe")
@@ -987,7 +987,7 @@ class HdfPipe:
             )
 
             # Add attributes
-            units = hdf[data_path].attrs.get('Units', b'')
+            units = read_attr(hdf[data_path], 'Units', b'')
             da.attrs['units'] = units.decode('utf-8') if isinstance(units, bytes) else str(units)
             da.attrs['variable'] = variable
 

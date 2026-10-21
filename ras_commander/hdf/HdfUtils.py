@@ -779,8 +779,9 @@ class HdfUtils:
             return CrsEvidence(source, path, CRS_EVIDENCE_MISSING_FILE)
         try:
             if kind == "hdf":
+                from ..fast_hdf import read_attr
                 with h5py.File(path, "r") as hdf_file:
-                    value = hdf_file.attrs.get("Projection")
+                    value = read_attr(hdf_file, "Projection", None)
                 if isinstance(value, np.ndarray):
                     if value.size != 1:
                         return CrsEvidence(source, path, CRS_EVIDENCE_INVALID,
@@ -808,6 +809,8 @@ class HdfUtils:
                     wkt = src.crs.to_wkt() if src.crs else None
                 return HdfUtils._evidence_from_wkt(source, path, wkt)
         except Exception as e:
+            from ..fast_hdf import reraise_required
+            reraise_required(e)
             return CrsEvidence(source, path, CRS_EVIDENCE_UNREADABLE, detail=str(e))
         return CrsEvidence(source, path, CRS_EVIDENCE_UNREADABLE,
                            detail=f"unsupported file type '{suffix}'")
