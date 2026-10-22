@@ -488,10 +488,27 @@ numeric storage only. Family-level errors in `stored_family_index` are reported 
 `failures`, never dropped; since bridge API 11 the Python router also surfaces them in
 required-mode refusals and in the trace.
 
+## Engine API 10 repin (API_VERSION = 11)
+
+Engine pin 3c2d4799ffdad01452682b82ca64305279ecc679 (ras-commander-rust engine/hardening-20261021,
+engine API 10). The bindings and API_VERSION are unchanged from the API 9 set below. Behaviour changes
+from the engine:
+
+- Mesh cell polygon rings follow the ras-commander Python contract (clockwise, starting at the first
+  listed face), so `mesh_polygons` and the Python `HdfMesh.get_mesh_cell_polygons` agree byte for byte.
+- Malformed-input hardening: bounded soft-link resolution, decoded chunk size bounded before
+  allocation (256 MiB default), checked size arithmetic, chunk-cache recovery after a decoder panic,
+  attribute element counts checked against their payload.
+- `read_numeric`, `read_numeric_batch` and `read_topology` (used by `HdfSession` numeric reads and the
+  reader) now refuse more than `DEFAULT_READ_MAX_BYTES` (2 GiB) of decoded values before allocating.
+  `auto` mode falls back to h5py for such reads; `rust` (required) mode raises `FastHdfError`. The
+  engine's additive `*_bounded` variants are not bound yet.
+- The engine LICENSE names CLB Engineering Corporation (`licenses/ras-commander-rust-LICENSE.txt`).
+
 ## Engine API 9 bindings (API_VERSION = 11)
 
 Engine pin 435ddb4b35c30507127a2656dae5d85b214553ea (ras-commander-rust engine/route2-gaps-20261021,
-engine API 9). Full-feature registration set: 78 entrypoints (77 plus the
+engine API 9; superseded by the API 10 repin above). Full-feature registration set: 78 entrypoints (77 plus the
 `_panic_for_test` hook; see "Panic containment" below).
 
 | Binding | Engine API | Returns |
