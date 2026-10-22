@@ -42,6 +42,7 @@ from .._ras_text import _write_ras_text
 from ..ComputeResults import GeometryPreprocessResult
 from ..Decorators import log_call
 from ..LoggingConfig import get_logger
+from ..fast_hdf import read_attr, reraise_required
 from ..RasBco import BcoMonitor
 from ..RasPlan import RasPlan
 from ..RasPrj import ras
@@ -907,7 +908,7 @@ class GeomPreprocessor:
             import h5py
 
             with h5py.File(path, "r") as hdf:
-                if not hdf.attrs.get("File Type"):
+                if not read_attr(hdf, "File Type", None):
                     return False, "root File Type attribute is absent"
                 if "Geometry" not in hdf:
                     return False, "/Geometry group is absent"
@@ -956,6 +957,7 @@ class GeomPreprocessor:
                     return False, "no recognized geometry feature collection is populated"
                 return True, f"geometry ready: {', '.join(populated)}"
         except Exception as exc:
+            reraise_required(exc)
             return False, f"could not inspect geometry HDF: {type(exc).__name__}: {exc}"
 
     @staticmethod
@@ -1331,10 +1333,10 @@ class GeomPreprocessor:
             )
 
         file_type = GeomPreprocessor._decode_hdf_attribute(
-            hdf.attrs.get("File Type")
+            read_attr(hdf, "File Type", None)
         )
         file_version = GeomPreprocessor._decode_hdf_attribute(
-            hdf.attrs.get("File Version")
+            read_attr(hdf, "File Version", None)
         )
         if file_type != "HEC-RAS Geometry":
             raise ValueError(

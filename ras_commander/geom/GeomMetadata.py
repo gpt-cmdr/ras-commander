@@ -40,6 +40,7 @@ from typing import Any, Dict, Optional, Union
 import h5py
 
 from ..LoggingConfig import get_logger
+from ..fast_hdf import read_typed
 from ..Decorators import log_call
 
 logger = get_logger(__name__)
@@ -302,7 +303,7 @@ class GeomMetadata:
         if path not in hdf:
             return result
 
-        attrs = hdf[path][()]
+        attrs = read_typed(hdf[path])
         dtype_names = attrs.dtype.names or ()
 
         # Older HDFs do not always expose Type. That is a supported schema
@@ -357,7 +358,7 @@ class GeomMetadata:
         attrs_path = f"{base_path}/Attributes"
         attributes_present = attrs_path in hdf
         if attributes_present:
-            attrs = hdf[attrs_path][()]
+            attrs = read_typed(hdf[attrs_path])
             dtype_names = attrs.dtype.names or ()
             if 'Name' not in dtype_names:
                 raise ValueError(f"2D area Attributes dataset has no Name field: {attrs_path}")
@@ -378,7 +379,7 @@ class GeomMetadata:
         cell_info_path = f"{base_path}/Cell Info"
         cell_rows = 0
         if cell_info_path in hdf:
-            cell_info = hdf[cell_info_path][()]
+            cell_info = read_typed(hdf[cell_info_path])
             cell_rows = int(cell_info.shape[0]) if cell_info.ndim else 0
             if cell_info.size == 0:
                 result['mesh_cell_count'] = 0

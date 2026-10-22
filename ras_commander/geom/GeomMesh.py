@@ -93,6 +93,7 @@ from .._geometry_association import (
     resolve_association_attr_path as _shared_resolve_association_attr_path,
 )
 from ..LoggingConfig import get_logger
+from ..fast_hdf import read_attr, read_typed, reraise_required
 from .GeomMeshDataclasses import (
     BCConflict,
     BCFixResult,
@@ -303,7 +304,7 @@ def _grid_anchor_from_hdf(
     path = Path(hdf_path)
     with h5py.File(path, "r") as hdf:
         group = hdf["Geometry/2D Flow Areas"]
-        attrs = group["Attributes"][()]
+        attrs = read_typed(group["Attributes"])
         names = [_decode_hdf_text(value).strip() for value in attrs["Name"]]
         if mesh_name is not None:
             if mesh_name not in names:
@@ -316,8 +317,8 @@ def _grid_anchor_from_hdf(
             if not 0 <= mesh_index < len(names):
                 raise ValueError(f"mesh_index {mesh_index} out of range for {path.name}")
             index = mesh_index
-        info = group["Polygon Info"][()]
-        points = group["Polygon Points"][()]
+        info = read_typed(group["Polygon Info"])
+        points = read_typed(group["Polygon Points"])
         start, count = int(info[index][0]), int(info[index][1])
         ring = np.asarray(points[start : start + count], dtype=float)
         dx = float(attrs["Spacing dx"][index])
@@ -762,7 +763,7 @@ def _screening_inset(hdf_path):
     """Return a half-foot inset expressed in geometry length units."""
     import h5py
     with h5py.File(hdf_path, "r") as hf:
-        units = hf.attrs.get("Units System", "")
+        units = read_attr(hf, "Units System", "")
     if isinstance(units, bytes):
         units = units.decode("utf-8")
     if str(units) == "US Customary":
@@ -1256,8 +1257,8 @@ def _read_bc_features(area_group, shapely_line_cls) -> list[dict]:
         bc_feature = area_group["BC Lines"][bc_name]
         if not hasattr(bc_feature, "keys") or "Coordinates" not in bc_feature:
             continue
-        coords = bc_feature["Coordinates"][:]
-        bc_type_raw = bc_feature.attrs.get("Type", "")
+        coords = read_typed(bc_feature["Coordinates"], slice(None))
+        bc_type_raw = read_attr(bc_feature, "Type", "")
         if hasattr(bc_type_raw, "decode"):
             bc_type = bc_type_raw.decode("utf-8", errors="replace").strip("\x00").strip()
         else:
@@ -1276,9 +1277,9 @@ def _read_bc_features(area_group, shapely_line_cls) -> list[dict]:
 def _read_bc_face_segments(area_group, shapely_line_cls) -> List[tuple]:
     """Read perimeter faces for one 2D flow area."""
     face_segments: List[tuple] = []
-    fp_coords = area_group["FacePoints Coordinate"][:]
-    face_fp_idx = area_group["Faces FacePoint Indexes"][:]
-    perim_info = area_group["Faces Perimeter Info"][:]
+    fp_coords = read_typed(area_group["FacePoints Coordinate"], slice(None))
+    face_fp_idx = read_typed(area_group["Faces FacePoint Indexes"], slice(None))
+    perim_info = read_typed(area_group["Faces Perimeter Info"], slice(None))
 
     for fid in range(len(face_fp_idx)):
         row = perim_info[fid]
@@ -1751,7 +1752,7 @@ def _read_mesh_metadata_from_hdf(
 
     with h5py.File(str(hdf_path), "r") as hf:
         if attrs_key in hf:
-            data = hf[attrs_key][:]
+            data = read_typed(hf[attrs_key], slice(None))
             dtype_names = data.dtype.names or ()
             for i in range(len(data)):
                 if "Name" in dtype_names:
@@ -1851,7 +1852,7 @@ def _read_cell_size_from_hdf(
         with h5py.File(str(hdf_path), "r") as hf:
             if attrs_key not in hf:
                 return fallback
-            data = hf[attrs_key][:]
+            data = read_typed(hf[attrs_key], slice(None))
             if "Spacing dx" not in data.dtype.names:
                 return fallback
             for i in range(len(data)):
@@ -1862,8 +1863,8 @@ def _read_cell_size_from_hdf(
                 dx = float(data["Spacing dx"][i])
                 if dx > 0:
                     return dx
-    except Exception:
-        pass
+    except Exception as exc:
+        reraise_required(exc)
     return fallback
 
 
@@ -2455,7 +2456,7 @@ def _hdf_flow_area_perimeter(
 
     with h5py.File(str(hdf_path), "r") as hdf:
         group = hdf["Geometry/2D Flow Areas"]
-        attributes = group["Attributes"][()]
+        attributes = read_typed(group["Attributes"])
         names = []
         for value in attributes["Name"]:
             if isinstance(value, (bytes, np.bytes_)):
@@ -2470,10 +2471,10 @@ def _hdf_flow_area_perimeter(
                 f"2D flow area {mesh_name!r} resolved to {len(matches)} HDF rows"
             )
         point_start, point_count = (
-            int(value) for value in group["Polygon Info"][matches[0], :2]
+            int(value) for value in read_typed(group["Polygon Info"], (matches[0], slice(None, 2)))
         )
         return np.asarray(
-            group["Polygon Points"][point_start : point_start + point_count],
+            read_typed(group["Polygon Points"], slice(point_start, point_start + point_count)),
             dtype=float,
         )
 
@@ -2538,7 +2539,7 @@ def _hdf_polyline_features(
                 "Lateral Structure Count",
             )
             observed_counts = [
-                int(group.attrs[name])
+                int(read_attr(group, name))
                 for name in count_attributes
                 if name in group.attrs
             ]
@@ -2549,15 +2550,15 @@ def _hdf_polyline_features(
         raise RuntimeError(
             f"{group_path} is missing required dataset(s): {', '.join(missing)}"
         )
-    attributes = group["Attributes"][()]
-    info = group[info_name][()]
-    points = group[points_name][()]
+    attributes = read_typed(group["Attributes"])
+    info = read_typed(group[info_name])
+    points = read_typed(group[points_name])
     if len(attributes) != len(info):
         raise RuntimeError(
             f"{group_path} Attributes rows ({len(attributes)}) do not match "
             f"{info_name} rows ({len(info)})"
         )
-    parts = group[parts_name][()] if parts_name in group else None
+    parts = read_typed(group[parts_name]) if parts_name in group else None
     features: list[dict[str, Any]] = []
     for index, row in enumerate(info):
         if len(row) < 2 or any(
@@ -2647,9 +2648,9 @@ def _hdf_polygon_features(
         raise RuntimeError(
             f"{group_path} is missing required dataset(s): {', '.join(missing)}"
         )
-    attributes = group["Attributes"][()]
-    info = group["Polygon Info"][()]
-    points = group["Polygon Points"][()]
+    attributes = read_typed(group["Attributes"])
+    info = read_typed(group["Polygon Info"])
+    points = read_typed(group["Polygon Points"])
     if len(attributes) != len(info):
         raise RuntimeError(
             f"{group_path} Attributes rows ({len(attributes)}) do not match "
@@ -2657,7 +2658,7 @@ def _hdf_polygon_features(
         )
     if points.ndim != 2 or points.shape[1] < 2:
         raise RuntimeError(f"{group_path}/Polygon Points must contain XY coordinates")
-    parts = group["Polygon Parts"][()] if "Polygon Parts" in group else None
+    parts = read_typed(group["Polygon Parts"]) if "Polygon Parts" in group else None
     features: list[dict[str, Any]] = []
     for index, row in enumerate(info):
         if len(row) < 2 or any(
@@ -3967,7 +3968,7 @@ class GeomMesh:
         with h5py.File(str(hdf_path), "r") as hf:
             if rr_key not in hf:
                 return result
-            data = hf[rr_key][:]
+            data = read_typed(hf[rr_key], slice(None))
             for i, row in enumerate(data):
                 name = row["Name"].decode("utf-8", errors="replace").strip()
                 result.append((i, name))
@@ -4104,7 +4105,7 @@ class GeomMesh:
         with h5py.File(str(hdf_path), "r") as hf:
             if rr_key not in hf:
                 return result
-            data = hf[rr_key][:]
+            data = read_typed(hf[rr_key], slice(None))
             has_dx = "Spacing dx" in data.dtype.names
             has_dy = "Spacing dy" in data.dtype.names
             for i, row in enumerate(data):
@@ -4345,7 +4346,7 @@ class GeomMesh:
         }
         with h5py.File(hdf_path, "r") as hdf:
             key = "Geometry/2D Flow Area Refinement Regions/Attributes"
-            attributes = _coerce_refinement_region_attributes(hdf[key][()]) if key in hdf else []
+            attributes = _coerce_refinement_region_attributes(read_typed(hdf[key])) if key in hdf else []
         output: list[dict[str, Any]] = []
         rows = []
         repairs = []
