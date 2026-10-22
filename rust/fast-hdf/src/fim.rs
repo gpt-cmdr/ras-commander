@@ -43,10 +43,12 @@ fn mesh_summary_inventory<'py>(
     area: &str,
     max_bytes: usize,
 ) -> PyResult<Bound<'py, PyDict>> {
-    let i = py
-        .detach(|| ReadOnlyHdfSession::open(path)?.mesh_summary_inventory(area, max_bytes))
-        .map_err(crate::reader::err)?;
-    inventory(py, i)
+    crate::panic_guard::guard(|| {
+        let i = py
+            .detach(|| ReadOnlyHdfSession::open(path)?.mesh_summary_inventory(area, max_bytes))
+            .map_err(crate::reader::err)?;
+        inventory(py, i)
+    })
 }
 
 #[pyfunction]
@@ -57,10 +59,12 @@ fn mesh_series_inventory<'py>(
     area: &str,
     max_bytes: usize,
 ) -> PyResult<Bound<'py, PyDict>> {
-    let i = py
-        .detach(|| ReadOnlyHdfSession::open(path)?.mesh_series_inventory(area, max_bytes))
-        .map_err(crate::reader::err)?;
-    inventory(py, i)
+    crate::panic_guard::guard(|| {
+        let i = py
+            .detach(|| ReadOnlyHdfSession::open(path)?.mesh_series_inventory(area, max_bytes))
+            .map_err(crate::reader::err)?;
+        inventory(py, i)
+    })
 }
 
 #[pyfunction]
@@ -71,10 +75,12 @@ fn mesh_boundary_inventory<'py>(
     area: &str,
     max_bytes: usize,
 ) -> PyResult<Bound<'py, PyDict>> {
-    let i = py
-        .detach(|| ReadOnlyHdfSession::open(path)?.mesh_boundary_inventory(area, max_bytes))
-        .map_err(crate::reader::err)?;
-    inventory(py, i)
+    crate::panic_guard::guard(|| {
+        let i = py
+            .detach(|| ReadOnlyHdfSession::open(path)?.mesh_boundary_inventory(area, max_bytes))
+            .map_err(crate::reader::err)?;
+        inventory(py, i)
+    })
 }
 
 #[pyfunction]
@@ -88,18 +94,20 @@ fn read_mesh_summary<'py>(
     metadata_max_bytes: usize,
     max_bytes: usize,
 ) -> PyResult<Bound<'py, PyDict>> {
-    let r = py
-        .detach(|| {
-            ReadOnlyHdfSession::open(path)?.read_mesh_summary(
-                area,
-                variable,
-                elements.as_deref(),
-                metadata_max_bytes,
-                max_bytes,
-            )
-        })
-        .map_err(crate::reader::err)?;
-    selection(py, r)
+    crate::panic_guard::guard(|| {
+        let r = py
+            .detach(|| {
+                ReadOnlyHdfSession::open(path)?.read_mesh_summary(
+                    area,
+                    variable,
+                    elements.as_deref(),
+                    metadata_max_bytes,
+                    max_bytes,
+                )
+            })
+            .map_err(crate::reader::err)?;
+        selection(py, r)
+    })
 }
 
 #[pyfunction]
@@ -115,19 +123,21 @@ fn read_mesh_series<'py>(
     metadata_max_bytes: usize,
     max_bytes: usize,
 ) -> PyResult<Bound<'py, PyDict>> {
-    let r = py
-        .detach(|| {
-            ReadOnlyHdfSession::open(path)?.read_mesh_series(
-                area,
-                variable,
-                slice(rows),
-                elements.as_deref(),
-                metadata_max_bytes,
-                max_bytes,
-            )
-        })
-        .map_err(crate::reader::err)?;
-    selection(py, r)
+    crate::panic_guard::guard(|| {
+        let r = py
+            .detach(|| {
+                ReadOnlyHdfSession::open(path)?.read_mesh_series(
+                    area,
+                    variable,
+                    slice(rows),
+                    elements.as_deref(),
+                    metadata_max_bytes,
+                    max_bytes,
+                )
+            })
+            .map_err(crate::reader::err)?;
+        selection(py, r)
+    })
 }
 
 #[pyfunction]
@@ -143,19 +153,21 @@ fn read_mesh_boundary_series<'py>(
     metadata_max_bytes: usize,
     max_bytes: usize,
 ) -> PyResult<Bound<'py, PyDict>> {
-    let r = py
-        .detach(|| {
-            ReadOnlyHdfSession::open(path)?.read_mesh_boundary_series(
-                area,
-                variable,
-                slice(rows),
-                elements.as_deref(),
-                metadata_max_bytes,
-                max_bytes,
-            )
-        })
-        .map_err(crate::reader::err)?;
-    selection(py, r)
+    crate::panic_guard::guard(|| {
+        let r = py
+            .detach(|| {
+                ReadOnlyHdfSession::open(path)?.read_mesh_boundary_series(
+                    area,
+                    variable,
+                    slice(rows),
+                    elements.as_deref(),
+                    metadata_max_bytes,
+                    max_bytes,
+                )
+            })
+            .map_err(crate::reader::err)?;
+        selection(py, r)
+    })
 }
 
 #[pyfunction]
@@ -171,21 +183,23 @@ fn reduce_mesh_series<'py>(
     metadata_max_bytes: usize,
     max_bytes: usize,
 ) -> PyResult<Bound<'py, PyDict>> {
-    let r = py
-        .detach(|| {
-            ReadOnlyHdfSession::open(path)?.reduce_mesh_series(
-                area,
-                variable,
-                slice(rows),
-                elements.as_deref(),
-                metadata_max_bytes,
-                max_bytes,
-            )
-        })
-        .map_err(crate::reader::err)?;
-    Ok(
-        dict!(py,"identity"=>identity(py,&r.id)?,"elements"=>r.elements.into_pyarray(py),"values"=>crate::reader::array(py,r.values)?,"time_indices"=>r.time_indices.into_pyarray(py)),
-    )
+    crate::panic_guard::guard(|| {
+        let r = py
+            .detach(|| {
+                ReadOnlyHdfSession::open(path)?.reduce_mesh_series(
+                    area,
+                    variable,
+                    slice(rows),
+                    elements.as_deref(),
+                    metadata_max_bytes,
+                    max_bytes,
+                )
+            })
+            .map_err(crate::reader::err)?;
+        Ok(
+            dict!(py,"identity"=>identity(py,&r.id)?,"elements"=>r.elements.into_pyarray(py),"values"=>crate::reader::array(py,r.values)?,"time_indices"=>r.time_indices.into_pyarray(py)),
+        )
+    })
 }
 
 #[pyfunction]
@@ -199,36 +213,40 @@ fn read_mesh_geometry<'py>(
     metadata_max_bytes: usize,
     max_bytes: usize,
 ) -> PyResult<Bound<'py, PyAny>> {
-    let field = MESH_GEOMETRY_FIELDS
-        .iter()
-        .find(|f| f.as_str() == field)
-        .copied()
-        .ok_or_else(|| PyValueError::new_err("unknown mesh geometry field"))?;
-    let r = py
-        .detach(|| {
-            ReadOnlyHdfSession::open(path)?.read_mesh_geometry(
-                area,
-                field,
-                rows.map(slice),
-                metadata_max_bytes,
-                max_bytes,
-            )
-        })
-        .map_err(crate::reader::err)?;
-    crate::reader::array(py, r)
+    crate::panic_guard::guard(|| {
+        let field = MESH_GEOMETRY_FIELDS
+            .iter()
+            .find(|f| f.as_str() == field)
+            .copied()
+            .ok_or_else(|| PyValueError::new_err("unknown mesh geometry field"))?;
+        let r = py
+            .detach(|| {
+                ReadOnlyHdfSession::open(path)?.read_mesh_geometry(
+                    area,
+                    field,
+                    rows.map(slice),
+                    metadata_max_bytes,
+                    max_bytes,
+                )
+            })
+            .map_err(crate::reader::err)?;
+        crate::reader::array(py, r)
+    })
 }
 #[pyfunction]
 #[pyo3(signature=(path,max_bytes=67108864))]
 fn run_summary(py: Python<'_>, path: PathBuf, max_bytes: usize) -> PyResult<Bound<'_, PyDict>> {
-    let r = py
-        .detach(|| ReadOnlyHdfSession::open(path)?.run_summary(max_bytes))
-        .map_err(crate::reader::err)?;
-    let d = dict!(py,"capability"=>capability(py,r.capability())?,"value"=>py.None());
-    if let Some(groups) = r.value() {
-        let values=groups.iter().map(|g|Ok(dict!(py,"path"=>&g.path,"attributes"=>g.attributes.iter().map(|a|typed_attribute_dict(py,a)).collect::<PyResult<Vec<_>>>()?))).collect::<PyResult<Vec<_>>>()?;
-        d.set_item("value", values)?;
-    }
-    Ok(d)
+    crate::panic_guard::guard(|| {
+        let r = py
+            .detach(|| ReadOnlyHdfSession::open(path)?.run_summary(max_bytes))
+            .map_err(crate::reader::err)?;
+        let d = dict!(py,"capability"=>capability(py,r.capability())?,"value"=>py.None());
+        if let Some(groups) = r.value() {
+            let values=groups.iter().map(|g|Ok(dict!(py,"path"=>&g.path,"attributes"=>g.attributes.iter().map(|a|typed_attribute_dict(py,a)).collect::<PyResult<Vec<_>>>()?))).collect::<PyResult<Vec<_>>>()?;
+            d.set_item("value", values)?;
+        }
+        Ok(d)
+    })
 }
 pub(crate) fn compound<'py>(py: Python<'py>, t: &ExactCompound) -> PyResult<Bound<'py, PyDict>> {
     let columns=t.table.columns.iter().map(|c| {
@@ -248,31 +266,33 @@ fn geometry_family<'py>(
     family: &str,
     max_bytes: usize,
 ) -> PyResult<Bound<'py, PyDict>> {
-    let family = GEOMETRY_FAMILIES
-        .iter()
-        .find(|f| f.as_str() == family)
-        .copied()
-        .ok_or_else(|| PyValueError::new_err("unknown geometry family"))?;
-    let r = py
-        .detach(|| ReadOnlyHdfSession::open(path)?.geometry_family(family, max_bytes))
-        .map_err(crate::reader::err)?;
-    let d = dict!(py,"capability"=>capability(py,r.capability())?,"value"=>py.None());
-    let v = r.into_value();
-    if let Some(g) = v {
-        let features=g.features.iter().map(|f|Ok(dict!(py,"identity"=>identity(py,&f.id)?,"name"=>&f.name,"name_capability"=>capability(py,&f.name_capability)?,"point_range"=>(f.point_range.start,f.point_range.end),"parts"=>f.parts.iter().map(|p|(p.start,p.end)).collect::<Vec<_>>()))).collect::<PyResult<Vec<_>>>()?;
-        let tables = g
-            .tables
+    crate::panic_guard::guard(|| {
+        let family = GEOMETRY_FAMILIES
             .iter()
-            .map(|(n, t)| Ok((n, compound(py, t)?)))
-            .collect::<PyResult<Vec<_>>>()?;
-        let profiles = g
-            .terrain_profiles
-            .into_iter()
-            .map(|(n, a)| Ok((n, crate::reader::array(py, a)?)))
-            .collect::<PyResult<Vec<_>>>()?;
-        d.set_item("value",dict!(py,"family"=>g.family.as_str(),"attributes"=>compound(py,&g.attributes)?,"info"=>crate::reader::array(py,g.info)?,"parts"=>crate::reader::array(py,g.parts)?,"points"=>crate::reader::array(py,g.points)?,"features"=>features,"tables"=>tables,"terrain_profiles"=>profiles))?;
-    }
-    Ok(d)
+            .find(|f| f.as_str() == family)
+            .copied()
+            .ok_or_else(|| PyValueError::new_err("unknown geometry family"))?;
+        let r = py
+            .detach(|| ReadOnlyHdfSession::open(path)?.geometry_family(family, max_bytes))
+            .map_err(crate::reader::err)?;
+        let d = dict!(py,"capability"=>capability(py,r.capability())?,"value"=>py.None());
+        let v = r.into_value();
+        if let Some(g) = v {
+            let features=g.features.iter().map(|f|Ok(dict!(py,"identity"=>identity(py,&f.id)?,"name"=>&f.name,"name_capability"=>capability(py,&f.name_capability)?,"point_range"=>(f.point_range.start,f.point_range.end),"parts"=>f.parts.iter().map(|p|(p.start,p.end)).collect::<Vec<_>>()))).collect::<PyResult<Vec<_>>>()?;
+            let tables = g
+                .tables
+                .iter()
+                .map(|(n, t)| Ok((n, compound(py, t)?)))
+                .collect::<PyResult<Vec<_>>>()?;
+            let profiles = g
+                .terrain_profiles
+                .into_iter()
+                .map(|(n, a)| Ok((n, crate::reader::array(py, a)?)))
+                .collect::<PyResult<Vec<_>>>()?;
+            d.set_item("value",dict!(py,"family"=>g.family.as_str(),"attributes"=>compound(py,&g.attributes)?,"info"=>crate::reader::array(py,g.info)?,"parts"=>crate::reader::array(py,g.parts)?,"points"=>crate::reader::array(py,g.points)?,"features"=>features,"tables"=>tables,"terrain_profiles"=>profiles))?;
+        }
+        Ok(d)
+    })
 }
 #[pyfunction]
 #[pyo3(signature=(path,other,area,*,metadata_max_bytes=67108864,max_bytes=67108864))]
@@ -284,17 +304,18 @@ fn compare_mesh_identity<'py>(
     metadata_max_bytes: usize,
     max_bytes: usize,
 ) -> PyResult<Bound<'py, PyDict>> {
-    let r = py
-        .detach(|| {
-            ReadOnlyHdfSession::open(path)?.compare_mesh_identity(
-                &ReadOnlyHdfSession::open(other)?,
-                area,
-                metadata_max_bytes,
-                max_bytes,
-            )
-        })
-        .map_err(crate::reader::err)?;
-    let mismatch = r
+    crate::panic_guard::guard(|| {
+        let r = py
+            .detach(|| {
+                ReadOnlyHdfSession::open(path)?.compare_mesh_identity(
+                    &ReadOnlyHdfSession::open(other)?,
+                    area,
+                    metadata_max_bytes,
+                    max_bytes,
+                )
+            })
+            .map_err(crate::reader::err)?;
+        let mismatch = r
         .first_mismatch
         .map(|m| {
             Ok::<_, PyErr>(
@@ -302,9 +323,10 @@ fn compare_mesh_identity<'py>(
             )
         })
         .transpose()?;
-    Ok(
-        dict!(py,"left"=>identity(py,&r.left)?,"right"=>identity(py,&r.right)?,"first_mismatch"=>mismatch),
-    )
+        Ok(
+            dict!(py,"left"=>identity(py,&r.left)?,"right"=>identity(py,&r.right)?,"first_mismatch"=>mismatch),
+        )
+    })
 }
 #[pyfunction]
 #[pyo3(signature=(path,max_bytes=67108864))]
@@ -313,13 +335,15 @@ fn layer_inventory(
     path: PathBuf,
     max_bytes: usize,
 ) -> PyResult<Vec<Bound<'_, PyDict>>> {
-    let r = py
-        .detach(|| ReadOnlyHdfSession::open(path)?.layer_inventory(max_bytes))
-        .map_err(crate::reader::err)?;
-    r.into_iter().map(|l| {
+    crate::panic_guard::guard(|| {
+        let r = py
+            .detach(|| ReadOnlyHdfSession::open(path)?.layer_inventory(max_bytes))
+            .map_err(crate::reader::err)?;
+        r.into_iter().map(|l| {
  let fields=l.fields.iter().map(|f|Ok(dict!(py,"name"=>&f.name,"dataset"=>&f.dataset,"numeric_kind"=>f.numeric_kind.map(crate::reader::numeric_kind_name),"row_count"=>f.row_count,"capability"=>capability(py,&f.capability)?))).collect::<PyResult<Vec<_>>>()?;
  Ok(dict!(py,"family"=>l.family,"area"=>l.area,"name"=>l.name,"identity"=>l.identity.as_ref().map(|i|identity(py,i)).transpose()?,"element_domain"=>l.element_domain,"domain_rule"=>l.mesh_result.as_ref().map(|m|m.domain_rule.as_str()),"geometry_type"=>l.geometry_type,"row_count"=>l.row_count,"fields"=>fields,"capability"=>capability(py,&l.capability)?))
  }).collect()
+    })
 }
 
 #[pyfunction]
@@ -330,14 +354,16 @@ fn mesh_geometry<'py>(
     area: &str,
     max_bytes: usize,
 ) -> PyResult<Bound<'py, PyDict>> {
-    let g = py
-        .detach(|| ReadOnlyHdfSession::open(path)?.mesh_geometry(area, max_bytes))
-        .map_err(crate::reader::err)?;
-    let m = &g.mesh;
-    let fields=g.fields.iter().map(|f|Ok(dict!(py,"field"=>f.field.as_str(),"path"=>&f.path,"shape"=>&f.shape,"kind"=>f.kind.map(crate::reader::numeric_kind_name),"dtype"=>f.kind.and_then(crate::reader::numpy),"capability"=>capability(py,&f.capability)?))).collect::<PyResult<Vec<_>>>()?;
-    Ok(
-        dict!(py,"identity"=>identity(py,&m.id)?,"mesh_name"=>&m.mesh_name,"physical_cells"=>m.physical_cells,"stored_cells"=>m.stored_cells,"ghost_cells"=>m.ghost_cells,"fields"=>fields),
-    )
+    crate::panic_guard::guard(|| {
+        let g = py
+            .detach(|| ReadOnlyHdfSession::open(path)?.mesh_geometry(area, max_bytes))
+            .map_err(crate::reader::err)?;
+        let m = &g.mesh;
+        let fields=g.fields.iter().map(|f|Ok(dict!(py,"field"=>f.field.as_str(),"path"=>&f.path,"shape"=>&f.shape,"kind"=>f.kind.map(crate::reader::numeric_kind_name),"dtype"=>f.kind.and_then(crate::reader::numpy),"capability"=>capability(py,&f.capability)?))).collect::<PyResult<Vec<_>>>()?;
+        Ok(
+            dict!(py,"identity"=>identity(py,&m.id)?,"mesh_name"=>&m.mesh_name,"physical_cells"=>m.physical_cells,"stored_cells"=>m.stored_cells,"ghost_cells"=>m.ghost_cells,"fields"=>fields),
+        )
+    })
 }
 #[pyfunction]
 #[pyo3(signature=(path,max_bytes=67108864))]
@@ -346,15 +372,18 @@ fn mesh_geometry_tables(
     path: PathBuf,
     max_bytes: usize,
 ) -> PyResult<Bound<'_, PyDict>> {
-    let t = py
-        .detach(|| ReadOnlyHdfSession::open(path)?.mesh_geometry_tables(max_bytes))
-        .map_err(crate::reader::err)?;
-    let cell = dict!(py,"capability"=>capability(py,t.cell_info.capability())?,"value"=>py.None());
-    let attributes = compound(py, &t.attributes)?;
-    if let Some(a) = t.cell_info.into_value() {
-        cell.set_item("value", crate::reader::array(py, a)?)?;
-    }
-    Ok(dict!(py,"attributes"=>attributes,"cell_info"=>cell))
+    crate::panic_guard::guard(|| {
+        let t = py
+            .detach(|| ReadOnlyHdfSession::open(path)?.mesh_geometry_tables(max_bytes))
+            .map_err(crate::reader::err)?;
+        let cell =
+            dict!(py,"capability"=>capability(py,t.cell_info.capability())?,"value"=>py.None());
+        let attributes = compound(py, &t.attributes)?;
+        if let Some(a) = t.cell_info.into_value() {
+            cell.set_item("value", crate::reader::array(py, a)?)?;
+        }
+        Ok(dict!(py,"attributes"=>attributes,"cell_info"=>cell))
+    })
 }
 #[pyfunction]
 #[pyo3(signature=(path,family,max_bytes=67108864))]
@@ -364,15 +393,19 @@ fn geometry_family_capability<'py>(
     family: &str,
     max_bytes: usize,
 ) -> PyResult<Bound<'py, PyDict>> {
-    let family = GEOMETRY_FAMILIES
-        .iter()
-        .find(|f| f.as_str() == family)
-        .copied()
-        .ok_or_else(|| PyValueError::new_err("unknown geometry family"))?;
-    let c = py
-        .detach(|| ReadOnlyHdfSession::open(path)?.geometry_family_capability(family, max_bytes))
-        .map_err(crate::reader::err)?;
-    capability(py, &c)
+    crate::panic_guard::guard(|| {
+        let family = GEOMETRY_FAMILIES
+            .iter()
+            .find(|f| f.as_str() == family)
+            .copied()
+            .ok_or_else(|| PyValueError::new_err("unknown geometry family"))?;
+        let c = py
+            .detach(|| {
+                ReadOnlyHdfSession::open(path)?.geometry_family_capability(family, max_bytes)
+            })
+            .map_err(crate::reader::err)?;
+        capability(py, &c)
+    })
 }
 #[pyfunction]
 #[pyo3(signature=(path,area,max_bytes=67108864))]
@@ -382,15 +415,17 @@ fn mesh_boundary_links<'py>(
     area: &str,
     max_bytes: usize,
 ) -> PyResult<Bound<'py, PyDict>> {
-    let r = py
-        .detach(|| ReadOnlyHdfSession::open(path)?.mesh_boundary_links(area, max_bytes))
-        .map_err(crate::reader::err)?;
-    let d = dict!(py,"capability"=>capability(py,r.capability())?,"value"=>py.None());
-    if let Some(l) = r.value() {
-        let matched=l.matched.iter().map(|m|Ok(dict!(py,"name"=>&m.name,"geometry"=>identity(py,&m.geometry)?,"series_path"=>&m.series_path))).collect::<PyResult<Vec<_>>>()?;
-        d.set_item("value",dict!(py,"area"=>&l.area,"geometry_capability"=>capability(py,&l.geometry_capability)?,"series_capability"=>capability(py,&l.series_capability)?,"matched"=>matched,"unmatched_geometry"=>&l.unmatched_geometry,"unmatched_series"=>&l.unmatched_series))?;
-    }
-    Ok(d)
+    crate::panic_guard::guard(|| {
+        let r = py
+            .detach(|| ReadOnlyHdfSession::open(path)?.mesh_boundary_links(area, max_bytes))
+            .map_err(crate::reader::err)?;
+        let d = dict!(py,"capability"=>capability(py,r.capability())?,"value"=>py.None());
+        if let Some(l) = r.value() {
+            let matched=l.matched.iter().map(|m|Ok(dict!(py,"name"=>&m.name,"geometry"=>identity(py,&m.geometry)?,"series_path"=>&m.series_path))).collect::<PyResult<Vec<_>>>()?;
+            d.set_item("value",dict!(py,"area"=>&l.area,"geometry_capability"=>capability(py,&l.geometry_capability)?,"series_capability"=>capability(py,&l.series_capability)?,"matched"=>matched,"unmatched_geometry"=>&l.unmatched_geometry,"unmatched_series"=>&l.unmatched_series))?;
+        }
+        Ok(d)
+    })
 }
 
 pub(crate) fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {

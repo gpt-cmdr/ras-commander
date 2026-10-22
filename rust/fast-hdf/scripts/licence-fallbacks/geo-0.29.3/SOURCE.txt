@@ -1,0 +1,5 @@
+The published geo 0.29.3 crate package ships no licence file.
+These texts are copied unmodified from https://github.com/georust/geo at tag geo-0.29.3:
+  https://raw.githubusercontent.com/georust/geo/geo-0.29.3/LICENSE-MIT
+  https://raw.githubusercontent.com/georust/geo/geo-0.29.3/LICENSE-APACHE
+Retrieved 2026-10-21.

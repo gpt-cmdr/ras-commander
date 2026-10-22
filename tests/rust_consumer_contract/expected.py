@@ -1,5 +1,7 @@
-"""Explicit API11 full-feature native entrypoint contract (77); additions require review."""
+"""Explicit API11 full-feature native entrypoint contract (78); additions require review."""
 EXPECTED = {
+    # Test hook: panics inside the boundary guard (contained as FastHdfPanicError).
+    "_panic_for_test": ("function", None, "src/panic_guard.rs"),
     "HdfSession": ("class", None, "src/session.rs"),
     "mesh_summary_inventory": ("function", None, "src/fim.rs"),
     "mesh_series_inventory": ("function", None, "src/fim.rs"),

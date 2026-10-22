@@ -124,8 +124,8 @@ fn reported<'py, T>(
 }
 
 #[pyfunction]
-fn read_families() -> Vec<&'static str> {
-    READ_FAMILIES.iter().map(|f| f.as_str()).collect()
+fn read_families() -> PyResult<Vec<&'static str>> {
+    crate::panic_guard::guard(|| Ok(READ_FAMILIES.iter().map(|f| f.as_str()).collect()))
 }
 #[pyfunction]
 #[pyo3(signature=(path,family,metadata_max_bytes=DEFAULT))]
@@ -135,11 +135,13 @@ fn read_family_inventory<'py>(
     family: &str,
     metadata_max_bytes: usize,
 ) -> PyResult<Bound<'py, PyDict>> {
-    let f = self::family(family)?;
-    let inv = py
-        .detach(|| ReadOnlyHdfSession::open(path)?.read_family_inventory(f, metadata_max_bytes))
-        .map_err(crate::reader::err)?;
-    inventory(py, inv)
+    crate::panic_guard::guard(|| {
+        let f = self::family(family)?;
+        let inv = py
+            .detach(|| ReadOnlyHdfSession::open(path)?.read_family_inventory(f, metadata_max_bytes))
+            .map_err(crate::reader::err)?;
+        inventory(py, inv)
+    })
 }
 #[pyfunction]
 #[pyo3(signature=(path,family,dataset,slices=None,metadata_max_bytes=DEFAULT,max_bytes=DEFAULT))]
@@ -152,20 +154,22 @@ fn read_family_dataset<'py>(
     metadata_max_bytes: usize,
     max_bytes: usize,
 ) -> PyResult<Bound<'py, PyDict>> {
-    let f = self::family(family)?;
-    let s = self::slices(slices);
-    let v = py
-        .detach(|| {
-            ReadOnlyHdfSession::open(path)?.read_family_dataset(
-                f,
-                dataset,
-                s.as_deref(),
-                metadata_max_bytes,
-                max_bytes,
-            )
-        })
-        .map_err(crate::reader::err)?;
-    values(py, v)
+    crate::panic_guard::guard(|| {
+        let f = self::family(family)?;
+        let s = self::slices(slices);
+        let v = py
+            .detach(|| {
+                ReadOnlyHdfSession::open(path)?.read_family_dataset(
+                    f,
+                    dataset,
+                    s.as_deref(),
+                    metadata_max_bytes,
+                    max_bytes,
+                )
+            })
+            .map_err(crate::reader::err)?;
+        values(py, v)
+    })
 }
 #[pyfunction]
 #[pyo3(signature=(path,max_bytes=DEFAULT))]
@@ -174,20 +178,22 @@ fn output_block_inventory<'py>(
     path: PathBuf,
     max_bytes: usize,
 ) -> PyResult<Vec<Bound<'py, PyDict>>> {
-    let blocks: Vec<OutputBlock> = py
-        .detach(|| ReadOnlyHdfSession::open(path)?.output_block_inventory(max_bytes))
-        .map_err(crate::reader::err)?;
-    blocks
-        .iter()
-        .map(|b| {
-            let datasets = b
-                .datasets
-                .iter()
-                .map(|d| stored_dict(py, d))
-                .collect::<PyResult<Vec<_>>>()?;
-            Ok(dict!(py,"name"=>&b.name,"path"=>&b.path,"datasets"=>datasets))
-        })
-        .collect()
+    crate::panic_guard::guard(|| {
+        let blocks: Vec<OutputBlock> = py
+            .detach(|| ReadOnlyHdfSession::open(path)?.output_block_inventory(max_bytes))
+            .map_err(crate::reader::err)?;
+        blocks
+            .iter()
+            .map(|b| {
+                let datasets = b
+                    .datasets
+                    .iter()
+                    .map(|d| stored_dict(py, d))
+                    .collect::<PyResult<Vec<_>>>()?;
+                Ok(dict!(py,"name"=>&b.name,"path"=>&b.path,"datasets"=>datasets))
+            })
+            .collect()
+    })
 }
 #[pyfunction]
 #[pyo3(signature=(path,block,relative,slices=None,max_bytes=DEFAULT))]
@@ -199,18 +205,20 @@ fn read_output_block<'py>(
     slices: Option<Vec<(u64, u64, u64)>>,
     max_bytes: usize,
 ) -> PyResult<Bound<'py, PyDict>> {
-    let s = self::slices(slices);
-    let v = py
-        .detach(|| {
-            ReadOnlyHdfSession::open(path)?.read_output_block(
-                block,
-                relative,
-                s.as_deref(),
-                max_bytes,
-            )
-        })
-        .map_err(crate::reader::err)?;
-    values(py, v)
+    crate::panic_guard::guard(|| {
+        let s = self::slices(slices);
+        let v = py
+            .detach(|| {
+                ReadOnlyHdfSession::open(path)?.read_output_block(
+                    block,
+                    relative,
+                    s.as_deref(),
+                    max_bytes,
+                )
+            })
+            .map_err(crate::reader::err)?;
+        values(py, v)
+    })
 }
 #[pyfunction]
 #[pyo3(signature=(path,max_bytes=DEFAULT))]
@@ -219,23 +227,25 @@ fn reference_point_geometry<'py>(
     path: PathBuf,
     max_bytes: usize,
 ) -> PyResult<Bound<'py, PyDict>> {
-    let r: Reported<ReferencePointGeometry> = py
-        .detach(|| ReadOnlyHdfSession::open(path)?.reference_point_geometry(max_bytes))
-        .map_err(crate::reader::err)?;
-    reported(py, r, |g| {
-        let features = g
-            .features
-            .iter()
-            .map(|f| {
-                Ok(
-                    dict!(py,"identity"=>identity(py,&f.id)?,"name"=>&f.name,"area"=>&f.area,
+    crate::panic_guard::guard(|| {
+        let r: Reported<ReferencePointGeometry> = py
+            .detach(|| ReadOnlyHdfSession::open(path)?.reference_point_geometry(max_bytes))
+            .map_err(crate::reader::err)?;
+        reported(py, r, |g| {
+            let features = g
+                .features
+                .iter()
+                .map(|f| {
+                    Ok(
+                        dict!(py,"identity"=>identity(py,&f.id)?,"name"=>&f.name,"area"=>&f.area,
                     "cell_index"=>f.cell_index,"point_row"=>f.point_row),
-                )
-            })
-            .collect::<PyResult<Vec<_>>>()?;
-        Ok(dict!(py,"attributes"=>compound(py,&g.attributes)?,
+                    )
+                })
+                .collect::<PyResult<Vec<_>>>()?;
+            Ok(dict!(py,"attributes"=>compound(py,&g.attributes)?,
             "points"=>crate::reader::array(py,g.points)?,"features"=>features)
-        .into_any())
+            .into_any())
+        })
     })
 }
 #[pyfunction]
@@ -246,40 +256,42 @@ fn classification_catalogue<'py>(
     family: &str,
     max_bytes: usize,
 ) -> PyResult<Bound<'py, PyDict>> {
-    let f = self::family(family)?;
-    let r: Reported<ClassificationCatalogue> = py
-        .detach(|| ReadOnlyHdfSession::open(path)?.classification_catalogue(f, max_bytes))
-        .map_err(crate::reader::err)?;
-    reported(py, r, |c| {
-        let entries = c
-            .entries
-            .iter()
-            .map(|e| {
-                let pixel: Option<Bound<'py, PyAny>> = match &e.pixel_id {
-                    Some(ClassId::Signed(v)) => Some(v.into_pyobject(py)?.into_any()),
-                    Some(ClassId::Unsigned(v)) => Some(v.into_pyobject(py)?.into_any()),
-                    _ => None,
-                };
-                let rows = e
-                    .variable_rows
-                    .iter()
-                    .map(|i| identity(py, i))
-                    .collect::<PyResult<Vec<_>>>()?;
-                Ok(
-                    dict!(py,"identity"=>identity(py,&e.id)?,"pixel_id"=>pixel,"name"=>&e.name,
+    crate::panic_guard::guard(|| {
+        let f = self::family(family)?;
+        let r: Reported<ClassificationCatalogue> = py
+            .detach(|| ReadOnlyHdfSession::open(path)?.classification_catalogue(f, max_bytes))
+            .map_err(crate::reader::err)?;
+        reported(py, r, |c| {
+            let entries = c
+                .entries
+                .iter()
+                .map(|e| {
+                    let pixel: Option<Bound<'py, PyAny>> = match &e.pixel_id {
+                        Some(ClassId::Signed(v)) => Some(v.into_pyobject(py)?.into_any()),
+                        Some(ClassId::Unsigned(v)) => Some(v.into_pyobject(py)?.into_any()),
+                        _ => None,
+                    };
+                    let rows = e
+                        .variable_rows
+                        .iter()
+                        .map(|i| identity(py, i))
+                        .collect::<PyResult<Vec<_>>>()?;
+                    Ok(
+                        dict!(py,"identity"=>identity(py,&e.id)?,"pixel_id"=>pixel,"name"=>&e.name,
                     "variable_rows"=>rows,"capability"=>capability(py,&e.capability)?),
-                )
-            })
-            .collect::<PyResult<Vec<_>>>()?;
-        let unmatched = c
-            .unmatched_variables
-            .iter()
-            .map(|i| identity(py, i))
-            .collect::<PyResult<Vec<_>>>()?;
-        Ok(
-            dict!(py,"layout"=>&c.layout,"entries"=>entries,"unmatched_variables"=>unmatched)
-                .into_any(),
-        )
+                    )
+                })
+                .collect::<PyResult<Vec<_>>>()?;
+            let unmatched = c
+                .unmatched_variables
+                .iter()
+                .map(|i| identity(py, i))
+                .collect::<PyResult<Vec<_>>>()?;
+            Ok(
+                dict!(py,"layout"=>&c.layout,"entries"=>entries,"unmatched_variables"=>unmatched)
+                    .into_any(),
+            )
+        })
     })
 }
 /// Compact membership index for routing: every dataset of every read family and of
@@ -292,82 +304,84 @@ fn stored_family_index<'py>(
     path: PathBuf,
     metadata_max_bytes: usize,
 ) -> PyResult<Bound<'py, PyDict>> {
-    type Row = (
-        String,
-        String,
-        String,
-        Vec<u64>,
-        Option<&'static str>,
-        String,
-        Option<String>,
-    );
-    let (rows, failures, blocks) = py
-        .detach(|| -> ras_commander_rust::Result<_> {
-            let s = ReadOnlyHdfSession::open(path)?;
-            let mut rows: Vec<Row> = Vec::new();
-            let mut failures = Vec::new();
-            let row = |owner: &str, d: &StoredDataset| -> Row {
-                (
-                    owner.to_owned(),
-                    d.path.clone(),
-                    d.storage.clone(),
-                    d.shape.clone(),
-                    d.kind.and_then(crate::reader::numpy),
-                    d.capability.as_str().to_owned(),
-                    d.capability.code().map(|c| c.as_str().to_owned()),
-                )
-            };
-            for &f in READ_FAMILIES {
-                match s.read_family_inventory(f, metadata_max_bytes) {
-                    Ok(inv) => {
-                        for d in &inv.datasets {
-                            rows.push(row(f.as_str(), &d.stored));
+    crate::panic_guard::guard(|| {
+        type Row = (
+            String,
+            String,
+            String,
+            Vec<u64>,
+            Option<&'static str>,
+            String,
+            Option<String>,
+        );
+        let (rows, failures, blocks) = py
+            .detach(|| -> ras_commander_rust::Result<_> {
+                let s = ReadOnlyHdfSession::open(path)?;
+                let mut rows: Vec<Row> = Vec::new();
+                let mut failures = Vec::new();
+                let row = |owner: &str, d: &StoredDataset| -> Row {
+                    (
+                        owner.to_owned(),
+                        d.path.clone(),
+                        d.storage.clone(),
+                        d.shape.clone(),
+                        d.kind.and_then(crate::reader::numpy),
+                        d.capability.as_str().to_owned(),
+                        d.capability.code().map(|c| c.as_str().to_owned()),
+                    )
+                };
+                for &f in READ_FAMILIES {
+                    match s.read_family_inventory(f, metadata_max_bytes) {
+                        Ok(inv) => {
+                            for d in &inv.datasets {
+                                rows.push(row(f.as_str(), &d.stored));
+                            }
+                        }
+                        Err(e) => failures.push((
+                            f.as_str(),
+                            e.kind.as_str(),
+                            e.code.map(|c| c.as_str()),
+                            e.to_string(),
+                        )),
+                    }
+                }
+                let mut blocks = Vec::new();
+                match s.output_block_inventory(metadata_max_bytes) {
+                    Ok(b) => {
+                        for block in b {
+                            for d in &block.datasets {
+                                rows.push(row(&format!("output_block:{}", block.name), d));
+                            }
+                            blocks.push(block.name);
                         }
                     }
                     Err(e) => failures.push((
-                        f.as_str(),
+                        "output_blocks",
                         e.kind.as_str(),
                         e.code.map(|c| c.as_str()),
                         e.to_string(),
                     )),
                 }
-            }
-            let mut blocks = Vec::new();
-            match s.output_block_inventory(metadata_max_bytes) {
-                Ok(b) => {
-                    for block in b {
-                        for d in &block.datasets {
-                            rows.push(row(&format!("output_block:{}", block.name), d));
-                        }
-                        blocks.push(block.name);
-                    }
-                }
-                Err(e) => failures.push((
-                    "output_blocks",
-                    e.kind.as_str(),
-                    e.code.map(|c| c.as_str()),
-                    e.to_string(),
-                )),
-            }
-            Ok((rows, failures, blocks))
-        })
-        .map_err(crate::reader::err)?;
-    let rows = rows
-        .into_iter()
-        .map(|(owner, path, storage, shape, dtype, status, code)| {
-            Ok(
-                dict!(py,"owner"=>owner,"path"=>path,"storage"=>storage,"shape"=>shape,
+                Ok((rows, failures, blocks))
+            })
+            .map_err(crate::reader::err)?;
+        let rows = rows
+            .into_iter()
+            .map(|(owner, path, storage, shape, dtype, status, code)| {
+                Ok(
+                    dict!(py,"owner"=>owner,"path"=>path,"storage"=>storage,"shape"=>shape,
                 "dtype"=>dtype,"status"=>status,"code"=>code),
-            )
-        })
-        .collect::<PyResult<Vec<_>>>()?;
-    let failures = failures
-        .into_iter()
-        .map(|(owner, kind, code, message)| {
-            Ok(dict!(py,"owner"=>owner,"kind"=>kind,"code"=>code,"message"=>message))
-        })
-        .collect::<PyResult<Vec<_>>>()?;
-    Ok(dict!(py,"datasets"=>rows,"failures"=>failures,"output_blocks"=>blocks))
+                )
+            })
+            .collect::<PyResult<Vec<_>>>()?;
+        let failures = failures
+            .into_iter()
+            .map(|(owner, kind, code, message)| {
+                Ok(dict!(py,"owner"=>owner,"kind"=>kind,"code"=>code,"message"=>message))
+            })
+            .collect::<PyResult<Vec<_>>>()?;
+        Ok(dict!(py,"datasets"=>rows,"failures"=>failures,"output_blocks"=>blocks))
+    })
 }
 
 pub(crate) fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {

@@ -69,38 +69,40 @@ fn structure_inventory<'py>(
     family: &str,
     max_bytes: usize,
 ) -> PyResult<Bound<'py, PyDict>> {
-    let k = self::family(family)?;
-    let inv = py
-        .detach(|| ReadOnlyHdfSession::open(path)?.structure_inventory(k, max_bytes))
-        .map_err(crate::reader::err)?;
-    let structures = inv
-        .structures
-        .iter()
-        .map(|s| descriptor(py, s))
-        .collect::<PyResult<Vec<_>>>()?;
-    // Preserve series label evidence as diagnostics without changing the successful inventory status.
-    let diagnostics = inv
-        .structures
-        .iter()
-        .flat_map(|s| s.series.iter())
-        .chain(inv.family_series.iter())
-        .filter_map(|s| {
-            let c = s.columns.capability();
-            if c.is_supported() || s.columns.is_unavailable() {
-                None
-            } else {
-                Some((s, c))
-            }
-        })
-        .map(|(s, c)| {
-            let d = crate::domain::diagnostic(py, Some(&s.path), None, Some(c))?;
-            d.set_item("path", &s.path)?;
-            Ok(d)
-        })
-        .collect::<PyResult<Vec<_>>>()?;
-    Ok(
-        dict!(py,"family"=>family_name(inv.kind),"group"=>inv.group,"time_rows"=>inv.time_rows,"capability"=>crate::domain::capability(py,&Capability::Supported)?,"structures"=>structures,"family_series"=>inv.family_series.iter().map(|s|series(py,s)).collect::<PyResult<Vec<_>>>()?,"diagnostics"=>diagnostics),
-    )
+    crate::panic_guard::guard(|| {
+        let k = self::family(family)?;
+        let inv = py
+            .detach(|| ReadOnlyHdfSession::open(path)?.structure_inventory(k, max_bytes))
+            .map_err(crate::reader::err)?;
+        let structures = inv
+            .structures
+            .iter()
+            .map(|s| descriptor(py, s))
+            .collect::<PyResult<Vec<_>>>()?;
+        // Preserve series label evidence as diagnostics without changing the successful inventory status.
+        let diagnostics = inv
+            .structures
+            .iter()
+            .flat_map(|s| s.series.iter())
+            .chain(inv.family_series.iter())
+            .filter_map(|s| {
+                let c = s.columns.capability();
+                if c.is_supported() || s.columns.is_unavailable() {
+                    None
+                } else {
+                    Some((s, c))
+                }
+            })
+            .map(|(s, c)| {
+                let d = crate::domain::diagnostic(py, Some(&s.path), None, Some(c))?;
+                d.set_item("path", &s.path)?;
+                Ok(d)
+            })
+            .collect::<PyResult<Vec<_>>>()?;
+        Ok(
+            dict!(py,"family"=>family_name(inv.kind),"group"=>inv.group,"time_rows"=>inv.time_rows,"capability"=>crate::domain::capability(py,&Capability::Supported)?,"structures"=>structures,"family_series"=>inv.family_series.iter().map(|s|series(py,s)).collect::<PyResult<Vec<_>>>()?,"diagnostics"=>diagnostics),
+        )
+    })
 }
 #[pyfunction]
 #[pyo3(signature=(path,family,structure,relative,rows,columns,max_bytes=67108864,threads=None,parallel=true))]
@@ -117,21 +119,23 @@ fn read_structure_series<'py>(
     threads: Option<usize>,
     parallel: bool,
 ) -> PyResult<Bound<'py, pyo3::types::PyAny>> {
-    let k = self::family(family)?;
-    let threads = crate::reader::threads(threads)?;
-    let out = py
-        .detach(|| {
-            ReadOnlyHdfSession::with_options(path, threads, parallel)?.read_structure_series(
-                k,
-                structure,
-                relative,
-                Slice::new(rows.0, rows.1, rows.2),
-                Slice::new(columns.0, columns.1, columns.2),
-                max_bytes,
-            )
-        })
-        .map_err(crate::reader::err)?;
-    crate::reader::array(py, out)
+    crate::panic_guard::guard(|| {
+        let k = self::family(family)?;
+        let threads = crate::reader::threads(threads)?;
+        let out = py
+            .detach(|| {
+                ReadOnlyHdfSession::with_options(path, threads, parallel)?.read_structure_series(
+                    k,
+                    structure,
+                    relative,
+                    Slice::new(rows.0, rows.1, rows.2),
+                    Slice::new(columns.0, columns.1, columns.2),
+                    max_bytes,
+                )
+            })
+            .map_err(crate::reader::err)?;
+        crate::reader::array(py, out)
+    })
 }
 pub fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(structure_inventory, m)?)?;

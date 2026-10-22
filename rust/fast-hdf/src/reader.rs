@@ -124,19 +124,21 @@ pub fn read_numeric<'py>(
     threads: Option<usize>,
     parallel: bool,
 ) -> PyResult<Bound<'py, PyAny>> {
-    let threads = self::threads(threads)?;
-    let selection = selection.map(|s| {
-        s.into_iter()
-            .map(|(start, end, step)| Slice::new(start, end, step))
-            .collect::<Vec<_>>()
-    });
-    let output = py
-        .detach(|| {
-            ReadOnlyHdfSession::with_options(&path, threads, parallel)?
-                .read_numeric(dataset_path, selection.as_deref())
-        })
-        .map_err(err)?;
-    array(py, output)
+    crate::panic_guard::guard(|| {
+        let threads = self::threads(threads)?;
+        let selection = selection.map(|s| {
+            s.into_iter()
+                .map(|(start, end, step)| Slice::new(start, end, step))
+                .collect::<Vec<_>>()
+        });
+        let output = py
+            .detach(|| {
+                ReadOnlyHdfSession::with_options(&path, threads, parallel)?
+                    .read_numeric(dataset_path, selection.as_deref())
+            })
+            .map_err(err)?;
+        array(py, output)
+    })
 }
 #[pyfunction]
 #[pyo3(signature=(path,dataset_paths,threads=None,parallel=true))]
@@ -147,19 +149,21 @@ pub fn read_numeric_batch<'py>(
     threads: Option<usize>,
     parallel: bool,
 ) -> PyResult<Bound<'py, PyDict>> {
-    let threads = self::threads(threads)?;
-    let output = py
-        .detach(|| {
-            let session = ReadOnlyHdfSession::with_options(&path, threads, parallel)?;
-            let paths = dataset_paths.iter().map(String::as_str).collect::<Vec<_>>();
-            session.read_numeric_batch(&paths)
-        })
-        .map_err(err)?;
-    let result = PyDict::new(py);
-    for (name, output) in output {
-        result.set_item(name, array(py, output)?)?;
-    }
-    Ok(result)
+    crate::panic_guard::guard(|| {
+        let threads = self::threads(threads)?;
+        let output = py
+            .detach(|| {
+                let session = ReadOnlyHdfSession::with_options(&path, threads, parallel)?;
+                let paths = dataset_paths.iter().map(String::as_str).collect::<Vec<_>>();
+                session.read_numeric_batch(&paths)
+            })
+            .map_err(err)?;
+        let result = PyDict::new(py);
+        for (name, output) in output {
+            result.set_item(name, array(py, output)?)?;
+        }
+        Ok(result)
+    })
 }
 #[pyfunction]
 pub fn numeric_capability<'py>(
@@ -167,95 +171,97 @@ pub fn numeric_capability<'py>(
     path: std::path::PathBuf,
     dataset_path: &str,
 ) -> PyResult<Bound<'py, PyDict>> {
-    let cap = py
-        .detach(|| ReadOnlyHdfSession::open(&path)?.numeric_capability(dataset_path))
-        .map_err(err)?;
-    let out = PyDict::new(py);
-    out.set_item("schema_version", CAPABILITY_SCHEMA_VERSION)?;
-    out.set_item(
-        "capability",
-        crate::domain::capability(py, &cap.capability)?,
-    )?;
-    out.set_item("dataset", dataset_path)?;
-    out.set_item("dataset_path", dataset_path)?;
-    out.set_item("shape", cap.shape)?;
-    out.set_item("max_shape", cap.max_shape)?;
-    out.set_item("chunks", cap.chunks)?;
-    let (byte_order, signed) = (cap.byte_order, cap.signed);
-    out.set_item(
-        "byte_order",
-        byte_order.map(|o| {
-            if matches!(o, ByteOrder::Little) {
-                "little"
-            } else {
-                "big"
-            }
-        }),
-    )?;
-    out.set_item("signed", signed)?;
-    if let Some(enc) = cap.encoding {
-        let class = match enc.class.code() {
-            0 => "integer",
-            1 => "float",
-            2 => "time",
-            3 => "string",
-            4 => "bitfield",
-            5 => "opaque",
-            6 => "compound",
-            7 => "reference",
-            8 => "enum",
-            9 => "vlen",
-            10 => "array",
-            _ => "unknown",
-        };
-        out.set_item("type_class", class)?;
-        out.set_item("datatype_version", enc.version)?;
-        out.set_item("class_flags", enc.flags)?;
-        out.set_item("element_size", enc.size)?;
-        out.set_item("bit_offset", enc.bit_offset)?;
-        out.set_item("bit_precision", enc.bit_precision)?;
-        if let Some(layout) = enc.float {
-            let float = PyDict::new(py);
-            float.set_item("sign_location", layout.sign_location)?;
-            float.set_item("exponent_location", layout.exponent_location)?;
-            float.set_item("exponent_size", layout.exponent_size)?;
-            float.set_item("mantissa_location", layout.mantissa_location)?;
-            float.set_item("mantissa_size", layout.mantissa_size)?;
-            float.set_item("exponent_bias", layout.exponent_bias)?;
-            float.set_item("mantissa_normalization", layout.normalization)?;
-            float.set_item("vax_order", enc.flags & 0x40 != 0)?;
-            out.set_item("float_layout", float)?;
-        }
-    }
-    match cap.kind.and_then(numpy) {
-        Some(dtype) => {
-            out.set_item("supported", true)?;
-            out.set_item("numpy_dtype", dtype)?;
-            out.set_item("reason", py.None())?;
-        }
-        None => {
-            out.set_item("supported", false)?;
-            out.set_item("numpy_dtype", py.None())?;
-            let reason = cap
-                .capability
-                .reason()
-                .unwrap_or("numeric kind has no supported NumPy conversion");
-            out.set_item("reason", reason)?;
-            if cap.kind.is_some() {
-                out.set_item(
-                    "capability",
-                    crate::domain::capability(
-                        py,
-                        &ras_commander_rust::Capability::unsupported(
-                            ras_commander_rust::UnsupportedCode::NotImplemented,
-                            reason,
-                        ),
-                    )?,
-                )?;
+    crate::panic_guard::guard(|| {
+        let cap = py
+            .detach(|| ReadOnlyHdfSession::open(&path)?.numeric_capability(dataset_path))
+            .map_err(err)?;
+        let out = PyDict::new(py);
+        out.set_item("schema_version", CAPABILITY_SCHEMA_VERSION)?;
+        out.set_item(
+            "capability",
+            crate::domain::capability(py, &cap.capability)?,
+        )?;
+        out.set_item("dataset", dataset_path)?;
+        out.set_item("dataset_path", dataset_path)?;
+        out.set_item("shape", cap.shape)?;
+        out.set_item("max_shape", cap.max_shape)?;
+        out.set_item("chunks", cap.chunks)?;
+        let (byte_order, signed) = (cap.byte_order, cap.signed);
+        out.set_item(
+            "byte_order",
+            byte_order.map(|o| {
+                if matches!(o, ByteOrder::Little) {
+                    "little"
+                } else {
+                    "big"
+                }
+            }),
+        )?;
+        out.set_item("signed", signed)?;
+        if let Some(enc) = cap.encoding {
+            let class = match enc.class.code() {
+                0 => "integer",
+                1 => "float",
+                2 => "time",
+                3 => "string",
+                4 => "bitfield",
+                5 => "opaque",
+                6 => "compound",
+                7 => "reference",
+                8 => "enum",
+                9 => "vlen",
+                10 => "array",
+                _ => "unknown",
+            };
+            out.set_item("type_class", class)?;
+            out.set_item("datatype_version", enc.version)?;
+            out.set_item("class_flags", enc.flags)?;
+            out.set_item("element_size", enc.size)?;
+            out.set_item("bit_offset", enc.bit_offset)?;
+            out.set_item("bit_precision", enc.bit_precision)?;
+            if let Some(layout) = enc.float {
+                let float = PyDict::new(py);
+                float.set_item("sign_location", layout.sign_location)?;
+                float.set_item("exponent_location", layout.exponent_location)?;
+                float.set_item("exponent_size", layout.exponent_size)?;
+                float.set_item("mantissa_location", layout.mantissa_location)?;
+                float.set_item("mantissa_size", layout.mantissa_size)?;
+                float.set_item("exponent_bias", layout.exponent_bias)?;
+                float.set_item("mantissa_normalization", layout.normalization)?;
+                float.set_item("vax_order", enc.flags & 0x40 != 0)?;
+                out.set_item("float_layout", float)?;
             }
         }
-    }
-    Ok(out)
+        match cap.kind.and_then(numpy) {
+            Some(dtype) => {
+                out.set_item("supported", true)?;
+                out.set_item("numpy_dtype", dtype)?;
+                out.set_item("reason", py.None())?;
+            }
+            None => {
+                out.set_item("supported", false)?;
+                out.set_item("numpy_dtype", py.None())?;
+                let reason = cap
+                    .capability
+                    .reason()
+                    .unwrap_or("numeric kind has no supported NumPy conversion");
+                out.set_item("reason", reason)?;
+                if cap.kind.is_some() {
+                    out.set_item(
+                        "capability",
+                        crate::domain::capability(
+                            py,
+                            &ras_commander_rust::Capability::unsupported(
+                                ras_commander_rust::UnsupportedCode::NotImplemented,
+                                reason,
+                            ),
+                        )?,
+                    )?;
+                }
+            }
+        }
+        Ok(out)
+    })
 }
 pub(crate) fn numeric_kind_name(k: Native) -> &'static str {
     k.as_str()

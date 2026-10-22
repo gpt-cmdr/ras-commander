@@ -44,3 +44,6 @@ serde_json = "1"
 [profile.release]
 lto = "thin"
 codegen-units = 1
+# Integer overflow panics (contained by panic_guard as FastHdfPanicError) instead of
+# wrapping into a short read or a huge allocation; matches the engine release profile.
+overflow-checks = true

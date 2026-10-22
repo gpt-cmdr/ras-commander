@@ -76,172 +76,176 @@ pub fn write_pmtiles(
     max_zoom: u8,
     threads: Option<usize>,
 ) -> PyResult<()> {
-    if min_zoom > max_zoom || max_zoom > 22 {
-        return Err(PyValueError::new_err(
-            "zoom range must satisfy 0 <= min_zoom <= max_zoom <= 22",
-        ));
-    }
-    let mut names = HashSet::new();
-    let mut parsed = Vec::new();
-    for obj in layers.iter() {
-        let d = obj.cast::<PyDict>()?;
-        let name: String = required(d, "name")?.extract()?;
-        if name.is_empty() || !names.insert(name.clone()) {
+    crate::panic_guard::guard(|| {
+        if min_zoom > max_zoom || max_zoom > 22 {
             return Err(PyValueError::new_err(
-                "layer names must be nonempty and unique",
+                "zoom range must satisfy 0 <= min_zoom <= max_zoom <= 22",
             ));
         }
-        let coords_obj = required(d, "coordinates")?;
-        let ids_obj = required(d, "cell_ids")?;
-        let coords: PyReadonlyArray2<f64> = coords_obj.extract()?;
-        let ids: PyReadonlyArray1<i64> = ids_obj.extract()?;
-        let coords = coords.as_array();
-        let ids = ids.as_array();
-        if coords.ncols() != 2 {
-            return Err(PyValueError::new_err(format!(
-                "{name}: invalid packed polygon dimensions"
-            )));
-        }
-        let nested = d.contains("ring_offsets")?
-            || d.contains("polygon_offsets")?
-            || d.contains("feature_offsets")?;
-        let (ring_offsets, polygon_offsets, feature_offsets) = if nested {
-            if d.contains("offsets")? {
+        let mut names = HashSet::new();
+        let mut parsed = Vec::new();
+        for obj in layers.iter() {
+            let d = obj.cast::<PyDict>()?;
+            let name: String = required(d, "name")?.extract()?;
+            if name.is_empty() || !names.insert(name.clone()) {
                 return Err(PyValueError::new_err(
-                    "use either offsets or the three nested offset arrays, not both",
+                    "layer names must be nonempty and unique",
                 ));
             }
-            let rings = spans(d, "ring_offsets", coords.nrows())?;
-            let polygons = spans(d, "polygon_offsets", rings.len() - 1)?;
-            let features = spans(d, "feature_offsets", polygons.len() - 1)?;
-            (rings, polygons, features)
-        } else {
-            let rings = spans(d, "offsets", coords.nrows())?;
-            let identity: Vec<_> = (0..rings.len()).collect();
-            (rings, identity.clone(), identity)
-        };
-        if feature_offsets.len() != ids.len() + 1 {
-            return Err(PyValueError::new_err(format!(
-                "{name}: feature offsets differ from ID count"
-            )));
-        }
-        if coords.rows().into_iter().any(|p| {
-            !p[0].is_finite()
-                || !p[1].is_finite()
-                || p[0].abs() > 180.
-                || p[1].abs() > 85.0511287798066
-        }) {
-            return Err(PyValueError::new_err(format!("{name}: coordinates must be finite WGS84 lon/lat within Web Mercator latitude limits")));
-        }
-        let properties = required(d, "properties")?;
-        let properties = properties.cast::<PyDict>()?;
-        let mut prop_names = Vec::new();
-        let mut columns = Vec::new();
-        let mut prop_types = Vec::new();
-        for (key, values) in properties.iter() {
-            prop_names.push(key.extract::<String>()?);
-            let values = values.cast::<PyList>()?;
-            if values.len() != ids.len() {
+            let coords_obj = required(d, "coordinates")?;
+            let ids_obj = required(d, "cell_ids")?;
+            let coords: PyReadonlyArray2<f64> = coords_obj.extract()?;
+            let ids: PyReadonlyArray1<i64> = ids_obj.extract()?;
+            let coords = coords.as_array();
+            let ids = ids.as_array();
+            if coords.ncols() != 2 {
                 return Err(PyValueError::new_err(format!(
-                    "{name}: property length differs from polygon count"
+                    "{name}: invalid packed polygon dimensions"
                 )));
             }
-            let values: Vec<_> = values
-                .iter()
-                .map(|v| property(&v))
-                .collect::<PyResult<_>>()?;
-            // freestiler expects its input type names, not TileJSON's output
-            // labels. Mixed scalar columns have no TileJSON union type.
-            let mut kind = None;
-            for value in &values {
-                let next = match value {
-                    PropertyValue::String(_) => "string",
-                    PropertyValue::Bool(_) => "boolean",
-                    PropertyValue::Null => continue,
-                    _ => "numeric",
+            let nested = d.contains("ring_offsets")?
+                || d.contains("polygon_offsets")?
+                || d.contains("feature_offsets")?;
+            let (ring_offsets, polygon_offsets, feature_offsets) = if nested {
+                if d.contains("offsets")? {
+                    return Err(PyValueError::new_err(
+                        "use either offsets or the three nested offset arrays, not both",
+                    ));
+                }
+                let rings = spans(d, "ring_offsets", coords.nrows())?;
+                let polygons = spans(d, "polygon_offsets", rings.len() - 1)?;
+                let features = spans(d, "feature_offsets", polygons.len() - 1)?;
+                (rings, polygons, features)
+            } else {
+                let rings = spans(d, "offsets", coords.nrows())?;
+                let identity: Vec<_> = (0..rings.len()).collect();
+                (rings, identity.clone(), identity)
+            };
+            if feature_offsets.len() != ids.len() + 1 {
+                return Err(PyValueError::new_err(format!(
+                    "{name}: feature offsets differ from ID count"
+                )));
+            }
+            if coords.rows().into_iter().any(|p| {
+                !p[0].is_finite()
+                    || !p[1].is_finite()
+                    || p[0].abs() > 180.
+                    || p[1].abs() > 85.0511287798066
+            }) {
+                return Err(PyValueError::new_err(format!("{name}: coordinates must be finite WGS84 lon/lat within Web Mercator latitude limits")));
+            }
+            let properties = required(d, "properties")?;
+            let properties = properties.cast::<PyDict>()?;
+            let mut prop_names = Vec::new();
+            let mut columns = Vec::new();
+            let mut prop_types = Vec::new();
+            for (key, values) in properties.iter() {
+                prop_names.push(key.extract::<String>()?);
+                let values = values.cast::<PyList>()?;
+                if values.len() != ids.len() {
+                    return Err(PyValueError::new_err(format!(
+                        "{name}: property length differs from polygon count"
+                    )));
+                }
+                let values: Vec<_> = values
+                    .iter()
+                    .map(|v| property(&v))
+                    .collect::<PyResult<_>>()?;
+                // freestiler expects its input type names, not TileJSON's output
+                // labels. Mixed scalar columns have no TileJSON union type.
+                let mut kind = None;
+                for value in &values {
+                    let next = match value {
+                        PropertyValue::String(_) => "string",
+                        PropertyValue::Bool(_) => "boolean",
+                        PropertyValue::Null => continue,
+                        _ => "numeric",
+                    };
+                    kind = Some(match kind {
+                        Some(previous) if previous != next => "mixed",
+                        _ => next,
+                    });
+                }
+                let kind = kind.unwrap_or("string");
+                prop_types.push(kind.to_string());
+                columns.push(values);
+            }
+            let mut features = Vec::with_capacity(ids.len());
+            let mut seen = HashSet::new();
+            for i in 0..ids.len() {
+                let id = u64::try_from(ids[i])
+                    .map_err(|_| PyValueError::new_err("cell IDs must be nonnegative"))?;
+                if !seen.insert(id) {
+                    return Err(PyValueError::new_err(format!(
+                        "{name}: duplicate feature ID {id}"
+                    )));
+                }
+                let mut polygons = Vec::new();
+                for p in feature_offsets[i]..feature_offsets[i + 1] {
+                    let mut rings = Vec::new();
+                    for r in polygon_offsets[p]..polygon_offsets[p + 1] {
+                        let start = ring_offsets[r];
+                        let end = ring_offsets[r + 1];
+                        if end - start < 4 {
+                            return Err(PyValueError::new_err(format!(
+                                "{name}: invalid ring span at feature {id}"
+                            )));
+                        }
+                        if coords.row(start) != coords.row(end - 1) {
+                            return Err(PyValueError::new_err(format!(
+                                "{name}: unclosed ring at feature {id}"
+                            )));
+                        }
+                        let ring = LineString::new(
+                            (start..end)
+                                .map(|r| Coord {
+                                    x: coords[[r, 0]],
+                                    y: coords[[r, 1]],
+                                })
+                                .collect(),
+                        );
+                        ras_commander_rust::mesh::validate_ring_geometry(
+                            ring.0.iter().map(|c| [c.x, c.y]),
+                        )
+                        .map_err(|error| {
+                            crate::TopologyError::new_err(format!("{name}: feature {id}: {error}"))
+                        })?;
+                        rings.push(ring);
+                    }
+                    let exterior = rings.remove(0);
+                    polygons.push(Polygon::new(exterior, rings));
+                }
+                let geometry = if polygons.len() == 1 {
+                    Geometry::Polygon(polygons.remove(0))
+                } else {
+                    Geometry::MultiPolygon(MultiPolygon::new(polygons))
                 };
-                kind = Some(match kind {
-                    Some(previous) if previous != next => "mixed",
-                    _ => next,
+                features.push(Feature {
+                    id: Some(id),
+                    geometry,
+                    properties: columns.iter().map(|c| c[i].clone()).collect(),
                 });
             }
-            let kind = kind.unwrap_or("string");
-            prop_types.push(kind.to_string());
-            columns.push(values);
-        }
-        let mut features = Vec::with_capacity(ids.len());
-        let mut seen = HashSet::new();
-        for i in 0..ids.len() {
-            let id = u64::try_from(ids[i])
-                .map_err(|_| PyValueError::new_err("cell IDs must be nonnegative"))?;
-            if !seen.insert(id) {
-                return Err(PyValueError::new_err(format!(
-                    "{name}: duplicate feature ID {id}"
-                )));
+            if !features.is_empty() {
+                parsed.push(LayerData {
+                    name,
+                    features,
+                    prop_names,
+                    prop_types,
+                    min_zoom,
+                    max_zoom,
+                });
             }
-            let mut polygons = Vec::new();
-            for p in feature_offsets[i]..feature_offsets[i + 1] {
-                let mut rings = Vec::new();
-                for r in polygon_offsets[p]..polygon_offsets[p + 1] {
-                    let start = ring_offsets[r];
-                    let end = ring_offsets[r + 1];
-                    if end - start < 4 {
-                        return Err(PyValueError::new_err(format!(
-                            "{name}: invalid ring span at feature {id}"
-                        )));
-                    }
-                    if coords.row(start) != coords.row(end - 1) {
-                        return Err(PyValueError::new_err(format!(
-                            "{name}: unclosed ring at feature {id}"
-                        )));
-                    }
-                    let ring = LineString::new(
-                        (start..end)
-                            .map(|r| Coord {
-                                x: coords[[r, 0]],
-                                y: coords[[r, 1]],
-                            })
-                            .collect(),
-                    );
-                    ras_commander_rust::mesh::validate_ring_geometry(
-                        ring.0.iter().map(|c| [c.x, c.y]),
-                    )
-                    .map_err(|error| {
-                        crate::TopologyError::new_err(format!("{name}: feature {id}: {error}"))
-                    })?;
-                    rings.push(ring);
-                }
-                let exterior = rings.remove(0);
-                polygons.push(Polygon::new(exterior, rings));
-            }
-            let geometry = if polygons.len() == 1 {
-                Geometry::Polygon(polygons.remove(0))
-            } else {
-                Geometry::MultiPolygon(MultiPolygon::new(polygons))
-            };
-            features.push(Feature {
-                id: Some(id),
-                geometry,
-                properties: columns.iter().map(|c| c[i].clone()).collect(),
-            });
         }
-        if !features.is_empty() {
-            parsed.push(LayerData {
-                name,
-                features,
-                prop_names,
-                prop_types,
-                min_zoom,
-                max_zoom,
-            });
+        if parsed.is_empty() {
+            return Err(PyValueError::new_err(
+                "at least one nonempty layer is required",
+            ));
         }
-    }
-    if parsed.is_empty() {
-        return Err(PyValueError::new_err(
-            "at least one nonempty layer is required",
-        ));
-    }
-    let pool = crate::pool(threads)?;
-    py.detach(|| pool.install(|| crate::tile_engine::write(&parsed, output, min_zoom, max_zoom)))
+        let pool = crate::pool(threads)?;
+        py.detach(|| {
+            pool.install(|| crate::tile_engine::write(&parsed, output, min_zoom, max_zoom))
+        })
         .map_err(PyOSError::new_err)
+    })
 }

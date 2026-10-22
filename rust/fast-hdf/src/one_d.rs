@@ -135,19 +135,21 @@ fn xs_geometry_inventory(
     path: PathBuf,
     max_bytes: usize,
 ) -> PyResult<Bound<'_, PyDict>> {
-    let i = py
-        .detach(|| ReadOnlyHdfSession::open(path)?.xs_geometry_inventory(max_bytes))
-        .map_err(crate::reader::err)?;
-    let fields=i.fields.iter().map(|f| Ok(dict!(py,"field"=>f.field.as_str(),"info_path"=>&f.info_path,"values_path"=>&f.values_path,"info_shape"=>&f.info_shape,"values_shape"=>&f.values_shape,"info_kind"=>f.info_kind.map(crate::reader::numeric_kind_name),"info_dtype"=>f.info_kind.and_then(crate::reader::numpy),"values_kind"=>f.values_kind.map(crate::reader::numeric_kind_name),"values_dtype"=>f.values_kind.and_then(crate::reader::numpy),"compound"=>f.compound,"identity_table"=>&f.identity_table,"records_are_sections"=>f.records_are_sections,"section_records"=>f.section_records,"labels"=>labels(py,&f.labels)?,"info_attributes"=>attrs(py,&f.info_attributes)?,"values_attributes"=>attrs(py,&f.values_attributes)?,"capability"=>capability(py,&f.capability)?))).collect::<PyResult<Vec<_>>>()?;
-    let unqualified = i
-        .unqualified
-        .iter()
-        .map(|(n, c)| Ok((n, capability(py, c)?)))
-        .collect::<PyResult<Vec<_>>>()?;
-    let attributes = compound(py, &i.attributes)?;
-    Ok(
-        dict!(py,"geometry"=>crate::domain::cross_section_geometry(py,i.geometry)?,"attributes"=>attributes,"fields"=>fields,"unqualified"=>unqualified),
-    )
+    crate::panic_guard::guard(|| {
+        let i = py
+            .detach(|| ReadOnlyHdfSession::open(path)?.xs_geometry_inventory(max_bytes))
+            .map_err(crate::reader::err)?;
+        let fields=i.fields.iter().map(|f| Ok(dict!(py,"field"=>f.field.as_str(),"info_path"=>&f.info_path,"values_path"=>&f.values_path,"info_shape"=>&f.info_shape,"values_shape"=>&f.values_shape,"info_kind"=>f.info_kind.map(crate::reader::numeric_kind_name),"info_dtype"=>f.info_kind.and_then(crate::reader::numpy),"values_kind"=>f.values_kind.map(crate::reader::numeric_kind_name),"values_dtype"=>f.values_kind.and_then(crate::reader::numpy),"compound"=>f.compound,"identity_table"=>&f.identity_table,"records_are_sections"=>f.records_are_sections,"section_records"=>f.section_records,"labels"=>labels(py,&f.labels)?,"info_attributes"=>attrs(py,&f.info_attributes)?,"values_attributes"=>attrs(py,&f.values_attributes)?,"capability"=>capability(py,&f.capability)?))).collect::<PyResult<Vec<_>>>()?;
+        let unqualified = i
+            .unqualified
+            .iter()
+            .map(|(n, c)| Ok((n, capability(py, c)?)))
+            .collect::<PyResult<Vec<_>>>()?;
+        let attributes = compound(py, &i.attributes)?;
+        Ok(
+            dict!(py,"geometry"=>crate::domain::cross_section_geometry(py,i.geometry)?,"attributes"=>attributes,"fields"=>fields,"unqualified"=>unqualified),
+        )
+    })
 }
 
 #[pyfunction]
@@ -160,30 +162,32 @@ fn read_xs_geometry<'py>(
     metadata_max_bytes: usize,
     max_bytes: usize,
 ) -> PyResult<Bound<'py, PyDict>> {
-    let f = self::field(field)?;
-    let r = py
-        .detach(|| {
-            ReadOnlyHdfSession::open(path)?.read_xs_geometry(
-                f,
-                records.as_deref(),
-                metadata_max_bytes,
-                max_bytes,
-            )
-        })
-        .map_err(crate::reader::err)?;
-    let recs=r.records.iter().map(|x| Ok(dict!(py,"identity"=>identity(py,&x.id)?,"stored_rows"=>(x.stored_rows.start,x.stored_rows.end),"offset"=>x.offset))).collect::<PyResult<Vec<_>>>()?;
-    let (kind, values) = match r.values {
-        XsGeometryValues::Numeric(a) => ("numeric", crate::reader::array(py, a)?),
-        XsGeometryValues::Compound(c) => ("compound", compound(py, &c)?.into_any()),
-        _ => {
-            return Err(crate::UnsupportedError::new_err(
-                "unknown cross-section geometry value encoding",
-            ))
-        }
-    };
-    Ok(
-        dict!(py,"field"=>r.field.as_str(),"info_path"=>&r.info_path,"values_path"=>&r.values_path,"info"=>crate::reader::array(py,r.info)?,"values_kind"=>kind,"values"=>values,"records"=>recs,"labels"=>labels(py,&r.labels)?),
-    )
+    crate::panic_guard::guard(|| {
+        let f = self::field(field)?;
+        let r = py
+            .detach(|| {
+                ReadOnlyHdfSession::open(path)?.read_xs_geometry(
+                    f,
+                    records.as_deref(),
+                    metadata_max_bytes,
+                    max_bytes,
+                )
+            })
+            .map_err(crate::reader::err)?;
+        let recs=r.records.iter().map(|x| Ok(dict!(py,"identity"=>identity(py,&x.id)?,"stored_rows"=>(x.stored_rows.start,x.stored_rows.end),"offset"=>x.offset))).collect::<PyResult<Vec<_>>>()?;
+        let (kind, values) = match r.values {
+            XsGeometryValues::Numeric(a) => ("numeric", crate::reader::array(py, a)?),
+            XsGeometryValues::Compound(c) => ("compound", compound(py, &c)?.into_any()),
+            _ => {
+                return Err(crate::UnsupportedError::new_err(
+                    "unknown cross-section geometry value encoding",
+                ))
+            }
+        };
+        Ok(
+            dict!(py,"field"=>r.field.as_str(),"info_path"=>&r.info_path,"values_path"=>&r.values_path,"info"=>crate::reader::array(py,r.info)?,"values_kind"=>kind,"values"=>values,"records"=>recs,"labels"=>labels(py,&r.labels)?),
+        )
+    })
 }
 
 #[pyfunction]
@@ -194,45 +198,53 @@ fn one_d_line_family<'py>(
     family: &str,
     max_bytes: usize,
 ) -> PyResult<Bound<'py, PyDict>> {
-    let f = line_family(family)?;
-    let r = py
-        .detach(|| ReadOnlyHdfSession::open(path)?.one_d_line_family(f, max_bytes))
-        .map_err(crate::reader::err)?;
-    reported(py, r, |g| {
-        let features=g.features.iter().map(|x| Ok(dict!(py,"identity"=>identity(py,&x.id)?,"point_range"=>(x.point_range.start,x.point_range.end),"parts"=>x.parts.iter().map(|p|(p.start,p.end)).collect::<Vec<_>>()))).collect::<PyResult<Vec<_>>>()?;
-        let attributes = g.attributes.as_ref().map(|a| compound(py, a)).transpose()?;
-        Ok(dict!(py,"family"=>g.family.as_str(),"group_path"=>g.family.group_path(),"prefix"=>g.family.prefix(),"attributes"=>attributes,"info"=>crate::reader::array(py,g.info)?,"parts"=>crate::reader::array(py,g.parts)?,"points"=>crate::reader::array(py,g.points)?,"features"=>features,"points_attributes"=>attrs(py,&g.points_attributes)?).into_any())
+    crate::panic_guard::guard(|| {
+        let f = line_family(family)?;
+        let r = py
+            .detach(|| ReadOnlyHdfSession::open(path)?.one_d_line_family(f, max_bytes))
+            .map_err(crate::reader::err)?;
+        reported(py, r, |g| {
+            let features=g.features.iter().map(|x| Ok(dict!(py,"identity"=>identity(py,&x.id)?,"point_range"=>(x.point_range.start,x.point_range.end),"parts"=>x.parts.iter().map(|p|(p.start,p.end)).collect::<Vec<_>>()))).collect::<PyResult<Vec<_>>>()?;
+            let attributes = g.attributes.as_ref().map(|a| compound(py, a)).transpose()?;
+            Ok(dict!(py,"family"=>g.family.as_str(),"group_path"=>g.family.group_path(),"prefix"=>g.family.prefix(),"attributes"=>attributes,"info"=>crate::reader::array(py,g.info)?,"parts"=>crate::reader::array(py,g.parts)?,"points"=>crate::reader::array(py,g.points)?,"features"=>features,"points_attributes"=>attrs(py,&g.points_attributes)?).into_any())
+        })
     })
 }
 
 #[pyfunction]
 #[pyo3(signature=(path,max_bytes=67108864))]
 fn river_reaches(py: Python<'_>, path: PathBuf, max_bytes: usize) -> PyResult<Bound<'_, PyDict>> {
-    let r = py
-        .detach(|| ReadOnlyHdfSession::open(path)?.river_reaches(max_bytes))
-        .map_err(crate::reader::err)?;
-    reported(py, r, |v| {
-        let rows=v.iter().map(|x| Ok(dict!(py,"identity"=>identity(py,&x.id)?,"river"=>&x.river,"reach"=>&x.reach,"upstream_type"=>text(py,&x.upstream_type)?,"upstream_name"=>text(py,&x.upstream_name)?,"downstream_type"=>text(py,&x.downstream_type)?,"downstream_name"=>text(py,&x.downstream_name)?))).collect::<PyResult<Vec<_>>>()?;
-        Ok(pyo3::types::PyList::new(py, rows)?.into_any())
+    crate::panic_guard::guard(|| {
+        let r = py
+            .detach(|| ReadOnlyHdfSession::open(path)?.river_reaches(max_bytes))
+            .map_err(crate::reader::err)?;
+        reported(py, r, |v| {
+            let rows=v.iter().map(|x| Ok(dict!(py,"identity"=>identity(py,&x.id)?,"river"=>&x.river,"reach"=>&x.reach,"upstream_type"=>text(py,&x.upstream_type)?,"upstream_name"=>text(py,&x.upstream_name)?,"downstream_type"=>text(py,&x.downstream_type)?,"downstream_name"=>text(py,&x.downstream_name)?))).collect::<PyResult<Vec<_>>>()?;
+            Ok(pyo3::types::PyList::new(py, rows)?.into_any())
+        })
     })
 }
 
 #[pyfunction]
 #[pyo3(signature=(path,max_bytes=67108864))]
 fn river_junctions(py: Python<'_>, path: PathBuf, max_bytes: usize) -> PyResult<Bound<'_, PyDict>> {
-    let r = py
-        .detach(|| ReadOnlyHdfSession::open(path)?.river_junctions(max_bytes))
-        .map_err(crate::reader::err)?;
-    reported(py, r, |p| points(py, p))
+    crate::panic_guard::guard(|| {
+        let r = py
+            .detach(|| ReadOnlyHdfSession::open(path)?.river_junctions(max_bytes))
+            .map_err(crate::reader::err)?;
+        reported(py, r, |p| points(py, p))
+    })
 }
 
 #[pyfunction]
 #[pyo3(signature=(path,max_bytes=67108864))]
 fn pump_stations(py: Python<'_>, path: PathBuf, max_bytes: usize) -> PyResult<Bound<'_, PyDict>> {
-    let r = py
-        .detach(|| ReadOnlyHdfSession::open(path)?.pump_stations(max_bytes))
-        .map_err(crate::reader::err)?;
-    reported(py, r, |p| points(py, p))
+    crate::panic_guard::guard(|| {
+        let r = py
+            .detach(|| ReadOnlyHdfSession::open(path)?.pump_stations(max_bytes))
+            .map_err(crate::reader::err)?;
+        reported(py, r, |p| points(py, p))
+    })
 }
 
 #[pyfunction]
@@ -242,17 +254,19 @@ fn xs_interpolation_surfaces(
     path: PathBuf,
     max_bytes: usize,
 ) -> PyResult<Bound<'_, PyDict>> {
-    let r = py
-        .detach(|| ReadOnlyHdfSession::open(path)?.xs_interpolation_surfaces(max_bytes))
-        .map_err(crate::reader::err)?;
-    reported(py, r, |s| {
-        let surfaces=s.surfaces.iter().map(|x| Ok(dict!(py,"identity"=>identity(py,&x.id)?,"point_range"=>(x.point_range.start,x.point_range.end),"triangle_range"=>(x.triangle_range.start,x.triangle_range.end)))).collect::<PyResult<Vec<_>>>()?;
-        let per_surface = s
-            .per_surface
-            .into_iter()
-            .map(|(n, a)| Ok((n, crate::reader::array(py, a)?)))
-            .collect::<PyResult<Vec<_>>>()?;
-        Ok(dict!(py,"info"=>crate::reader::array(py,s.info)?,"points"=>crate::reader::array(py,s.points)?,"triangles"=>crate::reader::array(py,s.triangles)?,"per_surface"=>per_surface,"surfaces"=>surfaces).into_any())
+    crate::panic_guard::guard(|| {
+        let r = py
+            .detach(|| ReadOnlyHdfSession::open(path)?.xs_interpolation_surfaces(max_bytes))
+            .map_err(crate::reader::err)?;
+        reported(py, r, |s| {
+            let surfaces=s.surfaces.iter().map(|x| Ok(dict!(py,"identity"=>identity(py,&x.id)?,"point_range"=>(x.point_range.start,x.point_range.end),"triangle_range"=>(x.triangle_range.start,x.triangle_range.end)))).collect::<PyResult<Vec<_>>>()?;
+            let per_surface = s
+                .per_surface
+                .into_iter()
+                .map(|(n, a)| Ok((n, crate::reader::array(py, a)?)))
+                .collect::<PyResult<Vec<_>>>()?;
+            Ok(dict!(py,"info"=>crate::reader::array(py,s.info)?,"points"=>crate::reader::array(py,s.points)?,"triangles"=>crate::reader::array(py,s.triangles)?,"per_surface"=>per_surface,"surfaces"=>surfaces).into_any())
+        })
     })
 }
 
@@ -264,19 +278,21 @@ fn xs_result_inventory<'py>(
     mode: &str,
     max_bytes: usize,
 ) -> PyResult<Bound<'py, PyDict>> {
-    let m = self::mode(mode)?;
-    let i = py
-        .detach(|| ReadOnlyHdfSession::open(path)?.xs_result_inventory(m, max_bytes))
-        .map_err(crate::reader::err)?;
-    let vars=i.variables.iter().map(|v| Ok(dict!(py,"name"=>&v.name,"path"=>&v.path,"domain"=>v.domain.as_str(),"shape"=>&v.shape,"kind"=>v.kind.map(crate::reader::numeric_kind_name),"dtype"=>v.kind.and_then(crate::reader::numpy),"chunks"=>&v.chunks,"capability"=>capability(py,&v.capability)?,"attributes"=>attrs(py,&v.attributes)?,"units"=>dataset_units(py,&v.units.units,&v.units.source,&v.units.quantity_name)?,"labels"=>labels(py,&v.labels)?))).collect::<PyResult<Vec<_>>>()?;
-    let sections = i
-        .sections
-        .iter()
-        .map(|s| identity(py, s))
-        .collect::<PyResult<Vec<_>>>()?;
-    Ok(
-        dict!(py,"mode"=>i.mode.as_str(),"group"=>&i.group,"capability"=>capability(py,&i.capability)?,"rows"=>i.rows,"sections"=>sections,"variables"=>vars),
-    )
+    crate::panic_guard::guard(|| {
+        let m = self::mode(mode)?;
+        let i = py
+            .detach(|| ReadOnlyHdfSession::open(path)?.xs_result_inventory(m, max_bytes))
+            .map_err(crate::reader::err)?;
+        let vars=i.variables.iter().map(|v| Ok(dict!(py,"name"=>&v.name,"path"=>&v.path,"domain"=>v.domain.as_str(),"shape"=>&v.shape,"kind"=>v.kind.map(crate::reader::numeric_kind_name),"dtype"=>v.kind.and_then(crate::reader::numpy),"chunks"=>&v.chunks,"capability"=>capability(py,&v.capability)?,"attributes"=>attrs(py,&v.attributes)?,"units"=>dataset_units(py,&v.units.units,&v.units.source,&v.units.quantity_name)?,"labels"=>labels(py,&v.labels)?))).collect::<PyResult<Vec<_>>>()?;
+        let sections = i
+            .sections
+            .iter()
+            .map(|s| identity(py, s))
+            .collect::<PyResult<Vec<_>>>()?;
+        Ok(
+            dict!(py,"mode"=>i.mode.as_str(),"group"=>&i.group,"capability"=>capability(py,&i.capability)?,"rows"=>i.rows,"sections"=>sections,"variables"=>vars),
+        )
+    })
 }
 
 #[pyfunction]
@@ -292,27 +308,29 @@ fn read_xs_result<'py>(
     metadata_max_bytes: usize,
     max_bytes: usize,
 ) -> PyResult<Bound<'py, PyDict>> {
-    let m = self::mode(mode)?;
-    let r = py
-        .detach(|| {
-            ReadOnlyHdfSession::open(path)?.read_xs_result(
-                m,
-                variable,
-                slice(rows),
-                sections.as_deref(),
-                metadata_max_bytes,
-                max_bytes,
-            )
-        })
-        .map_err(crate::reader::err)?;
-    let ids = r
-        .section_ids
-        .iter()
-        .map(|s| identity(py, s))
-        .collect::<PyResult<Vec<_>>>()?;
-    Ok(
-        dict!(py,"identity"=>identity(py,&r.id)?,"mode"=>r.mode.as_str(),"variable"=>&r.variable,"rows"=>(r.rows.start,r.rows.end,r.rows.step),"sections"=>&r.sections,"section_ids"=>ids,"values"=>crate::reader::array(py,r.values)?),
-    )
+    crate::panic_guard::guard(|| {
+        let m = self::mode(mode)?;
+        let r = py
+            .detach(|| {
+                ReadOnlyHdfSession::open(path)?.read_xs_result(
+                    m,
+                    variable,
+                    slice(rows),
+                    sections.as_deref(),
+                    metadata_max_bytes,
+                    max_bytes,
+                )
+            })
+            .map_err(crate::reader::err)?;
+        let ids = r
+            .section_ids
+            .iter()
+            .map(|s| identity(py, s))
+            .collect::<PyResult<Vec<_>>>()?;
+        Ok(
+            dict!(py,"identity"=>identity(py,&r.id)?,"mode"=>r.mode.as_str(),"variable"=>&r.variable,"rows"=>(r.rows.start,r.rows.end,r.rows.step),"sections"=>&r.sections,"section_ids"=>ids,"values"=>crate::reader::array(py,r.values)?),
+        )
+    })
 }
 
 #[pyfunction]
@@ -324,10 +342,14 @@ fn unsteady_row_window(
     end_ms: i64,
     max_bytes: usize,
 ) -> PyResult<(u64, u64, u64)> {
-    let s = py
-        .detach(|| ReadOnlyHdfSession::open(path)?.unsteady_row_window(start_ms, end_ms, max_bytes))
-        .map_err(crate::reader::err)?;
-    Ok((s.start, s.end, s.step))
+    crate::panic_guard::guard(|| {
+        let s = py
+            .detach(|| {
+                ReadOnlyHdfSession::open(path)?.unsteady_row_window(start_ms, end_ms, max_bytes)
+            })
+            .map_err(crate::reader::err)?;
+        Ok((s.start, s.end, s.step))
+    })
 }
 
 #[pyfunction]
@@ -337,11 +359,15 @@ fn one_d_summary_inventory(
     path: PathBuf,
     max_bytes: usize,
 ) -> PyResult<Bound<'_, PyDict>> {
-    let i = py
-        .detach(|| ReadOnlyHdfSession::open(path)?.one_d_summary_inventory(max_bytes))
-        .map_err(crate::reader::err)?;
-    let vars=i.variables.iter().map(|v| Ok(dict!(py,"family"=>&v.family,"name"=>&v.name,"path"=>&v.path,"shape"=>&v.shape,"kind"=>v.kind.map(crate::reader::numeric_kind_name),"dtype"=>v.kind.and_then(crate::reader::numpy),"chunks"=>&v.chunks,"domain"=>v.domain.as_str(),"element_axis"=>v.element_axis,"capability"=>capability(py,&v.capability)?,"attributes"=>attrs(py,&v.attributes)?,"labels"=>labels(py,&v.labels)?,"row_labels"=>v.row_labels.as_ref().map(|l|label_list(py,l)).transpose()?,"time_of_extreme_rows"=>&v.time_of_extreme_rows))).collect::<PyResult<Vec<_>>>()?;
-    Ok(dict!(py,"group"=>&i.group,"capability"=>capability(py,&i.capability)?,"variables"=>vars))
+    crate::panic_guard::guard(|| {
+        let i = py
+            .detach(|| ReadOnlyHdfSession::open(path)?.one_d_summary_inventory(max_bytes))
+            .map_err(crate::reader::err)?;
+        let vars=i.variables.iter().map(|v| Ok(dict!(py,"family"=>&v.family,"name"=>&v.name,"path"=>&v.path,"shape"=>&v.shape,"kind"=>v.kind.map(crate::reader::numeric_kind_name),"dtype"=>v.kind.and_then(crate::reader::numpy),"chunks"=>&v.chunks,"domain"=>v.domain.as_str(),"element_axis"=>v.element_axis,"capability"=>capability(py,&v.capability)?,"attributes"=>attrs(py,&v.attributes)?,"labels"=>labels(py,&v.labels)?,"row_labels"=>v.row_labels.as_ref().map(|l|label_list(py,l)).transpose()?,"time_of_extreme_rows"=>&v.time_of_extreme_rows))).collect::<PyResult<Vec<_>>>()?;
+        Ok(
+            dict!(py,"group"=>&i.group,"capability"=>capability(py,&i.capability)?,"variables"=>vars),
+        )
+    })
 }
 
 #[pyfunction]
@@ -355,29 +381,31 @@ fn read_one_d_summary<'py>(
     metadata_max_bytes: usize,
     max_bytes: usize,
 ) -> PyResult<Bound<'py, PyDict>> {
-    let r = py
-        .detach(|| {
-            ReadOnlyHdfSession::open(path)?.read_one_d_summary(
-                family,
-                name,
-                elements.as_deref(),
-                metadata_max_bytes,
-                max_bytes,
-            )
-        })
-        .map_err(crate::reader::err)?;
-    let ids = r
-        .element_ids
-        .as_ref()
-        .map(|v| {
-            v.iter()
-                .map(|i| identity(py, i))
-                .collect::<PyResult<Vec<_>>>()
-        })
-        .transpose()?;
-    Ok(
-        dict!(py,"identity"=>identity(py,&r.id)?,"family"=>&r.family,"name"=>&r.name,"elements"=>&r.elements,"element_ids"=>ids,"values"=>crate::reader::array(py,r.values)?),
-    )
+    crate::panic_guard::guard(|| {
+        let r = py
+            .detach(|| {
+                ReadOnlyHdfSession::open(path)?.read_one_d_summary(
+                    family,
+                    name,
+                    elements.as_deref(),
+                    metadata_max_bytes,
+                    max_bytes,
+                )
+            })
+            .map_err(crate::reader::err)?;
+        let ids = r
+            .element_ids
+            .as_ref()
+            .map(|v| {
+                v.iter()
+                    .map(|i| identity(py, i))
+                    .collect::<PyResult<Vec<_>>>()
+            })
+            .transpose()?;
+        Ok(
+            dict!(py,"identity"=>identity(py,&r.id)?,"family"=>&r.family,"name"=>&r.name,"elements"=>&r.elements,"element_ids"=>ids,"values"=>crate::reader::array(py,r.values)?),
+        )
+    })
 }
 
 #[pyfunction]
@@ -387,16 +415,18 @@ fn structure_geometry(
     path: PathBuf,
     max_bytes: usize,
 ) -> PyResult<Bound<'_, PyDict>> {
-    let r = py
-        .detach(|| ReadOnlyHdfSession::open(path)?.structure_geometry(max_bytes))
-        .map_err(crate::reader::err)?;
-    reported(py, r, |g| {
-        let records=g.records.iter().map(|x| Ok(dict!(py,"identity"=>identity(py,&x.id)?,"structure_type"=>text(py,&x.structure_type)?,"river"=>text(py,&x.river)?,"reach"=>text(py,&x.reach)?,"station"=>text(py,&x.station)?,"connection"=>text(py,&x.connection)?,"node_name"=>text(py,&x.node_name)?,"profile_ranges"=>x.profile_ranges.iter().map(|(n,r)|(n.clone(),(r.start,r.end))).collect::<Vec<_>>()))).collect::<PyResult<Vec<_>>>()?;
-        let attributes = compound(py, &g.attributes)?;
-        Ok(
+    crate::panic_guard::guard(|| {
+        let r = py
+            .detach(|| ReadOnlyHdfSession::open(path)?.structure_geometry(max_bytes))
+            .map_err(crate::reader::err)?;
+        reported(py, r, |g| {
+            let records=g.records.iter().map(|x| Ok(dict!(py,"identity"=>identity(py,&x.id)?,"structure_type"=>text(py,&x.structure_type)?,"river"=>text(py,&x.river)?,"reach"=>text(py,&x.reach)?,"station"=>text(py,&x.station)?,"connection"=>text(py,&x.connection)?,"node_name"=>text(py,&x.node_name)?,"profile_ranges"=>x.profile_ranges.iter().map(|(n,r)|(n.clone(),(r.start,r.end))).collect::<Vec<_>>()))).collect::<PyResult<Vec<_>>>()?;
+            let attributes = compound(py, &g.attributes)?;
+            Ok(
             dict!(py,"attributes"=>attributes,"records"=>records,"group"=>group_data(py,g.group)?)
                 .into_any(),
         )
+        })
     })
 }
 
@@ -408,11 +438,13 @@ fn one_d_geometry_group<'py>(
     group: &str,
     max_bytes: usize,
 ) -> PyResult<Bound<'py, PyDict>> {
-    let g = geometry_group(group)?;
-    let r = py
-        .detach(|| ReadOnlyHdfSession::open(path)?.one_d_geometry_group(g, max_bytes))
-        .map_err(crate::reader::err)?;
-    reported(py, r, |d| Ok(group_data(py, d)?.into_any()))
+    crate::panic_guard::guard(|| {
+        let g = geometry_group(group)?;
+        let r = py
+            .detach(|| ReadOnlyHdfSession::open(path)?.one_d_geometry_group(g, max_bytes))
+            .map_err(crate::reader::err)?;
+        reported(py, r, |d| Ok(group_data(py, d)?.into_any()))
+    })
 }
 
 #[pyfunction]
@@ -424,23 +456,25 @@ fn one_d_structure_inventory<'py>(
     mode: &str,
     max_bytes: usize,
 ) -> PyResult<Bound<'py, PyDict>> {
-    let (k, m) = (structure_kind(kind)?, self::mode(mode)?);
-    let i = py
-        .detach(|| ReadOnlyHdfSession::open(path)?.one_d_structure_inventory(k, m, max_bytes))
-        .map_err(crate::reader::err)?;
-    let structures = i
-        .structures
-        .iter()
-        .map(|s| crate::structures::descriptor(py, s))
-        .collect::<PyResult<Vec<_>>>()?;
-    let family = i
-        .family_series
-        .iter()
-        .map(|s| crate::structures::series(py, s))
-        .collect::<PyResult<Vec<_>>>()?;
-    Ok(
-        dict!(py,"kind"=>i.kind.as_str(),"mode"=>i.mode.as_str(),"group"=>&i.group,"rows"=>i.rows,"qualified"=>i.kind.qualified(i.mode),"structures"=>structures,"family_series"=>family),
-    )
+    crate::panic_guard::guard(|| {
+        let (k, m) = (structure_kind(kind)?, self::mode(mode)?);
+        let i = py
+            .detach(|| ReadOnlyHdfSession::open(path)?.one_d_structure_inventory(k, m, max_bytes))
+            .map_err(crate::reader::err)?;
+        let structures = i
+            .structures
+            .iter()
+            .map(|s| crate::structures::descriptor(py, s))
+            .collect::<PyResult<Vec<_>>>()?;
+        let family = i
+            .family_series
+            .iter()
+            .map(|s| crate::structures::series(py, s))
+            .collect::<PyResult<Vec<_>>>()?;
+        Ok(
+            dict!(py,"kind"=>i.kind.as_str(),"mode"=>i.mode.as_str(),"group"=>&i.group,"rows"=>i.rows,"qualified"=>i.kind.qualified(i.mode),"structures"=>structures,"family_series"=>family),
+        )
+    })
 }
 
 #[pyfunction]
@@ -450,10 +484,12 @@ fn one_d_structure_capabilities(
     path: PathBuf,
     max_bytes: usize,
 ) -> PyResult<Vec<Bound<'_, PyDict>>> {
-    let c = py
-        .detach(|| ReadOnlyHdfSession::open(path)?.one_d_structure_capabilities(max_bytes))
-        .map_err(crate::reader::err)?;
-    c.iter().map(|c| Ok(dict!(py,"kind"=>c.kind.as_str(),"mode"=>c.mode.as_str(),"group"=>&c.group,"qualified"=>c.kind.qualified(c.mode),"capability"=>capability(py,&c.status)?))).collect()
+    crate::panic_guard::guard(|| {
+        let c = py
+            .detach(|| ReadOnlyHdfSession::open(path)?.one_d_structure_capabilities(max_bytes))
+            .map_err(crate::reader::err)?;
+        c.iter().map(|c| Ok(dict!(py,"kind"=>c.kind.as_str(),"mode"=>c.mode.as_str(),"group"=>&c.group,"qualified"=>c.kind.qualified(c.mode),"capability"=>capability(py,&c.status)?))).collect()
+    })
 }
 
 #[pyfunction]
@@ -471,22 +507,24 @@ fn read_one_d_structure_series<'py>(
     metadata_max_bytes: usize,
     max_bytes: usize,
 ) -> PyResult<Bound<'py, PyAny>> {
-    let (k, m) = (structure_kind(kind)?, self::mode(mode)?);
-    let a = py
-        .detach(|| {
-            ReadOnlyHdfSession::open(path)?.read_one_d_structure_series(
-                k,
-                m,
-                structure,
-                relative,
-                slice(rows),
-                columns.map(slice),
-                metadata_max_bytes,
-                max_bytes,
-            )
-        })
-        .map_err(crate::reader::err)?;
-    crate::reader::array(py, a)
+    crate::panic_guard::guard(|| {
+        let (k, m) = (structure_kind(kind)?, self::mode(mode)?);
+        let a = py
+            .detach(|| {
+                ReadOnlyHdfSession::open(path)?.read_one_d_structure_series(
+                    k,
+                    m,
+                    structure,
+                    relative,
+                    slice(rows),
+                    columns.map(slice),
+                    metadata_max_bytes,
+                    max_bytes,
+                )
+            })
+            .map_err(crate::reader::err)?;
+        crate::reader::array(py, a)
+    })
 }
 
 pub(crate) fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {

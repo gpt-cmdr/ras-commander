@@ -120,35 +120,39 @@ fn mode(m: PlanResultMode) -> &'static str {
 }
 #[pyfunction]
 fn capabilities(py: Python<'_>) -> PyResult<Bound<'_, PyDict>> {
-    let engine = ras_commander_rust::capabilities();
-    let entrypoints = engine
-        .entrypoints
-        .iter()
-        .map(|e| Ok(dict!(py,"owner"=>e.owner,"name"=>e.name,"feature"=>e.feature)))
-        .collect::<PyResult<Vec<_>>>()?;
-    let engine_capabilities = dict!(py,"api_version"=>engine.api_version,"features"=>engine.features,"entrypoints"=>entrypoints);
-    Ok(
-        dict!(py,"engine_api_version"=>ras_commander_rust::API_VERSION,"engine_capabilities"=>engine_capabilities,"default_max_bytes"=>ras_commander_rust::hdf::DEFAULT_MAX_BYTES,"api_version"=>crate::API_VERSION,"engine_commit"=>env!("RAS_ENGINE_COMMIT"),"engine_features"=>env!("RAS_ENGINE_FEATURES").split(',').collect::<Vec<_>>(),"bindings"=>crate::REGISTERED_BINDINGS.get().ok_or_else(||pyo3::exceptions::PyRuntimeError::new_err("module registration incomplete"))?),
-    )
+    crate::panic_guard::guard(|| {
+        let engine = ras_commander_rust::capabilities();
+        let entrypoints = engine
+            .entrypoints
+            .iter()
+            .map(|e| Ok(dict!(py,"owner"=>e.owner,"name"=>e.name,"feature"=>e.feature)))
+            .collect::<PyResult<Vec<_>>>()?;
+        let engine_capabilities = dict!(py,"api_version"=>engine.api_version,"features"=>engine.features,"entrypoints"=>entrypoints);
+        Ok(
+            dict!(py,"engine_api_version"=>ras_commander_rust::API_VERSION,"engine_capabilities"=>engine_capabilities,"default_max_bytes"=>ras_commander_rust::hdf::DEFAULT_MAX_BYTES,"api_version"=>crate::API_VERSION,"engine_commit"=>env!("RAS_ENGINE_COMMIT"),"engine_features"=>env!("RAS_ENGINE_FEATURES").split(',').collect::<Vec<_>>(),"bindings"=>crate::REGISTERED_BINDINGS.get().ok_or_else(||pyo3::exceptions::PyRuntimeError::new_err("module registration incomplete"))?),
+        )
+    })
 }
 #[pyfunction]
 fn raw_crs_evidence(py: Python<'_>, path: PathBuf) -> PyResult<Bound<'_, PyDict>> {
-    let r = py
-        .detach(|| ReadOnlyHdfSession::open(path)?.raw_crs_evidence())
-        .map_err(crate::reader::err)?;
-    let ev = r
-        .evidence
-        .iter()
-        .map(|e| evidence(py, e))
-        .collect::<PyResult<Vec<_>>>()?;
-    let units = r
-        .hydraulic_units_evidence
-        .iter()
-        .map(|e| evidence(py, e))
-        .collect::<PyResult<Vec<_>>>()?;
-    Ok(
-        dict!(py,"kind"=>status(&r.status),"capability"=>capability(py,&r.capability())?,"evidence"=>ev,"hydraulic_units"=>r.hydraulic_units,"hydraulic_units_evidence"=>units),
-    )
+    crate::panic_guard::guard(|| {
+        let r = py
+            .detach(|| ReadOnlyHdfSession::open(path)?.raw_crs_evidence())
+            .map_err(crate::reader::err)?;
+        let ev = r
+            .evidence
+            .iter()
+            .map(|e| evidence(py, e))
+            .collect::<PyResult<Vec<_>>>()?;
+        let units = r
+            .hydraulic_units_evidence
+            .iter()
+            .map(|e| evidence(py, e))
+            .collect::<PyResult<Vec<_>>>()?;
+        Ok(
+            dict!(py,"kind"=>status(&r.status),"capability"=>capability(py,&r.capability())?,"evidence"=>ev,"hydraulic_units"=>r.hydraulic_units,"hydraulic_units_evidence"=>units),
+        )
+    })
 }
 #[pyfunction]
 #[pyo3(signature=(path,group="/"))]
@@ -157,10 +161,12 @@ fn typed_group_attributes<'py>(
     path: PathBuf,
     group: &str,
 ) -> PyResult<Vec<Bound<'py, PyDict>>> {
-    let attrs = py
-        .detach(|| ReadOnlyHdfSession::open(path)?.typed_group_attributes(group))
-        .map_err(crate::reader::err)?;
-    attrs.iter().map(|a| typed_attribute_dict(py, a)).collect()
+    crate::panic_guard::guard(|| {
+        let attrs = py
+            .detach(|| ReadOnlyHdfSession::open(path)?.typed_group_attributes(group))
+            .map_err(crate::reader::err)?;
+        attrs.iter().map(|a| typed_attribute_dict(py, a)).collect()
+    })
 }
 /// Engine API 9 `typed_dataset_attributes`: every attribute of one dataset, typed with the
 /// family encoding proof. `{capability, value: [typed attribute] | None}`.
@@ -172,18 +178,20 @@ fn typed_dataset_attributes<'py>(
     dataset: &str,
     max_bytes: usize,
 ) -> PyResult<Bound<'py, PyDict>> {
-    let r = py
-        .detach(|| ReadOnlyHdfSession::open(path)?.typed_dataset_attributes(dataset, max_bytes))
-        .map_err(crate::reader::err)?;
-    let d = dict!(py,"capability"=>capability(py,r.capability())?,"value"=>py.None());
-    if let Some(attrs) = r.value() {
-        let values = attrs
-            .iter()
-            .map(|a| typed_attribute_dict(py, a))
-            .collect::<PyResult<Vec<_>>>()?;
-        d.set_item("value", values)?;
-    }
-    Ok(d)
+    crate::panic_guard::guard(|| {
+        let r = py
+            .detach(|| ReadOnlyHdfSession::open(path)?.typed_dataset_attributes(dataset, max_bytes))
+            .map_err(crate::reader::err)?;
+        let d = dict!(py,"capability"=>capability(py,r.capability())?,"value"=>py.None());
+        if let Some(attrs) = r.value() {
+            let values = attrs
+                .iter()
+                .map(|a| typed_attribute_dict(py, a))
+                .collect::<PyResult<Vec<_>>>()?;
+            d.set_item("value", values)?;
+        }
+        Ok(d)
+    })
 }
 /// Engine API 9 `raw_fixed_strings`: a fixed-length string dataset as stored (padding kept).
 /// `{capability, value: {shape, dataspace, width, padding, charset, raw_bytes} | None}`.
@@ -195,29 +203,31 @@ fn raw_fixed_strings<'py>(
     dataset: &str,
     max_bytes: usize,
 ) -> PyResult<Bound<'py, PyDict>> {
-    use ras_commander_rust::hdf::{StringCharset as C, StringPadding as P};
-    let r = py
-        .detach(|| ReadOnlyHdfSession::open(path)?.raw_fixed_strings(dataset, max_bytes))
-        .map_err(crate::reader::err)?;
-    let d = dict!(py,"capability"=>capability(py,r.capability())?,"value"=>py.None());
-    if let Some(v) = r.value() {
-        let charset = match v.charset {
-            C::Ascii => "ascii",
-            C::Utf8 => "utf8",
-            _ => "unknown",
-        };
-        let padding = match v.padding {
-            P::NullTerminate => "null_terminate",
-            P::NullPad => "null_pad",
-            P::SpacePad => "space_pad",
-            _ => "unknown",
-        };
-        d.set_item(
+    crate::panic_guard::guard(|| {
+        use ras_commander_rust::hdf::{StringCharset as C, StringPadding as P};
+        let r = py
+            .detach(|| ReadOnlyHdfSession::open(path)?.raw_fixed_strings(dataset, max_bytes))
+            .map_err(crate::reader::err)?;
+        let d = dict!(py,"capability"=>capability(py,r.capability())?,"value"=>py.None());
+        if let Some(v) = r.value() {
+            let charset = match v.charset {
+                C::Ascii => "ascii",
+                C::Utf8 => "utf8",
+                _ => "unknown",
+            };
+            let padding = match v.padding {
+                P::NullTerminate => "null_terminate",
+                P::NullPad => "null_pad",
+                P::SpacePad => "space_pad",
+                _ => "unknown",
+            };
+            d.set_item(
             "value",
             dict!(py,"shape"=>&v.shape,"dataspace"=>v.dataspace.as_str(),"width"=>v.width,"padding"=>padding,"charset"=>charset,"raw_bytes"=>PyBytes::new(py,&v.raw_bytes)),
         )?;
-    }
-    Ok(d)
+        }
+        Ok(d)
+    })
 }
 pub(crate) fn typed_attribute_dict<'py>(
     py: Python<'py>,
@@ -265,33 +275,41 @@ fn mesh_inventory(
     path: PathBuf,
     max_bytes: usize,
 ) -> PyResult<Vec<Bound<'_, PyDict>>> {
-    let meshes = py
-        .detach(|| ReadOnlyHdfSession::open(path)?.mesh_inventory(max_bytes))
-        .map_err(crate::reader::err)?;
-    meshes.into_iter().map(|m| {
+    crate::panic_guard::guard(|| {
+        let meshes = py
+            .detach(|| ReadOnlyHdfSession::open(path)?.mesh_inventory(max_bytes))
+            .map_err(crate::reader::err)?;
+        meshes.into_iter().map(|m| {
         let blocks=m.output_blocks.iter().map(|b| Ok(dict!(py,"mode"=>b.mode.as_str(),"block_name"=>&b.block_name,"dataset_root"=>&b.dataset_root,"results"=>result_availability(py,&b.results)?))).collect::<PyResult<Vec<_>>>()?;
         Ok(dict!(py,"source"=>&m.id.source,"identity"=>identity(py,&m.id)?,"mesh_name"=>m.mesh_name,"physical_cells"=>m.physical_cells,"stored_cells"=>m.stored_cells,"ghost_cells"=>m.ghost_cells,"results"=>result_availability(py,&m.results)?,"output_blocks"=>blocks))
     }).collect()
+    })
 }
 #[pyfunction]
 fn plan_result_mode(py: Python<'_>, path: PathBuf) -> PyResult<&'static str> {
-    py.detach(|| ReadOnlyHdfSession::open(path)?.plan_result_mode())
-        .map(mode)
-        .map_err(crate::reader::err)
+    crate::panic_guard::guard(|| {
+        py.detach(|| ReadOnlyHdfSession::open(path)?.plan_result_mode())
+            .map(mode)
+            .map_err(crate::reader::err)
+    })
 }
 #[pyfunction]
 #[pyo3(signature=(path,max_bytes=67108864))]
 fn steady_profile_names(py: Python<'_>, path: PathBuf, max_bytes: usize) -> PyResult<Vec<String>> {
-    py.detach(|| ReadOnlyHdfSession::open(path)?.steady_profile_names(max_bytes))
-        .map_err(crate::reader::err)
+    crate::panic_guard::guard(|| {
+        py.detach(|| ReadOnlyHdfSession::open(path)?.steady_profile_names(max_bytes))
+            .map_err(crate::reader::err)
+    })
 }
 #[pyfunction]
 #[pyo3(signature=(path,max_bytes=67108864))]
 fn cross_sections(py: Python<'_>, path: PathBuf, max_bytes: usize) -> PyResult<Bound<'_, PyDict>> {
-    let g = py
-        .detach(|| ReadOnlyHdfSession::open(path)?.cross_sections(max_bytes))
-        .map_err(crate::reader::err)?;
-    cross_section_geometry(py, g)
+    crate::panic_guard::guard(|| {
+        let g = py
+            .detach(|| ReadOnlyHdfSession::open(path)?.cross_sections(max_bytes))
+            .map_err(crate::reader::err)?;
+        cross_section_geometry(py, g)
+    })
 }
 pub(crate) fn cross_section_geometry(
     py: Python<'_>,
@@ -335,34 +353,37 @@ fn read_cross_section_result<'py>(
     parallel: bool,
     metadata_max_bytes: usize,
 ) -> PyResult<Bound<'py, PyAny>> {
-    let k = match kind {
-        "steady" => ResultMode::Steady,
-        "unsteady" => ResultMode::Unsteady,
-        _ => return Err(PyValueError::new_err("kind must be steady or unsteady")),
-    };
-    let v = match variable {
-        "Water Surface" => XsVariable::WaterSurface,
-        "Flow" => XsVariable::Flow,
-        _ => {
-            return Err(PyValueError::new_err(
-                "variable must be Water Surface or Flow",
-            ))
-        }
-    };
-    let threads = crate::reader::threads(threads)?;
-    let out = py
-        .detach(|| {
-            ReadOnlyHdfSession::with_options(path, threads, parallel)?.read_cross_section_result(
-                k,
-                v,
-                Slice::new(rows.0, rows.1, rows.2),
-                Slice::new(sections.0, sections.1, sections.2),
-                metadata_max_bytes,
-                max_bytes,
-            )
-        })
-        .map_err(crate::reader::err)?;
-    crate::reader::array(py, out)
+    crate::panic_guard::guard(|| {
+        let k = match kind {
+            "steady" => ResultMode::Steady,
+            "unsteady" => ResultMode::Unsteady,
+            _ => return Err(PyValueError::new_err("kind must be steady or unsteady")),
+        };
+        let v = match variable {
+            "Water Surface" => XsVariable::WaterSurface,
+            "Flow" => XsVariable::Flow,
+            _ => {
+                return Err(PyValueError::new_err(
+                    "variable must be Water Surface or Flow",
+                ))
+            }
+        };
+        let threads = crate::reader::threads(threads)?;
+        let out = py
+            .detach(|| {
+                ReadOnlyHdfSession::with_options(path, threads, parallel)?
+                    .read_cross_section_result(
+                        k,
+                        v,
+                        Slice::new(rows.0, rows.1, rows.2),
+                        Slice::new(sections.0, sections.1, sections.2),
+                        metadata_max_bytes,
+                        max_bytes,
+                    )
+            })
+            .map_err(crate::reader::err)?;
+        crate::reader::array(py, out)
+    })
 }
 #[pyfunction]
 #[pyo3(signature=(path,max_bytes=67108864))]
@@ -371,15 +392,17 @@ fn plan_capabilities(
     path: PathBuf,
     max_bytes: usize,
 ) -> PyResult<Bound<'_, PyDict>> {
-    let c = py
-        .detach(|| ReadOnlyHdfSession::open(path)?.plan_capabilities(max_bytes))
-        .map_err(crate::reader::err)?;
-    let families=c.families.iter().map(|f| {
+    crate::panic_guard::guard(|| {
+        let c = py
+            .detach(|| ReadOnlyHdfSession::open(path)?.plan_capabilities(max_bytes))
+            .map_err(crate::reader::err)?;
+        let families=c.families.iter().map(|f| {
         let family=f.family.as_str();
         Ok(dict!(py,"family"=>family,"capability"=>capability(py,&f.status)?,"datasets"=>&f.datasets))
     }).collect::<PyResult<Vec<_>>>()?;
-    let structures=c.structures.iter().map(|s| Ok(dict!(py,"family"=>crate::structures::family_name(s.kind),"capability"=>capability(py,&s.status)?,"datasets"=>&s.datasets,"diagnostics"=>s.diagnostics.iter().map(|m|diagnostic(py,None,Some(m),None)).collect::<PyResult<Vec<_>>>()?))).collect::<PyResult<Vec<_>>>()?;
-    Ok(dict!(py,"mode"=>mode(c.mode),"families"=>families,"structures"=>structures))
+        let structures=c.structures.iter().map(|s| Ok(dict!(py,"family"=>crate::structures::family_name(s.kind),"capability"=>capability(py,&s.status)?,"datasets"=>&s.datasets,"diagnostics"=>s.diagnostics.iter().map(|m|diagnostic(py,None,Some(m),None)).collect::<PyResult<Vec<_>>>()?))).collect::<PyResult<Vec<_>>>()?;
+        Ok(dict!(py,"mode"=>mode(c.mode),"families"=>families,"structures"=>structures))
+    })
 }
 
 fn axis_capability(a: &ras_commander_rust::hdf::time::TimeAxis) -> Capability {
@@ -401,26 +424,28 @@ fn unsteady_time_axis(
     path: PathBuf,
     max_bytes: usize,
 ) -> PyResult<Bound<'_, PyDict>> {
-    use ras_commander_rust::hdf::time::{MillisecondSource, TimeEpoch};
-    let a = py
-        .detach(|| ReadOnlyHdfSession::open(path)?.unsteady_time_axis(max_bytes))
-        .map_err(crate::reader::err)?;
-    let timestamps = a
-        .timestamps
-        .as_ref()
-        .map(|v| v.iter().map(ToString::to_string).collect::<Vec<_>>());
-    let epoch = match a.epoch {
-        TimeEpoch::CivilUnix1970 => "civil_unix_1970",
-        _ => "unknown",
-    };
-    let source = a.ms_source.map(|v| match v {
-        MillisecondSource::StoredStringDataset => "stored_string_dataset",
-        MillisecondSource::DerivedFromStrings => "derived_from_strings",
-        _ => "unknown",
-    });
-    Ok(
-        dict!(py,"group"=>&a.group,"rows"=>a.rows,"days"=>&a.days,"raw_strings"=>&a.raw_strings,"raw_ms"=>&a.raw_ms,"raw_ms_strings"=>&a.raw_ms_strings,"ms_since_epoch"=>&a.ms_since_epoch,"timestamps"=>timestamps,"hour_2400_rows"=>&a.hour_2400_rows,"epoch"=>epoch,"ms_source"=>source,"timezone"=>py.None(),"capability"=>capability(py,&axis_capability(&a))?,"integer_ms"=>a.integer_ms.as_ref().map(|c|capability(py,c)).transpose()?),
-    )
+    crate::panic_guard::guard(|| {
+        use ras_commander_rust::hdf::time::{MillisecondSource, TimeEpoch};
+        let a = py
+            .detach(|| ReadOnlyHdfSession::open(path)?.unsteady_time_axis(max_bytes))
+            .map_err(crate::reader::err)?;
+        let timestamps = a
+            .timestamps
+            .as_ref()
+            .map(|v| v.iter().map(ToString::to_string).collect::<Vec<_>>());
+        let epoch = match a.epoch {
+            TimeEpoch::CivilUnix1970 => "civil_unix_1970",
+            _ => "unknown",
+        };
+        let source = a.ms_source.map(|v| match v {
+            MillisecondSource::StoredStringDataset => "stored_string_dataset",
+            MillisecondSource::DerivedFromStrings => "derived_from_strings",
+            _ => "unknown",
+        });
+        Ok(
+            dict!(py,"group"=>&a.group,"rows"=>a.rows,"days"=>&a.days,"raw_strings"=>&a.raw_strings,"raw_ms"=>&a.raw_ms,"raw_ms_strings"=>&a.raw_ms_strings,"ms_since_epoch"=>&a.ms_since_epoch,"timestamps"=>timestamps,"hour_2400_rows"=>&a.hour_2400_rows,"epoch"=>epoch,"ms_source"=>source,"timezone"=>py.None(),"capability"=>capability(py,&axis_capability(&a))?,"integer_ms"=>a.integer_ms.as_ref().map(|c|capability(py,c)).transpose()?),
+        )
+    })
 }
 #[pyfunction]
 #[pyo3(signature=(path,rows,max_bytes=67108864))]
@@ -430,26 +455,28 @@ fn unsteady_row_times(
     rows: (u64, u64, u64),
     max_bytes: usize,
 ) -> PyResult<Bound<'_, PyDict>> {
-    let (a, r) = py
-        .detach(|| {
-            let a = ReadOnlyHdfSession::open(path)?.unsteady_time_axis(max_bytes)?;
-            let r = a.select(Slice::new(rows.0, rows.1, rows.2))?;
-            Ok::<_, ras_commander_rust::Error>((a, r))
-        })
-        .map_err(crate::reader::err)?;
-    let timestamps = r
-        .timestamps
-        .as_ref()
-        .map(|v| v.iter().map(ToString::to_string).collect::<Vec<_>>());
-    let hours = a
-        .hour_2400_rows
-        .iter()
-        .copied()
-        .filter(|row| r.row_indices.binary_search(row).is_ok())
-        .collect::<Vec<_>>();
-    Ok(
-        dict!(py,"row_indices"=>&r.row_indices,"days"=>&r.days,"raw_strings"=>&r.raw_strings,"raw_ms"=>&r.raw_ms,"raw_ms_strings"=>&r.raw_ms_strings,"ms_since_epoch"=>&r.ms_since_epoch,"timestamps"=>timestamps,"hour_2400_rows"=>hours,"epoch"=>match a.epoch {ras_commander_rust::hdf::time::TimeEpoch::CivilUnix1970=>"civil_unix_1970",_=>"unknown"},"integer_ms"=>a.integer_ms.as_ref().map(|c|capability(py,c)).transpose()?,"capability"=>capability(py,&axis_capability(&a))?,"timezone"=>py.None()),
-    )
+    crate::panic_guard::guard(|| {
+        let (a, r) = py
+            .detach(|| {
+                let a = ReadOnlyHdfSession::open(path)?.unsteady_time_axis(max_bytes)?;
+                let r = a.select(Slice::new(rows.0, rows.1, rows.2))?;
+                Ok::<_, ras_commander_rust::Error>((a, r))
+            })
+            .map_err(crate::reader::err)?;
+        let timestamps = r
+            .timestamps
+            .as_ref()
+            .map(|v| v.iter().map(ToString::to_string).collect::<Vec<_>>());
+        let hours = a
+            .hour_2400_rows
+            .iter()
+            .copied()
+            .filter(|row| r.row_indices.binary_search(row).is_ok())
+            .collect::<Vec<_>>();
+        Ok(
+            dict!(py,"row_indices"=>&r.row_indices,"days"=>&r.days,"raw_strings"=>&r.raw_strings,"raw_ms"=>&r.raw_ms,"raw_ms_strings"=>&r.raw_ms_strings,"ms_since_epoch"=>&r.ms_since_epoch,"timestamps"=>timestamps,"hour_2400_rows"=>hours,"epoch"=>match a.epoch {ras_commander_rust::hdf::time::TimeEpoch::CivilUnix1970=>"civil_unix_1970",_=>"unknown"},"integer_ms"=>a.integer_ms.as_ref().map(|c|capability(py,c)).transpose()?,"capability"=>capability(py,&axis_capability(&a))?,"timezone"=>py.None()),
+        )
+    })
 }
 fn unit_evidence<'py>(
     py: Python<'py>,
@@ -484,31 +511,35 @@ fn dataset_unit_evidence<'py>(
     path: PathBuf,
     dataset: &str,
 ) -> PyResult<Bound<'py, PyDict>> {
-    let u = py
-        .detach(|| ReadOnlyHdfSession::open(path)?.dataset_units(dataset))
-        .map_err(crate::reader::err)?;
-    dataset_units(py, &u.units, &u.source, &u.quantity_name)
+    crate::panic_guard::guard(|| {
+        let u = py
+            .detach(|| ReadOnlyHdfSession::open(path)?.dataset_units(dataset))
+            .map_err(crate::reader::err)?;
+        dataset_units(py, &u.units, &u.source, &u.quantity_name)
+    })
 }
 #[pyfunction]
 #[pyo3(signature=(path,max_bytes=67108864))]
 fn result_units(py: Python<'_>, path: PathBuf, max_bytes: usize) -> PyResult<Bound<'_, PyDict>> {
-    let u = py
-        .detach(|| ReadOnlyHdfSession::open(path)?.result_units(max_bytes))
-        .map_err(crate::reader::err)?;
-    let variables=u.variables.iter().map(|v|Ok(dict!(py,"family"=>v.family.as_str(),"area"=>&v.area,"variable"=>&v.variable,"dataset"=>&v.dataset,"dataset_path"=>&v.dataset,"units"=>dataset_units(py,&v.units,&v.source,&v.quantity_name)?))).collect::<PyResult<Vec<_>>>()?;
-    let systems = u
-        .unit_system
-        .iter()
-        .map(|e| {
-            let d = unit_evidence(py, &e.value)?;
-            d.set_item("kind", "unit_system")?;
-            d.set_item("source", &e.source)?;
-            d.set_item("source_attribute", "Units System")?;
-            d.set_item("unit_system_kind", e.kind.map(|k| k.as_str()))?;
-            Ok(d)
-        })
-        .collect::<PyResult<Vec<_>>>()?;
-    Ok(dict!(py,"variables"=>variables,"unit_system"=>systems))
+    crate::panic_guard::guard(|| {
+        let u = py
+            .detach(|| ReadOnlyHdfSession::open(path)?.result_units(max_bytes))
+            .map_err(crate::reader::err)?;
+        let variables=u.variables.iter().map(|v|Ok(dict!(py,"family"=>v.family.as_str(),"area"=>&v.area,"variable"=>&v.variable,"dataset"=>&v.dataset,"dataset_path"=>&v.dataset,"units"=>dataset_units(py,&v.units,&v.source,&v.quantity_name)?))).collect::<PyResult<Vec<_>>>()?;
+        let systems = u
+            .unit_system
+            .iter()
+            .map(|e| {
+                let d = unit_evidence(py, &e.value)?;
+                d.set_item("kind", "unit_system")?;
+                d.set_item("source", &e.source)?;
+                d.set_item("source_attribute", "Units System")?;
+                d.set_item("unit_system_kind", e.kind.map(|k| k.as_str()))?;
+                Ok(d)
+            })
+            .collect::<PyResult<Vec<_>>>()?;
+        Ok(dict!(py,"variables"=>variables,"unit_system"=>systems))
+    })
 }
 #[pyfunction]
 #[pyo3(signature=(path,max_bytes=67108864))]
@@ -517,11 +548,13 @@ fn mesh_name_diagnostics(
     path: PathBuf,
     max_bytes: usize,
 ) -> PyResult<Vec<Bound<'_, PyDict>>> {
-    use ras_commander_rust::schema::MeshNameIssue as I;
-    let d = py
-        .detach(|| ReadOnlyHdfSession::open(path)?.mesh_name_diagnostics(max_bytes))
-        .map_err(crate::reader::err)?;
-    d.iter().map(|v|Ok(dict!(py,"subject"=>Some(&v.mesh_name),"message"=>None::<String>,"capability"=>None::<String>,"mesh_name"=>&v.mesh_name,"issue"=>match v.issue {I::MissingGroup=>"missing_group",I::ExtraGroup=>"extra_group",I::DuplicateAttributeName=>"duplicate_attribute_name",I::InvalidName=>"invalid_name",_=>"unknown"}))).collect()
+    crate::panic_guard::guard(|| {
+        use ras_commander_rust::schema::MeshNameIssue as I;
+        let d = py
+            .detach(|| ReadOnlyHdfSession::open(path)?.mesh_name_diagnostics(max_bytes))
+            .map_err(crate::reader::err)?;
+        d.iter().map(|v|Ok(dict!(py,"subject"=>Some(&v.mesh_name),"message"=>None::<String>,"capability"=>None::<String>,"mesh_name"=>&v.mesh_name,"issue"=>match v.issue {I::MissingGroup=>"missing_group",I::ExtraGroup=>"extra_group",I::DuplicateAttributeName=>"duplicate_attribute_name",I::InvalidName=>"invalid_name",_=>"unknown"}))).collect()
+    })
 }
 pub(crate) fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(unsteady_time_axis, m)?)?;

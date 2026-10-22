@@ -46,7 +46,7 @@ from .LoggingConfig import get_logger
 logger = get_logger(__name__)
 
 __all__ = [
-    "FastHdfError", "available", "close_sessions",
+    "FastHdfError", "FastHdfPanicError", "available", "close_sessions",
     "packed_meshes", "mesh_polygons", "export_pmtiles", "export_mesh_pmtiles",
     "export_arrow", "export_arrow_pmtiles",
 ]
@@ -54,6 +54,18 @@ __all__ = [
 
 class FastHdfError(RuntimeError):
     """The explicitly requested native operation could not be completed."""
+
+
+class FastHdfPanicError(FastHdfError):
+    """A Rust panic inside the native extension: an engine bug, not bad input.
+
+    The extension contains panics at every Python entry point and raises this
+    class while ``ras_commander.fast_hdf`` is imported (the standalone module
+    raises its own ``NativePanicError(RuntimeError)``). Unlike PyO3's
+    ``PanicException`` it is an ``Exception``, so ``auto`` mode falls back to
+    h5py and ``rust`` mode reports it as a :class:`FastHdfError`. A panic does
+    not poison a cached session; later reads and ``close()`` keep working.
+    """
 
 
 _warned_modes = set()
