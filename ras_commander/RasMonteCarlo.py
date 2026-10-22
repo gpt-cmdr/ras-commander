@@ -2057,7 +2057,7 @@ class RasMonteCarlo:
         num_cores: int = 2,
         max_plans_per_batch: int = 99,
         ras_object: Any = None,
-        timeout_sec: Optional[int] = None,
+        timeout_sec: Optional[float] = None,
         clear_geompre: bool = False,
         clone_geom: bool = False,
         workers: Optional[list] = None,
@@ -2074,7 +2074,8 @@ class RasMonteCarlo:
             num_cores: HEC-RAS core count per plan execution.
             max_plans_per_batch: Limit per batch project.
             ras_object: Optional project object for multi-project workflows.
-            timeout_sec: Optional per-plan timeout in seconds.
+            timeout_sec: Optional local per-plan engine deadline in seconds,
+                excluding setup and preprocessing. Remote overrides are rejected.
             clear_geompre: Clear .c## preprocessor files before execution.
             clone_geom: Clone geometry file per sample.
             workers: Optional list of remote worker objects from
@@ -2097,6 +2098,11 @@ class RasMonteCarlo:
         the Post-Execution Protocol; this module does not wire that scan into
         every sample automatically.
         """
+        from .RasCmdr import RasCmdr
+
+        timeout_sec = RasCmdr._normalize_max_runtime(timeout_sec)
+        if workers and timeout_sec is not None:
+            raise ValueError("timeout_sec is not supported for remote workers; configure worker runtime limits instead")
         prepared_samples = RasMonteCarlo._prepare_samples_df(samples_df)
 
         plan_matrix = RasPermutation.generate_plans(

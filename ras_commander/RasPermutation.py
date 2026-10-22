@@ -766,7 +766,7 @@ class RasPermutation:
         max_workers: int = 2,
         num_cores: int = 2,
         ras_object: Any = None,
-        timeout_sec: Optional[int] = None,
+        timeout_sec: Optional[float] = None,
         clear_geompre: bool = False,
         force_geompre: bool = False,
         workers: Optional[List[Any]] = None,
@@ -779,10 +779,10 @@ class RasPermutation:
             max_workers: Maximum parallel worker count (local execution).
             num_cores: HEC-RAS core count per plan execution.
             ras_object: Optional project object for multi-project workflows.
-            timeout_sec: Optional per-plan timeout in seconds. NOTE: per-plan
-                timeout is not yet supported by RasCmdr.compute_parallel() on the
-                current Windows execution path; when set it is logged and ignored
-                (tracked as a follow-up). The ensemble still runs to completion.
+            timeout_sec: Optional per-plan engine-execution deadline in seconds,
+                forwarded as compute_parallel(max_runtime=...). Setup and
+                preprocessing are excluded. Remote workers do not yet support
+                this override and reject it rather than silently ignoring it.
             clear_geompre: Clear .c## preprocessor files before execution.
             force_geompre: Force full geometry preprocessing before execution.
             workers: Optional list of remote worker objects from
@@ -806,6 +806,9 @@ class RasPermutation:
         ras_exe_path = getattr(source_ras, "ras_exe_path", None)
 
         use_remote = workers is not None and len(workers) > 0
+        timeout_sec = RasCmdr._normalize_max_runtime(timeout_sec)
+        if use_remote and timeout_sec is not None:
+            raise ValueError("timeout_sec is not supported for remote workers; configure worker runtime limits instead")
 
         batch_results: List[pd.DataFrame] = []
         for batch_folder in plan_matrix["batch_folders"]:
@@ -856,13 +859,6 @@ class RasPermutation:
                     plan_numbers,
                 )
             else:
-                if timeout_sec is not None:
-                    logger.warning(
-                        "timeout_sec=%s ignored: per-plan timeout is not yet supported "
-                        "by RasCmdr.compute_parallel(); the ensemble runs without a "
-                        "per-plan timeout (tracked as a follow-up).",
-                        timeout_sec,
-                    )
                 compute_result = RasCmdr.compute_parallel(
                     plan_number=plan_numbers,
                     max_workers=max_workers,
@@ -870,6 +866,7 @@ class RasPermutation:
                     ras_object=batch_ras,
                     clear_geompre=clear_geompre,
                     force_geompre=force_geompre,
+                    **({"max_runtime": timeout_sec} if timeout_sec is not None else {}),
                 )
 
                 execution_success_map = compute_result.execution_results
