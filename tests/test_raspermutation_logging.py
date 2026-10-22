@@ -94,7 +94,9 @@ def test_execute_and_summarize_uses_quiet_batch_init_and_summary(
             }
         )
 
+    compute_calls = []
     def fake_compute_parallel(**kwargs):
+        compute_calls.append(kwargs)
         return FakeComputeResult()
 
     monkeypatch.setattr(
@@ -125,6 +127,7 @@ def test_execute_and_summarize_uses_quiet_batch_init_and_summary(
             max_workers=2,
             num_cores=1,
             ras_object=source_ras,
+            timeout_sec=12.5,
         )
 
     assert init_calls == [
@@ -135,6 +138,7 @@ def test_execute_and_summarize_uses_quiet_batch_init_and_summary(
             "hide_intro": True,
         }
     ]
+    assert compute_calls[0]["max_runtime"] == 12.5
     assert result.loc[0, "status"] == "completed"
     assert result.loc[0, "max_wse"] == 123.4
 
@@ -153,3 +157,26 @@ def test_execute_and_summarize_uses_quiet_batch_init_and_summary(
         "Executed and summarized 1 permutation(s): completed=1"
     ]
     assert any(str(master_log_path) in message for message in debug_messages)
+
+
+def test_remote_timeout_override_is_rejected_before_worker_execution(tmp_path):
+    import pytest
+    master = tmp_path / "master.csv"
+    pd.DataFrame({"plan_number": ["01"]}).to_csv(master, index=False)
+    with pytest.raises(ValueError, match="not supported for remote"):
+        RasPermutation.execute_and_summarize(
+            {"master_log": master, "batch_folders": []},
+            timeout_sec=5, workers=[object()],
+        )
+
+
+def test_monte_carlo_rejects_timeout_before_generating_projects(monkeypatch):
+    import pytest
+    from ras_commander import RasMonteCarlo
+    def unexpected(*args, **kwargs):
+        raise AssertionError("No projects should be generated for invalid settings")
+    monkeypatch.setattr(RasPermutation, "generate_plans", staticmethod(unexpected))
+    for value, workers, message in [(0, None, "max_runtime"), (5, [object()], "not supported for remote")]:
+        with pytest.raises(ValueError, match=message):
+            RasMonteCarlo.run_ensemble("01", None, lambda *a: None,
+                                      timeout_sec=value, workers=workers)

@@ -4356,7 +4356,8 @@ class RasCmdr:
         dest_folder: Union[str, Path, None] = None,
         overwrite_dest: bool = False,
         skip_existing: bool = False,
-        verify: bool = False
+        verify: bool = False,
+        max_runtime: Optional[float] = None,
     ) -> 'ComputeParallelResult':
         """
         Execute multiple HEC-RAS plans in parallel using multiple worker instances.
@@ -4501,7 +4502,14 @@ class RasCmdr:
                 results are not assigned to workers at all.
 
             - verify is passed through to compute_plan() for each worker execution.
+            - max_runtime bounds each plan's engine execution in seconds using
+              compute_plan's monotonic deadline and exact cancellation. It starts
+              when the engine launches, excluding worker setup and preprocessing.
+              None preserves existing execution limits. Each worker executes its
+              assigned plans sequentially. Uncertain cancellation blocks reuse
+              and retains that worker's artifacts instead of publishing them.
         """
+        max_runtime = RasCmdr._normalize_max_runtime(max_runtime)
         _require_process_supervision("RasCmdr.compute_parallel()")
         execution_results: Dict[str, bool] = {}
         execution_details_by_plan: Dict[str, Dict[str, Any]] = {}
@@ -4662,41 +4670,80 @@ class RasCmdr:
                     ras_object=worker_ras,
                 )
 
-            with ThreadPoolExecutor(max_workers=max_workers) as executor:
-                # Submit futures and track which plan each future represents
-                future_to_plan = {}
-                for worker_id, plan_num in plan_assignments:
-                    future = executor.submit(
-                        RasCmdr.compute_plan,
-                        plan_num,
+            def run_worker(worker_id):
+                # One executor task owns one folder for its entire plan queue.
+                # Per-plan futures with round-robin folders could overlap when
+                # an earlier task on another worker finished first.
+                outcomes = {}
+                if worker_ras_objects[worker_id] is None:
+                    return ({plan: (False, {
+                        "calculation_attempted": False,
+                        "failure_stage": "worker_initialization_failed",
+                    }) for plan in worker_plan_numbers[worker_id]}, True)
+                blocked = False
+                for plan_num in worker_plan_numbers[worker_id]:
+                    if blocked:
+                        outcomes[plan_num] = (False, {
+                            "calculation_attempted": False,
+                            "failure_stage": "worker_reuse_blocked",
+                            "failure_detail": "Prior execution did not confirm worker quiescence",
+                        })
+                        continue
+                    kwargs = dict(
                         ras_object=worker_ras_objects[worker_id],
                         clear_geompre=clear_geompre,
                         force_geompre=force_geompre,
-                        force_rerun=True,  # Always force execution in workers - plans passed skip_existing filter
+                        force_rerun=True,
                         num_cores=num_cores,
-                        verify=verify
+                        verify=verify,
                     )
-                    future_to_plan[future] = (worker_id, plan_num)
-
-                # Process futures as they complete (not in submission order)
-                for future in as_completed(future_to_plan.keys()):
-                    worker_id, plan_num = future_to_plan[future]
+                    if max_runtime is not None:
+                        kwargs["max_runtime"] = max_runtime
                     try:
-                        compute_result = future.result()
-                        # Extract bool from ComputeResult for execution_results dict
-                        execution_results[plan_num] = bool(compute_result)
-                        details = getattr(compute_result, "execution_details", None)
-                        execution_details_by_plan[plan_num] = (
-                            dict(details) if isinstance(details, dict) else {}
+                        computed = RasCmdr.compute_plan(plan_num, **kwargs)
+                        details = getattr(computed, "execution_details", None)
+                        details = dict(details) if isinstance(details, dict) else {}
+                        outcomes[plan_num] = (bool(computed), details)
+                        cancellation = details.get("cancellation_details")
+                        blocked = (
+                            details.get("solver_quiescence_confirmed") is False
+                            or (isinstance(cancellation, dict)
+                                and cancellation.get("quiescence_confirmed") is not True)
+                            or (details.get("runtime_timed_out") is True
+                                and not (isinstance(cancellation, dict)
+                                         and cancellation.get("quiescence_confirmed") is True))
                         )
-                        if compute_result:
-                            logger.debug(f"Plan {plan_num} executed in worker {worker_id}: Successful")
-                        else:
-                            logger.warning(f"Plan {plan_num} executed in worker {worker_id}: Failed")
-                    except Exception as e:
-                        execution_results[plan_num] = False
-                        execution_details_by_plan[plan_num] = {}
-                        logger.error(f"Plan {plan_num} failed in worker {worker_id}: {str(e)}")
+                    except Exception as exc:
+                        # An unexpected escape cannot establish whether this
+                        # folder is safe to reuse; leave subsequent plans alone.
+                        outcomes[plan_num] = (False, {
+                            "failure_stage": "worker_execution_exception",
+                            "failure_type": type(exc).__name__,
+                            "failure_detail": str(exc),
+                        })
+                        blocked = True
+                return outcomes, blocked
+
+            unsafe_worker_ids = set()
+            retained_timeout_worker_ids = set()
+            with ThreadPoolExecutor(max_workers=max_workers) as executor:
+                futures = {
+                    executor.submit(run_worker, worker_id): worker_id
+                    for worker_id in worker_plan_numbers
+                }
+                for future in as_completed(futures):
+                    worker_id = futures[future]
+                    outcomes, blocked = future.result()
+                    if blocked:
+                        unsafe_worker_ids.add(worker_id)
+                    if any(details.get("runtime_timed_out") is True
+                           for _, details in outcomes.values()):
+                        retained_timeout_worker_ids.add(worker_id)
+                    for plan_num, (success, details) in outcomes.items():
+                        execution_results[plan_num] = success
+                        execution_details_by_plan[plan_num] = details
+                        logger.info("Plan %s in worker %s: %s", plan_num, worker_id,
+                                    "Successful" if success else "Failed")
 
             # Consolidate results: use dest_folder if provided, otherwise back to original folder
             # This eliminates the [Computed] folder anti-pattern - results go directly to original project
@@ -4805,7 +4852,9 @@ class RasCmdr:
                 retained_worker_folder = str(
                     worker_folder.resolve(strict=False)
                 )
-                worker_must_be_retained = not promotion_allowed
+                worker_must_be_retained = (not promotion_allowed
+                    or worker_id in unsafe_worker_ids
+                    or worker_id in retained_timeout_worker_ids)
                 current_plan_number: Optional[str] = None
                 current_failure_stage = "destination_promotion_preparation"
                 current_source_path: Optional[Path] = None
@@ -4820,6 +4869,14 @@ class RasCmdr:
                     # Add a small delay to ensure file handles are released
                     time.sleep(1)
 
+                    if worker_id in unsafe_worker_ids:
+                        for plan_num in assigned_plan_numbers:
+                            execution_results[plan_num] = False
+                            details = execution_details_by_plan.setdefault(plan_num, {})
+                            details["retained_worker_folder"] = retained_worker_folder
+                            details.setdefault("failure_stage", "worker_not_quiescent")
+                        logger.warning("Retained non-quiescent worker folder: %s", worker_folder)
+                        continue
                     if not promotion_allowed:
                         logger.warning(
                             "Retained computed worker folder after promotion "

@@ -800,3 +800,22 @@ except ValueError as e:
 3. **Clear preprocessor**: Use `clear_geompre=True` after geometry changes
 4. **Check return values**: Always verify execution success
 5. **Use logging**: Enable DEBUG level for troubleshooting
+
+
+## Per-plan execution limits
+
+`RasCmdr.compute_parallel(..., max_runtime=3600)` forwards one deadline per plan
+to `compute_plan`. The clock starts at engine launch and excludes project copying
+and preprocessing. `None` preserves existing limits. Plans assigned to one worker
+project run sequentially; different workers remain concurrent.
+
+Timeouts use exact-plan cancellation. If quiescence cannot be confirmed, that
+worker's remaining plans are not attempted and its artifacts are not published.
+Timeout worker folders and diagnostics are retained even when cancellation is
+confirmed; successful sibling plans can still be published. Inspect
+`execution_details_by_plan` for cancellation evidence and recovery paths.
+
+`RasPermutation.execute_and_summarize(timeout_sec=...)` and
+`RasMonteCarlo.run_ensemble(timeout_sec=...)` forward this local limit. Remote
+worker overrides are rejected explicitly; configure their separate worker
+runtime policy instead.

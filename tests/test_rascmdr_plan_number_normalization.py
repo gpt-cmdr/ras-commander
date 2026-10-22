@@ -1394,3 +1394,123 @@ def test_filter_plan_entries_empty_list_returns_empty():
     plan_entries = pd.DataFrame({"plan_number": ["01", "02"]})
     result = RasCmdr._filter_plan_entries(plan_entries, [])
     assert result.empty
+
+
+@pytest.mark.parametrize("value", [0, -1, True, float("nan"), float("inf")])
+def test_parallel_rejects_invalid_deadline_before_project_access(value):
+    with pytest.raises(ValueError, match="max_runtime"):
+        RasCmdr.compute_parallel(max_runtime=value)
+
+
+def test_parallel_worker_folder_is_exclusive_and_forwards_deadline(monkeypatch, tmp_path):
+    import threading
+    project = tmp_path / "exclusive"
+    project.mkdir()
+    (project / "TestProject.prj").write_text("Proj Title=TestProject\n")
+    other_finished = threading.Event()
+    third_started = threading.Event()
+    overlap = []
+    deadlines = []
+    def compute(plan_number, **kwargs):
+        deadlines.append(kwargs["max_runtime"])
+        if plan_number == "01":
+            assert other_finished.wait(2)
+            overlap.append(third_started.wait(.05))
+        elif plan_number == "02":
+            other_finished.set()
+        else:
+            third_started.set()
+        return ComputeResult(success=False)
+    monkeypatch.setattr(rascmdr_module, "RasPrj", FakeRasProject)
+    monkeypatch.setattr(rascmdr_module, "init_ras_project", fake_init_ras_project)
+    monkeypatch.setattr(RasCmdr, "compute_plan", staticmethod(compute))
+    RasCmdr.compute_parallel(["01", "02", "03"], max_workers=2,
+                             ras_object=FakeRasProject(project_folder=project), max_runtime=2.5)
+    assert overlap == [False] and third_started.is_set()
+    assert deadlines == [2.5] * 3
+
+
+@pytest.mark.parametrize("quiescent", [True, False])
+def test_parallel_timeout_retains_evidence_and_blocks_unsafe_reuse(monkeypatch, tmp_path, quiescent):
+    project = tmp_path / "timeout"
+    project.mkdir()
+    (project / "TestProject.prj").write_text("Proj Title=TestProject\n")
+    executed = []
+    def compute(plan_number, **kwargs):
+        executed.append(plan_number)
+        worker = Path(kwargs["ras_object"].project_folder)
+        if plan_number == "01":
+            (worker / "timeout-diagnostic.log").write_text("retained diagnostic")
+            return ComputeResult(success=False, execution_details={
+                "runtime_timed_out": True, "failure_stage": "runtime_deadline",
+                "cancellation_details": {"quiescence_confirmed": quiescent},
+            })
+        (worker / f"TestProject.p{plan_number}.hdf").write_text("computed")
+        return ComputeResult(success=True)
+    monkeypatch.setattr(rascmdr_module, "RasPrj", FakeRasProject)
+    monkeypatch.setattr(rascmdr_module, "init_ras_project", fake_init_ras_project)
+    monkeypatch.setattr(RasCmdr, "compute_plan", staticmethod(compute))
+    result = RasCmdr.compute_parallel(["01", "02", "03"], max_workers=2,
+                                     ras_object=FakeRasProject(project_folder=project), max_runtime=1)
+    assert result.execution_results["01"] is False
+    assert result.execution_results["02"] is True
+    assert ("03" in executed) is quiescent
+    assert result.execution_results["03"] is quiescent
+    details = result.execution_details_by_plan["01"]
+    assert details["failure_stage"] == "runtime_deadline"
+    assert details["cancellation_details"]["quiescence_confirmed"] is quiescent
+    assert (Path(details["retained_worker_folder"]) / "timeout-diagnostic.log").is_file()
+    if not quiescent:
+        assert result.execution_details_by_plan["03"]["calculation_attempted"] is False
+
+
+def test_parallel_deadline_stops_owned_simulated_child_and_sibling_completes(monkeypatch, tmp_path):
+    import subprocess
+    import sys
+    project = tmp_path / "child-timeout"
+    project.mkdir()
+    (project / "TestProject.prj").write_text("Proj Title=TestProject\n")
+    children = []
+    def compute(plan_number, **kwargs):
+        if plan_number == "01":
+            process = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(30)"])
+            children.append(process)
+            try:
+                process.wait(timeout=kwargs["max_runtime"])
+                raise AssertionError("Simulated hanging process exited unexpectedly")
+            except subprocess.TimeoutExpired:
+                process.terminate()
+                process.wait(timeout=5)
+                return ComputeResult(success=False, execution_details={
+                    "runtime_timed_out": True,
+                    "cancellation_details": {"quiescence_confirmed": True},
+                })
+            finally:
+                if process.poll() is None:
+                    process.kill()
+                    process.wait(timeout=5)
+        worker = Path(kwargs["ras_object"].project_folder)
+        (worker / f"TestProject.p{plan_number}.hdf").write_text("computed")
+        return ComputeResult(success=True)
+    monkeypatch.setattr(rascmdr_module, "RasPrj", FakeRasProject)
+    monkeypatch.setattr(rascmdr_module, "init_ras_project", fake_init_ras_project)
+    monkeypatch.setattr(RasCmdr, "compute_plan", staticmethod(compute))
+    result = RasCmdr.compute_parallel(["01", "02"], max_workers=2,
+        ras_object=FakeRasProject(project_folder=project), max_runtime=.1)
+    assert result.execution_results == {"01": False, "02": True}
+    assert len(children) == 1 and children[0].poll() is not None
+    assert result.execution_details_by_plan["01"]["runtime_timed_out"] is True
+
+
+def test_parallel_failed_worker_initialization_never_uses_global_project(monkeypatch, tmp_path):
+    project = tmp_path / "bad-worker"
+    project.mkdir()
+    (project / "TestProject.prj").write_text("Proj Title=TestProject\n")
+    def broken_init(*args, **kwargs): raise RuntimeError("initialization failed")
+    def no_compute(*args, **kwargs): raise AssertionError("must not execute on global ras")
+    monkeypatch.setattr(rascmdr_module, "init_ras_project", broken_init)
+    monkeypatch.setattr(RasCmdr, "compute_plan", staticmethod(no_compute))
+    result = RasCmdr.compute_parallel(["01"], max_workers=1,
+        ras_object=FakeRasProject(project_folder=project), max_runtime=1)
+    assert result.execution_results == {"01": False}
+    assert result.execution_details_by_plan["01"]["failure_stage"] == "worker_initialization_failed"
