@@ -136,10 +136,15 @@ class DomainContainmentResult:
 
 @dataclass
 class MeshResult:
-    """Result of a headless mesh generation attempt."""
+    """Result of a mesh operation, including computation-point bootstrap.
+
+    ``ok`` and truthiness mean the requested operation succeeded. Bootstrap
+    uses ``status="success"`` and counts generated points; it does not prove a
+    compiled mesh exists. Full mesh generation retains ``status="complete"``.
+    """
 
     mesh_name: str
-    status: str  # "complete", "error", "exception"
+    status: str  # "success" (points), "complete" (mesh), "error", "exception"
     mesh_state: str = ""
     cell_count: int = 0
     face_count: int = 0
@@ -160,7 +165,7 @@ class MeshResult:
 
     @property
     def ok(self) -> bool:
-        return self.status == "complete"
+        return self.status in {"success", "complete"}
 
     def __bool__(self) -> bool:
         return self.ok

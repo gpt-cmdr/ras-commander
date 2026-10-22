@@ -9,6 +9,13 @@ alone does not identify a development checkout.
 
 ### Unreleased
 
+**Successful computation-point bootstrap is truthy**
+
+`MeshResult.ok` and `bool(result)` now accept bootstrap `status="success"` as
+well as mesh-generation `status="complete"`. Status strings are unchanged.
+Bootstrap counts generated points; a true result does not establish a compiled
+mesh or hydraulic acceptance. Error and exception results remain false.
+
 **Breakline protection flags validate correctly under NumPy 2**
 
 Preprocessing validation accepts native text `Protection Radius=-1` as enabled,

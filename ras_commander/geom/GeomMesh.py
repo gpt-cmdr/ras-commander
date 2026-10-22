@@ -5413,7 +5413,9 @@ class GeomMesh:
             MeshResult with status, mesh_name, cell_count (= number of generated
             computation points), and geom_text_path. Points are written to the
             .g## text; the full mesh is produced by the subsequent HEC-RAS
-            geometry preprocess.
+            geometry preprocess. Successful bootstrap keeps status="success"
+            and is truthy; this means points were generated, not that a compiled
+            mesh or hydraulically accepted model exists.
         """
         import numpy as np
         from .GeomStorage import GeomStorage
