@@ -254,3 +254,23 @@ CASES.update({
     "HdfLandCover.get_landcover_association": lambda p: HdfLandCover.get_landcover_association(p),
     "HdfStorageArea.get_terrain_path_from_geom_hdf": lambda p: HdfStorageArea.get_terrain_path_from_geom_hdf(p),
 })
+
+
+# ---------------------------------------------------------------- main #580 / #582 readers
+from ras_commander.hdf import HdfCompletion, HdfResultsMesh  # noqa: E402
+
+
+def _first_ref_line_flow(path):
+    """Recorded computed Flow for the first reference line, or None without one."""
+    ds = HdfResultsXsec.get_ref_lines_timeseries(path, variables="Flow")
+    if "Flow" not in ds or ds.sizes.get("refln_id", 0) == 0:
+        return None
+    return HdfResultsMesh.get_profile_line_flow_timeseries(
+        path, str(ds["refln_name"].values[0]), mesh_name=str(ds["mesh_name"].values[0]),
+    )
+
+
+CASES.update({
+    "HdfCompletion.inspect_time_coverage": lambda p: HdfCompletion.inspect_time_coverage(p),
+    "HdfResultsMesh.get_profile_line_flow_timeseries[recorded]": _first_ref_line_flow,
+})

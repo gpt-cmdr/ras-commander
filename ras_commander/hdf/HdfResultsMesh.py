@@ -968,7 +968,7 @@ class HdfResultsMesh:
                 or h5py.check_string_dtype(names.dtype) is None
             ):
                 raise ValueError(f"Malformed reference-line Name dataset: {group_path}/Name")
-            identities = [HdfResultsXsec._decode_reference_name_mesh(value) for value in names[:]]
+            identities = [HdfResultsXsec._decode_reference_name_mesh(value) for value in read_typed(names, slice(None))]
             positions = [
                 index for index, (name, mesh) in enumerate(identities)
                 if name == str(line_name) and (mesh_name is None or mesh == str(mesh_name))
@@ -998,7 +998,7 @@ class HdfResultsMesh:
                 or not times.is_monotonic_increasing
             ):
                 raise ValueError(f"Recorded reference-line Flow timestamps do not match: {flow_path}")
-            units_attr = flow_dataset.attrs.get("Units", "")
+            units_attr = read_attr(flow_dataset, "Units", "")
             units_array = np.asarray(units_attr)
             if units_array.size != 1 or not isinstance(
                 units_array.reshape(-1)[0], (str, bytes, np.str_, np.bytes_)

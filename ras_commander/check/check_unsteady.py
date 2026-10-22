@@ -802,6 +802,7 @@ class CheckUnsteady:
             if not mesh_names:
                 raise ValueError("2D flow-area inventory could not be read")
         except Exception as exc:
+            reraise_required(exc)
             for check in ("cell_area", "aspect_ratio"):
                 record(check, "failed", f"Cannot read mesh geometry: {exc}")
             mesh_names = None
@@ -820,6 +821,7 @@ class CheckUnsteady:
                 if not valid.all():
                     raise ValueError("Invalid or missing cell polygons prevent complete coverage")
             except Exception as exc:
+                reraise_required(exc)
                 for check in ("cell_area", "aspect_ratio"):
                     record(check, "unavailable" if geometry_read else "failed",
                            f"Complete cell polygons unavailable: {exc}")
@@ -962,6 +964,7 @@ class CheckUnsteady:
                 record("face_velocity", "issues" if issues else "passed",
                        f"Compared {len(values)} maximum face velocities in ft/s (native {unit})")
         except Exception as exc:
+            reraise_required(exc)
             record("face_velocity", "failed", f"Cannot evaluate maximum face velocities: {exc}")
 
         return results

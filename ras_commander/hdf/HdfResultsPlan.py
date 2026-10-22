@@ -702,7 +702,7 @@ class HdfResultsPlan:
                     dataset = hdf[path]
                     if not isinstance(dataset, h5py.Dataset):
                         raise ValueError(f'expected a dataset at {path}')
-                    return np.asarray(dataset[()])
+                    return np.asarray(read_typed(dataset))
 
                 def validate_stations(values, path):
                     if values.dtype.kind not in 'fiu':
