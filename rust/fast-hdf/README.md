@@ -152,7 +152,36 @@ engine prevents those on file input; see the engine hardening branch.
   the same 0.13 version as freestiler, preserving MVT field representations.
 
 Cargo.lock records exact transitive dependencies. Retain upstream license
-notices when distributing wheels. Consult the repository implementation plan
+notices when distributing wheels.
+
+### Licences
+
+The wheel ships these files under `.dist-info/licenses/`, through maturin
+`license-files` in `pyproject.toml`:
+- `licenses/ras-commander-LICENSE.txt`: this package's MIT licence.
+- `licenses/ras-commander-rust-LICENSE.txt`: the pinned engine's MIT licence.
+- `THIRD-PARTY-NOTICES.md`: generated from the locked default-wheel graph
+  (`extension-module`). It lists every crate linked for any target platform,
+  with the full licence texts each crate ships. It includes the bundled zstd
+  C library (BSD-3-Clause, elected from BSD-3-Clause OR GPL-2.0) and the
+  Apache-2.0-only `approx` and `prost`. Compile-time proc-macro crates (such
+  as `prost-derive`) are listed too, marked as such.
+
+Regenerate the notices after any `Cargo.lock` or engine-pin change, and
+replace the engine licence copy when the pin moves:
+
+```text
+python scripts/generate_third_party_notices.py --features extension-module     --own-licence ../../LICENSE --title "ras-commander-fast-hdf wheel (default features)"
+python scripts/generate_third_party_notices.py --features extension-module     --own-licence ../../LICENSE --title "ras-commander-fast-hdf wheel (default features)" --check
+```
+
+The script uses only the Python standard library and `cargo metadata --locked`.
+It is the same script as in the engine repository. A crate whose published
+package ships no licence file needs its upstream texts under
+`scripts/licence-fallbacks/<crate>-<version>/`, with a `SOURCE.txt`, and
+generation fails until they are added. Wheels built with `exports-*` features
+link a larger graph: regenerate with those features and add any missing
+fallbacks before distributing them. Consult the repository implementation plan
 and validation report for tested datasets, measured timings, and limitations;
 prior research timings are not measurements of this extension.
 

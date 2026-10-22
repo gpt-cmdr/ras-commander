@@ -9,7 +9,10 @@ description = "Optional Rust acceleration for ras-commander"
 requires-python = ">=3.10"
 dependencies = ["numpy>=1.24"]
 license = "MIT"
-license-files = ["licenses/*"]
+# licenses/: this package and the pinned engine (both MIT) plus earlier per-crate notices;
+# THIRD-PARTY-NOTICES.md: every crate linked into the wheel with full licence texts.
+# Regenerate with scripts/generate_third_party_notices.py (see README "Licences").
+license-files = ["licenses/*", "THIRD-PARTY-NOTICES.md"]
 
 [project.optional-dependencies]
 exports = ["pyarrow>=14", "pyproj>=3.6", "shapely>=2.1"]
