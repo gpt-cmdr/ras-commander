@@ -1,0 +1,19 @@
+[package]
+name = "ras-text-conformance"
+version = "0.0.0"
+edition = "2021"
+publish = false
+description = "Standalone conformance harness for rust/fast-hdf/src/ras_text (no PyO3, no shared manifest edits)"
+
+[lib]
+path = "src/lib.rs"
+
+[[bin]]
+name = "ras_text_probe"
+path = "src/main.rs"
+
+[dependencies]
+serde_json = "1"
+
+# Keep this crate out of any parent workspace.
+[workspace]

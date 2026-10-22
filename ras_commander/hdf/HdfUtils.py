@@ -36,7 +36,7 @@ Main Method Categories:
     - parse_ras_datetime_ms: Parse datetime with milliseconds
     - parse_run_time_window: Parse time window strings
 
-4. CRS Evidence and Identity
+4. CRS Evidence, Identity and Units
     - resolve_ras_relative_path: Resolve RASMapper relative paths on any host
     - get_crs_identity: Describe a CRS without guessing an authority code
     - crs_equivalent: Strict CRS equivalence (WKT1/WKT2/authority spellings)
@@ -46,6 +46,9 @@ Main Method Categories:
     - collect_hdf_crs_evidence: Ordered evidence for an HDF and its .rasmap
     - collect_rasmap_crs_evidence: Ordered evidence named by a .rasmap
     - resolve_crs_evidence: Resolve evidence to resolved/missing/conflict
+    - get_units_system: Read the HDF "Units System" attribute
+    - linear_unit_to_meters / area_to_square_meters: Unit-aware conversions
+    - get_stored_ras_version / parse_ras_file_version: Stored HEC-RAS version
 
 Usage Notes:
 - All methods are static and can be called without class instantiation
@@ -66,7 +69,7 @@ from datetime import datetime, timedelta
 from typing import Union, Optional, Dict, List, Tuple, Any, Sequence
 import re
 
-from ..Decorators import standardize_input, log_call 
+from ..Decorators import standardize_input, log_call
 from ..LoggingConfig import setup_logging, get_logger
 
 logger = get_logger(__name__)
@@ -671,7 +674,7 @@ class HdfUtils:
         return parsed_dt
 
     # ------------------------------------------------------------------
-    # CRS evidence and identity
+    # CRS evidence, identity and units
     # ------------------------------------------------------------------
 
     @staticmethod
@@ -966,10 +969,11 @@ class HdfUtils:
             return CrsEvidence(source, path, CRS_EVIDENCE_MISSING_FILE)
         try:
             if kind == "hdf":
+                from ..fast_hdf import read_attr
                 with h5py.File(path, "r") as hdf_file:
-                    value = hdf_file.attrs.get("Projection")
+                    value = read_attr(hdf_file, "Projection", None)
                     if value is None and "Geometry" in hdf_file:
-                        value = hdf_file["Geometry"].attrs.get("Projection")
+                        value = read_attr(hdf_file["Geometry"], "Projection", None)
                 text, error = HdfUtils._decode_projection_attr(value)
                 if error:
                     return CrsEvidence(source, path, CRS_EVIDENCE_INVALID, detail=error)
@@ -991,6 +995,8 @@ class HdfUtils:
                     wkt = src.crs.to_wkt() if src.crs else None
                 return HdfUtils._evidence_from_wkt(source, path, wkt)
         except Exception as e:
+            from ..fast_hdf import reraise_required
+            reraise_required(e)
             return CrsEvidence(source, path, CRS_EVIDENCE_UNREADABLE, detail=str(e))
         return CrsEvidence(source, path, CRS_EVIDENCE_UNREADABLE,
                            detail=f"unsupported file type '{suffix}'")
@@ -1152,3 +1158,103 @@ class HdfUtils:
                 break
         return CrsResolution(CRS_RESOLVED, primary.wkt, primary.source, primary.path,
                              authority, evidence, (primary.wkt,), epsg)
+
+    @staticmethod
+    @log_call
+    def get_units_system(hdf_path: Union[str, Path]) -> Optional[str]:
+        """Return the HDF root ``Units System`` attribute (e.g. ``"SI Units"``,
+        ``"US Customary"``), or ``None`` when it is not stored."""
+        from ..fast_hdf import read_attrs
+        with h5py.File(hdf_path, "r") as hdf_file:
+            value = read_attrs(hdf_file).get("Units System")
+        if value is None:
+            return None
+        if isinstance(value, (bytes, np.bytes_)):
+            value = value.decode("utf-8")
+        return str(value).strip() or None
+
+    @staticmethod
+    @log_call
+    def linear_unit_to_meters(crs: Any = None, units_system: Optional[str] = None) -> float:
+        """
+        Return metres per horizontal model unit.
+
+        The CRS unit is authoritative because ``US Customary`` does not
+        distinguish US survey feet from international feet. Without a CRS,
+        only ``SI Units`` resolves (to 1.0).
+
+        Args:
+            crs: CRS input accepted by ``get_crs_identity``, or ``None``.
+            units_system: HDF ``Units System`` value, or ``None``.
+
+        Raises:
+            ValueError: If the unit cannot be determined, the CRS is angular,
+                or the CRS unit contradicts ``units_system``.
+        """
+        if crs is not None:
+            identity = HdfUtils.get_crs_identity(crs)
+            kind = identity["horizontal_unit_kind"]
+            if kind in ("angular", "unknown"):
+                raise ValueError(
+                    f"CRS '{identity['name']}' has {kind} horizontal units; "
+                    "no linear model unit is defined."
+                )
+            if units_system:
+                system = units_system.strip().lower()
+                if (system.startswith("si") and kind != "metre") or (
+                    system.startswith("us") and kind == "metre"
+                ):
+                    raise ValueError(
+                        f"CRS unit '{identity['horizontal_unit']}' contradicts "
+                        f"HDF units system '{units_system}'."
+                    )
+            return float(identity["horizontal_unit_to_meter"])
+
+        if units_system and units_system.strip().lower().startswith("si"):
+            return 1.0
+        if units_system and units_system.strip().lower().startswith("us"):
+            raise ValueError(
+                "'US Customary' without a CRS is ambiguous between US survey "
+                "feet and international feet."
+            )
+        raise ValueError("Horizontal model unit is unknown (no CRS or units system).")
+
+    @staticmethod
+    @log_call
+    def area_to_square_meters(
+        area: Union[float, np.ndarray],
+        crs: Any = None,
+        units_system: Optional[str] = None,
+    ) -> Union[float, np.ndarray]:
+        """Convert areas in model units squared to square metres using
+        ``linear_unit_to_meters`` (same arguments and errors)."""
+        scale = HdfUtils.linear_unit_to_meters(crs, units_system) ** 2
+        if np.isscalar(area):
+            return float(area) * scale
+        return np.asarray(area, dtype=np.float64) * scale
+
+    @staticmethod
+    @log_call
+    def get_stored_ras_version(hdf_path: Union[str, Path]) -> Optional[str]:
+        """Return the HDF root ``File Version`` attribute written by HEC-RAS
+        (e.g. ``"HEC-RAS 5.0.7 November 2018"``), or ``None``."""
+        from ..fast_hdf import read_attrs
+        with h5py.File(hdf_path, "r") as hdf_file:
+            value = read_attrs(hdf_file).get("File Version")
+        if value is None:
+            return None
+        if isinstance(value, (bytes, np.bytes_)):
+            value = value.decode("utf-8")
+        return str(value).strip() or None
+
+    @staticmethod
+    @log_call
+    def parse_ras_file_version(version_text: Optional[str]) -> Optional[Tuple[int, int, int]]:
+        """Parse ``"HEC-RAS 6.7 Beta 5 Development"`` to ``(6, 7, 0)``.
+        Returns ``None`` when no HEC-RAS version number is present."""
+        if not version_text:
+            return None
+        match = re.search(r"HEC-RAS\s+(\d+)\.(\d+)(?:\.(\d+))?", version_text)
+        if not match:
+            return None
+        return int(match.group(1)), int(match.group(2)), int(match.group(3) or 0)

@@ -27,6 +27,7 @@ import pandas as pd
 from .HdfStruc import HdfStruc
 from ..Decorators import log_call, standardize_input
 from ..LoggingConfig import get_logger
+from ..fast_hdf import read_attr, read_attrs, read_typed, reraise_required
 
 logger = get_logger(__name__)
 
@@ -197,11 +198,12 @@ class HdfStorageArea:
 
         try:
             with h5py.File(hdf_path, "r") as hdf_file:
-                units_system_raw = hdf_file.attrs.get("Units System")
+                units_system_raw = read_attr(hdf_file, "Units System", None)
                 geom_group = hdf_file.get("Geometry")
                 if geom_group is not None:
-                    si_units_raw = geom_group.attrs.get("SI Units")
+                    si_units_raw = read_attr(geom_group, "SI Units", None)
         except Exception as exc:
+            reraise_required(exc)
             logger.debug(
                 "Unable to read storage unit metadata from %s: %s",
                 hdf_path,
@@ -315,7 +317,7 @@ class HdfStorageArea:
                 )
                 return []
 
-            attrs = sa_group["Attributes"][()]
+            attrs = read_typed(sa_group["Attributes"])
             if not getattr(attrs.dtype, "names", None) or "Name" not in attrs.dtype.names:
                 logger.debug(
                     "Storage area attributes in %s do not include a Name field.",
@@ -362,7 +364,7 @@ class HdfStorageArea:
                 )
                 return {}
 
-            attrs = sa_group["Attributes"][()]
+            attrs = read_typed(sa_group["Attributes"])
             names = attrs.dtype.names or ()
             if "Name" not in names:
                 logger.debug(
@@ -465,7 +467,7 @@ class HdfStorageArea:
                         HdfStorageArea._STORAGE_AREA_PATH,
                     )
                     return empty
-                attrs = sa_group["Attributes"][()]
+                attrs = read_typed(sa_group["Attributes"])
                 field_names = getattr(attrs.dtype, "names", None)
                 if not field_names or "Name" not in field_names:
                     logger.debug(
@@ -507,7 +509,7 @@ class HdfStorageArea:
                     )
                     return empty
 
-                info = sa_group[HdfStorageArea._VOLUME_ELEVATION_INFO][()]
+                info = read_typed(sa_group[HdfStorageArea._VOLUME_ELEVATION_INFO])
                 start, count = int(info[sa_index, 0]), int(info[sa_index, 1])
                 if count == 0:
                     HdfStorageArea._log_missing_volume_elevation_curve(
@@ -517,9 +519,9 @@ class HdfStorageArea:
                     )
                     return empty
 
-                values = sa_group[HdfStorageArea._VOLUME_ELEVATION_VALUES][
-                    start:start + count
-                ]
+                values = read_typed(
+                    sa_group[HdfStorageArea._VOLUME_ELEVATION_VALUES], slice(start, start + count)
+                )
                 df = pd.DataFrame(
                     {"elevation": values[:, 1].astype("float64"),
                      "volume": values[:, 0].astype("float64")},
@@ -531,6 +533,7 @@ class HdfStorageArea:
                 return df
 
         except Exception as e:
+            reraise_required(e)
             logger.error(
                 "Error reading volume-elevation curve for SA '%s' from %s "
                 "(%s): %s",
@@ -562,9 +565,9 @@ class HdfStorageArea:
                 logger.debug("Geometry group not found in %s.", hdf_path.name)
                 return None
 
-            terrain_raw = geom_group.attrs.get("Terrain Filename")
+            terrain_raw = read_attrs(geom_group).get("Terrain Filename")
             if terrain_raw is None:
-                terrain_raw = hdf_file.attrs.get("Terrain Filename")
+                terrain_raw = read_attrs(hdf_file).get("Terrain Filename")
             if terrain_raw is None:
                 logger.debug("Terrain Filename attribute not found in %s.", hdf_path.name)
                 return None
@@ -764,6 +767,7 @@ class HdfStorageArea:
         except (FileNotFoundError, ValueError):
             raise
         except Exception as e:
+            reraise_required(e)
             logger.debug(
                 "Error computing stage-storage curve for SA '%s' in %s: %s",
                 sa_name, hdf_path, e, exc_info=True,
@@ -807,7 +811,7 @@ class HdfStorageArea:
             if attr_path not in hdf_file:
                 return None
 
-            attributes = hdf_file[attr_path][()]
+            attributes = read_typed(hdf_file[attr_path])
             field_names = attributes.dtype.names or ()
             if not field_names:
                 return None

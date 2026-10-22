@@ -1,0 +1,13 @@
+[package]
+name = "ras-fgb-finalization-tests"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[lib]
+path = "lifecycle.rs"
+
+[dependencies]
+ras-export = { path = "../../rust/fast-hdf/src/exports", features = ["flatgeobuf"] }
+arrow-ipc = "=59.0.0"
+tempfile = "3"

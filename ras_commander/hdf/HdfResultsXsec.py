@@ -43,6 +43,7 @@ from .HdfBase import HdfBase
 from .HdfUtils import HdfUtils
 from ..Decorators import standardize_input, log_call
 from ..LoggingConfig import get_logger
+from ..fast_hdf import read_attr, read_typed
 
 xr = optional_module("xarray", "Returning xarray results from HdfResultsXsec")
 
@@ -119,7 +120,7 @@ class HdfResultsXsec:
                 )
                 
                 # Extract Cross Section Attributes
-                attrs_dataset = hdf_file[f"{base_output_path}/Cross Section Attributes"][:]
+                attrs_dataset = read_typed(hdf_file[f"{base_output_path}/Cross Section Attributes"], slice(None))
                 rivers = [attr['River'].decode('utf-8').strip() for attr in attrs_dataset]
                 reaches = [attr['Reach'].decode('utf-8').strip() for attr in attrs_dataset]
                 stations = [attr['Station'].decode('utf-8').strip() for attr in attrs_dataset]
@@ -137,11 +138,11 @@ class HdfResultsXsec:
                 times = pd.to_datetime(time_stamps, format='%d%b%Y %H:%M:%S:%f')
                 
                 # Extract Required Datasets
-                water_surface = hdf_file[f"{base_output_path}/Water Surface"][:]
-                velocity_total = hdf_file[f"{base_output_path}/Velocity Total"][:]
-                velocity_channel = hdf_file[f"{base_output_path}/Velocity Channel"][:]
-                flow_lateral = hdf_file[f"{base_output_path}/Flow Lateral"][:]
-                flow = hdf_file[f"{base_output_path}/Flow"][:]
+                water_surface = read_typed(hdf_file[f"{base_output_path}/Water Surface"], slice(None))
+                velocity_total = read_typed(hdf_file[f"{base_output_path}/Velocity Total"], slice(None))
+                velocity_channel = read_typed(hdf_file[f"{base_output_path}/Velocity Channel"], slice(None))
+                flow_lateral = read_typed(hdf_file[f"{base_output_path}/Flow Lateral"], slice(None))
+                flow = read_typed(hdf_file[f"{base_output_path}/Flow"], slice(None))
                 
                 # Calculate maximum values along time axis
                 max_water_surface = np.max(water_surface, axis=0)
@@ -256,7 +257,7 @@ class HdfResultsXsec:
                     "required dataset 'Cross Section Attributes'."
                 )
 
-            attribute_rows = attributes[:]
+            attribute_rows = read_typed(attributes, slice(None))
             feature_count = len(attribute_rows)
             frame = pd.DataFrame(
                 {
@@ -315,7 +316,7 @@ class HdfResultsXsec:
                 frame[f"maximum_{variable_slug}_time"] = maximum_times
 
                 units[variable_slug] = HdfResultsXsec._decode_reference_attr(
-                    dataset.attrs.get("Units", "")
+                    read_attr(dataset, "Units", "")
                 )
                 native_variables[variable_slug] = str(variable_name)
 
@@ -406,7 +407,7 @@ class HdfResultsXsec:
 
         for start in range(0, int(dataset.shape[0]), chunk_rows):
             stop = min(int(dataset.shape[0]), start + chunk_rows)
-            block = np.asarray(dataset[start:stop], dtype="float64")
+            block = np.asarray(read_typed(dataset, slice(start, stop)), dtype="float64")
             valid = np.isfinite(block) & (np.abs(block) < 1.0e30)
             maximum_block = np.where(valid, block, -np.inf)
             minimum_block = np.where(valid, block, np.inf)
@@ -659,7 +660,7 @@ class HdfResultsXsec:
                 logger.error("%s", message)
                 raise KeyError(message)
 
-            reference_names = reference_group["Name"][:]
+            reference_names = read_typed(reference_group["Name"], slice(None))
             names = []
             mesh_areas = []
             for s in reference_names:
@@ -682,9 +683,9 @@ class HdfResultsXsec:
                 ):
                     continue
 
-                values = dataset[:]
+                values = read_typed(dataset, slice(None))
                 units = HdfResultsXsec._decode_reference_attr(
-                    dataset.attrs.get("Units", "")
+                    read_attr(dataset, "Units", "")
                 )
                 da = xr.DataArray(
                     values,

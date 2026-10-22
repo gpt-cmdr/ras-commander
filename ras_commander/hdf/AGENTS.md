@@ -133,6 +133,10 @@ This file is the canonical local instruction file for `ras_commander/hdf/`.
   stored coordinates (MultiLineString if not contiguous). Dissolve uses sorted
   `(mesh_name, cell_id)` rows and normalized rings, so the `cell_id` column is
   the smallest cell in each class.
+  The opt-in `engine="native"`/`"auto"` paths reproduce this mesh-scoped reference
+  (several meshes are analysed in isolation; frames keep the
+  `mesh_name, classification, geometry, cell_id` dissolve layout) and record
+  `attrs["fluvial_engine"]`; the default `engine="python"` is the reference.
 - Mesh time-series domains use authoritative stored scalar `Location`: `Cells`
   and `Cell` mean cells; `Faces` means faces. Invalid, unknown, nonscalar or
   contradictory present Location is refused, never bypassed with a name rule.

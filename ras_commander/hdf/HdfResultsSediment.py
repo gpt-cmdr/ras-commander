@@ -45,6 +45,7 @@ from .HdfBase import HdfBase
 from .HdfMesh import HdfMesh
 from ..Decorators import log_call, standardize_input
 from ..LoggingConfig import get_logger
+from ..fast_hdf import read_typed
 
 logger = get_logger(__name__)
 
@@ -213,7 +214,7 @@ class HdfResultsSediment:
         """Best-effort sediment output time vector (model time units, days)."""
         for path in (_BED_TS_TIME, _SED_TS_TIME):
             if path in f:
-                t = f[path][:]
+                t = read_typed(f[path], slice(None))
                 if len(t) == n:
                     return t
         return np.arange(n, dtype=float)
@@ -222,8 +223,8 @@ class HdfResultsSediment:
     def _cell_geometry(f: h5py.File, area: str):
         """Return (surface_area, cell_centers, crs) for a 2D area from the plan HDF."""
         base = f"Geometry/2D Flow Areas/{area}"
-        sa = f[f"{base}/Cells Surface Area"][:]
-        cc = f[f"{base}/Cells Center Coordinate"][:]
+        sa = read_typed(f[f"{base}/Cells Surface Area"], slice(None))
+        cc = read_typed(f[f"{base}/Cells Center Coordinate"], slice(None))
         crs = HdfBase.get_projection(f)
         return sa, cc, crs
 
@@ -286,9 +287,9 @@ class HdfResultsSediment:
         single-snapshot layout; raises a clear error on any other rank.
         """
         if arr.ndim == 2:
-            return arr[time_index]
+            return read_typed(arr, time_index)
         if arr.ndim == 1:
-            return arr[:]
+            return read_typed(arr, slice(None))
         raise ValueError(
             f"Unexpected rank {arr.ndim} for dataset '{dataset}' in area '{area}' "
             "(expected (n_time, n_cell) or (n_cell,)).")
@@ -497,7 +498,7 @@ class HdfResultsSediment:
         project_file = HdfResultsSediment._project_file(hdf_path, ras_object)
         with h5py.File(hdf_path, 'r') as f:
             area = HdfResultsSediment._resolve_area(f, mesh_name)
-            bc = f[f"{_BED_BLOCK}/{area}/Cell Bed Change"][:]
+            bc = read_typed(f[f"{_BED_BLOCK}/{area}/Cell Bed Change"], slice(None))
             length_unit = HdfResultsSediment._length_unit(
                 f, unit_system=unit_system, project_file=project_file)
             # Tolerate a 1-D single-snapshot dataset by promoting to (1, n_cell).

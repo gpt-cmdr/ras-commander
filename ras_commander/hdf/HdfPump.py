@@ -27,6 +27,7 @@ from .HdfUtils import HdfUtils
 from .HdfBase import HdfBase
 from ..Decorators import standardize_input, log_call
 from ..LoggingConfig import get_logger
+from ..fast_hdf import read_attrs, read_typed
 
 gpd = optional_module("geopandas", "Returning GeoDataFrame results from HdfPump")
 xr = optional_module("xarray", "Returning xarray results from HdfPump")
@@ -113,8 +114,8 @@ class HdfPump:
                         "Verify the HDF was written with pump station geometry data.",
                     ))
 
-            attributes = group['Attributes'][()]
-            points = group['Points'][()]
+            attributes = read_typed(group['Attributes'])
+            points = read_typed(group['Points'])
 
             # Create geometries
             geometries = [Point(x, y) for x, y in points]
@@ -184,9 +185,9 @@ class HdfPump:
                     "Verify the HDF was written with pump group geometry data."
                 )
 
-            attributes = group['Attributes'][()]
-            efficiency_curves_info = group['Efficiency Curves Info'][()]
-            efficiency_curves_values = group['Efficiency Curves Values'][()]
+            attributes = read_typed(group['Attributes'])
+            efficiency_curves_info = read_typed(group['Efficiency Curves Info'])
+            efficiency_curves_values = read_typed(group['Efficiency Curves Values'])
 
             # Create DataFrame and decode byte strings
             df = pd.DataFrame(attributes)
@@ -262,11 +263,11 @@ class HdfPump:
                     _PUMP_RESULTS_ACTION,
                 ))
 
-            data = hdf[data_path][()]
+            data = read_typed(hdf[data_path])
 
             time, time_units = HdfPump._pump_block_time(hdf, data_path, data.shape)
 
-            variable_units = hdf[data_path].attrs.get('Variable_Unit', None)
+            variable_units = read_attrs(hdf[data_path]).get('Variable_Unit', None)
             variable_names, unit_by_variable = HdfPump._pump_variable_columns(
                 variable_units,
                 data.shape[1],
@@ -314,7 +315,7 @@ class HdfPump:
                 logger.debug("Pump station summary data not found in HDF file")
                 return pd.DataFrame()
 
-            summary_data = hdf[summary_path][()]
+            summary_data = read_typed(hdf[summary_path])
 
             # Create DataFrame and decode byte strings
             df = pd.DataFrame(summary_data)
@@ -383,11 +384,11 @@ class HdfPump:
                     _PUMP_RESULTS_ACTION,
                 ))
 
-            data = hdf[data_path][()]
+            data = read_typed(hdf[data_path])
 
             time, time_units = HdfPump._pump_block_time(hdf, data_path, data.shape)
 
-            variable_units = hdf[data_path].attrs.get('Variable_Unit', None)
+            variable_units = read_attrs(hdf[data_path]).get('Variable_Unit', None)
             variable_names, unit_by_variable = HdfPump._pump_variable_columns(
                 variable_units,
                 data.shape[1],
@@ -422,9 +423,9 @@ class HdfPump:
                     f"Pump time axis '{path}' has shape {dataset.shape}; "
                     f"expected ({data_shape[0]},) for '{data_path}'"
                 )
-            values = dataset[()]
+            values = read_typed(dataset)
             if name == 'Time':
-                units = HdfPump._decode_hdf_text(dataset.attrs.get('Time', ''))
+                units = HdfPump._decode_hdf_text(read_attrs(dataset).get('Time', ''))
                 if (values.dtype.kind != 'f' or units.lower() != 'days'
                         or not np.all(np.isfinite(values)) or np.any(np.diff(values) < 0)):
                     raise ValueError(f"Pump time axis '{path}' requires finite nondecreasing days")

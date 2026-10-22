@@ -43,6 +43,7 @@ from ..Decorators import log_call, standardize_input
 from ..LoggingConfig import get_logger
 from .HdfBase import HdfBase
 from .HdfUtils import HdfUtils
+from ..fast_hdf import read_attr, read_attrs, read_typed, reraise_required
 
 logger = get_logger(__name__)
 
@@ -174,10 +175,8 @@ class HdfLandCover:
             if areas_path not in hdf:
                 raise RuntimeError(f"No 2D flow areas in {hdf_path.name}.")
             geometry = hdf.get("Geometry")
-            attributes = geometry.attrs if geometry is not None else {}
-
             def decode_attribute(name: str) -> Optional[str]:
-                value = attributes.get(name)
+                value = read_attr(geometry, name, None) if geometry is not None else None
                 if value is None:
                     return None
                 if isinstance(value, (bytes, np.bytes_)):
@@ -200,12 +199,12 @@ class HdfLandCover:
                 ):
                     face_values = np.array([], dtype=np.float64)
                 else:
-                    face_values = np.asarray(face_dataset[:, 3], dtype=np.float64)
+                    face_values = np.asarray(read_typed(face_dataset, (slice(None), 3)), dtype=np.float64)
                 face_distinct = _materially_distinct(face_values, tolerance)
 
                 cell_dataset = area.get("Cells Center Manning's n")
                 cell_values = (
-                    np.asarray(cell_dataset[()], dtype=np.float64)
+                    np.asarray(read_typed(cell_dataset), dtype=np.float64)
                     if cell_dataset is not None
                     else np.array([], dtype=np.float64)
                 )
@@ -361,7 +360,7 @@ class HdfLandCover:
                         logger.debug(f"No Manning's n data for mesh '{area_name}'")
                         continue
 
-                    n_values = area[mann_path][()]
+                    n_values = read_typed(area[mann_path])
                     n_cells = len(n_values)
 
                     area_df = pd.DataFrame({
@@ -372,6 +371,7 @@ class HdfLandCover:
                     results.append(area_df)
 
         except Exception as e:
+            reraise_required(e)
             logger.error(f"Error reading preprocessed Manning's n from {hdf_path}: {e}")
             return pd.DataFrame(columns=['mesh_name', 'cell_id', 'mannings_n'])
 
@@ -414,7 +414,7 @@ class HdfLandCover:
                     logger.debug(f"No Manning's n calibration table in {hdf_path}")
                     return None
 
-                data = hdf_file[table_path][()]
+                data = read_typed(hdf_file[table_path])
 
                 df_dict = {}
                 for field_name in data.dtype.names:
@@ -426,6 +426,7 @@ class HdfLandCover:
                 return pd.DataFrame(df_dict)
 
         except Exception as e:
+            reraise_required(e)
             logger.error(f"Error reading calibration table from {hdf_path}: {e}")
             return None
 
@@ -460,9 +461,9 @@ class HdfLandCover:
         nodata_threshold = np.finfo(np.float32).max * 0.5
 
         with h5py.File(landcover_hdf_path, "r") as hdf_file:
-            ids = hdf_file["IDs"][()]
-            names = hdf_file["Names"][()]
-            mannings_n = hdf_file["ManningsN"][()]
+            ids = read_typed(hdf_file["IDs"])
+            names = read_typed(hdf_file["Names"])
+            mannings_n = read_typed(hdf_file["ManningsN"])
 
         for pixel_value, raw_name, base_n in zip(ids, names, mannings_n):
             class_name = str(HdfUtils.convert_ras_hdf_value(raw_name)).strip()
@@ -535,7 +536,7 @@ class HdfLandCover:
                 if missing:
                     raise ValueError(f"Missing polygon datasets: {missing}")
 
-                attrs = lc_group["Attributes"][()]
+                attrs = read_typed(lc_group["Attributes"])
                 names = [HdfUtils.convert_ras_string(name) for name in attrs["Name"]]
 
                 area_names = None
@@ -543,9 +544,9 @@ class HdfLandCover:
                     area_names = [HdfUtils.convert_ras_string(name) for name in attrs["2D Area Name"]]
 
                 geoms = []
-                for pnt_start, pnt_cnt, part_start, part_cnt in lc_group["Polygon Info"][()]:
+                for pnt_start, pnt_cnt, part_start, part_cnt in read_typed(lc_group["Polygon Info"]):
                     points = HdfBase.plan_vertex_ordinates(
-                        lc_group["Polygon Points"][()][pnt_start:pnt_start + pnt_cnt]
+                        read_typed(lc_group["Polygon Points"])[pnt_start:pnt_start + pnt_cnt]
                     )
                     if pnt_start < 0 or pnt_cnt < 3 or len(points) != pnt_cnt:
                         raise ValueError("Invalid region polygon point range")
@@ -554,7 +555,7 @@ class HdfLandCover:
                     elif "Polygon Parts" not in lc_group:
                         raise ValueError("Multipart Manning's region is missing Polygon Parts")
                     else:
-                        parts = lc_group["Polygon Parts"][()][part_start:part_start + part_cnt]
+                        parts = read_typed(lc_group["Polygon Parts"])[part_start:part_start + part_cnt]
                         rings = [points[ps:ps + pc] for ps, pc in parts]
                         if len(rings) == 1:
                             geoms.append(Polygon(rings[0]))
@@ -577,6 +578,7 @@ class HdfLandCover:
                 )
 
         except Exception as e:
+            reraise_required(e)
             logger.error(f"Error reading Manning's region polygons from {hdf_path} (Geometry/Land Cover (Manning's n)): {e}")
             raise
 
@@ -608,13 +610,14 @@ class HdfLandCover:
                 if cells_path not in hdf_file:
                     return None
 
-                data = hdf_file[cells_path][()]
+                data = read_typed(hdf_file[cells_path])
                 return pd.DataFrame({
                     'region_id': data['Region ID'],
                     'cell_index': data['Cell Index'],
                 })
 
         except Exception as e:
+            reraise_required(e)
             logger.error(f"Error reading region cell mapping from {hdf_path}: {e}")
             return None
 
@@ -664,7 +667,7 @@ class HdfLandCover:
                     logger.debug(f"Land cover sidecar missing Raster Map: {landcover_hdf_path}")
                     return None
 
-                rmap_data = hdf_file[rmap_path][()]
+                rmap_data = read_typed(hdf_file[rmap_path])
                 class_names = [HdfUtils.convert_ras_string(n) for n in rmap_data['Name']]
                 pixel_ids = rmap_data['ID'].tolist()
 
@@ -682,7 +685,7 @@ class HdfLandCover:
                     logger.debug(f"Land cover sidecar missing Variables: {landcover_hdf_path}")
                     return None
 
-                vars_data = hdf_file[vars_path][()]
+                vars_data = read_typed(hdf_file[vars_path])
                 var_names = [HdfUtils.convert_ras_string(n) for n in vars_data['Name']]
 
                 mannings_n = {}
@@ -702,6 +705,7 @@ class HdfLandCover:
                 return pd.DataFrame(rows)
 
         except Exception as e:
+            reraise_required(e)
             logger.error(f"Error reading land cover raster map from {landcover_hdf_path}: {e}")
             return None
 
@@ -998,7 +1002,7 @@ class HdfLandCover:
                 if geom_group is None:
                     return None
 
-                lc_attr = geom_group.attrs.get('Land Cover Filename')
+                lc_attr = read_attrs(geom_group).get('Land Cover Filename')
                 if lc_attr is None:
                     return None
 
@@ -1021,6 +1025,7 @@ class HdfLandCover:
                     return None
 
         except Exception as e:
+            reraise_required(e)
             logger.error(f"Error reading land cover association from {hdf_path}: {e}")
             return None
 
@@ -1180,7 +1185,7 @@ class HdfLandCover:
                 # Try 2D flow area perimeter first (tightest bounds)
                 perim_pts_path = "Geometry/2D Flow Areas/Polygon Points"
                 if perim_pts_path in hf:
-                    pts = hf[perim_pts_path][()]
+                    pts = read_typed(hf[perim_pts_path])
                     buffer = 500.0  # 500 ft buffer around perimeter
                     clip_bounds = (
                         float(pts[:, 0].min()) - buffer,
@@ -1199,6 +1204,7 @@ class HdfLandCover:
                         )
                         logger.debug("Clipping to geometry extent (no 2D perimeter found)")
         except Exception as e:
+            reraise_required(e)
             logger.debug(f"Could not read clip bounds from geometry HDF: {e}")
 
         # Step 5: Read land cover TIF (clipped to geometry extent) and compute

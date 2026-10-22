@@ -3227,6 +3227,8 @@ class RasCmdr:
         """
         if type(disable_omp_affinity) is not bool:
             raise TypeError("disable_omp_affinity must be a bool")
+        from .fast_hdf import close_sessions
+        close_sessions()
         _require_process_supervision("RasCmdr.compute_plan()")
         max_runtime_seconds = RasCmdr._normalize_max_runtime(max_runtime)
         _success = False

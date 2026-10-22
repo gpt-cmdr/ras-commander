@@ -1,0 +1,19 @@
+[package]
+name = "ras-whole-export-harness"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[dependencies]
+ras-export = { path = "../../../rust/fast-hdf/src/exports", features = ["geojson", "flatgeobuf", "geoparquet", "geopackage"] }
+arrow-ipc = "=59.0.0"
+arrow-array = "=59.0.0"
+serde_json = "1"
+
+[[bin]]
+name = "whole-export-harness"
+path = "main.rs"
+
+[profile.release]
+lto = "thin"
+codegen-units = 1
