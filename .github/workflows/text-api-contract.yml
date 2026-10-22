@@ -59,3 +59,7 @@ jobs:
           tests/test_hdf_coastal_native_contract.py
           tests/test_resultsparser_write_attr_precheck.py
           tests/test_results_parser_fatal_records.py -q
+      - name: Check DSS read contracts without optional runtimes
+        run: >-
+          python -m pytest tests/test_rasdss_java_read_fixes.py
+          -m "not integration" -q
