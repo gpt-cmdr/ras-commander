@@ -46,5 +46,7 @@ jobs:
           tests/test_rasplan_2d_numeric_validation.py
           tests/test_rasplan_2d_flow_options.py
           tests/test_results_parser.py
+          tests/test_hdf_nonnewtonian_native_contract.py
+          tests/test_hdf_coastal_native_contract.py
           tests/test_resultsparser_write_attr_precheck.py
           tests/test_results_parser_fatal_records.py -q
