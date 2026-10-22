@@ -23,7 +23,7 @@ class AnchorInventory(HTMLParser):
 
     def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
         anchor = dict(attrs).get("id")
-        if not anchor or anchor.startswith(("__span", "__codelineno")):
+        if not anchor:
             return
         self.ids[anchor] += 1
         if re.fullmatch(r"h[1-6]", tag) or anchor.startswith("ras_commander."):
@@ -96,9 +96,9 @@ def validate(docs_dir: Path, site_dir: Path) -> list[str]:
         inventory.feed(html_path.read_text(encoding="utf-8"))
         for anchor in sorted(expected - inventory.ids.keys()):
             errors.append(f"{page.name}: missing API/compatibility anchor {anchor}")
-        for anchor in sorted(inventory.review_ids | expected):
+        for anchor in sorted(inventory.ids):
             if inventory.ids[anchor] > 1:
-                errors.append(f"{page.name}: duplicate API/heading ID {anchor}")
+                errors.append(f"{page.name}: duplicate HTML ID {anchor}")
     if total == 0:
         errors.append("No explicitly listed API members found; refusing a vacuous pass")
     if not errors:

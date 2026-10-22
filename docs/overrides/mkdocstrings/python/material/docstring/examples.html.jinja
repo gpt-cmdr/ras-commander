@@ -1,0 +1,10 @@
+{% import "language.html.jinja" as lang with context %}
+
+<p><span class="doc-section-title">{{ section.title or lang.t("Examples:") }}</span></p>
+{% for section_type, sub_section in section.value %}
+  {% if section_type.value == "text" %}
+    {{ sub_section|convert_markdown(heading_level, html_id ~ '--example-text-' ~ loop.index, autoref_hook=autoref_hook) }}
+  {% elif section_type.value == "examples" %}
+    {{ sub_section|highlight(language="pycon", id_prefix=html_id ~ '--example-' ~ loop.index ~ '--') }}
+  {% endif %}
+{% endfor %}

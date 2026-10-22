@@ -1,0 +1,15 @@
+{% extends "_base/function.html.jinja" %}
+{% from "signature_ids.html.jinja" import render_signature with context %}
+
+{% block signature scoped %}
+  {% if function.overloads and config.show_overloads %}
+    <div class="doc-overloads">
+      {% for overload in function.overloads %}
+        {{ render_signature(overload.name, overload, html_id ~ '--overload-' ~ loop.index ~ '--', annotations=true) }}
+      {% endfor %}
+    </div>
+  {% endif %}
+  {% if config.separate_signature and not (config.show_overloads and function.overloads and config.overloads_only) %}
+    {{ render_signature(function.name, function, html_id ~ '--signature--') }}
+  {% endif %}
+{% endblock signature %}

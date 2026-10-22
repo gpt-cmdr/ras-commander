@@ -1,0 +1,16 @@
+{# Upstream signature filters highlight with line IDs but no object prefix.
+   Keep their formatting and cross-references; scope IDs and links together. #}
+{% macro scoped_ids(code, prefix) -%}
+  {{ code | replace('id="__', 'id="' ~ prefix ~ '__')
+          | replace('name="__', 'name="' ~ prefix ~ '__')
+          | replace('href="#__', 'href="#' ~ prefix ~ '__') }}
+{%- endmacro %}
+
+{% macro render_signature(name, function, prefix, annotations=none) -%}
+  {% set code %}
+    {% filter format_signature(function, config.line_length, annotations=annotations, crossrefs=config.signature_crossrefs) %}
+      {{ name }}
+    {% endfilter %}
+  {% endset %}
+  {{ scoped_ids(code, prefix) }}
+{%- endmacro %}

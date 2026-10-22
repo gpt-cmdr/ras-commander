@@ -1,0 +1,6 @@
+{% extends "_base/attribute.html.jinja" %}
+{% from "signature_ids.html.jinja" import scoped_ids with context %}
+
+{% block signature scoped %}
+  {{ scoped_ids(super(), html_id ~ '--signature--') }}
+{% endblock signature %}

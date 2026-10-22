@@ -47,7 +47,7 @@ jobs:
       - name: Install documentation dependencies
         run: |
           pip install --upgrade pip
-          pip install -r docs/requirements-docs.txt
+          pip install -r docs/requirements-docs.txt pytest
           CI=1 pip install -e .
 
       - name: Validate notebook inventory
@@ -68,9 +68,12 @@ jobs:
         run: |
           python .claude/scripts/generate_cognitive_docs.py
 
+      - name: Verify source and signature rendering regressions
+        run: python -m pytest tests/test_mkdocstrings_source_anchors.py -q
+
       - name: Build — no deploy
         run: |
           mkdocs build --strict
 
-      - name: Verify rendered RASMapper API methods
+      - name: Verify rendered API members and unique HTML IDs
         run: python .claude/scripts/validate_rasmapper_api_rendering.py
