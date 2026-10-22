@@ -41,6 +41,9 @@ jobs:
           tests/test_breakout_feature_handoff.py
           tests/test_hdf_completion.py
           tests/test_hdf_followup_native_contract.py
+          tests/test_precipitation_boundary_authoring.py
+          tests/test_precip_native_contract.py
+          tests/test_rasunsteady_precipitation_contract.py
           tests/test_ras_docker_slurm.py
           tests/test_slurm_node_staging.py
           tests/test_rasplan_core_upsert.py
