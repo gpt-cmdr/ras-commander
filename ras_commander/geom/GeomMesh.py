@@ -79,6 +79,7 @@ from uuid import uuid4
 
 from .._ras_text import _write_ras_text
 from ..Decorators import log_call
+from ..fast_hdf import release_native_sessions
 from .._gdal_runtime import (
     configure_hecras_gdal_runtime,
     configure_rasmapper_gdal_bridge,
@@ -4638,6 +4639,7 @@ class GeomMesh:
 
             if create_backup:
                 backup_path = GeomParser.create_backup(hdf_path)
+            release_native_sessions(temp_path, hdf_path)
             os.replace(temp_path, hdf_path)
         finally:
             if temp_path.exists():

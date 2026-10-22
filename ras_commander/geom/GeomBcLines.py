@@ -57,6 +57,7 @@ import pandas as pd
 
 from .._ras_text import _write_ras_text
 from ..Decorators import log_call
+from ..fast_hdf import release_native_sessions
 from ..LoggingConfig import get_logger
 from .GeomParser import GeomParser
 from .GeomReferenceFeatures import _format_coord_line
@@ -764,12 +765,14 @@ class GeomBcLines:
             committed = []
             try:
                 for path, stage in staged.items():
+                    release_native_sessions(stage, path)
                     os.replace(stage, path)
                     committed.append(path)
             except BaseException:
                 for index, path in enumerate(reversed(committed)):
                     restore = staging / f"rollback{index}"
                     restore.write_bytes(originals[path])
+                    release_native_sessions(restore, path)
                     os.replace(restore, path)
                 raise
         boundaries_df_refreshed = False

@@ -47,6 +47,7 @@ logger = get_logger(__name__)
 
 __all__ = [
     "FastHdfError", "FastHdfPanicError", "available", "close_sessions",
+    "release_native_sessions",
     "packed_meshes", "mesh_polygons", "export_pmtiles", "export_mesh_pmtiles",
     "export_arrow", "export_arrow_pmtiles",
 ]
@@ -194,6 +195,20 @@ def close_sessions(path=None):
                 session, _ = _sessions.pop(key)
                 _scoped_keys.discard(key)
                 session.close()
+
+
+def release_native_sessions(*paths):
+    """Close cached native sessions on ``paths`` before they are replaced, moved or renamed.
+
+    A session opened inside a public call stays mapped until the outermost call
+    returns, and Windows refuses to replace or rename a mapped file. Writers call
+    this immediately before ``os.replace``/``shutil.move`` on both source and
+    destination. Their typed-result cache entries are dropped too. Paths without
+    a cached session (including non-HDF files) only clear that cache.
+    """
+    for path in paths:
+        if path is not None:
+            close_sessions(path)
 
 
 @contextmanager

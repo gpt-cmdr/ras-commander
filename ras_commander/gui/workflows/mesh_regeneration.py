@@ -43,7 +43,7 @@ except ImportError:
     WIN32_AVAILABLE = False
 
 from ...LoggingConfig import get_logger
-from ...fast_hdf import read_typed, reraise_required
+from ...fast_hdf import read_typed, release_native_sessions, reraise_required
 from ...Decorators import log_call
 from ..win32_primitives import Win32Primitives
 from ..hecras_elements import HecRasElements
@@ -776,6 +776,7 @@ def _begin_geometry_hdf_transaction(context: dict) -> None:
     had_original = target.is_file()
     try:
         if had_original:
+            release_native_sessions(target, temporary_backup)
             os.replace(target, temporary_backup)
     except Exception:
         for item in non_target_backups:
@@ -811,6 +812,7 @@ def _restore_non_target_geometry_hdfs(context: dict) -> dict:
             observed = None
         if observed != tuple(item["pre_stat"]):
             evidence["changed_during_gui"].append(str(target))
+        release_native_sessions(backup, target)
         os.replace(backup, target)
         evidence["restored_paths"].append(str(target))
     context["non_target_hdf_restoration"] = evidence
@@ -839,12 +841,14 @@ def _finish_geometry_hdf_transaction(
         if target.exists():
             target.unlink()
         if had_original and temporary_backup.exists():
+            release_native_sessions(temporary_backup, target)
             os.replace(temporary_backup, target)
         evidence["rolled_back"] = True
         return evidence
 
     if not target.is_file():
         if had_original and temporary_backup.exists():
+            release_native_sessions(temporary_backup, target)
             os.replace(temporary_backup, target)
         evidence["rolled_back"] = True
         raise RuntimeError(f"HEC-RAS did not rebuild geometry HDF: {target}")
@@ -858,6 +862,7 @@ def _finish_geometry_hdf_transaction(
                     f"{target.name}.pre-rasmapper.bak{counter}"
                 )
                 counter += 1
+            release_native_sessions(temporary_backup, committed_backup)
             os.replace(temporary_backup, committed_backup)
             evidence["backup"] = str(committed_backup)
         else:
