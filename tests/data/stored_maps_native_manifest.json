@@ -1,0 +1,134 @@
+{
+  "schema_version": 1,
+  "qualification_date": "2026-10-22",
+  "ras_commander_base": "97ebab378efaac98acf59427489d39d26e642056",
+  "fixture_environment": "RAS_STORED_MAP_FIXTURE_ROOT",
+  "model": "Ether Hollow",
+  "runtime_version": "7.0.1",
+  "render_mode": "horizontal",
+  "terrain_name": "Terrain",
+  "arrival_depth": 0.5,
+  "simulation_minutes": 20,
+  "output_minutes": [
+    0,
+    5,
+    10,
+    15,
+    20
+  ],
+  "initial_rendered_time_returns_no_files": true,
+  "files": [
+    {
+      "key": "adr_arrival_time",
+      "path": "rasters/adr/Arrival Time (0.5ft hrs).Terrain.EtherHollow_terrain_ft.tif",
+      "bytes": 109266,
+      "sha256": "fe20ec798b2941c0b754d8d3370f67fee9735c4f806ddc90825ccdfc92cc7e52"
+    },
+    {
+      "key": "adr_duration",
+      "path": "rasters/adr/Duration (0.5ft hrs).Terrain.EtherHollow_terrain_ft.tif",
+      "bytes": 109132,
+      "sha256": "34305609f8edfd3942203a0ac4777909932777a5c395b640ef439df587d85cdc"
+    },
+    {
+      "key": "adr_percent_inundated",
+      "path": "rasters/adr/Percent Time Inundated (0.5ft).Terrain.EtherHollow_terrain_ft.tif",
+      "bytes": 108684,
+      "sha256": "e8d1ddff077611e106af7d4394b4fa126d14e5e46e0485ac16f6b86da4760cb5"
+    },
+    {
+      "key": "time_01_wse",
+      "path": "rasters/time_01/WSE (01JAN2000 00 05 00).Terrain.EtherHollow_terrain_ft.tif",
+      "bytes": 91760,
+      "sha256": "7e6910035008fafa58c44dd1e4684f7e77199074f1b03b56cf2d174e1558abb4"
+    },
+    {
+      "key": "time_01_depth",
+      "path": "rasters/time_01/Depth (01JAN2000 00 05 00).Terrain.EtherHollow_terrain_ft.tif",
+      "bytes": 92166,
+      "sha256": "9a98431709e8097393d94229d51f22ea75dfc0bfac8bb001598e9ce7728f14b5"
+    },
+    {
+      "key": "time_02_wse",
+      "path": "rasters/time_02/WSE (01JAN2000 00 10 00).Terrain.EtherHollow_terrain_ft.tif",
+      "bytes": 97012,
+      "sha256": "b0ff3c3a53038e4f2574bfb0a36f9e7aaf51938e9fe2b9af0fde3eca1bd6091b"
+    },
+    {
+      "key": "time_02_depth",
+      "path": "rasters/time_02/Depth (01JAN2000 00 10 00).Terrain.EtherHollow_terrain_ft.tif",
+      "bytes": 106450,
+      "sha256": "c7408f6c7edf77e4bbee8dbb09da16cbcafc34056b4e78b4b1fbef69e261d1bd"
+    },
+    {
+      "key": "time_03_wse",
+      "path": "rasters/time_03/WSE (01JAN2000 00 15 00).Terrain.EtherHollow_terrain_ft.tif",
+      "bytes": 105532,
+      "sha256": "03f50082b2cda3d63901a7024845487f4cad2d415517a9d20a56aaad5419c3e1"
+    },
+    {
+      "key": "time_03_depth",
+      "path": "rasters/time_03/Depth (01JAN2000 00 15 00).Terrain.EtherHollow_terrain_ft.tif",
+      "bytes": 137568,
+      "sha256": "998c9dcfc6964e416d0ad13c53b03cb7c97806ba7e848fe58a0bdb81859932b5"
+    },
+    {
+      "key": "time_04_wse",
+      "path": "rasters/time_04/WSE (01JAN2000 00 20 00).Terrain.EtherHollow_terrain_ft.tif",
+      "bytes": 115374,
+      "sha256": "1f44b953d447f06fe33ac97d1f7f4a1a8ce550999d955b5899dad9cf7829ca7a"
+    },
+    {
+      "key": "time_04_depth",
+      "path": "rasters/time_04/Depth (01JAN2000 00 20 00).Terrain.EtherHollow_terrain_ft.tif",
+      "bytes": 184080,
+      "sha256": "43174057c11b5443a3c035c24458e04434ff75562f6a0e0f38fcbfa25f3a2637"
+    },
+    {
+      "key": "terrain",
+      "path": "project/Terrain/Terrain.EtherHollow_terrain_ft.tif",
+      "bytes": 8866729,
+      "sha256": "1546110613d287e0dd6c875daa8566493fed572ef1c3ad08cf5dd9f17033977b"
+    },
+    {
+      "key": "result",
+      "path": "project/EtherHollow.p01.hdf",
+      "bytes": 16753800,
+      "sha256": "1a0fff604fe58d314fe497d64c2033dda4e30bef26dd46d7d6399a58bb52dce2"
+    },
+    {
+      "key": "rasmap",
+      "path": "project/EtherHollow.rasmap",
+      "bytes": 12046,
+      "sha256": "e44204fa25fd93241498c908e87bc00334958109816c741967c0fada17d87adb"
+    }
+  ],
+  "mapping_runtime": {
+    "helper": {
+      "sha256": "d1a79dadb9b42139f8cd8ba18084136e561685faf3ab067f83a1ce50b2761f0b",
+      "size_bytes": 20480
+    },
+    "libraries": {
+      "RasMapperLib.dll": {
+        "sha256": "8f246aae48a5833288d12568203919693cc15992d750514058467916a203fd7e",
+        "size_bytes": 14209536
+      },
+      "Geospatial.Core.dll": {
+        "sha256": "598d7e8b96e39eab3eedf2b70751ff2c76fb96dac71d58f56af63d96e062a674",
+        "size_bytes": 818688
+      },
+      "Geospatial.GDALAssist.dll": {
+        "sha256": "925c883db04458c67aa9c55879af8547c7aab6a8c11682c3b4cdd632e4fe36b4",
+        "size_bytes": 409600
+      },
+      "HDF.PInvoke.dll": {
+        "sha256": "56451ba1282aadc8b78877d151c61aaa0c2221ebec333564a0cfe9412e5f860b",
+        "size_bytes": 127488
+      },
+      "H5Assist.dll": {
+        "sha256": "d25c53056f3ca72acd10a8040c972c3113136cde54a711c7f43804b98233e5d6",
+        "size_bytes": 125440
+      }
+    }
+  }
+}

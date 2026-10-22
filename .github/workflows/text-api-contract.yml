@@ -24,7 +24,7 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
       - name: Install public library and focused test runner
-        run: python -m pip install -e . pytest geopandas 'shapely>=2.0' xarray requests
+        run: python -m pip install -e . pytest geopandas 'shapely>=2.0' xarray requests rasterio
       - name: Check text API and geometry write safety
         run: >-
           python -m pytest tests/ras_text_read_only_test.py
@@ -41,6 +41,7 @@ jobs:
           tests/test_breakout_feature_handoff.py
           tests/test_hdf_completion.py
           tests/test_hdf_followup_native_contract.py
+          tests/test_stored_maps_native_contract.py
           tests/test_precipitation_boundary_authoring.py
           tests/test_precip_native_contract.py
           tests/test_rasunsteady_precipitation_contract.py
