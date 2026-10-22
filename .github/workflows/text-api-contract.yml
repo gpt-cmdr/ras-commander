@@ -41,6 +41,9 @@ jobs:
           tests/test_hdf_completion.py
           tests/test_ras_docker_slurm.py
           tests/test_slurm_node_staging.py
+          tests/test_rasplan_core_upsert.py
+          tests/test_rasplan_2d_numeric_validation.py
+          tests/test_rasplan_2d_flow_options.py
           tests/test_results_parser.py
           tests/test_resultsparser_write_attr_precheck.py
           tests/test_results_parser_fatal_records.py -q
