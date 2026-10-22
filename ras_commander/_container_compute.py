@@ -27,6 +27,7 @@ import h5py
 import numpy as np
 
 from .LoggingConfig import get_logger
+from .fast_hdf import read_attr, read_typed
 
 logger = get_logger(__name__)
 JOB_SCHEMA = "ras-commander-job/v1"
@@ -178,7 +179,7 @@ def _mesh(path, expected=None, property_tables=True):
             coordinates = area.get("Cells Center Coordinate")
             if (coordinates is None or coordinates.ndim != 2
                     or coordinates.shape[1] != 2 or coordinates.shape[0] == 0
-                    or not np.isfinite(coordinates[:]).all()):
+                    or not np.isfinite(read_typed(coordinates, slice(None))).all()):
                 raise ValueError(f"Invalid or empty 2D cells in {name}")
             cells = len(coordinates)
             summary[name] = {"cells": cells}
@@ -191,14 +192,14 @@ def _mesh(path, expected=None, property_tables=True):
                         or not len(info) or values.ndim != 2 or values.shape[1] != width
                         or not len(values) or (rows is not None and len(info) != rows)):
                     raise ValueError(f"Missing or invalid {label} tables in {name}")
-                indexes = info[:]
+                indexes = read_typed(info, slice(None))
                 if (not np.isfinite(indexes).all() or np.any(indexes < 0)
                         or np.any(indexes != np.floor(indexes))
                         or not np.any(indexes[:, 1] > 0)
                         or np.any(indexes[:, 0] + indexes[:, 1] > len(values))):
                     raise ValueError(f"Out-of-bounds {label} indexes in {name}")
                 for offset in range(0, len(values), 65536):
-                    if not np.isfinite(values[offset:offset + 65536]).all():
+                    if not np.isfinite(read_typed(values, slice(offset, offset + 65536))).all():
                         raise ValueError(f"Nonfinite {label} values in {name}")
                 summary[name][label] = {"entries": len(info), "values": len(values)}
     if not summary:
@@ -228,7 +229,7 @@ def _prepared_window(path):
         for label in ("Simulation Start Time", "Simulation End Time"):
             if label not in info.attrs:
                 raise ValueError(f"Prepared HDF lacks {label}")
-            times.append(HdfUtils.parse_ras_datetime(_text(info.attrs[label])))
+            times.append(HdfUtils.parse_ras_datetime(_text(read_attr(info, label))))
         if times[1] <= times[0]:
             raise ValueError("Prepared simulation end must follow its start")
     return tuple(times)
@@ -507,7 +508,7 @@ def _validate_result(path, log, plan, meshes, window, property_tables=True):
             if water is None or water.shape != (len(timestamps), mesh["cells"]):
                 raise ValueError(f"Result water-surface dimensions are incomplete for {name}")
             for offset in range(0, len(water), 8):
-                if not np.isfinite(water[offset:offset + 8]).all():
+                if not np.isfinite(read_typed(water, slice(offset, offset + 8))).all():
                     raise ValueError(f"Result water surfaces contain nonfinite values for {name}")
             validation["meshes"][name] = {"water_surface_shape": list(water.shape), "finite": True}
         validation.update(output_times=len(timestamps), simulation_start=timestamps[0].isoformat(),

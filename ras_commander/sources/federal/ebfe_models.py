@@ -61,6 +61,7 @@ from ras_commander.sources.base import (
 )
 
 from ..._ras_text import _write_ras_text, _write_ras_xml
+from ...fast_hdf import read_attr, read_attrs, reraise_required
 
 logger = logging.getLogger(__name__)
 
@@ -2954,7 +2955,7 @@ class RasEbfeModels:
                             errors.append(f"{hdf_path.name} lacks {group_path}")
                             continue
                         for attribute, expected in attributes.items():
-                            actual = hdf[group_path].attrs.get(attribute)
+                            actual = read_attr(hdf[group_path], attribute, None)
                             hdf_association_attributes_checked += 1
                             if actual is None or not (
                                 RasEbfeModels._upper_guadalupe_path_equivalent(
@@ -3770,7 +3771,7 @@ class RasEbfeModels:
             with h5py.File(hdf_path, "r") as hdf:
                 for group_name in ("Geometry", "Geometry/2D Flow Areas/Perimeter 1"):
                     for attr_name, expected in expected_values.items():
-                        actual = hdf[group_name].attrs.get(attr_name)
+                        actual = read_attr(hdf[group_name], attr_name, None)
                         if isinstance(actual, bytes):
                             actual = actual.decode("utf-8")
                         normalized_actual = re.sub(
@@ -4703,11 +4704,11 @@ class RasEbfeModels:
                         f"No named 2D flow-area groups found in {geometry_hdf}."
                     )
                 for area_name in area_names:
-                    attrs = flow_areas[area_name].attrs
+                    area_group = flow_areas[area_name]
                     missing_area_attrs[area_name] = [
                         attr_name
                         for attr_name in filename_attrs.values()
-                        if decode_hdf_attr(attrs.get(attr_name)) is None
+                        if decode_hdf_attr(read_attr(area_group, attr_name, None)) is None
                     ]
 
             rasmap = project_folder / f"{settings['project']}.rasmap"
@@ -4840,7 +4841,7 @@ class RasEbfeModels:
 
                         hdf_file.visititems(collect)
                         for object_name, item in objects:
-                            for attr_name, attr_value in item.attrs.items():
+                            for attr_name, attr_value in read_attrs(item).items():
                                 if not re.search(
                                     r"(?:file|filename|path)",
                                     str(attr_name),
@@ -5031,7 +5032,7 @@ class RasEbfeModels:
                     for asset_kind, association_key in association_keys.items():
                         field = GEOMETRY_ASSOCIATION_FIELDS[association_key]
                         raw_value = decode_hdf_attr(
-                            area_group.attrs.get(field["filename_attr"])
+                            read_attr(area_group, field["filename_attr"], None)
                         )
                         checked += 1
                         expected = expected_assets[asset_kind]
@@ -10659,7 +10660,7 @@ projects point to that single organized target. See
                         for attr_name in obj.attrs.keys():
                             if "land cover filename" not in str(attr_name).lower():
                                 continue
-                            raw_value = obj.attrs[attr_name]
+                            raw_value = read_attr(obj, attr_name)
                             if isinstance(raw_value, (bytes, bytearray)):
                                 current_value = raw_value.decode(
                                     "utf-8",
@@ -10678,7 +10679,8 @@ projects point to that single organized target. See
 
                     collect("/", hdf)
                     hdf.visititems(collect)
-            except Exception:
+            except Exception as exc:
+                reraise_required(exc)
                 continue
 
         copied = 0

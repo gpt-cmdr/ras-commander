@@ -34,6 +34,7 @@ import uuid
 from typing import Any, Mapping, Optional, Sequence, Union
 
 from .Decorators import log_call
+from .fast_hdf import read_attr, read_typed
 from .LoggingConfig import get_logger
 from .RasSlurm import (
     _CONTAINER_IDENTITY,
@@ -578,7 +579,7 @@ def _area_names(hdf: Any) -> list[str]:
     attrs = group.get("Attributes")
     if attrs is not None and attrs.dtype.names and "Name" in attrs.dtype.names:
         return [n.decode("utf-8", "replace").strip() if isinstance(n, bytes) else str(n).strip()
-                for n in attrs["Name"]]
+                for n in read_typed(attrs)["Name"]]
     return [k for k, v in group.items() if isinstance(v, h5py.Group)]
 
 
@@ -621,7 +622,7 @@ def check_solver_ready(tmp_hdf: Union[str, Path], *, geom_preprocess: bool = Fal
         major = _hdf_ras_major_version(hdf)
         # Geometry lives in the .c## file for pre-6.3.1 ("cfile") releases.
         cfile = (major is not None and major < 6) or RasCmdr._linux_solver_arguments_for_release(
-            RasCmdr._ras_release_tuple(hdf.attrs.get("File Version"))) == "cfile"
+            RasCmdr._ras_release_tuple(read_attr(hdf, "File Version", None))) == "cfile"
         areas = _area_names(hdf)
         if not geom_preprocess and not cfile:
             geompre = hdf.get("Geometry/GeomPreprocess")
@@ -631,7 +632,7 @@ def check_solver_ready(tmp_hdf: Union[str, Path], *, geom_preprocess: bool = Fal
                     "RasGeomPreprocess in the image"
                 )
         precip = hdf.get(_PRECIP_GROUP)
-        mode = precip.attrs.get("Mode") if precip is not None else None
+        mode = read_attr(precip, "Mode", None) if precip is not None else None
         if isinstance(mode, bytes):
             mode = mode.decode("utf-8", "replace")
         # Older completed HDFs did not persist Mode, so retain Values as a conservative
@@ -665,7 +666,7 @@ def check_solver_ready(tmp_hdf: Union[str, Path], *, geom_preprocess: bool = Fal
             area_group.visititems(find_float_tables)
             for table, node in float_tables:
                 for start in range(0, node.shape[0], _NAN_CHUNK_ROWS):
-                    if np.isnan(node[start:start + _NAN_CHUNK_ROWS]).any():
+                    if np.isnan(read_typed(node, slice(start, start + _NAN_CHUNK_ROWS))).any():
                         problems.append(
                             f"NaN in Geometry/2D Flow Areas/{area}/{table} (solver SIGSEGV)"
                         )
@@ -1077,7 +1078,7 @@ def _check_layout_matches_hdf(tmp_hdf: Path, profile: ApptainerSiteProfile) -> N
     try:
         with h5py.File(str(tmp_hdf), "r", locking=False) as hdf:
             major = _hdf_ras_major_version(hdf)
-            release = RasCmdr._ras_release_tuple(hdf.attrs.get("File Version"))
+            release = RasCmdr._ras_release_tuple(read_attr(hdf, "File Version", None))
     except (OSError, TypeError):
         return  # unreadable files are reported by check_solver_ready / later staging
     if profile.layout == "bin_ras" and major != 5:
@@ -1129,16 +1130,16 @@ def _gridded_dss_dependency(source_tmp_hdf: Path) -> Optional[dict[str, Any]]:
         precipitation = hdf.get(precipitation_path)
         if precipitation is None:
             return None
-        mode = _decode_hdf_string(precipitation.attrs.get("Mode", ""))
-        source = _decode_hdf_string(precipitation.attrs.get("Source", ""))
+        mode = _decode_hdf_string(read_attr(precipitation, "Mode", ""))
+        source = _decode_hdf_string(read_attr(precipitation, "Source", ""))
         if mode.strip().casefold() != "gridded" or source.strip().casefold() != "dss":
             return None
         if "DSS Filename" not in precipitation.attrs:
             raise ValueError("Gridded DSS precipitation lacks a DSS Filename attribute")
-        reference_value = precipitation.attrs["DSS Filename"]
+        reference_value = read_attr(precipitation, "DSS Filename")
         reference = _decode_hdf_string(reference_value).strip()
         pathname = _decode_hdf_string(
-            precipitation.attrs.get("DSS Pathname", "")
+            read_attr(precipitation, "DSS Pathname", "")
         ).strip()
         if not reference:
             raise ValueError("Gridded DSS precipitation has an empty DSS Filename")
@@ -1304,7 +1305,7 @@ def _expected_simulation_end(tmp_hdf: Path) -> str:
 
     with h5py.File(tmp_hdf, "r", locking=False) as hdf:
         info = hdf.get("Plan Data/Plan Information")
-        value = info.attrs.get("Simulation End Time") if info is not None else None
+        value = read_attr(info, "Simulation End Time", None) if info is not None else None
     if isinstance(value, bytes):
         value = value.decode("utf-8", "replace")
     if not isinstance(value, str) or not value.strip() or value.strip().casefold() == "unknown":

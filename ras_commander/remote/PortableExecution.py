@@ -25,6 +25,7 @@ import time
 from typing import Any, Union
 
 from ..Decorators import log_call
+from ..fast_hdf import read_attr, read_attrs, read_typed, reraise_required
 from ..LoggingConfig import get_logger
 from ..RasCmdr import RasCmdr
 from ..RasPrj import RasPrj
@@ -158,16 +159,16 @@ def _hdf_content_digest(path: Path) -> str:
             digest.update(b"\0" + name.encode("utf-8") + b"\0")
             for key in sorted(node.attrs):
                 digest.update(key.encode("utf-8"))
-                add(node.attrs[key])
+                add(read_attr(node, key))
             if isinstance(node, h5py.Dataset):
                 digest.update(str(node.dtype).encode())
                 digest.update(str(node.shape).encode())
                 if node.shape and node.shape[0]:
-                    step = max(1, (64 * 1024 * 1024) // max(1, node[:1].nbytes))
+                    step = max(1, (64 * 1024 * 1024) // max(1, read_typed(node, slice(None, 1)).nbytes))
                     for start in range(0, node.shape[0], step):
-                        digest.update(raw(node[start : start + step]))
+                        digest.update(raw(read_typed(node, slice(start, start + step))))
                 elif node.shape == ():
-                    add(node[()])
+                    add(read_typed(node))
     return digest.hexdigest()
 
 
@@ -754,10 +755,11 @@ def validate_unsteady_results(
 
         with h5py.File(hdf_path, "r") as handle:
             group = handle.get(_VOLUME_ACCOUNTING_GROUP)
-            attributes = dict(group.attrs) if group is not None else None
+            attributes = read_attrs(group) if group is not None else None
             legacy_group = handle.get(_LEGACY_VOLUME_ACCOUNTING_GROUP)
-            legacy = dict(legacy_group.attrs) if legacy_group is not None else {}
+            legacy = read_attrs(legacy_group) if legacy_group is not None else {}
     except Exception as exc:  # noqa: BLE001 - fail closed on any read error
+        reraise_required(exc)
         summary["error"] = f"{type(exc).__name__}: {exc}"
         reason_codes.append("UNSTEADY_RESULTS_UNREADABLE")
         return summary

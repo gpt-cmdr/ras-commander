@@ -16,6 +16,8 @@ def validate_registration(output: Path, raster: Path) -> dict[str, Any]:
     """Require a self-contained native HDF and VRT binding to the owned TIFF."""
     import h5py
 
+    from ..fast_hdf import read_attr
+
     def owned_reference(value: str) -> str:
         # Native registration uses leaf filenames, so relocations remain safe.
         if not value or "/" in value or "\\" in value or ":" in value:
@@ -41,11 +43,11 @@ def validate_registration(output: Path, raster: Path) -> dict[str, Any]:
                 if isinstance(group, h5py.Group) and "File" in group.attrs
             ]
         )
-        if len(records) != 1 or records[0].attrs.get("Priority") != 0:
+        if len(records) != 1 or read_attr(records[0], "Priority", None) != 0:
             raise RuntimeError(
                 "Native terrain registration requires one priority-zero raster"
             )
-        value = records[0].attrs["File"]
+        value = read_attr(records[0], "File")
         file = owned_reference(
             value.decode("utf-8") if isinstance(value, bytes) else str(value)
         )

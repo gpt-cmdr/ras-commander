@@ -19,6 +19,7 @@ from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple, Union
 from .._ras_text import _write_ras_text, _write_ras_xml
 from ..Decorators import log_call
 from ..LoggingConfig import get_logger
+from ..fast_hdf import read_typed, reraise_required
 from ..RasUtils import RasUtils
 from .GeomParser import GeomParser
 from .GeomStorage import GeomStorage
@@ -1111,6 +1112,7 @@ class GeomProjection:
                             GeomProjection._inspect_refinement_region_integrity(hdf)
                         )
                 except Exception as exc:
+                    reraise_required(exc)
                     record["compiled_hdf_warning"] = str(exc)
             records.append(record)
         return records
@@ -1161,9 +1163,9 @@ class GeomProjection:
             issues.append("Refinement region Polygon Parts must be an Nx2 dataset.")
 
         if not issues:
-            points = polygon_points[:]
-            parts = polygon_parts[:]
-            for region_index, row in enumerate(polygon_info[:]):
+            points = read_typed(polygon_points, slice(None))
+            parts = read_typed(polygon_parts, slice(None))
+            for region_index, row in enumerate(read_typed(polygon_info, slice(None))):
                 pnt_start, pnt_count, part_start, part_count = [
                     int(value) for value in row[:4]
                 ]

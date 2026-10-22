@@ -34,6 +34,7 @@ import pandas as pd
 from .._ras_text import _write_ras_xml
 from ..Decorators import log_call
 from ..LoggingConfig import get_logger
+from ..fast_hdf import read_attr, read_attrs, read_typed
 
 logger = get_logger(__name__)
 
@@ -578,7 +579,7 @@ class RasTerrainModWriter:
                         key: RasTerrainModWriter._decode_hdf_scalar(value)
                         for key, value in zip(
                             mod_grp["Attributes"].dtype.names,
-                            mod_grp["Attributes"][0],
+                            read_typed(mod_grp["Attributes"], 0),
                         )
                     }
 
@@ -591,12 +592,12 @@ class RasTerrainModWriter:
                     {
                         "name": mod_name,
                         "type": RasTerrainModWriter._decode_hdf_scalar(
-                            mod_grp.attrs.get("Type", "")
+                            read_attr(mod_grp, "Type", "")
                         ),
                         "subtype": RasTerrainModWriter._decode_hdf_scalar(
-                            mod_grp.attrs.get("Subtype", "")
+                            read_attr(mod_grp, "Subtype", "")
                         ),
-                        "priority": int(mod_grp.attrs.get("Priority", 0)),
+                        "priority": int(read_attr(mod_grp, "Priority", 0)),
                         "modification_type": modification_type,
                         "modification_mode": RasTerrainModWriter._mode_name(
                             modification_type
@@ -1649,19 +1650,19 @@ class RasTerrainModWriter:
                     return
 
         with h5py.File(terrain_hdf_path, "r") as f:
-            for value in f.attrs.values():
+            for value in read_attrs(f).values():
                 for text in RasTerrainModWriter._iter_hdf_strings(value):
                     add_candidate(text)
 
             def visitor(_name, obj):
-                for value in obj.attrs.values():
+                for value in read_attrs(obj).values():
                     for text in RasTerrainModWriter._iter_hdf_strings(value):
                         add_candidate(text)
                 if isinstance(obj, h5py.Dataset):
                     if obj.size <= 10000 and (
                         obj.dtype.names is not None or obj.dtype.kind in {"S", "U", "O"}
                     ):
-                        for text in RasTerrainModWriter._iter_hdf_strings(obj[()]):
+                        for text in RasTerrainModWriter._iter_hdf_strings(read_typed(obj)):
                             add_candidate(text)
 
             f.visititems(visitor)
@@ -1913,7 +1914,7 @@ class RasTerrainModWriter:
     @staticmethod
     def _profile_point_count(mod_grp) -> int:
         if "Profile Info" in mod_grp and len(mod_grp["Profile Info"]) > 0:
-            info = np.asarray(mod_grp["Profile Info"][:], dtype=np.int64)
+            info = np.asarray(read_typed(mod_grp["Profile Info"], slice(None)), dtype=np.int64)
             return int(info[:, 1].sum())
         if "Profile Values" in mod_grp:
             return int(mod_grp["Profile Values"].shape[0])
@@ -1924,16 +1925,16 @@ class RasTerrainModWriter:
     @staticmethod
     def _read_profile_array(mod_grp) -> np.ndarray:
         if "Profile" in mod_grp:
-            values = np.asarray(mod_grp["Profile"][:], dtype=np.float64)
+            values = np.asarray(read_typed(mod_grp["Profile"], slice(None)), dtype=np.float64)
             if "Profile Info" in mod_grp and len(mod_grp["Profile Info"]) > 0:
-                start, count = np.asarray(mod_grp["Profile Info"][0], dtype=np.int64)
+                start, count = np.asarray(read_typed(mod_grp["Profile Info"], 0), dtype=np.int64)
                 values = values[start : start + count]
             return values
 
         if "Profile Values" in mod_grp:
-            values = np.asarray(mod_grp["Profile Values"][:], dtype=np.float64)
+            values = np.asarray(read_typed(mod_grp["Profile Values"], slice(None)), dtype=np.float64)
             if "Profile Info" in mod_grp and len(mod_grp["Profile Info"]) > 0:
-                start, count = np.asarray(mod_grp["Profile Info"][0], dtype=np.int64)
+                start, count = np.asarray(read_typed(mod_grp["Profile Info"], 0), dtype=np.int64)
                 values = values[start : start + count]
             return values
 
@@ -1957,7 +1958,7 @@ class RasTerrainModWriter:
             if "Polyline Points" not in mod_grp:
                 raise KeyError(f"Modification polyline not found: {mod_path}/Polyline Points")
 
-            line = np.asarray(mod_grp["Polyline Points"][:], dtype=np.float64)
+            line = np.asarray(read_typed(mod_grp["Polyline Points"], slice(None)), dtype=np.float64)
             profile = RasTerrainModWriter._read_profile_array(mod_grp)
             attr_row = {}
             if "Attributes" in mod_grp and len(mod_grp["Attributes"]) > 0:
@@ -1965,7 +1966,7 @@ class RasTerrainModWriter:
                     key: RasTerrainModWriter._decode_hdf_scalar(value)
                     for key, value in zip(
                         mod_grp["Attributes"].dtype.names,
-                        mod_grp["Attributes"][0],
+                        read_typed(mod_grp["Attributes"], 0),
                     )
                 }
 

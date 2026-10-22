@@ -3,6 +3,8 @@
 import h5py
 import numpy as np
 
+from .fast_hdf import read_attr
+
 
 def _scalar_text(value) -> str:
     """Decode a scalar HDF attribute without treating 'False' as truthy."""
@@ -19,7 +21,7 @@ def _hdf_ras_major_version(hdf):
     """Return the HEC-RAS major version recorded in the HDF ``File Version``."""
     import re
 
-    text = _scalar_text(hdf.attrs.get("File Version"))
+    text = _scalar_text(read_attr(hdf, "File Version", None))
     match = re.search(r"hec-ras\s+(\d+)\.", text)
     return int(match.group(1)) if match else None
 
@@ -42,7 +44,7 @@ def _event_condition_errors(hdf, precipitation_mode=None) -> list[str]:
     if not isinstance(event, h5py.Group):
         problems.append("Event Conditions attribute 'Completed Successfully' must be True (Event Conditions group is missing)")
     elif (major is None or major >= 6) and _scalar_text(
-        event.attrs.get("Completed Successfully")
+        read_attr(event, "Completed Successfully", None)
     ) not in {"true", "1"}:
         # HEC-RAS 5.x never writes this flag; its completion evidence is the
         # owned engine start plus the computed-geometry (.c##) file.
@@ -52,7 +54,7 @@ def _event_condition_errors(hdf, precipitation_mode=None) -> list[str]:
     precipitation = hdf.get(base)
     if precipitation_mode is None:
         mode = (
-            _scalar_text(precipitation.attrs.get("Mode"))
+            _scalar_text(read_attr(precipitation, "Mode", None))
             if isinstance(precipitation, h5py.Group) else ""
         )
     else:

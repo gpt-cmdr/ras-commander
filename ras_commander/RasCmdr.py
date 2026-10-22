@@ -6453,9 +6453,12 @@ class RasCmdr:
         try:
             import h5py
 
+            from .fast_hdf import read_attr, reraise_required
+
             with h5py.File(str(tmp_hdf), "r", locking=False) as hdf:
-                return RasCmdr._ras_release_tuple(hdf.attrs.get("File Version"))
-        except Exception:
+                return RasCmdr._ras_release_tuple(read_attr(hdf, "File Version", None))
+        except Exception as exc:
+            reraise_required(exc)
             return None
 
     @staticmethod
