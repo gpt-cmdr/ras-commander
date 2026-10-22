@@ -206,10 +206,24 @@ The remaining J2b tail allowance requires exactly matching values and timestamps
 through Java's final whole-minute stamp, equal metadata, and less than a minute
 of additional native data. Investigate all other truncations.
 
-The earlier 11,045-comparison evidence used the historical classification rules.
-It is retained as migration evidence, but does not establish zero unexpected
-differences under these stricter rules. Rerun native/Java corpus qualification
-with the optional wheel and Java runtime before accepting that claim.
+The earlier comparison evidence used broader historical rules. A fresh
+2026-10-22 run under the stricter rules completed all 11,045 comparisons across
+53 public RasExamples DSS files, sampling 4,108 time-series datasets, with zero
+unexpected differences and no source or working-copy hash changes. It used
+HEC Monolith 3.3.27, Java 17.0.11 and a private ABI3 wheel built from native
+engine commit `7053eae464ae1b7a9ff798b9ff1de6a95d81adf6`.
+
+The 506 expected comparisons comprise 468 missing-marker mappings, 16 typed
+no-data outcomes, 15 whole-minute tail truncations and seven whole-read failures
+verified by actual Java window reads. Six additional direct Monolith window
+probes match native clocks and values exactly. The seven Davis datasets affected
+by tail truncation also match HEC's C library in timestamps, missing positions
+and all non-missing value bits.
+
+This is sampled read-contract qualification for these artifacts and runtimes,
+not a claim that every possible DSS record or native-engine version is covered.
+The optional native wheel remains unpublished; Java remains the default.
+Future engine or comparison changes require a fresh corpus run.
 
 ## Related
 
