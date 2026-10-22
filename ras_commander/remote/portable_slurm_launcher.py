@@ -18,6 +18,7 @@ import os
 from pathlib import Path
 import re
 import shutil
+import socket
 import subprocess
 import sys
 import tempfile
@@ -132,6 +133,61 @@ def _remove_created_job_scratch() -> None:
         _CREATED_JOB_SCRATCH.discard(job_dir)
 
 
+def _tree_manifest(root: Path) -> dict:
+    """Hash regular files; never traverse links or accept special files."""
+    manifest = {}
+    for path in sorted(root.rglob("*")):
+        if path.is_symlink():
+            raise ValueError(f"Staging cannot traverse symbolic link: {path}")
+        if path.is_dir():
+            continue
+        if not path.is_file():
+            raise ValueError(f"Staging requires regular files: {path}")
+        digest = hashlib.sha256()
+        with path.open("rb") as stream:
+            for block in iter(lambda: stream.read(1024 * 1024), b""):
+                digest.update(block)
+        manifest[path.relative_to(root).as_posix()] = digest.hexdigest()
+    return manifest
+
+
+def _copy_verified_tree(source: Path, destination: Path) -> None:
+    expected = _tree_manifest(source)
+    shutil.copytree(source, destination, symlinks=True)
+    if _tree_manifest(destination) != expected:
+        raise ValueError("Staged file hashes do not match their source")
+
+
+def _stage_bundle(bundle: Path, output_relative: Path, scratch: Path) -> tuple[Path, Path]:
+    output = bundle / output_relative
+    if output.is_symlink() or (output.exists() and any(output.iterdir())):
+        raise ValueError("Node-local staging requires an empty output directory")
+    staged = scratch / "bundle"
+    _copy_verified_tree(bundle, staged)
+    staged_output = staged / output_relative
+    staged_output.mkdir(parents=True, exist_ok=True)
+    return staged, staged_output
+
+
+def _publish_staged_output(source: Path, destination: Path) -> None:
+    """Verify a sibling copy before replacing the initially empty output."""
+    parent = Path(tempfile.mkdtemp(prefix=f".{destination.name}.copyback-", dir=destination.parent))
+    payload = parent / "payload"
+    try:
+        _copy_verified_tree(source, payload)
+        if destination.is_symlink() or (destination.exists() and any(destination.iterdir())):
+            raise ValueError("Output changed while the node-local step ran")
+        if destination.exists():
+            destination.rmdir()
+        payload.replace(destination)
+    except Exception as exc:
+        # Preserve a verified or partial delivery for recovery, as well as
+        # node scratch. The caller records both paths in the failed output.
+        raise RuntimeError(f"Copyback failed; delivery retained at {parent}: {exc}") from exc
+    else:
+        parent.rmdir()
+
+
 def _run_step(root: Path, site: dict, step: dict) -> bool:
     execution_id = str(step["execution_id"])
     if not SAFE_ID.fullmatch(execution_id):
@@ -166,6 +222,24 @@ def _run_step(root: Path, site: dict, step: dict) -> bool:
     except (OSError, ValueError) as exc:
         _failure(output, "SLURM_STEP_SCRATCH_FAILED", str(exc))
         return False
+    staged = site.get("stage_bundles_to_node_scratch", False)
+    if type(staged) is not bool:
+        _failure(output, "SLURM_STEP_STAGEIN_FAILED", "stage_bundles_to_node_scratch must be Boolean")
+        return False
+    run_bundle, run_output = bundle, output
+    if staged:
+        try:
+            # Both supported sbatch modes reserve --nodes=1. The batch
+            # launcher and srun step therefore use this same allocated node.
+            run_bundle, run_output = _stage_bundle(bundle, output_relative, scratch)
+        except (OSError, ValueError) as exc:
+            _failure(output, "SLURM_STEP_STAGEIN_FAILED", f"scratch={scratch}; {exc}")
+            return False
+    run_tmp = scratch
+    if staged:
+        # Do not expose the staged read-only input via a writable /tmp alias.
+        run_tmp = scratch / "tmp"
+        run_tmp.mkdir()
     command = [
         site["srun_executable"],
         "--exclusive",
@@ -182,11 +256,11 @@ def _run_step(root: Path, site: dict, step: dict) -> bool:
         "RAS_COMMANDER_RUNTIME_CONTAINER_IDENTITY="
         f"sif:sha256:{site['apptainer_image_sha256']}",
         "--bind",
-        f"{bundle}:/job:ro",
+        f"{run_bundle}:/job:ro",
         "--bind",
-        f"{output}:/job/{output_relative.as_posix()}:rw",
+        f"{run_output}:/job/{output_relative.as_posix()}:rw",
         "--bind",
-        f"{scratch}:/tmp:rw",
+        f"{run_tmp}:/tmp:rw",
         site["apptainer_image"],
         site["python_executable"],
         "-m",
@@ -196,24 +270,43 @@ def _run_step(root: Path, site: dict, step: dict) -> bool:
     ]
     if site.get("slurm_memory"):
         command.insert(6, f"--mem={site['slurm_memory']}")
+    completed = None
+    failed = False
     try:
         completed = _run_step_process(
             command,
-            bundle=bundle,
-            output=output,
+            bundle=run_bundle,
+            output=run_output,
             # The Wine bridge owns a bounded solver timeout plus up to five
             # minutes for Windows-Python and task-private wineserver cleanup.
             timeout_seconds=int(step["timeout_seconds"]) + 420,
         )
     except subprocess.TimeoutExpired as exc:
-        _failure(output, "SLURM_STEP_TIMEOUT", str(exc))
-        return False
+        _failure(run_output, "SLURM_STEP_TIMEOUT", str(exc))
+        failed = True
     except OSError as exc:
-        _failure(output, "SLURM_STEP_LAUNCH_FAILED", str(exc))
-        return False
-    finally:
-        # Wine prefixes are large; results and logs are already in ``output``.
+        _failure(run_output, "SLURM_STEP_LAUNCH_FAILED", str(exc))
+        failed = True
+    except Exception as exc:
+        _failure(run_output, "SLURM_STEP_FAILED", str(exc))
+        failed = True
+    if staged:
+        try:
+            (run_output / "slurm_staging.json").write_text(json.dumps({
+                "execution_location": "node_scratch",
+                "node": socket.gethostname(),
+                "scratch_directory": str(scratch),
+                "scratch_retained": failed and completed is None,
+            }, indent=2) + "\n", encoding="utf-8")
+            _publish_staged_output(run_output, output)
+        except (OSError, ValueError, RuntimeError) as exc:
+            _failure(output, "SLURM_STEP_COPYBACK_FAILED", f"scratch={scratch}; {exc}")
+            return False
+    # Never erase node-local results until the verified output copy exists.
+    if not (staged and failed and completed is None):
         shutil.rmtree(scratch, ignore_errors=True)
+    if failed:
+        return False
     receipt = output / "execution_receipt.json"
     if completed.returncode != 0 or not receipt.is_file():
         _failure(

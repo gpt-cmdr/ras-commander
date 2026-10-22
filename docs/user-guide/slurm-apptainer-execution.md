@@ -597,3 +597,30 @@ rejected. To stop the recorded job, call
 
 The [API reference](../api/remote.md#rasapptainer-source-reference) documents
 profile, transport, job, and collection records.
+
+
+## Portable requests on node-local scratch
+
+For `RasSlurm`, set `SlurmSiteConfig(stage_bundles_to_node_scratch=True)` to copy
+each portable request bundle onto private storage below `node_scratch_root`.
+The default is `False`. Both pool and array modes reserve one node per batch
+invocation, so the batch launcher stages on the same allocated node as its step.
+The SIF remains at the configured image path; model inputs, runtime project,
+result files, step logs and Wine temporary files use node-local storage.
+
+The staged bundle keeps its relative paths and request identity. Source and
+copied files are checked by SHA-256. Output starts empty. After execution,
+including a reported solver or launch failure, output and diagnostics are copied
+into a sibling delivery directory, verified byte-for-byte, and published to the
+shared output location. `slurm_staging.json` records the node and scratch path.
+Hydraulic validation remains the execution receipt's separate responsibility.
+
+A failed stage-in or copyback returns failure. Copyback failure leaves node
+scratch and any partial delivery intact, with recovery paths in
+`launcher_failure.json`. Do not resubmit into that nonempty output; recover or
+archive it first. A successful byte copy permits scratch cleanup after the process returns,
+even for a failed hydraulic run. A launcher timeout or launch exception retains
+scratch because process quiescence has not been established by this launcher.
+Abrupt node loss or scheduler SIGKILL can prevent copyback; normal job retention
+and site scratch-recovery policy still apply. No new hydraulic request field is
+introduced, and old site dictionaries without the option retain the default.
