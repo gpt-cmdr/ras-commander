@@ -20,7 +20,7 @@ rayon = "1.10"
 prost = "0.13"
 i_overlay = "=1.9.4"
 i_float = "=1.6.0"
-ras-commander-rust = { git = "https://github.com/CLB-Engineering-Corporation/ras-commander-rust", rev = "435ddb4b35c30507127a2656dae5d85b214553ea", default-features = false, features = ["catalog", "hdf", "mesh", "results"] }
+ras-commander-rust = { git = "https://github.com/CLB-Engineering-Corporation/ras-commander-rust", rev = "3c2d4799ffdad01452682b82ca64305279ecc679", default-features = false, features = ["catalog", "hdf", "mesh", "results"] }
 freestiler-core = { git = "https://github.com/walkerke/freestiler", rev = "beb64b0d4414da895ec67d02b2f91db6ab6acc37" }
 # Fast Rust zlib implementation; features unify with both upstream readers.
 flate2 = { version = "1", default-features = false, features = ["zlib-rs"] }
