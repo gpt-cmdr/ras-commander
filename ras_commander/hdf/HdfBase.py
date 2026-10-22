@@ -164,7 +164,7 @@ class HdfBase:
         for ts_name, has_ms in (("Time Date Stamp", False), ("Time Date Stamp (ms)", True)):
             ds = hdf_file.get(f"{base}/{ts_name}")
             if ds is not None and ds.shape[0] > 0:
-                first = _decode(ds[0])
+                first = _decode(read_typed(ds, 0))
                 return HdfUtils.parse_ras_datetime_ms(first) if has_ms else HdfUtils.parse_ras_datetime(first)
 
         raise ValueError(
@@ -199,7 +199,7 @@ class HdfBase:
         ):
             dataset = hdf_file.get(f"{base}/{ts_name}")
             if dataset is not None:
-                return [parse(x.decode("utf-8")) for x in dataset[:]]
+                return [parse(x.decode("utf-8")) for x in read_typed(dataset, slice(None))]
         file_label = Path(getattr(hdf_file, "filename", "HDF file")).name
         raise ValueError(
             f"No unsteady output timestamps in {file_label}: neither "

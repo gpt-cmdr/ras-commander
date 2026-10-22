@@ -1120,9 +1120,10 @@ class HdfResultsMesh:
             with h5py.File(hdf_path, "r") as hdf_file:
                 if dataset_path in hdf_file:
                     units = HdfResultsMesh._decode_hdf_attr(
-                        hdf_file[dataset_path].attrs.get("Units", "")
+                        read_attr(hdf_file[dataset_path], "Units", "")
                     )
-        except Exception:
+        except Exception as exc:
+            reraise_required(exc)
             units = ""
 
         result = pd.DataFrame({
@@ -1152,12 +1153,12 @@ class HdfResultsMesh:
                 if time_path in hdf_file:
                     return list(pd.to_datetime(
                         HdfUtils.convert_timesteps_to_datetimes(
-                            np.asarray(hdf_file[time_path][:]),
+                            np.asarray(read_typed(hdf_file[time_path], slice(None))),
                             start_time,
                         )
                     ))
-        except Exception:
-            pass
+        except Exception as exc:
+            reraise_required(exc)
 
         if results is not None:
             try:
@@ -1891,8 +1892,10 @@ class HdfResultsMesh:
 
         for start in range(0, time_count, chunk_rows):
             stop = min(start + chunk_rows, time_count)
+            block = (slice(start, stop), slice(None))
             values = np.array(
-                result_ds[start:stop, :],
+                read_dataset(result_ds, block)
+                if isinstance(result_ds, h5py.Dataset) else result_ds[block],
                 dtype=np.float32,
                 copy=True,
             )
@@ -2006,7 +2009,7 @@ class HdfResultsMesh:
                         raise ValueError(
                             f"Cell centers are missing for mesh '{mesh_name}'"
                         )
-                    xy = np.asarray(cc_ds, dtype=np.float64)
+                    xy = np.asarray(read_typed(cc_ds), dtype=np.float64)
                     if xy.ndim != 2 or xy.shape[1] != 2:
                         raise ValueError(
                             f"Cell-center shape {xy.shape} is not an (N, 2) "
@@ -2057,7 +2060,7 @@ class HdfResultsMesh:
                             )
 
                         minimum_elevation = np.asarray(
-                            minimum_elevation_ds,
+                            read_typed(minimum_elevation_ds),
                             dtype=np.float32,
                         )
                         if minimum_elevation.ndim != 1:
@@ -2437,7 +2440,7 @@ class HdfResultsMesh:
 
         with h5py.File(hdf_path, "r") as result_hdf, h5py.File(geom_source, "r") as geom_hdf:
             if time_stamp_path in result_hdf:
-                raw_times = result_hdf[time_stamp_path][()]
+                raw_times = read_typed(result_hdf[time_stamp_path])
                 parsed_times = [
                     _parse_timestamp(value.decode("utf-8")) for value in raw_times
                 ]
@@ -2450,7 +2453,7 @@ class HdfResultsMesh:
             elif time_path in result_hdf:
                 start_time = HdfBase.get_simulation_start_time(result_hdf)
                 hdf_times = HdfUtils.convert_timesteps_to_datetimes(
-                    np.asarray(result_hdf[time_path][()]),
+                    np.asarray(read_typed(result_hdf[time_path])),
                     start_time,
                     round_to="s",
                 )
@@ -2467,7 +2470,7 @@ class HdfResultsMesh:
                 )
 
             min_elev = (
-                np.asarray(geom_hdf[min_elev_path][()], dtype=np.float32)
+                np.asarray(read_typed(geom_hdf[min_elev_path]), dtype=np.float32)
                 if depth_path not in result_hdf
                 else None
             )
@@ -2487,9 +2490,9 @@ class HdfResultsMesh:
                     time_index = nearest_position
 
                 if depth_path in result_hdf:
-                    values = np.asarray(result_hdf[depth_path][time_index], dtype=np.float32)
+                    values = np.asarray(read_typed(result_hdf[depth_path], time_index), dtype=np.float32)
                 else:
-                    wse = np.asarray(result_hdf[wse_path][time_index], dtype=np.float32)
+                    wse = np.asarray(read_typed(result_hdf[wse_path], time_index), dtype=np.float32)
                     values = np.maximum(wse - min_elev, 0.0).astype(np.float32)
                 # Physical cells precede ghost cells in result arrays.
                 values = values[: len(cell_points)]
@@ -3000,7 +3003,7 @@ class HdfResultsMesh:
         path = HdfResultsMesh._get_mesh_timeseries_output_path(mesh_name, var)
         group = hdf_path[path]
         values = read_dataset(group)
-        units = HdfResultsMesh._decode_hdf_attr(group.attrs.get("Units"))
+        units = HdfResultsMesh._decode_hdf_attr(read_attr(group, "Units", None))
         return values, units
 
     @staticmethod

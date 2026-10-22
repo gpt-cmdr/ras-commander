@@ -165,6 +165,8 @@ def native_temporal_reduce(dataset, offset=None, *, threshold=None, backend="aut
         if "engine_seconds" in raw:
             timings["engine_seconds"] = float(raw["engine_seconds"])
             read_plan["timing_scope"] = raw["timing_scope"]
+        from ._fast_hdf_typed import _record
+        _record(dataset.name, "native-typed", "temporal_reduce")
         return TemporalReduction(
             maximum=raw["maximum"], peak_index=raw["peak_index"],
             finite_count=raw["finite_count"], exceed_count=raw["exceed_count"],

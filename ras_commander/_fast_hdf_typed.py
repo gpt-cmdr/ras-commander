@@ -22,9 +22,11 @@ Backend policy follows :mod:`ras_commander.fast_hdf`:
 
 Datasets outside every typed family use the generic native reader
 (``fast_hdf.read_dataset``); in auto mode any native failure there (including
-Corrupt/checksum refusals) also falls back to h5py. Text datasets and text-only
-compound identity tables stay on h5py in every mode (recorded as
-``h5py-metadata``): this is the documented required-mode metadata exception. A
+Corrupt/checksum refusals) also falls back to h5py. Fixed-length text datasets
+are served by the engine's ``raw_fixed_strings`` with h5py's NULLPAD byte rule
+(:func:`_fixed_strings`). Variable-length text and text-only compound identity
+tables stay on h5py in every mode (recorded as ``h5py-metadata``): this is the
+documented required-mode metadata exception. A
 compound with any numeric member and no typed route is value data: auto reads it
 with h5py (``h5py-fallback``/``untyped-compound``) and required mode refuses.
 When the engine failed a whole read family (``stored_family_index`` failures),
@@ -316,6 +318,54 @@ def _h5py_fixed_text(values, column, dataset):
             size = len(data) if cut < 0 else cut
         row[size:] = 0
     values[name] = raw.view(field).reshape(values[name].shape)
+
+
+def _fixed_text(dataset):
+    """Whether ``dataset`` is a plain fixed-length string dataset (no compound, no vlen)."""
+    dtype = dataset.dtype
+    return (dtype.names is None and dtype.kind == "S" and dtype.itemsize > 0
+            and h5py.check_vlen_dtype(dtype) is None)
+
+
+def _fixed_strings(module, file_path, dataset):
+    """Full stored fixed-string array, exactly as h5py reads it, from ``raw_fixed_strings``.
+
+    The engine returns the stored bytes with their declared padding. h5py reads
+    fixed strings through HDF5's conversion into a NULLPAD memory type, so the
+    same byte rule as :func:`_h5py_fixed_text` applies: NULLPAD is copied
+    unchanged, NULLTERM is cut at its first NUL and SPACEPAD loses its trailing
+    spaces, the rest of each element being zero-filled. The array is built with
+    the dataset's own dtype (h5py string metadata included).
+    """
+    reported = module.raw_fixed_strings(file_path, dataset.name.strip("/"), _budget(dataset))
+    value = reported.get("value")
+    if value is None:
+        raise TypedRouteError(f"{dataset.name}: raw fixed strings {reported.get('capability')}")
+    dtype = dataset.dtype
+    width = int(value["width"])
+    shape = tuple(int(n) for n in value["shape"])
+    if width != dtype.itemsize:
+        raise TypedRouteError(f"{dataset.name}: string width {width} versus h5py {dtype}")
+    if shape != dataset.shape or value["dataspace"] != ("scalar" if shape == () else "simple"):
+        raise TypedRouteError(f"{dataset.name}: {value['dataspace']} shape {shape} versus {dataset.shape}")
+    padding = value["padding"]
+    if padding not in {"null_pad", "null_terminate", "space_pad"}:
+        raise TypedRouteError(f"{dataset.name}: unproven string padding {padding}")
+    raw = bytes(value["raw_bytes"])
+    count = int(np.prod(shape, dtype=np.int64)) if shape else 1
+    if len(raw) != count * width:
+        raise TypedRouteError(f"{dataset.name}: {len(raw)} string bytes for {count} x {width}")
+    rows = np.frombuffer(raw, dtype=np.uint8).reshape(count, width).copy()
+    if padding != "null_pad":
+        for row in rows:
+            data = row.tobytes()
+            if padding == "space_pad":
+                size = len(data.rstrip(b" "))
+            else:
+                cut = data.find(b"\0")
+                size = len(data) if cut < 0 else cut
+            row[size:] = 0
+    return rows.view(dtype).reshape(shape)
 
 
 def _numeric(values, dataset):
@@ -975,6 +1025,58 @@ def _generic(dataset, selection, key, shape, backend, mode):
         return dataset[key]
 
 
+def _absent_parts_refusal(exc, dataset, route):
+    """Whether a packed line/polygon family was refused only for its absent ``Parts`` dataset.
+
+    Only structure centerlines have a legal legacy layout without ``Centerline
+    Parts`` (single-part records) that the h5py reader supports; the engine family
+    requires ``Parts`` and raises its ``not_found`` error. The numeric Info/Points
+    values are then still the exact stored arrays, so the literal generic native
+    reader serves them. For every other family (river centerlines, breaklines,
+    refinement regions...) a missing ``Parts`` is damage and stays a refusal.
+    """
+    if route is None or route[0] != "line_family" or route[1] != "structure_centerlines":
+        return False
+    if getattr(exc, "engine_kind", None) != "not_found" or not _fast_numeric(dataset):
+        return False
+    parent = dataset.parent.name.strip("/")
+    prefix = {**LINE_GROUPS, **LINE_FAMILY_IN_GROUPS, **FAMILIES_2D}.get(parent, (None, None))[1]
+    if prefix is None:
+        return False
+    parts = f"{parent}/{prefix} Parts"
+    return parts in str(exc) and parts not in dataset.file
+
+
+def _fast_numeric(dataset):
+    from . import fast_hdf
+    return fast_hdf._numeric(dataset) and dataset.shape is not None
+
+
+def _read_fixed_text(module, dataset, key, shape, mode):
+    """Fixed-length text dataset served by the engine's ``raw_fixed_strings`` (engine API 9)."""
+    from . import fast_hdf
+
+    try:
+        if not fast_hdf._safe_file(dataset):
+            raise TypedRouteError(f"{dataset.name}: file cannot be reopened safely by the engine")
+        if shape is None:
+            raise TypedRouteError(f"{dataset.name}: selection {key!r} is left to h5py")
+        values = _fixed_strings(module, os.fsdecode(dataset.file.filename), dataset)[key]
+        if np.shape(values) != shape:
+            raise TypedRouteError(f"{dataset.name}: selection shape {np.shape(values)} versus h5py {shape}")
+        values = values.copy() if isinstance(values, np.ndarray) else values
+    except Exception as exc:
+        if mode == "rust":
+            if isinstance(exc, fast_hdf.FastHdfError):
+                raise
+            raise fast_hdf.FastHdfError(f"Fixed-string native read failed for {dataset.name}: {exc}") from exc
+        logger.debug("h5py fallback for fixed strings %s: %s", dataset.name, exc)
+        _record(dataset.name, "h5py-fallback", "fixed_strings")
+        return dataset[key]
+    _record(dataset.name, "native-typed", "fixed_strings")
+    return values
+
+
 def read(dataset, selection=None, *, backend="auto"):
     """Read like ``dataset[selection]``; typed engine families serve the values."""
     from . import fast_hdf
@@ -989,6 +1091,8 @@ def read(dataset, selection=None, *, backend="auto"):
         return dataset[key]
     shape = _selection_shape(dataset, key)
     dtype = dataset.dtype
+    if _fixed_text(dataset) and hasattr(module, "raw_fixed_strings"):
+        return _read_fixed_text(module, dataset, key, shape, mode)
     metadata = dtype.names is None and (dtype.kind not in "iuf" or h5py.check_vlen_dtype(dtype) is not None)
     route = None if metadata or not hasattr(module, "read_xs_geometry") else route_for(dataset.name)
     if route is not None and route[0] in {"xs_result", "one_d_summary", "structure_series",
@@ -998,6 +1102,9 @@ def read(dataset, selection=None, *, backend="auto"):
             if not _member(module, _os.fsdecode(dataset.file.filename), route):
                 route = None
         except Exception as exc:
+            if _absent_parts_refusal(exc, dataset, route):
+                _record(dataset.name, "diagnostic", route[0], f"absent Parts: {exc}")
+                return _generic(dataset, selection, key, shape, backend, mode)
             if mode == "rust":
                 raise fast_hdf.FastHdfError(f"Typed inventory failed for {dataset.name}: {exc}") from exc
             logger.debug("h5py fallback for typed inventory %s: %s", dataset.name, exc)
@@ -1048,6 +1155,10 @@ def read(dataset, selection=None, *, backend="auto"):
             raise TypedRouteError(f"{dataset.name}: selection shape {np.shape(values)} versus h5py {shape}")
         values = values.copy() if hasattr(values, "copy") else values
     except Exception as exc:
+        if _absent_parts_refusal(exc, dataset, route):
+            # Legacy single-part layout: the stored Info/Points are read literally.
+            _record(dataset.name, "diagnostic", route[0], f"absent Parts: {exc}")
+            return _generic(dataset, selection, key, shape, backend, mode)
         if mode == "rust":
             if isinstance(exc, fast_hdf.FastHdfError):
                 raise

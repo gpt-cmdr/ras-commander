@@ -511,7 +511,7 @@ class HdfResultsPlan:
 
                 # Read profile names dataset
                 profile_names_ds = hdf_file[profile_names_path]
-                profile_names_raw = profile_names_ds[()]
+                profile_names_raw = read_typed(profile_names_ds)
 
                 # Decode byte strings to regular strings
                 profile_names = []
@@ -532,6 +532,7 @@ class HdfResultsPlan:
         except KeyError as e:
             raise KeyError(f"Error accessing steady state profile names: {str(e)}")
         except Exception as e:
+            reraise_required(e)
             raise RuntimeError(f"Error reading steady state profile names: {str(e)}")
 
     @staticmethod
@@ -976,7 +977,7 @@ class HdfResultsPlan:
                 # Read dataset from HDF
                 logger.debug(f"Reading computation messages from HDF: {hdf_path.name}")
                 dataset = hdf_file[compute_msgs_path]
-                data = dataset[()]
+                data = read_typed(dataset)
 
                 # Decode byte string to UTF-8
                 if isinstance(data, bytes):
@@ -1012,6 +1013,7 @@ class HdfResultsPlan:
             return ""
 
         except Exception as e:
+            reraise_required(e)
             logger.debug(f"Error reading computation messages from HDF: {str(e)}")
 
             # Try .txt fallback on any HDF error
@@ -1067,7 +1069,7 @@ class HdfResultsPlan:
                 if compute_msgs_path in hdf_file:
                     logger.debug(f"Reading computation messages from HDF: {hdf_path.name}")
                     dataset = hdf_file[compute_msgs_path]
-                    data = dataset[()]
+                    data = read_typed(dataset)
 
                     # Decode byte string to UTF-8
                     if isinstance(data, bytes):
@@ -1091,6 +1093,7 @@ class HdfResultsPlan:
         except FileNotFoundError:
             logger.debug(f"HDF file not found: {hdf_path}")
         except Exception as e:
+            reraise_required(e)
             logger.debug(f"Error reading computation messages from HDF: {str(e)}")
 
         # Attempt 2: Read .computeMsgs.txt file (HEC-RAS 6.x+)

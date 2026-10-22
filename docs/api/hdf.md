@@ -858,9 +858,21 @@ Routing policy:
   every mode. Basic selections and single increasing integer vectors are read
   natively. Field names, boolean masks and non-integer vectors stay on h5py,
   and are refusals in required mode.
-- **Required-mode metadata exception.** Text datasets and compound tables
-  whose every member is text (identity tables such as XS `River/Reach/RS`
-  rows) are read through h5py in every mode (`h5py-metadata` in the trace).
+- **Fixed-length text datasets** (compute messages, time-stamp and profile-name
+  datasets) are read from the engine's `raw_fixed_strings` with h5py's byte
+  rule applied: NULLPAD unchanged, NULLTERM cut at the first NUL, SPACEPAD
+  without trailing spaces, each element zero-filled, in the dataset's own dtype
+  (`native-typed`/`fixed_strings` in the trace). Auto falls back to h5py on any
+  engine refusal; required mode raises `FastHdfError`.
+- **Legacy single-part structure centerlines.** When the engine refuses the
+  structure centerline family only because `Geometry/Structures/Centerline
+  Parts` is absent (a legal legacy layout), numeric Info/Points reads use the
+  literal generic native reader. A missing `Parts` in any other packed family is
+  damage and remains a refusal in required mode.
+- **Required-mode metadata exception.** Variable-length text datasets and
+  compound tables whose every member is text (identity tables such as XS
+  `River/Reach/RS` rows) are read through h5py in every mode (`h5py-metadata`
+  in the trace).
   Group/key walks, `in` checks and shape probes also stay on h5py. A compound
   with any numeric member is value data: without a typed engine route it is an
   h5py fallback in auto mode and a `FastHdfError` refusal in required mode.
@@ -898,6 +910,11 @@ Routing policy:
   rule: in auto mode any native failure, Corrupt or checksum refusals included,
   falls back to h5py, so the public result or exception is the h5py one.
   Required mode raises `FastHdfError`.
+- Since ROUTE-EXTENTS, project extents (`HdfProject`), point/profile queries
+  (`HdfResultsQuery`), `get_mesh_max_depth` and the depth raster exports, and
+  `HdfResultsProducts.export` read every value through these functions. Their
+  broad exception handlers re-raise required-mode refusals instead of returning
+  an empty extent or result.
 - `read_dataset` returns the literal stored selection. When the typed 2D
   mesh-result reader refuses to qualify a domain (for example a summary or
   series without a stored `Location` attribute, refused since engine API 8),
