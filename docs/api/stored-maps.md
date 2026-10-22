@@ -32,6 +32,17 @@ contains retained execution outputs. [125 — arrival and duration maps](../note
 currently has no retained code-cell outputs; use it as a workflow example, not
 execution evidence.
 
+A separate retained Ether Hollow control qualifies native HEC-RAS 7.0.1
+arrival, duration and percent rasters with horizontal rendering, one explicitly
+selected terrain, a 0.5-foot wetness threshold and five regular output times.
+Across 21,292 wet pixels, percent matches the fraction of wet stored samples;
+arrival matches the first wet output time, and duration matches the observed
+single-period time support. All product grids match the registered terrain.
+The opt-in `tests/test_stored_maps_native_contract.py` checks these contracts
+against hash-pinned external fixtures. This evidence does not execute notebook
+125 or qualify sloping rendering, irregular intervals, initially wet conditions,
+multiple wet periods, threshold equality or general recession semantics.
+
 ## Orchestration, result registration and calculated layers
 
 ::: ras_commander.RasMap.RasMap
