@@ -3358,7 +3358,7 @@ class RasUnsteady:
         return "\n"
 
     @staticmethod
-    def _atomic_write_lines(file_path: Path, lines: List[str]) -> None:
+    def _atomic_write_lines(file_path: Path, lines: List[str], *, encoding: str = "utf-8") -> None:
         """
         Atomically replace a text file with the supplied lines.
 
@@ -3380,8 +3380,8 @@ class RasUnsteady:
         try:
             with tempfile.NamedTemporaryFile(
                 "w",
-                encoding="utf-8",
-                errors="replace",
+                encoding=encoding,
+                errors="strict",
                 newline="",
                 dir=target_path.parent,
                 prefix=f".{target_path.name}.",
@@ -5210,6 +5210,157 @@ class RasUnsteady:
         except IOError as e:
             logger.error(f"Error writing to unsteady flow file: {unsteady_path}. {str(e)}")
             raise
+
+    @staticmethod
+    @log_call
+    def ensure_2d_precipitation_boundary(
+        unsteady_file: Union[str, Path],
+        geometry_file: Union[str, Path],
+        *,
+        area_2d: str,
+        ras_object: Optional[Any] = None,
+    ) -> Dict[str, Any]:
+        """Ensure an inline area-wide precipitation boundary for a real 2D area.
+
+        Creates a zero-depth, simulation-start boundary when absent. Follow
+        with :meth:`set_precipitation_hyetograph` to author interval depths.
+        Existing inline precipitation is preserved byte-for-byte. Traditional
+        Storage Areas, DSS precipitation and conflicting area-wide boundaries
+        are refused; perimeter BC lines remain separate.
+
+        Args:
+            unsteady_file: Unsteady-flow path or project-bound number.
+            geometry_file: Geometry text path containing the exact 2D area.
+            area_2d: Exact 2D Flow Area name, at most 16 characters.
+            ras_object: Optional project used for path resolution and refresh.
+
+        Returns:
+            dict: Resolved paths, area name, whether a block was created, and
+            whether the project's boundary inventory was refreshed.
+
+        Raises:
+            FileNotFoundError: The geometry file is unavailable.
+            ValueError: The area, file header, encoding, or existing boundary
+                is ambiguous or unsupported, or the unsteady file is unavailable.
+                Validation precedes replacement.
+        """
+        from .geom import GeomStorage
+
+        if not isinstance(area_2d, str) or not area_2d.strip():
+            raise ValueError("area_2d must be a non-empty 2D Flow Area name")
+        area_name = area_2d.strip()
+        if len(area_name) > 16 or any(character in area_name for character in ",\r\n\x00"):
+            raise ValueError("area_2d must fit the 16-character native field without delimiters")
+        geometry_path = Path(geometry_file)
+        areas = GeomStorage.get_storage_areas(geometry_path, exclude_2d=False)
+        matches = areas.loc[areas["Name"] == area_name] if "Name" in areas else areas
+        if len(matches) != 1 or not bool(matches.iloc[0]["Is2D"]):
+            raise ValueError(f"Geometry must contain exactly one 2D Flow Area {area_name!r}")
+        unsteady_path = RasUnsteady._resolve_unsteady_file_path(unsteady_file, ras_object=ras_object)
+        original = unsteady_path.read_bytes()
+        if b"\x00" in original:
+            raise ValueError("NUL-containing unsteady text is unsupported")
+        for encoding in ("utf-8", "cp1252", "latin-1"):
+            try:
+                text = original.decode(encoding)
+                break
+            except UnicodeDecodeError:
+                continue
+        lines = text.splitlines(keepends=True)
+        newline = RasUnsteady._detect_line_ending(lines)
+        titles = [index for index, line in enumerate(lines) if line.startswith("Flow Title=")]
+        nonempty = [index for index, line in enumerate(lines) if line.strip()]
+        if len(titles) != 1 or not nonempty or titles[0] != nonempty[0]:
+            raise ValueError("Unsteady-flow header must begin with exactly one Flow Title record")
+        blocks = RasUnsteady._find_boundary_blocks(lines)
+        header_indexes = [index for index, line in enumerate(lines)
+                          if line.startswith(("Flow Title=", "Program Version=", "Use Restart="))]
+        if blocks and max(header_indexes) >= blocks[0]["start_idx"]:
+            raise ValueError("Unsteady-flow header records appear inside boundary data")
+        candidates = []
+        for block in blocks:
+            parts = list(block["parts"]) + [""] * max(0, 9 - len(block["parts"]))
+            if parts[5] == area_name and not parts[7]:
+                if any(parts[index] for index in range(len(parts)) if index != 5):
+                    raise ValueError(f"Conflicting area-wide location fields for {area_name!r}")
+                candidates.append(block)
+        result = {
+            "unsteady_file": str(unsteady_path.resolve()),
+            "geometry_file": str(geometry_path.resolve()),
+            "area_2d": area_name, "created": False,
+            "boundaries_df_refreshed": False,
+        }
+        if candidates:
+            if len(candidates) != 1:
+                raise ValueError(f"Duplicate area-wide boundaries for {area_name!r}")
+            block = candidates[0]
+            body = lines[block["start_idx"]:block["end_idx"]]
+            headers = [kind for line in body for prefix, kind in RasUnsteady._BOUNDARY_TYPE_KEYWORDS
+                       if line.startswith(prefix)]
+            dss_flags = [line.partition("=")[2].strip().casefold() for line in body
+                         if line.partition("=")[0].strip().casefold() == "use dss"]
+            if headers != ["Precipitation Hydrograph"] or dss_flags != ["false"]:
+                raise ValueError(f"Existing area-wide boundary for {area_name!r} is not supported inline precipitation")
+            intervals = [line.split("=", 1)[1].strip() for line in body if line.startswith("Interval=")]
+            if len(intervals) != 1 or re.fullmatch(r"[1-9]\d*(?:MIN|HOUR)", intervals[0], re.IGNORECASE) is None:
+                raise ValueError(f"Existing precipitation interval for {area_name!r} is unsupported")
+            table_index = next(index for index in range(block["start_idx"], block["end_idx"])
+                               if lines[index].startswith("Precipitation Hydrograph="))
+            try:
+                if not any(line.startswith("Interval=") for line in lines[block["start_idx"]:table_index]):
+                    raise ValueError("Precipitation interval must precede its table")
+                count = int(lines[table_index].split("=", 1)[1].strip())
+                if not 1 <= count <= 10 * (block["end_idx"] - table_index - 1):
+                    raise ValueError("Invalid precipitation table count")
+                # The general legacy reader rescues numeric substrings. Here
+                # malformed existing state must fail before authoring proceeds.
+                values = []
+                for line in lines[table_index + 1:block["end_idx"]]:
+                    record = line.rstrip("\r\n")
+                    if "=" in record:
+                        break
+                    if not record.strip():
+                        continue
+                    if len(record) > 80 or len(record) % 8:
+                        raise ValueError("Precipitation rows require up to ten 8-character fields")
+                    for start in range(0, len(record), 8):
+                        field = record[start:start + 8].strip()
+                        if len(values) >= count:
+                            if field:
+                                raise ValueError("Precipitation table has extra ordinates")
+                        elif not field:
+                            raise ValueError("Precipitation table has a blank value slot")
+                        else:
+                            values.append(float(field))
+                values = np.asarray(values, dtype=float)
+                if len(values) != count or not np.all(np.isfinite(values)) or np.any(values < 0):
+                    raise ValueError("Invalid precipitation table values")
+            except (TypeError, ValueError) as exc:
+                raise ValueError(f"Existing precipitation table for {area_name!r} is malformed") from exc
+            return result
+        insert_at = blocks[0]["start_idx"] if blocks else max(header_indexes) + 1
+        fields = ["" for _ in range(9)]
+        widths = [16, 16, 8, 8, 16, 16, 16, 32, 32]
+        fields[5] = area_name
+        location = ",".join(f"{value:<{width}}" for value, width in zip(fields, widths))
+        content = [f"Boundary Location={location}", "Interval=1HOUR",
+                   "Precipitation Hydrograph= 2", "    0.00    0.00",
+                   "DSS Path=", "Use DSS=False", "Use Fixed Start Time=False",
+                   "Fixed Start Date/Time=,", "Is Critical Boundary=False", "Critical Boundary Flow="]
+        if insert_at and not lines[insert_at - 1].endswith(("\r", "\n")):
+            lines[insert_at - 1] += newline
+        lines[insert_at:insert_at] = [line + newline for line in content]
+        RasUnsteady._atomic_write_lines(unsteady_path, lines, encoding=encoding)
+        result["created"] = True
+        ras_obj = ras_object or ras
+        if ras_obj is not None and hasattr(ras_obj, "get_boundary_conditions"):
+            try:
+                ras_obj.boundaries_df = ras_obj.get_boundary_conditions()
+                result["boundaries_df_refreshed"] = True
+            except Exception as exc:
+                logger.debug("Boundary inventory refresh skipped: %s", exc)
+        logger.info("Created zero-depth precipitation boundary for %s in %s", area_name, unsteady_path.name)
+        return result
 
     @staticmethod
     @log_call
