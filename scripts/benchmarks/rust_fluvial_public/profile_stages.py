@@ -23,7 +23,6 @@ STAGES = [
     ("ras_commander.hdf.HdfResultsMesh", "HdfResultsMesh.get_mesh_max_ws", "hdf_max_ws"),
     ("ras_commander.hdf.HdfFluvialPluvial", "HdfFluvialPluvial._process_cell_adjacencies", "python_adjacency"),
     ("ras_commander.hdf.HdfFluvialPluvial", "HdfFluvialPluvial._get_boundary_cell_pairs", "python_boundary_pairs"),
-    ("ras_commander.hdf.HdfFluvialPluvial", "HdfFluvialPluvial._legacy_replay", "python_tie_break_replay"),
     ("geopandas", "GeoDataFrame.dissolve", "geopandas_dissolve"),
 ]
 

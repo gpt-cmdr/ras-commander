@@ -131,8 +131,9 @@ def test_p07_polygons_native_equals_python(tmp_path):
     assert used["face_graph"] == 1 and used["assemble_rings"] == 1 and used["NativeAnalysis"] == 1
     assert used["NativeAnalysis.classify"] >= 1 and used["NativeAnalysis.polygons"] == 1
     info = native.attrs["fluvial_native"]
-    # Python resolves exactly these conflicting seeds by last write; replayed.
-    assert info["python_seed_tie_breaks"] == info["classification"]["conflicting_seeds"] == 3
+    # Set-based seeding (#572): conflicting seeds are ambiguous in both engines; no replay.
+    assert info["classification"]["conflicting_seeds"] == 3
+    assert "python_seed_tie_breaks" not in info
     result = qualify.compare_polygons(reference, save(native, tmp_path / "native.parquet"))
     assert result["equal"], json.dumps(result, default=str)
     assert all(c["symmetric_difference_area"] == 0 for c in result["classes"].values())
@@ -183,10 +184,11 @@ def test_p07_boundary_native_equals_python(tmp_path):
     used = delta(calls)
     assert used["NativeAnalysis.qualifying_edges"] == 1 and used["face_graph"] == 1
     assert native.attrs["fluvial_native"]["qualifying_edges"] == len(reference) == 4569
-    # Curved shared faces: Python keeps one order-dependent segment; replayed.
-    assert native.attrs["fluvial_native"]["python_segment_tie_breaks"] == 43
+    # Every shared face is kept (#572); rows are in the reference's sorted pair order.
+    assert "python_segment_tie_breaks" not in native.attrs["fluvial_native"]
     result = qualify.compare_boundary(save(reference, tmp_path / "p.parquet"), save(native, tmp_path / "n.parquet"))
     assert result["equal"], result
+    assert all(a.equals_exact(b, 0) for a, b in zip(native.geometry, reference.geometry))
     short = HdfFluvialPluvial.calculate_fluvial_pluvial_boundary(hdf, min_line_length=100.0, engine="native")
     expected = reference[reference.length >= 100.0]
     assert 0 < len(short) == len(expected) < len(reference)
@@ -266,7 +268,7 @@ def test_p18_two_meshes_native_composite_equals_per_mesh_python(tmp_path):
     assert used["face_graph"] == 1 and used["assemble_rings"] == 2 and used["NativeAnalysis"] == 1
     assert used["NativeAnalysis.polygons"] == 1
     info = native.attrs["fluvial_native"]
-    assert info["python_seed_tie_breaks"] == info["classification"]["conflicting_seeds"]
+    assert "python_seed_tie_breaks" not in info
     assert set(native["mesh_name"]) == set(meshes)
     assert not native.duplicated(["mesh_name", "classification"]).any()
 
@@ -358,9 +360,9 @@ def test_native_output_identical_at_1_and_4_threads():
 def test_d601_invalid_source_cells_native_refuses():
     """Stored 5.0.7 D601 p04: 2 genuinely invalid source cells (crossing boundaries).
 
-    Python silently drops them from adjacency but keeps them in its dissolve, so
-    native cannot reproduce it without guessing; it refuses, and auto would use
-    Python. Nothing is repaired. Explicit audited quarantine remains available
+    Python keeps them in its stored-topology adjacency and GEOS dissolve, which
+    native polygon assembly cannot reproduce without guessing; it refuses, and
+    auto uses Python. Nothing is repaired. Explicit audited quarantine remains available
     through HdfFluvialNative.Analysis(invalid_geometry='quarantine').
     """
     hdf = fixture("JUL2020_D100RAS.p04.hdf")

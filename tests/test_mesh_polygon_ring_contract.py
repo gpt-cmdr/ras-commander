@@ -232,7 +232,7 @@ def native_and_python(request):
     if reason:
         pytest.skip(reason)
     path, py = _python_polygons(request.param)
-    native = HdfMesh.get_mesh_cell_polygons(path, backend="native")
+    native = HdfMesh.get_mesh_cell_polygons(path, backend="rust")
     return request.param, path, py, native
 
 

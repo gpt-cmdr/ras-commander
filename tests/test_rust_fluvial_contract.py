@@ -131,7 +131,8 @@ def real_selection():
                         on=["mesh_name", "cell_id"], validate="one_to_one", how="left")
     adjacency, _ = HdfFluvialPluvial._process_cell_adjacencies(cells)
     index = {int(cell): i for i, cell in enumerate(cells.cell_id)}
-    rows = [[index[int(other)] for other in adjacency.get(int(cell), [])] for cell in cells.cell_id]
+    # Adjacency keys are (mesh_name, cell_id) identities (#564/#572).
+    rows = [[index[int(other[1])] for other in adjacency.get((mesh, int(cell)), [])] for cell in cells.cell_id]
     # Masks here qualify peak-valid cells only: wetness is an explicit all-true
     # input, not an inference that peak-time presence establishes inundation.
     masks = [(int(g.is_valid and not g.is_empty), 1, int(t == t))

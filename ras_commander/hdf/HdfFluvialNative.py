@@ -55,6 +55,9 @@ def integer_milliseconds(value):
 
     Lightweight scalar conversion used in per-cell loops; intentionally no
     ``log_call`` here. The public bulk analysis boundary logs once instead.
+    Accepts the #548 time contract as is (``datetime64[ns]``, or ``[us]``
+    beyond 2262): the integer is an internal kernel key only and never
+    appears in any returned frame, so no datetime unit leaks into outputs.
     """
     import pandas as pd
     if pd.isna(value):

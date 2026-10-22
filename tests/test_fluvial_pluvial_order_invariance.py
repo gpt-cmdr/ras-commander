@@ -367,7 +367,7 @@ def test_native_backend_gives_same_fluvial_pluvial_as_python_backend(name, delta
         pytest.skip(reason)
     path, _, max_ws = _model(name)
     py_cells = HdfMesh.get_mesh_cell_polygons(path, backend="python")
-    native_cells = HdfMesh.get_mesh_cell_polygons(path, backend="native")
+    native_cells = HdfMesh.get_mesh_cell_polygons(path, backend="rust")
     a = run(func, py_cells, max_ws, path, delta_t)
     b = run(func, native_cells, max_ws, path, delta_t)
     if func == "polygons":

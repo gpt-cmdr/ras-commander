@@ -83,21 +83,44 @@ def _native_snapshot(hdf_path, retain_faces):
     from pyproj import CRS
     from .HdfBase import HdfBase
     # Validates the file before the CRS probe: corrupt input is fatal, never unsupported.
-    HdfBase.get_2d_flow_area_names_and_counts(hdf_path)
+    counts = HdfBase.get_2d_flow_area_names_and_counts(hdf_path)
     projection = HdfBase.get_projection(hdf_path)
     if not projection or not CRS.from_user_input(projection).is_projected:
         raise FluvialNativeUnsupportedError(f"native engine requires a projected CRS; got {projection!r}")
+    # The reference takes adjacency from stored Faces Cell Indexes restricted to
+    # the cells HdfMesh.get_mesh_cell_polygons returns. The native graph uses
+    # the same faces over the physical cells, so require that both cell sets
+    # can coincide: a physical cell needs >= 3 faces to be polygonized, and a
+    # non-physical (ghost) cell with >= 3 faces could be. Without the dataset,
+    # Python uses its ring-segment fallback, which native does not reproduce.
+    with h5py.File(hdf_path, "r") as hdf_file:
+        for mesh_name, count in counts or ():
+            base = f"Geometry/2D Flow Areas/{mesh_name}"
+            face_cells = hdf_file.get(f"{base}/Faces Cell Indexes")
+            if face_cells is None or face_cells.ndim != 2 or face_cells.shape[1] < 2:
+                raise FluvialNativeUnsupportedError(
+                    f"mesh {mesh_name!r} has no Faces Cell Indexes; the Python reference uses "
+                    f"its shared-ring-segment fallback adjacency")
+            info = hdf_file.get(f"{base}/Cells Face and Orientation Info")
+            if info is not None and info.ndim == 2 and info.shape[1] >= 2:
+                lengths = np.asarray(info[:, 1], dtype=np.int64)
+                count = int(count)
+                if (lengths[:count] < 3).any() or (lengths[count:] >= 3).any():
+                    raise FluvialNativeUnsupportedError(
+                        f"mesh {mesh_name!r}: the physical cells differ from the polygonizable "
+                        f"cells the Python reference analyses")
     # Legacy reads peaks with HdfResultsMesh.get_mesh_max_ws's default "100ms".
     analysis = Analysis.from_hdf(hdf_path, wet_policy="all", peak_round_to="100ms",
                                  retain_faces=retain_faces)
     from .HdfFluvialNative import _native
     invalid = _native("validate_geometry", list(analysis.points), list(analysis.rings))
     if invalid:
-        # Python skips invalid cell polygons when building adjacency (yet keeps
-        # them in its dissolve); the native graph would include them.
+        # Python dissolves invalid cell polygons with GEOS (and, without stored
+        # topology, drops them from adjacency); native polygon assembly cannot
+        # reproduce either without guessing.
         raise FluvialNativeUnsupportedError(
-            f"{len(invalid)} cell(s) have invalid source geometry, which Python drops from "
-            f"its adjacency; e.g. vertices {[index for index, _ in invalid[:5]]}")
+            f"{len(invalid)} cell(s) have invalid source geometry, which the native engine "
+            f"does not reproduce; e.g. vertices {[index for index, _ in invalid[:5]]}")
     return analysis
 
 
@@ -190,10 +213,7 @@ class HdfFluvialPluvial:
                           returning different results), or "auto" (native when it reproduces
                           the Python result, otherwise Python; recorded in
                           ``result.attrs["fluvial_engine"]``). Native output holds the same
-                          lines and CRS; rows are sorted by cell pair instead of Python's
-                          hash-dependent order. Pairs sharing a curved or multi-face
-                          boundary are unsupported natively because Python keeps one
-                          order-dependent segment for them.
+                          lines, row order (sorted cell pairs) and CRS as the reference.
 
         Returns:
             gpd.GeoDataFrame: GeoDataFrame containing the fluvial-pluvial boundary lines.
@@ -336,12 +356,14 @@ class HdfFluvialPluvial:
                           "native" (Rust graph, classification and polygon assembly; never
                           falls back), or "auto" (native when it reproduces the Python
                           result, otherwise Python; recorded in
-                          ``result.attrs["fluvial_engine"]``). For cells seeded both fluvial
-                          and pluvial, the native engine replays Python's own tie-break
-                          (Python keeps the last write in its pair order). Several meshes
+                          ``result.attrs["fluvial_engine"]``). The native kernel applies
+                          the same set-based seeding (cells with both kinds of evidence
+                          are ambiguous and do not grow). Several meshes
                           are analysed in isolation under (mesh_name, cell_id), as Python
                           does. It raises FluvialNativeUnsupportedError for unprojected
-                          CRSs, thresholds that are not exact milliseconds, and any
+                          CRSs, meshes without ``Faces Cell Indexes`` (Python then uses its
+                          ring-segment fallback), invalid source cell geometry,
+                          thresholds that are not exact milliseconds, delta_t=0, and any
                           min_polygon_area_acres (the class
                           swap keeps attributes that depend on union part order; polygon
                           removal is not a substitute). Native polygons are topologically
@@ -573,76 +595,18 @@ class HdfFluvialPluvial:
         )
 
     @staticmethod
-    def _legacy_replay(hdf_path, analysis, delta_t):
-        """Python's own adjacency and boundary-pair order, for its tie-breaks only.
-
-        Python resolves two cases by iteration order rather than by data: a
-        cell seeded both fluvial and pluvial keeps its last write, and a
-        curved shared face keeps one of its segments. The native engine replays
-        exactly these Python routines when (and only when) such cases occur,
-        after proving that their adjacency and peak times equal the native
-        snapshot's, so every other result still comes from the Rust kernels.
-        """
-        from .HdfFluvialNative import integer_milliseconds
-        polygons = HdfMesh.get_mesh_cell_polygons(hdf_path)
-        max_ws = HdfResultsMesh.get_mesh_max_ws(hdf_path)
-        max_ws['maximum_water_surface_time'] = max_ws['maximum_water_surface_time'].apply(
-            lambda x: HdfUtils.parse_ras_datetime(x) if isinstance(x, str) else x
-        )
-        # Python keys cells by (mesh_name, cell_id) and its adjacency never
-        # crosses meshes; replay results are keyed by (native mesh index, cell_id).
-        mesh_index = {name: m for m, name in enumerate(analysis.meshes)}
-
-        def key(cell):
-            return mesh_index[cell[0]], int(cell[1])
-
-        times = max_ws.set_index(['mesh_name', 'cell_id'])['maximum_water_surface_time'].to_dict()
-        adjacency, edges = HdfFluvialPluvial._process_cell_adjacencies(polygons)
-        pairs = [(key(a), key(b))
-                 for a, b in HdfFluvialPluvial._get_boundary_cell_pairs(adjacency, times, delta_t)]
-        common_edges = defaultdict(lambda: defaultdict(dict))
-        for a, neighbors in edges.items():
-            for b, line in neighbors.items():
-                (m, ka), (_, kb) = key(a), key(b)
-                common_edges[m][ka][kb] = line
-        cell_times = {key(cell): t for cell, t in times.items() if cell[0] in mesh_index}
-        legacy_edges = set()
-        for a, neighbors in adjacency.items():
-            for b in neighbors:
-                (m, ka), (n, kb) = key(a), key(b)
-                if m != n:
-                    raise ValueError(f"Python adjacency links meshes {m} and {n}")
-                legacy_edges.add((m, min(ka, kb), max(ka, kb)))
-        vertex = {(m, row): i for i, (m, row) in enumerate(analysis.sources)}
-        native_edges = set()
-        for i in range(len(analysis.keys)):
-            for j in analysis.neighbors[analysis.offsets[i]:analysis.offsets[i + 1]]:
-                if i < j:
-                    (m, a), (n, b) = analysis.sources[i], analysis.sources[j]
-                    if m != n:
-                        raise ValueError(f"native face graph links meshes {m} and {n}")
-                    native_edges.add((m, min(a, b), max(a, b)))
-        if legacy_edges != native_edges:
-            raise FluvialNativeUnsupportedError(
-                f"Python shared-segment adjacency differs from the native face graph "
-                f"({len(legacy_edges - native_edges)} Python-only, "
-                f"{len(native_edges - legacy_edges)} native-only pairs)")
-        for row, i in vertex.items():
-            value, present = integer_milliseconds(cell_times.get(row))
-            if present != analysis.present[i] or (present and value != analysis.times[i]):
-                raise FluvialNativeUnsupportedError(f"Python peak time differs from native for cell {row}")
-        return {"pairs": pairs, "common_edges": common_edges, "cell_times": cell_times, "vertex": vertex}
-
-    @staticmethod
     def _native_polygons(hdf_path, delta_t, temporal_tolerance_hours, min_polygon_area_acres):
         """Rust classification and polygon assembly reproducing the Python result.
 
-        Native seeding equals Python's except for cells that receive both a
-        fluvial and a pluvial seed, which Python resolves by last write in its
-        hash-dependent pair order; those cells take Python's replayed labels
-        through native seed overrides. Synchronous growth, ambiguity and NaN-time
-        barriers match the Python loop, and unclassified or missing-time cells
-        become 'ambiguous' as in Python.
+        The native kernel applies the reference's order-invariant rules
+        directly: in each boundary pair the later-peaking cell is fluvial
+        evidence and the earlier one pluvial; a cell with both is seeded
+        ambiguous and does not grow. Synchronous growth, ambiguity and
+        missing-time barriers match the Python loop, and unclassified or
+        missing-time cells become 'ambiguous' as in Python. The one rule the
+        kernel does not share is equal-time pairs (Python seeds nothing, the
+        kernel seeds them ambiguous); they can only qualify when delta_t is 0,
+        which is therefore unsupported here.
         """
         import time
         from shapely.geometry import MultiPolygon
@@ -656,33 +620,14 @@ class HdfFluvialPluvial:
         tolerance_ms = _hours_to_ms(temporal_tolerance_hours, "temporal_tolerance_hours")
         if delta_ms == 0:
             raise FluvialNativeUnsupportedError(
-                "delta_t=0 seeds equal-time pairs whose Python labels depend on pair order")
+                "delta_t=0 qualifies equal-time pairs, which Python does not seed but the "
+                "native kernel seeds ambiguous")
         timings = {}
         begin = time.perf_counter()
         analysis = _native_snapshot(hdf_path, retain_faces=False)
         timings["snapshot_seconds"] = time.perf_counter() - begin
+        # No seed overrides: conflicting seeds stay ambiguous, as in the reference.
         labels, diagnostics, timings["classify_kernel_seconds"] = analysis.classify(delta_ms, tolerance_ms)
-        overrides = []
-        if diagnostics["conflicting_seeds"]:
-            begin = time.perf_counter()
-            replay = HdfFluvialPluvial._legacy_replay(hdf_path, analysis, delta_t)
-            roles, last = defaultdict(set), {}
-            for cell1, cell2 in replay["pairs"]:
-                # Same comparison and write order as the Python seeding loop.
-                if replay["cell_times"].get(cell1) > replay["cell_times"].get(cell2):
-                    fluvial, pluvial = cell1, cell2
-                else:
-                    fluvial, pluvial = cell2, cell1
-                for cell, label in ((fluvial, 1), (pluvial, 2)):
-                    roles[cell].add(label)
-                    last[cell] = label
-            overrides = sorted((replay["vertex"][cell], last[cell]) for cell, seen in roles.items() if len(seen) == 2)
-            if len(overrides) != diagnostics["conflicting_seeds"]:
-                raise ValueError(f"Python has {len(overrides)} conflicting seeds; native has "
-                                 f"{diagnostics['conflicting_seeds']}")
-            labels, diagnostics, timings["classify_kernel_seconds"] = analysis.classify(
-                delta_ms, tolerance_ms, seed_overrides=overrides)
-            timings["python_tie_break_replay_seconds"] = time.perf_counter() - begin
         if diagnostics["label_4"] or diagnostics["label_5"]:
             raise ValueError("unexpected invalid/dry labels under strict, all-wet native analysis")
         # Python's finalization: remaining unclassified (incl. missing time) -> ambiguous.
@@ -713,7 +658,6 @@ class HdfFluvialPluvial:
             final_regions_gdf, delta_t, temporal_tolerance_hours, diagnostics["waves"])
         final_regions_gdf.attrs["fluvial_native"] = {
             "classification": dict(diagnostics), "geometry": dict(geometry), "timings": timings,
-            "python_seed_tie_breaks": len(overrides),
             "snapshot_setup": {k: v for k, v in analysis.setup.items() if k != "topology_diagnostics"},
         }
         return final_regions_gdf
@@ -722,9 +666,11 @@ class HdfFluvialPluvial:
     def _native_boundary(hdf_path, delta_t, min_line_length):
         """Rust face graph and threshold predicate reproducing the Python lines.
 
-        A straight shared face yields Python's rounded two-point segment directly.
-        For a curved or multi-face pair Python keeps one order-dependent segment;
-        those pairs take Python's replayed segment (see _legacy_replay).
+        As in the reference: one line per qualifying cell pair, in sorted
+        ``(mesh_name, cell_id)`` pair order, holding every stored face the two
+        cells share (unrounded stored coordinates, line-merged by the same
+        ``_merge_shared_pieces`` helper, so a MultiLineString when the shared
+        faces are not contiguous).
         """
         import time
         delta_ms = _hours_to_ms(delta_t, "delta_t")
@@ -735,30 +681,22 @@ class HdfFluvialPluvial:
         begin = time.perf_counter()
         edges = analysis.qualifying_edges(delta_ms)
         timings["edge_kernel_seconds"] = time.perf_counter() - begin
-
-        def key(coord):  # Python's edge_key rounding (precision=8)
-            return tuple(round(value, 8) for value in coord)
-
-        lines, curved = [], []
+        pairs = []
         for i, j in edges:
-            (mesh, a), (_, b) = analysis.sources[i], analysis.sources[j]
-            faces = analysis.edge_faces[(mesh, min(a, b), max(a, b))]
-            if len(faces) != 1 or len(faces[0][1]) != 2:
-                curved.append((len(lines), mesh, a, b))
-                lines.append(None)
-                continue
-            start, end = faces[0][1]
-            lines.append(LineString(sorted([key(start), key(end)])))
-        if curved:
-            begin = time.perf_counter()
-            replay = HdfFluvialPluvial._legacy_replay(hdf_path, analysis, delta_t)
-            for position, mesh, a, b in curved:
-                lines[position] = replay["common_edges"][mesh][a][b]
-            timings["python_tie_break_replay_seconds"] = time.perf_counter() - begin
+            (mesh, a), (other, b) = analysis.sources[i], analysis.sources[j]
+            if mesh != other:
+                raise ValueError(f"native face graph links meshes {mesh} and {other}")
+            pairs.append((str(analysis.meshes[mesh]), min(a, b), max(a, b), mesh))
+        pairs.sort()
+        lines, merged = [], 0
+        for _, a, b, mesh in pairs:
+            faces = analysis.edge_faces[(mesh, a, b)]
+            merged += len(faces) > 1
+            lines.append(HdfFluvialPluvial._merge_shared_pieces([coords for _, coords in faces]))
         if min_line_length is not None:
             lines = [line for line in lines if line.length >= min_line_length]
         boundary_gdf = gpd.GeoDataFrame(geometry=lines, crs=analysis.crs)
-        boundary_gdf.attrs["fluvial_native"] = {"timings": timings, "python_segment_tie_breaks": len(curved),
+        boundary_gdf.attrs["fluvial_native"] = {"timings": timings, "multi_face_pairs": merged,
                                                 "qualifying_edges": len(edges)}
         logger.info(f"Fluvial/pluvial boundary (native): {len(boundary_gdf)} line(s), delta_t={delta_t} hr.")
         return boundary_gdf

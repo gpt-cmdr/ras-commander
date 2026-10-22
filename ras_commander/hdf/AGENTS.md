@@ -166,6 +166,15 @@ This file is the canonical local instruction file for `ras_commander/hdf/`.
   (several meshes are analysed in isolation; frames keep the
   `mesh_name, classification, geometry, cell_id` dissolve layout) and record
   `attrs["fluvial_engine"]`; the default `engine="python"` is the reference.
+  Native uses the same stored-face adjacency and set-based seeding (no
+  last-write replay), emits boundary lines in sorted pair order through the
+  shared `_merge_shared_pieces`, and returns topologically equal polygons with
+  the same rows and attributes. It raises `FluvialNativeUnsupportedError`
+  (`"auto"` then runs Python) when it cannot match: missing
+  `Faces Cell Indexes` (Python's ring-segment fallback), physical cells that
+  differ from the polygonizable cells, invalid source cell geometry,
+  unprojected CRS, delta_t=0 (equal-time pairs), non-millisecond thresholds,
+  or `min_polygon_area_acres`.
 - Mesh time-series domains use authoritative stored scalar `Location`: `Cells`
   and `Cell` mean cells; `Faces` means faces. Invalid, unknown, nonscalar or
   contradictory present Location is refused, never bypassed with a name rule.
