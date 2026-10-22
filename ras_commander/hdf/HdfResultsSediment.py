@@ -45,7 +45,7 @@ from .HdfBase import HdfBase
 from .HdfMesh import HdfMesh
 from ..Decorators import log_call, standardize_input
 from ..LoggingConfig import get_logger
-from ..fast_hdf import read_typed
+from ..fast_hdf import read_attr, read_typed
 
 logger = get_logger(__name__)
 
@@ -137,7 +137,7 @@ class HdfResultsSediment:
                 "Dataset '%s' in area '%s' has no Units attribute; assuming mm.",
                 name, area)
             return
-        units = HdfBase._decode_unit_attribute(dataset.attrs["Units"])
+        units = HdfBase._decode_unit_attribute(read_attr(dataset, "Units"))
         if units != "mm":
             raise ValueError(
                 f"Dataset '{name}' in area '{area}' has Units={units!r}; "

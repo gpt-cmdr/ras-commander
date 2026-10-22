@@ -31,7 +31,7 @@ BASE = "Results/Unsteady/Output/Output Blocks/Base Output/Unsteady Time Series"
 def native():
     module = pytest.importorskip("ras_commander_fast_hdf")
     assert module.API_VERSION == 11
-    assert module.capabilities()["engine_api_version"] == 9
+    assert module.capabilities()["engine_api_version"] == 10
     return module
 
 

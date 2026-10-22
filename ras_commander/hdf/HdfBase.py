@@ -510,7 +510,7 @@ class HdfBase:
                 return
             values = {
                 HdfBase._decode_unit_attribute(item).casefold()
-                for item in np.asarray(obj.attrs["Units"]).reshape(-1)
+                for item in np.asarray(read_attr(obj, "Units")).reshape(-1)
             }
             for unit, paths in labels.items():
                 if unit in values:
