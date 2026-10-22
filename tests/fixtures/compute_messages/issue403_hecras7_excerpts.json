@@ -1,0 +1,17 @@
+{
+  "schema_version": 1,
+  "engine_version": "HEC-RAS 7.0",
+  "plan_type": "unsteady, pipe network with rain-on-grid",
+  "source": "https://github.com/gpt-cmdr/ras-commander/issues/403#issuecomment-5856033197",
+  "scope": "Exact public diagnostic excerpts from retained Davis controls; not full original compute-message records. Full records and HDFs remain outside this fixture.",
+  "records": [
+    {
+      "text": "Pipe Flow Solution went unstable in system: Davis",
+      "reason_code": "hec_ras_pipe_solution_unstable"
+    },
+    {
+      "text": "Unsteady Flow Simulation Terminated",
+      "reason_code": "hec_ras_unsteady_simulation_terminated"
+    }
+  ]
+}

@@ -9,6 +9,22 @@ alone does not identify a development checkout.
 
 ### Unreleased
 
+**Compute-message classification rejects observed early termination**
+
+`ResultsParser` classifies `Unsteady Flow Simulation Terminated` and the
+observed pipe-solution instability record as fatal, even when a normal
+`Complete Process` timing footer follows. Diagnostics retain the matched
+message and a reason code. `completed` still records footer presence;
+`is_successful_completion()` additionally requires no classified errors.
+Zero process exit codes are no longer errors; nonzero codes remain errors.
+Public return keys and method signatures are unchanged.
+
+This correction covers the reported HEC-RAS 7.0 diagnostic excerpts and
+synthetic controls. It does not qualify all plan types or independently
+verify the final result timestamp. The broader message corpus and endpoint
+coverage checks in #403 remain open. Existing HDF structure, freshness and
+explicit error-check opt-outs are unchanged.
+
 **Mesh operations use one successful status (API behavior change)**
 
 `GeomMesh.generate_computation_points()` now returns `status="complete"`,
