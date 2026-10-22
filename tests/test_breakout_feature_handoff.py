@@ -18,7 +18,7 @@ from ras_commander import (
     Breakout2DSpec,
     RasBreakout2D,
 )
-from ras_commander.geom import GeomMesh, GeomStorage
+from ras_commander.geom import GeomMesh, GeomStorage, MeshResult
 from ras_commander.geom.GeomPreprocessor import GeomPreprocessor
 from ras_commander.gui.workflows import MeshRegenerationWorkflow
 
@@ -332,9 +332,7 @@ def test_boundary_only_disables_met_before_refresh_without_changing_source(
 
     _patch_points(
         monkeypatch,
-        lambda *a, **k: SimpleNamespace(
-            status="success", cell_count=10, error_message=None
-        ),
+        lambda *a, **k: MeshResult(mesh_name="Area", status="complete", cell_count=10, operation="computation_points"),
     )
     monkeypatch.setattr(
         GeomPreprocessor, "run_geometry_preprocessor", staticmethod(refresh)
@@ -388,7 +386,7 @@ def test_native_refresh_receives_planned_features(
     def points(*args, **kwargs):
         order.append("points")
         _assert_planned_files(preflight, clone)
-        return SimpleNamespace(status="success", cell_count=10, error_message=None)
+        return MeshResult(mesh_name="Area", status="complete", cell_count=10, operation="computation_points")
 
     def refresh(*args, **kwargs):
         order.append("refresh")
@@ -441,7 +439,7 @@ def test_refresh_exception_keeps_original_cause(tmp_path, monkeypatch, method):
         raise original
 
     _patch_points(
-        monkeypatch, lambda *a, **kw: SimpleNamespace(status="success", cell_count=10)
+        monkeypatch, lambda *a, **kw: MeshResult(mesh_name="Area", status="complete", cell_count=10, operation="computation_points")
     )
     monkeypatch.setattr(
         GeomPreprocessor, "run_geometry_preprocessor", staticmethod(refresh)
@@ -464,7 +462,6 @@ def test_numeric_containment_retry_uses_real_violation_identity(
 ):
     import json
 
-    from ras_commander.geom import MeshResult
 
     preflight, clone, ras = _fixture(tmp_path)
     source_before = preflight.source_geometry_path.read_bytes()
@@ -495,7 +492,7 @@ def test_numeric_containment_retry_uses_real_violation_identity(
         )
 
     _patch_points(
-        monkeypatch, lambda *a, **kw: SimpleNamespace(status="success", cell_count=10)
+        monkeypatch, lambda *a, **kw: MeshResult(mesh_name="Area", status="complete", cell_count=10, operation="computation_points")
     )
     monkeypatch.setattr(
         GeomPreprocessor, "run_geometry_preprocessor", staticmethod(refresh)
@@ -568,7 +565,7 @@ def test_anchor_grid_to_parent_passes_parent_lattice_to_every_remesh(
         return SimpleNamespace(success=True, error=None, first_error_line=None)
 
     _patch_points(
-        monkeypatch, lambda *a, **kw: SimpleNamespace(status="success", cell_count=10)
+        monkeypatch, lambda *a, **kw: MeshResult(mesh_name="Area", status="complete", cell_count=10, operation="computation_points")
     )
     monkeypatch.setattr(
         GeomPreprocessor, "run_geometry_preprocessor", staticmethod(refresh)

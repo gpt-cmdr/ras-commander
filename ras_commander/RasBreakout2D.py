@@ -879,9 +879,9 @@ class RasBreakout2D:
                 mesh_name=preflight.spec.source_2d_area,
                 ras_object=ras_object,
             )
-            # Seeding reports "success" (a mesh is only "complete" after
-            # generation), so check the status and the point count directly.
-            if points.status != "success" or not points.cell_count:
+            # Operation completion establishes generated points; native mesh
+            # compilation and verification follow below.
+            if not points.ok or not points.cell_count:
                 raise RuntimeError(
                     f"Computation-point regeneration failed: {points.error_message}"
                 )
@@ -1007,7 +1007,7 @@ class RasBreakout2D:
                     mesh_name=preflight.spec.source_2d_area,
                     ras_object=ras_object,
                 )
-                if points.status != "success" or not points.cell_count:
+                if not points.ok or not points.cell_count:
                     raise RuntimeError(
                         "Numeric breakline repair could not regenerate computation points"
                     )

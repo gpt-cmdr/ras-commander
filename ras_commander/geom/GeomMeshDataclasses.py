@@ -136,7 +136,12 @@ class DomainContainmentResult:
 
 @dataclass
 class MeshResult:
-    """Result of a headless mesh generation attempt."""
+    """Result of a mesh operation, including computation-point bootstrap.
+
+    ``status="complete"``, ``ok`` and truthiness mean the requested operation
+    succeeded. ``operation`` identifies computation-point generation versus
+    mesh generation. Completion does not establish hydraulic acceptance.
+    """
 
     mesh_name: str
     status: str  # "complete", "error", "exception"
@@ -157,6 +162,10 @@ class MeshResult:
     # Empty unless generate(grid_anchor=...) was used; then the anchor and
     # lattice/seed counts of each anchored point generation.
     grid_anchor: Dict[str, Any] = field(default_factory=dict)
+
+    # Appended to preserve the positional constructor contract. For point
+    # generation, cell_count counts points and no compiled HDF is produced.
+    operation: str = "mesh_generation"  # or "computation_points"
 
     @property
     def ok(self) -> bool:

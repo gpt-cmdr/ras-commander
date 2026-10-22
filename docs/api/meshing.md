@@ -546,11 +546,20 @@ and the [6.6 Mapper manual](https://www.hec.usace.army.mil/confluence/rasdocs/rm
 For `generate()` and `generate_all()`, inspect `MeshResult.ok`/`status`, error
 information and repair evidence rather than cell count alone.
 
-`generate_computation_points()` currently reports successful bootstrap with
-`status == "success"`, while `MeshResult.ok` and `bool(result)` recognize only
-`"complete"`. For this method, check `status`, `cell_count` and `error_message`
-explicitly; a false `ok` alone does not mean bootstrap failed. Its `cell_count`
-counts generated points, not a compiled hydraulic mesh.
+`MeshResult.status == "complete"`, `MeshResult.ok` and `bool(result)` report
+that the requested operation succeeded. Error, exception, and unknown statuses
+are false. `operation` identifies `"computation_points"` for bootstrap and
+`"mesh_generation"` for mesh generation, including failed operations.
+
+For `generate_computation_points()`, `cell_count` counts generated points;
+`geom_hdf_path` is empty and the operation does not produce a compiled mesh.
+Callers requiring a compiled mesh must perform and verify native geometry
+preprocessing. Truthiness is not hydraulic acceptance.
+
+**Migration:** Bootstrap previously returned `status == "success"` while
+`ok` and truthiness were false. Bootstrap now returns `status == "complete"`,
+matching mesh generation. Replace checks for the old `"success"` string with
+`result.ok`; inspect `result.operation` when the operation type matters.
 
 `DomainContainmentResult.ok` means no recorded containment
 violations. `BCFixResult.ok` means no unresolved conflicts in that result; these

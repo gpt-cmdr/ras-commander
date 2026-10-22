@@ -1718,6 +1718,8 @@ class TestGenerate:
         result = GeomMesh.generate(breakline_geom_text)
 
         assert result.ok
+        assert result.status == "complete"
+        assert result.operation == "mesh_generation"
         assert result.geom_hdf_path
         assert Path(result.geom_hdf_path).exists()
         assert captured["cell_size"] == pytest.approx(50.0)

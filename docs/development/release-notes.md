@@ -9,6 +9,16 @@ alone does not identify a development checkout.
 
 ### Unreleased
 
+**Mesh operations use one successful status (API behavior change)**
+
+`GeomMesh.generate_computation_points()` now returns `status="complete"`,
+matching full mesh generation, so successful bootstrap is truthy. Replace
+comparisons to the previous bootstrap `"success"` string with `result.ok`.
+The appended `MeshResult.operation` field distinguishes `"computation_points"`
+from `"mesh_generation"` without changing existing positional arguments.
+Bootstrap `cell_count` counts points and does not establish a compiled mesh
+or hydraulic acceptance.
+
 **Breakline protection flags validate correctly under NumPy 2**
 
 Preprocessing validation accepts native text `Protection Radius=-1` as enabled,
