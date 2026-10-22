@@ -1,4 +1,22 @@
 {% extends "_base/class.html.jinja" %}
+{% from "signature_ids.html.jinja" import render_signature with context %}
+
+{% block signature scoped %}
+  {% if config.merge_init_into_class and '__init__' in all_members %}
+    {% with function = all_members['__init__'] %}
+      {% if function.overloads and config.show_overloads %}
+        <div class="doc-overloads">
+          {% for overload in function.overloads %}
+            {{ render_signature(class.name, overload, html_id ~ '--overload-' ~ loop.index ~ '--', annotations=true) }}
+          {% endfor %}
+        </div>
+      {% endif %}
+      {% if config.separate_signature and not (config.show_overloads and function.overloads and config.overloads_only) %}
+        {{ render_signature(class.name, function, html_id ~ '--signature--') }}
+      {% endif %}
+    {% endwith %}
+  {% endif %}
+{% endblock signature %}
 
 {% block source scoped %}
   {# Method-group directives repeat a class with its root heading hidden.
