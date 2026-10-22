@@ -77,7 +77,7 @@ from pathlib import Path
 from typing import Any, Callable, List, Mapping, Optional, Sequence, Tuple, TYPE_CHECKING, Union
 from uuid import uuid4
 
-from .._ras_text import _write_ras_text
+from .._ras_text import _split_ras_records, _write_ras_text
 from ..Decorators import log_call
 from .._gdal_runtime import (
     configure_hecras_gdal_runtime,
@@ -2125,9 +2125,7 @@ def _patch_text_seeds(
     When mesh_name is given, only the block under the matching ``Storage Area=``
     header is replaced (multi-area safe).
     """
-    lines = geom_text_path.read_text(encoding="utf-8", errors="replace").splitlines(
-        keepends=True
-    )
+    lines = _split_ras_records(geom_text_path.read_bytes().decode("utf-8"))
     n = len(cell_centers)
 
     def _fmt(v: float) -> str:
@@ -2212,7 +2210,7 @@ def _refresh_points_perimeter_time(geom_text_path: Path, mesh_name: str | None) 
 
     from .GeomStorage import GeomStorage
 
-    lines = geom_text_path.read_text(encoding="utf-8").splitlines(keepends=True)
+    lines = _split_ras_records(geom_text_path.read_bytes().decode("utf-8"))
     areas_with_time = set()
     area = None
     for line in lines:
@@ -5408,7 +5406,10 @@ class GeomMesh:
         reseeding, snapping, deduplication or perimeter repair is performed.
         Coordinates use the existing native 16-character text serialization.
         Every point must be unique and strictly inside the selected 2D-area
-        perimeter. Validation completes before the text is changed.
+        perimeter. UTF-8 and legacy CP1252 text retain their original encoding;
+        undecodable text is refused before mutation. Unrelated record contents
+        are preserved; line endings follow the repository's CRLF write policy.
+        Validation completes before the text is changed.
 
         This supports cookie-cut children retaining a parent's physical cell
         centres. It mutates only the supplied geometry text, leaves its HDF
@@ -5440,22 +5441,32 @@ class GeomMesh:
             geom_text_path=str(geom_path), operation="computation_points",
         )
         try:
-            areas = GeomStorage.get_storage_area_polygons(geom_path, exclude_2d=False)
-            areas = areas[areas["is_2d"]] if "is_2d" in areas else areas
-            if mesh_name is not None:
-                areas = areas[areas["Name"].eq(mesh_name)]
-            elif mesh_index >= 0:
-                areas = areas.iloc[mesh_index:mesh_index + 1]
-            else:
-                raise ValueError("mesh_index must be nonnegative")
-            if len(areas) != 1:
-                raise ValueError("exactly one matching 2D flow area is required")
-            area = areas.iloc[0]
-            points = _validated_computation_points(computation_points, area.geometry)
+            original = geom_path.read_bytes()
+            try:
+                text = original.decode("utf-8")
+                encoding = "utf-8"
+            except UnicodeDecodeError:
+                # Strict decoding prevents replacement characters in active text.
+                text = original.decode("cp1252")
+                encoding = "cp1252"
             with tempfile.TemporaryDirectory(prefix=".ras-points-", dir=geom_path.parent) as scratch:
                 staged = Path(scratch) / geom_path.name
-                shutil.copy2(geom_path, staged)
+                staged.write_bytes(text.encode("utf-8"))
+                # Parse the reversible UTF-8 copy to retain legacy area names.
+                areas = GeomStorage.get_storage_area_polygons(staged, exclude_2d=False)
+                areas = areas[areas["is_2d"]] if "is_2d" in areas else areas
+                if mesh_name is not None:
+                    areas = areas[areas["Name"].eq(mesh_name)]
+                elif mesh_index >= 0:
+                    areas = areas.iloc[mesh_index:mesh_index + 1]
+                else:
+                    raise ValueError("mesh_index must be nonnegative")
+                if len(areas) != 1:
+                    raise ValueError("exactly one matching 2D flow area is required")
+                area = areas.iloc[0]
+                points = _validated_computation_points(computation_points, area.geometry)
                 _patch_text_seeds(staged, points, mesh_name=str(area["Name"]))
+                staged.write_bytes(staged.read_bytes().decode("utf-8").encode(encoding))
                 GeomParser.create_backup(geom_path)
                 staged.replace(geom_path)
             result.mesh_name = str(area["Name"])
