@@ -1033,3 +1033,15 @@ def test_launcher_accepts_a_symlinked_node_scratch_root(tmp_path, monkeypatch):
     batch.write_text(json.dumps(payload))
     assert launcher.run(batch)
     assert len(commands) == 2
+
+
+def test_node_staging_site_option_is_opt_in_and_strict_boolean():
+    from dataclasses import asdict
+    assert _site().stage_bundles_to_node_scratch is False
+    assert _site(stage_bundles_to_node_scratch=True).stage_bundles_to_node_scratch is True
+    old = asdict(_site())
+    del old["stage_bundles_to_node_scratch"]
+    assert SlurmSiteConfig(**old).stage_bundles_to_node_scratch is False
+    for invalid in [1, "true", None]:
+        with pytest.raises(ValueError, match="must be Boolean"):
+            _site(stage_bundles_to_node_scratch=invalid)
