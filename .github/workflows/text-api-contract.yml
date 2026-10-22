@@ -39,6 +39,7 @@ jobs:
           tests/test_rasunsteady_initial_flow_validation.py
           tests/test_rasunsteady_meteorology_transaction.py
           tests/test_breakout_feature_handoff.py
+          tests/test_explicit_computation_points.py
           tests/test_hdf_completion.py
           tests/test_hdf_followup_native_contract.py
           tests/test_stored_maps_native_contract.py
