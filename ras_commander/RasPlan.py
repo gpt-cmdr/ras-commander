@@ -83,6 +83,7 @@ from pathlib import Path, PureWindowsPath
 import shutil
 from typing import Union, Optional, List, Dict, Any, Tuple
 from numbers import Integral, Number
+from math import isfinite
 import pandas as pd
 from .RasPrj import RasPrj, _matching_copied_prj_file, ras
 from .RasUtils import RasUtils
@@ -695,7 +696,9 @@ class RasPlan:
         A value of "0" uses "All Available" cores, and values of 1 or more
         specify an explicit number of cores.
         For complex 1D/2D models with pipe systems, a more complex approach may be needed to optimize performance.  (Suggest writing a custom function based on this code).
-        This function simply sets the "num_cores" parameter for ALL instances of the above parameters in the plan file.
+        Sets all existing instances of these parameters and inserts missing
+        controls in the default plan scope. An omitted core key must not leave
+        an explicit request using the native runtime's default core count.
 
 
         Notes on setting num_cores in HEC-RAS:
@@ -731,13 +734,29 @@ class RasPlan:
             )
         
         def update_num_cores(lines):
-            updated_lines = []
-            for line in lines:
-                if any(param in line for param in ["UNET D1 Cores=", "UNET D2 Cores=", "PS Cores="]):
-                    param_name = line.split("=")[0]
-                    updated_lines.append(f"{param_name}= {num_cores}\n")
-                else:
-                    updated_lines.append(line)
+            core_keys = ("UNET D1 Cores", "UNET D2 Cores", "PS Cores")
+            updated_lines = list(lines)
+            seen = set()
+            default_seen = set()
+            default_end = len(lines)
+            for index, key, _ in _iter_plan_key_lines(lines):
+                if key == "UNET D2 Name" and default_end == len(lines):
+                    default_end = index
+                if key in core_keys:
+                    updated_lines[index] = f"{key}= {num_cores}\n"
+                    seen.add(key)
+                    if index < default_end:
+                        default_seen.add(key)
+            missing_lines = [
+                f"{key}= {num_cores}\n" for key in core_keys
+                if key not in seen or (key == "UNET D2 Cores" and key not in default_seen)
+            ]
+            if missing_lines:
+                # A missing D2 default belongs before any named mesh section,
+                # rather than accidentally overriding only the final mesh.
+                if default_end and not updated_lines[default_end - 1].endswith(("\n", "\r")):
+                    updated_lines[default_end - 1] += "\n"
+                updated_lines[default_end:default_end] = missing_lines
             return updated_lines
         
         try:
@@ -2789,11 +2808,14 @@ class RasPlan:
         """
         Normalize a 2D equation-set value to the plan-file integer code.
         """
-        if isinstance(equation_set, bool):
+        if pd.api.types.is_bool(equation_set):
             raise ValueError("equation_set must be DWE, SWE-ELM, 0, or 1")
         if isinstance(equation_set, Number):
-            code = int(equation_set)
-            if code in RasPlan.TWO_D_EQUATION_CODE_TO_NAME:
+            try:
+                code = int(equation_set)
+            except (TypeError, ValueError, OverflowError) as exc:
+                raise ValueError("equation_set must be DWE, SWE-ELM, 0, or 1") from exc
+            if equation_set == code and code in RasPlan.TWO_D_EQUATION_CODE_TO_NAME:
                 return code
         normalized = str(equation_set).strip().upper().replace("_", "-")
         normalized = re.sub(r"\s+", " ", normalized)
@@ -2825,6 +2847,18 @@ class RasPlan:
         raise ValueError(f"Cannot parse boolean value: {value}")
 
     @staticmethod
+    def _parse_2d_bool_option(api_key: str, value: Any) -> Optional[bool]:
+        """Accept boolean aliases and the native -1/0/1 numeric encodings."""
+        if isinstance(value, Number):
+            try:
+                numeric_value = float(value)
+            except (TypeError, ValueError, OverflowError) as exc:
+                raise ValueError(f"{api_key} must be boolean or -1, 0, or 1") from exc
+            if not isfinite(numeric_value) or numeric_value not in {-1, 0, 1}:
+                raise ValueError(f"{api_key} must be boolean or -1, 0, or 1")
+        return RasPlan._parse_bool_like(value)
+
+    @staticmethod
     def _coerce_2d_option_value(api_key: str, raw_value: Any) -> Any:
         """
         Convert raw plan/HDF option values to Python types.
@@ -2848,11 +2882,17 @@ class RasPlan:
             code = RasPlan._normalize_2d_equation_set(raw_value)
             return RasPlan.TWO_D_EQUATION_CODE_TO_NAME[code]
         if value_type == "bool":
-            return RasPlan._parse_bool_like(raw_value)
+            return RasPlan._parse_2d_bool_option(api_key, raw_value)
         if value_type == "int":
-            return int(float(str(raw_value).strip()))
+            numeric_value = float(str(raw_value).strip())
+            if not isfinite(numeric_value) or not numeric_value.is_integer():
+                raise ValueError(f"{api_key} must be a finite integer")
+            return int(numeric_value)
         if value_type == "float":
-            return float(str(raw_value).strip())
+            numeric_value = float(str(raw_value).strip())
+            if not isfinite(numeric_value):
+                raise ValueError(f"{api_key} must be finite")
+            return numeric_value
         if value_type == "interval":
             interval = str(raw_value).strip().upper()
             if interval and interval not in RasPlan.VALID_PLAN_INTERVALS:
@@ -2882,14 +2922,23 @@ class RasPlan:
         if value_type == "equation":
             return str(RasPlan._normalize_2d_equation_set(value))
         if value_type == "bool":
-            return "-1" if RasPlan._parse_bool_like(value) else "0"
+            return "-1" if RasPlan._parse_2d_bool_option(api_key, value) else "0"
         if value_type == "int":
-            int_value = int(value)
+            if pd.api.types.is_bool(value):
+                raise ValueError(f"{api_key} must be a finite integer, not boolean")
+            try:
+                int_value = int(value)
+            except (TypeError, ValueError, OverflowError) as exc:
+                raise ValueError(f"{api_key} must be a finite integer") from exc
+            if not isinstance(value, (str, bytes)) and value != int_value:
+                raise ValueError(f"{api_key} must be a finite integer")
             if int_value < 0:
                 raise ValueError(f"{api_key} must be >= 0")
             return str(int_value)
         if value_type == "float":
             float_value = float(value)
+            if not isfinite(float_value):
+                raise ValueError(f"{api_key} must be finite")
             if api_key in {
                 "initial_conditions_time_hours",
                 "time_step_max_courant",
