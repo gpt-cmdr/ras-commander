@@ -284,7 +284,8 @@ class RasFloodway:
         Parameters
         ----------
         method : int
-            Encroachment method, typically 4 or 5 for iterative trial setup.
+            Method 4 or 5 for target-surcharge trial setup. Use
+            ``set_encroachments`` for explicit Method 1 station pairs.
         targets : sequence of numbers
             Target surcharge values written into encroachment triplets.
         base_profile : int or str
@@ -296,8 +297,11 @@ class RasFloodway:
         energy_targets : sequence, optional
             Method 5 secondary values.
         """
-        if method not in {1, 2, 3, 4, 5}:
-            raise ValueError("method must be between 1 and 5")
+        if isinstance(method, bool) or method not in {4, 5}:
+            raise ValueError(
+                "create_trial_profiles supports target-surcharge methods 4 and 5; "
+                "use set_encroachments for explicit method-specific values"
+            )
         targets = RasFloodway._as_number_list(targets, "targets")
         if not targets:
             raise ValueError("targets must contain at least one value")
@@ -313,6 +317,24 @@ class RasFloodway:
         locations = locations or encroachments
         if locations is None:
             locations = RasFloodway._infer_encroachment_locations(plan_path, flow_path)
+
+        # Validate method values and identities before profile expansion writes
+        # the flow file. In particular, a malformed Method 5 energy vector must
+        # not leave a newly appended flow profile behind after failure.
+        if energy_targets is not None and method != 5:
+            raise ValueError("energy_targets are only supported for Method 5")
+        preview_records = RasFloodway._build_trial_encroachments(
+            locations, method, targets, list(range(2, len(targets) + 2)),
+            energy_targets,
+        )
+        if not preview_records:
+            raise ValueError("No encroachment locations supplied or inferred")
+        preview_records = RasFloodway._normalise_encroachment_records(preview_records)
+        RasFloodway._format_encroachment_block(
+            preview_records,
+            profile_count=len(targets) + 1,
+            encroach_param=(-1, 0, 0, len(targets) + 1),
+        )
 
         flow_info = RasFloodway._expand_steady_flow_profiles(
             flow_path=flow_path,

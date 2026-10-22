@@ -1,0 +1,269 @@
+{
+  "schema_version": 1,
+  "qualification_date": "2026-10-22",
+  "ras_commander_base": "238502d4c846f1c2062125b99f6578aa107ccc5f",
+  "fixture_environment": "RAS_HDF_FOLLOWUP_FIXTURE_ROOT",
+  "scope": "Native read-only format conformance; no hydraulic calibration or convergence claim; viscosity domain and units remain unresolved",
+  "cases": [
+    {
+      "case_id": "ether_hollow_66_offcadence",
+      "runtime_version": "6.6",
+      "native_file_version": "HEC-RAS 6.6 September 2024",
+      "path": "ether_hollow_66_offcadence/EtherHollow.p01.hdf",
+      "bytes": 14447142,
+      "sha256": "94bdf395c218caaa3ec2c018ebe69b35728576cad28b6ad9b28b434488d9dc2e",
+      "source_inputs": [
+        {
+          "path": "ether_hollow_66_offcadence/source_before_compute/EtherHollow.g01",
+          "bytes": 349339,
+          "sha256": "95da572f53969433b6b251f1b76e6d3654aedc9b5423a6a25d39192432fbe3e8"
+        },
+        {
+          "path": "ether_hollow_66_offcadence/source_before_compute/EtherHollow.p01",
+          "bytes": 592,
+          "sha256": "df5b5a3e93c3d5ca8bfd984a41ebd902673adbff674f59851c9a9527dd2f3de4"
+        },
+        {
+          "path": "ether_hollow_66_offcadence/source_before_compute/EtherHollow.prj",
+          "bytes": 557,
+          "sha256": "1227955de857266f14177dbcfbf64a63c74913f72518f8ec5eab996ac2edae83"
+        },
+        {
+          "path": "ether_hollow_66_offcadence/source_before_compute/EtherHollow.rasmap",
+          "bytes": 12046,
+          "sha256": "e44204fa25fd93241498c908e87bc00334958109816c741967c0fada17d87adb"
+        },
+        {
+          "path": "ether_hollow_66_offcadence/source_before_compute/EtherHollow.u01",
+          "bytes": 5190,
+          "sha256": "609804c8c8983778ba7992f23b5d83d9d3fd602776601befae24800c9bf17c69"
+        }
+      ]
+    },
+    {
+      "case_id": "ether_hollow_66_aligned",
+      "runtime_version": "6.6",
+      "native_file_version": "HEC-RAS 6.6 September 2024",
+      "path": "ether_hollow_66_aligned/EtherHollow.p01.hdf",
+      "bytes": 14504745,
+      "sha256": "d94fe1c08ad44a04c540ac3eed50b37e52efee1a43798af92d2ac16f249f112c",
+      "source_inputs": [
+        {
+          "path": "ether_hollow_66_aligned/source_before_compute/EtherHollow.g01",
+          "bytes": 349339,
+          "sha256": "95da572f53969433b6b251f1b76e6d3654aedc9b5423a6a25d39192432fbe3e8"
+        },
+        {
+          "path": "ether_hollow_66_aligned/source_before_compute/EtherHollow.p01",
+          "bytes": 592,
+          "sha256": "05e14c4eee0b520ca761453a401d3e8b4c0b3f7f29a2c3421b00dd506b53477d"
+        },
+        {
+          "path": "ether_hollow_66_aligned/source_before_compute/EtherHollow.prj",
+          "bytes": 557,
+          "sha256": "1227955de857266f14177dbcfbf64a63c74913f72518f8ec5eab996ac2edae83"
+        },
+        {
+          "path": "ether_hollow_66_aligned/source_before_compute/EtherHollow.rasmap",
+          "bytes": 12046,
+          "sha256": "e44204fa25fd93241498c908e87bc00334958109816c741967c0fada17d87adb"
+        },
+        {
+          "path": "ether_hollow_66_aligned/source_before_compute/EtherHollow.u01",
+          "bytes": 5190,
+          "sha256": "609804c8c8983778ba7992f23b5d83d9d3fd602776601befae24800c9bf17c69"
+        }
+      ]
+    },
+    {
+      "case_id": "bald_eagle_66_observed_computed",
+      "runtime_version": "6.6",
+      "native_file_version": "HEC-RAS 6.6 September 2024",
+      "path": "bald_eagle_66_observed_computed/BaldEagleDamBrk.p03.hdf",
+      "bytes": 14412241,
+      "sha256": "d6b326145110ee4507e710a7626e086e1f48133732b201dce92cab8354afc68c",
+      "source_inputs": [
+        {
+          "path": "bald_eagle_66_observed_computed/source_before_compute/BaldEagleDamBrk.g09",
+          "bytes": 660482,
+          "sha256": "1cb6b9049454f87cb0392fcccb73fd5b124b6800de38713d7d6ad72663130889"
+        },
+        {
+          "path": "bald_eagle_66_observed_computed/source_before_compute/BaldEagleDamBrk.p03",
+          "bytes": 8385,
+          "sha256": "0fd42208e79391d28b48809402165e1d1b2c0ff0a72d58c0b67c1aac58515565"
+        },
+        {
+          "path": "bald_eagle_66_observed_computed/source_before_compute/BaldEagleDamBrk.prj",
+          "bytes": 2388,
+          "sha256": "a112974c1216382971d60926aaf5f1d0324a4b3da0fe0309bd58e8d13f61a082"
+        },
+        {
+          "path": "bald_eagle_66_observed_computed/source_before_compute/BaldEagleDamBrk.u13",
+          "bytes": 4061,
+          "sha256": "bd6358f55dba26356c220c020b50f31f538666f08cd6c865b2747f6d26c33fbf"
+        }
+      ]
+    },
+    {
+      "case_id": "bald_eagle_66_observed_computed_active",
+      "runtime_version": "6.6",
+      "native_file_version": "HEC-RAS 6.6 September 2024",
+      "path": "bald_eagle_66_observed_computed_active/BaldEagleDamBrk.p03.hdf",
+      "bytes": 17027155,
+      "sha256": "ffa341ad31b5f80c82c70dcf408e42852af27fa8b7e61f5e1c47c923d89d3676",
+      "source_inputs": [
+        {
+          "path": "bald_eagle_66_observed_computed_active/source_before_compute/BaldEagleDamBrk.g09",
+          "bytes": 660482,
+          "sha256": "1cb6b9049454f87cb0392fcccb73fd5b124b6800de38713d7d6ad72663130889"
+        },
+        {
+          "path": "bald_eagle_66_observed_computed_active/source_before_compute/BaldEagleDamBrk.p03",
+          "bytes": 8385,
+          "sha256": "79fc724a1d888ea27a7c0ae756ac26159bd61c88ad65f69a46bb9e641aed4480"
+        },
+        {
+          "path": "bald_eagle_66_observed_computed_active/source_before_compute/BaldEagleDamBrk.prj",
+          "bytes": 2388,
+          "sha256": "a112974c1216382971d60926aaf5f1d0324a4b3da0fe0309bd58e8d13f61a082"
+        },
+        {
+          "path": "bald_eagle_66_observed_computed_active/source_before_compute/BaldEagleDamBrk.u13",
+          "bytes": 4061,
+          "sha256": "bd6358f55dba26356c220c020b50f31f538666f08cd6c865b2747f6d26c33fbf"
+        }
+      ]
+    },
+    {
+      "case_id": "ether_hollow_701_offcadence",
+      "runtime_version": "7.0.1",
+      "native_file_version": "HEC-RAS 7.0.1 June 2026",
+      "path": "ether_hollow_701_offcadence/EtherHollow.p01.hdf",
+      "bytes": 16698265,
+      "sha256": "7debc233868004a9756ed7ca376df47d193f9d7af41403f68c2ec4c22f2f536c",
+      "source_inputs": [
+        {
+          "path": "ether_hollow_701_offcadence/source_before_compute/EtherHollow.g01",
+          "bytes": 349339,
+          "sha256": "95da572f53969433b6b251f1b76e6d3654aedc9b5423a6a25d39192432fbe3e8"
+        },
+        {
+          "path": "ether_hollow_701_offcadence/source_before_compute/EtherHollow.p01",
+          "bytes": 592,
+          "sha256": "df5b5a3e93c3d5ca8bfd984a41ebd902673adbff674f59851c9a9527dd2f3de4"
+        },
+        {
+          "path": "ether_hollow_701_offcadence/source_before_compute/EtherHollow.prj",
+          "bytes": 557,
+          "sha256": "1227955de857266f14177dbcfbf64a63c74913f72518f8ec5eab996ac2edae83"
+        },
+        {
+          "path": "ether_hollow_701_offcadence/source_before_compute/EtherHollow.rasmap",
+          "bytes": 12046,
+          "sha256": "e44204fa25fd93241498c908e87bc00334958109816c741967c0fada17d87adb"
+        },
+        {
+          "path": "ether_hollow_701_offcadence/source_before_compute/EtherHollow.u01",
+          "bytes": 5190,
+          "sha256": "609804c8c8983778ba7992f23b5d83d9d3fd602776601befae24800c9bf17c69"
+        }
+      ]
+    },
+    {
+      "case_id": "ether_hollow_701_aligned",
+      "runtime_version": "7.0.1",
+      "native_file_version": "HEC-RAS 7.0.1 June 2026",
+      "path": "ether_hollow_701_aligned/EtherHollow.p01.hdf",
+      "bytes": 16753800,
+      "sha256": "1a0fff604fe58d314fe497d64c2033dda4e30bef26dd46d7d6399a58bb52dce2",
+      "source_inputs": [
+        {
+          "path": "ether_hollow_701_aligned/source_before_compute/EtherHollow.g01",
+          "bytes": 349339,
+          "sha256": "95da572f53969433b6b251f1b76e6d3654aedc9b5423a6a25d39192432fbe3e8"
+        },
+        {
+          "path": "ether_hollow_701_aligned/source_before_compute/EtherHollow.p01",
+          "bytes": 592,
+          "sha256": "05e14c4eee0b520ca761453a401d3e8b4c0b3f7f29a2c3421b00dd506b53477d"
+        },
+        {
+          "path": "ether_hollow_701_aligned/source_before_compute/EtherHollow.prj",
+          "bytes": 557,
+          "sha256": "1227955de857266f14177dbcfbf64a63c74913f72518f8ec5eab996ac2edae83"
+        },
+        {
+          "path": "ether_hollow_701_aligned/source_before_compute/EtherHollow.rasmap",
+          "bytes": 12046,
+          "sha256": "e44204fa25fd93241498c908e87bc00334958109816c741967c0fada17d87adb"
+        },
+        {
+          "path": "ether_hollow_701_aligned/source_before_compute/EtherHollow.u01",
+          "bytes": 5190,
+          "sha256": "609804c8c8983778ba7992f23b5d83d9d3fd602776601befae24800c9bf17c69"
+        }
+      ]
+    },
+    {
+      "case_id": "bald_eagle_701_observed_computed",
+      "runtime_version": "7.0.1",
+      "native_file_version": "HEC-RAS 7.0.1 June 2026",
+      "path": "bald_eagle_701_observed_computed/BaldEagleDamBrk.p03.hdf",
+      "bytes": 18205296,
+      "sha256": "5336eaa87180e46997a63db9f1d4288c6e12235c6ccf2a083da65b6c90f6e2f6",
+      "source_inputs": [
+        {
+          "path": "bald_eagle_701_observed_computed/source_before_compute/BaldEagleDamBrk.g09",
+          "bytes": 660482,
+          "sha256": "1cb6b9049454f87cb0392fcccb73fd5b124b6800de38713d7d6ad72663130889"
+        },
+        {
+          "path": "bald_eagle_701_observed_computed/source_before_compute/BaldEagleDamBrk.p03",
+          "bytes": 8385,
+          "sha256": "0fd42208e79391d28b48809402165e1d1b2c0ff0a72d58c0b67c1aac58515565"
+        },
+        {
+          "path": "bald_eagle_701_observed_computed/source_before_compute/BaldEagleDamBrk.prj",
+          "bytes": 2388,
+          "sha256": "a112974c1216382971d60926aaf5f1d0324a4b3da0fe0309bd58e8d13f61a082"
+        },
+        {
+          "path": "bald_eagle_701_observed_computed/source_before_compute/BaldEagleDamBrk.u13",
+          "bytes": 4061,
+          "sha256": "bd6358f55dba26356c220c020b50f31f538666f08cd6c865b2747f6d26c33fbf"
+        }
+      ]
+    },
+    {
+      "case_id": "bald_eagle_701_observed_computed_active",
+      "runtime_version": "7.0.1",
+      "native_file_version": "HEC-RAS 7.0.1 June 2026",
+      "path": "bald_eagle_701_observed_computed_active/BaldEagleDamBrk.p03.hdf",
+      "bytes": 20822975,
+      "sha256": "0f6dc8ce4881ee9f75e29b973ca5891d5047195f5e4636b01b4a88a98b0ad53f",
+      "source_inputs": [
+        {
+          "path": "bald_eagle_701_observed_computed_active/source_before_compute/BaldEagleDamBrk.g09",
+          "bytes": 660482,
+          "sha256": "1cb6b9049454f87cb0392fcccb73fd5b124b6800de38713d7d6ad72663130889"
+        },
+        {
+          "path": "bald_eagle_701_observed_computed_active/source_before_compute/BaldEagleDamBrk.p03",
+          "bytes": 8385,
+          "sha256": "79fc724a1d888ea27a7c0ae756ac26159bd61c88ad65f69a46bb9e641aed4480"
+        },
+        {
+          "path": "bald_eagle_701_observed_computed_active/source_before_compute/BaldEagleDamBrk.prj",
+          "bytes": 2388,
+          "sha256": "a112974c1216382971d60926aaf5f1d0324a4b3da0fe0309bd58e8d13f61a082"
+        },
+        {
+          "path": "bald_eagle_701_observed_computed_active/source_before_compute/BaldEagleDamBrk.u13",
+          "bytes": 4061,
+          "sha256": "bd6358f55dba26356c220c020b50f31f538666f08cd6c865b2747f6d26c33fbf"
+        }
+      ]
+    }
+  ]
+}

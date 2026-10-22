@@ -753,214 +753,215 @@ class CheckUnsteady:
         geom_hdf: Path,
         thresholds: Optional[ValidationThresholds] = None
     ) -> CheckResults:
-        """
-        Check 2D mesh quality.
+        """Check cell areas, bounding-box aspect ratios, and maximum face velocities.
 
-        Validates:
-        - Cell area sizes (too small or too large)
-        - Cell aspect ratios
-        - Face velocities
-        - Mesh connectivity
-
-        Args:
-            plan_hdf: Path to plan HDF file
-            geom_hdf: Path to geometry HDF file
-            thresholds: Custom ValidationThresholds (uses defaults if None)
+        Area thresholds are in square feet; velocity thresholds are in ft/s.
+        Areas use projected CRS axis units and velocities use native result-HDF
+        unit metadata. Missing or conflicting unit evidence prevents comparison.
+        Connectivity and other geometric mesh rules are not implemented here.
 
         Returns:
-            CheckResults with mesh quality check messages
-
-        Data Source:
-            Uses HdfMesh.get_mesh_cell_polygons() for cell geometry
-            Uses HdfResultsMesh.get_mesh_max_face_v() for face velocities
+            CheckResults with per-check status and reason in
+            ``statistics["mesh_quality_coverage"]``. A passed status covers only
+            that check, never unavailable data or unimplemented geometric rules.
         """
-        results = CheckResults()
+        from ..hdf.HdfBase import HdfBase
+        from ..hdf.HdfMesh import HdfMesh
+        from ..hdf.HdfResultsMesh import HdfResultsMesh
 
+        results = CheckResults()
         if thresholds is None:
             thresholds = get_default_thresholds()
+        coverage = {}
+        results.statistics["mesh_quality_coverage"] = coverage
+
+        def record(check, status, reason):
+            coverage[check] = {"status": status, "reason": reason}
+            severity = (Severity.ERROR if status == "failed" else
+                        Severity.WARNING if status == "unavailable" else Severity.INFO)
+            results.messages.append(CheckMessage(
+                message_id="US_2D_ERR" if status == "failed" else "US_2D_INFO",
+                severity=severity, check_type="UNSTEADY",
+                message=f"2D mesh {check}: {status} - {reason}",
+            ))
+
+        record("connectivity", "unsupported", "Connectivity checks are not implemented")
+        # Validate file structure here: legacy geometry readers can turn read
+        # errors into empty frames/lists, which are not evidence of a 1D model.
+        try:
+            geom_hdf = Path(geom_hdf)
+            with h5py.File(geom_hdf, "r") as hdf:
+                if "Geometry" not in hdf:
+                    raise ValueError("Geometry group is absent")
+                mesh_group = hdf.get("Geometry/2D Flow Areas")
+                if mesh_group is None or len(mesh_group) == 0:
+                    for check in ("cell_area", "aspect_ratio", "face_velocity"):
+                        record(check, "not_applicable", "Geometry contains no 2D flow areas")
+                    return results
+            mesh_names = HdfMesh.get_mesh_area_names(geom_hdf)
+            if not mesh_names:
+                raise ValueError("2D flow-area inventory could not be read")
+        except Exception as exc:
+            for check in ("cell_area", "aspect_ratio"):
+                record(check, "failed", f"Cannot read mesh geometry: {exc}")
+            mesh_names = None
+
+        if mesh_names:
+            geometry_read = False
+            try:
+                polygons = HdfMesh.get_mesh_cell_polygons(geom_hdf, strict=True)
+                geometry_read = True
+                if polygons is None or polygons.empty:
+                    raise ValueError("Cell polygon data are absent or unreadable")
+                if set(polygons["mesh_name"]) != set(mesh_names):
+                    raise ValueError("Cell polygons do not cover every 2D flow area")
+                valid = (polygons.geometry.notna() & ~polygons.geometry.is_empty
+                         & polygons.geometry.is_valid)
+                if not valid.all():
+                    raise ValueError("Invalid or missing cell polygons prevent complete coverage")
+            except Exception as exc:
+                for check in ("cell_area", "aspect_ratio"):
+                    record(check, "unavailable" if geometry_read else "failed",
+                           f"Complete cell polygons unavailable: {exc}")
+            else:
+                crs = polygons.crs
+                if crs is None or not crs.is_projected:
+                    for check in ("cell_area", "aspect_ratio"):
+                        record(check, "unavailable", "Projected CRS with linear axis units is required")
+                else:
+                    # CRS axis factors are metres per coordinate unit, including
+                    # US survey feet. Project/result units cannot substitute for
+                    # horizontal coordinate units.
+                    try:
+                        factors = [axis.unit_conversion_factor for axis in crs.axis_info[:2]]
+                        if (len(factors) != 2 or not np.isfinite(factors).all()
+                                or min(factors) <= 0 or not np.isclose(*factors)):
+                            raise ValueError("CRS horizontal axis units are unsupported")
+                        area_factor = factors[0] * factors[1] / 0.3048 ** 2
+                        areas = polygons.geometry.area * area_factor
+                        if not np.isfinite(areas).all() or (areas <= 0).any():
+                            raise ValueError("Non-finite or nonpositive cell areas")
+                        min_area = thresholds.unsteady.min_cell_area_sqft
+                        max_area = thresholds.unsteady.max_cell_area_sqft
+                        summaries = []
+                        issues = False
+                        for mesh_name in mesh_names:
+                            mesh_areas = areas[polygons["mesh_name"] == mesh_name]
+                            small, large = mesh_areas < min_area, mesh_areas > max_area
+                            for flagged, message_id, value, limit in (
+                                (small.any(), "US_2D_01", mesh_areas.min(), min_area),
+                                (large.any(), "US_2D_02", mesh_areas.max(), max_area),
+                            ):
+                                if flagged:
+                                    issues = True
+                                    results.messages.append(CheckMessage(
+                                        message_id=message_id, severity=Severity.WARNING,
+                                        check_type="UNSTEADY", value=float(value), threshold=limit,
+                                        message=format_message(message_id, area=value,
+                                                               threshold=limit, mesh_name=mesh_name),
+                                    ))
+                            summaries.append({
+                                "mesh_name": mesh_name, "total_cells": len(mesh_areas),
+                                "cells_too_small": int(small.sum()), "cells_too_large": int(large.sum()),
+                                "min_area_sqft": mesh_areas.min(), "max_area_sqft": mesh_areas.max(),
+                                "mean_area_sqft": mesh_areas.mean(),
+                            })
+                        results.mesh_summary = pd.DataFrame(summaries)
+                        record("cell_area", "issues" if issues else "passed",
+                               f"Compared {len(areas)} cell areas in ft²")
+                    except Exception as exc:
+                        record("cell_area", "unavailable", f"Area comparison unavailable: {exc}")
+
+                    try:
+                        if (len(crs.axis_info) < 2 or not np.isclose(
+                                crs.axis_info[0].unit_conversion_factor,
+                                crs.axis_info[1].unit_conversion_factor)):
+                            raise ValueError("CRS horizontal axes must have equal linear units")
+                        bounds = polygons.geometry.bounds
+                        widths = bounds.maxx - bounds.minx
+                        heights = bounds.maxy - bounds.miny
+                        ratios = np.maximum(widths / heights, heights / widths)
+                        if not np.isfinite(ratios).all():
+                            raise ValueError("Non-finite bounding-box aspect ratios")
+                        issues = False
+                        for mesh_name in mesh_names:
+                            value = ratios[polygons["mesh_name"] == mesh_name].max()
+                            limit = thresholds.unsteady.max_aspect_ratio
+                            if value > limit:
+                                issues = True
+                                results.messages.append(CheckMessage(
+                                    message_id="US_2D_03", severity=Severity.WARNING,
+                                    check_type="UNSTEADY", value=float(value), threshold=limit,
+                                    message=format_message("US_2D_03", ratio=value,
+                                                           threshold=limit, mesh_name=mesh_name),
+                                ))
+                        record("aspect_ratio", "issues" if issues else "passed",
+                               f"Compared {len(ratios)} bounding-box aspect ratios (approximation)")
+                    except Exception as exc:
+                        record("aspect_ratio", "unavailable", f"Aspect-ratio comparison unavailable: {exc}")
 
         try:
             plan_hdf = Path(plan_hdf)
-            geom_hdf = Path(geom_hdf)
-
-            mesh_issues_found = False
-
-            # Get mesh cell geometry
-            try:
-                from ..hdf.HdfMesh import HdfMesh
-
-                cell_polygons = HdfMesh.get_mesh_cell_polygons(geom_hdf)
-
-                if cell_polygons is not None and not cell_polygons.empty:
-                    # Calculate cell areas
-                    cell_areas = cell_polygons.geometry.area
-
-                    # Extract mesh name
-                    mesh_name = "2D Flow Area"
-                    if 'mesh_name' in cell_polygons.columns:
-                        mesh_name = cell_polygons['mesh_name'].iloc[0]
-
-                    # Check cell area thresholds
-                    min_threshold = thresholds.unsteady.min_cell_area_sqft
-                    max_threshold = thresholds.unsteady.max_cell_area_sqft
-
-                    # Count cells outside thresholds
-                    too_small = cell_areas < min_threshold
-                    too_large = cell_areas > max_threshold
-
-                    if too_small.any():
-                        min_area = cell_areas[too_small].min()
-                        msg = CheckMessage(
-                            message_id="US_2D_01",
-                            severity=Severity.WARNING,
-                            check_type="UNSTEADY",
-                            message=format_message("US_2D_01",
-                                area=min_area,
-                                threshold=min_threshold,
-                                mesh_name=mesh_name
-                            ),
-                            value=min_area,
-                            threshold=min_threshold
+            # Opening separately prevents a swallowed/empty reader result from
+            # concealing a nonexistent or corrupt plan HDF.
+            with h5py.File(plan_hdf, "r"):
+                pass
+            velocities = HdfResultsMesh.get_mesh_max_face_v(plan_hdf)
+            if velocities is None or velocities.empty:
+                record("face_velocity", "unavailable", "Maximum face velocity data are absent")
+            elif "maximum_face_velocity" not in velocities.columns:
+                record("face_velocity", "unavailable", "Maximum face velocity column is absent")
+            elif not mesh_names or set(velocities["mesh_name"]) != set(mesh_names):
+                record("face_velocity", "unavailable", "Velocity data do not cover the geometry mesh inventory")
+            elif "face_id" not in velocities.columns:
+                record("face_velocity", "unavailable", "Native face IDs are absent from velocity data")
+            else:
+                # A mesh name alone cannot establish coverage: a shortened
+                # summary matrix still carries that name. Native face IDs are
+                # zero-based rows of Faces FacePoint Indexes, including the
+                # boundary faces, and must each occur exactly once.
+                with h5py.File(geom_hdf, "r") as geometry:
+                    for mesh_name in mesh_names:
+                        topology = geometry.get(
+                            f"Geometry/2D Flow Areas/{mesh_name}/Faces FacePoint Indexes"
                         )
-                        results.messages.append(msg)
-                        mesh_issues_found = True
-
-                    if too_large.any():
-                        max_area = cell_areas[too_large].max()
-                        msg = CheckMessage(
-                            message_id="US_2D_02",
-                            severity=Severity.WARNING,
-                            check_type="UNSTEADY",
-                            message=format_message("US_2D_02",
-                                area=max_area,
-                                threshold=max_threshold,
-                                mesh_name=mesh_name
-                            ),
-                            value=max_area,
-                            threshold=max_threshold
-                        )
-                        results.messages.append(msg)
-                        mesh_issues_found = True
-
-                    # Calculate aspect ratios (approximate using bounding box)
-                    try:
-                        aspect_ratios = []
-                        for geom in cell_polygons.geometry:
-                            if geom is not None and not geom.is_empty:
-                                bounds = geom.bounds  # (minx, miny, maxx, maxy)
-                                width = bounds[2] - bounds[0]
-                                height = bounds[3] - bounds[1]
-                                if height > 0 and width > 0:
-                                    aspect = max(width / height, height / width)
-                                    aspect_ratios.append(aspect)
-                                else:
-                                    aspect_ratios.append(np.nan)
-                            else:
-                                aspect_ratios.append(np.nan)
-
-                        aspect_ratios = np.array(aspect_ratios)
-                        valid_ratios = aspect_ratios[~np.isnan(aspect_ratios)]
-
-                        if len(valid_ratios) > 0:
-                            max_aspect = np.max(valid_ratios)
-
-                            if max_aspect > thresholds.unsteady.max_aspect_ratio:
-                                msg = CheckMessage(
-                                    message_id="US_2D_03",
-                                    severity=Severity.WARNING,
-                                    check_type="UNSTEADY",
-                                    message=format_message("US_2D_03",
-                                        ratio=max_aspect,
-                                        threshold=thresholds.unsteady.max_aspect_ratio,
-                                        mesh_name=mesh_name
-                                    ),
-                                    value=max_aspect,
-                                    threshold=thresholds.unsteady.max_aspect_ratio
-                                )
-                                results.messages.append(msg)
-                                mesh_issues_found = True
-
-                    except Exception as e:
-                        logger.debug(f"Could not calculate aspect ratios: {e}")
-
-                    # Create mesh summary
-                    results.mesh_summary = pd.DataFrame([{
-                        'mesh_name': mesh_name,
-                        'total_cells': len(cell_areas),
-                        'cells_too_small': too_small.sum(),
-                        'cells_too_large': too_large.sum(),
-                        'min_area_sqft': cell_areas.min(),
-                        'max_area_sqft': cell_areas.max(),
-                        'mean_area_sqft': cell_areas.mean()
-                    }])
-
-            except Exception as e:
-                reraise_required(e)
-                logger.debug(f"Could not read mesh geometry: {e}")
-
-            # Check face velocities
-            try:
-                from ..hdf.HdfResultsMesh import HdfResultsMesh
-
-                max_face_vel_df = HdfResultsMesh.get_mesh_max_face_v(plan_hdf)
-
-                if max_face_vel_df is not None and not max_face_vel_df.empty:
-                    # Find velocity column
-                    vel_col = None
-                    for col in max_face_vel_df.columns:
-                        if 'velocity' in col.lower() or 'vel' in col.lower():
-                            vel_col = col
-                            break
-
-                    if vel_col is not None:
-                        face_vels = max_face_vel_df[vel_col].values
-                        valid_vels = face_vels[~np.isnan(face_vels)]
-
-                        if len(valid_vels) > 0:
-                            max_face_vel = np.max(valid_vels)
-
-                            # Use same velocity thresholds as peaks
-                            if max_face_vel >= thresholds.unsteady.max_velocity_error_fps:
-                                mesh_name = "2D Flow Area"
-                                if 'mesh_name' in max_face_vel_df.columns:
-                                    mesh_name = max_face_vel_df['mesh_name'].iloc[0]
-
-                                msg = CheckMessage(
-                                    message_id="US_2D_04",
-                                    severity=Severity.WARNING,
-                                    check_type="UNSTEADY",
-                                    message=format_message("US_2D_04",
-                                        vel=max_face_vel,
-                                        mesh_name=mesh_name
-                                    ),
-                                    value=max_face_vel
-                                )
-                                results.messages.append(msg)
-                                mesh_issues_found = True
-
-            except Exception as e:
-                reraise_required(e)
-                logger.debug(f"Could not read face velocities: {e}")
-
-            if not mesh_issues_found:
-                msg = CheckMessage(
-                    message_id="US_2D_INFO",
-                    severity=Severity.INFO,
-                    check_type="UNSTEADY",
-                    message="2D mesh quality check completed - no issues detected"
-                )
-                results.messages.append(msg)
-
-        except Exception as e:
-            reraise_required(e)
-            logger.error("Failed to check mesh quality")
-            logger.debug("Mesh quality check failure for %s: %s", plan_hdf, e)
-            msg = CheckMessage(
-                message_id="US_2D_ERR",
-                severity=Severity.ERROR,
-                check_type="UNSTEADY",
-                message=f"Failed to check mesh quality: {e}"
-            )
-            results.messages.append(msg)
+                        if (not isinstance(topology, h5py.Dataset)
+                                or topology.ndim != 2 or topology.shape[1] != 2
+                                or topology.shape[0] == 0 or topology.dtype.kind not in "iu"):
+                            raise ValueError(f"Native face inventory unavailable for {mesh_name!r}")
+                        face_ids = pd.to_numeric(
+                            velocities.loc[velocities["mesh_name"] == mesh_name, "face_id"],
+                            errors="coerce",
+                        ).to_numpy()
+                        if (len(face_ids) != topology.shape[0]
+                                or not np.isfinite(face_ids).all()
+                                or not np.array_equal(np.sort(face_ids), np.arange(topology.shape[0]))):
+                            raise ValueError(
+                                f"Velocity face IDs do not cover every native face exactly once "
+                                f"for {mesh_name!r} (expected {topology.shape[0]}, got {len(face_ids)})"
+                            )
+                metadata = HdfBase.get_result_unit_metadata(plan_hdf)
+                unit = metadata["velocity_units"]
+                if unit not in ("ft/s", "m/s"):
+                    raise ValueError(f"Unsupported native velocity units: {unit}")
+                values = pd.to_numeric(velocities["maximum_face_velocity"], errors="coerce")
+                if not np.isfinite(values).all():
+                    raise ValueError("Missing or non-finite maximum face velocity values")
+                values = values * (1 / 0.3048 if unit == "m/s" else 1)
+                issues = False
+                for mesh_name in mesh_names:
+                    value = values[velocities["mesh_name"] == mesh_name].max()
+                    limit = thresholds.unsteady.max_velocity_error_fps
+                    if value >= limit:
+                        issues = True
+                        results.messages.append(CheckMessage(
+                            message_id="US_2D_04", severity=Severity.WARNING,
+                            check_type="UNSTEADY", value=float(value), threshold=limit,
+                            message=format_message("US_2D_04", vel=value, mesh_name=mesh_name),
+                        ))
+                record("face_velocity", "issues" if issues else "passed",
+                       f"Compared {len(values)} maximum face velocities in ft/s (native {unit})")
+        except Exception as exc:
+            record("face_velocity", "failed", f"Cannot evaluate maximum face velocities: {exc}")
 
         return results

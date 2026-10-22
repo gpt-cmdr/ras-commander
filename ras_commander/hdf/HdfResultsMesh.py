@@ -567,10 +567,10 @@ class HdfResultsMesh:
         """
         Return a flow time series across a RAS Mapper profile/reference line.
 
-        This canonical entry point uses RasMapperLib through pythonnet. Native
-        reference lines first use ``ObservedDataLayer.TryReadRefLineFlow()``
-        when RAS Mapper exposes a precomputed hydrograph; otherwise native
-        reference-line faces and ad-hoc profile lines are read through
+        Recorded computed reference-line Flow is read first through
+        ``HdfResultsXsec.get_ref_lines_timeseries()``, without pythonnet or
+        face-output requirements. Observed Event Conditions data is not used.
+        Otherwise native reference-line faces and ad-hoc profile lines are read through
         ``RASResults.ReadUnsteadyTimeSeries()`` after selecting ad-hoc faces
         with ``MeshFV2D.PerimeterFacesAlongPolyline()``.
 
@@ -580,9 +580,9 @@ class HdfResultsMesh:
             mesh_name: Optional 2D flow area selector.
             profile_lines_path: Optional external profile-line layer. Coordinates
                 must match the model CRS; project metadata can resolve this path.
-            direction: ``"absolute"`` takes the absolute value of a precomputed
+            direction: ``"absolute"`` takes the absolute value of a recorded
                 reference hydrograph, but sums absolute face flows in a fallback
-                branch. ``"signed"`` preserves the precomputed hydrograph sign,
+                branch. ``"signed"`` preserves the recorded hydrograph sign,
                 or sums native face-normal signs without line-orientation
                 correction in a fallback. These are not interchangeable fluxes.
             truncate: Trim leading and trailing zero-flow samples when true.
@@ -592,20 +592,32 @@ class HdfResultsMesh:
             DataFrame with ``time``, ``flow``, ``line_name``, ``mesh_name``,
             ``direction``, ``face_count`` and ``selection_source``. Attributes
             include units, variable and face IDs. Preserve this provenance:
-            ``try_read_ref_line_flow`` identifies the precomputed hydrograph
-            route, whose observed-versus-computed provenance has not been
-            independently qualified here; face-selection routes identify
+            ``reference_line_recorded_flow`` identifies the computed HDF
+            reference matrix, with its dataset path and reference ID in attrs;
+            face-selection routes identify
             aggregation of stored face output, not a new solver calculation.
             Missing units are not inferred.
 
         Notes:
-            Requires pythonnet and compatible installed RasMapperLib. For an
+            Face fallbacks require pythonnet and compatible RasMapperLib. For an
             offline approximation use ``get_profile_line_flow_timeseries_legacy``.
             To read recorded reference matrices directly without native mapping,
             use ``HdfResultsXsec.get_ref_lines_timeseries``. Reading an HDF cannot
             create reference output that was not recorded by the model run.
         """
         direction = HdfResultsMesh._normalize_profile_line_direction(direction)
+        refline_flow = HdfResultsMesh._try_read_ref_line_flow_rasmapper(
+            hdf_path=hdf_path,
+            line_name=line_name,
+            mesh_name=mesh_name,
+            direction=direction,
+        )
+        if refline_flow is not None:
+            return HdfResultsMesh._truncate_profile_line_flow_dataframe(
+                refline_flow,
+                truncate,
+            )
+
         native_faces = HdfResultsMesh._get_native_profile_line_faces(
             hdf_path=hdf_path,
             line_name=line_name,
@@ -613,18 +625,6 @@ class HdfResultsMesh:
             ras_object=ras_object,
         )
         if not native_faces.empty:
-            refline_flow = HdfResultsMesh._try_read_ref_line_flow_rasmapper(
-                hdf_path=hdf_path,
-                line_name=line_name,
-                mesh_name=mesh_name,
-                direction=direction,
-            )
-            if refline_flow is not None:
-                return HdfResultsMesh._truncate_profile_line_flow_dataframe(
-                    refline_flow,
-                    truncate,
-                )
-
             resolved_mesh_name = HdfResultsMesh._resolve_single_mesh_name(
                 native_faces,
                 mesh_name,
@@ -821,7 +821,7 @@ class HdfResultsMesh:
         Return peak flow across a RAS Mapper profile/reference line.
 
         For ``direction="absolute"``, the peak is the maximum of the selected
-        extraction route's absolute-flow series: absolute native-associated
+        extraction route's absolute-flow series: absolute recorded reference
         hydrograph flow or a sum of absolute face flows. Preserve ``selection_source`` to
         distinguish these quantities. For ``direction="signed"``, the peak timestep is selected by
         maximum signed-flow magnitude and the returned ``peak_flow`` preserves
@@ -939,53 +939,94 @@ class HdfResultsMesh:
         mesh_name: Optional[str],
         direction: str,
     ) -> Optional[pd.DataFrame]:
-        """Read a native RAS Mapper reference-line flow hydrograph if present."""
-        try:
-            from ..dotnet.clr_bootstrap import load_clr
+        """Read recorded computed Flow; the historical private name is retained.
 
-            load_clr()
-            from RasMapperLib import (  # type: ignore
-                ObservedDataLayer,
-                RASEventConditions,
-                RASResults,
-            )
-        except Exception as exc:
-            raise RuntimeError(
-                "pythonnet/RasMapperLib is required for canonical profile-line "
-                "flow time-series extraction. Use "
-                "get_profile_line_flow_timeseries_legacy() for offline analysis."
-            ) from exc
+        ObservedDataLayer.TryReadRefLineFlow reads observed Event Conditions,
+        so it must never supply the computed-flow API. Missing computed output
+        permits a face fallback; malformed output for the selected recorded
+        identity does not. Unrelated recorded output does not select a route.
+        """
+        from .HdfResultsXsec import HdfResultsXsec
 
-        results = RASResults(str(Path(hdf_path)))
-        if not bool(results.LoadedSuccessfully):
-            raise RuntimeError(f"RASResults could not load {hdf_path}")
+        group_path = (
+            "Results/Unsteady/Output/Output Blocks/Base Output/"
+            "Unsteady Time Series/Reference Lines"
+        )
+        flow_path = f"{group_path}/Flow"
+        with h5py.File(hdf_path, "r") as hdf_file:
+            if group_path not in hdf_file:
+                return None
+            group = hdf_file[group_path]
+            if not isinstance(group, h5py.Group):
+                raise ValueError(f"Malformed reference-line group: {group_path}")
+            if "Flow" not in group:
+                return None
+            names = group.get("Name")
+            if (
+                not isinstance(names, h5py.Dataset)
+                or names.ndim != 1
+                or h5py.check_string_dtype(names.dtype) is None
+            ):
+                raise ValueError(f"Malformed reference-line Name dataset: {group_path}/Name")
+            identities = [HdfResultsXsec._decode_reference_name_mesh(value) for value in names[:]]
+            positions = [
+                index for index, (name, mesh) in enumerate(identities)
+                if name == str(line_name) and (mesh_name is None or mesh == str(mesh_name))
+            ]
+            if not positions:
+                return None
+            if len(positions) != 1:
+                raise ValueError(
+                    f"Ambiguous recorded reference-line Flow for '{line_name}' "
+                    f"(mesh_name={mesh_name!r}); select a unique name and mesh."
+                )
+            position = positions[0]
+            flow_dataset = group["Flow"]
+            if (
+                not isinstance(flow_dataset, h5py.Dataset)
+                or flow_dataset.ndim != 2
+                or flow_dataset.dtype.kind not in "iuf"
+                or flow_dataset.shape[1] != len(names)
+            ):
+                raise ValueError(f"Malformed recorded reference-line Flow matrix: {flow_path}")
+            # The general reference reader skips incompatible matrices. Here a
+            # present Flow must fail explicitly rather than change the product.
+            times = pd.DatetimeIndex(HdfBase.get_unsteady_timestamps(hdf_file))
+            if (
+                flow_dataset.shape[0] != len(times)
+                or times.hasnans
+                or not times.is_monotonic_increasing
+            ):
+                raise ValueError(f"Recorded reference-line Flow timestamps do not match: {flow_path}")
+            units_attr = flow_dataset.attrs.get("Units", "")
+            units_array = np.asarray(units_attr)
+            if units_array.size != 1 or not isinstance(
+                units_array.reshape(-1)[0], (str, bytes, np.str_, np.bytes_)
+            ):
+                raise ValueError(f"Malformed recorded reference-line Flow Units: {flow_path}")
 
-        observed = ObservedDataLayer(RASEventConditions(results))
-        met_ts = observed.TryReadRefLineFlow(str(line_name))
-        if met_ts is None:
-            return None
-
-        values = np.asarray([float(value) for value in met_ts.AllValues], dtype=float)
+        reference_ds = HdfResultsXsec.get_ref_lines_timeseries(hdf_path, variables="Flow")
+        if "Flow" not in reference_ds:
+            raise ValueError(f"Recorded reference-line Flow could not be read: {flow_path}")
+        hydrograph = reference_ds["Flow"].isel(refln_id=position)
+        values = hydrograph.values.copy()
         if direction == "absolute":
             values = np.abs(values)
 
-        dates = [pd.Timestamp(str(value)) for value in met_ts.AllDates]
-        if len(dates) != len(values):
-            dates = HdfResultsMesh._profile_times_from_hdf(hdf_path, results)
-        dates = dates[: len(values)]
-
         result = pd.DataFrame({
-            "time": pd.to_datetime(dates),
+            "time": pd.to_datetime(hydrograph["time"].values),
             "flow": values,
-            "line_name": str(line_name),
-            "mesh_name": "" if mesh_name is None else str(mesh_name),
+            "line_name": str(reference_ds["refln_name"].values[position]),
+            "mesh_name": str(reference_ds["mesh_name"].values[position]),
             "direction": direction,
             "face_count": 0,
-            "selection_source": "try_read_ref_line_flow",
+            "selection_source": "reference_line_recorded_flow",
         })
         result.attrs["face_ids"] = []
-        result.attrs["units"] = str(getattr(met_ts, "UnitString", "") or "")
+        result.attrs["units"] = hydrograph.attrs.get("units", "")
         result.attrs["variable"] = "Reference Line Flow"
+        result.attrs["hdf_path"] = flow_path
+        result.attrs["refln_id"] = int(reference_ds["refln_id"].values[position])
         return result
 
     @staticmethod
