@@ -139,6 +139,32 @@ whole instead of as one segment.
 
 ### v0.106.1 (October 2026)
 
+**Fixed-width overflow corrections are available in the published package**
+
+The [PyPI 0.106.1 wheel](https://pypi.org/project/ras-commander/0.106.1/),
+uploaded October 16, 2026, contains the unsteady inline-table correction
+from #488 and the remaining writer corrections from #497. An October 22
+audit downloaded the wheel, verified its PyPI SHA-256, and passed all 274
+regressions in `test_fixed_width_decimal_compatibility.py` and
+`test_remaining_fixed_width.py` against its extracted package. No native
+HEC-RAS execution was performed in this release-artifact audit.
+
+For a reproducible installation containing these corrections, pin
+`ras-commander==0.106.1`. This is a verified release, not a claim that it was
+the first release containing both fixes. The inspected release tags
+v0.99.1 through v0.104.0 contain the remaining defective writers; the
+v0.104.0 tag also predates #488. Re-author affected tables from their
+original numeric inputs: upgrading does not repair existing corrupted
+files. See the affected-writer details under v0.105.0 below.
+
+Artifact: `ras_commander-0.106.1-py3-none-any.whl`, SHA-256
+`9f94bc25aaf8ceb533056b4df0b00b6b03c27b54060625965548fadcd0cc6d0d`.
+[PyPI artifact metadata](https://pypi.org/pypi/ras-commander/0.106.1/json)
+records the published file and digest. At the audit date, the latest
+GitHub release record remained v0.104.0; it does not identify the current
+PyPI package. This audit does not establish a Git commit for the wheel,
+create a retrospective tag, or publish another package.
+
 **Point-precipitation preprocessing repairs HEC-RAS's intermittent failure**
 
 HEC-RAS's own `RasProcess.exe CompletePreProcess` intermittently writes no
@@ -462,9 +488,10 @@ The remaining defects are present in the inspected release tags v0.99.1
 through v0.104.0: geometry and USGS writers could silently shift adjacent
 fields, obstruction writers emitted `********`, and breach writers could
 truncate scientific notation into a different value. Earlier versions were
-not surveyed. PR #488 fixed unsteady overflow after v0.104.0 was tagged; a
-release containing both fixes is needed. Re-author affected tables from
-their original numeric inputs; these fixes do not recover corrupted files.
+not surveyed. PR #488 fixed unsteady overflow after v0.104.0 was tagged. The published
+PyPI 0.106.1 wheel has since been verified to contain both corrections;
+see its release-artifact audit above. Re-author affected tables from their
+original numeric inputs; these fixes do not recover corrupted files.
 
 Opt-in HEC-RAS 6.6 read-back tests in
 `tests/test_remaining_fixed_width_native.py` compile disposable public Bald
