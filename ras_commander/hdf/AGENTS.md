@@ -44,12 +44,14 @@ This file is the canonical local instruction file for `ras_commander/hdf/`.
 - `RAS_COMMANDER_FAST_TEXT` is the same policy switch for `ras_commander.fast_text`
   (not used by any existing `Geom*`/`Ras*` method).
 - Public `fast_hdf` names are those in its `__all__`. `read_typed`, `read_attr(s)`, `read_dataset(s)`,
-  `mesh_series_domain`, `trace_reads`, `native_required`, `reraise_required`, `fast_results` and
-  `_fast_hdf_typed` are internal plumbing; do not document them as user API or add new public
-  callers outside `ras_commander/`.
+  `mesh_series_domain`, `trace_reads`, `native_required`, `reraise_required`, `backend_scope`,
+  `release_native_sessions`, `fast_results`, `hdf/HdfFluvialNative` and `_fast_hdf_typed` are
+  internal plumbing; do not document them as user API or add new public callers outside
+  `ras_commander/`. Read one attribute with `read_attr(obj, name, default)`, never
+  `read_attrs(obj).get(name)` (an unreadable sibling must not fail the read).
 - Timestamps: `HdfUtils.convert_timesteps_to_datetimes` returns exactly what pandas has always
   returned (`datetime64[ns]` under pandas 2.x) for every date pandas can represent; only dates
-  beyond year 2262 use `datetime64[ms]`.
+  beyond year 2262 use `datetime64[us]` (main #548).
 - Keep this contract when adding a routed method: add a test that injects a native failure
   (see `tests/test_native_api_conservatism.py`) and a test that the result equals the python-mode result.
 

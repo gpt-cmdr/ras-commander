@@ -27,6 +27,20 @@ from ras_commander.hdf.HdfFluvialPluvial import (  # noqa: E402
 )
 
 FIXTURES = Path(os.environ.get("RAS_FLUVIAL_PUBLIC_FIXTURES", "missing"))
+
+
+@pytest.fixture(scope="module", autouse=True)
+def _default_backend_policy():
+    """Pin RAS_COMMANDER_FAST_HDF=auto for this native-engine qualification module.
+
+    engine="auto" follows the backend policy (API re-audit P2-N3): it runs the
+    Python reference under ``0`` and raises FastHdfError instead of falling back
+    under ``required``. These tests qualify native/auto parity under the default
+    policy; tests/test_fluvial_engine_policy.py covers the other policies.
+    """
+    with pytest.MonkeyPatch.context() as patch:
+        patch.setenv("RAS_COMMANDER_FAST_HDF", "auto")
+        yield
 PRESENTATIONS = ["original", "rows_reversed", "rows_shuffled", "rings_reversed", "rings_rotated"]
 
 

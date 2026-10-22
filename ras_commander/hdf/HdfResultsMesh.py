@@ -111,7 +111,9 @@ from ..Decorators import log_call, standardize_input
 from ..LoggingConfig import get_logger
 from .. import fast_results
 from ..fast_hdf import (
+    FastHdfError,
     mesh_series_domain,
+    native_required,
     read_attr,
     read_attrs,
     read_dataset,
@@ -2683,12 +2685,15 @@ class HdfResultsMesh:
         filtering occurs after qualification. Cell centers are numeric coordinate
         pairs; face-point indexes are integer pairs. Time-only series have no domain.
 
-        With the native engine, the domain of a canonical Base Output series comes
-        from ``fast_hdf.mesh_series_domain`` (engine ``stored_location`` or
-        ``legacy_exact_name`` rule, the same rule as below). When the engine does
-        not qualify a domain, or in python mode, the stored ``Location`` is read
-        through ``fast_hdf.read_attr`` and the rule below decides, so refusals keep
-        their exact ``ValueError``. Geometry checks always run.
+        The stored ``Location`` rule below (main's rule, read through
+        ``fast_hdf.read_attr``) decides the domain in every mode, so an invalid
+        or contradictory ``Location`` is refused with the same ``ValueError``
+        whether or not the native engine is installed. With the native engine,
+        the engine's typed domain of a canonical Base Output series
+        (``fast_hdf.mesh_series_domain``) is a cross-check only: when it
+        qualifies a cell/face domain that differs from the rule's, auto mode keeps
+        the rule's answer and required mode raises ``FastHdfError``. Geometry
+        checks always run.
         """
         if not isinstance(dataset, h5py.Dataset) or dataset.ndim not in (1, 2) or dataset.dtype.kind not in "iuf":
             raise ValueError(f"Unsupported numeric time/element schema: {dataset.name}")
@@ -2699,12 +2704,7 @@ class HdfResultsMesh:
                 or time.dtype.kind not in "iuf" or dataset.shape[0] != len(time)):
             raise ValueError(f"Series rows differ from Base Output Time axis: {dataset.name}")
         native = HdfResultsMesh._native_series_domain(dataset)
-        if native is not None and native["id_dim"] in {"cell_id", "face_id"} and dataset.ndim == 2:
-            id_dim = native["id_dim"]
-        elif (native is not None and native["domain"] == "other" and dataset.ndim == 1
-                and "Location" not in dataset.attrs):
-            return "time"
-        elif "Location" in dataset.attrs:
+        if "Location" in dataset.attrs:
             location = np.asarray(read_attr(dataset, "Location"))
             if location.shape not in ((), (1,)):
                 raise ValueError(f"Location requires one stored text value: {dataset.name}")
@@ -2731,6 +2731,13 @@ class HdfResultsMesh:
                 "Legacy stable-core mesh series schema supplies %s for exact name '%s' at '%s'",
                 id_dim, name, dataset.name,
             )
+        if (native is not None and native.get("id_dim") in {"cell_id", "face_id"}
+                and native["id_dim"] != id_dim):
+            message = (f"Engine series domain {native['id_dim']!r} contradicts the stored "
+                       f"Location/legacy rule {id_dim!r}: {dataset.name}")
+            if native_required():
+                raise FastHdfError(message)
+            logger.debug("%s; using the stored rule", message)
         is_cell = id_dim == "cell_id"
         geometry_name = "Cells Center Coordinate" if is_cell else "Faces FacePoint Indexes"
         geometry = hdf_file.get(f"Geometry/2D Flow Areas/{mesh_name}/{geometry_name}")

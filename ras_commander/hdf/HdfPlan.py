@@ -42,7 +42,7 @@ from .HdfBase import HdfBase
 from .HdfUtils import HdfUtils
 from ..Decorators import standardize_input, log_call
 from ..LoggingConfig import setup_logging, get_logger
-from ..fast_hdf import read_attrs, read_typed, reraise_required
+from ..fast_hdf import read_attr, read_attrs, read_typed, reraise_required
 
 logger = get_logger(__name__)
 
@@ -158,7 +158,7 @@ class HdfPlan:
                 plan_info = hdf_file.get('Plan Data/Plan Information')
                 if plan_info is None:
                     raise ValueError("Plan Information not found in HDF file")
-                time_str = read_attrs(plan_info).get('Simulation End Time')
+                time_str = read_attr(plan_info, 'Simulation End Time', None)
                 return HdfUtils.parse_ras_datetime(time_str.decode('utf-8'))
         except Exception as e:
             reraise_required(e)
@@ -439,7 +439,7 @@ class HdfPlan:
         info_path = HdfPlan._PLAN_INFORMATION_PATH
         if info_path not in hdf_file:
             return None
-        program_version = read_attrs(hdf_file[info_path]).get("Program Version")
+        program_version = read_attr(hdf_file[info_path], "Program Version", None)
         if program_version is None:
             return None
         return str(HdfPlan._decode_hdf_attr_value(program_version))
@@ -780,7 +780,9 @@ class HdfPlan:
                 # Try to get starting WSE method from Plan Parameters
                 plan_params_path = HdfPlan._PLAN_PARAMETERS_PATH
                 if plan_params_path in hdf_file:
-                    plan_params = read_attrs(hdf_file[plan_params_path])
+                    # Membership through h5py, values one attribute at a time (as main).
+                    plan_params_group = hdf_file[plan_params_path]
+                    plan_params = plan_params_group.attrs
 
                     # Extract starting WSE method attributes
                     # Common attribute names (adjust based on actual HDF structure):
@@ -793,7 +795,7 @@ class HdfPlan:
 
                     for attr_name in method_attrs:
                         if attr_name in plan_params:
-                            value = plan_params[attr_name]
+                            value = read_attr(plan_params_group, attr_name)
                             if isinstance(value, bytes):
                                 value = HdfUtils.convert_ras_string(value)
                             result['method'] = value
@@ -808,7 +810,7 @@ class HdfPlan:
                         ]
                         for slope_attr in slope_attrs:
                             if slope_attr in plan_params:
-                                slope_value = plan_params[slope_attr]
+                                slope_value = read_attr(plan_params_group, slope_attr)
                                 if isinstance(slope_value, (np.number, float, int)):
                                     result['slope'] = float(slope_value)
                                     break
@@ -822,7 +824,7 @@ class HdfPlan:
                         ]
                         for wse_attr in wse_attrs:
                             if wse_attr in plan_params:
-                                wse_value = plan_params[wse_attr]
+                                wse_value = read_attr(plan_params_group, wse_attr)
                                 if isinstance(wse_value, (np.number, float, int)):
                                     result['wse'] = float(wse_value)
                                     break
@@ -831,10 +833,10 @@ class HdfPlan:
                 if 'method' not in result:
                     plan_info_path = HdfPlan._PLAN_INFORMATION_PATH
                     if plan_info_path in hdf_file:
-                        plan_info = read_attrs(hdf_file[plan_info_path])
+                        plan_info_group = hdf_file[plan_info_path]
                         for attr_name in ['Flow Regime', 'Simulation Type']:
-                            if attr_name in plan_info:
-                                value = plan_info[attr_name]
+                            if attr_name in plan_info_group.attrs:
+                                value = read_attr(plan_info_group, attr_name)
                                 if isinstance(value, bytes):
                                     value = HdfUtils.convert_ras_string(value)
                                 result['regime'] = value

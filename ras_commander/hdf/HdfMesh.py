@@ -1092,9 +1092,11 @@ class HdfMesh:
         exactly one polygon.
 
         ``backend="auto"`` falls back to the reference polygonizer on any
-        native failure. Explicit Rust or ``RAS_COMMANDER_FAST_HDF=required``
-        never falls back. Native geometric reason codes can be more specific
-        than reference polygonization codes.
+        native failure, and whenever the native records cannot be proven equal
+        to the reference's, so its rows, statuses, reason codes and warnings
+        are the reference ones. Explicit Rust or
+        ``RAS_COMMANDER_FAST_HDF=required`` never falls back; there native
+        reason codes can differ from reference polygonization codes.
         """
         polygons = HdfMesh.get_mesh_cell_polygons(hdf_path, strict=False, backend=backend)
         diagnostic_records = polygons.attrs.get("cell_polygon_diagnostics")

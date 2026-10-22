@@ -1,8 +1,17 @@
-"""Isolated, reviewable adapter; all graph/ring/region kernels execute in Rust.
+"""Internal: native fluvial/pluvial adapter behind ``HdfFluvialPluvial(engine=...)``.
 
+**Not public API.** Use ``HdfFluvialPluvial.calculate_fluvial_pluvial_boundary``
+and ``generate_fluvial_pluvial_polygons`` with ``engine="native"``/``"auto"``.
+``Analysis``, ``LABELS``, ``integer_milliseconds`` and the ``NATIVE_CALLS``
+counter (used by the qualification tests to prove that Rust ran) may change or
+disappear in any release; nothing here is exported (``__all__`` is empty).
+
+Isolated, reviewable adapter; all graph/ring/region kernels execute in Rust.
 HDF interpretation and CRS metadata use ras-commander. NativeAnalysis owns an
 immutable snapshot: construct a new one after source changes. Explicit wetness
 policy is required. No global file cache or Python per-cell polygonization.
+The extension is obtained through ``fast_hdf``'s availability and API-version
+check, so an incompatible ``ras_commander_fast_hdf`` raises ImportError here.
 """
 from collections import Counter
 from pathlib import Path
@@ -11,7 +20,13 @@ import time
 
 import numpy as np
 from ras_commander import HdfBase, HdfMesh, HdfResultsMesh, get_logger, log_call
-import ras_commander_fast_hdf as rust_fluvial
+from ras_commander import fast_hdf as _fast_hdf
+
+rust_fluvial, _failure, _import_exc = _fast_hdf._load_native()
+if rust_fluvial is None:
+    raise ImportError(_failure) from _import_exc
+
+__all__ = []
 
 logger = get_logger(__name__)
 LABELS = ("unclassified", "fluvial", "pluvial", "ambiguous", "invalid", "dry", "missing_time")

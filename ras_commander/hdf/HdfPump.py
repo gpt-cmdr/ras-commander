@@ -27,7 +27,7 @@ from .HdfUtils import HdfUtils
 from .HdfBase import HdfBase
 from ..Decorators import standardize_input, log_call
 from ..LoggingConfig import get_logger
-from ..fast_hdf import read_attrs, read_typed
+from ..fast_hdf import read_attr, read_typed
 
 gpd = optional_module("geopandas", "Returning GeoDataFrame results from HdfPump")
 xr = optional_module("xarray", "Returning xarray results from HdfPump")
@@ -267,7 +267,7 @@ class HdfPump:
 
             time, time_units = HdfPump._pump_block_time(hdf, data_path, data.shape)
 
-            variable_units = read_attrs(hdf[data_path]).get('Variable_Unit', None)
+            variable_units = read_attr(hdf[data_path], 'Variable_Unit', None)
             variable_names, unit_by_variable = HdfPump._pump_variable_columns(
                 variable_units,
                 data.shape[1],
@@ -388,7 +388,7 @@ class HdfPump:
 
             time, time_units = HdfPump._pump_block_time(hdf, data_path, data.shape)
 
-            variable_units = read_attrs(hdf[data_path]).get('Variable_Unit', None)
+            variable_units = read_attr(hdf[data_path], 'Variable_Unit', None)
             variable_names, unit_by_variable = HdfPump._pump_variable_columns(
                 variable_units,
                 data.shape[1],
@@ -425,7 +425,7 @@ class HdfPump:
                 )
             values = read_typed(dataset)
             if name == 'Time':
-                units = HdfPump._decode_hdf_text(read_attrs(dataset).get('Time', ''))
+                units = HdfPump._decode_hdf_text(read_attr(dataset, 'Time', ''))
                 if (values.dtype.kind != 'f' or units.lower() != 'days'
                         or not np.all(np.isfinite(values)) or np.any(np.diff(values) < 0)):
                     raise ValueError(f"Pump time axis '{path}' requires finite nondecreasing days")

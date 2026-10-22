@@ -35,6 +35,7 @@ from .HdfUtils import HdfUtils
 from ..Decorators import standardize_input, log_call
 from .HdfResultsMesh import HdfResultsMesh
 from ..LoggingConfig import get_logger
+from ..fast_hdf import reraise_required
 from pathlib import Path
 
 logger = get_logger(__name__)
@@ -54,6 +55,41 @@ class FluvialNativeUnsupportedError(ValueError):
 def _check_engine(engine):
     if engine not in _ENGINES:
         raise ValueError(f"engine must be one of {_ENGINES}, got {engine!r}")
+
+
+def _resolve_engine(engine):
+    """Map ``engine`` onto the ``RAS_COMMANDER_FAST_HDF`` backend policy.
+
+    Explicit ``"python"`` and ``"native"`` override the environment, as an
+    explicit ``backend="python"``/``"rust"`` does for the ``HdfMesh`` readers.
+    ``"auto"`` follows the environment exactly like ``backend="auto"``:
+    ``0``/``off``/``false``/``python`` -> ``"python"`` (the reference, no
+    native attempt); unset/``auto`` -> ``"auto"`` (native when it reproduces the
+    reference, else Python); ``required``/``rust`` -> ``"required"`` (native, or
+    :class:`~ras_commander.fast_hdf.FastHdfError`; never a silent fallback).
+    """
+    _check_engine(engine)
+    if engine != "auto":
+        return engine
+    from ..fast_hdf import _mode
+    mode = _mode("auto")
+    if mode == "python":
+        return "python"
+    if mode == "rust":
+        return "required"
+    return "auto"
+
+
+def _native_fallback(engine, effective, exc):
+    """Raise ``exc`` (or FastHdfError in required mode), or log the Python fallback."""
+    if effective == "native":
+        raise exc
+    if effective == "required":
+        from ..fast_hdf import FastHdfError
+        raise FastHdfError(
+            f"RAS_COMMANDER_FAST_HDF=required: engine={engine!r} could not use the native "
+            f"fluvial engine: {exc}") from exc
+    logger.info(f"engine='auto' selected the Python reference: {exc}")
 
 
 def _hours_to_ms(value, name):
@@ -76,6 +112,11 @@ def _native_snapshot(hdf_path, retain_faces):
     identities, as the Python reference keys them; the face graph never
     connects cells of different meshes.
     """
+    # Same availability and API-version gate (fast_hdf.API 11) as every other native read.
+    from .. import fast_hdf
+    module, failure, _ = fast_hdf._load_native()
+    if module is None:
+        raise FluvialNativeUnsupportedError(f"native fluvial extension unavailable: {failure}")
     try:
         from .HdfFluvialNative import Analysis
     except ImportError as exc:
@@ -122,6 +163,9 @@ def _native_snapshot(hdf_path, retain_faces):
             f"{len(invalid)} cell(s) have invalid source geometry, which the native engine "
             f"does not reproduce; e.g. vertices {[index for index, _ in invalid[:5]]}")
     return analysis
+
+
+_PYTHON_POLICY_REASON = "RAS_COMMANDER_FAST_HDF selects the Python backend"
 
 
 def _engine_attrs(frame, requested, used, reason=None):
@@ -214,22 +258,35 @@ class HdfFluvialPluvial:
                           the Python result, otherwise Python; recorded in
                           ``result.attrs["fluvial_engine"]``). Native output holds the same
                           lines, row order (sorted cell pairs) and CRS as the reference.
+                          Mapping onto ``RAS_COMMANDER_FAST_HDF`` and ``backend=``:
+                          ``engine="python"``/``"native"`` are explicit and ignore the
+                          environment (like ``backend="python"``/``"rust"``; note the
+                          spelling ``"native"``, not ``"rust"``). ``engine="auto"`` follows
+                          the environment like ``backend="auto"``: ``0``/``off``/``python``
+                          runs the Python reference without trying native; unset/``auto``
+                          tries native and falls back; ``required`` runs native or raises
+                          ``FastHdfError`` instead of falling back. Native is used only when
+                          ``fast_hdf.available()`` (a compatible extension) is true. With the
+                          default ``engine="python"``, ``required`` mode re-raises a routed
+                          read's ``FastHdfError`` instead of returning an empty result.
 
         Returns:
             gpd.GeoDataFrame: GeoDataFrame containing the fluvial-pluvial boundary lines.
         """
-        _check_engine(engine)
-        if engine != "python":
+        effective = _resolve_engine(engine)
+        if effective != "python":
             try:
                 result = HdfFluvialPluvial._native_boundary(hdf_path, delta_t, min_line_length)
                 return _engine_attrs(result, engine, "native")
             except FluvialNativeUnsupportedError as exc:
-                if engine == "native":
-                    raise
-                logger.info(f"engine='auto' selected the Python reference: {exc}")
+                _native_fallback(engine, effective, exc)
                 result = HdfFluvialPluvial.calculate_fluvial_pluvial_boundary(
                     hdf_path, delta_t, min_line_length, engine="python")
                 return _engine_attrs(result, engine, "python", str(exc))
+        if engine == "auto":
+            result = HdfFluvialPluvial.calculate_fluvial_pluvial_boundary(
+                hdf_path, delta_t, min_line_length, engine="python")
+            return _engine_attrs(result, engine, "python", _PYTHON_POLICY_REASON)
         stage = "data loading"
         try:
             logger.debug("Getting cell polygons from HDF file...")
@@ -280,6 +337,7 @@ class HdfFluvialPluvial:
             return boundary_gdf
 
         except Exception as e:
+            reraise_required(e)
             logger.error(
                 f"Error calculating fluvial-pluvial boundary lines for {hdf_path} "
                 f"(delta_t={delta_t} hr, min_line_length={min_line_length}, stage={stage}): {str(e)}",
@@ -368,6 +426,13 @@ class HdfFluvialPluvial:
                           swap keeps attributes that depend on union part order; polygon
                           removal is not a substitute). Native polygons are topologically
                           equal to Python's; part order inside a MultiPolygon may differ.
+                          ``engine`` maps onto ``RAS_COMMANDER_FAST_HDF`` exactly as in
+                          :meth:`calculate_fluvial_pluvial_boundary`: explicit ``"python"``/
+                          ``"native"`` ignore the environment; ``"auto"`` runs Python under
+                          ``0``/``python``, native-or-fallback under ``auto``, and
+                          native-or-``FastHdfError`` under ``required``. With the default
+                          ``engine="python"``, ``required`` mode re-raises a routed read's
+                          ``FastHdfError`` instead of returning an empty result.
 
         Returns:
             gpd.GeoDataFrame: A GeoDataFrame with dissolved polygons for 'fluvial', 'pluvial',
@@ -376,21 +441,25 @@ class HdfFluvialPluvial:
 
         Raises:
             Exception: Existing input/decorator validation errors are not suppressed.
+            FastHdfError: Only under ``RAS_COMMANDER_FAST_HDF=required`` (see ``engine``).
         """
-        _check_engine(engine)
-        if engine != "python":
+        effective = _resolve_engine(engine)
+        if effective != "python":
             try:
                 result = HdfFluvialPluvial._native_polygons(
                     hdf_path, delta_t, temporal_tolerance_hours, min_polygon_area_acres)
                 return _engine_attrs(result, engine, "native")
             except FluvialNativeUnsupportedError as exc:
-                if engine == "native":
-                    raise
-                logger.info(f"engine='auto' selected the Python reference: {exc}")
+                _native_fallback(engine, effective, exc)
                 result = HdfFluvialPluvial.generate_fluvial_pluvial_polygons(
                     hdf_path, delta_t, temporal_tolerance_hours, min_polygon_area_acres,
                     engine="python")
                 return _engine_attrs(result, engine, "python", str(exc))
+        if engine == "auto":
+            result = HdfFluvialPluvial.generate_fluvial_pluvial_polygons(
+                hdf_path, delta_t, temporal_tolerance_hours, min_polygon_area_acres,
+                engine="python")
+            return _engine_attrs(result, engine, "python", _PYTHON_POLICY_REASON)
         stage = "data loading"
         try:
             # --- 1. Data Loading and Preparation ---
@@ -516,6 +585,7 @@ class HdfFluvialPluvial:
             return final_regions_gdf
             
         except Exception as e:
+            reraise_required(e)
             logger.error(
                 f"Error generating fluvial-pluvial polygons for {hdf_path} "
                 f"(delta_t={delta_t} hr, tolerance={temporal_tolerance_hours} hr, "

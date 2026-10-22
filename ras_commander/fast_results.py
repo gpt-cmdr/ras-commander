@@ -45,10 +45,11 @@ from .fast_hdf import FastHdfError, _mode, _native, _safe_file, _threads
 
 logger = get_logger(__name__)
 
-__all__ = [
-    "TemporalReduction", "temporal_reduce", "native_temporal_reduce", "peak_times_ms",
-    "cross_plan_maximum",
-]
+# Internal module: no supported public names (see docs/api/hdf.md,
+# "Public and internal"). TemporalReduction, temporal_reduce,
+# native_temporal_reduce, peak_times_ms and cross_plan_maximum stay importable
+# for HdfResultsMesh and the qualification suites but may change in any release.
+__all__ = []
 
 # Matches the reference route's 16 MiB read bound (HdfResultsMesh).
 _DEFAULT_BLOCK_BYTES = 16 * 1024 * 1024

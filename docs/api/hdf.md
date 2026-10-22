@@ -174,14 +174,16 @@ editing geometry text.
 - `diagnose_mesh_layout(hdf_path, program_version=None)` - Report version
   evidence, detected layout, dataset paths, and per-capability status for area
   names, perimeters, cell centers, face topology, and cell polygons
-- `get_mesh_cell_polygons(hdf_path, strict=False)` - Get cell polygons as a
-  GeoDataFrame; warnings and the equality-safe tuple of record dictionaries in
-  `result.attrs["cell_polygon_diagnostics"]` expose physical cells that were
-  omitted or ambiguously polygonized. Use `diagnose_mesh_cell_polygons()` when
-  a DataFrame is preferred.
-- `diagnose_mesh_cell_polygons(hdf_path)` - Report native cell IDs, face IDs,
-  polygon counts, and reason codes for physical-cell reconstruction problems
-  and expected boundary-only records
+- `get_mesh_cell_polygons(hdf_path, *, strict=False, backend="auto", threads=None)` -
+  Get cell polygons as a GeoDataFrame; warnings and the equality-safe tuple of
+  record dictionaries in `result.attrs["cell_polygon_diagnostics"]` expose
+  physical cells that were omitted or ambiguously polygonized. Use
+  `diagnose_mesh_cell_polygons()` when a DataFrame is preferred. `backend`
+  (`"auto"`, `"python"`, `"rust"`) and `threads` select and bound the optional
+  native polygonizer; see [Optional Rust acceleration](#optional-rust-acceleration).
+- `diagnose_mesh_cell_polygons(hdf_path, *, backend="auto")` - Report native
+  cell IDs, face IDs, polygon counts, and reason codes for physical-cell
+  reconstruction problems and expected boundary-only records
 - `get_mesh_cell_faces(hdf_path)` - Get cell face lines
 - `get_mesh_cell_points(hdf_path)` - Get cell center points
 - `find_nearest_cell(point, cell_points_gdf, mesh_name=None)` - Find nearest cell ID and distance using previously read cell centers
@@ -599,7 +601,30 @@ the Python engine. Both opt-in engines record the engine that produced the resul
 in `result.attrs["fluvial_engine"]`. With `"native"` and `"auto"`, errors other
 than `FluvialNativeUnsupportedError` (invalid data, native failures) propagate
 instead of becoming an empty result. `FluvialNativeUnsupportedError` is defined
-in `ras_commander.hdf.HdfFluvialPluvial`.
+in the module `ras_commander.hdf.HdfFluvialPluvial` (import it with
+`from ras_commander.hdf.HdfFluvialPluvial import FluvialNativeUnsupportedError`).
+
+How `engine` maps onto `RAS_COMMANDER_FAST_HDF` and the `backend=` keyword of
+`HdfMesh`/`fast_hdf`:
+
+| `engine` | `RAS_COMMANDER_FAST_HDF` | Behaviour | `backend=` equivalent |
+|----------|--------------------------|-----------|-----------------------|
+| `"python"` (default) | any | Python reference. Under `required`, a `FastHdfError` from a routed read is raised instead of returning an empty result. | `"python"` for the algorithm; nested reads follow the environment |
+| `"native"` | any (ignored) | Native, or `FluvialNativeUnsupportedError`; never falls back. | `"rust"` |
+| `"auto"` | `0`/`off`/`false`/`python` | Python reference; native is not attempted (`attrs["fluvial_engine"]["used"] == "python"`). | `"auto"` |
+| `"auto"` | unset/`auto` | Native when it reproduces the reference, otherwise Python. | `"auto"` |
+| `"auto"` | `required`/`rust` | Native, or `FastHdfError` (never a silent fallback). | `"auto"` |
+
+The native engine is used only when `fast_hdf.available()` is true (the same
+extension availability and API-version check as every other native read).
+
+Naming: the fluvial selector is `engine=` with values `"python"`, `"native"`
+and `"auto"` and default `"python"`; the `HdfMesh`/`fast_hdf` selector is
+`backend=` with `"python"`, `"rust"` and `"auto"` and default `"auto"`.
+`engine="native"` corresponds to `backend="rust"`; `"rust"` is not accepted by
+`engine=` and `"native"` is not accepted by `backend=`. The fluvial default
+stays `"python"` because the native engine does not reproduce every input
+(for example `min_polygon_area_acres`, unprojected CRSs, `delta_t=0`).
 
 ### HdfInfiltration
 
@@ -766,8 +791,14 @@ when a source cell has no polygon. Tile feature identifiers are independently
 unique across meshes.
 
 `HdfMesh.get_mesh_cell_polygons(strict=True)` retains its diagnostic behavior.
-Automatic mode uses the Python polygonizer for unsupported layouts, including
-two-face diagnostic records; required Rust mode reports these cases explicitly.
+Automatic mode returns the native result only when its diagnostic records,
+warnings and strict-mode outcome are provably the Python polygonizer's: native
+`boundary_only` records for one- and two-face cells, `zero_faces` records, and
+`no_polygon` records for cells that the reference polygonizer also cannot
+close. Any other case (an ambiguous or multi-polygon cell, an unassembled cell
+that the reference would return, an invalid face span or face reference, an
+unsupported layout) uses the Python polygonizer. Required Rust mode reports
+unsupported cases explicitly and keeps the native records.
 Use `threads` to bound native parallelism when calling from other worker pools.
 
 The native engine refuses any single numeric read over 2 GiB before allocating,
@@ -830,13 +861,20 @@ by the qualification tests.
 
 **Public and internal.** `ras_commander.fast_hdf` is optional infrastructure.
 Its supported names are `available`, `close_sessions`, `FastHdfError`,
-`mesh_polygons`, `packed_meshes` and the `export_*` functions (`__all__`).
-Everything else in `fast_hdf`, `fast_results` and `_fast_hdf_typed`
-(`read_typed`, `read_attrs`, `read_attr`, `read_dataset`, `read_datasets`,
-`mesh_series_domain`, `trace_reads`, `native_required`, `reraise_required`,
-the temporal-reduction helpers) is internal adapter code for the `Hdf*`
-classes and the test suites. It is importable but may change in any release;
-use the `Hdf*` methods instead.
+`FastHdfPanicError` (a `FastHdfError` subclass for a panic inside the native
+extension), `mesh_polygons`, `packed_meshes` and the `export_*` functions
+(`__all__`; see the [fast_hdf source reference](#fast_hdf-source-reference)).
+Everything else in `fast_hdf`, `fast_results`, `_fast_hdf_typed` and
+`hdf/HdfFluvialNative` is internal adapter code for the `Hdf*` classes and the
+test suites: `read_typed`, `read_attrs`, `read_attr`, `read_dataset`,
+`read_datasets`, `mesh_series_domain`, `trace_reads`, `native_required`,
+`reraise_required`, `backend_scope` (applies an explicit `backend` to nested
+reads of one call), `release_native_sessions` (used by writers before they
+replace an HDF; call `close_sessions(path)` instead), the temporal-reduction
+helpers of `fast_results` (whose `__all__` is empty), and the native fluvial
+adapter `HdfFluvialNative` (`Analysis`, `LABELS`, `integer_milliseconds` and
+its `NATIVE_CALLS` counter; use `HdfFluvialPluvial(engine=...)`). These are
+importable but may change in any release; use the `Hdf*` methods instead.
 
 ### Routed HDF reads and backend modes
 
@@ -1443,6 +1481,27 @@ prerequisites and return contracts take precedence over abbreviated summaries.
         - plot_results_max_wsel
         - plot_results_max_wsel_time
         - plot_results_mesh_variable
+
+### fast_hdf source reference
+
+The supported names of the optional native backend (`ras_commander.fast_hdf.__all__`).
+
+::: ras_commander.fast_hdf
+    options:
+      show_root_heading: false
+      heading_level: 3
+      show_source: false
+      members:
+        - FastHdfError
+        - FastHdfPanicError
+        - available
+        - close_sessions
+        - packed_meshes
+        - mesh_polygons
+        - export_pmtiles
+        - export_mesh_pmtiles
+        - export_arrow
+        - export_arrow_pmtiles
 
 ### HdfFluvialPluvial source reference
 

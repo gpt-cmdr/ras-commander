@@ -9,6 +9,38 @@ alone does not identify a development checkout.
 
 ### Unreleased
 
+**Optional native (Rust) HDF backend (additive; default results unchanged)**
+
+`ras_commander.fast_hdf` adds an optional native backend for HDF reads, mesh
+polygon assembly and direct PMTiles/Arrow export. It is used only when the
+separately built `ras-commander-fast-hdf` extension (API version 11) is
+installed; ordinary installations are unaffected. In the default automatic
+mode every public `Hdf*` result, dtype, column, attribute and exception is
+the h5py result: any native failure falls back to h5py.
+
+- Environment: `RAS_COMMANDER_FAST_HDF` (`0`/`python` disables native reads,
+  `auto` is the default, `required` raises `FastHdfError` instead of falling
+  back), `RAS_COMMANDER_HDF_SESSION_CACHE` (native file sessions; none stays
+  open after a public call returns unless set to `persist`) and
+  `RAS_COMMANDER_FAST_TEXT` (only for direct `fast_text` callers).
+- Supported `fast_hdf` names: `available`, `close_sessions`, `FastHdfError`,
+  `FastHdfPanicError`, `mesh_polygons`, `packed_meshes`, `export_pmtiles`,
+  `export_mesh_pmtiles`, `export_arrow` and `export_arrow_pmtiles`. Other
+  `fast_hdf`/`fast_results` names and `hdf/HdfFluvialNative` are internal.
+- New keyword-only parameters: `HdfMesh.get_mesh_cell_polygons(..., backend="auto",
+  threads=None)` and `HdfMesh.diagnose_mesh_cell_polygons(..., backend="auto")`;
+  `HdfFluvialPluvial.calculate_fluvial_pluvial_boundary(..., engine="python")`
+  and `generate_fluvial_pluvial_polygons(..., engine="python")`, with
+  `FluvialNativeUnsupportedError` (a `ValueError`, in
+  `ras_commander.hdf.HdfFluvialPluvial`) for inputs the native engine cannot
+  reproduce. `engine="auto"` follows `RAS_COMMANDER_FAST_HDF`; the defaults
+  keep the existing code paths.
+- New `HdfUtils` helpers: `get_units_system`, `linear_unit_to_meters`,
+  `area_to_square_meters`, `get_stored_ras_version` and
+  `parse_ras_file_version`.
+
+See [Optional Rust acceleration](../api/hdf.md#optional-rust-acceleration).
+
 **Compute-message classification rejects observed early termination**
 
 `ResultsParser` classifies `Unsteady Flow Simulation Terminated` and the

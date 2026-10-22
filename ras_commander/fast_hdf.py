@@ -9,12 +9,13 @@ mode. h5py behaviour is the public contract: in auto mode any native failure
 the h5py outcome; ``required`` raises :class:`FastHdfError` instead.
 
 Public surface: ``__all__`` lists the supported names (``available``,
-``close_sessions``, ``FastHdfError``, ``mesh_polygons``, ``packed_meshes`` and
-the ``export_*`` functions). Everything else here, in particular
-``read_typed``/``read_attrs``/``read_attr``/``read_dataset(s)``,
-``mesh_series_domain``, ``trace_reads``, ``native_required`` and
-``reraise_required``, is internal adapter plumbing for the ``Hdf*`` classes and
-the qualification suites; it may change without notice.
+``close_sessions``, ``FastHdfError``, ``FastHdfPanicError``, ``mesh_polygons``,
+``packed_meshes`` and the ``export_*`` functions). Everything else here, in
+particular ``read_typed``/``read_attrs``/``read_attr``/``read_dataset(s)``,
+``mesh_series_domain``, ``trace_reads``, ``native_required``,
+``reraise_required``, ``backend_scope`` and ``release_native_sessions`` (use
+``close_sessions(path)``), is internal adapter plumbing for the ``Hdf*``
+classes and the qualification suites; it may change without notice.
 
 Environment: ``RAS_COMMANDER_FAST_HDF`` (backend policy; an unrecognised value
 is ``auto`` with one logged warning) and ``RAS_COMMANDER_HDF_SESSION_CACHE``
@@ -818,7 +819,43 @@ _MESH_ARRAYS = (
 )
 
 
-def _assemble(hdf, mesh_name, module, backend, threads, *, diagnostics=False, strict=True):
+def _reference_missing_cell(args, start, length, invalid):
+    """The Python reference's record kind for a cell native did not assemble.
+
+    ``"boundary_only"``, ``"zero_faces"`` or ``"no_polygon"`` when the
+    reference provably produces that record (and no polygon) for the cell;
+    ``None`` when it would not (it would report another reason or return a
+    polygon), so the native diagnostics cannot be returned in auto mode.
+    """
+    from shapely.geometry import LineString
+    from shapely.ops import polygonize
+    points, face_points, perimeter_info, perimeter_values, _, values = args
+    if start < 0 or length < 0 or start + length > len(values):
+        return None
+    if length == 0:
+        return None if invalid else "zero_faces"
+    face_ids = [int(face) for face in values[start:start + length, 0]]
+    if any(not 0 <= face < len(face_points) for face in face_ids):
+        return None
+    if length < 3:
+        return None if invalid else "boundary_only"
+    lines = []
+    for face in face_ids:
+        a, b = map(int, face_points[face, :2])
+        offset, count = map(int, perimeter_info[face, :2])
+        if not (0 <= a < len(points) and 0 <= b < len(points)) or (
+                count > 0 and (offset < 0 or offset + count > len(perimeter_values))):
+            return None
+        coords = [points[a]]
+        if count > 0:
+            coords.extend(perimeter_values[offset:offset + count])
+        coords.append(points[b])
+        lines.append(LineString(coords))
+    return "no_polygon" if not list(polygonize(lines)) else None
+
+
+def _assemble(hdf, mesh_name, module, backend, threads, *, diagnostics=False, strict=True,
+              reference_diagnostics=False):
     paths = [f"Geometry/2D Flow Areas/{mesh_name}/{name}" for name in _MESH_ARRAYS]
     arrays = read_datasets(hdf, paths, backend=backend, threads=threads)
     args = []
@@ -853,13 +890,40 @@ def _assemble(hdf, mesh_name, module, backend, threads, *, diagnostics=False, st
         invalid = {int(d["cell_id"]): (d["kind"], d["message"]) for d in invalid}
         missing = np.ones(len(args[4]), dtype=bool)
         missing[cell_ids] = False
+        # ``reference_diagnostics`` (auto mode) proves every record equal to the
+        # Python reference's, or marks the result not provable so that auto
+        # mode uses the Python polygonizer (see _native_mesh_polygons):
+        # - an assembled cell with fewer than three faces is never a polygon in
+        #   the reference: not provable;
+        # - a missing one- or two-face cell is the reference's boundary_only /
+        #   insufficient_faces record, and a missing zero-face cell its omitted /
+        #   zero_faces record, when the face span and face IDs are in range (so
+        #   the reference finds no invalid_face_span/missing_face_reference);
+        # - a missing cell with three or more faces is polygonized exactly as
+        #   the reference does (faces rebuilt as get_mesh_cell_faces builds
+        #   them, shapely.ops.polygonize): no polygon gives the reference's
+        #   omitted/no_polygon record; one or more polygons (a cell the
+        #   reference returns, possibly ambiguous/multiple_polygons) is not
+        #   provable. A valid assembled ring uses every face of its cell once,
+        #   so the reference polygonizes it as exactly one polygon.
+        provable = True
+        if reference_diagnostics:
+            lengths = np.asarray(args[4][:, 1], dtype=np.int64)
+            provable = not bool((lengths[np.asarray(cell_ids, dtype=np.int64)] < 3).any())
         for cell_id in np.flatnonzero(missing):
             start, length = map(int, args[4][cell_id, :2])
+            reference_omitted = False
+            if reference_diagnostics and provable:
+                verdict = _reference_missing_cell(args, start, length, cell_id in invalid)
+                if verdict is None:
+                    provable = False
+                reference_omitted = verdict == "no_polygon"
             records.append({
                 "mesh_name": mesh_name, "cell_id": int(cell_id),
                 "face_count": length, "polygon_count": 0,
-                "status": "omitted" if cell_id in invalid or length == 0 else "boundary_only",
-                "reason_code": "no_polygon" if cell_id in invalid else (
+                "status": "omitted" if (cell_id in invalid or length == 0
+                                        or reference_omitted) else "boundary_only",
+                "reason_code": "no_polygon" if (cell_id in invalid or reference_omitted) else (
                     "zero_faces" if length == 0 else "insufficient_faces"),
                 "face_ids": tuple(map(int, args[5][start:start + length, 0])),
                 "missing_face_ids": (),
@@ -870,6 +934,7 @@ def _assemble(hdf, mesh_name, module, backend, threads, *, diagnostics=False, st
                 logger.debug("Native mesh %r cell %d omitted (%s): %s", mesh_name,
                              int(cell_id), invalid[cell_id][0], invalid[cell_id][1])
         result["diagnostics"] = records
+        result["diagnostics_provable"] = provable
     return result
 
 
@@ -938,7 +1003,8 @@ def _native_mesh_polygons(module, mode, hdf_path, backend, threads, strict):
                 if not all(f"Geometry/2D Flow Areas/{name}/{key}" in hdf for key in _MESH_ARRAYS):
                     raise module.UnsupportedError("Incomplete native mesh layout")
                 packed = _assemble(hdf, name, module, backend, threads,
-                                   diagnostics=strict is not None, strict=strict is not False)
+                                   diagnostics=strict is not None, strict=strict is not False,
+                                   reference_diagnostics=mode == "auto")
             except Exception as exc:
                 if (mode == "auto" and _unsupported(module, exc)
                         and not hasattr(exc, "mesh_structure_error")):
@@ -950,6 +1016,12 @@ def _native_mesh_polygons(module, mode, hdf_path, backend, threads, strict):
                 if isinstance(exc, FastHdfError):
                     raise
                 raise FastHdfError(f"Native polygon assembly failed for {name}: {exc}") from exc
+            if mode == "auto" and not packed.get("diagnostics_provable", True):
+                # Auto mode must return the reference diagnostics, status labels
+                # and warnings exactly (main's behaviour); use the Python polygonizer.
+                logger.debug("Python polygon diagnostics for %s/%s: native records are "
+                             "not proven equal to the reference", hdf_path, name)
+                return None
             count = len(packed["cell_ids"])
             diagnostics.extend(packed.get("diagnostics", ()))
             if count:
@@ -989,7 +1061,9 @@ def _native_mesh_polygons(module, mode, hdf_path, backend, threads, strict):
                 if strict:
                     from .hdf.HdfMesh import MeshCellPolygonError
                     raise MeshCellPolygonError(message)
-                logger.warning(message)
+                # The reference's warning, from the reference's logger.
+                from .hdf.HdfMesh import logger as mesh_logger
+                mesh_logger.warning(message)
         return result
 
 
