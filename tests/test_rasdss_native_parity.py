@@ -127,6 +127,19 @@ def java(corpus):
     for name, (folder, pickle_path, _count) in corpus["boundaries"].items():
         requests.append({"op": "boundaries", "project_dir": folder,
                          "boundaries_pickle": pickle_path, "name": name})
+    # A whole-read "No data" disagreement is accepted only if an actual
+    # Java window read independently matches the native values and clock.
+    for req in requests:
+        if req["op"] != "ts":
+            continue
+        try:
+            with dc.open(req["dss_file"]) as handle:
+                frame = handle.read_timeseries(req["pathname"])
+            bounds = _backend.verification_window(frame)
+            if bounds is not None:
+                req["verification_start"], req["verification_end"] = bounds
+        except (ValueError, RuntimeError):
+            pass  # Expected missing/unsupported datasets retain their oracle error.
     req_path = corpus["root"] / "java_requests.json"
     out_path = corpus["root"] / "java_results.pkl"
     req_path.write_text(json.dumps(requests), encoding="utf-8")
@@ -173,7 +186,10 @@ def _classify(pathname, java_entry, native_call):
         # to classification; anything else becomes RuntimeError.
         name, message = java_entry["error"]
         java_exc = {"TypeError": TypeError, "ValueError": ValueError}.get(name, RuntimeError)(message)
-    return _backend.classify_timeseries(pathname, java_df, java_exc, native_df, native_exc)
+    return _backend.classify_timeseries(
+        pathname, java_df, java_exc, native_df, native_exc,
+        java_window_df=java_entry.get("java_window"),
+    )
 
 
 def test_get_catalog_parity(corpus, java, native):

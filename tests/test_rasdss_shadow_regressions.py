@@ -74,3 +74,21 @@ def test_unrelated_java_errors_are_not_hidden_for_special_pathnames(pathname, ye
         native.index = pd.date_range("3000-01-01", periods=3, freq="h", unit="s")
     assert _backend.classify_timeseries(pathname, None, TypeError("wrapper regression"),
                                        native, None)[0] == "unexpected"
+
+
+def test_no_data_requires_exact_independent_java_window_evidence():
+    native = frame()
+    path = "/A/B/FLOW//1HOUR/F/"
+    error = ValueError(f"No data found for pathname: {path}")
+    assert _backend.classify_timeseries(path, None, error, native, None,
+                                       java_window_df=native.copy())[0] == "expected"
+    changed = native.copy()
+    changed.iloc[1, 0] += 1
+    assert _backend.classify_timeseries(path, None, error, native, None,
+                                       java_window_df=changed)[0] == "unexpected"
+    shifted = native.copy()
+    shifted.index += pd.Timedelta(days=1)
+    assert _backend.classify_timeseries(path, None, error, native, None,
+                                       java_window_df=shifted)[0] == "unexpected"
+    assert _backend.classify_timeseries(path, None, TypeError("wrapper error"), native, None,
+                                       java_window_df=native.copy())[0] == "unexpected"

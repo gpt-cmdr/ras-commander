@@ -74,7 +74,18 @@ def main():
         try:
             results.append({"result": run(req)})
         except Exception as exc:  # noqa: BLE001
-            results.append({"error": (type(exc).__name__, str(exc)[:300])})
+            entry = {"error": (type(exc).__name__, str(exc)[:300])}
+            if (req["op"] == "ts" and isinstance(exc, ValueError)
+                    and str(exc) == f"No data found for pathname: {req['pathname']}"
+                    and "verification_start" in req):
+                try:
+                    entry["java_window"] = RasDss._read_timeseries_java(
+                        req["dss_file"], req["pathname"],
+                        start_date=req["verification_start"], end_date=req["verification_end"],
+                    )
+                except Exception as window_exc:
+                    entry["java_window_error"] = str(window_exc)
+            results.append(entry)
     with open(out_path, "wb") as fh:
         pickle.dump(results, fh)
 

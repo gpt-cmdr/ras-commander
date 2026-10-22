@@ -402,3 +402,32 @@ def test_historical_java_errors_stay_visible_but_whitespace_is_expected(muncie_d
         pathname, None, TypeError("NaT"), native_df, None
     )
     assert (outcome, label) == ("unexpected", "native data, Java error")
+
+
+@pytest.mark.parametrize("window_result", ["match", "changed", "error"])
+def test_shadow_verifies_java_window_after_whole_read_failure(
+    shadow, monkeypatch, muncie_dss, window_result
+):
+    pathname = muncie_dss["ts"][0]
+    reference = _native_frame(muncie_dss["file"], pathname)
+    calls = []
+
+    def java_whole_or_window(dss_file, path, **kwargs):
+        calls.append(kwargs)
+        if not kwargs:
+            raise ValueError(f"No data found for pathname: {path}")
+        if window_result == "error":
+            raise RuntimeError("window read failed")
+        result = reference.copy()
+        result.attrs = dict(reference.attrs)
+        if window_result == "changed":
+            result.iloc[0, 0] += 1
+        return result
+
+    monkeypatch.setattr(RasDss, "_read_timeseries_java", staticmethod(java_whole_or_window))
+    actual = RasDss.read_timeseries(muncie_dss["file"], pathname)
+    pd.testing.assert_frame_equal(actual, reference)
+    assert len(calls) == 2 and set(calls[1]) == {"start_date", "end_date"}
+    record = list(_backend.SHADOW_RECORDS)[-1]
+    assert record["java_window_verified"] == (window_result == "match")
+    assert record["outcome"] == ("expected" if window_result == "match" else "unexpected")

@@ -335,6 +335,19 @@ def cut_window(
     return out
 
 
+def verification_window(frame: Optional[pd.DataFrame]):
+    """Minute-aligned native span suitable for an independent Java window read."""
+    if frame is None or frame.empty or not isinstance(frame.index, pd.DatetimeIndex):
+        return None
+    index = frame.index
+    if index.hasnans or not index.is_unique or not index.is_monotonic_increasing:
+        return None
+    first, last = index[0], index[-1]
+    if any((stamp.second or stamp.microsecond or stamp.nanosecond) for stamp in (first, last)):
+        return None
+    return first.strftime("%d%b%Y %H%M"), last.strftime("%d%b%Y %H%M")
+
+
 def java_unavailable(exc: Optional[BaseException]) -> bool:
     """True when the Java path could not run at all (no pyjnius, Java or Monolith)."""
     if exc is None:
@@ -358,6 +371,8 @@ def classify_timeseries(
     java_exc: Optional[BaseException],
     native_df: Optional[pd.DataFrame],
     native_exc: Optional[BaseException],
+    *,
+    java_window_df: Optional[pd.DataFrame] = None,
 ) -> Tuple[str, str, List[str]]:
     """Classify one ``read_timeseries`` comparison.
 
@@ -400,6 +415,11 @@ def classify_timeseries(
         stamps = native_df.index
         known_no_data = (isinstance(java_exc, ValueError) and
                          str(java_exc) == f"No data found for pathname: {pathname}")
+        if known_no_data and java_window_df is not None:
+            diffs = compare_frames(java_window_df, native_df)
+            if not diffs:
+                return "expected", "D3 Java whole read misses data; window verified", []
+            return "unexpected", "Java window differs after whole-read failure", diffs
         parts = pathname.split("/")
         if (known_no_data and len(parts) == 8 and parts[4] == "TS-PATTERN"
                 and len(stamps) and stamps[0].year == 3000):

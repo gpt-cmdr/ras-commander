@@ -483,10 +483,26 @@ class RasDss:
                     java_df, java_exc = None, ValueError(
                         f"No data found for pathname: {pathname}"
                     )
+            java_window_df, java_window_error = None, None
+            bounds = _backend.verification_window(native_df)
+            if (java_df is None and bounds is not None
+                    and isinstance(java_exc, ValueError)
+                    and str(java_exc) == f"No data found for pathname: {pathname}"):
+                try:
+                    java_window_df = RasDss._read_timeseries_java(
+                        dss_file, pathname, start_date=bounds[0], end_date=bounds[1]
+                    )
+                except Exception as exc:
+                    java_window_error = f"{type(exc).__name__}: {exc}"
             outcome, label, diffs = _backend.classify_timeseries(
-                pathname, java_df, java_exc, native_df, native_exc
+                pathname, java_df, java_exc, native_df, native_exc,
+                java_window_df=java_window_df,
             )
-            detail = {"windowed": windowed}
+            java_s = time.perf_counter() - t1
+            detail = {"windowed": windowed,
+                      "java_window_verified": java_window_df is not None and outcome == "expected"
+                      and label.startswith("D3 "),
+                      "java_window_error": java_window_error}
             if native_df is not None:
                 detail["values"] = len(native_df)
             if java_df is not None:
@@ -510,8 +526,13 @@ class RasDss:
     def _read_timeseries_java(
         dss_file: Union[str, Path],
         pathname: str,
+        *,
+        start_date: Optional[str] = None,
+        end_date: Optional[str] = None,
     ) -> pd.DataFrame:
-        """Time series through HEC Monolith (pyjnius); always the whole dataset."""
+        """Whole Java dataset, or an explicit private shadow-verification window."""
+        if (start_date is None) != (end_date is None):
+            raise ValueError("Java verification requires both window bounds")
         # Configure JVM (must be before first jnius import)
         RasDss._configure_jvm()
 
@@ -532,7 +553,8 @@ class RasDss:
             dss = HecDss.open(dss_file)
             # Read time series
             # True = ignore D-part (date) for wildcards
-            container = dss.get(pathname, True)
+            container = (dss.get(pathname, start_date, end_date)
+                         if start_date is not None else dss.get(pathname, True))
 
             if container is None:
                 raise ValueError(f"No data found for pathname: {pathname}")

@@ -197,6 +197,11 @@ D4).
 Base-date shifts, sub-minute clock or interval differences, and Java errors with
 native data are unexpected differences. An exception alone does not establish an
 all-missing first block. Historical J1/J2 allowances no longer suppress them.
+For the exact Java no-data error, shadow may verify a minute-aligned native
+span using Monolith's actual windowed read. Only exact values, missing positions,
+timestamps, dtypes and attributes establish the expected D3 whole-read defect.
+A failed or differing window remains unexpected. This verifies the returned
+span; it does not independently prove whole-dataset completeness.
 The remaining J2b tail allowance requires exactly matching values and timestamps
 through Java's final whole-minute stamp, equal metadata, and less than a minute
 of additional native data. Investigate all other truncations.
