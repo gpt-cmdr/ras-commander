@@ -167,9 +167,12 @@ def _classify(pathname, java_entry, native_call):
     except Exception as exc:  # noqa: BLE001
         native_exc = exc
     java_df = java_entry.get("result")
-    java_exc = TypeError(java_entry["error"][1]) if "error" in java_entry else None
-    if java_exc is not None and java_entry["error"][0] != "TypeError":
-        java_exc = RuntimeError(java_entry["error"][1])
+    java_exc = None
+    if "error" in java_entry:
+        # Rebuild the worker's exception with its original class where it matters
+        # to classification; anything else becomes RuntimeError.
+        name, message = java_entry["error"]
+        java_exc = {"TypeError": TypeError, "ValueError": ValueError}.get(name, RuntimeError)(message)
     return _backend.classify_timeseries(pathname, java_df, java_exc, native_df, native_exc)
 
 

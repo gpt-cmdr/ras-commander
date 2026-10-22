@@ -408,7 +408,12 @@ def classify_timeseries(
             return "expected", "D5 pattern record (Java cannot read)", []
         if not _is_ascii(pathname):
             return "expected", "D7 Latin-1 pathname (Java cannot address)", []
-        if isinstance(java_exc, TypeError):
+        # Monolith returns an empty container when its whole-dataset range lookup
+        # gives up (first block all missing). Older RasDss raised an accidental
+        # TypeError there; it now raises ValueError("No data found ...").
+        if isinstance(java_exc, TypeError) or (
+            isinstance(java_exc, ValueError) and "No data found" in str(java_exc)
+        ):
             return "expected", "D3 Java misses data (first block all missing)", []
         return "unexpected", "native data, Java error", []
 
