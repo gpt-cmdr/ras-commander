@@ -31,9 +31,12 @@ class HdfCompletion:
         unsupported, never successful. Pure steady results are not applicable.
 
         No output-cadence allowance is applied: an output ending before the
-        declared end is ``not_covered``, including off-cadence ends. Whether a
-        native solver legitimately omits such an endpoint is a separate policy
-        question. No completion policy in RasCmdr is changed by this inspector.
+        declared end is ``not_covered``, including off-cadence ends. Native
+        execution completion is separate from literal clock coverage.
+        Native 6.6 and 7.0.1 qualification runs completed
+        a 17-minute simulation with five-minute output ending at minute 15;
+        this inspector reports ``not_covered`` for those stored clocks.
+        No completion policy in RasCmdr is changed by this inspector.
         Numeric Time alone is not promoted to calendar evidence; milliseconds
         take priority, with a seconds-only fallback for legacy output.
 
