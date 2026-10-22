@@ -579,98 +579,15 @@ class CheckFloodways:
     @staticmethod
     def _get_encroachment_stations(
         plan_hdf: Path,
-        floodway_profile: str
+        floodway_profile: str,
     ) -> Optional[pd.DataFrame]:
-        """Read profile-specific stations without inferring encroachment methods.
-
-        Supports paired Additional Variables arrays (profile, cross section).
-        Legacy combined arrays require explicit (cross section, profile, side)
-        axes, or (cross section, side) for a single-profile result only.
-        Returns the established five columns, or None when data is absent or
-        unsupported. Invalid/ambiguous data is logged with the file and profile.
-        """
-        base = 'Results/Steady/Output/Output Blocks/Base Output/Steady Profiles'
-        result_attrs = 'Results/Steady/Output/Geometry Info/Cross Section Attributes'
-        geometry_attrs = 'Geometry/Cross Sections/Attributes'
-
-        def decode(value):
-            return value.decode('utf-8').strip() if isinstance(value, bytes) else str(value).strip()
+        """Keep diagnostic callers tolerant while the public reader is strict."""
+        from ..hdf.HdfResultsPlan import HdfResultsPlan
 
         try:
-            with h5py.File(plan_hdf, 'r') as hdf:
-                paired = f'{base}/Cross Sections/Additional Variables'
-                left_path = f'{paired}/Encroachment Station Left'
-                right_path = f'{paired}/Encroachment Station Right'
-                has_left, has_right = left_path in hdf, right_path in hdf
-                combined_path = next((path for path in (
-                    f'{base}/Cross Sections/Encroachment Stations',
-                    'Results/Steady/Output/Cross Sections/Encroachment Stations',
-                    'Geometry/Cross Sections/Encroachment Stations',
-                ) if path in hdf), None)
-                if not has_left and not has_right and combined_path is None:
-                    logger.debug("No encroachment station datasets in %s", plan_hdf)
-                    return None
-                if has_left != has_right:
-                    raise ValueError('missing paired Encroachment Station Left/Right dataset')
-
-                profile_path = f'{base}/Profile Names'
-                if profile_path not in hdf:
-                    raise ValueError('missing steady profile names')
-                names = hdf[profile_path][()]
-                if names.ndim != 1:
-                    raise ValueError('steady profile names must be one-dimensional')
-                profiles = [decode(name) for name in names]
-                if profiles.count(floodway_profile) != 1:
-                    raise ValueError(f'profile {floodway_profile!r} must occur exactly once')
-                profile_idx = profiles.index(floodway_profile)
-
-                # Result arrays must use result-owned identifiers. Equal row
-                # counts do not prove alignment with the geometry table.
-                attrs_path = (geometry_attrs if not has_left and
-                              combined_path.startswith('Geometry/') else result_attrs)
-                if attrs_path not in hdf:
-                    raise ValueError(f'missing cross-section identifiers: {attrs_path}')
-                xs_attrs = hdf[attrs_path][()]
-                fields = {name.lower(): name for name in (xs_attrs.dtype.names or ())}
-                station_field = fields.get('station') or fields.get('rs')
-                if (xs_attrs.ndim != 1 or not station_field or
-                        'river' not in fields or 'reach' not in fields):
-                    raise ValueError(f'invalid cross-section identifiers: {attrs_path}')
-                identifiers = [
-                    (decode(xs[fields['river']]), decode(xs[fields['reach']]),
-                     decode(xs[station_field])) for xs in xs_attrs
-                ]
-                if len(set(identifiers)) != len(identifiers):
-                    raise ValueError('duplicate cross-section identifiers')
-                count = len(xs_attrs)
-
-                if has_left:
-                    left = hdf[left_path][()]
-                    right = hdf[right_path][()]
-                    expected = (len(profiles), count)
-                    if left.shape != expected or right.shape != expected:
-                        raise ValueError(
-                            f'paired station shapes must be {expected}; '
-                            f'got {left.shape} and {right.shape}'
-                        )
-                    left, right = left[profile_idx], right[profile_idx]
-                else:
-                    combined = hdf[combined_path][()]
-                    if combined.shape == (count, len(profiles), 2):
-                        left, right = combined[:, profile_idx, 0], combined[:, profile_idx, 1]
-                    elif len(profiles) == 1 and combined.shape == (count, 2):
-                        left, right = combined[:, 0], combined[:, 1]
-                    else:
-                        raise ValueError(f'unsupported or ambiguous combined station shape {combined.shape}')
-
-                records = [
-                    {'river': river, 'reach': reach, 'station': station,
-                     'encr_sta_l': float(left[i]), 'encr_sta_r': float(right[i])}
-                    for i, (river, reach, station) in enumerate(identifiers)
-                ]
-                return pd.DataFrame(records, columns=[
-                    'river', 'reach', 'station', 'encr_sta_l', 'encr_sta_r'
-                ])
+            return HdfResultsPlan.get_steady_encroachment_stations(
+                plan_hdf, floodway_profile,
+            )
         except (OSError, KeyError, ValueError, TypeError) as exc:
             logger.warning(
                 "Could not extract encroachment stations from %s for profile %r: %s",

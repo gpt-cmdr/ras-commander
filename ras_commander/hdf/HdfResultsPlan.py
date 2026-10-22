@@ -21,6 +21,7 @@ Available Functions:
     Steady Flow:
         - is_steady_plan: Check if HDF contains steady state results
         - get_steady_profile_names: Extract steady state profile names
+        - get_steady_encroachment_stations: Read exact-profile station pairs
         - get_steady_wse: Extract WSE data for steady state profiles
         - get_steady_info: Extract steady flow attributes and metadata
         - get_steady_results: Extract profile/XS hydraulics and channel length
@@ -32,7 +33,7 @@ Note:
     All methods are static and designed to be used without class instantiation.
 """
 
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple, Union
 from pathlib import Path
 import h5py
 import pandas as pd
@@ -646,6 +647,142 @@ class HdfResultsPlan:
                 )
             ordered_lengths.append(lengths_by_identity[identity])
         return np.asarray(ordered_lengths, dtype=float)
+
+    @staticmethod
+    @log_call
+    @standardize_input(file_type='plan_hdf')
+    def get_steady_encroachment_stations(
+        hdf_path: Union[str, Path],
+        profile_name: str,
+    ) -> Optional[pd.DataFrame]:
+        """Read stored steady encroachment stations for an exact profile name.
+
+        Args:
+            hdf_path: Computed steady plan HDF path or project plan number.
+            profile_name: Exact, unique stored profile name.
+
+        Returns:
+            DataFrame with ``river``, ``reach``, ``station``, ``encr_sta_l``
+            and ``encr_sta_r``, preserving result-owned identities and stored
+            NaNs. Returns None when no station dataset exists; this means
+            unavailable evidence, not a successful floodway validation.
+            Station values retain the native model's length units.
+
+        Raises:
+            ValueError: Present data has missing paired arrays, malformed or
+                ambiguous axes/identities, non-real station dtypes, infinite
+                station values, or a missing/nonunique profile.
+
+        Notes:
+            Supports paired Additional Variables arrays and qualified legacy
+            combined layouts. Does not infer encroachment methods, hydraulic
+            acceptance, or stations for structures absent from these arrays.
+        """
+        base = 'Results/Steady/Output/Output Blocks/Base Output/Steady Profiles'
+        result_attrs = 'Results/Steady/Output/Geometry Info/Cross Section Attributes'
+        geometry_attrs = 'Geometry/Cross Sections/Attributes'
+
+        def decode(value):
+            return value.decode('utf-8').strip() if isinstance(value, bytes) else str(value).strip()
+
+        try:
+            with h5py.File(hdf_path, 'r') as hdf:
+                def read_dataset(path):
+                    dataset = hdf[path]
+                    if not isinstance(dataset, h5py.Dataset):
+                        raise ValueError(f'expected a dataset at {path}')
+                    return np.asarray(dataset[()])
+
+                def validate_stations(values, path):
+                    if values.dtype.kind not in 'fiu':
+                        raise ValueError(f'stations must have real numeric dtype at {path}')
+                    if np.isinf(values).any():
+                        raise ValueError(f'infinite encroachment stations at {path}')
+
+                paired = f'{base}/Cross Sections/Additional Variables'
+                left_path = f'{paired}/Encroachment Station Left'
+                right_path = f'{paired}/Encroachment Station Right'
+                has_left, has_right = left_path in hdf, right_path in hdf
+                combined_path = next((path for path in (
+                    f'{base}/Cross Sections/Encroachment Stations',
+                    'Results/Steady/Output/Cross Sections/Encroachment Stations',
+                    'Geometry/Cross Sections/Encroachment Stations',
+                ) if path in hdf), None)
+                if not has_left and not has_right and combined_path is None:
+                    logger.debug("No encroachment station datasets in %s", hdf_path)
+                    return None
+                if has_left != has_right:
+                    raise ValueError('missing paired Encroachment Station Left/Right dataset')
+
+                profile_path = f'{base}/Profile Names'
+                if profile_path not in hdf:
+                    raise ValueError('missing steady profile names')
+                names = read_dataset(profile_path)
+                if names.ndim != 1 or names.dtype.kind not in 'SU':
+                    raise ValueError('steady profile names must be a one-dimensional string dataset')
+                profiles = [decode(name) for name in names]
+                if profiles.count(profile_name) != 1:
+                    raise ValueError(f'profile {profile_name!r} must occur exactly once')
+                profile_idx = profiles.index(profile_name)
+
+                # Result arrays must use result-owned identifiers. Equal row
+                # counts do not prove alignment with the geometry table.
+                attrs_path = (geometry_attrs if not has_left and
+                              combined_path.startswith('Geometry/') else result_attrs)
+                if attrs_path not in hdf:
+                    raise ValueError(f'missing cross-section identifiers: {attrs_path}')
+                xs_attrs = read_dataset(attrs_path)
+                fields = {name.lower(): name for name in (xs_attrs.dtype.names or ())}
+                station_field = fields.get('station') or fields.get('rs')
+                if (xs_attrs.ndim != 1 or not station_field or
+                        'river' not in fields or 'reach' not in fields):
+                    raise ValueError(f'invalid cross-section identifiers: {attrs_path}')
+                if any(xs_attrs.dtype.fields[field][0].kind not in 'SU'
+                       for field in (fields['river'], fields['reach'], station_field)):
+                    raise ValueError(f'cross-section identifier fields must have string dtype: {attrs_path}')
+                identifiers = [
+                    (decode(xs[fields['river']]), decode(xs[fields['reach']]),
+                     decode(xs[station_field])) for xs in xs_attrs
+                ]
+                if len(set(identifiers)) != len(identifiers):
+                    raise ValueError('duplicate cross-section identifiers')
+                count = len(xs_attrs)
+
+                if has_left:
+                    left = read_dataset(left_path)
+                    right = read_dataset(right_path)
+                    validate_stations(left, left_path)
+                    validate_stations(right, right_path)
+                    expected = (len(profiles), count)
+                    if left.shape != expected or right.shape != expected:
+                        raise ValueError(
+                            f'paired station shapes must be {expected}; '
+                            f'got {left.shape} and {right.shape}'
+                        )
+                    left, right = left[profile_idx], right[profile_idx]
+                else:
+                    combined = read_dataset(combined_path)
+                    validate_stations(combined, combined_path)
+                    if combined.shape == (count, len(profiles), 2):
+                        left, right = combined[:, profile_idx, 0], combined[:, profile_idx, 1]
+                    elif len(profiles) == 1 and combined.shape == (count, 2):
+                        left, right = combined[:, 0], combined[:, 1]
+                    else:
+                        raise ValueError(f'unsupported or ambiguous combined station shape {combined.shape}')
+
+                records = [
+                    {'river': river, 'reach': reach, 'station': station,
+                     'encr_sta_l': float(left[i]), 'encr_sta_r': float(right[i])}
+                    for i, (river, reach, station) in enumerate(identifiers)
+                ]
+                return pd.DataFrame(records, columns=[
+                    'river', 'reach', 'station', 'encr_sta_l', 'encr_sta_r'
+                ]).astype({'encr_sta_l': 'float64', 'encr_sta_r': 'float64'})
+        except (OSError, KeyError, ValueError, TypeError) as exc:
+            raise ValueError(
+                f"Could not extract encroachment stations from {hdf_path} "
+                f"for profile {profile_name!r}: {exc}"
+            ) from exc
 
     @staticmethod
     @log_call

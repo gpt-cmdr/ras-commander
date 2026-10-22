@@ -29,7 +29,7 @@ Each entry of :data:`DATAFRAME_SCHEMAS`:
 """
 
 # Schema contract version -- bump when the documented column surface changes meaningfully.
-SCHEMA_VERSION = "1.25"
+SCHEMA_VERSION = "1.26"
 
 _GEOMETRY_ASSOCIATION_COLUMNS = [
     {"name": "geom_number", "dtype": "str", "description": "Normalized geometry identifier."},
@@ -836,6 +836,25 @@ DATAFRAME_SCHEMAS = {
             {"name": "extraction_method", "dtype": "str", "description": "text_geometry or geometry_hdf."},
             {"name": "vertical_transform_applied", "dtype": "bool", "description": "Whether an explicit per-point XYZ transform changed coordinates."},
             {"name": "vertical_transform_provenance", "dtype": "str", "description": "Deterministic JSON operation provenance, including explicit no-transform state."},
+        ],
+    },
+    "steady_encroachment_stations": {
+        "description": (
+            "Stored station pairs for one exact steady profile, joined to result-owned "
+            "cross-section identities. None means unavailable datasets, not validation "
+            "success. Present malformed evidence raises. Values retain native model "
+            "length units and stored NaNs; no encroachment method is inferred."
+        ),
+        "accessor": "HdfResultsPlan.get_steady_encroachment_stations(hdf_path, profile_name)",
+        "source": "ras_commander.hdf.HdfResultsPlan.HdfResultsPlan.get_steady_encroachment_stations()",
+        "extra_columns": False,
+        "dynamic": False,
+        "columns": [
+            {"name": "river", "dtype": "str", "description": "Result-owned river name."},
+            {"name": "reach", "dtype": "str", "description": "Result-owned reach name."},
+            {"name": "station", "dtype": "str", "description": "Exact result-owned river station, preserving native interpolation markers."},
+            {"name": "encr_sta_l", "dtype": "float64", "description": "Stored left encroachment station in native model length units; NaN remains unavailable."},
+            {"name": "encr_sta_r", "dtype": "float64", "description": "Stored right encroachment station in native model length units; NaN remains unavailable."},
         ],
     },
     "steady_profile_stored_maps": {
