@@ -627,11 +627,16 @@ def test_session_is_released_when_a_public_call_raises(tmp_path, session_spy, mo
     monkeypatch.setattr(HdfResultsMesh, "_mesh_series_id_dim", real)
 
 
-def test_direct_low_level_reads_keep_their_documented_cache(tmp_path, session_spy):
+def test_direct_low_level_reads_hold_nothing_open(tmp_path, session_spy, monkeypatch):
+    # Outside a public call (direct use, or a generator resumed after its call
+    # returned) every read closes its own session; only persist caches it.
     from ras_commander import fast_hdf
     path = _write_mesh_results_hdf(tmp_path / "results.p01.hdf")
     name = f"{BASE_TS_PATH}/2D Flow Areas/{MESH_NAME}/Water Surface"
     with h5py.File(path, "r") as hdf:
+        fast_hdf.read_dataset(hdf[name])
+        assert not fast_hdf._sessions
+        monkeypatch.setenv("RAS_COMMANDER_HDF_SESSION_CACHE", "persist")
         fast_hdf.read_dataset(hdf[name])
         assert len(fast_hdf._sessions) == 1
     fast_hdf.close_sessions(path)

@@ -185,9 +185,11 @@ def available() -> bool:
 # A session opened inside a public call is "scoped": it is shared by every read
 # of that call and closed when the outermost public call returns (see
 # ``_native_scope``), so no HDF stays open - and undeletable on Windows - after a
-# public method has returned. Sessions opened by direct use of this module's
-# readers outside a public call, or with RAS_COMMANDER_HDF_SESSION_CACHE=persist,
-# stay cached until ``close_sessions()``.
+# public method has returned. A read outside any public call (direct use of this
+# module, or a generator such as ``iter_mesh_timeseries`` resumed after its
+# public call returned) uses its own session and closes it when the read ends.
+# Only RAS_COMMANDER_HDF_SESSION_CACHE=persist keeps sessions cached until
+# ``close_sessions()``.
 _sessions = OrderedDict()
 _sessions_lock = RLock()
 _SESSION_LIMIT = 4
@@ -249,6 +251,12 @@ def _session(module, path, threads=None):
         with module.HdfSession(path, threads=threads) as session:
             yield session
         return
+    if setting != "persist" and not _native_scope.active():
+        # Outside a public call nothing may stay open: Windows (and network
+        # shares) refuse to rename, delete or replace an open HDF.
+        with module.HdfSession(path, threads=threads) as session:
+            yield session
+        return
     with _sessions_lock:
         try:
             stat = path.stat()
@@ -266,7 +274,7 @@ def _session(module, path, threads=None):
                 _scoped_keys.discard(evicted[0])
                 evicted[1][0].close()
             _sessions[key] = (module.HdfSession(path, threads=threads), threads)
-            if setting != "persist" and _native_scope.active():
+            if setting != "persist":
                 _scoped_keys.add(key)
                 _native_scope.sessions_opened(_release_scoped_sessions)
         _sessions.move_to_end(key)

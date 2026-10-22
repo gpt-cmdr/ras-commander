@@ -805,7 +805,10 @@ The exporter retains source geometry in memory and spools encoded tile batches.
 **Native sessions and open files.** The native engine reads through a session
 that keeps the HDF open. By default a session is opened inside the first public
 call that needs it, shared by every read of that call, and closed when that
-public call returns (also when it raises). No HDF stays open after an `Hdf*`
+public call returns (also when it raises). A read outside any public call
+(direct use of `fast_hdf`, or a generator such as `HdfResultsMesh.iter_mesh_timeseries`
+or `HdfResultView.iter_batches` iterated after its call returned) opens and closes
+its own session. No HDF stays open after an `Hdf*`
 method returns, so renaming, deleting, replacing or re-extracting a project
 folder afterwards works exactly as without the extension (on Windows and on
 network shares an open file would block these). Sessions are not carried from
