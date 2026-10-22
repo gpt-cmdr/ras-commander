@@ -1003,9 +1003,12 @@ prerequisites and return contracts take precedence over abbreviated summaries.
         - convert_timesteps_to_datetimes
         - area_to_square_meters
         - collect_hdf_crs_evidence
+        - collect_rasmap_crs_evidence
         - crs_equivalent
         - find_nearest_neighbors
+        - format_crs
         - get_crs_identity
+        - get_equivalent_epsg
         - get_stored_ras_version
         - get_units_system
         - linear_unit_to_meters
