@@ -31,6 +31,7 @@ jobs:
           tests/test_clear_geometry_infiltration.py
           tests/test_geometry_association_inventory.py
           tests/test_property_tables_worker.py
+          tests/test_mesh_quality_coverage.py
           tests/test_mannings_region_recovery.py
           tests/test_rasunsteady_disable_meteorology.py
           tests/test_rasunsteady_remove_met_sources.py

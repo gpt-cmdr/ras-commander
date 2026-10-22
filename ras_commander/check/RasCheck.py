@@ -271,6 +271,7 @@ class RasCheck:
             mesh_results = CheckUnsteady.check_mesh_quality(plan_hdf, geom_hdf, thresholds)
             results.messages.extend(mesh_results.messages)
             results.mesh_summary = mesh_results.mesh_summary
+            results.statistics.update(mesh_results.statistics)
         else:
             msg = CheckMessage(
                 message_id="US_INFO_01",
@@ -302,7 +303,8 @@ class RasCheck:
             results.messages.extend(subgrid_results.messages)
 
         # Calculate statistics
-        results.statistics = _utils.calculate_statistics(results)
+        # Retain per-check coverage alongside the aggregate message counts.
+        results.statistics.update(_utils.calculate_statistics(results))
 
         return results
 
