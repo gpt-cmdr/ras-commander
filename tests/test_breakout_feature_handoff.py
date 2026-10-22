@@ -303,6 +303,60 @@ def _patch_points(monkeypatch, callback):
     monkeypatch.setattr(GeomMesh, "generate_computation_points", staticmethod(callback))
 
 
+@pytest.mark.parametrize("kwargs", [
+    {}, {"refresh_hdf": False, "refresh_method": "rasexe", "remesh": False},
+    {"refresh_method": "rasmapper", "remesh": False},
+    {"refresh_method": "rasexe", "remesh": True},
+    {"refresh_method": "rasexe", "remesh": False, "anchor_grid_to_parent": True},
+])
+def test_explicit_points_reject_incompatible_mode_before_mutation(tmp_path, kwargs):
+    preflight, clone, ras = _fixture(tmp_path)
+    before = clone.geometry_path.read_bytes()
+    with pytest.raises(ValueError, match="computation_points requires"):
+        RasBreakout2D.prepare_cloned_geometry(
+            preflight, clone, ras_object=ras, computation_points=np.array([[20, 20]]), **kwargs
+        )
+    assert clone.geometry_path.read_bytes() == before
+
+
+def test_explicit_points_replace_generated_bootstrap_without_remeshing(tmp_path, monkeypatch):
+    preflight, clone, ras = _fixture(tmp_path)
+    original_source = preflight.source_geometry_path.read_bytes()
+    seeds = np.array([[20, 20], [50, 50], [80, 80]], dtype=float)
+
+    def forbidden(*args, **kwargs):
+        pytest.fail("explicit seed preparation must not generate another point set")
+
+    def refresh(*args, **kwargs):
+        assert "Storage Area 2D Points= 3" in clone.geometry_path.read_text()
+        _sync_native_hdf(clone.geometry_path)
+        return SimpleNamespace(success=True, error=None, first_error_line=None)
+
+    _patch_points(monkeypatch, forbidden)
+    monkeypatch.setattr(GeomMesh, "generate", staticmethod(forbidden))
+    monkeypatch.setattr(GeomPreprocessor, "run_geometry_preprocessor", staticmethod(refresh))
+    result = RasBreakout2D.prepare_cloned_geometry(
+        preflight, clone, ras_object=ras, computation_points=seeds,
+        refresh_method="rasexe", remesh=False,
+    )
+    assert result.computation_points_result.ok
+    assert result.computation_points_result.cell_count == len(seeds)
+    assert result.mesh_result is None and result.boundaries_unchanged
+    assert preflight.source_geometry_path.read_bytes() == original_source
+
+
+@pytest.mark.parametrize("points", [[[1, 1]], [[10 + 1e-15, 50]]])
+def test_invalid_explicit_points_fail_before_breakout_mutation(tmp_path, points):
+    preflight, clone, ras = _fixture(tmp_path)
+    original = clone.geometry_path.read_bytes()
+    with pytest.raises(ValueError, match="strictly inside|native text serialization"):
+        RasBreakout2D.prepare_cloned_geometry(
+            preflight, clone, ras_object=ras, computation_points=np.asarray(points),
+            refresh_method="rasexe", remesh=False,
+        )
+    assert clone.geometry_path.read_bytes() == original
+
+
 @pytest.mark.parametrize("empty_sidecar", [False, True])
 def test_boundary_only_disables_met_before_refresh_without_changing_source(
     tmp_path, monkeypatch, empty_sidecar
