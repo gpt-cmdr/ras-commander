@@ -2105,6 +2105,18 @@ def _looks_like_storage_area_seed_line(line: str) -> bool:
     return True
 
 
+def _format_seed_coordinate(value: float, *, strict: bool = False) -> str:
+    """Native 16-character seed field; explicit writers reject field overflow."""
+    int_digits = max(1, len(str(int(abs(value)))))
+    n_dec = max(0, 16 - int_digits - 1)
+    text = f"{value:.{n_dec}f}"
+    if len(text) > 16 and n_dec > 0:
+        text = f"{value:.{n_dec - 1}f}"
+    if strict and len(text) > 16:
+        raise ValueError("computation point coordinate exceeds a native 16-character field")
+    return text[:16].ljust(16)
+
+
 def _patch_text_seeds(
     geom_text_path: Path, cell_centers, mesh_name: str | None = None
 ) -> None:
@@ -2119,12 +2131,7 @@ def _patch_text_seeds(
     n = len(cell_centers)
 
     def _fmt(v: float) -> str:
-        int_digits = max(1, len(str(int(abs(v)))))
-        n_dec = max(0, 16 - int_digits - 1)
-        s = f"{v:.{n_dec}f}"
-        if len(s) > 16 and n_dec > 0:
-            s = f"{v:.{n_dec - 1}f}"
-        return s[:16].ljust(16)
+        return _format_seed_coordinate(v)
 
     coord_lines: list[str] = []
     for i in range(0, n, 2):
@@ -3625,6 +3632,33 @@ def _add_refinement_region_via_mapper(
         raise
     finally:
         backup.unlink(missing_ok=True)
+
+
+def _validated_computation_points(computation_points, perimeter):
+    """Validate a supplied point set before any owned geometry is changed."""
+    import numpy as np
+    from shapely import contains_xy
+
+    points = np.asarray(computation_points, dtype=float)
+    if points.ndim != 2 or points.shape[1] != 2 or not len(points):
+        raise ValueError("computation_points must be a non-empty N-by-2 XY array")
+    if not np.isfinite(points).all():
+        raise ValueError("computation_points must contain only finite coordinates")
+    if len(np.unique(points, axis=0)) != len(points):
+        raise ValueError("computation_points contains duplicate coordinates")
+    native = np.array([
+        [float(_format_seed_coordinate(float(value), strict=True)) for value in row]
+        for row in points
+    ])
+    if perimeter is None or perimeter.geom_type != "Polygon" or not perimeter.is_valid:
+        raise ValueError("2D flow area must have one valid perimeter polygon")
+    if not contains_xy(perimeter, points[:, 0], points[:, 1]).all():
+        raise ValueError("every computation point must be strictly inside the perimeter")
+    if len(np.unique(native, axis=0)) != len(native):
+        raise ValueError("native text serialization makes computation points duplicate")
+    if not contains_xy(perimeter, native[:, 0], native[:, 1]).all():
+        raise ValueError("native text serialization moves a point onto or outside the perimeter")
+    return points
 
 
 class GeomMesh:
@@ -5357,6 +5391,81 @@ class GeomMesh:
         if not path.is_file():
             raise FileNotFoundError(f"Compiled geometry HDF not found: {path}")
         return _grid_anchor_from_hdf(path, mesh_name=mesh_name, mesh_index=mesh_index)
+
+    @staticmethod
+    @log_call
+    def write_computation_points(
+        geom_number: Union[str, Number, Path],
+        computation_points: Any,
+        mesh_name: Optional[str] = None,
+        mesh_index: int = 0,
+        ras_object=None,
+    ) -> "MeshResult":
+        """Write an explicit computation-point set into an owned geometry text.
+
+        Points are an N-by-2 array of finite XY coordinates in the geometry's
+        horizontal CRS and units. No coordinate transformation, interpolation,
+        reseeding, snapping, deduplication or perimeter repair is performed.
+        Coordinates use the existing native 16-character text serialization.
+        Every point must be unique and strictly inside the selected 2D-area
+        perimeter. Validation completes before the text is changed.
+
+        This supports cookie-cut children retaining a parent's physical cell
+        centres. It mutates only the supplied geometry text, leaves its HDF
+        untouched and requires no native DLL. The caller must subsequently
+        compile and verify the mesh; writing points does not establish cell or
+        face identity, property-table equality or hydraulic acceptance.
+
+        Args:
+            geom_number: Geometry number or path to the owned .g## text.
+            computation_points: N-by-2 XY array, in geometry coordinates.
+            mesh_name: Exact 2D flow-area name, or use mesh_index.
+            mesh_index: Zero-based area index when mesh_name is omitted.
+            ras_object: Optional isolated RasPrj for numeric geometry lookup.
+
+        Returns:
+            MeshResult with operation="computation_points", status="complete"
+            and cell_count equal to the supplied point count on success. Invalid
+            inputs return status="error" without changing text. No model files
+            other than the explicit geometry text and a preserved numbered
+            .bak backup are produced. Geometry replacement is atomic.
+        """
+        from .GeomStorage import GeomStorage
+        from .GeomParser import GeomParser
+        import tempfile
+
+        geom_path = _resolve_geom_text_path(geom_number, ras_object)
+        result = MeshResult(
+            mesh_name=mesh_name or f"<index {mesh_index}>", status="error",
+            geom_text_path=str(geom_path), operation="computation_points",
+        )
+        try:
+            areas = GeomStorage.get_storage_area_polygons(geom_path, exclude_2d=False)
+            areas = areas[areas["is_2d"]] if "is_2d" in areas else areas
+            if mesh_name is not None:
+                areas = areas[areas["Name"].eq(mesh_name)]
+            elif mesh_index >= 0:
+                areas = areas.iloc[mesh_index:mesh_index + 1]
+            else:
+                raise ValueError("mesh_index must be nonnegative")
+            if len(areas) != 1:
+                raise ValueError("exactly one matching 2D flow area is required")
+            area = areas.iloc[0]
+            points = _validated_computation_points(computation_points, area.geometry)
+            with tempfile.TemporaryDirectory(prefix=".ras-points-", dir=geom_path.parent) as scratch:
+                staged = Path(scratch) / geom_path.name
+                shutil.copy2(geom_path, staged)
+                _patch_text_seeds(staged, points, mesh_name=str(area["Name"]))
+                GeomParser.create_backup(geom_path)
+                staged.replace(geom_path)
+            result.mesh_name = str(area["Name"])
+            result.cell_count = len(points)
+            result.status = "complete"
+            return result
+        except (ValueError, TypeError, KeyError, OSError) as exc:
+            result.error_message = f"{type(exc).__name__}: {exc}"
+            logger.error("[%s] write_computation_points failed: %s", result.mesh_name, exc)
+            return result
 
     @staticmethod
     @log_call

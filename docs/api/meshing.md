@@ -19,6 +19,7 @@ native preprocessing success.
 | Stage | API | Input → output |
 |---|---|---|
 | Bootstrap points | `generate_computation_points` | Authored perimeter text and spacing -> regular-grid computation points in text; no existing HDF required |
+| Explicit points | `write_computation_points` | Authored perimeter text and supplied XY coordinates -> validated native text seed block; no native DLL or existing HDF required |
 | Compile geometry | [RasCmdr preprocessing](core.md#rascmdr) | Referencing project/plan and authored geometry -> native compiled HDF workspace |
 | Author controls | Breakline/refinement methods | Names, spacing and polygons/flowlines → updated text or compiled-HDF controls, as specified per method |
 | Check domain | `audit_domain_containment` | Selected 2D area and cell spacing → `DomainContainmentResult` |

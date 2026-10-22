@@ -44,6 +44,10 @@ jobs:
           tests/test_precipitation_boundary_authoring.py
           tests/test_precip_native_contract.py
           tests/test_rasunsteady_precipitation_contract.py
+          tests/test_floodway_public_station_reader.py
+          tests/test_floodway_native_contracts.py
+          tests/test_rasfloodway.py
+          tests/test_floodway_diagnostic_contract.py
           tests/test_ras_docker_slurm.py
           tests/test_slurm_node_staging.py
           tests/test_rasplan_core_upsert.py

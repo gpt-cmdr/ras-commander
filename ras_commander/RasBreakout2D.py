@@ -316,6 +316,7 @@ class Breakout2DPreparationResult:
     )
     breakline_containment_repairs: list[dict[str, Any]] = field(default_factory=list)
     meteorology: dict[str, Any] = field(default_factory=dict)
+    computation_points_result: Any = None
 
     @property
     def boundaries_unchanged(self) -> bool:
@@ -691,6 +692,7 @@ class RasBreakout2D:
         disable_meteorology: bool = False,
         require_complete_products: bool = False,
         anchor_grid_to_parent: bool = False,
+        computation_points: Optional[np.ndarray] = None,
     ) -> Breakout2DPreparationResult:
         """Trim mesh-owned features and remesh only the cloned geometry.
 
@@ -739,6 +741,12 @@ class RasBreakout2D:
                 Requires a terrain association on the geometry.
             timeout: Seconds allowed for the text-to-HDF import.
             max_mesh_iterations: Mesh auto-fix iterations.
+            computation_points: Optional N-by-2 XY coordinates in the source
+                geometry CRS/units, for a cookie-cut bootstrap. Requires
+                refresh_hdf=True, refresh_method="rasexe", remesh=False and
+                anchor_grid_to_parent=False. Points are written unchanged through
+                GeomMesh.write_computation_points; native compilation and QA
+                still follow. No point repair or face-identity claim is made.
             disable_meteorology: Disable and remove inherited meteorological
                 sources for an owned boundary-only child before preprocessing.
                 Defaults to False for existing precipitation-driven workflows.
@@ -766,8 +774,21 @@ class RasBreakout2D:
         """
         if refresh_method not in ("rasmapper", "rasexe"):
             raise ValueError("refresh_method must be 'rasmapper' or 'rasexe'")
+        if computation_points is not None and (
+            not refresh_hdf or refresh_method != "rasexe" or remesh or anchor_grid_to_parent
+        ):
+            raise ValueError(
+                "computation_points requires refresh_hdf=True, refresh_method='rasexe', "
+                "remesh=False and anchor_grid_to_parent=False"
+            )
         if not preflight.is_ready:
             raise ValueError("preflight must pass before geometry preparation")
+        if computation_points is not None:
+            from .geom.GeomMesh import _validated_computation_points
+
+            computation_points = _validated_computation_points(
+                computation_points, preflight.child_boundary.geometry.iloc[0]
+            )
         _verify_contributing_geometry_snapshots(preflight)
         if not clone.boundaries_unchanged:
             raise ValueError("clone does not prove byte-identical unsteady inputs")
@@ -871,14 +892,23 @@ class RasBreakout2D:
         )
 
         refresh_result = None
+        points = None
         if refresh_hdf and refresh_method == "rasexe":
             from .geom.GeomPreprocessor import GeomPreprocessor
 
-            points = GeomMesh.generate_computation_points(
-                clone.geometry_number,
-                mesh_name=preflight.spec.source_2d_area,
-                ras_object=ras_object,
-            )
+            if computation_points is None:
+                points = GeomMesh.generate_computation_points(
+                    clone.geometry_number,
+                    mesh_name=preflight.spec.source_2d_area,
+                    ras_object=ras_object,
+                )
+            else:
+                points = GeomMesh.write_computation_points(
+                    clone.geometry_number,
+                    computation_points,
+                    mesh_name=preflight.spec.source_2d_area,
+                    ras_object=ras_object,
+                )
             # Operation completion establishes generated points; native mesh
             # compilation and verification follow below.
             if not points.ok or not points.cell_count:
@@ -1123,6 +1153,7 @@ class RasBreakout2D:
             unsteady_sha256_after=final_unsteady_hash,
             breakline_containment_repairs=breakline_containment_repairs,
             meteorology=meteorology,
+            computation_points_result=points,
         )
 
     @staticmethod
