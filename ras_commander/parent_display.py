@@ -20,6 +20,7 @@ from typing import Mapping
 import h5py
 
 from .Decorators import log_call
+from .fast_hdf import read_attr, reraise_required
 from .LoggingConfig import get_logger
 
 logger = get_logger(__name__)
@@ -240,7 +241,7 @@ def probe_applied_forcing(plan_hdf: str | Path) -> AppliedForcingProbe:
                         SOURCE_TABLE_INCOMPLETE,
                         detail=f"{name} shape {item.shape} does not match Time ({time_steps} rows)",
                     )
-                columns = tuple(_text(c) for c in item.attrs.get("Columns", ()))
+                columns = tuple(_text(c) for c in read_attr(item, "Columns", ()))
                 if columns and len(columns) != item.shape[1]:
                     return AppliedForcingProbe(
                         SOURCE_TABLE_INCOMPLETE,
@@ -251,7 +252,7 @@ def probe_applied_forcing(plan_hdf: str | Path) -> AppliedForcingProbe:
                         name=name,
                         columns=columns,
                         time_steps=int(item.shape[0]) if item.shape else None,
-                        units=_text(item.attrs.get("Units")),
+                        units=_text(read_attr(item, "Units", None)),
                         flow_per_face=f"{name} - Flow per Face" in group,
                         stage_per_face=f"{name} - Stage per Face" in group,
                     )
@@ -263,6 +264,7 @@ def probe_applied_forcing(plan_hdf: str | Path) -> AppliedForcingProbe:
                 time_units=_text(time.attrs.get("Units")),
             )
         except Exception as exc:  # report, never guess
+            reraise_required(exc)
             logger.warning("Could not probe applied forcing in %s: %s", hdf.filename, type(exc).__name__)
             return AppliedForcingProbe(READ_ERROR, detail=type(exc).__name__)
 

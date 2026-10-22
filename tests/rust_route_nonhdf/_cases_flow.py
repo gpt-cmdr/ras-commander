@@ -52,6 +52,17 @@ def _child_box(path, mesh):
     return box(cx - half, cy - half, cx + half, cy + half)
 
 
+# ----------------------------------------------------------------- parent_display (#543)
+def _applied_forcing(p):
+    from ras_commander.parent_display import probe_applied_forcing
+    return probe_applied_forcing(Path(p))
+
+
+def _geometry_features(p):
+    from ras_commander.parent_display import probe_geometry_features
+    return probe_geometry_features(Path(p))
+
+
 # ----------------------------------------------------------------- _native_precip
 def _inspect_precipitation(p):
     from ras_commander._native_precip import inspect_precipitation
@@ -195,4 +206,6 @@ CASES = {
         helper="RasUnsteady gridded precipitation writers (preflight before mutation)"),
     "ebfe_medina._association_paths_are_valid": Case(_medina_associations, kinds=_GEOM_PLAN,
                                                      helper="ebfe_medina.medina_is_reusable"),
+    "parent_display.probe_applied_forcing": Case(_applied_forcing, kinds=_PLAN_2D),
+    "parent_display.probe_geometry_features": Case(_geometry_features, kinds=_GEOM_PLAN),
 }
