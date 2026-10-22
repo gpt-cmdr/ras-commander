@@ -770,6 +770,18 @@ Automatic mode uses the Python polygonizer for unsupported layouts, including
 two-face diagnostic records; required Rust mode reports these cases explicitly.
 Use `threads` to bound native parallelism when calling from other worker pools.
 
+The native engine refuses any single numeric read over 2 GiB before allocating,
+so a damaged or crafted file cannot make it reserve memory the file does not
+hold. Larger numeric reads (for example a whole 2D mesh time series) are served
+natively as bounded 256 MiB hyperslab blocks, aligned to the stored chunks, into
+one NumPy array, so the result is the same array h5py returns. Before allocating
+the output, the declared size is checked against the storage the file really
+holds: contiguous data must be allocated and inside the file; chunked data must
+not decode to more than its stored bytes allow for its filters; and no more than
+2 GiB may come from the fill value of unallocated chunks. A dataset that fails
+this check reads through h5py in automatic mode and raises `FastHdfError` in
+required mode. Big-endian datasets keep their existing h5py path at any size.
+
 Coordinate transformation uses the HDF CRS, or an explicit `source_crs` override.
 Missing CRS must be supplied rather than assumed to be WGS84. Result property
 arrays passed to `export_mesh_pmtiles(properties=...)` are grouped by mesh and

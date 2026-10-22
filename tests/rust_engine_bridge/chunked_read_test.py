@@ -143,6 +143,20 @@ def test_partial_selection_crossing_chunks(small_budget, tmp_path, layout, selec
             _assert_chunked(record)
 
 
+@pytest.mark.parametrize("layout", sorted(LAYOUTS))
+def test_stepped_split_axis_ending_at_the_edge(small_budget, tmp_path, layout):
+    path = tmp_path / "values.h5"
+    with h5py.File(path, "w") as f:
+        f.create_dataset("v", data=_values("<f8", (3000,)), **LAYOUTS[layout]((256,)))
+    with h5py.File(path, "r") as f:
+        for key in (slice(1, None, 2), slice(5, 2999, 5), slice(None, None, 3), slice(2, None, 4)):
+            expected = f["v"][key]
+            assert expected.nbytes > CALL_BUDGET
+            values, record = _read(f["v"], key)
+            _assert_identical(values, expected)
+            _assert_chunked(record)
+
+
 def test_blocks_follow_the_stored_chunk_grid(small_budget, tmp_path):
     path = tmp_path / "values.h5"
     with h5py.File(path, "w") as f:
