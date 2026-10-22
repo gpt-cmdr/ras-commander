@@ -9,6 +9,15 @@ alone does not identify a development checkout.
 
 ### Unreleased
 
+**Breakline protection flags validate correctly under NumPy 2**
+
+Preprocessing validation accepts native text `Protection Radius=-1` as enabled,
+matching HDF flag `1`; `0` remains disabled. Previously the unsigned cast raised
+`OverflowError` under NumPy 2 and could report a valid preprocessing result as a
+failure. Text-to-HDF spacing synchronization now uses the same Boolean mapping.
+Invalid or nonrepresentable authored controls remain validation issues rather
+than being wrapped or truncated. Public signatures are unchanged.
+
 **SI sediment results resolve despite the RasMapper geometry unit flag (behavior change)**
 
 HEC-RAS 6.6 and 7.0 write `/Geometry/@SI Units = False` in every result HDF

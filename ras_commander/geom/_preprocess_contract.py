@@ -14,6 +14,8 @@ from pathlib import Path
 import h5py
 import numpy as np
 
+from ._breakline_controls import _protection_radius_flag
+
 AREA = "Geometry/2D Flow Areas"
 CALIBRATION = "Geometry/Land Cover (Manning's n)/Calibration Table"
 CELL_PRODUCTS = (
@@ -162,6 +164,28 @@ def _text_features(lines: list[str], prefix: str, arc: str) -> list[dict]:
     return features
 
 
+def _control_matches(field: str, authored, stored, dtype) -> bool:
+    """Compare representable controls without NumPy's unsafe integer casts."""
+    try:
+        if field == "Protection Radius":
+            authored = _protection_radius_flag(authored)
+        if not np.isfinite(authored):
+            return False
+        if dtype.kind in "iu":
+            integer = int(authored)
+            bounds = np.iinfo(dtype)
+            if integer != authored or not bounds.min <= integer <= bounds.max:
+                return False
+            return int(stored) == integer
+        if dtype.kind == "b" and authored not in (0, 1):
+            return False
+        with np.errstate(over="ignore", invalid="ignore"):
+            converted = np.asarray(authored, dtype=dtype)
+        return bool(np.isfinite(converted)) and float(stored) == float(converted)
+    except (ValueError, TypeError, OverflowError):
+        return False
+
+
 def _feature_issues(
     hdf, path: str, features: list[dict], family="Polyline"
 ) -> list[str]:
@@ -236,8 +260,8 @@ def _feature_issues(
         ):
             issues.append(f"{path}/{index}: authored BC Type changed")
         for field, value in feature.get("controls", {}).items():
-            if field not in attrs.dtype.names or float(attrs[field][index]) != float(
-                np.asarray(value, dtype=attrs.dtype[field])
+            if field not in attrs.dtype.names or not _control_matches(
+                field, value, attrs[field][index], attrs.dtype[field]
             ):
                 issues.append(f"{path}/{index}: authored {field} changed")
     return issues

@@ -93,6 +93,7 @@ from .._geometry_association import (
     resolve_association_attr_path as _shared_resolve_association_attr_path,
 )
 from ..LoggingConfig import get_logger
+from ._breakline_controls import _protection_radius_flag
 from .GeomMeshDataclasses import (
     BCConflict,
     BCFixResult,
@@ -1652,13 +1653,16 @@ def _sync_breakline_spacing_text_to_hdf(
                 if t_far > 0 and abs(float(data["Cell Spacing Far"][fid]) - t_far) > 0.001:
                     data["Cell Spacing Far"][fid] = t_far
                     changed = True
-                # Negative means "not set in text"; HDF uses uint8 so skip to avoid overflow
+                # Negative Near Repeats retains its existing unspecified behavior.
+                # Protection Radius instead uses native Boolean text -1/0/1.
                 if has_nr and t_nr >= 0 and int(data["Near Repeats"][fid]) != t_nr:
                     data["Near Repeats"][fid] = t_nr
                     changed = True
-                if has_pr and t_pr >= 0 and int(data["Protection Radius"][fid]) != t_pr:
-                    data["Protection Radius"][fid] = t_pr
-                    changed = True
+                if has_pr:
+                    protection_flag = _protection_radius_flag(t_pr)
+                    if int(data["Protection Radius"][fid]) != protection_flag:
+                        data["Protection Radius"][fid] = protection_flag
+                        changed = True
             if changed:
                 hf[bl_key][:] = data
                 logger.debug(
