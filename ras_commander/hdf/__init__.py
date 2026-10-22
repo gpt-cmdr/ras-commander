@@ -8,6 +8,7 @@ Classes are organized by function:
 
 Core:
     - HdfBase: Foundation class for HDF operations
+    - HdfCompletion: Stored result-clock coverage inspection
     - HdfUtils: Utility functions (time parsing, data conversion)
     - HdfPlan: Plan file information extraction
 
@@ -64,7 +65,7 @@ from types import ModuleType
 _LAZY_EXPORTS = {
     name: (f".{name}", name)
     for name in (
-        'HdfBase', 'HdfUtils', 'HdfPlan',
+        'HdfBase', 'HdfCompletion', 'HdfUtils', 'HdfPlan',
         'HdfMesh', 'HdfXsec', 'HdfBndry', 'HdfStruc', 'HdfStorageArea',
         'HdfStruc1D', 'HdfHydraulicTables',
         'HdfResultsPlan', 'HdfResultsMesh', 'HdfResultsQuery',
@@ -121,7 +122,7 @@ sys.modules[__name__].__class__ = _LazyHdfModule
 
 __all__ = [
     # Core
-    'HdfBase', 'HdfUtils', 'HdfPlan',
+    'HdfBase', 'HdfCompletion', 'HdfUtils', 'HdfPlan',
     # Geometry
     'HdfMesh', 'MeshCellPolygonError', 'HdfXsec', 'HdfBndry', 'HdfStruc', 'HdfStorageArea', 'HdfStruc1D', 'HdfHydraulicTables',
     # Results
