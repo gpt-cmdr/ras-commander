@@ -6,10 +6,11 @@ and extract summary information about execution status.
 """
 
 from typing import Dict, Optional
-import logging
 import re
 
-logger = logging.getLogger(__name__)
+from ..LoggingConfig import get_logger, log_call
+
+logger = get_logger(__name__)
 
 
 class ResultsParser:
@@ -44,6 +45,17 @@ class ResultsParser:
         ),
     }
 
+    # Observed fatal records take precedence over generic metric exclusions.
+    # A normal timing footer can still follow an early solver termination.
+    CLASSIFIED_ERROR_PATTERNS = {
+        "hec_ras_unsteady_simulation_terminated": (
+            r"^Unsteady Flow Simulation Terminated\.?$"
+        ),
+        "hec_ras_pipe_solution_unstable": (
+            r"^Pipe Flow Solution went unstable in system:\s*\S.*$"
+        ),
+    }
+
     # Configurable keyword sets for error/warning detection
     # More specific patterns to avoid false positives from metric names
     ERROR_PATTERNS = [
@@ -59,7 +71,7 @@ class ResultsParser:
         r'aborted',                        # "aborted"
         r'terminated\s+abnormally',        # "terminated abnormally"
         r'\bwriter\s+failed\b',            # "Geometry Writer Failed"
-        r'exit\s+code\s*=\s*-?\d+',        # "Exit Code = -532462766" (RasProcess crash)
+        r'exit\s+code\s*=\s*[+-]?0*[1-9]\d*\b',  # Nonzero process exit code
         r'\berror\b',                      # HEC-RAS data_errors: "Error generating Mesh"
     ]
 
@@ -108,6 +120,7 @@ class ResultsParser:
         )
 
     @staticmethod
+    @log_call
     def parse_compute_messages(messages: str) -> Dict:
         """
         Parse compute messages and extract summary information.
@@ -121,13 +134,14 @@ class ResultsParser:
 
         Returns:
             dict: Summary with keys:
-                - completed (bool): True if "Complete Process" found
+                - completed (bool): True if an exact "Complete Process" record
+                  exists; a timing footer alone does not establish success
                 - has_errors (bool): True if error keywords found
                 - has_warnings (bool): True if warning keywords found
                 - error_count (int): Number of lines with error keywords
                 - warning_count (int): Number of lines with warning keywords
                 - first_error_line (str or None): First line containing error (truncated to 200 chars)
-                - diagnostics (list[dict]): Exact, reason-coded vendor diagnostics
+                - diagnostics (list[dict]): Reason-coded warning/fatal diagnostics
                   classified separately from generic warning and error keywords
 
         Example:
@@ -167,6 +181,10 @@ class ResultsParser:
             reason_code: re.compile(pattern, re.IGNORECASE)
             for reason_code, pattern in ResultsParser.CLASSIFIED_WARNING_PATTERNS.items()
         }
+        classified_error_patterns = {
+            reason_code: re.compile(pattern, re.IGNORECASE)
+            for reason_code, pattern in ResultsParser.CLASSIFIED_ERROR_PATTERNS.items()
+        }
 
         # Build regex pattern for warnings
         warning_pattern = re.compile(
@@ -177,6 +195,22 @@ class ResultsParser:
         for line in lines:
             line_stripped = line.strip()
             if not line_stripped:
+                continue
+
+            classified_error_code = next(
+                (code for code, pattern in classified_error_patterns.items()
+                 if pattern.fullmatch(line_stripped)),
+                None,
+            )
+            if classified_error_code is not None:
+                error_count += 1
+                if first_error_line is None:
+                    first_error_line = line_stripped[:200]
+                diagnostics.append({
+                    'reason_code': classified_error_code,
+                    'severity': 'error',
+                    'message': line_stripped,
+                })
                 continue
 
             classified_warning_code = next(
@@ -227,6 +261,7 @@ class ResultsParser:
         }
 
     @staticmethod
+    @log_call
     def is_successful_completion(messages: str) -> bool:
         """
         Quick check if computation completed successfully.
@@ -295,6 +330,7 @@ class ResultsParser:
         return None
 
     @staticmethod
+    @log_call
     def parse_compute_messages_runtime(messages: str) -> Dict:
         """
         Parse compute messages for runtime data (fallback for pre-6.4 HEC-RAS).
