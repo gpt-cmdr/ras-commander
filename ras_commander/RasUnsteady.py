@@ -633,6 +633,11 @@ class RasUnsteady:
             ``unmatched`` (list[dict]): Entries with no matching geometry XS.
             ``ic_count`` (int): Total flow IC entries checked.
             ``geom_xs_count`` (int): Total XS in geometry.
+            ``status`` (str): passed, failed, unavailable, or not_applicable.
+            ``reason`` (str): Explicit outcome reason. Present flow ICs with
+            missing or unreadable geometry are unavailable and ``valid=False``.
+            No flow IC entries is not_applicable and vacuously valid; this is
+            not a completeness check for the boundary conditions or the plan.
         """
         from ras_commander import ras as global_ras
         _ras = ras_object if ras_object is not None else global_ras
@@ -673,18 +678,40 @@ class RasUnsteady:
                     geom_path = Path(g_match.iloc[0]['full_path'])
 
         geom_stations = set()
+
+        def normalize_station(value):
+            # Geometry RS is a string and may carry one native interpolation
+            # marker; flow ICs normally expose the numeric station already.
+            if isinstance(value, str):
+                value = value.strip()
+                if value.endswith('*'):
+                    value = value[:-1]
+            station_value = float(value)
+            if not math.isfinite(station_value):
+                raise ValueError("Cross-section station must be finite")
+            return station_value
+
+        geometry_reason = 'geometry_not_resolved'
+        if geom_path is not None:
+            geometry_reason = 'geometry_file_missing'
         if geom_path is not None and geom_path.is_file():
             try:
                 from ras_commander.geom import GeomCrossSection
                 xs_df = GeomCrossSection.get_cross_sections(geom_path)
+                geometry_reason = 'geometry_has_no_cross_sections'
                 if xs_df is not None and len(xs_df) > 0:
                     for _, xs_row in xs_df.iterrows():
-                        river = str(xs_row.get('river', '')).strip()
-                        reach = str(xs_row.get('reach', '')).strip()
-                        station = xs_row.get('station')
-                        if station is not None:
-                            geom_stations.add((river, reach, float(station)))
+                        # GeomCrossSection's public schema uses River/Reach/RS.
+                        river = str(xs_row['River']).strip()
+                        reach = str(xs_row['Reach']).strip()
+                        station = normalize_station(xs_row['RS'])
+                        if not river or not reach or not math.isfinite(station):
+                            raise ValueError("Invalid geometry cross-section identity")
+                        geom_stations.add((river, reach, station))
+                    geometry_reason = None
             except Exception as e:
+                geom_stations.clear()
+                geometry_reason = 'geometry_read_failed'
                 logger.warning(f"Could not parse geometry for validation: {e}")
 
         matched = []
@@ -697,15 +724,27 @@ class RasUnsteady:
                 'river': river, 'reach': reach,
                 'station': station, 'value': ic_row.get('value'),
             }
-            if (river, reach, float(station)) in geom_stations:
+            try:
+                station_key = normalize_station(station)
+                station_matches = (river, reach, station_key) in geom_stations
+            except (TypeError, ValueError, OverflowError):
+                station_matches = False
+            if station_matches:
                 matched.append(entry)
             else:
                 unmatched.append(entry)
 
-        valid = len(unmatched) == 0 and len(flow_ics) > 0
-        if not geom_stations:
+        if len(flow_ics) == 0:
             valid = True
-            logger.info("No geometry XS available for validation; skipping station check")
+            status, reason = 'not_applicable', 'no_initial_flow_entries'
+        elif not geom_stations:
+            valid = False
+            status, reason = 'unavailable', geometry_reason
+            logger.warning("Geometry XS unavailable; initial flow stations could not be validated")
+        else:
+            valid = len(unmatched) == 0
+            status = 'passed' if valid else 'failed'
+            reason = 'stations_match_geometry' if valid else 'unmatched_flow_stations'
 
         logger.info(
             f"IC validation: {len(matched)} matched, {len(unmatched)} unmatched "
@@ -717,6 +756,8 @@ class RasUnsteady:
             'unmatched': unmatched,
             'ic_count': len(flow_ics),
             'geom_xs_count': len(geom_stations),
+            'status': status,
+            'reason': reason,
         }
 
     # -------------------------------------------------------------------------
