@@ -138,13 +138,13 @@ class DomainContainmentResult:
 class MeshResult:
     """Result of a mesh operation, including computation-point bootstrap.
 
-    ``ok`` and truthiness mean the requested operation succeeded. Bootstrap
-    uses ``status="success"`` and counts generated points; it does not prove a
-    compiled mesh exists. Full mesh generation retains ``status="complete"``.
+    ``status="complete"``, ``ok`` and truthiness mean the requested operation
+    succeeded. ``operation`` identifies computation-point generation versus
+    mesh generation. Completion does not establish hydraulic acceptance.
     """
 
     mesh_name: str
-    status: str  # "success" (points), "complete" (mesh), "error", "exception"
+    status: str  # "complete", "error", "exception"
     mesh_state: str = ""
     cell_count: int = 0
     face_count: int = 0
@@ -163,9 +163,13 @@ class MeshResult:
     # lattice/seed counts of each anchored point generation.
     grid_anchor: Dict[str, Any] = field(default_factory=dict)
 
+    # Appended to preserve the positional constructor contract. For point
+    # generation, cell_count counts points and no compiled HDF is produced.
+    operation: str = "mesh_generation"  # or "computation_points"
+
     @property
     def ok(self) -> bool:
-        return self.status in {"success", "complete"}
+        return self.status == "complete"
 
     def __bool__(self) -> bool:
         return self.ok

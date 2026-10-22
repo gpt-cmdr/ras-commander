@@ -14,7 +14,7 @@ from ras_commander.geom.GeomMeshDataclasses import MeshResult
 @pytest.mark.parametrize(
     "status, expected",
     [
-        ("success", True),
+        ("success", False),
         ("complete", True),
         ("error", False),
         ("exception", False),
@@ -73,8 +73,15 @@ def test_public_bootstrap_reports_success_without_claiming_compiled_mesh(
     result = GeomMesh.generate_computation_points(
         geometry, mesh_name=area["Name"], cell_size=100
     )
-    assert result.status == "success" and result.ok and bool(result)
+    assert result.status == "complete" and result.ok and bool(result)
+    assert result.operation == "computation_points"
     assert result.cell_count == 2 and result.face_count == 0
     assert result.geom_hdf_path == ""
     assert hdf.read_bytes() == before
     assert "Storage Area 2D Points= 2" in geometry.read_text()
+
+    failed = GeomMesh.generate_computation_points(
+        geometry, mesh_name="missing-area", cell_size=100
+    )
+    assert failed.status == "error" and not failed
+    assert failed.operation == "computation_points"

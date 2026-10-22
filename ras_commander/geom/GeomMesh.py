@@ -2050,7 +2050,7 @@ def _reseed_after_perimeter_fix(
         hecras_dir=hecras_dir,
         ras_object=ras_object,
     )
-    if seeds.status != "success" or seeds.cell_count <= 0:
+    if not seeds.ok or seeds.cell_count <= 0:
         raise RuntimeError(
             f"Repaired perimeter seed generation failed: {seeds.error_message}"
         )
@@ -5413,9 +5413,10 @@ class GeomMesh:
             MeshResult with status, mesh_name, cell_count (= number of generated
             computation points), and geom_text_path. Points are written to the
             .g## text; the full mesh is produced by the subsequent HEC-RAS
-            geometry preprocess. Successful bootstrap keeps status="success"
-            and is truthy; this means points were generated, not that a compiled
-            mesh or hydraulically accepted model exists.
+            geometry preprocess. Successful bootstrap returns status="complete"
+            and operation="computation_points" and is truthy. This means points
+            were generated, not that a compiled mesh or hydraulically accepted
+            model exists.
         """
         import numpy as np
         from .GeomStorage import GeomStorage
@@ -5428,6 +5429,7 @@ class GeomMesh:
             mesh_name=mesh_name or f"<index {mesh_index}>",
             status="error",
             geom_text_path=str(geom_path),
+            operation="computation_points",
         )
 
         try:
@@ -5501,7 +5503,7 @@ class GeomMesh:
             # ── Write points into the .g## text (sole persistent output) ───
             _patch_text_seeds(geom_path, centers, mesh_name=area)
 
-            result.status = "success"
+            result.status = "complete"
             result.cell_count = n_pts
             logger.info(
                 f"Generated {n_pts} computation points for 2D area '{area}' "
