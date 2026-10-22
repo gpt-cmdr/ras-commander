@@ -132,12 +132,12 @@ correctly through `native`:
 
 | # | Case | Java backend | Native backend |
 |---|---|---|---|
-| D3 | First block of a dataset all missing | `TypeError` | Returns the valid values |
+| D3 | First block of a dataset all missing | May return no data | Returns the valid values; any disagreement requires investigation |
 | D5 | Pattern records (`TS-PATTERN` D part) | `TypeError` | Values stamped from 01JAN3000 |
 | D7 | Latin-1 pathnames (DSS6) | `TypeError` | Reads the dataset |
 | D8 | Weekly (`1WEEK`) DSS6 data | Drops the first value | All stored values |
-| J1 | Records with a base date (type 115) | Stamps off by the base date | Correct stamps |
-| J2 | Sub-minute data (for example `3Second`, `15Second`) | Stamps read as minutes from 1899 and `interval` in the wrong unit | Correct stamps; `interval` in fractional minutes (`0.05`, `0.25`) |
+| J1 (fixed) | Records with a base date (type 115) | Corrected by #591 | Correct stamps |
+| J2 (fixed) | Sub-minute data (for example `3Second`, `15Second`) | Stamps and interval corrected by #591 | Same corrected clock and fractional-minute interval |
 | J2b | Sub-minute data whose last value is not on a whole minute | Also drops the trailing values after the last whole minute | All stored values; same as HEC's C library |
 | D9 | Blank data type | 19 spaces | `""` |
 
@@ -192,7 +192,22 @@ whole-dataset frame is cut to the same window first.
 the shadow release. The Java read path and pyjnius are then removed (decision
 D4).
 
+### Shadow acceptance after Java timestamp corrections
+
+Base-date shifts, sub-minute clock or interval differences, and Java errors with
+native data are unexpected differences. An exception alone does not establish an
+all-missing first block. Historical J1/J2 allowances no longer suppress them.
+The remaining J2b tail allowance requires exactly matching values and timestamps
+through Java's final whole-minute stamp, equal metadata, and less than a minute
+of additional native data. Investigate all other truncations.
+
+The earlier 11,045-comparison evidence used the historical classification rules.
+It is retained as migration evidence, but does not establish zero unexpected
+differences under these stricter rules. Rerun native/Java corpus qualification
+with the optional wheel and Java runtime before accepting that claim.
+
 ## Related
 
 - [DSS Operations](dss-operations.md)
 - [DSS API reference](../api/dss.md)
+

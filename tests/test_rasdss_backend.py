@@ -378,7 +378,7 @@ def test_shadow_window_compares_against_cut_java_frame(shadow, monkeypatch, munc
     assert _backend.summary() == {"read_timeseries|identical|identical": 1}
 
 
-def test_known_java_bug_classes_are_expected(muncie_dss):
+def test_historical_java_errors_stay_visible_but_whitespace_is_expected(muncie_dss):
     pytest.importorskip("dss_commander")
     pathname = muncie_dss["ts"][0]
     native_df = _native_frame(muncie_dss["file"], pathname)
@@ -389,7 +389,7 @@ def test_known_java_bug_classes_are_expected(muncie_dss):
         (native_df.index - pd.Timedelta(days=40178)).as_unit("s"), name="datetime"
     )
     assert _backend.classify_timeseries(pathname, j1, None, native_df, None)[1] == (
-        "J1 Java base-date offset"
+        "frame difference"
     )
 
     d9_java = native_df.copy()
@@ -401,4 +401,4 @@ def test_known_java_bug_classes_are_expected(muncie_dss):
     outcome, label, _ = _backend.classify_timeseries(
         pathname, None, TypeError("NaT"), native_df, None
     )
-    assert (outcome, label) == ("expected", "D3 Java misses data (first block all missing)")
+    assert (outcome, label) == ("unexpected", "native data, Java error")

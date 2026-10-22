@@ -62,4 +62,5 @@ jobs:
       - name: Check DSS read contracts without optional runtimes
         run: >-
           python -m pytest tests/test_rasdss_java_read_fixes.py
+          tests/test_rasdss_backend.py tests/test_rasdss_shadow_regressions.py
           -m "not integration" -q

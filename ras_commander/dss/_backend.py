@@ -380,19 +380,13 @@ def classify_timeseries(
         if dset <= {"attr_ws:type", "attr_ws:units"}:
             return "expected", "D9 blank units/type whitespace", diffs
         n_int = native_df.attrs.get("interval")
-        if isinstance(n_int, float) and not float(n_int).is_integer():
-            if dset <= {"index_values", "attr:interval"}:
-                return "expected", "J2 sub-minute data (Java stamps/interval wrong)", diffs
-            if dset <= {"length", "attr:interval"} and _values_prefix(java_df, native_df):
-                return (
-                    "expected",
-                    "J2b sub-minute data (Java stamps wrong, end cut to whole minute)",
-                    diffs,
-                )
-        if dset == {"index_values"}:
-            offset = np.unique(_stamps(native_df) - _stamps(java_df))
-            if len(offset) == 1 and offset[0] % 86400 == 0:
-                return "expected", "J1 Java base-date offset", diffs
+        # #591 fixes Java base-date and granularity handling. A new clock or
+        # interval disagreement is unexpected, regardless of its magnitude.
+        # Monolith's independently observed whole-minute tail truncation remains
+        # recognizable only with an identical timestamped prefix and a short tail.
+        if (isinstance(n_int, float) and not float(n_int).is_integer()
+                and dset == {"length"} and _values_prefix(java_df, native_df)):
+            return "expected", "J2b Java sub-minute tail cut to whole minute", diffs
         if (
             "length" in dset
             and len(native_df) == len(java_df) + 1
@@ -404,17 +398,16 @@ def classify_timeseries(
 
     if java_df is None and native_df is not None:
         stamps = native_df.index
-        if len(stamps) and stamps[0].year == 3000:
+        known_no_data = (isinstance(java_exc, ValueError) and
+                         str(java_exc) == f"No data found for pathname: {pathname}")
+        parts = pathname.split("/")
+        if (known_no_data and len(parts) == 8 and parts[4] == "TS-PATTERN"
+                and len(stamps) and stamps[0].year == 3000):
             return "expected", "D5 pattern record (Java cannot read)", []
-        if not _is_ascii(pathname):
+        if known_no_data and not _is_ascii(pathname):
             return "expected", "D7 Latin-1 pathname (Java cannot address)", []
-        # Monolith returns an empty container when its whole-dataset range lookup
-        # gives up (first block all missing). Older RasDss raised an accidental
-        # TypeError there; it now raises ValueError("No data found ...").
-        if isinstance(java_exc, TypeError) or (
-            isinstance(java_exc, ValueError) and "No data found" in str(java_exc)
-        ):
-            return "expected", "D3 Java misses data (first block all missing)", []
+        # An error alone cannot prove an all-missing first block. Keep this
+        # disagreement visible instead of assuming a known Java producer defect.
         return "unexpected", "native data, Java error", []
 
     if java_df is not None and native_df is None:
@@ -432,9 +425,13 @@ def classify_timeseries(
 
 
 def _values_prefix(java_df: pd.DataFrame, native_df: pd.DataFrame) -> bool:
-    """True when Java holds fewer values and they equal native's leading values."""
+    """Verify a matching timestamped prefix ending at the last whole minute."""
     n = len(java_df)
     if not 0 < n < len(native_df):
+        return False
+    jt, nt = _stamps(java_df), _stamps(native_df)
+    if (not np.array_equal(jt, nt[:n]) or jt[-1] % 60 != 0
+            or not 0 < nt[-1] - jt[-1] < 60):
         return False
     jv = java_df["value"].to_numpy(dtype=np.float64)
     nv = native_df["value"].to_numpy(dtype=np.float64)[:n]

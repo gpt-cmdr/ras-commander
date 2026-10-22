@@ -114,6 +114,7 @@ class RasDss:
     backend = _backend.DEFAULT_BACKEND
 
     @staticmethod
+    @log_call
     def get_backend() -> str:
         """Return the backend the next read call will use.
 
@@ -260,7 +261,7 @@ class RasDss:
 
         Backends:
             Under ``"native"`` and ``"shadow"`` a missing file raises
-            ``FileNotFoundError`` (the Java path creates an empty DSS file)
+            ``FileNotFoundError`` (the Java path also refuses missing files)
             and a file that is not DSS raises
             ``dss_commander.DssFormatError`` (a ``RuntimeError``; Java
             returns zero rows).
