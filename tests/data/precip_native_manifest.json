@@ -1,0 +1,249 @@
+{
+  "schema_version": 1,
+  "ras_commander_base": "97ebab378efaac98acf59427489d39d26e642056",
+  "date": "2026-10-22",
+  "scope": "Six native uniform inline precipitation controls; source/serialized/native clock and depth conformance, not hydraulic acceptance",
+  "fixture_environment": "RAS_PRECIP_NATIVE_FIXTURE_ROOT",
+  "cases": [
+    {
+      "case_id": "davis_66_simulation_5min_clean",
+      "runtime_version": "6.6",
+      "mesh": "area2",
+      "depth_units": "in",
+      "rate_units": "in/hr",
+      "fixed_start": false,
+      "files": [
+        {
+          "path": "davis_66_simulation_5min_clean/DavisStormSystem.p02.hdf",
+          "bytes": 2875738,
+          "sha256": "15049ac5a9ed4e34873fa00525f2f5968af7fb703310d66e0a7e3e0ef757772b"
+        },
+        {
+          "path": "davis_66_simulation_5min_clean/source_before_compute/DavisStormSystem.p02",
+          "bytes": 9709,
+          "sha256": "6a6e681359649985a88ec24c8cc569b4a5c42861a49e34fac505a78e1fa9eec2"
+        },
+        {
+          "path": "davis_66_simulation_5min_clean/source_before_compute/DavisStormSystem.u01",
+          "bytes": 3885,
+          "sha256": "b583ed94338d6caf225639f385c4585b11df793462ef001cc8555a56871b0778"
+        },
+        {
+          "path": "davis_66_simulation_5min_clean/source_before_compute/DavisStormSystem.prj",
+          "bytes": 576,
+          "sha256": "225c1bd2da2518167a28a50a4bc3b662f012e80a93be41d160f09a148241cfe8"
+        },
+        {
+          "path": "davis_66_simulation_5min_clean/source_hyetograph.csv",
+          "bytes": 295,
+          "sha256": "a188519f32ef367d6e069f430286e58a7beb218d74d61ef9eba4a815a64f2204"
+        }
+      ],
+      "result": "davis_66_simulation_5min_clean/DavisStormSystem.p02.hdf",
+      "plan": "davis_66_simulation_5min_clean/source_before_compute/DavisStormSystem.p02",
+      "flow": "davis_66_simulation_5min_clean/source_before_compute/DavisStormSystem.u01",
+      "project": "davis_66_simulation_5min_clean/source_before_compute/DavisStormSystem.prj",
+      "source_csv": "davis_66_simulation_5min_clean/source_hyetograph.csv"
+    },
+    {
+      "case_id": "davis_66_fixed_5min_clean",
+      "runtime_version": "6.6",
+      "mesh": "area2",
+      "depth_units": "in",
+      "rate_units": "in/hr",
+      "fixed_start": true,
+      "files": [
+        {
+          "path": "davis_66_fixed_5min_clean/DavisStormSystem.p02.hdf",
+          "bytes": 2875730,
+          "sha256": "dad9741d4fc9eec5c5681743c7e15249ca2c571905b2f1256614800d1b55bb16"
+        },
+        {
+          "path": "davis_66_fixed_5min_clean/source_before_compute/DavisStormSystem.p02",
+          "bytes": 9709,
+          "sha256": "6a6e681359649985a88ec24c8cc569b4a5c42861a49e34fac505a78e1fa9eec2"
+        },
+        {
+          "path": "davis_66_fixed_5min_clean/source_before_compute/DavisStormSystem.u01",
+          "bytes": 3905,
+          "sha256": "c345705c476a43aece0998501ea512b2e4cb914980e7f7837349ea8ef3b9c71d"
+        },
+        {
+          "path": "davis_66_fixed_5min_clean/source_before_compute/DavisStormSystem.prj",
+          "bytes": 576,
+          "sha256": "225c1bd2da2518167a28a50a4bc3b662f012e80a93be41d160f09a148241cfe8"
+        },
+        {
+          "path": "davis_66_fixed_5min_clean/source_hyetograph.csv",
+          "bytes": 323,
+          "sha256": "ebf8e23042b3209c086e925a716dde0083818df69060cecf58e30ac0ce6c6a5b"
+        }
+      ],
+      "result": "davis_66_fixed_5min_clean/DavisStormSystem.p02.hdf",
+      "plan": "davis_66_fixed_5min_clean/source_before_compute/DavisStormSystem.p02",
+      "flow": "davis_66_fixed_5min_clean/source_before_compute/DavisStormSystem.u01",
+      "project": "davis_66_fixed_5min_clean/source_before_compute/DavisStormSystem.prj",
+      "source_csv": "davis_66_fixed_5min_clean/source_hyetograph.csv"
+    },
+    {
+      "case_id": "weise_66_si_5min_v3",
+      "runtime_version": "6.6",
+      "mesh": "2DArea",
+      "depth_units": "mm",
+      "rate_units": "mm/hr",
+      "fixed_start": false,
+      "files": [
+        {
+          "path": "weise_66_si_5min_v3/Weise.p01.hdf",
+          "bytes": 2763260,
+          "sha256": "bc9b62dd9ca3f1e789624de67966d6061cc73744b73491811d7c4216769c2ba4"
+        },
+        {
+          "path": "weise_66_si_5min_v3/source_before_compute/Weise.p01",
+          "bytes": 8553,
+          "sha256": "5d39d2a4dfefdf9b8f9681199e206ac51d0da0ae6296a5dafa74fabab514c681"
+        },
+        {
+          "path": "weise_66_si_5min_v3/source_before_compute/Weise.u01",
+          "bytes": 5282,
+          "sha256": "ddfa0ce96dbd5e1b81db4b72df5299e02856f4560773ca1242654046392b56ac"
+        },
+        {
+          "path": "weise_66_si_5min_v3/source_before_compute/Weise.prj",
+          "bytes": 808,
+          "sha256": "94da44a4fc39c4f43ea54b4fb1ac850e731b985a469b64a932ce8c34213d769b"
+        },
+        {
+          "path": "weise_66_si_5min_v3/source_hyetograph_mm.csv",
+          "bytes": 182,
+          "sha256": "488d819d8e371dc860d8d1e3bfdb580355956c8f4b9e48d00a4dc707de003157"
+        }
+      ],
+      "result": "weise_66_si_5min_v3/Weise.p01.hdf",
+      "plan": "weise_66_si_5min_v3/source_before_compute/Weise.p01",
+      "flow": "weise_66_si_5min_v3/source_before_compute/Weise.u01",
+      "project": "weise_66_si_5min_v3/source_before_compute/Weise.prj",
+      "source_csv": "weise_66_si_5min_v3/source_hyetograph_mm.csv"
+    },
+    {
+      "case_id": "davis_701_simulation_5min_clean",
+      "runtime_version": "7.0.1",
+      "mesh": "area2",
+      "depth_units": "in",
+      "rate_units": "in/hr",
+      "fixed_start": false,
+      "files": [
+        {
+          "path": "davis_701_simulation_5min_clean/DavisStormSystem.p02.hdf",
+          "bytes": 3160730,
+          "sha256": "922f5f9a1530ee2900dcc7f2e964a5f9d727f555068e8f929db6cf8726607b11"
+        },
+        {
+          "path": "davis_701_simulation_5min_clean/source_before_compute/DavisStormSystem.p02",
+          "bytes": 9709,
+          "sha256": "6a6e681359649985a88ec24c8cc569b4a5c42861a49e34fac505a78e1fa9eec2"
+        },
+        {
+          "path": "davis_701_simulation_5min_clean/source_before_compute/DavisStormSystem.u01",
+          "bytes": 3885,
+          "sha256": "b583ed94338d6caf225639f385c4585b11df793462ef001cc8555a56871b0778"
+        },
+        {
+          "path": "davis_701_simulation_5min_clean/source_before_compute/DavisStormSystem.prj",
+          "bytes": 576,
+          "sha256": "225c1bd2da2518167a28a50a4bc3b662f012e80a93be41d160f09a148241cfe8"
+        },
+        {
+          "path": "davis_701_simulation_5min_clean/source_hyetograph.csv",
+          "bytes": 295,
+          "sha256": "a188519f32ef367d6e069f430286e58a7beb218d74d61ef9eba4a815a64f2204"
+        }
+      ],
+      "result": "davis_701_simulation_5min_clean/DavisStormSystem.p02.hdf",
+      "plan": "davis_701_simulation_5min_clean/source_before_compute/DavisStormSystem.p02",
+      "flow": "davis_701_simulation_5min_clean/source_before_compute/DavisStormSystem.u01",
+      "project": "davis_701_simulation_5min_clean/source_before_compute/DavisStormSystem.prj",
+      "source_csv": "davis_701_simulation_5min_clean/source_hyetograph.csv"
+    },
+    {
+      "case_id": "davis_701_fixed_5min_clean",
+      "runtime_version": "7.0.1",
+      "mesh": "area2",
+      "depth_units": "in",
+      "rate_units": "in/hr",
+      "fixed_start": true,
+      "files": [
+        {
+          "path": "davis_701_fixed_5min_clean/DavisStormSystem.p02.hdf",
+          "bytes": 3160712,
+          "sha256": "af443cef62cc3b0f6d11fdcf7eb492e920c9b4e4151498fdba48cdcdec24f146"
+        },
+        {
+          "path": "davis_701_fixed_5min_clean/source_before_compute/DavisStormSystem.p02",
+          "bytes": 9709,
+          "sha256": "6a6e681359649985a88ec24c8cc569b4a5c42861a49e34fac505a78e1fa9eec2"
+        },
+        {
+          "path": "davis_701_fixed_5min_clean/source_before_compute/DavisStormSystem.u01",
+          "bytes": 3905,
+          "sha256": "c345705c476a43aece0998501ea512b2e4cb914980e7f7837349ea8ef3b9c71d"
+        },
+        {
+          "path": "davis_701_fixed_5min_clean/source_before_compute/DavisStormSystem.prj",
+          "bytes": 576,
+          "sha256": "225c1bd2da2518167a28a50a4bc3b662f012e80a93be41d160f09a148241cfe8"
+        },
+        {
+          "path": "davis_701_fixed_5min_clean/source_hyetograph.csv",
+          "bytes": 323,
+          "sha256": "ebf8e23042b3209c086e925a716dde0083818df69060cecf58e30ac0ce6c6a5b"
+        }
+      ],
+      "result": "davis_701_fixed_5min_clean/DavisStormSystem.p02.hdf",
+      "plan": "davis_701_fixed_5min_clean/source_before_compute/DavisStormSystem.p02",
+      "flow": "davis_701_fixed_5min_clean/source_before_compute/DavisStormSystem.u01",
+      "project": "davis_701_fixed_5min_clean/source_before_compute/DavisStormSystem.prj",
+      "source_csv": "davis_701_fixed_5min_clean/source_hyetograph.csv"
+    },
+    {
+      "case_id": "weise_701_si_5min_v3",
+      "runtime_version": "7.0.1",
+      "mesh": "2DArea",
+      "depth_units": "mm",
+      "rate_units": "mm/hr",
+      "fixed_start": false,
+      "files": [
+        {
+          "path": "weise_701_si_5min_v3/Weise.p01.hdf",
+          "bytes": 2799609,
+          "sha256": "09cf3d49fdcfe432ff9b2787640ca6db32fc14148dfef2650e2c7b1c806f9dd4"
+        },
+        {
+          "path": "weise_701_si_5min_v3/source_before_compute/Weise.p01",
+          "bytes": 8553,
+          "sha256": "5d39d2a4dfefdf9b8f9681199e206ac51d0da0ae6296a5dafa74fabab514c681"
+        },
+        {
+          "path": "weise_701_si_5min_v3/source_before_compute/Weise.u01",
+          "bytes": 5282,
+          "sha256": "ddfa0ce96dbd5e1b81db4b72df5299e02856f4560773ca1242654046392b56ac"
+        },
+        {
+          "path": "weise_701_si_5min_v3/source_before_compute/Weise.prj",
+          "bytes": 808,
+          "sha256": "94da44a4fc39c4f43ea54b4fb1ac850e731b985a469b64a932ce8c34213d769b"
+        },
+        {
+          "path": "weise_701_si_5min_v3/source_hyetograph_mm.csv",
+          "bytes": 182,
+          "sha256": "488d819d8e371dc860d8d1e3bfdb580355956c8f4b9e48d00a4dc707de003157"
+        }
+      ],
+      "result": "weise_701_si_5min_v3/Weise.p01.hdf",
+      "plan": "weise_701_si_5min_v3/source_before_compute/Weise.p01",
+      "flow": "weise_701_si_5min_v3/source_before_compute/Weise.u01",
+      "project": "weise_701_si_5min_v3/source_before_compute/Weise.prj",
+      "source_csv": "weise_701_si_5min_v3/source_hyetograph_mm.csv"
+    }
+  ]
+}
