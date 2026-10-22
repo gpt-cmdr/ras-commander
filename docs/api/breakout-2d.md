@@ -123,6 +123,25 @@ assert clone.boundaries_unchanged
 assert prepared.boundaries_unchanged
 ```
 
+For a cookie-cut bootstrap, pass the parent's selected physical cell centres as
+`computation_points` (an N-by-2 XY array in the geometry's CRS and horizontal
+units). Use `refresh_hdf=True`, `refresh_method="rasexe"`, `remesh=False` and
+`anchor_grid_to_parent=False` together. Preparation writes that set through
+`GeomMesh.write_computation_points` instead of generating a regular grid. It
+returns the text-writing result in `prepared.computation_points_result` and
+then runs the normal native geometry preprocessor. No seeds are added, removed
+or snapped; native fixed-width text serialization still applies. Every supplied
+point must be unique, finite and strictly inside the child perimeter.
+The native text round trip must preserve uniqueness and strict containment too;
+field overflow is rejected. The writer preserves numbered `.bak` files and
+atomically replaces the owned geometry text after all checks pass.
+
+This is an explicit-point authoring primitive, not a claim of exact parent
+mesh reproduction. After compilation, the caller must check cell count, centre
+mapping, boundary faces and property tables. Native failure requires an explicit
+repair plan; the API does not silently generate a replacement point set. No
+hydraulic simulation is launched by preparation.
+
 The clone operation creates new geometry, unsteady, and plan files; associates
 the cloned plan with the new `g##` and `u##`; makes that plan current; and
 registers the cloned geometry as a RASMapper geometry layer. It verifies both
