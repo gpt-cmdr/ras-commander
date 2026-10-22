@@ -7,6 +7,7 @@ pub mod fluvial_geometry;
 pub mod fluvial_topology;
 mod mesh;
 mod one_d;
+mod panic_guard;
 pub mod ras_text;
 mod reader;
 mod session;
@@ -37,7 +38,8 @@ pub(crate) fn pool(threads: Option<usize>) -> PyResult<Arc<rayon::ThreadPool>> {
     let mut cache = POOLS
         .get_or_init(|| Mutex::new(HashMap::new()))
         .lock()
-        .map_err(|_| PyValueError::new_err("thread pool cache poisoned"))?;
+        // Pools are immutable once built; a panic elsewhere cannot corrupt the map.
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
     if let Some(pool) = cache.get(&count) {
         return Ok(pool.clone());
     }
@@ -67,13 +69,15 @@ fn export_ipc_file(
     format: &str,
     max_batch_rows: usize,
 ) -> PyResult<String> {
-    let format = format
-        .parse::<ras_export::Format>()
-        .map_err(|e| PyValueError::new_err(e.to_string()))?;
-    py.detach(move || {
-        let metrics = ras_export::export_ipc(&input, &output, format, max_batch_rows)
+    crate::panic_guard::guard(|| {
+        let format = format
+            .parse::<ras_export::Format>()
             .map_err(|e| PyValueError::new_err(e.to_string()))?;
-        serde_json::to_string(&metrics).map_err(|e| PyValueError::new_err(e.to_string()))
+        py.detach(move || {
+            let metrics = ras_export::export_ipc(&input, &output, format, max_batch_rows)
+                .map_err(|e| PyValueError::new_err(e.to_string()))?;
+            serde_json::to_string(&metrics).map_err(|e| PyValueError::new_err(e.to_string()))
+        })
     })
 }
 
@@ -87,14 +91,16 @@ fn export_pmtiles_ipc_file(
     options: &str,
     threads: Option<usize>,
 ) -> PyResult<String> {
-    let options: ras_export::pmtiles_bridge::Options =
-        serde_json::from_str(options).map_err(|e| PyValueError::new_err(e.to_string()))?;
-    let pool = pool(threads)?;
-    py.detach(move || {
-        pool.install(|| {
-            let metrics = ras_export::pmtiles_bridge::export_ipc(&input, &output, &options)
-                .map_err(|e| PyValueError::new_err(e.to_string()))?;
-            serde_json::to_string(&metrics).map_err(|e| PyValueError::new_err(e.to_string()))
+    crate::panic_guard::guard(|| {
+        let options: ras_export::pmtiles_bridge::Options =
+            serde_json::from_str(options).map_err(|e| PyValueError::new_err(e.to_string()))?;
+        let pool = pool(threads)?;
+        py.detach(move || {
+            pool.install(|| {
+                let metrics = ras_export::pmtiles_bridge::export_ipc(&input, &output, &options)
+                    .map_err(|e| PyValueError::new_err(e.to_string()))?;
+                serde_json::to_string(&metrics).map_err(|e| PyValueError::new_err(e.to_string()))
+            })
         })
     })
 }
@@ -111,34 +117,36 @@ fn validate_export_wkb(
     array_offset: usize,
     count: usize,
 ) -> PyResult<()> {
-    let offsets = offsets.as_slice()?;
-    let data = data.as_slice()?;
-    let validity = validity.as_ref().map(|v| v.as_slice()).transpose()?;
-    let end = array_offset
-        .checked_add(count)
-        .ok_or_else(|| PyValueError::new_err("WKB array offset overflow"))?;
-    if end >= offsets.len() {
-        return Err(PyValueError::new_err("WKB offsets outside buffer"));
-    }
-    if let Some(bits) = validity {
-        if count > 0 && (end - 1) / 8 >= bits.len() {
-            return Err(PyValueError::new_err("WKB validity outside buffer"));
+    crate::panic_guard::guard(|| {
+        let offsets = offsets.as_slice()?;
+        let data = data.as_slice()?;
+        let validity = validity.as_ref().map(|v| v.as_slice()).transpose()?;
+        let end = array_offset
+            .checked_add(count)
+            .ok_or_else(|| PyValueError::new_err("WKB array offset overflow"))?;
+        if end >= offsets.len() {
+            return Err(PyValueError::new_err("WKB offsets outside buffer"));
         }
-    }
-    for i in array_offset..end {
-        let start = usize::try_from(offsets[i])
-            .map_err(|_| PyValueError::new_err("negative WKB offset"))?;
-        let stop = usize::try_from(offsets[i + 1])
-            .map_err(|_| PyValueError::new_err("negative WKB offset"))?;
-        let bytes = data
-            .get(start..stop)
-            .ok_or_else(|| PyValueError::new_err("WKB offsets outside data"))?;
-        if validity.is_none_or(|bits| bits[i / 8] & (1 << (i % 8)) != 0) {
-            ras_export::contract::validate_wkb(bytes, false)
-                .map_err(|e| PyValueError::new_err(e.to_string()))?;
+        if let Some(bits) = validity {
+            if count > 0 && (end - 1) / 8 >= bits.len() {
+                return Err(PyValueError::new_err("WKB validity outside buffer"));
+            }
         }
-    }
-    Ok(())
+        for i in array_offset..end {
+            let start = usize::try_from(offsets[i])
+                .map_err(|_| PyValueError::new_err("negative WKB offset"))?;
+            let stop = usize::try_from(offsets[i + 1])
+                .map_err(|_| PyValueError::new_err("negative WKB offset"))?;
+            let bytes = data
+                .get(start..stop)
+                .ok_or_else(|| PyValueError::new_err("WKB offsets outside data"))?;
+            if validity.is_none_or(|bits| bits[i / 8] & (1 << (i % 8)) != 0) {
+                ras_export::contract::validate_wkb(bytes, false)
+                    .map_err(|e| PyValueError::new_err(e.to_string()))?;
+            }
+        }
+        Ok(())
+    })
 }
 
 #[pymodule]
@@ -153,6 +161,7 @@ fn ras_commander_fast_hdf(m: &Bound<'_, PyModule>) -> PyResult<()> {
     )?;
     m.add("API_VERSION", API_VERSION)?;
     m.add("CorruptDataError", m.py().get_type::<CorruptDataError>())?;
+    panic_guard::register(m)?;
     domain::register(m)?;
     fim::register(m)?;
     session::register(m)?;

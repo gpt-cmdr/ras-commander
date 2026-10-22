@@ -20,55 +20,59 @@ pub fn assemble_cells<'py>(
     strict: bool,
     return_diagnostics: bool,
 ) -> PyResult<Bound<'py, PyAny>> {
-    // Own buffers before releasing Python: callers may mutate original arrays
-    // from another thread while this operation runs.
-    let top = Topology::new(
-        face_points.as_array().to_owned(),
-        face_endpoints.as_array().to_owned(),
-        face_perimeter_info.as_array().to_owned(),
-        face_perimeter_values.as_array().to_owned(),
-        cell_face_info.as_array().to_owned(),
-        cell_face_values.as_array().to_owned(),
-    );
-    let threads = crate::reader::threads(threads)?;
-    let policy = if strict {
-        GeometryPolicy::Strict
-    } else {
-        GeometryPolicy::QuarantineInvalid
-    };
-    let packed = py
-        .detach(|| top.assemble(policy, threads))
-        .map_err(crate::reader::err)?;
-    let coords = packed.coordinates.into_iter().flatten().collect::<Vec<_>>();
-    let offsets = packed
-        .offsets
-        .into_iter()
-        .map(|n| i64::try_from(n).map_err(|_| PyValueError::new_err("coordinate count overflow")))
-        .collect::<PyResult<Vec<_>>>()?;
-    let ids = packed.cell_ids;
-    // The Python adapter owns canonical no_polygon/boundary_only records.
-    // Preserve this API's historical invalid-geometry-only diagnostics.
-    let diagnostics = packed
-        .diagnostics
-        .into_iter()
-        .filter(|d| d.kind == OmissionKind::InvalidGeometry)
-        .map(|d| (d.cell_id, "invalid_geometry", d.reason))
-        .collect::<Vec<_>>();
-    let coords = Array2::from_shape_vec((coords.len() / 2, 2), coords)
-        .map_err(|e| PyValueError::new_err(e.to_string()))?;
-    let arrays = (
-        coords.into_pyarray(py),
-        offsets.into_pyarray(py),
-        ids.into_pyarray(py),
-    );
-    if return_diagnostics {
-        let diagnostics = diagnostic_records(py, diagnostics)?;
-        Ok((arrays.0, arrays.1, arrays.2, diagnostics)
-            .into_pyobject(py)?
-            .into_any())
-    } else {
-        Ok(arrays.into_pyobject(py)?.into_any())
-    }
+    crate::panic_guard::guard(|| {
+        // Own buffers before releasing Python: callers may mutate original arrays
+        // from another thread while this operation runs.
+        let top = Topology::new(
+            face_points.as_array().to_owned(),
+            face_endpoints.as_array().to_owned(),
+            face_perimeter_info.as_array().to_owned(),
+            face_perimeter_values.as_array().to_owned(),
+            cell_face_info.as_array().to_owned(),
+            cell_face_values.as_array().to_owned(),
+        );
+        let threads = crate::reader::threads(threads)?;
+        let policy = if strict {
+            GeometryPolicy::Strict
+        } else {
+            GeometryPolicy::QuarantineInvalid
+        };
+        let packed = py
+            .detach(|| top.assemble(policy, threads))
+            .map_err(crate::reader::err)?;
+        let coords = packed.coordinates.into_iter().flatten().collect::<Vec<_>>();
+        let offsets = packed
+            .offsets
+            .into_iter()
+            .map(|n| {
+                i64::try_from(n).map_err(|_| PyValueError::new_err("coordinate count overflow"))
+            })
+            .collect::<PyResult<Vec<_>>>()?;
+        let ids = packed.cell_ids;
+        // The Python adapter owns canonical no_polygon/boundary_only records.
+        // Preserve this API's historical invalid-geometry-only diagnostics.
+        let diagnostics = packed
+            .diagnostics
+            .into_iter()
+            .filter(|d| d.kind == OmissionKind::InvalidGeometry)
+            .map(|d| (d.cell_id, "invalid_geometry", d.reason))
+            .collect::<Vec<_>>();
+        let coords = Array2::from_shape_vec((coords.len() / 2, 2), coords)
+            .map_err(|e| PyValueError::new_err(e.to_string()))?;
+        let arrays = (
+            coords.into_pyarray(py),
+            offsets.into_pyarray(py),
+            ids.into_pyarray(py),
+        );
+        if return_diagnostics {
+            let diagnostics = diagnostic_records(py, diagnostics)?;
+            Ok((arrays.0, arrays.1, arrays.2, diagnostics)
+                .into_pyobject(py)?
+                .into_any())
+        } else {
+            Ok(arrays.into_pyobject(py)?.into_any())
+        }
+    })
 }
 
 pub(crate) fn diagnostic_records<'py>(

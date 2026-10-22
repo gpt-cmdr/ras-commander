@@ -112,6 +112,27 @@ construction failures, missing datasets use KeyError, I/O failures use OSError,
 and invalid arguments/data use ValueError. Automatic fallback should never
 catch every exception indiscriminately or hide corrupt inputs.
 
+### Panic containment
+
+Every `#[pyfunction]` and `#[pymethods]` body runs inside
+`panic_guard::guard` (`catch_unwind`). Without it, a Rust panic surfaced as
+PyO3's `PanicException`, a `BaseException`, which escaped the
+`except Exception` h5py fallback.
+- With `ras_commander.fast_hdf` imported, a panic raises its
+  `FastHdfPanicError(FastHdfError)`: `auto` mode falls back to h5py, and
+  `rust` mode reports a `FastHdfError`.
+- The standalone module raises `NativePanicError(RuntimeError)`.
+
+`HdfSession` catches engine panics while it holds its lock, and recovers a
+poisoned lock. A panic therefore never disables a session: later reads,
+`closed` and `close()` keep working, including on process-cached sessions.
+
+`_panic_for_test(message)` and `HdfSession._panic_for_test()` inject a
+panic for tests (`tests/rust_engine_bridge/panic_guard_test.py`).
+
+Aborts (stack overflow, allocation failure) cannot be caught in-process. The
+engine prevents those on file input; see the engine hardening branch.
+
 ## Dependency provenance
 
 * hdf5-reader/core are vendored inside the pinned ras-commander-rust engine,
@@ -441,7 +462,8 @@ required-mode refusals and in the trace.
 ## Engine API 9 bindings (API_VERSION = 11)
 
 Engine pin 435ddb4b35c30507127a2656dae5d85b214553ea (ras-commander-rust engine/route2-gaps-20261021,
-engine API 9). Full-feature registration set: 77 entrypoints.
+engine API 9). Full-feature registration set: 78 entrypoints (77 plus the
+`_panic_for_test` hook; see "Panic containment" below).
 
 | Binding | Engine API | Returns |
 |---|---|---|
