@@ -126,7 +126,7 @@ SOFTWARE.
 | pyo3-macros-backend (compile time only) | 0.30.1 | MIT OR Apache-2.0 | https://github.com/pyo3/pyo3 | [32c76dbe0e73](#licence-32c76dbe0e73), [afcbe3b2e6b3](#licence-afcbe3b2e6b3) |
 | quote (compile time only) | 1.0.47 | MIT OR Apache-2.0 | https://github.com/dtolnay/quote | [b30df9a48463](#licence-b30df9a48463), [23f18e03dc49](#licence-23f18e03dc49) |
 | radium | 0.7.0 | MIT | https://github.com/bitvecto-rs/radium | [13f4cc9fbc8d](#licence-13f4cc9fbc8d) |
-| ras-commander-rust | 0.1.0 | MIT | https://github.com/CLB-Engineering-Corporation/ras-commander-rust | [bc1318a06e89](#licence-bc1318a06e89) |
+| ras-commander-rust | 0.1.0 | MIT | https://github.com/CLB-Engineering-Corporation/ras-commander-rust | [c6f7836d26fe](#licence-c6f7836d26fe) |
 | rawpointer | 0.2.1 | MIT/Apache-2.0 | https://github.com/bluss/rawpointer/ | [143368af9701](#licence-143368af9701), [7576269ea71f](#licence-7576269ea71f) |
 | rayon | 1.10.0 | MIT OR Apache-2.0 | https://github.com/rayon-rs/rayon | [143368af9701](#licence-143368af9701), [0621878e61f0](#licence-0621878e61f0) |
 | rayon-core | 1.12.1 | MIT OR Apache-2.0 | https://github.com/rayon-rs/rayon | [143368af9701](#licence-143368af9701), [0621878e61f0](#licence-0621878e61f0) |
@@ -1398,14 +1398,33 @@ TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF
 THIS SOFTWARE.
 ```
 
-### licence-bc1318a06e89
+### licence-c0c56f26d9c0
+
+File(s): LICENSE. Used by: alloc-no-stdlib 2.0.4, alloc-stdlib 0.2.4, brotli 3.5.0, brotli-decompressor 2.5.1.
+
+```text
+Copyright (c) 2016 Dropbox, Inc.
+All rights reserved.
+
+Redistribution and use in source and binary forms, with or without modification, are permitted provided that the following conditions are met:
+
+1. Redistributions of source code must retain the above copyright notice, this list of conditions and the following disclaimer.
+
+2. Redistributions in binary form must reproduce the above copyright notice, this list of conditions and the following disclaimer in the documentation and/or other materials provided with the distribution.
+
+3. Neither the name of the copyright holder nor the names of its contributors may be used to endorse or promote products derived from this software without specific prior written permission.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+```
+
+### licence-c6f7836d26fe
 
 File(s): LICENSE. Used by: ras-commander-rust 0.1.0.
 
 ```text
 MIT License
 
-Copyright (c) 2024 William M. Katzenmeyer
+Copyright (c) 2024 CLB Engineering Corporation
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -1424,25 +1443,6 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
-```
-
-### licence-c0c56f26d9c0
-
-File(s): LICENSE. Used by: alloc-no-stdlib 2.0.4, alloc-stdlib 0.2.4, brotli 3.5.0, brotli-decompressor 2.5.1.
-
-```text
-Copyright (c) 2016 Dropbox, Inc.
-All rights reserved.
-
-Redistribution and use in source and binary forms, with or without modification, are permitted provided that the following conditions are met:
-
-1. Redistributions of source code must retain the above copyright notice, this list of conditions and the following disclaimer.
-
-2. Redistributions in binary form must reproduce the above copyright notice, this list of conditions and the following disclaimer in the documentation and/or other materials provided with the distribution.
-
-3. Neither the name of the copyright holder nor the names of its contributors may be used to endorse or promote products derived from this software without specific prior written permission.
-
-THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ```
 
 ### licence-ce4868c8e4eb
