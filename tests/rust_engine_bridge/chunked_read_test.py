@@ -55,6 +55,15 @@ def _assert_chunked(record):
     assert int(record["detail"].split()[0]) > 1
 
 
+def _assert_served(record, backend, layout):
+    # Auto mode serves contiguous storage above the budget through h5py directly
+    # (faster than native blocks, same values); everything else is chunked native.
+    if backend == "auto" and layout == "contiguous":
+        assert record["backend"] == "h5py" and record["route"] == "contiguous-direct"
+    else:
+        _assert_chunked(record)
+
+
 NAN_BITS = {
     "f4": ("<u4", [0x7FC00001, 0x7F800001, 0xFFC12345, 0x7FFFFFFF]),
     "f8": ("<u8", [0x7FF8000000000001, 0x7FF0000000000001, 0xFFF8DEADBEEF0001]),
@@ -100,7 +109,7 @@ def test_whole_read_is_identical_to_h5py(small_budget, tmp_path, dtype, ndim, la
         for backend in ("rust", "auto"):
             values, record = _read(f["v"], backend=backend)
             _assert_identical(values, expected)
-            _assert_chunked(record)
+            _assert_served(record, backend, layout)
 
 
 def test_required_environment_serves_natively(small_budget, tmp_path, monkeypatch):
@@ -140,7 +149,7 @@ def test_partial_selection_crossing_chunks(small_budget, tmp_path, layout, selec
         for backend in ("rust", "auto"):
             values, record = _read(f["v"], key, backend=backend)
             _assert_identical(values, expected)
-            _assert_chunked(record)
+            _assert_served(record, backend, layout)
 
 
 @pytest.mark.parametrize("layout", sorted(LAYOUTS))
@@ -294,7 +303,7 @@ def test_declared_huge_datasets_are_refused_before_allocation(native, tmp_path, 
             # Auto returns h5py's own outcome: here NumPy cannot allocate 1 PiB.
             with fast_hdf.trace_reads() as records, pytest.raises(MemoryError):
                 fast_hdf.read_dataset(f[name], backend="auto")
-            assert records[-1]["backend"] == "h5py-fallback"
+            assert records[-1]["backend"] == ("h5py" if name == "contiguous" else "h5py-fallback")
             allocations.clear()
         # A small natively servable selection of the same dataset still works.
         values = fast_hdf.read_dataset(f["chunked"], (slice(0, 2), slice(0, 3)), backend="rust")
@@ -313,7 +322,7 @@ def test_fill_only_beyond_budget_falls_back_in_auto(small_budget, tmp_path):
             expected = f[name][()]
             values, record = _read(f[name], backend="auto")
             _assert_identical(values, expected)
-            assert record["backend"] == "h5py-fallback"
+            assert record["backend"] == ("h5py" if name == "unallocated" else "h5py-fallback")
             with pytest.raises(fast_hdf.FastHdfError, match="implausible declared size"):
                 fast_hdf.read_dataset(f[name], backend="rust")
 

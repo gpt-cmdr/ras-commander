@@ -536,6 +536,13 @@ def read_dataset(dataset: h5py.Dataset, selection=None, *, backend="auto", threa
         _record(dataset.name, "h5py-fallback", "advanced-selection")
         return dataset[key]
     expected = dataset.shape if slices is None else tuple(len(range(*item)) for item in slices)
+    if mode == "auto" and dataset.chunks is None and _over_budget(expected, dataset.dtype):
+        # Contiguous storage above one engine call: h5py copies it straight from
+        # the file, 4-5x faster than bounded native blocks once the file is
+        # cached (PERF_CHUNKED_READS.md), with the same values. Required mode
+        # keeps the native chunked path.
+        _record(dataset.name, "h5py", "contiguous-direct")
+        return dataset[key]
     route = ("mesh_result" if dataset.name.startswith(
         "/Results/Unsteady/Output/Output Blocks/Base Output/") and "/2D Flow Areas/" in dataset.name
         else "generic")
@@ -738,7 +745,11 @@ def read_datasets(hdf_path, dataset_paths: Sequence[str], *, backend="auto", thr
                         ds = datasets[path]
                         size = ds.size * ds.dtype.itemsize
                         if _over_budget(ds.shape, ds.dtype):
-                            native_values[path] = _read_chunked(session, ds, None, ds.shape)[0]
+                            if mode == "auto" and ds.chunks is None:
+                                # Contiguous above the budget: h5py direct (see read_dataset).
+                                native_values[path] = ds[()]
+                            else:
+                                native_values[path] = _read_chunked(session, ds, None, ds.shape)[0]
                             continue
                         if batch and batch_bytes + size > _NATIVE_CALL_BUDGET:
                             native_values.update(session.read_numeric_batch(batch))
