@@ -359,6 +359,147 @@ def _checked_array(result, dtype, expected_shape):
     return result.astype(dtype, copy=False)
 
 
+# ------------------------------------------------------------- chunked reads
+# The engine refuses any single numeric read whose decoded values exceed its
+# DEFAULT_READ_MAX_BYTES (2 GiB) before allocating, so a crafted file cannot make
+# it reserve memory the file does not hold. Larger reads are served here as a
+# loop of bounded hyperslab reads into one NumPy-allocated output, after the
+# declared size has been checked against the storage the file really holds
+# (``_implausible``). Tests shrink both budgets through monkeypatch.
+_NATIVE_CALL_BUDGET = 2 * 1024 ** 3
+_CHUNKED_BLOCK_BYTES = 256 * 1024 ** 2
+# Worst-case decoded/stored size ratio of each filter the engine decodes. A
+# filter without a finite bound (scale-offset with zero bits, szip, unknown
+# plugins) makes a declared size unprovable, so such datasets are refused here.
+_FILTER_EXPANSION = {
+    h5py.h5z.FILTER_DEFLATE: 1100,   # deflate cannot exceed about 1032:1
+    h5py.h5z.FILTER_SHUFFLE: 1,
+    h5py.h5z.FILTER_FLETCHER32: 1,
+    h5py.h5z.FILTER_NBIT: 64,        # at least one stored bit per 64-bit value
+    32004: 256,                      # LZ4: at most 255:1
+}
+
+
+def _over_budget(shape, dtype):
+    """Whether one engine call could not return ``shape`` values of ``dtype``."""
+    return math.prod(shape) * dtype.itemsize > _NATIVE_CALL_BUDGET
+
+
+def _implausible(dataset):
+    """Why the declared size of ``dataset`` is not backed by its file, or ``None``.
+
+    Policy (applied only to reads above the per-call budget, before allocating):
+    contiguous storage must be allocated and lie inside the file; chunked
+    storage must be no larger than the file, its stored chunks must decode to
+    no more than ``stored bytes x worst-case filter expansion``, and the
+    remainder served from the fill value (unallocated chunks) may not exceed
+    the per-call budget. Anything else stays an engine refusal: auto mode then
+    returns h5py's outcome and required mode raises :class:`FastHdfError`.
+    """
+    itemsize = dataset.dtype.itemsize
+    declared = math.prod(dataset.shape) * itemsize
+    file_size = os.path.getsize(os.fsdecode(dataset.file.filename))
+    dsid = dataset.id
+    dcpl = dsid.get_create_plist()
+    layout = dcpl.get_layout()
+    if layout == h5py.h5d.COMPACT:
+        return None  # bounded by the 64 KiB object header limit
+    if layout == h5py.h5d.CONTIGUOUS:
+        offset = dsid.get_offset()
+        if offset is None:
+            return f"declares {declared} bytes of contiguous storage that is not allocated"
+        if offset + declared > file_size:
+            return (f"declares {declared} contiguous bytes at offset {offset} "
+                    f"in a {file_size} byte file")
+        return None
+    if layout != h5py.h5d.CHUNKED or not dataset.chunks:
+        return f"storage layout {layout} is not provable"
+    stored = dsid.get_storage_size()
+    if stored > file_size:
+        return f"reports {stored} stored bytes in a {file_size} byte file"
+    expansion = 1
+    for index in range(dcpl.get_nfilters()):
+        code = dcpl.get_filter(index)[0]
+        if code not in _FILTER_EXPANSION:
+            return f"filter {code} has no bounded expansion"
+        expansion *= _FILTER_EXPANSION[code]
+    allocated = dsid.get_num_chunks()
+    backed = allocated * math.prod(dataset.chunks) * itemsize
+    if backed > stored * expansion:
+        return (f"{allocated} stored chunks would decode to {backed} bytes from "
+                f"{stored} stored bytes")
+    unbacked = declared - min(declared, backed)
+    if unbacked > _NATIVE_CALL_BUDGET:
+        return (f"{unbacked} of {declared} declared bytes have no stored chunks "
+                f"(fill-only beyond the {_NATIVE_CALL_BUDGET} byte budget)")
+    return None
+
+
+def _block_plan(dataset, slices, block_bytes):
+    """``(source selection, output index)`` blocks covering ``slices``.
+
+    Blocks split the first axis whose trailing slab fits ``block_bytes``; outer
+    axes are walked one index at a time. With unit steps, block edges fall on
+    the stored chunk grid of the split axis so no chunk is decoded twice, and a
+    block grows to one whole chunk band when the band fits the per-call budget.
+    """
+    sel = slices or [(0, n, 1) for n in dataset.shape]
+    counts = [len(range(*s)) for s in sel]
+    itemsize = dataset.dtype.itemsize
+    tails = [itemsize * math.prod(counts[k + 1:]) for k in range(len(counts))]
+    axis = next(k for k, tail in enumerate(tails) if tail <= block_bytes)
+    count, (start, _, step) = counts[axis], sel[axis]
+    rows = max(1, min(count, block_bytes // tails[axis]))
+    chunk = dataset.chunks[axis] if dataset.chunks else 1
+    aligned = False
+    if step == 1 and chunk > 1:
+        if rows >= chunk:
+            rows -= rows % chunk
+        elif chunk * tails[axis] <= _NATIVE_CALL_BUDGET:
+            rows = chunk
+        aligned = rows % chunk == 0
+    if aligned:
+        first = (start // rows + 1) * rows - start
+        edges = [0, *range(first, count, rows), count] if first < count else [0, count]
+    else:
+        edges = [*range(0, count, rows), count]
+    trailing_src = [tuple(s) for s in sel[axis + 1:]]
+    trailing_dst = [slice(None)] * len(trailing_src)
+    for outer in np.ndindex(*counts[:axis]):
+        outer_src = [(s0 + i * st, s0 + i * st + 1, 1) for i, (s0, _, st) in zip(outer, sel)]
+        outer_dst = [slice(i, i + 1) for i in outer]
+        for a, b in zip(edges, edges[1:]):
+            src = (*outer_src, (start + a * step, start + (b - 1) * step + 1, step), *trailing_src)
+            yield list(src), (*outer_dst, slice(a, b), *trailing_dst)
+
+
+def _read_chunked(session, dataset, slices, expected):
+    """Exact ``dataset[slices]`` above the per-call budget, as bounded native reads.
+
+    Returns ``(values, blocks)``. The output is allocated by NumPy in the
+    dataset's own dtype (byte order included), so an allocation failure is a
+    Python ``MemoryError`` and never a native abort.
+    """
+    reason = _implausible(dataset)
+    if reason is not None:
+        raise FastHdfError(f"{dataset.name}: implausible declared size: {reason}")
+    out, blocks = None, 0
+    for src, dst in _block_plan(dataset, slices, _CHUNKED_BLOCK_BYTES):
+        part = np.asarray(session.read_numeric(dataset.name, selection=src))
+        if out is None:
+            # Allocate only once the engine has accepted the dataset's encoding.
+            out = np.empty(expected, dtype=dataset.dtype)
+        target = out[dst]
+        if (part.dtype.kind != out.dtype.kind or part.dtype.itemsize != out.dtype.itemsize
+                or part.shape != target.shape):
+            raise FastHdfError(
+                f"Native block mismatch for {dataset.name}: {part.dtype}{part.shape} "
+                f"versus {out.dtype}{target.shape}")
+        target[...] = part
+        blocks += 1
+    return out, blocks
+
+
 def read_dataset(dataset: h5py.Dataset, selection=None, *, backend="auto", threads=None):
     """Read numeric values without changing dtype, shape, or integer indexing.
 
@@ -409,7 +550,11 @@ def read_dataset(dataset: h5py.Dataset, selection=None, *, backend="auto", threa
                 # Typed domain unqualified: the literal generic read is exact.
                 logger.debug("literal generic read for %s: %s", dataset.name, exc)
                 values, served = None, ("native-generic", "mesh_result-literal")
-            if values is None:
+            if values is None and _over_budget(expected, dataset.dtype):
+                # Above one engine call's budget: bounded blocks into one array.
+                values, blocks = _read_chunked(session, dataset, slices, expected)
+                served = ("native-generic", "chunked", f"{blocks} bounded blocks")
+            elif values is None:
                 values = session.read_numeric(dataset.name, selection=slices)
         # A binding that returns the wrong dtype/shape is a native failure too.
         values = _checked_array(values, dataset.dtype, expected)
@@ -585,7 +730,23 @@ def read_datasets(hdf_path, dataset_paths: Sequence[str], *, backend="auto", thr
                         if size > 67108864:
                             generic.extend(path for path, _ in requests)
                             del groups[key]
-                    native_values = session.read_numeric_batch(generic) if generic else {}
+                    # One engine batch shares the per-call budget: split the
+                    # generic paths into batches within it, and serve a dataset
+                    # above it on its own as bounded chunked reads.
+                    native_values, batch, batch_bytes = {}, [], 0
+                    for path in generic:
+                        ds = datasets[path]
+                        size = ds.size * ds.dtype.itemsize
+                        if _over_budget(ds.shape, ds.dtype):
+                            native_values[path] = _read_chunked(session, ds, None, ds.shape)[0]
+                            continue
+                        if batch and batch_bytes + size > _NATIVE_CALL_BUDGET:
+                            native_values.update(session.read_numeric_batch(batch))
+                            batch, batch_bytes = [], 0
+                        batch.append(path)
+                        batch_bytes += size
+                    if batch:
+                        native_values.update(session.read_numeric_batch(batch))
                     for (area, rows), requests in groups.items():
                         try:
                             values = session.read_mesh_boundary_batch(

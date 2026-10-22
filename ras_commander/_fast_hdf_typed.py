@@ -1124,6 +1124,13 @@ def read(dataset, selection=None, *, backend="auto"):
             logger.debug("h5py fallback for stored family index %s: %s", dataset.name, exc)
             _record(dataset.name, "h5py-fallback", "stored_family")
             return dataset[key]
+    if (route is not None and route[0] == "stored_family" and route[3] == "numeric"
+            and fast_hdf._over_budget(dataset.shape, dtype)):
+        # The stored family reader returns one engine allocation; above the
+        # per-call budget the literal generic reader serves the same values as
+        # bounded chunked reads (fast_hdf._read_chunked).
+        _record(dataset.name, "diagnostic", "stored_family", "above the per-call budget")
+        return _generic(dataset, selection, key, shape, backend, mode)
     if route is None:
         if stored_detail:
             _record(dataset.name, "diagnostic", "stored_family_index", stored_detail)
