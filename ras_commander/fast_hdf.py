@@ -25,6 +25,7 @@ from __future__ import annotations
 
 from contextlib import nullcontext, contextmanager
 from collections import OrderedDict
+from contextvars import ContextVar
 from threading import RLock
 import atexit
 import math
@@ -47,7 +48,6 @@ logger = get_logger(__name__)
 
 __all__ = [
     "FastHdfError", "FastHdfPanicError", "available", "close_sessions",
-    "release_native_sessions",
     "packed_meshes", "mesh_polygons", "export_pmtiles", "export_mesh_pmtiles",
     "export_arrow", "export_arrow_pmtiles",
 ]
@@ -70,6 +70,31 @@ class FastHdfPanicError(FastHdfError):
 
 
 _warned_modes = set()
+# Explicit backend of the enclosing public call; see ``backend_scope``.
+_BACKEND_SCOPE = ContextVar("ras_commander_fast_hdf_backend", default=None)
+
+
+@contextmanager
+def backend_scope(backend):
+    """Make nested default-``auto`` reads follow an explicit ``backend`` for one call.
+
+    A public reader that takes ``backend`` applies it to its own algorithm, but
+    its nested readers (``read_typed``, other public calls) default to ``auto``
+    and would otherwise resolve ``RAS_COMMANDER_FAST_HDF``. Inside this scope
+    an explicit ``"python"`` keeps every nested read on h5py and ``"rust"``
+    requires native for every nested read; ``"auto"`` leaves the environment
+    policy unchanged. The scope is per context (thread/task), not global.
+    """
+    if backend not in {"auto", "python", "rust"}:
+        raise ValueError("backend must be 'auto', 'python', or 'rust'")
+    if backend == "auto":
+        yield
+        return
+    token = _BACKEND_SCOPE.set(backend)
+    try:
+        yield
+    finally:
+        _BACKEND_SCOPE.reset(token)
 
 
 def _mode(backend):
@@ -85,6 +110,9 @@ def _mode(backend):
         raise ValueError("backend must be 'auto', 'python', or 'rust'")
     if backend != "auto":
         return backend
+    scoped = _BACKEND_SCOPE.get()
+    if scoped is not None:
+        return scoped
     value = os.environ.get("RAS_COMMANDER_FAST_HDF", "auto").strip().lower()
     if value in {"0", "off", "false", "python"}:
         return "python"
@@ -657,8 +685,10 @@ def _assemble(hdf, mesh_name, module, backend, threads, *, diagnostics=False, st
                 "missing_face_ids": (),
             })
             if cell_id in invalid:
-                records[-1]["native_reason_code"] = invalid[cell_id][0]
-                records[-1]["reason"] = invalid[cell_id][1]
+                # Records keep the Python reference schema exactly, so auto mode
+                # returns the same diagnostics as h5py; the native detail is logged.
+                logger.debug("Native mesh %r cell %d omitted (%s): %s", mesh_name,
+                             int(cell_id), invalid[cell_id][0], invalid[cell_id][1])
         result["diagnostics"] = records
     return result
 

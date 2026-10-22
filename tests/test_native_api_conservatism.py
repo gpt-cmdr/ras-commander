@@ -727,7 +727,8 @@ def test_hdfutils_api_reference_lists_every_public_method():
 def test_fast_hdf_public_names_exclude_the_low_level_plumbing():
     from ras_commander import fast_hdf
     internal = {"read_typed", "read_attrs", "read_attr", "read_dataset", "read_datasets",
-                "mesh_series_domain", "trace_reads", "native_required", "reraise_required"}
+                "mesh_series_domain", "trace_reads", "native_required", "reraise_required",
+                "release_native_sessions", "backend_scope"}
     assert not internal & set(fast_hdf.__all__)
     assert len(fast_hdf.__all__) == len(set(fast_hdf.__all__))
     for name in fast_hdf.__all__:

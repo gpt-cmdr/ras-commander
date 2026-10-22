@@ -142,8 +142,10 @@ def test_adapter_all_invalid_diagnostics_and_strict_identity(native, tmp_path, m
     record = diagnostics[0]
     assert (record['mesh_name'], record['cell_id'], record['status']) == ('Native Quarantine', 0, 'omitted')
     assert record['reason_code'] == 'no_polygon'
-    assert record['native_reason_code'] == 'invalid_geometry'
-    assert 'intersection' in record['reason']
+    # The Python reference schema exactly (main #572 parity contract): the native
+    # failure kind is logged, not added to the record.
+    assert set(record) == {'mesh_name', 'cell_id', 'face_count', 'polygon_count', 'status',
+                           'reason_code', 'face_ids', 'missing_face_ids'}
     assert record['face_ids'] == (0, 1, 2, 3)
     with pytest.raises(MeshCellPolygonError, match='Native Quarantine.*cell 0'):
         HdfMesh.get_mesh_cell_polygons(path, backend=backend, strict=True)

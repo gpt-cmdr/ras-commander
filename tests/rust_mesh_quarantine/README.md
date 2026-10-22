@@ -16,8 +16,9 @@ registration/Cargo/API_VERSION edit is needed for this compatible capability gat
 
 Diagnostics preserve mesh_name, original cell_id, face_count, polygon_count,
 status, reason_code, face_ids and missing_face_ids. Invalid rings use status
-omitted and the canonical reason_code no_polygon; additive native_reason_code
-invalid_geometry and reason fields describe the native failure. Ghosts
+omitted and the canonical reason_code no_polygon. Records keep the Python
+reference schema exactly (main #572 parity contract); the native failure kind
+and message are logged at debug level instead of added to the record. Ghosts
 remain boundary_only/insufficient_faces. Zero-face records retain zero_faces.
 Metadata construction uses one cell mask and omission-only per-face slices;
 there is no per-cell copying of whole topology arrays.

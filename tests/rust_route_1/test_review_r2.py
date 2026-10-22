@@ -94,3 +94,25 @@ def test_reraise_required_honours_explicit_backend(monkeypatch):
         reraise_required(exc)
     reraise_required(exc, "python")
     reraise_required(ValueError("not native"), "rust")
+
+
+def test_backend_scope_governs_nested_default_reads(monkeypatch):
+    # An explicit backend on a public reader must reach its nested default-auto
+    # reads; otherwise backend="python" under a required environment turned a
+    # nested FastHdfError into an empty result (HdfMesh reference polygonizer).
+    from ras_commander import fast_hdf
+    monkeypatch.setenv("RAS_COMMANDER_FAST_HDF", "required")
+    assert fast_hdf.native_required()
+    with fast_hdf.backend_scope("python"):
+        assert fast_hdf._mode("auto") == "python"
+        assert not fast_hdf.native_required()
+        assert fast_hdf._mode("rust") == "rust"
+    assert fast_hdf.native_required()
+    monkeypatch.setenv("RAS_COMMANDER_FAST_HDF", "auto")
+    with fast_hdf.backend_scope("rust"):
+        assert fast_hdf.native_required()
+    with fast_hdf.backend_scope("auto"):
+        assert fast_hdf._mode("auto") == "auto"
+    with pytest.raises(ValueError):
+        with fast_hdf.backend_scope("h5py"):
+            pass

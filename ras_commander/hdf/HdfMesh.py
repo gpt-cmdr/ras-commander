@@ -106,7 +106,7 @@ import numpy as np
 import pandas as pd
 
 from ..Decorators import log_call, standardize_input
-from ..fast_hdf import read_attr, read_typed, reraise_required
+from ..fast_hdf import backend_scope, read_attr, read_typed, reraise_required
 from ..LoggingConfig import get_logger
 from .HdfBase import HdfBase
 from .HdfUtils import HdfUtils
@@ -833,6 +833,18 @@ class HdfMesh:
         native = _try_mesh_polygons(hdf_path, backend=backend, threads=threads, strict=strict)
         if native is not None:
             return native
+        with backend_scope(backend):
+            return HdfMesh._reference_mesh_cell_polygons(hdf_path, strict=strict, backend=backend)
+
+    @staticmethod
+    def _reference_mesh_cell_polygons(hdf_path: Path, *, strict: bool, backend: str) -> 'GeoDataFrame':
+        """Reference polygonizer behind :meth:`get_mesh_cell_polygons`.
+
+        Called inside ``fast_hdf.backend_scope(backend)`` so an explicit backend
+        governs every nested read, not only the choice of polygonizer: with
+        ``backend="python"`` a required-native environment cannot turn a nested
+        refusal into an empty result.
+        """
         # Lazy imports for heavy dependencies
         from geopandas import GeoDataFrame
         from shapely.geometry import Polygon
