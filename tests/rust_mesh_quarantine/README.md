@@ -1,52 +1,74 @@
 # Native mesh quarantine qualification
 
-The direct native assemble_cells binding preserves its original positional arrays,
-optional threads argument, default strict failure, and three-array return value.
-New keyword-only strict=False quarantines geometric ring invalidity only;
-return_diagnostics=True adds a fourth list of (cell_id, reason_code, reason).
-Structural errors remain TopologyError and carry mesh_structure_error=True;
-strict geometric failures carry False. Adapter code uses this typed marker,
-never message matching, to prevent corruption fallback. Bounds are preflighted
-for every cell before geometry. No repair, snapping, or source mutation occurs.
+Covers native cell-polygon assembly for bridge `API_VERSION` 11 (engine
+`3c2d4799ffdad01452682b82ca64305279ecc679`, engine API 10).
 
-The high-level adapter checks the binding signature for both new keywords before
-requesting quarantine. Older API_VERSION 1 binaries cannot claim support:
-required Rust fails with a rebuild instruction; auto may use Python. No shared
-registration/Cargo/API_VERSION edit is needed for this compatible capability gate.
+## Direct binding
 
-Diagnostics preserve mesh_name, original cell_id, face_count, polygon_count,
-status, reason_code, face_ids and missing_face_ids. Invalid rings use status
-omitted and the canonical reason_code no_polygon. Records keep the Python
-reference schema exactly (main #572 parity contract); the native failure kind
-and message are logged at debug level instead of added to the record. Ghosts
-remain boundary_only/insufficient_faces. Zero-face records retain zero_faces.
-Metadata construction uses one cell mask and omission-only per-face slices;
-there is no per-cell copying of whole topology arrays.
+`ras_commander_fast_hdf.assemble_cells(face_points, face_endpoints,
+face_perimeter_info, face_perimeter_values, cell_face_info, cell_face_values,
+threads=None, *, strict=True, return_diagnostics=False)`
 
-Run the new binding/adapter regressions with:
+- Default call returns three arrays: `(coordinates (N, 2), ring offsets (C+1),
+  original cell ids (C))`. Rings are closed and retain every face perimeter
+  sample (curved and reversed faces included).
+- `strict=False` quarantines geometric ring invalidity only;
+  `return_diagnostics=True` adds a fourth element, a list of dicts with at
+  least `cell_id`, `kind` (`"invalid_geometry"`) and `message`.
+- Structural damage (offsets, counts, face/endpoint/perimeter indices, NaN
+  coordinates, missing columns, disconnected rings) always raises
+  `TopologyError` with `mesh_structure_error=True`, in strict and quarantine
+  mode alike. Strict geometric failures raise `TopologyError` with
+  `mesh_structure_error=False`, naming the first original cell (`cell N:`).
+- Ghost/empty cells are expected non-polygons, never diagnostics. Results are
+  identical for every thread count; inputs are never mutated.
 
-    .venv/Scripts/python.exe -m pytest tests/rust_mesh_quarantine/test_quarantine.py -q
+## Release contract (`HdfMesh.get_mesh_cell_polygons`)
 
-Run the full immutable corpus (paths/hashes declared in qualification.py) with:
+| Mode | Behaviour |
+|------|-----------|
+| auto (`RAS_COMMANDER_FAST_HDF` unset/`auto`, `backend="auto"`) | Exactly the Python reference outcome: same frame, CRS and `cell_polygon_diagnostics`, or the same exception. Any native refusal, corruption or invalid geometry falls back to h5py/Python. |
+| required (`=required`, or `backend="rust"`) | Never falls back to Python polygonize. Valid and quarantined meshes return the reference frame and diagnostics. Structural corruption raises `FastHdfError` (non-strict); with `strict=True` every native `TopologyError`, structural included, raises the documented strict `MeshCellPolygonError`. A missing/incompatible extension raises `FastHdfError`. |
+| python (`=0`, or `backend="python"`) | Never imports or calls the extension. |
 
-    .venv/Scripts/python.exe tests/rust_mesh_quarantine/qualification.py --output working/qualification.json
+Native diagnostics records keep the Python reference schema exactly:
+`mesh_name, cell_id, face_count, polygon_count, status, reason_code, face_ids,
+missing_face_ids`. Invalid rings are `status="omitted"`,
+`reason_code="no_polygon"`; ghosts are `boundary_only`/`insufficient_faces`;
+zero-face records are `zero_faces`. The native failure kind and message are
+logged at debug level only, never added to the record.
 
-Full comparisons retain all forward collinear vertices, removing only exact
-consecutive duplicate samples for comparison, and normalize orientation/start
-with GEOS. Every composite ID and every normalized coordinate is compared.
-Native read/assembly calls are counted and Python polygonize is forbidden.
-The second strict5.x probe modifies only a detached array's first-invalid count,
-retaining original ID339176; the source HDF is never changed.
+## Running
 
-The older test_hdf_mesh_cell_polygon_diagnostics.py suite contains assertions
-for Python/native diagnostic equality and fallback over corrupt references.
-Those expectations conflict with this packet's explicit native safety policy.
-They remain unchanged for coordinator review; the Python-only suite still passes.
-The new tests enforce the revised native contract independently.
+The regression suite needs no fixtures and passes in all three modes; tests
+that need the extension skip cleanly when it is not importable:
 
-Timing scope is mesh extraction only. Read, assembly, adapter/output residual and
-10ms sampled absolute process RSS are reported separately. These are single warm
-process observations with retained reference geometries, not isolated-memory,
-cold-cache, statistical, export-pipeline, wetness, peak-result or solver claims.
+    python -m pytest tests/rust_mesh_quarantine/test_quarantine.py -q
+    RAS_COMMANDER_FAST_HDF=0 python -m pytest tests/rust_mesh_quarantine/test_quarantine.py -q
+    RAS_COMMANDER_FAST_HDF=required python -m pytest tests/rust_mesh_quarantine/test_quarantine.py -q
 
-For another host, pass `--fixture-root <local-directory>` to qualification.py. The declared model filenames, stored versions, expected counts and SHA256 values remain pinned; no project search or source mutation is performed.
+Synthetic fixtures store `Projection` as a fixed-length ASCII string, as
+HEC-RAS does; the native attribute reader refuses vlen/non-ASCII metadata
+(a legitimate refusal that required mode would surface).
+
+The full immutable corpus (file names, stored versions, polygon counts and
+SHA256 values pinned in `qualification.py`) runs as a script against an
+installed extension:
+
+    python tests/rust_mesh_quarantine/qualification.py \
+        --fixture-root <dir with the three HDFs> --output <ignored>/qualification.json
+
+(`RAS_QUAL_FIXTURES` may replace `--fixture-root`.) For each fixture it
+compares required native at 1 and 4 threads and auto mode against the Python
+reference: every composite ID, every normalized coordinate (exact consecutive
+duplicate samples removed, orientation/start normalized with GEOS), and the
+diagnostic records exactly. Python polygonize is forbidden during required
+native runs. On 5.0.7 strict native must fail on original cell 317422, auto
+strict must raise the same exception as Python, and a detached-array probe
+(changing only the first invalid cell's count in a copy) must expose cell
+339176. The source HDF hash is checked before and after.
+
+Timing scope is mesh extraction only. Assembly, adapter dataset reads and the
+adapter/output residual, and 10 ms sampled absolute process RSS are reported
+separately. These are single warm-process observations, not isolated-memory,
+cold-cache, statistical, export-pipeline or solver claims.

@@ -1,30 +1,41 @@
-"""Clean-install qualification of a locally built ras-commander-fast-hdf wheel.
+"""Release gate for an installed ras-commander-fast-hdf wheel.
 
-Run from a directory outside the source checkout, in an environment where
-ras-commander and the wheel were installed non-editably:
+Install the built wheel non-editably into the environment under test, then run
+this module from a directory outside the source checkout:
 
-* ``RAS_DIST_RECEIPT``: build-receipt.json written by build_wheel.py.
-* ``RAS_DIST_FIXTURES``: directory with local copies of computed HEC-RAS HDF
-  fixtures (optional; real-fixture tests are skipped as unavailable without it).
+* ``RAS_DIST_WHEEL`` (required): path to the built ``.whl`` that was installed
+  (or a directory holding exactly one ``.whl``). Without it every test skips.
+* ``RAS_DIST_FIXTURES`` (optional): ``os.pathsep``-separated list of computed
+  HEC-RAS HDF files and/or directories containing them. Files named in
+  ``CASES`` are hash-checked; real-fixture tests skip when none is found.
 
-Native tests run with ``backend="rust"``, count calls into the extension and
-compare against independent h5py/NumPy and Python-backend oracles.
+The gate pins bridge ``API_VERSION`` 11 and engine commit ``ENGINE_COMMIT``;
+checks that the extension is imported from site-packages and that its binary
+is byte-identical to the one inside the wheel; checks the abi3 tag and the
+licence files; and runs required-native reads and mesh polygons against
+h5py/Python oracles, counting calls into the extension.
 """
 
-import hashlib
 import functools
+import hashlib
 import importlib.metadata as metadata
 import json
 import os
 import sys
+import sysconfig
+import zipfile
+from contextlib import contextmanager
 from pathlib import Path
 
 import numpy as np
 import pytest
 
-RECEIPT_PATH = os.environ.get("RAS_DIST_RECEIPT")
-FIXTURES = Path(os.environ["RAS_DIST_FIXTURES"]) if os.environ.get("RAS_DIST_FIXTURES") else None
-pytestmark = pytest.mark.skipif(not RECEIPT_PATH, reason="RAS_DIST_RECEIPT not provided")
+API_VERSION = 11
+ENGINE_COMMIT = "3c2d4799ffdad01452682b82ca64305279ecc679"
+DIST = "ras-commander-fast-hdf"
+LICENCE_HOLDER = "CLB Engineering Corporation"
+SOURCE_ROOT = Path(__file__).resolve().parents[2]
+BINARY_SUFFIXES = {".pyd", ".so", ".dylib"}
 
 # Stored "File Version" prefix, polygon count, SHA256 of the immutable copy.
 CASES = {
@@ -36,18 +47,70 @@ CASES = {
                                 "1d0063a84fd131ac95ffaa2b3f6647f2ef51c7f38f23c43e8ae6c698bfc95f0b"),
 }
 
+WHEEL_ENV = os.environ.get("RAS_DIST_WHEEL")
+pytestmark = pytest.mark.skipif(
+    not WHEEL_ENV,
+    reason="RAS_DIST_WHEEL not set: point it at the built ras-commander-fast-hdf .whl "
+           "installed in this environment to run the release wheel gate")
 
-def _sha256(path):
+
+def _sha256(path_or_bytes):
     digest = hashlib.sha256()
-    with open(path, "rb") as handle:
+    if isinstance(path_or_bytes, bytes):
+        digest.update(path_or_bytes)
+        return digest.hexdigest()
+    with open(path_or_bytes, "rb") as handle:
         for block in iter(lambda: handle.read(1 << 22), b""):
             digest.update(block)
     return digest.hexdigest()
 
 
+def _fixture_paths():
+    found = {}
+    for entry in filter(None, os.environ.get("RAS_DIST_FIXTURES", "").split(os.pathsep)):
+        path = Path(entry)
+        if path.is_dir():
+            for name in CASES:
+                if (path / name).is_file():
+                    found.setdefault(name, path / name)
+        elif path.is_file() and path.name in CASES:
+            found.setdefault(path.name, path)
+    return found
+
+
+FIXTURES = _fixture_paths()
+
+
+def _fixture(name):
+    if not os.environ.get("RAS_DIST_FIXTURES"):
+        pytest.skip("RAS_DIST_FIXTURES not set; real-fixture coverage unavailable")
+    if name not in FIXTURES:
+        pytest.skip(f"fixture {name} not found in RAS_DIST_FIXTURES")
+    path = FIXTURES[name]
+    assert _sha256(path) == CASES[name][2], f"{path} is not the pinned immutable copy"
+    return path
+
+
 @pytest.fixture(scope="module")
-def receipt():
-    return json.loads(Path(RECEIPT_PATH).read_text(encoding="utf-8"))
+def wheel_path():
+    path = Path(WHEEL_ENV)
+    if path.is_dir():
+        wheels = sorted(path.glob("*.whl"))
+        assert len(wheels) == 1, f"RAS_DIST_WHEEL directory must hold exactly one wheel: {wheels}"
+        path = wheels[0]
+    assert path.is_file() and path.suffix == ".whl", f"RAS_DIST_WHEEL is not a wheel: {path}"
+    return path
+
+
+@pytest.fixture(scope="module")
+def wheel(wheel_path):
+    with zipfile.ZipFile(wheel_path) as archive:
+        yield archive
+
+
+@pytest.fixture(scope="module")
+def dist():
+    return metadata.distribution(DIST)
 
 
 @pytest.fixture(scope="module")
@@ -57,8 +120,32 @@ def native():
 
 
 @pytest.fixture
-def counted(native, monkeypatch):
-    """Count every call into the extension's callable entry points."""
+def adapter(monkeypatch):
+    from ras_commander import fast_hdf
+    monkeypatch.delenv("RAS_COMMANDER_FAST_HDF", raising=False)
+    fast_hdf.close_sessions()
+    fast_hdf._reset_native()
+    yield fast_hdf
+    fast_hdf.close_sessions()
+    fast_hdf._reset_native()
+
+
+def _installed_binary(native):
+    module_dir = Path(native.__file__).resolve().parent
+    binaries = [p for p in module_dir.iterdir() if p.suffix.lower() in BINARY_SUFFIXES]
+    assert len(binaries) == 1, binaries
+    return binaries[0]
+
+
+def _wheel_member(wheel, suffix):
+    members = [n for n in wheel.namelist() if n.endswith(suffix)]
+    assert len(members) == 1, (suffix, members)
+    return members[0]
+
+
+@pytest.fixture
+def counted(native, adapter, monkeypatch):
+    """Count calls into module-level extension entry points and HdfSession methods."""
     counts = {}
     for name in dir(native):
         value = getattr(native, name)
@@ -70,74 +157,161 @@ def counted(native, monkeypatch):
             counts[__name] = counts.get(__name, 0) + 1
             return __value(*args, **kwargs)
         monkeypatch.setattr(native, name, wrapper)
+
+    session_type = native.HdfSession
+
+    class CountingSession:
+        """Delegating proxy; the adapter builds sessions via module.HdfSession."""
+
+        def __init__(self, *args, **kwargs):
+            self._inner = session_type(*args, **kwargs)
+
+        def __getattr__(self, name):
+            value = getattr(self._inner, name)
+            if not callable(value):
+                return value
+
+            def call(*args, **kwargs):
+                key = f"HdfSession.{name}"
+                counts[key] = counts.get(key, 0) + 1
+                return value(*args, **kwargs)
+            return call
+
+        def __enter__(self):
+            self._inner.__enter__()
+            return self
+
+        def __exit__(self, *exc):
+            return self._inner.__exit__(*exc)
+
+    monkeypatch.setattr(native, "HdfSession", CountingSession)
     return counts
 
 
-def _fixture(name):
-    if FIXTURES is None:
-        pytest.skip("RAS_DIST_FIXTURES not provided; real-fixture coverage unavailable")
-    path = FIXTURES / name
-    if not path.is_file():
-        pytest.skip(f"fixture {name} unavailable")
-    return path
+@contextmanager
+def _python_polygonize_forbidden():
+    import shapely.ops
+    original = shapely.ops.polygonize
+
+    def forbidden(*args, **kwargs):
+        raise AssertionError("required native mesh polygons fell back to Python polygonize")
+    shapely.ops.polygonize = forbidden
+    try:
+        yield
+    finally:
+        shapely.ops.polygonize = original
 
 
-def _source_root(receipt):
-    return Path(receipt["source"]["root"]).resolve()
+# --------------------------------------------------------------------------
+# Identity: pins, location, binary, tags, licences
+# --------------------------------------------------------------------------
+
+def test_api_version_and_engine_commit_pins(native, adapter):
+    assert native.API_VERSION == API_VERSION
+    assert native.ENGINE_COMMIT == ENGINE_COMMIT
+    assert adapter.available(), "ras_commander.fast_hdf must accept the installed extension"
 
 
-def test_import_locations_are_installed_not_source(receipt, native):
-    import ras_commander
-    source = _source_root(receipt)
-    package = Path(ras_commander.__file__).resolve()
+def test_extension_imported_from_site_packages(native, dist):
     module = Path(native.__file__).resolve()
-    for path in (package, module):
-        assert "site-packages" in path.parts, path
-        assert source not in path.parents, f"{path} imported from source checkout"
-        assert Path.cwd().resolve() not in path.parents
-    assert Path(sys.prefix).resolve() in package.parents
+    inner = getattr(native, "ras_commander_fast_hdf", None)
+    paths = [module] + ([Path(inner.__file__).resolve()] if getattr(inner, "__file__", None) else [])
+    site_dirs = {Path(sysconfig.get_paths()[key]).resolve() for key in ("purelib", "platlib")}
+    for path in paths:
+        assert any(site in path.parents for site in site_dirs), (path, site_dirs)
+        assert SOURCE_ROOT not in path.parents, f"{path} imported from the source checkout"
+        assert Path.cwd().resolve() not in path.parents, f"{path} imported from the working directory"
+    assert Path(sys.prefix).resolve() in module.parents
+    installed = {Path(dist.locate_file(f)).resolve() for f in dist.files}
+    assert module in installed, "extension module is not a file of the installed distribution"
+    direct = json.loads(dist.read_text("direct_url.json") or "{}")
+    assert not direct.get("dir_info", {}).get("editable", False), direct
 
 
-def test_inner_binary_matches_built_wheel(receipt, native):
-    assert native.API_VERSION == 1
-    module_dir = Path(native.__file__).resolve().parent
-    binaries = [p for p in module_dir.iterdir() if p.suffix in {".pyd", ".so", ".dylib"}]
-    assert len(binaries) == 1, binaries
-    assert binaries[0].name == Path(receipt["wheel"]["native_member"]).name
-    assert _sha256(binaries[0]) == receipt["wheel"]["native_sha256"]
+def test_installed_binary_matches_wheel(native, wheel, wheel_path, dist):
+    binary = _installed_binary(native)
+    member = next(n for n in wheel.namelist() if Path(n).suffix.lower() in BINARY_SUFFIXES)
+    assert [n for n in wheel.namelist() if Path(n).suffix.lower() in BINARY_SUFFIXES] == [member]
+    assert binary.name == Path(member).name
+    assert _sha256(binary) == _sha256(wheel.read(member)), (
+        f"installed {binary} differs from {member} in {wheel_path.name}")
     inner = getattr(native, "ras_commander_fast_hdf", native)
-    assert Path(inner.__file__).resolve() == binaries[0].resolve(), (
+    assert Path(inner.__file__).resolve() == binary.resolve(), (
         "the hashed binary must be the loaded extension module")
+    # The installed distribution is this wheel's version.
+    assert wheel_path.name.split("-")[1] == dist.version
 
 
-def test_versions_and_abi(receipt):
-    dist = metadata.distribution("ras-commander-fast-hdf")
-    assert dist.version == "0.1.0"
-    tags = [line.split(": ", 1)[1] for line in dist.read_text("WHEEL").splitlines()
-            if line.startswith("Tag: ")]
+def test_abi3_tag(wheel, wheel_path, dist):
+    tags = [line.split(": ", 1)[1] for line in wheel.read(_wheel_member(wheel, ".dist-info/WHEEL"))
+            .decode().splitlines() if line.startswith("Tag: ")]
     assert tags and all(tag.startswith("cp310-abi3-") for tag in tags), tags
+    assert "-cp310-abi3-" in wheel_path.name
+    installed = [line.split(": ", 1)[1] for line in dist.read_text("WHEEL").splitlines()
+                 if line.startswith("Tag: ")]
+    assert installed == tags
     assert sys.version_info >= (3, 10)
-    assert int(np.__version__.split(".")[0]) >= 1
-    assert dist.read_text("direct_url.json") is None or "editable" not in dist.read_text("direct_url.json")
-    rc = metadata.distribution("ras-commander")
-    direct = json.loads(rc.read_text("direct_url.json") or "{}")
-    assert not direct.get("dir_info", {}).get("editable", False)
 
 
-def test_fast_hdf_available_and_required_mode(monkeypatch):
-    from ras_commander import fast_hdf
-    assert fast_hdf.available()
+@pytest.mark.parametrize("name", ["THIRD-PARTY-NOTICES.md", "ras-commander-rust-LICENSE.txt",
+                                  "ras-commander-LICENSE.txt"])
+def test_licence_files_installed_and_match_wheel(wheel, dist, name):
+    installed = [f for f in dist.files if ".dist-info/licenses/" in f.as_posix()
+                 and f.name == name]
+    assert len(installed) == 1, f"{name} missing from installed dist-info licenses"
+    member = _wheel_member(wheel, "/" + installed[0].as_posix().split(".dist-info/", 1)[1])
+    data = Path(dist.locate_file(installed[0])).read_bytes()
+    assert data == wheel.read(member)
+    if name == "ras-commander-rust-LICENSE.txt":
+        text = data.decode("utf-8")
+        assert text.startswith("MIT License") and f"Copyright (c) 2024 {LICENCE_HOLDER}" in text
+
+
+def test_embedded_notices_name_engine_licence_holder(dist):
+    """THIRD-PARTY-NOTICES must carry the engine's own licence text (CLB holder)."""
+    import re
+    notices = next(f for f in dist.files if f.name == "THIRD-PARTY-NOTICES.md"
+                   and ".dist-info/licenses/" in f.as_posix())
+    text = Path(dist.locate_file(notices)).read_text(encoding="utf-8")
+    row = re.search(r"^\| ras-commander-rust \|.*\(#(licence-[0-9a-f]+)\)", text, re.M)
+    assert row, "ras-commander-rust missing from the notices table"
+    section = text.split(f"### {row.group(1)}", 1)[1].split("\n### ", 1)[0]
+    assert f"Copyright (c) 2024 {LICENCE_HOLDER}" in section, (
+        f"engine licence section {row.group(1)} does not name {LICENCE_HOLDER}; "
+        "regenerate THIRD-PARTY-NOTICES.md and rebuild the wheel")
+
+
+# --------------------------------------------------------------------------
+# Behaviour: required mode, numeric reads, mesh polygons
+# --------------------------------------------------------------------------
+
+def test_required_mode_reads_natively(adapter, counted, monkeypatch, tmp_path):
+    import h5py
+    path = tmp_path / "numeric.hdf"
+    expected = {"/a": np.arange(24, dtype="f8").reshape(4, 6),
+                "/g/b": np.arange(10, dtype="i4"),
+                "/g/c": np.linspace(0, 1, 37, dtype="f4").reshape(37, 1)}
+    with h5py.File(path, "w") as hdf:
+        for key, values in expected.items():
+            hdf[key] = values
+        hdf.create_dataset("/chunked", data=np.arange(5000, dtype="f8"), chunks=(512,),
+                           compression="gzip")
+    expected["/chunked"] = np.arange(5000, dtype="f8")
     monkeypatch.setenv("RAS_COMMANDER_FAST_HDF", "required")
-    assert fast_hdf._native(fast_hdf._mode("auto")) is not None
+    assert adapter.native_required()
+    assert adapter._native(adapter._mode("auto")) is not None
+    values = adapter.read_datasets(path, list(expected), backend="auto")
+    assert counted.get("HdfSession.read_numeric_batch", 0) >= 1, counted
+    for key, oracle in expected.items():
+        assert values[key].dtype == oracle.dtype and values[key].shape == oracle.shape, key
+        assert np.array_equal(values[key], oracle), key
 
 
 @pytest.mark.parametrize("name", list(CASES))
-def test_stored_version_and_numeric_reads(name, counted):
+def test_stored_version_and_numeric_reads(name, adapter, counted):
     import h5py
-    from ras_commander import fast_hdf
     path = _fixture(name)
     version, _, sha = CASES[name]
-    assert _sha256(path) == sha
     with h5py.File(path, "r") as hdf:
         stored = hdf.attrs["File Version"].decode()
         assert stored.startswith(version), stored
@@ -145,71 +319,44 @@ def test_stored_version_and_numeric_reads(name, counted):
         hdf.visititems(lambda key, obj: names.append(key) if isinstance(obj, h5py.Dataset)
                        and obj.dtype.kind in "iuf" and obj.dtype.fields is None
                        and 0 < obj.size <= 5_000_000 and "2D Flow Areas" in key else None)
-        names = ["/" + key for key in names]
-        names = sorted(names)[:40]  # deterministic, bounded selection
+        names = sorted("/" + key for key in names)[:40]  # deterministic, bounded selection
         assert names, "fixture has numeric 2D datasets"
         oracle = {key: hdf[key][()] for key in names}
-    values = fast_hdf.read_datasets(path, names, backend="rust")
-    assert counted.get("read_numeric_batch", 0) + counted.get("read_numeric", 0) >= 1
+    values = adapter.read_datasets(path, names, backend="rust")
+    assert counted.get("HdfSession.read_numeric_batch", 0) >= 1, counted
     for key in names:
         got = values[key]
         assert got.dtype == oracle[key].dtype and got.shape == oracle[key].shape, key
         assert np.array_equal(got, oracle[key], equal_nan=oracle[key].dtype.kind == "f"), key
+    adapter.close_sessions()
     assert _sha256(path) == sha
+
+
+def _canonical(frame):
+    import shapely
+    order = np.lexsort((frame.cell_id.to_numpy(), frame.mesh_name.to_numpy()))
+    keys = list(zip(frame.mesh_name.to_numpy()[order].tolist(),
+                    frame.cell_id.to_numpy()[order].astype("i8").tolist()))
+    geometries = shapely.normalize(shapely.remove_repeated_points(frame.geometry.to_numpy()[order], 0))
+    return keys, shapely.to_wkb(geometries)
 
 
 @pytest.mark.parametrize("name", list(CASES))
-def test_mesh_polygons_native_matches_python(name, counted):
-    import shapely
-    from ras_commander import fast_hdf
+def test_mesh_polygons_native_matches_python(name, adapter, counted):
+    from ras_commander.hdf.HdfMesh import HdfMesh
     path = _fixture(name)
     _, polygons, sha = CASES[name]
-    rust = fast_hdf.mesh_polygons(path, backend="rust")
-    assert counted.get("assemble_cells", 0) >= 1
-    calls = dict(counted)
-    python = fast_hdf.mesh_polygons(path, backend="python")
-    assert dict(counted) == calls, "python backend must not call the extension"
+    python = HdfMesh.get_mesh_cell_polygons(path, backend="python", strict=False)
+    assert not counted, f"python backend must not call the extension: {counted}"
+    with _python_polygonize_forbidden():
+        rust = HdfMesh.get_mesh_cell_polygons(path, backend="rust", strict=False)
+    assert counted.get("assemble_cells", 0) >= 1, counted
     assert len(rust) == len(python) == polygons
     assert rust.crs == python.crs and rust.crs is not None
-    key = ["mesh_name", "cell_id"]
-    rust = rust.sort_values(key).reset_index(drop=True)
-    python = python.sort_values(key).reset_index(drop=True)
-    assert (rust[key].to_numpy() == python[key].to_numpy()).all()
-    assert shapely.equals(rust.geometry.values, python.geometry.values).all()
+    rust_keys, rust_wkb = _canonical(rust)
+    python_keys, python_wkb = _canonical(python)
+    assert rust_keys == python_keys
+    assert (rust_wkb == python_wkb).all()
+    assert rust.attrs["cell_polygon_diagnostics"] == python.attrs["cell_polygon_diagnostics"]
+    adapter.close_sessions()
     assert _sha256(path) == sha
-
-
-def test_arrow_first_tier_and_pmtiles_smoke(tmp_path, counted):
-    import geopandas as gpd
-    import pyarrow as pa
-    import shapely
-    from ras_commander import fast_hdf
-    path = _fixture("BaldEagleDamBrk.p18.hdf")
-    mesh = fast_hdf.mesh_polygons(path, backend="rust")
-    schema = pa.schema([
-        pa.field("mesh_name", pa.string(), nullable=False),
-        pa.field("cell_id", pa.int64(), nullable=False),
-        pa.field("geometry", pa.binary(), nullable=False),
-        pa.field("area", pa.float64()),
-    ])
-    table = pa.table({
-        "mesh_name": pa.array(mesh["mesh_name"].astype(str), pa.string()),
-        "cell_id": pa.array(mesh["cell_id"].astype("int64"), pa.int64()),
-        "geometry": pa.array(shapely.to_wkb(mesh.geometry.values), pa.binary()),
-        "area": pa.array(mesh.geometry.area.to_numpy(), pa.float64()),
-    }, schema=schema)
-    crs = mesh.crs.to_wkt()
-    for fmt, suffix in (("parquet", ".parquet"), ("fgb", ".fgb"),
-                        ("geojson", ".geojson"), ("gpkg", ".gpkg")):
-        out = tmp_path / f"mesh{suffix}"
-        fast_hdf.export_arrow(out, table, source_crs=crs, format=fmt)
-        frame = gpd.read_parquet(out) if fmt == "parquet" else gpd.read_file(out)
-        assert len(frame) == len(mesh), fmt
-        assert sorted(frame["cell_id"].astype("int64")) == sorted(table["cell_id"].to_pylist()), fmt
-        assert frame.crs is not None, fmt
-    bundle = tmp_path / "bundle"
-    fast_hdf.export_arrow_pmtiles(bundle, table, source_crs=crs, max_zoom=10)
-    assert (bundle / "tiles.pmtiles").stat().st_size > 0
-    with pa.ipc.open_file(bundle / "identities.arrow") as reader:
-        assert reader.read_all().num_rows == len(mesh)
-    assert counted, "exports must execute native writers"
