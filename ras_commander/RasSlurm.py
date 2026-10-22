@@ -486,7 +486,13 @@ def _validate_submission_files(submission: SlurmSubmission) -> None:
     if payload.get("submission_id") != submission.submission_id:
         raise ValueError("Slurm batch submission_id does not match handle")
     normalized_site = json.loads(json.dumps(asdict(submission.site)))
-    if payload.get("site") != normalized_site:
+    recorded_site = payload.get("site")
+    if isinstance(recorded_site, dict):
+        recorded_site = dict(recorded_site)
+        # Pre-option v2 handles and batch manifests imply the default False.
+        # Keep every existing digest and all other site comparisons exact.
+        recorded_site.setdefault("stage_bundles_to_node_scratch", False)
+    if recorded_site != normalized_site:
         raise ValueError("Slurm batch site does not match handle")
     if payload.get("launcher") != {
         "path": launcher.name,

@@ -1045,3 +1045,21 @@ def test_node_staging_site_option_is_opt_in_and_strict_boolean():
     for invalid in [1, "true", None]:
         with pytest.raises(ValueError, match="must be Boolean"):
             _site(stage_bundles_to_node_scratch=invalid)
+
+
+def test_pre_option_submission_handle_and_batch_remain_valid(tmp_path):
+    from dataclasses import replace
+    request = _request(tmp_path, "legacy-staging-option")
+    submission = RasSlurm.render_submission([request], tmp_path / "submission", site=_site())
+    batch_path = submission.submission_directory / "slurm_batch.json"
+    batch = json.loads(batch_path.read_text())
+    del batch["site"]["stage_bundles_to_node_scratch"]
+    batch_path.write_text(json.dumps(batch))
+    handle = submission.to_dict()
+    del handle["site"]["stage_bundles_to_node_scratch"]
+    handle["batch_sha256"] = sha256_file(batch_path)
+    restored = SlurmSubmission.from_dict(handle)
+    module = importlib.import_module("ras_commander.RasSlurm")
+    module._validate_submission_files(restored)
+    with pytest.raises(ValueError, match="site does not match"):
+        module._validate_submission_files(replace(restored, site=_site(stage_bundles_to_node_scratch=True)))
