@@ -302,6 +302,14 @@ def raw_ineffective(path: Path, rs: str):
     raise AssertionError(rs)
 
 
+_EXTRACTED_FIX = (
+    "Deliberate GeomCrossSection bug fix, extracted from the native-routing branch so "
+    "that branch changes no plain-text geometry output; see "
+    "working/ras-native-engine-integration/runs/successor-api-conservatism-20261021/NOTE_FOR_MAIN_TEXT_FIXES.md"
+)
+
+
+@pytest.mark.xfail(reason=_EXTRACTED_FIX, strict=False)
 @pytest.mark.parametrize(
     "archive, name, key",
     [
@@ -329,6 +337,7 @@ def test_text001_ineffective_flow_nine_value_wrap(corpus, tmp_path, archive, nam
     record("defects", f"TEXT-001/{name}", {"rows": len(frame), "format_flag": fmt})
 
 
+@pytest.mark.xfail(reason=_EXTRACTED_FIX, strict=False)
 def test_text002_bank_station_precision(corpus, tmp_path):
     f = find(corpus, "6.6", "Muncie.g01")
     copy = tmp_path / "Muncie.g01"

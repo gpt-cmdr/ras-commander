@@ -254,26 +254,20 @@ def test_mesh_cell_polygon_strict_mode_rejects_any_anomaly(tmp_path: Path):
         HdfMesh.get_mesh_cell_polygons(geom_hdf, strict=True, backend="python")
 
 
-def test_auto_diagnosis_inspects_corruption_without_returning_polygons(tmp_path, monkeypatch, caplog):
+def test_auto_diagnosis_of_corruption_is_the_reference_diagnosis(tmp_path, monkeypatch):
     pytest.importorskip("ras_commander_fast_hdf")
     from ras_commander.fast_hdf import FastHdfError
     monkeypatch.setenv("RAS_COMMANDER_FAST_HDF", "auto")
     path = _write_polygon_cases(tmp_path / "inspect-corrupt.g01.hdf")
-    # The extracting API must not return a partial valid-looking result.
+    # Required native execution refuses corrupt topology ...
     with pytest.raises(FastHdfError):
         HdfMesh.get_mesh_cell_polygons(path, backend="rust")
-    calls = []
-    original = HdfMesh.get_mesh_cell_polygons
-    def recorded(*args, **kwargs):
-        calls.append(kwargs.get("backend", "auto"))
-        return original(*args, **kwargs)
-    monkeypatch.setattr(HdfMesh, "get_mesh_cell_polygons", staticmethod(recorded))
+    # ... while auto mode is the reference behaviour, with no native-only attrs.
+    reference = HdfMesh.diagnose_mesh_cell_polygons(path, backend="python")
     diagnostics = HdfMesh.diagnose_mesh_cell_polygons(path)
-    assert calls == ["auto", "python"]
+    pd.testing.assert_frame_equal(diagnostics, reference)
+    assert diagnostics.attrs == reference.attrs == {}
     assert diagnostics.loc[diagnostics.cell_id == 3, "missing_face_ids"].item() == (99,)
-    assert diagnostics.attrs["diagnostic_backend"] == "python"
-    assert diagnostics.attrs["native_rejection"]
-    assert "diagnostic report only" in caplog.text
 
 
 @pytest.mark.parametrize("required", ["explicit", "environment"])

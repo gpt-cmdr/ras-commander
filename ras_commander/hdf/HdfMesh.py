@@ -106,8 +106,7 @@ import numpy as np
 import pandas as pd
 
 from ..Decorators import log_call, standardize_input
-from ..fast_hdf import read_dataset
-from ..fast_hdf import FastHdfError, read_attr, read_typed, reraise_required
+from ..fast_hdf import read_attr, read_typed, reraise_required
 from ..LoggingConfig import get_logger
 from .HdfBase import HdfBase
 from .HdfUtils import HdfUtils
@@ -808,8 +807,9 @@ class HdfMesh:
         backend : str, default "auto"
             Use the optional Rust extension when available. "python" forces
             the reference polygonizer; "rust" requires native execution.
-            Auto mode falls back for unsupported topology and preserves
-            the diagnostic records and strict-mode contract.
+            Auto mode falls back to the reference polygonizer on any native
+            failure, so its result and exceptions (including the diagnostic
+            records and the strict-mode contract) are the reference ones.
         threads : int, optional
             Maximum threads for native extraction and polygon construction.
 
@@ -1079,30 +1079,12 @@ class HdfMesh:
         named mesh supplied topology and every processed physical cell produced
         exactly one polygon.
 
-        ``backend="auto"`` permits reference inspection for a diagnostic report
-        after native topology rejection; the rejection is retained in result
-        attrs. This does not relax native polygon extraction. Explicit Rust or
-        ``RAS_COMMANDER_FAST_HDF=required`` never falls back. Native geometric
-        reason codes can be more specific than reference polygonization codes.
+        ``backend="auto"`` falls back to the reference polygonizer on any
+        native failure. Explicit Rust or ``RAS_COMMANDER_FAST_HDF=required``
+        never falls back. Native geometric reason codes can be more specific
+        than reference polygonization codes.
         """
-        # Inspecting malformed topology is distinct from publishing extracted
-        # polygons. Auto diagnosis may use the reference inspection after native
-        # corruption rejection; explicitly required native mode never falls back.
-        from ..fast_hdf import FastHdfError, _mode
-
-        mode = _mode(backend)
-        native_rejection = None
-        try:
-            polygons = HdfMesh.get_mesh_cell_polygons(hdf_path, strict=False, backend=backend)
-        except FastHdfError as exc:
-            if mode != "auto":
-                raise
-            native_rejection = str(exc)
-            logger.warning(
-                "Native topology rejected; using Python inspection for the diagnostic report only: %s",
-                exc,
-            )
-            polygons = HdfMesh.get_mesh_cell_polygons(hdf_path, strict=False, backend="python")
+        polygons = HdfMesh.get_mesh_cell_polygons(hdf_path, strict=False, backend=backend)
         diagnostic_records = polygons.attrs.get("cell_polygon_diagnostics")
         columns = [
             "mesh_name",
@@ -1117,9 +1099,6 @@ class HdfMesh:
         result = pd.DataFrame.from_records(
             () if diagnostic_records is None else diagnostic_records, columns=columns
         )
-        if native_rejection is not None:
-            result.attrs["diagnostic_backend"] = "python"
-            result.attrs["native_rejection"] = native_rejection
         return result
         
     @staticmethod

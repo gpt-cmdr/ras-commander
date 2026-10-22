@@ -7,6 +7,18 @@ environment. Metadata and unsupported HDF types continue to use h5py in auto
 mode. h5py behaviour is the public contract: in auto mode any native failure
 (Corrupt/checksum refusals included) falls back to the h5py read, so callers see
 the h5py outcome; ``required`` raises :class:`FastHdfError` instead.
+
+Public surface: ``__all__`` lists the supported names (``available``,
+``close_sessions``, ``FastHdfError``, ``mesh_polygons``, ``packed_meshes`` and
+the ``export_*`` functions). Everything else here, in particular
+``read_typed``/``read_attrs``/``read_attr``/``read_dataset(s)``,
+``mesh_series_domain``, ``trace_reads``, ``native_required`` and
+``reraise_required``, is internal adapter plumbing for the ``Hdf*`` classes and
+the qualification suites; it may change without notice.
+
+Environment: ``RAS_COMMANDER_FAST_HDF`` (backend policy; an unrecognised value
+is ``auto`` with one logged warning) and ``RAS_COMMANDER_HDF_SESSION_CACHE``
+(native session policy). See ``docs/api/hdf.md``, "Optional Rust acceleration".
 """
 
 from __future__ import annotations
@@ -27,16 +39,16 @@ from typing import Mapping, Sequence
 import h5py
 import numpy as np
 
+from . import _native_scope
 from .Decorators import log_call
 from .LoggingConfig import get_logger
 
 logger = get_logger(__name__)
 
 __all__ = [
-    "FastHdfError", "available", "close_sessions", "read_dataset", "read_datasets",
-    "read_typed", "read_attrs", "read_attr", "mesh_series_domain", "trace_reads",
-    "native_required", "reraise_required",
+    "FastHdfError", "available", "close_sessions",
     "packed_meshes", "mesh_polygons", "export_pmtiles", "export_mesh_pmtiles",
+    "export_arrow", "export_arrow_pmtiles",
 ]
 
 
@@ -44,7 +56,18 @@ class FastHdfError(RuntimeError):
     """The explicitly requested native operation could not be completed."""
 
 
+_warned_modes = set()
+
+
 def _mode(backend):
+    """Resolve the backend policy: "python", "auto" or "rust" (required).
+
+    An unrecognised ``RAS_COMMANDER_FAST_HDF`` value must never change what a
+    read returns, so it is treated as ``auto`` after one logged warning per
+    value. (Raising here would be swallowed by the readers' broad handlers and
+    turn into empty results.) Only an invalid explicit ``backend`` argument,
+    a programming error, raises.
+    """
     if backend not in {"auto", "python", "rust"}:
         raise ValueError("backend must be 'auto', 'python', or 'rust'")
     if backend != "auto":
@@ -54,9 +77,12 @@ def _mode(backend):
         return "python"
     if value in {"required", "rust"}:
         return "rust"
-    if value in {"", "auto", "1", "on", "true"}:
-        return "auto"
-    raise ValueError("Invalid RAS_COMMANDER_FAST_HDF value: " + repr(value))
+    if value not in {"", "auto", "1", "on", "true"} and value not in _warned_modes:
+        _warned_modes.add(value)
+        logger.warning(
+            "Ignoring unrecognised RAS_COMMANDER_FAST_HDF=%r; using 'auto'. "
+            "Valid values: auto (default), 0/off/false/python, required/rust.", value)
+    return "auto"
 
 
 def _threads(threads):
@@ -70,21 +96,41 @@ def _threads(threads):
     return value
 
 
+# Outcome of the extension import, cached for the process so a missing or
+# incompatible extension costs nothing on the (often hot-loop) routed reads:
+# (module or None, failure message, import exception).
+_native_state = None
+
+
+def _load_native():
+    global _native_state
+    if _native_state is None:
+        try:
+            module = importlib.import_module("ras_commander_fast_hdf")
+        except (ImportError, OSError) as exc:
+            _native_state = (None, "The optional ras-commander-fast-hdf extension is unavailable", exc)
+        else:
+            if getattr(module, "API_VERSION", None) != 11:
+                logger.warning("Ignoring incompatible ras-commander-fast-hdf extension")
+                _native_state = (None, "Incompatible ras-commander-fast-hdf API; version 11 is required", None)
+            else:
+                _native_state = (module, None, None)
+    return _native_state
+
+
 def _native(mode):
     if mode == "python":
         return None
-    try:
-        module = importlib.import_module("ras_commander_fast_hdf")
-    except (ImportError, OSError) as exc:
-        if mode == "rust":
-            raise FastHdfError("The optional ras-commander-fast-hdf extension is unavailable") from exc
-        return None
-    if getattr(module, "API_VERSION", None) != 11:
-        if mode == "rust":
-            raise FastHdfError("Incompatible ras-commander-fast-hdf API; version 11 is required")
-        logger.warning("Ignoring incompatible ras-commander-fast-hdf extension")
-        return None
+    module, failure, exc = _load_native()
+    if module is None and mode == "rust":
+        raise FastHdfError(failure) from exc
     return module
+
+
+def _reset_native():
+    """Forget the cached import outcome (tests; or after installing the extension)."""
+    global _native_state
+    _native_state = None
 
 
 @log_call
@@ -93,11 +139,31 @@ def available() -> bool:
     return _native("auto") is not None
 
 
-# At most four mapped files. The lock also keeps eviction/close from racing a
+# At most four open files. The lock also keeps eviction/close from racing a
 # cached read; native sessions independently serialize close against reads.
+# A session opened inside a public call is "scoped": it is shared by every read
+# of that call and closed when the outermost public call returns (see
+# ``_native_scope``), so no HDF stays open - and undeletable on Windows - after a
+# public method has returned. Sessions opened by direct use of this module's
+# readers outside a public call, or with RAS_COMMANDER_HDF_SESSION_CACHE=persist,
+# stay cached until ``close_sessions()``.
 _sessions = OrderedDict()
 _sessions_lock = RLock()
 _SESSION_LIMIT = 4
+_scoped_keys = set()
+
+
+def _release_scoped_sessions():
+    """Close the sessions opened inside public calls (the typed-result cache stays)."""
+    with _sessions_lock:
+        for key in list(_scoped_keys):
+            entry = _sessions.pop(key, None)
+            if entry is not None:
+                try:
+                    entry[0].close()
+                except Exception as exc:  # a failing close must not mask the call's outcome
+                    logger.debug("Closing native session %s failed: %s", key[0], exc)
+        _scoped_keys.clear()
 
 
 @log_call
@@ -114,13 +180,15 @@ def close_sessions(path=None):
         for key in list(_sessions):
             if resolved is None or key[0] == resolved:
                 session, _ = _sessions.pop(key)
+                _scoped_keys.discard(key)
                 session.close()
 
 
 @contextmanager
 def _session(module, path, threads=None):
     path = Path(path).resolve()
-    enabled = os.environ.get("RAS_COMMANDER_HDF_SESSION_CACHE", "1").strip().lower() not in {"0", "false", "off"}
+    setting = os.environ.get("RAS_COMMANDER_HDF_SESSION_CACHE", "1").strip().lower()
+    enabled = setting not in {"0", "false", "off"}
     if not enabled:
         close_sessions(path)
         with module.HdfSession(path, threads=threads) as session:
@@ -135,11 +203,17 @@ def _session(module, path, threads=None):
         key = (str(path), stat.st_size, stat.st_mtime_ns)
         for old in list(_sessions):
             if old[0] == str(path) and (old != key or _sessions[old][1] != threads):
+                _scoped_keys.discard(old)
                 _sessions.pop(old)[0].close()
         if key not in _sessions:
             while len(_sessions) >= _SESSION_LIMIT:
-                _sessions.popitem(last=False)[1][0].close()
+                evicted = _sessions.popitem(last=False)
+                _scoped_keys.discard(evicted[0])
+                evicted[1][0].close()
             _sessions[key] = (module.HdfSession(path, threads=threads), threads)
+            if setting != "persist" and _native_scope.active():
+                _scoped_keys.add(key)
+                _native_scope.sessions_opened(_release_scoped_sessions)
         _sessions.move_to_end(key)
         yield _sessions[key][0]
 
@@ -230,7 +304,6 @@ def _checked_array(result, dtype, expected_shape):
     return result.astype(dtype, copy=False)
 
 
-@log_call
 def read_dataset(dataset: h5py.Dataset, selection=None, *, backend="auto", threads=None):
     """Read numeric values without changing dtype, shape, or integer indexing.
 
@@ -283,6 +356,8 @@ def read_dataset(dataset: h5py.Dataset, selection=None, *, backend="auto", threa
                 values, served = None, ("native-generic", "mesh_result-literal")
             if values is None:
                 values = session.read_numeric(dataset.name, selection=slices)
+        # A binding that returns the wrong dtype/shape is a native failure too.
+        values = _checked_array(values, dataset.dtype, expected)
     except Exception as exc:
         if mode == "auto":
             # h5py is the public contract: any native failure, Corrupt included.
@@ -291,7 +366,6 @@ def read_dataset(dataset: h5py.Dataset, selection=None, *, backend="auto", threa
             return dataset[key]
         raise FastHdfError(f"Native read failed for {dataset.name}: {exc}") from exc
     _record(dataset.name, *served)
-    values = _checked_array(values, dataset.dtype, expected)
     if squeeze:
         values = np.squeeze(values, axis=squeeze)
     # h5py returns a NumPy scalar for a scalar dataset/full integer indexing.
@@ -412,7 +486,6 @@ def trace_reads():
     return _fast_hdf_typed.trace_reads()
 
 
-@log_call
 def read_datasets(hdf_path, dataset_paths: Sequence[str], *, backend="auto", threads=None):
     """Read multiple datasets with one native file handle; retain h5py metadata.
 
@@ -487,9 +560,16 @@ def read_datasets(hdf_path, dataset_paths: Sequence[str], *, backend="auto", thr
         result = {}
         for path, ds in datasets.items():
             if path in eligible:
-                if path not in native_values:
-                    raise FastHdfError(f"Native batch omitted {path}")
-                values = _checked_array(native_values[path], ds.dtype, ds.shape)
+                try:
+                    if path not in native_values:
+                        raise FastHdfError(f"Native batch omitted {path}")
+                    values = _checked_array(native_values[path], ds.dtype, ds.shape)
+                except FastHdfError:
+                    if mode != "auto":
+                        raise
+                    # Auto: a broken binding result for one dataset gets h5py's outcome.
+                    result[path] = ds[()]
+                    continue
                 result[path] = values[()] if values.ndim == 0 else values
             else:
                 result[path] = ds[()]
@@ -587,11 +667,26 @@ def packed_meshes(hdf_path, *, mesh_names=None, backend="auto", threads=None):
 
 
 def _try_mesh_polygons(hdf_path, *, backend="auto", threads=None, strict=None):
-    """Internal compatibility hook; None means use the original polygonizer."""
+    """Internal compatibility hook; None means use the original polygonizer.
+
+    In auto mode *any* native failure returns None, so the Python polygonizer
+    produces the result (or the exception) the library has always produced.
+    Explicit ``rust`` and required mode raise instead.
+    """
     mode, threads = _mode(backend), _threads(threads)
     module = _native(mode)
     if module is None:
         return None
+    try:
+        return _native_mesh_polygons(module, mode, hdf_path, backend, threads, strict)
+    except Exception as exc:
+        if mode != "auto":
+            raise
+        logger.debug("Python polygonizer after native mesh polygon failure in %s: %s", hdf_path, exc)
+        return None
+
+
+def _native_mesh_polygons(module, mode, hdf_path, backend, threads, strict):
     from geopandas import GeoDataFrame
     import shapely
     from .hdf.HdfBase import HdfBase
@@ -981,7 +1076,3 @@ def _export_arrow_transport(output, batches, *, source_crs, format,
             return json.loads(native.export_pmtiles_ipc_file(ipc, output, options, threads=threads))
         return json.loads(native.export_ipc_file(ipc, output, format, max_batch_rows))
 
-
-__all__.append("export_arrow")
-
-__all__.append("export_arrow_pmtiles")

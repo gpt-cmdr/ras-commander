@@ -10,7 +10,8 @@ reader's per-file chunk cache (``read_plan["chunk_cache_bytes"]``) retains
 decompressed chunks up to its size. Narrowing copies, finite masks, reduction
 temporaries and accumulators are additional working memory: the block budget
 is not a total process RSS limit. Neither route returns or accumulates the
-complete series. Policy follows :mod:`ras_commander.fast_hdf`:
+complete series. This module is internal plumbing for ``HdfResultsMesh``; only
+the ``Hdf*`` methods that use it are public API. Policy follows :mod:`ras_commander.fast_hdf`:
 ``RAS_COMMANDER_FAST_HDF=0`` selects Python, ``required`` forbids fallback, and
 an explicit ``backend`` overrides the environment.
 
@@ -150,25 +151,33 @@ def native_temporal_reduce(dataset, offset=None, *, threshold=None, backend="aut
     expected = {"maximum": np.float32, "peak_index": np.int64, "finite_count": np.uint64}
     if threshold is not None:
         expected.update(exceed_count=np.uint64, first_exceed_index=np.int64)
-    for key, dtype in expected.items():
-        array = raw.get(key)
-        if not isinstance(array, np.ndarray) or array.dtype != dtype or array.shape != (elements,):
-            raise FastHdfError(f"Native reduction returned an invalid {key!r} array")
-    if int(raw["rows"]) != dataset.shape[0]:
-        raise FastHdfError("Native reduction row count disagrees with the dataset")
-    timings = {k: float(raw[k]) for k in ("setup_seconds", "read_seconds", "reduce_seconds")}
-    read_plan = {k: raw[k] for k in ("block_rows", "blocks", "block_bytes", "max_block_bytes",
-                                    "chunk_shape", "storage_chunk_bytes", "chunk_cache_bytes",
-                                    "stored_dtype")}
-    if "engine_seconds" in raw:
-        timings["engine_seconds"] = float(raw["engine_seconds"])
-        read_plan["timing_scope"] = raw["timing_scope"]
-    return TemporalReduction(
-        maximum=raw["maximum"], peak_index=raw["peak_index"],
-        finite_count=raw["finite_count"], exceed_count=raw["exceed_count"],
-        first_exceed_index=raw["first_exceed_index"], rows=int(raw["rows"]), backend="rust",
-        timings=timings, read_plan=read_plan,
-    )
+    try:
+        for key, dtype in expected.items():
+            array = raw.get(key)
+            if not isinstance(array, np.ndarray) or array.dtype != dtype or array.shape != (elements,):
+                raise FastHdfError(f"Native reduction returned an invalid {key!r} array")
+        if int(raw["rows"]) != dataset.shape[0]:
+            raise FastHdfError("Native reduction row count disagrees with the dataset")
+        timings = {k: float(raw[k]) for k in ("setup_seconds", "read_seconds", "reduce_seconds")}
+        read_plan = {k: raw[k] for k in ("block_rows", "blocks", "block_bytes", "max_block_bytes",
+                                        "chunk_shape", "storage_chunk_bytes", "chunk_cache_bytes",
+                                        "stored_dtype")}
+        if "engine_seconds" in raw:
+            timings["engine_seconds"] = float(raw["engine_seconds"])
+            read_plan["timing_scope"] = raw["timing_scope"]
+        return TemporalReduction(
+            maximum=raw["maximum"], peak_index=raw["peak_index"],
+            finite_count=raw["finite_count"], exceed_count=raw["exceed_count"],
+            first_exceed_index=raw["first_exceed_index"], rows=int(raw["rows"]), backend="rust",
+            timings=timings, read_plan=read_plan,
+        )
+    except Exception as exc:
+        if mode == "auto":
+            logger.debug("Python reduction for %s after a malformed native result: %s", dataset.name, exc)
+            return None
+        if isinstance(exc, FastHdfError):
+            raise
+        raise FastHdfError(f"Native reduction returned a malformed result for {dataset.name}: {exc}") from exc
 
 
 def _python_reduce(dataset, offset, threshold, max_block_bytes):

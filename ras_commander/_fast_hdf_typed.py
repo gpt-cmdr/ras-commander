@@ -683,7 +683,8 @@ def read_attrs(obj, *, backend="auto"):
             if key not in typed:
                 raise TypedRouteError(f"attribute {key!r} missing from the engine reader")
             out[key] = attribute_value(typed[key])
-        except TypedRouteError as exc:
+        except Exception as exc:
+            # Auto reads this attribute with h5py after *any* engine descriptor problem.
             if mode == "rust":
                 raise fast_hdf.FastHdfError(f"{obj.name}: {exc}") from exc
             out[key] = obj.attrs[key]
@@ -723,7 +724,7 @@ def read_attr(obj, name, default=_MISSING, *, backend="auto"):
         if name not in typed:
             raise TypedRouteError(f"attribute {name!r} missing from the engine reader")
         value = attribute_value(typed[name])
-    except TypedRouteError as exc:
+    except Exception as exc:
         if mode == "rust":
             raise fast_hdf.FastHdfError(f"{obj.name}: {exc}") from exc
         _record(obj.name, "h5py-fallback", f"attr:{name}")
