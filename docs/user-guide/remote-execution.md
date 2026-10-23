@@ -47,7 +47,7 @@ workers = [
     init_ras_worker("psexec",
         hostname="192.168.1.100",
         share_path=r"\\192.168.1.100\RasRemote",
-        credentials={"username": "user", "password": "pass"},
+        credentials={"username": "user", "password": "YOUR_PASSWORD"},
         ras_exe_path=r"C:\Program Files (x86)\HEC\HEC-RAS\7.0\RAS.exe",
         session_id=2
     ),
@@ -412,7 +412,7 @@ workers = [
         "psexec",
         hostname="192.168.3.8",  # CLB-04
         share_path=r"\\192.168.3.8\RasRemote",
-        credentials={"username": "bill", "password": "pass"},
+        credentials={"username": "bill", "password": "YOUR_PASSWORD"},
         ras_exe_path=r"C:\Program Files (x86)\HEC\HEC-RAS\7.0\RAS.exe",
         session_id=2,
         system_account=False
@@ -421,7 +421,7 @@ workers = [
         "psexec",
         hostname="192.168.3.9",  # Another machine
         share_path=r"\\192.168.3.9\RasRemote",
-        credentials={"username": "user2", "password": "pass2"},
+        credentials={"username": "user2", "password": "YOUR_PASSWORD"},
         ras_exe_path=r"C:\Program Files\HEC\HEC-RAS\6.3\RAS.exe",
         session_id=2,
         system_account=False

@@ -290,3 +290,25 @@ def test_untraversable_gdal_bridge_is_reported_unusable(tmp_path, monkeypatch):
 
     monkeypatch.setattr(Path, "is_dir", refuse)
     assert _gdal_runtime.python_gdal_bridge_is_usable(python_dir) is False
+
+
+def test_configure_rasmapper_gdal_bridge_rejects_false_success(monkeypatch, tmp_path):
+    hecras_dir = _make_hecras_gdal_tree(tmp_path)
+    python_dir = tmp_path / "wine-python"
+    python_dir.mkdir()
+
+    monkeypatch.setattr(os, "add_dll_directory", lambda path: object(), raising=False)
+    monkeypatch.setattr(_gdal_runtime.platform, "system", lambda: "Windows")
+    monkeypatch.setattr(
+        _gdal_runtime.subprocess,
+        "run",
+        lambda cmd, **kwargs: CompletedProcess(cmd, 0, "reported success", ""),
+    )
+
+    with pytest.raises(RuntimeError, match="Could not initialize the GDAL bridge"):
+        _gdal_runtime.configure_rasmapper_gdal_bridge(
+            hecras_dir,
+            python_dir=python_dir,
+        )
+
+    assert not _gdal_runtime.python_gdal_bridge_is_usable(python_dir)
