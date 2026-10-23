@@ -530,7 +530,27 @@ Bridge geometry authoring (deck profiles, piers, abutments, approach sections).
 
 ## GeomBcLines
 
-2D boundary condition line geometry authoring.
+Read and author boundary condition line geometry.
+
+`GeomBcLines.get_bc_lines(geom_file)` reads a plain-text `.g##` file into a
+DataFrame with `name`, `storage_area`, `coordinates`, and `coordinate_count`
+columns, in file order. Each `coordinates` value is a list of `(x, y)` tuples
+in the source coordinate system and units. The reader preserves stored
+precision, strips surrounding name padding, and rejects missing headers,
+invalid arc counts, truncated or non-finite coordinates, and missing
+text-position terminators. A file without BC lines returns an empty frame
+with the same columns. The call leaves the file unchanged and requires no
+initialized project, geometry HDF, or HEC-RAS installation.
+
+```python
+from ras_commander import GeomBcLines
+
+bc_lines = GeomBcLines.get_bc_lines("child.g01")
+outlets = bc_lines.loc[bc_lines["storage_area"] == "Perimeter 1"]
+```
+
+Use `HdfBndry.get_bc_lines()` to read compiled geometry HDF lines instead.
+The text reader does not establish mesh attachment or boundary forcing.
 
 `replace_bc_lines(geom_file, unsteady_files, *, area_2d, lines, ras_object=None)`
 replaces the complete named-area line set and its forcing in one staged
@@ -570,6 +590,7 @@ targets `fim-hecras-wine:6.6-clb-v8`.
 
 ### Methods
 
+- `get_bc_lines(geom_file)` - Read BC line identities and vertices from geometry text
 - `add_bc_lines(geom_file, lines, replace_existing=False)` - Add or upsert named geometry lines
 - `delete_bc_line(geom_file, name)` - Delete a named geometry line
 - `rename_bc_line(geom_file, old_name, new_name)` - Rename a geometry line

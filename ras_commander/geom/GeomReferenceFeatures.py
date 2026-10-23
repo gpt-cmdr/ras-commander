@@ -68,15 +68,17 @@ def _parse_reference_line_coordinates(
     start: int,
     point_count: int,
     block_start: int,
+    *,
+    feature_label: str = "Reference line",
 ) -> tuple[List[tuple[float, float]], int]:
-    """Parse the exact fixed-width coordinate payload for one reference line."""
+    """Parse an exact 16-character-field polyline coordinate payload."""
     coordinates: List[tuple[float, float]] = []
     coordinate_line_count = (point_count + 1) // 2
     for offset in range(coordinate_line_count):
         line_index = start + offset
         if line_index >= len(file_lines):
             raise ValueError(
-                f"Reference line at line {block_start + 1} has truncated coordinates"
+                f"{feature_label} at line {block_start + 1} has truncated coordinates"
             )
         raw_line = file_lines[line_index].rstrip("\r\n")
         points_on_line = min(2, point_count - len(coordinates))
@@ -84,7 +86,7 @@ def _parse_reference_line_coordinates(
         expected_width = scalar_count * 16
         if len(raw_line) < expected_width or raw_line[expected_width:].strip():
             raise ValueError(
-                f"Reference line at line {block_start + 1} has a malformed "
+                f"{feature_label} at line {block_start + 1} has a malformed "
                 f"fixed-width coordinate line at line {line_index + 1}"
             )
 
@@ -96,12 +98,12 @@ def _parse_reference_line_coordinates(
                 value = float(raw_value)
             except ValueError as exc:
                 raise ValueError(
-                    f"Reference line at line {block_start + 1} has an invalid "
+                    f"{feature_label} at line {block_start + 1} has an invalid "
                     f"coordinate at line {line_index + 1}"
                 ) from exc
             if not math.isfinite(value):
                 raise ValueError(
-                    f"Reference line at line {block_start + 1} has a non-finite "
+                    f"{feature_label} at line {block_start + 1} has a non-finite "
                     f"coordinate at line {line_index + 1}"
                 )
             values.append(value)

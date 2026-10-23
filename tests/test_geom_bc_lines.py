@@ -61,6 +61,141 @@ def skeleton_geom(tmp_path):
 # ---------------------------------------------------------------------------
 
 
+class TestGetBcLines:
+    @pytest.mark.parametrize("as_string", [False, True])
+    @pytest.mark.parametrize("ending", ["\n", "\r\n", "\r"])
+    def test_read_and_round_trip(self, tmp_path, as_string, ending):
+        from ras_commander import GeomBcLines
+
+        geom = tmp_path / "project.g01"
+        geom.write_bytes(_SKELETON.replace("\n", ending).encode())
+        before = geom.read_bytes()
+        stat = geom.stat()
+        result = GeomBcLines.get_bc_lines(str(geom) if as_string else geom)
+        assert result.to_dict("records") == [{
+            "name": "Existing", "storage_area": "Perimeter 1",
+            "coordinates": [(100.0, 100.0), (200.0, 100.0)],
+            "coordinate_count": 2,
+        }]
+        assert geom.read_bytes() == before
+        assert geom.stat().st_mtime_ns == stat.st_mtime_ns
+        assert list(tmp_path.iterdir()) == [geom]
+
+        copy = _write_geom(tmp_path / "copy.g01", "Storage Area=Perimeter 1,,\n")
+        GeomBcLines.add_bc_lines(copy, lines=result.to_dict("records"))
+        assert GeomBcLines.get_bc_lines(copy).to_dict("records") == result.to_dict("records")
+
+    def test_multiple_lines_and_odd_vertex_count(self, skeleton_geom):
+        from ras_commander import GeomBcLines
+
+        GeomBcLines.add_bc_lines(skeleton_geom, lines=[{
+            "name": "DSNormalDepth", "storage_area": "Perimeter 1",
+            "coordinates": [(500, 100), (700, 100), (900, 100)],
+        }])
+        result = GeomBcLines.get_bc_lines(skeleton_geom)
+        assert result["name"].tolist() == ["Existing", "DSNormalDepth"]
+        assert result["coordinate_count"].tolist() == [2, 3]
+        assert result.iloc[1]["coordinates"] == [(500., 100.), (700., 100.), (900., 100.)]
+
+    def test_packed_fields_and_literal_names(self, tmp_path):
+        from ras_commander import GeomBcLines
+
+        values = [123456789.123456, -12345678.123456, 123456789.654321, -12345678.654321]
+        packed = "".join(f"{v:16.6f}" for v in values)
+        assert len(packed) == 64
+        content = _SKELETON.replace("Existing                                ", "  MiXeD, name  ")
+        content = content.replace("             100             100             200             100", packed)
+        geom = _write_geom(tmp_path / "packed.g01", content)
+        row = GeomBcLines.get_bc_lines(geom).iloc[0]
+        assert row["name"] == "MiXeD, name"
+        assert row["coordinates"] == list(zip(values[::2], values[1::2]))
+
+    @pytest.mark.parametrize("content", ["", "Geom Title=No BC lines\nReference Line Name=Ignored\n"])
+    def test_empty_result_columns(self, tmp_path, content):
+        from ras_commander import GeomBcLines
+
+        result = GeomBcLines.get_bc_lines(_write_geom(tmp_path / "empty.g01", content))
+        assert result.empty
+        assert result.columns.tolist() == ["name", "storage_area", "coordinates", "coordinate_count"]
+
+    def test_missing_file(self, tmp_path):
+        from ras_commander import GeomBcLines
+
+        with pytest.raises(FileNotFoundError):
+            GeomBcLines.get_bc_lines(tmp_path / "missing.g01")
+
+    @pytest.mark.parametrize("old,new", [
+        ("BC Line Arc= 2", "BC Line Arc= nonsense"),
+        ("BC Line Arc= 2", "BC Line Arc= 2.0"),
+        ("BC Line Arc= 2", "BC Line Arc= -1"),
+        ("BC Line Arc= 2", "BC Line Arc= 0"),
+        ("BC Line Arc= 2", "BC Line Arc= 1"),
+        ("BC Line Arc= 2", "BC Line Arc= 3"),
+        ("BC Line Arc= 2", "Other Arc= 2"),
+        ("BC Line Storage Area=Perimeter 1", "BC Line Storage Area="),
+        ("BC Line Name=Existing", "BC Line Name="),
+        ("BC Line Start Position=", "Other Start Position="),
+        ("BC Line Text Position=", "Other Text Position="),
+        ("             100             100             200             100", "             100             100"),
+        ("             100             100             200             100", "             100             100             200             100               1"),
+        ("             100             100             200             100", "             100                             200             100"),
+        ("             100", "             nan"),
+        ("             100", "             inf"),
+        ("             100", "           1x100"),
+    ])
+    def test_malformed_blocks_raise_without_writes(self, tmp_path, old, new):
+        from ras_commander import GeomBcLines
+
+        geom = _write_geom(tmp_path / "bad.g01", _SKELETON.replace(old, new))
+        before = geom.read_bytes()
+        with pytest.raises(ValueError, match="BC line at line"):
+            GeomBcLines.get_bc_lines(geom)
+        assert geom.read_bytes() == before
+        assert list(tmp_path.iterdir()) == [geom]
+
+    @pytest.mark.parametrize("cut", [1, 3, 6, 7])
+    def test_truncated_blocks(self, tmp_path, cut):
+        from ras_commander import GeomBcLines
+
+        block = _SKELETON[_SKELETON.index("BC Line Name="):].splitlines()
+        geom = _write_geom(tmp_path / "truncated.g01", "\n".join(block[:cut]))
+        with pytest.raises(ValueError, match="BC line at line"):
+            GeomBcLines.get_bc_lines(geom)
+
+    def test_does_not_consume_next_block_as_coordinates(self, tmp_path):
+        from ras_commander import GeomBcLines
+
+        geom = _write_geom(tmp_path / "bad.g01", _SKELETON.replace("BC Line Arc= 2", "BC Line Arc= 6") + _SKELETON)
+        with pytest.raises(ValueError, match="BC line at line"):
+            GeomBcLines.get_bc_lines(geom)
+
+    @pytest.mark.slow
+    def test_real_chippewa_read_add_read(self, tmp_path):
+        from ras_commander import GeomBcLines, RasExamples
+
+        project = RasExamples.extract_project("Chippewa_2D", output_path=tmp_path)
+        if isinstance(project, list):
+            project = project[0]
+        # No project context exists here; select the public example's text geometry.
+        geom = next(Path(project).glob("*.g01"))
+        before = geom.read_bytes()
+        first = GeomBcLines.get_bc_lines(geom)
+        assert first["name"].tolist() == ["Upstream", "Downstream"]
+        assert first["storage_area"].tolist() == ["Perimeter 1", "Perimeter 1"]
+        assert all(len(row.coordinates) == row.coordinate_count for row in first.itertuples())
+        assert geom.read_bytes() == before
+        copy = _write_geom(tmp_path / "roundtrip.g01", "Storage Area=Perimeter 1,,\n")
+        GeomBcLines.add_bc_lines(copy, lines=first.to_dict("records"))
+        second = GeomBcLines.get_bc_lines(copy)
+        assert second.drop(columns="coordinates").equals(first.drop(columns="coordinates"))
+        # The existing writer uses three decimal places; the reader retains
+        # the source geometry's full precision.
+        import numpy as np
+
+        for original, written in zip(first["coordinates"], second["coordinates"]):
+            np.testing.assert_allclose(written, original, rtol=0, atol=0.0005)
+
+
 class TestAddBcLines:
     def test_add_single_bc_line(self, skeleton_geom):
         from ras_commander import GeomBcLines
