@@ -14,7 +14,9 @@ pip install /path/to/ras2fim_engine-0.1.0-py3-none-<platform>.whl
 ras2fim-batch method
 ```
 
-Use the actual wheel filename. Wheels are built by the `Engine wheels` workflow
+The repository `wheels/` folder includes both tested wheels, checksums, and
+`BUILD.json` provenance. See `wheels/README.md` for the exact platform filenames.
+Wheels are rebuilt by the `Engine wheels` workflow
 and available as its platform artifacts with SHA-256 checksums. Linux wheels
 target glibc 2.28 or newer. The wheel installs `ras2fim-batch` on the environment's
 `PATH`; no Rust compiler or system GDAL is needed for the native engine.

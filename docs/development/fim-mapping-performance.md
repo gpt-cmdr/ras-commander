@@ -31,3 +31,10 @@ and, when required, the serial interpolation fallback.
 See [the API guide](../api/fim.md) for installation, inputs, bounds, polygon
 CRS rules and explicit failure behavior. Native Windows builds and other
 untested terrain/CRS combinations require additional qualification.
+
+Both retained engine wheels passed installed synthetic shared-terrain batch,
+bbox and polygon-mask tests. The Windows wheel additionally passed a local
+Commander public-model full/bbox/multipart-polygon-with-hole crop test.
+`wheels/BUILD.json` identifies the public build and `wheels/SHA256SUMS.txt`
+records the retained artifacts. These platform checks are distinct from the
+Linux 19-profile numerical qualification and from performance measurements.

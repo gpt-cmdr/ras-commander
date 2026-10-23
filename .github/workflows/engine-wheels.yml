@@ -3,15 +3,23 @@ name: Engine wheels
 on:
   push:
     branches: ['feat/optional-fim-mapping-engine']
-    paths: ['rust/step05/**', '.github/workflows/engine-wheels.yml', 'tests/smoke_engine_wheel.py']
+    paths: ['rust/step05/**', '.github/workflows/engine-wheels.yml', 'tests/smoke_engine_wheel.py', 'tests/verify_wheel_artifacts.py', 'wheels/**']
   pull_request:
-    paths: ['rust/step05/**', '.github/workflows/engine-wheels.yml', 'tests/smoke_engine_wheel.py']
+    paths: ['rust/step05/**', '.github/workflows/engine-wheels.yml', 'tests/smoke_engine_wheel.py', 'tests/verify_wheel_artifacts.py', 'wheels/**']
   workflow_dispatch:
 
 permissions:
   contents: read
 
 jobs:
+  retained-artifacts:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - run: python tests/verify_wheel_artifacts.py
   build:
     strategy:
       fail-fast: false
