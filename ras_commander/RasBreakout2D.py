@@ -693,6 +693,7 @@ class RasBreakout2D:
         require_complete_products: bool = False,
         anchor_grid_to_parent: bool = False,
         computation_points: Optional[np.ndarray] = None,
+        repair_computation_points: bool = False,
         parent_cell_ids: Optional[Sequence[int]] = None,
     ) -> Breakout2DPreparationResult:
         """Trim mesh-owned features and remesh only the cloned geometry.
@@ -746,8 +747,15 @@ class RasBreakout2D:
                 geometry CRS/units, for a cookie-cut bootstrap. Requires
                 refresh_hdf=True, refresh_method="rasexe", remesh=False and
                 anchor_grid_to_parent=False. Points are written unchanged through
-                GeomMesh.write_computation_points; native compilation and QA
-                still follow. No point repair or face-identity claim is made.
+                GeomMesh.write_computation_points unless repair_computation_points
+                is enabled; native compilation and QA still follow. Writing
+                supplied points does not establish parent face identity.
+            repair_computation_points: Opt in to the bounded supplied-seed
+                MaxFaces/perimeter recipe before headless compilation. Requires
+                computation_points. The returned computation_points_result's
+                seed_repair records its plan and readback; default False leaves
+                supplied points and perimeter unchanged. Native completion and
+                hydraulic review remain required after repair.
             parent_cell_ids: Explicit physical cell IDs from the source geometry
                 HDF. Retain their exact cell/face topology through
                 :meth:`GeomMesh.plan_cell_subset` and
@@ -806,6 +814,8 @@ class RasBreakout2D:
                 raise ValueError(
                     "parent_cell_ids must be unique nonnegative integer IDs"
                 )
+        if repair_computation_points and computation_points is None:
+            raise ValueError("repair_computation_points requires computation_points")
         if computation_points is not None and (
             not refresh_hdf
             or refresh_method != "rasexe"
@@ -952,6 +962,15 @@ class RasBreakout2D:
                     mesh_name=preflight.spec.source_2d_area,
                     ras_object=ras_object,
                 )
+            elif repair_computation_points:
+                repair_plan = GeomMesh.plan_computation_point_repair(
+                    clone.geometry_number,
+                    computation_points,
+                    mesh_name=preflight.spec.source_2d_area,
+                    ras_object=ras_object,
+                    allow_extended_connection_support=preflight.spec.allow_extended_connection_support,
+                )
+                points = GeomMesh.apply_computation_point_repair(repair_plan)
             else:
                 points = GeomMesh.write_computation_points(
                     clone.geometry_number,
@@ -1153,6 +1172,26 @@ class RasBreakout2D:
             if not property_tables:
                 raise RuntimeError("2D property-table computation returned False")
 
+        if repair_computation_points:
+            from .geom._seed_repair import _audit_text_features
+            from .geom.GeomMesh import _hdf_flow_area_perimeter
+
+            containment_result = GeomMesh.audit_domain_containment(
+                clone.geometry_number,
+                mesh_name=preflight.spec.source_2d_area,
+                ras_object=ras_object,
+            )
+            if not containment_result.ok:
+                raise ValueError("Repaired supplied-seed mesh features fail containment: "
+                                 f"{containment_result.violations}")
+            feature_audit = _audit_text_features(
+                clone.geometry_path,
+                preflight.spec.source_2d_area,
+                Polygon(_hdf_flow_area_perimeter(clone.geometry_hdf, preflight.spec.source_2d_area)),
+                preflight.spec.allow_extended_connection_support,
+            )
+            points.seed_repair["post_preprocess_containment"] = containment_result.to_dict()
+            points.seed_repair["post_preprocess_feature_audit"] = feature_audit
         if parent_cell_ids is not None:
             # Ras.exe may silently regenerate topology from unchanged seeds and
             # perimeter. Recheck exact planned arrays after every native phase.
