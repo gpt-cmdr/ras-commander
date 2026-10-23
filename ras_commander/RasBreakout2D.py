@@ -969,6 +969,7 @@ class RasBreakout2D:
                     computation_points,
                     mesh_name=preflight.spec.source_2d_area,
                     ras_object=ras_object,
+                    allow_extended_connection_support=preflight.spec.allow_extended_connection_support,
                 )
                 points = GeomMesh.apply_computation_point_repair(repair_plan)
             else:
@@ -1172,6 +1173,26 @@ class RasBreakout2D:
             if not property_tables:
                 raise RuntimeError("2D property-table computation returned False")
 
+        if repair_computation_points:
+            from .geom._seed_repair import _audit_text_features
+            from .geom.GeomMesh import _hdf_flow_area_perimeter
+
+            containment_result = GeomMesh.audit_domain_containment(
+                clone.geometry_number,
+                mesh_name=preflight.spec.source_2d_area,
+                ras_object=ras_object,
+            )
+            if not containment_result.ok:
+                raise ValueError("Repaired supplied-seed mesh features fail containment: "
+                                 f"{containment_result.violations}")
+            feature_audit = _audit_text_features(
+                clone.geometry_path,
+                preflight.spec.source_2d_area,
+                Polygon(_hdf_flow_area_perimeter(clone.geometry_hdf, preflight.spec.source_2d_area)),
+                preflight.spec.allow_extended_connection_support,
+            )
+            points.seed_repair["post_preprocess_containment"] = containment_result.to_dict()
+            points.seed_repair["post_preprocess_feature_audit"] = feature_audit
         if parent_cell_ids is not None:
             # Ras.exe may silently regenerate topology from unchanged seeds and
             # perimeter. Recheck exact planned arrays after every native phase.

@@ -15,7 +15,7 @@ from typing import Any
 
 import numpy as np
 from shapely import contains_xy
-from shapely.geometry import Polygon
+from shapely.geometry import LineString, Point, Polygon
 
 
 @dataclass(frozen=True)
@@ -53,54 +53,115 @@ def _native_polygon(ring, ns):
     return ns["Polygon"](points)
 
 
-def _preview(ring, points, ratio, ns, gm):
+def _preview(ring, points, ratio, ns, gm, constraints=None):
     seeds = ns["PointMs"]()
     for x, y in points:
         seeds.Add(ns["PointM"](float(x), float(y)))
     perimeter = _native_polygon(ring, ns)
-    return gm._compute_mesh(perimeter, seeds, None, ratio, ns), perimeter, seeds
+    return gm._compute_mesh(perimeter, seeds, constraints, ratio, ns), perimeter, seeds
 
 
-def _repair(ring, points, cell_size, ns, gm):
-    """Port research ordering: MaxFaces across three ratios, then perimeter."""
+class _RepairLossError(RuntimeError):
+    def __init__(self, evidence):
+        self.repair_evidence = evidence
+        super().__init__(f"Supplied-seed repair loss limit exceeded: {evidence}")
+
+
+def _repair(
+    ring,
+    points,
+    cell_size,
+    ns,
+    gm,
+    constraints=None,
+    max_parent_seed_loss_fraction=0.001,
+    max_area_loss_fraction=0.001,
+):
+    """Bound midpoint/perimeter repairs, including MaxFaces after every cut."""
+    for value in (max_parent_seed_loss_fraction, max_area_loss_fraction):
+        if isinstance(value, bool) or not np.isfinite(value) or not 0 <= value <= 1:
+            raise ValueError(
+                "repair loss fractions must be finite numbers between zero and one"
+            )
     points = [tuple(map(float, p)) for p in points]
     original_points = list(points)
     ring = np.asarray(ring, dtype=float)
     if np.array_equal(ring[0], ring[-1]):
         ring = ring[:-1]
     original_ring = ring.copy()
-    maxfaces, perimeter_rounds = [], []
-    for attempt in range(7):
-        counts, midpoints = {}, []
-        for ratio in (0.0025, 0.05, 0.1):
-            mesh, perimeter, seeds = _preview(ring, points, ratio, ns, gm)
-            count = sum(
-                mesh.CellFacesCount(i) > 8 for i in range(mesh.NonVirtualCellCount)
-            )
-            counts[str(ratio)] = int(count)
-            if count:
-                _, _, added = gm._autofix_max_faces(
-                    mesh,
-                    [seeds[i] for i in range(seeds.Count)],
-                    ns,
-                    perimeter=perimeter,
-                )
-                midpoints.extend(
-                    (round(float(p.X), 3), round(float(p.Y), 3)) for p in added
-                )
-        maxfaces.append(
-            {"round": attempt, "seeds": len(points), "cells_over_8": counts}
-        )
-        if not any(counts.values()):
-            break
-        seen = set(points)
-        added = list(dict.fromkeys(p for p in midpoints if p not in seen))
-        if not added:
-            raise RuntimeError("Supplied-seed MaxFaces repair made no progress")
-        points.extend(added)
+    original_polygon = Polygon(ring)
+    original_set = set(original_points)
+    maxfaces, perimeter_rounds, excluded = [], [], []
+    repairs_used = 0
 
+    def loss_evidence():
+        polygon = Polygon(ring)
+        retained = {tuple(p) for p in points}
+        dropped = [list(p) for p in original_points if p not in retained]
+        area_lost = float(original_polygon.difference(polygon).area)
+        evidence = {
+            "parent_seed_count": len(original_points),
+            "dropped_parent_points": dropped,
+            "dropped_parent_fraction": len(dropped) / len(original_points),
+            "area_lost": area_lost,
+            "area_lost_fraction": area_lost / original_polygon.area,
+            "max_parent_seed_loss_fraction": max_parent_seed_loss_fraction,
+            "max_area_loss_fraction": max_area_loss_fraction,
+        }
+        if (
+            evidence["dropped_parent_fraction"] > max_parent_seed_loss_fraction
+            or evidence["area_lost_fraction"] > max_area_loss_fraction
+        ):
+            raise _RepairLossError(evidence)
+        return evidence
+
+    def repair_maxfaces(phase):
+        nonlocal repairs_used
+        while True:
+            counts, midpoints = {}, []
+            for ratio in (0.0025, 0.05, 0.1):
+                mesh, perimeter, seeds = _preview(
+                    ring, points, ratio, ns, gm, constraints
+                )
+                count = sum(
+                    mesh.CellFacesCount(i) > 8 for i in range(mesh.NonVirtualCellCount)
+                )
+                counts[str(ratio)] = int(count)
+                if count and repairs_used < 7:
+                    _, _, added = gm._autofix_max_faces(
+                        mesh,
+                        [seeds[i] for i in range(seeds.Count)],
+                        ns,
+                        perimeter=perimeter,
+                        midpoint_round_decimals=3,
+                    )
+                    # The owning helper rounds before its move-inside step.
+                    # Preserve that inset coordinate; deduplicate by exact equality.
+                    midpoints.extend((float(p.X), float(p.Y)) for p in added)
+            maxfaces.append(
+                {
+                    "phase": phase,
+                    "repairs_used": repairs_used,
+                    "seeds": len(points),
+                    "cells_over_8": counts,
+                }
+            )
+            if not any(counts.values()):
+                return
+            if repairs_used >= 7:
+                raise RuntimeError(
+                    "Supplied-seed MaxFaces repair did not converge within seven repairs"
+                )
+            seen = set(points)
+            added = list(dict.fromkeys(p for p in midpoints if p not in seen))
+            if not added:
+                raise RuntimeError("Supplied-seed MaxFaces repair made no progress")
+            points.extend(added)
+            repairs_used += 1
+
+    repair_maxfaces("initial")
     for attempt in range(6):
-        mesh, _, _ = _preview(ring, points, 0.05, ns, gm)
+        mesh, _, _ = _preview(ring, points, 0.05, ns, gm, constraints)
         record = {
             "round": attempt,
             "state": str(mesh.MeshCompletionState),
@@ -127,18 +188,20 @@ def _repair(ring, points, cell_size, ns, gm):
             raise RuntimeError(
                 "Supplied-seed perimeter repair produced an invalid polygon"
             )
-
-    # The research discards seeds excluded by its repaired perimeter. Record
-    # their identities, then require fresh previews on the actual final set.
+        array = np.asarray(points)
+        keep = contains_xy(polygon, array[:, 0], array[:, 1])
+        excluded.extend(array[~keep].tolist())
+        points = [tuple(p) for p in array[keep]]
+        if not points:
+            raise RuntimeError("Supplied-seed perimeter repair excluded all seeds")
+        record["loss"] = loss_evidence()
+        repair_maxfaces(f"after_perimeter_{attempt}")
     polygon = Polygon(ring)
-    array = np.asarray(points)
-    keep = contains_xy(polygon, array[:, 0], array[:, 1])
-    dropped = array[~keep].tolist()
-    points = array[keep]
     gm._validated_computation_points(points, polygon)
+    loss = loss_evidence()
     final = []
     for ratio in (0.0025, 0.05, 0.1):
-        mesh, _, _ = _preview(ring, points, ratio, ns, gm)
+        mesh, _, _ = _preview(ring, points, ratio, ns, gm, constraints)
         count = sum(mesh.CellFacesCount(i) > 8 for i in range(mesh.NonVirtualCellCount))
         final.append(
             {
@@ -149,22 +212,16 @@ def _repair(ring, points, cell_size, ns, gm):
         )
         if count or int(mesh.MeshCompletionState) != int(ns["MeshStatus"].Complete):
             raise RuntimeError(f"Supplied-seed repair did not converge: {final[-1]}")
-    original_set = set(original_points)
-    final_set = {tuple(p) for p in points}
     return (
         ring,
-        points,
+        np.asarray(points),
         {
             "supplied_points": [list(p) for p in original_points],
             "parent_seed_count": len(original_points),
             "final_seed_count": len(points),
-            "added_points": [
-                list(p) for p in map(tuple, points) if p not in original_set
-            ],
-            "dropped_parent_points": [
-                list(p) for p in original_points if p not in final_set
-            ],
-            "excluded_points_after_perimeter_repair": dropped,
+            "added_points": [list(p) for p in points if p not in original_set],
+            **loss,
+            "excluded_points_after_perimeter_repair": excluded,
             "perimeter_before": original_ring.tolist(),
             "perimeter_after": ring.tolist(),
             "maxfaces_rounds": maxfaces,
@@ -175,26 +232,111 @@ def _repair(ring, points, cell_size, ns, gm):
 
 
 def _runtime_directory(hecras_dir, ras_object):
-    if ras_object is None:
-        from ..RasPrj import ras
-
-        ras_object = ras if getattr(ras, "initialized", False) else None
     selected = None
     if ras_object is not None:
-        executable = Path(ras_object.ras_exe_path).resolve()
-        if not executable.is_file() or executable.name.lower() != "ras.exe":
-            raise FileNotFoundError("Project must select an existing Ras.exe")
-        selected = executable.parent
+        raw = str(getattr(ras_object, "ras_exe_path", "") or "")
+        if raw and raw.lower() != "ras.exe":
+            executable = Path(raw).resolve()
+            if not executable.is_file() or executable.name.lower() != "ras.exe":
+                raise FileNotFoundError("Project must select an existing Ras.exe")
+            selected = executable.parent
     if hecras_dir is not None:
         explicit = Path(hecras_dir).resolve()
         if selected is not None and explicit != selected:
             raise ValueError("hecras_dir conflicts with the project's selected Ras.exe")
         selected = explicit
-    if selected is None or not (selected / "RasMapperLib.dll").is_file():
+    if selected is None or any(
+        not (selected / filename).is_file()
+        for filename in ("Ras.exe", "RasMapperLib.dll")
+    ):
         raise FileNotFoundError(
             "Select a project runtime or explicit hecras_dir containing RasMapperLib.dll"
         )
     return selected
+
+
+def _text_constraints(path, name):
+    from .._ras_text import _split_ras_records
+    from ._preprocess_contract import _text_features
+    from .GeomLateral import GeomLateral
+
+    lines = _split_ras_records(path.read_text(encoding="utf-8"))
+    breaklines = [
+        feature
+        for feature in _text_features(lines, "BreakLine Name=", "BreakLine Polyline=")
+        if feature["storage_area"] in (name, "")
+    ]
+    connections = GeomLateral.get_connection_data(path)
+    connections = connections[connections["From"].eq(name) | connections["To"].eq(name)]
+    coordinates = [feature["coordinates"] for feature in breaklines]
+    for _, row in connections.iterrows():
+        coords = row["LineCoordinates"]
+        if len(coords) < 2:
+            raise ValueError(
+                f"Connection {row['Name']} has no verified constraint line"
+            )
+        coordinates.append(coords[["X", "Y"]].to_numpy())
+    return breaklines, coordinates
+
+
+def _native_constraints(coordinates, ns):
+    if not coordinates:
+        return None
+    layer = ns["PolylineFeatureLayer"]("supplied-seed-constraints")
+    for coords in coordinates:
+        points = ns["PointMs"]()
+        for x, y in coords:
+            points.Add(ns["PointM"](float(x), float(y)))
+        layer.AddFeature(ns["Polyline"](points))
+    return layer.CopyToMultiPartPolyline()
+
+
+def _audit_text_features(path, name, polygon, allow_extended_connection_support=False):
+    from .GeomBcLines import GeomBcLines
+    from .GeomLateral import GeomLateral
+
+    breaklines, _ = _text_constraints(path, name)
+    checked = []
+    for feature in breaklines:
+        inside = polygon.covers(LineString(feature["coordinates"]))
+        checked.append({"type": "breakline", "name": feature["name"], "inside": inside})
+        if not inside:
+            raise RuntimeError(
+                f"Repaired perimeter excludes kept breakline {feature['name']}"
+            )
+    for row in GeomBcLines.get_bc_lines(path).to_dict("records"):
+        if row["storage_area"] != name:
+            continue
+        distances = [
+            float(polygon.boundary.distance(Point(p)))
+            for p in (row["coordinates"][0], row["coordinates"][-1])
+        ]
+        checked.append(
+            {"type": "bc_line", "name": row["name"], "endpoint_distances": distances}
+        )
+        if max(distances) > 1e-6:
+            raise RuntimeError(
+                f"BC line {row['name']} endpoints no longer touch the repaired perimeter"
+            )
+    connections = GeomLateral.classify_connections(
+        path, polygon, allow_extended_support=allow_extended_connection_support
+    )
+    for row in connections.to_dict("records"):
+        if row["From"] != name and row["To"] != name:
+            continue
+        checked.append(
+            {
+                "type": "connection",
+                "name": row["Name"],
+                "action": row["action"],
+                "reason": row["reason"],
+            }
+        )
+        if row["action"] != "keep":
+            raise RuntimeError(
+                f"Repaired perimeter fails connection containment for {row['Name']}: {row['reason']}"
+            )
+    return {"ok": True, "checks": checked, "bc_endpoint_tolerance": 1e-6}
 
 
 def _loaded_runtime_directory(ns):
@@ -205,11 +347,25 @@ def _loaded_runtime_directory(ns):
 
 
 def _plan(
-    geom_number, computation_points, mesh_name, mesh_index, hecras_dir, ras_object
+    geom_number,
+    computation_points,
+    mesh_name,
+    mesh_index,
+    hecras_dir,
+    ras_object,
+    max_parent_seed_loss_fraction,
+    max_area_loss_fraction,
+    allow_extended_connection_support,
 ):
     from .GeomStorage import GeomStorage
 
     gm = importlib.import_module("ras_commander.geom.GeomMesh")
+    if ras_object is None and (
+        not isinstance(geom_number, (str, Path)) or not Path(geom_number).is_file()
+    ):
+        raise ValueError(
+            "Without ras_object, pass an explicit existing geometry text path"
+        )
     path = gm._resolve_geom_text_path(geom_number, ras_object).resolve()
     original = path.read_bytes()
     try:
@@ -246,8 +402,17 @@ def _plan(
             raise ValueError(
                 "positive cell spacing is required for native perimeter diagnostics"
             )
+        _, constraint_coordinates = _text_constraints(staged, name)
+        constraints = _native_constraints(constraint_coordinates, ns)
         ring, points, evidence = _repair(
-            list(area.geometry.exterior.coords), points, cell_size, ns, gm
+            list(area.geometry.exterior.coords),
+            points,
+            cell_size,
+            ns,
+            gm,
+            constraints,
+            max_parent_seed_loss_fraction,
+            max_area_loss_fraction,
         )
         GeomStorage.set_2d_flow_area_perimeter(
             staged, name, geometry=Polygon(ring), create_backup=False
@@ -255,6 +420,16 @@ def _plan(
         # Reparse the native text ring; never preview one precision then apply another.
         actual = GeomStorage.get_storage_area_polygons(staged, exclude_2d=False)
         polygon = actual[actual["Name"].eq(name)].geometry.iloc[0]
+        original_polygon = Polygon(evidence["perimeter_before"])
+        evidence["area_lost"] = float(original_polygon.difference(polygon).area)
+        evidence["area_lost_fraction"] = evidence["area_lost"] / original_polygon.area
+        evidence["native_constraint_count"] = len(constraint_coordinates)
+        if evidence["area_lost_fraction"] > max_area_loss_fraction:
+            raise _RepairLossError(evidence)
+        evidence["feature_audit"] = _audit_text_features(
+            staged, name, polygon, allow_extended_connection_support
+        )
+        constraints = _native_constraints(_text_constraints(staged, name)[1], ns)
         native_points = np.asarray(
             [
                 [float(gm._format_seed_coordinate(float(v), strict=True)) for v in p]
@@ -264,7 +439,7 @@ def _plan(
         gm._validated_computation_points(native_points, polygon)
         for ratio in (0.0025, 0.05, 0.1):
             mesh, _, _ = _preview(
-                list(polygon.exterior.coords), native_points, ratio, ns, gm
+                list(polygon.exterior.coords), native_points, ratio, ns, gm, constraints
             )
             if int(mesh.MeshCompletionState) != int(ns["MeshStatus"].Complete) or any(
                 mesh.CellFacesCount(i) > 8 for i in range(mesh.NonVirtualCellCount)
