@@ -10258,7 +10258,7 @@ projects point to that single organized target. See
                     match.group(2),
                 )
 
-            if source_projection and source_projection.exists():
+            if source_projection and source_projection.is_file():
                 projection_folder.mkdir(parents=True, exist_ok=True)
                 if not RasEbfeModels._is_hecras_project_prj(source_projection):
                     desired_projection = projection_folder / source_projection.name
