@@ -79,6 +79,7 @@ _LAZY_EXPORTS = {
 }
 _LAZY_EXPORTS["HdfResultView"] = (".HdfResultView", "HdfResultView")
 _LAZY_EXPORTS["MeshCellPolygonError"] = (".HdfMesh", "MeshCellPolygonError")
+_LAZY_EXPORTS["MeshSeriesAvailabilityError"] = (".HdfResultsMesh", "MeshSeriesAvailabilityError")
 
 
 def _load_export(name):
@@ -126,7 +127,7 @@ __all__ = [
     # Geometry
     'HdfMesh', 'MeshCellPolygonError', 'HdfXsec', 'HdfBndry', 'HdfStruc', 'HdfStorageArea', 'HdfStruc1D', 'HdfHydraulicTables',
     # Results
-    'HdfResultsPlan', 'HdfResultsMesh', 'HdfResultView', 'HdfResultsQuery',
+    'HdfResultsPlan', 'HdfResultsMesh', 'MeshSeriesAvailabilityError', 'HdfResultView', 'HdfResultsQuery',
     'HdfResultsXsec', 'HdfResultsBreach',
     'HdfResultsSediment', 'HdfResultsProducts',
     # Infrastructure
