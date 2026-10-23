@@ -824,7 +824,7 @@ def attribute_value(typed):
     dataspace class or an unsupported/corrupt value raises :class:`TypedRouteError`,
     so the caller falls back or refuses.
     """
-    if typed.get("capability", {}).get("status") != "supported":
+    if (typed.get("capability") or {}).get("status") != "supported":
         raise TypedRouteError(f"attribute {typed.get('name')!r}: {typed.get('capability')}")
     kind = typed["attribute_type"]
     dtype = _attribute_dtype(typed)

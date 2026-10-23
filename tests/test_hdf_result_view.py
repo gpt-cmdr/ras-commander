@@ -29,15 +29,18 @@ def test_native_view_pushes_selected_reads_and_bounded_batches(tmp_path, monkeyp
     native = pytest.importorskip("ras_commander_fast_hdf")
     monkeypatch.setenv("RAS_COMMANDER_FAST_HDF", "required")
     hdf_path, values = _write_result_hdf(tmp_path / "native-slice.p01.hdf")
+    from ras_commander import fast_hdf
     calls = []
-    original = native.read_numeric
+    original = fast_hdf._read_fim_result
 
-    def record_read(path, dataset_path, **kwargs):
-        if dataset_path.endswith("/Water Surface"):
-            calls.append(kwargs["selection"])
-        return original(path, dataset_path, **kwargs)
+    # Every native mesh-series read is dispatched here with the exact selection
+    # pushed to the engine (typed series reader or generic numeric reader).
+    def record_read(module, dataset, slices, threads):
+        if dataset.name.endswith("/Water Surface"):
+            calls.append([tuple(item) for item in slices] if slices is not None else None)
+        return original(module, dataset, slices, threads)
 
-    monkeypatch.setattr(native, "read_numeric", record_read)
+    monkeypatch.setattr(fast_hdf, "_read_fim_result", record_read)
     view = HdfResultsMesh.get_mesh_timeseries(
         hdf_path, MESH_NAME, "Water Surface", truncate=False,
         time_selection=slice(1, 5, 2), spatial_selection=slice(1, 4, 2),
@@ -67,9 +70,10 @@ def _write_result_hdf(path: Path) -> tuple[Path, np.ndarray]:
         dtype=np.float32,
     )
     with h5py.File(path, "w") as hdf_file:
-        hdf_file.attrs["Projection"] = CRS.from_epsg(26915).to_wkt()
+        # Fixed-length ASCII, as HEC-RAS writes text attributes.
+        hdf_file.attrs["Projection"] = np.bytes_(CRS.from_epsg(26915).to_wkt("WKT1_ESRI"))  # ESRI WKT is ASCII
         plan_info = hdf_file.require_group("Plan Data/Plan Information")
-        plan_info.attrs["Simulation Start Time"] = "01Jan2024 00:00:00"
+        plan_info.attrs["Simulation Start Time"] = np.bytes_("01Jan2024 00:00:00")
         hdf_file.create_dataset(
             f"{TIME_BASE}/Time",
             data=np.arange(len(values), dtype=float) / 24.0,
@@ -91,7 +95,7 @@ def _write_result_hdf(path: Path) -> tuple[Path, np.ndarray]:
             data=values,
             chunks=(1, values.shape[1]),
         )
-        dataset.attrs["Units"] = "ft"
+        dataset.attrs["Units"] = np.bytes_("ft")
         summary = hdf_file.create_dataset(
             f"{SUMMARY_BASE}/Maximum Water Surface",
             data=np.array(
@@ -99,7 +103,7 @@ def _write_result_hdf(path: Path) -> tuple[Path, np.ndarray]:
                 dtype=np.float32,
             ),
         )
-        summary.attrs["Units"] = "ft"
+        summary.attrs["Units"] = np.bytes_("ft")
     return path, values
 
 
