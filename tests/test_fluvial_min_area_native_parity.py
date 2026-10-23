@@ -196,7 +196,7 @@ def test_synthetic_native_swap_equals_reference(synthetic, monkeypatch, how, are
     with pytest.MonkeyPatch.context() as patch:
         native_spy = Spy(patch)
         native = HdfFluvialPluvial.generate_fluvial_pluvial_polygons(
-            path, delta_t=12, min_polygon_area_acres=area, engine="native")
+            path, delta_t=12, min_polygon_area_acres=area, engine="native", diagnostics=True)
     assert native.attrs["fluvial_engine"] == {"requested": "native", "used": "native", "fallback_reason": None}
     assert native.attrs["fluvial_native"]["geometry"]["assembly"] == "reference_dissolve"
     assert_identical(reference, baseline)  # the reference swap is presentation-invariant
@@ -246,7 +246,8 @@ def run_pair(path, **kwargs):
         # Classification must come from the native kernel, not the Python growth loop.
         patch.setattr(module, "tqdm", lambda *a, **k: (_ for _ in ()).throw(
             AssertionError("Python region growth ran under engine='native'")))
-        native = HdfFluvialPluvial.generate_fluvial_pluvial_polygons(path, engine="native", **kwargs)
+        native = HdfFluvialPluvial.generate_fluvial_pluvial_polygons(
+            path, engine="native", diagnostics=True, **kwargs)
     assert native.attrs["fluvial_engine"]["used"] == "native"
     return reference, native, reference_spy, native_spy
 

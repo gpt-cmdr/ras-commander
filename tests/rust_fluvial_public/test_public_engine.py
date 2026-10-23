@@ -139,7 +139,7 @@ def test_p07_polygons_native_equals_python(tmp_path):
     reference = save(_python_polygons(hdf), tmp_path / "python.parquet")
     calls = native_calls()
     with forbid_python_classification():
-        native = HdfFluvialPluvial.generate_fluvial_pluvial_polygons(hdf, engine="native")
+        native = HdfFluvialPluvial.generate_fluvial_pluvial_polygons(hdf, engine="native", diagnostics=True)
     used = delta(calls)
     assert native.attrs["fluvial_engine"] == {"requested": "native", "used": "native", "fallback_reason": None}
     assert used["face_graph"] == 1 and used["assemble_rings"] == 1 and used["NativeAnalysis"] == 1
@@ -183,7 +183,7 @@ def test_p07_min_area_swap_native_and_auto_equal_python(tmp_path):
         patch.setattr(module, "tqdm", lambda *a, **k: (_ for _ in ()).throw(
             AssertionError("Python classification loop executed under engine='native'")))
         native = HdfFluvialPluvial.generate_fluvial_pluvial_polygons(
-            hdf, min_polygon_area_acres=1000.0, engine="native")
+            hdf, min_polygon_area_acres=1000.0, engine="native", diagnostics=True)
     used = delta(calls)
     assert used["NativeAnalysis.classify"] >= 1 and "NativeAnalysis.polygons" not in used
     assert native.attrs["fluvial_engine"] == {"requested": "native", "used": "native", "fallback_reason": None}
@@ -205,7 +205,7 @@ def test_p07_boundary_native_equals_python(tmp_path):
     assert delta(calls) == {}
     calls = native_calls()
     with forbid_python_classification():
-        native = HdfFluvialPluvial.calculate_fluvial_pluvial_boundary(hdf, engine="native")
+        native = HdfFluvialPluvial.calculate_fluvial_pluvial_boundary(hdf, engine="native", diagnostics=True)
     used = delta(calls)
     assert used["NativeAnalysis.qualifying_edges"] == 1 and used["face_graph"] == 1
     assert native.attrs["fluvial_native"]["qualifying_edges"] == len(reference) == 4569
@@ -217,6 +217,15 @@ def test_p07_boundary_native_equals_python(tmp_path):
     short = HdfFluvialPluvial.calculate_fluvial_pluvial_boundary(hdf, min_line_length=100.0, engine="native")
     expected = reference[reference.length >= 100.0]
     assert 0 < len(short) == len(expected) < len(reference)
+
+
+def test_native_diagnostics_are_opt_in():
+    hdf = fixture("BaldEagleDamBrk.p07.hdf")
+    for method in (HdfFluvialPluvial.generate_fluvial_pluvial_polygons,
+                   HdfFluvialPluvial.calculate_fluvial_pluvial_boundary):
+        plain = method(hdf, engine="native")
+        assert set(plain.attrs) == {"fluvial_engine"}
+        assert "fluvial_native" in method(hdf, engine="native", diagnostics=True).attrs
 
 
 def test_p07_auto_selects_native():
@@ -287,7 +296,7 @@ def test_p18_two_meshes_native_composite_equals_per_mesh_python(tmp_path):
 
     calls = native_calls()
     with forbid_python_classification():
-        native = HdfFluvialPluvial.generate_fluvial_pluvial_polygons(hdf, engine="native")
+        native = HdfFluvialPluvial.generate_fluvial_pluvial_polygons(hdf, engine="native", diagnostics=True)
     used = delta(calls)
     assert native.attrs["fluvial_engine"] == {"requested": "native", "used": "native", "fallback_reason": None}
     assert used["face_graph"] == 1 and used["assemble_rings"] == 2 and used["NativeAnalysis"] == 1
@@ -299,7 +308,7 @@ def test_p18_two_meshes_native_composite_equals_per_mesh_python(tmp_path):
 
     calls = native_calls()
     with forbid_python_classification():
-        native_lines = HdfFluvialPluvial.calculate_fluvial_pluvial_boundary(hdf, engine="native")
+        native_lines = HdfFluvialPluvial.calculate_fluvial_pluvial_boundary(hdf, engine="native", diagnostics=True)
     assert delta(calls)["NativeAnalysis.qualifying_edges"] == 1
     native_lines = native_lines.assign(_n=range(len(native_lines)))
 

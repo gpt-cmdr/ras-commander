@@ -135,7 +135,8 @@ variable for that call. `engine="auto"` follows the environment variable, so
 
 The fluvial/pluvial methods record what ran in
 `result.attrs["fluvial_engine"]` (`requested`, `used`, and the fallback reason
-when `auto` used the Python reference).
+when `auto` used the Python reference). Native kernel timings and counts
+(`attrs["fluvial_native"]`) are attached only with `diagnostics=True`.
 
 **Mesh polygon diagnostics are opt-in.** `get_mesh_cell_polygons` attaches the
 per-cell `cell_polygon_diagnostics` records only with `diagnostics=True`

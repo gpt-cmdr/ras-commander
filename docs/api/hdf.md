@@ -668,8 +668,8 @@ fail processing: the method logs ERROR with traceback, path, parameters and stag
 then returns an empty GeoDataFrame and discards partial geometry. Input/decorator
 validation exceptions remain unchanged; no result status attributes are added.
 
-- `calculate_fluvial_pluvial_boundary(hdf_path, delta_t, min_line_length=None, *, engine="auto")` - Calculate boundary
-- `generate_fluvial_pluvial_polygons(hdf_path, delta_t, temporal_tolerance_hours=1.0, min_polygon_area_acres=None, *, engine="auto")` - Boundary polygons
+- `calculate_fluvial_pluvial_boundary(hdf_path, delta_t, min_line_length=None, *, engine="auto", diagnostics=False)` - Calculate boundary
+- `generate_fluvial_pluvial_polygons(hdf_path, delta_t, temporal_tolerance_hours=1.0, min_polygon_area_acres=None, *, engine="auto", diagnostics=False)` - Boundary polygons
 
 `engine` selects the implementation. `"h5py"` is the reference described above
 (failures are logged and an empty GeoDataFrame is returned). `"native"` uses the
@@ -679,6 +679,9 @@ propagate. `"auto"` (default) uses native when it can and otherwise the
 reference, including on any native error, so its outcome is always the
 reference outcome. The engine that produced the result is recorded in
 `result.attrs["fluvial_engine"]` (`"used"`: `"native"` or `"h5py"`).
+Native kernel timings and counts are attached as `result.attrs["fluvial_native"]`
+only with `diagnostics=True` (default `False`), so results carry the same
+attributes whichever engine ran.
 `FluvialNativeUnsupportedError` is defined
 in the module `ras_commander.hdf.HdfFluvialPluvial` (import it with
 `from ras_commander.hdf.HdfFluvialPluvial import FluvialNativeUnsupportedError`).

@@ -175,6 +175,13 @@ def _native_snapshot(hdf_path, retain_faces):
 _PYTHON_POLICY_REASON = "RAS_COMMANDER_FAST_HDF selects the Python backend"
 
 
+def _native_diagnostics(frame, keep):
+    """Keep attrs["fluvial_native"] only when diagnostics were requested."""
+    if not keep:
+        frame.attrs.pop("fluvial_native", None)
+    return frame
+
+
 def _engine_attrs(frame, requested, used, reason=None):
     frame.attrs["fluvial_engine"] = {"requested": requested, "used": used, "fallback_reason": reason}
     return frame
@@ -227,6 +234,7 @@ class HdfFluvialPluvial:
         min_line_length: Optional[float] = None,
         *,
         engine: str = "auto",
+        diagnostics: bool = False,
     ) -> gpd.GeoDataFrame:
         """
         Calculate the fluvial-pluvial boundary lines based on cell polygons and maximum water surface elevation times.
@@ -274,6 +282,10 @@ class HdfFluvialPluvial:
                           (a compatible extension) is true. With ``engine="h5py"`` under
                           ``RAS_COMMANDER_FAST_HDF=native`` a routed read's ``FastHdfError``
                           is re-raised instead of returning an empty result.
+            diagnostics (bool): Attach ``result.attrs["fluvial_native"]`` (native kernel
+                          timings and classification/geometry counts) when the native
+                          engine produced the result. Default False, so results carry the
+                          same attributes whichever engine ran. Ignored by the reference.
 
         Returns:
             gpd.GeoDataFrame: GeoDataFrame containing the fluvial-pluvial boundary lines.
@@ -287,7 +299,7 @@ class HdfFluvialPluvial:
         if effective != "h5py":
             try:
                 result = HdfFluvialPluvial._native_boundary(hdf_path, delta_t, min_line_length)
-                return _engine_attrs(result, engine, "native")
+                return _engine_attrs(_native_diagnostics(result, diagnostics), engine, "native")
             except Exception as exc:
                 # Auto must give the reference outcome (main logs processing failures
                 # and returns an empty frame), so any native exception falls back;
@@ -370,6 +382,7 @@ class HdfFluvialPluvial:
         min_polygon_area_acres: Optional[float] = None,
         *,
         engine: str = "auto",
+        diagnostics: bool = False,
     ) -> gpd.GeoDataFrame:
         """
         Generates dissolved polygons representing fluvial, pluvial, and ambiguous flood zones.
@@ -444,6 +457,10 @@ class HdfFluvialPluvial:
                           (a compatible extension) is true. With ``engine="h5py"`` under
                           ``RAS_COMMANDER_FAST_HDF=native`` a routed read's ``FastHdfError``
                           is re-raised instead of returning an empty result.
+            diagnostics (bool): Attach ``result.attrs["fluvial_native"]`` (native kernel
+                          timings and classification/geometry counts) when the native
+                          engine produced the result. Default False, so results carry the
+                          same attributes whichever engine ran. Ignored by the reference.
 
         Returns:
             gpd.GeoDataFrame: A GeoDataFrame with dissolved polygons for 'fluvial', 'pluvial',
@@ -465,7 +482,7 @@ class HdfFluvialPluvial:
             try:
                 result = HdfFluvialPluvial._native_polygons(
                     hdf_path, delta_t, temporal_tolerance_hours, min_polygon_area_acres)
-                return _engine_attrs(result, engine, "native")
+                return _engine_attrs(_native_diagnostics(result, diagnostics), engine, "native")
             except Exception as exc:
                 # Auto must give the reference outcome (main logs processing failures
                 # and returns an empty frame), so any native exception falls back;

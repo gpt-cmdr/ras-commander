@@ -118,7 +118,7 @@ def test_polygons_native_and_auto_equal_python_for_any_presentation(hdf, cells, 
     reference = baselines[("polygons", delta_t)]
     python = run("polygons", hdf, frame, "h5py", delta_t=delta_t)
     assert_polygons_equal(python, reference)
-    native = run("polygons", hdf, frame, "native", delta_t=delta_t)
+    native = run("polygons", hdf, frame, "native", delta_t=delta_t, diagnostics=True)
     assert native.attrs["fluvial_engine"]["used"] == "native"
     # Conflicting seeds are present, so the set-based (ambiguous) rule is exercised.
     assert native.attrs["fluvial_native"]["classification"]["conflicting_seeds"] > 0

@@ -42,7 +42,8 @@ the h5py result: any native failure falls back to h5py.
 - Behaviour change: `HdfMesh.get_mesh_cell_polygons` attaches
   `attrs["cell_polygon_diagnostics"]` only with `diagnostics=True` (it was
   always attached); `diagnose_mesh_cell_polygons` is unchanged. Fluvial results
-  carry `attrs["fluvial_engine"]` (which engine produced them).
+  carry `attrs["fluvial_engine"]` (which engine produced them); native kernel
+  timings and counts (`attrs["fluvial_native"]`) only with `diagnostics=True`.
 - New `HdfUtils` helpers: `get_units_system`, `linear_unit_to_meters`,
   `area_to_square_meters`, `get_stored_ras_version` and
   `parse_ras_file_version`.
