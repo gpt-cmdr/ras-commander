@@ -39,7 +39,7 @@ def test_read_families_and_unknown_family(native):
         "pipe_geometry", "pipe_run_summary", "pipe_results", "reference_line_results",
         "reference_point_results", "reference_summaries", "breach", "plan_metadata",
         "land_cover", "infiltration", "sediment", "encroachments", "terrain",
-        "event_conditions", "steady_output"]
+        "terrain_modifications", "event_conditions", "steady_output"]
     with pytest.raises(ValueError, match="unknown read family"):
         native.read_family_inventory(_fixture("DavisStormSystem.p02"), "pipes")
 
