@@ -298,6 +298,7 @@ def snapshot(
         "manning_regions": [],
         "infiltration_methods": {},
         "projections": {},
+        "native_perimeters": {},
         "contract_qualified": True,
     }
     result["features"]["Geometry/Structures"] += sum(
@@ -417,6 +418,16 @@ def snapshot(
         return result
     current = not _mesh_hdf_consistency_issues(geometry_path, hdf_path)
     with h5py.File(hdf_path, "r") as hdf:
+        # An exact-topology mesh can retain more coordinate digits than a
+        # 16-character text field. Bind that native ring only when its canonical
+        # fixed-width serialization is exactly the current authored polygon.
+        # Keep the full array as an immutable input, never as a relaxed tolerance.
+        for name, ring in result["perimeters"].items():
+            area = hdf.get(f"{AREA}/{name}")
+            if area is not None and "Perimeter" in area:
+                native = area["Perimeter"][()]
+                if _perimeter_serialization_matches(native, ring):
+                    result["native_perimeters"][name] = native
         bc_path = "Geometry/Boundary Condition Lines"
         bc_features = result["feature_geometry"][bc_path]
         # A current feature mirror can contain explicitly authored native types.
@@ -722,6 +733,36 @@ def _topology_issues(area: h5py.Group) -> list[str]:
     if flags is not None and not np.all(np.isin(flags, [-1, 0])):
         issues.append("FacePoints Is Perimeter: invalid flags")
     return issues
+
+
+def _perimeter_serialization_matches(native: np.ndarray, authored: np.ndarray) -> bool:
+    """Prove polygon identity after the existing fixed-width perimeter writer."""
+    import shapely
+
+    from .GeomParser import GeomParser
+    from .GeomStorage import GeomStorage
+
+    for ring in (native, authored):
+        if (
+            ring is None
+            or ring.ndim != 2
+            or ring.shape[1] != 2
+            or len(ring) < 3
+            or not np.all(np.isfinite(ring))
+        ):
+            return False
+    lines = GeomStorage._format_surface_line_lines(native.tolist())
+    serialized = np.asarray(
+        [value for line in lines for value in GeomParser.parse_fixed_width(line, 16)]
+    ).reshape(-1, 2)
+    origin = authored[0]
+    left, right = (
+        shapely.Polygon(serialized - origin),
+        shapely.Polygon(authored - origin),
+    )
+    return bool(
+        left.is_valid and right.is_valid and not left.is_empty and left.equals(right)
+    )
 
 
 def _mesh_binding_issues(
@@ -1055,12 +1096,23 @@ def validate(
             topology_issues = _topology_issues(hdf[path])
             missing.extend(f"{path}/{issue}" for issue in topology_issues)
             if not topology_issues:
+                ring = expected["perimeters"][name]
+                if name in expected.get("native_perimeters", {}):
+                    native_ring = expected["native_perimeters"][name]
+                    if "Perimeter" not in hdf[path] or not np.array_equal(
+                        hdf[path]["Perimeter"][()], native_ring
+                    ):
+                        changed.append(
+                            f"{path}/Perimeter: bound native perimeter changed"
+                        )
+                    else:
+                        ring = native_ring
                 missing.extend(
                     f"{path}/{issue}"
                     for issue in _mesh_binding_issues(
                         hdf[path],
                         current_seeds,
-                        expected["perimeters"][name],
+                        ring,
                     )
                 )
             for product in FACE_PRODUCTS[2:]:
@@ -1110,6 +1162,10 @@ def validate(
                 "total_cells": cells,
                 "faces": face_count,
             }
+            if name in expected.get("native_perimeters", {}):
+                evidence["areas"][name]["perimeter_binding"] = (
+                    "exact_fixed_width_serialization"
+                )
 
         for path, count in expected["features"].items():
             if not count:

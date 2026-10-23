@@ -49,6 +49,79 @@ the authored perimeter. HEC-RAS preprocessing then builds the full mesh.
 returns successfully; it is documented below only for compatibility.
 RASMapper completion of an existing HDF is not text-to-HDF compilation.
 
+## Retain an exact subset of parent cells
+
+Use `GeomMesh.plan_cell_subset()` when a child domain is the union of explicit
+physical parent cells and must retain their faces and vertices. The parent must
+be a geometry-only HDF with complete native topology; a plan/results HDF is
+rejected. Prepare an owned child text/HDF pair with one matching area, consistent
+CRS, and the selected union as its perimeter. Cell IDs are zero-based physical
+IDs from `HdfMesh`; ghost cells, duplicate IDs, holes, disconnected components,
+and boundary pinch points are rejected. The API never expands the selection.
+
+```python
+from ras_commander.geom import GeomMesh, GeomPreprocessor
+from ras_commander import RasPreprocess
+
+subset = GeomMesh.plan_cell_subset(
+    "source/Model.g01.hdf", "review-copy/Model.g02",
+    parent_cell_ids=selected_ids, mesh_name="Area",
+)
+review_record = subset.to_dict()  # ras-mesh-cell-subset/v1; no writes
+# Review the IDs, source hashes, CRS and counts before applying.
+# review_project is initialized for the owned copy and selected HEC-RAS 6.6;
+# plan 08 references g02. Reuse that exact runtime for both native phases.
+written = GeomMesh.apply_cell_subset(subset, ras_object=review_project)
+assert written.ok and written.operation == "cell_subset"
+
+geometry = GeomPreprocessor.run_geometry_preprocessor(
+    "08", ras_object=review_project, require_complete_products=True,
+)
+assert geometry.success
+event = RasPreprocess.preprocess_plan(
+    "08", ras_object=review_project, clear_existing=True,
+)
+assert event.success
+```
+
+Planning binds source HDF, child text and child HDF hashes. Applying refuses stale
+inputs, preserves physical cell coordinates and face polylines, reindexes native
+incidence tables, and creates one ghost cell per new perimeter face. HEC-RAS 6.6
+serializes the mesh in an isolated worker. The text perimeter is written from
+the exact native ring with the existing 16-character formatter. Completion
+checks can bind the full-precision ring only when that formatter reproduces
+the authored polygon exactly; the bound ring must remain unchanged and all
+mesh segments must remain inside it. This adds no containment tolerance.
+
+With `ras_object`, application uses that project's exact `ras_exe_path`.
+An optional `hecras_dir` must identify the same installation; conflicting paths
+are rejected. Without either, the declared `hecras_version="6.6"` is discovered.
+The native worker verifies the selected executable's file version. Returned
+`cell_subset.native_serialization` records the install directory, executable file
+version, executable SHA-256, and RasMapperLib DLL SHA-256.
+
+Native staging resolves associated sidecars against the original geometry
+folder, retains calibration overrides, then restores the original relative
+association spelling. Inherited hydraulic property tables are invalidated for
+fresh native computation. Two unique sibling backups support exception rollback
+if either file replacement fails. Exclusive access is required: the text/HDF
+pair is not crash atomic. Restore both backups after an interrupted replacement.
+
+`MeshResult.ok` here means topology writing completed. Retain the strict geometry
+receipt, fresh Event Conditions completion, independent `HdfMesh` cell/face
+readback, boundary attachments, and spatial review before accepting a child for
+simulation. The library does not produce an engineering approval or a review map.
+
+For an already planned breakout, pass `parent_cell_ids=selected_ids` to
+`RasBreakout2D.prepare_cloned_geometry()` with `refresh_method="rasexe"`,
+`remesh=False`, and `require_complete_products=True`. This applies the exact
+subset before the first native completion pass. It cannot be combined with
+`computation_points` or grid anchoring.
+
+::: ras_commander.geom.GeomMeshDataclasses.MeshCellSubsetPlan
+    options:
+      heading_level: 3
+
 ## Diagnose before repairing
 
 | Symptom or question | Inspection | Supported next step |

@@ -18,6 +18,53 @@ from ras_commander.geom._preprocess_contract import (
 )
 
 
+@pytest.mark.parametrize("reverse", [False, True])
+def test_native_perimeter_requires_exact_fixed_width_serialization(reverse):
+    from ras_commander.geom._preprocess_contract import _perimeter_serialization_matches
+    from ras_commander.geom.GeomStorage import GeomStorage
+    from ras_commander.geom.GeomParser import GeomParser
+
+    native = np.array(
+        [
+            [1762812.6010300105, 13948229.492235743],
+            [1762912.6010300105, 13948229.492235743],
+            [1762912.6010300105, 13948329.492235743],
+            [1762812.6010300105, 13948229.492235743],
+        ]
+    )
+    text = np.array(
+        [
+            v
+            for line in GeomStorage._format_surface_line_lines(native)
+            for v in GeomParser.parse_fixed_width(line, 16)
+        ]
+    ).reshape(-1, 2)
+    assert not np.array_equal(native, text)
+    assert _perimeter_serialization_matches(native, text[::-1] if reverse else text)
+    moved = native.copy()
+    moved[1, 0] += 1e-5
+    assert not _perimeter_serialization_matches(moved, text)
+
+
+def test_bound_native_perimeter_must_remain_exactly_unchanged(tmp_path):
+    text, path, expected = fixture(tmp_path)
+    ring = expected["perimeters"]["Synthetic"].copy()
+    expected["native_perimeters"] = {"Synthetic": ring}
+    with h5py.File(path, "r+") as h:
+        h[f"{AREA}/Synthetic"].create_dataset("Perimeter", data=ring)
+    changed, missing, evidence = validate(text, path, expected, time.time() - 1)
+    assert not changed and not missing
+    assert (
+        evidence["areas"]["Synthetic"]["perimeter_binding"]
+        == "exact_fixed_width_serialization"
+    )
+    with h5py.File(path, "r+") as h:
+        ds = h[f"{AREA}/Synthetic/Perimeter"]
+        ds[1, 0] += 1e-9
+    changed, _, _ = validate(text, path, expected, time.time() - 1)
+    assert any("bound native perimeter changed" in issue for issue in changed)
+
+
 def fixture(tmp_path):
     text = tmp_path / "Synthetic.g01"
     text.write_text(

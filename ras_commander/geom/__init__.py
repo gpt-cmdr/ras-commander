@@ -77,6 +77,7 @@ from .GeomMeshDataclasses import (
     DomainContainmentViolation,
     GridAnchor,
     MeshResult,
+    MeshCellSubsetPlan,
 )
 
 __all__ = [
@@ -106,6 +107,7 @@ __all__ = [
     'GeomMeshRepair',
     'GeomPipeNetwork',
     'MeshResult',
+    'MeshCellSubsetPlan',
     'BCConflict',
     'BCFixResult',
     'DomainContainmentResult',

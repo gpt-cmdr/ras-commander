@@ -357,6 +357,79 @@ def test_invalid_explicit_points_fail_before_breakout_mutation(tmp_path, points)
     assert clone.geometry_path.read_bytes() == original
 
 
+@pytest.mark.parametrize(
+    "kwargs",
+    [
+        {},
+        {"refresh_method": "rasexe"},
+        {
+            "refresh_method": "rasexe",
+            "remesh": False,
+            "computation_points": np.array([[20.0, 20.0]]),
+        },
+    ],
+)
+def test_parent_cell_ids_reject_incompatible_modes_before_mutation(tmp_path, kwargs):
+    preflight, clone, ras = _fixture(tmp_path)
+    original = clone.geometry_path.read_bytes()
+    with pytest.raises(ValueError, match="parent_cell_ids requires"):
+        RasBreakout2D.prepare_cloned_geometry(
+            preflight, clone, ras_object=ras, parent_cell_ids=[1, 2], **kwargs
+        )
+    assert clone.geometry_path.read_bytes() == original
+
+
+def test_parent_cell_subset_is_applied_before_native_completion(tmp_path, monkeypatch):
+    preflight, clone, ras = _fixture(tmp_path)
+    ras.ras_version = "6.6"
+    events = []
+    plan = object()
+
+    def forbidden(*args, **kwargs):
+        pytest.fail("exact subset must not regenerate cells")
+
+    def inspect(source, target, ids, name, **kwargs):
+        assert source == preflight.source_geometry_hdf and target == clone.geometry_path
+        assert ids == [1, 2] and name == "Area"
+        events.append("plan")
+        return plan
+
+    def apply(selected, **kwargs):
+        assert selected is plan and kwargs["ras_object"] is ras
+        events.append("apply")
+        return MeshResult(
+            mesh_name="Area", status="complete", cell_count=2, operation="cell_subset"
+        )
+
+    def refresh(*args, **kwargs):
+        assert events == ["plan", "apply"]
+        events.append("complete")
+        assert kwargs["require_complete_products"]
+        _sync_native_hdf(clone.geometry_path)
+        return SimpleNamespace(success=True, error=None, first_error_line=None)
+
+    monkeypatch.setattr(
+        GeomMesh, "generate_computation_points", staticmethod(forbidden)
+    )
+    monkeypatch.setattr(GeomMesh, "generate", staticmethod(forbidden))
+    monkeypatch.setattr(GeomMesh, "plan_cell_subset", staticmethod(inspect))
+    monkeypatch.setattr(GeomMesh, "apply_cell_subset", staticmethod(apply))
+    monkeypatch.setattr(
+        GeomPreprocessor, "run_geometry_preprocessor", staticmethod(refresh)
+    )
+    result = RasBreakout2D.prepare_cloned_geometry(
+        preflight,
+        clone,
+        ras_object=ras,
+        parent_cell_ids=[1, 2],
+        refresh_method="rasexe",
+        remesh=False,
+        require_complete_products=True,
+    )
+    assert events == ["plan", "apply", "complete"]
+    assert result.mesh_result.operation == "cell_subset"
+
+
 @pytest.mark.parametrize("empty_sidecar", [False, True])
 def test_boundary_only_disables_met_before_refresh_without_changing_source(
     tmp_path, monkeypatch, empty_sidecar
