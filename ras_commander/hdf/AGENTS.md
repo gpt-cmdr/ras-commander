@@ -179,8 +179,12 @@ This file is the canonical local instruction file for `ras_commander/hdf/`.
   (`"auto"` then runs Python) when it cannot match: missing
   `Faces Cell Indexes` (Python's ring-segment fallback), physical cells that
   differ from the polygonizable cells, invalid source cell geometry,
-  unprojected CRS, delta_t=0 (equal-time pairs), non-millisecond thresholds,
-  or `min_polygon_area_acres`.
+  unprojected CRS, delta_t=0 (equal-time pairs) or non-millisecond thresholds.
+  With `min_polygon_area_acres`, native classifies and then runs the
+  reference's own `_dissolve_classified_cells` (over the h5py cell polygons)
+  and `_swap_small_polygons`: the swap's 'first' `area_acres`/`cell_id` follow
+  the GEOS part order of that canonical dissolve, which native ring assembly
+  does not share, so the result is then byte-identical to the reference.
 - Mesh time-series domains use authoritative stored scalar `Location`: `Cells`
   and `Cell` mean cells; `Faces` means faces. Invalid, unknown, nonscalar or
   contradictory present Location is refused, never bypassed with a name rule.
