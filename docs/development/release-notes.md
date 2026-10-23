@@ -9,6 +9,19 @@ alone does not identify a development checkout.
 
 ### Unreleased
 
+**Legacy 2D `Log Hydraulics` diagnostic reader (new API)**
+
+`HdfResultsMesh.get_mesh_log_hydraulics(hdf_path, mesh_name)` reads the
+per-mesh `Log Hydraulics` table that HEC-RAS 6.0-6.3.x can write beside 2D
+Base Output. It returns the ten producer-labelled fields as named columns with
+Base Output time provenance. It accepts only HEC-RAS 6.0-6.3.x files and the
+producer's exact `Column N` labels. Units come only from label suffixes that
+agree with the file's `Units System`; values are never converted. Row semantics
+within an output interval and the cell-location index base are not
+established. The table is a diagnostic, not proof of convergence.
+`get_mesh_timeseries()` and `iter_mesh_timeseries()` continue to refuse the
+dataset, so its columns are never read as cells or faces.
+
 **Compute-message classification rejects observed early termination**
 
 `ResultsParser` classifies `Unsteady Flow Simulation Terminated` and the

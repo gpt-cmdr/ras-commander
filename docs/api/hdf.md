@@ -262,6 +262,15 @@ removed before v1.2.0:
 
 - `get_mesh_cells_timeseries(hdf_path, mesh_names=None, var=None, truncate=False, ras_object=None)` - Dictionary of mesh Datasets; select cells/faces afterward
 - `get_mesh_faces_timeseries(hdf_path, mesh_name, truncate=True)` - Available face variables as one Dataset; select `face_velocity` and `face_id` afterward
+- `get_mesh_log_hydraulics(hdf_path, mesh_name)` - Diagnostic DataFrame for the
+  legacy HEC-RAS 6.0-6.3.x per-mesh `Log Hydraulics` solver log: ten named
+  fields (iterations, corrections, residuals, volume balance, water surface
+  extrema), Base Output `time`/`timestamp` and per-field units/provenance in
+  `DataFrame.attrs`. Other versions, unknown `Column N` labels, a stored
+  `Location` or a row count that differs from Base Output time raise
+  `ValueError`. Fixed-suffix labels (the producer always writes
+  `Min water surface elevation (m)`) are not treated as unit evidence. The
+  table is not a cell or face series; `get_mesh_timeseries()` still refuses it.
 - `get_profile_line_flow_timeseries(hdf_path, line_name, mesh_name=None, profile_lines_path=None, direction="absolute")` - Native Mapper named-line flow; inspect returned `selection_source`
 - `get_profile_line_peak_flow(hdf_path, line_name, mesh_name=None, profile_lines_path=None, direction="absolute")` - Peak Q and time from the same native named-line extraction path
 - `get_mesh_timeseries_availability(hdf_path, mesh_name=None)` - Metadata-only
@@ -1004,6 +1013,7 @@ prerequisites and return contracts take precedence over abbreviated summaries.
         - get_mesh_cells_timeseries
         - get_mesh_faces_timeseries
         - get_mesh_last_iter
+        - get_mesh_log_hydraulics
         - get_mesh_max_depth
         - get_mesh_max_face_v
         - get_mesh_max_iter
