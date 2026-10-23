@@ -4055,7 +4055,7 @@ class RasUnsteady:
         insert_index = max(0, insert_index - removed_before_insert)
         desired_lines = [
             f"Wind Mode=Disable{newline}",
-            f"Met BC=Evapotranspiration|Mode=Disable{newline}",
+            f"Met BC=Evapotranspiration|Mode=None{newline}",
         ]
         if (
             insert_index == len(filtered_lines)
