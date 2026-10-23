@@ -113,6 +113,10 @@ This file is the canonical local instruction file for `ras_commander/hdf/`.
   `region_name` parameters for selective face application (precedence:
   `face_ids` > `region_name` > `polygon` > all faces).
 - 2D results extraction: `HdfResultsMesh`
+- Legacy `Log Hydraulics` (HEC-RAS 6.0-6.3.x per-mesh solver log) is read only
+  by `HdfResultsMesh.get_mesh_log_hydraulics()` as a labelled diagnostic table
+  on the Base Output clock. Never add it to `_LEGACY_MESH_SERIES_DOMAINS` or
+  infer a cell/face domain from its width.
 - `HdfFluvialPluvial` retains `(mesh_name, cell_id)` through time lookups,
   adjacency, region growth and classification joins. Coincident edges from
   different meshes are never neighbors. Polygon dissolution groups by mesh and

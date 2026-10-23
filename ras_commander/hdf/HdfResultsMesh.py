@@ -83,6 +83,7 @@ from __future__ import annotations
 
 
 import operator
+import re
 from pathlib import Path
 from types import MappingProxyType
 from typing import (
@@ -138,6 +139,50 @@ _LEGACY_MESH_SERIES_DOMAINS = MappingProxyType({
     "Face Area": "face_id",
     "Face Manning's n": "face_id",
 })
+
+
+# Legacy 2D solver convergence log: Base Output/Unsteady Time Series/2D Flow
+# Areas/<mesh>/Log Hydraulics. A per-mesh table, not a cell or face series.
+# Field labels are the producer's own "Column N" attributes; the accepted label
+# strings are exactly those embedded in RasUnsteady.exe 6.0, 6.1, 6.2, 6.3 and
+# 6.3.1 (absent from the 5.0.x and 6.4.1+ binaries). One authentic 6.3.1
+# output was inspected. Columns with a single producer label have a fixed
+# unit suffix regardless of Units System, so that suffix is not unit evidence.
+_LOG_HYDRAULICS_NAME = "Log Hydraulics"
+_LOG_HYDRAULICS_VERSION_BOUNDS = ((6, 0), (6, 4))  # inclusive lower, exclusive upper
+_LOG_HYDRAULICS_COLUMNS = (
+    ("total_iterations", ("Total iterations",), "count"),
+    ("outer_loop_iterations", ("Outer-loop iterations",), "count"),
+    ("inner_loop_iterations", ("Inner-loop iterations",), "count"),
+    ("outer_loop_max_water_surface_correction", (
+        "Outer-loop max water surface correction (ft)",
+        "Outer-loop max water surface correction (m)",
+    ), "length"),
+    ("max_water_surface_correction_cell_location", (
+        "Cell location of max water surface correction",
+    ), "cell_location"),
+    ("inner_loop_max_volume_residual_per_wet_area", (
+        "Inner-loop max volume residual divided by wet area (ft)",
+    ), "length"),
+    ("max_volume_residual_cell_location", (
+        "Cell location of max volume residual divided by wet area",
+    ), "cell_location"),
+    ("total_volume_balance", (
+        "Total volume balance (ft^3)",
+        "Total volume balance (m^3)",
+    ), "volume"),
+    ("max_water_surface_elevation", (
+        "Max water surface elevation (ft)",
+        "Max water surface elevation (m)",
+    ), "length"),
+    ("min_water_surface_elevation", (
+        "Min water surface elevation (m)",
+    ), "length"),
+)
+_LOG_HYDRAULICS_UNIT_FAMILIES = {
+    "US Customary": {"ft", "ft^3"},
+    "SI Units": {"m", "m^3"},
+}
 
 
 class HdfResultsMesh:
@@ -1877,6 +1922,197 @@ class HdfResultsMesh:
         except Exception as e:
             logger.error(f"Error in get_mesh_max_iter: {str(e)}")
             raise ValueError(f"Failed to get maximum iteration count: {str(e)}")
+
+    @staticmethod
+    @log_call
+    @standardize_input(file_type='plan_hdf')
+    def get_mesh_log_hydraulics(hdf_path: Path, mesh_name: str) -> pd.DataFrame:
+        """
+        Read the legacy per-mesh 2D solver log table ``Log Hydraulics``.
+
+        HEC-RAS 6.0 through 6.3.x can write ``Results/Unsteady/Output/Output
+        Blocks/Base Output/Unsteady Time Series/2D Flow Areas/<mesh>/Log
+        Hydraulics``: one row per Base Output time and one column per solver
+        diagnostic, labelled by ``Column 0`` ... ``Column N`` attributes. It has
+        no ``Location``; its columns are fields, never cells or faces, so
+        ``get_mesh_timeseries()`` keeps refusing it. This is a diagnostic
+        reader only. It does not establish hydraulic convergence or result
+        quality.
+
+        Accepted schema (all checked; any deviation raises ``ValueError``):
+
+        - root ``File Version`` is HEC-RAS 6.0 through 6.3.x. These bounds
+          come from producer strings in the HEC-RAS 6.0-6.3.1 solver binaries
+          (absent from 5.0.x and 6.4.1+) and one authentic 6.3.1 result.
+        - a rank-2 numeric dataset at the canonical path with no ``Location``.
+        - exactly one ``Column i`` label per stored column, each one of the
+          producer label strings for that position (10 columns).
+        - rows equal the length of the canonical Base Output ``Time`` and its
+          ``Time Date Stamp (ms)`` (or ``Time Date Stamp``) datasets. The table
+          is never aligned to any other clock or resampled.
+
+        Units are taken only from a label suffix that the producer varies by
+        unit system and that agrees with the root ``Units System``. Fixed-suffix
+        labels (``Inner-loop max volume residual divided by wet area (ft)``,
+        ``Min water surface elevation (m)``) and conflicting suffixes get
+        ``units=None``; values are never converted. Cell-location columns are
+        stored float values of a solver cell location whose index base is
+        unqualified; they are not joined to mesh geometry.
+
+        Row semantics within each output interval (instantaneous step at the
+        output time versus an interval aggregate) are not established. In the
+        inspected 6.3.1 output the first row (simulation start) is all zero, and
+        the max/min water surface columns repeat the Water Surface dataset's
+        stored ``Maximum/Minimum Value of Data Set`` attributes rather than the
+        per-row extrema of the stored Water Surface rows.
+
+        Args:
+            hdf_path: Plan number, plan-result HDF path, or open HDF handle.
+            mesh_name: Name of the 2D flow area.
+
+        Returns:
+            pd.DataFrame: One row per Base Output time with columns
+            ``time_index``, ``time`` (stored Base Output ``Time`` values),
+            ``timestamp`` and the ten field columns, ``total_iterations``,
+            ``outer_loop_iterations``, ``inner_loop_iterations``,
+            ``outer_loop_max_water_surface_correction``,
+            ``max_water_surface_correction_cell_location``,
+            ``inner_loop_max_volume_residual_per_wet_area``,
+            ``max_volume_residual_cell_location``, ``total_volume_balance``,
+            ``max_water_surface_elevation`` and
+            ``min_water_surface_elevation``. Field values keep the stored
+            dtype. ``DataFrame.attrs`` carries ``diagnostic`` (True),
+            ``dataset_path``, ``mesh_name``, ``file_version``,
+            ``units_system``, ``clock`` (``"Base Output"``), ``time_source``,
+            ``timestamp_source``, ``time_units``, ``version_bounds``,
+            ``units`` (field -> unit or None) and ``columns`` (per-field
+            ``column_index``, verbatim ``label``, ``label_unit``, ``units``
+            and ``units_status``).
+
+        Raises:
+            KeyError: If the mesh has no ``Log Hydraulics`` dataset.
+            ValueError: If the file version, labels, shape, Location or clock
+                fall outside the accepted schema.
+        """
+        if isinstance(hdf_path, h5py.File):
+            return HdfResultsMesh._read_mesh_log_hydraulics(hdf_path, mesh_name)
+        with h5py.File(hdf_path, "r") as hdf_file:
+            return HdfResultsMesh._read_mesh_log_hydraulics(hdf_file, mesh_name)
+
+    @staticmethod
+    def _read_mesh_log_hydraulics(hdf_file: h5py.File, mesh_name: str) -> pd.DataFrame:
+        """Validate and read one ``Log Hydraulics`` table (see public method)."""
+        decode = HdfResultsMesh._decode_hdf_attr
+        path = "/" + HdfResultsMesh._get_mesh_timeseries_output_path(mesh_name, _LOG_HYDRAULICS_NAME)
+        dataset = hdf_file.get(path)
+        if dataset is None:
+            raise KeyError(f"No {_LOG_HYDRAULICS_NAME} dataset for mesh '{mesh_name}': {path}")
+        if not isinstance(dataset, h5py.Dataset) or dataset.ndim != 2 or dataset.dtype.kind not in "iuf":
+            raise ValueError(f"Unsupported {_LOG_HYDRAULICS_NAME} schema (rank-2 numeric required): {path}")
+
+        file_version = decode(hdf_file.attrs.get("File Version")).strip()
+        match = re.match(r"HEC-RAS (\d+)\.(\d+)(?!\d)", file_version)
+        low, high = _LOG_HYDRAULICS_VERSION_BOUNDS
+        if match is None or not low <= (int(match.group(1)), int(match.group(2))) < high:
+            raise ValueError(
+                f"{_LOG_HYDRAULICS_NAME} is qualified only for HEC-RAS 6.0-6.3.x; "
+                f"File Version is {file_version or 'absent'!r}: {path}"
+            )
+        if "Location" in dataset.attrs:
+            raise ValueError(f"{_LOG_HYDRAULICS_NAME} with a stored Location is not the qualified schema: {path}")
+
+        column_attrs = sorted(name for name in dataset.attrs if re.fullmatch(r"Column \d+", name))
+        n_columns = dataset.shape[1]
+        if n_columns != len(_LOG_HYDRAULICS_COLUMNS) or set(column_attrs) != {
+            f"Column {i}" for i in range(n_columns)
+        }:
+            raise ValueError(
+                f"{_LOG_HYDRAULICS_NAME} requires {len(_LOG_HYDRAULICS_COLUMNS)} columns labelled "
+                f"Column 0..{len(_LOG_HYDRAULICS_COLUMNS) - 1}; found shape {dataset.shape} "
+                f"and labels {column_attrs}: {path}"
+            )
+
+        units_system = decode(hdf_file.attrs.get("Units System")).strip()
+        family = _LOG_HYDRAULICS_UNIT_FAMILIES.get(units_system)
+        columns = []
+        for index, (field, labels, kind) in enumerate(_LOG_HYDRAULICS_COLUMNS):
+            raw = dataset.attrs[f"Column {index}"]
+            if np.asarray(raw).size != 1:
+                raise ValueError(f"Column {index} requires one stored label: {path}")
+            try:
+                label = decode(raw)
+            except UnicodeDecodeError as exc:
+                raise ValueError(f"Invalid Column {index} label text: {path}") from exc
+            if label not in labels:
+                raise ValueError(
+                    f"Unqualified {_LOG_HYDRAULICS_NAME} Column {index} label {label!r}; "
+                    f"expected one of {list(labels)}: {path}"
+                )
+            suffix = re.search(r"\(([^()]+)\)$", label)
+            label_unit = suffix.group(1) if suffix else None
+            if kind == "count":
+                units, status = "count", "dimensionless_count"
+            elif kind == "cell_location":
+                units, status = None, "cell_location_index_base_unqualified"
+            elif len(labels) == 1:
+                units, status = None, "fixed_producer_label_not_unit_evidence"
+            elif family is None:
+                units, status = None, "units_system_unavailable"
+            elif label_unit in family:
+                units, status = label_unit, "label_matches_units_system"
+            else:
+                units, status = None, "label_conflicts_units_system"
+            columns.append({
+                "field": field, "column_index": index, "label": label,
+                "label_unit": label_unit, "units": units, "units_status": status,
+            })
+
+        base = "Results/Unsteady/Output/Output Blocks/Base Output/Unsteady Time Series"
+        rows = dataset.shape[0]
+        time = hdf_file.get(f"{base}/Time")
+        if (not isinstance(time, h5py.Dataset) or time.ndim != 1
+                or time.dtype.kind not in "iuf" or len(time) != rows):
+            raise ValueError(f"{_LOG_HYDRAULICS_NAME} rows differ from Base Output Time axis: {path}")
+        timestamp_source = None
+        for name, parse in (
+            ("Time Date Stamp (ms)", HdfUtils.parse_ras_datetime_ms),
+            ("Time Date Stamp", HdfUtils.parse_ras_datetime),
+        ):
+            stamps = hdf_file.get(f"{base}/{name}")
+            if stamps is None:
+                continue
+            if not isinstance(stamps, h5py.Dataset) or stamps.ndim != 1 or len(stamps) != rows:
+                raise ValueError(f"{_LOG_HYDRAULICS_NAME} rows differ from Base Output {name}: {path}")
+            timestamps = [parse(decode(value)) for value in stamps[()]]
+            timestamp_source = stamps.name
+            break
+        if timestamp_source is None:
+            raise ValueError(f"No Base Output Time Date Stamp for {_LOG_HYDRAULICS_NAME}: {path}")
+
+        values = dataset[()]
+        frame = pd.DataFrame({
+            "time_index": np.arange(rows, dtype=np.int64),
+            "time": time[()],
+            "timestamp": pd.to_datetime(timestamps),
+        })
+        for column in columns:
+            frame[column["field"]] = values[:, column["column_index"]]
+        time_units = decode(time.attrs.get("Time")).strip() or None
+        frame.attrs.update({
+            "diagnostic": True,
+            "dataset_path": dataset.name,
+            "mesh_name": mesh_name,
+            "file_version": file_version,
+            "units_system": units_system or None,
+            "clock": "Base Output",
+            "time_source": time.name,
+            "timestamp_source": timestamp_source,
+            "time_units": time_units,
+            "version_bounds": "HEC-RAS >=6.0,<6.4",
+            "units": {column["field"]: column["units"] for column in columns},
+            "columns": columns,
+        })
+        return frame
 
     @staticmethod
     def _get_mesh_temporal_maximum(
