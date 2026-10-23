@@ -71,6 +71,7 @@ def test_selection_helper_fallback_leaves_selection_to_h5py(tmp_path, monkeypatc
     from ras_commander import fast_hdf
     from ras_commander._fast_hdf_typed import h5py_selection_shape
     monkeypatch.delattr(selections, "select")
+    monkeypatch.delenv("RAS_COMMANDER_FAST_HDF", raising=False)  # auto policy under test
     with h5py.File(_small(tmp_path), "r") as f:
         ds = f["values"]
         assert h5py_selection_shape(ds, (slice(1, 3),)) is None
@@ -113,6 +114,14 @@ def test_backend_scope_governs_nested_default_reads(monkeypatch):
         assert fast_hdf.native_required()
     with fast_hdf.backend_scope("auto"):
         assert fast_hdf._mode("auto") == "auto"
-    with pytest.raises(ValueError):
-        with fast_hdf.backend_scope("h5py"):
+    # Public engine names are aliases of the internal policy names.
+    monkeypatch.setenv("RAS_COMMANDER_FAST_HDF", "native")
+    with fast_hdf.backend_scope("h5py"):
+        assert fast_hdf._mode("auto") == "python"
+        assert not fast_hdf.native_required()
+    monkeypatch.setenv("RAS_COMMANDER_FAST_HDF", "auto")
+    with fast_hdf.backend_scope("native"):
+        assert fast_hdf.native_required()
+    with pytest.raises(ValueError, match="engine must be"):
+        with fast_hdf.backend_scope("fast"):
             pass

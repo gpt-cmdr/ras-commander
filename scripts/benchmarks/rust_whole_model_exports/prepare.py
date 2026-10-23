@@ -33,7 +33,7 @@ def prepare(fixture, output, version, expected):
     else:
         attrs = HdfBase.get_attrs(fixture, '/')
         assert f'HEC-RAS {version}' in attrs['File Version']
-        cells = HdfMesh.get_mesh_cell_polygons(fixture, backend='python')
+        cells = HdfMesh.get_mesh_cell_polygons(fixture, engine='h5py')
         diagnostics = cells.attrs.get('cell_polygon_diagnostics', ())
         physical = sum(int(c) for _, c in HdfBase.get_2d_flow_area_names_and_counts(fixture))
         # Clear large per-cell diagnostics before pandas merge; retain omissions in receipt.

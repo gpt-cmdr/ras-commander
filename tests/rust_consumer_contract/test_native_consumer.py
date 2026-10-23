@@ -264,7 +264,7 @@ def test_d601_strict_refuses_and_quarantine_is_explicit(fixture_dir, reference_d
     with pytest.raises(MeshCellPolygonError, match="317422"):
         fast_hdf.mesh_polygons(path, backend="rust", strict=True)
     with NativeCalls(["assemble_cells"]) as calls:
-        quarantined = fast_hdf.mesh_polygons(path, backend="rust", strict=False)
+        quarantined = fast_hdf.mesh_polygons(path, backend="rust", strict=False, diagnostics=True)
     assert calls.snapshot() == {"assemble_cells": 1}
     omitted = {r["cell_id"] for r in quarantined.attrs["cell_polygon_diagnostics"] if r["status"] == "omitted"}
     assert omitted == {317422, 339176}

@@ -96,6 +96,7 @@ from .._geometry_association import (
 from ..LoggingConfig import get_logger
 from ._breakline_controls import _protection_radius_flag
 from ..fast_hdf import read_attr, read_typed, reraise_required
+from ..fast_hdf import h5py_until_qualified
 from .GeomMeshDataclasses import (
     BCConflict,
     BCFixResult,
@@ -6520,6 +6521,7 @@ class GeomMesh:
 
     @staticmethod
     @log_call
+    @h5py_until_qualified
     def detect_bc_conflicts(
         geom_hdf_path: Union[str, Path],
         cell_size: float,

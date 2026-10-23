@@ -1,9 +1,9 @@
 """Full immutable 5/6/7 geometry qualification (bridge API_VERSION 11).
 
 Run as a script; it is not collected by pytest. For each pinned fixture it
-checks, against the Python reference (``backend="python"``):
+checks, against the Python reference (``engine="h5py"``):
 
-* required native (``backend="rust"``, threads 1 and 4) returns every
+* required native (``engine="native"``, threads 1 and 4) returns every
   composite ID and every normalized coordinate of the reference, with the
   reference diagnostic records exactly, and never reaches Python polygonize;
 * auto mode returns exactly the reference outcome (frame and diagnostics);
@@ -155,7 +155,7 @@ def run(version, path, count, expected_hash):
     with h5py.File(path, 'r') as hdf:
         attrs = {str(key): str(value) for key, value in hdf.attrs.items()}
     with measurements() as python_measure:
-        reference = HdfMesh.get_mesh_cell_polygons(path, backend='python', strict=False)
+        reference = HdfMesh.get_mesh_cell_polygons(path, engine='h5py', strict=False, diagnostics=True)
     assert python_measure['native_assembly_calls'] == 0
     assert len(reference) == count and count > 0
     reference_keys, reference_wkb = canonical(reference)
@@ -168,7 +168,8 @@ def run(version, path, count, expected_hash):
     with python_polygonize_forbidden():
         for threads in (1, 4):
             with measurements() as measure:
-                actual = HdfMesh.get_mesh_cell_polygons(path, backend='rust', strict=False, threads=threads)
+                actual = HdfMesh.get_mesh_cell_polygons(path, engine='native', strict=False, threads=threads,
+                                                      diagnostics=True)
             assert measure['native_assembly_calls'] > 0 and measure['dataset_read_calls'] > 0
             assert len(actual) == count and bool(shapely.is_valid(actual.geometry.to_numpy()).all())
             keys, wkb, diagnostics = compare(actual, reference_keys, reference_wkb,
@@ -186,7 +187,7 @@ def run(version, path, count, expected_hash):
             result['native'].append(measure)
         if version == '5.0.7':
             try:
-                HdfMesh.get_mesh_cell_polygons(path, backend='rust', strict=True, threads=4)
+                HdfMesh.get_mesh_cell_polygons(path, engine='native', strict=True, threads=4)
             except MeshCellPolygonError as exc:
                 assert 'cell 317422:' in str(exc), str(exc)
                 result['strict_error'] = str(exc)
@@ -211,21 +212,21 @@ def run(version, path, count, expected_hash):
             else:
                 raise AssertionError('strict accepted second invalid original cell')
         else:
-            strict = HdfMesh.get_mesh_cell_polygons(path, backend='rust', strict=True)
+            strict = HdfMesh.get_mesh_cell_polygons(path, engine='native', strict=True)
             assert len(strict) == count
     # Auto: exactly the Python reference outcome (native first, h5py on refusal).
     adapter.close_sessions()
     with fast_hdf_env('auto'), measurements() as measure:
-        auto = HdfMesh.get_mesh_cell_polygons(path, backend='auto', strict=False)
+        auto = HdfMesh.get_mesh_cell_polygons(path, engine='auto', strict=False, diagnostics=True)
     compare(auto, reference_keys, reference_wkb, reference_diagnostics, 'auto')
     assert auto.crs == reference.crs
     result['auto'] = measure
     if version == '5.0.7':
         outcomes = []
-        for backend in ('python', 'auto'):
+        for engine in ('h5py', 'auto'):
             with fast_hdf_env('auto'):
                 try:
-                    HdfMesh.get_mesh_cell_polygons(path, backend=backend, strict=True)
+                    HdfMesh.get_mesh_cell_polygons(path, engine=engine, strict=True)
                 except Exception as exc:  # noqa: BLE001 - the exception is the outcome
                     outcomes.append((type(exc), str(exc)))
                 else:

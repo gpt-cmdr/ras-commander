@@ -97,7 +97,7 @@ def worker(task):
                                                threads=threads, parallel=threads > 1)
                 return ds[selection if selection else ()]
         if operation == "polygons":
-            return HdfMesh.get_mesh_cell_polygons(path, backend=backend, threads=threads)
+            return HdfMesh.get_mesh_cell_polygons(path, engine=backend, threads=threads)
         if operation == "packed_mesh":
             return fast_hdf.packed_meshes(path, backend="rust", threads=threads)
         if operation == "assemble_only":
@@ -108,7 +108,7 @@ def worker(task):
         if operation == "pmtiles":
             if backend == "python":
                 import freestiler
-                frame = HdfMesh.get_mesh_cell_polygons(path, backend="python")
+                frame = HdfMesh.get_mesh_cell_polygons(path, engine="h5py")
                 return freestiler.freestile(frame, task["destination"], layer_name="mesh_cells",
                     min_zoom=10, max_zoom=12, simplification=False, drop_rate=None, quiet=True)
             return fast_hdf.export_mesh_pmtiles(path, task["destination"], backend="rust",

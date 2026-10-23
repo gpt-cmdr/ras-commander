@@ -346,10 +346,10 @@ def test_mesh_polygons_native_matches_python(name, adapter, counted):
     from ras_commander.hdf.HdfMesh import HdfMesh
     path = _fixture(name)
     _, polygons, sha = CASES[name]
-    python = HdfMesh.get_mesh_cell_polygons(path, backend="python", strict=False)
-    assert not counted, f"python backend must not call the extension: {counted}"
+    python = HdfMesh.get_mesh_cell_polygons(path, engine="h5py", strict=False, diagnostics=True)
+    assert not counted, f"h5py engine must not call the extension: {counted}"
     with _python_polygonize_forbidden():
-        rust = HdfMesh.get_mesh_cell_polygons(path, backend="rust", strict=False)
+        rust = HdfMesh.get_mesh_cell_polygons(path, engine="native", strict=False, diagnostics=True)
     assert counted.get("assemble_cells", 0) >= 1, counted
     assert len(rust) == len(python) == polygons
     assert rust.crs == python.crs and rust.crs is not None

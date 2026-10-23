@@ -27,7 +27,7 @@ def test_real_regions(tmp_path, filename, version, record_property):
     attrs = HdfBase.get_attrs(path, "/")
     assert f"HEC-RAS {version}" in attrs["File Version"]
     started = time.perf_counter()
-    source = HdfMesh.get_mesh_cell_polygons(path, backend="python")
+    source = HdfMesh.get_mesh_cell_polygons(path, engine="h5py")
     assert not source.empty and source.crs is not None
     # Bounded valid sample, preserving source vertices; not a whole-model gate.
     sample = source[source.cell_id < 512]

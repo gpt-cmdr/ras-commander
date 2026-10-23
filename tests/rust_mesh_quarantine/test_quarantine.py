@@ -8,11 +8,11 @@ Two layers are covered:
   optional extension is not installed;
 * the ``HdfMesh.get_mesh_cell_polygons`` release contract: auto mode returns
   exactly the Python reference outcome (result or exception), required mode
-  (``backend="rust"``) raises instead of falling back, and python mode never
+  (``engine="native"``) raises instead of falling back, and h5py mode never
   touches the extension.
 
 Real-model conformance lives in ``qualification.py``. The suite passes with
-``RAS_COMMANDER_FAST_HDF`` unset/``auto``, ``0`` and ``required``.
+``RAS_COMMANDER_FAST_HDF`` unset/``auto``, ``h5py`` (``0``) and ``native`` (``required``).
 """
 from contextlib import contextmanager
 from functools import wraps
@@ -278,12 +278,12 @@ def write_hdf(path, case):
     return path
 
 
-def outcome(backend, path, strict, **kwargs):
-    """Comparable outcome of get_mesh_cell_polygons: normalized frame or exception."""
+def outcome(engine, path, strict, **kwargs):
+    """Comparable outcome of get_mesh_cell_polygons (diagnostics attached): normalized frame or exception."""
     import shapely
     from ras_commander.hdf.HdfMesh import HdfMesh
     try:
-        frame = HdfMesh.get_mesh_cell_polygons(path, backend=backend, strict=strict, **kwargs)
+        frame = HdfMesh.get_mesh_cell_polygons(path, engine=engine, strict=strict, diagnostics=True, **kwargs)
     except Exception as exc:  # noqa: BLE001 - the exception is the outcome
         return ("raised", type(exc), str(exc))
     if frame.empty:
@@ -334,7 +334,7 @@ def test_python_reference_schema_and_outcomes(tmp_path, adapter):
     """Pin the reference outcomes the native paths are held to."""
     from ras_commander.hdf.HdfMesh import MeshCellPolygonError
     path = write_hdf(tmp_path / "invalid.g01.hdf", "invalid")
-    reference = outcome("python", path, strict=False)
+    reference = outcome("h5py", path, strict=False)
     assert reference[0] == "returned" and reference[2] == ()
     diagnostics = reference[4]["cell_polygon_diagnostics"]
     assert len(diagnostics) == 1
@@ -342,7 +342,7 @@ def test_python_reference_schema_and_outcomes(tmp_path, adapter):
     assert set(record) == REFERENCE_KEYS
     assert (record["mesh_name"], record["cell_id"], record["status"]) == (MESH, 0, "omitted")
     assert record["reason_code"] == "no_polygon" and record["face_ids"] == (0, 1, 2, 3)
-    strict = outcome("python", path, strict=True)
+    strict = outcome("h5py", path, strict=True)
     assert strict[0] == "raised" and strict[1] is MeshCellPolygonError
 
 
@@ -351,8 +351,8 @@ def test_python_reference_schema_and_outcomes(tmp_path, adapter):
 def test_auto_returns_exactly_the_python_outcome(tmp_path, adapter, monkeypatch, assemble_calls,
                                                  case, strict):
     path = write_hdf(tmp_path / f"{case}.g01.hdf", case)
-    reference = outcome("python", path, strict=strict)
-    assert not assemble_calls, "python backend must not call the extension"
+    reference = outcome("h5py", path, strict=strict)
+    assert not assemble_calls, "h5py engine must not call the extension"
     monkeypatch.setenv("RAS_COMMANDER_FAST_HDF", "auto")
     actual = outcome("auto", path, strict=strict)
     assert actual == reference
@@ -363,11 +363,11 @@ def test_auto_returns_exactly_the_python_outcome(tmp_path, adapter, monkeypatch,
 @pytest.mark.parametrize("strict", [False, True])
 @pytest.mark.parametrize("case", CASES)
 def test_env_default_backend_follows_policy(tmp_path, adapter, case, strict):
-    """backend="auto" honours RAS_COMMANDER_FAST_HDF as set for this run."""
+    """engine="auto" honours RAS_COMMANDER_FAST_HDF as set for this run."""
     path = write_hdf(tmp_path / f"{case}.g01.hdf", case)
     policy = adapter._mode("auto")
     actual = outcome("auto", path, strict=strict)
-    expected = outcome("rust" if policy == "rust" else "python", path, strict=strict)
+    expected = outcome("native" if policy == "rust" else "h5py", path, strict=strict)
     assert actual == expected
 
 
@@ -377,9 +377,9 @@ def test_required_native_matches_reference_without_fallback(
         tmp_path, native_adapter, assemble_calls, case, strict):
     from ras_commander.hdf.HdfMesh import MeshCellPolygonError
     path = write_hdf(tmp_path / f"{case}.g01.hdf", case)
-    reference = outcome("python", path, strict=strict)
+    reference = outcome("h5py", path, strict=strict)
     with python_polygonize_forbidden():
-        actual = outcome("rust", path, strict=strict)
+        actual = outcome("native", path, strict=strict)
     assert assemble_calls and all(call.get("strict") is strict for call in assemble_calls)
     if case != "valid" and strict:
         # Strict native assembly fails on the first invalid source cell with the
@@ -401,7 +401,7 @@ def test_required_native_late_corruption_raises(tmp_path, native_adapter, assemb
     from ras_commander.hdf.HdfMesh import MeshCellPolygonError
     path = write_hdf(tmp_path / "corrupt.g01.hdf", "corrupt_late")
     # Python quarantines the corrupt span; required native must refuse instead.
-    reference = outcome("python", path, strict=False)
+    reference = outcome("h5py", path, strict=False)
     assert reference[0] == "returned"
     assert [r["reason_code"] for r in reference[4]["cell_polygon_diagnostics"]] == [
         "no_polygon", "invalid_face_span"]
@@ -410,7 +410,7 @@ def test_required_native_late_corruption_raises(tmp_path, native_adapter, assemb
     from ras_commander.hdf.HdfMesh import HdfMesh
     expected = MeshCellPolygonError if strict else FastHdfError
     with python_polygonize_forbidden(), pytest.raises(expected, match="cell 1") as info:
-        HdfMesh.get_mesh_cell_polygons(path, backend="rust", strict=strict)
+        HdfMesh.get_mesh_cell_polygons(path, engine="native", strict=strict)
     assert getattr(info.value.__cause__, "mesh_structure_error", None) is True
     assert assemble_calls
 
@@ -422,18 +422,18 @@ def test_required_mode_without_extension_raises(tmp_path, adapter, monkeypatch):
                         (None, "The optional ras-commander-fast-hdf extension is unavailable", None))
     from ras_commander.hdf.HdfMesh import HdfMesh
     with pytest.raises(FastHdfError, match="unavailable"):
-        HdfMesh.get_mesh_cell_polygons(path, backend="rust", strict=False)
+        HdfMesh.get_mesh_cell_polygons(path, engine="native", strict=False)
     monkeypatch.setenv("RAS_COMMANDER_FAST_HDF", "auto")
-    assert outcome("auto", path, strict=False) == outcome("python", path, strict=False)
+    assert outcome("auto", path, strict=False) == outcome("h5py", path, strict=False)
 
 
 @pytest.mark.parametrize("case", CASES)
 def test_python_mode_never_touches_native(tmp_path, adapter, monkeypatch, case):
     path = write_hdf(tmp_path / f"{case}.g01.hdf", case)
-    expected = outcome("python", path, strict=False)
+    expected = outcome("h5py", path, strict=False)
     def forbidden():
         raise AssertionError("python mode loaded the native extension")
     monkeypatch.setattr(adapter, "_load_native", forbidden)
     monkeypatch.setenv("RAS_COMMANDER_FAST_HDF", "0")
     assert outcome("auto", path, strict=False) == expected
-    assert outcome("python", path, strict=False) == expected
+    assert outcome("h5py", path, strict=False) == expected

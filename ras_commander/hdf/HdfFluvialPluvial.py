@@ -36,20 +36,28 @@ from ..Decorators import standardize_input, log_call
 from .HdfResultsMesh import HdfResultsMesh
 from ..LoggingConfig import get_logger
 from ..fast_hdf import reraise_required
+from ..fast_hdf import backend_scope
 from pathlib import Path
 
 logger = get_logger(__name__)
 CellKey = Tuple[str, int]
 
-_ENGINES = ("python", "native", "auto")
+_ENGINES = ("auto", "h5py", "native")
 
 
 class FluvialNativeUnsupportedError(ValueError):
     """The native kernels cannot reproduce the legacy Python result for this request.
 
     engine="native" raises it instead of returning different scientific
-    results; engine="auto" catches only this error and uses the Python engine.
+    results; engine="auto" falls back to the reference on this and on any other
+    native error.
     """
+
+
+def _h5py_scoped():
+    """Whether the calling context already forces every native read to h5py."""
+    from ..fast_hdf import _BACKEND_SCOPE
+    return _BACKEND_SCOPE.get() == "python"
 
 
 def _check_engine(engine):
@@ -60,10 +68,9 @@ def _check_engine(engine):
 def _resolve_engine(engine):
     """Map ``engine`` onto the ``RAS_COMMANDER_FAST_HDF`` backend policy.
 
-    Explicit ``"python"`` and ``"native"`` override the environment, as an
-    explicit ``backend="python"``/``"rust"`` does for the ``HdfMesh`` readers.
-    ``"auto"`` follows the environment exactly like ``backend="auto"``:
-    ``0``/``off``/``false``/``python`` -> ``"python"`` (the reference, no
+    Explicit ``"h5py"`` and ``"native"`` override the environment, as they do
+    for the ``HdfMesh`` readers. ``"auto"`` follows the environment:
+    ``h5py`` (or legacy ``0``/``off``/``false``/``python``) -> ``"h5py"`` (the reference, no
     native attempt); unset/``auto`` -> ``"auto"`` (native when it reproduces the
     reference, else Python); ``required``/``rust`` -> ``"required"`` (native, or
     :class:`~ras_commander.fast_hdf.FastHdfError`; never a silent fallback).
@@ -74,7 +81,7 @@ def _resolve_engine(engine):
     from ..fast_hdf import _mode
     mode = _mode("auto")
     if mode == "python":
-        return "python"
+        return "h5py"
     if mode == "rust":
         return "required"
     return "auto"
@@ -219,7 +226,7 @@ class HdfFluvialPluvial:
         delta_t: float = 12,
         min_line_length: Optional[float] = None,
         *,
-        engine: str = "python",
+        engine: str = "auto",
     ) -> gpd.GeoDataFrame:
         """
         Calculate the fluvial-pluvial boundary lines based on cell polygons and maximum water surface elevation times.
@@ -251,42 +258,50 @@ class HdfFluvialPluvial:
                              greater than this value are considered boundaries. Default is 12 hours.
             min_line_length (float, optional): Minimum length (in CRS units) for boundary lines to be included.
                                                Lines shorter than this will be dropped. Default is None (no filtering).
-            engine (str): "python" (default, unchanged reference implementation),
-                          "native" (Rust graph and threshold kernels; never falls back, and
-                          raises FluvialNativeUnsupportedError or data errors rather than
-                          returning different results), or "auto" (native when it reproduces
-                          the Python result, otherwise Python; recorded in
-                          ``result.attrs["fluvial_engine"]``). Native output holds the same
+            engine (str): "auto" (default): the native Rust graph and threshold kernels when
+                          they reproduce the reference result, otherwise the reference
+                          implementation; which one ran is recorded in
+                          ``result.attrs["fluvial_engine"]``. "h5py": the reference
+                          implementation only (h5py reads, no native attempt). "native":
+                          native or an error (FluvialNativeUnsupportedError or data
+                          errors), never a different result. Native output holds the same
                           lines, row order (sorted cell pairs) and CRS as the reference.
-                          Mapping onto ``RAS_COMMANDER_FAST_HDF`` and ``backend=``:
-                          ``engine="python"``/``"native"`` are explicit and ignore the
-                          environment (like ``backend="python"``/``"rust"``; note the
-                          spelling ``"native"``, not ``"rust"``). ``engine="auto"`` follows
-                          the environment like ``backend="auto"``: ``0``/``off``/``python``
-                          runs the Python reference without trying native; unset/``auto``
-                          tries native and falls back; ``required`` runs native or raises
-                          ``FastHdfError`` instead of falling back. Native is used only when
-                          ``fast_hdf.available()`` (a compatible extension) is true. With the
-                          default ``engine="python"``, ``required`` mode re-raises a routed
-                          read's ``FastHdfError`` instead of returning an empty result.
+                          ``engine="auto"`` follows ``RAS_COMMANDER_FAST_HDF`` like every
+                          other reader: ``h5py`` runs the reference without trying native;
+                          unset/``auto`` tries native and falls back; ``native`` runs native
+                          or raises ``FastHdfError``. Explicit ``"h5py"``/``"native"`` ignore
+                          the environment. Native is used only when ``fast_hdf.available()``
+                          (a compatible extension) is true. With ``engine="h5py"`` under
+                          ``RAS_COMMANDER_FAST_HDF=native`` a routed read's ``FastHdfError``
+                          is re-raised instead of returning an empty result.
 
         Returns:
             gpd.GeoDataFrame: GeoDataFrame containing the fluvial-pluvial boundary lines.
         """
         effective = _resolve_engine(engine)
-        if effective != "python":
+        if engine == "h5py" and not _h5py_scoped():
+            # The reference with every nested read on h5py, in any mode.
+            with backend_scope("h5py"):
+                return HdfFluvialPluvial.calculate_fluvial_pluvial_boundary(
+                    hdf_path, delta_t, min_line_length, engine="h5py")
+        if effective != "h5py":
             try:
                 result = HdfFluvialPluvial._native_boundary(hdf_path, delta_t, min_line_length)
                 return _engine_attrs(result, engine, "native")
-            except FluvialNativeUnsupportedError as exc:
+            except Exception as exc:
+                # Auto must give the reference outcome (main logs processing failures
+                # and returns an empty frame), so any native exception falls back;
+                # explicit native/required only treat unsupported inputs specially.
+                if effective != "auto" and not isinstance(exc, FluvialNativeUnsupportedError):
+                    raise
                 _native_fallback(engine, effective, exc)
                 result = HdfFluvialPluvial.calculate_fluvial_pluvial_boundary(
-                    hdf_path, delta_t, min_line_length, engine="python")
-                return _engine_attrs(result, engine, "python", str(exc))
+                    hdf_path, delta_t, min_line_length, engine="h5py")
+                return _engine_attrs(result, engine, "h5py", str(exc))
         if engine == "auto":
             result = HdfFluvialPluvial.calculate_fluvial_pluvial_boundary(
-                hdf_path, delta_t, min_line_length, engine="python")
-            return _engine_attrs(result, engine, "python", _PYTHON_POLICY_REASON)
+                hdf_path, delta_t, min_line_length, engine="h5py")
+            return _engine_attrs(result, engine, "h5py", _PYTHON_POLICY_REASON)
         stage = "data loading"
         try:
             logger.debug("Getting cell polygons from HDF file...")
@@ -354,7 +369,7 @@ class HdfFluvialPluvial:
         temporal_tolerance_hours: float = 1.0,
         min_polygon_area_acres: Optional[float] = None,
         *,
-        engine: str = "python",
+        engine: str = "auto",
     ) -> gpd.GeoDataFrame:
         """
         Generates dissolved polygons representing fluvial, pluvial, and ambiguous flood zones.
@@ -410,29 +425,22 @@ class HdfFluvialPluvial:
                                                       polygons smaller than this, reclassify to the opposite
                                                       type and merge with adjacent polygons of that type.
                                                       Ambiguous polygons are not affected.
-            engine (str): "python" (default, unchanged reference implementation),
-                          "native" (Rust graph, classification and polygon assembly; never
-                          falls back), or "auto" (native when it reproduces the Python
-                          result, otherwise Python; recorded in
-                          ``result.attrs["fluvial_engine"]``). The native kernel applies
-                          the same set-based seeding (cells with both kinds of evidence
-                          are ambiguous and do not grow). Several meshes
-                          are analysed in isolation under (mesh_name, cell_id), as Python
-                          does. It raises FluvialNativeUnsupportedError for unprojected
-                          CRSs, meshes without ``Faces Cell Indexes`` (Python then uses its
-                          ring-segment fallback), invalid source cell geometry,
-                          thresholds that are not exact milliseconds, delta_t=0, and any
-                          min_polygon_area_acres (the class
-                          swap keeps attributes that depend on union part order; polygon
-                          removal is not a substitute). Native polygons are topologically
-                          equal to Python's; part order inside a MultiPolygon may differ.
-                          ``engine`` maps onto ``RAS_COMMANDER_FAST_HDF`` exactly as in
-                          :meth:`calculate_fluvial_pluvial_boundary`: explicit ``"python"``/
-                          ``"native"`` ignore the environment; ``"auto"`` runs Python under
-                          ``0``/``python``, native-or-fallback under ``auto``, and
-                          native-or-``FastHdfError`` under ``required``. With the default
-                          ``engine="python"``, ``required`` mode re-raises a routed read's
-                          ``FastHdfError`` instead of returning an empty result.
+            engine (str): "auto" (default): the native Rust graph and threshold kernels when
+                          they reproduce the reference result, otherwise the reference
+                          implementation; which one ran is recorded in
+                          ``result.attrs["fluvial_engine"]``. "h5py": the reference
+                          implementation only (h5py reads, no native attempt). "native":
+                          native or an error (FluvialNativeUnsupportedError or data
+                          errors), never a different result. Native output holds the same
+                          lines, row order (sorted cell pairs) and CRS as the reference.
+                          ``engine="auto"`` follows ``RAS_COMMANDER_FAST_HDF`` like every
+                          other reader: ``h5py`` runs the reference without trying native;
+                          unset/``auto`` tries native and falls back; ``native`` runs native
+                          or raises ``FastHdfError``. Explicit ``"h5py"``/``"native"`` ignore
+                          the environment. Native is used only when ``fast_hdf.available()``
+                          (a compatible extension) is true. With ``engine="h5py"`` under
+                          ``RAS_COMMANDER_FAST_HDF=native`` a routed read's ``FastHdfError``
+                          is re-raised instead of returning an empty result.
 
         Returns:
             gpd.GeoDataFrame: A GeoDataFrame with dissolved polygons for 'fluvial', 'pluvial',
@@ -444,22 +452,33 @@ class HdfFluvialPluvial:
             FastHdfError: Only under ``RAS_COMMANDER_FAST_HDF=required`` (see ``engine``).
         """
         effective = _resolve_engine(engine)
-        if effective != "python":
+        if engine == "h5py" and not _h5py_scoped():
+            # The reference with every nested read on h5py, in any mode.
+            with backend_scope("h5py"):
+                return HdfFluvialPluvial.generate_fluvial_pluvial_polygons(
+                    hdf_path, delta_t, temporal_tolerance_hours, min_polygon_area_acres,
+                    engine="h5py")
+        if effective != "h5py":
             try:
                 result = HdfFluvialPluvial._native_polygons(
                     hdf_path, delta_t, temporal_tolerance_hours, min_polygon_area_acres)
                 return _engine_attrs(result, engine, "native")
-            except FluvialNativeUnsupportedError as exc:
+            except Exception as exc:
+                # Auto must give the reference outcome (main logs processing failures
+                # and returns an empty frame), so any native exception falls back;
+                # explicit native/required only treat unsupported inputs specially.
+                if effective != "auto" and not isinstance(exc, FluvialNativeUnsupportedError):
+                    raise
                 _native_fallback(engine, effective, exc)
                 result = HdfFluvialPluvial.generate_fluvial_pluvial_polygons(
                     hdf_path, delta_t, temporal_tolerance_hours, min_polygon_area_acres,
-                    engine="python")
-                return _engine_attrs(result, engine, "python", str(exc))
+                    engine="h5py")
+                return _engine_attrs(result, engine, "h5py", str(exc))
         if engine == "auto":
             result = HdfFluvialPluvial.generate_fluvial_pluvial_polygons(
                 hdf_path, delta_t, temporal_tolerance_hours, min_polygon_area_acres,
-                engine="python")
-            return _engine_attrs(result, engine, "python", _PYTHON_POLICY_REASON)
+                engine="h5py")
+            return _engine_attrs(result, engine, "h5py", _PYTHON_POLICY_REASON)
         stage = "data loading"
         try:
             # --- 1. Data Loading and Preparation ---

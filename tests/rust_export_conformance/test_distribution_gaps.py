@@ -17,7 +17,7 @@ def test_freestiler_real_low_zoom_validity_gap(tmp_path):
     root = os.environ.get("RAS_EXPORT_FIXTURE_ROOT")
     if not root:
         pytest.skip("Set RAS_EXPORT_FIXTURE_ROOT to copied qualification HDFs")
-    source = HdfMesh.get_mesh_cell_polygons(Path(root) / "BaldEagleDamBrk.p18.hdf", backend="python")
+    source = HdfMesh.get_mesh_cell_polygons(Path(root) / "BaldEagleDamBrk.p18.hdf", engine="h5py")
     assert not source.empty
     # Native source rings are unchanged. This is a rendering-output probe.
     source = source.to_crs(4326).reset_index(drop=True)

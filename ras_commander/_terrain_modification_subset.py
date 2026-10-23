@@ -13,6 +13,7 @@ import h5py
 import numpy as np
 
 from .fast_hdf import read_typed
+from .fast_hdf import h5py_until_qualified
 
 TABLES = frozenset(
     {
@@ -120,6 +121,7 @@ def _validated_group(group):
     return arrays
 
 
+@h5py_until_qualified
 def read_features(terrain_hdf_path, crs):
     import geopandas as gpd
     from shapely.geometry import LineString, MultiLineString, Point, Polygon

@@ -6,7 +6,7 @@ BaldEagleDamBrk.p18.hdf (stored 7.0, two meshes, 4425 cells) and
 BaldEagleDamBrk.p03.hdf (stored 6.6, no peak results). A missing fixture is
 reported as skipped (unavailable), never as a pass.
 
-engine="python" is the reference. engine="native" must equal it exactly or
+engine="h5py" is the reference. engine="native" must equal it exactly or
 raise; tests count native kernel calls and make the Python classification
 loop and dissolve fail so that native results cannot come from a fallback.
 """
@@ -41,8 +41,8 @@ def _default_backend_policy():
     """Pin RAS_COMMANDER_FAST_HDF=auto for this native-engine qualification module.
 
     engine="auto" follows the backend policy (API re-audit P2-N3): it runs the
-    Python reference under ``0`` and raises FastHdfError instead of falling back
-    under ``required``. These tests qualify native/auto parity under the default
+    h5py reference under ``h5py`` and raises FastHdfError instead of falling back
+    under ``native``. These tests qualify native/auto parity under the default
     policy; tests/test_fluvial_engine_policy.py covers the other policies.
     """
     with pytest.MonkeyPatch.context() as patch:
@@ -107,14 +107,14 @@ def test_public_defaults_unchanged():
     assert polygons.parameters["delta_t"].default == 12
     assert polygons.parameters["temporal_tolerance_hours"].default == 1.0
     assert polygons.parameters["min_polygon_area_acres"].default is None
-    assert polygons.parameters["engine"].default == "python"
+    assert polygons.parameters["engine"].default == "auto"
     assert polygons.parameters["engine"].kind is inspect.Parameter.KEYWORD_ONLY
     assert boundary.parameters["delta_t"].default == 12
     assert boundary.parameters["min_line_length"].default is None
-    assert boundary.parameters["engine"].default == "python"
+    assert boundary.parameters["engine"].default == "auto"
 
 
-@pytest.mark.parametrize("engine", ["rust", "", None, "Native"])
+@pytest.mark.parametrize("engine", ["python", "rust", "", None, "Native", "H5PY"])
 def test_unknown_engine_rejected(engine):
     hdf = fixture("BaldEagleDamBrk.p18.hdf")  # path validation precedes engine validation
     with pytest.raises(ValueError, match="engine must be one of"):
@@ -156,8 +156,8 @@ def test_p07_polygons_native_equals_python(tmp_path):
 
 def _python_polygons(hdf, **kwargs):
     calls = native_calls()
-    frame = HdfFluvialPluvial.generate_fluvial_pluvial_polygons(hdf, engine="python", **kwargs)
-    assert delta(calls) == {}, "python engine must not call fluvial native kernels"
+    frame = HdfFluvialPluvial.generate_fluvial_pluvial_polygons(hdf, engine="h5py", **kwargs)
+    assert delta(calls) == {}, "h5py engine must not call fluvial native kernels"
     assert "fluvial_engine" not in frame.attrs
     assert not frame.empty
     return frame
@@ -181,7 +181,7 @@ def test_p07_min_area_swap_is_never_native_and_auto_matches_python(tmp_path):
     # Swapping relabels, never deletes: total area is conserved.
     assert reference.geometry.area.sum() == pytest.approx(unswapped.geometry.area.sum(), rel=1e-12)
     auto = HdfFluvialPluvial.generate_fluvial_pluvial_polygons(hdf, min_polygon_area_acres=1000.0, engine="auto")
-    assert auto.attrs["fluvial_engine"]["used"] == "python"
+    assert auto.attrs["fluvial_engine"]["used"] == "h5py"
     assert "class swapping" in auto.attrs["fluvial_engine"]["fallback_reason"]
     auto.attrs.clear()
     assert auto.to_wkb().equals(reference.to_wkb())
@@ -190,7 +190,7 @@ def test_p07_min_area_swap_is_never_native_and_auto_matches_python(tmp_path):
 def test_p07_boundary_native_equals_python(tmp_path):
     hdf = fixture("BaldEagleDamBrk.p07.hdf")
     calls = native_calls()
-    reference = HdfFluvialPluvial.calculate_fluvial_pluvial_boundary(hdf, engine="python")
+    reference = HdfFluvialPluvial.calculate_fluvial_pluvial_boundary(hdf, engine="h5py")
     assert delta(calls) == {}
     calls = native_calls()
     with forbid_python_classification():
@@ -250,7 +250,7 @@ def test_p18_two_meshes_auto_native_equals_mesh_scoped_python(tmp_path):
         assert result["equal"], json.dumps(result, default=str)
     lines = HdfFluvialPluvial.calculate_fluvial_pluvial_boundary(hdf, engine="auto")
     assert lines.attrs["fluvial_engine"]["used"] == "native"
-    python_lines = HdfFluvialPluvial.calculate_fluvial_pluvial_boundary(hdf, engine="python")
+    python_lines = HdfFluvialPluvial.calculate_fluvial_pluvial_boundary(hdf, engine="h5py")
     assert not python_lines.empty
     result = qualify.compare_boundary(save(python_lines, tmp_path / "pl.parquet"),
                                       save(lines, tmp_path / "al.parquet"))
@@ -297,7 +297,7 @@ def test_p18_two_meshes_native_composite_equals_per_mesh_python(tmp_path):
         with single_mesh_inputs(hdf, name) as cells:
             assert cells == per_mesh[name]
             reference = _python_polygons(hdf)
-            oracle_lines.append(HdfFluvialPluvial.calculate_fluvial_pluvial_boundary(hdf, engine="python"))
+            oracle_lines.append(HdfFluvialPluvial.calculate_fluvial_pluvial_boundary(hdf, engine="h5py"))
         mine = native[native["mesh_name"] == name].reset_index(drop=True)
         assert set(reference["mesh_name"]) == {name}
         result = qualify.compare_polygons(save(reference, tmp_path / f"{name}-p.parquet"),
@@ -334,26 +334,60 @@ def test_inexact_threshold_native_rejects_auto_falls_back():
         HdfFluvialPluvial.calculate_fluvial_pluvial_boundary(hdf, delta_t=-1, engine="native")
 
 
-def test_uncomputed_results_are_fatal_not_empty():
-    """p03 has geometry but no peak results: Python logs and returns empty; native raises."""
+def test_uncomputed_results_are_fatal_for_native_and_reference_for_auto():
+    """p03 has geometry but no peak results: the reference logs and returns empty;
+    native raises; auto gives the reference outcome (any native error falls back)."""
     hdf = fixture("BaldEagleDamBrk.p03.hdf")
-    assert HdfFluvialPluvial.generate_fluvial_pluvial_polygons(hdf).empty
-    for engine in ("native", "auto"):
-        with pytest.raises(ValueError, match="empty peak table"):
-            HdfFluvialPluvial.generate_fluvial_pluvial_polygons(hdf, engine=engine)
+    reference = HdfFluvialPluvial.generate_fluvial_pluvial_polygons(hdf, engine="h5py")
+    assert reference.empty and "fluvial_engine" not in reference.attrs
+    with pytest.raises(ValueError, match="empty peak table"):
+        HdfFluvialPluvial.generate_fluvial_pluvial_polygons(hdf, engine="native")
+    for auto in (HdfFluvialPluvial.generate_fluvial_pluvial_polygons(hdf, engine="auto"),
+                 HdfFluvialPluvial.generate_fluvial_pluvial_polygons(hdf)):
+        assert auto.empty
+        assert auto.attrs["fluvial_engine"]["used"] == "h5py"
+        assert "empty peak table" in auto.attrs["fluvial_engine"]["fallback_reason"]
 
 
-def test_corrupt_hdf_is_fatal_for_native_and_auto(tmp_path):
+def test_corrupt_hdf_is_fatal_for_native_and_reference_for_auto(tmp_path):
     source = fixture("BaldEagleDamBrk.p18.hdf")
     broken = tmp_path / "Broken.p18.hdf"
     with open(source, "rb") as handle:
         broken.write_bytes(handle.read(4096))
-    for engine in ("native", "auto"):
-        with pytest.raises(Exception) as caught:
-            HdfFluvialPluvial.generate_fluvial_pluvial_polygons(broken, engine=engine)
-        assert not isinstance(caught.value, FluvialNativeUnsupportedError)
-    # The legacy reference keeps its documented log-and-return-empty behavior.
-    assert HdfFluvialPluvial.generate_fluvial_pluvial_polygons(broken).empty
+    with pytest.raises(Exception) as caught:
+        HdfFluvialPluvial.generate_fluvial_pluvial_polygons(broken, engine="native")
+    assert not isinstance(caught.value, FluvialNativeUnsupportedError)
+    # The legacy reference keeps its documented log-and-return-empty behavior,
+    # and auto (the default) falls back to it on any native error.
+    assert HdfFluvialPluvial.generate_fluvial_pluvial_polygons(broken, engine="h5py").empty
+    for auto in (HdfFluvialPluvial.generate_fluvial_pluvial_polygons(broken, engine="auto"),
+                 HdfFluvialPluvial.generate_fluvial_pluvial_polygons(broken)):
+        assert auto.empty and auto.attrs["fluvial_engine"]["used"] == "h5py"
+
+
+@pytest.mark.parametrize("method,native_name", [
+    ("generate_fluvial_pluvial_polygons", "_native_polygons"),
+    ("calculate_fluvial_pluvial_boundary", "_native_boundary"),
+])
+def test_auto_falls_back_on_any_native_error(monkeypatch, method, native_name):
+    """engine="auto" turns any native exception into the h5py reference result;
+    explicit engine="native" propagates it unchanged."""
+    hdf = fixture("BaldEagleDamBrk.p18.hdf")
+    public = getattr(HdfFluvialPluvial, method)
+    reference = public(hdf, engine="h5py")
+    assert not reference.empty
+
+    def explode(*args, **kwargs):
+        raise RuntimeError("controlled native crash")
+    monkeypatch.setattr(HdfFluvialPluvial, native_name, staticmethod(explode))
+    auto = public(hdf, engine="auto")
+    assert auto.attrs["fluvial_engine"] == {
+        "requested": "auto", "used": "h5py", "fallback_reason": "controlled native crash"}
+    auto.attrs.clear()
+    assert list(auto.columns) == list(reference.columns) and auto.crs == reference.crs
+    assert auto.to_wkb().equals(reference.to_wkb())
+    with pytest.raises(RuntimeError, match="controlled native crash"):
+        public(hdf, engine="native")
 
 
 def _hash_native_polygons(hdf, threads):

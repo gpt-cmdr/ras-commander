@@ -27,8 +27,8 @@ def test_native_invalid_closed_ring_keeps_strict_diagnostics(tmp_path, points):
         values = hdf[base + "Cells Face and Orientation Values"][:4]
         del hdf[base + "Cells Face and Orientation Values"]
         hdf[base + "Cells Face and Orientation Values"] = values
-    reference = HdfMesh.get_mesh_cell_polygons(path, backend="python")
-    automatic = HdfMesh.get_mesh_cell_polygons(path, backend="auto")
+    reference = HdfMesh.get_mesh_cell_polygons(path, engine="h5py", diagnostics=True)
+    automatic = HdfMesh.get_mesh_cell_polygons(path, engine="auto", diagnostics=True)
     assert automatic.empty and reference.empty
     expected = reference.attrs["cell_polygon_diagnostics"]
     actual = automatic.attrs["cell_polygon_diagnostics"]
@@ -41,9 +41,9 @@ def test_native_invalid_closed_ring_keeps_strict_diagnostics(tmp_path, points):
     ]
     assert all(row["reason_code"] for row in actual)
     with pytest.raises(MeshCellPolygonError):
-        HdfMesh.get_mesh_cell_polygons(path, backend="auto", strict=True)
+        HdfMesh.get_mesh_cell_polygons(path, engine="auto", strict=True)
     with pytest.raises(MeshCellPolygonError):
-        HdfMesh.get_mesh_cell_polygons(path, backend="rust", strict=True)
+        HdfMesh.get_mesh_cell_polygons(path, engine="native", strict=True)
 
 
 def _write_polygon_cases(path: Path) -> Path:
@@ -112,8 +112,8 @@ def test_mesh_cell_polygon_anomalies_are_reported_without_renumbering(
 ):
     geom_hdf = _write_polygon_cases(tmp_path / "diagnostics.g01.hdf")
 
-    cells = HdfMesh.get_mesh_cell_polygons(geom_hdf, backend="python")
-    diagnostics = HdfMesh.diagnose_mesh_cell_polygons(geom_hdf, backend="python")
+    cells = HdfMesh.get_mesh_cell_polygons(geom_hdf, engine="h5py")
+    diagnostics = HdfMesh.diagnose_mesh_cell_polygons(geom_hdf, engine="h5py")
 
     assert cells["cell_id"].tolist() == [0, 2]
     assert diagnostics["cell_id"].tolist() == [1, 2, 3, 4]
@@ -131,7 +131,7 @@ def test_mesh_cell_polygon_anomalies_are_reported_without_renumbering(
 
 def test_mesh_cell_polygon_attrs_do_not_break_concat(tmp_path: Path):
     geom_hdf = _write_polygon_cases(tmp_path / "diagnostics.g01.hdf")
-    cells = HdfMesh.get_mesh_cell_polygons(geom_hdf, backend="python")
+    cells = HdfMesh.get_mesh_cell_polygons(geom_hdf, engine="h5py")
 
     combined = pd.concat([cells, cells], ignore_index=True)
 
@@ -157,7 +157,7 @@ def test_clean_mesh_cell_polygon_attrs_do_not_break_concat(tmp_path: Path):
             data=np.array([[0, 1], [1, 1], [2, 1], [3, 1]], dtype=np.int32),
         )
 
-    cells = HdfMesh.get_mesh_cell_polygons(geom_hdf, backend="python")
+    cells = HdfMesh.get_mesh_cell_polygons(geom_hdf, engine="h5py", diagnostics=True)
     assert cells.attrs["cell_polygon_diagnostics"] == ()
     assert pd.concat([cells, cells], ignore_index=True)["cell_id"].tolist() == [0, 0]
 
@@ -170,12 +170,12 @@ def test_mesh_cell_polygon_partial_layout_reports_read_error(tmp_path: Path):
             "Cells Face and Orientation Values"
         ]
 
-    diagnostics = HdfMesh.diagnose_mesh_cell_polygons(geom_hdf, backend="python")
+    diagnostics = HdfMesh.diagnose_mesh_cell_polygons(geom_hdf, engine="h5py")
 
     assert diagnostics["status"].tolist() == ["read_error"]
     assert diagnostics["reason_code"].tolist() == ["_MeshLayoutError"]
     with pytest.raises(MeshCellPolygonError, match="partial"):
-        HdfMesh.get_mesh_cell_polygons(geom_hdf, strict=True, backend="python")
+        HdfMesh.get_mesh_cell_polygons(geom_hdf, strict=True, engine="h5py")
 
 
 def test_zero_face_cell_is_not_classified_as_boundary_only(tmp_path: Path):
@@ -190,7 +190,7 @@ def test_zero_face_cell_is_not_classified_as_boundary_only(tmp_path: Path):
         info[4, 1] = 0
         hdf_file.create_dataset(info_path, data=info)
 
-    diagnostics = HdfMesh.diagnose_mesh_cell_polygons(geom_hdf, backend="python")
+    diagnostics = HdfMesh.diagnose_mesh_cell_polygons(geom_hdf, engine="h5py")
     row = diagnostics.loc[diagnostics.cell_id == 4].iloc[0]
 
     assert row["status"] == "omitted"
@@ -210,7 +210,7 @@ def test_invalid_face_spans_are_reported(tmp_path: Path, start: int, length: int
         info[4] = [start, length]
         hdf_file.create_dataset(info_path, data=info)
 
-    diagnostics = HdfMesh.diagnose_mesh_cell_polygons(geom_hdf, backend="python")
+    diagnostics = HdfMesh.diagnose_mesh_cell_polygons(geom_hdf, engine="h5py")
     row = diagnostics.loc[diagnostics.cell_id == 4].iloc[0]
     assert row["status"] == "omitted"
     assert row["reason_code"] == "invalid_face_span"
@@ -228,7 +228,7 @@ def test_missing_named_area_topology_is_explicit(tmp_path: Path):
             "Cells Face and Orientation Values"
         ]
 
-    diagnostics = HdfMesh.diagnose_mesh_cell_polygons(geom_hdf, backend="python")
+    diagnostics = HdfMesh.diagnose_mesh_cell_polygons(geom_hdf, engine="h5py")
 
     assert diagnostics["status"].tolist() == ["not_present"]
     assert diagnostics["reason_code"].tolist() == ["cell_topology_not_present"]
@@ -237,7 +237,7 @@ def test_missing_named_area_topology_is_explicit(tmp_path: Path):
 def test_mesh_cell_polygon_diagnostic_method_returns_native_ids(tmp_path: Path):
     geom_hdf = _write_polygon_cases(tmp_path / "diagnostics.g01.hdf")
 
-    diagnostics = HdfMesh.diagnose_mesh_cell_polygons(geom_hdf, backend="python")
+    diagnostics = HdfMesh.diagnose_mesh_cell_polygons(geom_hdf, engine="h5py")
 
     assert diagnostics[["mesh_name", "cell_id"]].to_records(index=False).tolist() == [
         ("Diagnostic Mesh", 1),
@@ -251,7 +251,7 @@ def test_mesh_cell_polygon_strict_mode_rejects_any_anomaly(tmp_path: Path):
     geom_hdf = _write_polygon_cases(tmp_path / "diagnostics.g01.hdf")
 
     with pytest.raises(MeshCellPolygonError, match="Diagnostic Mesh.*3"):
-        HdfMesh.get_mesh_cell_polygons(geom_hdf, strict=True, backend="python")
+        HdfMesh.get_mesh_cell_polygons(geom_hdf, strict=True, engine="h5py")
 
 
 def test_auto_diagnosis_of_corruption_is_the_reference_diagnosis(tmp_path, monkeypatch):
@@ -261,9 +261,9 @@ def test_auto_diagnosis_of_corruption_is_the_reference_diagnosis(tmp_path, monke
     path = _write_polygon_cases(tmp_path / "inspect-corrupt.g01.hdf")
     # Required native execution refuses corrupt topology ...
     with pytest.raises(FastHdfError):
-        HdfMesh.get_mesh_cell_polygons(path, backend="rust")
+        HdfMesh.get_mesh_cell_polygons(path, engine="native")
     # ... while auto mode is the reference behaviour, with no native-only attrs.
-    reference = HdfMesh.diagnose_mesh_cell_polygons(path, backend="python")
+    reference = HdfMesh.diagnose_mesh_cell_polygons(path, engine="h5py")
     diagnostics = HdfMesh.diagnose_mesh_cell_polygons(path)
     pd.testing.assert_frame_equal(diagnostics, reference)
     assert diagnostics.attrs == reference.attrs == {}
@@ -279,10 +279,41 @@ def test_required_native_diagnosis_never_falls_back(tmp_path, monkeypatch, requi
     calls = []
     original = HdfMesh.get_mesh_cell_polygons
     def recorded(*args, **kwargs):
-        calls.append(kwargs.get("backend", "auto"))
+        calls.append(kwargs.get("engine", "auto"))
         return original(*args, **kwargs)
     monkeypatch.setattr(HdfMesh, "get_mesh_cell_polygons", staticmethod(recorded))
-    backend = "rust" if required == "explicit" else "auto"
+    engine = "native" if required == "explicit" else "auto"
     with pytest.raises(FastHdfError):
-        HdfMesh.diagnose_mesh_cell_polygons(path, backend=backend)
-    assert calls == [backend]
+        HdfMesh.diagnose_mesh_cell_polygons(path, engine=engine)
+    assert calls == [engine]
+
+
+def test_cell_polygon_diagnostics_attr_is_opt_in(tmp_path: Path):
+    geom_hdf = _write_polygon_cases(tmp_path / "opt-in.g01.hdf")
+    default = HdfMesh.get_mesh_cell_polygons(geom_hdf, engine="h5py")
+    attached = HdfMesh.get_mesh_cell_polygons(geom_hdf, engine="h5py", diagnostics=True)
+    assert "cell_polygon_diagnostics" not in default.attrs
+    assert [row["cell_id"] for row in attached.attrs["cell_polygon_diagnostics"]] == [1, 2, 3, 4]
+    # The flag only controls the attr: the polygons are identical either way.
+    assert default["cell_id"].tolist() == attached["cell_id"].tolist() == [0, 2]
+    assert all(a.equals(b) for a, b in zip(default.geometry, attached.geometry))
+    # diagnose_mesh_cell_polygons enables diagnostics itself.
+    assert HdfMesh.diagnose_mesh_cell_polygons(geom_hdf, engine="h5py")["cell_id"].tolist() == [1, 2, 3, 4]
+
+
+def test_cell_polygon_diagnostics_attr_is_opt_in_for_auto(tmp_path: Path, monkeypatch):
+    # Auto policy: synthetic files store a vlen Projection that forced native refuses.
+    monkeypatch.delenv("RAS_COMMANDER_FAST_HDF", raising=False)
+    geom_hdf = _write_polygon_cases(tmp_path / "opt-in-clean.g01.hdf")
+    base = "Geometry/2D Flow Areas/Diagnostic Mesh/"
+    with h5py.File(geom_hdf, "a") as hdf_file:
+        del hdf_file[base + "Cells Face and Orientation Info"]
+        del hdf_file[base + "Cells Face and Orientation Values"]
+        hdf_file[base + "Cells Face and Orientation Info"] = np.array([[0, 4]], dtype=np.int32)
+        hdf_file[base + "Cells Face and Orientation Values"] = np.array(
+            [[0, 1], [1, 1], [2, 1], [3, 1]], dtype=np.int32)
+    default = HdfMesh.get_mesh_cell_polygons(geom_hdf)
+    attached = HdfMesh.get_mesh_cell_polygons(geom_hdf, diagnostics=True)
+    assert "cell_polygon_diagnostics" not in default.attrs
+    assert attached.attrs["cell_polygon_diagnostics"] == ()
+    assert default["cell_id"].tolist() == attached["cell_id"].tolist() == [0]

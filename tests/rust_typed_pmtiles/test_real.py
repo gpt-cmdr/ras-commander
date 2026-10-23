@@ -30,7 +30,7 @@ def test_real_typed_bridge(tmp_path,filename,version):
         columns={'classification':pa.array(source.classification,type=pa.string()),'area_acres':pa.array(source.area_acres)}
     else:
         attrs=HdfBase.get_attrs(path,'/'); assert f'HEC-RAS {version}' in attrs['File Version']
-        all_cells=HdfMesh.get_mesh_cell_polygons(path,backend='python')
+        all_cells=HdfMesh.get_mesh_cell_polygons(path,engine='h5py')
         source=all_cells.groupby('mesh_name',sort=False).head(64).copy()
         values=HdfResultsMesh.get_mesh_max_ws(path,round_to='1ms')
         if values.empty:
@@ -83,7 +83,7 @@ def test_real_typed_bridge(tmp_path,filename,version):
 def test_typed_low_zoom_gap(tmp_path):
     root=os.environ.get('RAS_EXPORT_FIXTURE_ROOT')
     if not root:pytest.skip('set local fixture root')
-    source=HdfMesh.get_mesh_cell_polygons(Path(root)/'BaldEagleDamBrk.p18.hdf',backend='python').to_crs(4326)
+    source=HdfMesh.get_mesh_cell_polygons(Path(root)/'BaldEagleDamBrk.p18.hdf',engine='h5py').to_crs(4326)
     source.geometry=shapely.orient_polygons(source.geometry.to_numpy())
     t=table(source.geometry.to_numpy(),4326,mesh_names=source.mesh_name.to_numpy(),cell_ids=source.cell_id.to_numpy())
     out=tmp_path/'bundle'

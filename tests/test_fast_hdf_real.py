@@ -69,8 +69,8 @@ def test_real_polygons_preserve_topology_vertices_ids(native, path, record_prope
     import shapely
     from ras_commander.hdf import HdfMesh
     require_file(path)
-    reference = HdfMesh.get_mesh_cell_polygons(path, backend="python")
-    actual = HdfMesh.get_mesh_cell_polygons(path, backend="rust", threads=2)
+    reference = HdfMesh.get_mesh_cell_polygons(path, engine="h5py")
+    actual = HdfMesh.get_mesh_cell_polygons(path, engine="native", threads=2)
     assert not reference.empty
     assert actual.columns.tolist() == reference.columns.tolist()
     assert actual.crs == reference.crs
@@ -168,7 +168,7 @@ def test_real_pmtiles_ids_properties_coverage_and_validity(native, tmp_path, rec
     pytest.importorskip("pmtiles.reader")
     pytest.importorskip("mapbox_vector_tile")
     path = require_file(BALD / f"BaldEagleDamBrk.g{geom_number:02}.hdf")
-    source = HdfMesh.get_mesh_cell_polygons(path, backend="python").to_crs(4326)
+    source = HdfMesh.get_mesh_cell_polygons(path, engine="h5py").to_crs(4326)
     assert source.mesh_name.nunique() == (2 if geom_number == 11 else 1)
     properties = {}
     for mesh, group in source.groupby("mesh_name"):

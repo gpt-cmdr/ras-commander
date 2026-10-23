@@ -28,6 +28,7 @@ from .HdfBase import HdfBase
 from ..Decorators import standardize_input, log_call
 from ..LoggingConfig import get_logger
 from ..fast_hdf import read_attr, read_typed
+from ..fast_hdf import h5py_until_qualified
 
 gpd = optional_module("geopandas", "Returning GeoDataFrame results from HdfPump")
 xr = optional_module("xarray", "Returning xarray results from HdfPump")
@@ -293,6 +294,7 @@ class HdfPump:
     @staticmethod
     @log_call
     @standardize_input(file_type='plan_hdf')
+    @h5py_until_qualified
     def get_pump_station_summary(hdf_path: Path) -> pd.DataFrame:
         """
         Extract summary statistics and performance data for all pump stations.

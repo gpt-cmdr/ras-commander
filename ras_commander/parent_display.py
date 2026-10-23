@@ -22,6 +22,7 @@ import h5py
 from .Decorators import log_call
 from .fast_hdf import read_attr, reraise_required
 from .LoggingConfig import get_logger
+from .fast_hdf import h5py_until_qualified
 
 logger = get_logger(__name__)
 
@@ -85,6 +86,7 @@ class FeatureProbe:
 
 
 @log_call
+@h5py_until_qualified
 def probe_geometry_features(
     geometry_hdf: str | Path, features: tuple[str, ...] | None = None
 ) -> dict[str, FeatureProbe]:

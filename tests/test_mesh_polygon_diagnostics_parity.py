@@ -3,7 +3,7 @@
 In auto mode the native polygonizer may only return when its diagnostic records
 (status, reason code, counts, face IDs), its warnings and its strict-mode
 outcome are provably the reference ones; otherwise the Python polygonizer runs.
-Each case compares ``backend="auto"`` with ``backend="python"`` on:
+Each case compares ``engine="auto"`` with ``engine="h5py"`` on:
 
 - the returned cells (identity and normalized geometry),
 - ``attrs["cell_polygon_diagnostics"]`` and ``diagnose_mesh_cell_polygons()``,
@@ -130,19 +130,19 @@ def _compare(path, caplog, monkeypatch):
         served.append("reference")
         return original(*args, **kwargs)
     with caplog.at_level(logging.WARNING):
-        python, python_warnings = _call(caplog, path, backend="python")
+        python, python_warnings = _call(caplog, path, engine="h5py", diagnostics=True)
         monkeypatch.setattr(HdfMesh, "_reference_mesh_cell_polygons", staticmethod(reference))
-        auto, auto_warnings = _call(caplog, path, backend="auto")
+        auto, auto_warnings = _call(caplog, path, engine="auto", diagnostics=True)
         auto_served = served[:] or ["native"]
         _assert_same_cells(auto, python)
         assert auto.attrs["cell_polygon_diagnostics"] == python.attrs["cell_polygon_diagnostics"]
         assert auto_warnings == python_warnings
         pd.testing.assert_frame_equal(
-            HdfMesh.diagnose_mesh_cell_polygons(path, backend="auto"),
-            HdfMesh.diagnose_mesh_cell_polygons(path, backend="python"))
+            HdfMesh.diagnose_mesh_cell_polygons(path, engine="auto"),
+            HdfMesh.diagnose_mesh_cell_polygons(path, engine="h5py"))
         monkeypatch.setattr(HdfMesh, "_reference_mesh_cell_polygons", staticmethod(original))
-        python_strict, python_strict_warnings = _call(caplog, path, backend="python", strict=True)
-        auto_strict, auto_strict_warnings = _call(caplog, path, backend="auto", strict=True)
+        python_strict, python_strict_warnings = _call(caplog, path, engine="h5py", strict=True, diagnostics=True)
+        auto_strict, auto_strict_warnings = _call(caplog, path, engine="auto", strict=True, diagnostics=True)
     if isinstance(python_strict, tuple):
         assert auto_strict == python_strict
     else:
@@ -180,7 +180,7 @@ def test_auto_diagnostics_equal_reference(tmp_path, caplog, monkeypatch, case):
 def test_ambiguous_case_really_is_ambiguous_in_the_reference(tmp_path, monkeypatch):
     monkeypatch.setenv("RAS_COMMANDER_FAST_HDF", "auto")
     path = _write(tmp_path / "ambiguous.g01.hdf", CASES["ambiguous_two_rings"])
-    diagnostics = HdfMesh.diagnose_mesh_cell_polygons(path, backend="auto")
+    diagnostics = HdfMesh.diagnose_mesh_cell_polygons(path, engine="auto")
     assert diagnostics[["cell_id", "status", "reason_code", "polygon_count"]].values.tolist() == [
         [1, "ambiguous", "multiple_polygons", 2]]
 
@@ -188,7 +188,7 @@ def test_ambiguous_case_really_is_ambiguous_in_the_reference(tmp_path, monkeypat
 def test_open_ring_gets_the_reference_reason_code(tmp_path, monkeypatch):
     monkeypatch.setenv("RAS_COMMANDER_FAST_HDF", "auto")
     path = _write(tmp_path / "open.g01.hdf", CASES["open_ring_no_polygon"])
-    diagnostics = HdfMesh.diagnose_mesh_cell_polygons(path, backend="auto")
+    diagnostics = HdfMesh.diagnose_mesh_cell_polygons(path, engine="auto")
     assert diagnostics[["cell_id", "status", "reason_code"]].values.tolist() == [
         [1, "omitted", "no_polygon"]]
 

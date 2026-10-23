@@ -43,6 +43,7 @@ from .HdfUtils import HdfUtils
 from ..Decorators import standardize_input, log_call
 from ..LoggingConfig import setup_logging, get_logger
 from ..fast_hdf import read_attr, read_attrs, read_typed, reraise_required
+from ..fast_hdf import h5py_until_qualified
 
 logger = get_logger(__name__)
 
@@ -645,6 +646,7 @@ class HdfPlan:
     @staticmethod
     @log_call
     @standardize_input(file_type='plan_hdf')
+    @h5py_until_qualified
     def get_plan_met_precip_values(
         hdf_path: Union[str, Path, int, h5py.File], *, ras_object=None,
     ) -> Dict[str, Any]:
@@ -749,6 +751,7 @@ class HdfPlan:
     @staticmethod
     @log_call
     @standardize_input(file_type='plan_hdf')
+    @h5py_until_qualified
     def get_starting_wse_method(hdf_path: Path) -> StartingWSEMethodDict:
         """
         Extract initial water surface elevation calculation method from plan HDF.

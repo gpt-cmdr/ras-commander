@@ -28,7 +28,7 @@ def worker(args):
     if args.backend=='rust':native.assemble_cells=counted;shapely.ops.polygonize=forbidden
     print(json.dumps({'phase':'writer'}),flush=True);started=time.perf_counter()
     try:
-        frame=HdfMesh.get_mesh_cell_polygons(args.fixture,backend=args.backend,threads=2 if args.backend=='rust' else None)
+        frame=HdfMesh.get_mesh_cell_polygons(args.fixture,engine=args.backend,threads=2 if args.backend=='rust' else None)
         elapsed=time.perf_counter()-started
     except Exception as e:
         print(json.dumps({'extraction_seconds':time.perf_counter()-started,'error_type':type(e).__name__,

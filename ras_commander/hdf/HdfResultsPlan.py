@@ -43,6 +43,7 @@ from ..LoggingConfig import get_logger
 from ..fast_hdf import read_attrs, read_typed, reraise_required
 import numpy as np
 from datetime import datetime
+from ..fast_hdf import h5py_until_qualified
 
 logger = get_logger(__name__)
 
@@ -393,6 +394,7 @@ class HdfResultsPlan:
     @staticmethod
     @log_call
     @standardize_input(file_type='plan_hdf')
+    @h5py_until_qualified
     def get_reference_summary(hdf_path: Path, reftype: str) -> pd.DataFrame:
         """
         Get reference line or point summary output from HDF file.

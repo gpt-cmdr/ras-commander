@@ -15,6 +15,7 @@ import h5py
 from ..LoggingConfig import get_logger
 from ..fast_hdf import read_typed, reraise_required
 from .types import Severity, FlowType, CheckMessage, CheckResults
+from ..fast_hdf import h5py_until_qualified
 
 logger = get_logger(__name__)
 
@@ -65,6 +66,7 @@ def resolve_hdf_paths(
     return plan_hdf, geom_hdf
 
 
+@h5py_until_qualified
 def verify_steady_plan(plan_hdf: Path) -> bool:
     """Check if plan contains steady flow results."""
     try:
@@ -74,6 +76,7 @@ def verify_steady_plan(plan_hdf: Path) -> bool:
         return False
 
 
+@h5py_until_qualified
 def detect_flow_type(plan_hdf: Path) -> FlowType:
     """
     Detect the flow type of a plan HDF file.
@@ -107,6 +110,7 @@ def detect_flow_type(plan_hdf: Path) -> FlowType:
         return FlowType.GEOMETRY_ONLY
 
 
+@h5py_until_qualified
 def has_2d_mesh(plan_hdf: Path) -> bool:
     """
     Check if plan contains 2D mesh results.

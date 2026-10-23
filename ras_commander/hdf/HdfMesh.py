@@ -787,8 +787,9 @@ class HdfMesh:
         hdf_path: Path,
         *,
         strict: bool = False,
-        backend: str = "auto",
+        engine: str = "auto",
         threads: Optional[int] = None,
+        diagnostics: bool = False,
     ) -> 'GeoDataFrame':
         """
         Return 2D flow mesh cell polygons.
@@ -800,18 +801,33 @@ class HdfMesh:
         strict : bool, default False
             Raise :class:`MeshCellPolygonError` when a native cell produces no
             polygon or more than one polygon. The default preserves the legacy
-            return behavior, emits a warning, and attaches anomaly rows to
-            ``result.attrs["cell_polygon_diagnostics"]`` as an equality-safe
-            tuple of record dictionaries. Use
-            :meth:`diagnose_mesh_cell_polygons` for a DataFrame.
-        backend : str, default "auto"
-            Use the optional Rust extension when available. "python" forces
-            the reference polygonizer; "rust" requires native execution.
-            Auto mode falls back to the reference polygonizer on any native
-            failure, so its result and exceptions (including the diagnostic
-            records and the strict-mode contract) are the reference ones.
+            return behavior and emits a warning for omitted cells.
+        engine : str, default "auto"
+            ``"auto"``: native first, with the Python reference polygonizer on
+            any native refusal or failure, so results and exceptions are the
+            reference ones. ``"h5py"``: the reference polygonizer only.
+            ``"native"``: native execution or
+            :class:`~ras_commander.fast_hdf.FastHdfError`.
         threads : int, optional
             Maximum threads for native extraction and polygon construction.
+        diagnostics : bool, default False
+            Attach anomaly rows to ``result.attrs["cell_polygon_diagnostics"]``
+            as an equality-safe tuple of record dictionaries. Off by default
+            (behaviour change from ras-commander 0.106.1, which always attached
+            them); :meth:`diagnose_mesh_cell_polygons` returns them as a
+            DataFrame.
+            Native and Python diagnostics: with ``engine="auto"`` the records
+            are always the Python reference's (native results are used only
+            when every record is proven equal, else the Python polygonizer
+            runs). With ``engine="native"`` (or
+            ``RAS_COMMANDER_FAST_HDF=native``) the native records are returned
+            as produced and can differ: the engine labels a cell it did not
+            assemble ``omitted``/``no_polygon`` only when it detected an invalid
+            ring, otherwise ``boundary_only``/``insufficient_faces`` even if the
+            cell has three or more faces; it never reports ``ambiguous``/
+            ``multiple_polygons``, ``invalid_face_span`` or
+            ``missing_face_reference`` (the reference polygonizes the faces
+            and can). The polygons themselves are unaffected.
 
         Returns
         -------
@@ -829,12 +845,16 @@ class HdfMesh:
         Use :meth:`diagnose_mesh_cell_polygons` or ``strict=True`` whenever an
         exhaustive physical-cell mask is required.
         """
-        from ..fast_hdf import _try_mesh_polygons
-        native = _try_mesh_polygons(hdf_path, backend=backend, threads=threads, strict=strict)
-        if native is not None:
-            return native
-        with backend_scope(backend):
-            return HdfMesh._reference_mesh_cell_polygons(hdf_path, strict=strict, backend=backend)
+        from ..fast_hdf import _normalize_backend, _try_mesh_polygons
+        backend = _normalize_backend(engine)
+        result = _try_mesh_polygons(hdf_path, backend=backend, threads=threads, strict=strict)
+        if result is None:
+            with backend_scope(backend):
+                result = HdfMesh._reference_mesh_cell_polygons(
+                    hdf_path, strict=strict, backend=backend)
+        if not diagnostics:
+            result.attrs.pop("cell_polygon_diagnostics", None)
+        return result
 
     @staticmethod
     def _reference_mesh_cell_polygons(hdf_path: Path, *, strict: bool, backend: str) -> 'GeoDataFrame':
@@ -1078,7 +1098,7 @@ class HdfMesh:
     @staticmethod
     @log_call
     @standardize_input(file_type='geom_hdf')
-    def diagnose_mesh_cell_polygons(hdf_path: Path, *, backend: str = "auto") -> pd.DataFrame:
+    def diagnose_mesh_cell_polygons(hdf_path: Path, *, engine: str = "auto") -> pd.DataFrame:
         """Return cells not reconstructed as exactly one polygon.
 
         The result contains the native ``mesh_name`` and zero-based ``cell_id``,
@@ -1091,14 +1111,16 @@ class HdfMesh:
         named mesh supplied topology and every processed physical cell produced
         exactly one polygon.
 
-        ``backend="auto"`` falls back to the reference polygonizer on any
-        native failure, and whenever the native records cannot be proven equal
-        to the reference's, so its rows, statuses, reason codes and warnings
-        are the reference ones. Explicit Rust or
-        ``RAS_COMMANDER_FAST_HDF=required`` never falls back; there native
-        reason codes can differ from reference polygonization codes.
+        ``engine`` is as in :meth:`get_mesh_cell_polygons`. ``engine="auto"``
+        falls back to the reference polygonizer on any native failure, and
+        whenever the native records cannot be proven equal to the reference's,
+        so its rows, statuses, reason codes and warnings are the reference
+        ones. ``engine="native"`` (or ``RAS_COMMANDER_FAST_HDF=native``) never
+        falls back; there the native records can differ from the reference's
+        as described under ``diagnostics`` in :meth:`get_mesh_cell_polygons`.
         """
-        polygons = HdfMesh.get_mesh_cell_polygons(hdf_path, strict=False, backend=backend)
+        polygons = HdfMesh.get_mesh_cell_polygons(
+            hdf_path, strict=False, engine=engine, diagnostics=True)
         diagnostic_records = polygons.attrs.get("cell_polygon_diagnostics")
         columns = [
             "mesh_name",

@@ -75,6 +75,20 @@ _warned_modes = set()
 _BACKEND_SCOPE = ContextVar("ras_commander_fast_hdf_backend", default=None)
 
 
+# Public vocabulary (``engine=`` and RAS_COMMANDER_FAST_HDF): auto | h5py | native.
+# Internal policy names: auto | python | rust. Legacy spellings stay accepted.
+_BACKEND_ALIASES = {"auto": "auto", "h5py": "python", "python": "python",
+                    "native": "rust", "rust": "rust"}
+
+
+def _normalize_backend(backend):
+    """Internal policy name for a public ``engine``/``backend`` value."""
+    try:
+        return _BACKEND_ALIASES[backend]
+    except (KeyError, TypeError):
+        raise ValueError("engine must be 'auto', 'h5py', or 'native'") from None
+
+
 @contextmanager
 def backend_scope(backend):
     """Make nested default-``auto`` reads follow an explicit ``backend`` for one call.
@@ -86,8 +100,7 @@ def backend_scope(backend):
     requires native for every nested read; ``"auto"`` leaves the environment
     policy unchanged. The scope is per context (thread/task), not global.
     """
-    if backend not in {"auto", "python", "rust"}:
-        raise ValueError("backend must be 'auto', 'python', or 'rust'")
+    backend = _normalize_backend(backend)
     if backend == "auto":
         yield
         return
@@ -98,6 +111,29 @@ def backend_scope(backend):
         _BACKEND_SCOPE.reset(token)
 
 
+
+# Functions whose native read path has not yet been exercised by the release test
+# corpus (no fixture carries their data). In auto mode they run entirely on h5py;
+# an explicit ``native`` engine (or RAS_COMMANDER_FAST_HDF=native) still runs them
+# natively. Remove the decorator once a fixture proves the function identical.
+UNQUALIFIED_NATIVE = set()
+
+
+def h5py_until_qualified(func):
+    """Run ``func`` on h5py in auto mode until the test corpus qualifies its native path."""
+    import functools
+    UNQUALIFIED_NATIVE.add(f"{func.__module__}.{func.__qualname__}")
+
+    @functools.wraps(func)
+    def wrapper(*args, **kwargs):
+        if _mode("auto") == "auto":
+            with backend_scope("h5py"):
+                return func(*args, **kwargs)
+        return func(*args, **kwargs)
+
+    wrapper.__native_qualified__ = False
+    return wrapper
+
 def _mode(backend):
     """Resolve the backend policy: "python", "auto" or "rust" (required).
 
@@ -107,23 +143,23 @@ def _mode(backend):
     turn into empty results.) Only an invalid explicit ``backend`` argument,
     a programming error, raises.
     """
-    if backend not in {"auto", "python", "rust"}:
-        raise ValueError("backend must be 'auto', 'python', or 'rust'")
+    backend = _normalize_backend(backend)
     if backend != "auto":
         return backend
     scoped = _BACKEND_SCOPE.get()
     if scoped is not None:
         return scoped
     value = os.environ.get("RAS_COMMANDER_FAST_HDF", "auto").strip().lower()
-    if value in {"0", "off", "false", "python"}:
+    if value in {"h5py", "0", "off", "false", "python"}:
         return "python"
-    if value in {"required", "rust"}:
+    if value in {"native", "required", "rust"}:
         return "rust"
     if value not in {"", "auto", "1", "on", "true"} and value not in _warned_modes:
         _warned_modes.add(value)
         logger.warning(
             "Ignoring unrecognised RAS_COMMANDER_FAST_HDF=%r; using 'auto'. "
-            "Valid values: auto (default), 0/off/false/python, required/rust.", value)
+            "Valid values: auto (default), h5py, native "
+            "(legacy aliases: 0/off/false/python, required/rust).", value)
     return "auto"
 
 
@@ -692,6 +728,7 @@ def reraise_required(exc: BaseException, backend: str = "auto") -> None:
     """
     if not isinstance(exc, FastHdfError):
         return
+    backend = _normalize_backend(backend)
     if backend == "rust" or (backend == "auto" and native_required()):
         raise exc
 
@@ -1068,10 +1105,15 @@ def _native_mesh_polygons(module, mode, hdf_path, backend, threads, strict):
 
 
 @log_call
-def mesh_polygons(hdf_path, *, backend="auto", threads=None, strict=False):
-    """Extract the established mesh GeoDataFrame, with explicit backend control."""
+def mesh_polygons(hdf_path, *, backend="auto", threads=None, strict=False, diagnostics=False):
+    """Extract the established mesh GeoDataFrame, with explicit backend control.
+
+    ``backend`` takes the public engine values (``auto``/``h5py``/``native``);
+    see :meth:`HdfMesh.get_mesh_cell_polygons` for ``diagnostics``.
+    """
     from .hdf.HdfMesh import HdfMesh
-    return HdfMesh.get_mesh_cell_polygons(hdf_path, backend=backend, threads=threads, strict=strict)
+    return HdfMesh.get_mesh_cell_polygons(hdf_path, engine=backend, threads=threads,
+                                          strict=strict, diagnostics=diagnostics)
 
 
 def _property_values(values, count, name):

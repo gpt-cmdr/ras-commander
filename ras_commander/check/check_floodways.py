@@ -19,6 +19,7 @@ from .thresholds import ValidationThresholds, get_default_thresholds
 from .messages import get_message_template, get_help_text, format_message
 from . import _utils
 from .check_structures import CheckStructures
+from ..fast_hdf import h5py_until_qualified
 
 logger = get_logger(__name__)
 
@@ -896,6 +897,7 @@ class CheckFloodways:
         return messages
 
     @staticmethod
+    @h5py_until_qualified
     def _get_encroachment_parameters(
         plan_hdf: Path,
         floodway_profile: str
@@ -953,6 +955,7 @@ class CheckFloodways:
             return None
 
     @staticmethod
+    @h5py_until_qualified
     def _check_floodway_boundary_conditions(
         plan_hdf: Path,
         base_profile: str,
@@ -1634,6 +1637,7 @@ class CheckFloodways:
         return messages
 
     @staticmethod
+    @h5py_until_qualified
     def _check_floodway_lateral_weirs(
         plan_hdf: Path,
         geom_hdf: Path,

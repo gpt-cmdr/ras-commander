@@ -29,7 +29,7 @@ def real(request):
     attrs = HdfBase.get_attrs(path, '/')
     assert f'HEC-RAS {version}' in attrs['File Version']
     start=time.perf_counter()
-    cells=HdfMesh.get_mesh_cell_polygons(path,backend='python')
+    cells=HdfMesh.get_mesh_cell_polygons(path,engine='h5py')
     values=HdfResultsMesh.get_mesh_max_ws(path,round_to='1ms')
     keys=['mesh_name','cell_id']
     selected=cells.groupby('mesh_name',sort=False).head(128)

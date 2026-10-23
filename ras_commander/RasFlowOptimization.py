@@ -26,6 +26,7 @@ from .LoggingConfig import get_logger
 from .RasPlan import RasPlan
 from .RasPrj import ras
 from .RasUtils import RasUtils
+from .fast_hdf import h5py_until_qualified
 
 logger = get_logger(__name__)
 
@@ -1184,6 +1185,7 @@ class RasFlowOptimization:
         return ""
 
     @staticmethod
+    @h5py_until_qualified
     def _extract_trial_results_from_hdf(hdf_path: Path) -> pd.DataFrame:
         rows = []
         with h5py.File(hdf_path, "r") as hdf_file:

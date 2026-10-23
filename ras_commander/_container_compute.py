@@ -28,6 +28,7 @@ import numpy as np
 
 from .LoggingConfig import get_logger
 from .fast_hdf import read_attr, read_typed
+from .fast_hdf import h5py_until_qualified
 
 logger = get_logger(__name__)
 JOB_SCHEMA = "ras-commander-job/v1"
@@ -216,6 +217,7 @@ def _text(value):
     return str(value)
 
 
+@h5py_until_qualified
 def _prepared_window(path):
     from .hdf.HdfUtils import HdfUtils
 

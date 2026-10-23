@@ -1,4 +1,4 @@
-"""Public-API qualification: HdfFluvialPluvial engine="python" vs engine="native".
+"""Public-API qualification: HdfFluvialPluvial engine="h5py" vs engine="native".
 
 Runs both engines on one immutable computed plan HDF, interleaved, and writes a
 JSON record of semantic equality (classes, geometry, identity attributes, CRS,

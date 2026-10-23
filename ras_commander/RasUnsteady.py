@@ -132,6 +132,7 @@ import numpy as np
 import re
 from typing import TYPE_CHECKING, Union, Optional, Any, Tuple, Dict, List, Sequence
 from ._ras_text import _normalize_ras_newlines, _split_ras_records, _write_ras_text
+from .fast_hdf import h5py_until_qualified
 
 if TYPE_CHECKING:
     from .ComputeResults import PrecipRasterImportResult
@@ -6093,6 +6094,7 @@ class RasUnsteady:
         precip_grp.attrs["Ratio"] = np.float32(ratio)
 
     @staticmethod
+    @h5py_until_qualified
     def _preflight_precipitation_ratio(
         unsteady_path: Path,
         capabilities: Optional["GriddedPrecipitationCapabilities"],

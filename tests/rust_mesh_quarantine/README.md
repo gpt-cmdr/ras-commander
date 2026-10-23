@@ -27,9 +27,9 @@ threads=None, *, strict=True, return_diagnostics=False)`
 
 | Mode | Behaviour |
 |------|-----------|
-| auto (`RAS_COMMANDER_FAST_HDF` unset/`auto`, `backend="auto"`) | Exactly the Python reference outcome: same frame, CRS and `cell_polygon_diagnostics`, or the same exception. Any native refusal, corruption or invalid geometry falls back to h5py/Python. |
-| required (`=required`, or `backend="rust"`) | Never falls back to Python polygonize. Valid and quarantined meshes return the reference frame and diagnostics. Structural corruption raises `FastHdfError` (non-strict); with `strict=True` every native `TopologyError`, structural included, raises the documented strict `MeshCellPolygonError`. A missing/incompatible extension raises `FastHdfError`. |
-| python (`=0`, or `backend="python"`) | Never imports or calls the extension. |
+| auto (`RAS_COMMANDER_FAST_HDF` unset/`auto`, `engine="auto"`) | Exactly the Python reference outcome: same frame, CRS and `cell_polygon_diagnostics`, or the same exception. Any native refusal, corruption or invalid geometry falls back to h5py/Python. |
+| native (`=native`/`required`, or `engine="native"`) | Never falls back to Python polygonize. Valid and quarantined meshes return the reference frame and diagnostics. Structural corruption raises `FastHdfError` (non-strict); with `strict=True` every native `TopologyError`, structural included, raises the documented strict `MeshCellPolygonError`. A missing/incompatible extension raises `FastHdfError`. |
+| h5py (`=h5py`/`0`, or `engine="h5py"`) | Never imports or calls the extension. |
 
 Native diagnostics records keep the Python reference schema exactly:
 `mesh_name, cell_id, face_count, polygon_count, status, reason_code, face_ids,
@@ -44,8 +44,8 @@ The regression suite needs no fixtures and passes in all three modes; tests
 that need the extension skip cleanly when it is not importable:
 
     python -m pytest tests/rust_mesh_quarantine/test_quarantine.py -q
-    RAS_COMMANDER_FAST_HDF=0 python -m pytest tests/rust_mesh_quarantine/test_quarantine.py -q
-    RAS_COMMANDER_FAST_HDF=required python -m pytest tests/rust_mesh_quarantine/test_quarantine.py -q
+    RAS_COMMANDER_FAST_HDF=h5py python -m pytest tests/rust_mesh_quarantine/test_quarantine.py -q
+    RAS_COMMANDER_FAST_HDF=native python -m pytest tests/rust_mesh_quarantine/test_quarantine.py -q
 
 Synthetic fixtures store `Projection` as a fixed-length ASCII string, as
 HEC-RAS does; the native attribute reader refuses vlen/non-ASCII metadata

@@ -247,13 +247,13 @@ def test_auto_polygons_equal_python_when_native_fails(tmp_path, monkeypatch, nat
         error = native_module.CorruptDataError("checksum")
     monkeypatch.delenv("RAS_COMMANDER_FAST_HDF", raising=False)
     path = _write_polygon_mesh(tmp_path / "clean.g01.hdf", CLEAN_CELLS)
-    reference = HdfMesh.get_mesh_cell_polygons(path, strict=strict, backend="python")
+    reference = HdfMesh.get_mesh_cell_polygons(path, strict=strict, engine="h5py", diagnostics=True)
 
     def failing(*args, **kwargs):
         raise error
 
     monkeypatch.setattr(fast_hdf, "_assemble", failing)
-    _same_polygons(HdfMesh.get_mesh_cell_polygons(path, strict=strict), reference)
+    _same_polygons(HdfMesh.get_mesh_cell_polygons(path, strict=strict, diagnostics=True), reference)
 
 
 def test_native_failure_still_raises_in_required_mode(tmp_path, monkeypatch, native_module):
@@ -261,7 +261,7 @@ def test_native_failure_still_raises_in_required_mode(tmp_path, monkeypatch, nat
     path = _write_polygon_mesh(tmp_path / "clean.g01.hdf", CLEAN_CELLS)
     monkeypatch.setattr(fast_hdf, "_assemble", lambda *a, **k: (_ for _ in ()).throw(RuntimeError("x")))
     with pytest.raises(fast_hdf.FastHdfError):
-        HdfMesh.get_mesh_cell_polygons(path, backend="rust")
+        HdfMesh.get_mesh_cell_polygons(path, engine="native")
     monkeypatch.setenv("RAS_COMMANDER_FAST_HDF", "required")
     with pytest.raises(fast_hdf.FastHdfError):
         HdfMesh.get_mesh_cell_polygons(path)
@@ -271,11 +271,11 @@ def test_auto_polygons_reproduce_main_on_corrupt_topology(tmp_path, monkeypatch,
     monkeypatch.delenv("RAS_COMMANDER_FAST_HDF", raising=False)
     path = _write_polygon_mesh(tmp_path / "broken.g01.hdf", BROKEN_CELLS)
     _same_polygons(
-        HdfMesh.get_mesh_cell_polygons(path),
-        HdfMesh.get_mesh_cell_polygons(path, backend="python"),
+        HdfMesh.get_mesh_cell_polygons(path, diagnostics=True),
+        HdfMesh.get_mesh_cell_polygons(path, engine="h5py", diagnostics=True),
     )
     with pytest.raises(MeshCellPolygonError) as python_error:
-        HdfMesh.get_mesh_cell_polygons(path, strict=True, backend="python")
+        HdfMesh.get_mesh_cell_polygons(path, strict=True, engine="h5py")
     with pytest.raises(MeshCellPolygonError) as auto_error:
         HdfMesh.get_mesh_cell_polygons(path, strict=True)
     assert str(auto_error.value) == str(python_error.value)
@@ -287,9 +287,9 @@ def test_auto_polygons_on_unreadable_file_equal_python(tmp_path, monkeypatch, na
     path = tmp_path / "not-hdf.g01.hdf"
     path.write_bytes(b"this is not an HDF5 file")
     outcomes = []
-    for backend in ("python", "auto"):
+    for engine in ("h5py", "auto"):
         try:
-            result = HdfMesh.get_mesh_cell_polygons(path, strict=strict, backend=backend)
+            result = HdfMesh.get_mesh_cell_polygons(path, strict=strict, engine=engine, diagnostics=True)
             outcomes.append(("result", result.empty, result.attrs))
         except Exception as exc:  # noqa: BLE001 - compare whatever main did
             outcomes.append(("raise", type(exc).__name__, str(exc)))
@@ -307,7 +307,7 @@ def test_invalid_fast_hdf_value_behaves_as_auto_and_warns_once(tmp_path, monkeyp
     path = _write_polygon_mesh(tmp_path / "clean.g01.hdf", CLEAN_CELLS)
     monkeypatch.delenv("RAS_COMMANDER_FAST_HDF", raising=False)
     expected_names = HdfMesh.get_mesh_area_names(path)
-    expected = HdfMesh.get_mesh_cell_polygons(path, backend="python")
+    expected = HdfMesh.get_mesh_cell_polygons(path, engine="h5py")
     monkeypatch.setenv("RAS_COMMANDER_FAST_HDF", value)
     with caplog.at_level("WARNING", logger="ras_commander.fast_hdf"):
         assert fast_hdf._mode("auto") == "auto"
@@ -323,7 +323,8 @@ def test_valid_fast_hdf_values_do_not_warn(monkeypatch, caplog):
     monkeypatch.setattr(fast_hdf, "_warned_modes", set())
     expected = {"": "auto", "auto": "auto", " AUTO ": "auto", "1": "auto", "on": "auto", "true": "auto",
                 "0": "python", "off": "python", "false": "python", "python": "python",
-                "required": "rust", "rust": "rust"}
+                "required": "rust", "rust": "rust", "h5py": "python", " H5PY ": "python",
+                "native": "rust", "Native": "rust"}
     with caplog.at_level("WARNING", logger="ras_commander.fast_hdf"):
         for value, mode in expected.items():
             monkeypatch.setenv("RAS_COMMANDER_FAST_HDF", value)
@@ -331,10 +332,12 @@ def test_valid_fast_hdf_values_do_not_warn(monkeypatch, caplog):
     assert not caplog.records
 
 
-def test_invalid_explicit_backend_still_raises():
+def test_invalid_explicit_backend_still_raises(tmp_path):
     from ras_commander import fast_hdf
-    with pytest.raises(ValueError, match="backend must be"):
+    with pytest.raises(ValueError, match="engine must be 'auto', 'h5py', or 'native'"):
         fast_hdf._mode("fast")
+    with pytest.raises(ValueError, match="engine must be"):
+        HdfMesh.get_mesh_cell_polygons(_write_polygon_mesh(tmp_path / "clean.g01.hdf", CLEAN_CELLS), engine="fast")
 
 
 # ---------------------------------------------------------------------------

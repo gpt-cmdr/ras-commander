@@ -1,11 +1,13 @@
 """HdfFluvialPluvial engine= policy against RAS_COMMANDER_FAST_HDF (API re-audit P2-N2, P2-N3).
 
-- The default ``engine="python"`` keeps main's failure policy (logged ERROR and
-  an empty GeoDataFrame) in python and auto modes, but required mode surfaces a
-  routed read's ``FastHdfError`` instead of swallowing it (P2-N2).
-- ``engine="auto"`` resolves through ``fast_hdf._mode`` (P2-N3): ``0`` never
-  tries native, ``auto`` tries native and falls back, ``required`` is native or
-  ``FastHdfError``. Explicit ``"python"``/``"native"`` ignore the environment.
+- ``engine="h5py"`` (the reference) keeps main's failure policy (logged ERROR
+  and an empty GeoDataFrame) in h5py and auto modes, but native (required) mode
+  surfaces a routed read's ``FastHdfError`` instead of swallowing it (P2-N2).
+- ``engine="auto"`` (the default) resolves through ``fast_hdf._mode`` (P2-N3):
+  ``h5py``/``0`` never tries native, ``auto`` tries native and falls back to the
+  reference on any native error, ``native``/``required`` is native or
+  ``FastHdfError``. Explicit ``"h5py"``/``"native"`` ignore the environment.
+  ``"python"`` is not a fluvial engine.
 - The native fluvial engine uses fast_hdf's extension availability and API
   version check.
 
@@ -56,41 +58,44 @@ def _native(monkeypatch, method, outcome):
     return calls
 
 
-# --- P2-N2: default python engine in required mode ------------------------------
+# --- P2-N2: explicit h5py engine ---------------------------------------------
+# engine="h5py" runs the reference with every nested read on h5py, so a routed
+# FastHdfError cannot arise; any failure keeps main's policy (empty frame).
 
+@pytest.mark.parametrize("mode", ["0", "h5py", "auto", "required", "native"])
 @pytest.mark.parametrize("method", sorted(METHODS))
-def test_python_engine_reraises_fast_hdf_error_in_required_mode(plan, monkeypatch, method):
-    monkeypatch.setenv("RAS_COMMANDER_FAST_HDF", "required")
-    _python_fails(monkeypatch, FastHdfError("controlled native refusal"))
-    with pytest.raises(FastHdfError, match="controlled native refusal"):
-        getattr(HdfFluvialPluvial, method)(plan)
-
-
-@pytest.mark.parametrize("mode", ["0", "auto"])
-@pytest.mark.parametrize("method", sorted(METHODS))
-def test_python_engine_keeps_empty_result_outside_required_mode(plan, monkeypatch, method, mode):
-    # In python/auto mode a FastHdfError cannot reach here from the routed
-    # readers; if one did, main's policy (empty frame) applies unchanged.
+def test_h5py_engine_keeps_empty_result_in_every_mode(plan, monkeypatch, method, mode):
     monkeypatch.setenv("RAS_COMMANDER_FAST_HDF", mode)
     _python_fails(monkeypatch, FastHdfError("controlled native refusal"))
-    out = getattr(HdfFluvialPluvial, method)(plan)
+    out = getattr(HdfFluvialPluvial, method)(plan, engine="h5py")
     assert isinstance(out, gpd.GeoDataFrame) and out.empty and not out.attrs
 
 
-@pytest.mark.parametrize("mode", ["0", "auto", "required"])
 @pytest.mark.parametrize("method", sorted(METHODS))
-def test_python_engine_ordinary_failure_is_empty_in_every_mode(plan, monkeypatch, method, mode):
+def test_h5py_engine_forces_h5py_reads_under_native_env(plan, monkeypatch, method):
+    from ras_commander import fast_hdf
+    monkeypatch.setenv("RAS_COMMANDER_FAST_HDF", "native")
+    seen = []
+    original = fast_hdf._mode
+    monkeypatch.setattr(fast_hdf, "_mode", lambda backend: seen.append(original(backend)) or seen[-1])
+    getattr(HdfFluvialPluvial, method)(plan, engine="h5py")
+    assert seen and set(seen) == {"python"}
+
+
+@pytest.mark.parametrize("mode", ["0", "h5py", "auto", "required", "native"])
+@pytest.mark.parametrize("method", sorted(METHODS))
+def test_h5py_engine_ordinary_failure_is_empty_in_every_mode(plan, monkeypatch, method, mode):
     monkeypatch.setenv("RAS_COMMANDER_FAST_HDF", mode)
     _python_fails(monkeypatch, RuntimeError("controlled ordinary failure"))
-    out = getattr(HdfFluvialPluvial, method)(plan)
+    out = getattr(HdfFluvialPluvial, method)(plan, engine="h5py")
     assert isinstance(out, gpd.GeoDataFrame) and out.empty and not out.attrs
 
 
 # --- P2-N3: engine="auto" follows RAS_COMMANDER_FAST_HDF -----------------------------
 
-@pytest.mark.parametrize("mode", ["0", "off", "false", "python"])
+@pytest.mark.parametrize("mode", ["h5py", "0", "off", "false", "python"])
 @pytest.mark.parametrize("method", sorted(METHODS))
-def test_auto_engine_never_tries_native_in_python_mode(plan, monkeypatch, method, mode):
+def test_auto_engine_never_tries_native_in_h5py_mode(plan, monkeypatch, method, mode):
     monkeypatch.setenv("RAS_COMMANDER_FAST_HDF", mode)
     calls = _native(monkeypatch, method, AssertionError("native must not run"))
     _python_fails(monkeypatch, RuntimeError("reference ran"))
@@ -98,7 +103,7 @@ def test_auto_engine_never_tries_native_in_python_mode(plan, monkeypatch, method
     assert calls == []
     assert out.empty
     engine = out.attrs["fluvial_engine"]
-    assert engine["requested"] == "auto" and engine["used"] == "python"
+    assert engine["requested"] == "auto" and engine["used"] == "h5py"
     assert "RAS_COMMANDER_FAST_HDF" in engine["fallback_reason"]
 
 
@@ -110,12 +115,41 @@ def test_auto_engine_falls_back_in_auto_mode(plan, monkeypatch, method):
     out = getattr(HdfFluvialPluvial, method)(plan, engine="auto")
     assert len(calls) == 1
     assert out.attrs["fluvial_engine"] == {
-        "requested": "auto", "used": "python", "fallback_reason": "controlled unsupported"}
+        "requested": "auto", "used": "h5py", "fallback_reason": "controlled unsupported"}
 
 
 @pytest.mark.parametrize("method", sorted(METHODS))
-def test_auto_engine_requires_native_in_required_mode(plan, monkeypatch, method):
-    monkeypatch.setenv("RAS_COMMANDER_FAST_HDF", "required")
+def test_auto_engine_falls_back_on_any_native_error(plan, monkeypatch, method):
+    # Not only FluvialNativeUnsupportedError: auto gives the reference outcome
+    # (here main's logged failure and empty frame) whatever the native path raised.
+    monkeypatch.setenv("RAS_COMMANDER_FAST_HDF", "auto")
+    calls = _native(monkeypatch, method, RuntimeError("controlled native crash"))
+    _python_fails(monkeypatch, RuntimeError("reference ran"))
+    reference = getattr(HdfFluvialPluvial, method)(plan, engine="h5py")
+    out = getattr(HdfFluvialPluvial, method)(plan, engine="auto")
+    assert len(calls) == 1
+    assert out.attrs["fluvial_engine"] == {
+        "requested": "auto", "used": "h5py", "fallback_reason": "controlled native crash"}
+    assert out.empty and reference.empty and list(out.columns) == list(reference.columns)
+    with pytest.raises(RuntimeError, match="controlled native crash"):
+        getattr(HdfFluvialPluvial, method)(plan, engine="native")
+    assert len(calls) == 2
+
+
+@pytest.mark.parametrize("mode", ["required", "native"])
+@pytest.mark.parametrize("method", sorted(METHODS))
+def test_auto_engine_propagates_native_error_in_required_mode(plan, monkeypatch, method, mode):
+    monkeypatch.setenv("RAS_COMMANDER_FAST_HDF", mode)
+    _native(monkeypatch, method, RuntimeError("controlled native crash"))
+    _python_fails(monkeypatch, AssertionError("reference must not run"))
+    with pytest.raises(RuntimeError, match="controlled native crash"):
+        getattr(HdfFluvialPluvial, method)(plan, engine="auto")
+
+
+@pytest.mark.parametrize("method", sorted(METHODS))
+@pytest.mark.parametrize("mode", ["required", "native"])
+def test_auto_engine_requires_native_in_required_mode(plan, monkeypatch, method, mode):
+    monkeypatch.setenv("RAS_COMMANDER_FAST_HDF", mode)
     calls = _native(monkeypatch, method, FluvialNativeUnsupportedError("controlled unsupported"))
     _python_fails(monkeypatch, AssertionError("reference must not run"))
     with pytest.raises(FastHdfError, match="controlled unsupported") as info:
@@ -134,7 +168,7 @@ def test_auto_engine_uses_native_result(plan, monkeypatch, method, mode):
     assert out.attrs["fluvial_engine"] == {"requested": "auto", "used": "native", "fallback_reason": None}
 
 
-@pytest.mark.parametrize("mode", ["0", "auto", "required"])
+@pytest.mark.parametrize("mode", ["0", "h5py", "auto", "required", "native"])
 @pytest.mark.parametrize("method", sorted(METHODS))
 def test_explicit_engines_ignore_the_environment(plan, monkeypatch, method, mode):
     monkeypatch.setenv("RAS_COMMANDER_FAST_HDF", mode)
@@ -143,14 +177,25 @@ def test_explicit_engines_ignore_the_environment(plan, monkeypatch, method, mode
         getattr(HdfFluvialPluvial, method)(plan, engine="native")
     assert len(calls) == 1
     _python_fails(monkeypatch, RuntimeError("reference ran"))
-    out = getattr(HdfFluvialPluvial, method)(plan, engine="python")
+    out = getattr(HdfFluvialPluvial, method)(plan, engine="h5py")
     assert len(calls) == 1 and out.empty and not out.attrs
 
 
-def test_unknown_engine_is_still_rejected(plan, monkeypatch):
+@pytest.mark.parametrize("engine", ["rust", "python"])
+@pytest.mark.parametrize("method", sorted(METHODS))
+def test_unknown_engine_is_still_rejected(plan, monkeypatch, method, engine):
+    # Legacy backend spellings are not fluvial engines ("python" was the old default).
     monkeypatch.setenv("RAS_COMMANDER_FAST_HDF", "0")
     with pytest.raises(ValueError, match="engine must be one of"):
-        HdfFluvialPluvial.generate_fluvial_pluvial_polygons(plan, engine="rust")
+        getattr(HdfFluvialPluvial, method)(plan, engine=engine)
+
+
+def test_default_engine_is_auto(plan, monkeypatch):
+    monkeypatch.setenv("RAS_COMMANDER_FAST_HDF", "auto")
+    for method in sorted(METHODS):
+        _native(monkeypatch, method, None)
+        out = getattr(HdfFluvialPluvial, method)(plan)
+        assert out.attrs["fluvial_engine"] == {"requested": "auto", "used": "native", "fallback_reason": None}
 
 
 # --- P2-N3: the native fluvial engine shares fast_hdf's extension gate ---------------
@@ -173,7 +218,7 @@ def test_incompatible_extension_auto_falls_back(plan, monkeypatch, incompatible_
     monkeypatch.setenv("RAS_COMMANDER_FAST_HDF", "auto")
     _python_fails(monkeypatch, RuntimeError("reference ran"))
     out = getattr(HdfFluvialPluvial, method)(plan, engine="auto")
-    assert out.attrs["fluvial_engine"]["used"] == "python"
+    assert out.attrs["fluvial_engine"]["used"] == "h5py"
     assert "version 11 is required" in out.attrs["fluvial_engine"]["fallback_reason"]
 
 

@@ -44,6 +44,7 @@ from ..LoggingConfig import get_logger
 from .HdfBase import HdfBase
 from .HdfUtils import HdfUtils
 from ..fast_hdf import read_attr, read_typed, reraise_required
+from ..fast_hdf import h5py_until_qualified
 
 logger = get_logger(__name__)
 
@@ -1032,6 +1033,7 @@ class HdfLandCover:
     @staticmethod
     @log_call
     @standardize_input(file_type='geom_hdf')
+    @h5py_until_qualified
     def compute_final_mannings_raster(
         hdf_path: Path,
         landcover_hdf_path: Optional[Union[str, Path]] = None,
@@ -1059,6 +1061,7 @@ class HdfLandCover:
     @staticmethod
     @log_call
     @standardize_input(file_type='geom_hdf')
+    @h5py_until_qualified
     def estimate_final_mannings_raster(
         hdf_path: Path,
         landcover_hdf_path: Optional[Union[str, Path]] = None,

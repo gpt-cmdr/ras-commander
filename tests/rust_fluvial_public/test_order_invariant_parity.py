@@ -3,9 +3,9 @@
 The Python reference is order-invariant: it depends only on stored mesh and
 results, never on cell-polygon row order, ring direction or ring start vertex.
 The native engine never reads the polygon frame, so for every presentation
-engine="native" must equal engine="python" exactly (same rows, attributes,
+engine="native" must equal engine="h5py" (the reference) exactly (same rows, attributes,
 topologically equal polygons; row-wise identical boundary lines) or raise
-FluvialNativeUnsupportedError, and engine="auto" must equal Python.
+FluvialNativeUnsupportedError, and engine="auto" must equal the reference.
 
 Fixture: BaldEagleDamBrk.p18.hdf under RAS_FLUVIAL_PUBLIC_FIXTURES (two meshes,
 4425 cells, conflicting seeds at delta_t=1 and 12). Missing fixture skips.
@@ -34,8 +34,8 @@ def _default_backend_policy():
     """Pin RAS_COMMANDER_FAST_HDF=auto for this native-engine qualification module.
 
     engine="auto" follows the backend policy (API re-audit P2-N3): it runs the
-    Python reference under ``0`` and raises FastHdfError instead of falling back
-    under ``required``. These tests qualify native/auto parity under the default
+    h5py reference under ``h5py`` and raises FastHdfError instead of falling back
+    under ``native``. These tests qualify native/auto parity under the default
     policy; tests/test_fluvial_engine_policy.py covers the other policies.
     """
     with pytest.MonkeyPatch.context() as patch:
@@ -107,7 +107,7 @@ def assert_lines_equal(actual, expected):
 
 @pytest.fixture(scope="module")
 def baselines(hdf, cells):
-    return {(kind, dt): run(kind, hdf, cells, "python", delta_t=dt)
+    return {(kind, dt): run(kind, hdf, cells, "h5py", delta_t=dt)
             for kind in ("polygons", "boundary") for dt in (1, 12)}
 
 
@@ -116,7 +116,7 @@ def baselines(hdf, cells):
 def test_polygons_native_and_auto_equal_python_for_any_presentation(hdf, cells, baselines, how, delta_t):
     frame = present(cells, how)
     reference = baselines[("polygons", delta_t)]
-    python = run("polygons", hdf, frame, "python", delta_t=delta_t)
+    python = run("polygons", hdf, frame, "h5py", delta_t=delta_t)
     assert_polygons_equal(python, reference)
     native = run("polygons", hdf, frame, "native", delta_t=delta_t)
     assert native.attrs["fluvial_engine"]["used"] == "native"
@@ -133,7 +133,7 @@ def test_polygons_native_and_auto_equal_python_for_any_presentation(hdf, cells, 
 def test_boundary_native_and_auto_equal_python_for_any_presentation(hdf, cells, baselines, how, delta_t):
     frame = present(cells, how)
     reference = baselines[("boundary", delta_t)]
-    python = run("boundary", hdf, frame, "python", delta_t=delta_t)
+    python = run("boundary", hdf, frame, "h5py", delta_t=delta_t)
     assert_lines_equal(python, reference)
     for engine in ("native", "auto"):
         result = run("boundary", hdf, frame, engine, delta_t=delta_t)
@@ -146,7 +146,7 @@ def test_delta_t_zero_native_raises_auto_equals_python(hdf, cells):
     frame = present(cells, "rows_shuffled")
     with pytest.raises(FluvialNativeUnsupportedError, match="delta_t=0"):
         run("polygons", hdf, frame, "native", delta_t=0)
-    python = run("polygons", hdf, frame, "python", delta_t=0)
+    python = run("polygons", hdf, frame, "h5py", delta_t=0)
     auto = run("polygons", hdf, frame, "auto", delta_t=0)
-    assert auto.attrs["fluvial_engine"]["used"] == "python"
+    assert auto.attrs["fluvial_engine"]["used"] == "h5py"
     assert_polygons_equal(auto, python)

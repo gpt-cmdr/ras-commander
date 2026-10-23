@@ -24,6 +24,7 @@ from .RasPlan import RasPlan
 from .RasPrj import ras
 from .RasUtils import RasUtils
 from . import _land_classification_helper as _lch
+from .fast_hdf import h5py_until_qualified
 
 logger = get_logger(__name__)
 
@@ -684,6 +685,7 @@ def _build_attribute_array(records: Sequence[Dict[str, Any]], feature_kind: str)
     raise ValueError(f"Unsupported feature kind: {feature_kind}")
 
 
+@h5py_until_qualified
 def _read_feature_table(
     hdf_path: Optional[Path],
     group_path: str,
