@@ -1245,6 +1245,57 @@ class RasMap:
 
     @staticmethod
     @log_call
+    def plan_geometry_area_association_sync(
+        geometry_hdf: str | Path, mesh_names: Sequence[str] | None = None,
+    ) -> dict:
+        """Inspect stale area links against current geometry-wide sidecars.
+
+        Args:
+            geometry_hdf: Owned compiled geometry-only HDF path (str or Path).
+            mesh_names: Selected exact area names, or all compiled areas.
+
+        Returns:
+            Read-only identity-bound plan of filename/layer changes. Current
+            geometry links must exist. Area-only links are preserved when no
+            geometry-wide filename is declared. A stale area layer name is
+            removed when the current geometry declares a filename without one.
+            Coordinates, CRS, calibration/override tables and mesh data are
+            unchanged; this API does not run native preprocessing.
+
+        Raises:
+            ValueError: Invalid area selection or geometry HDF.
+            FileNotFoundError: Geometry or current associated input is absent.
+            RuntimeError: Geometry changes during inspection.
+        """
+        from ._area_association_sync import _plan
+
+        return _plan(geometry_hdf, mesh_names)
+
+    @staticmethod
+    @log_call
+    def apply_geometry_area_association_sync(plan: dict) -> dict:
+        """Apply a reviewed area-link plan atomically with a numbered backup.
+
+        Args:
+            plan: Unchanged plan from plan_geometry_area_association_sync.
+
+        Returns:
+            Plan plus applied/unchanged status and final identity. An applied
+            change includes its backup path; unchanged files need no backup.
+            Only selected area filename/layer attributes change. Staged readback
+            must match the plan before replacement; native completion follows.
+
+        Raises:
+            ValueError: Invalid plan or selected geometry.
+            RuntimeError: Input identity or recomputed plan differs.
+            OSError: Backup or atomic replacement fails.
+        """
+        from ._area_association_sync import _apply
+
+        return _apply(plan)
+
+    @staticmethod
+    @log_call
     def clear_geometry_infiltration(geometry_hdf: str | Path) -> Path:
         """Clear infiltration association metadata on a cloned .gNN.hdf.
 
