@@ -259,6 +259,11 @@ removed before v1.2.0:
 - `iter_mesh_timeseries(hdf_path, mesh_name, var, *, time_selection=None,
   spatial_selection=None, batch_size=None, max_chunk_bytes=16777216)` - Stream
   untruncated, bounded, time-major xarray batches
+- `inspect_mesh_series_raw(hdf_path, mesh_name, var, *, include_values=False)` -
+  Untyped diagnostic of one stored Base Output mesh series: dataset identity,
+  shape, dtype, attributes, Time row match, geometry counts and the typed
+  readers' refusal reason. Physical domain and units are always reported as
+  unqualified; see [Non-Newtonian rheology outputs](#non-newtonian-rheology-outputs)
 
 - `get_mesh_cells_timeseries(hdf_path, mesh_names=None, var=None, truncate=False, ras_object=None)` - Dictionary of mesh Datasets; select cells/faces afterward
 - `get_mesh_faces_timeseries(hdf_path, mesh_name, truncate=True)` - Available face variables as one Dataset; select `face_velocity` and `face_id` afterward
@@ -293,6 +298,32 @@ read only. The fallback is computed only in memory and does not create or write
 `Depth` in the HDF. Temporary synthetic test HDFs are test artifacts; they are
 not producer output and are labeled separately from pre-existing HEC-RAS result
 fixtures.
+
+#### Non-Newtonian rheology outputs
+
+Native HEC-RAS 6.6 and 7.0.1 Bingham runs can write three optional face-labelled
+series. `Face Yield Stress` and `Face Viscous Stress` have one column per face and
+are read by `get_mesh_timeseries()`, lazy views and `iter_mesh_timeseries()` as
+`(time, face_id)` series with their stored `lb/ft^2` units in US-Customary output.
+`Face Mixture Dynamic Viscosity` is stored with `Location=Faces` and
+`Columns=Faces`, but in the inspected outputs its width equals the stored cell
+count (physical plus ghost cells), not the face count. No producer contract
+establishes its physical domain or the meaning of its stored `lb/ft^2*s` label,
+so the typed readers refuse it with `ValueError` and face/cell discovery skips it.
+`inspect_mesh_series_raw()` reports the stored dataset and the refusal reason
+without assigning cell or face identities, timestamps or converted units:
+
+```python
+report = HdfResultsMesh.inspect_mesh_series_raw(
+    plan_hdf, "DebrisFlowArea", "Face Mixture Dynamic Viscosity"
+)
+report["typed_status"], report["refusal_reason"]  # "refused", "...contradicts geometry count..."
+report["shape"], report["geometry_counts"]         # stored width vs stored cells/faces
+report["physical_domain"], report["units_interpretation"]  # always "unqualified"
+```
+
+Readable rheology series are a file-format result. They do not establish
+hydraulic convergence or engineering acceptance of a debris-flow model.
 
 **Ghost cells.** HEC-RAS writes 2D cell results for the physical cells
 followed by ghost cells outside the mesh perimeter. `Geometry/2D Flow
@@ -1030,6 +1061,7 @@ prerequisites and return contracts take precedence over abbreviated summaries.
         - get_profile_line_flow_timeseries
         - get_profile_line_flow_timeseries_legacy
         - get_profile_line_peak_flow
+        - inspect_mesh_series_raw
         - iter_mesh_timeseries
 
 ### HdfResultView source reference

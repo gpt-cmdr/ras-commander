@@ -45,6 +45,7 @@ Understanding when each return type is used:
 - get_mesh_summary_values(): Get summary values without geometry → pd.DataFrame
 - get_mesh_timeseries(): Get timeseries for one mesh/variable → xr.DataArray
 - iter_mesh_timeseries(): Stream bounded time-major xarray batches
+- inspect_mesh_series_raw(): Untyped stored identity/attrs/refusal diagnostic → dict
 - get_mesh_faces_timeseries(): Get face variables for one mesh → xr.Dataset
 - get_mesh_cells_timeseries(): Get cell timeseries for all meshes → Dict[str, xr.Dataset]
 - get_mesh_timeseries_availability(): Report per-dataset series availability → pd.DataFrame
@@ -570,6 +571,156 @@ class HdfResultsMesh:
             batch_size=batch_size,
             max_chunk_bytes=max_chunk_bytes,
         )
+
+    @staticmethod
+    @log_call
+    @standardize_input(file_type='plan_hdf')
+    def inspect_mesh_series_raw(
+        hdf_path: HdfInput,
+        mesh_name: str,
+        var: str,
+        *,
+        include_values: bool = False,
+    ) -> Dict[str, Any]:
+        """Describe one Base Output mesh series exactly as stored, without typing it.
+
+        This is a diagnostic accessor for series that the typed readers refuse,
+        such as a dataset whose stored ``Location`` contradicts its width. It
+        reports the stored identity, shape, dtype and attributes, the canonical
+        Time row count, the stored geometry counts, and the typed-reader outcome
+        with its refusal reason. It never assigns a physical domain or a unit
+        interpretation: ``physical_domain`` and ``units_interpretation`` are
+        always ``"unqualified"``, and a rank-two dataset's axes are
+        ``("raw_row", "raw_column")``. ``time_axis["matches_rows"]`` reports
+        whether the row count equals the canonical Base Output Time axis; no
+        timestamps are attached. Column positions are not cell or face
+        identifiers. No values are
+        converted, relabelled, filtered, broadcast or reconstructed. Use
+        ``get_mesh_timeseries()`` or ``iter_mesh_timeseries()`` for qualified
+        spatial series.
+
+        Args:
+            hdf_path: Plan number, plan-result HDF path, or open HDF handle.
+            mesh_name: Name of the 2D flow area.
+            var: Exact dataset name under the mesh's Base Output Unsteady Time
+                Series group.
+            include_values: Return a copy of the stored array under ``values``
+                (default False). Values keep the stored dtype and are not
+                interpreted.
+
+        Returns:
+            dict with keys ``dataset_path``, ``mesh_name``, ``variable``,
+            ``file_version`` (stored text or None), ``shape``, ``dtype``,
+            ``attrs`` (stored attributes; bytes decoded as UTF-8 when possible),
+            ``stored_location``, ``stored_units``, ``axes``, ``time_axis``
+            (``path``, ``rows``, ``matches_rows``), ``geometry_counts``
+            (``stored_cells``, ``physical_cells``, ``faces``; None when absent),
+            ``typed_status`` (``"qualified"`` or ``"refused"``), ``typed_domain``
+            (the typed readers' ``"cell_id"``, ``"face_id"`` or ``"time"``, or
+            None when refused), ``refusal_reason``, ``physical_domain``,
+            ``units_interpretation`` and ``values`` (None unless requested).
+
+        Raises:
+            ValueError: If the dataset is absent or is not an HDF dataset.
+        """
+        def raw(value: Any) -> Any:
+            if isinstance(value, (bytes, np.bytes_)):
+                try:
+                    return bytes(value).decode("utf-8")
+                except UnicodeDecodeError:
+                    return bytes(value)
+            if isinstance(value, np.ndarray):
+                return [raw(item) for item in value.tolist()] if value.ndim else raw(value.item())
+            if isinstance(value, np.generic):
+                return value.item()
+            return value
+
+        def stored_text(attrs: Dict[str, Any], key: str) -> Optional[str]:
+            value = attrs.get(key)
+            if isinstance(value, list) and len(value) == 1:
+                value = value[0]
+            return value if isinstance(value, str) else None
+
+        dataset_path = HdfResultsMesh._get_mesh_timeseries_output_path(mesh_name, var)
+        time_path = (
+            "Results/Unsteady/Output/Output Blocks/Base Output/"
+            "Unsteady Time Series/Time"
+        )
+        source_path = Path(hdf_path)
+        stat_before = source_path.stat()
+        with h5py.File(source_path, "r") as hdf_file:
+            dataset = hdf_file.get(dataset_path)
+            if not isinstance(dataset, h5py.Dataset):
+                raise ValueError(f"Mesh series dataset not found: /{dataset_path}")
+            attrs = {key: raw(value) for key, value in dataset.attrs.items()}
+            version = hdf_file.attrs.get("File Version")
+            time = hdf_file.get(time_path)
+            time_rows = (
+                int(time.shape[0])
+                if isinstance(time, h5py.Dataset) and time.ndim == 1
+                else None
+            )
+            geometry = f"Geometry/2D Flow Areas/{mesh_name}"
+            counts = {}
+            for key, name in (("stored_cells", "Cells Center Coordinate"),
+                              ("faces", "Faces FacePoint Indexes")):
+                item = hdf_file.get(f"{geometry}/{name}")
+                counts[key] = (
+                    int(item.shape[0])
+                    if isinstance(item, h5py.Dataset) and item.ndim >= 1
+                    else None
+                )
+            try:
+                counts["physical_cells"] = HdfResultsMesh._physical_cell_counts(
+                    hdf_file
+                ).get(mesh_name)
+            except (KeyError, ValueError, TypeError):
+                counts["physical_cells"] = None
+            try:
+                typed_domain = HdfResultsMesh._mesh_series_id_dim(
+                    hdf_file, mesh_name, dataset
+                )
+                typed_status, refusal_reason = "qualified", None
+            except ValueError as exc:
+                typed_domain, typed_status, refusal_reason = None, "refused", str(exc)
+            values = dataset[()].copy() if include_values else None
+            shape = tuple(int(value) for value in dataset.shape)
+            result = {
+                "dataset_path": dataset.name,
+                "mesh_name": mesh_name,
+                "variable": var,
+                "file_version": raw(version) if version is not None else None,
+                "shape": shape,
+                "dtype": str(dataset.dtype),
+                "attrs": attrs,
+                "stored_location": stored_text(attrs, "Location"),
+                "stored_units": stored_text(attrs, "Units"),
+                "axes": tuple(
+                    ("raw_row", "raw_column")[axis] if axis < 2 else f"raw_axis_{axis}"
+                    for axis in range(len(shape))
+                ),
+                "time_axis": {
+                    "path": "/" + time_path,
+                    "rows": time_rows,
+                    "matches_rows": bool(
+                        time_rows is not None and len(shape) >= 1
+                        and shape[0] == time_rows
+                    ),
+                },
+                "geometry_counts": counts,
+                "typed_status": typed_status,
+                "typed_domain": typed_domain,
+                "refusal_reason": refusal_reason,
+                "physical_domain": "unqualified",
+                "units_interpretation": "unqualified",
+                "values": values,
+            }
+        stat_after = source_path.stat()
+        if (stat_after.st_size, stat_after.st_mtime_ns) != (
+            stat_before.st_size, stat_before.st_mtime_ns
+        ):
+            raise RuntimeError("HDF result source changed while it was being inspected")
+        return result
 
     @staticmethod
     def _get_mesh_result_view(
