@@ -6,7 +6,76 @@ import h5py
 import numpy as np
 import pytest
 
+from ras_commander import fast_hdf
 from ras_commander.terrain import RasTerrainModWriter
+
+# The fixture reproduces the observed RASMapper channel layout (Type "Levee",
+# Subtype "Channel"; HEC-RAS 6.1 to 6.6, e.g. the ras2fim-2d UPGU3 Terrain.hdf):
+# fixed-length NULLTERM ASCII text, packed little-endian f4 members, and the
+# exact companion tables with their attributes. The native engine qualifies
+# observed layouts only, so an invented layout is refused in native mode.
+CHANNEL_ATTRIBUTES = [
+    ("Name", "S11"),
+    ("Elevation Type", "S11"),
+    ("Top Elevation", "<f4"),
+    ("Top Width", "<f4"),
+    ("Left Slope", "<f4"),
+    ("Right Slope", "<f4"),
+    ("Max Reach", "<f4"),
+    ("Elev Pt Tolerance", "<f4"),
+]
+
+native_refuses_unobserved_layout = pytest.mark.skipif(
+    fast_hdf.native_required(),
+    reason=(
+        "exercises an invented Attributes layout; the native engine refuses "
+        "unobserved layouts by design (RAS_COMMANDER_FAST_HDF=native)"
+    ),
+)
+
+
+def _nullterm_text(size):
+    text = h5py.h5t.C_S1.copy()
+    text.set_size(size)
+    text.set_strpad(h5py.h5t.STR_NULLTERM)
+    return text
+
+
+def _write_text_attr(obj, name, value):
+    """Write a scalar or 1-D fixed-length NULLTERM text attribute."""
+    data = np.array(value, dtype=np.bytes_)
+    text = _nullterm_text(data.dtype.itemsize)
+    if data.ndim:
+        space = h5py.h5s.create_simple(data.shape)
+    else:
+        space = h5py.h5s.create(h5py.h5s.SCALAR)
+    attr = h5py.h5a.create(obj.id, name.encode(), text, space)
+    # Writing with the stored type as memory type keeps the bytes unconverted
+    # (a NULLPAD to NULLTERM conversion would drop the last character).
+    attr.write(data, mtype=text)
+
+
+def _write_channel_attributes(group, rows):
+    data = np.array(rows, dtype=CHANNEL_ATTRIBUTES)
+    stored = h5py.h5t.create(h5py.h5t.COMPOUND, data.dtype.itemsize)
+    for name in data.dtype.names:
+        member, offset = data.dtype.fields[name][:2]
+        if member.kind == "S":
+            kind = _nullterm_text(member.itemsize)
+        else:
+            kind = h5py.h5t.py_create(member)
+        stored.insert(name.encode(), offset, kind)
+    space = h5py.h5s.create_simple(data.shape)
+    dataset = h5py.h5d.create(group.id, b"Attributes", stored, space)
+    dataset.write(h5py.h5s.ALL, h5py.h5s.ALL, data, mtype=stored)
+
+
+def _write_table(group, name, data, column, row, feature_type=None):
+    dataset = group.create_dataset(name, data=data)
+    _write_text_attr(dataset, "Column", column)
+    if feature_type is not None:
+        _write_text_attr(dataset, "Feature Type", feature_type)
+    _write_text_attr(dataset, "Row", row)
 
 
 @pytest.fixture
@@ -15,38 +84,63 @@ def terrains(tmp_path):
     destination = tmp_path / "destination.hdf"
     source_mapper = tmp_path / "source.rasmap"
     destination_mapper = tmp_path / "destination.rasmap"
-    dtype = np.dtype(
-        [("Max Extent", "<f8"), ("Top Width", "<f8"), ("Elevation Type", "<i4")]
-    )
     with h5py.File(source, "w") as file:
         group = file.create_group("Modifications/Channels")
-        group.attrs.update(Type="Levee", Subtype="Channel", Priority=3)
-        group.create_dataset(
-            "Attributes", data=np.array([(10, 5, 2), (20, 8, 1)], dtype=dtype)
+        group.attrs["Priority"] = np.int32(3)
+        _write_text_attr(group, "Subtype", "Channel")
+        _write_text_attr(group, "Type", "Levee")
+        _write_channel_attributes(
+            group,
+            [
+                (b"Channel 1", b"SetIfLower", 0, 5, 2, 2, 10, 50),
+                (b"Channel 2", b"SetIfLower", 0, 8, 2, 2, 20, 50),
+            ],
         )
-        group.create_dataset(
-            "Polyline Info", data=np.array([[0, 2, 0, 1], [2, 4, 1, 2]], dtype="int32")
+        _write_table(
+            group,
+            "Polyline Info",
+            np.array([[0, 2, 0, 1], [2, 4, 1, 2]], dtype="<i4"),
+            [
+                "Point Starting Index",
+                "Point Count",
+                "Part Starting Index",
+                "Part Count",
+            ],
+            "Feature",
+            feature_type="Polyline",
         )
-        group.create_dataset(
-            "Polyline Parts", data=np.array([[0, 2], [0, 2], [2, 2]], dtype="int32")
+        _write_table(
+            group,
+            "Polyline Parts",
+            np.array([[0, 2], [0, 2], [2, 2]], dtype="<i4"),
+            ["Point Starting Index", "Point Count"],
+            "Part",
         )
-        group.create_dataset(
+        _write_table(
+            group,
             "Polyline Points",
-            data=np.array(
-                [[0, 0], [10, 10], [30, 0], [40, 10], [50, 20], [60, 0]],
-                dtype="float64",
+            np.array(
+                [[0, 0], [10, 10], [30, 0], [40, 10], [50, 20], [60, 0]], dtype="<f8"
             ),
+            ["X", "Y"],
+            "Points",
         )
-        group.create_dataset(
-            "Profile Info", data=np.array([[0, 2], [2, 3]], dtype="int32")
+        _write_table(
+            group,
+            "Profile Info",
+            np.array([[0, 2], [2, 3]], dtype="<i4"),
+            ["Starting Index", "Count"],
+            "Feature",
         )
-        group.create_dataset(
+        _write_table(
+            group,
             "Profile Values",
-            data=np.array(
-                [[0, 100], [1, 99], [0, 10.01], [1, 9.25], [2, 8.125]], dtype="float64"
+            np.array(
+                [[0, 100], [1, 99], [0, 10.01], [1, 9.25], [2, 8.125]], dtype="<f4"
             ),
+            ["X", "Y"],
+            "Values",
         )
-        group["Polyline Points"].attrs["Column"] = ["X", "Y"]
     with h5py.File(destination, "w") as file:
         file.create_group("Terrain").attrs["Priority"] = 0
     source_mapper.write_text(
@@ -84,7 +178,7 @@ def test_copy_preserves_parameters_coordinates_profiles_and_mapper(terrains):
         assert b["Polyline Info"][:].tolist() == [[0, 4, 0, 2]]
         assert b["Polyline Parts"][:].tolist() == [[0, 2], [2, 2]]
         assert b["Profile Info"][:].tolist() == [[0, 3]]
-        assert b["Polyline Points"].attrs["Column"].tolist() == ["X", "Y"]
+        assert b["Polyline Points"].attrs["Column"].tolist() == [b"X", b"Y"]
         assert "Terrain" in child
     xml = ET.parse(child_mapper)
     group = xml.find('.//Layer[@Type="ElevationModificationGroup"]')
@@ -276,7 +370,7 @@ def test_ambiguous_stale_source_and_inexact_destination_refused(terrains):
         RasTerrainModWriter.copy_modification_features(*terrains, {"Channels": [0]})
 
 
-def test_empty_frame_contract_and_missing_support(terrains, tmp_path):
+def test_empty_frame_contract(tmp_path):
     empty = tmp_path / "empty.hdf"
     with h5py.File(empty, "w"):
         pass
@@ -284,6 +378,12 @@ def test_empty_frame_contract_and_missing_support(terrains, tmp_path):
     assert frame.empty and str(frame.crs) == "EPSG:2278"
     assert str(frame.feature_index.dtype) == "int64"
     assert str(frame.support_distance.dtype) == "float64"
+
+
+@native_refuses_unobserved_layout
+def test_missing_support_distance_rejected(terrains):
+    # No observed polyline layout lacks "Max Reach", so this error path is
+    # reachable only through an invented Attributes table.
     with h5py.File(terrains[0], "r+") as file:
         group = file["Modifications/Channels"]
         del group["Attributes"]
