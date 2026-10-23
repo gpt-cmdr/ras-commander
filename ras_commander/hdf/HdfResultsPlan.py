@@ -1407,7 +1407,7 @@ class HdfResultsPlan:
 
                 # Get profile names
                 if profile_names_path in hdf_file:
-                    profile_names_raw = hdf_file[profile_names_path][()]
+                    profile_names_raw = read_typed(hdf_file[profile_names_path])
                     profile_names = [
                         name.decode('utf-8').strip() if isinstance(name, bytes) else str(name).strip()
                         for name in profile_names_raw
@@ -1457,10 +1457,21 @@ class HdfResultsPlan:
                     optional_paths[column] = paths
                     column_sources[column] = None
                     for path in paths:
+                        # Absence and shape are metadata; only a present,
+                        # correctly shaped dataset is read (natively when
+                        # selected). A malformed present dataset raises here in
+                        # every backend mode and is never replaced by a
+                        # fallback path; a native refusal propagates unchanged.
                         if path not in hdf_file:
                             continue
-                        values = np.asarray(read_typed(hdf_file[path]))
+                        dataset = hdf_file[path]
                         expected_shape = (num_profiles, num_xs)
+                        if dataset.shape != expected_shape:
+                            raise ValueError(
+                                f"Steady variable {var_name!r} has shape "
+                                f"{dataset.shape}; expected {expected_shape}"
+                            )
+                        values = np.asarray(read_typed(dataset))
                         if values.shape != expected_shape:
                             raise ValueError(
                                 f"Steady variable {var_name!r} has shape "
