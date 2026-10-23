@@ -512,7 +512,7 @@ def test_application_retains_hard_links_and_file_identity(tmp_path):
         ),
     ],
 )
-def test_default_output_matches_main_for_official_and_gui_flows(
+def test_default_output_preserves_other_bytes_for_official_and_gui_flows(
     tmp_path, newline, filename, expected_sha256
 ):
     # Expected default output hashes come from main at 08d7226c, before PR 514.
@@ -521,7 +521,17 @@ def test_default_output_matches_main_for_official_and_gui_flows(
     flow = tmp_path / "Model.u01"
     flow.write_bytes(raw)
     RasUnsteady.disable_meteorology(flow)
-    assert hashlib.sha256(flow.read_bytes()).hexdigest() == expected_sha256
+    after = flow.read_bytes()
+    disabled_et = b"Met BC=Evapotranspiration|Mode=None\r\n"
+    records = _split_ras_records(after)
+    assert records.count(disabled_et) == 1
+    # Keep the frozen legacy hashes as a guard on every other output byte.
+    # Only the ET token intentionally differs from the pre-514 serialization.
+    legacy = b"".join(
+        b"Met BC=Evapotranspiration|Mode=Disable\r\n" if line == disabled_et else line
+        for line in records
+    )
+    assert hashlib.sha256(legacy).hexdigest() == expected_sha256
 
 
 def test_corrupted_application_cannot_return_boundary_integrity_evidence(
