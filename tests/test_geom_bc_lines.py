@@ -113,10 +113,21 @@ class TestGetBcLines:
     @pytest.mark.parametrize("content", ["", "Geom Title=No BC lines\nReference Line Name=Ignored\n"])
     def test_empty_result_columns(self, tmp_path, content):
         from ras_commander import GeomBcLines
+        from ras_commander.schemas import DATAFRAME_SCHEMAS
 
         result = GeomBcLines.get_bc_lines(_write_geom(tmp_path / "empty.g01", content))
         assert result.empty
         assert result.columns.tolist() == ["name", "storage_area", "coordinates", "coordinate_count"]
+        assert result.columns.tolist() == [
+            column["name"] for column in DATAFRAME_SCHEMAS["geometry_bc_lines"]["columns"]
+        ]
+
+    def test_display_position_values_are_ignored(self, tmp_path):
+        from ras_commander import GeomBcLines
+
+        content = re.sub(r"(BC Line (?:Start|Middle|End|Text) Position=)[^\n]*", r"\1", _SKELETON)
+        geom = _write_geom(tmp_path / "positions.g01", content)
+        assert GeomBcLines.get_bc_lines(geom).iloc[0]["coordinates"] == [(100., 100.), (200., 100.)]
 
     def test_missing_file(self, tmp_path):
         from ras_commander import GeomBcLines
@@ -172,6 +183,7 @@ class TestGetBcLines:
     @pytest.mark.slow
     def test_real_chippewa_read_add_read(self, tmp_path):
         from ras_commander import GeomBcLines, RasExamples
+        from ras_commander.schemas import DATAFRAME_SCHEMAS
 
         project = RasExamples.extract_project("Chippewa_2D", output_path=tmp_path)
         if isinstance(project, list):
@@ -180,6 +192,9 @@ class TestGetBcLines:
         geom = next(Path(project).glob("*.g01"))
         before = geom.read_bytes()
         first = GeomBcLines.get_bc_lines(geom)
+        assert first.columns.tolist() == [
+            column["name"] for column in DATAFRAME_SCHEMAS["geometry_bc_lines"]["columns"]
+        ]
         assert first["name"].tolist() == ["Upstream", "Downstream"]
         assert first["storage_area"].tolist() == ["Perimeter 1", "Perimeter 1"]
         assert all(len(row.coordinates) == row.coordinate_count for row in first.itertuples())

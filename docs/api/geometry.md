@@ -541,6 +541,8 @@ invalid arc counts, truncated or non-finite coordinates, and missing
 text-position terminators. A file without BC lines returns an empty frame
 with the same columns. The call leaves the file unchanged and requires no
 initialized project, geometry HDF, or HEC-RAS installation.
+Start, middle, end, and text-position records must be present; their display
+position values are ignored. Returned vertices come only from the arc payload.
 
 ```python
 from ras_commander import GeomBcLines

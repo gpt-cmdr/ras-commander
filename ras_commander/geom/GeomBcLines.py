@@ -188,7 +188,10 @@ class GeomBcLines:
         Reads only the supplied file, without creating backups or requiring an
         HDF file, initialized project, or HEC-RAS installation. Records retain
         file order and vertex order. Only surrounding name/area whitespace is
-        removed. All BC blocks are validated before any result is returned.
+        removed. Each BC block must contain the required record keys and a
+        valid coordinate payload before any result is returned. Start, middle,
+        end, and text-position record values are ignored; vertices come only
+        from the arc payload.
 
         Args:
             geom_file: Path to a plain-text HEC-RAS geometry file (.g##).
@@ -203,9 +206,10 @@ class GeomBcLines:
 
         Raises:
             FileNotFoundError: If geom_file does not exist.
-            ValueError: If a BC header, arc count, coordinate payload, or
-                text-position terminator is missing or malformed. Counts must
-                declare at least two vertices; coordinates must be finite.
+            ValueError: If a required BC record key, name, or storage area is
+                missing, or an arc count or coordinate payload is invalid.
+                Counts must declare at least two vertices; coordinates must
+                be finite.
             UnicodeDecodeError: If the file cannot be decoded as UTF-8.
         """
         geom_file = Path(geom_file)

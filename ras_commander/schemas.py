@@ -29,7 +29,7 @@ Each entry of :data:`DATAFRAME_SCHEMAS`:
 """
 
 # Schema contract version -- bump when the documented column surface changes meaningfully.
-SCHEMA_VERSION = "1.26"
+SCHEMA_VERSION = "1.27"
 
 _GEOMETRY_ASSOCIATION_COLUMNS = [
     {"name": "geom_number", "dtype": "str", "description": "Normalized geometry identifier."},
@@ -60,6 +60,19 @@ _GEOMETRY_ASSOCIATION_COLUMNS = [
 ]
 
 DATAFRAME_SCHEMAS = {
+    "geometry_bc_lines": {
+        "description": "Authored BC line identities and ordered vertices from plain-text geometry, in file order.",
+        "accessor": "GeomBcLines.get_bc_lines(geom_file)",
+        "source": "ras_commander.geom.GeomBcLines.GeomBcLines.get_bc_lines()",
+        "extra_columns": False,
+        "dynamic": False,
+        "columns": [
+            {"name": "name", "dtype": "str", "description": "BC line name with surrounding whitespace removed."},
+            {"name": "storage_area", "dtype": "str", "description": "Associated storage-area name with surrounding whitespace removed."},
+            {"name": "coordinates", "dtype": "list[tuple[float, float]]", "description": "Ordered (x, y) vertices in source coordinates and units, without CRS inference or rounding."},
+            {"name": "coordinate_count", "dtype": "int", "description": "Declared vertex count, validated against the coordinate payload."},
+        ],
+    },
     "mesh_geometry_inventory": {
         "description": "Read-only exact identities of native 2D geometry datasets; no hydraulic acceptance.",
         "accessor": "HdfMesh.get_mesh_geometry_inventory(hdf_path, dataset_paths=None)",
