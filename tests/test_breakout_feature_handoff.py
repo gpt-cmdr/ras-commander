@@ -355,7 +355,10 @@ def test_explicit_seed_repair_is_opt_in_and_precedes_native_refresh(tmp_path, mo
 
     def apply(plan):
         calls.append("apply")
-        return GeomMesh.write_computation_points(clone.geometry_path, [[20, 20]], mesh_name="Area")
+        from ras_commander.geom import MeshSeedRepairResult
+
+        result = GeomMesh.write_computation_points(clone.geometry_path, [[20, 20]], mesh_name="Area")
+        return MeshSeedRepairResult(**vars(result))
 
     def refresh(*args, **kwargs):
         calls.append("refresh")

@@ -1478,17 +1478,34 @@ readback = GeomMesh.validate_computation_point_repair(plan)
 
 Planning performs native previews without changing the target text or compiled
 HDF. It follows the supplied-seed recipe retained in the Salt Draw subdomain
-assembly research: up to seven MaxFaces rounds at face-length ratios 0.0025,
-0.05 and 0.1, followed by up to six perimeter-connection repair rounds. It adds
-midpoint seeds, removes the perimeter vertices nearest native error locations,
-and records seeds excluded by the repaired perimeter. Final previews must
+assembly research: up to seven MaxFaces repairs at face-length ratios 0.0025,
+0.05 and 0.1, and up to six perimeter-connection repairs. MaxFaces is checked
+again after each perimeter change, sharing the same seven-repair budget. New
+midpoints are rounded to three decimal places before being moved inside, then
+deduplicated by exact equality. It removes perimeter vertices nearest native
+error locations and records seeds excluded by the repaired perimeter. Final previews must
 complete at all three ratios, both before and after native text serialization.
-Failure or exhausted repair budgets leave the target unchanged.
+Breakline and connection-line constraints participate in the native previews.
+Kept breaklines and complete connection footprints must remain contained, and
+boundary-condition line ends must still touch the repaired perimeter (within
+1e-6 model unit for text serialization). Breakout also audits compiled feature
+containment and connection/BC geometry after native preprocessing.
+
+The default loss limits are 0.001 of supplied parent seeds and 0.001 of the
+original perimeter area. Set `max_parent_seed_loss_fraction` and
+`max_area_loss_fraction` explicitly when planning if the reviewed workflow needs
+different limits. Loss uses the original polygon's excluded area, not net area
+change. Exceeding either limit raises with a `repair_evidence` dictionary; no
+successful plan or target mutation occurs. Failure or exhausted repair budgets
+also leave the target unchanged.
 
 Application requires unchanged input bytes, preserves a numbered backup and
-atomically replaces only the geometry text. The active project's runtime must
+atomically replaces only the geometry text. The explicitly supplied project's runtime must
 agree with the actual loaded RasMapperLib assembly; use a fresh worker to switch
-runtimes. Successful readback establishes that the text matches the plan. It
+runtimes. Without `ras_object`, supply explicit geometry and installation paths;
+the global project is never selected. A project's unresolved `Ras.exe` fallback
+accepts an explicit installation instead of resolving against the working folder.
+Successful readback establishes that the text matches the plan. It
 does not establish identical parent face topology or hydraulic equivalence.
 Run native Geometry and Event Conditions preprocessing and review the resulting
 compiled mesh and hydraulics separately.
