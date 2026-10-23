@@ -1,0 +1,59 @@
+name: Engine wheels
+
+on:
+  push:
+    branches: ['feat/optional-fim-mapping-engine']
+    paths: ['rust/step05/**', '.github/workflows/engine-wheels.yml', 'tests/smoke_engine_wheel.py']
+  pull_request:
+    paths: ['rust/step05/**', '.github/workflows/engine-wheels.yml', 'tests/smoke_engine_wheel.py']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            manylinux: '2_28'
+            platform: linux-x86_64
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            manylinux: auto
+            platform: windows-x86_64
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - uses: PyO3/maturin-action@v1
+        with:
+          maturin-version: '1.15.0'
+          rust-toolchain: '1.99.1'
+          target: ${{ matrix.target }}
+          manylinux: ${{ matrix.manylinux }}
+          args: --release --locked --manifest-path rust/step05/Cargo.toml --out dist
+      - name: Install and test the built wheel
+        shell: bash
+        run: |
+          python -m pip install --no-deps --no-index --find-links dist ras2fim-engine
+          python -m pip install numpy==2.3.5 scipy==1.16.3 rasterio==1.4.4
+          python tests/smoke_engine_wheel.py
+      - name: Hash wheel artifacts
+        shell: python
+        run: |
+          import hashlib, pathlib
+          paths = sorted(pathlib.Path('dist').glob('*.whl'))
+          assert len(paths) == 1, paths
+          pathlib.Path('dist/SHA256SUMS.txt').write_text(''.join(f'{hashlib.sha256(p.read_bytes()).hexdigest()}  {p.name}\n' for p in paths))
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ras2fim-engine-${{ matrix.platform }}
+          path: dist/*
+          if-no-files-found: error
+          retention-days: 90

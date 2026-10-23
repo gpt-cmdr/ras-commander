@@ -1,6 +1,7 @@
 # Optional Step05 Rust engine
 
-Build the standalone engine explicitly, then pass its path to
+Install the matching engine wheel (see the API guide), or build explicitly,
+then pass its path to
 `RasFim.map_profiles(..., engine_path="/path/to/ras2fim-batch")`.
 Python does not build or download the engine.
 

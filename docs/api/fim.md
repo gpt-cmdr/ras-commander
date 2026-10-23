@@ -5,12 +5,22 @@ cells to depth and WSE rasters with the ras2fim-2D Step 05 method. It maps a
 batch of profiles against one shared terrain, accepts a bounding box or a
 polygon area of interest (AOI), and returns a product manifest DataFrame.
 
-The feature is optional. It needs the `fim` extra and a separately built
-`ras2fim-batch` engine executable:
+The feature is optional. Install the Python extra and the matching Linux x86-64
+or Windows x86-64 engine wheel into the same environment:
 
 ```bash
 pip install "ras-commander[fim]"
+pip install /path/to/ras2fim_engine-0.1.0-py3-none-<platform>.whl
+ras2fim-batch method
 ```
+
+Use the actual wheel filename. Wheels are built by the `Engine wheels` workflow
+and available as its platform artifacts with SHA-256 checksums. Linux wheels
+target glibc 2.28 or newer. The wheel installs `ras2fim-batch` on the environment's
+`PATH`; no Rust compiler or system GDAL is needed for the native engine.
+The Python GIS stack remains required. Source builds are also supported.
+The workflow does not publish to PyPI. Installed-binary synthetic mapping tests
+run on both platforms; retained real-model agreement evidence remains Linux-only.
 
 ## Method
 
