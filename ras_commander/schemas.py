@@ -29,7 +29,7 @@ Each entry of :data:`DATAFRAME_SCHEMAS`:
 """
 
 # Schema contract version -- bump when the documented column surface changes meaningfully.
-SCHEMA_VERSION = "1.27"
+SCHEMA_VERSION = "1.28"
 
 _GEOMETRY_ASSOCIATION_COLUMNS = [
     {"name": "geom_number", "dtype": "str", "description": "Normalized geometry identifier."},
@@ -1719,4 +1719,35 @@ DATAFRAME_SCHEMAS["terrain_modification_features"] = {
         {"name": "geometry", "dtype": "geometry", "description": "Complete LineString/MultiLineString, Polygon, or Point for a native single-vertex record, in the caller-declared terrain CRS."},
     ],
     "note": "Read-only. Unknown layouts or unavailable support fail. No terrain grid is loaded or CRS inferred. Empty frames retain the same columns and explicit CRS.",
+}
+
+
+DATAFRAME_SCHEMAS["fim_product_manifest"] = {
+    "description": "One row per mapped WSE profile from the optional ras2fim-2D FIM method.",
+    "accessor": "RasFim.map_profiles(cells, terrain_path, output_folder, ...) or RasFim.map_ras2fim_results(...)",
+    "source": "ras_commander.fim.RasFim.RasFim.map_profiles()",
+    "extra_columns": False,
+    "dynamic": False,
+    "columns": [
+        {"name": name, "dtype": dtype, "description": description}
+        for name, dtype, description in (
+            ("profile", "str", "WSE profile column name; products use it in their file names."),
+            ("status", "str", "complete, no_flooded_pixels, empty_aoi, failed, or not_run."),
+            ("wet_cells", "int | None", "Wet cells (non-NaN WSE) used for global sample preparation."),
+            ("samples", "int | None", "Interpolation samples: wet centres plus merged hull-exterior vertices."),
+            ("depth_tif", "str | None", "Product 09 depth GeoTIFF path (float32, NaN nodata)."),
+            ("wse_tif", "str | None", "Product 10 WSE GeoTIFF path (float32, NaN nodata)."),
+            ("floodplain_gpkg", "str | None", "Product 11 floodplain GeoPackage path; None when not written."),
+            ("col_off", "int | None", "Column offset of the written window on the full output grid."),
+            ("row_off", "int | None", "Row offset of the written window on the full output grid."),
+            ("width", "int | None", "Written raster width in pixels."),
+            ("height", "int | None", "Written raster height in pixels."),
+            ("transform", "tuple[float, ...] | None", "Affine (a, b, c, d, e, f) of the written raster."),
+            ("crs", "str | None", "Output CRS."),
+            ("depth_finite_pixels", "int | None", "Finite depth pixels in the written raster."),
+            ("flooded_pixels", "int | None", "Pixels with 0 < depth <= 10000, the floodplain polygon support."),
+            ("error", "str | None", "Failure diagnostic for failed or not_run rows."),
+        )
+    ],
+    "note": "The same rows, engine method record, engine reports, options, AOI and input identities are written to fim_manifest.json. An AOI selects output pixels only; preparation always uses every wet cell.",
 }

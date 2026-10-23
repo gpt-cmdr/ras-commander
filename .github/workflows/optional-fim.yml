@@ -1,0 +1,35 @@
+name: Optional FIM engine
+
+on:
+  pull_request:
+    paths:
+      - 'ras_commander/fim/**'
+      - 'ras_commander/schemas.py'
+      - 'ras_commander/__init__.py'
+      - 'tests/test_ras_fim.py'
+      - 'rust/step05/**'
+      - 'setup.py'
+      - '.github/workflows/optional-fim.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  python-interface:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - run: python -m pip install -e '.[fim]' pytest
+      - run: python -m pytest tests/test_ras_fim.py -q
+  rust:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: rustup toolchain install 1.99.1 --profile minimal --component rustfmt --component clippy
+      - run: cargo +1.99.1 fmt --manifest-path rust/step05/Cargo.toml -- --check
+      - run: cargo +1.99.1 clippy --locked --manifest-path rust/step05/Cargo.toml --all-targets -- -D warnings
+      - run: cargo +1.99.1 test --locked --manifest-path rust/step05/Cargo.toml --all-targets

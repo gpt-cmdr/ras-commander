@@ -97,6 +97,7 @@ plugins:
           - api/breakout-1d.md
           - api/breakout-2d.md
           - api/benefits.md
+          - api/fim.md
           - api/hdf.md
           - api/geometry.md
           - api/terrain.md
@@ -286,6 +287,8 @@ nav:
       - Remote Modules: api/remote.md
       - Model Source Utilities: api/model-sources.md
     - Benefits Analysis: api/benefits.md
+    - ras2fim-2D FIM Mapping (Optional): api/fim.md
+    - FIM Engine Comparison: development/fim-mapping-performance.md
     - DataFrame Reference: reference/dataframe-reference.md
   - RAS Data Formats:
     - Overview: reference/file-formats.md

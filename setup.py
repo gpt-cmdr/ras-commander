@@ -75,6 +75,7 @@ setup(
     package_data={
         "ras_commander": [
             "LLM_GUIDE.md",
+            "fim/THIRD_PARTY_NOTICES.md",
             "resources/*.json",
             "resources/templates/*/*",
         ],
@@ -131,6 +132,9 @@ setup(
             'psutil>=5.6.6',
             'comtypes>=1.4.0; sys_platform == "win32"',
         ],
+        # Optional ras2fim-2D FIM mapping (RasFim). The ras2fim-batch engine
+        # executable is separate and is never installed by this extra.
+        'fim': ['scipy', 'geopandas', 'shapely>=2.0', 'rasterio', 'pyproj'],
         # USGS gauge data integration
         'usgs': ['dataretrieval>=1.0'],
         # FEMA eBFE archives that use Deflate64 compression (ZIP method 9).

@@ -109,6 +109,7 @@ This file is the canonical local instruction file for the `ras_commander/` packa
 - USGS workflows: [ras_commander/usgs/AGENTS.md](usgs/AGENTS.md)
 - QA and repair flows: [ras_commander/check/AGENTS.md](check/AGENTS.md), [ras_commander/fixit/AGENTS.md](fixit/AGENTS.md)
 - DSS and precipitation helpers: [ras_commander/dss/AGENTS.md](dss/AGENTS.md), [ras_commander/precip/AGENTS.md](precip/AGENTS.md)
+- Optional ras2fim-2D FIM mapping (`RasFim`): [ras_commander/fim/AGENTS.md](fim/AGENTS.md)
 
 ## Update Discipline
 
