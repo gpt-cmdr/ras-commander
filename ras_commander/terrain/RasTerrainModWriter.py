@@ -35,7 +35,6 @@ from .._ras_text import _write_ras_xml
 from ..Decorators import log_call
 from ..LoggingConfig import get_logger
 from ..fast_hdf import read_attr, read_attrs, read_typed
-from ..fast_hdf import h5py_until_qualified
 
 logger = get_logger(__name__)
 
@@ -538,7 +537,6 @@ class RasTerrainModWriter:
 
     @staticmethod
     @log_call
-    @h5py_until_qualified
     def list_modifications(terrain_hdf_path: Union[str, Path]) -> pd.DataFrame:
         """
         List terrain modifications stored in a terrain HDF sidecar group.
