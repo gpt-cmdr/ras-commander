@@ -22,6 +22,20 @@ established. The table is a diagnostic, not proof of convergence.
 `get_mesh_timeseries()` and `iter_mesh_timeseries()` continue to refuse the
 dataset, so its columns are never read as cells or faces.
 
+**Raw diagnostic for unqualified mesh series; viscosity refusal retained**
+
+`HdfResultsMesh.inspect_mesh_series_raw()` is a new read-only diagnostic for one
+stored Base Output mesh series. It returns the dataset path, file version,
+shape, dtype, stored attributes, Time row match, stored geometry counts and the
+typed readers' qualification outcome or refusal reason. Axes are `raw_row` and
+`raw_column`; `physical_domain` and `units_interpretation` are always
+`"unqualified"`. It assigns no cell or face identifiers, timestamps or unit
+conversions. Existing typed readers are unchanged: `Face Mixture Dynamic
+Viscosity`, whose `Location=Faces` label contradicts its stored-cell width in
+the inspected HEC-RAS 6.6 and 7.0.1 output, remains refused. `Face Yield Stress`
+and `Face Viscous Stress` remain qualified face series. Public synthetic tests
+pin both contracts. Readable output does not establish hydraulic convergence.
+
 **Compute-message classification rejects observed early termination**
 
 `ResultsParser` classifies `Unsteady Flow Simulation Terminated` and the

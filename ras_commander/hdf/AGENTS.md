@@ -163,6 +163,15 @@ This file is the canonical local instruction file for `ras_commander/hdf/`.
   Ghost filtering follows qualification. `Cell Hydraulic Depth` remains distinct
   from `Depth` and WSE-minus-minimum-elevation depth. Summary wrappers retain
   their separate existing schemas and are unchanged by these series rules.
+- Non-Newtonian `Face Mixture Dynamic Viscosity` (6.6/7.0.1 Bingham output) is
+  labelled `Location=Faces` but its width equals stored cells. It has no
+  established producer domain/unit contract: typed readers must keep refusing
+  it. Do not relabel it as cells, strip ghost columns, attach IDs, or convert
+  its stored `lb/ft^2*s` value. `HdfResultsMesh.inspect_mesh_series_raw()` is the
+  diagnostic route: stored identity, attrs, Time row match, geometry counts,
+  refusal reason, `raw_row`/`raw_column` axes and always-unqualified domain and
+  units. `Face Yield Stress` and `Face Viscous Stress` remain qualified face
+  series. Reader support does not establish hydraulic convergence.
 - Unsteady `HdfResultsQuery` velocity queries at integer time indexes prefer stored
   `Cell Velocity - Velocity X/Y` components per mesh. Validate their stored
   cell Location, time/geometry axes, physical count and velocity units; compute
