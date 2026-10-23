@@ -395,6 +395,37 @@ def _packed_is_stored(info, rows):
     return bool(np.array_equal(starts, expected)) and int(counts.sum()) == rows
 
 
+def _cut_lines_absent(reported, family):
+    """Whether the cross-section line family is unavailable only because no cut lines are stored.
+
+    Several HEC-RAS 6.x plan HDFs keep ``Geometry/Cross Sections/Attributes``
+    (the steady identity table Python falls back to) without the packed
+    ``Polyline Info/Parts/Points``. The engine reports that family as
+    unavailable with this exact reason; any other refusal stays a refusal.
+    """
+    capability = reported.get("capability") or {}
+    return (family == "cross_section_cut_lines" and reported.get("value") is None
+            and capability.get("status") == "unavailable"
+            and capability.get("reason") == "packed line datasets absent")
+
+
+def _xs_attributes_without_cut_lines(module, file_path, dataset, budget):
+    """``Geometry/Cross Sections/Attributes`` from the engine's XS geometry inventory.
+
+    The inventory returns the same exact stored compound (the engine's
+    ``exact_compound`` of this table) as the line family, after validating the
+    River/Reach/RS identity and the cross-section layout guard; it needs no cut lines.
+    """
+    data = _cached(file_path, ("xsinv", budget),
+                   lambda: module.xs_geometry_inventory(file_path, max_bytes=budget))
+    attributes = data.get("attributes")
+    if attributes is None:
+        raise TypedRouteError(f"{dataset.name}: XS geometry inventory has no Attributes")
+    _record(dataset.name, "diagnostic", "line_family",
+            "packed line datasets absent; Attributes from xs_geometry_inventory")
+    return _compound(attributes, dataset)
+
+
 def _full(module, file_path, route, dataset):
     """Full stored array for one dataset from its typed engine family."""
     kind = route[0]
@@ -402,6 +433,8 @@ def _full(module, file_path, route, dataset):
     if kind == "line_family":
         _, family, leaf = route
         data = _cached(file_path, ("line", family), lambda: module.one_d_line_family(file_path, family))
+        if leaf == "Attributes" and _cut_lines_absent(data, family):
+            return _xs_attributes_without_cut_lines(module, file_path, dataset, budget)
         value = _value(data, dataset)
         if leaf == "Attributes":
             if value["attributes"] is None:
