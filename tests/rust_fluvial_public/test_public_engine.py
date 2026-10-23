@@ -163,26 +163,37 @@ def _python_polygons(hdf, **kwargs):
     return frame
 
 
-def test_p07_min_area_swap_is_never_native_and_auto_matches_python(tmp_path):
-    """Legacy swap keeps union-order-dependent 'first' attributes: native refuses.
+def test_p07_min_area_swap_native_and_auto_equal_python(tmp_path):
+    """The swap runs on native classes through the reference dissolve and swap.
 
-    Removal (HdfFluvialNative.Analysis area_filter_policy='remove') is a different
-    policy and is never substituted. auto selects the unchanged Python swap.
+    The reference keeps a 'first' area_acres chosen by its GEOS dissolve part
+    order, so native ring assembly is bypassed and the result is identical
+    (WKB and attributes). Removal (HdfFluvialNative.Analysis
+    area_filter_policy='remove') is a different policy and is never substituted.
     """
     hdf = fixture("BaldEagleDamBrk.p07.hdf")
-    calls = native_calls()
-    with pytest.raises(FluvialNativeUnsupportedError, match="class swapping"):
-        HdfFluvialPluvial.generate_fluvial_pluvial_polygons(hdf, min_polygon_area_acres=1000.0, engine="native")
-    assert delta(calls) == {}, "rejected before any native work"
     reference = _python_polygons(hdf, min_polygon_area_acres=1000.0)
     unswapped = _python_polygons(hdf)
     parts = lambda frame: sum(len(getattr(g, "geoms", [g])) for g in frame.geometry)
     assert parts(reference) < parts(unswapped)  # the swap actually happened
     # Swapping relabels, never deletes: total area is conserved.
     assert reference.geometry.area.sum() == pytest.approx(unswapped.geometry.area.sum(), rel=1e-12)
+    calls = native_calls()
+    with pytest.MonkeyPatch.context() as patch:
+        patch.setattr(module, "tqdm", lambda *a, **k: (_ for _ in ()).throw(
+            AssertionError("Python classification loop executed under engine='native'")))
+        native = HdfFluvialPluvial.generate_fluvial_pluvial_polygons(
+            hdf, min_polygon_area_acres=1000.0, engine="native")
+    used = delta(calls)
+    assert used["NativeAnalysis.classify"] >= 1 and "NativeAnalysis.polygons" not in used
+    assert native.attrs["fluvial_engine"] == {"requested": "native", "used": "native", "fallback_reason": None}
+    assert native.attrs["fluvial_native"]["geometry"]["assembly"] == "reference_dissolve"
+    native.attrs.clear()
+    assert list(native.columns) == list(reference.columns)
+    assert native.drop(columns="geometry").equals(reference.drop(columns="geometry"))
+    assert native.to_wkb().equals(reference.to_wkb())
     auto = HdfFluvialPluvial.generate_fluvial_pluvial_polygons(hdf, min_polygon_area_acres=1000.0, engine="auto")
-    assert auto.attrs["fluvial_engine"]["used"] == "h5py"
-    assert "class swapping" in auto.attrs["fluvial_engine"]["fallback_reason"]
+    assert auto.attrs["fluvial_engine"] == {"requested": "auto", "used": "native", "fallback_reason": None}
     auto.attrs.clear()
     assert auto.to_wkb().equals(reference.to_wkb())
 
