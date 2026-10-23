@@ -1,0 +1,700 @@
+"""Optional ras2fim-2D flood inundation mapping (FIM) from 2D cell WSE profiles.
+
+``RasFim`` maps one or more water-surface-elevation (WSE) profiles defined on
+HEC-RAS 2D cells to depth and WSE rasters with the ras2fim-2D Step 05 method:
+
+1. linear (Delaunay) interpolation of WSE from the wet cell centres plus the
+   wet-cell vertices outside their convex hull;
+2. masking to the union of the wet cells;
+3. subtraction of the terrain (nearest sample at each pixel centre) and
+   removal of negative depths;
+4. nearest-neighbour reprojection to an output grid whose origin is snapped
+   to a multiple of the output resolution.
+
+This is a different method from RAS Mapper stored maps
+(:meth:`ras_commander.RasProcess.store_maps`). The two produce different
+rasters and are not interchangeable.
+
+The mapping arithmetic runs in the external ``ras2fim-batch`` engine. RAS
+Commander prepares the global inputs in Python, runs the engine in bounded
+batches over one shared terrain, validates every output unit, and writes
+GeoTIFF and GeoPackage products with a product manifest. RAS Commander does
+not build, download, or install the engine, and has no Python fallback for
+the mapping arithmetic.
+
+Requires the ``fim`` extra (``pip install "ras-commander[fim]"``) and an
+engine executable.
+"""
+
+from __future__ import annotations
+
+import json
+import os
+import shutil
+import tempfile
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import TYPE_CHECKING, Any, Dict, Iterable, List, Optional, Sequence, Union
+
+if TYPE_CHECKING:
+    import geopandas as gpd
+
+import numpy as np
+import pandas as pd
+
+from ..Decorators import log_call
+from ..LoggingConfig import get_logger
+from . import _aoi, _engine, _prepare, _products
+from ._aoi import FimAoi
+from ._prepare import FimPreparedProfile
+from .errors import FimMappingError, FimUnsupportedError
+
+logger = get_logger(__name__)
+
+MANIFEST_SCHEMA = "ras-commander-fim-manifest/1"
+MANIFEST_NAME = "fim_manifest.json"
+RAS2FIM_CELLS_LAYER = "02_cells_wsel_ar"
+DEFAULT_PROFILE_PREFIX = "wsel"
+NUDGE_METHODS = ("lookup", "full_warp")
+
+# Column order of the product manifest returned by map_profiles(); declared
+# in ras_commander.schemas as "fim_product_manifest".
+MANIFEST_COLUMNS = [
+    "profile", "status", "wet_cells", "samples", "depth_tif", "wse_tif",
+    "floodplain_gpkg", "col_off", "row_off", "width", "height", "transform",
+    "crs", "depth_finite_pixels", "flooded_pixels", "error",
+]
+
+PathLike = Union[str, os.PathLike]
+
+
+def _require_dependencies() -> None:
+    """Fail early with installation guidance when the ``fim`` extra is missing."""
+    from .._optional_deps import require_module
+
+    for name in ("scipy.spatial", "geopandas", "shapely", "rasterio", "pyproj"):
+        require_module(name, "RasFim")
+
+
+def _file_identity(path: Path) -> tuple:
+    stat = path.stat()
+    return stat.st_size, stat.st_mtime_ns
+
+
+def _require_path(value: PathLike, what: str) -> Path:
+    path = Path(os.fspath(value))
+    if not path.is_file():
+        raise FileNotFoundError(f"{what} not found: {path}")
+    return path.resolve()
+
+
+def _prepare_output_folder(output_folder: PathLike) -> Path:
+    folder = Path(os.fspath(output_folder))
+    if folder.exists():
+        if not folder.is_dir():
+            raise NotADirectoryError(f"output_folder is not a directory: {folder}")
+        if any(folder.iterdir()):
+            raise FileExistsError(
+                f"output_folder must be new or empty so no existing file is replaced: {folder}"
+            )
+    folder.mkdir(parents=True, exist_ok=True)
+    return folder.resolve()
+
+
+def _positive_int(value, name: str) -> int:
+    if isinstance(value, bool) or not isinstance(value, (int, np.integer)) or value < 1:
+        raise ValueError(f"{name} must be a positive integer, got {value!r}")
+    return int(value)
+
+
+def _default_threads() -> int:
+    return max(1, min((os.cpu_count() or 2) - 1, 16))
+
+
+def _validate_cells(cells, profiles: Optional[Sequence[str]], profile_prefix: str) -> List[str]:
+    if not hasattr(cells, "geometry") or not hasattr(cells, "crs"):
+        raise TypeError("cells must be a GeoDataFrame of cell polygons")
+    if cells.crs is None:
+        raise FimUnsupportedError("cells has no CRS")
+    if "cell_idx" not in cells.columns:
+        raise KeyError("cells needs a 'cell_idx' column (zero-based HEC-RAS cell index)")
+    if not pd.api.types.is_integer_dtype(cells["cell_idx"]):
+        raise TypeError("cells 'cell_idx' must be an integer column")
+    if cells["cell_idx"].duplicated().any():
+        raise ValueError("cells 'cell_idx' values must be unique")
+    if profiles is None:
+        profiles = [c for c in cells.columns if isinstance(c, str) and c.startswith(profile_prefix)]
+        if not profiles:
+            raise KeyError(f"cells has no profile columns starting with {profile_prefix!r}")
+    else:
+        profiles = [profiles] if isinstance(profiles, str) else list(profiles)
+        if not profiles:
+            raise ValueError("profiles is empty")
+        missing = [p for p in profiles if p not in cells.columns]
+        if missing:
+            raise KeyError(f"profile columns not in cells: {missing}")
+        if len(set(profiles)) != len(profiles):
+            raise ValueError("profiles contains duplicates")
+    if any(not isinstance(p, str) or not _engine._SAFE_ID.fullmatch(p) for p in profiles):
+        raise FimUnsupportedError("profile names must match [A-Za-z0-9_.-]+")
+    if len({p.casefold() for p in profiles}) != len(profiles):
+        raise ValueError("profile names must be unique ignoring case")
+    for p in profiles:
+        if not pd.api.types.is_numeric_dtype(cells[p]):
+            raise TypeError(f"profile column {p!r} must be numeric")
+    return profiles
+
+
+
+def _validate_centers(centers, cells):
+    """Validate caller centres and preserve the upstream ascending id order."""
+    from pyproj import CRS
+
+    if not hasattr(centers, "geometry") or not hasattr(centers, "crs"):
+        raise TypeError("centers must be a GeoDataFrame of points")
+    if "cell_idx" not in centers.columns:
+        raise KeyError("centers needs a 'cell_idx' column")
+    if not pd.api.types.is_integer_dtype(centers["cell_idx"]):
+        raise TypeError("centers 'cell_idx' must be an integer column")
+    if centers["cell_idx"].isna().any() or centers["cell_idx"].duplicated().any():
+        raise ValueError("centers 'cell_idx' values must be non-null and unique")
+    if centers.geometry.isna().any() or centers.geometry.is_empty.any() or not centers.geom_type.eq("Point").all():
+        raise FimUnsupportedError("centers geometries must be non-empty points")
+    if centers.crs is not None and CRS.from_user_input(centers.crs) != CRS.from_user_input(cells.crs):
+        raise FimUnsupportedError("centers and cells have different CRSs")
+    return centers.sort_values("cell_idx", kind="stable").reset_index(drop=True)
+
+
+def _empty_row(profile: str, status: str, **values) -> dict:
+    row = {name: None for name in MANIFEST_COLUMNS}
+    row.update(profile=profile, status=status, **values)
+    return row
+
+
+class RasFim:
+    """Static namespace for the optional ras2fim-2D FIM mapping method.
+
+    All methods are static; do not instantiate.
+    """
+
+    ENGINE_NAME = _engine.ENGINE_NAME
+    ENGINE_ENV_VAR = _engine.ENGINE_ENV_VAR
+    MANIFEST_COLUMNS = tuple(MANIFEST_COLUMNS)
+
+    @staticmethod
+    @log_call
+    def find_engine(engine_path: Optional[PathLike] = None) -> Path:
+        """Return the path of the ``ras2fim-batch`` engine executable.
+
+        Resolution order: ``engine_path``, then the ``RAS_COMMANDER_FIM_ENGINE``
+        environment variable, then ``ras2fim-batch`` on ``PATH``.
+
+        Raises:
+            FimEngineNotFoundError: No executable was found. The engine is
+                never built or installed automatically.
+        """
+        return _engine.find_engine(engine_path)
+
+    @staticmethod
+    @log_call
+    def get_engine_info(engine_path: Optional[PathLike] = None) -> Dict[str, Any]:
+        """Return the engine path and its method record (``ras2fim-batch method``)."""
+        engine = _engine.find_engine(engine_path)
+        return {"engine_path": str(engine), "method": _engine.engine_method(engine)}
+
+    @staticmethod
+    @log_call
+    def get_cells_from_results_gpkg(
+        results_gpkg: PathLike,
+        layer: str = RAS2FIM_CELLS_LAYER,
+    ) -> "gpd.GeoDataFrame":
+        """Read a ras2fim-2D hydraulic-results cell layer.
+
+        The ras2fim-2D layer ``02_cells_wsel_ar`` holds one polygon per cell
+        with ``cell_idx`` and WSE profile columns (``wsel_*``), NaN where the
+        cell is dry for that profile. The file is opened read-only.
+
+        Returns:
+            GeoDataFrame: The layer as stored.
+        """
+        _require_dependencies()
+        import geopandas as gpd
+
+        path = _require_path(results_gpkg, "results_gpkg")
+        layers = list(gpd.list_layers(path)["name"])
+        if layer not in layers:
+            raise KeyError(f"layer {layer!r} not in {path.name} (layers: {layers})")
+        return gpd.read_file(path, layer=layer)
+
+    @staticmethod
+    @log_call
+    def get_cell_centers(
+        hdf_path: PathLike,
+        cell_ids: Optional[Iterable[int]] = None,
+        *,
+        mesh_name: Optional[str] = None,
+    ) -> "gpd.GeoDataFrame":
+        """Return HEC-RAS 2D cell centres for the FIM method.
+
+        Centres are the computational cell centres (``HdfMesh.get_mesh_cell_points``),
+        not polygon centroids.
+
+        Args:
+            hdf_path: Plan or geometry HDF that contains the 2D mesh geometry.
+            cell_ids: Zero-based cell indices to return. ``None`` returns every
+                cell. Duplicates are removed and the result is sorted by
+                ``cell_idx``.
+            mesh_name: 2D flow area name. Required when the HDF has more than one.
+
+        Returns:
+            gpd.GeoDataFrame: Cell indices and point geometries.
+
+        Raises:
+            FimUnsupportedError: No mesh, an ambiguous or unknown mesh, or a
+                requested cell that is not in the mesh.
+        """
+        _require_dependencies()
+        from ..hdf.HdfMesh import HdfMesh
+
+        path = _require_path(hdf_path, "hdf_path")
+        points = HdfMesh.get_mesh_cell_points(path, include_ghost_cells=True)
+        if points is None or len(points) == 0:
+            raise FimUnsupportedError(f"{path.name}: no 2D mesh cell centres could be read")
+        names = list(dict.fromkeys(points["mesh_name"]))
+        if mesh_name is None:
+            if len(names) != 1:
+                raise FimUnsupportedError(f"{path.name} has {len(names)} 2D flow areas {names}; pass mesh_name")
+            mesh_name = names[0]
+        elif mesh_name not in names:
+            raise FimUnsupportedError(f"mesh {mesh_name!r} not in {path.name} (meshes: {names})")
+        mesh = points[points["mesh_name"] == mesh_name]
+        by_id = mesh.set_index("cell_id")
+        if cell_ids is None:
+            ids = np.asarray(sorted(by_id.index))
+        else:
+            ids = np.asarray(sorted(set(int(v) for v in cell_ids)), dtype=np.int64)
+            missing = ids[~np.isin(ids, by_id.index.to_numpy())]
+            if len(missing):
+                raise FimUnsupportedError(
+                    f"{len(missing)} cell_idx values are not in mesh {mesh_name!r}: {missing[:10].tolist()}"
+                )
+        import geopandas as gpd
+
+        return gpd.GeoDataFrame(
+            {"cell_idx": ids, "geometry": by_id.loc[ids, "geometry"].to_numpy()},
+            geometry="geometry", crs=points.crs,
+        )
+
+    @staticmethod
+    @log_call
+    def get_cells_from_plan_hdf(
+        hdf_path: PathLike,
+        *,
+        mesh_name: Optional[str] = None,
+        profile_name: str = "wsel_max",
+        min_depth: float = 0.0,
+    ) -> "gpd.GeoDataFrame":
+        """Build a one-profile cell table from a plan HDF's maximum results.
+
+        Uses ``HdfMesh.get_mesh_cell_polygons(strict=True)``,
+        ``HdfResultsMesh.get_mesh_max_ws`` and ``HdfResultsMesh.get_mesh_max_depth``.
+        A cell is wet when its maximum depth is greater than ``min_depth``;
+        dry cells get NaN.
+
+        Returns:
+            gpd.GeoDataFrame: Cell indices, profile WSE and polygon geometries.
+                Frames from plans on the same geometry can be joined on
+                ``cell_idx`` to map a batch of profiles.
+        """
+        _require_dependencies()
+        import geopandas as gpd
+
+        from ..hdf.HdfMesh import HdfMesh
+        from ..hdf.HdfResultsMesh import HdfResultsMesh
+
+        path = _require_path(hdf_path, "hdf_path")
+        if not np.isfinite(min_depth) or min_depth < 0:
+            raise ValueError(f"min_depth must be finite and >= 0, got {min_depth!r}")
+        polygons = HdfMesh.get_mesh_cell_polygons(path, strict=True)
+        if polygons is None or len(polygons) == 0:
+            raise FimUnsupportedError(f"{path.name}: no 2D mesh cell polygons could be read")
+        names = list(dict.fromkeys(polygons["mesh_name"]))
+        if mesh_name is None:
+            if len(names) != 1:
+                raise FimUnsupportedError(f"{path.name} has {len(names)} 2D flow areas {names}; pass mesh_name")
+            mesh_name = names[0]
+        elif mesh_name not in names:
+            raise FimUnsupportedError(f"mesh {mesh_name!r} not in {path.name} (meshes: {names})")
+
+        def _one(frame, column_hint):
+            frame = frame[frame["mesh_name"] == mesh_name]
+            columns = [c for c in frame.columns if column_hint in str(c).lower() and "time" not in str(c).lower()]
+            if len(columns) != 1:
+                raise FimUnsupportedError(f"cannot identify the {column_hint} column in {list(frame.columns)}")
+            return frame.set_index("cell_id")[columns[0]]
+
+        wse = _one(HdfResultsMesh.get_mesh_max_ws(path), "water_surface")
+        depth = _one(HdfResultsMesh.get_mesh_max_depth(path), "depth")
+        cells = polygons[polygons["mesh_name"] == mesh_name]
+        ids = cells["cell_id"].to_numpy(dtype=np.int64)
+        missing = np.setdiff1d(ids, wse.index.to_numpy())
+        if len(missing) or len(np.setdiff1d(ids, depth.index.to_numpy())):
+            raise FimUnsupportedError(f"maximum results are missing for {len(missing)} or more mesh cells")
+        wse_values = wse.loc[ids].to_numpy(dtype=np.float64)
+        wet = depth.loc[ids].to_numpy(dtype=np.float64) > float(min_depth)
+        return gpd.GeoDataFrame(
+            {"cell_idx": ids, profile_name: np.where(wet, wse_values, np.nan),
+             "geometry": cells.geometry.to_numpy()},
+            geometry="geometry", crs=polygons.crs,
+        )
+
+    @staticmethod
+    @log_call
+    def resolve_aoi(
+        bbox: Optional[Sequence[float]] = None,
+        polygon: Any = None,
+        *,
+        polygon_layer: Optional[str] = None,
+        aoi_crs: Any = None,
+        default_crs: Any = None,
+    ) -> Optional[FimAoi]:
+        """Validate a bounding box OR polygon area of interest.
+
+        Args:
+            bbox: ``(xmin, ymin, xmax, ymax)``. Its CRS is ``aoi_crs``, else
+                ``default_crs``.
+            polygon: A Shapely Polygon/MultiPolygon (needs ``aoi_crs``), a
+                GeoDataFrame, or a vector file path (GeoJSON, GeoPackage, ...).
+                Holes and multiple parts are kept; features are unioned.
+            polygon_layer: Layer of a multi-layer polygon file.
+            aoi_crs: CRS of the AOI. Must agree with a frame or file CRS.
+            default_crs: CRS used for a bbox without ``aoi_crs``.
+
+        Returns:
+            FimAoi, or None when neither bbox nor polygon is given.
+
+        Raises:
+            FimAoiError: Both or invalid AOIs, a missing or conflicting CRS,
+                invalid or empty geometry.
+        """
+        _require_dependencies()
+        return _aoi.resolve_aoi(bbox=bbox, polygon=polygon, polygon_layer=polygon_layer,
+                                aoi_crs=aoi_crs, default_crs=default_crs)
+
+    @staticmethod
+    @log_call
+    def prepare_profile(cells, centers, profile: str, pixel_size: float) -> FimPreparedProfile:
+        """Prepare the global interpolation samples and axes for one profile.
+
+        This is the preparation ``map_profiles`` sends to the engine, exposed
+        for inspection and qualification. It always uses every wet cell.
+        Inputs are not modified.
+        """
+        _require_dependencies()
+        _validate_cells(cells, [profile], DEFAULT_PROFILE_PREFIX)
+        if not (np.isfinite(pixel_size) and pixel_size > 0):
+            raise ValueError(f"pixel_size must be positive, got {pixel_size!r}")
+        return _prepare.prepare_profile(cells, _validate_centers(centers, cells), profile, float(pixel_size))
+
+    @staticmethod
+    @log_call
+    def map_profiles(
+        cells,
+        terrain_path: PathLike,
+        output_folder: PathLike,
+        *,
+        profiles: Optional[Sequence[str]] = None,
+        profile_prefix: str = DEFAULT_PROFILE_PREFIX,
+        centers=None,
+        hdf_path: Optional[PathLike] = None,
+        mesh_name: Optional[str] = None,
+        output_crs: Any = "EPSG:3857",
+        output_resolution: float = 3.0,
+        bbox: Optional[Sequence[float]] = None,
+        polygon: Any = None,
+        polygon_layer: Optional[str] = None,
+        aoi_crs: Any = None,
+        aoi: Optional[FimAoi] = None,
+        engine_path: Optional[PathLike] = None,
+        threads: Optional[int] = None,
+        profiles_per_request: int = 4,
+        max_inflight_profiles: int = 1,
+        max_cache_mib: int = 64,
+        max_profile_mib: int = 1024,
+        nudge_method: str = "lookup",
+        terrain_crs_fnv1a64: Optional[str] = None,
+        write_floodplain: bool = True,
+        keep_work: bool = False,
+        timeout: Optional[float] = None,
+        raise_on_failure: bool = True,
+    ) -> pd.DataFrame:
+        """Map a batch of cell WSE profiles to depth and WSE rasters.
+
+        Every profile shares one terrain and one engine session per request
+        of ``profiles_per_request`` profiles. Sample preparation, Delaunay
+        topology, query axes and the wet mask always use every wet cell of a
+        profile. An AOI only selects pixels of the final output grid, so an
+        AOI product equals the crop of the full product. The preparation cost
+        therefore does not shrink with the AOI.
+
+        Args:
+            cells (geopandas.GeoDataFrame): Cell polygons with ``cell_idx`` and WSE
+                profile columns (NaN = dry), in the terrain CRS. Not modified.
+            terrain_path: Single-band terrain GeoTIFF, same CRS as ``cells``.
+                Its pixel width is the interpolation pixel size.
+            output_folder: New or empty folder for products and the manifest.
+            profiles: Profile columns to map. Default: columns starting with
+                ``profile_prefix``.
+            centers (geopandas.GeoDataFrame): Unique integer ``cell_idx`` and centre points.
+                Give either ``centers`` or ``hdf_path``.
+            hdf_path: Plan or geometry HDF; centres are read through
+                :meth:`get_cell_centers`.
+            mesh_name: 2D flow area for ``hdf_path`` (required for several).
+            output_crs: CRS of the final grid (must have an EPSG code).
+            output_resolution: Final pixel size in ``output_crs`` units.
+            bbox: Bounding box; without ``aoi_crs`` it is in ``output_crs``.
+            polygon: Polygon area of interest; see :meth:`resolve_aoi`.
+            polygon_layer: Layer name for a polygon file.
+            aoi_crs: CRS of the area of interest.
+            aoi: A :class:`FimAoi` from :meth:`resolve_aoi` (instead of the
+                bbox/polygon arguments).
+            engine_path: Engine executable; see :meth:`find_engine`.
+            threads: Engine threads. Default ``min(cpu_count - 1, 16)``.
+            profiles_per_request: Profiles prepared and run per engine call.
+                This bounds the prepared inputs on disk at one time.
+            max_inflight_profiles: Profiles the engine evaluates concurrently
+                within one call (default 1). Concurrent profiles share one
+                decoded-terrain cache and the ``threads`` pool; each counts
+                against ``max_profile_mib``.
+            max_cache_mib: Engine decoded-terrain cache budget.
+            max_profile_mib: Engine per-profile working-set budget; a profile
+                whose planned peak exceeds it fails before allocation.
+            nudge_method: ``"lookup"`` (one full-grid index warp, AOI pixels
+                gathered from it) or ``"full_warp"``.
+            terrain_crs_fnv1a64: Engine WKT hash to accept when the engine
+                cannot identify the terrain EPSG code.
+            write_floodplain: Write product 11.
+            keep_work: Keep the engine requests and raw outputs in
+                ``output_folder/.fim_work`` for review.
+            timeout: Seconds allowed per engine call (default no limit).
+            raise_on_failure: Raise :class:`FimMappingError` when any profile
+                fails (default). The manifest is written first either way.
+
+        Returns:
+            DataFrame with one row per profile (``fim_product_manifest``
+            schema). ``status`` is ``complete``, ``no_flooded_pixels``,
+            ``empty_aoi``, ``failed``, or ``not_run`` (a fatal engine error
+            stopped the batch sequence). The manifest is also written to
+            ``fim_manifest.json`` before any error is raised.
+
+        Raises:
+            FimEngineNotFoundError: No engine executable.
+            FimEngineError: The engine rejected a request or crashed.
+            FimUnsupportedError: Input outside the engine contract.
+            FimAoiError: Invalid area of interest.
+            FimMappingError: One or more profiles failed.
+            FileExistsError: ``output_folder`` is not empty.
+        """
+        _require_dependencies()
+        import rasterio
+        from pyproj import CRS
+
+        profiles = _validate_cells(cells, profiles, profile_prefix)
+        terrain = _require_path(terrain_path, "terrain_path")
+        if (centers is None) == (hdf_path is None):
+            raise ValueError("give exactly one of centers or hdf_path")
+        if nudge_method not in NUDGE_METHODS:
+            raise ValueError(f"nudge_method must be one of {NUDGE_METHODS}, got {nudge_method!r}")
+        threads = _default_threads() if threads is None else _positive_int(threads, "threads")
+        profiles_per_request = _positive_int(profiles_per_request, "profiles_per_request")
+        max_inflight_profiles = _positive_int(max_inflight_profiles, "max_inflight_profiles")
+        max_cache_mib = _positive_int(max_cache_mib, "max_cache_mib")
+        max_profile_mib = _positive_int(max_profile_mib, "max_profile_mib")
+        if not (np.isfinite(output_resolution) and output_resolution > 0):
+            raise ValueError(f"output_resolution must be positive, got {output_resolution!r}")
+        output_crs = CRS.from_user_input(output_crs)
+        dst_epsg = output_crs.to_epsg()
+        if dst_epsg is None:
+            raise FimUnsupportedError(f"output_crs {output_crs.to_string()} has no EPSG code")
+        if aoi is not None:
+            if any(v is not None for v in (bbox, polygon, polygon_layer, aoi_crs)):
+                raise ValueError("give aoi or the bbox/polygon arguments, not both")
+            if not isinstance(aoi, FimAoi):
+                raise TypeError("aoi must be a FimAoi from RasFim.resolve_aoi()")
+        else:
+            aoi = _aoi.resolve_aoi(bbox=bbox, polygon=polygon, polygon_layer=polygon_layer,
+                                   aoi_crs=aoi_crs, default_crs=output_crs)
+
+        engine = _engine.find_engine(engine_path)
+        method = _engine.engine_method(engine)
+
+        watched = {"terrain": terrain}
+        if hdf_path is not None:
+            watched["hdf"] = _require_path(hdf_path, "hdf_path")
+        if isinstance(polygon, (str, os.PathLike)):
+            watched["polygon"] = _require_path(polygon, "polygon")
+        before = {k: _file_identity(p) for k, p in watched.items()}
+
+        if hdf_path is not None:
+            centers = RasFim.get_cell_centers(watched["hdf"], cells["cell_idx"].to_numpy(), mesh_name=mesh_name)
+            # HDF centres are model coordinates; as in ras2fim-2D they take the
+            # cells' CRS (HDF and GeoPackage WKT spellings can differ).
+            centers = centers.set_crs(cells.crs, allow_override=True)
+        else:
+            centers = _validate_centers(centers, cells)
+        with rasterio.open(terrain) as src:
+            pixel_size = float(src.res[0])
+            terrain_bounds = tuple(src.bounds)
+        terrain_block = _engine.terrain_identity(engine, terrain, cells.crs, terrain_crs_fnv1a64)
+
+        folder = _prepare_output_folder(output_folder)
+        work = Path(tempfile.mkdtemp(prefix=".fim_work_", dir=folder))
+        rows: Dict[str, dict] = {}
+        reports = []
+        fatal: Optional[BaseException] = None
+        try:
+            for batch, start in enumerate(range(0, len(profiles), profiles_per_request)):
+                names = profiles[start:start + profiles_per_request]
+                batch_dir = work / f"batch_{batch:04d}"
+                (batch_dir / "masks").mkdir(parents=True)
+                requests = []
+                for name in names:
+                    try:
+                        prep = _prepare.prepare_profile(cells, centers, name, pixel_size)
+                        grids = _prepare.derive_grids(prep, terrain_bounds, output_crs, output_resolution)
+                        window, mask_file = None, None
+                        if aoi is not None:
+                            window = _aoi.aoi_window(aoi, grids.dest_transform, grids.dest_width,
+                                                     grids.dest_height, output_crs)
+                            if window.is_empty:
+                                rows[name] = _empty_row(name, _aoi.AOI_STATUS_EMPTY,
+                                                        wet_cells=prep.wet_cell_count,
+                                                        samples=prep.sample_count,
+                                                        crs=output_crs.to_string())
+                                continue
+                            if window.mask is not None:
+                                mask_file = f"masks/{name}.u8"
+                                np.ascontiguousarray(window.mask, dtype=np.uint8).tofile(batch_dir / mask_file)
+                        inputs_dir = f"inputs/{name}"
+                        _prepare.write_profile_inputs(batch_dir / inputs_dir, prep, grids)
+                        grids.wet_mask = None
+                        rows[name] = _empty_row(name, "pending", wet_cells=prep.wet_cell_count,
+                                                samples=prep.sample_count)
+                        requests.append(_engine.ProfileRequest(name, inputs_dir, grids, window, mask_file))
+                        del prep
+                    except (OSError, MemoryError):
+                        raise
+                    except Exception as exc:  # e.g. Qhull errors on degenerate samples
+                        logger.error("FIM profile %s failed during preparation: %s", name, exc)
+                        rows[name] = _empty_row(name, "failed", error=f"{type(exc).__name__}: {exc}")
+                if not requests:
+                    continue
+                request = _engine.build_request(
+                    terrain_block, requests, dst_epsg=dst_epsg, threads=threads,
+                    max_cache_bytes=max_cache_mib * 1024 * 1024,
+                    max_profile_bytes=max_profile_mib * 1024 * 1024, nudge_method=nudge_method,
+                    max_inflight_profiles=max_inflight_profiles)
+                outputs, report = _engine.run_request(engine, batch_dir, batch, request, requests, timeout)
+                reports.append({"batch": batch, "profiles": [r.profile for r in requests], "report": report})
+                for result in outputs:
+                    row = rows[result.profile]
+                    if result.status != "complete":
+                        logger.error("FIM profile %s failed: %s", result.profile, result.error)
+                        row.update(status="failed", error=result.error)
+                        continue
+                    row.update(RasFim._write_products(folder, result, output_crs, write_floodplain))
+                if not keep_work:
+                    shutil.rmtree(batch_dir)
+        except Exception as exc:
+            fatal = exc
+            message = f"not completed: {type(exc).__name__}: {exc}"
+            for name in profiles:
+                row = rows.get(name)
+                if row is None:
+                    rows[name] = _empty_row(name, "not_run", error=message)
+                elif row["status"] == "pending":
+                    row.update(status="failed", error=message)
+        finally:
+            if keep_work:
+                kept = folder / ".fim_work"
+                work.rename(kept)
+                work = kept
+            else:
+                shutil.rmtree(work, ignore_errors=True)
+
+        after = {k: _file_identity(p) for k, p in watched.items()}
+        changed = [k for k in watched if before[k] != after[k]]
+
+        manifest = pd.DataFrame([rows[p] for p in profiles], columns=MANIFEST_COLUMNS)
+        RasFim._write_manifest(folder, manifest, {
+            "engine_path": str(engine), "method": method, "reports": reports,
+            "inputs": {k: {"path": str(p), "size": after[k][0], "mtime_ns": after[k][1]}
+                       for k, p in watched.items()},
+            "options": {"output_crs": output_crs.to_string(), "output_resolution": float(output_resolution),
+                        "pixel_size": pixel_size, "threads": threads,
+                        "profiles_per_request": profiles_per_request,
+                        "max_inflight_profiles": max_inflight_profiles, "max_cache_mib": max_cache_mib,
+                        "max_profile_mib": max_profile_mib, "nudge_method": nudge_method,
+                        "write_floodplain": bool(write_floodplain), "mesh_name": mesh_name},
+            "aoi": aoi.describe() if aoi is not None else None,
+            "work_folder": str(work) if keep_work else None,
+        })
+        if fatal is not None:
+            raise fatal
+        if changed:
+            raise FimMappingError(f"input files changed during mapping: {changed}", manifest)
+        failed = manifest.loc[manifest["status"].isin(["failed", "not_run"]), "profile"].tolist()
+        if failed and raise_on_failure:
+            raise FimMappingError(
+                f"{len(failed)} of {len(profiles)} profile(s) failed: {failed}; see {folder / MANIFEST_NAME}",
+                manifest,
+            )
+        return manifest
+
+    @staticmethod
+    @log_call
+    def map_ras2fim_results(
+        results_gpkg: PathLike,
+        hdf_path: PathLike,
+        terrain_path: PathLike,
+        output_folder: PathLike,
+        **kwargs,
+    ) -> pd.DataFrame:
+        """Map every ``wsel_*`` profile of a ras2fim-2D hydraulic-results GeoPackage.
+
+        Reads layer ``02_cells_wsel_ar``, takes cell centres from ``hdf_path``,
+        and calls :meth:`map_profiles` with ``kwargs``.
+        """
+        cells = RasFim.get_cells_from_results_gpkg(results_gpkg)
+        return RasFim.map_profiles(cells, terrain_path, output_folder, hdf_path=hdf_path, **kwargs)
+
+    @staticmethod
+    def _write_products(folder: Path, result, output_crs, write_floodplain: bool) -> dict:
+        depth_path, wse_path, floodplain_path = _products.product_paths(folder, result.profile)
+        _products.write_raster(depth_path, result.depth, result.transform, output_crs)
+        _products.write_raster(wse_path, result.wse, result.transform, output_crs)
+        flooded = int(_products.flooded_mask(result.depth).sum())
+        status = "complete" if flooded else "no_flooded_pixels"
+        floodplain = None
+        if write_floodplain and flooded:
+            frame = _products.floodplain_frame(result.depth, result.transform, output_crs)
+            frame.to_file(floodplain_path)
+            floodplain = str(floodplain_path)
+        window = result.unit.get("window", [0, 0, result.depth.shape[1], result.depth.shape[0]])
+        return {
+            "status": status, "depth_tif": str(depth_path), "wse_tif": str(wse_path),
+            "floodplain_gpkg": floodplain, "col_off": int(window[0]), "row_off": int(window[1]),
+            "width": int(result.depth.shape[1]), "height": int(result.depth.shape[0]),
+            "transform": tuple(float(v) for v in tuple(result.transform)[:6]),
+            "crs": output_crs.to_string(), "depth_finite_pixels": int(np.isfinite(result.depth).sum()),
+            "flooded_pixels": flooded, "error": None,
+        }
+
+    @staticmethod
+    def _write_manifest(folder: Path, manifest: pd.DataFrame, details: dict) -> Path:
+        records = json.loads(manifest.to_json(orient="records"))
+        document = {"schema": MANIFEST_SCHEMA, "created_utc": datetime.now(timezone.utc).isoformat(),
+                    "method": "ras2fim-2D Step 05 (ras2fim-batch engine)", **details, "profiles": records}
+        path = folder / MANIFEST_NAME
+        path.write_text(json.dumps(document, indent=1, default=str), encoding="utf-8")
+        return path

@@ -1,0 +1,20 @@
+{
+  "method": "ras2fim-step05-stages/0.1.0 method-r2",
+  "files": {
+    "Cargo.toml": "148e797cc3be2a32c74998f0539b8638591606ca99c418903d0a172b9eec8323",
+    "Cargo.lock": "0bc189b7d853a93396094a708495dd99d203565f5d9f6ca67092e30e19696d2a",
+    "src/cache.rs": "67fe5979291828d50f97fd121a0fffd68017eaab3fbc0ba2472f35256ac5d59c",
+    "src/interp.rs": "1be2beb6d6d0bd622f5f3fcf410be32490a8e22bbda2aa6b9bd483a37a567575",
+    "src/lib.rs": "275680a92e1717d87196a1e6e0267f6e9e33a51bdf15bc5c301c7214200548be",
+    "src/main.rs": "242b657dd3481b870ae638e1dbeb7b465d5715937336ba3c876a32a3269ff877",
+    "src/model.rs": "2454206dcabbbb65569d538977736cb5af83894133bc1786255e278b75681bbc",
+    "src/scipy_interp.rs": "8eedf291604c84faced5690da232f5d51a76658549326433b636e35a48a78e92",
+    "src/session.rs": "fb9a9e1b667c5dbf9a7b32404752550bda66cd79ee8b4a73f9901c2db3b16c54",
+    "src/sink.rs": "a6888e88a32a9ae15bf3ba4979deff5be528ff5ad7a180e3e5591341dc5dde7d",
+    "src/step05.rs": "a6a3cfa98b40e697bba88a84a151afd7c688192553ca8b47654786f63a954d52",
+    "src/terrain.rs": "66e7a32fb51cfb9e8803580d53630ee85327e52a21231399e9c98f0b4bd0b4cc",
+    "tests/hardening.rs": "c47f0cd24fce4fe5afd0514ff7857d8e51b362492e0eb43ec8d7070159b3bf20",
+    "tests/live_binary.rs": "d00846473760808dd2b1eefdc3097ab23762829f251f80f7a78a0a140d18b0af",
+    "tests/live_step05.rs": "d702ab7035c6b401e70cebfc181b1cdfdd435f52431e834a6a60c595feaa3979"
+  }
+}

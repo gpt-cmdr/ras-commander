@@ -42,6 +42,10 @@ Rasterized depth-comparison benefits and mesh-based WSE comparison:
 - [`BenefitAreaResult`](benefits.md#calculate-from-existing-depth-rasters) - Raster paths, thresholds, and class-area statistics
 - [`HdfBenefitAreas`](benefits.md#raster-benefitarea-versus-hdfbenefitareas) - Separate 2D mesh/WSE benefit and rise analysis
 
+## ras2fim-2D Flood Inundation Mapping (Optional)
+
+- [`RasFim`](fim.md) - Batch depth/WSE rasters and floodplain polygons from 2D cell WSE profiles with the ras2fim-2D Step 05 method and the separate `ras2fim-batch` engine; bounding-box or polygon AOI; product manifest
+
 ## Hydrofabric Conflation
 
 - [`RasNetworkConflation`](hydrofabric.md) - Extent-first network-edge classification with optional multi-criteria QA

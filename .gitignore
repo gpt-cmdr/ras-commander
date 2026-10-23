@@ -275,3 +275,4 @@ terminal-logs/
 .env.local
 .pypirc
 /agent_tasks/plans
+rust/step05/target/
