@@ -30,6 +30,7 @@ jobs:
           python -m pytest tests/ras_text_read_only_test.py
           tests/test_clear_geometry_infiltration.py
           tests/test_geometry_association_inventory.py
+          tests/test_area_association_sync.py
           tests/test_property_tables_worker.py
           tests/test_mesh_quality_coverage.py
           tests/test_mannings_region_recovery.py
