@@ -47,7 +47,6 @@ from .RasSlurm import (
     _TOKEN,
 )
 from .remote.ExecutionContract import atomic_write_json, sha256_file
-from .fast_hdf import h5py_until_qualified
 
 logger = get_logger(__name__)
 
@@ -1115,7 +1114,6 @@ def _decode_hdf_string(value: Any) -> str:
     return str(value).rstrip("\x00")
 
 
-@h5py_until_qualified
 def _gridded_dss_dependency(source_tmp_hdf: Path) -> Optional[dict[str, Any]]:
     """Resolve the external DSS dependency declared by a gridded plan HDF.
 

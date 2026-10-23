@@ -394,7 +394,6 @@ class HdfInfiltration:
 
     @staticmethod
     @log_call
-    @h5py_until_qualified
     def get_infiltration_baseoverrides(hdf_path: Path) -> Optional[pd.DataFrame]:
         """
         Retrieve current infiltration parameters from a HEC-RAS geometry HDF file.
@@ -447,7 +446,6 @@ class HdfInfiltration:
     @staticmethod
     @log_call
     @standardize_input(file_type='geom_hdf')
-    @h5py_until_qualified
     def get_infiltration_region_names(hdf_path: Path) -> Optional[List[str]]:
         """Retrieve infiltration region names from a HEC-RAS geometry HDF file.
 
@@ -486,7 +484,6 @@ class HdfInfiltration:
     @staticmethod
     @log_call
     @standardize_input(file_type='geom_hdf')
-    @h5py_until_qualified
     def get_infiltration_calibration_regions(hdf_path: Path) -> Optional[Dict[str, pd.DataFrame]]:
         """Retrieve infiltration calibration region data from a HEC-RAS geometry HDF file.
 
@@ -549,7 +546,6 @@ class HdfInfiltration:
     @staticmethod
     @log_call
     @standardize_input(file_type='geom_hdf')
-    @h5py_until_qualified
     def get_infiltration_region_polygons(hdf_path: Path) -> 'gpd.GeoDataFrame':
         """Retrieve infiltration region polygons from a HEC-RAS geometry HDF file.
 
@@ -1357,7 +1353,6 @@ class HdfInfiltration:
     @staticmethod
     @log_call
     @standardize_input(file_type='geom_hdf')
-    @h5py_until_qualified
     def get_soil_raster_stats(
         geom_hdf_path: Path,
         landcover_hdf_path: Path = None,
@@ -1631,7 +1626,6 @@ class HdfInfiltration:
     @staticmethod
     @log_call
     @standardize_input(file_type='geom_hdf')
-    @h5py_until_qualified
     def get_infiltration_stats(
         geom_hdf_path: Path,
         landcover_hdf_path: Path = None,
@@ -2155,7 +2149,6 @@ class HdfInfiltration:
     @staticmethod
     @log_call
     @standardize_input(file_type='geom_hdf')
-    @h5py_until_qualified
     def get_landcover_raster_stats(
         geom_hdf_path: Path,
         landcover_hdf_path: Path = None,

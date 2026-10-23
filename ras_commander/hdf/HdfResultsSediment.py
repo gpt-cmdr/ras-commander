@@ -378,7 +378,6 @@ class HdfResultsSediment:
     @staticmethod
     @log_call
     @standardize_input(file_type='plan_hdf')
-    @h5py_until_qualified
     def get_active_layer_grain_class(hdf_path: Path, percentile: str = "D50",
                                      mesh_name: Optional[str] = None, time_index: int = -1,
                                      ras_object: Optional[Any] = None,

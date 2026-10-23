@@ -170,7 +170,8 @@ below lists each public method and its status in this release.
 
 <!-- QUALIFIED_METHODS_TABLE -->
 
-Evidence: the release gate route suites (route-1, route-2, extents) on the final branch.
+Evidence: the release gate route suites on the final branch (route-1 and extents: gate1; route-2: the
+requalification run on the full corpus manifest, 137 fixtures).
 A *case* is one public method or one parameterised variant of it. *Qualified* means at
 least one real fixture made a native read and returned a result identical to h5py
 (values, dtypes, columns, index, attrs, CRS, exceptions). Cases with no native-identical
@@ -179,57 +180,48 @@ fixture run on h5py in auto mode until a fixture proves them
 
 | Class | Cases qualified native | Native-identical method x fixture pairs | Cases running on h5py in auto |
 |---|---:|---:|---:|
-| `HdfBase` | 11 | 198 | 0 |
-| `HdfBndry` | 7 | 35 | 0 |
+| `HdfBase` | 11 | 244 | 0 |
+| `HdfBndry` | 7 | 40 | 0 |
 | `HdfChannelCapacity` | 4 | 58 | 0 |
-| `HdfCompletion` | 1 | 15 | 0 |
+| `HdfCompletion` | 1 | 53 | 0 |
 | `HdfHydraulicTables` | 3 | 66 | 0 |
-| `HdfInfiltration` | 5 | 44 | 9 |
-| `HdfLandCover` | 11 | 153 | 2 |
-| `HdfMesh` | 15 | 145 | 1 |
-| `HdfPipe` | 22 | 62 | 0 |
-| `HdfPlan` | 10 | 197 | 2 |
+| `HdfInfiltration` | 12 | 140 | 2 |
+| `HdfLandCover` | 11 | 338 | 2 |
+| `HdfMesh` | 15 | 168 | 1 |
+| `HdfPipe` | 22 | 191 | 0 |
+| `HdfPlan` | 11 | 584 | 1 |
 | `HdfProject` | 7 | 175 | 0 |
-| `HdfPump` | 4 | 11 | 1 |
-| `HdfResultsAnalysis` | 2 | 7 | 0 |
-| `HdfResultsBreach` | 4 | 24 | 0 |
-| `HdfResultsMesh` | 24 | 241 | 0 |
-| `HdfResultsPlan` | 13 | 125 | 2 |
+| `HdfPump` | 4 | 23 | 1 |
+| `HdfResultsAnalysis` | 2 | 14 | 0 |
+| `HdfResultsBreach` | 4 | 92 | 0 |
+| `HdfResultsMesh` | 24 | 277 | 0 |
+| `HdfResultsPlan` | 13 | 298 | 2 |
 | `HdfResultsProducts` | 1 | 13 | 0 |
 | `HdfResultsQuery` | 12 | 192 | 0 |
-| `HdfResultsSediment` | 5 | 10 | 3 |
-| `HdfResultsXsec` | 4 | 17 | 0 |
-| `HdfStorageArea` | 6 | 78 | 0 |
-| `HdfStruc` | 6 | 136 | 0 |
+| `HdfResultsSediment` | 6 | 28 | 2 |
+| `HdfResultsXsec` | 4 | 24 | 0 |
+| `HdfStorageArea` | 6 | 129 | 0 |
+| `HdfStruc` | 6 | 214 | 0 |
 | `HdfStruc1D` | 1 | 10 | 0 |
-| `HdfUtils` | 4 | 108 | 0 |
+| `HdfUtils` | 4 | 248 | 0 |
 | `HdfXsec` | 10 | 181 | 0 |
-| **Total** | **192** | **2301** | **20** |
+| **Total** | **201** | **3800** | **11** |
 
 Public methods running on h5py in auto mode (their data is absent from every corpus fixture):
 
-- `HdfInfiltration.get_infiltration_baseoverrides`
-- `HdfInfiltration.get_infiltration_calibration_regions`
 - `HdfInfiltration.get_infiltration_parameters`
-- `HdfInfiltration.get_infiltration_region_names`
-- `HdfInfiltration.get_infiltration_region_polygons`
-- `HdfInfiltration.get_infiltration_stats`
-- `HdfInfiltration.get_landcover_raster_stats`
-- `HdfInfiltration.get_soil_raster_stats`
 - `HdfInfiltration.get_soils_raster_stats`
 - `HdfLandCover.compute_final_mannings_raster`
 - `HdfLandCover.estimate_final_mannings_raster`
-- `HdfPlan.get_plan_met_precip_values`
 - `HdfPlan.get_starting_wse_method`
 - `HdfPump.get_pump_station_summary`
 - `HdfResultsPlan.get_reference_summary[lines]`
 - `HdfResultsPlan.get_reference_summary[points]`
-- `HdfResultsSediment.get_active_layer_grain_class`
 - `HdfResultsSediment.get_sediment_mesh_areas`
 - `HdfResultsSediment.is_sediment_plan`
 
 `HdfMesh.get_mesh_geometry_inventory` reads only metadata through h5py and is unaffected.
-Eighteen internal helpers outside `ras_commander/hdf` are marked the same way (see
+Internal helpers outside `ras_commander/hdf` are marked the same way (see
 `UNQUALIFIED_NATIVE`).
 <!-- /QUALIFIED_METHODS_TABLE -->
 

@@ -10,10 +10,8 @@ import tempfile
 import xml.etree.ElementTree as ET
 from pathlib import Path
 from typing import Any
-from ..fast_hdf import h5py_until_qualified
 
 
-@h5py_until_qualified
 def validate_registration(output: Path, raster: Path) -> dict[str, Any]:
     """Require a self-contained native HDF and VRT binding to the owned TIFF."""
     import h5py

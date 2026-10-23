@@ -646,7 +646,6 @@ class HdfPlan:
     @staticmethod
     @log_call
     @standardize_input(file_type='plan_hdf')
-    @h5py_until_qualified
     def get_plan_met_precip_values(
         hdf_path: Union[str, Path, int, h5py.File], *, ras_object=None,
     ) -> Dict[str, Any]:

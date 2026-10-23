@@ -41,7 +41,6 @@ from .LoggingConfig import get_logger
 from .RasBco import BcoMonitor
 from .RasPlan import RasPlan
 from .RasPrj import ras
-from .fast_hdf import h5py_until_qualified
 
 logger = get_logger(__name__)
 
@@ -1875,7 +1874,6 @@ class RasPreprocess:
             return None
 
     @staticmethod
-    @h5py_until_qualified
     def _validate_materialized_gridded_precipitation(
         tmp_hdf: Path,
     ) -> Tuple[bool, str]:
