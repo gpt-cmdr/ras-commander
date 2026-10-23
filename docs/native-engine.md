@@ -207,7 +207,8 @@ fixture run on h5py in auto mode until a fixture proves them
 | `HdfXsec` | 10 | 181 | 0 |
 | **Total** | **201** | **3800** | **11** |
 
-Public methods running on h5py in auto mode (their data is absent from every corpus fixture):
+Public methods running on h5py in auto mode (no corpus fixture made a native read that could prove them:
+their data is absent from every fixture, or they read only metadata):
 
 - `HdfInfiltration.get_infiltration_parameters`
 - `HdfInfiltration.get_soils_raster_stats`
