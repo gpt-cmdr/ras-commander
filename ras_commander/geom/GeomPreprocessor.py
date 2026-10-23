@@ -1186,6 +1186,7 @@ class GeomPreprocessor:
                     existing_paths.append(hdf_message_path)
                     chunks.append(hdf_messages)
             except Exception as exc:
+                reraise_required(exc)
                 logger.debug(
                     f"Could not read HDF compute messages from {hdf_message_path}: {exc}"
                 )

@@ -4963,6 +4963,7 @@ class GeomMesh:
 
                 target_crs = HdfBase.get_projection(hdf_path)
             except Exception as exc:
+                reraise_required(exc)
                 logger.debug(f"Could not read project CRS for flowline regions: {exc}")
             if target_crs is None:
                 logger.warning(

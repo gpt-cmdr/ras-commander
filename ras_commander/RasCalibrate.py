@@ -453,7 +453,8 @@ def _normalize_steady_wse_frame(
                 profile_names = HdfResultsPlan.get_steady_profile_names(plan_hdf)
                 if len(profile_names) == 1:
                     resolved_profile = profile_names[0]
-            except Exception:
+            except Exception as exc:
+                reraise_required(exc)
                 resolved_profile = None
         result["Profile"] = resolved_profile or "Profile_1"
 

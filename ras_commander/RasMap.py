@@ -1449,6 +1449,9 @@ class RasMap:
                     record["inspection_status"] = "available"
                     record["inspection_error"] = None
                 except Exception as exc:
+                    from .fast_hdf import reraise_required
+
+                    reraise_required(exc)
                     record["inspection_status"] = "failed"
                     record["inspection_error"] = str(exc)
             records.append(record)

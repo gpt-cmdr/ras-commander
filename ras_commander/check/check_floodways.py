@@ -892,6 +892,7 @@ class CheckFloodways:
                         messages.append(msg)
 
         except Exception as e:
+            reraise_required(e)
             logger.debug(f"Could not check encroachment methods: {e}")
 
         return messages
