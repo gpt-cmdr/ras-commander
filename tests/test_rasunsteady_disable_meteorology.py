@@ -172,7 +172,7 @@ def test_disabled_et_mode_matches_official_gui_fixture(tmp_path, remove_source_r
         "Met BC=Evapotranspiration|Mode=Disable\n"
         "Boundary Location=,,,,,Area,,BC,\n"
     )
-    RasUnsteady.disable_meteorology(
+    evidence = RasUnsteady.disable_meteorology(
         unsteady, remove_source_references=remove_source_references
     )
     actual = [
@@ -180,3 +180,4 @@ def test_disabled_et_mode_matches_official_gui_fixture(tmp_path, remove_source_r
         if line.startswith("Met BC=Evapotranspiration|Mode=")
     ]
     assert actual == [expected]
+    assert evidence["text_state"]["evapotranspiration_mode"] == expected.rsplit("=", 1)[1]
