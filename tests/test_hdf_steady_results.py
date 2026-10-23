@@ -167,3 +167,102 @@ def test_steady_results_rejects_misaligned_variable_shape(tmp_path):
 
     with pytest.raises(ValueError, match="Maximum Depth Total.*shape"):
         HdfResultsPlan.get_steady_results(hdf_path)
+
+
+@pytest.mark.parametrize("layout", ["primary", "additional", "both"])
+def test_steady_energy_uses_stored_values_and_prefers_primary(tmp_path, layout):
+    path = tmp_path / "energy.p02.hdf"
+    _write_legacy_steady_plan_hdf(path)
+    xs = f"{STEADY_BASE_PATH}/Cross Sections"
+    primary = np.array([[103.25, 102.75], [104.5, 103.5]])
+    alternate = primary + 10
+    with h5py.File(path, "a") as hdf:
+        if layout in ("primary", "both"):
+            hdf.create_dataset(f"{xs}/Energy Grade", data=primary)
+        if layout in ("additional", "both"):
+            hdf.create_dataset(f"{xs}/Additional Variables/Energy Grade", data=alternate)
+
+    result = HdfResultsPlan.get_steady_results(path)
+
+    expected = alternate if layout == "additional" else primary
+    np.testing.assert_array_equal(result["energy"], expected.reshape(-1))
+    suffix = "Additional Variables/Energy Grade" if layout == "additional" else "Energy Grade"
+    assert result.attrs["column_sources"]["energy"] == f"{xs}/{suffix}"
+    assert "energy" not in result.attrs["unavailable_columns"]
+
+
+def test_steady_results_reports_absent_optional_outputs_once(tmp_path, monkeypatch):
+    import importlib
+
+    module = importlib.import_module("ras_commander.hdf.HdfResultsPlan")
+    warnings = []
+    monkeypatch.setattr(module.logger, "warning", lambda *args: warnings.append(args))
+    path = tmp_path / "unavailable.p02.hdf"
+    _write_legacy_steady_plan_hdf(path)
+
+    result = HdfResultsPlan.get_steady_results(path)
+
+    for column in ("energy", "froude", "min_ch_el"):
+        assert result[column].isna().all()
+        assert column in result.attrs["unavailable_columns"]
+        assert result.attrs["column_sources"][column] is None
+    assert len(warnings) == 1
+    message = warnings[0][0] % warnings[0][1:]
+    assert "Energy Grade" in message
+    assert "Froude # Channel" in message
+    assert "Min Ch El" in message
+    assert result.attrs["max_depth_source"] == "Maximum Depth Total"
+    assert list(result.columns) == [
+        "river", "reach", "node_id", "profile", "wsel", "velocity", "flow",
+        "froude", "energy", "max_depth", "hydraulic_depth", "channel_length",
+        "min_ch_el", "top_width", "area", "eg_slope", "friction_slope",
+    ]
+
+
+def test_present_nan_energy_does_not_fall_back_or_report_source_absent(tmp_path):
+    path = tmp_path / "present_nan.p02.hdf"
+    _write_legacy_steady_plan_hdf(path)
+    xs = f"{STEADY_BASE_PATH}/Cross Sections"
+    with h5py.File(path, "a") as hdf:
+        hdf.create_dataset(f"{xs}/Energy Grade", data=np.full((2, 2), np.nan))
+        hdf.create_dataset(f"{xs}/Additional Variables/Energy Grade", data=np.ones((2, 2)))
+        hdf.create_dataset(f"{xs}/Additional Variables/Froude # Channel", data=np.full((2, 2), np.nan))
+        hdf.create_dataset(f"{xs}/Additional Variables/Min Ch El", data=np.full((2, 2), np.nan))
+
+    result = HdfResultsPlan.get_steady_results(path)
+
+    assert result["energy"].isna().all()
+    for column in ("energy", "froude", "min_ch_el"):
+        assert column not in result.attrs["unavailable_columns"]
+        assert result.attrs["column_sources"][column] is not None
+
+
+@pytest.mark.parametrize("shape", [(1, 2), (4,), (2, 1)])
+def test_malformed_primary_energy_raises_even_with_valid_fallback(tmp_path, shape):
+    path = tmp_path / "bad_energy.p02.hdf"
+    _write_legacy_steady_plan_hdf(path)
+    xs = f"{STEADY_BASE_PATH}/Cross Sections"
+    with h5py.File(path, "a") as hdf:
+        hdf.create_dataset(f"{xs}/Energy Grade", data=np.ones(shape))
+        hdf.create_dataset(f"{xs}/Additional Variables/Energy Grade", data=np.ones((2, 2)))
+
+    with pytest.raises(ValueError, match="Energy Grade.*shape"):
+        HdfResultsPlan.get_steady_results(path)
+
+
+@pytest.mark.parametrize("keep_hydraulic_depth", [True, False])
+def test_depth_fallback_availability_tracks_actual_source(tmp_path, keep_hydraulic_depth):
+    path = tmp_path / "depth_source.p02.hdf"
+    _write_legacy_steady_plan_hdf(path)
+    add = f"{STEADY_BASE_PATH}/Cross Sections/Additional Variables"
+    with h5py.File(path, "a") as hdf:
+        del hdf[f"{add}/Maximum Depth Total"]
+        if not keep_hydraulic_depth:
+            del hdf[f"{add}/Hydraulic Depth Channel"]
+
+    result = HdfResultsPlan.get_steady_results(path)
+
+    assert ("max_depth" in result.attrs["unavailable_columns"]) is not keep_hydraulic_depth
+    assert result.attrs["column_sources"]["max_depth"] == (
+        f"{add}/Hydraulic Depth Channel" if keep_hydraulic_depth else None
+    )

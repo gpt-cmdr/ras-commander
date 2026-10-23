@@ -1329,6 +1329,20 @@ class HdfResultsPlan:
         without that dataset fall back to ``Hydraulic Depth Channel`` and
         record the selected dataset in ``df.attrs['max_depth_source']``.
 
+        ``energy`` uses the primary Cross Sections/Energy Grade dataset, with
+        Additional Variables/Energy Grade as a fallback only when the primary
+        dataset is absent. Optional profile outputs, including ``froude`` and
+        ``min_ch_el``, remain NaN when their datasets are not stored. No Froude
+        number or minimum channel elevation is inferred from other quantities.
+
+        ``df.attrs['column_sources']`` maps optional profile-output columns to
+        their selected HDF dataset paths, or None when no source is available.
+        ``df.attrs['unavailable_columns']`` lists those columns with no source;
+        one summarized warning names the missing datasets. A stored array that
+        contains only NaNs still has a source and is not listed as unavailable.
+        Existing ``max_depth_source`` and ``channel_length_source`` attributes
+        are retained. Present datasets with incorrect shapes raise ValueError.
+
         **Performance:**
 
         This method is significantly faster than COM-based extraction
@@ -1418,9 +1432,16 @@ class HdfResultsPlan:
                 # Missing optional variables are returned as null values. Do
                 # not infer a cross-section join from legacy packed arrays;
                 # their axis ordering and row coverage vary by HEC-RAS version.
-                def get_additional_var(var_name, default=np.nan):
-                    path = f"{add_vars_path}/{var_name}"
-                    if path in hdf_file:
+                column_sources = {}
+                optional_paths = {}
+
+                def get_optional_var(column, var_name, paths=None):
+                    paths = paths or [f"{add_vars_path}/{var_name}"]
+                    optional_paths[column] = paths
+                    column_sources[column] = None
+                    for path in paths:
+                        if path not in hdf_file:
+                            continue
                         values = np.asarray(hdf_file[path][()])
                         expected_shape = (num_profiles, num_xs)
                         if values.shape != expected_shape:
@@ -1428,25 +1449,31 @@ class HdfResultsPlan:
                                 f"Steady variable {var_name!r} has shape "
                                 f"{values.shape}; expected {expected_shape}"
                             )
+                        column_sources[column] = path
                         return values
-                    return np.full((num_profiles, num_xs), default)
+                    return np.full((num_profiles, num_xs), np.nan)
 
-                velocity_data = get_additional_var('Velocity Channel')
-                energy_data = get_additional_var('Energy Grade')
-                froude_data = get_additional_var('Froude # Channel')
-                hydraulic_depth_data = get_additional_var('Hydraulic Depth Channel')
+                velocity_data = get_optional_var('velocity', 'Velocity Channel')
+                energy_data = get_optional_var('energy', 'Energy Grade', paths=[
+                    f"{xs_path}/Energy Grade",
+                    f"{add_vars_path}/Energy Grade",
+                ])
+                froude_data = get_optional_var('froude', 'Froude # Channel')
+                hydraulic_depth_data = get_optional_var('hydraulic_depth', 'Hydraulic Depth Channel')
                 maximum_depth_path = f"{add_vars_path}/Maximum Depth Total"
                 if maximum_depth_path in hdf_file:
-                    max_depth_data = get_additional_var('Maximum Depth Total')
+                    max_depth_data = get_optional_var('max_depth', 'Maximum Depth Total')
                     max_depth_source = 'Maximum Depth Total'
                 else:
                     max_depth_data = hydraulic_depth_data
                     max_depth_source = 'Hydraulic Depth Channel (legacy fallback)'
-                min_ch_el_data = get_additional_var('Min Ch El')
-                top_width_data = get_additional_var('Top Width Total')
-                area_data = get_additional_var('Area Flow Total')
-                eg_slope_data = get_additional_var('EG Slope')
-                friction_slope_data = get_additional_var('Friction Slope')
+                    column_sources['max_depth'] = column_sources['hydraulic_depth']
+                    optional_paths['max_depth'] = [maximum_depth_path] + optional_paths['hydraulic_depth']
+                min_ch_el_data = get_optional_var('min_ch_el', 'Min Ch El')
+                top_width_data = get_optional_var('top_width', 'Top Width Total')
+                area_data = get_optional_var('area', 'Area Flow Total')
+                eg_slope_data = get_optional_var('eg_slope', 'EG Slope')
+                friction_slope_data = get_optional_var('friction_slope', 'Friction Slope')
 
                 # Build results DataFrame
                 rows = []
@@ -1488,6 +1515,20 @@ class HdfResultsPlan:
                     if np.isnan(channel_length_data).all()
                     else 'Geometry/Cross Sections/Attributes/Len Channel'
                 )
+                df.attrs['column_sources'] = column_sources
+                unavailable = [
+                    column for column in df.columns
+                    if column in column_sources and column_sources[column] is None
+                ]
+                df.attrs['unavailable_columns'] = unavailable
+                if unavailable:
+                    logger.warning(
+                        "Optional steady result datasets unavailable; columns remain NaN: %s",
+                        "; ".join(
+                            f"{column} ({' or '.join(path.rsplit('/', 1)[-1] for path in optional_paths[column])})"
+                            for column in unavailable
+                        ),
+                    )
                 logger.debug(f"Extracted steady results: {len(df)} rows "
                             f"({num_profiles} profiles x {num_xs} cross sections)")
                 return df
