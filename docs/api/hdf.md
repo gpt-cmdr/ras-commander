@@ -264,11 +264,28 @@ removed before v1.2.0:
 - `iter_mesh_timeseries(hdf_path, mesh_name, var, *, time_selection=None,
   spatial_selection=None, batch_size=None, max_chunk_bytes=16777216)` - Stream
   untruncated, bounded, time-major xarray batches
+- `inspect_mesh_series_raw(hdf_path, mesh_name, var, *, include_values=False)` -
+  Untyped diagnostic of one stored Base Output mesh series: dataset identity,
+  shape, dtype, attributes, Time row match, geometry counts and the typed
+  readers' refusal reason. Physical domain and units are always reported as
+  unqualified; see [Non-Newtonian rheology outputs](#non-newtonian-rheology-outputs)
 
 - `get_mesh_cells_timeseries(hdf_path, mesh_names=None, var=None, truncate=False, ras_object=None)` - Dictionary of mesh Datasets; select cells/faces afterward
 - `get_mesh_faces_timeseries(hdf_path, mesh_name, truncate=True)` - Available face variables as one Dataset; select `face_velocity` and `face_id` afterward
+- `get_mesh_log_hydraulics(hdf_path, mesh_name)` - Diagnostic DataFrame for the
+  legacy HEC-RAS 6.0-6.3.x per-mesh `Log Hydraulics` solver log: ten named
+  fields (iterations, corrections, residuals, volume balance, water surface
+  extrema), Base Output `time`/`timestamp` and per-field units/provenance in
+  `DataFrame.attrs`. Other versions, unknown `Column N` labels, a stored
+  `Location` or a row count that differs from Base Output time raise
+  `ValueError`. Fixed-suffix labels (the producer always writes
+  `Min water surface elevation (m)`) are not treated as unit evidence. The
+  table is not a cell or face series; `get_mesh_timeseries()` still refuses it.
 - `get_profile_line_flow_timeseries(hdf_path, line_name, mesh_name=None, profile_lines_path=None, direction="absolute")` - Native Mapper named-line flow; inspect returned `selection_source`
 - `get_profile_line_peak_flow(hdf_path, line_name, mesh_name=None, profile_lines_path=None, direction="absolute")` - Peak Q and time from the same native named-line extraction path
+- `get_mesh_timeseries_availability(hdf_path, mesh_name=None)` - Metadata-only
+  report of whether each Base Output mesh dataset is readable as a series
+  (`status`, `rows`, `time_rows`, `stored_bytes`, `reason`)
 
 The canonical profile-line methods above require pythonnet/RasMapperLib. They
 may return a native-associated precomputed hydrograph of unqualified provenance
@@ -286,6 +303,32 @@ read only. The fallback is computed only in memory and does not create or write
 `Depth` in the HDF. Temporary synthetic test HDFs are test artifacts; they are
 not producer output and are labeled separately from pre-existing HEC-RAS result
 fixtures.
+
+#### Non-Newtonian rheology outputs
+
+Native HEC-RAS 6.6 and 7.0.1 Bingham runs can write three optional face-labelled
+series. `Face Yield Stress` and `Face Viscous Stress` have one column per face and
+are read by `get_mesh_timeseries()`, lazy views and `iter_mesh_timeseries()` as
+`(time, face_id)` series with their stored `lb/ft^2` units in US-Customary output.
+`Face Mixture Dynamic Viscosity` is stored with `Location=Faces` and
+`Columns=Faces`, but in the inspected outputs its width equals the stored cell
+count (physical plus ghost cells), not the face count. No producer contract
+establishes its physical domain or the meaning of its stored `lb/ft^2*s` label,
+so the typed readers refuse it with `ValueError` and face/cell discovery skips it.
+`inspect_mesh_series_raw()` reports the stored dataset and the refusal reason
+without assigning cell or face identities, timestamps or converted units:
+
+```python
+report = HdfResultsMesh.inspect_mesh_series_raw(
+    plan_hdf, "DebrisFlowArea", "Face Mixture Dynamic Viscosity"
+)
+report["typed_status"], report["refusal_reason"]  # "refused", "...contradicts geometry count..."
+report["shape"], report["geometry_counts"]         # stored width vs stored cells/faces
+report["physical_domain"], report["units_interpretation"]  # always "unqualified"
+```
+
+Readable rheology series are a file-format result. They do not establish
+hydraulic convergence or engineering acceptance of a debris-flow model.
 
 **Ghost cells.** HEC-RAS writes 2D cell results for the physical cells
 followed by ghost cells outside the mesh perimeter. `Geometry/2D Flow
@@ -346,6 +389,39 @@ floating-point dtype so NaN/infinite filtering remains valid.
 `iter_mesh_timeseries()` is intentionally untruncated: it emits every selected
 source timestep once, in time-major batches. This makes batch reassembly
 deterministic and avoids a hidden preliminary scan.
+
+**Series availability.** A dataset whose stored rows differ from the Base
+Output `Time` axis is never broadcast, padded, truncated or re-timed. Eager,
+view and streamed reads all raise `MeshSeriesAvailabilityError`, a
+`ValueError` subclass. They raise before any value is read. The error has
+`dataset_path`, `rows`, `time_rows`, `stored_bytes` and `disposition`:
+
+- `"unwritten_placeholder"`: the producer stored no data (`stored_bytes == 0`).
+  Reading it would return HDF5 fill values, not results. HEC-RAS 6.6 and 7.0.1
+  plans without wind forcing leave `Face Wind Term` this way: an extendable
+  one-row dataset with `Location=Faces`, `Rows=Times` and no stored chunks.
+  It is created when governing-equation output terms are selected. HEC-RAS 6.6
+  Diffusion Wave runs leave `Face Water Surface` this way too; 7.0.1 writes it
+  in full. Treat these datasets as unavailable, not as a constant zero field.
+- `"row_count_mismatch"`: stored data whose row count cannot be aligned with
+  the clock.
+
+`get_mesh_timeseries_availability()` reports the same qualification for every
+dataset without reading values. `get_mesh_faces_timeseries()` and
+`get_mesh_cells_timeseries()` skip such datasets during discovery and log the
+same message.
+
+```python
+from ras_commander import HdfResultsMesh, MeshSeriesAvailabilityError
+
+report = HdfResultsMesh.get_mesh_timeseries_availability("BaldEagleDamBrk.p03.hdf")
+print(report.loc[report.status != "available", ["mesh_name", "variable", "rows", "time_rows", "status"]])
+
+try:
+    HdfResultsMesh.get_mesh_timeseries("BaldEagleDamBrk.p03.hdf", "BaldEagleCr", "Face Wind Term")
+except MeshSeriesAvailabilityError as exc:
+    print(exc.disposition, exc.rows, exc.time_rows)
+```
 
 ```python
 from ras_commander import HdfResultsMesh
@@ -1274,6 +1350,7 @@ prerequisites and return contracts take precedence over abbreviated summaries.
         - get_mesh_cells_timeseries
         - get_mesh_faces_timeseries
         - get_mesh_last_iter
+        - get_mesh_log_hydraulics
         - get_mesh_max_depth
         - get_mesh_max_face_v
         - get_mesh_max_iter
@@ -1286,9 +1363,11 @@ prerequisites and return contracts take precedence over abbreviated summaries.
         - get_mesh_summary_output_group
         - get_mesh_summary_values
         - get_mesh_timeseries
+        - get_mesh_timeseries_availability
         - get_profile_line_flow_timeseries
         - get_profile_line_flow_timeseries_legacy
         - get_profile_line_peak_flow
+        - inspect_mesh_series_raw
         - iter_mesh_timeseries
 
 ### HdfResultView source reference

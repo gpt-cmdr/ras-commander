@@ -90,3 +90,40 @@ def test_explicit_area_selection_is_unambiguous(tmp_path, kwargs):
     before = path.read_bytes()
     assert not GeomMesh.write_computation_points(path, [[1, 2]], **kwargs).ok
     assert path.read_bytes() == before
+
+
+@pytest.mark.parametrize("encoding", ["cp1252", "utf-8"])
+def test_explicit_points_preserve_nonascii_text_and_area_names(tmp_path, encoding):
+    path = geometry(tmp_path)
+    text = path.read_text(encoding="utf-8").replace("Explicit seeds", "Caf\u00e9 seeds")
+    text = text.replace("Storage Area=Area,", "Storage Area=Ar\u00e9a,")
+    path.write_bytes(text.replace("\n", "\r\n").encode(encoding))
+    original = path.read_bytes()
+    other_before = original.split(b"Storage Area=Other", 1)[1]
+    result = GeomMesh.write_computation_points(path, [[50, 50]], mesh_name="Ar\u00e9a")
+    assert result.ok, result.error_message
+    actual = path.read_bytes()
+    assert "Caf\u00e9 seeds".encode(encoding) in actual
+    assert "Storage Area=Ar\u00e9a,".encode(encoding) in actual
+    assert actual.split(b"Storage Area=Other", 1)[1] == other_before
+    assert path.with_suffix(".g01.bak").read_bytes() == original
+
+
+def test_explicit_points_refuse_undecodable_text_before_backup(tmp_path):
+    path = geometry(tmp_path)
+    original = path.read_bytes().replace(b"Explicit seeds", b"Invalid \x81 title")
+    path.write_bytes(original)
+    result = GeomMesh.write_computation_points(path, [[50, 50]], mesh_name="Area")
+    assert not result.ok
+    assert path.read_bytes() == original
+    assert not list(tmp_path.glob("*.bak*"))
+
+
+def test_explicit_points_preserve_non_record_unicode_separators(tmp_path):
+    path = geometry(tmp_path)
+    title = "Caf\u00e9\vnotes\fmore\u0085text\u2028tail"
+    original = path.read_bytes().replace(b"Explicit seeds", title.encode("utf-8"))
+    path.write_bytes(original)
+    result = GeomMesh.write_computation_points(path, [[50, 50]], mesh_name="Area")
+    assert result.ok, result.error_message
+    assert title.encode("utf-8") in path.read_bytes()

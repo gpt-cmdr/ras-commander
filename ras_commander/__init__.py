@@ -310,7 +310,7 @@ _LAZY_EXPORTS = {
             'HdfBase', 'HdfCompletion', 'HdfUtils', 'HdfPlan', 'HdfMesh', 'MeshCellPolygonError', 'HdfXsec',
             'HdfBndry', 'HdfStruc', 'HdfStorageArea',
             'HdfHydraulicTables', 'HdfResultsPlan', 'HdfResultsMesh',
-            'HdfResultView', 'HdfResultsQuery', 'HdfResultsXsec',
+            'MeshSeriesAvailabilityError', 'HdfResultView', 'HdfResultsQuery', 'HdfResultsXsec',
             'HdfResultsBreach',
             'HdfResultsSediment', 'HdfResultsProducts', 'HdfPipe',
             'HdfPump', 'HdfInfiltration', 'HdfLandCover', 'HdfPlot',
@@ -544,7 +544,7 @@ __all__ = [
 
     # HDF handling
     'HdfBase', 'HdfCompletion', 'HdfBndry', 'HdfMesh', 'MeshCellPolygonError', 'HdfPlan', 'HdfProject',
-    'HdfResultsMesh', 'HdfResultView', 'HdfResultsPlan',
+    'HdfResultsMesh', 'MeshSeriesAvailabilityError', 'HdfResultView', 'HdfResultsPlan',
     'HdfResultsProducts', 'HdfResultsQuery',
     'HdfResultsXsec', 'HdfResultsSediment',
     'HdfStruc', 'HdfStorageArea', 'HdfUtils', 'HdfXsec', 'HdfPump',

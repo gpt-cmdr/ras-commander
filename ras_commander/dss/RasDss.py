@@ -233,6 +233,9 @@ class RasDss:
         HecDss = autoclass('hec.heclib.dss.HecDss')
 
         dss_file = str(RasUtils.safe_resolve(Path(dss_file)))
+        # HecDss.open() creates a new, empty DSS file when the path does not exist.
+        # A read must never create a file.
+        RasDss._require_existing_dss_file(dss_file)
 
         # Open DSS file
         dss = None
@@ -288,6 +291,8 @@ class RasDss:
         TimeSeriesContainer = autoclass('hec.io.TimeSeriesContainer')
 
         dss_file = str(RasUtils.safe_resolve(Path(dss_file)))
+        # HecDss.open() creates a new, empty DSS file when the path does not exist.
+        RasDss._require_existing_dss_file(dss_file)
 
         # Open DSS file
         dss = None
@@ -300,18 +305,38 @@ class RasDss:
             if container is None:
                 raise ValueError(f"No data found for pathname: {pathname}")
 
+            # Paired data, grids and other records come back as other container
+            # classes; casting them to TimeSeriesContainer misreads their fields.
+            container_class = str(container.getClass().getName())
+            if container_class != 'hec.io.TimeSeriesContainer':
+                raise TypeError(
+                    f"Pathname is not a time series record ({container_class}): {pathname}"
+                )
+
             # Cast to TimeSeriesContainer to access fields
             tsc = cast('hec.io.TimeSeriesContainer', container)
+
+            # An absent or all-missing dataset comes back as an empty container.
+            if int(tsc.numberValues) <= 0 or tsc.times is None or tsc.values is None:
+                raise ValueError(f"No data found for pathname: {pathname}")
 
             # Extract values and times from Java container
             # pyjnius automatically converts Java arrays to Python lists
             values = np.array(tsc.values)  # Java double[] -> numpy array
-            times = np.array(tsc.times)    # Java int[] -> numpy array (minutes since 1899-12-31)
+            times = np.array(tsc.times, dtype=np.int64)
 
-            # Convert HEC time to numpy datetime64
-            # HEC epoch: December 31, 1899 00:00
-            HEC_EPOCH = np.datetime64('1899-12-31T00:00:00')
-            datetimes = HEC_EPOCH + times.astype('timedelta64[m]')
+            # TimeSeriesContainer.times are counts of timeGranularitySeconds
+            # (60 for minutes, 1 for seconds) after julianBaseDate days past the
+            # HEC epoch (December 31, 1899 00:00). Older containers use minutes
+            # from the epoch, which is base 0 and granularity 60.
+            granularity = RasDss._tsc_granularity_seconds(tsc)
+            base_days = int(getattr(tsc, 'julianBaseDate', 0) or 0)
+            HEC_EPOCH = np.datetime64('1899-12-31T00:00:00', 's')
+            datetimes = (
+                HEC_EPOCH
+                + np.timedelta64(base_days, 'D')
+                + (times * granularity).astype('timedelta64[s]')
+            )
 
             # Create DataFrame
             df = pd.DataFrame({
@@ -322,9 +347,7 @@ class RasDss:
             df.attrs['pathname'] = pathname
             df.attrs['units'] = str(tsc.units) if tsc.units else ""
             df.attrs['type'] = str(tsc.type) if tsc.type else ""
-            df.attrs['interval'] = (
-                int(tsc.interval) if hasattr(tsc, 'interval') else None
-            )
+            df.attrs['interval'] = RasDss._tsc_interval_minutes(tsc, granularity)
             df.attrs['dss_file'] = dss_file
 
             return df
@@ -332,6 +355,40 @@ class RasDss:
         finally:
             if dss is not None:
                 dss.done()
+
+    @staticmethod
+    def _require_existing_dss_file(dss_file: Union[str, Path]) -> None:
+        """Raise before HEC code can create a missing DSS file during a read."""
+        path = Path(dss_file)
+        if not path.exists():
+            raise FileNotFoundError(f"DSS file not found: {dss_file}")
+        if not path.is_file():
+            raise IsADirectoryError(f"DSS path is not a file: {dss_file}")
+
+    @staticmethod
+    def _tsc_granularity_seconds(tsc) -> int:
+        """Seconds per unit of TimeSeriesContainer.times (60 when not reported)."""
+        getter = getattr(tsc, 'getTimeGranularitySeconds', None)
+        try:
+            value = int(getter()) if getter is not None else 60
+        except Exception:
+            value = 60
+        return value if value > 0 else 60
+
+    @staticmethod
+    def _tsc_interval_minutes(tsc, granularity: int) -> Optional[Union[int, float]]:
+        """Regular interval in minutes; 0 for irregular data; float below one minute.
+
+        TimeSeriesContainer.interval is counted in the container's time
+        granularity, so a 15-second series reports 15 with granularity 1.
+        """
+        if not hasattr(tsc, 'interval'):
+            return None
+        raw = int(tsc.interval)
+        seconds = raw * granularity
+        if seconds % 60 == 0:
+            return seconds // 60
+        return seconds / 60
 
     @staticmethod
     @log_call

@@ -27,6 +27,11 @@ native preprocessing success.
 | Build properties | `compute_property_tables` | Mesh and terrain/classification associations → native property tables; Boolean result |
 | Check boundary conflicts | `detect_bc_conflicts`, `fix_bc_conflicts` | Compiled perimeter faces and BC lines → conflicts or `BCFixResult`; repair can modify HDF |
 
+`write_computation_points` preserves UTF-8 or legacy CP1252 encoding, including
+non-ASCII area names. Undecodable text is refused before backup or replacement.
+Unrelated record contents are preserved; model writes use CRLF line endings.
+
+
 ```mermaid
 flowchart LR
     A[Geometry text and spatial inputs] --> S[Bootstrap points if no mesh exists]

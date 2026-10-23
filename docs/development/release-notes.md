@@ -49,6 +49,33 @@ the h5py result: any native failure falls back to h5py.
 
 See [Optional Rust acceleration](../api/hdf.md#optional-rust-acceleration).
 
+**Legacy 2D `Log Hydraulics` diagnostic reader (new API)**
+
+`HdfResultsMesh.get_mesh_log_hydraulics(hdf_path, mesh_name)` reads the
+per-mesh `Log Hydraulics` table that HEC-RAS 6.0-6.3.x can write beside 2D
+Base Output. It returns the ten producer-labelled fields as named columns with
+Base Output time provenance. It accepts only HEC-RAS 6.0-6.3.x files and the
+producer's exact `Column N` labels. Units come only from label suffixes that
+agree with the file's `Units System`; values are never converted. Row semantics
+within an output interval and the cell-location index base are not
+established. The table is a diagnostic, not proof of convergence.
+`get_mesh_timeseries()` and `iter_mesh_timeseries()` continue to refuse the
+dataset, so its columns are never read as cells or faces.
+
+**Raw diagnostic for unqualified mesh series; viscosity refusal retained**
+
+`HdfResultsMesh.inspect_mesh_series_raw()` is a new read-only diagnostic for one
+stored Base Output mesh series. It returns the dataset path, file version,
+shape, dtype, stored attributes, Time row match, stored geometry counts and the
+typed readers' qualification outcome or refusal reason. Axes are `raw_row` and
+`raw_column`; `physical_domain` and `units_interpretation` are always
+`"unqualified"`. It assigns no cell or face identifiers, timestamps or unit
+conversions. Existing typed readers are unchanged: `Face Mixture Dynamic
+Viscosity`, whose `Location=Faces` label contradicts its stored-cell width in
+the inspected HEC-RAS 6.6 and 7.0.1 output, remains refused. `Face Yield Stress`
+and `Face Viscous Stress` remain qualified face series. Public synthetic tests
+pin both contracts. Readable output does not establish hydraulic convergence.
+
 **Compute-message classification rejects observed early termination**
 
 `ResultsParser` classifies `Unsteady Flow Simulation Terminated` and the
@@ -64,6 +91,25 @@ synthetic controls. It does not qualify all plan types or independently
 verify the final result timestamp. The broader message corpus and endpoint
 coverage checks in #403 remain open. Existing HDF structure, freshness and
 explicit error-check opt-outs are unchanged.
+
+**Mesh series availability diagnostics for one-row placeholders**
+
+Eager, view and streamed `HdfResultsMesh` time-series reads still refuse a
+dataset whose rows differ from the Base Output `Time` axis. They now raise
+`MeshSeriesAvailabilityError`, a `ValueError` subclass with the historical
+message prefix. It names the dataset, its row count, the clock length,
+stored bytes and a `disposition`. `"unwritten_placeholder"` means that the
+producer stored no data, so the readable values are only HDF5 fill values.
+`"row_count_mismatch"` means stored data that cannot be aligned. The new
+`HdfResultsMesh.get_mesh_timeseries_availability()` reports these
+dispositions per dataset from metadata only.
+
+HEC-RAS 6.6 and 7.0.1 public-example runs without wind forcing leave
+`Face Wind Term` as an extendable one-row dataset with no stored chunks.
+HEC-RAS 6.6 Diffusion Wave runs also leave `Face Water Surface` this way;
+7.0.1 writes it in full. These datasets are reported as unavailable. They
+are not broadcast, given timestamps or interpreted as a constant zero field.
+Successful reads, signatures and the face/cell discovery skips are unchanged.
 
 **Mesh operations use one successful status (API behavior change)**
 

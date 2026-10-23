@@ -144,6 +144,10 @@ This file is the canonical local instruction file for `ras_commander/hdf/`.
   `region_name` parameters for selective face application (precedence:
   `face_ids` > `region_name` > `polygon` > all faces).
 - 2D results extraction: `HdfResultsMesh`
+- Legacy `Log Hydraulics` (HEC-RAS 6.0-6.3.x per-mesh solver log) is read only
+  by `HdfResultsMesh.get_mesh_log_hydraulics()` as a labelled diagnostic table
+  on the Base Output clock. Never add it to `_LEGACY_MESH_SERIES_DOMAINS` or
+  infer a cell/face domain from its width.
 - `HdfFluvialPluvial` retains `(mesh_name, cell_id)` through time lookups,
   adjacency, region growth and classification joins. Coincident edges from
   different meshes are never neighbors. Polygon dissolution groups by mesh and
@@ -194,9 +198,24 @@ This file is the canonical local instruction file for `ras_commander/hdf/`.
   lazy and streamed reads, without ghost flags or spatial coordinates. Default
   cell/face discovery skips time-only diagnostics and reports invalid entries;
   explicit malformed reads raise `ValueError`. One-row outputs are not broadcast.
+  Rows that differ from a valid Time axis raise `MeshSeriesAvailabilityError`
+  (a `ValueError`) from eager, view and stream reads alike; `disposition` is
+  `unwritten_placeholder` when the dataset stores no bytes (HDF5 fill only, e.g.
+  6.6/7.0.1 no-wind `Face Wind Term`, 6.6 Diffusion Wave `Face Water Surface`)
+  else `row_count_mismatch`. Never broadcast, re-time or read them as constant
+  fields. `get_mesh_timeseries_availability()` reports the same qualification.
   Ghost filtering follows qualification. `Cell Hydraulic Depth` remains distinct
   from `Depth` and WSE-minus-minimum-elevation depth. Summary wrappers retain
   their separate existing schemas and are unchanged by these series rules.
+- Non-Newtonian `Face Mixture Dynamic Viscosity` (6.6/7.0.1 Bingham output) is
+  labelled `Location=Faces` but its width equals stored cells. It has no
+  established producer domain/unit contract: typed readers must keep refusing
+  it. Do not relabel it as cells, strip ghost columns, attach IDs, or convert
+  its stored `lb/ft^2*s` value. `HdfResultsMesh.inspect_mesh_series_raw()` is the
+  diagnostic route: stored identity, attrs, Time row match, geometry counts,
+  refusal reason, `raw_row`/`raw_column` axes and always-unqualified domain and
+  units. `Face Yield Stress` and `Face Viscous Stress` remain qualified face
+  series. Reader support does not establish hydraulic convergence.
 - Unsteady `HdfResultsQuery` velocity queries at integer time indexes prefer stored
   `Cell Velocity - Velocity X/Y` components per mesh. Validate their stored
   cell Location, time/geometry axes, physical count and velocity units; compute
