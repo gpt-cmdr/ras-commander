@@ -305,8 +305,17 @@ def test_staged_associations_keep_original_resolution_and_spelling(tmp_path):
 
 
 def _fake_native_runtime(monkeypatch, tmp_path):
+    import importlib
+    from types import SimpleNamespace
+
     import ras_commander._gdal_runtime as gdal
     import ras_commander._landcover_native as native
+
+    monkeypatch.setattr(
+        importlib.import_module("ras_commander.RasPrj"),
+        "ras",
+        SimpleNamespace(initialized=False),
+    )
 
     monkeypatch.setattr(native, "find_hecras_install", lambda version: tmp_path)
     (tmp_path / "Ras.exe").write_bytes(b"fake native executable for failure injection")
@@ -390,3 +399,215 @@ def test_second_pair_replacement_failure_restores_exact_original_bytes(
         GeomMesh.apply_cell_subset(plan)
     assert all(p.read_bytes() == raw for p, raw in original.items())
     assert len(list(tmp_path.glob("*.cell-subset-*.bak"))) == 2
+
+
+def written_subset(tmp_path):
+    from ras_commander.geom._cell_subset import _selection, _write_subset
+
+    plan, source, target = planned(tmp_path)
+    with h5py.File(source) as h:
+        _, subset = _selection(h["Geometry/2D Flow Areas/Area"], plan.parent_cell_ids)
+    hdf = Path(str(target) + ".hdf")
+    _write_subset(source, hdf, "Area", subset, plan.crs_wkt)
+    return plan, hdf, subset
+
+
+@pytest.mark.parametrize(
+    "changed", ["facepoints", "endpoints", "cell_pairs", "face_count"]
+)
+def test_post_preprocess_validation_blocks_silent_remesh_with_same_seeds_and_perimeter(
+    tmp_path, changed
+):
+    plan, path, _ = written_subset(tmp_path)
+    assert GeomMesh.validate_cell_subset(plan)["topology_exact"]
+    with h5py.File(path, "r+") as h:
+        area = h["Geometry/2D Flow Areas/Area"]
+        seeds = area["Cells Center Coordinate"][()].copy()
+        perimeter = area["Perimeter"][()].copy()
+        if changed == "facepoints":
+            area["FacePoints Coordinate"][0, 0] += 1e-8
+        elif changed == "endpoints":
+            area["Faces FacePoint Indexes"][0, 0] = area["Faces FacePoint Indexes"][
+                0, 1
+            ]
+        elif changed == "cell_pairs":
+            area["Faces Cell Indexes"][0, 0] = 1
+        else:
+            values = area["Faces FacePoint Indexes"][()][:-1]
+            del area["Faces FacePoint Indexes"]
+            area.create_dataset("Faces FacePoint Indexes", data=values)
+        assert np.array_equal(seeds, area["Cells Center Coordinate"][()])
+        assert np.array_equal(perimeter, area["Perimeter"][()])
+    with pytest.raises(RuntimeError, match="changed"):
+        GeomMesh.validate_cell_subset(plan)
+
+
+@pytest.mark.parametrize(
+    "changed", ["boundary_order", "cell_incidence", "cell_orientation"]
+)
+def test_native_save_validation_requires_order_and_reciprocal_cell_faces(
+    tmp_path, changed
+):
+    from ras_commander.geom._cell_subset import _validate_incidence
+
+    _, path, subset = written_subset(tmp_path)
+    with h5py.File(path, "r+") as h:
+        area = h["Geometry/2D Flow Areas/Area"]
+        if changed == "boundary_order":
+            info = area["FacePoints Face and Orientation Info"][()]
+            point = int(np.flatnonzero(area["FacePoints Is Perimeter"][()] == -1)[0])
+            start, count = info[point]
+            values = area["FacePoints Face and Orientation Values"]
+            values[start : start + count] = values[start : start + count][::-1]
+        elif changed == "cell_incidence":
+            area["Cells Face and Orientation Values"][0, 0] = (
+                len(area["Faces Cell Indexes"]) - 1
+            )
+        else:
+            area["Cells Face and Orientation Values"][0, 1] *= -1
+        with pytest.raises(RuntimeError, match="outgoing-first|reciprocal"):
+            _validate_incidence(h, "Area", subset)
+
+
+def test_single_normals_and_curved_face_values_survive_swapped_boundary(tmp_path):
+    from ras_commander.geom._cell_subset import _ragged, _write_subset
+
+    source = tmp_path / "Parent.g01.hdf"
+    grid(source)
+    with h5py.File(source, "r+") as h:
+        g = h["Geometry/2D Flow Areas/Area"]
+        normals = g["Faces NormalUnitVector and Length"][()].astype("float32")
+        del g["Faces NormalUnitVector and Length"]
+        g.create_dataset("Faces NormalUnitVector and Length", data=normals)
+        pairs = g["Faces Cell Indexes"][()]
+        face = int(np.flatnonzero((pairs[:, 0] == 5) & (pairs[:, 1] == 6))[0])
+        counts = np.zeros(len(pairs), dtype="int32")
+        counts[face] = 2
+        g["Faces Perimeter Info"][...] = np.column_stack(
+            (np.cumsum(counts) - counts, counts)
+        )
+        del g["Faces Perimeter Values"]
+        values = np.array([[2.1, 1.3], [1.9, 1.7]], dtype="float64")
+        g.create_dataset("Faces Perimeter Values", data=values)
+        keep = np.zeros(16, dtype=bool)
+        keep[6] = True
+        sub = _build_subset(g, keep)
+    child_face = int(np.flatnonzero(sub.face_src == face)[0])
+    assert sub.face_swap[child_face]
+    assert sub.tables["Faces NormalUnitVector and Length"].dtype == np.dtype("float32")
+    assert np.array_equal(
+        sub.tables["Faces NormalUnitVector and Length"][child_face, :2],
+        -normals[face, :2],
+    )
+    assert np.array_equal(
+        _ragged(
+            sub.tables["Faces Perimeter Info"],
+            sub.tables["Faces Perimeter Values"],
+            child_face,
+        ),
+        values[::-1],
+    )
+    target = tmp_path / "Child.g02.hdf"
+    grid(target)
+    _write_subset(source, target, "Area", sub, CRS.from_epsg(2278).to_wkt())
+    with h5py.File(target) as h:
+        g = h["Geometry/2D Flow Areas/Area"]
+        assert g["Faces NormalUnitVector and Length"].dtype == np.dtype("float32")
+        assert np.array_equal(g["Faces Perimeter Values"][()], values[::-1])
+
+
+def test_active_global_runtime_is_preserved_without_explicit_project(
+    tmp_path, monkeypatch
+):
+    import importlib
+    from types import SimpleNamespace
+
+    import ras_commander._landcover_native as native
+    from ras_commander.geom._cell_subset import _resolve_subset_install
+
+    for name in ("Ras.exe", "RasMapperLib.dll"):
+        (tmp_path / name).write_bytes(b"runtime fixture")
+    active = SimpleNamespace(initialized=True, ras_exe_path=tmp_path / "Ras.exe")
+    monkeypatch.setattr(importlib.import_module("ras_commander.RasPrj"), "ras", active)
+    monkeypatch.setattr(
+        native,
+        "find_hecras_install",
+        lambda version: pytest.fail("active runtime must not be rediscovered"),
+    )
+    assert _resolve_subset_install("6.6", None, None) == tmp_path
+    with pytest.raises(ValueError, match="conflicts"):
+        _resolve_subset_install("6.6", tmp_path / "other", None)
+
+
+def test_worker_timeout_uses_caller_limit_and_preserves_owned_pair(
+    tmp_path, monkeypatch
+):
+    import subprocess
+
+    plan, source, target = planned(tmp_path)
+    before = {p: p.read_bytes() for p in (source, target, Path(str(target) + ".hdf"))}
+    _fake_native_runtime(monkeypatch, tmp_path)
+
+    def timeout(argv, **kwargs):
+        assert kwargs["timeout"] == 71
+        raise subprocess.TimeoutExpired(argv, 71)
+
+    monkeypatch.setattr(subprocess, "run", timeout)
+    with pytest.raises(RuntimeError, match="exceeded 71 seconds") as error:
+        GeomMesh.apply_cell_subset(plan, timeout=71)
+    assert isinstance(error.value.__cause__, subprocess.TimeoutExpired)
+    assert all(path.read_bytes() == raw for path, raw in before.items())
+
+
+@pytest.mark.parametrize(
+    "name",
+    [
+        "Cells FacePoint Indexes",
+        "FacePoints Cell Index Values",
+        "Faces NormalUnitVector and Length",
+    ],
+)
+def test_validation_blocks_corrupt_remaining_native_connectivity_or_normal_tables(
+    tmp_path, name
+):
+    plan, path, _ = written_subset(tmp_path)
+    with h5py.File(path, "r+") as h:
+        dataset = h["Geometry/2D Flow Areas/Area/" + name]
+        if dataset.ndim == 1:
+            dataset[0] = 999999
+        else:
+            dataset[0, 0] = 999999
+    with pytest.raises(RuntimeError):
+        GeomMesh.validate_cell_subset(plan)
+
+
+def test_cell_vertex_membership_alone_does_not_accept_crossed_order(tmp_path):
+    plan, path, _ = written_subset(tmp_path)
+    with h5py.File(path, "r+") as h:
+        cells = h["Geometry/2D Flow Areas/Area/Cells FacePoint Indexes"]
+        row = cells[0]
+        row[[1, 2]] = row[[2, 1]]
+        cells[0] = row
+    with pytest.raises(RuntimeError, match="vertex order"):
+        GeomMesh.validate_cell_subset(plan)
+
+
+def test_validation_rejects_child_bytes_changed_after_array_read(tmp_path, monkeypatch):
+    from ras_commander.geom import _cell_subset as module
+
+    plan, path, _ = written_subset(tmp_path)
+    original = module._sha256
+    seen = 0
+
+    def race(value):
+        nonlocal seen
+        if Path(value) == path:
+            seen += 1
+            if seen == 2:
+                with path.open("ab") as stream:
+                    stream.write(b"concurrent edit")
+        return original(value)
+
+    monkeypatch.setattr(module, "_sha256", race)
+    with pytest.raises(RuntimeError, match="child changed during validation"):
+        GeomMesh.validate_cell_subset(plan)

@@ -6852,6 +6852,7 @@ class GeomMesh:
         *,
         hecras_version: str = "6.6",
         hecras_dir: Optional[Union[str, Path]] = None,
+        timeout: int = 1800,
         ras_object=None,
     ) -> MeshResult:
         """Write a planned topology into an owned child text/HDF pair.
@@ -6864,7 +6865,7 @@ class GeomMesh:
         never modified. Text points use the existing native fixed-width writer;
         its mesh timestamp is bound to the native serialized Data Date.
 
-        Only HEC-RAS 6.6 is qualified. The native worker is limited to 300 seconds.
+        Only HEC-RAS 6.6 is qualified. The native worker has a caller-selected timeout.
         Uses sibling staging, preserves two uniquely named .bak files and restores
         original bytes if either replacement fails. Requires exclusive access;
         exception rollback is not crash-atomic across the pair. A crash between
@@ -6876,6 +6877,7 @@ class GeomMesh:
             hecras_dir: Explicit installed runtime folder. With ras_object, it
                 must match the project's selected Ras.exe installation. Native
                 file metadata must identify HEC-RAS 6.6; hashes are returned.
+            timeout: Positive native serialization timeout in seconds, default 1800.
             ras_object: Optional isolated project forwarded to text point writing.
 
         Returns:
@@ -6893,6 +6895,33 @@ class GeomMesh:
             raise ValueError(
                 "Exact cell subset serialization is qualified only for HEC-RAS 6.6"
             )
+        if isinstance(timeout, bool) or not isinstance(timeout, int) or timeout <= 0:
+            raise ValueError("timeout must be a positive integer number of seconds")
         from ._cell_subset import _apply_cell_subset
 
-        return _apply_cell_subset(plan, hecras_version, hecras_dir, ras_object)
+        return _apply_cell_subset(plan, hecras_version, hecras_dir, ras_object, timeout)
+
+    @staticmethod
+    @log_call
+    def validate_cell_subset(
+        plan: MeshCellSubsetPlan, *, ras_object=None
+    ) -> dict[str, Any]:
+        """Verify retained exact topology against a hash-bound geometry-only source.
+
+        Args:
+            plan: Original subset plan. The source bytes and physical IDs remain
+                authoritative after native preprocessing changes the child HDF.
+            ras_object: Optional project context; paths are bound by the plan.
+
+        Returns:
+            Read-only ras-mesh-cell-subset-validation/v1 evidence with source and
+            child hashes, physical/ghost/face/vertex counts and topology_exact.
+            Coordinates retain their source CRS/units. No files are written,
+            native execution is launched, or hydraulic acceptance established.
+
+        Raises:
+            RuntimeError: Source identity, exact arrays, counts or reciprocity fail.
+        """
+        from ._cell_subset import _validate_cell_subset
+
+        return _validate_cell_subset(plan)

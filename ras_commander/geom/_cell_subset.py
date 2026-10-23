@@ -500,12 +500,29 @@ def _validate_incidence(hdf, mesh_name, expected):
     coordinates = group["FacePoints Coordinate"][:]
     info = group["FacePoints Face and Orientation Info"][:]
     values = group["FacePoints Face and Orientation Values"][:]
+    pairs = group["Faces Cell Indexes"][:]
+    centres = group["Cells Center Coordinate"][:]
     if len(ends) != len(expected.face_src) or len(coordinates) != len(expected.fp_src):
         raise RuntimeError("Native serialization changed selected topology counts")
+    if len(centres) != len(expected.tables["Cells Center Coordinate"]):
+        raise RuntimeError("Native serialization changed selected cell counts")
+    if not np.array_equal(pairs, expected.tables["Faces Cell Indexes"]):
+        raise RuntimeError("Native serialization changed selected face cell indexes")
     if not np.array_equal(coordinates, expected.tables["FacePoints Coordinate"]):
         raise RuntimeError("Native serialization changed source facepoint coordinates")
     if not np.array_equal(ends, expected.tables["Faces FacePoint Indexes"]):
         raise RuntimeError("Native serialization changed selected face endpoints")
+    for name in ("Faces Perimeter Info", "Faces Perimeter Values"):
+        if not np.array_equal(group[name][()], expected.tables[name]):
+            raise RuntimeError("Native serialization changed selected face polylines")
+    for name in ("Faces NormalUnitVector and Length", "FacePoints Is Perimeter"):
+        actual = group[name][()]
+        if actual.dtype != expected.tables[name].dtype or not np.array_equal(
+            actual, expected.tables[name]
+        ):
+            raise RuntimeError(f"Native serialization changed selected {name}")
+    if len(info) != len(coordinates):
+        raise RuntimeError("Native incident-face record count is invalid")
     if int(info[:, 1].sum()) != len(values):
         raise RuntimeError("Native incident-face packed counts do not match values")
     expected_faces = [[] for _ in coordinates]
@@ -523,15 +540,130 @@ def _validate_incidence(hdf, mesh_name, expected):
             expected_faces[point]
         ):
             raise RuntimeError("Native facepoint/face incidence is not reciprocal")
+        directions = _ragged(info, values, point)[:, 1]
+        if not np.array_equal(directions, np.where(ends[incident, 0] == point, -1, 1)):
+            raise RuntimeError("Native facepoint/face orientation is not reciprocal")
+        boundary = incident[pairs[incident, 1] >= expected.n_real]
+        if len(boundary):
+            outgoing = boundary[ends[boundary, 0] == point]
+            incoming = boundary[ends[boundary, 1] == point]
+            if (
+                len(outgoing) != 1
+                or len(incoming) != 1
+                or incident[0] != outgoing[0]
+                or incident[-1] != incoming[0]
+            ):
+                raise RuntimeError(
+                    "Native perimeter incidence must be outgoing-first/incoming-last"
+                )
         offset += int(count)
-    centres = group["Cells Center Coordinate"][: expected.n_real]
+    cell_info = group["Cells Face and Orientation Info"][:]
+    cell_values = group["Cells Face and Orientation Values"][:]
+    if len(cell_info) != len(centres) or int(cell_info[:, 1].sum()) != len(cell_values):
+        raise RuntimeError("Native cell/face packed counts do not match values")
+    cell_faces = [[] for _ in centres]
+    for face, (first, second) in enumerate(pairs):
+        cell_faces[first].append(face)
+        cell_faces[second].append(face)
+    cell_points = group["Cells FacePoint Indexes"][()]
+    if len(cell_points) != len(centres):
+        raise RuntimeError("Native cell vertex record count is invalid")
+    offset = 0
+    for cell, (start, count) in enumerate(cell_info):
+        if start != offset or count < 1:
+            raise RuntimeError("Native cell/face record span is invalid")
+        row = _ragged(cell_info, cell_values, cell)
+        incident = row[:, 0]
+        if len(set(incident)) != len(incident) or set(incident) != set(
+            cell_faces[cell]
+        ):
+            raise RuntimeError("Native cell/face incidence is not reciprocal")
+        if not np.array_equal(row[:, 1], np.where(pairs[incident, 0] == cell, 1, -1)):
+            raise RuntimeError("Native cell/face orientation is not reciprocal")
+        vertices = cell_points[cell][cell_points[cell] >= 0]
+        if len(vertices) != len(set(vertices)) or set(vertices) != set(
+            ends[incident].ravel()
+        ):
+            raise RuntimeError("Native cell vertex/face incidence is not reciprocal")
+        vertex_edges = {
+            tuple(sorted(edge)) for edge in zip(vertices, np.roll(vertices, -1))
+        }
+        face_edges = {tuple(sorted(edge)) for edge in ends[incident]}
+        if vertex_edges != face_edges:
+            raise RuntimeError(
+                "Native cell vertex order does not follow incident faces"
+            )
+        offset += int(count)
+    fp_cell_info = group["FacePoints Cell Info"][()]
+    fp_cell_values = group["FacePoints Cell Index Values"][()]
+    if len(fp_cell_info) != len(coordinates) or int(fp_cell_info[:, 1].sum()) != len(
+        fp_cell_values
+    ):
+        raise RuntimeError("Native facepoint/cell packed counts do not match values")
+    offset = 0
+    for point, (start, count) in enumerate(fp_cell_info):
+        if start != offset or count < 1:
+            raise RuntimeError("Native facepoint/cell record span is invalid")
+        cells = _ragged(fp_cell_info, fp_cell_values, point)
+        expected_cells = set(pairs[expected_faces[point]].ravel())
+        if len(cells) != len(set(cells)) or set(cells) != expected_cells:
+            raise RuntimeError("Native facepoint/cell incidence is not reciprocal")
+        offset += int(count)
     if not np.array_equal(
-        centres, expected.tables["Cells Center Coordinate"][: expected.n_real]
+        centres[: expected.n_real],
+        expected.tables["Cells Center Coordinate"][: expected.n_real],
     ):
         raise RuntimeError(
             "Native serialization changed source physical cell coordinates"
         )
     return group.attrs["Data Date"].decode().strip("\x00")
+
+
+def _validate_cell_subset(plan):
+    """Rebuild expected topology from immutable planned source IDs, then compare."""
+    from pathlib import Path
+
+    from .GeomMeshDataclasses import MeshCellSubsetPlan
+
+    if not isinstance(plan, MeshCellSubsetPlan):
+        raise TypeError("plan must be returned by GeomMesh.plan_cell_subset")
+    source = Path(plan.source_geometry_hdf)
+    if _sha256(source) != plan.source_sha256:
+        raise RuntimeError("Cell subset source changed after planning")
+    with h5py.File(source, "r") as hdf:
+        _, expected = _selection(
+            hdf["Geometry/2D Flow Areas/" + plan.mesh_name], plan.parent_cell_ids
+        )
+    target = Path(plan.geometry_path + ".hdf")
+    target_hash = _sha256(target)
+    if (
+        len(expected.face_src) != plan.face_count
+        or len(expected.fp_src) != plan.facepoint_count
+    ):
+        raise RuntimeError(
+            "Cell subset planned topology counts do not match the source"
+        )
+    try:
+        with h5py.File(target, "r") as hdf:
+            _validate_incidence(hdf, plan.mesh_name, expected)
+    except (ValueError, IndexError, KeyError, TypeError) as exc:
+        raise RuntimeError("Native subset topology validation failed") from exc
+    if _sha256(source) != plan.source_sha256:
+        raise RuntimeError("Cell subset source changed during validation")
+    if _sha256(target) != target_hash:
+        raise RuntimeError("Cell subset child changed during validation")
+    return {
+        "schema": "ras-mesh-cell-subset-validation/v1",
+        "status": "pass",
+        "source_sha256": plan.source_sha256,
+        "geometry_hdf_sha256": target_hash,
+        "physical_cells": expected.n_real,
+        "total_cells": len(expected.cell_src),
+        "faces": len(expected.face_src),
+        "facepoints": len(expected.fp_src),
+        "topology_exact": True,
+        "hydraulic_acceptance": "not_established",
+    }
 
 
 def _set_text_stamp(path, mesh_name, stamp):
@@ -604,6 +736,11 @@ def _resolve_subset_install(hecras_version, hecras_dir, ras_object):
     from .._landcover_native import find_hecras_install
 
     selected = None
+    if ras_object is None:
+        from ..RasPrj import ras
+
+        if getattr(ras, "initialized", False):
+            ras_object = ras
     if ras_object is not None:
         selected_exe = Path(ras_object.ras_exe_path).resolve()
         if not selected_exe.is_file() or selected_exe.name.lower() != "ras.exe":
@@ -623,7 +760,7 @@ def _resolve_subset_install(hecras_version, hecras_dir, ras_object):
     return install
 
 
-def _apply_cell_subset(plan, hecras_version, hecras_dir, ras_object):
+def _apply_cell_subset(plan, hecras_version, hecras_dir, ras_object, timeout):
     import json
     import os
     import shutil
@@ -695,26 +832,31 @@ def _apply_cell_subset(plan, hecras_version, hecras_dir, ras_object):
         original_associations = _relocate_associations(staged_hdf, target)
         receipt = Path(folder) / "native.json"
         worker = Path(__file__).resolve().parents[1] / "_cell_subset_worker.py"
-        result = subprocess.run(
-            [
-                sys.executable,
-                "-I",
-                str(worker),
-                str(install),
-                str(staged_hdf),
-                plan.mesh_name,
-                str(subset.n_real),
-                str(receipt),
-            ],
-            cwd=staged_hdf.parent,
-            env=worker_environment(1),
-            capture_output=True,
-            text=True,
-            encoding="utf-8",
-            errors="replace",
-            timeout=300,
-            check=False,
-        )
+        try:
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    "-I",
+                    str(worker),
+                    str(install),
+                    str(staged_hdf),
+                    plan.mesh_name,
+                    str(subset.n_real),
+                    str(receipt),
+                ],
+                cwd=staged_hdf.parent,
+                env=worker_environment(1),
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                timeout=timeout,
+                check=False,
+            )
+        except subprocess.TimeoutExpired as exc:
+            raise RuntimeError(
+                f"Native cell subset serialization exceeded {timeout} seconds"
+            ) from exc
         if result.returncode != 0 or not receipt.is_file():
             raise RuntimeError(
                 "Native cell subset serialization failed: "

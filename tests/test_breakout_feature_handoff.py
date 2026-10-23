@@ -396,6 +396,7 @@ def test_parent_cell_subset_is_applied_before_native_completion(tmp_path, monkey
 
     def apply(selected, **kwargs):
         assert selected is plan and kwargs["ras_object"] is ras
+        assert kwargs['timeout']==600
         events.append("apply")
         return MeshResult(
             mesh_name="Area", status="complete", cell_count=2, operation="cell_subset"
@@ -408,12 +409,19 @@ def test_parent_cell_subset_is_applied_before_native_completion(tmp_path, monkey
         _sync_native_hdf(clone.geometry_path)
         return SimpleNamespace(success=True, error=None, first_error_line=None)
 
+    def validate(selected,**kwargs):
+        assert selected is plan and kwargs['ras_object'] is ras
+        assert events==['plan','apply','complete']
+        events.append('validate')
+        return {'status':'pass','topology_exact':True}
+
     monkeypatch.setattr(
         GeomMesh, "generate_computation_points", staticmethod(forbidden)
     )
     monkeypatch.setattr(GeomMesh, "generate", staticmethod(forbidden))
     monkeypatch.setattr(GeomMesh, "plan_cell_subset", staticmethod(inspect))
     monkeypatch.setattr(GeomMesh, "apply_cell_subset", staticmethod(apply))
+    monkeypatch.setattr(GeomMesh, "validate_cell_subset", staticmethod(validate))
     monkeypatch.setattr(
         GeomPreprocessor, "run_geometry_preprocessor", staticmethod(refresh)
     )
@@ -426,8 +434,9 @@ def test_parent_cell_subset_is_applied_before_native_completion(tmp_path, monkey
         remesh=False,
         require_complete_products=True,
     )
-    assert events == ["plan", "apply", "complete"]
+    assert events == ["plan", "apply", "complete", "validate"]
     assert result.mesh_result.operation == "cell_subset"
+    assert result.mesh_result.cell_subset['post_preprocess_validation']['topology_exact']
 
 
 @pytest.mark.parametrize("empty_sidecar", [False, True])

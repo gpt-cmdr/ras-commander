@@ -42,6 +42,7 @@ jobs:
           tests/test_breakout_feature_handoff.py
           tests/test_explicit_computation_points.py
           tests/test_mesh_cell_subset.py
+          tests/test_mesh_cell_subset_native.py
           tests/test_geom_preprocessor_contract.py
           tests/test_hdf_completion.py
           tests/test_hdf_followup_native_contract.py

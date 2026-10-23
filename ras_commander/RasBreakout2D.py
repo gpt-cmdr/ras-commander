@@ -942,6 +942,7 @@ class RasBreakout2D:
                 )
                 mesh_result = GeomMesh.apply_cell_subset(
                     subset_plan,
+                    timeout=timeout,
                     ras_object=ras_object,
                 )
                 points = mesh_result
@@ -1152,6 +1153,12 @@ class RasBreakout2D:
             if not property_tables:
                 raise RuntimeError("2D property-table computation returned False")
 
+        if parent_cell_ids is not None:
+            # Ras.exe may silently regenerate topology from unchanged seeds and
+            # perimeter. Recheck exact planned arrays after every native phase.
+            mesh_result.cell_subset["post_preprocess_validation"] = (
+                GeomMesh.validate_cell_subset(subset_plan, ras_object=ras_object)
+            )
         final_unsteady_hash = _sha256_file(clone.unsteady_path)
         if final_unsteady_hash != prepared_unsteady_hash:
             raise RuntimeError("Geometry preparation modified the cloned unsteady file")
