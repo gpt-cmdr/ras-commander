@@ -3572,8 +3572,11 @@ class RasUnsteady:
 
         filtered_lines: List[str] = []
         removed_before_insert = 0
+        managed_prefixes = RasUnsteady._MET_PRECIP_MANAGED_PREFIXES + tuple(
+            f"{key}=" for key, _value in desired_entries
+        )
         for i, line in enumerate(lines):
-            if line.startswith(RasUnsteady._MET_PRECIP_MANAGED_PREFIXES):
+            if line.startswith(managed_prefixes):
                 if i < insert_index:
                     removed_before_insert += 1
                 continue
@@ -5616,6 +5619,8 @@ class RasUnsteady:
         value: float = 1.0,
         units: str = "in/hr",
         ras_object: Optional[Any] = None,
+        *,
+        ratio: Optional[float] = None,
     ) -> None:
         """
         Configure constant (spatially and temporally uniform) precipitation.
@@ -5646,6 +5651,13 @@ class RasUnsteady:
             Constant precipitation rate units.
         ras_object : optional
             Custom RAS object used to resolve an unsteady number.
+        ratio : float, optional
+            Positive finite dimensionless multiplier written to both text and
+            the existing HDF sidecar. Pass 1.0 to replace an inherited rainfall
+            reduction factor and retain the supplied rate unscaled. Omission
+            preserves existing ratio records for backward compatibility. Explicit
+            values are rounded once to native Single precision; overflow and
+            underflow to zero are rejected before either file is modified.
 
         Returns
         -------
@@ -5657,7 +5669,8 @@ class RasUnsteady:
         ------
         ValueError
             If ``value`` is not a finite, non-negative real number, or ``units``
-            is not ``"in/hr"`` or ``"mm/hr"``.
+            is not ``"in/hr"`` or ``"mm/hr"``, or an explicit ``ratio`` does
+            not round to a positive finite native Single.
 
         Examples
         --------
@@ -5679,6 +5692,17 @@ class RasUnsteady:
             raise ValueError(f"value must be >= 0, got {constant_value!r}")
         if units not in {"in/hr", "mm/hr"}:
             raise ValueError("units must be either 'in/hr' or 'mm/hr'")
+        native_ratio = None
+        if ratio is not None:
+            if isinstance(ratio, bool) or not isinstance(ratio, numbers.Real):
+                raise ValueError("ratio must be a positive finite real number")
+            try:
+                with np.errstate(over="ignore", under="ignore"):
+                    native_ratio = np.float32(float(ratio))
+            except (OverflowError, ValueError) as exc:
+                raise ValueError("ratio must fit a positive finite native Single") from exc
+            if not np.isfinite(native_ratio) or native_ratio <= 0:
+                raise ValueError("ratio must fit a positive finite native Single")
 
         unsteady_path = RasUnsteady._resolve_unsteady_file_path(
             unsteady_file,
@@ -5692,21 +5716,26 @@ class RasUnsteady:
             unsteady_path.name, formatted_value, units,
         )
 
-        RasUnsteady._replace_met_precipitation_keys(
-            unsteady_path,
-            [
-                ("Precipitation Mode", "Enable"),
-                ("Met BC=Precipitation|Mode", "Constant"),
-                ("Met BC=Precipitation|Constant Value", formatted_value),
-                ("Met BC=Precipitation|Constant Units", units),
-            ],
-        )
+        precipitation_keys = [
+            ("Precipitation Mode", "Enable"),
+            ("Met BC=Precipitation|Mode", "Constant"),
+            ("Met BC=Precipitation|Constant Value", formatted_value),
+            ("Met BC=Precipitation|Constant Units", units),
+        ]
+        if ratio is not None:
+            precipitation_keys.append(
+                ("Met BC=Precipitation|Ratio", format(float(native_ratio), ".9g"))
+            )
+        RasUnsteady._replace_met_precipitation_keys(unsteady_path, precipitation_keys)
 
         hdf_path = Path(str(unsteady_path) + ".hdf")
         if hdf_path.exists():
-            RasUnsteady._update_constant_precipitation_hdf(
-                hdf_path, constant_value, units
-            )
+            if ratio is None:
+                RasUnsteady._update_constant_precipitation_hdf(hdf_path, constant_value, units)
+            else:
+                RasUnsteady._update_constant_precipitation_hdf(
+                    hdf_path, constant_value, units, ratio=float(native_ratio)
+                )
         else:
             logger.warning(
                 f"HDF file not found: {hdf_path} - constant precipitation "
@@ -5725,6 +5754,8 @@ class RasUnsteady:
         hdf_path: Path,
         value: float,
         units: str,
+        *,
+        ratio: Optional[float] = None,
     ) -> None:
         """Write constant-mode precipitation attributes to an unsteady .u##.hdf."""
         import h5py
@@ -5742,6 +5773,9 @@ class RasUnsteady:
                 precip_grp.attrs["Mode"] = np.bytes_("Constant")
                 precip_grp.attrs["Constant Value"] = np.float64(value)
                 precip_grp.attrs["Constant Units"] = np.bytes_(units)
+                RasUnsteady._write_precipitation_ratio_attribute(
+                    precip_grp, ratio, hdf_path, historic=False,
+                )
 
                 RasUnsteady._ensure_meteorology_attributes_dataset(hdf_file, met_path)
         except Exception as e:
