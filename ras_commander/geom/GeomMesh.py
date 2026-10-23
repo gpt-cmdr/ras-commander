@@ -6818,6 +6818,9 @@ class GeomMesh:
         in source horizontal units. CRS definitions must agree. Holes, disjoint
         components, boundary pinch points, duplicate IDs and ghost IDs block;
         the selection is never repaired or expanded. No result HDF is read.
+        An owned target stamped "HEC-RAS Results" by native completion is
+        accepted only when its sole root group is Geometry; source stamps
+        remain restricted to "HEC-RAS Geometry".
 
         Args:
             source_geometry_hdf: Read-only parent geometry HDF, with native mesh tables.

@@ -326,6 +326,19 @@ def _geometry_source(hdf):
         raise ValueError("source must be a geometry-only HDF, without Results")
 
 
+def _geometry_target(hdf):
+    value = _attr_text(hdf.attrs.get("File Type", b""))
+    # Native completion can stamp a .g##.hdf as Results even when it contains
+    # only Geometry. This exception belongs to the owned target, never source.
+    native_geometry = value == "HEC-RAS Results" and set(hdf) == {"Geometry"}
+    if (
+        "Geometry" not in hdf
+        or "Results" in hdf
+        or not (value == "HEC-RAS Geometry" or native_geometry)
+    ):
+        raise ValueError("target must be a geometry-only HDF, without result data")
+
+
 def _plan_cell_subset(
     source_geometry_hdf, geometry_path, parent_cell_ids, mesh_name, boundary_tolerance
 ):
@@ -363,7 +376,7 @@ def _plan_cell_subset(
         raise ValueError("source and target horizontal CRS differ")
     with h5py.File(source, "r") as src, h5py.File(target, "r") as dst:
         _geometry_source(src)
-        _geometry_source(dst)
+        _geometry_target(dst)
         base = "Geometry/2D Flow Areas"
         attrs = dst[base + "/Attributes"][:]
         names = [row["Name"].decode().rstrip("\x00 ") for row in attrs]

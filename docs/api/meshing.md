@@ -58,6 +58,9 @@ rejected. Prepare an owned child text/HDF pair with one matching area, consisten
 CRS, and the selected union as its perimeter. Cell IDs are zero-based physical
 IDs from `HdfMesh`; ghost cells, duplicate IDs, holes, disconnected components,
 and boundary pinch points are rejected. The API never expands the selection.
+Native completion can stamp the owned geometry target `HEC-RAS Results`.
+Planning accepts that target only if its sole root group is `Geometry`.
+The parent still requires `HEC-RAS Geometry`; actual result data are rejected.
 
 ```python
 from ras_commander.geom import GeomMesh, GeomPreprocessor

@@ -235,6 +235,48 @@ def test_apply_rejects_changed_inputs_before_native_access(tmp_path, changed):
     assert all(p.read_bytes() == raw for p, raw in current.items())
 
 
+def test_completed_native_geometry_target_can_be_replanned(tmp_path):
+    source = tmp_path / "Parent.g01.hdf"
+    grid(source)
+    target = tmp_path / "Child.g02"
+    child_text(target)
+    hdf = Path(str(target) + ".hdf")
+    grid(hdf)
+    with h5py.File(hdf, "r+") as handle:
+        # Ras.exe can stamp a .g##.hdf this way after native completion.
+        handle.attrs["File Type"] = np.bytes_("HEC-RAS Results")
+        assert list(handle) == ["Geometry"]
+    plan = GeomMesh.plan_cell_subset(source, target, [5, 6, 9, 10], "Area")
+    assert plan.parent_cell_ids == (5, 6, 9, 10)
+
+
+@pytest.mark.parametrize("root", ["Results", "Event Conditions", "Plan Data"])
+def test_results_stamped_target_with_non_geometry_data_is_rejected(tmp_path, root):
+    source = tmp_path / "Parent.g01.hdf"
+    grid(source)
+    target = tmp_path / "Child.g02"
+    child_text(target)
+    hdf = Path(str(target) + ".hdf")
+    grid(hdf)
+    with h5py.File(hdf, "r+") as handle:
+        handle.attrs["File Type"] = np.bytes_("HEC-RAS Results")
+        handle.create_group(root)
+    with pytest.raises(ValueError, match="target.*geometry-only"):
+        GeomMesh.plan_cell_subset(source, target, [5, 6, 9, 10], "Area")
+
+
+def test_results_stamped_source_is_rejected_even_without_results_group(tmp_path):
+    source = tmp_path / "Parent.g01.hdf"
+    grid(source)
+    target = tmp_path / "Child.g02"
+    child_text(target)
+    grid(Path(str(target) + ".hdf"))
+    with h5py.File(source, "r+") as handle:
+        handle.attrs["File Type"] = np.bytes_("HEC-RAS Results")
+    with pytest.raises(ValueError, match="source.*geometry-only"):
+        GeomMesh.plan_cell_subset(source, target, [5, 6, 9, 10], "Area")
+
+
 def test_results_source_and_crs_mismatch_block(tmp_path):
     source = tmp_path / "Parent.g01.hdf"
     grid(source)
