@@ -9,7 +9,9 @@ Environment (all required for native acceptance; absent -> explicit skip):
   RAS_CONSUMER_ACCEPTANCE_RECEIPT  accepted-source-build.json (H: path is fine)
   RAS_CONSUMER_FIXTURES            local fixture copy folder containing
                                    fixture-copy-receipt.json
-  RAS_CONSUMER_SOURCE_CHECKOUT     isolated checkout of the accepted commit
+  RAS_CONSUMER_SOURCE_CHECKOUT     isolated ras-commander checkout of the accepted commit
+  RAS_EXPECTED_ENGINE_COMMIT       optional: the only extension ENGINE_COMMIT accepted
+                                   (default: tests/native_engine_provenance.py)
   RAS_CONSUMER_REFERENCE_DEPTH     folder of shared reference-depth parquet files
 """
 from __future__ import annotations
@@ -22,9 +24,12 @@ import inspect
 import json
 import os
 import struct
-import tomllib
+import sys
 from collections import Counter
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from native_engine_provenance import accepted_engine_commits  # noqa: E402,F401
 
 RESULTS = "Results/Unsteady/Output/Output Blocks/Base Output/Unsteady Time Series"
 
@@ -366,9 +371,3 @@ def tile_payload(archive, zxy):
 
 __all__ = [n for n in dir() if not n.startswith("_") and n not in {"annotations"}]
 
-
-def engine_dependency():
-    """Exact pin comes from the activated source manifest, never a copied literal."""
-    root = env_path("RAS_CONSUMER_SOURCE_CHECKOUT") or Path(__file__).resolve().parents[2]
-    manifest = tomllib.loads((root / "rust/fast-hdf/Cargo.toml").read_text(encoding="utf-8"))
-    return manifest["dependencies"]["ras-commander-rust"]

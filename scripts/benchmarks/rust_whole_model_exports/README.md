@@ -6,15 +6,19 @@ native extension path/hash. Do not reuse an older separate-worker native binary.
 This packet has no shared registration patch; `validate_export_wkb` remains in
 the coordinator-owned binding.
 
+`RAS_FAST_HDF_SOURCE` is a checkout of
+[gpt-cmdr/ras-commander-fast-hdf](https://github.com/gpt-cmdr/ras-commander-fast-hdf);
+the extension moved there from `rust/fast-hdf`.
+
 ```powershell
 uv venv .venv --python 3.12
 uv pip install -e . pytest maturin pyarrow pyogrio geopandas pyproj shapely xarray scipy requests tqdm psutil pmtiles mapbox-vector-tile freestiler==0.3.0
-uv run maturin develop --release --locked --features extension-module,exports-all --manifest-path rust/fast-hdf/Cargo.toml
-$env:CARGO_TARGET_DIR=(Join-Path $PWD 'rust/fast-hdf/target')
+uv run maturin develop --release --locked --features extension-module,exports-all --manifest-path $env:RAS_FAST_HDF_SOURCE/python/Cargo.toml
+$env:CARGO_TARGET_DIR=(Join-Path $PWD 'working/cargo-target')
 cargo build --release --locked --manifest-path tests/rust_whole_model_exports/harness/Cargo.toml
 # The inherited format suite also needs its separate test-harness prerequisite.
 cargo build --release --locked --manifest-path tests/rust_first_tier_exports/harness/Cargo.toml
-$env:RAS_EXPORT_HARNESS=(Join-Path $PWD 'rust/fast-hdf/target/release/export-test-harness.exe')
+$env:RAS_EXPORT_HARNESS=(Join-Path $PWD 'working/cargo-target/release/export-test-harness.exe')
 $env:RAS_EXPORT_FIXTURE_ROOT=(Join-Path $PWD 'working/fixtures')
 uv run python -m pytest tests/rust_first_tier_exports tests/rust_export_conformance tests/test_fast_hdf.py -q -rx
 

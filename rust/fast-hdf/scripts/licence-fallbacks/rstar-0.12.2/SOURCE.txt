@@ -1,5 +1,0 @@
-The published rstar 0.12.2 crate package ships no licence file.
-These texts are copied unmodified from https://github.com/georust/rstar at tag v0.12.2:
-  https://raw.githubusercontent.com/georust/rstar/v0.12.2/LICENSE-MIT
-  https://raw.githubusercontent.com/georust/rstar/v0.12.2/LICENSE-APACHE
-Retrieved 2026-10-21.

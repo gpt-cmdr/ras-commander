@@ -1,6 +1,9 @@
 """Static consumer-contract inventory of the optional native backend.
 
-Reads source only: no build, no import of the native module, no HDF access.
+The extension source lives in ``python/`` of
+https://github.com/gpt-cmdr/ras-commander-fast-hdf; set ``RAS_FAST_HDF_SOURCE``
+to a checkout of it. Reads source only: no build, no import of the native
+module, no HDF access.
 Records what a Python, terrio or RustGIS consumer can bind to at the checked
 out revision, including registrations delegated to ``module::register(m)``
 helpers and ``add_class`` types, and which modules are coupled to PyO3, NumPy
@@ -10,12 +13,12 @@ or filesystem paths (and therefore are not a pure-Rust/WASM contract).
 """
 import argparse
 import json
+import os
 import re
 import subprocess
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[2]
-CRATE = ROOT / "rust" / "fast-hdf"
+SOURCE_ENV = "RAS_FAST_HDF_SOURCE"
 SCHEMA = "ras-commander/consumer-contract-inventory/v2"
 
 COUPLING = {
@@ -33,9 +36,15 @@ SIGNATURE = re.compile(r"#\[pyo3\(signature\s*=\s*\((.*?)\)\)\]", re.S)
 METHOD = re.compile(r"(?:#\[pyo3\(signature\s*=\s*\((.*?)\)\)\]\s*)?fn\s+(\w+)(?:<[^>]*>)?\(", re.S)
 
 
-def _git(*args):
+def source_root():
+    """The ras-commander-fast-hdf checkout named by RAS_FAST_HDF_SOURCE, or None."""
+    value = os.environ.get(SOURCE_ENV)
+    return Path(value) if value else None
+
+
+def _git(root, *args):
     try:
-        return subprocess.check_output(["git", "-C", str(ROOT), *args], text=True).strip()
+        return subprocess.check_output(["git", "-C", str(root), *args], text=True).strip()
     except (OSError, subprocess.CalledProcessError):
         return None
 
@@ -120,10 +129,14 @@ def _git_deps(cargo):
         r'^([\w-]+)\s*=\s*\{[^}]*git\s*=\s*"([^"]+)"[^}]*rev\s*=\s*"([0-9a-f]+)"', cargo, re.M)}
 
 
-def build():
-    lib_rs = (CRATE / "src" / "lib.rs").read_text(encoding="utf-8")
-    texts = {p.relative_to(CRATE).as_posix(): p.read_text(encoding="utf-8")
-             for p in sorted((CRATE / "src").rglob("*.rs"))}
+def build(root=None):
+    root = root or source_root()
+    if root is None:
+        raise RuntimeError(f"set {SOURCE_ENV} to a ras-commander-fast-hdf checkout")
+    crate = Path(root) / "python"
+    lib_rs = (crate / "src" / "lib.rs").read_text(encoding="utf-8")
+    texts = {p.relative_to(crate).as_posix(): p.read_text(encoding="utf-8")
+             for p in sorted((crate / "src").rglob("*.rs"))}
     signatures = {}
     for text in texts.values():
         for name, sig in _signatures(text).items():
@@ -139,14 +152,15 @@ def build():
                      "coupling": {k: len(rx.findall(text)) for k, rx in COUPLING.items()},
                      "pub_items": re.findall(r"^pub (?:fn|struct|enum|trait) (\w+)", text, re.M)}
                for rel, text in texts.items()}
-    main_cargo = (CRATE / "Cargo.toml").read_text(encoding="utf-8")
-    export_cargo = (CRATE / "src" / "exports" / "Cargo.toml").read_text(encoding="utf-8")
+    main_cargo = (crate / "Cargo.toml").read_text(encoding="utf-8")
+    export_cargo = (crate / "src" / "exports" / "Cargo.toml").read_text(encoding="utf-8")
     pure = {rel: m["pub_items"] for rel, m in modules.items()
             if m["pub_items"] and m["coupling"]["pyo3"] == 0 and m["coupling"]["numpy"] == 0}
     return {
         "schema": SCHEMA,
-        "source": {"commit": _git("rev-parse", "HEAD"), "tree": _git("rev-parse", "HEAD^{tree}"),
-                   "dirty_paths": (_git("status", "--porcelain") or "").splitlines()},
+        "source": {"repository": "gpt-cmdr/ras-commander-fast-hdf",
+                   "commit": _git(root, "rev-parse", "HEAD"), "tree": _git(root, "rev-parse", "HEAD^{tree}"),
+                   "dirty_paths": (_git(root, "status", "--porcelain") or "").splitlines()},
         "crate": {"name": "ras-commander-fast-hdf",
                   "crate_types": re.findall(r'"(cdylib|rlib)"', main_cargo),
                   "features": _features(main_cargo), "git_dependencies": _git_deps(main_cargo)},

@@ -31,8 +31,10 @@ matching ``domain_rule`` (``stored_location`` when ``Location`` is present, else
 
 Inputs: ``RAS_ROUTE2_FIXTURES`` (real fixtures, JUL2020 D601 included) and
 optionally ``RAS_ROUTE3_LEGACY_EXCERPTS``, a directory holding the engine's
-``tests/fixtures/legacy_location/*.h5`` excerpts (valid, wrong_count,
-invalid_location, rows_mismatch, physical_count, physical_count_ok), read only.
+legacy-location excerpts (valid, wrong_count, invalid_location, rows_mismatch,
+physical_count, physical_count_ok), read only. In a checkout of
+https://github.com/gpt-cmdr/ras-commander-fast-hdf they are
+``crates/ras-commander-rust/tests/fixtures/legacy_location/*.h5``.
 ``RAS_ROUTE3_RESULTS`` (optional) receives one JSON line per compared series.
 """
 import json

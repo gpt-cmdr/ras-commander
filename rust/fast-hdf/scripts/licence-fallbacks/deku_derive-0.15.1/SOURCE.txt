@@ -1,5 +1,0 @@
-The published deku_derive 0.15.1 crate package ships no licence file (MIT OR Apache-2.0 declared).
-These texts are copied unmodified from https://github.com/sharksforarms/deku at tag deku-v0.15.1:
-  https://raw.githubusercontent.com/sharksforarms/deku/deku-v0.15.1/LICENSE-MIT
-  https://raw.githubusercontent.com/sharksforarms/deku/deku-v0.15.1/LICENSE-APACHE
-Retrieved 2026-10-21.

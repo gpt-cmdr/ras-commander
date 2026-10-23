@@ -9,7 +9,9 @@ this module from a directory outside the source checkout:
   HEC-RAS HDF files and/or directories containing them. Files named in
   ``CASES`` are hash-checked; real-fixture tests skip when none is found.
 
-The gate pins bridge ``API_VERSION`` 11 and engine commit ``ENGINE_COMMIT``;
+The gate pins bridge ``API_VERSION`` 11 and accepts the engine commits of
+``tests/native_engine_provenance.py`` (set ``RAS_EXPECTED_ENGINE_COMMIT`` to
+require one specific build);
 checks that the extension is imported from site-packages and that its binary
 is byte-identical to the one inside the wheel; checks the abi3 tag and the
 licence files; and runs required-native reads and mesh polygons against
@@ -30,8 +32,10 @@ from pathlib import Path
 import numpy as np
 import pytest
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from native_engine_provenance import accepted_engine_commits  # noqa: E402
+
 API_VERSION = 11
-ENGINE_COMMIT = "0b024adc7857e9fb2d364997ad002e01a939cec1"
 DIST = "ras-commander-fast-hdf"
 LICENCE_HOLDER = "CLB Engineering Corporation"
 SOURCE_ROOT = Path(__file__).resolve().parents[2]
@@ -208,7 +212,7 @@ def _python_polygonize_forbidden():
 
 def test_api_version_and_engine_commit_pins(native, adapter):
     assert native.API_VERSION == API_VERSION
-    assert native.ENGINE_COMMIT == ENGINE_COMMIT
+    assert native.ENGINE_COMMIT in accepted_engine_commits(), native.ENGINE_COMMIT
     assert adapter.available(), "ras_commander.fast_hdf must accept the installed extension"
 
 

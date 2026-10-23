@@ -18,7 +18,7 @@ from pathlib import Path
 import pytest
 
 from .expected import EXPECTED
-from .contract import engine_dependency, env_path, native_binary, native_package, sha256
+from .contract import accepted_engine_commits, env_path, native_binary, native_package, sha256
 
 pytestmark = pytest.mark.usefixtures("receipt")
 
@@ -50,7 +50,7 @@ def test_receipt_pins_are_the_activated_build(receipt):
     assert receipt["accepted"] is True
     if "native_engine_commit" in receipt:
         # Explicit new-wave activation; scientific oracles remain unchanged.
-        assert receipt["native_engine_commit"] == engine_dependency()["rev"]
+        assert receipt["native_engine_commit"] in accepted_engine_commits()
         source = env_path("RAS_CONSUMER_SOURCE_CHECKOUT")
         assert source is not None
         head = subprocess.check_output(["git", "-C", str(source), "rev-parse", "HEAD"], text=True).strip()

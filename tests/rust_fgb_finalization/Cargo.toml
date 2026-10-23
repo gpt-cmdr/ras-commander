@@ -8,6 +8,7 @@ publish = false
 path = "lifecycle.rs"
 
 [dependencies]
-ras-export = { path = "../../rust/fast-hdf/src/exports", features = ["flatgeobuf"] }
+# The export crate lives in python/src/exports of gpt-cmdr/ras-commander-fast-hdf (0.1.0).
+ras-export = { git = "https://github.com/gpt-cmdr/ras-commander-fast-hdf", rev = "7ca433ea4fbe68902a50902de815e56697eb21b2", features = ["flatgeobuf"] }
 arrow-ipc = "=59.0.0"
 tempfile = "3"

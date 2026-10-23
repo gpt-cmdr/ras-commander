@@ -834,20 +834,22 @@ push selected reads and bounded batches through the same adapter. This backend
 provides HDF reads only. Set `RAS_COMMANDER_FAST_HDF=0` to select the Python
 reference paths.
 
-The extension is a separate distribution, `ras-commander-fast-hdf`. Until its
-first wheel release, build it from this repository; the `fast-hdf` extra is not
-yet a publicly installable release:
+The extension is a separate, open-source (MIT) distribution,
+`ras-commander-fast-hdf`, developed in
+[gpt-cmdr/ras-commander-fast-hdf](https://github.com/gpt-cmdr/ras-commander-fast-hdf)
+and published on PyPI:
 
-```powershell
-uv tool run --from maturin maturin build --release --locked --manifest-path rust/fast-hdf/Cargo.toml --out working/wheels
-uv pip install --python .venv/Scripts/python.exe working/wheels/<built-wheel>.whl
+```bash
+pip install "ras-commander[fast]"    # or: pip install ras-commander-fast-hdf
 ```
 
-A Rust toolchain and platform linker are required to build from source. Ordinary
-ras-commander installations do not require either. Geometry output requires
-GeoPandas and Shapely; direct PMTiles export requires pyproj. The wheel workflow
-is configured to build Windows x64, Linux x64 and macOS ARM64 artifacts for
-review; it does not publish them.
+Wheels are published for Windows x64, Linux x64 (`manylinux_2_28`) and macOS
+arm64 (not yet qualified on the HEC-RAS corpus), so no Rust toolchain is
+needed. To build from source, follow the extension repository's
+[building guide](https://github.com/gpt-cmdr/ras-commander-fast-hdf/blob/main/docs/building.md).
+Geometry output requires GeoPandas and Shapely; direct PMTiles export requires
+pyproj. See [Native Rust HDF engine](../native-engine.md) for modes,
+qualification and limitations.
 
 ```python
 from ras_commander import fast_hdf

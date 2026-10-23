@@ -1,7 +1,10 @@
 """Contract tests for the standalone proposal, before native binding integration.
 
-Set FLUVIAL_RUSTC when rustc is outside PATH. RAS_FLUVIAL_HDF accepts a local
-computed BaldEagle plan HDF; unset fixtures skip explicitly. Never runs HEC-RAS.
+The standalone graph kernel is ``python/tests/fluvial_graph.rs`` of
+https://github.com/gpt-cmdr/ras-commander-fast-hdf: set RAS_FAST_HDF_SOURCE to
+a checkout of it. Set FLUVIAL_RUSTC when rustc is outside PATH. RAS_FLUVIAL_HDF
+accepts a local computed BaldEagle plan HDF; unset fixtures skip explicitly.
+Never runs HEC-RAS.
 """
 from pathlib import Path
 import itertools
@@ -18,10 +21,14 @@ def kernel(tmp_path_factory):
     rustc = os.environ.get("FLUVIAL_RUSTC") or shutil.which("rustc")
     if not rustc:
         pytest.skip("Rust toolchain unavailable; standalone kernel not tested")
-    root = Path(__file__).resolve().parents[1]
+    source = os.environ.get("RAS_FAST_HDF_SOURCE")
+    if not source:
+        pytest.skip("set RAS_FAST_HDF_SOURCE to a ras-commander-fast-hdf checkout to test the kernel")
+    kernel_rs = Path(source) / "python/tests/fluvial_graph.rs"
+    assert kernel_rs.is_file(), f"{kernel_rs} not found"
     binary = tmp_path_factory.mktemp("fluvial") / "graph.exe"
     subprocess.run([rustc, "--edition", "2021", "-O", "-A", "dead_code",
-                    str(root / "rust/fast-hdf/tests/fluvial_graph.rs"), "-o", str(binary)],
+                    str(kernel_rs), "-o", str(binary)],
                    check=True, capture_output=True, text=True)
     return binary
 

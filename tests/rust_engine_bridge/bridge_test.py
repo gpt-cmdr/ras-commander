@@ -1,36 +1,28 @@
-"""Binding-boundary regressions; existing real-model suites remain the domain oracle."""
+"""Binding-boundary regressions; existing real-model suites remain the domain oracle.
+
+The extension's source (and its source-level delegation checks) lives in
+https://github.com/gpt-cmdr/ras-commander-fast-hdf; these tests use the
+installed wheel only.
+"""
 import gc
 from pathlib import Path
-import tomllib
+import sys
 
 import h5py
 import numpy as np
 import pytest
 
-ROOT = Path(__file__).resolve().parents[2]
-DEP = tomllib.loads((ROOT / "rust/fast-hdf/Cargo.toml").read_text())["dependencies"]["ras-commander-rust"]
-PIN = DEP["rev"]
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from native_engine_provenance import accepted_engine_commits  # noqa: E402
 
-
-def test_source_delegation_and_exact_git_pin():
-    cargo = tomllib.loads((ROOT / 'rust/fast-hdf/Cargo.toml').read_text())
-    dep = cargo['dependencies']['ras-commander-rust']
-    assert dep['rev'] == PIN and dep['default-features'] is False
-    assert dep['features'] == ['catalog', 'hdf', 'mesh', 'results']
-    assert 'path' not in dep and 'hdf5-reader' not in cargo['dependencies']
-    for file in ['reader.rs', 'mesh.rs', 'analysis/bindings.rs']:
-        source = (ROOT / 'rust/fast-hdf/src' / file).read_text()
-        assert 'ras_commander_rust' in source
-        assert 'hdf5_reader' not in source
-    assert 'struct Accumulator' not in (ROOT / 'rust/fast-hdf/src/analysis/mod.rs').read_text()
-    assert 'validate_ring_geometry' in (ROOT / 'rust/fast-hdf/src/tiles.rs').read_text()
+ENGINE_FEATURES = ('catalog', 'hdf', 'mesh', 'results')
 
 
 @pytest.fixture
 def native():
     module = pytest.importorskip("ras_commander_fast_hdf")
-    assert module.ENGINE_COMMIT == PIN
-    assert tuple(module.ENGINE_FEATURES) == ('catalog', 'hdf', 'mesh', 'results')
+    assert module.ENGINE_COMMIT in accepted_engine_commits(), module.ENGINE_COMMIT
+    assert tuple(module.ENGINE_FEATURES) == ENGINE_FEATURES
     assert module.API_VERSION == 11
     assert module.TEXT_API_VERSION == 1
     return module

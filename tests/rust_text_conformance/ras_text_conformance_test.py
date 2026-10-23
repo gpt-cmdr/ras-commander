@@ -1,8 +1,9 @@
-"""Real-model qualification for the lossless Rust text core (rust/fast-hdf/src/ras_text).
+"""Real-model qualification for the lossless Rust text core of the native extension.
 
-The Rust module is compiled in place by the standalone crate next to this file
-(no shared Cargo.toml/lib.rs edits) and driven through its ``ras_text_probe``
-binary. Projects come from RasExamples, are extracted into pytest temp folders
+The core lives in ``python/src/ras_text`` of
+https://github.com/gpt-cmdr/ras-commander-fast-hdf. The standalone crate next
+to this file compiles it in place from the checkout named by
+``RAS_FAST_HDF_SOURCE`` and drives it through its ``ras_text_probe`` binary. Projects come from RasExamples, are extracted into pytest temp folders
 and resolved through RasPrj DataFrames; the example ZIPs are only read.
 
 Checks:
@@ -12,8 +13,10 @@ Checks:
 - batch edits change only their reported spans and reopen through the
   current Python APIs; malformed real derivatives are diagnosed.
 
-Skips (never weakens) when cargo or the example archives are unavailable.
+Skips (never weakens) when cargo, the extension source or the example archives
+are unavailable.
 Environment:
+  RAS_FAST_HDF_SOURCE checkout of gpt-cmdr/ras-commander-fast-hdf (required)
   RAS_TEXT_VERSIONS   comma list of RasExamples versions (default "6.6,7.0")
   RAS_TEXT_REPORT     optional path for a JSON evidence report
   CARGO               cargo executable (default: PATH or ~/.cargo/bin)
@@ -78,6 +81,8 @@ def probe() -> Path:
     cargo = _cargo()
     if not cargo:
         pytest.skip("cargo unavailable; set CARGO to build the ras_text conformance crate")
+    if not os.environ.get("RAS_FAST_HDF_SOURCE"):
+        pytest.skip("set RAS_FAST_HDF_SOURCE to a ras-commander-fast-hdf checkout to build the text core")
     target = Path(os.environ.get("CARGO_TARGET_DIR", CRATE / "target"))
     t0 = time.perf_counter()
     subprocess.run(
@@ -158,7 +163,7 @@ def test_provenance_is_this_checkout():
         "ras_commander": str(Path(ras_commander.__file__).resolve()),
         "version": ras_commander.__version__,
         "native_extension": spec.origin if spec else None,
-        "ras_text_source": str(CHECKOUT / "rust/fast-hdf/src/ras_text"),
+        "ras_text_source": str(Path(os.environ.get("RAS_FAST_HDF_SOURCE", "")) / "python/src/ras_text"),
     }
 
 

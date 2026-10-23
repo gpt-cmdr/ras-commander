@@ -110,7 +110,10 @@ setup(
     },
     install_requires=CORE_DEPENDENCIES,
     extras_require={
-        'fast-hdf': ['ras-commander-fast-hdf>=0.1.0,<0.2'],
+        # Optional native (Rust) HDF engine, published separately on PyPI from
+        # https://github.com/gpt-cmdr/ras-commander-fast-hdf. "fast-hdf" is an alias.
+        'fast': ['ras-commander-fast-hdf>=0.1,<0.2'],
+        'fast-hdf': ['ras-commander-fast-hdf>=0.1,<0.2'],
         # Lean Windows/Wine batch execution through RasCmdr.compute_plan().
         # This intentionally excludes the RasControl COM interface and the
         # geospatial/plotting stack. "execution" is a descriptive alias.
