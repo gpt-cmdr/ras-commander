@@ -1128,8 +1128,12 @@ def read(dataset, selection=None, *, backend="auto"):
         return _read_fixed_text(module, dataset, key, shape, mode)
     metadata = dtype.names is None and (dtype.kind not in "iuf" or h5py.check_vlen_dtype(dtype) is not None)
     route = None if metadata or not hasattr(module, "read_xs_geometry") else route_for(dataset.name)
-    if route is not None and route[0] in {"xs_result", "one_d_summary", "structure_series",
-                                         "structure_family", "geometry_family"}:
+    if (route is not None and route[0] in {"xs_result", "one_d_summary", "structure_series",
+                                          "structure_family", "geometry_family"}
+            # An unsafe file (e.g. a writable handle) is never opened by the engine:
+            # the route is kept so the read below refuses it with the clear
+            # ``file cannot be reopened safely`` error (auto falls back to h5py).
+            and fast_hdf._safe_file(dataset)):
         try:
             import os as _os
             if not _member(module, _os.fsdecode(dataset.file.filename), route):

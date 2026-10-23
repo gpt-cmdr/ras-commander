@@ -434,6 +434,9 @@ class RasPermutation:
                 if values.notna().any():
                     return float(values.max())
         except Exception as exc:
+            from .fast_hdf import reraise_required
+
+            reraise_required(exc)
             logger.debug(
                 "1D max WSE extraction failed for %s: %s",
                 hdf_path,
@@ -453,6 +456,9 @@ class RasPermutation:
                 if values.notna().any():
                     return float(values.max())
         except Exception as exc:
+            from .fast_hdf import reraise_required
+
+            reraise_required(exc)
             logger.debug(
                 "2D max WSE extraction failed for %s: %s",
                 hdf_path,

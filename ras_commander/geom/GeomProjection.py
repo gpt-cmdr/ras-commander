@@ -1056,8 +1056,8 @@ class GeomProjection:
             projection = HdfBase.get_projection(path)
             if projection:
                 return GeomProjection._crs_from_input(projection)
-        except Exception:
-            pass
+        except Exception as exc:
+            reraise_required(exc)
 
         if path.suffix.lower() in {".tif", ".tiff"}:
             try:

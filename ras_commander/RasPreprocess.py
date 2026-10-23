@@ -1562,6 +1562,10 @@ class RasPreprocess:
 
             association = read_geometry_association(geom_hdf)
         except Exception as exc:
+            from .fast_hdf import reraise_required
+
+            # Required-native mode must not pass the pre-launch guard on a refusal.
+            reraise_required(exc)
             logger.debug(f"Could not read associations from {geom_hdf.name}: {exc}")
             return []
 

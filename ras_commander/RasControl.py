@@ -3796,6 +3796,9 @@ class RasControl:
                     logger.debug(f"Successfully retrieved {len(hdf_contents)} characters from HDF")
                     return hdf_contents
         except Exception as e:
+            from .fast_hdf import reraise_required
+
+            reraise_required(e)
             logger.debug(f"HDF fallback failed: {e}")
 
         # Both methods failed

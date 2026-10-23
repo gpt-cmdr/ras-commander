@@ -40,7 +40,7 @@ from typing import Any, Dict, Optional, Union
 import h5py
 
 from ..LoggingConfig import get_logger
-from ..fast_hdf import read_typed
+from ..fast_hdf import read_typed, reraise_required
 from ..Decorators import log_call
 
 logger = get_logger(__name__)
@@ -123,7 +123,9 @@ class GeomMetadata:
                   encountered before success, or the terminal failure
 
         Note:
-            Always returns a complete dict and never raises. The two
+            Always returns a complete dict and never raises, except that
+            required-native mode (``RAS_COMMANDER_FAST_HDF=native``) propagates
+            a native :class:`~ras_commander.fast_hdf.FastHdfError`. The two
             ``has_*`` values remain ``None`` when no source can be inspected,
             so dispatch cannot mistake unreadable geometry for valid 1D.
 
@@ -161,6 +163,7 @@ class GeomMetadata:
                 if not hdf_has_structure_types and geom_path and geom_path.exists():
                     result = GeomMetadata._add_text_only_counts(geom_path, result)
             except Exception as exc:
+                reraise_required(exc)
                 errors.append(f"HDF inspection failed: {exc}")
                 logger.warning(f"HDF extraction failed for {hdf_path}: {exc}")
                 result = GeomMetadata._new_counts()

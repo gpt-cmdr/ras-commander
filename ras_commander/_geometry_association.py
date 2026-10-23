@@ -687,6 +687,9 @@ def landcover_association_diagnostic(hdf_path: PathLike) -> Optional[str]:
     try:
         association = read_geometry_association(hdf_path, resolve_paths=True)
     except Exception as exc:
+        from .fast_hdf import reraise_required
+
+        reraise_required(exc)
         return (
             f"Could not inspect the land-cover association on {hdf_path.name}: "
             f"{exc}. Property-table completion alone does not prove that "

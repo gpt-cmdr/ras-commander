@@ -2003,6 +2003,7 @@ Step 5: Configure (optional — auto-detection usually works)
                 rasmap_timestamps.append(formatted)
             return rasmap_timestamps
         except Exception as e:
+            reraise_required(e)
             logger.error(f"Failed to get timestamps from {hdf_path}: {e}")
             return []
 
