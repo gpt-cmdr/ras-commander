@@ -757,6 +757,14 @@ The `get_comp_msgs()` method attempts to read computation messages from multiple
 
 ### RasUnsteady
 
+`RasUnsteady.set_constant_precipitation(path, value=0.01, units="in/hr", ratio=1.0)`
+sets a uniform rate without an inherited rainfall reduction multiplier. The
+keyword-only `ratio` is dimensionless and must round to a positive finite
+native Single. That rounded value is written consistently to the text and
+existing HDF sidecar. Overflow and underflow to zero fail before either write.
+Omit `ratio` to preserve existing ratio records. Rates may use `in/hr` or
+`mm/hr`; native preprocessing and readback remain separate checks.
+
 `disable_meteorology(..., remove_source_references=True)` prepares an owned
 boundary-only child without inherited gridded or point meteorological sources.
 It removes met station/source records and resets the sidecar meteorology groups

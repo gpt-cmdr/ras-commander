@@ -116,6 +116,72 @@ def test_round_trips_through_get_met_precipitation_config(davis_style_unsteady):
     assert config["hdf_attributes"]["Constant Units"] == "in/hr"
 
 
+@pytest.mark.parametrize("ratio", [1.0, 0.5, None])
+def test_explicit_constant_ratio_updates_both_representations_or_preserves_default(
+    davis_style_unsteady, ratio
+):
+    from ras_commander import RasUnsteady
+
+    path = davis_style_unsteady
+    path.write_text(
+        path.read_text().replace(
+            "Boundary Location=",
+            "Met BC=Precipitation|Ratio=0.8768\nBoundary Location=",
+            1,
+        )
+    )
+    sidecar = Path(str(path) + ".hdf")
+    with h5py.File(sidecar, "r+") as h:
+        h["Event Conditions/Meteorology/Precipitation"].attrs["Ratio"] = np.float32(
+            0.8768
+        )
+    boundary = path.read_text().split("Boundary Location=", 1)[1]
+    kwargs = {} if ratio is None else {"ratio": ratio}
+    RasUnsteady.set_constant_precipitation(path, value=0.01, units="in/hr", **kwargs)
+    expected = 0.8768 if ratio is None else ratio
+    config = RasUnsteady.get_met_precipitation_config(path)
+    assert float(config["raw"]["Ratio"]) == pytest.approx(expected)
+    assert config["hdf_attributes"]["Ratio"] == pytest.approx(expected)
+    assert config["constant_value"] == pytest.approx(0.01)
+    assert boundary in path.read_text().split("Boundary Location=", 1)[1]
+    with h5py.File(sidecar) as h:
+        assert h["Event Conditions/Meteorology/Precipitation"].attrs[
+            "Ratio"
+        ].dtype == np.dtype("float32")
+
+
+@pytest.mark.parametrize(
+    "ratio", [0, -1, float("nan"), float("inf"), True, "1", 1e100, 1e-100, 10**1000]
+)
+def test_invalid_constant_ratio_leaves_text_and_sidecar_unchanged(
+    davis_style_unsteady, ratio
+):
+    from ras_commander import RasUnsteady
+
+    path = davis_style_unsteady
+    sidecar = Path(str(path) + ".hdf")
+    before = (path.read_bytes(), sidecar.read_bytes())
+    with pytest.raises(ValueError, match="ratio"):
+        RasUnsteady.set_constant_precipitation(path, ratio=ratio)
+    assert (path.read_bytes(), sidecar.read_bytes()) == before
+
+
+@pytest.mark.parametrize(
+    "ratio",
+    [1e-9, np.finfo(np.float32).max, np.nextafter(np.float32(0), np.float32(1))],
+)
+def test_constant_ratio_text_roundtrips_native_single(davis_style_unsteady, ratio):
+    from ras_commander import RasUnsteady
+
+    path = davis_style_unsteady
+    RasUnsteady.set_constant_precipitation(path, ratio=ratio)
+    config = RasUnsteady.get_met_precipitation_config(path)
+    text_ratio = float(config["raw"]["Ratio"])
+    assert np.isfinite(text_ratio) and text_ratio > 0
+    assert np.float32(text_ratio) == np.float32(ratio)
+    assert config["hdf_attributes"]["Ratio"] == float(np.float32(ratio))
+
+
 def test_inserts_missing_keys_into_minimal_file(tmp_path):
     from ras_commander import RasUnsteady
 
