@@ -97,6 +97,7 @@ from ..LoggingConfig import get_logger
 from ._breakline_controls import _protection_radius_flag
 from ..fast_hdf import read_attr, read_typed, reraise_required
 from ..fast_hdf import h5py_until_qualified
+from ._seed_repair import ComputationPointRepairPlan
 from .GeomMeshDataclasses import (
     BCConflict,
     BCFixResult,
@@ -105,6 +106,7 @@ from .GeomMeshDataclasses import (
     GridAnchor,
     MeshResult,
     MeshCellSubsetPlan,
+    MeshSeedRepairResult,
 )
 
 if TYPE_CHECKING:
@@ -5483,6 +5485,91 @@ class GeomMesh:
             result.error_message = f"{type(exc).__name__}: {exc}"
             logger.error("[%s] write_computation_points failed: %s", result.mesh_name, exc)
             return result
+
+    @staticmethod
+    @log_call
+    def plan_computation_point_repair(
+        geom_number: str | Number | Path,
+        computation_points: Any,
+        mesh_name: str | None = None,
+        mesh_index: int = 0,
+        hecras_dir: str | Path | None = None,
+        ras_object=None,
+    ) -> ComputationPointRepairPlan:
+        """Preview bounded native repair of supplied seeds without changing text.
+
+        Coordinates retain the geometry's horizontal CRS/units. This ports the
+        Salt Draw cookie authoring recipe: seven MaxFaces rounds at ratios
+        0.0025/0.05/0.1, adding longest-face midpoint seeds (deduplicated at
+        0.001 model unit), then six native perimeter-connection repair rounds.
+        Seeds excluded by the repaired perimeter are recorded and removed.
+        Final previews must complete at all three ratios, including after native
+        text serialization. No regular-grid generation or HDF mutation occurs.
+
+        Args:
+            geom_number: Owned geometry text path or project geometry number.
+            computation_points: Nonempty N-by-2 finite, unique interior XY seeds.
+            mesh_name: Exact 2D-area name, otherwise use mesh_index.
+            mesh_index: Zero-based area index when mesh_name is omitted.
+            hecras_dir: Native installation; must match the selected project.
+            ras_object: Isolated project; None uses the active project runtime.
+
+        Returns:
+            Identity-bound plan with original/final seeds, removed vertices,
+            round diagnostics and native previews for review. The caller then
+            applies it and separately compiles Geometry/Event Conditions.
+
+        Raises:
+            ValueError: Invalid points, area, spacing, or conflicting runtime.
+            FileNotFoundError: Missing geometry or selected native runtime.
+            RuntimeError: Native repair fails, exhausts its budget or input changes.
+        """
+        from ._seed_repair import _plan
+
+        return _plan(geom_number, computation_points, mesh_name, mesh_index, hecras_dir, ras_object)
+
+    @staticmethod
+    @log_call
+    def apply_computation_point_repair(plan: ComputationPointRepairPlan) -> MeshSeedRepairResult:
+        """Apply a reviewed supplied-seed plan to its owned text atomically.
+
+        Args:
+            plan: Unchanged plan from plan_computation_point_repair.
+
+        Returns:
+            Computation-point MeshResult containing repair/readback evidence.
+            Only geometry text and a numbered backup are written. HDF files
+            remain unchanged. Native compilation and hydraulic review follow.
+
+        Raises:
+            TypeError: The argument is not a repair plan.
+            RuntimeError: Geometry changed since planning or readback differs.
+            OSError: Backup or atomic replacement fails.
+        """
+        from ._seed_repair import _apply
+
+        return _apply(plan)
+
+    @staticmethod
+    @log_call
+    def validate_computation_point_repair(plan: ComputationPointRepairPlan) -> dict[str, Any]:
+        """Read back applied text against the plan; no model mutation.
+
+        Args:
+            plan: Applied supplied-seed plan in the geometry's CRS/units.
+
+        Returns:
+            Text identity and seed count on success. This is not a compiled
+            mesh or hydraulic-equivalence validation.
+
+        Raises:
+            TypeError: The argument is not a repair plan.
+            RuntimeError: Current text differs from the reviewed replacement.
+            OSError: The geometry cannot be read.
+        """
+        from ._seed_repair import _validate
+
+        return _validate(plan)
 
     @staticmethod
     @log_call
