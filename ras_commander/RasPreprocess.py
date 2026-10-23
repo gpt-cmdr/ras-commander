@@ -446,7 +446,6 @@ class RasPreprocess:
                     b_file,
                     x_file,
                     artifact_baseline=artifact_baseline,
-                    defer_stat_quiescence=not require_linux_solver_ready,
                 )
             )
             alternate_signal_description = (
