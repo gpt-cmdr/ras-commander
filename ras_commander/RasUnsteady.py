@@ -4117,7 +4117,7 @@ class RasUnsteady:
                 "precipitation_mode": "Disable",
                 "precipitation_met_mode": "None",
                 "wind_mode": "Disable",
-                "evapotranspiration_mode": "Disable",
+                "evapotranspiration_mode": "None",
             },
             "hdf_targets": hdf_evidence,
         }
