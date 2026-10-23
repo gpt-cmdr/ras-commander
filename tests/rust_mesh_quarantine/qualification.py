@@ -36,7 +36,7 @@ from ras_commander.hdf.HdfMesh import HdfMesh, MeshCellPolygonError
 import ras_commander_fast_hdf as native
 
 API_VERSION = 11
-ENGINE_COMMIT = "3c2d4799ffdad01452682b82ca64305279ecc679"
+ENGINE_COMMIT = "0b024adc7857e9fb2d364997ad002e01a939cec1"
 # (stored version, file name, polygon count, SHA256 of the immutable copy)
 FIXTURES = [
     ('5.0.7', 'JUL2020_D100RAS.p04.hdf', 340246,

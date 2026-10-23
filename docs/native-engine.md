@@ -70,7 +70,7 @@ ras-commander repository.
 ```python
 import ras_commander_fast_hdf as native
 print(native.API_VERSION)      # 11
-print(native.ENGINE_COMMIT)    # 3c2d4799ffdad01452682b82ca64305279ecc679
+print(native.ENGINE_COMMIT)    # 0b024adc7857e9fb2d364997ad002e01a939cec1
 print(native.ENGINE_FEATURES)  # ('catalog', 'hdf', 'mesh', 'results')
 
 from ras_commander import fast_hdf
@@ -489,7 +489,7 @@ first.
 
 | Component | This release |
 |---|---|
-| Engine | `ras-commander-rust` (private repository of CLB Engineering Corporation), commit `3c2d4799ffdad01452682b82ca64305279ecc679`, engine API 10 |
+| Engine | `ras-commander-rust` (private repository of CLB Engineering Corporation), commit `0b024adc7857e9fb2d364997ad002e01a939cec1`, engine API 10 |
 | Bridge | Python package `ras_commander_fast_hdf` 0.1.0, `API_VERSION` 11, text API 1, features `catalog, hdf, mesh, results` |
 | ras-commander | requires bridge API 11 |
 | Wheels | Windows `cp310-abi3-win_amd64`, Linux `cp310-abi3-manylinux_2_28_x86_64`; internal distribution only |

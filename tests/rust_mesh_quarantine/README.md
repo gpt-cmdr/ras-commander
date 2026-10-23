@@ -1,7 +1,7 @@
 # Native mesh quarantine qualification
 
 Covers native cell-polygon assembly for bridge `API_VERSION` 11 (engine
-`3c2d4799ffdad01452682b82ca64305279ecc679`, engine API 10).
+`0b024adc7857e9fb2d364997ad002e01a939cec1`, engine API 10).
 
 ## Direct binding
 
