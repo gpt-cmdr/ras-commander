@@ -632,14 +632,14 @@ class HdfResultsMesh:
 
             - ``"available"``: readable; ``id_dim`` gives the domain.
             - ``"unwritten_placeholder"``: rows differ from the clock and the
-              producer stored no data (``stored_bytes == 0``). The values are
-              only HDF5 fill values, so the series is unavailable. It is not
-              a constant field and is never broadcast over the clock.
+                producer stored no data (``stored_bytes == 0``). The values are
+                only HDF5 fill values, so the series is unavailable. It is not
+                a constant field and is never broadcast over the clock.
             - ``"row_count_mismatch"``: stored data whose rows differ from
-              the clock.
+                the clock.
             - ``"unqualified"``: any other refusal (invalid Location, unknown
-              legacy name, non-numeric data, malformed Time or geometry);
-              ``reason`` holds the reader's message.
+                legacy name, non-numeric data, malformed Time or geometry);
+                ``reason`` holds the reader's message.
 
             ``stored_bytes`` is reported for every dataset. A dataset whose
             rows match the clock but that stores no data still reads as fill
