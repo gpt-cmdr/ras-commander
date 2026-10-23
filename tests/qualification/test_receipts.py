@@ -378,3 +378,11 @@ def test_request_required_invariants_are_strict(
     write_json_with_digest(attempt / "receipt.json", receipt, replace=True)
     with pytest.raises(ReceiptError, match="required_invariants"):
         verify_attempt_receipt(attempt)
+
+
+@pytest.mark.parametrize("value", [float("nan"), float("inf"), float("-inf")])
+def test_nonfinite_json_write_leaves_no_partial_receipt(tmp_path: Path, value: float) -> None:
+    path = tmp_path / "record.json"
+    with pytest.raises(ValueError, match="JSON"):
+        write_json_with_digest(path, {"evidence": {"values": [value]}})
+    assert list(tmp_path.iterdir()) == []
