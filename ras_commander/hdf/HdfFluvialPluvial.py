@@ -72,7 +72,7 @@ def _resolve_engine(engine):
     for the ``HdfMesh`` readers. ``"auto"`` follows the environment:
     ``h5py`` (or legacy ``0``/``off``/``false``/``python``) -> ``"h5py"`` (the reference, no
     native attempt); unset/``auto`` -> ``"auto"`` (native when it reproduces the
-    reference, else Python); ``required``/``rust`` -> ``"required"`` (native, or
+    reference, else Python); ``native`` (legacy ``required``/``rust``) -> ``"required"`` (native, or
     :class:`~ras_commander.fast_hdf.FastHdfError`; never a silent fallback).
     """
     _check_engine(engine)
@@ -88,13 +88,13 @@ def _resolve_engine(engine):
 
 
 def _native_fallback(engine, effective, exc):
-    """Raise ``exc`` (or FastHdfError in required mode), or log the Python fallback."""
+    """Raise ``exc`` (or FastHdfError in native mode), or log the Python fallback."""
     if effective == "native":
         raise exc
     if effective == "required":
         from ..fast_hdf import FastHdfError
         raise FastHdfError(
-            f"RAS_COMMANDER_FAST_HDF=required: engine={engine!r} could not use the native "
+            f"RAS_COMMANDER_FAST_HDF=native: engine={engine!r} could not use the native "
             f"fluvial engine: {exc}") from exc
     logger.info(f"engine='auto' selected the Python reference: {exc}")
 
@@ -432,7 +432,10 @@ class HdfFluvialPluvial:
                           implementation only (h5py reads, no native attempt). "native":
                           native or an error (FluvialNativeUnsupportedError or data
                           errors), never a different result. Native output holds the same
-                          lines, row order (sorted cell pairs) and CRS as the reference.
+                          rows, attributes and CRS as the reference with topologically
+                          equal polygons; with ``min_polygon_area_acres`` native classes go
+                          through the reference dissolve and swap, so the frame is
+                          identical to the reference's.
                           ``engine="auto"`` follows ``RAS_COMMANDER_FAST_HDF`` like every
                           other reader: ``h5py`` runs the reference without trying native;
                           unset/``auto`` tries native and falls back; ``native`` runs native
@@ -449,7 +452,7 @@ class HdfFluvialPluvial:
 
         Raises:
             Exception: Existing input/decorator validation errors are not suppressed.
-            FastHdfError: Only under ``RAS_COMMANDER_FAST_HDF=required`` (see ``engine``).
+            FastHdfError: Only under ``RAS_COMMANDER_FAST_HDF=native`` (legacy ``required``; see ``engine``).
         """
         effective = _resolve_engine(engine)
         if engine == "h5py" and not _h5py_scoped():
@@ -577,21 +580,8 @@ class HdfFluvialPluvial:
             # --- 4. Finalization and Dissolving ---
             # Classify any remaining unclassified (likely isolated) cells as ambiguous
             classifications[classifications == 'unclassified'] = 'ambiguous'
-
-            logger.debug("Merging classifications with cell polygons...")
-            classified_gdf = cell_polygons_gdf.merge(
-                classifications.to_frame(), left_on=['mesh_name', 'cell_id'],
-                right_index=True, validate='one_to_one',
-            )
-            # Dissolve a canonical presentation (sorted rows, normalized rings) so
-            # the output geometry and the 'first' cell_id do not depend on input order.
-            classified_gdf = classified_gdf.sort_values(['mesh_name', 'cell_id'], kind='stable')
-            classified_gdf = classified_gdf.set_geometry(
-                shapely.normalize(classified_gdf.geometry.values), crs=classified_gdf.crs
-            )
-
-            logger.debug("Dissolving polygons by classification...")
-            final_regions_gdf = classified_gdf.dissolve(by=['mesh_name', 'classification'], aggfunc='first').reset_index()
+            final_regions_gdf = HdfFluvialPluvial._dissolve_classified_cells(
+                cell_polygons_gdf, classifications)
 
             stage = "acreage filtering"
             # --- 5. Minimum Polygon Area Filtering and Merging (if requested) ---
@@ -612,6 +602,28 @@ class HdfFluvialPluvial:
                 exc_info=True,
             )
             return gpd.GeoDataFrame()
+
+    @staticmethod
+    def _dissolve_classified_cells(cell_polygons_gdf, classifications):
+        """Per-mesh, per-class dissolve of the cell polygons, shared by every engine.
+
+        ``classifications`` is indexed by ``(mesh_name, cell_id)``. Rows are
+        dissolved in a canonical presentation (sorted rows, normalized rings),
+        so the output geometry, its GEOS part order and the 'first' cell_id
+        do not depend on the input row order or ring presentation.
+        """
+        logger.debug("Merging classifications with cell polygons...")
+        classified_gdf = cell_polygons_gdf.merge(
+            classifications.to_frame(), left_on=['mesh_name', 'cell_id'],
+            right_index=True, validate='one_to_one',
+        )
+        classified_gdf = classified_gdf.sort_values(['mesh_name', 'cell_id'], kind='stable')
+        classified_gdf = classified_gdf.set_geometry(
+            shapely.normalize(classified_gdf.geometry.values), crs=classified_gdf.crs
+        )
+
+        logger.debug("Dissolving polygons by classification...")
+        return classified_gdf.dissolve(by=['mesh_name', 'classification'], aggfunc='first').reset_index()
 
     @staticmethod
     def _swap_small_polygons(final_regions_gdf, min_polygon_area_acres):
@@ -696,15 +708,18 @@ class HdfFluvialPluvial:
         kernel does not share is equal-time pairs (Python seeds nothing, the
         kernel seeds them ambiguous); they can only qualify when delta_t is 0,
         which is therefore unsupported here.
+
+        With ``min_polygon_area_acres`` the reference's minimum-area swap keeps
+        a 'first' ``area_acres`` (and ``cell_id``) chosen by the GEOS part order
+        of the reference dissolve, which native ring assembly does not share.
+        The native classification is then dissolved by the reference's own
+        ``_dissolve_classified_cells`` over the same h5py cell polygons and
+        swapped by the reference's ``_swap_small_polygons``, so the frame the
+        swap receives, and therefore the result, is identical to the
+        reference's. Native polygon assembly is not used in that case.
         """
         import time
         from shapely.geometry import MultiPolygon
-        if min_polygon_area_acres is not None:
-            # The swap's classes and geometry are reproducible, but Python also
-            # keeps a 'first' area_acres attribute chosen by GEOS union part order.
-            raise FluvialNativeUnsupportedError(
-                "min_polygon_area_acres class swapping keeps Python's union-order-dependent "
-                "'first' attributes; it is not reproduced natively (polygon removal is not a substitute)")
         delta_ms = _hours_to_ms(delta_t, "delta_t")
         tolerance_ms = _hours_to_ms(temporal_tolerance_hours, "temporal_tolerance_hours")
         if delta_ms == 0:
@@ -721,11 +736,15 @@ class HdfFluvialPluvial:
             raise ValueError("unexpected invalid/dry labels under strict, all-wet native analysis")
         # Python's finalization: remaining unclassified (incl. missing time) -> ambiguous.
         final = [3 if label in (0, 6) else label for label in labels]
+        names = {1: "fluvial", 2: "pluvial", 3: "ambiguous"}
+        if min_polygon_area_acres is not None:
+            return HdfFluvialPluvial._native_swapped_polygons(
+                hdf_path, analysis, final, names, diagnostics, timings,
+                delta_t, temporal_tolerance_hours, min_polygon_area_acres)
         begin = time.perf_counter()
         regions, geometry = analysis.polygons(final)
         timings["polygon_kernel_and_shapely_seconds"] = time.perf_counter() - begin
         begin = time.perf_counter()
-        names = {1: "fluvial", 2: "pluvial", 3: "ambiguous"}
         rows = []
         # One row per (mesh, class), each dissolved within its own mesh only, in
         # Python's dissolve(by=['mesh_name', 'classification']) group order.
@@ -747,6 +766,49 @@ class HdfFluvialPluvial:
             final_regions_gdf, delta_t, temporal_tolerance_hours, diagnostics["waves"])
         final_regions_gdf.attrs["fluvial_native"] = {
             "classification": dict(diagnostics), "geometry": dict(geometry), "timings": timings,
+            "snapshot_setup": {k: v for k, v in analysis.setup.items() if k != "topology_diagnostics"},
+        }
+        return final_regions_gdf
+
+    @staticmethod
+    def _native_swapped_polygons(hdf_path, analysis, final, names, diagnostics, timings,
+                                 delta_t, temporal_tolerance_hours, min_polygon_area_acres):
+        """Native classes, then the reference dissolve and minimum-area swap.
+
+        The cell polygons are read exactly as the reference reads them (h5py
+        ``HdfMesh.get_mesh_cell_polygons``) and the classification Series is
+        indexed by that frame's ``(mesh_name, cell_id)`` rows, as in the
+        reference, so ``_dissolve_classified_cells`` and ``_swap_small_polygons``
+        receive the same inputs as under ``engine="h5py"``.
+        """
+        import time
+        begin = time.perf_counter()
+        with backend_scope("h5py"):
+            cell_polygons_gdf = HdfMesh.get_mesh_cell_polygons(hdf_path)
+        cell_index = pd.MultiIndex.from_frame(cell_polygons_gdf[['mesh_name', 'cell_id']])
+        if not cell_index.is_unique:
+            raise ValueError("Duplicate mesh/cell identities in cell polygons")
+        native = {(analysis.meshes[mesh], int(cell)): names[label]
+                  for (mesh, cell), label in zip(analysis.sources, final)}
+        if len(native) != len(final) or set(cell_index) != set(native):
+            raise FluvialNativeUnsupportedError(
+                "the native cells differ from the cell polygons the Python reference dissolves")
+        classifications = pd.Series([native[key] for key in cell_index], index=cell_index,
+                                    name='classification', dtype=object)
+        final_regions_gdf = HdfFluvialPluvial._dissolve_classified_cells(
+            cell_polygons_gdf, classifications)
+        timings["reference_dissolve_seconds"] = time.perf_counter() - begin
+        begin = time.perf_counter()
+        final_regions_gdf = HdfFluvialPluvial._swap_small_polygons(
+            final_regions_gdf, min_polygon_area_acres)
+        timings["reference_swap_seconds"] = time.perf_counter() - begin
+        HdfFluvialPluvial._log_polygon_summary(
+            final_regions_gdf, delta_t, temporal_tolerance_hours, diagnostics["waves"])
+        final_regions_gdf.attrs["fluvial_native"] = {
+            "classification": dict(diagnostics),
+            "geometry": {"assembly": "reference_dissolve",
+                         "reason": "min_polygon_area_acres swap keeps GEOS part-order 'first' attributes"},
+            "timings": timings,
             "snapshot_setup": {k: v for k, v in analysis.setup.items() if k != "topology_diagnostics"},
         }
         return final_regions_gdf
