@@ -81,7 +81,7 @@ in the extension's repository.
 ```python
 import ras_commander_fast_hdf as native
 print(native.API_VERSION)      # 11
-print(native.ENGINE_COMMIT)    # 7ca433ea4fbe68902a50902de815e56697eb21b2
+print(native.ENGINE_COMMIT)    # 6b8341f19fe2352e4a37f03d3218847587dd4ab4
 print(native.ENGINE_FEATURES)  # ('catalog', 'hdf', 'mesh', 'results')
 
 from ras_commander import fast_hdf

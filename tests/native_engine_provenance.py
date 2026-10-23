@@ -14,9 +14,12 @@ import os
 
 # Internal wheels built before the move, from the private engine repository.
 PRE_MOVE_ENGINE_COMMIT = "0b024adc7857e9fb2d364997ad002e01a939cec1"
-# ras-commander-fast-hdf 0.1.0, first commit of gpt-cmdr/ras-commander-fast-hdf.
-FAST_HDF_0_1_0_COMMIT = "7ca433ea4fbe68902a50902de815e56697eb21b2"
-KNOWN_ENGINE_COMMITS = (PRE_MOVE_ENGINE_COMMIT, FAST_HDF_0_1_0_COMMIT)
+# First commit of gpt-cmdr/ras-commander-fast-hdf (qualified before the release
+# commit; same engine and extension code).
+FAST_HDF_FIRST_COMMIT = "7ca433ea4fbe68902a50902de815e56697eb21b2"
+# ras-commander-fast-hdf 0.1.0 (tag v0.1.0), the published wheels.
+FAST_HDF_0_1_0_COMMIT = "6b8341f19fe2352e4a37f03d3218847587dd4ab4"
+KNOWN_ENGINE_COMMITS = (PRE_MOVE_ENGINE_COMMIT, FAST_HDF_FIRST_COMMIT, FAST_HDF_0_1_0_COMMIT)
 
 
 def accepted_engine_commits():

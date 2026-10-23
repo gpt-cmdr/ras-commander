@@ -19,7 +19,7 @@ live in
 instead of building it from this repository. The `rust/fast-hdf` folder is
 removed. ras-commander's behaviour and the required extension `API_VERSION`
 (11) do not change. The extension's `ENGINE_COMMIT` is now the commit of the
-new repository the wheel was built from (`7ca433e` for 0.1.0). See
+new repository the wheel was built from (`6b8341f` for 0.1.0). See
 [Native Rust HDF engine](../native-engine.md#installing-the-extension).
 
 **Optional native (Rust) HDF backend (additive; default results unchanged)**
