@@ -45,6 +45,7 @@ Understanding when each return type is used:
 - get_mesh_summary_values(): Get summary values without geometry → pd.DataFrame
 - get_mesh_timeseries(): Get timeseries for one mesh/variable → xr.DataArray
 - iter_mesh_timeseries(): Stream bounded time-major xarray batches
+- get_mesh_timeseries_availability(): Report per-dataset series availability → pd.DataFrame
 - get_mesh_faces_timeseries(): Get face variables for one mesh → xr.Dataset
 - get_mesh_cells_timeseries(): Get cell timeseries for all meshes → Dict[str, xr.Dataset]
 - get_mesh_last_iter(): Get last iteration count → pd.DataFrame
@@ -138,6 +139,79 @@ _LEGACY_MESH_SERIES_DOMAINS = MappingProxyType({
     "Face Area": "face_id",
     "Face Manning's n": "face_id",
 })
+
+_BASE_OUTPUT_TIME_PATH = (
+    "Results/Unsteady/Output/Output Blocks/Base Output/Unsteady Time Series/Time"
+)
+
+
+class MeshSeriesAvailabilityError(ValueError):
+    """A Base Output mesh series whose stored rows differ from the Time axis.
+
+    Raised identically by eager, lazy-view and streamed mesh time-series
+    reads (and by explicit-variable multi-variable reads). It subclasses
+    ``ValueError`` and keeps the historical message prefix, so existing
+    handlers continue to work. The dataset is never broadcast, truncated,
+    padded or re-timed to fit the clock.
+
+    Attributes:
+        dataset_path: Absolute HDF path of the refused dataset.
+        rows: Stored leading (time) dimension of the dataset.
+        time_rows: Length of the Base Output ``Time`` axis.
+        stored_bytes: Bytes of data the producer actually stored
+            (``h5py`` ``get_storage_size()``).
+        disposition: ``"unwritten_placeholder"`` when the producer stored no
+            data at all (``stored_bytes == 0``). Its readable values are only
+            the HDF5 fill value, not results, so the series is unavailable.
+            HEC-RAS 6.6 and 7.0.1 leave ``Face Wind Term`` (no wind forcing)
+            and 6.6 leaves ``Face Water Surface`` this way: an extendable
+            one-row dataset with no stored chunks beside a longer clock.
+            ``"row_count_mismatch"`` when stored data exists but its rows
+            differ from the clock; the alignment is unknown.
+    """
+
+    def __init__(
+        self,
+        dataset_path: str,
+        rows: int,
+        time_rows: int,
+        stored_bytes: int,
+    ) -> None:
+        self.dataset_path = dataset_path
+        self.rows = int(rows)
+        self.time_rows = int(time_rows)
+        self.stored_bytes = int(stored_bytes)
+        if self.stored_bytes == 0:
+            self.disposition = "unwritten_placeholder"
+            detail = (
+                "unwritten placeholder: the producer stored no data for this "
+                "dataset, so its values are HDF5 fill values, not results; "
+                "the series is unavailable"
+            )
+        else:
+            self.disposition = "row_count_mismatch"
+            detail = (
+                "row count mismatch: stored rows cannot be aligned with the "
+                "Time axis"
+            )
+        super().__init__(
+            f"Series rows differ from Base Output Time axis: {dataset_path} "
+            f"(rows={self.rows}, Time rows={self.time_rows}, "
+            f"stored bytes={self.stored_bytes}; {detail}). See "
+            "HdfResultsMesh.get_mesh_timeseries_availability()."
+        )
+
+    @classmethod
+    def from_dataset(
+        cls, dataset: h5py.Dataset, time_rows: int
+    ) -> "MeshSeriesAvailabilityError":
+        """Build the error from an open dataset and the clock length."""
+        return cls(
+            dataset.name,
+            dataset.shape[0],
+            time_rows,
+            dataset.id.get_storage_size(),
+        )
 
 
 class HdfResultsMesh:
@@ -362,6 +436,11 @@ class HdfResultsMesh:
                 which returns ``Dict[str, Dataset]``.
 
         Raises:
+            MeshSeriesAvailabilityError: If the stored rows differ from the
+                Base Output Time axis (a ``ValueError`` subclass naming the
+                dataset, its row count, the clock length and whether it is an
+                unwritten producer placeholder). Raised when the view is
+                created, so eager, view and streamed reads fail identically.
             ValueError: If the variable or return type is invalid.
             TypeError: If a selection is not integer-like or a slice.
             IndexError: If an integer selection is outside the source extent.
@@ -425,6 +504,8 @@ class HdfResultsMesh:
             Iterator of labeled xarray DataArray batches.
 
         Raises:
+            MeshSeriesAvailabilityError: If the stored rows differ from the
+                Base Output Time axis; raised before any batch is produced.
             ValueError: If the variable, selection, or batch sizing is invalid.
             TypeError: If a selection is not integer-like or a slice.
             IndexError: If an integer selection is outside the source extent.
@@ -444,6 +525,105 @@ class HdfResultsMesh:
             batch_size=batch_size,
             max_chunk_bytes=max_chunk_bytes,
         )
+
+    @staticmethod
+    @log_call
+    @standardize_input(file_type='plan_hdf')
+    def get_mesh_timeseries_availability(
+        hdf_path: HdfInput,
+        mesh_name: Optional[str] = None,
+    ) -> pd.DataFrame:
+        """Report whether each Base Output mesh dataset is readable as a series.
+
+        Reads metadata only (no result values). Each dataset directly under
+        ``Base Output/Unsteady Time Series/2D Flow Areas/<mesh>`` is qualified
+        by the same rule as :meth:`get_mesh_timeseries`, so ``status`` predicts
+        whether an eager, view or streamed read of that variable succeeds.
+        Subgroups (for example ``Boundary Conditions``) are not series and are
+        omitted.
+
+        Args:
+            hdf_path: Plan number, plan-result HDF path, or open HDF handle.
+            mesh_name: Optional 2D flow area name; all meshes when omitted.
+
+        Returns:
+            pd.DataFrame: One row per dataset with columns ``mesh_name``,
+            ``variable``, ``dataset_path``, ``shape``, ``rows``, ``time_rows``
+            (None when the Time axis is missing or malformed),
+            ``stored_bytes``, ``id_dim`` (``cell_id``, ``face_id``, ``time``
+            or None), ``status`` and ``reason``. ``status`` is:
+
+            - ``"available"``: readable; ``id_dim`` gives the domain.
+            - ``"unwritten_placeholder"``: rows differ from the clock and the
+              producer stored no data (``stored_bytes == 0``). The values are
+              only HDF5 fill values, so the series is unavailable. It is not
+              a constant field and is never broadcast over the clock.
+            - ``"row_count_mismatch"``: stored data whose rows differ from
+              the clock.
+            - ``"unqualified"``: any other refusal (invalid Location, unknown
+              legacy name, non-numeric data, malformed Time or geometry);
+              ``reason`` holds the reader's message.
+
+            ``stored_bytes`` is reported for every dataset. A dataset whose
+            rows match the clock but that stores no data still reads as fill
+            values; check ``stored_bytes`` when that distinction matters.
+
+        Raises:
+            ValueError: If ``mesh_name`` has no Base Output time-series group.
+        """
+        columns = [
+            "mesh_name", "variable", "dataset_path", "shape", "rows",
+            "time_rows", "stored_bytes", "id_dim", "status", "reason",
+        ]
+        group_root = HdfResultsMesh._get_mesh_timeseries_output_path("", "").rstrip("/")
+        records = []
+        with h5py.File(Path(hdf_path), "r") as hdf_file:
+            root = hdf_file.get(group_root)
+            meshes = [
+                name for name, item in (root.items() if isinstance(root, h5py.Group) else [])
+                if isinstance(item, h5py.Group)
+            ]
+            if mesh_name is not None:
+                if mesh_name not in meshes:
+                    raise ValueError(
+                        f"Mesh '{mesh_name}' has no Base Output time-series group in HDF file"
+                    )
+                meshes = [mesh_name]
+            time = hdf_file.get(_BASE_OUTPUT_TIME_PATH)
+            time_rows = (
+                len(time)
+                if isinstance(time, h5py.Dataset) and time.ndim == 1
+                and time.dtype.kind in "iuf"
+                else None
+            )
+            for mesh in meshes:
+                for variable, dataset in root[mesh].items():
+                    if not isinstance(dataset, h5py.Dataset):
+                        continue
+                    record = {
+                        "mesh_name": mesh,
+                        "variable": variable,
+                        "dataset_path": dataset.name,
+                        "shape": tuple(int(n) for n in dataset.shape),
+                        "rows": int(dataset.shape[0]) if dataset.ndim else None,
+                        "time_rows": time_rows,
+                        "stored_bytes": int(dataset.id.get_storage_size()),
+                        "id_dim": None,
+                        "status": "available",
+                        "reason": None,
+                    }
+                    try:
+                        record["id_dim"] = HdfResultsMesh._mesh_series_id_dim(
+                            hdf_file, mesh, dataset
+                        )
+                    except MeshSeriesAvailabilityError as exc:
+                        record["status"] = exc.disposition
+                        record["reason"] = str(exc)
+                    except ValueError as exc:
+                        record["status"] = "unqualified"
+                        record["reason"] = str(exc)
+                    records.append(record)
+        return pd.DataFrame.from_records(records, columns=columns)
 
     @staticmethod
     def _get_mesh_result_view(
@@ -1660,7 +1840,7 @@ class HdfResultsMesh:
                 return HdfResultsMesh._get_mesh_cells_timeseries_output(
                     hdf_path, mesh_names, var, truncate, include_ghost_cells
                 )
-        except OptionalDependencyError:
+        except (OptionalDependencyError, MeshSeriesAvailabilityError):
             raise
         except Exception as e:
             logger.error(f"Error in get_mesh_cells_timeseries: {str(e)}")
@@ -2655,8 +2835,10 @@ class HdfResultsMesh:
             "Results/Unsteady/Output/Output Blocks/Base Output/Unsteady Time Series/Time"
         )
         if (not isinstance(time, h5py.Dataset) or time.ndim != 1
-                or time.dtype.kind not in "iuf" or dataset.shape[0] != len(time)):
+                or time.dtype.kind not in "iuf"):
             raise ValueError(f"Series rows differ from Base Output Time axis: {dataset.name}")
+        if dataset.shape[0] != len(time):
+            raise MeshSeriesAvailabilityError.from_dataset(dataset, len(time))
         if "Location" in dataset.attrs:
             location = np.asarray(dataset.attrs["Location"])
             if location.shape not in ((), (1,)):
@@ -2883,7 +3065,7 @@ class HdfResultsMesh:
                         logger.warning(f"No valid data variables found for mesh '{mesh_name}'")
 
             return datasets
-        except OptionalDependencyError:
+        except (OptionalDependencyError, MeshSeriesAvailabilityError):
             raise
         except Exception as e:
             logger.error(f"Error in _mesh_cells_timeseries_output: {str(e)}")
@@ -2958,7 +3140,7 @@ class HdfResultsMesh:
                 dims=dims,
                 attrs={"units": units, "mesh_name": mesh_name, "variable": var},
             )
-        except OptionalDependencyError:
+        except (OptionalDependencyError, MeshSeriesAvailabilityError):
             raise
         except Exception as e:
             logger.error(f"Error in get_mesh_timeseries_output: {str(e)}")

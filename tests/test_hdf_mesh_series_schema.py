@@ -1,12 +1,15 @@
 """Qualification of legacy and Location-labelled mesh time series."""
 
 import logging
+import os
+from pathlib import Path
 
 import h5py
 import numpy as np
 import pytest
 
 from ras_commander.hdf.HdfResultsMesh import HdfResultsMesh as Mesh
+from ras_commander.hdf.HdfResultsMesh import MeshSeriesAvailabilityError
 
 
 BASE = "Results/Unsteady/Output/Output Blocks/Base Output/Unsteady Time Series"
@@ -149,13 +152,162 @@ def test_malformed_time_and_geometry_refused_on_both_domain_paths(source, locati
         read(source, "Water Surface", "lazy")
 
 
-@pytest.mark.parametrize("mode", ["eager", "lazy", "stream"])
-def test_one_row_wind_is_not_broadcast(source, mode):
-    with h5py.File(source, "r+") as hdf:
-        dataset = hdf.create_dataset(f"{SERIES}/Face Wind Term", data=np.ones((1, 4)))
+def add_one_row_face_series(path, name="Face Wind Term", written=False):
+    """Add a one-row Location=Faces series beside the three-row clock.
+
+    ``written=False`` mirrors the HEC-RAS 6.6/7.0.1 producer layout: an
+    extendable dataset created with one row and no stored chunks, so reads
+    return only the HDF5 fill value. ``written=True`` stores real bytes.
+    """
+    with h5py.File(path, "r+") as hdf:
+        if written:
+            dataset = hdf.create_dataset(f"{SERIES}/{name}", data=np.ones((1, 4), dtype=np.float32))
+        else:
+            dataset = hdf.create_dataset(
+                f"{SERIES}/{name}", shape=(1, 4), maxshape=(None, 4),
+                chunks=(1, 4), dtype=np.float32, fillvalue=0.0,
+            )
         dataset.attrs["Location"] = b"Faces"
-    with pytest.raises(ValueError, match="Time axis"):
+        dataset.attrs["Rows"] = b"Times"
+        dataset.attrs["Maximum Value of Data Set"] = np.float32(np.nan)
+        return dataset.name
+
+
+@pytest.mark.parametrize("mode", ["eager", "lazy", "stream"])
+@pytest.mark.parametrize("written,disposition", [
+    (False, "unwritten_placeholder"), (True, "row_count_mismatch"),
+])
+def test_one_row_face_series_is_unavailable_not_broadcast(source, mode, written, disposition):
+    dataset_path = add_one_row_face_series(source, written=written)
+    with pytest.raises(MeshSeriesAvailabilityError, match="Time axis") as caught:
         read(source, "Face Wind Term", mode)
+    error = caught.value
+    assert isinstance(error, ValueError)
+    assert error.disposition == disposition
+    assert (error.dataset_path, error.rows, error.time_rows) == (dataset_path, 1, 3)
+    assert (error.stored_bytes == 0) is (not written)
+    assert dataset_path in str(error) and "rows=1, Time rows=3" in str(error)
+    if not written:
+        assert "fill values, not results" in str(error)
+
+
+@pytest.mark.parametrize("mode", ["eager", "lazy", "stream"])
+@pytest.mark.parametrize("kwargs", [
+    {"time_selection": 0}, {"time_selection": slice(0, 1)}, {"spatial_selection": slice(0, 2)},
+])
+def test_one_row_refusal_ignores_selection_arguments(source, mode, kwargs):
+    add_one_row_face_series(source)
+    with pytest.raises(MeshSeriesAvailabilityError):
+        read(source, "Face Wind Term", mode, **kwargs)
+
+
+def test_malformed_time_axis_is_not_an_availability_disposition(source):
+    add_one_row_face_series(source)
+    with h5py.File(source, "r+") as hdf:
+        del hdf[f"{BASE}/Time"]
+        hdf.create_dataset(f"{BASE}/Time", data=[b"a", b"b", b"c"])
+    with pytest.raises(ValueError, match="Time axis") as caught:
+        read(source, "Face Wind Term", "lazy")
+    assert not isinstance(caught.value, MeshSeriesAvailabilityError)
+
+
+def test_multi_variable_reads_skip_or_refuse_one_row_series(source, caplog):
+    add_one_row_face_series(source)
+    with caplog.at_level(logging.WARNING, logger="ras_commander.hdf.HdfResultsMesh"):
+        faces = Mesh.get_mesh_faces_timeseries(source, AREA, truncate=False)
+    assert "face_wind_term" not in faces.data_vars
+    assert "face_velocity" in faces.data_vars
+    assert "Face Wind Term" in caplog.text and "unwritten placeholder" in caplog.text
+    with h5py.File(source, "r") as hdf:
+        assert "Face Wind Term" not in Mesh._discover_mesh_series(hdf, AREA)
+    with pytest.raises(MeshSeriesAvailabilityError) as caught:
+        Mesh.get_mesh_cells_timeseries(source, AREA, var="Face Wind Term")
+    assert caught.value.disposition == "unwritten_placeholder"
+
+
+def test_availability_report_matches_reader_qualification(source):
+    add_one_row_face_series(source, "Face Wind Term")
+    add_one_row_face_series(source, "Face Water Surface", written=True)
+    with h5py.File(source, "r+") as hdf:
+        hdf.require_group(f"{SERIES}/Boundary Conditions")
+        hdf.create_dataset(f"{SERIES}/Text Notes", data=np.full((3, 4), b"x"))
+    report = Mesh.get_mesh_timeseries_availability(source)
+    assert list(report.columns) == [
+        "mesh_name", "variable", "dataset_path", "shape", "rows",
+        "time_rows", "stored_bytes", "id_dim", "status", "reason",
+    ]
+    rows = report.set_index("variable")
+    assert "Boundary Conditions" not in rows.index
+    assert rows.loc["Depth", ["status", "id_dim"]].tolist() == ["available", "cell_id"]
+    assert rows.loc["Face Velocity", ["status", "id_dim"]].tolist() == ["available", "face_id"]
+    assert rows.loc["Time Step", ["status", "id_dim"]].tolist() == ["available", "time"]
+    wind = rows.loc["Face Wind Term"]
+    assert (wind["status"], wind["rows"], wind["time_rows"], wind["stored_bytes"], wind["shape"]) == (
+        "unwritten_placeholder", 1, 3, 0, (1, 4))
+    assert wind["id_dim"] is None and "fill values" in wind["reason"]
+    assert rows.loc["Face Water Surface", "status"] == "row_count_mismatch"
+    assert rows.loc["Face Water Surface", "stored_bytes"] > 0
+    assert rows.loc["Unknown Face Diagnostic", "status"] == "unqualified"
+    assert rows.loc["Text Notes", "status"] == "unqualified"
+    for variable, status in rows["status"].items():
+        try:
+            read(source, variable, "lazy", include_ghost_cells=True)
+            outcome = "available"
+        except MeshSeriesAvailabilityError as exc:
+            outcome = exc.disposition
+        except ValueError:
+            outcome = "unqualified"
+        assert outcome == status, variable
+    filtered = Mesh.get_mesh_timeseries_availability(source, AREA)
+    assert filtered.equals(report)
+    with pytest.raises(ValueError, match="no Base Output time-series group"):
+        Mesh.get_mesh_timeseries_availability(source, "Missing Area")
+
+
+def test_availability_report_reads_no_result_values(source, monkeypatch):
+    add_one_row_face_series(source)
+    original = h5py.Dataset.__getitem__
+
+    def guarded(self, key):
+        if self.name.startswith(f"/{SERIES}/"):
+            raise AssertionError(f"availability read result values: {self.name}")
+        return original(self, key)
+
+    monkeypatch.setattr(h5py.Dataset, "__getitem__", guarded)
+    report = Mesh.get_mesh_timeseries_availability(source)
+    assert "unwritten_placeholder" in set(report.status)
+
+
+_PUBLIC_ONE_ROW_HDFS = [
+    Path(item) for item in os.environ.get("RAS_COMMANDER_ONE_ROW_FACE_SERIES_HDFS", "").split(os.pathsep)
+    if item
+]
+
+
+@pytest.mark.skipif(
+    not _PUBLIC_ONE_ROW_HDFS,
+    reason="Set RAS_COMMANDER_ONE_ROW_FACE_SERIES_HDFS to HEC-RAS 6.6/7.0.1 public-example "
+    "plan HDFs computed with governing-equation output terms selected.",
+)
+@pytest.mark.parametrize("mode", ["eager", "lazy", "stream"])
+def test_public_example_one_row_face_series_are_unwritten_placeholders(mode):
+    found = 0
+    for path in _PUBLIC_ONE_ROW_HDFS:
+        report = Mesh.get_mesh_timeseries_availability(path)
+        one_row = report[(report.rows == 1) & (report.time_rows > 1)]
+        for row in one_row.itertuples():
+            found += 1
+            assert row.status == "unwritten_placeholder" and row.stored_bytes == 0
+            with pytest.raises(MeshSeriesAvailabilityError) as caught:
+                if mode == "eager":
+                    Mesh.get_mesh_timeseries(path, row.mesh_name, row.variable)
+                elif mode == "lazy":
+                    Mesh.get_mesh_timeseries(path, row.mesh_name, row.variable, return_type="view")
+                else:
+                    list(Mesh.iter_mesh_timeseries(path, row.mesh_name, row.variable))
+            assert caught.value.disposition == "unwritten_placeholder"
+            assert (caught.value.rows, caught.value.time_rows) == (1, row.time_rows)
+    assert found, "no one-row face series found in the supplied HDFs"
 
 
 def test_legacy_schema_is_confined_to_canonical_namespace(source):

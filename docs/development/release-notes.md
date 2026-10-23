@@ -9,6 +9,25 @@ alone does not identify a development checkout.
 
 ### Unreleased
 
+**Mesh series availability diagnostics for one-row placeholders**
+
+Eager, view and streamed `HdfResultsMesh` time-series reads still refuse a
+dataset whose rows differ from the Base Output `Time` axis. They now raise
+`MeshSeriesAvailabilityError`, a `ValueError` subclass with the historical
+message prefix. It names the dataset, its row count, the clock length,
+stored bytes and a `disposition`. `"unwritten_placeholder"` means that the
+producer stored no data, so the readable values are only HDF5 fill values.
+`"row_count_mismatch"` means stored data that cannot be aligned. The new
+`HdfResultsMesh.get_mesh_timeseries_availability()` reports these
+dispositions per dataset from metadata only.
+
+HEC-RAS 6.6 and 7.0.1 public-example runs without wind forcing leave
+`Face Wind Term` as an extendable one-row dataset with no stored chunks.
+HEC-RAS 6.6 Diffusion Wave runs also leave `Face Water Surface` this way;
+7.0.1 writes it in full. These datasets are reported as unavailable. They
+are not broadcast, given timestamps or interpreted as a constant zero field.
+Successful reads, signatures and the face/cell discovery skips are unchanged.
+
 **Compute-message classification rejects observed early termination**
 
 `ResultsParser` classifies `Unsteady Flow Simulation Terminated` and the

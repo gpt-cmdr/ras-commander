@@ -150,6 +150,12 @@ This file is the canonical local instruction file for `ras_commander/hdf/`.
   lazy and streamed reads, without ghost flags or spatial coordinates. Default
   cell/face discovery skips time-only diagnostics and reports invalid entries;
   explicit malformed reads raise `ValueError`. One-row outputs are not broadcast.
+  Rows that differ from a valid Time axis raise `MeshSeriesAvailabilityError`
+  (a `ValueError`) from eager, view and stream reads alike; `disposition` is
+  `unwritten_placeholder` when the dataset stores no bytes (HDF5 fill only, e.g.
+  6.6/7.0.1 no-wind `Face Wind Term`, 6.6 Diffusion Wave `Face Water Surface`)
+  else `row_count_mismatch`. Never broadcast, re-time or read them as constant
+  fields. `get_mesh_timeseries_availability()` reports the same qualification.
   Ghost filtering follows qualification. `Cell Hydraulic Depth` remains distinct
   from `Depth` and WSE-minus-minimum-elevation depth. Summary wrappers retain
   their separate existing schemas and are unchanged by these series rules.

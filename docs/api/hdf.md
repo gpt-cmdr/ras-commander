@@ -259,6 +259,9 @@ removed before v1.2.0:
 - `iter_mesh_timeseries(hdf_path, mesh_name, var, *, time_selection=None,
   spatial_selection=None, batch_size=None, max_chunk_bytes=16777216)` - Stream
   untruncated, bounded, time-major xarray batches
+- `get_mesh_timeseries_availability(hdf_path, mesh_name=None)` - Metadata-only
+  report of whether each Base Output mesh dataset is readable as a series
+  (`status`, `rows`, `time_rows`, `stored_bytes`, `reason`)
 
 - `get_mesh_cells_timeseries(hdf_path, mesh_names=None, var=None, truncate=False, ras_object=None)` - Dictionary of mesh Datasets; select cells/faces afterward
 - `get_mesh_faces_timeseries(hdf_path, mesh_name, truncate=True)` - Available face variables as one Dataset; select `face_velocity` and `face_id` afterward
@@ -341,6 +344,39 @@ floating-point dtype so NaN/infinite filtering remains valid.
 `iter_mesh_timeseries()` is intentionally untruncated: it emits every selected
 source timestep once, in time-major batches. This makes batch reassembly
 deterministic and avoids a hidden preliminary scan.
+
+**Series availability.** A dataset whose stored rows differ from the Base
+Output `Time` axis is never broadcast, padded, truncated or re-timed. Eager,
+view and streamed reads all raise `MeshSeriesAvailabilityError`, a
+`ValueError` subclass. They raise before any value is read. The error has
+`dataset_path`, `rows`, `time_rows`, `stored_bytes` and `disposition`:
+
+- `"unwritten_placeholder"`: the producer stored no data (`stored_bytes == 0`).
+  Reading it would return HDF5 fill values, not results. HEC-RAS 6.6 and 7.0.1
+  plans without wind forcing leave `Face Wind Term` this way: an extendable
+  one-row dataset with `Location=Faces`, `Rows=Times` and no stored chunks.
+  It is created when governing-equation output terms are selected. HEC-RAS 6.6
+  Diffusion Wave runs leave `Face Water Surface` this way too; 7.0.1 writes it
+  in full. Treat these datasets as unavailable, not as a constant zero field.
+- `"row_count_mismatch"`: stored data whose row count cannot be aligned with
+  the clock.
+
+`get_mesh_timeseries_availability()` reports the same qualification for every
+dataset without reading values. `get_mesh_faces_timeseries()` and
+`get_mesh_cells_timeseries()` skip such datasets during discovery and log the
+same message.
+
+```python
+from ras_commander import HdfResultsMesh, MeshSeriesAvailabilityError
+
+report = HdfResultsMesh.get_mesh_timeseries_availability("BaldEagleDamBrk.p03.hdf")
+print(report.loc[report.status != "available", ["mesh_name", "variable", "rows", "time_rows", "status"]])
+
+try:
+    HdfResultsMesh.get_mesh_timeseries("BaldEagleDamBrk.p03.hdf", "BaldEagleCr", "Face Wind Term")
+except MeshSeriesAvailabilityError as exc:
+    print(exc.disposition, exc.rows, exc.time_rows)
+```
 
 ```python
 from ras_commander import HdfResultsMesh
@@ -980,6 +1016,7 @@ prerequisites and return contracts take precedence over abbreviated summaries.
         - get_mesh_summary_output_group
         - get_mesh_summary_values
         - get_mesh_timeseries
+        - get_mesh_timeseries_availability
         - get_profile_line_flow_timeseries
         - get_profile_line_flow_timeseries_legacy
         - get_profile_line_peak_flow
