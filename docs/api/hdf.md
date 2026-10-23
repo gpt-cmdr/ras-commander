@@ -174,14 +174,17 @@ editing geometry text.
 - `diagnose_mesh_layout(hdf_path, program_version=None)` - Report version
   evidence, detected layout, dataset paths, and per-capability status for area
   names, perimeters, cell centers, face topology, and cell polygons
-- `get_mesh_cell_polygons(hdf_path, *, strict=False, backend="auto", threads=None)` -
-  Get cell polygons as a GeoDataFrame; warnings and the equality-safe tuple of
-  record dictionaries in `result.attrs["cell_polygon_diagnostics"]` expose
-  physical cells that were omitted or ambiguously polygonized. Use
-  `diagnose_mesh_cell_polygons()` when a DataFrame is preferred. `backend`
-  (`"auto"`, `"python"`, `"rust"`) and `threads` select and bound the optional
-  native polygonizer; see [Optional Rust acceleration](#optional-rust-acceleration).
-- `diagnose_mesh_cell_polygons(hdf_path, *, backend="auto")` - Report native
+- `get_mesh_cell_polygons(hdf_path, *, strict=False, engine="auto", threads=None, diagnostics=False)` -
+  Get cell polygons as a GeoDataFrame; a warning names omitted cells. With
+  `diagnostics=True` the equality-safe tuple of record dictionaries in
+  `result.attrs["cell_polygon_diagnostics"]` lists physical cells that were
+  omitted or ambiguously polygonized (off by default since this release; it was
+  always attached before). Use `diagnose_mesh_cell_polygons()` for a DataFrame.
+  `engine` (`"auto"`, `"h5py"`, `"native"`) and `threads` select and bound the
+  optional native polygonizer; with `engine="native"` diagnostic labels can
+  differ from the Python reference (see the docstring). See
+  [Optional Rust acceleration](#optional-rust-acceleration).
+- `diagnose_mesh_cell_polygons(hdf_path, *, engine="auto")` - Report native
   cell IDs, face IDs, polygon counts, and reason codes for physical-cell
   reconstruction problems and expected boundary-only records
 - `get_mesh_cell_faces(hdf_path)` - Get cell face lines
@@ -589,42 +592,38 @@ fail processing: the method logs ERROR with traceback, path, parameters and stag
 then returns an empty GeoDataFrame and discards partial geometry. Input/decorator
 validation exceptions remain unchanged; no result status attributes are added.
 
-- `calculate_fluvial_pluvial_boundary(hdf_path, delta_t, min_line_length=None, *, engine="python")` - Calculate boundary
-- `generate_fluvial_pluvial_polygons(hdf_path, delta_t, temporal_tolerance_hours=1.0, min_polygon_area_acres=None, *, engine="python")` - Boundary polygons
+- `calculate_fluvial_pluvial_boundary(hdf_path, delta_t, min_line_length=None, *, engine="auto")` - Calculate boundary
+- `generate_fluvial_pluvial_polygons(hdf_path, delta_t, temporal_tolerance_hours=1.0, min_polygon_area_acres=None, *, engine="auto")` - Boundary polygons
 
-`engine` selects the implementation. The default `"python"` is the reference
-described above (failures are logged and an empty GeoDataFrame is returned).
-`"native"` uses the optional Rust graph kernels and raises
-`FluvialNativeUnsupportedError` (a `ValueError`) when it cannot reproduce the
-reference result; `"auto"` uses native when it can and otherwise falls back to
-the Python engine. Both opt-in engines record the engine that produced the result
-in `result.attrs["fluvial_engine"]`. With `"native"` and `"auto"`, errors other
-than `FluvialNativeUnsupportedError` (invalid data, native failures) propagate
-instead of becoming an empty result. `FluvialNativeUnsupportedError` is defined
+`engine` selects the implementation. `"h5py"` is the reference described above
+(failures are logged and an empty GeoDataFrame is returned). `"native"` uses the
+optional Rust graph kernels and raises `FluvialNativeUnsupportedError` (a
+`ValueError`) when it cannot reproduce the reference result; other errors
+propagate. `"auto"` (default) uses native when it can and otherwise the
+reference, including on any native error, so its outcome is always the
+reference outcome. The engine that produced the result is recorded in
+`result.attrs["fluvial_engine"]` (`"used"`: `"native"` or `"h5py"`).
+`FluvialNativeUnsupportedError` is defined
 in the module `ras_commander.hdf.HdfFluvialPluvial` (import it with
 `from ras_commander.hdf.HdfFluvialPluvial import FluvialNativeUnsupportedError`).
 
-How `engine` maps onto `RAS_COMMANDER_FAST_HDF` and the `backend=` keyword of
-`HdfMesh`/`fast_hdf`:
+How `engine` maps onto `RAS_COMMANDER_FAST_HDF`:
 
-| `engine` | `RAS_COMMANDER_FAST_HDF` | Behaviour | `backend=` equivalent |
-|----------|--------------------------|-----------|-----------------------|
-| `"python"` (default) | any | Python reference. Under `required`, a `FastHdfError` from a routed read is raised instead of returning an empty result. | `"python"` for the algorithm; nested reads follow the environment |
-| `"native"` | any (ignored) | Native, or `FluvialNativeUnsupportedError`; never falls back. | `"rust"` |
-| `"auto"` | `0`/`off`/`false`/`python` | Python reference; native is not attempted (`attrs["fluvial_engine"]["used"] == "python"`). | `"auto"` |
-| `"auto"` | unset/`auto` | Native when it reproduces the reference, otherwise Python. | `"auto"` |
-| `"auto"` | `required`/`rust` | Native, or `FastHdfError` (never a silent fallback). | `"auto"` |
+| `engine` | `RAS_COMMANDER_FAST_HDF` | Behaviour |
+|----------|--------------------------|-----------|
+| `"auto"` (default) | unset/`auto` | Native when it reproduces the reference, otherwise the reference. |
+| `"auto"` | `h5py` | Reference; native is not attempted (`attrs["fluvial_engine"]["used"] == "h5py"`). |
+| `"auto"` | `native` | Native, or `FastHdfError` (never a silent fallback). |
+| `"h5py"` | any (ignored) | Reference, with every read on h5py (native is never used, in any mode). |
+| `"native"` | any (ignored) | Native, or `FluvialNativeUnsupportedError`; never falls back. |
 
 The native engine is used only when `fast_hdf.available()` is true (the same
 extension availability and API-version check as every other native read).
 
-Naming: the fluvial selector is `engine=` with values `"python"`, `"native"`
-and `"auto"` and default `"python"`; the `HdfMesh`/`fast_hdf` selector is
-`backend=` with `"python"`, `"rust"` and `"auto"` and default `"auto"`.
-`engine="native"` corresponds to `backend="rust"`; `"rust"` is not accepted by
-`engine=` and `"native"` is not accepted by `backend=`. The fluvial default
-stays `"python"` because the native engine does not reproduce every input
-(for example `min_polygon_area_acres`, unprojected CRSs, `delta_t=0`).
+Every public selector uses `engine=` with `"auto"`, `"h5py"` and `"native"`.
+Inputs the native fluvial engine does not reproduce (for example
+`min_polygon_area_acres`, unprojected CRSs, `delta_t=0`) run on the reference
+in auto mode.
 
 ### HdfInfiltration
 
@@ -775,14 +774,14 @@ review; it does not publish them.
 from ras_commander import fast_hdf
 
 print(fast_hdf.available())
-polygons = fast_hdf.mesh_polygons("model.g01.hdf", backend="rust", threads=4)
+polygons = fast_hdf.mesh_polygons("model.g01.hdf", backend="native", threads=4)
 fast_hdf.export_mesh_pmtiles(
     "model.g01.hdf", "mesh.pmtiles", layer_name="mesh_cells",
-    min_zoom=10, max_zoom=14, backend="rust", threads=4,
+    min_zoom=10, max_zoom=14, backend="native", threads=4,
 )
 ```
 
-Explicit `backend="rust"` requires native execution and reports unavailable or
+Explicit `backend="native"` requires native execution and reports unavailable or
 unsupported operations. Automatic mode can use the compatibility path. Direct
 export keeps polygons packed through a vectorized pyproj transformation and
 passes them to freestiler's Rust core, without building per-cell Python geometry
@@ -886,9 +885,9 @@ dtypes, index, CRS, attrs and exceptions do not change. The backend follows
 
 | Mode | Values | Behavior |
 |------|--------|----------|
-| Python | `0`, `off`, `false`, `python` | h5py for every read. |
-| Auto | unset, empty, `auto`, `1`, `on`, `true` | Native read when the extension is installed; **any** native failure, including Corrupt or checksum refusals, falls back to h5py, so the public result or exception is the h5py one. |
-| Required | `required`, `rust` | Native reads must succeed; a refusal raises `FastHdfError`, which routed readers surface unchanged instead of returning an empty result or wrapping it. |
+| h5py | `h5py` (legacy: `0`, `off`, `false`, `python`) | h5py for every read. |
+| Auto | unset, empty, `auto` (legacy: `1`, `on`, `true`) | Native read when the extension is installed and the function is qualified; **any** native failure, including Corrupt or checksum refusals, falls back to h5py, so the public result or exception is the h5py one. Functions the test corpus has not yet qualified (`fast_hdf.UNQUALIFIED_NATIVE`, marked with `fast_hdf.h5py_until_qualified`) run on h5py. |
+| Native | `native` (legacy: `required`, `rust`) | Native reads must succeed; a refusal raises `FastHdfError`, which routed readers surface unchanged instead of returning an empty result or wrapping it. |
 
 Routing policy:
 
