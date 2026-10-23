@@ -1,0 +1,148 @@
+{
+  "license": "MIT",
+  "engine_commit": "c38fb04f4f71f10cad4abf4c051fed5ae613534d",
+  "time_engine_relative_root": "crates/ras-commander-rust/tests/fixtures/time",
+  "fixtures": {
+    "rollover_2400_with_ms": {
+      "file": "rollover_2400_with_ms.h5",
+      "sha256": "7c477d42b120ce9c30e59a21d636aa9f0adbef7fcefe9c9e7e2085388e666b07",
+      "expect": {
+        "ok": true,
+        "strings": [
+          "31DEC2019 22:00:00",
+          "31DEC2019 23:00:00",
+          "31DEC2019 24:00:00",
+          "01JAN2020 01:00:00"
+        ],
+        "ms": [
+          1577829600000,
+          1577833200000,
+          1577836800000,
+          1577840400000
+        ],
+        "ms_source": "DerivedFromStrings",
+        "hour_2400_rows": [
+          2
+        ],
+        "raw_ms": [
+          1577829600000,
+          1577833200000,
+          1577836800000,
+          1577840400000
+        ],
+        "integer_ms_unsupported": true
+      }
+    },
+    "ms_strings_subsecond_with_stamps": {
+      "file": "ms_strings_subsecond_with_stamps.h5",
+      "sha256": "a792f013b914e35b8ce3635b40959f4c824a9e1402b0ad46faf9d0b7a15713b8",
+      "expect": {
+        "ok": true,
+        "strings": [
+          "31DEC2019 22:00:00",
+          "31DEC2019 23:00:00",
+          "31DEC2019 24:00:00",
+          "01JAN2020 01:00:00"
+        ],
+        "ms": [
+          1577829600250,
+          1577833200999,
+          1577836800000,
+          1577840400500
+        ],
+        "ms_strings": [
+          "31DEC2019 22:00:00:250",
+          "31DEC2019 23:00:00:999",
+          "31DEC2019 24:00:00:000",
+          "01JAN2020 01:00:00:500"
+        ],
+        "ms_source": "StoredStringDataset",
+        "hour_2400_rows": [
+          2
+        ]
+      }
+    },
+    "ms_only": {
+      "file": "ms_only.h5",
+      "sha256": "632c568e781cc4c366b5376a01ac398f77e40b90599246d890cc33e0fb7eb0a6",
+      "expect": {
+        "ok": true,
+        "strings": null,
+        "ms": null,
+        "ms_source": null,
+        "hour_2400_rows": [],
+        "raw_ms": [
+          1577829600000,
+          1577833200000,
+          1577836800000,
+          1577840400000
+        ],
+        "integer_ms_unsupported": true
+      }
+    },
+    "days_only": {
+      "file": "days_only.h5",
+      "sha256": "1e14f7be8bd96a294afd7568f52445f6aaf2df10f0e88778f1f541423959babc",
+      "expect": {
+        "ok": true,
+        "strings": null,
+        "ms": null,
+        "ms_source": null,
+        "hour_2400_rows": []
+      }
+    },
+    "ms_strings_bad_value": {
+      "file": "ms_strings_bad_value.h5",
+      "sha256": "a0e4d8389d18ec3174f23283e7e1ba289ca6081fbf66028713d8c5890e88d727",
+      "expect": {
+        "error": "Corrupt"
+      }
+    },
+    "ms_strings_bad_width": {
+      "file": "ms_strings_bad_width.h5",
+      "sha256": "e9cb8d5ebf2ea44415b79b83bd3ef987939e59b113134c418c73f126b04c0112",
+      "expect": {
+        "error": "Unsupported"
+      }
+    },
+    "units_full": {
+      "file": "units_full.h5",
+      "sha256": "79985c1a946ab60756e998d9a977678a0c98a991a219b621527c1af4996a19f8",
+      "expect": {
+        "units": "full"
+      }
+    },
+    "units_real_layouts": {
+      "file": "units_real_layouts.h5",
+      "sha256": "54eb49dd005e9cb4f1d9eb02f023c23c2daf7644b7d6000d32257eb36788fbd6",
+      "expect": {
+        "units": "real"
+      }
+    },
+    "mesh-blocks": {
+      "file": "mesh-blocks.h5",
+      "sha256": "436c081dc5f148c5ae0f05720a221ead41b267b186eed5ee373300ba937fb1e3",
+      "engine_relative_path": "crates/ras-commander-rust/tests/fixtures/deferred/blocks.h5"
+    },
+    "mesh-steady": {
+      "file": "mesh-steady.h5",
+      "sha256": "2dfca991de1fcef6feaf8d5ebb7e1d1e08b829c916dac85dc69560c67de6bdb6",
+      "engine_relative_path": "crates/ras-commander-rust/tests/fixtures/deferred/steady.h5"
+    },
+    "mesh-missing": {
+      "file": "mesh-missing.h5",
+      "sha256": "e0ab109114823ecce1c8e3fc497641975a256df007b5cfcfbd04a04b6d4bfceb",
+      "engine_relative_path": "crates/ras-commander-rust/tests/fixtures/deferred/missing.h5"
+    },
+    "mesh-extra": {
+      "file": "mesh-extra.h5",
+      "sha256": "3e25f4fd3867efca2785949877547e710b8bf5c192d211677e3f3c6d363350fc",
+      "engine_relative_path": "crates/ras-commander-rust/tests/fixtures/deferred/extra.h5"
+    },
+    "mesh-duplicate": {
+      "file": "mesh-duplicate.h5",
+      "sha256": "360eff41b0a7f3216596545ff227796e20761bbe590750e8cc6ef3f8cada96df",
+      "engine_relative_path": "crates/ras-commander-rust/tests/fixtures/deferred/duplicate.h5"
+    }
+  }
+}

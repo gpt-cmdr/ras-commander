@@ -44,6 +44,7 @@ from shapely.geometry.polygon import orient
 from shapely.ops import linemerge, unary_union
 
 from .Decorators import log_call
+from .fast_hdf import read_attr, read_typed
 from .geom.GeomLateral import GeomLateral
 from .geom.GeomMesh import GeomMesh
 from .geom.GeomParser import GeomParser
@@ -1235,13 +1236,13 @@ class RasBreakout2D:
         with h5py.File(geometry_path, "r") as hdf:
             if base not in hdf:
                 raise ValueError(f"Mesh faces/cells are unavailable for {mesh_name!r}")
-            centers = np.asarray(hdf[f"{base}/Cells Center Coordinate"][()])
+            centers = np.asarray(read_typed(hdf[f"{base}/Cells Center Coordinate"]))
             cell_count = len(centers)
             attributes = hdf.get("Geometry/2D Flow Areas/Attributes")
             if attributes is not None and "Cell Count" in (
                 attributes.dtype.names or ()
             ):
-                rows = attributes[()]
+                rows = read_typed(attributes)
                 cell_count = next(
                     int(row["Cell Count"])
                     for row in rows
@@ -1253,9 +1254,9 @@ class RasBreakout2D:
             if not 0 < cell_count <= len(centers):
                 raise ValueError(f"Invalid active cell count for {mesh_name!r}")
             centers = centers[:cell_count]
-            face_cells = np.asarray(hdf[f"{base}/Faces Cell Indexes"][()], dtype=int)
+            face_cells = np.asarray(read_typed(hdf[f"{base}/Faces Cell Indexes"]), dtype=int)
             normals = np.asarray(
-                hdf[f"{base}/Faces NormalUnitVector and Length"][()],
+                read_typed(hdf[f"{base}/Faces NormalUnitVector and Length"]),
                 dtype=float,
             )
         inside = intersects_xy(child, centers[:, 0], centers[:, 1])
@@ -1276,10 +1277,10 @@ class RasBreakout2D:
         with h5py.File(geometry_path, "r") as hdf:
             # Numeric topology is compact even for multi-million-cell meshes;
             # avoid expensive HDF fancy indexing of thousands of sparse rows.
-            point_indexes = hdf[f"{base}/Faces FacePoint Indexes"][()][selected_ids]
-            point_coords = hdf[f"{base}/FacePoints Coordinate"][()]
-            perimeter_info = hdf[f"{base}/Faces Perimeter Info"][()][selected_ids]
-            perimeter_values = hdf[f"{base}/Faces Perimeter Values"][()]
+            point_indexes = read_typed(hdf[f"{base}/Faces FacePoint Indexes"])[selected_ids]
+            point_coords = read_typed(hdf[f"{base}/FacePoints Coordinate"])
+            perimeter_info = read_typed(hdf[f"{base}/Faces Perimeter Info"])[selected_ids]
+            perimeter_values = read_typed(hdf[f"{base}/Faces Perimeter Values"])
             crs = HdfBase.get_projection(hdf)
 
         records: list[dict[str, Any]] = []
@@ -2412,7 +2413,7 @@ def _decode_hdf_text(value: Any) -> str:
 
 def _result_time_index(hdf: h5py.File) -> pd.Index:
     base = "Results/Unsteady/Output/Output Blocks/Base Output/Unsteady Time Series"
-    values = np.asarray(hdf[f"{base}/Time"][()], dtype=float)
+    values = np.asarray(read_typed(hdf[f"{base}/Time"]), dtype=float)
     try:
         start = HdfBase.get_simulation_start_time(hdf)
         return HdfUtils.convert_timesteps_to_datetimes(values, start)
@@ -2423,7 +2424,7 @@ def _result_time_index(hdf: h5py.File) -> pd.Index:
 def _read_hdf_columns(dataset: h5py.Dataset, ids: np.ndarray) -> np.ndarray:
     requested = np.asarray(ids, dtype=int)
     order = np.argsort(requested)
-    sorted_values = np.asarray(dataset[:, requested[order]], dtype=float)
+    sorted_values = np.asarray(read_typed(dataset, (slice(None), requested[order])), dtype=float)
     return sorted_values[:, np.argsort(order)]
 
 
@@ -2447,7 +2448,7 @@ def _read_boundary_face_flow(
         index = _result_time_index(result_hdf)
         if prefer_native and native_path in result_hdf:
             values = _read_hdf_columns(result_hdf[native_path], face_ids)
-            units = _decode_hdf_text(result_hdf[native_path].attrs.get("Units", ""))
+            units = _decode_hdf_text(read_attr(result_hdf[native_path], "Units", ""))
             return (
                 pd.DataFrame(values, index=index, columns=face_ids),
                 "native_face_flow",
@@ -2470,7 +2471,7 @@ def _read_boundary_face_flow(
                 cell_wse[:, position[int(row.cell_1)]],
             )
         velocity_units = _decode_hdf_text(
-            result_hdf[velocity_path].attrs.get("Units", "")
+            read_attr(result_hdf[velocity_path], "Units", "")
         )
 
     geometry_base = f"Geometry/2D Flow Areas/{mesh_name}"
@@ -2479,8 +2480,8 @@ def _read_boundary_face_flow(
         tables = geometry[f"{geometry_base}/Faces Area Elevation Values"]
         area = np.zeros_like(stage)
         for column, row in enumerate(faces.itertuples(index=False)):
-            start, count = np.asarray(info[int(row.face_id), :2], dtype=int)
-            table = np.asarray(tables[start : start + count], dtype=float)
+            start, count = np.asarray(read_typed(info, (int(row.face_id), slice(None, 2))), dtype=int)
+            table = np.asarray(read_typed(tables, slice(start, start + count)), dtype=float)
             elevations = table[:, 0]
             areas = table[:, 1]
             interpolated = np.interp(

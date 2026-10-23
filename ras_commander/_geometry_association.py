@@ -204,6 +204,8 @@ def validate_geometry_extents_for_2d_classification(hdf_path: PathLike) -> None:
     """
     import h5py
 
+    from .fast_hdf import read_attr
+
     hdf_path = safe_resolve_path(hdf_path)
     with h5py.File(str(hdf_path), "r") as hdf_file:
         geometry = hdf_file.get("Geometry")
@@ -213,7 +215,7 @@ def validate_geometry_extents_for_2d_classification(hdf_path: PathLike) -> None:
 
         area_extents: list[np.ndarray] = []
         for area in flow_areas.values():
-            values = np.asarray(area.attrs.get("Extents", []), dtype=float)
+            values = np.asarray(read_attr(area, "Extents", []), dtype=float)
             if (
                 values.shape == (4,)
                 and np.isfinite(values).all()
@@ -233,7 +235,7 @@ def validate_geometry_extents_for_2d_classification(hdf_path: PathLike) -> None:
             ],
             dtype=float,
         )
-        global_extents = np.asarray(geometry.attrs.get("Extents", []), dtype=float)
+        global_extents = np.asarray(read_attr(geometry, "Extents", []), dtype=float)
 
     invalid = (
         global_extents.shape != (4,)
@@ -295,12 +297,14 @@ def read_geometry_association(
     hdf_path = safe_resolve_path(hdf_path)
     ensure_geometry_group(hdf_path)
 
+    from .fast_hdf import read_attr
+
     association: dict[str, Any] = {}
     with h5py.File(str(hdf_path), "r") as hdf_file:
-        attrs = hdf_file["Geometry"].attrs
+        geometry = hdf_file["Geometry"]
         raw_attrs = {}
         for attr_name in _field_attr_names():
-            attr_value = decode_hdf_attr(attrs.get(attr_name))
+            attr_value = decode_hdf_attr(read_attr(geometry, attr_name, None))
             if attr_value is not None:
                 raw_attrs[attr_name] = attr_value
 
@@ -342,6 +346,8 @@ def read_geometry_association(
 def _read_two_d_area_terrain_associations(hdf_file, hdf_path: Path, resolve_paths: bool):
     import h5py
 
+    from .fast_hdf import read_attr
+
     area_records = []
     flow_areas = hdf_file.get("Geometry/2D Flow Areas")
     if flow_areas is None:
@@ -355,15 +361,15 @@ def _read_two_d_area_terrain_associations(hdf_file, hdf_path: Path, resolve_path
         # terrain-association attributes have not yet been populated.
         if not isinstance(area_group, h5py.Group):
             continue
-        raw_filename = decode_hdf_attr(area_group.attrs.get("Terrain Filename"))
+        raw_filename = decode_hdf_attr(read_attr(area_group, "Terrain Filename", None))
         record = {
             "flow_area": area_name,
             "terrain_raw_filename": raw_filename,
             "terrain_layer_name": decode_hdf_attr(
-                area_group.attrs.get("Terrain Layername")
+                read_attr(area_group, "Terrain Layername", None)
             ),
             "terrain_file_date": decode_hdf_attr(
-                area_group.attrs.get("Terrain File Date")
+                read_attr(area_group, "Terrain File Date", None)
             ),
         }
         if raw_filename:
@@ -681,6 +687,9 @@ def landcover_association_diagnostic(hdf_path: PathLike) -> Optional[str]:
     try:
         association = read_geometry_association(hdf_path, resolve_paths=True)
     except Exception as exc:
+        from .fast_hdf import reraise_required
+
+        reraise_required(exc)
         return (
             f"Could not inspect the land-cover association on {hdf_path.name}: "
             f"{exc}. Property-table completion alone does not prove that "

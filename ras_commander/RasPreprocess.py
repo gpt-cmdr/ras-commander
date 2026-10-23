@@ -746,6 +746,9 @@ class RasPreprocess:
                         f"HEC-RAS {ras_major}.x preprocessing did not write {c_file.name}"
                     )
         except Exception as exc:
+            from .fast_hdf import reraise_required
+
+            reraise_required(exc)
             event_errors = [f"could not validate Event Conditions: {exc}"]
             hdf_readable = False
             compatibility_errors = []
@@ -863,6 +866,9 @@ class RasPreprocess:
             with h5py.File(tmp_hdf, "r") as hdf:
                 return list(_event_condition_errors(hdf, precipitation_mode)), True
         except Exception as exc:
+            from .fast_hdf import reraise_required
+
+            reraise_required(exc)
             return [f"could not validate Event Conditions: {exc}"], False
 
     @staticmethod
@@ -1555,6 +1561,10 @@ class RasPreprocess:
 
             association = read_geometry_association(geom_hdf)
         except Exception as exc:
+            from .fast_hdf import reraise_required
+
+            # Required-native mode must not pass the pre-launch guard on a refusal.
+            reraise_required(exc)
             logger.debug(f"Could not read associations from {geom_hdf.name}: {exc}")
             return []
 
@@ -1883,6 +1893,8 @@ class RasPreprocess:
         try:
             import h5py
 
+            from .fast_hdf import read_typed
+
             with h5py.File(tmp_hdf, "r") as hdf:
                 missing = [
                     path
@@ -1915,7 +1927,7 @@ class RasPreprocess:
                     and "Name" in attributes.dtype.names
                 ):
                     area_names = []
-                    for name in attributes["Name"]:
+                    for name in read_typed(attributes)["Name"]:
                         if isinstance(name, bytes):
                             name = name.decode("utf-8", "replace")
                         name = str(name).strip()
@@ -1953,6 +1965,9 @@ class RasPreprocess:
                         + ", ".join(missing_interpolation),
                     )
         except Exception as exc:
+            from .fast_hdf import reraise_required
+
+            reraise_required(exc)
             return False, f"could not inspect {Path(tmp_hdf).name}: {exc}"
         return True, "ready"
 

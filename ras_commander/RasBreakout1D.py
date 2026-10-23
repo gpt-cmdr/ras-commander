@@ -4730,6 +4730,9 @@ class RasBreakout1D:
                 footprint = footprint.to_crs(target_crs)
                 return unary_union(footprint.geometry.tolist()), source_label
         except Exception as exc:
+            from .fast_hdf import reraise_required
+
+            reraise_required(exc)
             logger.debug(
                 "Could not derive source-catalog footprint from %s: %s",
                 geom_file,

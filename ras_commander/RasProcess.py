@@ -113,6 +113,7 @@ from .RasBenefits import BenefitAreaConfig, RasBenefits
 from .RasUtils import RasUtils
 from .LoggingConfig import get_logger
 from .Decorators import log_call
+from .fast_hdf import read_attr, read_typed, reraise_required
 from ._native_helper import (
     _is_wine_helper_runtime,
     normalize_store_map_render_mode,
@@ -2002,6 +2003,7 @@ Step 5: Configure (optional — auto-detection usually works)
                 rasmap_timestamps.append(formatted)
             return rasmap_timestamps
         except Exception as e:
+            reraise_required(e)
             logger.error(f"Failed to get timestamps from {hdf_path}: {e}")
             return []
 
@@ -2641,9 +2643,9 @@ Step 5: Configure (optional — auto-detection usually works)
                         elevation_path = f"{geometry_root}/{name}/{elevation_name}"
                         if wse_path not in hdf or elevation_path not in hdf:
                             continue
-                        wse = np.asarray(hdf[wse_path][()], dtype=np.float64)
+                        wse = np.asarray(read_typed(hdf[wse_path]), dtype=np.float64)
                         elevations = np.asarray(
-                            hdf[elevation_path][()], dtype=np.float64
+                            read_typed(hdf[elevation_path]), dtype=np.float64
                         ).reshape(-1)
                         if wse.ndim > 1:
                             wse = np.nanmax(wse, axis=0)
@@ -2656,6 +2658,7 @@ Step 5: Configure (optional — auto-detection usually works)
                         ):
                             return True
         except Exception as exc:
+            reraise_required(exc)
             logger.debug("Could not audit plan-HDF wet cells: %s", exc)
         return False
 
@@ -2840,11 +2843,12 @@ Step 5: Configure (optional — auto-detection usually works)
                 if "Plan Data" in hdf and "Plan Information" in hdf["Plan Data"]:
                     info = hdf["Plan Data"]["Plan Information"]
                     if "Plan ShortID" in info.attrs:
-                        short_id = info.attrs["Plan ShortID"]
+                        short_id = read_attr(info, "Plan ShortID")
                         if isinstance(short_id, bytes):
                             short_id = short_id.decode("utf-8")
                         return short_id.strip()
         except Exception as e:
+            reraise_required(e)
             logger.debug(f"Could not read Plan ShortID from {hdf_path}: {e}")
         return None
 

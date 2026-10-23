@@ -12,8 +12,16 @@ from ras_commander.hdf import HdfResultsPlan
 STEADY_BASE_PATH = "Results/Steady/Output/Output Blocks/Base Output/Steady Profiles"
 
 
-def _write_legacy_steady_plan_hdf(path: Path) -> None:
-    """Write a HEC-RAS 6.x-like steady HDF without output-side XS attributes."""
+def _write_legacy_steady_plan_hdf(path: Path, *, results_identity: bool = False) -> None:
+    """Write a HEC-RAS 6.x-like steady HDF without output-side XS attributes.
+
+    ``results_identity=True`` adds what HEC-RAS 6.6/7.0.1 steady plan HDFs also
+    store: the output-side Cross Section Attributes table (fixed-length ASCII
+    fields, as in the retained Balde Eagle Creek files) and the packed
+    cross-section cut lines beside the geometry Attributes table. The
+    required-native engine refuses the legacy layout without them ("results-side
+    identity table absent"), so the source-selection cases run on both layouts.
+    """
     attributes_dtype = np.dtype(
         [
             ("River", "S32"),
@@ -53,6 +61,39 @@ def _write_legacy_steady_plan_hdf(path: Path) -> None:
             f"{STEADY_BASE_PATH}/Cross Sections/Additional Variables/Hydraulic Depth Channel",
             data=np.array([[2.0, 1.0], [3.0, 2.0]]),
         )
+        if results_identity:
+            identity_dtype = np.dtype(
+                [("River", "S16"), ("Reach", "S16"), ("Station", "S8"), ("Name", "S16")]
+            )
+            hdf.create_dataset(
+                "Results/Steady/Output/Geometry Info/Cross Section Attributes",
+                data=np.array(
+                    [
+                        (b"River A", b"Reach A", b"1000", b""),
+                        (b"River A", b"Reach A", b"900", b""),
+                    ],
+                    dtype=identity_dtype,
+                ),
+            )
+            # One two-point cut line per cross section.
+            hdf.create_dataset(
+                "Geometry/Cross Sections/Polyline Info",
+                data=np.array([[0, 2, 0, 1], [2, 2, 1, 1]], dtype="i4"),
+            )
+            hdf.create_dataset(
+                "Geometry/Cross Sections/Polyline Parts",
+                data=np.array([[0, 2], [0, 2]], dtype="i4"),
+            )
+            hdf.create_dataset(
+                "Geometry/Cross Sections/Polyline Points",
+                data=np.array([[0.0, 0.0], [10.0, 0.0], [0.0, 5.0], [10.0, 5.0]]),
+            )
+
+
+@pytest.fixture(params=["geometry-identity", "results-identity"])
+def results_identity(request):
+    """Run a source-selection case on the legacy and the 6.6/7.0.1-like layout."""
+    return request.param == "results-identity"
 
 
 def test_steady_results_uses_geometry_cross_section_attributes_when_needed(tmp_path):
@@ -170,9 +211,9 @@ def test_steady_results_rejects_misaligned_variable_shape(tmp_path):
 
 
 @pytest.mark.parametrize("layout", ["primary", "additional", "both"])
-def test_steady_energy_uses_stored_values_and_prefers_primary(tmp_path, layout):
+def test_steady_energy_uses_stored_values_and_prefers_primary(tmp_path, layout, results_identity):
     path = tmp_path / "energy.p02.hdf"
-    _write_legacy_steady_plan_hdf(path)
+    _write_legacy_steady_plan_hdf(path, results_identity=results_identity)
     xs = f"{STEADY_BASE_PATH}/Cross Sections"
     primary = np.array([[103.25, 102.75], [104.5, 103.5]])
     alternate = primary + 10
@@ -191,14 +232,14 @@ def test_steady_energy_uses_stored_values_and_prefers_primary(tmp_path, layout):
     assert "energy" not in result.attrs["unavailable_columns"]
 
 
-def test_steady_results_reports_absent_optional_outputs_once(tmp_path, monkeypatch):
+def test_steady_results_reports_absent_optional_outputs_once(tmp_path, monkeypatch, results_identity):
     import importlib
 
     module = importlib.import_module("ras_commander.hdf.HdfResultsPlan")
     warnings = []
     monkeypatch.setattr(module.logger, "warning", lambda *args: warnings.append(args))
     path = tmp_path / "unavailable.p02.hdf"
-    _write_legacy_steady_plan_hdf(path)
+    _write_legacy_steady_plan_hdf(path, results_identity=results_identity)
 
     result = HdfResultsPlan.get_steady_results(path)
 
@@ -219,9 +260,9 @@ def test_steady_results_reports_absent_optional_outputs_once(tmp_path, monkeypat
     ]
 
 
-def test_present_nan_energy_does_not_fall_back_or_report_source_absent(tmp_path):
+def test_present_nan_energy_does_not_fall_back_or_report_source_absent(tmp_path, results_identity):
     path = tmp_path / "present_nan.p02.hdf"
-    _write_legacy_steady_plan_hdf(path)
+    _write_legacy_steady_plan_hdf(path, results_identity=results_identity)
     xs = f"{STEADY_BASE_PATH}/Cross Sections"
     with h5py.File(path, "a") as hdf:
         hdf.create_dataset(f"{xs}/Energy Grade", data=np.full((2, 2), np.nan))
@@ -238,9 +279,9 @@ def test_present_nan_energy_does_not_fall_back_or_report_source_absent(tmp_path)
 
 
 @pytest.mark.parametrize("shape", [(1, 2), (4,), (2, 1)])
-def test_malformed_primary_energy_raises_even_with_valid_fallback(tmp_path, shape):
+def test_malformed_primary_energy_raises_even_with_valid_fallback(tmp_path, shape, results_identity):
     path = tmp_path / "bad_energy.p02.hdf"
-    _write_legacy_steady_plan_hdf(path)
+    _write_legacy_steady_plan_hdf(path, results_identity=results_identity)
     xs = f"{STEADY_BASE_PATH}/Cross Sections"
     with h5py.File(path, "a") as hdf:
         hdf.create_dataset(f"{xs}/Energy Grade", data=np.ones(shape))
@@ -251,9 +292,9 @@ def test_malformed_primary_energy_raises_even_with_valid_fallback(tmp_path, shap
 
 
 @pytest.mark.parametrize("keep_hydraulic_depth", [True, False])
-def test_depth_fallback_availability_tracks_actual_source(tmp_path, keep_hydraulic_depth):
+def test_depth_fallback_availability_tracks_actual_source(tmp_path, keep_hydraulic_depth, results_identity):
     path = tmp_path / "depth_source.p02.hdf"
-    _write_legacy_steady_plan_hdf(path)
+    _write_legacy_steady_plan_hdf(path, results_identity=results_identity)
     add = f"{STEADY_BASE_PATH}/Cross Sections/Additional Variables"
     with h5py.File(path, "a") as hdf:
         del hdf[f"{add}/Maximum Depth Total"]
@@ -266,3 +307,35 @@ def test_depth_fallback_availability_tracks_actual_source(tmp_path, keep_hydraul
     assert result.attrs["column_sources"]["max_depth"] == (
         f"{add}/Hydraulic Depth Channel" if keep_hydraulic_depth else None
     )
+
+
+def test_native_refusal_of_present_primary_energy_is_not_retried_on_fallback(
+    tmp_path, monkeypatch, results_identity
+):
+    """A backend refusal of a present source propagates; no other path is tried."""
+    import importlib
+
+    from ras_commander.fast_hdf import FastHdfError
+
+    module = importlib.import_module("ras_commander.hdf.HdfResultsPlan")
+    path = tmp_path / "refused_energy.p02.hdf"
+    _write_legacy_steady_plan_hdf(path, results_identity=results_identity)
+    xs = f"{STEADY_BASE_PATH}/Cross Sections"
+    with h5py.File(path, "a") as hdf:
+        hdf.create_dataset(f"{xs}/Energy Grade", data=np.ones((2, 2)))
+        hdf.create_dataset(f"{xs}/Additional Variables/Energy Grade", data=np.ones((2, 2)))
+    original = module.read_typed
+    requested = []
+
+    def refusing_read(dataset, *args, **kwargs):
+        requested.append(dataset.name)
+        if dataset.name == f"/{xs}/Energy Grade":
+            raise FastHdfError(f"refused {dataset.name}")
+        return original(dataset, *args, **kwargs)
+
+    monkeypatch.setattr(module, "read_typed", refusing_read)
+
+    with pytest.raises(FastHdfError, match="refused"):
+        HdfResultsPlan.get_steady_results(path)
+    assert f"/{xs}/Energy Grade" in requested
+    assert f"/{xs}/Additional Variables/Energy Grade" not in requested

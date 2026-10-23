@@ -209,6 +209,7 @@ nav:
     - Architecture Overview: user-guide/overview.md
     - Workflows & Patterns: user-guide/workflows-and-patterns.md
   - Agent Plugin and MCPs: agent-plugin.md
+  - Native Rust Engine: native-engine.md
   - User Guide:
     - Running Plans:
       - Plan Execution: user-guide/plan-execution.md

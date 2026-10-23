@@ -55,6 +55,7 @@ from typing import Any, Literal, Optional, Sequence, Tuple, Union
 
 from .ComputeResults import PrecipRasterImportResult
 from .Decorators import log_call
+from .fast_hdf import read_attr
 from .LoggingConfig import get_logger
 
 logger = get_logger(__name__)
@@ -851,7 +852,7 @@ class RasPrecipHdf:
                 precip_path = "Event Conditions/Meteorology/Precipitation"
                 with h5py.File(hdf_path, "r") as f:
                     existing_ratio = (
-                        f[precip_path].attrs.get("Ratio")
+                        read_attr(f[precip_path], "Ratio", None)
                         if precip_path in f else None
                     )
                 try:

@@ -9,6 +9,47 @@ alone does not identify a development checkout.
 
 ### Unreleased
 
+**Optional native (Rust) HDF backend (additive; default results unchanged)**
+
+`ras_commander.fast_hdf` adds an optional native backend for HDF reads, mesh
+polygon assembly and direct PMTiles/Arrow export. It is used only when the
+separately built `ras-commander-fast-hdf` extension (API version 11) is
+installed; ordinary installations are unaffected. In the default automatic
+mode every public `Hdf*` result, dtype, column, attribute and exception is
+the h5py result: any native failure falls back to h5py.
+
+- Engine vocabulary: every selector and `RAS_COMMANDER_FAST_HDF` use `auto`
+  (default; native first, h5py on any refusal), `h5py` (never native) and
+  `native` (native or `FastHdfError`). Legacy spellings `0`/`python` and
+  `required`/`rust` are still accepted. Functions whose native path the test
+  corpus has not yet exercised run on h5py in auto mode
+  (`fast_hdf.UNQUALIFIED_NATIVE`).
+- Environment: `RAS_COMMANDER_FAST_HDF`, `RAS_COMMANDER_HDF_SESSION_CACHE` (native file sessions; none stays
+  open after a public call returns unless set to `persist`) and
+  `RAS_COMMANDER_FAST_TEXT` (only for direct `fast_text` callers).
+- Supported `fast_hdf` names: `available`, `close_sessions`, `FastHdfError`,
+  `FastHdfPanicError`, `mesh_polygons`, `packed_meshes`, `export_pmtiles`,
+  `export_mesh_pmtiles`, `export_arrow` and `export_arrow_pmtiles`. Other
+  `fast_hdf`/`fast_results` names and `hdf/HdfFluvialNative` are internal.
+- New keyword-only parameters: `HdfMesh.get_mesh_cell_polygons(..., engine="auto",
+  threads=None, diagnostics=False)` and
+  `HdfMesh.diagnose_mesh_cell_polygons(..., engine="auto")`;
+  `HdfFluvialPluvial.calculate_fluvial_pluvial_boundary(..., engine="auto")`
+  and `generate_fluvial_pluvial_polygons(..., engine="auto")`, with
+  `FluvialNativeUnsupportedError` (a `ValueError`, in
+  `ras_commander.hdf.HdfFluvialPluvial`) for inputs the native engine cannot
+  reproduce. In auto mode every result is the reference result.
+- Behaviour change: `HdfMesh.get_mesh_cell_polygons` attaches
+  `attrs["cell_polygon_diagnostics"]` only with `diagnostics=True` (it was
+  always attached); `diagnose_mesh_cell_polygons` is unchanged. Fluvial results
+  carry `attrs["fluvial_engine"]` (which engine produced them); native kernel
+  timings and counts (`attrs["fluvial_native"]`) only with `diagnostics=True`.
+- New `HdfUtils` helpers: `get_units_system`, `linear_unit_to_meters`,
+  `area_to_square_meters`, `get_stored_ras_version` and
+  `parse_ras_file_version`.
+
+See [Optional Rust acceleration](../api/hdf.md#optional-rust-acceleration).
+
 **Legacy 2D `Log Hydraulics` diagnostic reader (new API)**
 
 `HdfResultsMesh.get_mesh_log_hydraulics(hdf_path, mesh_name)` reads the

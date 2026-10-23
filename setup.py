@@ -110,6 +110,7 @@ setup(
     },
     install_requires=CORE_DEPENDENCIES,
     extras_require={
+        'fast-hdf': ['ras-commander-fast-hdf>=0.1.0,<0.2'],
         # Lean Windows/Wine batch execution through RasCmdr.compute_plan().
         # This intentionally excludes the RasControl COM interface and the
         # geospatial/plotting stack. "execution" is a descriptive alias.

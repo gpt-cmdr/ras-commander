@@ -126,11 +126,13 @@ from ._fixed_width import _format_fixed_width_value
 from .RasPrj import ras
 from .LoggingConfig import get_logger
 from .Decorators import log_call
+from .fast_hdf import read_attr, read_attrs, read_typed
 import pandas as pd
 import numpy as np
 import re
 from typing import TYPE_CHECKING, Union, Optional, Any, Tuple, Dict, List, Sequence
 from ._ras_text import _normalize_ras_newlines, _split_ras_records, _write_ras_text
+from .fast_hdf import h5py_until_qualified
 
 if TYPE_CHECKING:
     from .ComputeResults import PrecipRasterImportResult
@@ -887,6 +889,66 @@ class RasUnsteady:
         return result
 
     @staticmethod
+    def _read_output_profile_ic_entries(
+        source_plan_hdf: Path,
+        time_index: int,
+        include_1d: bool,
+        include_storage: bool,
+    ) -> list:
+        """Read the IC entries of :meth:`set_ic_from_output_profile` (read-only)."""
+        import h5py
+
+        entries: list = []
+        base = "Results/Unsteady/Output/Output Blocks/Base Output/Unsteady Time Series"
+
+        with h5py.File(source_plan_hdf, "r") as hdf:
+            if base not in hdf:
+                raise ValueError(f"No unsteady time series results in {source_plan_hdf.name}")
+
+            if include_1d:
+                xs_path = f"{base}/Cross Sections"
+                if xs_path in hdf and f"{xs_path}/Flow" in hdf:
+                    attrs = read_typed(hdf[f"{xs_path}/Cross Section Attributes"], slice(None))
+                    flow = read_typed(hdf[f"{xs_path}/Flow"], (time_index, slice(None)))
+                    for i, attr in enumerate(attrs):
+                        river = attr["River"].decode("utf-8").strip()
+                        reach = attr["Reach"].decode("utf-8").strip()
+                        station = attr["Station"].decode("utf-8").strip()
+                        try:
+                            station_val = float(station)
+                        except ValueError:
+                            station_val = station
+                        entries.append({
+                            "type": "flow",
+                            "river": river,
+                            "reach": reach,
+                            "station": station_val,
+                            "value": float(flow[i]),
+                            "area_name": None,
+                        })
+                    logger.info(f"Read flow at {len(attrs)} cross sections from {source_plan_hdf.name}")
+
+            if include_storage:
+                sa_path = f"{base}/Storage Areas"
+                geom_sa = "Geometry/Storage Areas/Attributes"
+                if sa_path in hdf and f"{sa_path}/Water Surface" in hdf and geom_sa in hdf:
+                    sa_attrs = read_typed(hdf[geom_sa], slice(None))
+                    ws = read_typed(hdf[f"{sa_path}/Water Surface"], (time_index, slice(None)))
+                    for i, sa in enumerate(sa_attrs):
+                        name = sa["Name"].decode("utf-8").strip() if isinstance(sa["Name"], bytes) else str(sa["Name"]).strip()
+                        if i < len(ws):
+                            entries.append({
+                                "type": "storage",
+                                "area_name": name,
+                                "value": float(ws[i]),
+                                "river": None,
+                                "reach": None,
+                                "station": None,
+                            })
+                    logger.info(f"Read WSE for {len(sa_attrs)} storage areas from {source_plan_hdf.name}")
+        return entries
+
+    @staticmethod
     @log_call
     def set_ic_from_output_profile(
         unsteady_number_or_path: Union[str, Path],
@@ -926,60 +988,13 @@ class RasUnsteady:
             The IC entries that were written, with columns matching
             ``get_initial_conditions()`` output.
         """
-        import h5py
-
         source_plan_hdf = Path(source_plan_hdf)
         if not source_plan_hdf.exists():
             raise FileNotFoundError(f"Source plan HDF not found: {source_plan_hdf}")
 
-        entries: list = []
-        base = "Results/Unsteady/Output/Output Blocks/Base Output/Unsteady Time Series"
-
-        with h5py.File(source_plan_hdf, "r") as hdf:
-            if base not in hdf:
-                raise ValueError(f"No unsteady time series results in {source_plan_hdf.name}")
-
-            if include_1d:
-                xs_path = f"{base}/Cross Sections"
-                if xs_path in hdf and f"{xs_path}/Flow" in hdf:
-                    attrs = hdf[f"{xs_path}/Cross Section Attributes"][:]
-                    flow = hdf[f"{xs_path}/Flow"][time_index, :]
-                    for i, attr in enumerate(attrs):
-                        river = attr["River"].decode("utf-8").strip()
-                        reach = attr["Reach"].decode("utf-8").strip()
-                        station = attr["Station"].decode("utf-8").strip()
-                        try:
-                            station_val = float(station)
-                        except ValueError:
-                            station_val = station
-                        entries.append({
-                            "type": "flow",
-                            "river": river,
-                            "reach": reach,
-                            "station": station_val,
-                            "value": float(flow[i]),
-                            "area_name": None,
-                        })
-                    logger.info(f"Read flow at {len(attrs)} cross sections from {source_plan_hdf.name}")
-
-            if include_storage:
-                sa_path = f"{base}/Storage Areas"
-                geom_sa = "Geometry/Storage Areas/Attributes"
-                if sa_path in hdf and f"{sa_path}/Water Surface" in hdf and geom_sa in hdf:
-                    sa_attrs = hdf[geom_sa][:]
-                    ws = hdf[f"{sa_path}/Water Surface"][time_index, :]
-                    for i, sa in enumerate(sa_attrs):
-                        name = sa["Name"].decode("utf-8").strip() if isinstance(sa["Name"], bytes) else str(sa["Name"]).strip()
-                        if i < len(ws):
-                            entries.append({
-                                "type": "storage",
-                                "area_name": name,
-                                "value": float(ws[i]),
-                                "river": None,
-                                "reach": None,
-                                "station": None,
-                            })
-                    logger.info(f"Read WSE for {len(sa_attrs)} storage areas from {source_plan_hdf.name}")
+        entries = RasUnsteady._read_output_profile_ic_entries(
+            source_plan_hdf, time_index, include_1d, include_storage
+        )
 
         if not entries:
             logger.warning("No IC entries extracted from output profile")
@@ -3332,7 +3347,7 @@ class RasUnsteady:
                 if precip_path in hdf_file:
                     config["hdf_attributes"] = {
                         key: RasUnsteady._decode_hdf_attr_value(value)
-                        for key, value in hdf_file[precip_path].attrs.items()
+                        for key, value in read_attrs(hdf_file[precip_path]).items()
                     }
         except (OSError, KeyError, ValueError) as exc:
             logger.warning(
@@ -6264,6 +6279,7 @@ class RasUnsteady:
         precip_grp.attrs["Ratio"] = np.float32(ratio)
 
     @staticmethod
+    @h5py_until_qualified
     def _preflight_precipitation_ratio(
         unsteady_path: Path,
         capabilities: Optional["GriddedPrecipitationCapabilities"],
@@ -6337,7 +6353,7 @@ class RasUnsteady:
                 precip_path = "Event Conditions/Meteorology/Precipitation"
                 with h5py.File(hdf_path, "r") as hdf_file:
                     if precip_path in hdf_file:
-                        existing = hdf_file[precip_path].attrs.get("Ratio")
+                        existing = read_attr(hdf_file[precip_path], "Ratio", None)
                         if existing is not None:
                             try:
                                 existing_ratio = float(existing)

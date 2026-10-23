@@ -106,6 +106,12 @@ def run(func: str, cells: gpd.GeoDataFrame, max_ws: pd.DataFrame, hdf_path: Path
     # pass takes ~25 min instead of ~9 s.  It plays no role in classification, so drop it.
     cells = cells.copy()
     cells.attrs = {}
+    # The patched sources feed only the reference implementation; where the public
+    # methods take ``engine=`` (default "auto" may run native), pin the reference.
+    method = (HdfFluvialPluvial.generate_fluvial_pluvial_polygons if func == "polygons"
+              else HdfFluvialPluvial.calculate_fluvial_pluvial_boundary)
+    if "engine" in inspect.signature(method).parameters:
+        kwargs.setdefault("engine", "h5py")
     with mock.patch.object(HdfMesh, "get_mesh_cell_polygons", staticmethod(lambda *_a, **_k: cells.copy())), \
          mock.patch.object(HdfResultsMesh, "get_mesh_max_ws", staticmethod(lambda *_a, **_k: ws.copy())):
         if func == "polygons":
@@ -348,13 +354,13 @@ def test_synthetic_multi_mesh_colliding_ids_equal_per_mesh_runs_for_any_mesh_ord
 
 
 # --------------------------------------------------------------------------- #
-# Native backend (skips cleanly when the extension or the backend switch is absent)
+# Native engine (skips cleanly when the extension or the engine switch is absent)
 # --------------------------------------------------------------------------- #
 def _native_unavailable_reason() -> str | None:
     if importlib.util.find_spec("ras_commander_fast_hdf") is None:
         return "ras_commander_fast_hdf is not installed"
-    if "backend" not in inspect.signature(HdfMesh.get_mesh_cell_polygons).parameters:
-        return "HdfMesh.get_mesh_cell_polygons has no backend= switch on this checkout"
+    if "engine" not in inspect.signature(HdfMesh.get_mesh_cell_polygons).parameters:
+        return "HdfMesh.get_mesh_cell_polygons has no engine= switch on this checkout"
     return None
 
 
@@ -366,8 +372,8 @@ def test_native_backend_gives_same_fluvial_pluvial_as_python_backend(name, delta
     if reason:
         pytest.skip(reason)
     path, _, max_ws = _model(name)
-    py_cells = HdfMesh.get_mesh_cell_polygons(path, backend="python")
-    native_cells = HdfMesh.get_mesh_cell_polygons(path, backend="native")
+    py_cells = HdfMesh.get_mesh_cell_polygons(path, engine="h5py")
+    native_cells = HdfMesh.get_mesh_cell_polygons(path, engine="native")
     a = run(func, py_cells, max_ws, path, delta_t)
     b = run(func, native_cells, max_ws, path, delta_t)
     if func == "polygons":

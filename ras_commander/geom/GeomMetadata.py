@@ -40,6 +40,7 @@ from typing import Any, Dict, Optional, Union
 import h5py
 
 from ..LoggingConfig import get_logger
+from ..fast_hdf import read_typed, reraise_required
 from ..Decorators import log_call
 
 logger = get_logger(__name__)
@@ -122,7 +123,9 @@ class GeomMetadata:
                   encountered before success, or the terminal failure
 
         Note:
-            Always returns a complete dict and never raises. The two
+            Always returns a complete dict and never raises, except that
+            required-native mode (``RAS_COMMANDER_FAST_HDF=native``) propagates
+            a native :class:`~ras_commander.fast_hdf.FastHdfError`. The two
             ``has_*`` values remain ``None`` when no source can be inspected,
             so dispatch cannot mistake unreadable geometry for valid 1D.
 
@@ -160,6 +163,7 @@ class GeomMetadata:
                 if not hdf_has_structure_types and geom_path and geom_path.exists():
                     result = GeomMetadata._add_text_only_counts(geom_path, result)
             except Exception as exc:
+                reraise_required(exc)
                 errors.append(f"HDF inspection failed: {exc}")
                 logger.warning(f"HDF extraction failed for {hdf_path}: {exc}")
                 result = GeomMetadata._new_counts()
@@ -302,7 +306,7 @@ class GeomMetadata:
         if path not in hdf:
             return result
 
-        attrs = hdf[path][()]
+        attrs = read_typed(hdf[path])
         dtype_names = attrs.dtype.names or ()
 
         # Older HDFs do not always expose Type. That is a supported schema
@@ -357,7 +361,7 @@ class GeomMetadata:
         attrs_path = f"{base_path}/Attributes"
         attributes_present = attrs_path in hdf
         if attributes_present:
-            attrs = hdf[attrs_path][()]
+            attrs = read_typed(hdf[attrs_path])
             dtype_names = attrs.dtype.names or ()
             if 'Name' not in dtype_names:
                 raise ValueError(f"2D area Attributes dataset has no Name field: {attrs_path}")
@@ -378,7 +382,7 @@ class GeomMetadata:
         cell_info_path = f"{base_path}/Cell Info"
         cell_rows = 0
         if cell_info_path in hdf:
-            cell_info = hdf[cell_info_path][()]
+            cell_info = read_typed(hdf[cell_info_path])
             cell_rows = int(cell_info.shape[0]) if cell_info.ndim else 0
             if cell_info.size == 0:
                 result['mesh_cell_count'] = 0

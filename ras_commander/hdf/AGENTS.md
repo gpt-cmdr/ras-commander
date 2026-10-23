@@ -24,6 +24,37 @@ This file is the canonical local instruction file for `ras_commander/hdf/`.
   input/decorator validation exceptions remain unchanged. No status attributes are added.
 
 
+## Optional Native Backend
+
+- The `Hdf*` readers may be served by the optional `ras_commander_fast_hdf` extension
+  through the internal adapter `ras_commander.fast_hdf`. Native routing must be invisible
+  except for speed: signatures, return types, columns, dtypes, index, CRS, attrs,
+  timestamps and exceptions equal the h5py reference in `python` and `auto` mode. Only
+  `required` mode (`RAS_COMMANDER_FAST_HDF=required` or `backend="rust"`) may raise
+  `fast_hdf.FastHdfError`; broad `except Exception` handlers in readers call
+  `reraise_required(e)` first.
+- `RAS_COMMANDER_FAST_HDF`: `0`/`off`/`false`/`python`, `auto` (default; unset/empty/`1`/`on`/`true`),
+  `required`/`rust`. An unrecognised value is `auto` plus one logged warning.
+- `RAS_COMMANDER_HDF_SESSION_CACHE`: default (unset/`1`) shares one native session per file
+  inside a public call (`log_call`/`standardize_input` open the scope) and closes it when the
+  outermost public call returns, so no HDF stays open afterwards (an open file blocks
+  rename/delete/replace on Windows and network shares). `0` opens per native read; `persist`
+  keeps up to four sessions across public calls and then requires `fast_hdf.close_sessions()`
+  before moving or deleting files and before running HEC-RAS.
+- `RAS_COMMANDER_FAST_TEXT` is the same policy switch for `ras_commander.fast_text`
+  (not used by any existing `Geom*`/`Ras*` method).
+- Public `fast_hdf` names are those in its `__all__`. `read_typed`, `read_attr(s)`, `read_dataset(s)`,
+  `mesh_series_domain`, `trace_reads`, `native_required`, `reraise_required`, `backend_scope`,
+  `release_native_sessions`, `fast_results`, `hdf/HdfFluvialNative` and `_fast_hdf_typed` are
+  internal plumbing; do not document them as user API or add new public callers outside
+  `ras_commander/`. Read one attribute with `read_attr(obj, name, default)`, never
+  `read_attrs(obj).get(name)` (an unreadable sibling must not fail the read).
+- Timestamps: `HdfUtils.convert_timesteps_to_datetimes` returns exactly what pandas has always
+  returned (`datetime64[ns]` under pandas 2.x) for every date pandas can represent; only dates
+  beyond year 2262 use `datetime64[us]` (main #548).
+- Keep this contract when adding a routed method: add a test that injects a native failure
+  (see `tests/test_native_api_conservatism.py`) and a test that the result equals the python-mode result.
+
 ## Implementation Rules
 
 - Follow the existing static-class pattern.
@@ -137,6 +168,23 @@ This file is the canonical local instruction file for `ras_commander/hdf/`.
   stored coordinates (MultiLineString if not contiguous). Dissolve uses sorted
   `(mesh_name, cell_id)` rows and normalized rings, so the `cell_id` column is
   the smallest cell in each class.
+  The opt-in `engine="native"`/`"auto"` paths reproduce this mesh-scoped reference
+  (several meshes are analysed in isolation; frames keep the
+  `mesh_name, classification, geometry, cell_id` dissolve layout) and record
+  `attrs["fluvial_engine"]`; the default `engine="python"` is the reference.
+  Native uses the same stored-face adjacency and set-based seeding (no
+  last-write replay), emits boundary lines in sorted pair order through the
+  shared `_merge_shared_pieces`, and returns topologically equal polygons with
+  the same rows and attributes. It raises `FluvialNativeUnsupportedError`
+  (`"auto"` then runs Python) when it cannot match: missing
+  `Faces Cell Indexes` (Python's ring-segment fallback), physical cells that
+  differ from the polygonizable cells, invalid source cell geometry,
+  unprojected CRS, delta_t=0 (equal-time pairs) or non-millisecond thresholds.
+  With `min_polygon_area_acres`, native classifies and then runs the
+  reference's own `_dissolve_classified_cells` (over the h5py cell polygons)
+  and `_swap_small_polygons`: the swap's 'first' `area_acres`/`cell_id` follow
+  the GEOS part order of that canonical dissolve, which native ring assembly
+  does not share, so the result is then byte-identical to the reference.
 - Mesh time-series domains use authoritative stored scalar `Location`: `Cells`
   and `Cell` mean cells; `Faces` means faces. Invalid, unknown, nonscalar or
   contradictory present Location is refused, never bypassed with a name rule.

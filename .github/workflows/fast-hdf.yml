@@ -1,0 +1,99 @@
+name: Rust HDF backend
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'rust/fast-hdf/**'
+      - 'ras_commander/fast_hdf.py'
+      - 'ras_commander/hdf/HdfMesh.py'
+      - 'ras_commander/hdf/HdfResultsMesh.py'
+      - 'ras_commander/hdf/HdfResultView.py'
+      - 'tests/test_hdf_result_view.py'
+      - 'tests/test_fast_hdf*.py'
+      - '.github/workflows/fast-hdf.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  wheels:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+          - os: macos-14
+            target: aarch64-apple-darwin
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: dtolnay/rust-toolchain@stable
+      # The bridge links the private engine (CLB-Engineering-Corporation/ras-commander-rust).
+      # Without a read token (repository secret RAS_ENGINE_TOKEN) the native build cannot
+      # fetch it; the job then reports that and skips the native steps instead of failing.
+      - name: Private engine access
+        id: engine
+        shell: bash
+        env:
+          RAS_ENGINE_TOKEN: ${{ secrets.RAS_ENGINE_TOKEN }}
+        run: |
+          if [ -z "$RAS_ENGINE_TOKEN" ]; then
+            echo "::notice title=Native build skipped::RAS_ENGINE_TOKEN is not configured, so the private engine cannot be fetched. Native wheels are built and gated on CLB machines."
+            echo "available=false" >> "$GITHUB_OUTPUT"
+          else
+            git config --global url."https://x-access-token:${RAS_ENGINE_TOKEN}@github.com/CLB-Engineering-Corporation/".insteadOf "https://github.com/CLB-Engineering-Corporation/"
+            echo "CARGO_NET_GIT_FETCH_WITH_CLI=true" >> "$GITHUB_ENV"
+            echo "available=true" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Native unit tests
+        if: steps.engine.outputs.available == 'true'
+        run: cargo test --locked --manifest-path rust/fast-hdf/Cargo.toml
+      - name: Third-party notices are current
+        if: steps.engine.outputs.available == 'true' && matrix.os == 'ubuntu-latest'
+        working-directory: rust/fast-hdf
+        run: python scripts/generate_third_party_notices.py --features extension-module --own-licence ../../LICENSE --title "ras-commander-fast-hdf wheel (default features)" --check
+      - name: Build wheel
+        if: steps.engine.outputs.available == 'true'
+        uses: PyO3/maturin-action@v1
+        env:
+          RAS_ENGINE_TOKEN: ${{ secrets.RAS_ENGINE_TOKEN }}
+        with:
+          target: ${{ matrix.target }}
+          args: --release --locked --manifest-path rust/fast-hdf/Cargo.toml --out dist
+          manylinux: auto
+          # The manylinux build runs in a container: pass the token and repeat the rewrite there.
+          docker-options: -e RAS_ENGINE_TOKEN -e CARGO_NET_GIT_FETCH_WITH_CLI=true
+          before-script-linux: git config --global url."https://x-access-token:${RAS_ENGINE_TOKEN}@github.com/CLB-Engineering-Corporation/".insteadOf "https://github.com/CLB-Engineering-Corporation/"
+      - name: Upload wheel for review (no publishing)
+        if: steps.engine.outputs.available == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: fast-hdf-${{ matrix.target }}
+          path: dist/*.whl
+          if-no-files-found: error
+      - name: Install Python package and built native wheel
+        if: steps.engine.outputs.available == 'true'
+        env:
+          CI: '1'
+        shell: bash
+        run: |
+          python -m pip install . pytest xarray geopandas shapely pyproj
+          python -m pip install dist/*.whl
+          python -c "import ras_commander_fast_hdf as native; assert native.API_VERSION == 11"
+          python - <<'PY'
+          import glob, zipfile
+          wheel = zipfile.ZipFile(glob.glob("dist/*.whl")[0])
+          names = {n.rsplit("/", 1)[-1] for n in wheel.namelist() if ".dist-info/licenses/" in n}
+          missing = {"THIRD-PARTY-NOTICES.md", "ras-commander-LICENSE.txt", "ras-commander-rust-LICENSE.txt"} - names
+          assert not missing, f"wheel licence files missing: {missing}"
+          PY
+      - name: Binding and fallback regression tests
+        if: steps.engine.outputs.available == 'true'
+        run: python -m pytest tests/test_fast_hdf.py tests/test_hdf_result_view.py tests/test_hdf_results_mesh.py tests/test_hdf_mesh_cell_polygon_diagnostics.py tests/rust_engine_bridge/panic_guard_test.py -q

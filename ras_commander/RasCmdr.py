@@ -67,6 +67,7 @@ from .ComputeResults import (
     RasProcessRecord,
 )
 from .Decorators import log_call
+from .fast_hdf import release_native_sessions
 from .ExecutionEvidence import (
     ExecutionEvidence,
     inspect_execution_evidence as _inspect_execution_evidence,
@@ -767,6 +768,7 @@ class RasCmdr:
         )
         try:
             shutil.copy2(source_path, temp_path)
+            release_native_sessions(temp_path, dest_path)
             os.replace(temp_path, dest_path)
         finally:
             if temp_path.exists():
@@ -1014,6 +1016,7 @@ class RasCmdr:
                     failed_path = (
                         failed_new_folder / f"{index:02d}-{target.name}"
                     )
+                    release_native_sessions(target, failed_path)
                     os.replace(target, failed_path)
                     if target.exists() or not failed_path.is_file():
                         raise RuntimeError(
@@ -1071,6 +1074,7 @@ class RasCmdr:
                                 "Restored artifact disappeared before "
                                 f"re-quarantine: {target}"
                             )
+                        release_native_sessions(target, backup_path)
                         os.replace(target, backup_path)
                         if target.exists() or not backup_path.is_file():
                             raise RuntimeError(
@@ -1100,6 +1104,7 @@ class RasCmdr:
                                     "Original backup unavailable for "
                                     f"{target}"
                                 )
+                            release_native_sessions(backup_path, target)
                             os.replace(backup_path, target)
                             restored_targets.append(target)
                             if (
@@ -1233,6 +1238,7 @@ class RasCmdr:
                     continue
                 backup_path = backup_folder / f"{index:02d}-{target.name}"
                 backup_paths[target] = backup_path
+                release_native_sessions(target, backup_path)
                 os.replace(target, backup_path)
                 mutated_paths.add(target)
                 if target.exists() or not backup_path.is_file():
@@ -1254,6 +1260,7 @@ class RasCmdr:
                 current_source_path = entry["source"]
                 current_destination_path = target
                 mutated_paths.add(target)
+                release_native_sessions(stage_path, target)
                 os.replace(stage_path, target)
                 committed_paths.append(target)
                 if not target.is_file():
@@ -3227,6 +3234,8 @@ class RasCmdr:
         """
         if type(disable_omp_affinity) is not bool:
             raise TypeError("disable_omp_affinity must be a bool")
+        from .fast_hdf import close_sessions
+        close_sessions()
         _require_process_supervision("RasCmdr.compute_plan()")
         max_runtime_seconds = RasCmdr._normalize_max_runtime(max_runtime)
         _success = False
@@ -6304,6 +6313,7 @@ class RasCmdr:
                 # Move results from .tmp.hdf → .hdf
                 if tmp_hdf.exists():
                     plan_hdf = RasCmdr._get_hdf_path(plan_num_str, ras_obj)
+                    release_native_sessions(tmp_hdf, plan_hdf)
                     shutil.move(str(tmp_hdf), str(plan_hdf))
                     logger.debug(f"Renamed {tmp_hdf.name} → {plan_hdf.name}")
 
@@ -6451,9 +6461,12 @@ class RasCmdr:
         try:
             import h5py
 
+            from .fast_hdf import read_attr, reraise_required
+
             with h5py.File(str(tmp_hdf), "r", locking=False) as hdf:
-                return RasCmdr._ras_release_tuple(hdf.attrs.get("File Version"))
-        except Exception:
+                return RasCmdr._ras_release_tuple(read_attr(hdf, "File Version", None))
+        except Exception as exc:
+            reraise_required(exc)
             return None
 
     @staticmethod
@@ -7887,6 +7900,7 @@ exit "$solver_rc"
                         encoding="utf-8",
                     )
                     plan_hdf = RasCmdr._get_hdf_path(plan_number, ras_obj)
+                    release_native_sessions(tmp_hdf, plan_hdf)
                     shutil.move(str(tmp_hdf), str(plan_hdf))
                     logger.debug(
                         f"Renamed {tmp_hdf.name} -> {plan_hdf.name}"

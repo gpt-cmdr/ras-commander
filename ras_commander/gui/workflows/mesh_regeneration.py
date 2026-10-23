@@ -43,6 +43,7 @@ except ImportError:
     WIN32_AVAILABLE = False
 
 from ...LoggingConfig import get_logger
+from ...fast_hdf import read_typed, release_native_sessions, reraise_required
 from ...Decorators import log_call
 from ..win32_primitives import Win32Primitives
 from ..hecras_elements import HecRasElements
@@ -199,7 +200,7 @@ def _check_mesh_valid(geom_hdf_path: Path, mesh_name: Optional[str] = None) -> d
             if mesh_name is None:
                 if "Attributes" in f[base]:
                     names = [n.decode() if isinstance(n, bytes) else str(n)
-                             for n in f[base]["Attributes"][()]["Name"]]
+                             for n in read_typed(f[base]["Attributes"])["Name"]]
                     if names:
                         mesh_name = names[0]
 
@@ -232,7 +233,7 @@ def _check_mesh_valid(geom_hdf_path: Path, mesh_name: Optional[str] = None) -> d
             n_cells = n_cell_rows
             attributes = f[base].get("Attributes")
             if attributes is not None:
-                data = attributes[()]
+                data = read_typed(attributes)
                 fields = data.dtype.names or ()
                 if "Name" in fields and "Cell Count" in fields:
                     for row in data:
@@ -262,7 +263,7 @@ def _check_mesh_valid(geom_hdf_path: Path, mesh_name: Optional[str] = None) -> d
 
             # Check face-cell connectivity (face perimeter connection test)
             if f"{mesh_base}/Faces Cell Indexes" in f:
-                face_cells = f[f"{mesh_base}/Faces Cell Indexes"][()]
+                face_cells = read_typed(f[f"{mesh_base}/Faces Cell Indexes"])
                 # Every face should connect to at least one valid cell (index >= 0)
                 max_valid = face_cells.max(axis=1)
                 if (max_valid < 0).any():
@@ -274,6 +275,7 @@ def _check_mesh_valid(geom_hdf_path: Path, mesh_name: Optional[str] = None) -> d
             return result
 
     except Exception as e:
+        reraise_required(e)
         result["error"] = f"HDF read error: {e}"
         return result
 
@@ -454,7 +456,7 @@ def _read_hdf_flow_area_polygon(geom_hdf: Path, flow_area_name: str):
                 + ", ".join(missing)
             )
 
-        attributes = group["Attributes"][()]
+        attributes = read_typed(group["Attributes"])
         if attributes.dtype.names is None or "Name" not in attributes.dtype.names:
             raise ValueError("Geometry HDF 2D flow-area Attributes has no Name field")
 
@@ -472,9 +474,9 @@ def _read_hdf_flow_area_polygon(geom_hdf: Path, flow_area_name: str):
             )
         row_index = matches[0]
 
-        polygon_info = np.asarray(group["Polygon Info"][()])
-        polygon_parts = np.asarray(group["Polygon Parts"][()])
-        polygon_points = np.asarray(group["Polygon Points"][()], dtype=float)
+        polygon_info = np.asarray(read_typed(group["Polygon Info"]))
+        polygon_parts = np.asarray(read_typed(group["Polygon Parts"]))
+        polygon_points = np.asarray(read_typed(group["Polygon Points"]), dtype=float)
         if polygon_info.ndim != 2 or polygon_info.shape[1] < 4:
             raise ValueError("Geometry HDF Polygon Info must be an Nx4 dataset")
         if row_index >= polygon_info.shape[0]:
@@ -774,6 +776,7 @@ def _begin_geometry_hdf_transaction(context: dict) -> None:
     had_original = target.is_file()
     try:
         if had_original:
+            release_native_sessions(target, temporary_backup)
             os.replace(target, temporary_backup)
     except Exception:
         for item in non_target_backups:
@@ -809,6 +812,7 @@ def _restore_non_target_geometry_hdfs(context: dict) -> dict:
             observed = None
         if observed != tuple(item["pre_stat"]):
             evidence["changed_during_gui"].append(str(target))
+        release_native_sessions(backup, target)
         os.replace(backup, target)
         evidence["restored_paths"].append(str(target))
     context["non_target_hdf_restoration"] = evidence
@@ -837,12 +841,14 @@ def _finish_geometry_hdf_transaction(
         if target.exists():
             target.unlink()
         if had_original and temporary_backup.exists():
+            release_native_sessions(temporary_backup, target)
             os.replace(temporary_backup, target)
         evidence["rolled_back"] = True
         return evidence
 
     if not target.is_file():
         if had_original and temporary_backup.exists():
+            release_native_sessions(temporary_backup, target)
             os.replace(temporary_backup, target)
         evidence["rolled_back"] = True
         raise RuntimeError(f"HEC-RAS did not rebuild geometry HDF: {target}")
@@ -856,6 +862,7 @@ def _finish_geometry_hdf_transaction(
                     f"{target.name}.pre-rasmapper.bak{counter}"
                 )
                 counter += 1
+            release_native_sessions(temporary_backup, committed_backup)
             os.replace(temporary_backup, committed_backup)
             evidence["backup"] = str(committed_backup)
         else:

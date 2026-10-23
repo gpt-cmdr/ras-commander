@@ -76,6 +76,7 @@ import numpy as np
 
 from ..LoggingConfig import get_logger
 from ..Decorators import log_call, standardize_input
+from ..fast_hdf import read_attr, read_typed, reraise_required
 
 logger = get_logger(__name__)
 
@@ -147,7 +148,7 @@ class HdfHydraulicTables:
                 logger.error(f"Attributes path not found: {attrs_path}")
                 return None
 
-            attrs = hdf_file[attrs_path][:]
+            attrs = read_typed(hdf_file[attrs_path], slice(None))
 
             # Check if required fields exist
             required_fields = ['River', 'Reach', 'RS']
@@ -170,6 +171,7 @@ class HdfHydraulicTables:
             return None
 
         except Exception as e:
+            reraise_required(e)
             logger.debug(f"Error finding XS index: {str(e)}")
             return None
 
@@ -202,7 +204,7 @@ class HdfHydraulicTables:
                 logger.debug("XSEC Info not found in Property Tables")
                 return None
 
-            xsec_info = prop_tables['XSEC Info'][:]
+            xsec_info = read_typed(prop_tables['XSEC Info'], slice(None))
 
             if xs_index >= len(xsec_info):
                 logger.debug(f"XS index {xs_index} out of range (max: {len(xsec_info)-1})")
@@ -222,11 +224,11 @@ class HdfHydraulicTables:
             xsec_value = prop_tables['XSEC Value']
 
             # Extract data for this XS
-            data = xsec_value[start_idx:start_idx + count, :]
+            data = read_typed(xsec_value, (slice(start_idx, start_idx + count), slice(None)))
 
             # Get column names from Variables attribute
             if 'Variables' in xsec_value.attrs:
-                variables = xsec_value.attrs['Variables']
+                variables = read_attr(xsec_value, 'Variables')
                 # Variables is Nx2 array: [name, units]
                 col_names = [var[0].decode('utf-8').strip() for var in variables]
 
@@ -264,6 +266,7 @@ class HdfHydraulicTables:
             return df
 
         except Exception as e:
+            reraise_required(e)
             logger.debug(f"Error extracting property table: {str(e)}", exc_info=True)
             return None
 
@@ -397,6 +400,7 @@ class HdfHydraulicTables:
         except ValueError:
             raise
         except Exception as e:
+            reraise_required(e)
             logger.error(f"Error reading HTAB property table from {hdf_path.name}: {str(e)}")
             raise IOError(f"Failed to read property table: {str(e)}")
 
@@ -465,7 +469,7 @@ class HdfHydraulicTables:
                     logger.error(f"Attributes path not found: {attrs_path}")
                     return all_htabs
 
-                attrs = hdf[attrs_path][:]
+                attrs = read_typed(hdf[attrs_path], slice(None))
 
                 missing_items = HdfHydraulicTables._missing_property_table_items(hdf)
                 if missing_items:
@@ -509,5 +513,6 @@ class HdfHydraulicTables:
         except FileNotFoundError:
             raise
         except Exception as e:
+            reraise_required(e)
             logger.error(f"Error reading property tables from HDF: {str(e)}")
             raise IOError(f"Failed to read property tables: {str(e)}")

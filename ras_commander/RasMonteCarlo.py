@@ -1594,6 +1594,9 @@ class RasMonteCarlo:
                 sample_weights.append(float(sample_weight))
 
             except Exception as exc:
+                from .fast_hdf import reraise_required
+
+                reraise_required(exc)
                 logger.debug(
                     "Dropping sample %s during %s extraction from %s: %s",
                     sample_id,

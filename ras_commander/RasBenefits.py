@@ -37,6 +37,7 @@ from shapely.ops import unary_union
 
 from .Decorators import log_call
 from .LoggingConfig import get_logger
+from .fast_hdf import read_attr
 from ._execution_types import BenefitAreaConfig
 
 logger = get_logger(__name__)
@@ -365,7 +366,7 @@ class RasBenefits:
                 terrain_group = hdf.get("Terrain")
                 if terrain_group is not None:
                     def collect_file_attribute(_name, obj) -> None:
-                        value = obj.attrs.get("File")
+                        value = read_attr(obj, "File", None)
                         if value is None:
                             return
                         if isinstance(value, (bytes, np.bytes_)):

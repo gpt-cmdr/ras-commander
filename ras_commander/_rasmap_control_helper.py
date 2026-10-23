@@ -20,6 +20,7 @@ from . import _land_classification_helper as _lch
 from . import _rasmap_layer_helper as _mlh
 from ._ras_text import _write_ras_xml
 from .LoggingConfig import get_logger
+from .fast_hdf import read_typed
 from .RasUtils import RasUtils
 
 logger = get_logger(__name__)
@@ -2410,6 +2411,13 @@ def _all_coordinate_dataset_paths(hdf_file: h5py.File) -> list[str]:
     return paths
 
 
+def _dataset_array(obj: Any) -> np.ndarray:
+    """``np.asarray(obj)``; dataset values come through the fast_hdf router."""
+    if isinstance(obj, h5py.Dataset):
+        return np.asarray(read_typed(obj))
+    return np.asarray(obj)
+
+
 def _bounds_from_datasets(
     hdf_file: h5py.File,
     dataset_paths: Sequence[str],
@@ -2420,7 +2428,7 @@ def _bounds_from_datasets(
     for path in dataset_paths:
         if path not in hdf_file:
             continue
-        data = np.asarray(hdf_file[path])
+        data = _dataset_array(hdf_file[path])
         if data.ndim != 2 or data.shape[1] < 2 or data.size == 0:
             continue
         if not np.issubdtype(data.dtype, np.number):
@@ -2517,9 +2525,9 @@ def _structure_feature_records(
     if not all(path in hdf_file for path in (attr_path, info_path, points_path)):
         return []
 
-    attrs = hdf_file[attr_path][:]
-    info = np.asarray(hdf_file[info_path])
-    points = np.asarray(hdf_file[points_path])
+    attrs = read_typed(hdf_file[attr_path], slice(None))
+    info = np.asarray(read_typed(hdf_file[info_path]))
+    points = np.asarray(read_typed(hdf_file[points_path]))
     records: list[dict[str, Any]] = []
     for index, info_row in enumerate(info):
         row = attrs[index] if index < len(attrs) else None
@@ -2567,9 +2575,9 @@ def _polyline_feature_records(
     if not all(path in hdf_file for path in (info_path, points_path)):
         return []
 
-    attrs = hdf_file[attr_path][:] if attr_path in hdf_file else None
-    info = np.asarray(hdf_file[info_path])
-    points = np.asarray(hdf_file[points_path])
+    attrs = read_typed(hdf_file[attr_path], slice(None)) if attr_path in hdf_file else None
+    info = np.asarray(read_typed(hdf_file[info_path]))
+    points = np.asarray(read_typed(hdf_file[points_path]))
     records: list[dict[str, Any]] = []
     for index, info_row in enumerate(info):
         row = attrs[index] if attrs is not None and index < len(attrs) else None
@@ -2735,9 +2743,9 @@ def _lateral_structure_centerline_points(hdf_file: h5py.File) -> np.ndarray:
     if not all(path in hdf_file for path in required):
         return np.empty((0, 2), dtype=float)
 
-    attrs = hdf_file["Geometry/Structures/Attributes"][:]
-    info = np.asarray(hdf_file["Geometry/Structures/Centerline Info"])
-    points = np.asarray(hdf_file["Geometry/Structures/Centerline Points"])
+    attrs = read_typed(hdf_file["Geometry/Structures/Attributes"], slice(None))
+    info = np.asarray(read_typed(hdf_file["Geometry/Structures/Centerline Info"]))
+    points = np.asarray(read_typed(hdf_file["Geometry/Structures/Centerline Points"]))
     if "Type" not in attrs.dtype.names:
         return points[:, :2]
 

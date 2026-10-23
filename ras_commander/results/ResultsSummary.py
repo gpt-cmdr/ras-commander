@@ -245,6 +245,9 @@ class ResultsSummary:
                 parsed = ResultsParser.parse_compute_messages(messages)
                 result.update(parsed)
         except Exception as e:
+            from ..fast_hdf import reraise_required
+
+            reraise_required(e)
             logger.debug(f"Error extracting compute messages: {e}")
 
         # Extract runtime data - try HDF structured paths first, then compute messages fallback
@@ -265,6 +268,9 @@ class ResultsSummary:
                 result['runtime_source'] = 'hdf'
                 runtime_extracted = True
         except Exception as e:
+            from ..fast_hdf import reraise_required
+
+            reraise_required(e)
             logger.debug(f"Error extracting runtime data from HDF: {e}")
 
         # Fallback: Parse compute messages for runtime data (pre-6.4 HEC-RAS versions)
@@ -312,6 +318,9 @@ class ResultsSummary:
                             result[result_col] = vol_row.get(hdf_col)
                     vol_extracted = True
             except Exception as e:
+                from ..fast_hdf import reraise_required
+
+                reraise_required(e)
                 logger.debug(f"Error extracting volume accounting from HDF: {e}")
 
             # Fallback: Use volume error percent from compute messages (pre-6.4 HEC-RAS)

@@ -13,6 +13,7 @@ import h5py
 
 from ..Decorators import standardize_input, log_call
 from ..LoggingConfig import get_logger
+from ..fast_hdf import read_typed, reraise_required
 from .types import Severity, FlowType, CheckMessage, CheckResults
 from .thresholds import ValidationThresholds, get_default_thresholds
 from .messages import get_message_template, get_help_text, format_message
@@ -67,6 +68,7 @@ class CheckNt:
             geom_hdf = Path(geom_hdf)
             xs_gdf = HdfXsec.get_cross_sections(geom_hdf)
         except Exception as e:
+            reraise_required(e)
             logger.error("Failed to read geometry HDF for Manning's n checks")
             logger.debug("Geometry HDF read failure for %s: %s", geom_hdf, e)
             msg = CheckMessage(
@@ -1032,7 +1034,7 @@ class CheckNt:
                 if 'Geometry/Structures/Attributes' not in hdf:
                     return messages
 
-                struct_attrs = hdf['Geometry/Structures/Attributes'][:]
+                struct_attrs = read_typed(hdf['Geometry/Structures/Attributes'], slice(None))
                 attr_names = struct_attrs.dtype.names
 
                 if 'US Type' not in attr_names or 'DS Type' not in attr_names:
@@ -1106,6 +1108,7 @@ class CheckNt:
                                 messages.append(msg)
 
         except Exception as e:
+            reraise_required(e)
             logger.warning("Could not check structure transition coefficients")
             logger.debug("Structure transition coefficient check failure: %s", e)
 
@@ -1141,7 +1144,7 @@ class CheckNt:
                 if 'Geometry/Structures/Attributes' not in hdf:
                     return messages
 
-                attrs = hdf['Geometry/Structures/Attributes'][:]
+                attrs = read_typed(hdf['Geometry/Structures/Attributes'], slice(None))
 
                 # Find all bridges
                 bridge_indices = []
@@ -1155,6 +1158,7 @@ class CheckNt:
                         bridge_indices.append(i)
 
         except Exception as e:
+            reraise_required(e)
             logger.warning("Could not read structures for bridge Manning's n check")
             logger.debug("Bridge Manning's n structure read failure for %s: %s", geom_hdf, e)
             return messages
@@ -1286,6 +1290,7 @@ class CheckNt:
                         messages.append(msg)
 
             except Exception as e:
+                reraise_required(e)
                 skipped_bridges.append(f"{bridge_idx}: {e}")
                 logger.debug("Could not check bridge %s: %s", bridge_idx, e)
                 continue
@@ -1333,8 +1338,8 @@ class CheckNt:
         """
         with h5py.File(geom_hdf, 'r') as hdf:
             # Get structure attributes
-            attrs = hdf['Geometry/Structures/Attributes'][bridge_idx]
-            table_info = hdf['Geometry/Structures/Table Info'][bridge_idx]
+            attrs = read_typed(hdf['Geometry/Structures/Attributes'], bridge_idx)
+            table_info = read_typed(hdf['Geometry/Structures/Table Info'], bridge_idx)
 
             river = attrs['River'].decode('utf-8').strip() if isinstance(attrs['River'], bytes) else str(attrs['River'])
             reach = attrs['Reach'].decode('utf-8').strip() if isinstance(attrs['Reach'], bytes) else str(attrs['Reach'])
@@ -1343,9 +1348,9 @@ class CheckNt:
             ds_rs = attrs['DS RS'].decode('utf-8').strip() if isinstance(attrs['DS RS'], bytes) else str(attrs['DS RS'])
 
             # Get cross section Manning's n data
-            xs_attrs = hdf['Geometry/Cross Sections/Attributes'][:]
-            xs_mann_info = hdf['Geometry/Cross Sections/Manning\'s n Info'][:]
-            xs_mann_values = hdf['Geometry/Cross Sections/Manning\'s n Values'][:]
+            xs_attrs = read_typed(hdf['Geometry/Cross Sections/Attributes'], slice(None))
+            xs_mann_info = read_typed(hdf['Geometry/Cross Sections/Manning\'s n Info'], slice(None))
+            xs_mann_values = read_typed(hdf['Geometry/Cross Sections/Manning\'s n Values'], slice(None))
 
             # Find Section 1 (US RS) in cross sections
             section_1_n = []
@@ -1383,7 +1388,7 @@ class CheckNt:
 
             if section_2_custom and 'Geometry/Structures/Mannings Data' in hdf:
                 us_br_idx = int(table_info['US BR Mann (Index)'])
-                struct_mann = hdf['Geometry/Structures/Mannings Data'][:]
+                struct_mann = read_typed(hdf['Geometry/Structures/Mannings Data'], slice(None))
                 section_2_n = [(float(struct_mann[us_br_idx + j][0]),
                                float(struct_mann[us_br_idx + j][1]))
                               for j in range(us_br_cnt)]
@@ -1397,7 +1402,7 @@ class CheckNt:
 
             if section_3_custom and 'Geometry/Structures/Mannings Data' in hdf:
                 ds_br_idx = int(table_info['DS BR Mann (Index)'])
-                struct_mann = hdf['Geometry/Structures/Mannings Data'][:]
+                struct_mann = read_typed(hdf['Geometry/Structures/Mannings Data'], slice(None))
                 section_3_n = [(float(struct_mann[ds_br_idx + j][0]),
                                float(struct_mann[ds_br_idx + j][1]))
                               for j in range(ds_br_cnt)]

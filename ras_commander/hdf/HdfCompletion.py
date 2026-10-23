@@ -7,6 +7,7 @@ import h5py
 import numpy as np
 
 from ..Decorators import log_call, standardize_input
+from ..fast_hdf import read_attr, read_typed
 from ..LoggingConfig import get_logger
 from .HdfUtils import HdfUtils
 
@@ -83,9 +84,9 @@ class HdfCompletion:
         if not isinstance(info, h5py.Group):
             return unsupported("missing_plan_information")
         try:
-            start = info.attrs.get("Simulation Start Time")
-            end = info.attrs.get("Simulation End Time")
-            window = info.attrs.get("Time Window")
+            start = read_attr(info, "Simulation Start Time", None)
+            end = read_attr(info, "Simulation End Time", None)
+            window = read_attr(info, "Time Window", None)
             declared = None
             if start is not None or end is not None:
                 if start is None or end is None:
@@ -122,7 +123,7 @@ class HdfCompletion:
             if not isinstance(dataset, h5py.Dataset) or dataset.ndim != 1 or dataset.size == 0:
                 return unsupported("invalid_timestamp_axis")
             try:
-                stamps = [parse(text(value)) for value in dataset[:]]
+                stamps = [parse(text(value)) for value in read_typed(dataset, slice(None))]
             except (ValueError, TypeError, UnicodeError, OverflowError):
                 return unsupported("invalid_timestamp_axis")
             # Seconds-only output can repeat for subsecond computations.
@@ -144,7 +145,7 @@ class HdfCompletion:
             or numeric.shape[0] != len(stamps) or numeric.dtype.kind not in "fiu"
         ):
             return unsupported("invalid_numeric_time_axis")
-        values = numeric[:]
+        values = read_typed(numeric, slice(None))
         if not np.all(np.isfinite(values)) or np.any(values[1:] <= values[:-1]):
             return unsupported("invalid_numeric_time_axis")
         result.update(

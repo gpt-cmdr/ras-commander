@@ -174,14 +174,19 @@ editing geometry text.
 - `diagnose_mesh_layout(hdf_path, program_version=None)` - Report version
   evidence, detected layout, dataset paths, and per-capability status for area
   names, perimeters, cell centers, face topology, and cell polygons
-- `get_mesh_cell_polygons(hdf_path, strict=False)` - Get cell polygons as a
-  GeoDataFrame; warnings and the equality-safe tuple of record dictionaries in
-  `result.attrs["cell_polygon_diagnostics"]` expose physical cells that were
-  omitted or ambiguously polygonized. Use `diagnose_mesh_cell_polygons()` when
-  a DataFrame is preferred.
-- `diagnose_mesh_cell_polygons(hdf_path)` - Report native cell IDs, face IDs,
-  polygon counts, and reason codes for physical-cell reconstruction problems
-  and expected boundary-only records
+- `get_mesh_cell_polygons(hdf_path, *, strict=False, engine="auto", threads=None, diagnostics=False)` -
+  Get cell polygons as a GeoDataFrame; a warning names omitted cells. With
+  `diagnostics=True` the equality-safe tuple of record dictionaries in
+  `result.attrs["cell_polygon_diagnostics"]` lists physical cells that were
+  omitted or ambiguously polygonized (off by default since this release; it was
+  always attached before). Use `diagnose_mesh_cell_polygons()` for a DataFrame.
+  `engine` (`"auto"`, `"h5py"`, `"native"`) and `threads` select and bound the
+  optional native polygonizer; with `engine="native"` diagnostic labels can
+  differ from the Python reference (see the docstring). See
+  [Optional Rust acceleration](#optional-rust-acceleration).
+- `diagnose_mesh_cell_polygons(hdf_path, *, engine="auto")` - Report native
+  cell IDs, face IDs, polygon counts, and reason codes for physical-cell
+  reconstruction problems and expected boundary-only records
 - `get_mesh_cell_faces(hdf_path)` - Get cell face lines
 - `get_mesh_cell_points(hdf_path)` - Get cell center points
 - `find_nearest_cell(point, cell_points_gdf, mesh_name=None)` - Find nearest cell ID and distance using previously read cell centers
@@ -663,7 +668,41 @@ fail processing: the method logs ERROR with traceback, path, parameters and stag
 then returns an empty GeoDataFrame and discards partial geometry. Input/decorator
 validation exceptions remain unchanged; no result status attributes are added.
 
-- `calculate_fluvial_pluvial_boundary(hdf_path, delta_t)` - Calculate boundary
+- `calculate_fluvial_pluvial_boundary(hdf_path, delta_t, min_line_length=None, *, engine="auto", diagnostics=False)` - Calculate boundary
+- `generate_fluvial_pluvial_polygons(hdf_path, delta_t, temporal_tolerance_hours=1.0, min_polygon_area_acres=None, *, engine="auto", diagnostics=False)` - Boundary polygons
+
+`engine` selects the implementation. `"h5py"` is the reference described above
+(failures are logged and an empty GeoDataFrame is returned). `"native"` uses the
+optional Rust graph kernels and raises `FluvialNativeUnsupportedError` (a
+`ValueError`) when it cannot reproduce the reference result; other errors
+propagate. `"auto"` (default) uses native when it can and otherwise the
+reference, including on any native error, so its outcome is always the
+reference outcome. The engine that produced the result is recorded in
+`result.attrs["fluvial_engine"]` (`"used"`: `"native"` or `"h5py"`).
+Native kernel timings and counts are attached as `result.attrs["fluvial_native"]`
+only with `diagnostics=True` (default `False`), so results carry the same
+attributes whichever engine ran.
+`FluvialNativeUnsupportedError` is defined
+in the module `ras_commander.hdf.HdfFluvialPluvial` (import it with
+`from ras_commander.hdf.HdfFluvialPluvial import FluvialNativeUnsupportedError`).
+
+How `engine` maps onto `RAS_COMMANDER_FAST_HDF`:
+
+| `engine` | `RAS_COMMANDER_FAST_HDF` | Behaviour |
+|----------|--------------------------|-----------|
+| `"auto"` (default) | unset/`auto` | Native when it reproduces the reference, otherwise the reference. |
+| `"auto"` | `h5py` | Reference; native is not attempted (`attrs["fluvial_engine"]["used"] == "h5py"`). |
+| `"auto"` | `native` | Native, or `FastHdfError` (never a silent fallback). |
+| `"h5py"` | any (ignored) | Reference, with every read on h5py (native is never used, in any mode). |
+| `"native"` | any (ignored) | Native, or `FluvialNativeUnsupportedError`; never falls back. |
+
+The native engine is used only when `fast_hdf.available()` is true (the same
+extension availability and API-version check as every other native read).
+
+Every public selector uses `engine=` with `"auto"`, `"h5py"` and `"native"`.
+Inputs the native fluvial engine does not reproduce (for example
+`min_polygon_area_acres`, unprojected CRSs, `delta_t=0`) run on the reference
+in auto mode.
 
 ### HdfInfiltration
 
@@ -785,6 +824,250 @@ Utility class for HDF file operations.
 - `parse_ras_datetime_ms(datetime_bytes)` - Parse datetime with milliseconds
 - `parse_run_time_window(window_str)` - Parse time window strings
 
+## Optional Rust acceleration
+
+`ras_commander.fast_hdf` provides optional numeric HDF reads, native mesh ring
+assembly, and direct mesh-to-PMTiles export. Existing `HdfResultsMesh` and
+`HdfMesh.get_mesh_cell_polygons` methods use the extension when installed while
+preserving their established xarray and GeoDataFrame outputs. Lazy result views
+push selected reads and bounded batches through the same adapter. This backend
+provides HDF reads only. Set `RAS_COMMANDER_FAST_HDF=0` to select the Python
+reference paths.
+
+The extension is a separate distribution, `ras-commander-fast-hdf`. Until its
+first wheel release, build it from this repository; the `fast-hdf` extra is not
+yet a publicly installable release:
+
+```powershell
+uv tool run --from maturin maturin build --release --locked --manifest-path rust/fast-hdf/Cargo.toml --out working/wheels
+uv pip install --python .venv/Scripts/python.exe working/wheels/<built-wheel>.whl
+```
+
+A Rust toolchain and platform linker are required to build from source. Ordinary
+ras-commander installations do not require either. Geometry output requires
+GeoPandas and Shapely; direct PMTiles export requires pyproj. The wheel workflow
+is configured to build Windows x64, Linux x64 and macOS ARM64 artifacts for
+review; it does not publish them.
+
+```python
+from ras_commander import fast_hdf
+
+print(fast_hdf.available())
+polygons = fast_hdf.mesh_polygons("model.g01.hdf", backend="native", threads=4)
+fast_hdf.export_mesh_pmtiles(
+    "model.g01.hdf", "mesh.pmtiles", layer_name="mesh_cells",
+    min_zoom=10, max_zoom=14, backend="native", threads=4,
+)
+```
+
+Explicit `backend="native"` requires native execution and reports unavailable or
+unsupported operations. Automatic mode can use the compatibility path. Direct
+export keeps polygons packed through a vectorized pyproj transformation and
+passes them to freestiler's Rust core, without building per-cell Python geometry
+objects. Each feature retains `mesh_name` and `cell_id`; IDs are not renumbered
+when a source cell has no polygon. Tile feature identifiers are independently
+unique across meshes.
+
+`HdfMesh.get_mesh_cell_polygons(strict=True)` retains its diagnostic behavior.
+Automatic mode returns the native result only when its diagnostic records,
+warnings and strict-mode outcome are provably the Python polygonizer's: native
+`boundary_only` records for one- and two-face cells, `zero_faces` records, and
+`no_polygon` records for cells that the reference polygonizer also cannot
+close. Any other case (an ambiguous or multi-polygon cell, an unassembled cell
+that the reference would return, an invalid face span or face reference, an
+unsupported layout) uses the Python polygonizer. Required Rust mode reports
+unsupported cases explicitly and keeps the native records.
+Use `threads` to bound native parallelism when calling from other worker pools.
+
+The native engine refuses any single numeric read over 2 GiB before allocating,
+so a damaged or crafted file cannot make it reserve memory the file does not
+hold. Larger numeric reads (for example a whole 2D mesh time series) are served
+natively as bounded 256 MiB hyperslab blocks, aligned to the stored chunks, into
+one NumPy array, so the result is the same array h5py returns. Before allocating
+the output, the declared size is checked against the storage the file really
+holds: contiguous data must be allocated and inside the file; chunked data must
+not decode to more than its stored bytes allow for its filters; and no more than
+2 GiB may come from the fill value of unallocated chunks. A dataset that fails
+this check reads through h5py in automatic mode and raises `FastHdfError` in
+required mode. Big-endian datasets keep their existing h5py path at any size.
+
+Coordinate transformation uses the HDF CRS, or an explicit `source_crs` override.
+Missing CRS must be supplied rather than assumed to be WGS84. Result property
+arrays passed to `export_mesh_pmtiles(properties=...)` are grouped by mesh and
+indexed by original cell ID. Time-series ghost columns retain their existing
+behavior; geometry extraction does not infer a different physical-cell count.
+
+Freestiler does not drop features by a configured density or area policy.
+The native export path repairs quantized rings on the integer tile grid.
+Very small cells can become one-pixel centroid squares at low zoom to preserve
+visibility. PMTiles are for visualization; use source polygons for analysis.
+The exporter retains source geometry in memory and spools encoded tile batches.
+
+### Environment variables, sessions and internal modules
+
+| Variable | Values | Effect |
+|----------|--------|--------|
+| `RAS_COMMANDER_FAST_HDF` | see the table in the next section | Backend policy for every routed reader. An **unrecognised value** (for example `yes`) is treated as `auto` and logs one warning per value, so a typo can never turn reads into empty results. |
+| `RAS_COMMANDER_HDF_SESSION_CACHE` | unset or `1` (default), `0`/`off`/`false`, `persist` | Native session policy, below. |
+| `RAS_COMMANDER_FAST_TEXT` | `0`/`off`/`false`/`python`, `auto` (default), `required`/`rust` | Same policy for the optional native plain-text index in `ras_commander.fast_text`. It is not wired into any existing `Geom*`/`Ras*` method; only code that calls `fast_text` directly is affected, and there an unrecognised value raises `ValueError`. |
+
+**Native sessions and open files.** The native engine reads through a session
+that keeps the HDF open. By default a session is opened inside the first public
+call that needs it, shared by every read of that call, and closed when that
+public call returns (also when it raises). A read outside any public call
+(direct use of `fast_hdf`, or a generator such as `HdfResultsMesh.iter_mesh_timeseries`
+or `HdfResultView.iter_batches` iterated after its call returned) opens and closes
+its own session. No HDF stays open after an `Hdf*`
+method returns, so renaming, deleting, replacing or re-extracting a project
+folder afterwards works exactly as without the extension (on Windows and on
+network shares an open file would block these). Sessions are not carried from
+one public call to the next; the measured cost of that is a few percent on
+repeated reads of one file. Choose a different trade-off with
+`RAS_COMMANDER_HDF_SESSION_CACHE`:
+
+- `0`: open and close the file around every individual native read (slowest).
+- `persist`: keep up to four sessions across public calls (fastest for many
+  repeated calls on the same files). The files stay open: call
+  `fast_hdf.close_sessions()` (or `close_sessions(path)`) before replacing,
+  moving or deleting them, and before running HEC-RAS. `RasCmdr.compute_plan()`
+  already does this.
+
+Two small caches also exist: a cache of the engine's decoded layout
+descriptions (at most 16 entries, keyed by file path, size and modification
+time, never holding a file open), and `fast_text.NATIVE_CALLS`, a counter used
+by the qualification tests.
+
+**Public and internal.** `ras_commander.fast_hdf` is optional infrastructure.
+Its supported names are `available`, `close_sessions`, `FastHdfError`,
+`FastHdfPanicError` (a `FastHdfError` subclass for a panic inside the native
+extension), `mesh_polygons`, `packed_meshes` and the `export_*` functions
+(`__all__`; see the [fast_hdf source reference](#fast_hdf-source-reference)).
+Everything else in `fast_hdf`, `fast_results`, `_fast_hdf_typed` and
+`hdf/HdfFluvialNative` is internal adapter code for the `Hdf*` classes and the
+test suites: `read_typed`, `read_attrs`, `read_attr`, `read_dataset`,
+`read_datasets`, `mesh_series_domain`, `trace_reads`, `native_required`,
+`reraise_required`, `backend_scope` (applies an explicit `backend` to nested
+reads of one call), `release_native_sessions` (used by writers before they
+replace an HDF; call `close_sessions(path)` instead), the temporal-reduction
+helpers of `fast_results` (whose `__all__` is empty), and the native fluvial
+adapter `HdfFluvialNative` (`Analysis`, `LABELS`, `integer_milliseconds` and
+its `NATIVE_CALLS` counter; use `HdfFluvialPluvial(engine=...)`). These are
+importable but may change in any release; use the `Hdf*` methods instead.
+
+### Routed HDF reads and backend modes
+
+Public `Hdf*` readers whose data the pinned engine reads as a typed family call
+`fast_hdf.read_typed(dataset, selection)` at their value reads. It returns
+exactly what `dataset[selection]` returns, so public signatures, columns,
+dtypes, index, CRS, attrs and exceptions do not change. The backend follows
+`RAS_COMMANDER_FAST_HDF`:
+
+| Mode | Values | Behavior |
+|------|--------|----------|
+| h5py | `h5py` (legacy: `0`, `off`, `false`, `python`) | h5py for every read. |
+| Auto | unset, empty, `auto` (legacy: `1`, `on`, `true`) | Native read when the extension is installed and the function is qualified; **any** native failure, including Corrupt or checksum refusals, falls back to h5py, so the public result or exception is the h5py one. Functions the test corpus has not yet qualified (`fast_hdf.UNQUALIFIED_NATIVE`, marked with `fast_hdf.h5py_until_qualified`) run on h5py. |
+| Native | `native` (legacy: `required`, `rust`) | Native reads must succeed; a refusal raises `FastHdfError`, which routed readers surface unchanged instead of returning an empty result or wrapping it. |
+
+Routing policy:
+
+- Datasets in a typed engine family (2D mesh geometry and line families, 1D
+  geometry, XS results, 1D summaries and structure series) are served by the
+  typed reader, after the stored dtype layout and shape are checked.
+- Wave 3 stored families (bridge API 10): pipes, reference lines and points,
+  breach, plan metadata tables, land-cover/infiltration sidecars, terrain,
+  sediment, encroachments, Event Conditions, steady output and the non-Base
+  output blocks (DSS Hydrograph/Profile, Computation Block). The engine's
+  `stored_family_index` decides membership; supported numeric, compound and
+  byte-bitfield datasets are read typed. Geometry reference points come from
+  `reference_point_geometry`. Datasets the engine lists but does not qualify
+  (for example pipe summaries without a stored `Location`) keep their exact
+  literal values through the generic reader. Compound text members stored
+  NULLTERM or SPACEPAD receive HDF5's conversion into h5py's NULLPAD type.
+- Other numeric datasets use the generic native reader (`read_dataset`).
+- Selections are validated with h5py's own selector before any native read.
+  Invalid selections (for example a negative step) raise h5py's exception in
+  every mode. Basic selections and single increasing integer vectors are read
+  natively. Field names, boolean masks and non-integer vectors stay on h5py,
+  and are refusals in required mode.
+- **Fixed-length text datasets** (compute messages, time-stamp and profile-name
+  datasets) are read from the engine's `raw_fixed_strings` with h5py's byte
+  rule applied: NULLPAD unchanged, NULLTERM cut at the first NUL, SPACEPAD
+  without trailing spaces, each element zero-filled, in the dataset's own dtype
+  (`native-typed`/`fixed_strings` in the trace). Auto falls back to h5py on any
+  engine refusal; required mode raises `FastHdfError`.
+- **Legacy single-part structure centerlines.** When the engine refuses the
+  structure centerline family only because `Geometry/Structures/Centerline
+  Parts` is absent (a legal legacy layout), numeric Info/Points reads use the
+  literal generic native reader. A missing `Parts` in any other packed family is
+  damage and remains a refusal in required mode.
+- **Required-mode metadata exception.** Variable-length text datasets and
+  compound tables whose every member is text (identity tables such as XS
+  `River/Reach/RS` rows) are read through h5py in every mode (`h5py-metadata`
+  in the trace).
+  Group/key walks, `in` checks and shape probes also stay on h5py. A compound
+  with any numeric member is value data: without a typed engine route it is an
+  h5py fallback in auto mode and a `FastHdfError` refusal in required mode.
+  Required mode therefore guarantees native numeric *and attribute* value
+  reads, not that h5py is never opened. When the engine fails a whole read
+  family (`stored_family_index` failures), the refusal message and the trace
+  (`diagnostic` entries) say so.
+- **Attributes.** `fast_hdf.read_attrs(obj)` returns `{name: obj.attrs[name]}`
+  in h5py's key order and `fast_hdf.read_attr(obj, name[, default])` returns
+  one attribute (`obj.attrs[name]` / `obj.attrs.get(name, default)`), with
+  values rebuilt exactly from the engine's typed attributes (bridge API 11):
+  numeric scalars/arrays in the stored dtype and byte order; bitfields as the
+  unsigned integer of the same size and order; fixed strings with HDF5's
+  NULLPAD conversion; an H5S_NULL dataspace as `h5py.Empty(dtype)`, never a
+  zero-length array. Groups use the engine's typed group attributes and every
+  dataset its typed dataset attributes, inside or outside the read families.
+  Values the engine cannot reproduce (variable-length text, compound, enum
+  attributes) fall back to h5py in auto mode and raise `FastHdfError` in
+  required mode; `read_attrs` refuses the whole object, `read_attr` only the
+  requested attribute. Attributes of virtual, external or SWMR datasets are
+  refused in required mode. All `Hdf*` readers qualified NATIVE read
+  attributes through these two functions.
+- **2D mesh series domains.** `fast_hdf.mesh_series_domain(dataset)` returns
+  the engine's typed domain of a Base Output 2D series:
+  `{id_dim, domain, domain_rule, capability}`, where `domain_rule` is
+  `stored_location` or `legacy_exact_name` (HEC-RAS 5.0.7 series without a
+  stored `Location`: `Depth`/`Water Surface` cells; `Face Velocity`,
+  `Face Shear Stress`, `Face Area`, `Face Manning's n` faces). It is the
+  native counterpart of the h5py rule of ras-commander PR #565.
+  `HdfResultsMesh._mesh_series_id_dim` takes the domain from it when the engine
+  qualifies one; otherwise (python mode, engine refusal in auto mode) the stored
+  `Location` is read through `read_attr` and the #565 rule decides, so refusals
+  keep their `ValueError`. Geometry-count checks run on both paths.
+- `HdfResultsMesh` result readers use `read_dataset`, which follows the same
+  rule: in auto mode any native failure, Corrupt or checksum refusals included,
+  falls back to h5py, so the public result or exception is the h5py one.
+  Required mode raises `FastHdfError`.
+- Since ROUTE-EXTENTS, project extents (`HdfProject`), point/profile queries
+  (`HdfResultsQuery`), `get_mesh_max_depth` and the depth raster exports, and
+  `HdfResultsProducts.export` read every value through these functions. Their
+  broad exception handlers re-raise required-mode refusals instead of returning
+  an empty extent or result.
+- `read_dataset` returns the literal stored selection. When the typed 2D
+  mesh-result reader refuses to qualify a domain (for example a summary or
+  series without a stored `Location` attribute, refused since engine API 8),
+  the exact values come from the generic native reader in every mode
+  (`native-generic` / `mesh_result-literal` in the trace).
+
+`fast_hdf.trace_reads()` records which backend served each read made through
+`read_typed` and `read_dataset`. **It is not a complete I/O audit.** Reads a
+caller makes directly with h5py do not appear in it. The route-1 qualification
+gate therefore also intercepts `h5py.Dataset.__getitem__` and `read_direct`
+and, since PY-ROUTE-3, `h5py.AttributeManager.__getitem__` in required mode. A method labelled NATIVE may read through h5py only the metadata
+listed above.
+
+In the coverage inventory, **H5PY is an inventory (qualification) label, not an
+enforced backend selection.** It means a method was not qualified as an exact
+native reader. Such a method can still use native helpers in auto mode; for
+example, `get_mesh_cell_polygons` uses native ring assembly. Set
+`RAS_COMMANDER_FAST_HDF=0` to force h5py for everything.
+Successful exports atomically replace the destination; failed exports preserve
+an existing destination. Exporting over the source HDF file is rejected.
+Run `scripts/benchmark_fast_hdf.py --help` for the reproducible benchmark driver.
+
 ## Visualization
 
 ### HdfPlot & HdfResultsPlot
@@ -849,15 +1132,41 @@ prerequisites and return contracts take precedence over abbreviated summaries.
         - convert_ras_hdf_value
         - convert_ras_string
         - convert_timesteps_to_datetimes
+        - area_to_square_meters
+        - collect_hdf_crs_evidence
+        - collect_rasmap_crs_evidence
+        - crs_equivalent
         - find_nearest_neighbors
+        - format_crs
+        - get_crs_identity
+        - get_equivalent_epsg
+        - get_stored_ras_version
+        - get_units_system
+        - linear_unit_to_meters
         - parse_duration
         - parse_ras_datetime
         - parse_ras_datetime_ms
+        - parse_ras_file_version
         - parse_ras_window_datetime
         - parse_run_time_window
         - perform_kdtree_query
+        - read_crs_evidence
+        - resolve_crs_evidence
         - resolve_hdf_paths
+        - resolve_ras_relative_path
         - scan_hdf_files
+
+::: ras_commander.hdf.HdfUtils.CrsEvidence
+    options:
+      show_root_heading: true
+      heading_level: 4
+      show_source: false
+
+::: ras_commander.hdf.HdfUtils.CrsResolution
+    options:
+      show_root_heading: true
+      heading_level: 4
+      show_source: false
 
 ### HdfPlan source reference
 
@@ -1253,6 +1562,27 @@ prerequisites and return contracts take precedence over abbreviated summaries.
         - plot_results_max_wsel
         - plot_results_max_wsel_time
         - plot_results_mesh_variable
+
+### fast_hdf source reference
+
+The supported names of the optional native backend (`ras_commander.fast_hdf.__all__`).
+
+::: ras_commander.fast_hdf
+    options:
+      show_root_heading: false
+      heading_level: 3
+      show_source: false
+      members:
+        - FastHdfError
+        - FastHdfPanicError
+        - available
+        - close_sessions
+        - packed_meshes
+        - mesh_polygons
+        - export_pmtiles
+        - export_mesh_pmtiles
+        - export_arrow
+        - export_arrow_pmtiles
 
 ### HdfFluvialPluvial source reference
 

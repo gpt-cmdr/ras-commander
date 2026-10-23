@@ -24,6 +24,7 @@ from .HdfPlan import HdfPlan
 from .HdfResultsMesh import HdfResultsMesh
 from .HdfResultsPlan import HdfResultsPlan
 from ..Decorators import standardize_input, log_call
+from ..fast_hdf import read_attr, read_typed, reraise_required
 from ..RasPrj import ras
 
 logger = logging.getLogger(__name__)
@@ -201,8 +202,8 @@ def _resolve_geometry_hdf(
                 or "Geometry/Pipe Networks" in hdf_file
             ):
                 return plan_hdf_path
-    except Exception:
-        pass
+    except Exception as exc:
+        reraise_required(exc)
 
     try:
         plan_info = HdfPlan.get_plan_information(plan_hdf_path)
@@ -219,8 +220,8 @@ def _resolve_geometry_hdf(
                     f"{geom_hdf_path}"
                 )
                 break
-    except Exception:
-        pass
+    except Exception as exc:
+        reraise_required(exc)
 
     try:
         with h5py.File(plan_hdf_path, "r") as hdf_file:
@@ -230,8 +231,8 @@ def _resolve_geometry_hdf(
                     plan_hdf_path,
                 )
                 return plan_hdf_path
-    except Exception:
-        pass
+    except Exception as exc:
+        reraise_required(exc)
 
     plan_text_geom_hdf = _resolve_geometry_hdf_from_plan_text(plan_hdf_path)
     if plan_text_geom_hdf is not None:
@@ -417,7 +418,7 @@ def _get_mesh_topology(
             )
 
         topology = {
-            key: np.asarray(hdf_file[f"{base_path}/{dataset}"][()])
+            key: np.asarray(read_typed(hdf_file[f"{base_path}/{dataset}"]))
             for key, dataset in required.items()
         }
 
@@ -533,7 +534,7 @@ def _read_geometry_cell_dataset(
                 raise KeyError(
                     f"Dataset not found in geometry HDF: {dataset_path}"
                 )
-            mesh_values = np.asarray(hdf_file[dataset_path][()], dtype=float)
+            mesh_values = np.asarray(read_typed(hdf_file[dataset_path]), dtype=float)
             values.append(_physical_mesh_values(mesh_values, cache, mesh_name))
 
     return np.concatenate(values) if values else np.array([], dtype=float)
@@ -605,7 +606,7 @@ def _read_steady_mesh_dataset(
             variable_name=variable_name,
         )
         if dataset_path in hdf_file:
-            return np.asarray(hdf_file[dataset_path][()], dtype=float)
+            return np.asarray(read_typed(hdf_file[dataset_path]), dtype=float)
 
     raise KeyError(
         "Steady 2D dataset not found for "
@@ -715,7 +716,7 @@ def _qualify_velocity_dataset(
 
 def _velocity_text_attribute(dataset: h5py.Dataset, name: str) -> str:
     """Read a scalar or singleton text attribute without coercing invalid types."""
-    value = np.asarray(dataset.attrs.get(name, ""))
+    value = np.asarray(read_attr(dataset, name, ""))
     if value.shape not in ((), (1,)):
         raise ValueError(f"Invalid {name} for {dataset.name}")
     value = value.reshape(-1)[0]
@@ -765,7 +766,8 @@ def _read_unsteady_velocity_pair(
                 _check_velocity_pair_units(hdf_file, paths)
                 return tuple(
                     _physical_mesh_values(
-                        np.asarray(hdf_file[path][time_index, :], dtype=float), cache, mesh_name,
+                        np.asarray(read_typed(hdf_file[path], (time_index, slice(None))), dtype=float),
+                        cache, mesh_name,
                     ) for path in paths
                 )
     return None
@@ -812,7 +814,7 @@ def _read_unsteady_direct(
             dataset = hdf_file[dataset_path]
             # Read only the requested row; a point query does not need all times.
             dataset_values = np.asarray(
-                dataset[time_index, :] if dataset.ndim == 2 else dataset[()],
+                read_typed(dataset, (time_index, slice(None))) if dataset.ndim == 2 else read_typed(dataset),
                 dtype=float,
             )
             values.append(
@@ -858,7 +860,7 @@ def _read_face_velocity_values(
         )
         if dataset_path not in hdf_file:
             raise KeyError(f"Dataset not found in plan HDF: {dataset_path}")
-        dataset_values = np.asarray(hdf_file[dataset_path][()], dtype=float)
+        dataset_values = np.asarray(read_typed(hdf_file[dataset_path]), dtype=float)
         return _select_time_slice(dataset_values, int(time_index))
 
 
@@ -1114,7 +1116,7 @@ def _get_unsteady_variable_max_values(
                 raise KeyError(
                     f"Dataset not found in plan HDF: {dataset_path}"
                 )
-            dataset_values = np.asarray(hdf_file[dataset_path][()], dtype=float)
+            dataset_values = np.asarray(read_typed(hdf_file[dataset_path]), dtype=float)
             if dataset_values.ndim == 1:
                 mesh_values = dataset_values
             elif dataset_values.ndim == 2:
@@ -1219,8 +1221,8 @@ def _get_cell_averaged_max_velocity(
                     f"Missing cell-face topology datasets for mesh '{mesh_name}'"
                 )
 
-            cell_face_info = geom_hdf[info_path][()]
-            cell_face_values = geom_hdf[values_path][()][:, 0].astype(int)
+            cell_face_info = read_typed(geom_hdf[info_path])
+            cell_face_values = read_typed(geom_hdf[values_path])[:, 0].astype(int)
 
             mesh_slice = cache["mesh_slices"][mesh_name]
             cell_face_info = cell_face_info[: mesh_slice.stop - mesh_slice.start]
@@ -1354,16 +1356,16 @@ def _read_ras_version(plan_hdf_path: Path) -> Optional[str]:
     with h5py.File(plan_hdf_path, "r") as hdf_file:
         candidates.extend(
             [
-                hdf_file.attrs.get("File Version"),
-                hdf_file.attrs.get("Program Version"),
+                read_attr(hdf_file, "File Version", None),
+                read_attr(hdf_file, "Program Version", None),
             ]
         )
         for path in ("Results/Unsteady", "Results/Steady"):
             if path in hdf_file:
                 candidates.extend(
                     [
-                        hdf_file[path].attrs.get("Program Version"),
-                        hdf_file[path].attrs.get("File Version"),
+                        read_attr(hdf_file[path], "Program Version", None),
+                        read_attr(hdf_file[path], "File Version", None),
                     ]
                 )
 
