@@ -407,6 +407,66 @@ def test_write_profile_inputs_layout_and_coplanar_rejection(tmp_path):
         _prepare.write_profile_inputs(tmp_path / "flat", flat, grids)
 
 
+def _duplicate_sample(prep):
+    """The prepared profile with its first sample repeated (a Qhull coplanar point)."""
+    import dataclasses
+
+    return dataclasses.replace(prep, x=np.append(prep.x, prep.x[0]), y=np.append(prep.y, prep.y[0]),
+                               z=np.append(prep.z, prep.z[0]))
+
+
+def test_write_profile_inputs_coplanar_policy(tmp_path):
+    cells = _cells()
+    prep = _duplicate_sample(RasFim.prepare_profile(cells, _centers(cells), "wsel_a", 2.0))
+    with rasterio.open(_terrain(tmp_path / "t.tif")) as src:
+        grids = _prepare.derive_grids(prep, tuple(src.bounds), "EPSG:3857", 3.0)
+    with pytest.raises(FimUnsupportedError, match="1 coplanar"):
+        _prepare.write_profile_inputs(tmp_path / "error", prep, grids)
+    record = _prepare.write_profile_inputs(tmp_path / "ignore", prep, grids, coplanar="ignore")
+    assert record["coplanar_samples"] == 1
+    assert "coplanar_samples" not in json.loads((tmp_path / "ignore" / "inputs.json").read_text())
+    simplices = np.fromfile(tmp_path / "ignore" / "simplices.u32", dtype="<u4")
+    assert prep.sample_count - 1 not in set(simplices.tolist())  # the duplicate is not a vertex
+    with pytest.raises(ValueError, match="coplanar must be"):
+        _prepare.write_profile_inputs(tmp_path / "bad", prep, grids, coplanar="drop")
+
+
+@pytest.mark.parametrize("origin", [(499950.7, 3300150.3), (499950.0, 3300150.0)])
+def test_terrain_anchor_puts_axes_and_final_grid_on_the_terrain_lattice(tmp_path, origin):
+    cells = _cells()
+    centers = _centers(cells)
+    plain = RasFim.prepare_profile(cells, centers, "wsel_a", 2.0)
+    prep = RasFim.prepare_profile(cells, centers, "wsel_a", 2.0, lattice_origin=origin)
+    assert prep.grid_anchor == "terrain" and plain.grid_anchor == "ras2fim"
+    for got, want in ((prep.x, plain.x), (prep.y, plain.y), (prep.z, plain.z)):
+        assert np.array_equal(got, want)  # samples never depend on the grid
+    for low, union_low, o in ((prep.xmin, plain.xmin, origin[0]), (prep.ymin, plain.ymin, origin[1])):
+        steps = (low - o) / 2.0
+        assert abs(steps - round(steps)) < 1e-9 and low <= union_low < low + 2.0
+    assert prep.x_axis[0] == prep.xmin and np.allclose(np.diff(prep.x_axis), 2.0)
+    path = _terrain(tmp_path / "t.tif", x0=origin[0], y0=origin[1])
+    with rasterio.open(path) as src:
+        bounds = tuple(src.bounds)
+    grids = _prepare.derive_grids(prep, bounds, CRS_MODEL, 2.0)
+    t = grids.dest_transform
+    assert (grids.dest_width, grids.dest_height) == (grids.cols, grids.rows)
+    assert (t.a, t.e, t.c) == (2.0, -2.0, prep.xmin)
+    for edge, o in ((t.c, origin[0]), (t.f, origin[1])):
+        steps = (edge - o) / 2.0
+        assert abs(steps - round(steps)) < 1e-9
+    assert t.f == _prepare.snap_down(t.f, origin[1], 2.0)  # canonical lattice value
+    with pytest.raises(FimUnsupportedError, match="output_resolution"):
+        _prepare.derive_grids(prep, bounds, CRS_MODEL, 3.0)
+    with pytest.raises(FimUnsupportedError, match="results CRS"):
+        _prepare.derive_grids(prep, bounds, "EPSG:3857", 2.0)
+
+
+def test_snap_down_is_canonical_on_and_off_the_lattice():
+    assert _prepare.snap_down(10.0, 0.5, 2.0) == 8.5
+    assert _prepare.snap_down(8.5 + 1e-12, 0.5, 2.0) == 8.5  # within tolerance: on the lattice
+    assert _prepare.snap_down(-3.0, 0.5, 2.0) == -3.5
+
+
 # --------------------------------------------------------------------------
 # Batch mapping with a simulated engine
 # --------------------------------------------------------------------------
@@ -529,6 +589,46 @@ def test_output_folder_must_be_empty_and_options_validated(scene):
     with pytest.raises(ValueError, match="exactly one"):
         RasFim.map_profiles(scene["cells"], scene["terrain"], scene["tmp"] / "x",
                             engine_path=scene["engine"])
+
+
+def test_map_profiles_terrain_anchor_requests_the_terrain_lattice(scene):
+    scene["terrain"] = _terrain(scene["tmp"] / "offset.tif", x0=499950.7, y0=3300150.3)
+    manifest = _map(scene, output_crs=CRS_MODEL, output_resolution=2.0, grid_anchor="terrain")
+    assert (manifest["status"] == "complete").all()
+    for request in scene["fake"].requests:
+        gt = request["profiles"][0]["dest_grid"]["geotransform"]
+        assert gt[1] == 2.0 and gt[5] == -2.0
+        for edge, origin in ((gt[0], 499950.7), (gt[3], 3300150.3)):
+            steps = (edge - origin) / 2.0
+            assert abs(steps - round(steps)) < 1e-9
+    document = json.loads((scene["tmp"] / "out" / "fim_manifest.json").read_text())
+    assert document["options"]["grid_anchor"] == "terrain" and document["options"]["coplanar"] == "error"
+    assert document["coplanar_samples"] == {}
+    for kwargs, message in (({"output_resolution": 3.0}, "terrain pixel size"),
+                            ({"output_resolution": 2.0, "output_crs": "EPSG:3857"}, "results CRS")):
+        kwargs.setdefault("output_crs", CRS_MODEL)
+        with pytest.raises(FimUnsupportedError, match=message):
+            _map(scene, out_name="x", grid_anchor="terrain", **kwargs)
+    for kwargs in ({"grid_anchor": "lattice"}, {"coplanar": "drop"}):
+        with pytest.raises(ValueError):
+            _map(scene, out_name="y", **kwargs)
+
+
+def test_map_profiles_coplanar_ignore_maps_and_records_the_count(scene, monkeypatch):
+    original = _prepare.prepare_profile
+
+    def with_duplicate(*args, **kwargs):
+        prep = original(*args, **kwargs)
+        return _duplicate_sample(prep) if prep.profile == "wsel_a" else prep
+
+    monkeypatch.setattr(_prepare, "prepare_profile", with_duplicate)
+    rejected = _map(scene, raise_on_failure=False)
+    assert rejected.set_index("profile")["status"].to_dict() == {"wsel_a": "failed", "wsel_b": "complete"}
+    assert "coplanar" in rejected.set_index("profile").loc["wsel_a", "error"]
+    manifest = _map(scene, out_name="ignored", coplanar="ignore")
+    assert (manifest["status"] == "complete").all()
+    document = json.loads((scene["tmp"] / "ignored" / "fim_manifest.json").read_text())
+    assert document["coplanar_samples"] == {"wsel_a": 1} and document["options"]["coplanar"] == "ignore"
 
 
 def test_crs_mismatch_is_unsupported(scene):
