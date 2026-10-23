@@ -146,35 +146,75 @@ def _record_attr(records, attrs, name):
     })
 
 
+# The interception wrappers are installed on the h5py classes ONCE per process and
+# never removed or replaced; ``watch_h5py_reads`` only toggles recording.
+#
+# Do not go back to patching/restoring the classes on every context entry (AV root
+# cause, runs/release-20261022/AV_ROOT_CAUSE.md). On CPython 3.13 a heap class whose
+# attributes are reassigned ~1000 times runs out of type versions; from then on
+# PyType_Modified() no longer clears the BINARY_SUBSCR_GETITEM specialization cache
+# (``_spec_cache.getitem``, a *borrowed* pointer to the per-context
+# ``watched_attr_getitem`` closure). Once that closure was freed, ``obj.attrs[k]``
+# ran freed code or crashed with an access violation in PyEval_EvalFrameDefault
+# (fixed upstream in 3.14 only). Module-lifetime wrappers are never freed, and one
+# installation per process cannot exhaust the class's versions.
+_ORIGINAL = {
+    (h5py.Dataset, "__getitem__"): h5py.Dataset.__dict__["__getitem__"],
+    (h5py.Dataset, "read_direct"): h5py.Dataset.__dict__["read_direct"],
+    (h5py.AttributeManager, "__getitem__"): h5py.AttributeManager.__dict__["__getitem__"],
+}
+_ACTIVE = []  # record lists of the currently open watch_h5py_reads() contexts
+
+
+def _watched_getitem(self, args, new_dtype=None):
+    for records in tuple(_ACTIVE):
+        _record(records, self, "getitem")
+    return _ORIGINAL[(h5py.Dataset, "__getitem__")](self, args, new_dtype=new_dtype)
+
+
+def _watched_read_direct(self, *args, **kwargs):
+    for records in tuple(_ACTIVE):
+        _record(records, self, "read_direct")
+    return _ORIGINAL[(h5py.Dataset, "read_direct")](self, *args, **kwargs)
+
+
+def _watched_attr_getitem(self, name):
+    for records in tuple(_ACTIVE):
+        _record_attr(records, self, name)
+    return _ORIGINAL[(h5py.AttributeManager, "__getitem__")](self, name)
+
+
+_WATCHED = {
+    (h5py.Dataset, "__getitem__"): _watched_getitem,
+    (h5py.Dataset, "read_direct"): _watched_read_direct,
+    (h5py.AttributeManager, "__getitem__"): _watched_attr_getitem,
+}
+
+
+def _ensure_installed():
+    """Install the permanent wrappers (once; again only if a restore removed them)."""
+    for (cls, name), watched in _WATCHED.items():
+        current = cls.__dict__.get(name)
+        if current is watched:
+            continue
+        if current is not _ORIGINAL[(cls, name)]:
+            # Someone else's patch is active: wrapping or replacing it would either
+            # miss reads or clobber the other patch. Fail loudly instead.
+            raise RuntimeError(f"h5py read guard: {cls.__name__}.{name} is patched by another caller")
+        setattr(cls, name, watched)
+
+
 @contextmanager
 def watch_h5py_reads():
     """Record every h5py dataset and attribute value read made while the context is active."""
+    _ensure_installed()
     records = []
-    getitem = h5py.Dataset.__getitem__
-    read_direct = h5py.Dataset.read_direct
-    attr_getitem = h5py.AttributeManager.__getitem__
-
-    def watched_getitem(self, args, new_dtype=None):
-        _record(records, self, "getitem")
-        return getitem(self, args, new_dtype=new_dtype)
-
-    def watched_read_direct(self, *args, **kwargs):
-        _record(records, self, "read_direct")
-        return read_direct(self, *args, **kwargs)
-
-    def watched_attr_getitem(self, name):
-        _record_attr(records, self, name)
-        return attr_getitem(self, name)
-
-    h5py.Dataset.__getitem__ = watched_getitem
-    h5py.Dataset.read_direct = watched_read_direct
-    h5py.AttributeManager.__getitem__ = watched_attr_getitem
+    _ACTIVE.append(records)
     try:
         yield records
     finally:
-        h5py.Dataset.__getitem__ = getitem
-        h5py.Dataset.read_direct = read_direct
-        h5py.AttributeManager.__getitem__ = attr_getitem
+        # by identity: list.remove() compares by equality and two empty lists are equal
+        del _ACTIVE[next(i for i, r in enumerate(_ACTIVE) if r is records)]
 
 
 def offending(records):
