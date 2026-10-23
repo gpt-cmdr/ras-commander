@@ -442,9 +442,25 @@ def _write_subset(source, target, mesh_name, subset, crs_wkt):
     area = base + "/" + mesh_name
     with h5py.File(source, "r") as src, h5py.File(target, "r+") as dst:
         old = src[area]
+        from .._geometry_association import (
+            GEOMETRY_ASSOCIATION_FIELDS,
+            decode_hdf_attr,
+        )
         from ._preprocess_contract import ASSOCIATIONS
 
         target_attributes = dict(dst[area].attrs) if area in dst else {}
+        # The owned geometry may already be associated with a child terrain,
+        # while its compiled area still names the delivered parent terrain.
+        # Native subset saving must use the current target association.
+        terrain = GEOMETRY_ASSOCIATION_FIELDS["terrain_hdf_path"]
+        geometry_attributes = dst["Geometry"].attrs
+        if decode_hdf_attr(geometry_attributes.get(terrain["filename_attr"])):
+            for role in ("filename_attr", "layer_attr", "date_attr"):
+                key = terrain[role]
+                if key in geometry_attributes:
+                    target_attributes[key] = geometry_attributes[key]
+                else:
+                    target_attributes.pop(key, None)
         if "Projection" not in dst.attrs:
             dst.attrs["Projection"] = np.bytes_(crs_wkt.encode("utf-8"))
         if area in dst:
