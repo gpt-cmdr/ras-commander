@@ -59,7 +59,7 @@ from .._ras_text import _write_ras_text
 from ..Decorators import log_call
 from ..LoggingConfig import get_logger
 from .GeomParser import GeomParser
-from .GeomReferenceFeatures import _format_coord_line
+from .GeomReferenceFeatures import _format_coord_line, _parse_reference_line_coordinates
 
 logger = get_logger(__name__)
 
@@ -178,7 +178,92 @@ def _bc_line_insertion_index(file_lines: List[str]) -> int:
 
 
 class GeomBcLines:
-    """Public API for authoring 2D BC line geometry in `.g##` text files."""
+    """Read and author BC line geometry in `.g##` text files; do not instantiate."""
+
+    @staticmethod
+    @log_call
+    def get_bc_lines(geom_file: Union[str, Path]) -> pd.DataFrame:
+        """Read BC line names, associated areas, and vertices from geometry text.
+
+        Reads only the supplied file, without creating backups or requiring an
+        HDF file, initialized project, or HEC-RAS installation. Records retain
+        file order and vertex order. Only surrounding name/area whitespace is
+        removed. Each BC block must contain the required record keys and a
+        valid coordinate payload before any result is returned. Start, middle,
+        end, and text-position record values are ignored; vertices come only
+        from the arc payload.
+
+        Args:
+            geom_file: Path to a plain-text HEC-RAS geometry file (.g##).
+
+        Returns:
+            pd.DataFrame: One row per BC line with columns ``name`` (str),
+            ``storage_area`` (str), ``coordinates`` (list of (x, y) float
+            tuples), and ``coordinate_count`` (int). Coordinates retain the
+            geometry's units and coordinate system; no transformation or CRS
+            inference is performed. An empty file or file without BC lines
+            returns an empty DataFrame with the same columns.
+
+        Raises:
+            FileNotFoundError: If geom_file does not exist.
+            ValueError: If a required BC record key, name, or storage area is
+                missing, or an arc count or coordinate payload is invalid.
+                Counts must declare at least two vertices; coordinates must
+                be finite.
+            UnicodeDecodeError: If the file cannot be decoded as UTF-8.
+        """
+        geom_file = Path(geom_file)
+        with geom_file.open("r", encoding="utf-8", newline="") as stream:
+            file_lines = stream.readlines()
+
+        prefixes = (
+            _BC_NAME_KEY,
+            _BC_STORAGE_AREA_KEY,
+            "BC Line Start Position=",
+            "BC Line Middle Position=",
+            "BC Line End Position=",
+            "BC Line Arc=",
+        )
+        records = []
+        index = 0
+        while index < len(file_lines):
+            if not file_lines[index].startswith(_BC_NAME_KEY):
+                index += 1
+                continue
+            start = index
+            header = []
+            for offset, prefix in enumerate(prefixes):
+                line_index = start + offset
+                if line_index >= len(file_lines) or not file_lines[line_index].startswith(prefix):
+                    raise ValueError(
+                        f"BC line at line {start + 1} is missing {prefix[:-1]!r} "
+                        f"at line {line_index + 1}"
+                    )
+                header.append(file_lines[line_index].split("=", 1)[1].strip())
+            if not header[0] or not header[1]:
+                raise ValueError(f"BC line at line {start + 1} has an empty name or storage area")
+            try:
+                point_count = int(header[5])
+            except ValueError as exc:
+                raise ValueError(f"BC line at line {start + 1} has an invalid arc count") from exc
+            if point_count < 2:
+                raise ValueError(f"BC line at line {start + 1} must contain at least two points")
+            coordinates, terminator = _parse_reference_line_coordinates(
+                file_lines, start + len(prefixes), point_count, start,
+                feature_label="BC line",
+            )
+            if terminator >= len(file_lines) or not file_lines[terminator].startswith(_BC_TEXT_POSITION_KEY):
+                raise ValueError(f"BC line at line {start + 1} is missing its text-position terminator")
+            records.append({
+                "name": header[0],
+                "storage_area": header[1],
+                "coordinates": coordinates,
+                "coordinate_count": point_count,
+            })
+            index = terminator + 1
+        return pd.DataFrame(records, columns=[
+            "name", "storage_area", "coordinates", "coordinate_count",
+        ])
 
     @staticmethod
     @log_call
