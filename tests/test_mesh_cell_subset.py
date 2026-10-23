@@ -347,25 +347,30 @@ def test_staged_associations_keep_original_resolution_and_spelling(tmp_path):
 
 
 @pytest.mark.parametrize("canonical", ["complete", "filename_only", "absent"])
-def test_subset_uses_target_geometry_terrain_for_compiled_area(tmp_path, canonical):
-    """A child terrain must replace a stale compiled parent-area terrain link."""
+@pytest.mark.parametrize(
+    "kind", ["Terrain", "Land Cover", "Infiltration", "Percent Impervious"]
+)
+def test_subset_uses_target_geometry_associations_for_compiled_area(
+    tmp_path, canonical, kind
+):
+    """Current child inputs must replace stale compiled parent-area links."""
     from ras_commander.geom._cell_subset import _relocate_associations, _write_subset
 
     plan, source, target = planned(tmp_path)
     hdf = Path(str(target) + ".hdf")
-    terrain = tmp_path / "ChildTerrain.hdf"
-    terrain.write_bytes(b"terrain association fixture")
+    sidecar = tmp_path / "ChildInput.hdf"
+    sidecar.write_bytes(b"terrain association fixture")
     with h5py.File(hdf, "r+") as h:
         area = h["Geometry/2D Flow Areas/Area"]
-        area.attrs["Terrain Filename"] = np.bytes_(
-            "ChildTerrain.hdf" if canonical == "absent" else "MissingParentTerrain.hdf"
+        area.attrs[f"{kind} Filename"] = np.bytes_(
+            "ChildInput.hdf" if canonical == "absent" else "MissingParentInput.hdf"
         )
-        area.attrs["Terrain Layername"] = np.bytes_("Parent")
+        area.attrs[f"{kind} Layername"] = np.bytes_("Parent")
         area.attrs["Terrain File Date"] = np.bytes_("01JAN2000 00:00:00")
         if canonical != "absent":
-            h["Geometry"].attrs["Terrain Filename"] = np.bytes_("ChildTerrain.hdf")
+            h["Geometry"].attrs[f"{kind} Filename"] = np.bytes_("ChildInput.hdf")
         if canonical == "complete":
-            h["Geometry"].attrs["Terrain Layername"] = np.bytes_("Child")
+            h["Geometry"].attrs[f"{kind} Layername"] = np.bytes_("Child")
             h["Geometry"].attrs["Terrain File Date"] = np.bytes_("02JAN2000 00:00:00")
     source_bytes = source.read_bytes()
     with h5py.File(source) as h:
@@ -375,13 +380,14 @@ def test_subset_uses_target_geometry_terrain_for_compiled_area(tmp_path, canonic
     _write_subset(source, hdf, "Area", subset, plan.crs_wkt)
     with h5py.File(hdf) as h:
         area = h["Geometry/2D Flow Areas/Area"]
-        assert area.attrs["Terrain Filename"] == np.bytes_("ChildTerrain.hdf")
+        assert area.attrs[f"{kind} Filename"] == np.bytes_("ChildInput.hdf")
         if canonical == "filename_only":
-            assert "Terrain Layername" not in area.attrs
+            assert f"{kind} Layername" not in area.attrs
             assert "Terrain File Date" not in area.attrs
         else:
             expected = "Child" if canonical == "complete" else "Parent"
-            assert area.attrs["Terrain Layername"] == np.bytes_(expected)
+            assert area.attrs[f"{kind} Layername"] == np.bytes_(expected)
+        assert "Terrain File Date" not in area.attrs
         np.testing.assert_array_equal(
             area["Faces FacePoint Indexes"][:], subset.tables["Faces FacePoint Indexes"]
         )
