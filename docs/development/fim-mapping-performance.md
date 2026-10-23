@@ -13,7 +13,8 @@ RAS Mapper stored maps or hydraulic accuracy.
 
 Development throughput observations from the **ras2fim adapter**, rather than
 this new `RasFim` wrapper, were 1.58× for one full map and 1.49–1.61× for
-19-profile constrained maps. The full 19-profile case was slower at 0.67×.
+19-profile constrained maps. Full-domain catalog throughput remains unqualified
+pending controlled remeasurement.
 Those results used four logical CPUs on a shared Intel i9-11900KF workstation,
 x86-64 WSL/Linux, tmpfs working storage, Python 3.13.17, SciPy 1.16.3 and
 rasterio 1.4.4 (GDAL 3.10.3), with five interleaved repetitions and an excluded
