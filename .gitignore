@@ -107,6 +107,9 @@ examples/example_projects.csv
 # Ignore remote worker credentials and API keys
 examples/RemoteWorkers.json
 RemoteWorkers.json
+# Timestamped backups can contain the same credentials as the live files.
+RemoteWorkers.json.*.bak
+examples/RemoteWorkers.json.*.bak
 examples/usgs_api_key.txt
 usgs_api_key.txt
 /troubleshooting
