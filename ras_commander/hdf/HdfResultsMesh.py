@@ -45,9 +45,9 @@ Understanding when each return type is used:
 - get_mesh_summary_values(): Get summary values without geometry → pd.DataFrame
 - get_mesh_timeseries(): Get timeseries for one mesh/variable → xr.DataArray
 - iter_mesh_timeseries(): Stream bounded time-major xarray batches
-- get_mesh_timeseries_availability(): Report per-dataset series availability → pd.DataFrame
 - get_mesh_faces_timeseries(): Get face variables for one mesh → xr.Dataset
 - get_mesh_cells_timeseries(): Get cell timeseries for all meshes → Dict[str, xr.Dataset]
+- get_mesh_timeseries_availability(): Report per-dataset series availability → pd.DataFrame
 - get_mesh_last_iter(): Get last iteration count → pd.DataFrame
 - get_mesh_max_ws(): Get maximum water surface → gpd.GeoDataFrame
 - get_mesh_min_ws(): Get minimum water surface → gpd.GeoDataFrame
@@ -527,6 +527,83 @@ class HdfResultsMesh:
         )
 
     @staticmethod
+    def _get_mesh_result_view(
+        hdf_path: HdfInput,
+        mesh_name: str,
+        var: str,
+        *,
+        truncate: bool,
+        time_selection: Selection,
+        spatial_selection: Selection,
+        include_ghost_cells: bool = False,
+    ) -> Tuple[HdfResultView, Optional[int]]:
+        """Create a fingerprinted lazy view without reading result values.
+
+        Returns the view and the mesh's physical cell count (``None`` for
+        face variables or when the HDF does not record ``Cell Count``).
+        """
+        source_path = Path(hdf_path).resolve()
+        stat_before = source_path.stat()
+        dataset_path = HdfResultsMesh._get_mesh_timeseries_output_path(
+            mesh_name,
+            var,
+        )
+        time_path = (
+            "Results/Unsteady/Output/Output Blocks/Base Output/"
+            "Unsteady Time Series/Time"
+        )
+        with h5py.File(source_path, "r") as hdf_file:
+            if dataset_path not in hdf_file:
+                raise ValueError(f"Path {dataset_path} not found in HDF file")
+            if time_path not in hdf_file:
+                raise ValueError(f"Path {time_path} not found in HDF file")
+            dataset = hdf_file[dataset_path]
+            id_dim = HdfResultsMesh._mesh_series_id_dim(hdf_file, mesh_name, dataset)
+            units = HdfResultsMesh._decode_hdf_attr(
+                dataset.attrs.get("Units", "")
+            )
+            shape = tuple(int(value) for value in dataset.shape)
+            dtype = dataset.dtype.str
+            cell_count = None
+            if id_dim == "cell_id" and len(shape) == 2:
+                cell_count = HdfResultsMesh._physical_cell_count(
+                    HdfResultsMesh._physical_cell_counts(hdf_file),
+                    mesh_name,
+                    include_ghost_cells,
+                )
+                if not include_ghost_cells and cell_count is not None:
+                    spatial_selection = HdfResultsMesh._physical_spatial_selection(
+                        spatial_selection, cell_count
+                    )
+
+        stat = source_path.stat()
+        if (
+            stat.st_size != stat_before.st_size
+            or stat.st_mtime_ns != stat_before.st_mtime_ns
+        ):
+            raise RuntimeError(
+                "HDF result source changed while the lazy view was being created"
+            )
+        view = HdfResultView(
+            source_path=source_path,
+            dataset_path=dataset_path,
+            time_path=time_path,
+            mesh_name=mesh_name,
+            variable=var,
+            units=units,
+            id_dim=id_dim,
+            source_shape=shape,
+            source_dtype=dtype,
+            source_size=stat.st_size,
+            source_mtime_ns=stat.st_mtime_ns,
+            truncate=truncate,
+        )
+        return view.select(
+            time=time_selection,
+            spatial=spatial_selection,
+        ), cell_count
+
+    @staticmethod
     @log_call
     @standardize_input(file_type='plan_hdf')
     def get_mesh_timeseries_availability(
@@ -624,83 +701,6 @@ class HdfResultsMesh:
                         record["reason"] = str(exc)
                     records.append(record)
         return pd.DataFrame.from_records(records, columns=columns)
-
-    @staticmethod
-    def _get_mesh_result_view(
-        hdf_path: HdfInput,
-        mesh_name: str,
-        var: str,
-        *,
-        truncate: bool,
-        time_selection: Selection,
-        spatial_selection: Selection,
-        include_ghost_cells: bool = False,
-    ) -> Tuple[HdfResultView, Optional[int]]:
-        """Create a fingerprinted lazy view without reading result values.
-
-        Returns the view and the mesh's physical cell count (``None`` for
-        face variables or when the HDF does not record ``Cell Count``).
-        """
-        source_path = Path(hdf_path).resolve()
-        stat_before = source_path.stat()
-        dataset_path = HdfResultsMesh._get_mesh_timeseries_output_path(
-            mesh_name,
-            var,
-        )
-        time_path = (
-            "Results/Unsteady/Output/Output Blocks/Base Output/"
-            "Unsteady Time Series/Time"
-        )
-        with h5py.File(source_path, "r") as hdf_file:
-            if dataset_path not in hdf_file:
-                raise ValueError(f"Path {dataset_path} not found in HDF file")
-            if time_path not in hdf_file:
-                raise ValueError(f"Path {time_path} not found in HDF file")
-            dataset = hdf_file[dataset_path]
-            id_dim = HdfResultsMesh._mesh_series_id_dim(hdf_file, mesh_name, dataset)
-            units = HdfResultsMesh._decode_hdf_attr(
-                dataset.attrs.get("Units", "")
-            )
-            shape = tuple(int(value) for value in dataset.shape)
-            dtype = dataset.dtype.str
-            cell_count = None
-            if id_dim == "cell_id" and len(shape) == 2:
-                cell_count = HdfResultsMesh._physical_cell_count(
-                    HdfResultsMesh._physical_cell_counts(hdf_file),
-                    mesh_name,
-                    include_ghost_cells,
-                )
-                if not include_ghost_cells and cell_count is not None:
-                    spatial_selection = HdfResultsMesh._physical_spatial_selection(
-                        spatial_selection, cell_count
-                    )
-
-        stat = source_path.stat()
-        if (
-            stat.st_size != stat_before.st_size
-            or stat.st_mtime_ns != stat_before.st_mtime_ns
-        ):
-            raise RuntimeError(
-                "HDF result source changed while the lazy view was being created"
-            )
-        view = HdfResultView(
-            source_path=source_path,
-            dataset_path=dataset_path,
-            time_path=time_path,
-            mesh_name=mesh_name,
-            variable=var,
-            units=units,
-            id_dim=id_dim,
-            source_shape=shape,
-            source_dtype=dtype,
-            source_size=stat.st_size,
-            source_mtime_ns=stat.st_mtime_ns,
-            truncate=truncate,
-        )
-        return view.select(
-            time=time_selection,
-            spatial=spatial_selection,
-        ), cell_count
 
     @staticmethod
     def _truncate_profile_line_flow_dataframe(

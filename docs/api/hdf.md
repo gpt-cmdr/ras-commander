@@ -259,14 +259,14 @@ removed before v1.2.0:
 - `iter_mesh_timeseries(hdf_path, mesh_name, var, *, time_selection=None,
   spatial_selection=None, batch_size=None, max_chunk_bytes=16777216)` - Stream
   untruncated, bounded, time-major xarray batches
-- `get_mesh_timeseries_availability(hdf_path, mesh_name=None)` - Metadata-only
-  report of whether each Base Output mesh dataset is readable as a series
-  (`status`, `rows`, `time_rows`, `stored_bytes`, `reason`)
 
 - `get_mesh_cells_timeseries(hdf_path, mesh_names=None, var=None, truncate=False, ras_object=None)` - Dictionary of mesh Datasets; select cells/faces afterward
 - `get_mesh_faces_timeseries(hdf_path, mesh_name, truncate=True)` - Available face variables as one Dataset; select `face_velocity` and `face_id` afterward
 - `get_profile_line_flow_timeseries(hdf_path, line_name, mesh_name=None, profile_lines_path=None, direction="absolute")` - Native Mapper named-line flow; inspect returned `selection_source`
 - `get_profile_line_peak_flow(hdf_path, line_name, mesh_name=None, profile_lines_path=None, direction="absolute")` - Peak Q and time from the same native named-line extraction path
+- `get_mesh_timeseries_availability(hdf_path, mesh_name=None)` - Metadata-only
+  report of whether each Base Output mesh dataset is readable as a series
+  (`status`, `rows`, `time_rows`, `stored_bytes`, `reason`)
 
 The canonical profile-line methods above require pythonnet/RasMapperLib. They
 may return a native-associated precomputed hydrograph of unqualified provenance
