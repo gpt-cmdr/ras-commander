@@ -163,7 +163,9 @@ the anchor, each output pixel takes the terrain pixel it lies on, products
 stack with the terrain without resampling, and equal lattice positions give
 bit-equal transforms. The anchor needs a north-up terrain with square pixels,
 `output_crs` equal to the results CRS, and `output_resolution` equal to the
-terrain pixel size; anything else raises `FimUnsupportedError`. Samples and
+terrain pixel size; anything else raises `FimUnsupportedError`. Grid edges are
+integer lattice positions, and the grid is clamped to the terrain extent where the
+wet cells reach past it (those pixels would only read terrain nodata). Samples and
 triangulation are unchanged.
 
 `coplanar="ignore"` maps a profile whose samples include points Qhull reports

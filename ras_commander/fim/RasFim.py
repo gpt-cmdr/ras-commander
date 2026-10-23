@@ -571,18 +571,19 @@ class RasFim:
             pixel_size = float(src.res[0])
             terrain_bounds = tuple(src.bounds)
             terrain_transform = src.transform
-        lattice_origin = None
+        lattice_origin = lattice_bounds = None
         if grid_anchor == "terrain":
             t = terrain_transform
             if t.b or t.d or t.a <= 0 or t.e >= 0 or not np.isclose(t.a, -t.e, rtol=1e-12, atol=0.0):
                 raise FimUnsupportedError("grid_anchor='terrain' needs a north-up terrain with square pixels")
-            if output_crs != CRS.from_user_input(cells.crs):
+            if not _prepare.same_crs(output_crs, cells.crs):
                 raise FimUnsupportedError("grid_anchor='terrain' needs output_crs equal to the results CRS")
             if not np.isclose(float(output_resolution), pixel_size, rtol=_prepare.LATTICE_TOLERANCE, atol=0.0):
                 raise FimUnsupportedError(
                     f"grid_anchor='terrain' needs output_resolution equal to the terrain pixel size {pixel_size!r}")
             output_resolution = pixel_size
             lattice_origin = (float(t.c), float(t.f))
+            lattice_bounds = terrain_bounds
         coplanar_samples: Dict[str, int] = {}
         terrain_block = _engine.terrain_identity(engine, terrain, cells.crs, terrain_crs_fnv1a64)
 
@@ -600,7 +601,8 @@ class RasFim:
                 for name in names:
                     try:
                         prep = _prepare.prepare_profile(cells, centers, name, pixel_size,
-                                                        lattice_origin=lattice_origin)
+                                                        lattice_origin=lattice_origin,
+                                                        lattice_bounds=lattice_bounds)
                         grids = _prepare.derive_grids(prep, terrain_bounds, output_crs, output_resolution)
                         window, mask_file = None, None
                         if aoi is not None:
