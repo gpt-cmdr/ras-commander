@@ -49,6 +49,115 @@ the authored perimeter. HEC-RAS preprocessing then builds the full mesh.
 returns successfully; it is documented below only for compatibility.
 RASMapper completion of an existing HDF is not text-to-HDF compilation.
 
+## Retain an exact subset of parent cells
+
+Use `GeomMesh.plan_cell_subset()` when a child domain is the union of explicit
+physical parent cells and must retain their faces and vertices. The parent must
+be a geometry-only HDF with complete native topology; a plan/results HDF is
+rejected. Prepare an owned child text/HDF pair with one matching area, consistent
+CRS, and the selected union as its perimeter. Cell IDs are zero-based physical
+IDs from `HdfMesh`; ghost cells, duplicate IDs, holes, disconnected components,
+and boundary pinch points are rejected. The API never expands the selection.
+Native completion can stamp the owned geometry target `HEC-RAS Results`.
+Planning accepts that target only if its sole root group is `Geometry`.
+The parent still requires `HEC-RAS Geometry`; actual result data are rejected.
+
+```python
+from ras_commander.geom import GeomMesh, GeomPreprocessor
+from ras_commander import RasPreprocess
+
+subset = GeomMesh.plan_cell_subset(
+    "source/Model.g01.hdf", "review-copy/Model.g02",
+    parent_cell_ids=selected_ids, mesh_name="Area",
+)
+review_record = subset.to_dict()  # ras-mesh-cell-subset/v1; no writes
+# Review the IDs, source hashes, CRS and counts before applying.
+# review_project is initialized for the owned copy and selected HEC-RAS 6.6;
+# plan 08 references g02. Reuse that exact runtime for both native phases.
+written = GeomMesh.apply_cell_subset(subset, ras_object=review_project)
+assert written.ok and written.operation == "cell_subset"
+
+geometry = GeomPreprocessor.run_geometry_preprocessor(
+    "08", ras_object=review_project, require_complete_products=True,
+)
+assert geometry.success
+assert GeomMesh.validate_cell_subset(subset)["topology_exact"]
+event = RasPreprocess.preprocess_plan(
+    "08", ras_object=review_project, clear_existing=True,
+)
+assert event.success
+assert GeomMesh.validate_cell_subset(subset)["topology_exact"]
+```
+
+Planning binds source HDF, child text and child HDF hashes. Applying refuses stale
+inputs, preserves physical cell coordinates and face polylines, reindexes native
+incidence tables, and creates one ghost cell per new perimeter face. HEC-RAS 6.6
+serializes the mesh in an isolated worker. The text perimeter is written from
+the exact native ring with the existing 16-character formatter. Completion
+checks can bind the full-precision ring only when that formatter reproduces
+the authored polygon exactly; the bound ring must remain unchanged and all
+mesh segments must remain inside it. This adds no containment tolerance.
+
+With `ras_object`, application uses that project's exact `ras_exe_path`.
+An optional `hecras_dir` must identify the same installation; conflicting paths
+are rejected. Without an explicit project, the active global project's runtime
+is retained. The declared `hecras_version="6.6"` is discovered only when neither
+project selects a runtime. The caller controls serialization `timeout` in seconds
+(default 1800); an expired worker raises `RuntimeError` and preserves the inputs.
+The native worker verifies the selected executable's file version. Returned
+`cell_subset.native_serialization` records the install directory, executable file
+version, executable SHA-256, and RasMapperLib DLL SHA-256.
+
+Native staging resolves associated sidecars against the original geometry
+folder, retains calibration overrides, then restores the original relative
+association spelling. Inherited hydraulic property tables are invalidated for
+fresh native computation. Two unique sibling backups support exception rollback
+if either file replacement fails. Exclusive access is required: the text/HDF
+pair is not crash atomic. Restore both backups after an interrupted replacement.
+
+`MeshResult.ok` here means topology writing completed. Retain the strict geometry
+receipt, fresh Event Conditions completion, independent `HdfMesh` cell/face
+readback, boundary attachments, and spatial review before accepting a child for
+simulation. The library does not produce an engineering approval or a review map.
+
+For an already planned breakout, pass `parent_cell_ids=selected_ids` to
+`RasBreakout2D.prepare_cloned_geometry()` with `refresh_method="rasexe"`,
+`remesh=False`, and `require_complete_products=True`. This applies the exact
+subset before the first native completion pass and validates source-bound face
+coordinates, endpoints, cell ownership, counts and reciprocal incidence again
+after preprocessing. Evidence is retained in
+`cell_subset.post_preprocess_validation`. Native remeshing from the same seeds
+and perimeter cannot pass this gate if it changes the exact topology.
+It cannot be combined with
+`computation_points` or grid anchoring.
+
+`validate_cell_subset()` returns `ras-mesh-cell-subset-validation/v1` evidence
+only on success; failed identity, array, count or incidence checks raise
+`RuntimeError`. Both source and child hashes must remain stable across the read.
+Cell vertices may rotate/reverse or change padding only when their edges still
+follow the same incident faces. Packed cell/face memberships may reorder when
+their sets and orientations remain reciprocal. Face coordinates, endpoints,
+cell ownership, polylines, normals/lengths and perimeter flags remain unchanged.
+
+| Validation field | Type | Meaning |
+|---|---|---|
+| `schema`, `status` | string | `ras-mesh-cell-subset-validation/v1`, `pass` |
+| `source_sha256` | string | Immutable planned parent geometry identity |
+| `geometry_hdf_sha256` | string | Stable child HDF bytes inspected by this validation |
+| `physical_cells`, `total_cells` | integer | Physical and physical-plus-boundary-ghost counts |
+| `faces`, `facepoints` | integer | Exact selected face and vertex counts |
+| `topology_exact` | boolean | Always true in returned evidence; failed checks raise |
+| `hydraulic_acceptance` | string | Always `not_established` |
+
+The opt-in `tests/test_mesh_cell_subset_native.py` test copies a prepared real
+project and checks strict Geometry, Event completion and topology after each
+native phase. It skips cleanly without Windows/Wine, HEC-RAS 6.6, pythonnet, or
+the explicitly configured `RAS_EXACT_SUBSET_NATIVE_CASE` fixture.
+
+::: ras_commander.geom.GeomMeshDataclasses.MeshCellSubsetPlan
+    options:
+      heading_level: 3
+
 ## Diagnose before repairing
 
 | Symptom or question | Inspection | Supported next step |

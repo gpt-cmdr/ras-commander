@@ -23,7 +23,7 @@ import tempfile
 from dataclasses import dataclass, field
 from itertools import pairwise
 from pathlib import Path
-from typing import Any, Optional, Union
+from typing import Any, Optional, Sequence, Union
 
 import geopandas as gpd
 import h5py
@@ -693,6 +693,7 @@ class RasBreakout2D:
         require_complete_products: bool = False,
         anchor_grid_to_parent: bool = False,
         computation_points: Optional[np.ndarray] = None,
+        parent_cell_ids: Optional[Sequence[int]] = None,
     ) -> Breakout2DPreparationResult:
         """Trim mesh-owned features and remesh only the cloned geometry.
 
@@ -747,6 +748,14 @@ class RasBreakout2D:
                 anchor_grid_to_parent=False. Points are written unchanged through
                 GeomMesh.write_computation_points; native compilation and QA
                 still follow. No point repair or face-identity claim is made.
+            parent_cell_ids: Explicit physical cell IDs from the source geometry
+                HDF. Retain their exact cell/face topology through
+                :meth:`GeomMesh.plan_cell_subset` and
+                :meth:`GeomMesh.apply_cell_subset` before native completion.
+                Requires refresh_hdf=True, refresh_method="rasexe", remesh=False,
+                anchor_grid_to_parent=False, and computation_points=None.
+                The selected union must match the planned child perimeter in
+                its source CRS/units; holes and disconnected selections block.
             disable_meteorology: Disable and remove inherited meteorological
                 sources for an owned boundary-only child before preprocessing.
                 Defaults to False for existing precipitation-driven workflows.
@@ -774,8 +783,34 @@ class RasBreakout2D:
         """
         if refresh_method not in ("rasmapper", "rasexe"):
             raise ValueError("refresh_method must be 'rasmapper' or 'rasexe'")
+        if parent_cell_ids is not None:
+            if (
+                not refresh_hdf
+                or refresh_method != "rasexe"
+                or remesh
+                or anchor_grid_to_parent
+                or computation_points is not None
+            ):
+                raise ValueError(
+                    "parent_cell_ids requires refresh_hdf=True, refresh_method='rasexe', "
+                    "remesh=False, anchor_grid_to_parent=False and computation_points=None"
+                )
+            ids = np.asarray(parent_cell_ids)
+            if (
+                ids.ndim != 1
+                or not ids.size
+                or ids.dtype.kind not in "iu"
+                or np.any(ids < 0)
+                or len(np.unique(ids)) != len(ids)
+            ):
+                raise ValueError(
+                    "parent_cell_ids must be unique nonnegative integer IDs"
+                )
         if computation_points is not None and (
-            not refresh_hdf or refresh_method != "rasexe" or remesh or anchor_grid_to_parent
+            not refresh_hdf
+            or refresh_method != "rasexe"
+            or remesh
+            or anchor_grid_to_parent
         ):
             raise ValueError(
                 "computation_points requires refresh_hdf=True, refresh_method='rasexe', "
@@ -893,10 +928,25 @@ class RasBreakout2D:
 
         refresh_result = None
         points = None
+        mesh_result = None
         if refresh_hdf and refresh_method == "rasexe":
             from .geom.GeomPreprocessor import GeomPreprocessor
 
-            if computation_points is None:
+            if parent_cell_ids is not None:
+                subset_plan = GeomMesh.plan_cell_subset(
+                    preflight.source_geometry_hdf,
+                    clone.geometry_path,
+                    parent_cell_ids,
+                    preflight.spec.source_2d_area,
+                    ras_object=ras_object,
+                )
+                mesh_result = GeomMesh.apply_cell_subset(
+                    subset_plan,
+                    timeout=timeout,
+                    ras_object=ras_object,
+                )
+                points = mesh_result
+            elif computation_points is None:
                 points = GeomMesh.generate_computation_points(
                     clone.geometry_number,
                     mesh_name=preflight.spec.source_2d_area,
@@ -965,7 +1015,6 @@ class RasBreakout2D:
             )
 
         containment_result = None
-        mesh_result = None
         breakline_containment_repairs = []
         if remesh:
             mesh_result = GeomMesh.generate(
@@ -1104,6 +1153,12 @@ class RasBreakout2D:
             if not property_tables:
                 raise RuntimeError("2D property-table computation returned False")
 
+        if parent_cell_ids is not None:
+            # Ras.exe may silently regenerate topology from unchanged seeds and
+            # perimeter. Recheck exact planned arrays after every native phase.
+            mesh_result.cell_subset["post_preprocess_validation"] = (
+                GeomMesh.validate_cell_subset(subset_plan, ras_object=ras_object)
+            )
         final_unsteady_hash = _sha256_file(clone.unsteady_path)
         if final_unsteady_hash != prepared_unsteady_hash:
             raise RuntimeError("Geometry preparation modified the cloned unsteady file")

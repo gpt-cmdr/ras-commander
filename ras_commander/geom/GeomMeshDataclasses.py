@@ -165,7 +165,10 @@ class MeshResult:
 
     # Appended to preserve the positional constructor contract. For point
     # generation, cell_count counts points and no compiled HDF is produced.
-    operation: str = "mesh_generation"  # or "computation_points"
+    operation: str = "mesh_generation"  # or "computation_points", "cell_subset"
+
+    # Empty unless exact physical parent cells were copied into an owned child.
+    cell_subset: Dict[str, Any] = field(default_factory=dict)
 
     @property
     def ok(self) -> bool:
@@ -202,3 +205,46 @@ class BCFixResult:
 
     def __bool__(self) -> bool:
         return self.ok
+
+
+@dataclass(frozen=True)
+class MeshCellSubsetPlan:
+    """Read-only plan for copying exact physical cells into an owned geometry.
+
+    Coordinates retain the source horizontal CRS and units. The selection is
+    explicit and sorted; it is never expanded, repaired or reseeded. Hashes
+    bind both inputs to application. This plan establishes no native completion
+    or hydraulic acceptance.
+    """
+
+    source_geometry_hdf: str
+    geometry_path: str
+    mesh_name: str
+    parent_cell_ids: Tuple[int, ...]
+    source_sha256: str
+    geometry_sha256: str
+    geometry_hdf_sha256: str
+    face_count: int
+    facepoint_count: int
+    boundary_tolerance: float
+    crs_wkt: str
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Return the planned source identities and topology counts."""
+        return {
+            "schema": "ras-mesh-cell-subset/v1",
+            "source_geometry_hdf": self.source_geometry_hdf,
+            "geometry_path": self.geometry_path,
+            "mesh_name": self.mesh_name,
+            "parent_cell_ids": list(self.parent_cell_ids),
+            "source_sha256": self.source_sha256,
+            "geometry_sha256": self.geometry_sha256,
+            "geometry_hdf_sha256": self.geometry_hdf_sha256,
+            "physical_cell_count": len(self.parent_cell_ids),
+            "face_count": self.face_count,
+            "facepoint_count": self.facepoint_count,
+            "boundary_tolerance": self.boundary_tolerance,
+            "horizontal_crs": self.crs_wkt,
+            "native_completion": "not_run",
+            "hydraulic_acceptance": "not_established",
+        }

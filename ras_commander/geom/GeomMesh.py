@@ -101,6 +101,7 @@ from .GeomMeshDataclasses import (
     DomainContainmentViolation,
     GridAnchor,
     MeshResult,
+    MeshCellSubsetPlan,
 )
 
 if TYPE_CHECKING:
@@ -6797,3 +6798,133 @@ class GeomMesh:
             f"(trims: {result.trims})"
         )
         return result
+
+    @staticmethod
+    @log_call
+    def plan_cell_subset(
+        source_geometry_hdf: Union[str, Path],
+        geom_file: Union[str, Path],
+        parent_cell_ids: Sequence[int],
+        mesh_name: str,
+        *,
+        boundary_tolerance: float = 1e-6,
+        ras_object=None,
+    ) -> MeshCellSubsetPlan:
+        """Plan an exact physical-cell subset without modifying either input.
+
+        The source must be a fully processed geometry-only HDF. The target is
+        an owned .g## text/HDF pair containing one named 2D area whose perimeter
+        agrees with the selected cell union within boundary_tolerance, measured
+        in source horizontal units. CRS definitions must agree. Holes, disjoint
+        components, boundary pinch points, duplicate IDs and ghost IDs block;
+        the selection is never repaired or expanded. No result HDF is read.
+        An owned target stamped "HEC-RAS Results" by native completion is
+        accepted only when its sole root group is Geometry; source stamps
+        remain restricted to "HEC-RAS Geometry".
+
+        Args:
+            source_geometry_hdf: Read-only parent geometry HDF, with native mesh tables.
+            geom_file: Owned child geometry text path; its .hdf must already exist.
+            parent_cell_ids: Explicit zero-based physical parent cell IDs.
+            mesh_name: Exact source and child 2D area name.
+            boundary_tolerance: Maximum perimeter distance in source horizontal units.
+            ras_object: Optional isolated project; path inputs require no global project.
+
+        Returns:
+            Hash-bound plan with selected IDs and topology counts. This performs
+            no native computation and produces no files or hydraulic acceptance.
+
+        Raises:
+            ValueError: The explicit selection, CRS or child perimeter is unsupported.
+            RuntimeError: An input changes during planning.
+        """
+        from ._cell_subset import _plan_cell_subset
+
+        return _plan_cell_subset(
+            source_geometry_hdf,
+            geom_file,
+            parent_cell_ids,
+            mesh_name,
+            boundary_tolerance,
+        )
+
+    @staticmethod
+    @log_call
+    def apply_cell_subset(
+        plan: MeshCellSubsetPlan,
+        *,
+        hecras_version: str = "6.6",
+        hecras_dir: Optional[Union[str, Path]] = None,
+        timeout: int = 1800,
+        ras_object=None,
+    ) -> MeshResult:
+        """Write a planned topology into an owned child text/HDF pair.
+
+        Retains physical parent centres, cell polygons and face coordinates in
+        their original horizontal CRS and units. Reindexes faces and facepoints,
+        creates one ghost per new boundary face, and checks reciprocal incidence
+        after isolated native serialization. No parent results are copied and
+        inherited hydraulic property tables are invalidated. Source bytes are
+        never modified. Text points use the existing native fixed-width writer;
+        its mesh timestamp is bound to the native serialized Data Date.
+
+        Only HEC-RAS 6.6 is qualified. The native worker has a caller-selected timeout.
+        Uses sibling staging, preserves two uniquely named .bak files and restores
+        original bytes if either replacement fails. Requires exclusive access;
+        exception rollback is not crash-atomic across the pair. A crash between
+        replacements requires restoring both returned backups before retrying.
+
+        Args:
+            plan: Unchanged plan returned by plan_cell_subset.
+            hecras_version: Installed engine version used for native serialization.
+            hecras_dir: Explicit installed runtime folder. With ras_object, it
+                must match the project's selected Ras.exe installation. Native
+                file metadata must identify HEC-RAS 6.6; hashes are returned.
+            timeout: Positive native serialization timeout in seconds, default 1800.
+            ras_object: Optional isolated project forwarded to text point writing.
+
+        Returns:
+            MeshResult with operation="cell_subset". Its complete status means
+            topology writing only. cell_subset records the plan, native counts,
+            timestamp, invalidations and backup paths. Native geometry/property
+            preprocessing, Event Conditions completion, final readback, review
+            and hydraulic acceptance remain separate required caller phases.
+
+        Raises:
+            RuntimeError: Inputs change, native serialization fails, or incidence changes.
+            ValueError: The runtime or planned geometry is unsupported.
+        """
+        if hecras_version != "6.6":
+            raise ValueError(
+                "Exact cell subset serialization is qualified only for HEC-RAS 6.6"
+            )
+        if isinstance(timeout, bool) or not isinstance(timeout, int) or timeout <= 0:
+            raise ValueError("timeout must be a positive integer number of seconds")
+        from ._cell_subset import _apply_cell_subset
+
+        return _apply_cell_subset(plan, hecras_version, hecras_dir, ras_object, timeout)
+
+    @staticmethod
+    @log_call
+    def validate_cell_subset(
+        plan: MeshCellSubsetPlan, *, ras_object=None
+    ) -> dict[str, Any]:
+        """Verify retained exact topology against a hash-bound geometry-only source.
+
+        Args:
+            plan: Original subset plan. The source bytes and physical IDs remain
+                authoritative after native preprocessing changes the child HDF.
+            ras_object: Optional project context; paths are bound by the plan.
+
+        Returns:
+            Read-only ras-mesh-cell-subset-validation/v1 evidence with source and
+            child hashes, physical/ghost/face/vertex counts and topology_exact.
+            Coordinates retain their source CRS/units. No files are written,
+            native execution is launched, or hydraulic acceptance established.
+
+        Raises:
+            RuntimeError: Source identity, exact arrays, counts or reciprocity fail.
+        """
+        from ._cell_subset import _validate_cell_subset
+
+        return _validate_cell_subset(plan)
