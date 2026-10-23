@@ -345,6 +345,34 @@ def test_explicit_points_replace_generated_bootstrap_without_remeshing(tmp_path,
     assert preflight.source_geometry_path.read_bytes() == original_source
 
 
+def test_explicit_seed_repair_is_opt_in_and_precedes_native_refresh(tmp_path, monkeypatch):
+    preflight, clone, ras = _fixture(tmp_path)
+    calls = []
+
+    def plan(*args, **kwargs):
+        calls.append("plan")
+        return object()
+
+    def apply(plan):
+        calls.append("apply")
+        return GeomMesh.write_computation_points(clone.geometry_path, [[20, 20]], mesh_name="Area")
+
+    def refresh(*args, **kwargs):
+        calls.append("refresh")
+        _sync_native_hdf(clone.geometry_path)
+        return SimpleNamespace(success=True, error=None, first_error_line=None)
+
+    monkeypatch.setattr(GeomMesh, "plan_computation_point_repair", staticmethod(plan))
+    monkeypatch.setattr(GeomMesh, "apply_computation_point_repair", staticmethod(apply))
+    monkeypatch.setattr(GeomPreprocessor, "run_geometry_preprocessor", staticmethod(refresh))
+    result = RasBreakout2D.prepare_cloned_geometry(
+        preflight, clone, ras_object=ras, computation_points=np.array([[20, 20]]),
+        repair_computation_points=True, refresh_method="rasexe", remesh=False,
+    )
+    assert result.computation_points_result.ok
+    assert calls == ["plan", "apply", "refresh"]
+
+
 @pytest.mark.parametrize("points", [[[1, 1]], [[10 + 1e-15, 50]]])
 def test_invalid_explicit_points_fail_before_breakout_mutation(tmp_path, points):
     preflight, clone, ras = _fixture(tmp_path)
