@@ -40,7 +40,7 @@ jobs:
       - name: Install ras-commander and test dependencies
         env:
           CI: '1'
-        run: python -m pip install . pytest xarray geopandas shapely pyproj rasterio scipy
+        run: python -m pip install --only-binary rasterio,scipy . pytest xarray geopandas shapely pyproj rasterio scipy
       # Wheels only: never build the extension from source here. Until the package
       # is published (or for a platform without a wheel) the native steps are skipped.
       - name: Install ras-commander-fast-hdf from PyPI
