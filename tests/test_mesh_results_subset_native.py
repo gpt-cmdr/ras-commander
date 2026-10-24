@@ -3,7 +3,8 @@
 Set RAS_RESULTS_SUBSET_NATIVE_CASE to a local JSON case with parent_plan_hdf,
 mesh_name, parent_cell_ids (a list, or a .npy path), terrain_hdf (a RAS Mapper
 terrain covering the selected cells; its folder is copied and must hold
-Projection.prj), output_rows and units ("US Customary" or "SI Units"). The parent and terrain stay read-only;
+Projection.prj), output_rows and units ("US Customary" or "SI Units"). Choose
+rows with wet selected cells: RAS Mapper writes no raster for a dry profile. The parent and terrain stay read-only;
 the child project is built under the pytest temporary folder. Private model
 bytes and case paths are never stored in this repo.
 """
