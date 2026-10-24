@@ -47,6 +47,7 @@ import math
 import re
 import tempfile
 from datetime import datetime
+from decimal import Decimal, InvalidOperation
 from pathlib import Path
 from typing import TYPE_CHECKING, List, Optional, Sequence, Union
 
@@ -438,7 +439,6 @@ class GeomStorage:
     def _format_surface_line_lines(
         coords: List[tuple[float, float]],
         *,
-        values_per_line: Optional[int] = None,
         trailing_padding: str = "",
     ) -> List[str]:
         """Format perimeter XY pairs in HEC-RAS fixed-width surface line form.
@@ -448,7 +448,7 @@ class GeomStorage:
         significant digits than a fixed 7-decimal approach.
         """
         col_w = GeomStorage.SURFACE_LINE_COLUMN
-        vpl = values_per_line or GeomStorage.SURFACE_LINE_VALUES_PER_LINE
+        vpl = GeomStorage.SURFACE_LINE_VALUES_PER_LINE
         lines = []
         flat_values = []
         for x_coord, y_coord in coords:
@@ -646,6 +646,22 @@ class GeomStorage:
 
         parts.extend([""] * (4 - len(parts)))
         return ",".join(parts[:4])
+
+    @staticmethod
+    def _point_generation_data_matches(requested: str, existing: Optional[str]) -> bool:
+        """Compare spacing fields without changing equivalent source formatting."""
+        if existing is None:
+            return False
+        try:
+            existing = GeomStorage._normalize_point_generation_data(existing)
+            return all(
+                left == right or (
+                    bool(left) and bool(right) and Decimal(left) == Decimal(right)
+                )
+                for left, right in zip(requested.split(','), existing.split(','))
+            )
+        except (ValueError, InvalidOperation):
+            return requested == existing
 
     @staticmethod
     def _build_2d_settings_lines(settings: dict) -> List[str]:
@@ -1609,7 +1625,7 @@ class GeomStorage:
 
         Existing blocks retain unrelated records and settings in their source
         order. Unchanged perimeters retain their original coordinate records;
-        changed perimeters retain the source row packing and trailing padding.
+        changed perimeters use one XY pair per row with source trailing padding.
         A perimeter change clears stored mesh points and refreshes its timestamp.
 
         Args:
@@ -1674,13 +1690,24 @@ class GeomStorage:
 
             try:
                 existing_coords = GeomStorage._parse_surface_line_coords(block_lines, info)
-                perimeter_changed = not GeomStorage._coords_match(coords, existing_coords)
+                declared_count = int(GeomParser.extract_keyword_value(
+                    block_lines[info['surface_line_idx']], "Storage Area Surface Line",
+                ).strip())
+                perimeter_changed = (
+                    declared_count != len(existing_coords) or
+                    not GeomStorage._coords_match(coords, existing_coords)
+                )
             except ValueError:
                 perimeter_changed = True
 
             # Splice only owned records; retain all other bytes and record order.
             edits = []
             missing_lines = []
+
+            def section_data_end(index, end):
+                while end > index + 1 and not block_lines[end - 1].strip():
+                    end -= 1
+                return end
 
             def replace_record(index, text, end=None):
                 if index is None:
@@ -1689,7 +1716,8 @@ class GeomStorage:
                     raw = block_lines[index].rstrip('\r\n')
                     padding = raw[len(raw.rstrip(' \t')):]
                     replacement = text.rstrip('\n') + padding + '\n'
-                    edits.append((index, end or index + 1, [replacement]))
+                    last = section_data_end(index, end) if end is not None else index + 1
+                    edits.append((index, last, [replacement]))
 
             if recompute_centroid:
                 edits.append((0, 1, [GeomStorage._format_storage_area_header(
@@ -1700,25 +1728,29 @@ class GeomStorage:
                 surface_idx = info['surface_line_idx']
                 surface_end = info['surface_line_end']
                 padding = ""
-                values_per_line = None
                 if surface_idx is None:
                     surface_idx = surface_end = 1
                     surface_header = f"Storage Area Surface Line= {len(coords)}\n"
                 else:
-                    surface_header = re.sub(
-                        r"(?<==)([ \t]*)\d+",
+                    source_header = block_lines[surface_idx].rstrip('\r\n')
+                    surface_header, substitutions = re.subn(
+                        r"(?<==)([ \t]*)\d+(?=[ \t]*$)",
                         lambda match: match.group(1) + str(len(coords)),
-                        block_lines[surface_idx], count=1,
+                        source_header, count=1,
                     )
+                    if not substitutions:
+                        header_padding = source_header[len(source_header.rstrip(' \t')):]
+                        surface_header = f"Storage Area Surface Line= {len(coords)}{header_padding}"
+                    surface_header += '\n'
+                    surface_end = section_data_end(surface_idx, surface_end)
                     for row in block_lines[surface_idx + 1:surface_end]:
                         values = GeomParser.parse_fixed_width(row, GeomStorage.SURFACE_LINE_COLUMN)
                         if values:
                             raw = row.rstrip('\r\n')
                             padding = raw[len(raw.rstrip(' \t')):]
-                            values_per_line = len(values)
                             break
                 surface_lines = [surface_header] + GeomStorage._format_surface_line_lines(
-                    coords, values_per_line=values_per_line, trailing_padding=padding,
+                    coords, trailing_padding=padding,
                 )
                 edits.append((surface_idx, surface_end, surface_lines))
 
@@ -1726,7 +1758,9 @@ class GeomStorage:
                 missing_lines.append("Storage Area Is2D=-1\n")
             if info['point_generation_idx'] is None or (
                 normalized_point_generation_data is not None and
-                normalized_point_generation_data != info['point_generation_data']
+                not GeomStorage._point_generation_data_matches(
+                    normalized_point_generation_data, info['point_generation_data'],
+                )
             ):
                 value = (
                     normalized_point_generation_data or
@@ -1751,13 +1785,20 @@ class GeomStorage:
                 insert_idx = info['settings_start']
                 if insert_idx is None:
                     insert_idx = GeomStorage._storage_area_tail_start(info, len(block_lines))
+                while insert_idx > 1 and not block_lines[insert_idx - 1].strip():
+                    insert_idx -= 1
                 if info['surface_line_idx'] is None and insert_idx == 1:
                     surface_lines.extend(missing_lines)
                 else:
                     edits.append((insert_idx, insert_idx, missing_lines))
 
             new_block_lines = list(block_lines)
-            for first, last, replacement in sorted(edits, key=lambda edit: edit[0], reverse=True):
+            ordered_edits = sorted(edits, key=lambda edit: (edit[0], edit[1]))
+            if any(left[1] > right[0] for left, right in zip(ordered_edits, ordered_edits[1:])):
+                raise ValueError("Overlapping 2D perimeter record edits")
+            for first, last, replacement in reversed(ordered_edits):
+                if first and replacement and not new_block_lines[first - 1].endswith(('\n', '\r')):
+                    new_block_lines[first - 1] += '\n'
                 new_block_lines[first:last] = replacement
             new_lines = lines[:start_idx] + new_block_lines + lines[end_idx:]
 
