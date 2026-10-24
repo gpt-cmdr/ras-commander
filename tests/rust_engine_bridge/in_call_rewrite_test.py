@@ -146,6 +146,9 @@ def test_one_read_stats_each_file_once_and_reads_do_not_share_stats(fast_hdf, pu
 
     def one_read(hdf_path):
         with h5py.File(hdf_path, "r") as f:
+            # Warm-up: the path is resolved once per public call, and on Python <= 3.12
+            # Path.resolve() stats the file itself; measure the reads after it.
+            fast_hdf.read_typed(f["Results/Values"], backend="rust")
             stats.clear()
             fast_hdf.read_typed(f["Results/Values"], backend="rust")
             first = list(stats)
