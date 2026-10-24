@@ -647,7 +647,8 @@ class HdfPlan:
     @log_call
     @standardize_input(file_type='plan_hdf')
     def get_plan_met_precip_values(
-        hdf_path: Union[str, Path, int, h5py.File], *, ras_object=None,
+        hdf_path: Union[str, Path, int, h5py.File], *, ras_object: Optional[Any] = None,
+        group_path: str = "Event Conditions/Meteorology/Precipitation",
     ) -> Dict[str, Any]:
         """Read materialized solver precipitation arrays without unit conversion.
 
@@ -655,6 +656,10 @@ class HdfPlan:
             hdf_path: Plan HDF path, plan identifier or open HDF handle accepted
                 by the HDF input decorator.
             ras_object: Optional RasPrj context for resolving plan identifiers.
+            group_path: Exact HDF precipitation group. The default reads a
+                compiled plan. For a retained meteorology-only snapshot, pass
+                ``"Meteorology/Precipitation"`` explicitly. No alternate group
+                is selected when the requested data are absent.
 
         Returns:
             Dictionary with ``values`` (time by precipitation-grid cell), raw
@@ -668,9 +673,18 @@ class HdfPlan:
         Raises:
             KeyError: Solver Values/Timestamp datasets are absent. An imported
                 raster sidecar alone is not materialized solver precipitation.
-            ValueError: Dataset dimensions or time-axis lengths are inconsistent.
+            ValueError: The group path is empty or not a string, or dataset
+                dimensions or time-axis lengths are inconsistent.
+
+        Notes:
+            Opens the source read-only and does not execute HEC-RAS. Snapshot
+            arrays retain the same units, timestamp encodings and shape checks
+            as compiled-plan arrays. This read does not establish that another
+            plan used the retained precipitation.
         """
-        group_path = "Event Conditions/Meteorology/Precipitation"
+        if not isinstance(group_path, str) or not group_path.strip('/'):
+            raise ValueError("group_path must be a nonempty HDF group path")
+        group_path = group_path.rstrip('/')
 
         def attributes(obj):
             return {
