@@ -16,7 +16,7 @@ without its container and request layers.
 
 Example:
     >>> from ras_commander.terrain import RasTauDem
-    >>> RasTauDem.get_taudem_info()["executables"]["StreamNet"]   # doctest: +SKIP
+    >>> info = RasTauDem.get_taudem_info()                          # doctest: +SKIP
     >>> result = RasTauDem.delineate("Terrain/dem.tif", "work/taudem",
     ...                              stream_area_sqmi=0.5, cell_size=30.0)  # doctest: +SKIP
     >>> result.streams[["LINKNO", "DSLINKNO", "DSContArea"]].head()      # doctest: +SKIP
