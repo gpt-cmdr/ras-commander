@@ -11,11 +11,11 @@ Workers load that pinned baseline or the newly built candidate in fresh processe
 the extension moved there from `rust/fast-hdf`.
 
 ```powershell
-uv run maturin develop --release --locked --features extension-module,exports-all --manifest-path $env:RAS_FAST_HDF_SOURCE/python/Cargo.toml
+uv run --project $PWD --directory $env:RAS_FAST_HDF_SOURCE/python maturin develop --release --locked --features extension-module,exports-all
 uv run python scripts/benchmarks/rust_fgb_finalization/benchmark.py --prepared working/prepared/cells7 --output working/fgb-finalization/measurements/cells7 --samples 3
 # Repeat with cells6 and cells5. Do not overwrite previous measurement folders.
 uv run python -m pytest tests/rust_fgb_finalization -q
-cargo test --release --locked --manifest-path $env:RAS_FAST_HDF_SOURCE/python/src/exports/Cargo.toml --features flatgeobuf
+cargo test --release --locked --manifest-path $env:RAS_FAST_HDF_SOURCE/Cargo.toml --lib --features exports-flatgeobuf exports::
 cargo test --release --locked --manifest-path tests/rust_fgb_finalization/Cargo.toml
 uv run python scripts/benchmarks/rust_fgb_finalization/policy_probe.py --output working/fgb-finalization/strict-policy.json
 ```
