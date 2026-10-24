@@ -105,6 +105,20 @@ and an unresolved status for audit workflows.
 
 Plan-level information from HDF files.
 
+`HdfPlan.get_plan_met_precip_values(hdf_path)` reads materialized precipitation
+values, timestamps and attributes from a compiled plan without changing the file.
+For a retained meteorology-only snapshot, select its group explicitly:
+
+```python
+rain = HdfPlan.get_plan_met_precip_values(
+    "retained-meteorology.h5", group_path="Meteorology/Precipitation"
+)
+```
+
+Arrays retain their stored units, numerical types and timestamp encodings.
+Missing datasets or inconsistent shapes raise errors; the reader does not search
+other groups or establish which model run used a snapshot.
+
 - `get_plan_information(hdf_path)` - Get plan metadata
 - `get_plan_start_time(hdf_path)` / `get_plan_end_time(hdf_path)` - Get start/end times
 - `get_plan_parameters(hdf_path)` - Get computation parameters
@@ -1193,6 +1207,7 @@ prerequisites and return contracts take precedence over abbreviated summaries.
         - get_plan_end_time
         - get_plan_information
         - get_plan_met_precip
+        - get_plan_met_precip_values
         - get_plan_parameters
         - get_plan_start_time
         - get_plan_timestamps_list
