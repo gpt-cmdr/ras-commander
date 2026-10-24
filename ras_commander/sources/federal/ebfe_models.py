@@ -21,6 +21,7 @@ These functions provide tested, deterministic organization for:
 - Lower Ouachita (08040207) - Pattern 2: URL-index; loose per-plan Output HDFs (10/100/500yr published)
 - Boeuf (08050001) - Pattern 2: 6-part split (~175 GiB), multi-work-area BO1..BOn, LA North
 - Bayou D'Arbonne (08040206) - Pattern 2: URL-index; results bundled inside the Input zip
+- Salt Draw (13070004) - Pattern 3: Single 2D archive; selectable ~9 GB plan result HDFs
 
 For organizing other eBFE models, use the organizing-ebfe-models agent skill which
 handles all patterns dynamically and generates new functions as needed.
@@ -178,6 +179,12 @@ class RasEbfeModels:
     )
     _MEDINA_SOURCE_SIZE = 52_085_665_792
     _MEDINA_SOURCE_ETAG = "5474dc597ff3a2fb4418a59807a439ff-6210"
+    _SALT_DRAW_SOURCE_URL = (
+        "https://ebfedata.s3.amazonaws.com/13070004_SaltDraw/"
+        "13070004_Models.zip"
+    )
+    _SALT_DRAW_SOURCE_SIZE = 66_982_389_960
+    _SALT_DRAW_SOURCE_ETAG = "4a242424595c638af489fd1b41c94b0d-7985"
     _DOUBLE_MOUNTAIN_FORK_BRAZOS_SOURCE_BASE = (
         "https://ebfedata.s3-us-west-2.amazonaws.com/"
         "12050004_DoubleMountainForkBrazos/Models"
@@ -401,6 +408,10 @@ class RasEbfeModels:
         "bayou-d-arbonne": "bayou-darbonne",
         "darbonne": "bayou-darbonne",
         "08040206": "bayou-darbonne",
+        "salt-draw": "salt-draw",
+        "saltdraw": "salt-draw",
+        "sldr": "salt-draw",
+        "13070004": "salt-draw",
     }
 
     _MODEL_REGISTRY = {
@@ -839,6 +850,80 @@ class RasEbfeModels:
                     "url": _MEDINA_SOURCE_URL,
                     "size_bytes": _MEDINA_SOURCE_SIZE,
                     "etag": _MEDINA_SOURCE_ETAG,
+                    "extract": False,
+                }],
+            },
+        },
+        "salt-draw": {
+            "study_area": "SaltDraw_13070004",
+            "huc8": "13070004",
+            "organizer": "organize_salt_draw",
+            "download_subdir": "13070004_SaltDraw",
+            "output_name": "SaltDraw_13070004",
+            "ras_version": "6.6",
+            "delivered_ras_version": "6.4.1",
+            "model_type": ModelType.UNSTEADY_2D,
+            "source_url": _SALT_DRAW_SOURCE_URL,
+            "file_size_bytes": _SALT_DRAW_SOURCE_SIZE,
+            "default_kwargs": {"output_plans": ["p01", "p02"]},
+            "notes": (
+                "One HEC-RAS 6.4.1 2D rain-on-grid project (SLDR_004, g02) "
+                "with seven plans: p01 1%, p02 0.2%, p03 10%, p04 4%, p05 2%, "
+                "p06 1% plus, p07 1% minus AEP. Terrain, land cover, DSS "
+                "inputs, and the HMS model are delivered. Each plan result HDF "
+                "is about 9 GB; only output_plans (default p01, p02) are "
+                "extracted. HEC-RAS 6.6 mesh regeneration needs the GeomMesh "
+                "computation-point (seed) repair first: 48 delivered cells "
+                "have more than eight sides."
+            ),
+            "extra": {
+                "source_program": "fema_ebfe",
+                "lane_kind": "integrated_2d",
+                "project_count": 1,
+                "project": "SLDR_004",
+                "project_relative_path": "RAS Model/RAS_Submittal/Input",
+                "geometry": "02",
+                "two_d_flow_areas": {"SLDR_004": {"cells": 794_234}},
+                "precipitation": "rain_on_grid",
+                "plan_events": {
+                    "p01": {"title": "SLDR_004_1pct", "unsteady": "01", "aep": "1%"},
+                    "p02": {"title": "SLDR_004_0_2pct", "unsteady": "02", "aep": "0.2%"},
+                    "p03": {"title": "SLDR_004_10pct", "unsteady": "03", "aep": "10%"},
+                    "p04": {"title": "SLDR_004_4pct", "unsteady": "04", "aep": "4%"},
+                    "p05": {"title": "SLDR_004_2pct", "unsteady": "05", "aep": "2%"},
+                    "p06": {"title": "SLDR_004_1plu", "unsteady": "06", "aep": "1% plus"},
+                    "p07": {"title": "SLDR_004_1min", "unsteady": "07", "aep": "1% minus"},
+                },
+                "default_output_plans": ["p01", "p02"],
+                "result_datasets": {
+                    "water_surface": True,
+                    "face_velocity": True,
+                    "face_flow": False,
+                },
+                "terrain_required": True,
+                "terrain_source_complete": True,
+                "land_cover_source_complete": True,
+                "delivered_hms_project": True,
+                "mesh_regeneration": {
+                    "ras_version": "6.6",
+                    "status": "requires_seed_repair",
+                    "cells_over_eight_faces": 48,
+                    "repair_api": (
+                        "GeomMesh.plan_computation_point_repair / "
+                        "GeomMesh.apply_computation_point_repair"
+                    ),
+                },
+                "required_validation_level": "unsteady_start",
+                "validation_status": "pending",
+                "hec_ras_executed": False,
+                "source_assets": [{
+                    "role": "models",
+                    "name": "13070004_Models.zip",
+                    "url": _SALT_DRAW_SOURCE_URL,
+                    "size_bytes": _SALT_DRAW_SOURCE_SIZE,
+                    "etag": _SALT_DRAW_SOURCE_ETAG,
+                    # The dedicated organizer reads selected members from the
+                    # retained archive instead of expanding all 67 GB.
                     "extract": False,
                 }],
             },
@@ -1458,6 +1543,10 @@ class RasEbfeModels:
             if source is None:
                 return False
             return cibolo_output_is_reusable(organized_target, source)
+        if str(metadata.get("huc8")) == "13070004":
+            from .ebfe_salt_draw import salt_draw_is_reusable
+
+            return salt_draw_is_reusable(organized_target)
         if str(metadata.get("huc8")) == "12100302":
             from .ebfe_medina import medina_is_reusable
 
@@ -1639,6 +1728,61 @@ class RasEbfeModels:
             output_folder or "./ebfe_organized/Medina_12100302"
         )
         return organize_medina(archive, destination)
+
+    @staticmethod
+    @log_call
+    def organize_salt_draw(
+        downloaded_folder: Optional[Union[str, Path]] = None,
+        output_folder: Optional[Union[str, Path]] = None,
+        output_plans: Optional[List[str]] = None,
+        include_hms: bool = True,
+    ) -> Path:
+        """Organize Salt Draw (13070004), extracting only selected result HDFs.
+
+        Args:
+            downloaded_folder: ``13070004_Models.zip``, a folder that holds it
+                (downloaded there with its identity sidecar when absent), or an
+                already-extracted ``13070004_Models_20250416`` delivery tree.
+            output_folder: Organized destination.
+            output_plans: Plan result HDFs to extract, from ``p01`` (1% AEP),
+                ``p02`` (0.2%), ``p03`` (10%), ``p04`` (4%), ``p05`` (2%),
+                ``p06`` (1% plus), ``p07`` (1% minus). Default ``p01``, ``p02``.
+                Plan text files for all seven plans are always kept.
+            include_hms: Copy the delivered HEC-HMS project.
+
+        Returns:
+            Organized folder; the project is
+            ``RAS Model/RAS_Submittal/Input/SLDR_004.prj``.
+        """
+        from .ebfe_salt_draw import DELIVERY_ROOT, SOURCE_NAME, organize_salt_draw
+
+        source = Path(
+            downloaded_folder or "./ebfe_downloads/13070004_SaltDraw"
+        ).resolve()
+        is_tree = (
+            source.is_dir()
+            and not (source / SOURCE_NAME).is_file()
+            and any(
+                (candidate / "Hydraulic Models" / "RAS_Submittal").is_dir()
+                for candidate in (source, source / DELIVERY_ROOT)
+            )
+        )
+        if not is_tree:
+            archive = (
+                source if source.suffix.lower() == ".zip" else source / SOURCE_NAME
+            )
+            if not archive.is_file():
+                RasEbfeModels.download_source_asset(
+                    "salt-draw", "models", archive.parent
+                )
+            source = archive
+        destination = Path(output_folder or "./ebfe_organized/SaltDraw_13070004")
+        return organize_salt_draw(
+            source,
+            destination,
+            output_plans=output_plans,
+            include_hms=include_hms,
+        )
 
     @staticmethod
     @log_call
