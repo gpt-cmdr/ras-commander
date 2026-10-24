@@ -376,6 +376,112 @@ def test_explicit_seed_repair_is_opt_in_and_precedes_native_refresh(tmp_path, mo
     assert calls == ["plan", "apply", "refresh"]
 
 
+@pytest.mark.parametrize("deficit, accepted", [(5.997435e-5, True), (0.02, False)])
+def test_supplied_seed_numeric_breakline_preparation_keeps_strict_native_audit(
+    tmp_path, monkeypatch, deficit, accepted
+):
+    """Native ring serialization can leave a tiny inward-buffer endpoint gap."""
+    from ras_commander.geom import MeshSeedRepairResult
+
+    preflight, clone, ras = _fixture(tmp_path)
+    seeds = np.array([[20.0, 20.0]])
+    calls = []
+
+    def plan(number, points, **kwargs):
+        np.testing.assert_array_equal(points, seeds)
+        calls.append("parent_seed_preview")
+        return object()
+
+    def apply(plan):
+        result = GeomMesh.write_computation_points(clone.geometry_path, seeds, mesh_name="Area")
+        return MeshSeedRepairResult(**vars(result))
+
+    def refresh(*args, **kwargs):
+        assert kwargs["require_complete_products"]
+        calls.append("strict_preprocess")
+        # A native perimeter rewrite can change the eroded admissible ring.
+        # Keep text/HDF synchronized; let the real containment reader measure
+        # the retained breakline's numeric deficit against that current ring.
+        GeomStorage.set_2d_flow_area_perimeter(
+            clone.geometry_path, "Area", geometry=box(10 + deficit, 10, 90, 90),
+            point_generation_data=[None, None, 1, 1], create_backup=False,
+        )
+        _sync_native_hdf(clone.geometry_path)
+        return SimpleNamespace(success=True, error=None, first_error_line=None)
+
+    def forbidden(*args, **kwargs):
+        pytest.fail("supplied parent seeds must not be replaced by grid generation")
+
+    monkeypatch.setattr(GeomMesh, "plan_computation_point_repair", staticmethod(plan))
+    monkeypatch.setattr(GeomMesh, "apply_computation_point_repair", staticmethod(apply))
+    monkeypatch.setattr(GeomMesh, "generate_computation_points", staticmethod(forbidden))
+    monkeypatch.setattr(GeomMesh, "generate", staticmethod(forbidden))
+    monkeypatch.setattr(GeomPreprocessor, "run_geometry_preprocessor", staticmethod(refresh))
+    kwargs = dict(ras_object=ras, computation_points=seeds, repair_computation_points=True,
+                  refresh_method="rasexe", remesh=False, require_complete_products=True)
+    if not accepted:
+        with pytest.raises(ValueError, match="numeric repair bounds"):
+            RasBreakout2D.prepare_cloned_geometry(preflight, clone, **kwargs)
+        assert calls == ["parent_seed_preview", "strict_preprocess"]
+        return
+    result = RasBreakout2D.prepare_cloned_geometry(preflight, clone, **kwargs)
+    assert calls == ["parent_seed_preview", "strict_preprocess"] * 2
+    assert result.containment_result.ok
+    repair = result.breakline_containment_repairs[0]
+    assert repair["status"] == "validated" and repair["perimeter_unchanged"]
+    assert 0 < repair["repairs"][0]["geometry_displacement"] < 0.01
+    assert result.computation_points_result.seed_repair["post_preprocess_containment"]["ok"]
+
+
+def test_compiled_concavity_failure_prepares_perimeter_then_repeats_strict_gate(tmp_path, monkeypatch):
+    from ras_commander import HdfMesh
+    from ras_commander.geom import MeshSeedRepairResult
+
+    preflight, clone, ras = _fixture(tmp_path)
+    seeds = np.array([[20.0, 20.0]])
+    face = LineString([(20, 89.998), (80, 89.998)])
+    calls = []
+
+    def plan(number, points, **kwargs):
+        np.testing.assert_array_equal(points, seeds)
+        calls.append("supplied_seed_preview")
+        return object()
+
+    def apply(plan):
+        result = GeomMesh.write_computation_points(clone.geometry_path, seeds, mesh_name="Area")
+        return MeshSeedRepairResult(**vars(result))
+
+    def refresh(*args, **kwargs):
+        assert kwargs["require_complete_products"] and kwargs["geometry_only"]
+        calls.append("strict_native_gate")
+        if len(calls) == 2:
+            GeomStorage.set_2d_flow_area_perimeter(
+                clone.geometry_path, "Area",
+                geometry=Polygon([(10,10),(90,10),(90,90),(55,90),(50,89.995),(45,90),(10,90)]),
+                point_generation_data=[None,None,1,1], create_backup=False,
+            )
+            _sync_native_hdf(clone.geometry_path)
+            return SimpleNamespace(success=False,error="Faces Perimeter: face segments outside authored perimeter")
+        _sync_native_hdf(clone.geometry_path)
+        polygon = GeomStorage.get_storage_area_polygons(clone.geometry_path,exclude_2d=False).geometry.item()
+        assert polygon.covers(face)
+        return SimpleNamespace(success=True,error=None,first_error_line=None)
+
+    monkeypatch.setattr(GeomMesh, "plan_computation_point_repair", staticmethod(plan))
+    monkeypatch.setattr(GeomMesh, "apply_computation_point_repair", staticmethod(apply))
+    monkeypatch.setattr(GeomPreprocessor, "run_geometry_preprocessor", staticmethod(refresh))
+    monkeypatch.setattr(HdfMesh, "get_mesh_cell_faces", staticmethod(lambda *_:gpd.GeoDataFrame(
+        {"mesh_name":["Area"],"face_id":[1]},geometry=[face],crs=CRS)))
+    result = RasBreakout2D.prepare_cloned_geometry(
+        preflight,clone,ras_object=ras,computation_points=seeds,repair_computation_points=True,
+        refresh_method="rasexe",remesh=False,require_complete_products=True,
+    )
+    assert calls == ["supplied_seed_preview","strict_native_gate"]*2
+    evidence = result.computation_points_result.seed_repair["compiled_face_perimeter_preparation"]
+    assert evidence["status"]=="validated" and evidence["native_completion_check_unchanged"]
+    assert evidence["area_gained_fraction"] <= .001
+
+
 @pytest.mark.parametrize("points", [[[1, 1]], [[10 + 1e-15, 50]]])
 def test_invalid_explicit_points_fail_before_breakout_mutation(tmp_path, points):
     preflight, clone, ras = _fixture(tmp_path)
