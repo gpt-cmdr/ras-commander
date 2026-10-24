@@ -25,7 +25,7 @@ from __future__ import annotations
 import math
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Sequence, Tuple, Union
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Sequence, Tuple, Union
 
 import numpy as np
 
@@ -33,6 +33,11 @@ from ..LoggingConfig import get_logger, log_call
 from . import _split_lines as sl
 from ._parent import (EventReader, face_tables, mesh_names, read_geometry, require_face_flow,
                       require_feet, same_geometry, sha256_file)
+
+if TYPE_CHECKING:
+    import pandas as pd
+
+    from ._breakouts import SubdomainBreakoutPlan, SubdomainBreakoutSet
 
 logger = get_logger(__name__)
 
@@ -660,7 +665,7 @@ class RasSubdomain:
     @log_call
     def plan_breakouts(partition: SubdomainPartition, plan_number: Union[str, int], *, ras_object: Any,
                        perimeter_friction_slope: float = 0.01,
-                       subdomain_ids: Optional[Sequence[str]] = None):
+                       subdomain_ids: Optional[Sequence[str]] = None) -> SubdomainBreakoutPlan:
         """Plan one exact-cell breakout per subdomain; nothing is written.
 
         For each subdomain (default: all, including the remainder) this records
@@ -696,9 +701,9 @@ class RasSubdomain:
 
     @staticmethod
     @log_call
-    def apply_breakouts(breakout_plan, dest_folder: Union[str, Path], *, overwrite_dest: bool = False,
-                        hecras_version: Optional[str] = None, time_step: str = "parent_minimum",
-                        timeout: int = 1800):
+    def apply_breakouts(breakout_plan: SubdomainBreakoutPlan, dest_folder: Union[str, Path], *,
+                        overwrite_dest: bool = False, hecras_version: Optional[str] = None,
+                        time_step: str = "parent_minimum", timeout: int = 1800) -> SubdomainBreakoutSet:
         """Author every planned breakout in one staged working copy of the parent.
 
         ``RasProject.stage_project`` copies the parent project to ``dest_folder``.
@@ -741,7 +746,7 @@ class RasSubdomain:
 
     @staticmethod
     @log_call
-    def validate_breakouts(breakout_set, *, max_wait: int = 3600):
+    def validate_breakouts(breakout_set: SubdomainBreakoutSet, *, max_wait: int = 3600) -> pd.DataFrame:
         """Preprocess every child and check each BC line against its compiled external faces.
 
         A BC line HEC-RAS attaches to no face, or spreads over the whole
@@ -754,7 +759,8 @@ class RasSubdomain:
 
     @staticmethod
     @log_call
-    def compute_subdomains(breakout_set, *, max_workers: int = 2, num_cores: int = 2):
+    def compute_subdomains(breakout_set: SubdomainBreakoutSet, *, max_workers: int = 2,
+                           num_cores: int = 2) -> pd.DataFrame:
         """Run the children tier by tier, handing each outlet hydrograph downstream.
 
         Each tier is one :meth:`RasCmdr.compute_parallel` call in the working
@@ -770,8 +776,8 @@ class RasSubdomain:
 
     @staticmethod
     @log_call
-    def compare_to_parent(breakout_set, parent_plan_hdf_path: Union[str, Path], *,
-                          depth_threshold_ft: float = 0.1):
+    def compare_to_parent(breakout_set: SubdomainBreakoutSet, parent_plan_hdf_path: Union[str, Path], *,
+                          depth_threshold_ft: float = 0.1) -> pd.DataFrame:
         """Compare each computed child with the parent on the same cells and outlet.
 
         Child cells are the parent's own cells, matched by centre. Per subdomain:
