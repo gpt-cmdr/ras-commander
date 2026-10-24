@@ -201,7 +201,15 @@ class HdfUtils:
     - All methods in this class are static and can be called without instantiating the class.
     """
 
+    # pandas >= 3 infers its "str" dtype for text columns, so the typed tables
+    # (``include_geometry=False``) keep the dtype the GeoDataFrame columns
+    # already have. Earlier pandas infers object; use the nullable "string".
+    _TEXT_DTYPE = "str" if int(pd.__version__.split(".", 1)[0]) >= 3 else "string"
 
+    @staticmethod
+    def _text_array(values) -> pd.api.extensions.ExtensionArray:
+        """Text values as the typed tables' string dtype (never object)."""
+        return pd.array(values, dtype=HdfUtils._TEXT_DTYPE)
 
 
 # RENAME TO convert_ras_string and make public

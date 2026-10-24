@@ -80,12 +80,22 @@ class HdfPump:
     @staticmethod
     @log_call
     @standardize_input(file_type='plan_hdf')
-    def get_pump_stations(hdf_path: Path) -> gpd.GeoDataFrame:
+    def get_pump_stations(
+        hdf_path: Path,
+        *,
+        include_geometry: bool = True,
+    ) -> Union[gpd.GeoDataFrame, pd.DataFrame]:
         """
         Extract pump station data from the HDF file.
 
         Args:
             hdf_path (Path): Path to the HEC-RAS HDF file.
+            include_geometry (bool): Keyword-only. Pump stations are point
+                features, so the default True returns the GeoDataFrame below.
+                False is a table-only convenience without GeoPandas/Shapely or
+                a CRS lookup: ``station_id`` (``int64``), the Attributes
+                fields (text as pandas ``str``/``string``, numbers in their stored
+                dtypes), then the stored ``x``/``y`` coordinates.
 
         Returns:
             gpd.GeoDataFrame: GeoDataFrame containing pump station data with columns:
@@ -97,13 +107,20 @@ class HdfPump:
         Raises:
             KeyError: If the pump station group exists but required datasets are missing.
         """
-        shapely_geometry = require_module("shapely.geometry", "Returning GeoDataFrame results from HdfPump")
-        Point = shapely_geometry.Point
+        if include_geometry:
+            shapely_geometry = require_module("shapely.geometry", "Returning GeoDataFrame results from HdfPump")
+            Point = shapely_geometry.Point
 
         with h5py.File(hdf_path, 'r') as hdf:
             pump_stations_path = "/Geometry/Pump Stations"
             if pump_stations_path not in hdf:
                 logger.debug("No pump station geometry group found in HDF file")
+                if not include_geometry:
+                    return pd.DataFrame({
+                        "station_id": pd.Series(dtype="int64"),
+                        "x": pd.Series(dtype="float64"),
+                        "y": pd.Series(dtype="float64"),
+                    })
                 return _empty_pump_stations_gdf()
 
             group = hdf[pump_stations_path]
@@ -117,6 +134,20 @@ class HdfPump:
 
             attributes = read_typed(group['Attributes'])
             points = read_typed(group['Points'])
+
+            if not include_geometry:
+                table = pd.DataFrame({"station_id": np.arange(len(points), dtype=np.int64)})
+                attr_df = pd.DataFrame(attributes)
+                for col in attr_df.columns:
+                    values = attr_df[col]
+                    if values.dtype == object:
+                        values = values.apply(
+                            lambda x: x.decode('utf-8') if isinstance(x, bytes) else x
+                        ).astype(HdfUtils._TEXT_DTYPE)
+                    table[col] = values
+                table["x"] = points[:, 0]
+                table["y"] = points[:, 1]
+                return table
 
             # Create geometries
             geometries = [Point(x, y) for x, y in points]
