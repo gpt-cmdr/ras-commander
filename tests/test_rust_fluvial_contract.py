@@ -1,6 +1,6 @@
 """Contract tests for the standalone proposal, before native binding integration.
 
-The standalone graph kernel is ``python/tests/fluvial_graph.rs`` of
+The standalone graph kernel is ``tests/fluvial_graph.rs`` of
 https://github.com/gpt-cmdr/ras-commander-fast-hdf: set RAS_FAST_HDF_SOURCE to
 a checkout of it. Set FLUVIAL_RUSTC when rustc is outside PATH. RAS_FLUVIAL_HDF
 accepts a local computed BaldEagle plan HDF; unset fixtures skip explicitly.
@@ -24,7 +24,7 @@ def kernel(tmp_path_factory):
     source = os.environ.get("RAS_FAST_HDF_SOURCE")
     if not source:
         pytest.skip("set RAS_FAST_HDF_SOURCE to a ras-commander-fast-hdf checkout to test the kernel")
-    kernel_rs = Path(source) / "python/tests/fluvial_graph.rs"
+    kernel_rs = Path(source) / "tests/fluvial_graph.rs"
     assert kernel_rs.is_file(), f"{kernel_rs} not found"
     binary = tmp_path_factory.mktemp("fluvial") / "graph.exe"
     subprocess.run([rustc, "--edition", "2021", "-O", "-A", "dead_code",
