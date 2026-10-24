@@ -1837,6 +1837,51 @@ notebooks:
   excluded: false
   code_cells: 14
   executed_cells: 14
+- id: 237_hydraulic_subdomain_breakout
+  filename: 237_hydraulic_subdomain_breakout.ipynb
+  title: 'Hydraulic subdomains: split a rain-on-grid parent at normal-depth locations'
+  series: 200
+  series_name: Geometry & Calibration
+  summary: Delineate TauDEM stream links on the FEMA eBFE Salt Draw terrain, find normal-depth split
+    lines in the parent's native Face Flow across the whole HUC, nest them into tiered hydraulic subdomains,
+    then cut, author, validate and run one headwater subdomain as an exact-cell breakout and compare its
+    maximum WSE and outlet hydrograph with the parent.
+  tags:
+  - 2d
+  - rain-on-grid
+  - breakout
+  - subdomain
+  - taudem
+  - ebfe
+  - normal-depth
+  - face-flow
+  - validation
+  difficulty: advanced
+  est_runtime: 25 min (cached parent; a fresh parent run takes about 12.5 h)
+  data_project: null
+  functions_used:
+  - GeomMesh.apply_computation_point_repair
+  - GeomMesh.plan_computation_point_repair
+  - GeomPreprocessor.run_geometry_preprocessor
+  - HdfMesh.get_mesh_cell_points
+  - HdfResultsMesh.get_mesh_summary_values
+  - RasCmdr.compute_plan
+  - RasEbfeModels.organize_salt_draw
+  - RasPlan.add_hdf_output_variable
+  - RasSubdomain.apply_breakouts
+  - RasSubdomain.build_subdomains
+  - RasSubdomain.compare_to_parent
+  - RasSubdomain.compute_subdomains
+  - RasSubdomain.find_split_lines
+  - RasSubdomain.plan_breakouts
+  - RasSubdomain.validate_breakouts
+  - RasTauDem.delineate
+  - RasTauDem.get_taudem_info
+  hec_refs: []
+  learning_paths: []
+  excluded: false
+  code_cells: 12
+  executed_cells: 12
 - id: 300_unsteady_flow_operations
   filename: 300_unsteady_flow_operations.ipynb
   title: Unsteady Flow Operations

@@ -199,6 +199,18 @@ The parent dropped to 15 s at 12:03 on the event day, forced by its most
 restrictive cells elsewhere in the HUC. The child alone stayed at 30 s until
 12:30, and a transient at its wetting front set summary maxima up to 3 ft high.
 
+## Example notebook
+
+`examples/237_hydraulic_subdomain_breakout.ipynb` runs the whole workflow on
+Salt Draw:
+
+1. organize the eBFE delivery;
+2. prepare the 6.6 Face Flow parent once (cached);
+3. delineate TauDEM links;
+4. search the HUC for split lines;
+5. author, validate and run one headwater subdomain;
+6. compare it with the parent.
+
 ## Provenance
 
 Ported from fim-commander's rain-on-grid subdomain research on Salt Draw
