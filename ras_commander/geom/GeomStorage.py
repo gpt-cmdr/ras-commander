@@ -1984,6 +1984,8 @@ class GeomStorage:
                 coords.append((x_coord, y_coord))
             if len(coords) < 2:
                 raise ValueError(f"Breakline {name!r} must contain at least two points")
+            if all(point == coords[0] for point in coords[1:]):
+                raise ValueError(f"Breakline {name!r} must have non-zero length")
 
             cell_sizes = {}
             for field_name in ("cell_size_near", "cell_size_far"):
@@ -2050,6 +2052,8 @@ class GeomStorage:
         Passing an empty ``breaklines`` sequence removes the collection.
         ``protection_radius`` accepts the native Boolean text encodings -1
         (enabled), 0 (disabled), and 1 (enabled), preserving the supplied value.
+        Each breakline must contain at least two distinct XY coordinates;
+        invalid collections are rejected before writing or creating a backup.
         """
         geom_file = Path(geom_file)
         if not geom_file.exists():

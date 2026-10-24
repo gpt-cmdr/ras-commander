@@ -558,3 +558,37 @@ def test_replace_breaklines_rejects_duplicate_names_before_write(tmp_path):
         )
 
     assert geom_file.read_bytes() == original
+
+
+@pytest.mark.parametrize("point", [(10.0, 10.0), (600000.0, 4500000.0)])
+@pytest.mark.parametrize("point_count", [2, 3])
+def test_replace_breaklines_rejects_zero_length_without_mutation(
+    tmp_path, point, point_count
+):
+    geom_file = _breakline_replacement_fixture(tmp_path)
+    original = geom_file.read_bytes()
+    original_files = {path.name for path in tmp_path.iterdir()}
+    with pytest.raises(ValueError, match="non-zero length"):
+        GeomStorage.replace_breaklines(
+            geom_file,
+            "Mesh",
+            [{"name": "Collapsed", "coords": [point] * point_count}],
+            expected_existing_names=["Retain", "Remove"],
+        )
+    assert geom_file.read_bytes() == original
+    assert {path.name for path in tmp_path.iterdir()} == original_files
+
+
+def test_replace_breaklines_preserves_short_line_at_projected_coordinates(tmp_path):
+    geom_file = _breakline_replacement_fixture(tmp_path)
+    coords = [(600000.0, 4500000.0), (600000.01, 4500000.0)]
+    GeomStorage.replace_breaklines(
+        geom_file,
+        "Mesh",
+        [{"name": "Short", "coords": coords}],
+        expected_existing_names=["Retain", "Remove"],
+    )
+    lines = geom_file.read_text().splitlines()
+    header = next(i for i, line in enumerate(lines) if line.startswith("BreakLine Polyline="))
+    values = GeomParser.parse_fixed_width(lines[header + 1], column_width=16)
+    assert values == [600000.0, 4500000.0, 600000.01, 4500000.0]
