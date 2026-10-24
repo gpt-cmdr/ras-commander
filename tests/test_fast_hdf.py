@@ -153,6 +153,8 @@ def test_missing_extension_auto_fallback_and_explicit_error(tmp_path, monkeypatc
             raise ImportError("Optional extension intentionally absent")
         return real_import(name, *args, **kwargs)
     monkeypatch.setattr(fast_hdf.importlib, "import_module", without_native)
+    # Forget a cached import of an installed extension; monkeypatch restores it.
+    monkeypatch.setattr(fast_hdf, "_native_state", None)
     monkeypatch.delenv("RAS_COMMANDER_FAST_HDF", raising=False)
     assert not fast_hdf.available()
     path = tmp_path / "fallback.hdf"
