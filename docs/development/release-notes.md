@@ -9,6 +9,16 @@ alone does not identify a development checkout.
 
 ### Unreleased
 
+**TauDEM delineation (`RasTauDem`)**
+
+`ras_commander.terrain.RasTauDem` runs the TauDEM 5 D8 tools (PitRemove,
+D8FlowDir, AreaD8, Threshold, StreamNet) on a DEM and returns the stream links
+and catchments as GeoDataFrames (schemas `taudem_streams`, `taudem_catchments`).
+TauDEM and MPI are external programs, found by argument, environment variable
+or `PATH`; RAS Commander does not install them. It is the first part of the
+hydraulic-subdomain workflow, which takes its pour points and contributing
+areas from these links.
+
 ### v0.107.1 (October 2026)
 
 **The native Rust HDF engine is installed by default**

@@ -95,7 +95,17 @@ def __getattr__(name):
         for public in ('TerrainBuildError', 'Usgs3depAws'):
             globals()[public] = getattr(module, public)
         return globals()[name]
+    if name in _TAUDEM_EXPORTS:
+        from importlib import import_module
+
+        module = import_module('.RasTauDem', __name__)
+        for public in _TAUDEM_EXPORTS:
+            globals()[public] = getattr(module, public)
+        return globals()[name]
     raise AttributeError(f'module {__name__!r} has no attribute {name!r}')
+
+
+_TAUDEM_EXPORTS = ('RasTauDem', 'TauDemDelineation', 'TauDemError', 'TauDemNotFoundError')
 
 # Conditional import - RasTerrainMod requires pythonnet (Windows only)
 try:
@@ -108,6 +118,7 @@ try:
         'RasTerrainModification',
         'RasTerrainModWriter',
         'TerrainExportResult',
+        *_TAUDEM_EXPORTS,
     ]
 except ImportError:
     __all__ = [
@@ -117,4 +128,5 @@ except ImportError:
         'RasTerrainModification',
         'RasTerrainModWriter',
         'TerrainExportResult',
+        *_TAUDEM_EXPORTS,
     ]
