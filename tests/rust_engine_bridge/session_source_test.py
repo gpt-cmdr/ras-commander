@@ -230,43 +230,8 @@ def _read_values(path, fast_hdf):
                 fast_hdf.read_attr(f["Results"], "Offset", backend="rust"))
 
 
-def test_file_is_stat_once_per_public_call_and_changes_between_calls_are_seen(native, fast_hdf, tmp_path, monkeypatch):
-    from ras_commander.Decorators import log_call
-    path = tmp_path / "model.p01.hdf"
-    _write_values(path, 0)
-    stats = []
-    real_stat = os.stat
-
-    def counting_stat(p, *args, **kwargs):
-        if os.path.basename(os.fspath(p)) == path.name:
-            stats.append(os.fspath(p))
-        return real_stat(p, *args, **kwargs)
-    monkeypatch.setattr(os, "stat", counting_stat)
-
-    @log_call
-    def public_call(hdf_path):
-        return _read_values(hdf_path, fast_hdf)
-
-    names, offset = public_call(path)
-    assert offset == 0 and list(names) == [b"n0", b"n1", b"n2"]
-    # One stat per distinct path spelling (h5py's filename and the resolved path), not per lookup.
-    assert len(stats) == len(set(stats)) <= 2
-    # Outside a public call every lookup stats the file, as before.
-    stats.clear()
-    _read_values(path, fast_hdf)
-    assert len(stats) > len(set(stats))
-    # A file modified between two public calls is detected (new size and mtime).
-    _write_values(path, 7, rows=4)
-    os.utime(path, ns=(real_stat(path).st_atime_ns, real_stat(path).st_mtime_ns + 10**9))
-    names, offset = public_call(path)
-    assert offset == 7 and list(names) == [b"n7", b"n8", b"n9", b"n10"]
-    with h5py.File(path, "r") as f:
-        np.testing.assert_array_equal(names, f["Geometry/Names"][()])
-    assert not fast_hdf._sessions
-
-
 def test_a_file_replaced_inside_a_public_call_is_seen_after_release(native, fast_hdf, tmp_path):
-    # Writers call release_native_sessions before os.replace; the remembered stat is dropped too.
+    # Writers call release_native_sessions before os.replace (Windows refuses to replace a mapped file).
     from ras_commander.Decorators import log_call
     path, staged = tmp_path / "model.p01.hdf", tmp_path / "staged.hdf"
     _write_values(path, 0)

@@ -12,6 +12,7 @@ This module has no package imports so the decorators can use it cheaply.
 Direct use of the low-level ``fast_hdf`` readers outside a public call keeps
 the session cache until ``fast_hdf.close_sessions()``.
 """
+import functools
 import threading
 
 _local = threading.local()
@@ -59,3 +60,33 @@ def memo():
     if getattr(_local, "depth", 0) > 0:
         return getattr(_local, "memo", None)
     return None
+
+
+_reads = threading.local()
+
+
+def one_read(func):
+    """Decorator: ``func`` is one adapter-level read (see ``fast_hdf._stat``).
+
+    While the outermost such read runs, :func:`read_stats` is a per-thread dict
+    for file stats; it is discarded when that read returns. Only the adapter and
+    the engine run inside one read, so no file can be rewritten during it.
+    """
+    @functools.wraps(func)
+    def wrapper(*args, **kwargs):
+        depth = getattr(_reads, "depth", 0)
+        if depth == 0:
+            _reads.stats = {}
+        _reads.depth = depth + 1
+        try:
+            return func(*args, **kwargs)
+        finally:
+            _reads.depth = depth
+            if depth == 0:
+                _reads.stats = None
+    return wrapper
+
+
+def read_stats():
+    """The current adapter-level read's stat memo, or ``None`` outside one."""
+    return getattr(_reads, "stats", None)

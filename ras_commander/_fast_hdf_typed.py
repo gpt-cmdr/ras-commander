@@ -62,6 +62,7 @@ from threading import RLock
 import h5py
 import numpy as np
 
+from ._native_scope import one_read as _one_read
 from .LoggingConfig import get_logger
 
 logger = get_logger(__name__)
@@ -780,6 +781,7 @@ def _attr_source(obj, module, mode, fast_hdf):
         return None
 
 
+@_one_read
 def read_attrs(obj, *, backend="auto"):
     """``{name: obj.attrs[name]}`` in h5py's key order, values from the engine.
 
@@ -827,6 +829,7 @@ def read_attrs(obj, *, backend="auto"):
 _MISSING = object()
 
 
+@_one_read
 def read_attr(obj, name, default=_MISSING, *, backend="auto"):
     """Exactly ``obj.attrs[name]`` (or ``obj.attrs.get(name, default)``), value from the engine.
 
@@ -952,6 +955,7 @@ MESH_SERIES_PREFIX = ["Results", "Unsteady", "Output", "Output Blocks", "Base Ou
 _ELEMENT_ID_DIMS = {"cell": "cell_id", "face": "face_id"}
 
 
+@_one_read
 def mesh_series_domain(dataset, *, backend="auto"):
     """Engine-typed element domain of one Base Output 2D mesh time series.
 
@@ -1159,6 +1163,7 @@ def _read_fixed_text(module, dataset, key, shape, mode, facts=None):
     return values
 
 
+@_one_read
 def read(dataset, selection=None, *, backend="auto"):
     """Read like ``dataset[selection]``; typed engine families serve the values."""
     from . import fast_hdf

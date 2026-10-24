@@ -51,6 +51,7 @@ import h5py
 import numpy as np
 
 from . import _native_scope
+from ._native_scope import one_read as _one_read
 from .Decorators import log_call
 from .LoggingConfig import get_logger
 
@@ -264,7 +265,7 @@ def close_sessions(path=None):
     """
     resolved = None if path is None else str(Path(path).resolve())
     # A file closed here may be replaced next (writers call this first): forget
-    # the stats remembered for the current public call.
+    # the stats remembered for the current adapter read.
     _forget_stats()
     from . import _fast_hdf_typed
     _fast_hdf_typed.clear_cache(path)
@@ -311,22 +312,24 @@ def _resolved(path):
 
 
 def _stat(path):
-    """``os.stat(path)``, remembered for the rest of the public call.
+    """``os.stat(path)``, remembered until the current adapter-level read returns.
 
-    Inside a public call an HDF is assumed not to change: the native session
-    already maps it for the whole call. Its size and modification time (the
-    identity of cached sessions and typed results) are therefore read once per
-    call instead of on every lookup. Each new public call stats the file again,
-    so a file modified between calls is detected. Outside a public call every
-    lookup stats the file. Failures are not remembered, and
-    :func:`close_sessions` / :func:`release_native_sessions` (called by writers
-    before replacing a file) forget the remembered stats.
+    The size and modification time of an HDF are the identity of its cached
+    session and typed results, and one read (``read_typed``, ``read_attrs``,
+    ``typed_call``, ``read_dataset``, ...) looks them up several times. Within
+    one such read only ras-commander's adapter and the engine run, so nothing
+    can rewrite the file and it is stat-ed once. Between reads, even inside one
+    public call, every lookup stats the file again: ras-commander's own
+    workflows rewrite an HDF in the middle of a public call (in place with
+    h5py, or through HEC-RAS / RAS Mapper in another process), and the next
+    read must see the new file. Failures are not remembered, and
+    :func:`close_sessions` / :func:`release_native_sessions` forget the stats.
     """
     raw = os.fspath(path)
-    memo = _native_scope.memo()
+    memo = _native_scope.read_stats()
     if memo is None:
         return os.stat(raw)
-    key = ("stat", raw) if os.path.isabs(raw) else ("stat", os.getcwd(), raw)
+    key = (raw,) if os.path.isabs(raw) else (os.getcwd(), raw)
     result = memo.get(key)
     if result is None:
         result = memo[key] = os.stat(raw)
@@ -334,10 +337,9 @@ def _stat(path):
 
 
 def _forget_stats():
-    memo = _native_scope.memo()
+    memo = _native_scope.read_stats()
     if memo:
-        for key in [k for k in memo if k[0] == "stat"]:
-            del memo[key]
+        memo.clear()
 
 
 def _is_file(path):
@@ -378,6 +380,7 @@ def _typed_source(module, path):
         return session
 
 
+@_one_read
 def typed_call(module, path, name, *args, **kwargs):
     """Call the path-based engine entry point ``name`` on ``path`` (see :func:`_typed_source`)."""
     source = _typed_source(module, path)
@@ -667,6 +670,7 @@ def _read_chunked(session, dataset, slices, expected):
     return out, blocks
 
 
+@_one_read
 def read_dataset(dataset: h5py.Dataset, selection=None, *, backend="auto", threads=None):
     """Read numeric values without changing dtype, shape, or integer indexing.
 
@@ -862,6 +866,7 @@ def trace_reads():
     return _fast_hdf_typed.trace_reads()
 
 
+@_one_read
 def read_datasets(hdf_path, dataset_paths: Sequence[str], *, backend="auto", threads=None):
     """Read multiple datasets with one native file handle; retain h5py metadata.
 
@@ -1099,6 +1104,7 @@ def _assemble(hdf, mesh_name, module, backend, threads, *, diagnostics=False, st
 
 
 @log_call
+@_one_read
 def packed_meshes(hdf_path, *, mesh_names=None, backend="auto", threads=None):
     """Return native packed polygon buffers keyed by mesh name.
 
@@ -1228,6 +1234,7 @@ def _native_mesh_polygons(module, mode, hdf_path, backend, threads, strict):
 
 
 @log_call
+@_one_read
 def mesh_polygons(hdf_path, *, backend="auto", threads=None, strict=False, diagnostics=False):
     """Extract the established mesh GeoDataFrame, with explicit backend control.
 

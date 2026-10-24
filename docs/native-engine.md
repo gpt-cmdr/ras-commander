@@ -452,18 +452,16 @@ blocks these operations.
 Keeping sessions across calls (`persist`) saves a few percent on repeated
 reads of one file; the default favours never holding a file open.
 
-**Files do not change during one public call.** Inside a public `Hdf*` call
-the engine assumes the HDF files it reads are not modified until the call
-returns (the session already maps them for the whole call). So each file's
-path is resolved and its size and modification time are read once per call,
-not on every read. Every new public call checks them again, so a file
-rewritten between two calls is detected and nothing stale is returned. A
-writer that replaces a file inside a call must call
-`fast_hdf.release_native_sessions(path)` first (ras-commander's own writers
-do); that also discards what was remembered for the call. Outside a public
-call (direct use of `fast_hdf`, `persist` reads between calls) every read
-checks the file as before. Do not let HEC-RAS or another program rewrite an
-HDF while a public call is reading it.
+**Rewriting an HDF during a public call.** An HDF's size and modification time
+identify its cached session and typed results. They are read once per native
+read (one `read_typed`, `read_attrs` or typed engine call, which may look them
+up several times) and again by the next read. So an HDF rewritten in the middle
+of a public call is read anew by every later read of that call. That covers an
+in-place `h5py` write, a replacement after `fast_hdf.release_native_sessions(path)`,
+and HEC-RAS or RAS Mapper rewriting the file in another process, as
+ras-commander's own breakout and remesh workflows do. A writer that replaces or
+renames a file must still call `release_native_sessions` first (Windows refuses
+to replace a mapped file); ras-commander's own writers do.
 
 ## Large reads
 
