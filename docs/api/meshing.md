@@ -60,7 +60,9 @@ IDs from `HdfMesh`; ghost cells, duplicate IDs, holes, disconnected components,
 and boundary pinch points are rejected. The API never expands the selection.
 Native completion can stamp the owned geometry target `HEC-RAS Results`.
 Planning accepts that target only if its sole root group is `Geometry`.
-The parent still requires `HEC-RAS Geometry`; actual result data are rejected.
+The parent source follows the same rule: `HEC-RAS Geometry`, or a natively
+compiled `HEC-RAS Results` stamp whose sole root group is `Geometry`. Plan HDFs
+and any file holding result data are rejected.
 
 ```python
 from ras_commander.geom import GeomMesh, GeomPreprocessor

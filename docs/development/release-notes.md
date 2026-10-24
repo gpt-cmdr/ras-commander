@@ -9,6 +9,17 @@ alone does not identify a development checkout.
 
 ### Unreleased
 
+**Hydraulic subdomains: breakout authoring, runs and parent comparison**
+
+`RasSubdomain.plan_breakouts` / `apply_breakouts` / `validate_breakouts` turn
+subdomains into exact-cell breakout models (HEC-RAS 6.6) with normal-depth
+outlets, perimeter normal depth and upstream inflow hydrographs.
+`compute_subdomains` runs them tier by tier with the hydrograph hand-off, and
+`compare_to_parent` reports maximum-WSE and outlet agreement. Children are held
+at the parent's minimum time step by default. Natively compiled parent geometry
+HDFs (stamped `HEC-RAS Results`, sole root group `Geometry`) are now accepted as
+cell-subset sources.
+
 **Hydraulic subdomains: split lines and nested subdomains (`RasSubdomain`)**
 
 `ras_commander.subdomain.RasSubdomain.find_split_lines()` finds normal-depth

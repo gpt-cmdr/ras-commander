@@ -6936,8 +6936,9 @@ class GeomMesh:
         components, boundary pinch points, duplicate IDs and ghost IDs block;
         the selection is never repaired or expanded. No result HDF is read.
         An owned target stamped "HEC-RAS Results" by native completion is
-        accepted only when its sole root group is Geometry; source stamps
-        remain restricted to "HEC-RAS Geometry".
+        accepted only when its sole root group is Geometry. The source follows
+        the same rule, so a parent compiled by Ras.exe can be cut; plan HDFs
+        and files holding results are rejected.
 
         Args:
             source_geometry_hdf: Read-only parent geometry HDF, with native mesh tables.
