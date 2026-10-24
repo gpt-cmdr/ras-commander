@@ -203,6 +203,12 @@ editing geometry text.
   reconstruction problems and expected boundary-only records
 - `get_mesh_cell_faces(hdf_path)` - Get cell face lines
 - `get_mesh_cell_points(hdf_path)` - Get cell center points
+- `get_mesh_cell_surface_areas(hdf_path)` - Read native zero-based cell IDs and
+  surface areas in squared source horizontal units without constructing polygons.
+  Native float precision is retained. Every stored row is returned, including
+  ghost rows; select physical cells with a separately verified physical-cell mask.
+  Missing, malformed, negative and nonfinite datasets raise instead of substituting
+  geometric polygon areas. The source is read-only.
 - `find_nearest_cell(point, cell_points_gdf, mesh_name=None)` - Find nearest cell ID and distance using previously read cell centers
 - `find_nearest_face(point, cell_faces_gdf, mesh_name=None)` - Find nearest face ID and distance using previously read faces
 - `get_mesh_face_property_tables(hdf_path)` - Read face elevation/area/wetted-perimeter/Manning tables

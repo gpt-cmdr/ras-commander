@@ -730,6 +730,14 @@ class RasBreakout2D:
         records in ``breakline_containment_repairs``. Larger deficits, dropped
         or split lines, and structure violations remain blocking.
 
+        The repaired supplied-seed route uses that same numeric breakline
+        preparation and repeats its native seed preview and strict completion.
+        If a complete native face crosses a small perimeter concavity, it may
+        add a local wedge bounded by 0.5% of base cell spacing (at most one
+        source unit) and 0.1% added area. It records the preparation in
+        ``seed_repair`` and repeats the unchanged strict native gate. Neither
+        preparation establishes hydraulic equivalence.
+
         Args:
             preflight: A passing :meth:`preflight` result.
             clone: The :meth:`clone_plan_components` result for that preflight.
@@ -997,6 +1005,61 @@ class RasBreakout2D:
                 )
             except Exception as exc:
                 raise RuntimeError("Headless geometry HDF refresh failed") from exc
+            if (
+                repair_computation_points
+                and not refresh_result.success
+                and "Faces Perimeter: face segments outside authored perimeter"
+                in str(refresh_result.error)
+            ):
+                from .geom._cookie_containment import _plan_face_containment_perimeter
+
+                area = GeomStorage.get_storage_area_polygons(
+                    clone.geometry_path, exclude_2d=False
+                )
+                perimeter = area[area.Name.eq(preflight.spec.source_2d_area)].geometry.item()
+                faces = HdfMesh.get_mesh_cell_faces(clone.geometry_hdf)
+                faces = faces[faces.mesh_name.eq(preflight.spec.source_2d_area)]
+                revised, evidence = _plan_face_containment_perimeter(
+                    perimeter, faces.geometry, preflight.base_cell_size
+                )
+                evidence.update(
+                    status="planned",
+                    geometry_text_sha256_before=_sha256_file(clone.geometry_path),
+                    geometry_hdf_sha256_before=_sha256_file(clone.geometry_hdf),
+                )
+                path = clone.geometry_path.with_name(
+                    clone.geometry_path.name + ".cookie_face_perimeter_preparation.json"
+                )
+                path.write_text(json.dumps(evidence, indent=2) + "\n", encoding="utf-8")
+                if (
+                    _sha256_file(clone.geometry_path) != evidence["geometry_text_sha256_before"]
+                    or _sha256_file(clone.geometry_hdf) != evidence["geometry_hdf_sha256_before"]
+                ):
+                    raise RuntimeError("Geometry changed after cookie face preparation planning")
+                GeomStorage.set_2d_flow_area_perimeter(
+                    clone.geometry_path, preflight.spec.source_2d_area, geometry=revised
+                )
+                previous_repair = points.seed_repair
+                plan = GeomMesh.plan_computation_point_repair(
+                    clone.geometry_number, computation_points,
+                    mesh_name=preflight.spec.source_2d_area, ras_object=ras_object,
+                    allow_extended_connection_support=preflight.spec.allow_extended_connection_support,
+                )
+                points = GeomMesh.apply_computation_point_repair(plan)
+                points.seed_repair["before_compiled_face_preparation"] = previous_repair
+                refresh_result = GeomPreprocessor.run_geometry_preprocessor(
+                    clone.plan_number, ras_object=ras_object, max_wait=timeout,
+                    force=True, clear_geompre=True, geometry_only=True,
+                    require_complete_products=require_complete_products,
+                )
+                evidence.update(
+                    status="validated" if refresh_result.success else "failed",
+                    native_preprocess_success=bool(refresh_result.success),
+                    geometry_text_sha256_after=_sha256_file(clone.geometry_path),
+                    geometry_hdf_sha256_after=_sha256_file(clone.geometry_hdf),
+                )
+                path.write_text(json.dumps(evidence, indent=2) + "\n", encoding="utf-8")
+                points.seed_repair["compiled_face_perimeter_preparation"] = evidence
             if not refresh_result.success or not clone.geometry_hdf.is_file():
                 error = refresh_result.error or refresh_result.first_error_line
                 raise RuntimeError(
@@ -1063,7 +1126,6 @@ class RasBreakout2D:
                 # the exact compiled-perimeter containment requirement.
                 from .geom.GeomMesh import _hdf_flow_area_perimeter
                 from .geom.GeomPreprocessor import GeomPreprocessor
-                from .geom.GeomStorage import GeomStorage
 
                 perimeter = Polygon(
                     _hdf_flow_area_perimeter(
@@ -1182,6 +1244,70 @@ class RasBreakout2D:
                 mesh_name=preflight.spec.source_2d_area,
                 ras_object=ras_object,
             )
+            violations = containment_result.violations
+            if violations and all(
+                item.feature_type == "breakline"
+                and item.reason == "outside_one_cell_inward_buffer"
+                for item in violations
+            ):
+                # Native import can reverse the ring and round endpoints. Use
+                # the same bounded numeric preparation as the remesh route;
+                # retain supplied seeds and audit the newly compiled geometry.
+                perimeter = Polygon(_hdf_flow_area_perimeter(
+                    clone.geometry_hdf, preflight.spec.source_2d_area
+                ))
+                repaired_specs, repair = _plan_numeric_breakline_containment(
+                    perimeter, breakline_specs,
+                    {item.feature_name for item in violations}, preflight.base_cell_size,
+                )
+                repair_path = clone.geometry_path.with_name(
+                    clone.geometry_path.name + ".breakline_containment_repair.json"
+                )
+                repair.update(
+                    status="planned",
+                    geometry_text_sha256_before=_sha256_file(clone.geometry_path),
+                    geometry_hdf_sha256_before=_sha256_file(clone.geometry_hdf),
+                )
+                repair_path.write_text(json.dumps(repair, indent=2) + "\n", encoding="utf-8")
+                if (
+                    _sha256_file(clone.geometry_path) != repair["geometry_text_sha256_before"]
+                    or _sha256_file(clone.geometry_hdf) != repair["geometry_hdf_sha256_before"]
+                ):
+                    raise RuntimeError("Geometry changed after numeric breakline repair planning")
+                GeomStorage.replace_breaklines(
+                    clone.geometry_path, preflight.spec.source_2d_area, repaired_specs,
+                    expected_existing_names=[item["name"] for item in breakline_specs],
+                )
+                # Re-run the public native preview, including MaxFaces, with
+                # the original parent seeds. This does not generate a grid.
+                previous_repair = points.seed_repair
+                repair_plan = GeomMesh.plan_computation_point_repair(
+                    clone.geometry_number, computation_points,
+                    mesh_name=preflight.spec.source_2d_area, ras_object=ras_object,
+                    allow_extended_connection_support=preflight.spec.allow_extended_connection_support,
+                )
+                points = GeomMesh.apply_computation_point_repair(repair_plan)
+                points.seed_repair["before_numeric_breakline_preparation"] = previous_repair
+                retry = GeomPreprocessor.run_geometry_preprocessor(
+                    clone.plan_number, ras_object=ras_object, max_wait=timeout,
+                    force=True, clear_geompre=True, geometry_only=True,
+                    require_complete_products=require_complete_products,
+                )
+                repair.update(status="applied", native_preprocess_success=bool(retry.success))
+                repair_path.write_text(json.dumps(repair, indent=2) + "\n", encoding="utf-8")
+                if not retry.success:
+                    raise RuntimeError("Supplied-seed breakline preparation failed native preprocessing")
+                containment_result = GeomMesh.audit_domain_containment(
+                    clone.geometry_number, mesh_name=preflight.spec.source_2d_area,
+                    ras_object=ras_object,
+                )
+                repair.update(
+                    status="validated" if containment_result.ok else "failed",
+                    geometry_text_sha256_after=_sha256_file(clone.geometry_path),
+                    geometry_hdf_sha256_after=_sha256_file(clone.geometry_hdf),
+                )
+                repair_path.write_text(json.dumps(repair, indent=2) + "\n", encoding="utf-8")
+                breakline_containment_repairs.append(repair)
             if not containment_result.ok:
                 raise ValueError("Repaired supplied-seed mesh features fail containment: "
                                  f"{containment_result.violations}")
