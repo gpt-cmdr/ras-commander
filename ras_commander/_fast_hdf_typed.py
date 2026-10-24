@@ -207,7 +207,7 @@ def _cached(file_path, call_key, loader):
     if not enabled:
         return loader()
     resolved = Path(fast_hdf._resolved(file_path))
-    stat = resolved.stat()
+    stat = fast_hdf._stat(resolved)
     key = (str(resolved), stat.st_size, stat.st_mtime_ns, call_key)
     with _cache_lock:
         for old in list(_cache):

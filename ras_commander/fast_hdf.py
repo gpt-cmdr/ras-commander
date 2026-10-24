@@ -43,6 +43,7 @@ import inspect
 import operator
 import os
 from pathlib import Path
+import stat as stat_module
 import tempfile
 from typing import Mapping, Sequence
 
@@ -262,6 +263,9 @@ def close_sessions(path=None):
     by their caller and must be closed separately.
     """
     resolved = None if path is None else str(Path(path).resolve())
+    # A file closed here may be replaced next (writers call this first): forget
+    # the stats remembered for the current public call.
+    _forget_stats()
     from . import _fast_hdf_typed
     _fast_hdf_typed.clear_cache(path)
     with _sessions_lock:
@@ -304,6 +308,44 @@ def _resolved(path):
     if resolved is None:
         resolved = memo[key] = str(Path(raw).resolve())
     return resolved
+
+
+def _stat(path):
+    """``os.stat(path)``, remembered for the rest of the public call.
+
+    Inside a public call an HDF is assumed not to change: the native session
+    already maps it for the whole call. Its size and modification time (the
+    identity of cached sessions and typed results) are therefore read once per
+    call instead of on every lookup. Each new public call stats the file again,
+    so a file modified between calls is detected. Outside a public call every
+    lookup stats the file. Failures are not remembered, and
+    :func:`close_sessions` / :func:`release_native_sessions` (called by writers
+    before replacing a file) forget the remembered stats.
+    """
+    raw = os.fspath(path)
+    memo = _native_scope.memo()
+    if memo is None:
+        return os.stat(raw)
+    key = ("stat", raw) if os.path.isabs(raw) else ("stat", os.getcwd(), raw)
+    result = memo.get(key)
+    if result is None:
+        result = memo[key] = os.stat(raw)
+    return result
+
+
+def _forget_stats():
+    memo = _native_scope.memo()
+    if memo:
+        for key in [k for k in memo if k[0] == "stat"]:
+            del memo[key]
+
+
+def _is_file(path):
+    """``Path(path).is_file()`` through :func:`_stat`."""
+    try:
+        return stat_module.S_ISREG(_stat(path).st_mode)
+    except (OSError, ValueError):
+        return False
 
 
 def _session_cache_setting():
@@ -374,7 +416,7 @@ def _session(module, path, threads=None, *, any_threads=False):
         return
     with _sessions_lock:
         try:
-            stat = path.stat()
+            stat = _stat(path)
         except OSError:
             close_sessions(path)
             raise
@@ -427,7 +469,7 @@ def _safe_file(dataset, file=None):
         file.mode == "r"
         and file.driver not in {"core", "fileobj", "family", "split", "mpio"}
         and isinstance(filename, (str, bytes))
-        and Path(os.fsdecode(filename)).is_file()
+        and _is_file(os.fsdecode(filename))
         and not file.swmr_mode
         # Groups (attribute reads) have no layout of their own.
         and (isinstance(dataset, h5py.Group)

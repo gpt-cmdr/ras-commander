@@ -215,3 +215,70 @@ def test_a_session_closed_by_another_thread_repeats_the_read_by_path(native, fas
             fast_hdf.typed_call(native, str(path), "read_xs_result", "no-such-mode", "Flow", (0, 1, 1))
     assert str(by_session.value) == str(by_path.value)
     assert calls == ["HdfSession"]
+
+
+def _write_values(path, offset, rows=3):
+    with h5py.File(path, "w") as f:
+        f.create_dataset("Geometry/Names", data=np.array([b"n%d" % (i + offset) for i in range(rows)], dtype="S8"))
+        g = f.create_group("Results")
+        g.attrs["Offset"] = np.int64(offset)
+
+
+def _read_values(path, fast_hdf):
+    with h5py.File(path, "r") as f:
+        return (fast_hdf.read_typed(f["Geometry/Names"], backend="rust"),
+                fast_hdf.read_attr(f["Results"], "Offset", backend="rust"))
+
+
+def test_file_is_stat_once_per_public_call_and_changes_between_calls_are_seen(native, fast_hdf, tmp_path, monkeypatch):
+    from ras_commander.Decorators import log_call
+    path = tmp_path / "model.p01.hdf"
+    _write_values(path, 0)
+    stats = []
+    real_stat = os.stat
+
+    def counting_stat(p, *args, **kwargs):
+        if os.path.basename(os.fspath(p)) == path.name:
+            stats.append(os.fspath(p))
+        return real_stat(p, *args, **kwargs)
+    monkeypatch.setattr(os, "stat", counting_stat)
+
+    @log_call
+    def public_call(hdf_path):
+        return _read_values(hdf_path, fast_hdf)
+
+    names, offset = public_call(path)
+    assert offset == 0 and list(names) == [b"n0", b"n1", b"n2"]
+    # One stat per distinct path spelling (h5py's filename and the resolved path), not per lookup.
+    assert len(stats) == len(set(stats)) <= 2
+    # Outside a public call every lookup stats the file, as before.
+    stats.clear()
+    _read_values(path, fast_hdf)
+    assert len(stats) > len(set(stats))
+    # A file modified between two public calls is detected (new size and mtime).
+    _write_values(path, 7, rows=4)
+    os.utime(path, ns=(real_stat(path).st_atime_ns, real_stat(path).st_mtime_ns + 10**9))
+    names, offset = public_call(path)
+    assert offset == 7 and list(names) == [b"n7", b"n8", b"n9", b"n10"]
+    with h5py.File(path, "r") as f:
+        np.testing.assert_array_equal(names, f["Geometry/Names"][()])
+    assert not fast_hdf._sessions
+
+
+def test_a_file_replaced_inside_a_public_call_is_seen_after_release(native, fast_hdf, tmp_path):
+    # Writers call release_native_sessions before os.replace; the remembered stat is dropped too.
+    from ras_commander.Decorators import log_call
+    path, staged = tmp_path / "model.p01.hdf", tmp_path / "staged.hdf"
+    _write_values(path, 0)
+    _write_values(staged, 5, rows=5)
+
+    @log_call
+    def read_replace_read(hdf_path):
+        first = _read_values(hdf_path, fast_hdf)
+        fast_hdf.release_native_sessions(staged, hdf_path)
+        os.replace(staged, hdf_path)
+        return first, _read_values(hdf_path, fast_hdf)
+
+    (names0, offset0), (names1, offset1) = read_replace_read(path)
+    assert offset0 == 0 and len(names0) == 3
+    assert offset1 == 5 and list(names1) == [b"n5", b"n6", b"n7", b"n8", b"n9"]

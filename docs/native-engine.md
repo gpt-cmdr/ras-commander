@@ -452,6 +452,19 @@ blocks these operations.
 Keeping sessions across calls (`persist`) saves a few percent on repeated
 reads of one file; the default favours never holding a file open.
 
+**Files do not change during one public call.** Inside a public `Hdf*` call
+the engine assumes the HDF files it reads are not modified until the call
+returns (the session already maps them for the whole call). So each file's
+path is resolved and its size and modification time are read once per call,
+not on every read. Every new public call checks them again, so a file
+rewritten between two calls is detected and nothing stale is returned. A
+writer that replaces a file inside a call must call
+`fast_hdf.release_native_sessions(path)` first (ras-commander's own writers
+do); that also discards what was remembered for the call. Outside a public
+call (direct use of `fast_hdf`, `persist` reads between calls) every read
+checks the file as before. Do not let HEC-RAS or another program rewrite an
+HDF while a public call is reading it.
+
 ## Large reads
 
 - **Per-call budget.** The engine refuses any single read larger than 2 GiB
