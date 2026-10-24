@@ -1458,6 +1458,69 @@ establish software geometry completion, not hydraulic acceptance.
 
 ## Recorded refinement and generated-point repairs
 
+### Supplied parent-seed repair
+
+Use `GeomMesh.plan_computation_point_repair` when a child should start with its
+parent's computation points, allowing recorded native repairs at the cut edge.
+The default `write_computation_points` path still writes supplied points without
+repair. Coordinates and spacing use the geometry's horizontal CRS and units.
+
+```python
+from ras_commander.geom import GeomMesh
+
+plan = GeomMesh.plan_computation_point_repair(
+    child_geometry, parent_points, mesh_name="ChildArea", ras_object=child_project,
+)
+evidence = plan.to_dict()  # inspect seed additions, exclusions and removed vertices
+result = GeomMesh.apply_computation_point_repair(plan)
+readback = GeomMesh.validate_computation_point_repair(plan)
+```
+
+Planning performs native previews without changing the target text or compiled
+HDF. It follows the supplied-seed recipe retained in the Salt Draw subdomain
+assembly research: up to seven MaxFaces repairs at face-length ratios 0.0025,
+0.05 and 0.1, and up to six perimeter-connection repairs. MaxFaces is checked
+again after each perimeter change, sharing the same seven-repair budget. New
+midpoints are rounded to three decimal places before being moved inside, then
+deduplicated by exact equality. It removes perimeter vertices nearest native
+error locations and records seeds excluded by the repaired perimeter. Final previews must
+complete at all three ratios, both before and after native text serialization.
+Breakline and connection-line constraints participate in the native previews.
+Kept breaklines and complete connection footprints must remain contained, and
+boundary-condition line ends must still touch the repaired perimeter (within
+1e-6 model unit for text serialization). Breakout also audits compiled feature
+containment and connection/BC geometry after native preprocessing.
+
+The default loss limits are 0.001 of supplied parent seeds and 0.001 of the
+original perimeter area. Set `max_parent_seed_loss_fraction` and
+`max_area_loss_fraction` explicitly when planning if the reviewed workflow needs
+different limits. Loss uses the original polygon's excluded area, not net area
+change. Exceeding either limit raises with a `repair_evidence` dictionary; no
+successful plan or target mutation occurs. Failure or exhausted repair budgets
+also leave the target unchanged.
+
+Application requires unchanged input bytes, preserves a numbered backup and
+atomically replaces only the geometry text. The explicitly supplied project's runtime must
+agree with the actual loaded RasMapperLib assembly; use a fresh worker to switch
+runtimes. Without `ras_object`, supply explicit geometry and installation paths;
+the global project is never selected. A project's unresolved `Ras.exe` fallback
+accepts an explicit installation instead of resolving against the working folder.
+Successful readback establishes that the text matches the plan. It
+does not establish identical parent face topology or hydraulic equivalence.
+Run native Geometry and Event Conditions preprocessing and review the resulting
+compiled mesh and hydraulics separately.
+
+For breakout authoring, opt in with
+`RasBreakout2D.prepare_cloned_geometry(computation_points=parent_points,
+repair_computation_points=True, refresh_method="rasexe", remesh=False, ...)`.
+The returned `computation_points_result.seed_repair` retains the plan and
+application readback. Omitting the repair flag preserves existing behavior.
+
+The recipe was adapted from FIM Commander's retained
+`pipelines/rog/subdomain_assembly/author_piece.py` at commit `2384719e`.
+It uses GeomMesh's existing native repair helpers; no optimesh dependency is
+required.
+
 `GeomMesh.clip_refinement_regions(..., invalid_regions="repair")` reads delivered
 geometry without changing the source HDF. GEOS `make_valid` supplies valid
 polygon coverage; every positive-area component survives before clipping.

@@ -179,6 +179,17 @@ class MeshResult:
 
 
 @dataclass
+class MeshSeedRepairResult(MeshResult):
+    """Supplied-seed operation result with its reviewed plan and text readback.
+
+    Separate from MeshResult so existing operations retain their serialized
+    result fields. Coordinates and repair distances use geometry CRS/units.
+    """
+
+    seed_repair: dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass
 class BCConflict:
     """A perimeter face covered by 2+ BC lines."""
 
