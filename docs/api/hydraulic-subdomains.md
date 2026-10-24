@@ -155,7 +155,8 @@ HDF is the mesh that was searched. `HOLES`, `MULTIPART` and
 - **Per subdomain:**
   - clones plan, geometry and unsteady file (`RasBreakout2D.clone_plan_components`);
   - removes the parent's perimeter BC lines from the cloned geometry;
-  - cuts the clone to the exact parent cells in HEC-RAS 6.6
+  - cuts the clone to the exact parent cells in the parent's HEC-RAS version
+    (6.4.1 or 6.6)
     (`prepare_cloned_geometry(parent_cell_ids=...)`);
   - writes the BC lines and their forcing (`GeomBcLines.replace_bc_lines`).
 - **BC line placement:** HEC-RAS can misclassify a line drawn on the perimeter
@@ -199,15 +200,30 @@ The parent dropped to 15 s at 12:03 on the event day, forced by its most
 restrictive cells elsewhere in the HUC. The child alone stayed at 30 s until
 12:30, and a transient at its wetting front set summary maxima up to 3 ft high.
 
+### Salt Draw headwater 2864, run in the delivered version (HEC-RAS 6.4.1)
+
+The parent is the delivered 6.4.1 model with its delivered mesh, re-run in
+6.4.1 with native Face Flow for the 1% and 0.2% AEP events. The two-event
+search accepted 116 split lines in 25 tiers. Headwater 2864 (5.9 sq mi, 2,592
+cells) was cut, preprocessed and run in 6.4.1, held at the parent's 15 s:
+
+| Max-WSE diff p50 / p95 / p99 / max (ft) | Outlet peak | Outlet volume | Outlet NSE |
+|---|---|---|---|
+| 0.0005 / 0.017 / 0.083 / 1.15 | +2.1% | +2.0% | 0.9994 |
+
+Running in the parent's own version needs no mesh repair. HEC-RAS 6.6 rejects
+48 cells of the delivered mesh that have more than eight sides.
+
 ## Example notebook
 
 `examples/237_hydraulic_subdomain_breakout.ipynb` runs the whole workflow on
-Salt Draw:
+Salt Draw in the delivered version, HEC-RAS 6.4.1:
 
 1. organize the eBFE delivery;
-2. prepare the 6.6 Face Flow parent once (cached);
+2. run the delivered parent once with native Face Flow for the 1% and 0.2% AEP
+   events (cached; no re-mesh);
 3. delineate TauDEM links;
-4. search the HUC for split lines;
+4. search the HUC for split lines that pass in both events;
 5. author, validate and run one headwater subdomain;
 6. compare it with the parent.
 
