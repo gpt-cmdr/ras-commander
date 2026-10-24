@@ -189,3 +189,29 @@ def test_path_resolution_is_remembered_only_inside_a_public_call(fast_hdf, tmp_p
     first, second = relative_call()
     assert first == str(real(target)) and second == str(real(tmp_path.parent / "model.p01.hdf"))
     assert len(calls) == 2
+
+
+def test_a_session_closed_by_another_thread_repeats_the_read_by_path(native, fast_hdf, tmp_path, monkeypatch):
+    path = tmp_path / "model.p01.hdf"
+    _write(path)
+    expected = native.raw_fixed_strings(str(path), "Geometry/Names")
+    closed = native.HdfSession(path)
+    closed.close()
+    monkeypatch.setattr(fast_hdf, "_typed_source", lambda module, p: closed)
+    assert fast_hdf.typed_call(native, str(path), "raw_fixed_strings", "Geometry/Names") == expected
+    # A ValueError from an open session (here an invalid request) is raised, not retried.
+    with pytest.raises(ValueError) as by_path:
+        native.read_xs_result(str(path), "no-such-mode", "Flow", (0, 1, 1))
+    calls = []
+    real = native.read_xs_result
+
+    def counting(source, *args, **kwargs):
+        calls.append(type(source).__name__)
+        return real(source, *args, **kwargs)
+    monkeypatch.setattr(native, "read_xs_result", counting)
+    with native.HdfSession(path) as live:
+        monkeypatch.setattr(fast_hdf, "_typed_source", lambda module, p: live)
+        with pytest.raises(ValueError) as by_session:
+            fast_hdf.typed_call(native, str(path), "read_xs_result", "no-such-mode", "Flow", (0, 1, 1))
+    assert str(by_session.value) == str(by_path.value)
+    assert calls == ["HdfSession"]

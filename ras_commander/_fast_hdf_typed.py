@@ -196,8 +196,7 @@ def _engine(module, file_path, name, *args, **kwargs):
     """
     from . import fast_hdf
 
-    with fast_hdf._typed_source(module, file_path) as source:
-        return getattr(module, name)(source, *args, **kwargs)
+    return fast_hdf.typed_call(module, file_path, name, *args, **kwargs)
 
 
 def _cached(file_path, call_key, loader):

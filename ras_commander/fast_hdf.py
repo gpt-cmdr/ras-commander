@@ -320,13 +320,35 @@ def _typed_source(module, path):
     being repeated by every small read. The values are the same either way.
     Otherwise (session cache off, no public call, older extension) the path
     itself is passed and the engine opens the file for that one call, as before.
+
+    The cache lock is held only while the session is looked up or opened, not
+    during the read, so typed reads of different files in different threads stay
+    parallel. A session closed by another thread in between (eviction, or another
+    public call returning) is detected by the caller (:func:`typed_call`), which
+    then repeats the read by path.
     """
     if getattr(module, "SESSION_SOURCES", False) is not True:
-        return nullcontext(path)
+        return path
     setting = _session_cache_setting()
     if setting in {"0", "false", "off"} or (setting != "persist" and not _native_scope.active()):
-        return nullcontext(path)
-    return _session(module, path, None, any_threads=True)
+        return path
+    with _session(module, path, None, any_threads=True) as session:
+        return session
+
+
+def typed_call(module, path, name, *args, **kwargs):
+    """Call the path-based engine entry point ``name`` on ``path`` (see :func:`_typed_source`)."""
+    source = _typed_source(module, path)
+    function = getattr(module, name)
+    if source is path:
+        return function(path, *args, **kwargs)
+    try:
+        return function(source, *args, **kwargs)
+    except ValueError:
+        if not getattr(source, "closed", False):
+            raise
+        # Closed by another thread after the lookup: the same read by path.
+        return function(path, *args, **kwargs)
 
 
 @contextmanager
