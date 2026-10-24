@@ -216,7 +216,8 @@ def plan_breakouts(partition, plan_number, *, ras_object, perimeter_friction_slo
         raise ValueError(f"plan {plan_number} not found in the project")
     plan_hdf = plan_row.iloc[0].get("HDF_Results_Path")
     identities = {}
-    if plan_hdf and Path(plan_hdf).is_file():
+    # plan_df holds NaN (not None) when the plan has no results file.
+    if isinstance(plan_hdf, (str, Path)) and str(plan_hdf) and Path(plan_hdf).is_file():
         same = Path(plan_hdf).resolve() in set(search.plan_hdf_paths)
         identities["plan_hdf_is_search_event"] = str(same)
     geom_number = str(plan_row.iloc[0]["geometry_number"]).zfill(2)
