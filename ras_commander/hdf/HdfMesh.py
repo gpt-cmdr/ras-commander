@@ -719,6 +719,49 @@ class HdfMesh:
         return pd.DataFrame(records)
 
     @staticmethod
+    @log_call
+    @standardize_input(file_type='geom_hdf')
+    def get_mesh_cell_surface_areas(
+        hdf_path: Union[str, Path], *, include_ghost_cells: bool = False
+    ) -> pd.DataFrame:
+        """Read native cell surface areas without constructing polygons.
+
+        Returns ``mesh_name``, native zero-based ``cell_id`` and ``surface_area``
+        in squared source horizontal units, plus ``is_ghost_cell``. Physical
+        cells are returned by default. Opt in to stored ghost rows; their native
+        placeholder values, including NaN or negative values, are preserved.
+        Source precision is preserved. Read-only; no CRS conversion, geometry
+        reconstruction or missing-data substitution. Missing, nonfinite,
+        negative physical areas or non-vector datasets raise ValueError.
+        """
+        frames = []
+        if not isinstance(include_ghost_cells, bool):
+            raise TypeError("include_ghost_cells must be bool")
+        with h5py.File(hdf_path, 'r') as hdf:
+            counts = HdfMesh._physical_cell_counts(hdf)
+            for name in HdfMesh.get_mesh_area_names(hdf_path):
+                path = f"Geometry/2D Flow Areas/{name}/Cells Surface Area"
+                if path not in hdf or not isinstance(hdf[path], h5py.Dataset):
+                    raise ValueError(f"Native cell surface areas are absent: {path}")
+                values = hdf[path][()]
+                if values.ndim != 1 or values.dtype.kind != 'f':
+                    raise ValueError(f"Invalid native cell surface areas: {path}")
+                count = counts.get(name)
+                if count is None or count < 0 or count > len(values):
+                    raise ValueError(f"Native physical cell count is absent or invalid: {name}")
+                if (not np.isfinite(values[:count]).all() or (values[:count] < 0).any()):
+                    raise ValueError(f"Invalid native cell surface areas: {path}")
+                ids = np.arange(len(values),dtype=np.int64)
+                if not include_ghost_cells:
+                    values,ids = values[:count],ids[:count]
+                frames.append(pd.DataFrame({"mesh_name":name,
+                    "cell_id":ids,"surface_area":values,"is_ghost_cell":ids>=count}))
+        result = pd.concat(frames,ignore_index=True) if frames else pd.DataFrame(
+            columns=["mesh_name","cell_id","surface_area","is_ghost_cell"])
+        result.attrs['surface_area_units'] = 'source horizontal units squared'
+        return result
+
+    @staticmethod
     @standardize_input(file_type='geom_hdf')
     def get_mesh_areas(hdf_path: Path) -> 'GeoDataFrame':
         """
