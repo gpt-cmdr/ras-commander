@@ -17,25 +17,28 @@ List of Functions in HdfStruc:
 - get_culvert_hydraulics()
 - get_storage_area_polygons()
 """
+
+from __future__ import annotations
+
 from pathlib import Path
 from typing import List, Union
 
 import h5py
 import numpy as np
 import pandas as pd
-from geopandas import GeoDataFrame
-from shapely.geometry import (
-    LineString,
-    MultiLineString,
-    Polygon,
-)
 
+from .._optional_deps import optional_module
 from ..Decorators import log_call, standardize_input
 from ..LoggingConfig import get_logger
 from .HdfBase import HdfBase
 from .HdfUtils import HdfUtils
 from ._packed_parts import _nonnegative_index, resolve_feature_part_ranges
 from ..fast_hdf import read_attr, read_attrs, read_typed, reraise_required
+
+# GeoPandas/Shapely load on first use, so the tabular readers work on the core
+# h5py/numpy/pandas install.
+gpd = optional_module("geopandas", "Building geometry in HdfStruc")
+shapely_geometry = optional_module("shapely.geometry", "Building geometry in HdfStruc")
 
 logger = get_logger(__name__)
 
@@ -347,7 +350,7 @@ class HdfStruc:
     @staticmethod
     @log_call
     @standardize_input(file_type='geom_hdf')
-    def get_structures(hdf_path: Union[Path, str], datetime_to_str: bool = False) -> GeoDataFrame:
+    def get_structures(hdf_path: Union[Path, str], datetime_to_str: bool = False) -> gpd.GeoDataFrame:
         """
         Extracts structure data from a HEC-RAS geometry HDF5 file.
 
@@ -406,7 +409,7 @@ class HdfStruc:
                         f"No Geometry/Structures group in {hdf_path.name}; "
                         "returning empty GeoDataFrame."
                     )
-                    return GeoDataFrame()
+                    return gpd.GeoDataFrame()
                 
                 # Native geometry may retain an empty Structures placeholder
                 # containing only an empty Property Tables group. This is not a
@@ -420,7 +423,7 @@ class HdfStruc:
                 )
                 if empty_placeholder:
                     logger.debug("Empty Geometry/Structures placeholder in %s", hdf_path.name)
-                    result = GeoDataFrame(
+                    result = gpd.GeoDataFrame(
                         {"Structure ID": pd.Series(dtype="int64")},
                         geometry=[], crs=HdfBase.get_projection(hdf),
                     )
@@ -496,7 +499,7 @@ class HdfStruc:
                 # Check if 'Structure ID' was successfully assigned
                 if 'Structure ID' not in struct_attrs.columns:
                     logger.error("'Structure ID' column could not be assigned to Structures/Attributes.")
-                    return GeoDataFrame()
+                    return gpd.GeoDataFrame()
 
                 # Get centerline geometry
                 centerline_info = read_typed(hdf["Geometry/Structures/Centerline Info"])
@@ -554,14 +557,14 @@ class HdfStruc:
                     if start_idx < 0 or point_count < 2 or len(points) != point_count:
                         raise ValueError(f"Invalid centerline point range for structure {i}")
                     if part_count <= 1:
-                        geoms.append(LineString(points))
+                        geoms.append(shapely_geometry.LineString(points))
                         continue
-                    geoms.append(MultiLineString(
+                    geoms.append(shapely_geometry.MultiLineString(
                         [points[offset:offset + count] for offset, count in part_ranges]
                     ))
 
                 # Create base GeoDataFrame with Structures Attributes and geometries
-                struct_gdf = GeoDataFrame(
+                struct_gdf = gpd.GeoDataFrame(
                     struct_attrs,
                     geometry=geoms,
                     crs=HdfBase.get_projection(hdf_path)
@@ -986,7 +989,7 @@ class HdfStruc:
     @staticmethod
     @log_call
     @standardize_input(file_type='geom_hdf')
-    def get_storage_area_polygons(hdf_path: Path, *, ras_object=None) -> GeoDataFrame:
+    def get_storage_area_polygons(hdf_path: Path, *, ras_object=None) -> gpd.GeoDataFrame:
         """
         Extract storage area polygon geometry from HEC-RAS HDF file.
 
@@ -1022,7 +1025,7 @@ class HdfStruc:
         The available project CRS is attached without transforming coordinates;
         the CRS remains unset when no projection can be resolved.
         """
-        _empty = GeoDataFrame(
+        _empty = gpd.GeoDataFrame(
             columns=['Name', 'geometry', 'avg_area', 'min_elev', 'mode'],
             geometry='geometry'
         )
@@ -1073,11 +1076,11 @@ class HdfStruc:
                             ring_count   = int(sa_parts[p, 1])
                             rings.append(sa_points[local_offset: local_offset + ring_count])
                         if len(rings) == 1:
-                            polygon = Polygon(rings[0])
+                            polygon = shapely_geometry.Polygon(rings[0])
                         else:
-                            polygon = Polygon(rings[0], rings[1:])
+                            polygon = shapely_geometry.Polygon(rings[0], rings[1:])
                     else:
-                        polygon = Polygon(sa_points)
+                        polygon = shapely_geometry.Polygon(sa_points)
 
                     # Extract attributes from structured array
                     sa_name  = f"SA_{i}"
@@ -1119,7 +1122,7 @@ class HdfStruc:
                 if not records:
                     return _empty
 
-                gdf = GeoDataFrame(
+                gdf = gpd.GeoDataFrame(
                     records, geometry='geometry', crs=HdfBase.get_projection(hdf)
                 )
                 logger.debug(
