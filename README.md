@@ -31,10 +31,11 @@ Linux x64 and macOS arm64; no extra and no code changes are needed.
   columns, index, CRS, attributes and exceptions as the h5py reference
   implementation. On Windows and Linux this was checked on 201 public method
   cases across 137 HEC-RAS 5.x–7.x files (3,800 method × file pairs).
-- **Faster large reads.** In the extension's 0.1.0 benchmark, building 2D cell
+- **Faster reads.** In the 0.2.0 / 0.108.0 benchmark, building 2D cell
   polygons was 4–19× faster than with h5py, depending on mesh size, and mesh
-  time series 2–7× faster on large meshes; small reads were a few
-  milliseconds slower. This makes it practical to extract results from many
+  time series 2–8× faster on large meshes; across all 50 cases the engine was
+  1.17× faster on a first call and 1.41× on repeat calls (geometric mean), and
+  small reads were at most a few milliseconds slower. This makes it practical to extract results from many
   large 2D models for flood science, research and new kinds of analysis.
 - **h5py fallback.** In the default `auto` mode, any read the engine refuses,
   and any method not yet proven on the test corpus, uses h5py. Set

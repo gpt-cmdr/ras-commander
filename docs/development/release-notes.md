@@ -39,6 +39,39 @@ or `PATH`; RAS Commander does not install them. It is the first part of the
 hydraulic-subdomain workflow, which takes its pour points and contributing
 areas from these links.
 
+### v0.108.0 (October 2026)
+
+**Native HDF engine 0.2.0; faster small native reads**
+
+`ras-commander-fast-hdf>=0.2,<0.3` is now the core dependency, so
+`pip install ras-commander` installs engine 0.2.x on Windows x64, Linux x64
+and macOS arm64 (same environment marker as 0.107.1).
+
+- **Engine 0.2.0** is one Rust crate, published on PyPI and, for Rust
+  programs, on [crates.io](https://crates.io/crates/ras-commander-fast-hdf).
+  Its Python API, `API_VERSION` (11) and results are unchanged. HEC-RAS 5.0
+  row-label water-surface summaries (`domain_rule` `legacy_row_labels`) now
+  read natively; values are the same as before.
+- **Faster small reads.** A public `Hdf*` call opens each HDF once and shares
+  that native session across its typed reads; it used to open the file 3 to
+  23 times. In the release benchmark (50 method × file cases, results identical
+  in every mode), the native engine is 1.17× faster than h5py on a first call
+  and 1.41× on repeat calls (geometric mean; 0.107.1 with engine 0.1.1: 1.07×
+  and 1.27×). Cross-section reads no longer decode the property-table values
+  they do not use (`get_cross_sections` first call on BaldEagle: 141 → 26 ms; h5py 17 ms),
+  and `HdfMesh.get_mesh_area_attributes` reads its table once.
+- **HDFs rewritten during a call are read anew.** File identity (size and
+  modification time) is checked on every native read, so a file rewritten in
+  the middle of a public call (in place with h5py, after
+  `fast_hdf.release_native_sessions`, or by HEC-RAS / RAS Mapper) is never
+  served from a stale cache.
+- **Licence file names:** the engine's licence in the wheel is now
+  `ras-commander-fast-hdf-LICENSE.txt` (was `ras-commander-rust-LICENSE.txt`).
+- **Contributors:** the optional source-checkout tests follow the engine's
+  single-crate layout (`src/python/`, `src/exports/`, `tests/`).
+
+See [Native Rust HDF engine](../native-engine.md#performance).
+
 ### v0.107.1 (October 2026)
 
 **The native Rust HDF engine is installed by default**

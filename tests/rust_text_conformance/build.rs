@@ -10,7 +10,7 @@ fn main() {
     let root = env::var_os("RAS_FAST_HDF_SOURCE").unwrap_or_else(|| {
         panic!("set RAS_FAST_HDF_SOURCE to a checkout of https://github.com/gpt-cmdr/ras-commander-fast-hdf")
     });
-    let module = path::absolute(PathBuf::from(root).join("python/src/ras_text/mod.rs"))
+    let module = path::absolute(PathBuf::from(root).join("src/python/ras_text/mod.rs"))
         .expect("RAS_FAST_HDF_SOURCE must be a valid path");
     assert!(module.is_file(), "{} not found; is RAS_FAST_HDF_SOURCE a ras-commander-fast-hdf checkout?", module.display());
     println!("cargo:rerun-if-changed={}", module.display());

@@ -257,7 +257,7 @@ def test_abi3_tag(wheel, wheel_path, dist):
     assert sys.version_info >= (3, 10)
 
 
-@pytest.mark.parametrize("name", ["THIRD-PARTY-NOTICES.md", "ras-commander-rust-LICENSE.txt",
+@pytest.mark.parametrize("name", ["THIRD-PARTY-NOTICES.md", "ras-commander-fast-hdf-LICENSE.txt",
                                   "ras-commander-LICENSE.txt"])
 def test_licence_files_installed_and_match_wheel(wheel, dist, name):
     installed = [f for f in dist.files if ".dist-info/licenses/" in f.as_posix()
@@ -266,7 +266,7 @@ def test_licence_files_installed_and_match_wheel(wheel, dist, name):
     member = _wheel_member(wheel, "/" + installed[0].as_posix().split(".dist-info/", 1)[1])
     data = Path(dist.locate_file(installed[0])).read_bytes()
     assert data == wheel.read(member)
-    if name == "ras-commander-rust-LICENSE.txt":
+    if name == "ras-commander-fast-hdf-LICENSE.txt":
         text = data.decode("utf-8")
         assert text.startswith("MIT License") and f"Copyright (c) 2024 {LICENCE_HOLDER}" in text
 
@@ -277,8 +277,8 @@ def test_embedded_notices_name_engine_licence_holder(dist):
     notices = next(f for f in dist.files if f.name == "THIRD-PARTY-NOTICES.md"
                    and ".dist-info/licenses/" in f.as_posix())
     text = Path(dist.locate_file(notices)).read_text(encoding="utf-8")
-    row = re.search(r"^\| ras-commander-rust \|.*\(#(licence-[0-9a-f]+)\)", text, re.M)
-    assert row, "ras-commander-rust missing from the notices table"
+    row = re.search(r"^\| ras-commander-fast-hdf \|.*\(#(licence-[0-9a-f]+)\)", text, re.M)
+    assert row, "ras-commander-fast-hdf missing from the notices table"
     section = text.split(f"### {row.group(1)}", 1)[1].split("\n### ", 1)[0]
     assert f"Copyright (c) 2024 {LICENCE_HOLDER}" in section, (
         f"engine licence section {row.group(1)} does not name {LICENCE_HOLDER}; "
