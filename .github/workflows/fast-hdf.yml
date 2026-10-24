@@ -41,8 +41,10 @@ jobs:
         env:
           CI: '1'
         run: python -m pip install --only-binary rasterio,scipy . pytest xarray geopandas shapely pyproj rasterio scipy
-      # Wheels only: never build the extension from source here. Until the package
-      # is published (or for a platform without a wheel) the native steps are skipped.
+      # ras-commander already installs the extension as a core dependency on these
+      # runners (Windows x64, Linux x64, macOS arm64). This step confirms a wheel
+      # is present and never builds the extension from source; on a platform
+      # without a wheel the native steps are skipped.
       - name: Install ras-commander-fast-hdf from PyPI
         id: native
         shell: bash

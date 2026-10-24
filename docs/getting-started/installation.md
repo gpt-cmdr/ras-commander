@@ -85,7 +85,35 @@ These are installed automatically with `pip install ras-commander`:
 
 ```bash
 h5py numpy pandas
+ras-commander-fast-hdf   # Windows x64, Linux x64 and macOS arm64 only
 ```
+
+`ras-commander-fast-hdf` is ras-commander's default HDF engine, written in
+Rust. On the three platforms above, pip installs its binary wheel; no Rust
+toolchain or HDF5 C library is needed. Public `Hdf*` results are identical to
+the h5py reference implementation, and large reads, such as 2D cell polygons
+and mesh time series on large meshes, are faster. In the default `auto` mode,
+any read the engine refuses uses h5py.
+
+- **Turn it off:** set `RAS_COMMANDER_FAST_HDF=h5py` before the first HDF
+  read. Every read then uses h5py.
+- **Other platforms** (for example Linux aarch64, macOS x86_64 or Windows
+  ARM64): pip does not install the engine, and ras-commander uses h5py for
+  every read with the same results. `pip install "ras-commander[fast]"`
+  requests the engine anyway and builds it from source, which needs Rust.
+- **Linux x64 without a compatible wheel** (glibc older than 2.28, or musl, for
+  example Alpine) and free-threaded CPython builds: the dependency still
+  applies, so pip tries to build the engine from source. Install a Rust
+  toolchain, or run `pip install h5py numpy pandas` and then
+  `pip install --no-deps ras-commander` to use h5py.
+- **Check which engine is available:**
+  `python -c "from ras_commander import fast_hdf; print(fast_hdf.available())"`
+  prints `True` when the native engine is installed and compatible.
+
+The `fast` and `fast-hdf` extras are no longer needed; they remain so existing
+install commands keep working. See
+[Native Rust HDF engine](../native-engine.md) for modes, qualification and
+performance.
 
 The core install supports project inventory: `init_ras_project()` and the
 project DataFrames, including geometry counts read from geometry HDF files.

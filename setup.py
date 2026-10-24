@@ -4,12 +4,26 @@ import subprocess
 from pathlib import Path
 
 
+# The native (Rust) HDF engine is ras-commander's default HDF engine. It is
+# published as binary wheels only for CPython on Windows x64, Linux x64
+# (manylinux_2_28) and macOS arm64, so the marker limits the dependency to those
+# platforms and pip never tries to compile the Rust source distribution
+# elsewhere. Where the extension is not installed, every read uses h5py.
+FAST_HDF_REQUIREMENT = 'ras-commander-fast-hdf>=0.1,<0.2'
+FAST_HDF_WHEEL_MARKER = (
+    'platform_python_implementation == "CPython" and ('
+    '(platform_system == "Windows" and platform_machine == "AMD64")'
+    ' or (platform_system == "Linux" and platform_machine == "x86_64")'
+    ' or (platform_system == "Darwin" and platform_machine == "arm64"))'
+)
+
 # Keep the default installation import-safe and suitable for inventory/HDF work.
 # Feature groups are additive so batch runners can install only what they use.
 CORE_DEPENDENCIES = [
     'h5py',
     'numpy',
     'pandas',
+    f'{FAST_HDF_REQUIREMENT}; {FAST_HDF_WHEEL_MARKER}',
 ]
 
 COMPUTE_DEPENDENCIES = [
@@ -110,10 +124,13 @@ setup(
     },
     install_requires=CORE_DEPENDENCIES,
     extras_require={
-        # Optional native (Rust) HDF engine, published separately on PyPI from
-        # https://github.com/gpt-cmdr/ras-commander-fast-hdf. "fast-hdf" is an alias.
-        'fast': ['ras-commander-fast-hdf>=0.1,<0.2'],
-        'fast-hdf': ['ras-commander-fast-hdf>=0.1,<0.2'],
+        # No longer needed: the native HDF engine is a core dependency on the
+        # platforms that have wheels. Kept so existing install commands work.
+        # Without the platform marker, these extras also request the engine on
+        # other platforms, where pip builds it from source (needs Rust).
+        # "fast-hdf" is an alias.
+        'fast': [FAST_HDF_REQUIREMENT],
+        'fast-hdf': [FAST_HDF_REQUIREMENT],
         # Lean Windows/Wine batch execution through RasCmdr.compute_plan().
         # This intentionally excludes the RasControl COM interface and the
         # geospatial/plotting stack. "execution" is a descriptive alias.

@@ -9,6 +9,32 @@ alone does not identify a development checkout.
 
 ### Unreleased
 
+**The native Rust HDF engine is installed by default**
+
+`ras-commander-fast-hdf>=0.1,<0.2` is now a core dependency, so
+`pip install ras-commander` installs the native HDF engine. An environment
+marker limits it to the platforms with published wheels: CPython on Windows x64
+(`platform_system == "Windows" and platform_machine == "AMD64"`), Linux x64
+(`"Linux"`, `"x86_64"`) and macOS arm64 (`"Darwin"`, `"arm64"`). pip therefore
+never tries to compile the Rust source distribution on other platforms.
+
+- **Behaviour:** unchanged public results. The default `auto` mode reads
+  natively where the method is qualified and uses h5py, the reference
+  implementation, for any read the engine refuses and for methods not yet
+  proven on the test corpus.
+- **Opt out:** set `RAS_COMMANDER_FAST_HDF=h5py` to use h5py for every read.
+  The package stays installed, but no HDF read uses it.
+- **Other platforms** (for example Linux aarch64, macOS x86_64, Windows ARM64,
+  PyPy): the engine is not installed, and every read uses h5py, as in 0.107.0.
+  `pip install "ras-commander[fast]"` still requests it there, which builds it
+  from source and needs Rust. On Linux x64 with glibc older than 2.28 or musl,
+  and on free-threaded CPython, the marker matches but no wheel does; see
+  [Installation](../native-engine.md#installation).
+- **Extras:** `fast` and `fast-hdf` are no longer needed and are kept so
+  existing install commands keep working.
+
+See [Native Rust HDF engine](../native-engine.md).
+
 ### v0.107.0 (October 2026)
 
 **Native HDF extension moved to its own repository and published on PyPI**

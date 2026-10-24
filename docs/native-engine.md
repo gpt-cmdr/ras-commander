@@ -1,26 +1,34 @@
 # Native Rust HDF Engine
 
-ras-commander can read HEC-RAS HDF files (plan results, geometry, terrain and
-land-cover sidecars) through an optional native engine written in Rust, instead
-of through h5py. This page explains what the engine is, how to install and
-select it, what "identical results" means and how that was proven, how fast it
-is, and what it does not do.
+ras-commander reads HEC-RAS HDF files (plan results, geometry, terrain and
+land-cover sidecars) through its native HDF engine, written in Rust. h5py
+remains the reference implementation and serves every read the engine does
+not. This page explains what the engine is, how it is installed and selected,
+what "identical results" means and how that was proven, how fast it is, and
+what it does not do.
 
 !!! info "Short version"
-    - The engine is an **optional, open-source** Python package,
-      `ras-commander-fast-hdf`. Install it with
-      `pip install ras-commander[fast]`. Without it, ras-commander works
-      exactly as before, on h5py.
-    - With it installed, the default mode `auto` reads natively where the
-      native path is qualified and falls back to h5py on any refusal. **Public
+    - The native engine is ras-commander's **default HDF engine**. Its
+      open-source (MIT) package, `ras-commander-fast-hdf`, is installed
+      automatically by `pip install ras-commander` (0.108.0 and later) on
+      Windows x64, Linux x64 and macOS arm64. No extra is needed.
+    - The default mode, `auto`, reads natively where the native path is
+      qualified and uses h5py for any read the engine refuses. **Public
       results are identical to h5py**: same values, dtypes, columns, index,
       CRS, attributes and exceptions.
-    - Set `RAS_COMMANDER_FAST_HDF=h5py` to switch the engine off completely.
+    - Large reads are faster than with h5py. In the extension's 0.1.0
+      benchmark of public methods, building 2D cell polygons was 4–19× faster
+      depending on mesh size, and mesh time series 2–7× faster on large
+      meshes; small reads were a few milliseconds slower (see
+      [Performance](#performance)).
+    - Set `RAS_COMMANDER_FAST_HDF=h5py` to switch the engine off. On
+      platforms without a wheel the engine is not installed, and every read
+      uses h5py automatically.
 
 ## What it is and why
 
-ras-commander's `Hdf*` classes have always read HDF5 through h5py and the HDF5
-C library. The native engine replaces the *value reads* underneath those
+ras-commander's `Hdf*` classes originally read HDF5 only through h5py and the
+HDF5 C library. The native engine replaces the *value reads* underneath those
 classes, not the classes themselves:
 
 - **Same public API.** No method was renamed or removed, and no positional
@@ -39,42 +47,65 @@ classes, not the classes themselves:
 
 Why: faster bulk and sparse reads of large result datasets (especially
 compressed 2D time series), fewer HDF5 C-library failure modes in long batch
-jobs, and the same code path on Windows and Linux.
+jobs, and the same code path on Windows and Linux. The largest measured gains
+are in the steps that dominate h5py-based extraction from large 2D models:
+building cell polygons and reading time series from compressed meshes. That
+makes it practical to extract results from many large models in one study,
+for flood science, research and new kinds of analysis, with results that are
+identical to the h5py reference.
 
 The engine is not a general HDF5 library. It reads what HEC-RAS writes and
 refuses anything it cannot reproduce exactly (see
 [Limitations and refusals](#known-limitations-and-refusals)).
 
-## Installing the extension
+<a id="installing-the-extension"></a>
+
+## Installation
 
 The engine and its Python extension are open source (MIT) in their own
 repository,
 [gpt-cmdr/ras-commander-fast-hdf](https://github.com/gpt-cmdr/ras-commander-fast-hdf),
-and published on PyPI as `ras-commander-fast-hdf`. Install it into the same
-environment as ras-commander:
+and published on PyPI as `ras-commander-fast-hdf`. ras-commander 0.108.0 and
+later list it as a core dependency, limited by an environment marker to the
+platforms that have wheels, so the normal install is enough:
 
 ```bash
-pip install ras-commander-fast-hdf
-```
-
-or install both together with the `fast` extra:
-
-```bash
-pip install "ras-commander[fast]"
+pip install ras-commander
 ```
 
 Wheels are published for CPython 3.10 and later (`abi3`):
 
-| Platform | Wheel tag | Status |
-|---|---|---|
-| Windows x64 | `cp310-abi3-win_amd64` | Qualified |
-| Linux x64 (glibc 2.28+, e.g. Rocky/RHEL 9, Ubuntu 20.04+) | `cp310-abi3-manylinux_2_28_x86_64` | Qualified |
-| macOS arm64 (Apple silicon) | `cp310-abi3-macosx_*_arm64` | Builds and passes its tests, but not yet qualified on the HEC-RAS corpus |
+| Platform | Wheel tag | Installed with ras-commander | Status |
+|---|---|---|---|
+| Windows x64 | `cp310-abi3-win_amd64` | Yes | Qualified |
+| Linux x64 (glibc 2.28+, e.g. Rocky/RHEL 9, Ubuntu 20.04+) | `cp310-abi3-manylinux_2_28_x86_64` | Yes | Qualified |
+| macOS arm64 (Apple silicon) | `cp310-abi3-macosx_*_arm64` | Yes | Builds and passes its tests, but not yet qualified on the HEC-RAS corpus |
 
-No Rust toolchain is needed to install a wheel. On other platforms pip falls
-back to the source distribution, which needs Rust. To build from source, see
+Installing a wheel needs no Rust toolchain and no HDF5 C library.
+
+**Other platforms.** On any other platform or interpreter (for example Linux
+aarch64, macOS x86_64, Windows ARM64 or PyPy), pip does not install the
+engine, and ras-commander uses h5py for every read with the same public
+results. To use the engine there, build it from source, which needs Rust:
+`pip install "ras-commander[fast]"` requests the engine without the platform
+marker, so pip builds the source distribution. See
 [Building](https://github.com/gpt-cmdr/ras-commander-fast-hdf/blob/main/docs/building.md)
 in the extension's repository.
+
+**Systems the marker cannot exclude.** The marker cannot test the C library
+or the interpreter build. On Linux x64 with glibc older than 2.28 or with musl
+(for example Alpine), and on free-threaded CPython builds, the marker matches
+but no wheel does, so pip tries to build
+the source distribution and fails without Rust. Either install a Rust
+toolchain, or install ras-commander without its dependency list and add the
+others yourself (`pip install h5py numpy pandas` followed by
+`pip install --no-deps ras-commander`); ras-commander then uses h5py.
+
+**The `fast` and `fast-hdf` extras** are no longer needed. They remain so that
+existing install commands keep working; on the three wheel platforms they add
+nothing. With ras-commander 0.107.0, which does not install the engine
+automatically, use `pip install "ras-commander[fast]"` or
+`pip install ras-commander-fast-hdf`.
 
 ### Verify the installation
 
@@ -92,6 +123,8 @@ ras-commander only uses an extension whose `API_VERSION` is exactly the one it
 was built against (11 for this release). An older or newer wheel is ignored
 with one logged warning, and every read uses h5py; in `native` mode it raises
 `FastHdfError` instead. `fast_hdf.available()` returns `False` in both cases.
+If the extension is not installed at all, `available()` returns `False` and
+every read uses h5py without a warning.
 
 ## Engine modes
 
@@ -294,14 +327,32 @@ pending.
 
 ### Release benchmark (public methods)
 
-<!-- PERF_RELEASE_TABLE: pending approved quiet-machine benchmark -->
+The release benchmark of public methods for extension 0.1.0 is published on
+the extension's
+[Performance](https://github.com/gpt-cmdr/ras-commander-fast-hdf/blob/main/docs/performance.md)
+page: 19 public methods on 7 HEC-RAS result files (50 method × file cases,
+600 fresh processes) on a quiet Windows workstation, `h5py` mode against the
+default `auto` mode, with every result hashed and identical in `h5py`, `auto`
+and `native` mode. Its largest gains, repeat calls on the heaviest file for
+each method:
 
-A wall-time comparison of commonly used public methods (`h5py` vs `auto`, each
-measurement in a fresh process, on small, medium and large fixtures, with
-result hashes checked for identity) will be published here once it has been
-run on a quiet machine. Until then, the figures below come from the earlier
-engine performance work. They measure the **HDF read layer** (the reads under
-the public methods), not complete public calls.
+| Method | Result rows | h5py | Native | Speed-up |
+|---|---:|---:|---:|---:|
+| `HdfMesh.get_mesh_cell_polygons` | 340,246 | 17,145 ms | 939 ms | 18.3× |
+| `HdfResultsMesh.get_mesh_cells_timeseries` (water surface) | 1 | 1,372 ms | 184 ms | 7.5× |
+| `HdfResultsMesh.get_mesh_timeseries` (water surface) | 193 | 1,415 ms | 213 ms | 6.6× |
+| `HdfResultsMesh.get_mesh_timeseries` (face velocity) | 865 | 1,486 ms | 291 ms | 5.1× |
+| `HdfFluvialPluvial.calculate_fluvial_pluvial_boundary` | 4,569 | 10,452 ms | 6,831 ms | 1.5× |
+
+Whole-array summaries such as `get_mesh_max_ws` ran at about the same speed,
+and small reads were up to 16 ms slower on repeat calls. Across all 50 cases
+(geometric mean) the native engine was 1.07× faster on the first call in a
+process and 1.30× faster on repeat calls. Timings were taken with the files in
+the operating system's cache; cold-disk reads were not measured.
+
+The figures below come from the earlier engine performance work. They measure
+the **HDF read layer** (the reads under the public methods), not complete
+public calls.
 
 ### Earlier evidence: read layer, Linux
 

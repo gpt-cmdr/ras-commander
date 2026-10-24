@@ -26,7 +26,8 @@ def _setup_metadata(monkeypatch):
 def test_compute_extra_has_only_process_supervision_dependencies(monkeypatch):
     metadata = _setup_metadata(monkeypatch)
 
-    assert metadata["install_requires"] == ["h5py", "numpy", "pandas"]
+    assert metadata["install_requires"][:3] == ["h5py", "numpy", "pandas"]
+    assert len(metadata["install_requires"]) == 4
     expected = [
         "psutil>=5.6.6",
         'pywin32>=227; sys_platform == "win32"',
@@ -47,6 +48,37 @@ def test_compute_extra_has_only_process_supervision_dependencies(monkeypatch):
         *expected,
     ):
         assert dependency in full
+
+
+def test_native_hdf_engine_is_a_core_dependency_on_wheel_platforms(monkeypatch):
+    from packaging.requirements import Requirement
+
+    metadata = _setup_metadata(monkeypatch)
+    native = [Requirement(spec) for spec in metadata["install_requires"]
+              if spec.startswith("ras-commander-fast-hdf")]
+    assert len(native) == 1
+    requirement = native[0]
+    assert str(requirement.specifier) == "<0.2,>=0.1"
+    assert requirement.marker is not None
+
+    def environment(system, machine, implementation="CPython"):
+        return {"platform_system": system, "platform_machine": machine,
+                "platform_python_implementation": implementation}
+
+    # Platforms with published wheels install the engine automatically.
+    for system, machine in (("Windows", "AMD64"), ("Linux", "x86_64"),
+                            ("Darwin", "arm64")):
+        assert requirement.marker.evaluate(environment(system, machine))
+    # Elsewhere pip must never be asked to build the Rust source distribution.
+    for env in (environment("Windows", "ARM64"), environment("Linux", "aarch64"),
+                environment("Darwin", "x86_64"),
+                environment("Linux", "x86_64", "PyPy")):
+        assert not requirement.marker.evaluate(env)
+
+    # The former opt-in extras still resolve (no marker: they request a source
+    # build on platforms without wheels).
+    for extra in ("fast", "fast-hdf"):
+        assert metadata["extras_require"][extra] == ["ras-commander-fast-hdf>=0.1,<0.2"]
 
 
 def test_compute_facade_imports_without_full_feature_stack():
