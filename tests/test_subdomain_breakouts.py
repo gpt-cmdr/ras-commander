@@ -105,3 +105,39 @@ def test_parent_minimum_interval_requires_an_interval(tmp_path):
     plan.write_text("Plan Title=p\n")
     with pytest.raises(ValueError, match="Computation Interval"):
         bo.parent_minimum_interval(plan)
+
+
+_GEOM = (
+    "Geom Title=Test geom\n"
+    "Program Version=6.60\n"
+    "Storage Area=Perimeter 1     ,,\n"
+    "Storage Area Surface Line= 4 \n"
+    "        0       0       1000    0       1000    1000    0       1000\n"
+    "Storage Area 2D Points= 4 \n"
+    "        0       0       1000    0       1000    1000    0       1000\n"
+    "Storage Area=Other Area      ,,\n"
+    "Storage Area Surface Line= 4 \n"
+    "        2000    0       3000    0       3000    1000    2000    1000\n"
+    "Storage Area 2D Points= 4 \n"
+    "        2000    0       3000    0       3000    1000    2000    1000\n"
+    "LCMann Time=Dec/30/1899 00:00:00\n"
+)
+
+
+def test_remove_area_bc_lines_in_one_write(tmp_path):
+    from ras_commander import GeomBcLines
+
+    geom = tmp_path / "project.g01"
+    geom.write_text(_GEOM, encoding="utf-8")
+    lines = [{"name": f"BC_{i}", "storage_area": "Perimeter 1", "coordinates": [(0, i), (0, i + 10)]}
+             for i in range(5)]
+    lines.append({"name": "Keep", "storage_area": "Other Area", "coordinates": [(3000, 0), (3000, 10)]})
+    GeomBcLines.add_bc_lines(geom, lines=lines)
+    before = {p.name for p in tmp_path.iterdir()}
+    removed = bo._remove_area_bc_lines(geom, "Perimeter 1")
+    assert removed == [f"BC_{i}" for i in range(5)]
+    remaining = GeomBcLines.get_bc_lines(geom)
+    assert list(remaining["name"]) == ["Keep"]
+    new_files = {p.name for p in tmp_path.iterdir()} - before
+    assert len(new_files) <= 1  # one backup, not one per line
+    assert bo._remove_area_bc_lines(geom, "Perimeter 1") == []

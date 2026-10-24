@@ -493,6 +493,35 @@ def parent_minimum_interval(plan_path: Path) -> str:
     return f"{seconds / 60:g}MIN" if seconds < 3600 else f"{seconds / 3600:g}HOUR"
 
 
+def _remove_area_bc_lines(geom_file, mesh_name: str) -> List[str]:
+    """Remove every BC line block of one 2D area from geometry text in one write.
+
+    Same block rule as :meth:`GeomBcLines.delete_bc_line`, which rewrites (and backs
+    up) the whole file per line; a delivered parent can carry dozens of lines.
+    """
+    from ..geom.GeomBcLines import GeomBcLines, _find_bc_line_block
+    from ..geom.GeomParser import GeomParser
+
+    path = Path(geom_file)
+    lines = GeomBcLines.get_bc_lines(path)
+    names = [str(n) for n in lines.loc[lines["storage_area"].astype(str) == mesh_name, "name"]]
+    if not names:
+        return []
+    with open(path, "r", encoding="utf-8", errors="ignore", newline="") as handle:
+        text = handle.readlines()
+    for name in names:
+        hit = _find_bc_line_block(text, name)
+        if hit is None:
+            raise ValueError(f"BC line {name!r} not found in {path.name}")
+        del text[hit[0]:hit[1]]
+    GeomParser.safe_write_geometry(path, text, create_backup=True)
+    remaining = GeomBcLines.get_bc_lines(path)
+    if (remaining["storage_area"].astype(str) == mesh_name).any():
+        raise RuntimeError(f"BC lines of {mesh_name} remain in {path.name}")
+    logger.info("Removed %d inherited BC lines of %s from %s", len(names), mesh_name, path.name)
+    return names
+
+
 def apply_breakouts(breakout_plan: SubdomainBreakoutPlan, dest_folder, *, overwrite_dest: bool = False,
                     hecras_version: Optional[str] = None, time_step: str = "parent_minimum",
                     timeout: int = 1800) -> SubdomainBreakoutSet:
@@ -542,10 +571,7 @@ def apply_breakouts(breakout_plan: SubdomainBreakoutPlan, dest_folder, *, overwr
         # the geometry text only (the cloned unsteady file must stay byte-identical
         # until preparation ends); replace_bc_lines then writes the child's lines
         # and forcing, dropping the parent's orphaned blocks.
-        inherited = GeomBcLines.get_bc_lines(clone.geometry_path)
-        inherited = inherited[inherited["storage_area"].astype(str) == breakout_plan.mesh_name]
-        for name in inherited["name"]:
-            GeomBcLines.delete_bc_line(clone.geometry_path, name)
+        _remove_area_bc_lines(clone.geometry_path, breakout_plan.mesh_name)
         prepared = RasBreakout2D.prepare_cloned_geometry(
             pre, clone, ras_object=working, refresh_hdf=True, refresh_method="rasexe", remesh=False,
             parent_cell_ids=list(bo.parent_cell_ids), timeout=timeout)

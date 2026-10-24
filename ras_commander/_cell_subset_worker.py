@@ -17,9 +17,12 @@ def main() -> None:
     from System.Diagnostics import FileVersionInfo
 
     version = FileVersionInfo.GetVersionInfo(str(Path(sys.argv[1]) / "Ras.exe"))
-    if (version.FileMajorPart, version.FileMinorPart) != (6, 6):
+    parts = (version.FileMajorPart, version.FileMinorPart, version.FileBuildPart,
+             version.FilePrivatePart)
+    # Qualified runtimes: 6.6, and 6.4.1 (file version 6.4.0.1; 6.4.0 is not).
+    if parts[:2] != (6, 6) and parts != (6, 4, 0, 1):
         raise RuntimeError(
-            f"Exact subset requires HEC-RAS 6.6, selected {version.FileVersion}"
+            f"Exact subset requires HEC-RAS 6.4.1 or 6.6, selected {version.FileVersion}"
         )
     suppress = runpy.run_path(
         str(root / "dotnet/geometry_save.py"), run_name="subset_save"
