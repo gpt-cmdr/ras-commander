@@ -9,11 +9,15 @@ import pytest
 from ras_commander import HdfMesh
 
 
-def fixture(path, values):
+def fixture(path, values, count=None):
     with h5py.File(path, "w") as h:
         g = h.create_group("Geometry/2D Flow Areas")
         g.create_dataset(
-            "Attributes", data=np.array([(b"Area",)], dtype=[("Name", "S16")])
+            "Attributes",
+            data=np.array(
+                [(b"Area", len(values) if count is None else count)],
+                dtype=[("Name", "S16"), ("Cell Count", "i4")],
+            ),
         )
         g.create_dataset("Area/Cells Surface Area", data=values)
 
@@ -28,6 +32,19 @@ def test_native_surface_areas_preserve_precision_and_source(tmp_path, dtype):
     assert result.surface_area.dtype == np.dtype(dtype)
     assert result.surface_area.tolist() == [12.5, 3.25, 0]
     assert hashlib.sha256(p.read_bytes()).hexdigest() == before
+
+
+def test_native_ghost_placeholders_are_excluded_or_preserved_explicitly(tmp_path):
+    p = tmp_path / "A.g01.hdf"
+    fixture(p, np.array([12.5, 3.25, -1, np.nan], dtype="float32"), count=2)
+    physical = HdfMesh.get_mesh_cell_surface_areas(p)
+    assert (
+        physical.surface_area.tolist() == [12.5, 3.25]
+        and not physical.is_ghost_cell.any()
+    )
+    stored = HdfMesh.get_mesh_cell_surface_areas(p, include_ghost_cells=True)
+    assert stored.is_ghost_cell.tolist() == [False, False, True, True]
+    assert stored.surface_area.iloc[2] == -1 and np.isnan(stored.surface_area.iloc[3])
 
 
 @pytest.mark.parametrize(
