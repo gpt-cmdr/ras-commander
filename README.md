@@ -18,6 +18,32 @@ This library was initially conceptualized in the Australian Water School course 
 
 **March 2026 Update:** RAS Commander now supports a fully agentic engineering experience using CLI coding agents and agent SDK's to extend library functions and assist H&H engineers with common modeling tasks such as importing external data, performing QAQC reviews, validating project file paths, AEP and historic storm modeling, or any of the other functionality supported by, or imminently extendable from existing functions, in composable long form agentic workflows. Agents are instructed to work with humans in the loop: demonstrating their steps, maintaining modeling logs, and creating reproducible deliverables that can be externally verified directly in the HEC-RAS GUI. Long term memory is arranged in a hierarchical knowledge structure with progressive disclosure. Agents, skills, rules and cognitive memory systems are included to assist the user with solidifying LLM-written code into deterministic workflows in a continual learning loop, along with a file-based memory system to assist with long term task planning and execution across many conversations and subagents.
 
+## Native Rust HDF engine
+
+ras-commander reads HEC-RAS HDF files (plan results, geometry, terrain and
+land-cover sidecars) through its native HDF engine, written in Rust and
+published as
+[`ras-commander-fast-hdf`](https://github.com/gpt-cmdr/ras-commander-fast-hdf)
+(MIT). `pip install ras-commander` installs it automatically on Windows x64,
+Linux x64 and macOS arm64; no extra and no code changes are needed.
+
+- **Identical results.** Public `Hdf*` methods return the same values, dtypes,
+  columns, index, CRS, attributes and exceptions as the h5py reference
+  implementation. On Windows and Linux this was checked on 201 public method
+  cases across 137 HEC-RAS 5.x–7.x files (3,800 method × file pairs).
+- **Faster large reads.** In the extension's 0.1.0 benchmark, building 2D cell
+  polygons was 4–19× faster than with h5py, depending on mesh size, and mesh
+  time series 2–7× faster on large meshes; small reads were a few
+  milliseconds slower. This makes it practical to extract results from many
+  large 2D models for flood science, research and new kinds of analysis.
+- **h5py fallback.** In the default `auto` mode, any read the engine refuses,
+  and any method not yet proven on the test corpus, uses h5py. Set
+  `RAS_COMMANDER_FAST_HDF=h5py` to turn the engine off. On platforms without
+  a wheel, the engine is not installed and every read uses h5py.
+
+See [Native Rust HDF engine](https://rascommander.info/ras/native-engine/) for
+modes, qualification evidence, performance and limitations.
+
 ## Docker, Slurm, and Apptainer
 
 Use `RasDocker` for Wine preprocessing and native Linux unsteady computation
@@ -181,7 +207,8 @@ pip install ras-commander[all]
 pip install --upgrade ras-commander
 ```
 
-The standard install provides project inventory and direct HDF access.
+The standard install provides project inventory and direct HDF access, with
+the native Rust HDF engine on Windows x64, Linux x64 and macOS arm64.
 Downloading example projects with `RasExamples` and running the example
 notebooks need the `full` extra (`pip install "ras-commander[full]"`). For a
 lean batch runner that also executes plans through `RasCmdr.compute_plan()`, use:
@@ -220,7 +247,10 @@ Combine extras as needed: `pip install ras-commander[notebooks,usgs,dss]`
 
 ### Core Dependencies (installed automatically)
 
-h5py, numpy, and pandas. The `compute` extra adds psutil and pywin32 on
+h5py, numpy, pandas, and, on Windows x64, Linux x64 and macOS arm64, the
+native HDF engine `ras-commander-fast-hdf`. The former `fast` and `fast-hdf`
+extras are no longer needed; they remain so existing install commands keep
+working. The `compute` extra adds psutil and pywin32 on
 Windows for process and dialog supervision. Install `full` or `all` for the
 geospatial, plotting, scientific, precipitation, and remote-data feature stack.
 

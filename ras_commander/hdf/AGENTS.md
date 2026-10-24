@@ -24,10 +24,12 @@ This file is the canonical local instruction file for `ras_commander/hdf/`.
   input/decorator validation exceptions remain unchanged. No status attributes are added.
 
 
-## Optional Native Backend
+## Native Backend
 
-- The `Hdf*` readers may be served by the optional `ras_commander_fast_hdf` extension
-  through the internal adapter `ras_commander.fast_hdf`. Native routing must be invisible
+- The native (Rust) engine is ras-commander's default HDF engine. The `ras_commander_fast_hdf`
+  extension is a core dependency on the platforms with wheels (Windows x64, Linux x64,
+  macOS arm64) and may be absent elsewhere, so every reader must still work on h5py alone.
+  The `Hdf*` readers are served by it through the internal adapter `ras_commander.fast_hdf`. Native routing must be invisible
   except for speed: signatures, return types, columns, dtypes, index, CRS, attrs,
   timestamps and exceptions equal the h5py reference in `python` and `auto` mode. Only
   `required` mode (`RAS_COMMANDER_FAST_HDF=required` or `backend="rust"`) may raise

@@ -1,9 +1,10 @@
 """Optional native lossless HEC-RAS text index, typed geometry reads and atomic edits.
 
-``FastText`` binds the Rust ``ras_text`` core in the optional
-``ras_commander_fast_hdf`` extension. Ordinary installations need no native
-extension: the public ``GeomCrossSection``/``GeomParser`` APIs are unchanged
-and remain pure Python.
+``FastText`` binds the Rust ``ras_text`` core in the
+``ras_commander_fast_hdf`` extension, which ras-commander installs on the
+platforms with published wheels. Only direct ``FastText`` callers use it: the
+public ``GeomCrossSection``/``GeomParser`` APIs are unchanged and remain pure
+Python.
 
 Backends (per call, or ``RAS_COMMANDER_FAST_TEXT`` when ``backend='auto'``):
 
@@ -88,7 +89,7 @@ def _native(mode: str):
         module = importlib.import_module("ras_commander_fast_hdf")
     except (ImportError, OSError) as exc:
         if mode == "rust":
-            raise FastTextError("The optional ras-commander-fast-hdf extension is unavailable") from exc
+            raise FastTextError("The ras-commander-fast-hdf extension is unavailable") from exc
         return None
     if getattr(module, "TEXT_API_VERSION", None) != _TEXT_API_VERSION:
         if mode == "rust":

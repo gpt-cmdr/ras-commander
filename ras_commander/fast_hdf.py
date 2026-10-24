@@ -1,12 +1,19 @@
-"""Optional Rust numeric reads, mesh assembly, and direct PMTiles export.
+"""Adapter for ras-commander's default HDF engine, the native (Rust) extension.
 
-Ordinary installations need no native extension. ``RAS_COMMANDER_FAST_HDF=0``
-disables automatic acceleration; ``required`` proves native execution in
-qualification runs. Explicit ``backend='python'`` or ``'rust'`` overrides the
-environment. Metadata and unsupported HDF types continue to use h5py in auto
-mode. h5py behaviour is the public contract: in auto mode any native failure
+The ``ras-commander-fast-hdf`` extension is a core dependency on the platforms
+with published wheels (CPython on Windows x64, Linux x64 and macOS arm64). This
+module routes the ``Hdf*`` classes' value reads through it and provides native
+mesh assembly and direct PMTiles export. h5py is the reference implementation
+and the public contract: in the default ``auto`` mode any native failure
 (Corrupt/checksum refusals included) falls back to the h5py read, so callers see
-the h5py outcome; ``required`` raises :class:`FastHdfError` instead.
+the h5py outcome. Metadata and unsupported HDF types use h5py. Where the
+extension is not installed or has an incompatible ``API_VERSION``, every read
+uses h5py.
+
+``RAS_COMMANDER_FAST_HDF=h5py`` (legacy ``0``) turns the native engine off;
+``native`` (legacy ``required``) raises :class:`FastHdfError` instead of falling
+back, which proves native execution in qualification runs. Explicit
+``backend='python'`` or ``'rust'`` overrides the environment.
 
 Public surface: ``__all__`` lists the supported names (``available``,
 ``close_sessions``, ``FastHdfError``, ``FastHdfPanicError``, ``mesh_polygons``,
@@ -19,7 +26,8 @@ classes and the qualification suites; it may change without notice.
 
 Environment: ``RAS_COMMANDER_FAST_HDF`` (backend policy; an unrecognised value
 is ``auto`` with one logged warning) and ``RAS_COMMANDER_HDF_SESSION_CACHE``
-(native session policy). See ``docs/api/hdf.md``, "Optional Rust acceleration".
+(native session policy). See ``docs/api/hdf.md``, "Native Rust HDF engine", and
+``docs/native-engine.md``.
 """
 
 from __future__ import annotations
@@ -186,7 +194,7 @@ def _load_native():
         try:
             module = importlib.import_module("ras_commander_fast_hdf")
         except (ImportError, OSError) as exc:
-            _native_state = (None, "The optional ras-commander-fast-hdf extension is unavailable", exc)
+            _native_state = (None, "The ras-commander-fast-hdf extension is unavailable", exc)
         else:
             if getattr(module, "API_VERSION", None) != 11:
                 logger.warning("Ignoring incompatible ras-commander-fast-hdf extension")

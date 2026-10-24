@@ -181,9 +181,9 @@ editing geometry text.
   omitted or ambiguously polygonized (off by default since this release; it was
   always attached before). Use `diagnose_mesh_cell_polygons()` for a DataFrame.
   `engine` (`"auto"`, `"h5py"`, `"native"`) and `threads` select and bound the
-  optional native polygonizer; with `engine="native"` diagnostic labels can
+  native polygonizer; with `engine="native"` diagnostic labels can
   differ from the Python reference (see the docstring). See
-  [Optional Rust acceleration](#optional-rust-acceleration).
+  [Native Rust HDF engine](#native-rust-hdf-engine).
 - `diagnose_mesh_cell_polygons(hdf_path, *, engine="auto")` - Report native
   cell IDs, face IDs, polygon counts, and reason codes for physical-cell
   reconstruction problems and expected boundary-only records
@@ -673,7 +673,7 @@ validation exceptions remain unchanged; no result status attributes are added.
 
 `engine` selects the implementation. `"h5py"` is the reference described above
 (failures are logged and an empty GeoDataFrame is returned). `"native"` uses the
-optional Rust graph kernels and raises `FluvialNativeUnsupportedError` (a
+native Rust graph kernels and raises `FluvialNativeUnsupportedError` (a
 `ValueError`) when it cannot reproduce the reference result; other errors
 propagate. `"auto"` (default) uses native when it can and otherwise the
 reference, including on any native error, so its outcome is always the
@@ -824,29 +824,39 @@ Utility class for HDF file operations.
 - `parse_ras_datetime_ms(datetime_bytes)` - Parse datetime with milliseconds
 - `parse_run_time_window(window_str)` - Parse time window strings
 
-## Optional Rust acceleration
+<a id="optional-rust-acceleration"></a>
 
-`ras_commander.fast_hdf` provides optional numeric HDF reads, native mesh ring
-assembly, and direct mesh-to-PMTiles export. Existing `HdfResultsMesh` and
-`HdfMesh.get_mesh_cell_polygons` methods use the extension when installed while
-preserving their established xarray and GeoDataFrame outputs. Lazy result views
-push selected reads and bounded batches through the same adapter. This backend
-provides HDF reads only. Set `RAS_COMMANDER_FAST_HDF=0` to select the Python
-reference paths.
+## Native Rust HDF engine
 
-The extension is a separate, open-source (MIT) distribution,
-`ras-commander-fast-hdf`, developed in
+The native (Rust) engine is ras-commander's default HDF engine.
+`ras_commander.fast_hdf` routes the `Hdf*` classes' numeric and text HDF reads
+through it, and provides native mesh ring assembly and direct mesh-to-PMTiles
+export. `HdfResultsMesh`, `HdfMesh.get_mesh_cell_polygons` and the other
+routed `Hdf*` methods keep their established xarray, DataFrame and
+GeoDataFrame outputs. Lazy result views push selected reads and bounded
+batches through the same adapter. The engine provides HDF reads only; every
+HDF write uses h5py. h5py is the reference implementation: in the default
+`auto` mode any read the engine refuses uses h5py. Set
+`RAS_COMMANDER_FAST_HDF=h5py` to select the h5py reference paths for every
+read.
+
+The engine is the open-source (MIT) distribution `ras-commander-fast-hdf`,
+developed in
 [gpt-cmdr/ras-commander-fast-hdf](https://github.com/gpt-cmdr/ras-commander-fast-hdf)
-and published on PyPI:
+and published on PyPI. ras-commander 0.107.1 and later install it
+automatically on Windows x64, Linux x64 (`manylinux_2_28`) and macOS arm64
+(not yet qualified on the HEC-RAS corpus), the platforms with published
+wheels; no Rust toolchain is needed:
 
 ```bash
-pip install "ras-commander[fast]"    # or: pip install ras-commander-fast-hdf
+pip install ras-commander
 ```
 
-Wheels are published for Windows x64, Linux x64 (`manylinux_2_28`) and macOS
-arm64 (not yet qualified on the HEC-RAS corpus), so no Rust toolchain is
-needed. To build from source, follow the extension repository's
-[building guide](https://github.com/gpt-cmdr/ras-commander-fast-hdf/blob/main/docs/building.md).
+On other platforms the engine is not installed and every read uses h5py. To
+build it from source there, run `pip install "ras-commander[fast]"` (needs
+Rust; see the extension repository's
+[building guide](https://github.com/gpt-cmdr/ras-commander-fast-hdf/blob/main/docs/building.md)).
+The `fast` and `fast-hdf` extras are otherwise no longer needed.
 Geometry output requires GeoPandas and Shapely; direct PMTiles export requires
 pyproj. See [Native Rust HDF engine](../native-engine.md) for modes,
 qualification and limitations.
@@ -939,7 +949,7 @@ descriptions (at most 16 entries, keyed by file path, size and modification
 time, never holding a file open), and `fast_text.NATIVE_CALLS`, a counter used
 by the qualification tests.
 
-**Public and internal.** `ras_commander.fast_hdf` is optional infrastructure.
+**Public and internal.** `ras_commander.fast_hdf` is engine infrastructure.
 Its supported names are `available`, `close_sessions`, `FastHdfError`,
 `FastHdfPanicError` (a `FastHdfError` subclass for a panic inside the native
 extension), `mesh_polygons`, `packed_meshes` and the `export_*` functions
@@ -1567,7 +1577,7 @@ prerequisites and return contracts take precedence over abbreviated summaries.
 
 ### fast_hdf source reference
 
-The supported names of the optional native backend (`ras_commander.fast_hdf.__all__`).
+The supported names of the native engine adapter (`ras_commander.fast_hdf.__all__`).
 
 ::: ras_commander.fast_hdf
     options:
