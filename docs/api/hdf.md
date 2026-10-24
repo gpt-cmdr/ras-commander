@@ -843,7 +843,7 @@ read.
 The engine is the open-source (MIT) distribution `ras-commander-fast-hdf`,
 developed in
 [gpt-cmdr/ras-commander-fast-hdf](https://github.com/gpt-cmdr/ras-commander-fast-hdf)
-and published on PyPI. ras-commander 0.108.0 and later install it
+and published on PyPI. ras-commander 0.107.1 and later install it
 automatically on Windows x64, Linux x64 (`manylinux_2_28`) and macOS arm64
 (not yet qualified on the HEC-RAS corpus), the platforms with published
 wheels; no Rust toolchain is needed:

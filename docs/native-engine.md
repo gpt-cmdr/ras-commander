@@ -10,7 +10,7 @@ what it does not do.
 !!! info "Short version"
     - The native engine is ras-commander's **default HDF engine**. Its
       open-source (MIT) package, `ras-commander-fast-hdf`, is installed
-      automatically by `pip install ras-commander` (0.108.0 and later) on
+      automatically by `pip install ras-commander` (0.107.1 and later) on
       Windows x64, Linux x64 and macOS arm64. No extra is needed.
     - The default mode, `auto`, reads natively where the native path is
       qualified and uses h5py for any read the engine refuses. **Public
@@ -65,7 +65,7 @@ refuses anything it cannot reproduce exactly (see
 The engine and its Python extension are open source (MIT) in their own
 repository,
 [gpt-cmdr/ras-commander-fast-hdf](https://github.com/gpt-cmdr/ras-commander-fast-hdf),
-and published on PyPI as `ras-commander-fast-hdf`. ras-commander 0.108.0 and
+and published on PyPI as `ras-commander-fast-hdf`. ras-commander 0.107.1 and
 later list it as a core dependency, limited by an environment marker to the
 platforms that have wheels, so the normal install is enough:
 
