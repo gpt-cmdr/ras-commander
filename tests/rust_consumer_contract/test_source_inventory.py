@@ -76,14 +76,18 @@ def test_source_matches_accepted_runtime_abi(inventory):
 
 
 def test_dependency_pins_and_features(inventory):
-    deps = inventory["crate"]["git_dependencies"]
-    # The engine is the in-repository crate (a path dependency, not a git pin),
-    # and it owns its generic reader.
-    assert "ras-commander-rust" not in deps and "hdf5-reader" not in deps
-    assert deps["freestiler-core"]["rev"] == "beb64b0d4414da895ec67d02b2f91db6ab6acc37"
-    assert inventory["export_crate"]["git_dependencies"]["freestiler-core"]["rev"] == \
-        deps["freestiler-core"]["rev"]
-    features = inventory["crate"]["features"]
+    crate = inventory["crate"]
+    # One crate (0.2+): the engine, bindings and export writers are features of
+    # ras-commander-fast-hdf, with no git or path dependencies. The HDF5 reader
+    # and freestiler-core are embedded sources pinned in vendor/PROVENANCE.json.
+    assert (crate["name"], crate["lib_name"]) == ("ras-commander-fast-hdf", "ras_commander_fast_hdf")
+    assert crate["git_dependencies"] == {}
+    assert crate["embedded"]["freestiler-core"]["commit"] == "beb64b0d4414da895ec67d02b2f91db6ab6acc37"
+    assert {"hdf5-reader", "hdf5-core"} <= set(crate["embedded"])
+    build = inventory["python_build"]
+    assert build["manifest_path"] == "../Cargo.toml" and build["module_name"] == "ras_commander_fast_hdf"
+    assert {"python", "extension-module"} <= set(build["features"])
+    features = crate["features"]
     receipt = load_receipt()
     for name in (receipt["features"] if receipt else ("extension-module", "exports-all", "exports-pmtiles")):
         assert name in features
@@ -101,15 +105,15 @@ def test_binding_boundary(inventory):
     and the export crate still use filesystem paths.
     """
     modules = inventory["modules"]
-    free = ["src/fluvial.rs", "src/fluvial_geometry.rs", "src/fluvial_topology.rs",
-            "src/analysis/mod.rs", "src/ras_text/geometry.rs", "src/ras_text/fixed_width.rs",
-            "src/exports/contract.rs"]
-    coupled = ["src/reader.rs", "src/mesh.rs", "src/tiles.rs", "src/fluvial_bindings.rs",
-               "src/text_bindings.rs", "src/analysis/bindings.rs"]
+    free = ["src/python/fluvial.rs", "src/python/fluvial_geometry.rs", "src/python/fluvial_topology.rs",
+            "src/python/analysis/mod.rs", "src/python/ras_text/geometry.rs",
+            "src/python/ras_text/fixed_width.rs", "src/exports/contract.rs"]
+    coupled = ["src/python/reader.rs", "src/python/mesh.rs", "src/python/tiles.rs",
+               "src/python/fluvial_bindings.rs", "src/python/text_bindings.rs",
+               "src/python/analysis/bindings.rs"]
     for rel in free:
         assert modules[rel]["coupling"]["pyo3"] == 0 and modules[rel]["coupling"]["numpy"] == 0, rel
     for rel in coupled:
         assert modules[rel]["coupling"]["pyo3"] > 0, rel
-    assert modules["src/exports/lib.rs"]["coupling"]["filesystem"] > 0
-    assert modules["src/ras_text/edit.rs"]["coupling"]["filesystem"] > 0
-    assert inventory["crate"]["crate_types"] == ["cdylib", "rlib"]
+    assert modules["src/exports/mod.rs"]["coupling"]["filesystem"] > 0
+    assert modules["src/python/ras_text/edit.rs"]["coupling"]["filesystem"] > 0

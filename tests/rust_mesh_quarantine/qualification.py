@@ -263,7 +263,7 @@ def main():
     assert len(binaries) == 1, binaries
     # Optional: hash the bridge source when a ras-commander-fast-hdf checkout is named.
     source = os.environ.get('RAS_FAST_HDF_SOURCE')
-    mesh_rs = Path(source) / 'python/src/mesh.rs' if source else None
+    mesh_rs = Path(source) / 'src/python/mesh.rs' if source else None
     records = {'native_module': native.__file__, 'api_version': native.API_VERSION,
                'engine_commit': native.ENGINE_COMMIT,
                'inner_binary': str(binaries[0]), 'inner_binary_sha256': digest(binaries[0]),
