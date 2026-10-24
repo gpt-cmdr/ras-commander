@@ -442,9 +442,23 @@ def _write_subset(source, target, mesh_name, subset, crs_wkt):
     area = base + "/" + mesh_name
     with h5py.File(source, "r") as src, h5py.File(target, "r+") as dst:
         old = src[area]
+        from .._geometry_association import decode_hdf_attr
         from ._preprocess_contract import ASSOCIATIONS
 
         target_attributes = dict(dst[area].attrs) if area in dst else {}
+        # The owned geometry may already use child sidecars while its compiled
+        # area still names parent inputs. Use the current target associations
+        # for every filename family relocated before native subset saving.
+        geometry_attributes = dst["Geometry"].attrs
+        for filename in (key for key in ASSOCIATIONS if key.endswith(" Filename")):
+            if not decode_hdf_attr(geometry_attributes.get(filename)):
+                continue
+            target_attributes[filename] = geometry_attributes[filename]
+            layer = filename.removesuffix(" Filename") + " Layername"
+            if layer in geometry_attributes:
+                target_attributes[layer] = geometry_attributes[layer]
+            else:
+                target_attributes.pop(layer, None)
         if "Projection" not in dst.attrs:
             dst.attrs["Projection"] = np.bytes_(crs_wkt.encode("utf-8"))
         if area in dst:

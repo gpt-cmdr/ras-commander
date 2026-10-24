@@ -346,6 +346,59 @@ def test_staged_associations_keep_original_resolution_and_spelling(tmp_path):
         assert h["Geometry"].attrs["Land Cover Filename"] == value
 
 
+@pytest.mark.parametrize("canonical", ["complete", "filename_only", "absent"])
+@pytest.mark.parametrize(
+    "kind", ["Terrain", "Land Cover", "Infiltration", "Percent Impervious"]
+)
+def test_subset_uses_target_geometry_associations_for_compiled_area(
+    tmp_path, canonical, kind
+):
+    """Current child inputs must replace stale compiled parent-area links."""
+    from ras_commander.geom._cell_subset import _relocate_associations, _write_subset
+
+    plan, source, target = planned(tmp_path)
+    hdf = Path(str(target) + ".hdf")
+    sidecar = tmp_path / "ChildInput.hdf"
+    sidecar.write_bytes(b"terrain association fixture")
+    with h5py.File(hdf, "r+") as h:
+        area = h["Geometry/2D Flow Areas/Area"]
+        area.attrs[f"{kind} Filename"] = np.bytes_(
+            "ChildInput.hdf" if canonical == "absent" else "MissingParentInput.hdf"
+        )
+        area.attrs[f"{kind} Layername"] = np.bytes_("Parent")
+        area.attrs["Terrain File Date"] = np.bytes_("01JAN2000 00:00:00")
+        if canonical != "absent":
+            h["Geometry"].attrs[f"{kind} Filename"] = np.bytes_("ChildInput.hdf")
+        if canonical == "complete":
+            h["Geometry"].attrs[f"{kind} Layername"] = np.bytes_("Child")
+            h["Geometry"].attrs["Terrain File Date"] = np.bytes_("02JAN2000 00:00:00")
+    source_bytes = source.read_bytes()
+    with h5py.File(source) as h:
+        keep = np.zeros(16, dtype=bool)
+        keep[list(plan.parent_cell_ids)] = True
+        subset = _build_subset(h["Geometry/2D Flow Areas/Area"], keep)
+    _write_subset(source, hdf, "Area", subset, plan.crs_wkt)
+    with h5py.File(hdf) as h:
+        area = h["Geometry/2D Flow Areas/Area"]
+        assert area.attrs[f"{kind} Filename"] == np.bytes_("ChildInput.hdf")
+        if canonical == "filename_only":
+            assert f"{kind} Layername" not in area.attrs
+            assert "Terrain File Date" not in area.attrs
+        else:
+            expected = "Child" if canonical == "complete" else "Parent"
+            assert area.attrs[f"{kind} Layername"] == np.bytes_(expected)
+        assert "Terrain File Date" not in area.attrs
+        np.testing.assert_array_equal(
+            area["Faces FacePoint Indexes"][:], subset.tables["Faces FacePoint Indexes"]
+        )
+        np.testing.assert_array_equal(
+            area["FacePoints Coordinate"][:], subset.tables["FacePoints Coordinate"]
+        )
+    # This is the same staging gate that rejected the real child before Save.
+    _relocate_associations(hdf, hdf)
+    assert source.read_bytes() == source_bytes
+
+
 def _fake_native_runtime(monkeypatch, tmp_path):
     import importlib
     from types import SimpleNamespace
