@@ -286,10 +286,58 @@ def release_native_sessions(*paths):
             close_sessions(path)
 
 
+def _resolved(path):
+    """``str(Path(path).resolve())``, remembered for the rest of the public call.
+
+    Resolving a path on Windows opens the file to ask for its final name, and the
+    typed readers resolve the same HDF path several times per read. How a path
+    string resolves cannot change during one public call (a relative path is
+    keyed with the working directory), so inside a call it is resolved once.
+    File identity checks (size, mtime) are still made on every lookup.
+    """
+    raw = os.fspath(path)
+    memo = _native_scope.memo()
+    if memo is None:
+        return str(Path(raw).resolve())
+    key = ("resolve", raw) if os.path.isabs(raw) else ("resolve", os.getcwd(), raw)
+    resolved = memo.get(key)
+    if resolved is None:
+        resolved = memo[key] = str(Path(raw).resolve())
+    return resolved
+
+
+def _session_cache_setting():
+    return os.environ.get("RAS_COMMANDER_HDF_SESSION_CACHE", "1").strip().lower()
+
+
+def _typed_source(module, path):
+    """Context yielding what a path-based typed engine call should read from.
+
+    Inside a public call (or with ``RAS_COMMANDER_HDF_SESSION_CACHE=persist``),
+    an extension that advertises ``SESSION_SOURCES`` reads through the call's
+    cached :class:`HdfSession`: the file is mapped once and the engine's
+    session-local metadata proofs are shared by all reads of the call instead of
+    being repeated by every small read. The values are the same either way.
+    Otherwise (session cache off, no public call, older extension) the path
+    itself is passed and the engine opens the file for that one call, as before.
+    """
+    if getattr(module, "SESSION_SOURCES", False) is not True:
+        return nullcontext(path)
+    setting = _session_cache_setting()
+    if setting in {"0", "false", "off"} or (setting != "persist" and not _native_scope.active()):
+        return nullcontext(path)
+    return _session(module, path, None, any_threads=True)
+
+
 @contextmanager
-def _session(module, path, threads=None):
-    path = Path(path).resolve()
-    setting = os.environ.get("RAS_COMMANDER_HDF_SESSION_CACHE", "1").strip().lower()
+def _session(module, path, threads=None, *, any_threads=False):
+    """Cached native session for ``path`` (see the module notes above).
+
+    ``any_threads`` reuses a cached session of the same file whatever its thread
+    count (typed reads do not depend on it) instead of reopening the file.
+    """
+    path = Path(_resolved(path))
+    setting = _session_cache_setting()
     enabled = setting not in {"0", "false", "off"}
     if not enabled:
         close_sessions(path)
@@ -310,7 +358,8 @@ def _session(module, path, threads=None):
             raise
         key = (str(path), stat.st_size, stat.st_mtime_ns)
         for old in list(_sessions):
-            if old[0] == str(path) and (old != key or _sessions[old][1] != threads):
+            if old[0] == str(path) and (old != key or (
+                    not any_threads and _sessions[old][1] != threads)):
                 _scoped_keys.discard(old)
                 _sessions.pop(old)[0].close()
         if key not in _sessions:
@@ -347,8 +396,9 @@ def _domain_refusal(exc):
     return getattr(exc, "engine_kind", None) == "unsupported"
 
 
-def _safe_file(dataset):
-    file = dataset.file
+def _safe_file(dataset, file=None):
+    """Whether the engine may reopen ``dataset``'s file (``file`` is ``dataset.file`` when given)."""
+    file = dataset.file if file is None else file
     filename = file.filename
     # Reopening must never discard dirty state or escape an in-memory file.
     return (
@@ -575,7 +625,8 @@ def read_dataset(dataset: h5py.Dataset, selection=None, *, backend="auto", threa
     if module is None:
         _record(dataset.name, "h5py")
         return dataset[key]
-    if not _safe_file(dataset) or not _numeric(dataset) or dataset.shape is None:
+    file = dataset.file
+    if not _safe_file(dataset, file) or not _numeric(dataset) or dataset.shape is None:
         if mode == "rust":
             raise FastHdfError(f"Dataset cannot be safely read by Rust: {dataset.name}")
         logger.debug("h5py fallback for unsupported dataset %s", dataset.name)
@@ -600,7 +651,7 @@ def read_dataset(dataset: h5py.Dataset, selection=None, *, backend="auto", threa
         "/Results/Unsteady/Output/Output Blocks/Base Output/") and "/2D Flow Areas/" in dataset.name
         else "generic")
     try:
-        with _session(module, os.fsdecode(dataset.file.filename), threads) as session:
+        with _session(module, os.fsdecode(file.filename), threads) as session:
             try:
                 values = _read_fim_result(session, dataset, slices, threads)
                 served = ("native-typed", "mesh_result") if values is not None else ("native-generic", None)

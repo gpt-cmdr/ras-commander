@@ -21,6 +21,8 @@ _state = {"dirty": False, "release": None}
 def enter():
     """Open a (possibly nested) scope and return the previous depth."""
     depth = getattr(_local, "depth", 0)
+    if depth == 0:
+        _local.memo = {}
     _local.depth = depth + 1
     return depth
 
@@ -28,6 +30,8 @@ def enter():
 def leave(depth):
     """Close a scope; the outermost one releases sessions opened since."""
     _local.depth = depth
+    if depth == 0:
+        _local.memo = None
     if depth == 0 and _state["dirty"]:
         _state["dirty"] = False
         release = _state["release"]
@@ -44,3 +48,14 @@ def sessions_opened(release):
     """Record that a cached session exists; ``release`` closes them."""
     _state["dirty"] = True
     _state["release"] = release
+
+
+def memo():
+    """A per-thread dict that lives until the outermost public call returns.
+
+    ``None`` outside a public call. Used only for facts that cannot change while
+    one call runs (e.g. how a path string resolves), never for file contents.
+    """
+    if getattr(_local, "depth", 0) > 0:
+        return getattr(_local, "memo", None)
+    return None
