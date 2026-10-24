@@ -1540,6 +1540,14 @@ the HDF atomically. Area-only associations are preserved when no geometry-wide
 filename is declared. A stale area layer name is removed when the current
 geometry filename has no corresponding layer name.
 
+Absent optional area layer names remain absent; current filename links are still
+synchronized. In a HEC-RAS 6.6 geometry-refresh readback, the native save retained
+the child terrain filename but omitted the area `Terrain Layername` even though
+the canonical geometry association named the layer. The API preserves that
+cache representation instead of introducing a label that native save removes.
+An existing area layer name is still updated or removed to match the canonical
+association.
+
 Only the selected cached association attributes change. Calibration overrides,
 mesh datasets, other area attributes and canonical geometry links remain intact.
 An already synchronized plan preserves the file bytes and creates no backup.

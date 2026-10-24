@@ -36,14 +36,14 @@ def test_selected_cache_sync_preserves_other_mesh_and_calibration(carrier):
     original = carrier.read_bytes()
     plan = RasMap.plan_geometry_area_association_sync(carrier, ["Selected"])
     assert carrier.read_bytes() == original
-    assert len(plan["changes"]) == 4
+    assert len(plan["changes"]) == 3
     receipt = RasMap.apply_geometry_area_association_sync(plan)
     assert receipt["status"] == "applied"
     assert carrier.with_suffix(".hdf.bak").read_bytes() == original
     with h5py.File(carrier, "r") as hdf:
         area = hdf["Geometry/2D Flow Areas/Selected"]
         assert area.attrs["Terrain Filename"] == b"Terrain.hdf"
-        assert area.attrs["Terrain Layername"] == b"ChildTerrain"
+        assert "Terrain Layername" not in area.attrs
         assert area.attrs["Land Cover Filename"] == b"LandCover.hdf"
         assert "Land Cover Layername" not in area.attrs
         assert area.attrs["Percent Impervious Filename"] == b"area-only.hdf"
@@ -60,6 +60,49 @@ def test_selected_cache_sync_preserves_other_mesh_and_calibration(carrier):
     assert not again["changes"]
     assert RasMap.apply_geometry_area_association_sync(again)["status"] == "unchanged"
     assert carrier.read_bytes() == before
+
+
+def test_existing_optional_area_layer_name_is_still_synchronized(carrier):
+    with h5py.File(carrier, "r+") as hdf:
+        hdf["Geometry/2D Flow Areas/Selected"].attrs["Terrain Layername"] = (
+            np.bytes_(b"OldTerrain")
+        )
+    plan = RasMap.plan_geometry_area_association_sync(carrier, ["Selected"])
+    assert any(
+        change["attribute"] == "Terrain Layername"
+        and change["before"] == "OldTerrain"
+        and change["after"] == "ChildTerrain"
+        for change in plan["changes"]
+    )
+    RasMap.apply_geometry_area_association_sync(plan)
+    with h5py.File(carrier, "r") as hdf:
+        assert (
+            hdf["Geometry/2D Flow Areas/Selected"].attrs["Terrain Layername"]
+            == b"ChildTerrain"
+        )
+
+
+@pytest.mark.parametrize(
+    "family",
+    ["Terrain", "Land Cover", "Infiltration", "Sediment Bed Material", "Percent Impervious"],
+)
+def test_missing_optional_area_label_is_not_invented(carrier, family):
+    with h5py.File(carrier, "r+") as hdf:
+        geometry = hdf["Geometry"]
+        geometry.attrs[family + " Filename"] = np.bytes_(b"Terrain.hdf")
+        geometry.attrs[family + " Layername"] = np.bytes_(b"CanonicalLayer")
+        area = geometry["2D Flow Areas/Selected"]
+        for key in (family + " Filename", family + " Layername"):
+            if key in area.attrs:
+                del area.attrs[key]
+    plan = RasMap.plan_geometry_area_association_sync(carrier, ["Selected"])
+    assert not any(change["attribute"] == family + " Layername" for change in plan["changes"])
+    RasMap.apply_geometry_area_association_sync(plan)
+    with h5py.File(carrier, "r") as hdf:
+        area = hdf["Geometry/2D Flow Areas/Selected"]
+        assert area.attrs[family + " Filename"] == b"Terrain.hdf"
+        assert family + " Layername" not in area.attrs
+        assert hdf["Geometry"].attrs[family + " Layername"] == b"CanonicalLayer"
 
 
 def test_missing_current_input_and_stale_plan_do_not_mutate(carrier):
