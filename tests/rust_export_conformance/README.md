@@ -18,7 +18,9 @@ the extension moved there from `rust/fast-hdf`.
 ```powershell
 uv pip install -e . pytest maturin geopandas pyproj pmtiles mapbox-vector-tile freestiler==0.3.0 psutil
 $env:VIRTUAL_ENV = "$PWD/.venv"
-maturin develop --release --locked --features extension-module --manifest-path $env:RAS_FAST_HDF_SOURCE/python/Cargo.toml
+Push-Location $env:RAS_FAST_HDF_SOURCE/python  # pyproject.toml; builds the root crate
+maturin develop --release --locked --features extension-module,exports-all,exports-pmtiles
+Pop-Location
 $env:RAS_EXPORT_FIXTURE_ROOT = "$PWD/working/fixtures"
 uv run --no-sync python -m pytest tests/rust_export_conformance tests/test_fast_hdf.py -q -rx -o junit_family=legacy
 ```
