@@ -9,6 +9,8 @@ alone does not identify a development checkout.
 
 ### Unreleased
 
+### v0.107.1 (October 2026)
+
 **The native Rust HDF engine is installed by default**
 
 `ras-commander-fast-hdf>=0.1,<0.2` is now a core dependency, so
