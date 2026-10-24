@@ -116,6 +116,89 @@ in 27,188 walk-up steps. It accepted 148 split lines, which nest into 30
 tiers. The search took 16 minutes and the partition 5 more on a workstation;
 most of the time goes to streaming the 12.6 GB of face flow.
 
+## Authoring, running and comparing breakouts
+
+```python
+breakout_plan = RasSubdomain.plan_breakouts(partition, "01", ras_object=parent, subdomain_ids=["2568"])
+assert breakout_plan.is_ready
+breakouts = RasSubdomain.apply_breakouts(breakout_plan, "work/breakouts")
+checks = RasSubdomain.validate_breakouts(breakouts)
+runs = RasSubdomain.compute_subdomains(breakouts, max_workers=2, num_cores=4)
+comparison = RasSubdomain.compare_to_parent(breakouts, "Model.p01.hdf")
+```
+
+### `plan_breakouts`
+
+`plan_breakouts(partition, plan_number, *, ras_object, perimeter_friction_slope=0.01, subdomain_ids=None)`
+writes nothing. Per subdomain it records:
+
+- the exact parent cells to keep;
+- the BC lines:
+  - the outlet split line as Normal Depth at its fitted slope;
+  - one Flow Hydrograph line per upstream subdomain, carrying the parent's own
+    flow across that split line until the upstream child has run;
+  - Normal Depth along each stretch of the parent perimeter.
+
+Every other edge is a closed wall, as in the parent. It runs
+`RasBreakout2D.preflight` against the parent and checks that the parent geometry
+HDF is the mesh that was searched. `HOLES`, `MULTIPART` and
+`STRUCTURE_ON_SPLIT_LINE` become blocking checks.
+
+### `apply_breakouts`
+
+`apply_breakouts(breakout_plan, dest_folder, *, overwrite_dest=False, hecras_version=None, time_step="parent_minimum")`:
+
+- **Working copy:** copies the parent project to `dest_folder`. The copy roots
+  at the smallest folder holding the project file and its RAS Mapper assets
+  (so eBFE layouts with `Terrain/` beside `Input/` keep resolving), and leaves
+  out parent result HDFs.
+- **Per subdomain:**
+  - clones plan, geometry and unsteady file (`RasBreakout2D.clone_plan_components`);
+  - removes the parent's perimeter BC lines from the cloned geometry;
+  - cuts the clone to the exact parent cells in HEC-RAS 6.6
+    (`prepare_cloned_geometry(parent_cell_ids=...)`);
+  - writes the BC lines and their forcing (`GeomBcLines.replace_bc_lines`).
+- **BC line placement:** HEC-RAS can misclassify a line drawn on the perimeter
+  or assign a short line to the whole ring. After each full preprocess, a line
+  that HEC-RAS rejects, that attaches to no face, that shares faces with
+  another line, or that spreads over the whole perimeter moves to its next
+  placement. The placements, in order: on the perimeter; offset 1 ft outward
+  with ends trimmed; extended 50 ft; following the perimeter 200, 400 or 800 ft
+  past each end.
+- **Time step:** `time_step="parent_minimum"` fixes each child at the shortest
+  step the parent can take, with the Courant-adaptive step off. A child must
+  not out-step its parent, whose adaptive step is set by its most restrictive
+  cells anywhere in the domain.
+
+### `validate_breakouts`, `compute_subdomains` and `compare_to_parent`
+
+- **`validate_breakouts`** preprocesses every child and checks each line
+  against its compiled external faces (schema `subdomain_breakout_checks`).
+- **`compute_subdomains`** runs one tier at a time through
+  `RasCmdr.compute_parallel`. Before each tier, each upstream child's outlet
+  flow is written into the matching inflow line downstream (schema
+  `subdomain_compute_runs`).
+- **`compare_to_parent`** compares each child cell with the same parent cell
+  (schema `subdomain_parent_comparison`):
+  - maximum-WSE difference percentiles over cells wet in both;
+  - wet-extent IoU;
+  - outlet peak, timing, volume and NSE against the parent's native flow
+    across the same faces.
+
+### Salt Draw headwater 2568
+
+5.1 sq mi, 2,407 parent cells, 1% AEP. The breakout ran in 1 min on a
+workstation (4 cores).
+
+| Child time step | Max-WSE diff p50 / p95 / p99 / max (ft) | Outlet peak | Outlet volume | Outlet NSE |
+|---|---|---|---|---|
+| Inherited adaptive (30 s, Courant 2) | 0.007 / 0.67 / 1.53 / 3.10 | +2.1% | -0.4% | 0.58 |
+| Parent minimum (fixed 15 s), the default | 0.0015 / 0.018 / 0.079 / 0.26 | +2.6% | +2.0% | 0.89 |
+
+The parent dropped to 15 s at 12:03 on the event day, forced by its most
+restrictive cells elsewhere in the HUC. The child alone stayed at 30 s until
+12:30, and a transient at its wetting front set summary maxima up to 3 ft high.
+
 ## Provenance
 
 Ported from fim-commander's rain-on-grid subdomain research on Salt Draw
@@ -142,3 +225,13 @@ TauDEM links and catchments instead.
         - SplitLineCriteria
         - SplitLineSearch
         - SubdomainPartition
+
+::: ras_commander.subdomain._breakouts
+    options:
+      show_root_heading: false
+      heading_level: 3
+      show_source: false
+      members:
+        - SubdomainBreakout
+        - SubdomainBreakoutPlan
+        - SubdomainBreakoutSet
