@@ -333,8 +333,8 @@ class RasFim:
                 raise FimUnsupportedError(f"cannot identify the {column_hint} column in {list(frame.columns)}")
             return frame.set_index("cell_id")[columns[0]]
 
-        wse = _one(HdfResultsMesh.get_mesh_max_ws(path), "water_surface")
-        depth = _one(HdfResultsMesh.get_mesh_max_depth(path), "depth")
+        wse = _one(HdfResultsMesh.get_mesh_max_ws(path, include_geometry=False), "water_surface")
+        depth = _one(HdfResultsMesh.get_mesh_max_depth(path, include_geometry=False), "depth")
         cells = polygons[polygons["mesh_name"] == mesh_name]
         ids = cells["cell_id"].to_numpy(dtype=np.int64)
         missing = np.setdiff1d(ids, wse.index.to_numpy())

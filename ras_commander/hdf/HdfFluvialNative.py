@@ -145,7 +145,9 @@ class Analysis:
             raise ValueError("inconsistent projected axis units")
         peaks = None
         if require_peaks:
-            peaks = HdfResultsMesh.get_mesh_max_ws(path, round_to=peak_round_to)
+            peaks = HdfResultsMesh.get_mesh_max_ws(
+                path, round_to=peak_round_to, include_geometry=False
+            )
             if peaks.empty:
                 raise ValueError("computed HDF returned an empty peak table")
             if peaks.duplicated(["mesh_name", "cell_id"]).any():
