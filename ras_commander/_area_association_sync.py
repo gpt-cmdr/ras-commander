@@ -71,6 +71,11 @@ def _plan(geometry_hdf, mesh_names):
                 )
             for name in names:
                 for key in (filename, layer):
+                    # Native area caches may omit optional layer labels even
+                    # when the geometry-wide association has one. Creating a
+                    # label there makes native save remove an invented input.
+                    if key == layer and key not in areas[name].attrs:
+                        continue
                     old = decode_hdf_attr(areas[name].attrs.get(key))
                     new = decode_hdf_attr(geometry.attrs.get(key))
                     if old != new:
