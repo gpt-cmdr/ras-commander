@@ -24,6 +24,10 @@ the mapping arithmetic.
 
 Requires the ``fim`` extra (``pip install "ras-commander[fim]"``) and an
 engine executable.
+
+``map_horizontal_profiles`` is a separate optional NumPy path for cell-constant
+horizontal WSE. It reuses terrain-lattice ownership across profiles and does
+not invoke the Rust engine or substitute for a failed Step05 run.
 """
 
 from __future__ import annotations
@@ -172,7 +176,7 @@ def _empty_row(profile: str, status: str, **values) -> dict:
 
 
 class RasFim:
-    """Static namespace for the optional ras2fim-2D FIM mapping method.
+    """Static namespace for optional triangulated and horizontal FIM methods.
 
     All methods are static; do not instantiate.
     """
@@ -180,6 +184,155 @@ class RasFim:
     ENGINE_NAME = _engine.ENGINE_NAME
     ENGINE_ENV_VAR = _engine.ENGINE_ENV_VAR
     MANIFEST_COLUMNS = tuple(MANIFEST_COLUMNS)
+
+    @staticmethod
+    @log_call
+    def map_horizontal_profiles(
+        cells: "gpd.GeoDataFrame",
+        terrain_path: PathLike,
+        output_folder: PathLike,
+        *,
+        profiles: Optional[Sequence[str]] = None,
+        profile_prefix: str = DEFAULT_PROFILE_PREFIX,
+        bbox: Optional[Sequence[float]] = None,
+        polygon: Any = None,
+        polygon_layer: Optional[str] = None,
+        aoi_crs: Any = None,
+        min_depth: float = 0.0,
+        max_working_mib: int = 1024,
+        write_floodplain: bool = True,
+        raise_on_failure: bool = True,
+    ) -> pd.DataFrame:
+        """Map cell-constant horizontal WSE using a shared terrain-lattice grid.
+
+        This explicit NumPy method fills each cell with its own WSE. It does
+        not invoke or fall back from the Rust Step05 engine, interpolate
+        between cells, or reproject the output. Cell ownership and terrain
+        are prepared once and reused across every requested profile.
+
+        Args:
+            cells (geopandas.GeoDataFrame): Valid non-overlapping cell Polygons
+                with unique integer ``cell_idx`` and numeric WSE columns.
+                NaN marks a dry cell. Not modified.
+            terrain_path: Single-band float32 terrain GeoTIFF in the cells'
+                CRS, with north-up square pixels and declared nodata.
+                Its nodata pixels stay dry.
+            output_folder: New or empty folder for rasters and the manifest.
+            profiles: Profile columns; defaults to ``profile_prefix`` matches.
+            profile_prefix: Prefix for selecting profile columns.
+            bbox: Output constraint in ``aoi_crs`` or the terrain CRS.
+            polygon: Polygon, MultiPolygon, frame or vector file constraint.
+            polygon_layer: Layer name for a multi-layer vector file.
+            aoi_crs: CRS of the constraint; see :meth:`resolve_aoi`.
+            min_depth: Keep pixels with depth strictly greater than this
+                value, in the input elevation units. Use 0.5 for a half-foot
+                filter only when those units are feet. Filters WSE too.
+            max_working_mib: Planned array admission budget, not an RSS cap.
+                Excludes polygonization and raster-library caches. Large
+                windows fail before terrain or ownership arrays load.
+            write_floodplain: Write product 11 from retained depth pixels.
+            raise_on_failure: Raise after writing the manifest if any profile
+                failed; otherwise return the failed rows too.
+
+        Returns:
+            DataFrame: ``fim_product_manifest`` rows. Offsets refer to the
+                terrain grid, shared by all profiles. Product names match
+                :meth:`map_profiles`; no nudge is performed in this method.
+
+        Raises:
+            FimUnsupportedError: Invalid or overlapping cells, grid/CRS
+                mismatch, unsupported terrain or an over-budget window.
+            FimMappingError: A failed profile or a changed input file.
+            FileExistsError: The output folder is not empty.
+
+        Notes:
+            Shared polygon edges use rasterio centre ownership, with the
+            higher sorted cell index written last. This is a horizontal
+            2D-cell method; it does not reproduce native sloping, 1D or
+            structure-specific rendering. Finite input WSE must already
+            reflect the caller's cell wet/dry policy. WSE is cast to float32
+            before subtraction, and the depth threshold compares in float32.
+            Product names are layout conventions, not method identifiers.
+        """
+        _require_dependencies()
+        from types import SimpleNamespace
+        from . import _horizontal
+
+        names = _validate_cells(cells, profiles, profile_prefix)
+        if len(cells) == 0:
+            raise ValueError("horizontal cells must not be empty")
+        if isinstance(min_depth, bool) or not np.isfinite(min_depth) or min_depth < 0:
+            raise ValueError("min_depth must be finite and >= 0 in model vertical units")
+        budget = _positive_int(max_working_mib, "max_working_mib")
+        terrain = _require_path(terrain_path, "terrain_path")
+        constraint = _aoi.resolve_aoi(bbox=bbox, polygon=polygon, polygon_layer=polygon_layer,
+                                      aoi_crs=aoi_crs, default_crs=cells.crs)
+        watched = {"terrain": terrain}
+        if isinstance(polygon, (str, os.PathLike)):
+            watched["polygon"] = _require_path(polygon, "polygon")
+        before = {key: _file_identity(path) for key, path in watched.items()}
+        ordered = cells.sort_values("cell_idx", kind="stable").reset_index(drop=True)
+        plan = _horizontal.plan_grid(ordered, terrain, constraint, budget)
+        folder = _prepare_output_folder(output_folder)
+        rows = {name: _empty_row(name, "not_run") for name in names}
+        details = {
+            "method": "horizontal cell-constant WSE / terrain lattice / NumPy",
+            "method_id": "horizontal-cell-constant/1",
+            "backend": "numpy",
+            "options": {"min_depth": float(min_depth), "max_working_mib": budget,
+                        "write_floodplain": bool(write_floodplain), "arithmetic": "float32 gather and subtract"},
+            "grid": {"crs": plan.crs.to_string(), "window": list(plan.window.flatten()),
+                     "transform": tuple(plan.transform)[:6], "planned_bytes": plan.planned_bytes},
+            "aoi": constraint.describe() if constraint else None,
+            "inputs": {k: {"path": str(path), "size": before[k][0], "mtime_ns": before[k][1]}
+                       for k, path in watched.items()},
+            "status": "in_progress",
+        }
+
+        def manifest():
+            return pd.DataFrame([rows[name] for name in names], columns=MANIFEST_COLUMNS)
+
+        RasFim._write_manifest(folder, manifest(), details)
+        try:
+            grid = _horizontal.prepare_grid(ordered, terrain, plan)
+            for name in names:
+                if not all(plan.shape):
+                    rows[name] = _empty_row(name, "empty_aoi", crs=plan.crs.to_string())
+                    continue
+                try:
+                    values = ordered[name].iloc[plan.cell_positions].to_numpy(dtype=np.float64, na_value=np.nan)
+                    depth, wse = _horizontal.render(grid, values, float(min_depth))
+                    result = SimpleNamespace(profile=name, depth=depth, wse=wse,
+                                             transform=plan.transform,
+                                             unit={"window": list(plan.window.flatten())})
+                    rows[name] = _empty_row(name, "pending", samples=0,
+                                            wet_cells=int(np.isfinite(values).sum()))
+                    rows[name].update(RasFim._write_products(folder, result, plan.crs, write_floodplain))
+                    del depth, wse, result
+                except Exception as exc:
+                    for path in _products.product_paths(folder, name):
+                        path.unlink(missing_ok=True)
+                    rows[name] = _empty_row(name, "failed", error=f"{type(exc).__name__}: {exc}")
+            changed = [key for key, path in watched.items() if _file_identity(path) != before[key]]
+            if changed:
+                raise FimMappingError(f"input files changed during horizontal mapping: {changed}", manifest())
+            details["status"] = "failed" if any(row["status"] == "failed" for row in rows.values()) else "complete"
+        except BaseException as exc:
+            details["status"] = "aborted"
+            for name in names:
+                for path in _products.product_paths(folder, name):
+                    path.unlink(missing_ok=True)
+                rows[name] = _empty_row(name, "not_run", error=f"{type(exc).__name__}: {exc}")
+            if isinstance(exc, FimMappingError):
+                raise FimMappingError(str(exc), manifest()) from exc
+            raise
+        finally:
+            RasFim._write_manifest(folder, manifest(), details)
+        output = manifest()
+        failed = output.loc[output.status == "failed", "profile"].tolist()
+        if failed and raise_on_failure:
+            raise FimMappingError(f"horizontal mapping failed for {failed}", output)
+        return output
 
     @staticmethod
     @log_call
@@ -743,5 +896,10 @@ class RasFim:
         document = {"schema": MANIFEST_SCHEMA, "created_utc": datetime.now(timezone.utc).isoformat(),
                     "method": "ras2fim-2D Step 05 (ras2fim-batch engine)", **details, "profiles": records}
         path = folder / MANIFEST_NAME
-        path.write_text(json.dumps(document, indent=1, default=str), encoding="utf-8")
+        partial = path.with_suffix(".json.partial")
+        with partial.open("w", encoding="utf-8") as stream:
+            json.dump(document, stream, indent=1, default=str)
+            stream.flush()
+            os.fsync(stream.fileno())
+        os.replace(partial, path)
         return path

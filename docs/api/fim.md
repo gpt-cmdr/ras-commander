@@ -1,7 +1,8 @@
-# ras2fim-2D flood inundation mapping (optional)
+# Flood inundation mapping (optional)
 
 `RasFim` maps water-surface elevation (WSE) profiles defined on HEC-RAS 2D
-cells to depth and WSE rasters with the ras2fim-2D Step 05 method. It maps a
+cells to depth and WSE rasters with either the ras2fim-2D Step 05 method or
+the horizontal method below. It maps a
 batch of profiles against one shared terrain, accepts a bounding box or a
 polygon area of interest (AOI), and returns a product manifest DataFrame.
 
@@ -23,6 +24,62 @@ target glibc 2.28 or newer. The wheel installs `ras2fim-batch` on the environmen
 The Python GIS stack remains required. Source builds are also supported.
 The workflow does not publish to PyPI. Installed-binary synthetic mapping tests
 run on both platforms; retained real-model agreement evidence remains Linux-only.
+
+## Horizontal cell mapping
+
+Use `map_horizontal_profiles` when a cell-constant horizontal water surface is
+the intended mapping method. It prepares terrain and pixel-to-cell ownership
+once, then gathers the owning cell's WSE for every profile. It avoids convex
+hulls, Delaunay triangulation, full-grid reprojection lookups and engine process
+startup. This explicit NumPy method needs the `fim` extra but no engine wheel.
+
+```python
+from ras_commander import RasFim
+
+manifest = RasFim.map_horizontal_profiles(
+    cells, "terrain_with_modifications.tif", "horizontal_catalog",
+    profiles=["wsel_t0198", "wsel_t0199"],
+    polygon="strict_domain.gpkg",
+    min_depth=0.5,             # half-foot filter only when elevation units are feet
+    max_working_mib=1024,
+    write_floodplain=False,
+)
+```
+
+The terrain must be a single-band float32 GeoTIFF with declared nodata,
+north-up square pixels, and the same CRS as the cells. Output stays on that
+terrain lattice; there is no reprojection or nudge. The output extent is the
+cell extent clipped to the AOI and terrain, so it can differ from
+`map_profiles` for the same bounding box. Polygon holes and multiple
+parts are retained. Only cells touching the constrained window are validated
+and rasterized. Positive-area cell overlaps are rejected; shared edges use a
+deterministic centre-based ownership rule. Geometry, terrain and WSE inputs
+remain read-only, and output must be new or empty. Declared nodata and NaN
+terrain pixels stay dry; other sentinel values present in the data but not
+declared are treated as elevations.
+
+NaN WSE marks dry cells; callers supply the cell wet/dry policy. Cell WSE is
+normalized to float32 before subtracting terrain. Depth must be **strictly
+greater** than `min_depth` to retain either product, with comparison in
+float32. The threshold uses the input elevation units; it does not convert
+feet to metres or establish a vertical datum. Native shallow-depth display
+rules below this threshold are not reproduced.
+
+The returned `fim_product_manifest` has the same columns and 09/10/11 filename
+layout as Step05 products; those names do not identify the mapping method.
+The JSON manifest records `method_id="horizontal-cell-constant/1"`,
+`backend="numpy"`, float32 arithmetic, the threshold, source identities and
+the terrain window. `samples=0` because there is no interpolation. The
+planned array admission budget excludes raster-library caches and optional
+floodplain polygonization; it is not a hard process-memory cap.
+
+This method implements cell-constant filling, consistent with the definition
+of Horizontal rendering in the [HEC-RAS Mapper 6.6 Mapping Options](https://www.hec.usace.army.mil/confluence/rasdocs/rmum/6.6/mapping-results/mapping-options).
+It is separate from the ras2fim-2D triangulated method below. It does not
+implement native sloping surfaces, mixed 1D/2D composition or structure-specific
+renderers. Select the same render mode, terrain, timestep, grid and depth
+filter when comparing with RAS Mapper; agreement with one mode does not
+establish agreement with another.
 
 ## Method
 

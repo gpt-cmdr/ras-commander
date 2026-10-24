@@ -1723,8 +1723,8 @@ DATAFRAME_SCHEMAS["terrain_modification_features"] = {
 
 
 DATAFRAME_SCHEMAS["fim_product_manifest"] = {
-    "description": "One row per mapped WSE profile from the optional ras2fim-2D FIM method.",
-    "accessor": "RasFim.map_profiles(cells, terrain_path, output_folder, ...) or RasFim.map_ras2fim_results(...)",
+    "description": "One row per mapped WSE profile; the file manifest identifies the selected RasFim method.",
+    "accessor": "RasFim.map_profiles(...), RasFim.map_ras2fim_results(...), or RasFim.map_horizontal_profiles(...)",
     "source": "ras_commander.fim.RasFim.RasFim.map_profiles()",
     "extra_columns": False,
     "dynamic": False,
@@ -1733,8 +1733,8 @@ DATAFRAME_SCHEMAS["fim_product_manifest"] = {
         for name, dtype, description in (
             ("profile", "str", "WSE profile column name; products use it in their file names."),
             ("status", "str", "complete, no_flooded_pixels, empty_aoi, failed, or not_run."),
-            ("wet_cells", "int | None", "Wet cells (non-NaN WSE) used for global sample preparation."),
-            ("samples", "int | None", "Interpolation samples: wet centres plus merged hull-exterior vertices."),
+            ("wet_cells", "int | None", "Wet cells (non-NaN WSE) in the prepared cell set for the selected method."),
+            ("samples", "int | None", "Interpolation samples: wet centres plus merged hull-exterior vertices; 0 for horizontal mapping."),
             ("depth_tif", "str | None", "Product 09 depth GeoTIFF path (float32, NaN nodata)."),
             ("wse_tif", "str | None", "Product 10 WSE GeoTIFF path (float32, NaN nodata)."),
             ("floodplain_gpkg", "str | None", "Product 11 floodplain GeoPackage path; None when not written."),
