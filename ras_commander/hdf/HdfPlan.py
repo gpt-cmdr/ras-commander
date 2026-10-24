@@ -647,7 +647,7 @@ class HdfPlan:
     @log_call
     @standardize_input(file_type='plan_hdf')
     def get_plan_met_precip_values(
-        hdf_path: Union[str, Path, int, h5py.File], *, ras_object=None,
+        hdf_path: Union[str, Path, int, h5py.File], *, ras_object: Optional[Any] = None,
         group_path: str = "Event Conditions/Meteorology/Precipitation",
     ) -> Dict[str, Any]:
         """Read materialized solver precipitation arrays without unit conversion.
