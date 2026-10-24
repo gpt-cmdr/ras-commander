@@ -1250,6 +1250,10 @@ class RasMap:
     ) -> dict:
         """Inspect stale area links against current geometry-wide sidecars.
 
+        Synchronize filenames and existing optional layer-name attributes.
+        Preserve absent area layer names: native geometry save can omit them
+        even when the geometry-wide association names the layer.
+
         Args:
             geometry_hdf: Owned compiled geometry-only HDF path (str or Path).
             mesh_names: Selected exact area names, or all compiled areas.
