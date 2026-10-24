@@ -29,7 +29,7 @@ Each entry of :data:`DATAFRAME_SCHEMAS`:
 """
 
 # Schema contract version -- bump when the documented column surface changes meaningfully.
-SCHEMA_VERSION = "1.28"
+SCHEMA_VERSION = "1.29"
 
 _GEOMETRY_ASSOCIATION_COLUMNS = [
     {"name": "geom_number", "dtype": "str", "description": "Normalized geometry identifier."},
@@ -60,6 +60,40 @@ _GEOMETRY_ASSOCIATION_COLUMNS = [
 ]
 
 DATAFRAME_SCHEMAS = {
+    "taudem_streams": {
+        "description": "TauDEM StreamNet stream links, one row per link, in the DEM CRS.",
+        "accessor": "RasTauDem.delineate(dem_path, dest_folder).streams",
+        "source": "ras_commander.terrain.RasTauDem.RasTauDem.delineate()",
+        "extra_columns": True,
+        "dynamic": False,
+        "columns": [
+            {"name": "LINKNO", "dtype": "int64", "description": "TauDEM link id."},
+            {"name": "DSLINKNO", "dtype": "int64", "description": "Downstream link id; -1 at an outlet."},
+            {"name": "USLINKNO1", "dtype": "int64", "description": "First upstream link id; -1 at a headwater."},
+            {"name": "USLINKNO2", "dtype": "int64", "description": "Second upstream link id; -1 when absent."},
+            {"name": "strmOrder", "dtype": "int64", "description": "Strahler order."},
+            {"name": "Length", "dtype": "float", "description": "Link length in DEM horizontal units."},
+            {"name": "Slope", "dtype": "float", "description": "Link drop over length (dimensionless)."},
+            {"name": "DSContArea", "dtype": "float", "description": "Contributing area at the link outlet, DEM horizontal units squared."},
+            {"name": "contributing_area_sqmi", "dtype": "float", "description": "DSContArea in square miles."},
+            {"name": "geometry", "dtype": "LineString", "description": "Link line; its first vertex is the link outlet."},
+        ],
+    },
+    "taudem_catchments": {
+        "description": "Polygonized TauDEM StreamNet watershed grid, one row per link.",
+        "accessor": "RasTauDem.delineate(dem_path, dest_folder).catchments",
+        "source": "ras_commander.terrain.RasTauDem.RasTauDem.delineate()",
+        "extra_columns": False,
+        "dynamic": False,
+        "columns": [
+            {"name": "LINKNO", "dtype": "int64", "description": "Link whose local catchment this is."},
+            {"name": "DSLINKNO", "dtype": "int64", "description": "Downstream link id; -1 at an outlet."},
+            {"name": "strmOrder", "dtype": "int64", "description": "Strahler order of the link."},
+            {"name": "area", "dtype": "float", "description": "Catchment area, DEM horizontal units squared."},
+            {"name": "area_sqmi", "dtype": "float", "description": "Catchment area in square miles."},
+            {"name": "geometry", "dtype": "Polygon | MultiPolygon", "description": "Catchment polygon in the DEM CRS."},
+        ],
+    },
     "geometry_bc_lines": {
         "description": "Authored BC line identities and ordered vertices from plain-text geometry, in file order.",
         "accessor": "GeomBcLines.get_bc_lines(geom_file)",

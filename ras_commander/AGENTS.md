@@ -34,6 +34,11 @@ This file is the canonical local instruction file for the `ras_commander/` packa
   `RasTerrainMod.compute_modified_terrain_raster()` is a deprecated row-sampled
   compatibility path scheduled for removal in 1.1; do not use it for new work
   or as the production consolidation fallback.
+- Terrain delineation: `terrain.RasTauDem.delineate()` runs the external TauDEM 5
+  D8 tools and returns stream links and catchments (`taudem_streams`,
+  `taudem_catchments`). TauDEM is GPL-3 and only ever runs as a separate
+  process: never import, link, vendor or install it. Keep `RasTauDem` lazily
+  exported so `import ras_commander.terrain` does not load geopandas.
 
 ## Coding Rules
 
