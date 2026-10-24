@@ -188,13 +188,26 @@ def clear_cache(path=None):
                 del _cache[key]
 
 
+def _engine(module, file_path, name, *args, **kwargs):
+    """Call the path-based engine entry point ``name`` for ``file_path``.
+
+    Inside a public call it reads through the call's cached native session when
+    the extension supports session sources (``fast_hdf._typed_source``).
+    """
+    from . import fast_hdf
+
+    return fast_hdf.typed_call(module, file_path, name, *args, **kwargs)
+
+
 def _cached(file_path, call_key, loader):
+    from . import fast_hdf
+
     enabled = os.environ.get("RAS_COMMANDER_HDF_SESSION_CACHE", "1").strip().lower() not in {
         "0", "false", "off"}
-    resolved = Path(file_path).resolve()
     if not enabled:
         return loader()
-    stat = resolved.stat()
+    resolved = Path(fast_hdf._resolved(file_path))
+    stat = fast_hdf._stat(resolved)
     key = (str(resolved), stat.st_size, stat.st_mtime_ns, call_key)
     with _cache_lock:
         for old in list(_cache):
@@ -309,15 +322,25 @@ def _h5py_fixed_text(values, column, dataset):
     if padding not in {"null_terminate", "space_pad"}:
         raise TypedRouteError(f"{dataset.name}: member {name} has unproven string padding {padding}")
     raw = np.frombuffer(values[name].tobytes(), dtype=np.uint8).reshape(-1, field.itemsize).copy()
-    for row in raw:
-        data = row.tobytes()
-        if padding == "space_pad":
-            size = len(data.rstrip(b" "))
-        else:
-            cut = data.find(b"\0")
-            size = len(data) if cut < 0 else cut
-        row[size:] = 0
+    _apply_h5py_padding(raw, padding)
     values[name] = raw.view(field).reshape(values[name].shape)
+
+
+def _apply_h5py_padding(rows, padding):
+    """Zero, in place, the bytes HDF5's conversion to NULLPAD drops from ``(n, width)`` uint8 rows.
+
+    SPACEPAD loses its trailing spaces (``data.rstrip(b" ")``) and NULLTERM
+    everything from its first NUL (``data[:data.find(b"\0")]``); NULLPAD rows are
+    unchanged. This is the per-row byte rule in vectorized form: it zeroes
+    exactly the same bytes, without a Python loop over the rows.
+    """
+    if padding == "space_pad":
+        drop = np.logical_and.accumulate(rows[:, ::-1] == 0x20, axis=1)[:, ::-1]
+    elif padding == "null_terminate":
+        drop = np.logical_or.accumulate(rows == 0, axis=1)
+    else:
+        return
+    rows[drop] = 0
 
 
 def _fixed_text(dataset):
@@ -337,7 +360,7 @@ def _fixed_strings(module, file_path, dataset):
     spaces, the rest of each element being zero-filled. The array is built with
     the dataset's own dtype (h5py string metadata included).
     """
-    reported = module.raw_fixed_strings(file_path, dataset.name.strip("/"), _budget(dataset))
+    reported = _engine(module, file_path, "raw_fixed_strings", dataset.name.strip("/"), _budget(dataset))
     value = reported.get("value")
     if value is None:
         raise TypedRouteError(f"{dataset.name}: raw fixed strings {reported.get('capability')}")
@@ -356,15 +379,7 @@ def _fixed_strings(module, file_path, dataset):
     if len(raw) != count * width:
         raise TypedRouteError(f"{dataset.name}: {len(raw)} string bytes for {count} x {width}")
     rows = np.frombuffer(raw, dtype=np.uint8).reshape(count, width).copy()
-    if padding != "null_pad":
-        for row in rows:
-            data = row.tobytes()
-            if padding == "space_pad":
-                size = len(data.rstrip(b" "))
-            else:
-                cut = data.find(b"\0")
-                size = len(data) if cut < 0 else cut
-            row[size:] = 0
+    _apply_h5py_padding(rows, padding)
     return rows.view(dtype).reshape(shape)
 
 
@@ -417,7 +432,7 @@ def _xs_attributes_without_cut_lines(module, file_path, dataset, budget):
     River/Reach/RS identity and the cross-section layout guard; it needs no cut lines.
     """
     data = _cached(file_path, ("xsinv", budget),
-                   lambda: module.xs_geometry_inventory(file_path, max_bytes=budget))
+                   lambda: _engine(module, file_path, "xs_geometry_inventory", max_bytes=budget))
     attributes = data.get("attributes")
     if attributes is None:
         raise TypedRouteError(f"{dataset.name}: XS geometry inventory has no Attributes")
@@ -432,7 +447,7 @@ def _full(module, file_path, route, dataset):
     budget = _budget(dataset)
     if kind == "line_family":
         _, family, leaf = route
-        data = _cached(file_path, ("line", family), lambda: module.one_d_line_family(file_path, family))
+        data = _cached(file_path, ("line", family), lambda: _engine(module, file_path, "one_d_line_family", family))
         if leaf == "Attributes" and _cut_lines_absent(data, family):
             return _xs_attributes_without_cut_lines(module, file_path, dataset, budget)
         value = _value(data, dataset)
@@ -443,7 +458,7 @@ def _full(module, file_path, route, dataset):
         return _numeric(value[leaf.rsplit(" ", 1)[1].lower()], dataset)
     if kind == "geometry_family":
         _, family, leaf = route
-        data = _cached(file_path, ("family2d", family), lambda: module.geometry_family(file_path, family))
+        data = _cached(file_path, ("family2d", family), lambda: _engine(module, file_path, "geometry_family", family))
         value = _value(data, dataset)
         prefix = FAMILIES_2D[dataset.parent.name.strip("/")][1]
         if leaf == "Attributes":
@@ -460,8 +475,8 @@ def _full(module, file_path, route, dataset):
         raise TypedRouteError(f"{dataset.name}: not part of the typed {family} family")
     if kind == "xs_geometry":
         _, field, part = route
-        data = _cached(file_path, ("xsgeom", field), lambda: module.read_xs_geometry(
-            file_path, field, max_bytes=max(budget, _DEFAULT_MAX_BYTES * 4)))
+        data = _cached(file_path, ("xsgeom", field), lambda: _engine(module, file_path, "read_xs_geometry",
+             field, max_bytes=max(budget, _DEFAULT_MAX_BYTES * 4)))
         if part == "info":
             return _numeric(data["info"], dataset)
         stored_rows = int(dataset.shape[0]) if dataset.shape else 0
@@ -472,7 +487,7 @@ def _full(module, file_path, route, dataset):
         return _numeric(data["values"], dataset)
     if kind == "geometry_group":
         _, group, relative = route
-        data = _cached(file_path, ("group", group), lambda: module.one_d_geometry_group(file_path, group))
+        data = _cached(file_path, ("group", group), lambda: _engine(module, file_path, "one_d_geometry_group", group))
         value = _value(data, dataset)
         tables = dict(value["tables"])
         arrays = dict(value["arrays"])
@@ -484,17 +499,17 @@ def _full(module, file_path, route, dataset):
         reason = refused.get(relative)
         raise TypedRouteError(f"{dataset.name}: not returned by the typed group reader ({reason})")
     if kind == "junctions":
-        data = _cached(file_path, ("junctions",), lambda: module.river_junctions(file_path))
+        data = _cached(file_path, ("junctions",), lambda: _engine(module, file_path, "river_junctions"))
         value = _value(data, dataset)
         return _compound(value["attributes"], dataset) if route[1] == "Attributes" else _numeric(value["points"], dataset)
     if kind == "reference_point_geometry":
         if not hasattr(module, "reference_point_geometry"):
             raise TypedRouteError(f"{dataset.name}: extension lacks reference_point_geometry")
-        data = _cached(file_path, ("refpoints",), lambda: module.reference_point_geometry(file_path))
+        data = _cached(file_path, ("refpoints",), lambda: _engine(module, file_path, "reference_point_geometry"))
         value = _value(data, dataset)
         return _compound(value["attributes"], dataset) if route[1] == "Attributes" else _numeric(value["points"], dataset)
     if kind == "interpolation_surfaces":
-        data = _cached(file_path, ("tin",), lambda: module.xs_interpolation_surfaces(file_path))
+        data = _cached(file_path, ("tin",), lambda: _engine(module, file_path, "xs_interpolation_surfaces"))
         value = _value(data, dataset)
         leaf = route[1]
         named = {"TIN Info": value["info"], "TIN Points": value["points"], "TIN Triangles": value["triangles"],
@@ -505,21 +520,21 @@ def _full(module, file_path, route, dataset):
     if kind == "xs_result":
         _, mode, variable = route
         rows = int(dataset.shape[0])
-        out = module.read_xs_result(file_path, mode, variable, (0, rows, 1), max_bytes=budget)
+        out = _engine(module, file_path, "read_xs_result", mode, variable, (0, rows, 1), max_bytes=budget)
         return _numeric(out["values"], dataset)
     if kind == "one_d_summary":
         _, family, name = route
-        out = module.read_one_d_summary(file_path, family, name, max_bytes=budget)
+        out = _engine(module, file_path, "read_one_d_summary", family, name, max_bytes=budget)
         return _numeric(out["values"], dataset)
     if kind in {"structure_series", "structure_family"}:
         _, skind, mode, structure, relative = route
         if len(dataset.shape) != 2:
             raise TypedRouteError(f"{dataset.name}: typed structure series are rank two")
-        values = module.read_one_d_structure_series(
-            file_path, skind, mode, structure, relative, (0, int(dataset.shape[0]), 1), max_bytes=budget)
+        values = _engine(module, file_path, "read_one_d_structure_series",
+            skind, mode, structure, relative, (0, int(dataset.shape[0]), 1), max_bytes=budget)
         return _numeric(values, dataset)
     if kind == "mesh_tables":
-        data = _cached(file_path, ("meshtables",), lambda: module.mesh_geometry_tables(file_path))
+        data = _cached(file_path, ("meshtables",), lambda: _engine(module, file_path, "mesh_geometry_tables"))
         if route[1] == "Attributes":
             return _compound(data["attributes"], dataset)
         cell = data["cell_info"]
@@ -530,7 +545,7 @@ def _full(module, file_path, route, dataset):
         _, area, field = route
         # Cached so element-wise public readers index one native array.
         values = _cached(file_path, ("meshgeom", area, field),
-                         lambda: module.read_mesh_geometry(file_path, area, field, max_bytes=budget))
+                         lambda: _engine(module, file_path, "read_mesh_geometry", area, field, max_bytes=budget))
         return _numeric(values, dataset)
     raise TypedRouteError(f"unknown typed route {kind}")
 
@@ -540,11 +555,11 @@ def _member(module, file_path, route):
     kind = route[0]
     if kind == "xs_result":
         _, mode, variable = route
-        inv = _cached(file_path, ("xsinv", mode), lambda: module.xs_result_inventory(file_path, mode))
+        inv = _cached(file_path, ("xsinv", mode), lambda: _engine(module, file_path, "xs_result_inventory", mode))
         return any(v["name"] == variable for v in inv["variables"])
     if kind == "one_d_summary":
         _, family, name = route
-        inv = _cached(file_path, ("suminv",), lambda: module.one_d_summary_inventory(file_path))
+        inv = _cached(file_path, ("suminv",), lambda: _engine(module, file_path, "one_d_summary_inventory"))
         # Listed but unqualified (e.g. Pipe Networks summaries) is not membership:
         # the literal values then come from the generic reader.
         return any(v["family"] == family and v["name"] == name
@@ -552,7 +567,7 @@ def _member(module, file_path, route):
     if kind in {"structure_series", "structure_family"}:
         _, skind, mode, structure, relative = route
         inv = _cached(file_path, ("structinv", skind, mode),
-                      lambda: module.one_d_structure_inventory(file_path, skind, mode))
+                      lambda: _engine(module, file_path, "one_d_structure_inventory", skind, mode))
         if structure is None:
             return any(s["relative"] == relative for s in inv["family_series"])
         for s in inv["structures"]:
@@ -561,11 +576,44 @@ def _member(module, file_path, route):
         return False
     if kind == "geometry_family":
         family = route[1]
-        data = _cached(file_path, ("family2d", family), lambda: module.geometry_family(file_path, family))
+        data = _cached(file_path, ("family2d", family), lambda: _engine(module, file_path, "geometry_family", family))
         # A canonically absent family (e.g. land-cover tables without calibration
         # polygons) has no typed reader; its tables stay h5py metadata.
         return data["capability"]["status"] != "unavailable"
     return True
+
+
+class _FileFacts:
+    """``dataset.file`` facts computed at most once per read.
+
+    Building ``dataset.file`` creates a new h5py ``File`` object and
+    :func:`fast_hdf._safe_file` stats the file; one read used to do each several
+    times. A failure is not remembered, so it is raised again where it was before.
+    """
+
+    __slots__ = ("dataset", "_file", "_path", "_safe")
+
+    def __init__(self, dataset):
+        self.dataset = dataset
+        self._file = self._path = self._safe = None
+
+    @property
+    def file(self):
+        if self._file is None:
+            self._file = self.dataset.file
+        return self._file
+
+    @property
+    def path(self):
+        if self._path is None:
+            self._path = os.fsdecode(self.file.filename)
+        return self._path
+
+    def safe(self):
+        if self._safe is None:
+            from . import fast_hdf
+            self._safe = fast_hdf._safe_file(self.dataset, self.file)
+        return self._safe
 
 
 # ------------------------------------------------------------------ Wave 3 stored families
@@ -596,7 +644,7 @@ def _stored_failures(module, file_path):
 
 def _stored_family_index(module, file_path):
     def load():
-        index = module.stored_family_index(file_path)
+        index = _engine(module, file_path, "stored_family_index")
         rows = {}
         for row in index["datasets"]:
             current = rows.get(row["path"])
@@ -619,7 +667,7 @@ def _failure_text(failures, limit=3):
         f"; and {more} more" if more > 0 else "")
 
 
-def _stored_route(module, dataset):
+def _stored_route(module, dataset, facts=None):
     """``("stored_family", owner, path, storage)`` for a supported Wave 3 stored dataset.
 
     Datasets the engine lists but refuses to qualify (for example pipe summaries
@@ -627,12 +675,11 @@ def _stored_route(module, dataset):
     are then served by the generic native reader. Strings are never routed here
     (decoded engine text cannot prove h5py's exact fixed-length bytes).
     """
-    from . import fast_hdf
-
-    if not fast_hdf._safe_file(dataset):
+    facts = _FileFacts(dataset) if facts is None else facts
+    if not facts.safe():
         return None
     path = dataset.name.strip("/")
-    row = _stored_index(module, os.fsdecode(dataset.file.filename)).get(path)
+    row = _stored_index(module, facts.path).get(path)
     if row is None or row["status"] != "supported" or row["storage"] not in STORED_STORAGE:
         return None
     return ("stored_family", row["owner"], path, row["storage"])
@@ -657,10 +704,10 @@ def _stored_read(module, file_path, route, dataset, key):
         prefix = f"{OUTPUT_BLOCKS}{block}/"
         if not path.startswith(prefix):
             raise TypedRouteError(f"{dataset.name}: outside output block {block}")
-        out = module.read_output_block(file_path, block, path[len(prefix):], native_slices,
+        out = _engine(module, file_path, "read_output_block", block, path[len(prefix):], native_slices,
                                        max_bytes=budget)
     else:
-        out = module.read_family_dataset(file_path, owner, path, native_slices,
+        out = _engine(module, file_path, "read_family_dataset", owner, path, native_slices,
                                          metadata_max_bytes=budget, max_bytes=budget)
     if out["storage"] != storage:
         raise TypedRouteError(f"{dataset.name}: engine storage {out['storage']} versus index {storage}")
@@ -690,21 +737,21 @@ def _stored_read(module, file_path, route, dataset, key):
 
 
 # ------------------------------------------------------------------ attributes
-def _typed_attributes(module, obj):
+def _typed_attributes(module, obj, file=None):
     """Engine typed attributes of a group or dataset, keyed by attribute name.
 
     Groups use ``typed_group_attributes``. Every dataset, inside or outside the
     engine read families, uses ``typed_dataset_attributes`` (engine API 9): the
     same encoding proof as the family descriptors, with the exact stored bytes.
     """
-    file_path = os.fsdecode(obj.file.filename)
+    file_path = os.fsdecode((obj.file if file is None else file).filename)
     name = obj.name
     if isinstance(obj, h5py.Group):
         return _cached(file_path, ("group_attrs", name),
-                       lambda: {a["name"]: a for a in module.typed_group_attributes(file_path, name)})
+                       lambda: {a["name"]: a for a in _engine(module, file_path, "typed_group_attributes", name)})
 
     def load():
-        reported = module.typed_dataset_attributes(file_path, name.strip("/"), _DEFAULT_MAX_BYTES)
+        reported = _engine(module, file_path, "typed_dataset_attributes", name.strip("/"), _DEFAULT_MAX_BYTES)
         if reported["value"] is None:
             raise TypedRouteError(f"{name}: typed dataset attributes {reported['capability']}")
         return {a["name"]: a for a in reported["value"]}
@@ -717,14 +764,15 @@ def _attr_source(obj, module, mode, fast_hdf):
     A virtual, external or SWMR dataset (or an unsafe file) is not read by the
     engine: required mode refuses it (review P3-A) and auto uses h5py.
     """
-    if not fast_hdf._safe_file(obj):
+    file = obj.file
+    if not fast_hdf._safe_file(obj, file):
         if mode == "rust":
             raise fast_hdf.FastHdfError(
                 f"{obj.name}: attributes of a virtual/external/SWMR dataset or unsafe file "
                 "are not read by the engine")
         return None
     try:
-        return _typed_attributes(module, obj)
+        return _typed_attributes(module, obj, file)
     except Exception as exc:
         if mode == "rust":
             raise fast_hdf.FastHdfError(f"Typed attributes failed for {obj.name}: {exc}") from exc
@@ -943,7 +991,7 @@ def mesh_series_domain(dataset, *, backend="auto"):
             raise TypedRouteError(f"{dataset.name}: file cannot be reopened safely by the engine")
         file_path = os.fsdecode(dataset.file.filename)
         inventory = _cached(file_path, ("mesh_series_inventory", area),
-                            lambda: module.mesh_series_inventory(file_path, area))
+                            lambda: _engine(module, file_path, "mesh_series_inventory", area))
         rows = [v for v in inventory["variables"] if v["name"] == name]
         if len(rows) != 1:
             raise TypedRouteError(f"{dataset.name}: {len(rows)} engine series descriptors")
@@ -1085,16 +1133,17 @@ def _fast_numeric(dataset):
     return fast_hdf._numeric(dataset) and dataset.shape is not None
 
 
-def _read_fixed_text(module, dataset, key, shape, mode):
+def _read_fixed_text(module, dataset, key, shape, mode, facts=None):
     """Fixed-length text dataset served by the engine's ``raw_fixed_strings`` (engine API 9)."""
     from . import fast_hdf
 
+    facts = _FileFacts(dataset) if facts is None else facts
     try:
-        if not fast_hdf._safe_file(dataset):
+        if not facts.safe():
             raise TypedRouteError(f"{dataset.name}: file cannot be reopened safely by the engine")
         if shape is None:
             raise TypedRouteError(f"{dataset.name}: selection {key!r} is left to h5py")
-        values = _fixed_strings(module, os.fsdecode(dataset.file.filename), dataset)[key]
+        values = _fixed_strings(module, facts.path, dataset)[key]
         if np.shape(values) != shape:
             raise TypedRouteError(f"{dataset.name}: selection shape {np.shape(values)} versus h5py {shape}")
         values = values.copy() if isinstance(values, np.ndarray) else values
@@ -1124,8 +1173,9 @@ def read(dataset, selection=None, *, backend="auto"):
         return dataset[key]
     shape = _selection_shape(dataset, key)
     dtype = dataset.dtype
+    facts = _FileFacts(dataset)
     if _fixed_text(dataset) and hasattr(module, "raw_fixed_strings"):
-        return _read_fixed_text(module, dataset, key, shape, mode)
+        return _read_fixed_text(module, dataset, key, shape, mode, facts)
     metadata = dtype.names is None and (dtype.kind not in "iuf" or h5py.check_vlen_dtype(dtype) is not None)
     route = None if metadata or not hasattr(module, "read_xs_geometry") else route_for(dataset.name)
     if (route is not None and route[0] in {"xs_result", "one_d_summary", "structure_series",
@@ -1133,10 +1183,9 @@ def read(dataset, selection=None, *, backend="auto"):
             # An unsafe file (e.g. a writable handle) is never opened by the engine:
             # the route is kept so the read below refuses it with the clear
             # ``file cannot be reopened safely`` error (auto falls back to h5py).
-            and fast_hdf._safe_file(dataset)):
+            and facts.safe()):
         try:
-            import os as _os
-            if not _member(module, _os.fsdecode(dataset.file.filename), route):
+            if not _member(module, facts.path, route):
                 route = None
         except Exception as exc:
             if _absent_parts_refusal(exc, dataset, route):
@@ -1150,11 +1199,10 @@ def read(dataset, selection=None, *, backend="auto"):
     stored_detail = None
     if route is None and not metadata and hasattr(module, "stored_family_index"):
         try:
-            route = _stored_route(module, dataset)
-            if route is None and fast_hdf._safe_file(dataset):
+            route = _stored_route(module, dataset, facts)
+            if route is None and facts.safe():
                 # A failed family lists no datasets; say so instead of a bare "no route".
-                stored_detail = _failure_text(
-                    _stored_failures(module, os.fsdecode(dataset.file.filename)))
+                stored_detail = _failure_text(_stored_failures(module, facts.path))
         except Exception as exc:
             if mode == "rust":
                 raise fast_hdf.FastHdfError(f"Stored family index failed for {dataset.name}: {exc}") from exc
@@ -1185,12 +1233,11 @@ def read(dataset, selection=None, *, backend="auto"):
         _record(dataset.name, "h5py-metadata")
         return dataset[key]
     try:
-        if not fast_hdf._safe_file(dataset):
+        if not facts.safe():
             raise TypedRouteError(f"{dataset.name}: file cannot be reopened safely by the engine")
         if shape is None:
             raise TypedRouteError(f"{dataset.name}: selection {key!r} is left to h5py")
-        import os as _os
-        file_path = _os.fsdecode(dataset.file.filename)
+        file_path = facts.path
         if route[0] == "stored_family":
             values = _stored_read(module, file_path, route, dataset, key)
         else:
