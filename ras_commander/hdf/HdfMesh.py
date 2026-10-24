@@ -719,6 +719,36 @@ class HdfMesh:
         return pd.DataFrame(records)
 
     @staticmethod
+    @log_call
+    @standardize_input(file_type='geom_hdf')
+    def get_mesh_cell_surface_areas(hdf_path: Union[str, Path]) -> pd.DataFrame:
+        """Read native cell surface areas without constructing polygons.
+
+        Returns ``mesh_name``, native zero-based ``cell_id`` and ``surface_area``
+        in squared source horizontal units. Includes every stored row, including
+        ghost rows; select physical cells by an independently verified cell mask.
+        Source precision is preserved. Read-only; no CRS conversion, geometry
+        reconstruction or missing-data substitution. Missing, nonfinite,
+        negative or non-vector area datasets raise ValueError.
+        """
+        frames = []
+        with h5py.File(hdf_path, 'r') as hdf:
+            for name in HdfMesh.get_mesh_area_names(hdf_path):
+                path = f"Geometry/2D Flow Areas/{name}/Cells Surface Area"
+                if path not in hdf or not isinstance(hdf[path], h5py.Dataset):
+                    raise ValueError(f"Native cell surface areas are absent: {path}")
+                values = hdf[path][()]
+                if (values.ndim != 1 or values.dtype.kind != 'f'
+                    or not np.isfinite(values).all() or (values < 0).any()):
+                    raise ValueError(f"Invalid native cell surface areas: {path}")
+                frames.append(pd.DataFrame({"mesh_name":name,
+                    "cell_id":np.arange(len(values),dtype=np.int64),"surface_area":values}))
+        result = pd.concat(frames,ignore_index=True) if frames else pd.DataFrame(
+            columns=["mesh_name","cell_id","surface_area"])
+        result.attrs['surface_area_units'] = 'source horizontal units squared'
+        return result
+
+    @staticmethod
     @standardize_input(file_type='geom_hdf')
     def get_mesh_areas(hdf_path: Path) -> 'GeoDataFrame':
         """
