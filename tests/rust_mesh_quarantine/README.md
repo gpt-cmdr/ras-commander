@@ -1,7 +1,10 @@
 # Native mesh quarantine qualification
 
-Covers native cell-polygon assembly for bridge `API_VERSION` 11 (engine
-`0b024adc7857e9fb2d364997ad002e01a939cec1`, engine API 10).
+Covers native cell-polygon assembly for bridge `API_VERSION` 11 (engine API
+10). The qualification originally ran on engine
+`0b024adc7857e9fb2d364997ad002e01a939cec1`; `qualification.py` accepts the
+engine commits listed in `tests/native_engine_provenance.py`, or exactly
+`RAS_EXPECTED_ENGINE_COMMIT` when it is set.
 
 ## Direct binding
 

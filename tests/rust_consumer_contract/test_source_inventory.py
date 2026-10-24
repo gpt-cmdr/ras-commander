@@ -1,6 +1,7 @@
 """Static consumer-contract guard for the hardened engine-backed source.
 
-Reads source only. Source registrations (including ``register(m)``
+Reads the extension source of a ras-commander-fast-hdf checkout named by
+RAS_FAST_HDF_SOURCE (skips without it). Source registrations (including ``register(m)``
 delegation and ``add_class``) are reconciled against the accepted runtime ABI
 inventory when RAS_CONSUMER_ACCEPTANCE_RECEIPT is supplied; the expected set is
 also frozen here so a dropped or renamed registration fails without it.
@@ -12,14 +13,15 @@ from pathlib import Path
 import pytest
 
 from .contract import load_receipt
-from .inventory import build
+from .inventory import SOURCE_ENV, build, source_root
 
 from .expected import EXPECTED
-from .contract import engine_dependency
 
 
 @pytest.fixture(scope="module")
 def inventory():
+    if source_root() is None:
+        pytest.skip(f"{SOURCE_ENV} not set: point it at a ras-commander-fast-hdf checkout")
     return build()
 
 
@@ -75,11 +77,9 @@ def test_source_matches_accepted_runtime_abi(inventory):
 
 def test_dependency_pins_and_features(inventory):
     deps = inventory["crate"]["git_dependencies"]
-    if "ras-commander-rust" in deps:
-        assert deps["ras-commander-rust"] == {k: engine_dependency()[k] for k in ("git", "rev")}
-        assert "hdf5-reader" not in deps  # engine owns its generic reader pin
-    else:
-        assert deps["hdf5-reader"]["rev"] == "24ff6fcfcc79a35c30aa5d8cb3028ab4d9d00564"
+    # The engine is the in-repository crate (a path dependency, not a git pin),
+    # and it owns its generic reader.
+    assert "ras-commander-rust" not in deps and "hdf5-reader" not in deps
     assert deps["freestiler-core"]["rev"] == "beb64b0d4414da895ec67d02b2f91db6ab6acc37"
     assert inventory["export_crate"]["git_dependencies"]["freestiler-core"]["rev"] == \
         deps["freestiler-core"]["rev"]

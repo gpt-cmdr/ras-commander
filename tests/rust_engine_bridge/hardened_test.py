@@ -7,7 +7,7 @@ from pathlib import Path
 import h5py
 import numpy as np
 import pytest
-from bridge_test import native, PIN, DEP
+from bridge_test import ENGINE_FEATURES, accepted_engine_commits, native
 
 FIXTURES = Path(__file__).with_name('fixtures')
 
@@ -45,8 +45,8 @@ def test_log_call_does_not_format_arguments(caplog):
 
 def test_capability_exports(native):
     c = native.capabilities()
-    assert c['engine_commit'] == PIN and c['api_version'] == 11
-    assert c['engine_features'] == DEP['features']
+    assert c['engine_commit'] in accepted_engine_commits() and c['api_version'] == 11
+    assert c['engine_features'] == list(ENGINE_FEATURES)
     assert 'mesh_inventory' in c['bindings']
 
 

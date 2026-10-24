@@ -23,6 +23,7 @@ import inspect
 import json
 import os
 from pathlib import Path
+import sys
 import threading
 import time
 
@@ -35,8 +36,10 @@ from ras_commander import fast_hdf as adapter
 from ras_commander.hdf.HdfMesh import HdfMesh, MeshCellPolygonError
 import ras_commander_fast_hdf as native
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from native_engine_provenance import accepted_engine_commits  # noqa: E402
+
 API_VERSION = 11
-ENGINE_COMMIT = "0b024adc7857e9fb2d364997ad002e01a939cec1"
 # (stored version, file name, polygon count, SHA256 of the immutable copy)
 FIXTURES = [
     ('5.0.7', 'JUL2020_D100RAS.p04.hdf', 340246,
@@ -252,21 +255,23 @@ def main():
     if args.fixture_root is None:
         parser.error('--fixture-root (or RAS_QUAL_FIXTURES) is required')
     assert native.API_VERSION == API_VERSION, native.API_VERSION
-    assert native.ENGINE_COMMIT == ENGINE_COMMIT, native.ENGINE_COMMIT
+    assert native.ENGINE_COMMIT in accepted_engine_commits(), native.ENGINE_COMMIT
     adapter._reset_native()
     assert adapter.available(), 'ras_commander.fast_hdf does not accept the installed extension'
     module_dir = Path(native.__file__).resolve().parent
     binaries = [p for p in module_dir.iterdir() if p.suffix.lower() in {'.pyd', '.so', '.dylib'}]
     assert len(binaries) == 1, binaries
-    mesh_rs = Path(__file__).resolve().parents[2] / 'rust/fast-hdf/src/mesh.rs'
+    # Optional: hash the bridge source when a ras-commander-fast-hdf checkout is named.
+    source = os.environ.get('RAS_FAST_HDF_SOURCE')
+    mesh_rs = Path(source) / 'python/src/mesh.rs' if source else None
     records = {'native_module': native.__file__, 'api_version': native.API_VERSION,
                'engine_commit': native.ENGINE_COMMIT,
                'inner_binary': str(binaries[0]), 'inner_binary_sha256': digest(binaries[0]),
                'adapter_path': adapter.__file__, 'adapter_sha256': digest(Path(adapter.__file__)),
                'hdf_mesh_path': inspect.getfile(HdfMesh),
                'hdf_mesh_sha256': digest(Path(inspect.getfile(HdfMesh))),
-               'bridge_mesh_rs_path': str(mesh_rs),
-               'bridge_mesh_rs_sha256': digest(mesh_rs) if mesh_rs.is_file() else None,
+               'bridge_mesh_rs_path': str(mesh_rs) if mesh_rs else None,
+               'bridge_mesh_rs_sha256': digest(mesh_rs) if mesh_rs and mesh_rs.is_file() else None,
                'measurement_scope': 'mesh extraction only; sampled process RSS; '
                                     'adapter/output residual includes Python setup',
                'fixtures': []}

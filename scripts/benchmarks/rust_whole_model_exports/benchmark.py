@@ -228,7 +228,7 @@ def main():
             for route in args.routes:
                 folder=args.output/f'{sample}-{fmt}-{route}';folder.mkdir();out=folder/('output.'+fmt)
                 if route=='direct':
-                    command=[str(ROOT/'rust/fast-hdf/target/release/whole-export-harness.exe'),str(args.prepared/('geographic.arrow' if fmt in ('geojson','jsonl') else 'native.arrow')),str(out),fmt]
+                    command=[str(Path(os.environ.get('CARGO_TARGET_DIR',ROOT/'tests/rust_whole_model_exports/harness/target'))/'release/whole-export-harness.exe'),str(args.prepared/('geographic.arrow' if fmt in ('geojson','jsonl') else 'native.arrow')),str(out),fmt]
                 else:
                     command=[sys.executable,__file__,'--worker','--prepared',str(args.prepared),'--output',str(out),'--format',fmt,'--route',route]
                 result=monitor(command,folder,folder/'process.log')

@@ -7,9 +7,10 @@ select it, what "identical results" means and how that was proven, how fast it
 is, and what it does not do.
 
 !!! info "Short version"
-    - The engine is an **optional, internally distributed** Python wheel,
-      `ras-commander-fast-hdf`. Without it, ras-commander works exactly as
-      before, on h5py.
+    - The engine is an **optional, open-source** Python package,
+      `ras-commander-fast-hdf`. Install it with
+      `pip install ras-commander[fast]`. Without it, ras-commander works
+      exactly as before, on h5py.
     - With it installed, the default mode `auto` reads natively where the
       native path is qualified and falls back to h5py on any refusal. **Public
       results are identical to h5py**: same values, dtypes, columns, index,
@@ -44,33 +45,43 @@ The engine is not a general HDF5 library. It reads what HEC-RAS writes and
 refuses anything it cannot reproduce exactly (see
 [Limitations and refusals](#known-limitations-and-refusals)).
 
-## Installing the wheel
+## Installing the extension
 
-The wheel is **distributed internally by CLB Engineering Corporation**. It
-contains private engine code; do not upload it to PyPI or share it outside
-CLB. Two builds exist, both for CPython 3.10 and later (`abi3`):
+The engine and its Python extension are open source (MIT) in their own
+repository,
+[gpt-cmdr/ras-commander-fast-hdf](https://github.com/gpt-cmdr/ras-commander-fast-hdf),
+and published on PyPI as `ras-commander-fast-hdf`. Install it into the same
+environment as ras-commander:
 
-| Platform | Wheel |
-|---|---|
-| Windows x64 | `ras_commander_fast_hdf-0.1.0-cp310-abi3-win_amd64.whl` |
-| Linux x64 (glibc 2.28+, e.g. Rocky/RHEL 9, Ubuntu 20.04+) | `ras_commander_fast_hdf-0.1.0-cp310-abi3-manylinux_2_28_x86_64.whl` |
-
-Install it into the same environment as ras-commander:
-
-```powershell
-pip install path\to\ras_commander_fast_hdf-0.1.0-cp310-abi3-win_amd64.whl
+```bash
+pip install ras-commander-fast-hdf
 ```
 
-No Rust toolchain is needed to install a wheel. Building from source needs
-access to the private engine repository; see `rust/fast-hdf` in the
-ras-commander repository.
+or install both together with the `fast` extra:
+
+```bash
+pip install "ras-commander[fast]"
+```
+
+Wheels are published for CPython 3.10 and later (`abi3`):
+
+| Platform | Wheel tag | Status |
+|---|---|---|
+| Windows x64 | `cp310-abi3-win_amd64` | Qualified |
+| Linux x64 (glibc 2.28+, e.g. Rocky/RHEL 9, Ubuntu 20.04+) | `cp310-abi3-manylinux_2_28_x86_64` | Qualified |
+| macOS arm64 (Apple silicon) | `cp310-abi3-macosx_*_arm64` | Builds and passes its tests, but not yet qualified on the HEC-RAS corpus |
+
+No Rust toolchain is needed to install a wheel. On other platforms pip falls
+back to the source distribution, which needs Rust. To build from source, see
+[Building](https://github.com/gpt-cmdr/ras-commander-fast-hdf/blob/main/docs/building.md)
+in the extension's repository.
 
 ### Verify the installation
 
 ```python
 import ras_commander_fast_hdf as native
 print(native.API_VERSION)      # 11
-print(native.ENGINE_COMMIT)    # 0b024adc7857e9fb2d364997ad002e01a939cec1
+print(native.ENGINE_COMMIT)    # b2ab8280617383519d38aad9bd47b88b654009b1
 print(native.ENGINE_FEATURES)  # ('catalog', 'hdf', 'mesh', 'results')
 
 from ras_commander import fast_hdf
@@ -490,14 +501,24 @@ first.
 
 | Component | This release |
 |---|---|
-| Engine | `ras-commander-rust` (private repository of CLB Engineering Corporation), commit `0b024adc7857e9fb2d364997ad002e01a939cec1`, engine API 10 |
-| Bridge | Python package `ras_commander_fast_hdf` 0.1.0, `API_VERSION` 11, text API 1, features `catalog, hdf, mesh, results` |
+| Engine | `ras-commander-rust` crate in [gpt-cmdr/ras-commander-fast-hdf](https://github.com/gpt-cmdr/ras-commander-fast-hdf), engine API 10 |
+| Bridge | Python package `ras-commander-fast-hdf` 0.1.0 (module `ras_commander_fast_hdf`), `API_VERSION` 11, text API 1, features `catalog, hdf, mesh, results`, `ENGINE_COMMIT` `7ca433ea4fbe68902a50902de815e56697eb21b2` |
 | ras-commander | requires bridge API 11 |
-| Wheels | Windows `cp310-abi3-win_amd64`, Linux `cp310-abi3-manylinux_2_28_x86_64`; internal distribution only |
+| Wheels | On PyPI: Windows `cp310-abi3-win_amd64`, Linux `cp310-abi3-manylinux_2_28_x86_64`, macOS `arm64` (not yet qualified) |
 
-The engine is copyright CLB Engineering Corporation. The wheel's
-`.dist-info/licenses/` folder contains `THIRD-PARTY-NOTICES.md`, which lists
-every Rust crate linked into the extension with its licence text, and the
-licence files of the engine, ras-commander, the vendored `hdf5-reader`
-(MIT), `freestiler` (ISC/MIT) and `i_float`/`i_overlay`. Keep these files with
-any internal copy of the wheel.
+`ENGINE_COMMIT` is the commit of the ras-commander-fast-hdf repository the
+wheel was built from. Internal wheels built before the engine was published
+report `0b024adc7857e9fb2d364997ad002e01a939cec1`; their engine source is
+identical to 0.1.0.
+
+The engine and extension are released under the MIT licence, copyright CLB
+Engineering Corporation. The wheel's `.dist-info/licenses/` folder contains
+`THIRD-PARTY-NOTICES.md`, which lists every Rust crate linked into the
+extension with its licence text, and the licence files of the engine,
+ras-commander, the vendored `hdf5-reader` (MIT), `freestiler` (ISC/MIT) and
+`i_float`/`i_overlay`. Keep these files with any copy of the wheel you
+redistribute.
+
+Report engine problems (a refusal you did not expect, a crash, a difference
+from h5py) at
+[ras-commander-fast-hdf issues](https://github.com/gpt-cmdr/ras-commander-fast-hdf/issues).

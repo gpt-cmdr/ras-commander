@@ -71,9 +71,13 @@ repeated real footprint benchmark is not whole-model spatial scaling.
 
 Build with proposed registrations/features:
 
+`RAS_FAST_HDF_SOURCE` is a checkout of
+[gpt-cmdr/ras-commander-fast-hdf](https://github.com/gpt-cmdr/ras-commander-fast-hdf);
+the extension moved there from `rust/fast-hdf`.
+
 ```powershell
 uv pip install -e . maturin pytest pyarrow geopandas pyproj pmtiles mapbox-vector-tile freestiler==0.3.0 psutil
-uv run --no-sync maturin develop --release --locked --features extension-module,exports-all,exports-pmtiles --manifest-path rust/fast-hdf/Cargo.toml
+uv run --no-sync maturin develop --release --locked --features extension-module,exports-all,exports-pmtiles --manifest-path $env:RAS_FAST_HDF_SOURCE/python/Cargo.toml
 $env:RAS_EXPORT_FIXTURE_ROOT = "$PWD/working/fixtures"
 uv run --no-sync python -m pytest tests/rust_typed_pmtiles tests/rust_first_tier_exports/test_binding.py tests/rust_first_tier_exports/test_review_regressions.py
 uv run --no-sync python tests/rust_typed_pmtiles/measure.py --fixture working/fixtures/computed7_regions.gpkg --output working/measurements --count 512 --samples 3

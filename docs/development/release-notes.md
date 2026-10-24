@@ -9,11 +9,24 @@ alone does not identify a development checkout.
 
 ### Unreleased
 
+**Native HDF extension moved to its own repository and published on PyPI**
+
+The optional native extension, `ras-commander-fast-hdf`, and its engine now
+live in
+[gpt-cmdr/ras-commander-fast-hdf](https://github.com/gpt-cmdr/ras-commander-fast-hdf)
+(MIT licence). It is published on PyPI, so install it with
+`pip install "ras-commander[fast]"` or `pip install ras-commander-fast-hdf`
+instead of building it from this repository. The `rust/fast-hdf` folder is
+removed. ras-commander's behaviour and the required extension `API_VERSION`
+(11) do not change. The extension's `ENGINE_COMMIT` is now the commit of the
+new repository the wheel was built from (`b2ab828` for 0.1.0). See
+[Native Rust HDF engine](../native-engine.md#installing-the-extension).
+
 **Optional native (Rust) HDF backend (additive; default results unchanged)**
 
 `ras_commander.fast_hdf` adds an optional native backend for HDF reads, mesh
 polygon assembly and direct PMTiles/Arrow export. It is used only when the
-separately built `ras-commander-fast-hdf` extension (API version 11) is
+separately installed `ras-commander-fast-hdf` extension (API version 11) is
 installed; ordinary installations are unaffected. In the default automatic
 mode every public `Hdf*` result, dtype, column, attribute and exception is
 the h5py result: any native failure falls back to h5py.

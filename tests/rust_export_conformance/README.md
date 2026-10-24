@@ -11,10 +11,14 @@ Missing optional packages cause explicit collection/test skips. Qualification
 requires no skips. Tests assert cwd, ras_commander source and native-module
 paths so another checkout or globally installed extension cannot pass by accident.
 
+`RAS_FAST_HDF_SOURCE` is a checkout of
+[gpt-cmdr/ras-commander-fast-hdf](https://github.com/gpt-cmdr/ras-commander-fast-hdf);
+the extension moved there from `rust/fast-hdf`.
+
 ```powershell
 uv pip install -e . pytest maturin geopandas pyproj pmtiles mapbox-vector-tile freestiler==0.3.0 psutil
 $env:VIRTUAL_ENV = "$PWD/.venv"
-maturin develop --release --locked --features extension-module --manifest-path rust/fast-hdf/Cargo.toml
+maturin develop --release --locked --features extension-module --manifest-path $env:RAS_FAST_HDF_SOURCE/python/Cargo.toml
 $env:RAS_EXPORT_FIXTURE_ROOT = "$PWD/working/fixtures"
 uv run --no-sync python -m pytest tests/rust_export_conformance tests/test_fast_hdf.py -q -rx -o junit_family=legacy
 ```
