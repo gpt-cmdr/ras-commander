@@ -1450,3 +1450,75 @@ def test_drop_unreadable_tifs_preserves_vector_outputs(tmp_path):
 
     assert results["inundation_boundary"] == [boundary]
     assert boundary.read_bytes() == b"vector-output"
+
+
+def test_store_maps_propagates_helper_timeout(monkeypatch, tmp_path):
+    ras_obj, _, _ = _configure_store_maps_test(monkeypatch, tmp_path)
+    rasmap_path = tmp_path / "Demo.rasmap"
+    original_rasmap = rasmap_path.read_bytes()
+
+    def time_out(**kwargs):
+        raise subprocess.TimeoutExpired(
+            cmd=["RasStoreMapHelper.exe"],
+            timeout=kwargs["timeout"],
+        )
+
+    monkeypatch.setattr(
+        ras_process_module,
+        "run_store_all_maps_helper",
+        time_out,
+    )
+
+    with pytest.raises(subprocess.TimeoutExpired):
+        RasProcess.store_maps(
+            plan_number="01",
+            wse=True,
+            depth=False,
+            velocity=False,
+            fix_georef=False,
+            ras_object=ras_obj,
+            timeout=1,
+        )
+
+    assert rasmap_path.read_bytes() == original_rasmap
+    assert not rasmap_path.with_suffix(".rasmap.bak").exists()
+
+
+def test_store_maps_returns_all_fresh_tiles_and_excludes_stale_matches(
+    monkeypatch, tmp_path
+):
+    ras_obj, output_dir, _ = _configure_store_maps_test(monkeypatch, tmp_path)
+    stale_path = output_dir / "WSE (Max).Old Area.tif"
+    stale_path.write_text("stale", encoding="utf-8")
+    fresh_paths = [
+        output_dir / "WSE (Max).Area A.tif",
+        output_dir / "WSE (Max).Area B.tif",
+    ]
+
+    def generate_two_tiles(**kwargs):
+        for index, path in enumerate(fresh_paths, start=1):
+            path.write_text(f"tile-{index}", encoding="utf-8")
+        return subprocess.CompletedProcess(
+            args=["RasStoreMapHelper.exe"],
+            returncode=0,
+            stdout="Maps generated: 2",
+            stderr="",
+        )
+
+    monkeypatch.setattr(
+        ras_process_module,
+        "run_store_all_maps_helper",
+        generate_two_tiles,
+    )
+
+    results = RasProcess.store_maps(
+        plan_number="01",
+        wse=True,
+        depth=False,
+        velocity=False,
+        fix_georef=False,
+        ras_object=ras_obj,
+    )
+
+    assert results == {"wse": fresh_paths}
+    assert stale_path.exists()

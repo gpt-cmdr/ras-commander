@@ -545,3 +545,30 @@ def test_ebfe_rabbs_text_footprint_matches_only_compiled_geometry():
     assert tuple(text_footprint.total_bounds) == pytest.approx(
         (3348593.86, 9957330.38, 3355339.92, 9966412.71)
     )
+
+
+def test_text_footprint_skips_reach_with_only_one_cross_section(tmp_path):
+    geom_path = _write_text_geometry(
+        tmp_path / "single.g01",
+        [("River", "Reach", [("10", [(0, 0), (10, 0)])])],
+    )
+
+    footprint = GeomParser.get_1d_footprint(geom_path)
+
+    assert footprint.empty
+    assert list(footprint.columns) == ["River", "Reach", "source", "geometry"]
+
+
+def test_project_extent_accepts_explicit_text_geometry(tmp_path):
+    geom_path = _write_text_geometry(tmp_path / "explicit.g01")
+
+    extent, bounds = HdfProject.get_project_extent(
+        geom_path=geom_path,
+        include_2d=False,
+        include_storage=False,
+        buffer_percent=0,
+    )
+
+    assert len(extent) == 1
+    assert extent.crs is None
+    assert bounds == pytest.approx((0, -2, 10, 12))
