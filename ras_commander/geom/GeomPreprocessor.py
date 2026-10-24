@@ -29,6 +29,7 @@ Example Usage:
     >>> GeomPreprocessor.clear_geompre_files(plan_path)
 """
 
+import os
 import re
 import shutil
 import subprocess
@@ -115,6 +116,12 @@ class GeomPreprocessor:
         only before launch and after process completion; all handles opened by
         this method are closed before engine execution.
 
+        Before touching geometry, wait up to 30 seconds within ``max_wait`` for
+        the same plan's previous native tree and temporary-HDF handles to close.
+        An unverified handoff returns failure with
+        ``GEOMETRY_PREPROCESS_HANDOFF_TIMEOUT`` and never starts another engine.
+        It does not terminate a previous caller's processes.
+
         Authored geometry inputs must survive unchanged. Native products must be
         freshly generated and complete for the current mesh; obsolete incoming
         parent products may be replaced. Geometry text, HDF-only associations,
@@ -165,6 +172,7 @@ class GeomPreprocessor:
         geometry_number = None
         flow_type = "Unknown"
         command_text = ""
+        process = None
         completion_contract = {}
         owned_registry = {"children": {}, "parent_identity": None}
         if not isinstance(require_complete_products, bool):
@@ -239,10 +247,22 @@ class GeomPreprocessor:
             hdf_message_path = project_folder / f"{project_name}.p{plan_num}.hdf"
             tmp_hdf_path = project_folder / f"{project_name}.p{plan_num}.tmp.hdf"
 
+            # A previous preprocessing call may return before a detached native
+            # process or Wine releases the temporary HDF. Do not inspect or
+            # invalidate geometry, change the plan, or launch into that handoff.
+            handoff_deadline = time.monotonic() + min(
+                30.0, max(0.0, max_wait - (time.time() - start_time))
+            )
+            GeomPreprocessor._wait_for_previous_native_exit(
+                prj_file,
+                plan_path,
+                tmp_hdf_path,
+                paths_to_clear=[],
+                timeout_seconds=max(0.0, handoff_deadline - time.monotonic()),
+            )
+
             original_plan_text = (
-                plan_path.read_bytes()
-                if restore_plan_settings
-                else None
+                plan_path.read_bytes() if restore_plan_settings else None
             )
 
             geometry_hdf_path = (
@@ -283,8 +303,20 @@ class GeomPreprocessor:
                 shutil.copy2(geometry_hdf_path, geometry_backup_path)
                 completion_contract["geometry_backup_path"] = str(geometry_backup_path)
             if clear_messages:
-                GeomPreprocessor._delete_files(message_paths)
-                GeomPreprocessor._delete_files([tmp_hdf_path])
+                # Retain the backup-first contract even when a handoff fails.
+                GeomPreprocessor._wait_for_previous_native_exit(
+                    prj_file,
+                    plan_path,
+                    tmp_hdf_path,
+                    paths_to_clear=message_paths + [tmp_hdf_path],
+                    timeout_seconds=max(
+                        0.0,
+                        min(
+                            handoff_deadline - time.monotonic(),
+                            max_wait - (time.time() - start_time),
+                        ),
+                    ),
+                )
             process = None
             _watchdog = None
             stdio = tempfile.TemporaryFile()  # noqa: SIM115 - closed by the outer finally
@@ -566,6 +598,7 @@ class GeomPreprocessor:
                 command=command_text,
                 return_code=getattr(process, "returncode", None),
                 error=str(exc),
+                timed_out=str(exc).startswith("GEOMETRY_PREPROCESS_HANDOFF_TIMEOUT:"),
                 elapsed_seconds=time.time() - start_time,
                 completion_contract=completion_contract,
             )
@@ -642,14 +675,121 @@ class GeomPreprocessor:
         ]
 
     @staticmethod
-    def _delete_files(paths: List[Path]) -> None:
-        """Delete stale files if present."""
+    def _delete_files(paths: list[Path]) -> None:
+        """Delete stale files, propagating a locked or inaccessible artifact."""
         for path in paths:
-            if path.exists():
-                try:
-                    path.unlink()
-                except OSError as exc:
-                    logger.warning(f"Could not delete stale file {path}: {exc}")
+            try:
+                path.unlink()
+            except FileNotFoundError:
+                pass
+
+    @staticmethod
+    def _probe_temporary_file_release(path: Path) -> None:
+        """Acquire and release an exclusive handle without reading HDF bytes."""
+        if not path.exists():
+            return
+        if os.name == "nt":
+            import ctypes
+            from ctypes import wintypes
+
+            kernel = ctypes.WinDLL("kernel32", use_last_error=True)
+            create = kernel.CreateFileW
+            create.argtypes = [
+                wintypes.LPCWSTR,
+                wintypes.DWORD,
+                wintypes.DWORD,
+                wintypes.LPVOID,
+                wintypes.DWORD,
+                wintypes.DWORD,
+                wintypes.HANDLE,
+            ]
+            create.restype = wintypes.HANDLE
+            close = kernel.CloseHandle
+            close.argtypes = [wintypes.HANDLE]
+            close.restype = wintypes.BOOL
+            # OPEN_EXISTING; no sharing, creation, truncation or HDF inspection.
+            handle = create(str(path), 0xC0000000, 0, None, 3, 0, None)
+            if handle == wintypes.HANDLE(-1).value:
+                raise ctypes.WinError(ctypes.get_last_error())
+            if not close(handle):
+                raise ctypes.WinError(ctypes.get_last_error())
+        else:
+            import fcntl
+
+            with path.open("rb") as handle:
+                fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                fcntl.flock(handle, fcntl.LOCK_UN)
+
+    @staticmethod
+    def _wait_for_previous_native_exit(
+        project_file: Path,
+        plan_file: Path,
+        tmp_hdf: Path,
+        *,
+        paths_to_clear: list[Path],
+        timeout_seconds: float,
+    ) -> None:
+        """Wait for this plan's native tree and file handles; never kill it.
+
+        Exact path matches establish scope; retained PID/create-time pairs also
+        cover children after their parent exits. Unknown ownership fails closed.
+        The caller bounds this handoff to 30 seconds within its overall budget.
+        """
+        import psutil
+
+        from ..RasPreprocess import RasPreprocess
+
+        normalize = RasPreprocess._normalized_preprocess_path
+        project, plan, temporary = map(normalize, (project_file, plan_file, tmp_hdf))
+        deadline = time.monotonic() + max(0.0, timeout_seconds)
+        tracked = {}
+        detail = "native process ownership is unverified"
+        while True:
+            try:
+                inventory = RasPreprocess._preprocess_process_inventory()
+                if inventory is None:
+                    raise RuntimeError("native process ownership is unverified")
+                for candidate, info in inventory:
+                    arguments = {normalize(argument) for argument in info["cmdline"]}
+                    if not (temporary in arguments or {project, plan} <= arguments):
+                        continue
+                    for process in [candidate, *candidate.children(recursive=True)]:
+                        if (
+                            process is not candidate
+                            and GeomPreprocessor._is_wine_display_child(process)
+                        ):
+                            continue
+                        tracked[(process.pid, process.create_time())] = process
+                active = []
+                for (pid, created), process in tuple(tracked.items()):
+                    try:
+                        alive = (
+                            process.create_time() == created and process.is_running()
+                        )
+                        alive = alive and process.status() != psutil.STATUS_ZOMBIE
+                    except psutil.NoSuchProcess:
+                        alive = False
+                    if alive:
+                        active.append(pid)
+                    else:
+                        del tracked[(pid, created)]
+                if active:
+                    detail = "previous native processes still active: " + ", ".join(
+                        map(str, active)
+                    )
+                else:
+                    GeomPreprocessor._probe_temporary_file_release(tmp_hdf)
+                    GeomPreprocessor._delete_files(paths_to_clear)
+                    return
+            except psutil.NoSuchProcess:
+                # A root may exit between inventory and child discovery. Its
+                # already retained children still need verification next pass.
+                detail = "native process exited during handoff inventory"
+            except (OSError, psutil.Error, RuntimeError) as exc:
+                detail = f"{tmp_hdf.name}: {exc}"
+            if time.monotonic() >= deadline:
+                raise RuntimeError("GEOMETRY_PREPROCESS_HANDOFF_TIMEOUT: " + detail)
+            time.sleep(min(0.1, max(0.0, deadline - time.monotonic())))
 
     @staticmethod
     def _read_plan_preprocessor_settings(plan_path: Path) -> dict:
