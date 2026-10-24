@@ -11,10 +11,19 @@ Lazy Loading Behavior:
     - `RasDss.get_catalog(...)` - pyjnius/Java loaded on first call
     - HEC Monolith libraries downloaded automatically on first use (~20 MB)
 
+Backends:
+    RasDss.backend = "java" (default) | "native" | "shadow"; the environment
+    variable RAS_COMMANDER_DSS_BACKEND overrides it. "native" reads catalogs
+    and time series through the optional dss-commander package without Java.
+    See docs/user-guide/dss-native-backend.md.
+
 Dependencies:
-    Required at runtime (lazy loaded):
+    Required at runtime for the java backend (lazy loaded):
         - pyjnius: pip install pyjnius
         - Java JRE/JDK 8+: Must be installed and JAVA_HOME set
+
+    Optional for the native backend:
+        - dss-commander (ras-commander[dss-native] extra)
 
     Auto-downloaded:
         - HEC Monolith libraries (~20 MB, cached in ~/.ras-commander/dss/)
