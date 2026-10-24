@@ -10,6 +10,7 @@ on:
     paths:
       - 'ras_commander/fast_hdf.py'
       - 'ras_commander/_fast_hdf_typed.py'
+      - 'ras_commander/_native_scope.py'
       - 'ras_commander/fast_results.py'
       - 'ras_commander/fast_text.py'
       - 'ras_commander/hdf/HdfMesh.py'
@@ -49,10 +50,10 @@ jobs:
         id: native
         shell: bash
         run: |
-          if python -m pip install --only-binary ras-commander-fast-hdf "ras-commander-fast-hdf==0.1.*"; then
+          if python -m pip install --only-binary ras-commander-fast-hdf "ras-commander-fast-hdf==0.2.*"; then
             echo "available=true" >> "$GITHUB_OUTPUT"
           else
-            echo "::notice title=Native tests skipped::ras-commander-fast-hdf 0.1.* could not be installed from PyPI for this platform."
+            echo "::notice title=Native tests skipped::ras-commander-fast-hdf 0.2.* could not be installed from PyPI for this platform."
             echo "available=false" >> "$GITHUB_OUTPUT"
           fi
       - name: Check the installed extension
@@ -69,9 +70,9 @@ jobs:
           assert fast_hdf.available(), "ras_commander.fast_hdf must accept the installed extension"
           names = {f.name for f in metadata.distribution("ras-commander-fast-hdf").files
                    if ".dist-info/licenses/" in f.as_posix()}
-          missing = {"THIRD-PARTY-NOTICES.md", "ras-commander-LICENSE.txt", "ras-commander-rust-LICENSE.txt"} - names
+          missing = {"THIRD-PARTY-NOTICES.md", "ras-commander-LICENSE.txt", "ras-commander-fast-hdf-LICENSE.txt"} - names
           assert not missing, f"wheel licence files missing: {missing}"
           PY
       - name: Binding and fallback regression tests
         if: steps.native.outputs.available == 'true'
-        run: python -m pytest tests/test_fast_hdf.py tests/test_hdf_result_view.py tests/test_hdf_results_mesh.py tests/test_hdf_mesh_cell_polygon_diagnostics.py tests/rust_engine_bridge/panic_guard_test.py -q
+        run: python -m pytest tests/test_fast_hdf.py tests/test_hdf_result_view.py tests/test_hdf_results_mesh.py tests/test_hdf_mesh_cell_polygon_diagnostics.py tests/rust_engine_bridge/panic_guard_test.py tests/rust_engine_bridge/in_call_rewrite_test.py -q

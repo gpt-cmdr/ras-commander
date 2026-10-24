@@ -77,7 +77,7 @@ the extension moved there from `rust/fast-hdf`.
 
 ```powershell
 uv pip install -e . maturin pytest pyarrow geopandas pyproj pmtiles mapbox-vector-tile freestiler==0.3.0 psutil
-uv run --no-sync maturin develop --release --locked --features extension-module,exports-all,exports-pmtiles --manifest-path $env:RAS_FAST_HDF_SOURCE/python/Cargo.toml
+uv run --no-sync --project $PWD --directory $env:RAS_FAST_HDF_SOURCE/python maturin develop --release --locked --features extension-module,exports-all,exports-pmtiles
 $env:RAS_EXPORT_FIXTURE_ROOT = "$PWD/working/fixtures"
 uv run --no-sync python -m pytest tests/rust_typed_pmtiles tests/rust_first_tier_exports/test_binding.py tests/rust_first_tier_exports/test_review_regressions.py
 uv run --no-sync python tests/rust_typed_pmtiles/measure.py --fixture working/fixtures/computed7_regions.gpkg --output working/measurements --count 512 --samples 3
