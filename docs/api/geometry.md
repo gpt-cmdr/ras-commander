@@ -1521,6 +1521,39 @@ The recipe was adapted from FIM Commander's retained
 It uses GeomMesh's existing native repair helpers; no optimesh dependency is
 required.
 
+### Synchronize cloned area association caches
+
+After relocating a clone's terrain or classification sidecars, compiled 2D areas
+may retain filenames from the parent even when `/Geometry` has current links.
+Inspect and synchronize those caches through RasMap:
+
+```python
+plan = RasMap.plan_geometry_area_association_sync(child_hdf, ["ChildArea"])
+# Review plan["changes"] before application.
+receipt = RasMap.apply_geometry_area_association_sync(plan)
+```
+
+Planning requires existing current geometry-wide sidecars and records every
+selected area's filename/layer change. Application rejects changed input or a
+modified plan, verifies staged readback, preserves a numbered backup and replaces
+the HDF atomically. Area-only associations are preserved when no geometry-wide
+filename is declared. A stale area layer name is removed when the current
+geometry filename has no corresponding layer name.
+
+Absent optional area layer names remain absent; current filename links are still
+synchronized. In a HEC-RAS 6.6 geometry-refresh readback, the native save retained
+the child terrain filename but omitted the area `Terrain Layername` even though
+the canonical geometry association named the layer. The API preserves that
+cache representation instead of introducing a label that native save removes.
+An existing area layer name is still updated or removed to match the canonical
+association.
+
+Only the selected cached association attributes change. Calibration overrides,
+mesh datasets, other area attributes and canonical geometry links remain intact.
+An already synchronized plan preserves the file bytes and creates no backup.
+These APIs do not execute HEC-RAS or establish native/hydraulic acceptance;
+preprocess and review the child afterwards.
+
 `GeomMesh.clip_refinement_regions(..., invalid_regions="repair")` reads delivered
 geometry without changing the source HDF. GEOS `make_valid` supplies valid
 polygon coverage; every positive-area component survives before clipping.
