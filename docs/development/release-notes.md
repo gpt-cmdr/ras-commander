@@ -9,6 +9,8 @@ alone does not identify a development checkout.
 
 ### Unreleased
 
+### v0.107.0 (October 2026)
+
 **Native HDF extension moved to its own repository and published on PyPI**
 
 The optional native extension, `ras-commander-fast-hdf`, and its engine now
