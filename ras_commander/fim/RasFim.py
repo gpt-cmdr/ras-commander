@@ -383,18 +383,25 @@ class RasFim:
 
     @staticmethod
     @log_call
-    def prepare_profile(cells, centers, profile: str, pixel_size: float) -> FimPreparedProfile:
+    def prepare_profile(cells, centers, profile: str, pixel_size: float,
+                        lattice_origin: Optional[Sequence[float]] = None) -> FimPreparedProfile:
         """Prepare the global interpolation samples and axes for one profile.
 
         This is the preparation ``map_profiles`` sends to the engine, exposed
         for inspection and qualification. It always uses every wet cell.
-        Inputs are not modified.
+        Inputs are not modified. ``lattice_origin`` (a terrain pixel corner
+        ``(x, y)``) gives the ``grid_anchor="terrain"`` query axes.
         """
         _require_dependencies()
         _validate_cells(cells, [profile], DEFAULT_PROFILE_PREFIX)
         if not (np.isfinite(pixel_size) and pixel_size > 0):
             raise ValueError(f"pixel_size must be positive, got {pixel_size!r}")
-        return _prepare.prepare_profile(cells, _validate_centers(centers, cells), profile, float(pixel_size))
+        if lattice_origin is not None:
+            lattice_origin = tuple(float(v) for v in lattice_origin)
+            if len(lattice_origin) != 2 or not np.isfinite(lattice_origin).all():
+                raise ValueError(f"lattice_origin must be two finite numbers, got {lattice_origin!r}")
+        return _prepare.prepare_profile(cells, _validate_centers(centers, cells), profile, float(pixel_size),
+                                        lattice_origin=lattice_origin)
 
     @staticmethod
     @log_call
@@ -422,6 +429,8 @@ class RasFim:
         max_cache_mib: int = 64,
         max_profile_mib: int = 1024,
         nudge_method: str = "lookup",
+        grid_anchor: str = "ras2fim",
+        coplanar: str = "error",
         terrain_crs_fnv1a64: Optional[str] = None,
         write_floodplain: bool = True,
         keep_work: bool = False,
@@ -471,6 +480,18 @@ class RasFim:
                 whose planned peak exceeds it fails before allocation.
             nudge_method: ``"lookup"`` (one full-grid index warp, AOI pixels
                 gathered from it) or ``"full_warp"``.
+            grid_anchor: ``"ras2fim"`` (default, the upstream grids: query
+                axes from the wet-union bounds, final origin snapped to a
+                multiple of ``output_resolution``) or ``"terrain"``: both grids
+                on the terrain pixel lattice, so each pixel takes the terrain
+                pixel it lies on and products stack with the terrain. Needs a
+                north-up terrain with square pixels, ``output_crs`` equal to the
+                results CRS and ``output_resolution`` equal to the terrain
+                pixel size. Not the upstream Step 05 grid.
+            coplanar: ``"error"`` (default) fails a profile whose samples
+                include points Qhull reports as coplanar or duplicate;
+                ``"ignore"`` maps it without them, as upstream ``griddata``
+                does, and records the count in the manifest.
             terrain_crs_fnv1a64: Engine WKT hash to accept when the engine
                 cannot identify the terrain EPSG code.
             write_floodplain: Write product 11.
@@ -505,6 +526,10 @@ class RasFim:
             raise ValueError("give exactly one of centers or hdf_path")
         if nudge_method not in NUDGE_METHODS:
             raise ValueError(f"nudge_method must be one of {NUDGE_METHODS}, got {nudge_method!r}")
+        if grid_anchor not in _prepare.GRID_ANCHORS:
+            raise ValueError(f"grid_anchor must be one of {_prepare.GRID_ANCHORS}, got {grid_anchor!r}")
+        if coplanar not in _prepare.COPLANAR_POLICIES:
+            raise ValueError(f"coplanar must be one of {_prepare.COPLANAR_POLICIES}, got {coplanar!r}")
         threads = _default_threads() if threads is None else _positive_int(threads, "threads")
         profiles_per_request = _positive_int(profiles_per_request, "profiles_per_request")
         max_inflight_profiles = _positive_int(max_inflight_profiles, "max_inflight_profiles")
@@ -545,6 +570,21 @@ class RasFim:
         with rasterio.open(terrain) as src:
             pixel_size = float(src.res[0])
             terrain_bounds = tuple(src.bounds)
+            terrain_transform = src.transform
+        lattice_origin = lattice_bounds = None
+        if grid_anchor == "terrain":
+            t = terrain_transform
+            if t.b or t.d or t.a <= 0 or t.e >= 0 or not np.isclose(t.a, -t.e, rtol=1e-12, atol=0.0):
+                raise FimUnsupportedError("grid_anchor='terrain' needs a north-up terrain with square pixels")
+            if not _prepare.same_crs(output_crs, cells.crs):
+                raise FimUnsupportedError("grid_anchor='terrain' needs output_crs equal to the results CRS")
+            if not np.isclose(float(output_resolution), pixel_size, rtol=_prepare.LATTICE_TOLERANCE, atol=0.0):
+                raise FimUnsupportedError(
+                    f"grid_anchor='terrain' needs output_resolution equal to the terrain pixel size {pixel_size!r}")
+            output_resolution = pixel_size
+            lattice_origin = (float(t.c), float(t.f))
+            lattice_bounds = terrain_bounds
+        coplanar_samples: Dict[str, int] = {}
         terrain_block = _engine.terrain_identity(engine, terrain, cells.crs, terrain_crs_fnv1a64)
 
         folder = _prepare_output_folder(output_folder)
@@ -560,7 +600,9 @@ class RasFim:
                 requests = []
                 for name in names:
                     try:
-                        prep = _prepare.prepare_profile(cells, centers, name, pixel_size)
+                        prep = _prepare.prepare_profile(cells, centers, name, pixel_size,
+                                                        lattice_origin=lattice_origin,
+                                                        lattice_bounds=lattice_bounds)
                         grids = _prepare.derive_grids(prep, terrain_bounds, output_crs, output_resolution)
                         window, mask_file = None, None
                         if aoi is not None:
@@ -576,7 +618,10 @@ class RasFim:
                                 mask_file = f"masks/{name}.u8"
                                 np.ascontiguousarray(window.mask, dtype=np.uint8).tofile(batch_dir / mask_file)
                         inputs_dir = f"inputs/{name}"
-                        _prepare.write_profile_inputs(batch_dir / inputs_dir, prep, grids)
+                        written = _prepare.write_profile_inputs(batch_dir / inputs_dir, prep, grids,
+                                                                coplanar=coplanar)
+                        if written["coplanar_samples"]:
+                            coplanar_samples[name] = written["coplanar_samples"]
                         grids.wet_mask = None
                         rows[name] = _empty_row(name, "pending", wet_cells=prep.wet_cell_count,
                                                 samples=prep.sample_count)
@@ -635,7 +680,9 @@ class RasFim:
                         "profiles_per_request": profiles_per_request,
                         "max_inflight_profiles": max_inflight_profiles, "max_cache_mib": max_cache_mib,
                         "max_profile_mib": max_profile_mib, "nudge_method": nudge_method,
+                        "grid_anchor": grid_anchor, "coplanar": coplanar,
                         "write_floodplain": bool(write_floodplain), "mesh_name": mesh_name},
+            "coplanar_samples": coplanar_samples,
             "aoi": aoi.describe() if aoi is not None else None,
             "work_folder": str(work) if keep_work else None,
         })

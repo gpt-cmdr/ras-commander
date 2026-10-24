@@ -20,7 +20,9 @@ Parent `ras_commander/AGENTS.md` and root `AGENTS.md` still apply.
   cell before any AOI. An AOI selects output pixels on the final grid only. Never subset or
   retriangulate for an AOI.
 - Preserve the upstream sample order and float semantics; changes need qualification against the
-  retained Step 05 oracle.
+  retained Step 05 oracle. The defaults (`grid_anchor="ras2fim"`, `coplanar="error"`) are the
+  upstream recipe; the opt-in `grid_anchor="terrain"` and `coplanar="ignore"` are recorded
+  departures and never become defaults silently.
 - Inputs are read-only. Products go to a new or empty `output_folder`. Input file identities are
   checked after mapping.
 - Failures are explicit: missing engine, engine exit codes other than 0/2, inconsistent units, and

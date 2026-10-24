@@ -407,6 +407,110 @@ def test_write_profile_inputs_layout_and_coplanar_rejection(tmp_path):
         _prepare.write_profile_inputs(tmp_path / "flat", flat, grids)
 
 
+def _duplicate_sample(prep):
+    """The prepared profile with its first sample repeated (a Qhull coplanar point)."""
+    import dataclasses
+
+    return dataclasses.replace(prep, x=np.append(prep.x, prep.x[0]), y=np.append(prep.y, prep.y[0]),
+                               z=np.append(prep.z, prep.z[0]))
+
+
+def test_write_profile_inputs_coplanar_policy(tmp_path):
+    cells = _cells()
+    prep = _duplicate_sample(RasFim.prepare_profile(cells, _centers(cells), "wsel_a", 2.0))
+    with rasterio.open(_terrain(tmp_path / "t.tif")) as src:
+        grids = _prepare.derive_grids(prep, tuple(src.bounds), "EPSG:3857", 3.0)
+    with pytest.raises(FimUnsupportedError, match="1 coplanar"):
+        _prepare.write_profile_inputs(tmp_path / "error", prep, grids)
+    record = _prepare.write_profile_inputs(tmp_path / "ignore", prep, grids, coplanar="ignore")
+    assert record["coplanar_samples"] == 1
+    assert "coplanar_samples" not in json.loads((tmp_path / "ignore" / "inputs.json").read_text())
+    simplices = np.fromfile(tmp_path / "ignore" / "simplices.u32", dtype="<u4")
+    assert prep.sample_count - 1 not in set(simplices.tolist())  # the duplicate is not a vertex
+    with pytest.raises(ValueError, match="coplanar must be"):
+        _prepare.write_profile_inputs(tmp_path / "bad", prep, grids, coplanar="drop")
+
+
+@pytest.mark.parametrize("origin", [(499950.7, 3300150.3), (499950.0, 3300150.0)])
+def test_terrain_anchor_puts_axes_and_final_grid_on_the_terrain_lattice(tmp_path, origin):
+    cells = _cells()
+    centers = _centers(cells)
+    plain = RasFim.prepare_profile(cells, centers, "wsel_a", 2.0)
+    prep = RasFim.prepare_profile(cells, centers, "wsel_a", 2.0, lattice_origin=origin)
+    assert prep.grid_anchor == "terrain" and plain.grid_anchor == "ras2fim"
+    for got, want in ((prep.x, plain.x), (prep.y, plain.y), (prep.z, plain.z)):
+        assert np.array_equal(got, want)  # samples never depend on the grid
+    for low, union_low, o in ((prep.xmin, plain.xmin, origin[0]), (prep.ymin, plain.ymin, origin[1])):
+        steps = (low - o) / 2.0
+        assert abs(steps - round(steps)) < 1e-9 and low <= union_low < low + 2.0
+    assert prep.x_axis[0] == prep.xmin and np.allclose(np.diff(prep.x_axis), 2.0)
+    path = _terrain(tmp_path / "t.tif", x0=origin[0], y0=origin[1])
+    with rasterio.open(path) as src:
+        bounds = tuple(src.bounds)
+    grids = _prepare.derive_grids(prep, bounds, CRS_MODEL, 2.0)
+    t = grids.dest_transform
+    assert (grids.dest_width, grids.dest_height) == (grids.cols, grids.rows)
+    assert (t.a, t.e, t.c) == (2.0, -2.0, prep.xmin)
+    for edge, o in ((t.c, origin[0]), (t.f, origin[1])):
+        steps = (edge - o) / 2.0
+        assert abs(steps - round(steps)) < 1e-9
+    assert t.f == _prepare.snap_down(t.f, origin[1], 2.0)  # canonical lattice value
+    with pytest.raises(FimUnsupportedError, match="output_resolution"):
+        _prepare.derive_grids(prep, bounds, CRS_MODEL, 3.0)
+    with pytest.raises(FimUnsupportedError, match="results CRS"):
+        _prepare.derive_grids(prep, bounds, "EPSG:3857", 2.0)
+
+
+@pytest.mark.parametrize("seed", range(6))
+def test_terrain_anchor_keeps_the_extent_with_far_origin_and_non_binary_pixels(seed):
+    # 0.3 units is not a binary fraction and the origin is tens of km away: a re-snapped
+    # top edge used to land one pixel low and drop the northernmost wet row.
+    rng = np.random.default_rng(seed)
+    origin, res = (499950.7, 3300150.3), 0.3
+    for _ in range(10):
+        cells = _cells(x0=500000.0 + rng.uniform(0, 50), y0=3275171.79 + rng.uniform(0, 50))
+        prep = RasFim.prepare_profile(cells, _centers(cells), "wsel_a", res, lattice_origin=origin)
+        rows, cols = prep.shape
+        grids = _prepare.derive_grids(prep, (0.0, 0.0, 1e7, 1e7), CRS_MODEL, res)
+        t = grids.dest_transform
+        assert (grids.dest_width, grids.dest_height) == (cols, rows)
+        assert abs(t.c - prep.xmin) < 1e-6 * res
+        assert abs(t.f - (prep.ymin + rows * res)) < 1e-6 * res  # same extent as raster 01
+        kx, ky = prep.lattice_index
+        assert t.c == origin[0] + kx * res and t.f == origin[1] + (ky + rows) * res
+        union = cells.dropna(subset=["wsel_a"]).union_all().bounds
+        assert prep.xmin <= union[0] + 1e-6 and t.f >= union[3] - 1e-6  # nothing cut off
+
+
+def test_terrain_anchor_clamps_a_wet_union_that_pokes_outside_the_terrain(tmp_path):
+    cells = _cells()  # wet union xmin 500020
+    path = _terrain(tmp_path / "t.tif", x0=500020.3)  # left edge 0.3 inside the union
+    with rasterio.open(path) as src:
+        bounds, t = tuple(src.bounds), src.transform
+    with pytest.raises(FimUnsupportedError, match="beyond the terrain"):
+        unclamped = RasFim.prepare_profile(cells, _centers(cells), "wsel_a", 2.0,
+                                           lattice_origin=(t.c, t.f))
+        _prepare.derive_grids(unclamped, bounds, CRS_MODEL, 2.0)
+    prep = _prepare.prepare_profile(cells, _centers(cells), "wsel_a", 2.0,
+                                    lattice_origin=(t.c, t.f), lattice_bounds=bounds)
+    assert prep.xmin == 500020.3 and prep.x_axis[0] == 500020.3
+    grids = _prepare.derive_grids(prep, bounds, CRS_MODEL, 2.0)
+    assert grids.dest_transform.c == 500020.3
+
+
+def test_same_crs_compares_epsg_codes_across_wkt_spellings():
+    from pyproj import CRS
+
+    assert _prepare.same_crs(CRS.from_epsg(32615).to_wkt("WKT1_ESRI"), "EPSG:32615")
+    assert not _prepare.same_crs("EPSG:32615", "EPSG:32616")
+
+
+def test_snap_down_is_canonical_on_and_off_the_lattice():
+    assert _prepare.snap_down(10.0, 0.5, 2.0) == 8.5
+    assert _prepare.snap_down(8.5 + 1e-12, 0.5, 2.0) == 8.5  # within tolerance: on the lattice
+    assert _prepare.snap_down(-3.0, 0.5, 2.0) == -3.5
+
+
 # --------------------------------------------------------------------------
 # Batch mapping with a simulated engine
 # --------------------------------------------------------------------------
@@ -531,6 +635,46 @@ def test_output_folder_must_be_empty_and_options_validated(scene):
                             engine_path=scene["engine"])
 
 
+def test_map_profiles_terrain_anchor_requests_the_terrain_lattice(scene):
+    scene["terrain"] = _terrain(scene["tmp"] / "offset.tif", x0=499950.7, y0=3300150.3)
+    manifest = _map(scene, output_crs=CRS_MODEL, output_resolution=2.0, grid_anchor="terrain")
+    assert (manifest["status"] == "complete").all()
+    for request in scene["fake"].requests:
+        gt = request["profiles"][0]["dest_grid"]["geotransform"]
+        assert gt[1] == 2.0 and gt[5] == -2.0
+        for edge, origin in ((gt[0], 499950.7), (gt[3], 3300150.3)):
+            steps = (edge - origin) / 2.0
+            assert abs(steps - round(steps)) < 1e-9
+    document = json.loads((scene["tmp"] / "out" / "fim_manifest.json").read_text())
+    assert document["options"]["grid_anchor"] == "terrain" and document["options"]["coplanar"] == "error"
+    assert document["coplanar_samples"] == {}
+    for kwargs, message in (({"output_resolution": 3.0}, "terrain pixel size"),
+                            ({"output_resolution": 2.0, "output_crs": "EPSG:3857"}, "results CRS")):
+        kwargs.setdefault("output_crs", CRS_MODEL)
+        with pytest.raises(FimUnsupportedError, match=message):
+            _map(scene, out_name="x", grid_anchor="terrain", **kwargs)
+    for kwargs in ({"grid_anchor": "lattice"}, {"coplanar": "drop"}):
+        with pytest.raises(ValueError):
+            _map(scene, out_name="y", **kwargs)
+
+
+def test_map_profiles_coplanar_ignore_maps_and_records_the_count(scene, monkeypatch):
+    original = _prepare.prepare_profile
+
+    def with_duplicate(*args, **kwargs):
+        prep = original(*args, **kwargs)
+        return _duplicate_sample(prep) if prep.profile == "wsel_a" else prep
+
+    monkeypatch.setattr(_prepare, "prepare_profile", with_duplicate)
+    rejected = _map(scene, raise_on_failure=False)
+    assert rejected.set_index("profile")["status"].to_dict() == {"wsel_a": "failed", "wsel_b": "complete"}
+    assert "coplanar" in rejected.set_index("profile").loc["wsel_a", "error"]
+    manifest = _map(scene, out_name="ignored", coplanar="ignore")
+    assert (manifest["status"] == "complete").all()
+    document = json.loads((scene["tmp"] / "ignored" / "fim_manifest.json").read_text())
+    assert document["coplanar_samples"] == {"wsel_a": 1} and document["options"]["coplanar"] == "ignore"
+
+
 def test_crs_mismatch_is_unsupported(scene):
     cells = scene["cells"].to_crs("EPSG:32616")
     with pytest.raises(FimUnsupportedError):
@@ -565,6 +709,36 @@ def test_fixture_preparation_matches_reference_inputs(profile, tmp_path):
 
 
 @pytest.mark.integration
+@pytest.mark.skipif(not ENGINE, reason="set RAS_COMMANDER_FIM_ENGINE")
+def test_engine_terrain_anchor_takes_the_terrain_pixel_each_output_pixel_lies_on(tmp_path):
+    # A terrain with a distinct value per pixel, an origin that is not a multiple of the pixel
+    # size, and a non-binary pixel size: every wet output pixel must satisfy WSE - depth equal
+    # to the terrain pixel at the same lattice position.
+    res, x0, y0 = 0.3, 499950.7, 3300150.3
+    width, height = 800, 700
+    data = (100.0 + np.add.outer(np.arange(height) * 0.001, np.arange(width) * 0.0007)).astype("float32")
+    path = tmp_path / "terrain.tif"
+    profile = dict(driver="GTiff", width=width, height=height, count=1, dtype="float32",
+                   crs=CRS_MODEL, transform=Affine(res, 0, x0, 0, -res, y0), nodata=-9999.0)
+    with rasterio.open(path, "w", **profile) as dst:
+        dst.write(data, 1)
+    cells = _cells(x0=500000.0, y0=3300000.0)
+    manifest = RasFim.map_profiles(cells, path, tmp_path / "out", centers=_centers(cells),
+                                   profiles=["wsel_a"], output_crs=CRS_MODEL, output_resolution=res,
+                                   grid_anchor="terrain", engine_path=ENGINE, threads=1,
+                                   write_floodplain=False)
+    row = manifest.iloc[0]
+    assert row.status == "complete"
+    with rasterio.open(row.depth_tif) as d, rasterio.open(row.wse_tif) as w:
+        depth, wse, t = d.read(1).astype("f8"), w.read(1).astype("f8"), d.transform
+    col0, row0 = (t.c - x0) / res, (y0 - t.f) / res
+    assert abs(col0 - round(col0)) < 1e-6 and abs(row0 - round(row0)) < 1e-6
+    ground = data[round(row0):round(row0) + depth.shape[0], round(col0):round(col0) + depth.shape[1]]
+    wet = np.isfinite(depth)
+    assert wet.sum() > 1000
+    np.testing.assert_allclose((wse - depth)[wet], ground[wet].astype("f8"), atol=1e-3)
+
+
 @pytest.mark.skipif(not (FIXTURE and ENGINE), reason="set RAS_COMMANDER_FIM_FIXTURE and RAS_COMMANDER_FIM_ENGINE")
 def test_fixture_engine_full_bbox_and_polygon_equal_full_crop(tmp_path):
     fixture = Path(FIXTURE)

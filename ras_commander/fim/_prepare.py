@@ -14,6 +14,14 @@ interpolation:
 4. the final grid is ``calculate_default_transform`` to the output CRS with
    its origin snapped to a multiple of the output resolution.
 
+Two opt-in variants depart from the upstream recipe and are recorded in the
+manifest. ``grid_anchor="terrain"`` snaps the raster-01 origin down onto the
+terrain pixel lattice and uses that same lattice as the final grid, so every
+pixel centre is a terrain pixel centre and the nudge is an identity.
+``coplanar="ignore"`` leaves samples that Qhull reports as coplanar or
+duplicate out of the triangulation, as ``griddata`` does upstream, instead of
+rejecting the profile.
+
 Preparation is always global. An area of interest never subsets these
 inputs.
 
@@ -42,6 +50,13 @@ INPUTS_SCHEMA = "ras2fim-step05-inputs/1"
 # hundredth of a model unit.
 MERGE_DECIMALS = 2
 
+GRID_ANCHORS = ("ras2fim", "terrain")
+COPLANAR_POLICIES = ("error", "ignore")
+
+# Fraction of a pixel within which a coordinate already counts as on the lattice. The
+# effective tolerance also scales with the float spacing of the coordinates (_tolerance).
+LATTICE_TOLERANCE = 1e-9
+
 
 @dataclass
 class FimPreparedProfile:
@@ -57,6 +72,11 @@ class FimPreparedProfile:
         wet_union: Shapely union of the wet cell polygons.
         crs: CRS of the hydraulic results (and of all coordinates above).
         wet_cell_count: Number of wet cells (centres) used.
+        grid_anchor: ``"ras2fim"`` (origin at the wet-union bounds, upstream)
+            or ``"terrain"`` (origin snapped down onto the terrain lattice).
+        lattice_origin: Terrain pixel corner of a terrain-anchored profile.
+        lattice_index: Integer ``(column, row)`` lattice index of ``(xmin, ymin)``
+            from ``lattice_origin``; edges are always ``origin + k * res``.
     """
 
     profile: str
@@ -71,6 +91,9 @@ class FimPreparedProfile:
     wet_union: Any
     crs: Any
     wet_cell_count: int
+    grid_anchor: str = "ras2fim"
+    lattice_origin: Optional[Tuple[float, float]] = None
+    lattice_index: Optional[Tuple[int, int]] = None
 
     @property
     def sample_count(self) -> int:
@@ -116,12 +139,42 @@ def _merge_points(gdf, profile: str):
     return gpd.GeoDataFrame(merged)
 
 
-def prepare_profile(cells, centers, profile: str, pixel_size: float) -> FimPreparedProfile:
+def _tolerance(value: float, origin: float, step: float) -> float:
+    """Lattice tolerance in pixels: the fixed floor or the float error of ``(value - origin) / step``."""
+    return max(LATTICE_TOLERANCE, 16 * np.finfo(float).eps * max(abs(value), abs(origin)) / step)
+
+
+def lattice_index(value: float, origin: float, step: float, *, up: bool = False) -> int:
+    """Index ``k`` of the lattice line ``origin + k * step`` at or below ``value`` (above with ``up``).
+
+    A ``value`` within float error of a lattice line is on that line.
+    """
+    cells = (value - origin) / step
+    nearest = round(cells)
+    if abs(cells - nearest) <= _tolerance(value, origin, step):
+        return int(nearest)
+    return int(np.ceil(cells)) if up else int(np.floor(cells))
+
+
+def snap_down(value: float, origin: float, step: float) -> float:
+    """Largest lattice coordinate ``origin + k * step`` not above ``value``."""
+    return origin + lattice_index(value, origin, step) * step
+
+
+def prepare_profile(cells, centers, profile: str, pixel_size: float,
+                    lattice_origin: Optional[Tuple[float, float]] = None,
+                    lattice_bounds: Optional[Tuple[float, float, float, float]] = None) -> FimPreparedProfile:
     """Prepare the global samples and query axes for one profile.
 
     ``cells`` has ``cell_idx``, polygon ``geometry``, and the profile column
     (NaN = dry). ``centers`` has ``cell_idx`` and point ``geometry`` in the
     same CRS, ordered by ascending ``cell_idx``. Neither frame is modified.
+    ``lattice_origin`` is any terrain pixel corner ``(x, y)``; when given, the
+    query axes start on the terrain lattice (``grid_anchor="terrain"``)
+    instead of at the wet-union bounds. Samples are the same either way.
+    ``lattice_bounds`` (the terrain ``left, bottom, right, top``, on the
+    lattice) clamps an anchored grid to the terrain: pixels of a wet union
+    that pokes outside it would only read terrain nodata.
     """
     import geopandas as gpd
     import shapely
@@ -185,19 +238,42 @@ def prepare_profile(cells, centers, profile: str, pixel_size: float) -> FimPrepa
 
     xmin, ymin, xmax, ymax = gdf_dissolved.total_bounds
     res = pixel_size
+    anchor, index = "ras2fim", None
+    x_axis, y_axis = np.arange(xmin, xmax, res), np.arange(ymin, ymax, res)
+    if lattice_origin is not None:
+        anchor = "terrain"
+        ox, oy = float(lattice_origin[0]), float(lattice_origin[1])
+        kx0, ky0 = lattice_index(float(xmin), ox, res), lattice_index(float(ymin), oy, res)
+        kx1 = lattice_index(float(xmax), ox, res, up=True)
+        ky1 = lattice_index(float(ymax), oy, res, up=True)
+        if lattice_bounds is not None:
+            left, bottom, right, top = (float(v) for v in lattice_bounds)
+            kx0 = max(kx0, lattice_index(left, ox, res))
+            ky0 = max(ky0, lattice_index(bottom, oy, res))
+            kx1 = min(kx1, lattice_index(right, ox, res))
+            ky1 = min(ky1, lattice_index(top, oy, res))
+        if kx1 <= kx0 or ky1 <= ky0:
+            raise FimUnsupportedError(f"{profile}: the wet cells do not overlap the terrain")
+        index = (kx0, ky0)
+        xmin, ymin = ox + kx0 * res, oy + ky0 * res
+        x_axis = ox + np.arange(kx0, kx1, dtype=np.float64) * res
+        y_axis = oy + np.arange(ky0, ky1, dtype=np.float64) * res
     return FimPreparedProfile(
         profile=profile,
         x=points.geometry.x.values,
         y=points.geometry.y.values,
         z=points[profile].values,
-        x_axis=np.arange(xmin, xmax, res),
-        y_axis=np.arange(ymin, ymax, res),
+        x_axis=x_axis,
+        y_axis=y_axis,
         xmin=xmin,
         ymin=ymin,
         res=res,
         wet_union=wet_union,
         crs=cells.crs,
         wet_cell_count=int(len(gdf_pnt)),
+        grid_anchor=anchor,
+        lattice_origin=None if lattice_origin is None else (float(lattice_origin[0]), float(lattice_origin[1])),
+        lattice_index=index,
     )
 
 
@@ -208,6 +284,10 @@ def derive_grids(prep: FimPreparedProfile, terrain_bounds, output_crs, output_re
     to the terrain bounds, and the 09/10 grid is ``calculate_default_transform``
     of the 07 grid followed by the origin snap. The engine works on the 01
     grid, so a crop that would change it is unsupported.
+
+    For a terrain-anchored profile the 09/10 grid is the raster-01 extent on
+    the same lattice, north up; this needs the results CRS and the terrain
+    pixel size as the output CRS and resolution.
     """
     import rasterio.mask
     from affine import Affine
@@ -238,9 +318,32 @@ def derive_grids(prep: FimPreparedProfile, terrain_bounds, output_crs, output_re
             bounds_07 = tuple(ds.bounds)
 
     res = float(output_resolution)
+    if prep.grid_anchor == "terrain":
+        from pyproj import CRS
+
+        if not same_crs(output_crs, prep.crs):
+            raise FimUnsupportedError(f"{prep.profile}: grid_anchor='terrain' needs the results CRS as output_crs")
+        if not np.isclose(res, prep.res, rtol=LATTICE_TOLERANCE, atol=0.0):
+            raise FimUnsupportedError(
+                f"{prep.profile}: grid_anchor='terrain' needs output_resolution {prep.res!r}, got {res!r}")
+        # Edges come from integer lattice indices, never from re-snapping a sum, so equal
+        # lattice positions give bit-equal transforms and the grids cover the same extent.
+        kx0, ky0 = prep.lattice_index
+        ox, oy = prep.lattice_origin
+        dest = from_origin(ox + kx0 * prep.res, oy + (ky0 + rows) * prep.res, prep.res, prep.res)
+        return FimGrids(rows, cols, affine_01, ~outside_02, dest, cols, rows, output_crs)
     transform, width, height = calculate_default_transform(crs_07, output_crs, cols, rows, *bounds_07)
     dest = from_origin(round(transform.c / res) * res, round(transform.f / res) * res, res, res)
     return FimGrids(rows, cols, affine_01, ~outside_02, dest, int(width), int(height), output_crs)
+
+
+def same_crs(a, b) -> bool:
+    """CRS equality by EPSG code when both have one (WKT spellings differ), else pyproj."""
+    from pyproj import CRS
+
+    a, b = CRS.from_user_input(a), CRS.from_user_input(b)
+    ea, eb = a.to_epsg(), b.to_epsg()
+    return ea == eb if ea is not None and eb is not None else a == b
 
 
 def _write_array(path: Path, arr, dtype) -> dict:
@@ -249,11 +352,16 @@ def _write_array(path: Path, arr, dtype) -> dict:
     return {"file": path.name, "dtype": np.dtype(dtype).str, "shape": list(arr.shape)}
 
 
-def write_profile_inputs(directory: Path, prep: FimPreparedProfile, grids: FimGrids) -> dict:
+def write_profile_inputs(directory: Path, prep: FimPreparedProfile, grids: FimGrids,
+                         coplanar: str = "error") -> dict:
     """Write one profile's engine inputs (``ras2fim-step05-inputs/1``).
 
     The SciPy ``Delaunay`` object is built from the exact samples, as
-    ``griddata(method='linear')`` builds it. Returns the ``inputs.json`` record.
+    ``griddata(method='linear')`` builds it. Qhull leaves coplanar or
+    duplicate samples out of the triangulation; ``coplanar="error"`` rejects
+    such a profile and ``"ignore"`` maps it without them, as ``griddata``
+    does. Returns the ``inputs.json`` record plus ``coplanar_samples`` (the
+    count left out; not written to ``inputs.json``).
     """
     import scipy
     from scipy.spatial import Delaunay
@@ -263,8 +371,10 @@ def write_profile_inputs(directory: Path, prep: FimPreparedProfile, grids: FimGr
     samples = np.column_stack([np.asarray(prep.x, dtype=np.float64),
                                np.asarray(prep.y, dtype=np.float64),
                                np.asarray(prep.z, dtype=np.float64)])
+    if coplanar not in COPLANAR_POLICIES:
+        raise ValueError(f"coplanar must be one of {COPLANAR_POLICIES}, got {coplanar!r}")
     tri = Delaunay(np.ascontiguousarray(samples[:, :2]))
-    if len(tri.coplanar):
+    if len(tri.coplanar) and coplanar == "error":
         raise FimUnsupportedError(
             f"{prep.profile}: {len(tri.coplanar)} coplanar or duplicate samples are not supported"
         )
@@ -298,4 +408,4 @@ def write_profile_inputs(directory: Path, prep: FimPreparedProfile, grids: FimGr
     }
     with open(directory / "inputs.json", "w", encoding="utf-8") as handle:
         json.dump(record, handle, indent=1)
-    return record
+    return {**record, "coplanar_samples": int(len(tri.coplanar))}

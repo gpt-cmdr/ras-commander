@@ -147,6 +147,42 @@ Wet-cell discovery, sample preparation, and triangulation always use every wet
 cell of the profile, and the engine's lookup warp spans the full output grid.
 AOI runtime therefore does not shrink in proportion to the AOI area.
 
+## Terrain-anchored grids and coplanar samples (opt-in)
+
+Two keywords depart from the upstream Step 05 recipe. Both default to the
+upstream behaviour and are recorded in `fim_manifest.json` under `options`.
+
+`grid_anchor="terrain"` places the query axes and the final grid on the
+terrain pixel lattice. Upstream starts the query axes at the wet-union bounds
+and snaps the final origin to a multiple of `output_resolution`, so the
+terrain pixel each output pixel takes depends on the phase of the wet-union
+bounds. On one 1 m terrain whose origin is not a multiple of the pixel size,
+that put every output pixel of a reach one terrain column away from the
+terrain pixel it lies on, and moved results when the cell set changed. With
+the anchor, each output pixel takes the terrain pixel it lies on, products
+stack with the terrain without resampling, and equal lattice positions give
+bit-equal transforms. The anchor needs a north-up terrain with square pixels,
+`output_crs` equal to the results CRS, and `output_resolution` equal to the
+terrain pixel size; anything else raises `FimUnsupportedError`. Grid edges are
+integer lattice positions, and the grid is clamped to the terrain extent where the
+wet cells reach past it (those pixels would only read terrain nodata). Samples and
+triangulation are unchanged.
+
+`coplanar="ignore"` maps a profile whose samples include points Qhull reports
+as coplanar or duplicate (for example two perimeter vertices closer than the
+0.01-unit merge) without those points, as upstream `griddata` does. The
+default `"error"` fails such a profile. The count per profile is in the
+manifest's `coplanar_samples`.
+
+```python
+manifest = RasFim.map_profiles(
+    cells, "terrain.tif", "fim_reach", centers=centers,
+    output_crs=cells.crs, output_resolution=terrain_pixel_size,
+    polygon=reach_polygon, aoi_crs=cells.crs,
+    grid_anchor="terrain", coplanar="ignore",
+)
+```
+
 ## Batches, resources, and outputs
 
 | Keyword | Meaning |
