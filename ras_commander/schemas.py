@@ -61,7 +61,7 @@ _GEOMETRY_ASSOCIATION_COLUMNS = [
 
 DATAFRAME_SCHEMAS = {
     "mesh_cell_surface_areas": {
-        "description": "Native stored cell areas, including ghost rows, without polygon reconstruction.",
+        "description": "Native cell areas without polygon reconstruction; optional stored ghost rows.",
         "accessor": "HdfMesh.get_mesh_cell_surface_areas(hdf_path)",
         "source": "ras_commander/hdf/HdfMesh.py",
         "extra_columns": False,
@@ -70,6 +70,7 @@ DATAFRAME_SCHEMAS = {
             {"name": "mesh_name", "dtype": "str", "description": "Native 2D flow area name."},
             {"name": "cell_id", "dtype": "int64", "description": "Zero-based stored native cell ID; select physical cells separately."},
             {"name": "surface_area", "dtype": "float32 | float64", "description": "Native cell area in squared source horizontal units; native precision retained."},
+            {"name": "is_ghost_cell", "dtype": "bool", "description": "Whether cell_id is at or above the native physical Cell Count."},
         ],
     },
     "geometry_bc_lines": {
