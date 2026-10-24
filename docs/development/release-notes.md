@@ -39,6 +39,31 @@ or `PATH`; RAS Commander does not install them. It is the first part of the
 hydraulic-subdomain workflow, which takes its pour points and contributing
 areas from these links.
 
+**Typed tables for per-cell HDF results; geometry-free imports**
+
+- **`include_geometry=False`** (keyword-only) returns a pandas `DataFrame`
+  instead of a GeoDataFrame from `HdfResultsMesh.get_mesh_max_ws`,
+  `get_mesh_min_ws`, `get_mesh_max_face_v`, `get_mesh_min_face_v`,
+  `get_mesh_max_ws_err`, `get_mesh_max_iter`, `get_mesh_last_iter`,
+  `get_mesh_summary`, `get_mesh_summary_output` and `get_mesh_max_depth`;
+  `HdfMesh.get_mesh_cell_points`; `HdfResultsSediment.get_cell_bed_change`,
+  `get_cell_bed_elevation` and `get_active_layer_grain_class`; and
+  `HdfPump.get_pump_stations`. The table has the same rows, order, values and
+  `attrs`, keeps the stored value dtypes (no `float64` upcast), uses `int64`
+  IDs and a string `mesh_name` (never `object`), and needs no
+  GeoPandas/Shapely. Point readers give `x`/`y` columns. The default is
+  unchanged. See
+  [Typed tables without geometry](../user-guide/hdf-data-extraction.md#typed-tables-without-geometry).
+- **Geometry-free imports:** `HdfBndry`, `HdfXsec` and `HdfStruc` (and so
+  `HdfStorageArea`, `HdfProject` and `HdfResultsBreach.get_breaching_variables`)
+  import without GeoPandas, Shapely or pyproj; the geometry functions load
+  them when called.
+- **Internal callers use the tables** where they need no geometry:
+  `CheckUnsteady.check_stability`/`check_mesh_quality`, `HdfResultsQuery`
+  point queries, `HdfFluvialPluvial` boundary/polygon timing, the native
+  fluvial-pluvial peaks, `RasFim.get_cells_from_plan_hdf`, `RasMonteCarlo`,
+  `RasPermutation` and `PrecipMrms` flood points. Their results are unchanged.
+
 ### v0.108.0 (October 2026)
 
 **Native HDF engine 0.2.0; faster small native reads**
