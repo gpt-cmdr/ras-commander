@@ -1,13 +1,13 @@
 {
   "method": "ras2fim-step05-stages/0.1.0 method-r2",
   "files": {
-    "Cargo.lock": "d9301b8725c855cbd4eea3e15bb42f975a0eb09e6d774522f96f1988e04c0580",
-    "Cargo.toml": "44027023ead196844774c6b39f167569f2ef52ea89b30b9d59771bf770289198",
-    "pyproject.toml": "059b852e8e62832baafc195802041ac6667845e2bbfae9c8c7e4bb2aea56e6a5",
+    "Cargo.lock": "2463a056e976cd87fc4d11655b200ef50b28b4e2f7f3bde63608295e1553ebea",
+    "Cargo.toml": "1eb3882ed41c4cf4c6c3e6704cf47131f52d8d6d872cf3144aa4500a68542433",
+    "pyproject.toml": "4102bd4be755c55c4038af710c3407fd2a2017108d71ea27819e40563433b94a",
     "src/cache.rs": "67fe5979291828d50f97fd121a0fffd68017eaab3fbc0ba2472f35256ac5d59c",
-    "src/horizontal.rs": "90288739a99546c5f33bb237d88d74c6281a29dac8865b077993517179ff37c2",
+    "src/horizontal.rs": "29504583e6a76c55610349ee177709a1ba7d19e540564e4fd96028efaee2b812",
     "src/interp.rs": "1be2beb6d6d0bd622f5f3fcf410be32490a8e22bbda2aa6b9bd483a37a567575",
-    "src/lib.rs": "dc8cda6ff28cd34c863a59afad080339eb3093e4d584c042f1dc5dcd11cdc959",
+    "src/lib.rs": "70b30dd826f3ac3aff3dbced252a7602e186fe7f5d0a78304ba5a86580dbacdc",
     "src/main.rs": "4ec34230d69004817260d4ceb221f982f6a201d22720f105efc01ab450923639",
     "src/model.rs": "2454206dcabbbb65569d538977736cb5af83894133bc1786255e278b75681bbc",
     "src/scipy_interp.rs": "8eedf291604c84faced5690da232f5d51a76658549326433b636e35a48a78e92",
@@ -17,7 +17,8 @@
     "src/terrain.rs": "66e7a32fb51cfb9e8803580d53630ee85327e52a21231399e9c98f0b4bd0b4cc",
     "tests/hardening.rs": "c47f0cd24fce4fe5afd0514ff7857d8e51b362492e0eb43ec8d7070159b3bf20",
     "tests/live_binary.rs": "d00846473760808dd2b1eefdc3097ab23762829f251f80f7a78a0a140d18b0af",
-    "tests/live_step05.rs": "d702ab7035c6b401e70cebfc181b1cdfdd435f52431e834a6a60c595feaa3979"
+    "tests/live_step05.rs": "d702ab7035c6b401e70cebfc181b1cdfdd435f52431e834a6a60c595feaa3979",
+    "src/ownership.rs": "1cc6ba0eb752632e1b584caf09c972b38f135d210fc57bbfa7abe1c57d2a53c8"
   },
   "horizontal_method": "horizontal-cell-constant/1"
 }

@@ -2,6 +2,7 @@
 
 from contextlib import contextmanager
 import json
+import struct
 from pathlib import Path
 import tempfile
 import shutil
@@ -21,6 +22,23 @@ def _write_array(path, array):
             chunk = view[start : start + (1 << 20)]
             if destination.write(chunk) != len(chunk):
                 raise FimEngineError("short horizontal staging write")
+
+
+def _write_geometry(path, geometries):
+    """Write ordered, length-framed 2D WKB without Python coordinate dictionaries."""
+    import shapely
+
+    with path.open("wb") as destination:
+        for start in range(0, len(geometries), 4096):
+            chunk = shapely.to_wkb(
+                geometries[start : start + 4096],
+                output_dimension=2,
+                byte_order=1,
+                include_srid=False,
+            )
+            for value in chunk:
+                destination.write(struct.pack("<I", len(value)))
+                destination.write(value)
 
 
 def _read_f32(stream, shape, expired, timeout, product):
@@ -63,9 +81,18 @@ def run_batch(
         raise FimEngineError(
             "engine does not support horizontal-cell-constant/1; install the matching wheel"
         )
+    if grid.owner is None and method.get("native_ownership") is not True:
+        raise FimEngineError(
+            "engine lacks native terrio ownership; install ras2fim-engine 0.3.0 or newer"
+        )
     identity = _engine.terrain_identity(engine, terrain, ordered.crs)
     details["engine"] = {"path": str(engine), "method": method}
-    required = grid.owner.size * 4 + len(grid.plan.cell_positions) * 4 * len(names) + (64 << 20)
+    pixels = int(np.prod(grid.plan.shape))
+    required = (
+        (grid.plan.planned_bytes if grid.owner is None else pixels * 4)
+        + len(grid.plan.cell_positions) * 4 * len(names)
+        + (64 << 20)
+    )
     if shutil.disk_usage(scratch_folder).free < required:
         raise FimEngineError(
             f"horizontal staging needs at least {required} free bytes on the output volume"
@@ -73,9 +100,21 @@ def run_batch(
     with tempfile.TemporaryDirectory(prefix=".horizontal-", dir=scratch_folder) as tmp:
         root = Path(tmp)
         staging_started = time.perf_counter()
-        owner = grid.owner.astype("<i4", copy=False).view("<u4")
-        _write_array(root / "owner.bin", owner)
-        del owner
+        geometry_fields = {}
+        if grid.owner is None:
+            _write_geometry(
+                root / "cells.wkb",
+                ordered.geometry.iloc[grid.plan.cell_positions].to_numpy(),
+            )
+            geometry_fields["geometry_file"] = "cells.wkb"
+            if grid.plan.mask_geometry:
+                _write_geometry(root / "aoi.wkb", [grid.plan.geometry])
+                geometry_fields["aoi_file"] = "aoi.wkb"
+        else:
+            owner = grid.owner.astype("<i4", copy=False).view("<u4")
+            _write_array(root / "owner.bin", owner)
+            geometry_fields["owner_file"] = "owner.bin"
+            del owner
         details.setdefault("timings", {})["owner_staging_seconds"] = (
             time.perf_counter() - staging_started
         )
@@ -109,7 +148,7 @@ def run_batch(
             "crs_identity": identity["crs_identity"],
             "terrain_transform": list(grid.plan.transform.to_gdal()),
             "window": [int(v) for v in grid.plan.window.flatten()],
-            "owner_file": "owner.bin",
+            **geometry_fields,
             "cell_count": len(grid.plan.cell_positions),
             "profiles": profiles,
             "min_depth": float(min_depth),
@@ -131,7 +170,12 @@ def run_batch(
         received_statuses = {}
         with (root / "stderr.txt").open("w+b") as errors:
             proc = subprocess.Popen(
-                [str(engine), "horizontal", str(root / "request.json"), str(root / "out")],
+                [
+                    str(engine),
+                    "horizontal",
+                    str(root / "request.json"),
+                    str(root / "out"),
+                ],
                 stdout=subprocess.PIPE,
                 stderr=errors,
             )
@@ -208,13 +252,16 @@ def run_batch(
                     raise FimEngineError("invalid horizontal stream JSON") from exc
                 if not isinstance(header, dict):
                     raise FimEngineError("horizontal stream header is not an object")
-                if header.get("id") != name or header.get("status") not in ("complete", "failed"):
+                if header.get("id") != name or header.get("status") not in (
+                    "complete",
+                    "failed",
+                ):
                     raise FimEngineError("horizontal stream profile/order mismatch")
                 received.append(name)
                 received_statuses[name] = header["status"]
                 if header["status"] == "failed":
                     return header
-                if header.get("pixels") != grid.owner.size:
+                if header.get("pixels") != pixels:
                     raise FimEngineError("horizontal stream pixel count mismatch")
                 result = {"status": "complete"}
                 for product in ("depth", "wse"):

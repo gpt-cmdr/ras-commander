@@ -33,7 +33,7 @@ class GridPlan:
 @dataclass(frozen=True)
 class HorizontalGrid:
     plan: GridPlan
-    owner: np.ndarray
+    owner: np.ndarray | None
     ground: np.ndarray
 
 
@@ -111,6 +111,16 @@ def plan_grid(
     # polygonization are not a hard process-RSS limit.
     pixels = int(window.width * window.height)
     planned = pixels * 40 + len(positions) * 64 + (64 << 20) + transient if pixels else 0
+    if native and pixels:
+        # Bound framed 2D WKB plus decoded geometry/terrio shape storage before allocation.
+        geoms = cells.geometry.iloc[positions].to_numpy()
+        transport = int(shapely.get_num_coordinates(geoms).sum()) * 16 + len(geoms) * 128
+        transport += int(shapely.get_num_interior_rings(geoms).sum()) * 4
+        if shape is not None:
+            parts = shapely.get_parts(shape)
+            transport += int(shapely.get_num_coordinates(parts).sum()) * 16 + len(parts) * 128
+            transport += int(shapely.get_num_interior_rings(parts).sum()) * 4
+        planned += transport * 12
     if planned > max_working_mib * (1 << 20):
         raise FimUnsupportedError(
             f"horizontal window planned {planned} bytes exceeds max_working_mib={max_working_mib}; "
@@ -137,7 +147,9 @@ def prepare_grid(
 
     if not all(plan.shape):
         return HorizontalGrid(
-            plan, np.zeros(plan.shape, dtype=np.int32), np.zeros(plan.shape, dtype=np.float32)
+            plan,
+            np.zeros(plan.shape, dtype=np.int32),
+            np.zeros(plan.shape, dtype=np.float32),
         )
     cells = cells.iloc[plan.cell_positions]
     import shapely
@@ -165,6 +177,9 @@ def prepare_grid(
             intersections = shapely.intersection(geometry, candidates[interiors])
             if (shapely.area(intersections) > 0).any():
                 raise FimUnsupportedError("horizontal cells have overlapping interiors")
+    if not read_terrain:
+        # Rust owns rasterization, AOI masking and terrain for the native path.
+        return HorizontalGrid(plan, None, np.empty((0, 0), dtype=np.float32))
     with rasterio.Env(GDAL_CACHEMAX=64 << 20), rasterio.open(terrain_path) as src:
         ground = (
             src.read(1, window=plan.window, masked=True).filled(np.nan)

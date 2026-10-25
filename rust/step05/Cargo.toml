@@ -1,6 +1,6 @@
 [package]
 name = "ras2fim-stages-r2"
-version = "0.2.0"
+version = "0.3.0"
 edition = "2024"
 license = "MIT"
 publish = false
@@ -11,8 +11,10 @@ name = "ras2fim-batch"
 path = "src/main.rs"
 
 [dependencies]
-# GeoTIFF window reads only. GDAL stays disabled (default features off).
+# Native terrain and polygon rasterization; GDAL remains disabled.
 terrio = { version = "=0.4.2", default-features = false, features = ["geotiff"] }
+wbvector = "=0.1.6"
+wbraster = "=0.2.1"
 rayon = "1.10"
 rstar = "=0.13.0"
 serde = { version = "1", features = ["derive"] }

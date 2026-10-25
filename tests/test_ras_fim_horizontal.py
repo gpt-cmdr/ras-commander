@@ -103,7 +103,8 @@ def test_horizontal_depth_filter_ownership_nodata_and_shared_prepare(scene, monk
 def test_horizontal_polygon_hole_is_masked_crop(scene):
     full = run(scene, "full", min_depth=0.5)
     polygon = Polygon(
-        [(1, 1), (19, 1), (19, 19), (1, 19)], holes=[[(5, 5), (15, 5), (15, 15), (5, 15)]]
+        [(1, 1), (19, 1), (19, 19), (1, 19)],
+        holes=[[(5, 5), (15, 5), (15, 15), (5, 15)]],
     )
     cut = run(scene, "cut", min_depth=0.5, polygon=polygon, aoi_crs="EPSG:2278")
     with rasterio.open(full.iloc[0].depth_tif) as ds:
@@ -199,7 +200,12 @@ def test_horizontal_aoi_between_disconnected_cells_is_empty(scene):
     cells = cells.iloc[:2].copy()
     cells.geometry = [box(0, 0, 5, 20), box(15, 0, 20, 20)]
     rows = RasFim.map_horizontal_profiles(
-        cells, terrain, root / "gap", backend="numpy", bbox=(6, 5, 14, 15), max_working_mib=1
+        cells,
+        terrain,
+        root / "gap",
+        backend="numpy",
+        bbox=(6, 5, 14, 15),
+        max_working_mib=1,
     )
     assert (rows.status == "empty_aoi").all()
     assert not list((root / "gap").glob("*.tif"))
@@ -299,11 +305,19 @@ def test_native_comparison_uses_horizontal_and_restores_rasmap(scene, monkeypatc
         RasMap,
         "list_terrain_layers",
         lambda *a, **k: pd.DataFrame(
-            [{"name": "terrain", "filename": str(terrain), "resolved_path": str(terrain)}]
+            [
+                {
+                    "name": "terrain",
+                    "filename": str(terrain),
+                    "resolved_path": str(terrain),
+                }
+            ]
         ),
     )
     monkeypatch.setattr(
-        RasProcess, "get_store_maps_runtime_provenance", lambda *a: {"test_runtime": True}
+        RasProcess,
+        "get_store_maps_runtime_provenance",
+        lambda *a: {"test_runtime": True},
     )
     mapper = RasFim.map_horizontal_profiles
 
@@ -430,7 +444,8 @@ def test_rust_horizontal_block_seams_polygon_and_float32(scene, tiled, threshold
         crs="EPSG:2278",
     )
     polygon = Polygon(
-        [(3, 4), (43, 4), (43, 34), (3, 34)], holes=[[(8, 8), (12, 8), (12, 12), (8, 12)]]
+        [(3, 4), (43, 4), (43, 34), (3, 34)],
+        holes=[[(8, 8), (12, 8), (12, 12), (8, 12)]],
     )
     reference = RasFim.map_horizontal_profiles(
         cells,
@@ -475,10 +490,16 @@ def test_horizontal_stream_report_mismatch_removes_products(scene, monkeypatch):
     from ras_commander.fim import _horizontal_engine
     from ras_commander.fim.errors import FimEngineError
 
-    method = {"method_id": "horizontal-cell-constant/1", "stream_outputs": True}
+    method = {
+        "method_id": "horizontal-cell-constant/1",
+        "stream_outputs": True,
+        "native_ownership": True,
+    }
     monkeypatch.setattr(_engine, "engine_method", lambda *a: {"horizontal": method})
     monkeypatch.setattr(
-        _engine, "terrain_identity", lambda *a: {"epsg": 2278, "crs_identity": {"kind": "epsg"}}
+        _engine,
+        "terrain_identity",
+        lambda *a: {"epsg": 2278, "crs_identity": {"kind": "epsg"}},
     )
 
     class FakeProcess:
@@ -530,7 +551,11 @@ def test_horizontal_stream_report_mismatch_removes_products(scene, monkeypatch):
     cells, terrain, root = scene
     with pytest.raises(FimEngineError, match="inconsistent horizontal engine report"):
         RasFim.map_horizontal_profiles(
-            cells, terrain, root / "bad-report", engine_path=sys.executable, write_floodplain=False
+            cells,
+            terrain,
+            root / "bad-report",
+            engine_path=sys.executable,
+            write_floodplain=False,
         )
     assert not list((root / "bad-report").glob("*.tif"))
     doc = json.loads((root / "bad-report/fim_manifest.json").read_text())
@@ -605,7 +630,11 @@ def test_horizontal_rejects_invalid_writer_worker_count(scene, workers):
     cells, terrain, root = scene
     with pytest.raises(ValueError, match="writer_threads"):
         RasFim.map_horizontal_profiles(
-            cells, terrain, root / "bad-workers", backend="numpy", writer_threads=workers
+            cells,
+            terrain,
+            root / "bad-workers",
+            backend="numpy",
+            writer_threads=workers,
         )
     assert not (root / "bad-workers").exists()
 
@@ -640,7 +669,8 @@ def test_horizontal_overlap_topology_edge_cases(scene, kind):
     else:
         second = box(9.999, 0, 20, 10)
     frame = gpd.GeoDataFrame(
-        {"cell_idx": [0, 1], "wsel_a": [103.0, 103.0], "geometry": [first, second]}, crs=cells.crs
+        {"cell_idx": [0, 1], "wsel_a": [103.0, 103.0], "geometry": [first, second]},
+        crs=cells.crs,
     )
     if kind == "sliver":
         with pytest.raises(FimUnsupportedError, match="overlapping interiors"):
@@ -657,3 +687,68 @@ def test_horizontal_owner_view_does_not_copy_or_change_bits():
     staged = owner.astype("<i4", copy=False).view("<u4")
     assert np.shares_memory(owner, staged)
     assert staged.tobytes() == owner.astype("<u4").tobytes()
+
+
+@pytest.mark.parametrize("workers", [1, 4, 8])
+@pytest.mark.parametrize("multipart", [False, True])
+def test_native_terrio_owns_boundary_and_polygon_mask(scene, monkeypatch, workers, multipart):
+    import os
+    from shapely.geometry import MultiPolygon
+    from rasterio import features
+
+    engine = os.environ.get("RAS_COMMANDER_FIM_HORIZONTAL_ENGINE")
+    if not engine:
+        pytest.skip("set RAS_COMMANDER_FIM_HORIZONTAL_ENGINE to the rebuilt engine")
+    cells, terrain, root = scene
+    # Put a shared boundary exactly on pixel centres, with distinct cell values.
+    cells.loc[0, "geometry"] = box(0, 0, 10.5, 10)
+    cells.loc[1, "geometry"] = box(10.5, 0, 20, 10)
+    polygon = Polygon(
+        [(1, 1), (19, 1), (19, 19), (1, 19)], holes=[[(5, 5), (8, 5), (8, 8), (5, 8)]]
+    )
+    if multipart:
+        polygon = MultiPolygon([polygon, box(0, 0, 0.75, 0.75)])
+    kw = dict(polygon=polygon, aoi_crs=cells.crs, min_depth=0.5, write_floodplain=False)
+    reference = RasFim.map_horizontal_profiles(
+        cells, terrain, root / "reference", backend="numpy", **kw
+    )
+
+    def forbidden(*args, **kwargs):
+        raise AssertionError("native ownership and AOI masking must not call GDAL rasterization")
+
+    monkeypatch.setattr(features, "rasterize", forbidden)
+    monkeypatch.setattr(features, "geometry_mask", forbidden)
+    actual = RasFim.map_horizontal_profiles(
+        cells, terrain, root / "native", engine_path=engine, threads=workers, **kw
+    )
+    for expected, result in zip(reference.itertuples(), actual.itertuples()):
+        for product in ("depth_tif", "wse_tif"):
+            with rasterio.open(getattr(expected, product)) as a, rasterio.open(
+                getattr(result, product)
+            ) as b:
+                assert a.transform == b.transform and a.crs == b.crs
+                np.testing.assert_array_equal(a.read(1).view("u4"), b.read(1).view("u4"))
+    details = json.loads((root / "native/fim_manifest.json").read_text())
+    assert details["engine_report"]["ownership_backend"] == "terrio"
+    assert details["engine_report"]["threads"] == workers
+
+
+def test_native_ownership_rejects_old_engine_without_rasterizing(scene, monkeypatch):
+    import sys
+    from rasterio import features
+    from ras_commander.fim.errors import FimEngineError
+
+    monkeypatch.setattr(
+        _engine,
+        "engine_method",
+        lambda *a: {
+            "horizontal": {"method_id": "horizontal-cell-constant/1", "stream_outputs": True}
+        },
+    )
+    monkeypatch.setattr(
+        features, "rasterize", lambda *a, **k: pytest.fail("unexpected GDAL fallback")
+    )
+    with pytest.raises(FimEngineError, match="native terrio ownership"):
+        RasFim.map_horizontal_profiles(
+            scene[0], scene[1], scene[2] / "old", engine_path=sys.executable
+        )

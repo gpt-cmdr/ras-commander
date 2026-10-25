@@ -21,6 +21,7 @@ pub mod cache;
 pub mod horizontal;
 pub mod interp;
 pub mod model;
+pub mod ownership;
 pub mod scipy_interp;
 pub mod session;
 pub mod sink;

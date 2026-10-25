@@ -28,7 +28,12 @@ pub struct Request {
     pub crs_identity: CrsIdentity,
     pub terrain_transform: [f64; 6],
     pub window: [usize; 4], // col, row, width, height
+    #[serde(default)]
     pub owner_file: String, // u32 little endian, 0=dry, i+1=cell table position
+    #[serde(default)]
+    pub geometry_file: Option<String>,
+    #[serde(default)]
+    pub aoi_file: Option<String>,
     pub cell_count: usize,
     pub profiles: Vec<Profile>,
     pub min_depth: f64,
@@ -47,7 +52,8 @@ pub struct Profile {
 pub fn method_record() -> Value {
     json!({"method_id":"horizontal-cell-constant/1", "backend":"rust", "stream_outputs":true,
         "arithmetic":"float32 cell WSE minus float32 terrain; strict float32 depth threshold",
-        "ownership":"caller-supplied centre-based u32 labels; 0 dry; cell position + 1",
+        "ownership":"terrio pixel-centre polygons or supplied u32 labels; 0 dry; cell position + 1",
+        "native_ownership":true,
         "terrain":"same-CRS north-up square float32 GeoTIFF; native terrio block reads once per window",
         "reuse":"terrain and ownership shared across all profiles; pixel parallelism inside bounded Rayon pool",
         "scope":"2D horizontal cells only; no native sloping, 1D or structure renderer"})
@@ -201,7 +207,19 @@ pub fn run(req: &Request, base: &Path, out: &Path) -> Result<Value, MapError> {
             "terrain block exceeds 64 MiB; export tiled terrain".into(),
         ));
     }
+    let geometry_bytes = [req.geometry_file.as_ref(), req.aoi_file.as_ref()]
+        .into_iter()
+        .flatten()
+        .try_fold(0_u64, |sum, name| -> Result<u64, MapError> {
+            sum.checked_add(fs::metadata(model::resolve(base, name))?.len())
+                .ok_or_else(|| MapError::Budget("geometry size overflow".into()))
+        })?;
+    let geometry_plan = geometry_bytes
+        .checked_mul(12)
+        .ok_or_else(|| MapError::Budget("geometry size overflow".into()))?;
     let admitted = planned
+        .checked_add(geometry_plan)
+        .ok_or_else(|| MapError::Budget("geometry plan overflow".into()))?
         .checked_add(terrain.decoder_transient_bytes_per_load())
         .ok_or_else(|| MapError::Budget("terrain transient size overflow".into()))?;
     if admitted > req.max_working_bytes {
@@ -211,7 +229,14 @@ pub fn run(req: &Request, base: &Path, out: &Path) -> Result<Value, MapError> {
     }
     // Check all lengths before reading pixel arrays.
     let owner_path = model::resolve(base, &req.owner_file);
-    if fs::metadata(&owner_path)?.len() != bytes(count, 4)? {
+    if req.geometry_file.is_some() == !req.owner_file.is_empty()
+        || (req.aoi_file.is_some() && req.geometry_file.is_none())
+    {
+        return Err(MapError::Invalid(
+            "supply geometry_file or owner_file, exclusively".into(),
+        ));
+    }
+    if req.geometry_file.is_none() && fs::metadata(&owner_path)?.len() != bytes(count, 4)? {
         return Err(MapError::Invalid("owner length mismatch".into()));
     }
     for p in &req.profiles {
@@ -229,15 +254,60 @@ pub fn run(req: &Request, base: &Path, out: &Path) -> Result<Value, MapError> {
     sink::write_json(&out.join("report.json"), &report)?;
     let execution = std::panic::catch_unwind(std::panic::AssertUnwindSafe(
         || -> Result<(), MapError> {
-            let raw = read_bytes(&owner_path, bytes(count, 4)?)?;
-            let owner: Vec<_> = raw
-                .chunks_exact(4)
-                .map(|v| u32::from_le_bytes(v.try_into().unwrap()))
-                .collect();
-            drop(raw);
+            let pool = rayon::ThreadPoolBuilder::new()
+                .num_threads(req.threads)
+                .build()
+                .map_err(|e| MapError::Internal(e.to_string()))?;
+            let owner_started = Instant::now();
+            let owner = if let Some(name) = &req.geometry_file {
+                let grid = terrio::ops::rasterize::Grid {
+                    geo_transform: [
+                        terrain.gt[0] + col as f64 * terrain.gt[1],
+                        terrain.gt[1],
+                        0.,
+                        terrain.gt[3] + row as f64 * terrain.gt[5],
+                        0.,
+                        terrain.gt[5],
+                    ],
+                    cols: width,
+                    rows: height,
+                    crs: Default::default(),
+                };
+                let cells =
+                    crate::ownership::load(&model::resolve(base, name), req.cell_count, false)?;
+                let mut labels = pool.install(|| crate::ownership::burn(cells, grid.clone()))?;
+                if let Some(mask) = &req.aoi_file {
+                    let layer = crate::ownership::load(&model::resolve(base, mask), 1, true)?;
+                    let mask = pool.install(|| crate::ownership::burn(layer, grid))?;
+                    pool.install(|| {
+                        labels
+                            .par_iter_mut()
+                            .zip(mask.par_iter())
+                            .for_each(|(v, m)| {
+                                if *m == 0 {
+                                    *v = 0
+                                }
+                            })
+                    });
+                }
+                labels
+            } else {
+                let raw = read_bytes(&owner_path, bytes(count, 4)?)?;
+                raw.chunks_exact(4)
+                    .map(|v| u32::from_le_bytes(v.try_into().unwrap()))
+                    .collect::<Vec<_>>()
+            };
             if owner.iter().any(|v| *v as usize > req.cell_count) {
                 return Err(MapError::Invalid("owner index exceeds cell table".into()));
             }
+            report["ownership_prepare_seconds"] = owner_started.elapsed().as_secs_f64().into();
+            report["ownership_backend"] = if req.geometry_file.is_some() {
+                "terrio"
+            } else {
+                "supplied"
+            }
+            .into();
+            let terrain_started = Instant::now();
             let mut ground = vec![f32::NAN; count];
             let (bw, bh) = terrain.block;
             for by in row / bh..=(row + height - 1) / bh {
@@ -259,11 +329,7 @@ pub fn run(req: &Request, base: &Path, out: &Path) -> Result<Value, MapError> {
                     }
                 }
             }
-            report["terrain_prepare_seconds"] = started.elapsed().as_secs_f64().into();
-            let pool = rayon::ThreadPoolBuilder::new()
-                .num_threads(req.threads)
-                .build()
-                .map_err(|e| MapError::Internal(e.to_string()))?;
+            report["terrain_prepare_seconds"] = terrain_started.elapsed().as_secs_f64().into();
             for p in &req.profiles {
                 let tick = Instant::now();
                 let dir = out.join(&p.id);

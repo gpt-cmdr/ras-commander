@@ -54,6 +54,11 @@ jobs:
           python tests/smoke_engine_wheel.py
           python -m pip install -e '.[fim]' pytest
           python -c "import os, shutil, pytest; os.environ['RAS_COMMANDER_FIM_HORIZONTAL_ENGINE'] = shutil.which('ras2fim-batch'); raise SystemExit(pytest.main(['tests/test_ras_fim_horizontal.py', '-q']))"
+      - name: Rust engine regression tests
+        shell: bash
+        run: |
+          rustup toolchain install 1.99.1 --profile minimal
+          cargo +1.99.1 test --locked --manifest-path rust/step05/Cargo.toml
       - name: Hash wheel artifacts
         shell: python
         run: |
