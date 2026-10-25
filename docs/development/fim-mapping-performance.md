@@ -53,7 +53,7 @@ The Rust backend reads the constrained terrain blocks through terrio once,
 then reuses terrain and ownership for every profile. Pixel arithmetic runs
 in its bounded Rayon pool. Profiles stream directly to Python's GIS writer;
 no per-profile binary scratch rasters accumulate. The explicit NumPy backend
-is a numerical reference, not a fallback. Engine 0.2 wheels for Linux and
+is a numerical reference, not a fallback. Engine 0.3 wheels for Linux and
 Windows include both the unchanged Step05 path and the horizontal capability.
 
 ### Agreement evidence
@@ -99,7 +99,7 @@ missing-WSE counts and configuration-restoration hashes.
 
 ### Direct comparison with native horizontal RAS Mapper
 
-A full-domain Spring Creek p01 `Max` run compared the current Rust horizontal
+A full-domain Spring Creek p01 `Max` run compared the 0.2 Rust horizontal
 pipeline with native HEC-RAS 7.0.1 horizontal stored maps. Both used the
 original registered terrain, all 340,163 physical cells, four allowed logical
 CPUs, the same strict `depth > 0.5 ft` filter, and depth/WSE LZW delivery
@@ -244,12 +244,76 @@ shortcuts. Horizontal scaling opportunities include bounded bulk overlap
 validation, persistent prepared-grid reuse and reducing the process boundary.
 Each needs separate equality and paired-throughput evidence before adoption.
 
+## Native terrio ownership rebuild, 2026-10-25
+
+Engine 0.3 moves horizontal cell ownership and polygon masking into Rust,
+using terrio 0.4.2 inside the bounded Rayon pool. Python validates the selected
+cell topology and stages compact, framed 2D WKB. Rust consumes the returned
+integer ownership buffer directly and reuses it with terrain across profiles.
+The native path avoids GDAL rasterization and full-grid ownership staging.
+The float32 gather, subtraction and strict depth cutoff are unchanged.
+
+Both rebuilt x86-64 wheels pass installed Step05 and horizontal file/stream
+smoke tests and 49 horizontal tests per platform. Rust suites pass 46 tests
+on Linux and 45 on Windows; five external-fixture tests are ignored on each.
+The local Windows API/schema run passes 131 tests with four external-fixture
+skips. Real-model qualification covers Spring River, Spring Creek and Bald
+Eagle: bbox and multipart polygons with holes at 1, 4 and 8 requested workers,
+18 checks per platform. All float32 depth/WSE bits agree with the explicit
+NumPy/GDAL reference. These worker-count checks establish equality, not a
+throughput scaling curve. Wheel/source hashes and build provenance are in
+`wheels/BUILD.json`.
+
+The full Spring Creek benchmark compares the retained 0.2 engine with GDAL
+ownership against the rebuilt 0.3 engine. Both use the same physical cells,
+terrain, profiles, float32 arithmetic, LZW products and strict >0.5-ft filter.
+Input loading and selected HDF reads are outside timing. Complete calls
+include geometry validation, preparation, staging, mapping, product writing
+and manifests. Four Rust workers and four compression workers share the same
+four-logical-CPU affinity budget. All primary pairs use C: NVMe terrain,
+output and scratch. Completed outputs and discarded diagnostics were moved
+to G: with per-file SHA-256 verification before the catalog rerun; source
+models remain on C:.
+
+| Workload / pair | 0.2 with GDAL ownership (s) | 0.3 native terrio (s) | Observed ratio |
+|---|---:|---:|---:|
+| Single maximum map / first pair | 128.835 | 51.078 | 2.52× |
+| Single maximum map / reversed-order pair | 66.559 | 43.950 | 1.51× |
+| Seven actual timesteps / one paired catalog | 311.435 | 162.775 | 1.91× |
+
+These are shared-workstation observations with uncontrolled load and cache
+state. Ownership setup is amortized across catalog profiles; profile
+arithmetic and GIS output remain common costs. These observations do not
+isolate the effect of storage speed or host contention. The single-map second
+pair spends 39.1 s in old Python validation/rasterization versus 19.2 s in new
+Python validation and 1.2 s in Rust ownership preparation. Rust ownership
+timing includes WKB decoding, shape preparation and fill. Pipeline stream
+reads include waits and engine timing includes output backpressure; do not
+add overlapping stages as independent compute costs.
+
+All 18 full-model delivery comparisons match grids, metadata and every
+float32 pixel bit, including nodata. Each raster contains 411,674,756 pixels;
+the maximum map has 79,872,550 wet pixels. The seven 12-hour saved timesteps
+span the dry initial state through 72 hours and total 182,956,389 wet
+pixel-times. A dry timestep is a valid `no_flooded_pixels` product. This rebuild
+comparison uses the retained engine and reference; native RAS Mapper
+evidence remains the separately scoped comparison above.
+
+Primary timings have no process/RSS sampling thread. An initial instrumented
+run was excluded because process-tree sampling consumed substantial CPU.
+An unpaired local catalog sample and a legacy scratch-space preflight failure
+are also excluded. The earlier paired G: catalog experiment is retained as
+secondary evidence; the table reports the C: rerun.
+No sampled peak-memory claim is made. Native ownership avoids staging the
+approximately 1.65-GB integer grid, and planned admission includes geometry
+storage; admission remains a plan rather than a hard process RSS limit.
+
 ## Proposed engine packaging
 
 Package the mapping engine separately as **`ras-commander-fast-fim`**, following
 [ras-commander-fast-hdf](https://github.com/gpt-cmdr/ras-commander-fast-hdf).
 This is a proposed extraction, not the installation name of the retained
-`ras2fim-engine` 0.2.0 test wheels in this PR.
+`ras2fim-engine` 0.3.0 test wheels in this PR.
 
 The separate repository should own the Rust mapping crate, method contracts,
 CLI, optional PyO3 bindings, native tests, notices and platform-wheel release
@@ -265,7 +329,7 @@ orchestration and notebooks. The mapping package should not depend on
 Commander or invoke HEC-RAS. Both Commander and ras2fim-2D can then depend on
 one versioned engine instead of maintaining duplicate source trees.
 
-An in-process binding could remove executable startup and owner/WSE staging
+An in-process binding could remove executable startup and geometry/WSE staging
 costs observed in the current CLI path. It should expose a prepared mapping
 context that owns terrain/ownership for repeated or chunked profile batches,
 releases the GIL during native computation, bounds allocations and threads,

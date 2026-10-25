@@ -752,3 +752,21 @@ def test_native_ownership_rejects_old_engine_without_rasterizing(scene, monkeypa
         RasFim.map_horizontal_profiles(
             scene[0], scene[1], scene[2] / "old", engine_path=sys.executable
         )
+
+
+def test_native_geometry_transport_preserves_order_holes_and_multipart(tmp_path):
+    import struct
+    import shapely
+    from shapely.geometry import MultiPolygon
+    from ras_commander.fim._horizontal_engine import _write_geometry
+
+    first = Polygon([(0, 0), (9, 0), (9, 9), (0, 9)], holes=[[(2, 2), (3, 2), (3, 3), (2, 3)]])
+    geometries = [first, MultiPolygon([box(10, 0, 11, 1), box(12, 0, 13, 1)])]
+    path = tmp_path / "geometry.wkb"
+    _write_geometry(path, geometries)
+    with path.open("rb") as source:
+        for expected in geometries:
+            length = struct.unpack("<I", source.read(4))[0]
+            actual = shapely.from_wkb(source.read(length))
+            assert actual.equals_exact(expected, 0)
+        assert source.read(1) == b""

@@ -11,7 +11,7 @@ or Windows x86-64 engine wheel into the same environment:
 
 ```bash
 pip install "ras-commander[fim]"
-pip install /path/to/ras2fim_engine-0.1.0-py3-none-<platform>.whl
+pip install /path/to/ras2fim_engine-0.3.0-py3-none-<platform>.whl
 ras2fim-batch method
 ```
 
@@ -24,17 +24,18 @@ target glibc 2.28 or newer. The wheel installs `ras2fim-batch` on the environmen
 The Python GIS stack remains required. Source builds are also supported.
 The workflow does not publish to PyPI. Installed-binary synthetic mapping tests
 run on both platforms. Step05 numerical qualification used Linux; horizontal
-corpus comparisons used Windows.
+corpus checks passed on both Linux and Windows.
 
 ## Horizontal cell mapping
 
 Use `map_horizontal_profiles` when a cell-constant horizontal water surface is
 the intended mapping method. It prepares terrain and pixel-to-cell ownership
 once, then gathers the owning cell's WSE for every profile. Rust reads native
-terrain blocks through terrio and reuses the decoded window; Python prepares
-the centre-based ownership raster and writes final GIS products. It avoids convex
+terrain blocks through terrio and reuses the decoded window. The native engine
+also rasterizes the validated cells and polygon AOI through terrio, preserving
+pixel-centre inclusion and feature order; Python writes final GIS products. It avoids convex
 hulls, Delaunay triangulation and full-grid reprojection lookups. The Rust
-backend is the default and requires the 0.2 engine wheel. The explicit
+backend is the default and requires the 0.3 engine wheel. The explicit
 `backend="numpy"` reference backend is retained for numerical qualification;
 there is no automatic fallback.
 
@@ -53,7 +54,7 @@ manifest = RasFim.map_horizontal_profiles(
 )
 ```
 
-`threads` caps Rust pixel workers; `writer_threads` caps GeoTIFF compression
+`threads` caps terrio rasterization and Rust pixel workers; `writer_threads` caps GeoTIFF compression
 workers and defaults to one. The pools can overlap when Rust prepares the
 next profile while Python writes the current one. Budget both pools for
 catalog runs; four workers in each can use up to eight worker threads.
@@ -61,6 +62,12 @@ The writer setting overrides a caller GDAL_NUM_THREADS value, including
 at its default of one. Compression uses a scoped [GDAL thread setting](https://gdal.org/en/stable/drivers/raster/gtiff.html#creation-options)
 and restores the caller's previous setting. These controls do not change
 float32 values, pixel ownership, the strict cutoff or the LZW output format.
+
+Ownership and polygon masks are created once inside the native engine, without
+staging a full ownership raster through Python. Compact 2D polygon geometry is
+staged once per batch. The geometry/decode allocation plan is checked before
+raster allocation; planned admission is not a hard process memory limit. Older
+engines raise an explicit version error rather than falling back.
 
 The terrain must be a single-band float32 GeoTIFF with declared nodata,
 north-up square pixels, and the same CRS as the cells. Output stays on that
@@ -92,7 +99,7 @@ timings. `samples=0` because there is no interpolation. The
 planned array admission budget excludes optional
 floodplain polygonization and unaccounted runtime overhead; it is not a hard
 process-memory cap. Rust profile arrays are streamed to the Python GIS writer
-without retaining binary scratch rasters. Ownership and WSE staging uses the
+without retaining binary scratch rasters. Geometry and WSE staging use the
 output volume, with a free-space check for staging only; final GeoTIFF space
 is not included. `timeout` defaults to `None`. When set, it bounds the Rust
 process and pipe-consumer lifetime, including product-writing backpressure.
