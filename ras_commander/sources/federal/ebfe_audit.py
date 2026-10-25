@@ -383,6 +383,25 @@ def _referenced_elements(bundle: "AuditBundle") -> dict:
     return out
 
 
+def _analysis_gap_is_settled(review: dict, *, dss: bool = False, delivery: bool = False) -> bool:
+    """Accept a review for the question its evidence answers.
+
+    DSS filename matches do not establish record availability. An exact
+    relative path establishes file delivery only; catalog record matches can
+    also settle an unresolved boundary reference.
+    """
+    if review.get("verdict") != "analysis_gap":
+        return False
+    if not dss:
+        return True
+    method = str(review.get("method") or "")
+    if method in ("dss_pathname_match", "dss_record_match"):
+        return True
+    if method in ("archive_member_match", "exact_relative_path"):
+        return delivery and method == "exact_relative_path"
+    return review.get("record_proven") is True
+
+
 def _delivered_elements(bundle: AuditBundle) -> dict:
     """Best available present/absent per supporting element, with location."""
     audit = bundle.audit
@@ -404,9 +423,11 @@ def _delivered_elements(bundle: AuditBundle) -> dict:
             # layer *is* in the delivery -- the capture looked in the wrong place.
             # Reporting it as an acquisition would hatch the study on the map for
             # data FEMA shipped (North Bosque's Manning's n, Lower Brazos's land
-            # cover). The review is the later, independent word; it wins.
+            # cover). DSS reviews must establish delivery at the referenced
+            # path or record availability; a basename match cannot do that.
             review = entry.get("review") or {}
-            if review.get("verdict") == "analysis_gap" and entry.get("state") in ("no", "partial", "source_only"):
+            if (_analysis_gap_is_settled(review, dss=key == "dss", delivery=True)
+                    and entry.get("state") in ("no", "partial", "source_only")):
                 evidence = str(review.get("evidence") or "")
                 member = evidence.split("::", 1)[1] if "::" in evidence else None
                 entry["state_as_captured"] = entry.get("state")
@@ -660,13 +681,16 @@ def _group_gaps(bundle: AuditBundle) -> dict:
     Honours the deficiency review: a gap whose ``review.verdict`` is
     ``analysis_gap`` was *ours*, not FEMA's -- the file exists under another
     path or case, or a detector disagreed with the rows. Those are pulled out
-    of "still missing" and "must obtain" and reported separately, so an
-    engineer never chases a gap in our own analysis.
+    of "still missing" and "must obtain" and reported separately. DSS references
+    require record-level evidence; finding a filename alone leaves the
+    reference unresolved.
     """
     grouped: dict[str, Counter] = defaultdict(Counter)
+    unverified: dict[str, Counter] = defaultdict(Counter)
     example_source: dict[tuple, str] = {}
     by_verdict: Counter = Counter()
     analysis_counts: Counter = Counter()
+    unsettled_reviews = 0
     analysis_evidence: dict[str, str] = {}
     for gap in bundle.gaps:
         if gap.get("gap") != "MISSING_REFERENCE":
@@ -674,6 +698,12 @@ def _group_gaps(bundle: AuditBundle) -> dict:
         raw = str(gap.get("raw_value", ""))
         review = gap.get("review") or {}
         verdict = review.get("verdict") or "unreviewed"
+        is_dss = (Path(raw.replace("\\", "/")).suffix.lower() == ".dss"
+                  or "dss" in str(gap.get("role") or "").lower()
+                  or gap.get("surface") == "dss_pathname")
+        if verdict == "analysis_gap" and not _analysis_gap_is_settled(review, dss=is_dss):
+            verdict = "unverifiable"
+            unsettled_reviews += 1
         by_verdict[verdict] += 1
         if verdict == "analysis_gap":
             analysis_counts[raw] += 1
@@ -695,6 +725,8 @@ def _group_gaps(bundle: AuditBundle) -> dict:
         else:
             group = f"Other ({ext or 'no extension'})"
         grouped[group][raw] += 1
+        if verdict == "unverifiable":
+            unverified[group][raw] += 1
         example_source.setdefault((group, raw), gap.get("source_file", ""))
     # Element-level reclassifications: a supporting layer the capture called
     # absent that the review found among the archive members. Listed with the
@@ -702,12 +734,15 @@ def _group_gaps(bundle: AuditBundle) -> dict:
     labels = dict(SUPPORTING_ELEMENTS)
     for ekey, entry in (bundle.audit.get("supporting_elements") or {}).items():
         review = (entry or {}).get("review") or {}
-        if review.get("verdict") == "analysis_gap" and entry.get("state") in ("no", "partial", "source_only"):
+        if (_analysis_gap_is_settled(review, dss=ekey == "dss", delivery=True)
+                and entry.get("state") in ("no", "partial", "source_only")):
             label = labels.get(ekey, ekey)
             analysis_counts[f"{label} (layer)"] += int(entry.get("referenced_count") or 1)
             analysis_evidence.setdefault(f"{label} (layer)", str(review.get("evidence", "")))
     return {
         "groups": grouped,
+        "unverified": unverified,
+        "unsettled_reviews": unsettled_reviews,
         "sources": example_source,
         "by_verdict": by_verdict,
         "analysis_gaps": [
@@ -790,6 +825,8 @@ def render_audit_markdown(bundle: AuditBundle) -> str:
     needs_external = any(a.kind == "acquisition" for a in actions)
     if not total or loaded < total:
         runnable = "no -- one or more projects will not open"
+    elif grouped["by_verdict"].get("unverifiable") and not needs_external:
+        runnable = "not established -- unresolved references need verification"
     elif not actions and grouped["groups"]:
         runnable = "no -- unresolved references are missing from the delivery"
     elif not actions:
@@ -876,7 +913,8 @@ def render_audit_markdown(bundle: AuditBundle) -> str:
     # is the fallback for captures that predate the review.
     review = audit.get("deficiency_review") or {}
     if review.get("reported") is not None:
-        w(f"| Reported gaps | {review.get('reported', 0)} reported: "
+        tally_label = "Captured review tally" if grouped["unsettled_reviews"] else "Reported gaps"
+        w(f"| {tally_label} | {review.get('reported', 0)} reported: "
           f"**{review.get('real', 0)} real**, "
           f"{review.get('analysis_gap', 0)} were gaps in our analysis, "
           f"{review.get('unverifiable', 0)} unverifiable |")
@@ -889,6 +927,9 @@ def render_audit_markdown(bundle: AuditBundle) -> str:
               + (f", {bv['unreviewed']} not yet reviewed" if bv.get("unreviewed") else "") + " |")
         elif reported:
             w(f"| Reported gaps | {reported} -- *not yet independently reviewed; treat as provisional* |")
+    if grouped["unsettled_reviews"]:
+        w(f"| DSS review evidence | {grouped['unsettled_reviews']} reference review(s) lack "
+          f"record-level evidence; treated as unverified below |")
     if blocking:
         first = blocking[0]
         w(f"| Most important | {_describe_action(first)} |")
@@ -972,7 +1013,8 @@ def render_audit_markdown(bundle: AuditBundle) -> str:
     else:
         total_missing = sum(sum(c.values()) for c in grouped["groups"].values())
         distinct = sum(len(c) for c in grouped["groups"].values())
-        w(f"{total_missing} missing references, {distinct} distinct files, grouped by kind. "
+        status = "unresolved" if grouped["by_verdict"].get("unverifiable") else "missing"
+        w(f"{total_missing} {status} references, {distinct} distinct files, grouped by kind. "
           f"A file referenced many times is one finding with a count.")
         w("")
         for group, counter in sorted(grouped["groups"].items(), key=lambda kv: -sum(kv[1].values())):
@@ -1019,8 +1061,14 @@ def render_audit_markdown(bundle: AuditBundle) -> str:
             for a in acq:
                 w(f"- {_describe_action(a)}")
         for group, counter in still_missing.items():
-            w(f"- **{group}**: {len(counter)} file(s) referenced by the model and not delivered. "
-              f"See section 5 for the exact names.")
+            unverified = grouped["unverified"].get(group, Counter())
+            confirmed = counter - unverified
+            if confirmed:
+                w(f"- **{group}**: {len(confirmed)} file(s) referenced by the model and not delivered. "
+                  f"See section 5 for the exact names.")
+            if unverified:
+                w(f"- **{group}**: {len(unverified)} file reference(s) need verification before "
+                  f"deciding whether acquisition is required. See section 5.")
     w("")
 
     # 7 -----------------------------------------------------------------
