@@ -167,7 +167,7 @@ pub fn run(req: &Request, base: &Path, out: &Path) -> Result<Value, MapError> {
     // included separately after inspecting the terrain layout; this is not an OS RSS cap.
     let cache = 64_u64 << 20;
     let planned = bytes(count, 40)?
-        .checked_add(bytes(req.cell_count, 12)?)
+        .checked_add(bytes(req.cell_count, 64)?)
         .and_then(|v| v.checked_add(cache))
         .ok_or_else(|| MapError::Budget("size overflow".into()))?;
     if planned > req.max_working_bytes {
