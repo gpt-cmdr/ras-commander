@@ -281,18 +281,22 @@ def test_horizontal_rejects_coincident_and_contained_cells(scene, other):
 
 
 @pytest.mark.parametrize("failure", [False, True])
-def test_native_comparison_uses_horizontal_and_restores_rasmap(scene, monkeypatch, failure):
+@pytest.mark.parametrize("postprocess", [False, True])
+@pytest.mark.parametrize("independent", [False, True])
+def test_native_comparison_uses_horizontal_and_restores_rasmap(scene, monkeypatch, failure, postprocess, independent):
     from types import SimpleNamespace
     import shutil
     import pandas as pd
-    from ras_commander import RasMap, RasProcess
+    from ras_commander import RasMap, RasProcess, StoreMapPerformanceOptions
 
     cells, terrain, root = scene
     rasmap = root / "project.rasmap"
     original = b"<RASMapper><RenderMode>slopingPretty</RenderMode></RASMapper>"
     rasmap.write_bytes(original)
     hdf = root / "project.p01.hdf"
-    hdf.touch()
+    import h5py
+    with h5py.File(hdf, "w") as file:
+        file.create_dataset("Geometry/2D Flow Areas/mesh/Cells Center Coordinate", data=[[0.0, 0.0]])
     obj = SimpleNamespace(
         project_folder=root,
         project_name="project",
@@ -331,6 +335,8 @@ def test_native_comparison_uses_horizontal_and_restores_rasmap(scene, monkeypatc
             kw["render_mode"] == "horizontal" and kw["wse"] and kw["depth"] and not kw["velocity"]
         )
         assert kw["profile"] == "Max"
+        assert kw["terrain_name"] == (None if independent else "terrain")
+        assert (kw["performance"] is not None) == independent
         if failure:
             rasmap.write_bytes(b"changed during native failure")
             raise RuntimeError("injected native failure")
@@ -342,7 +348,9 @@ def test_native_comparison_uses_horizontal_and_restores_rasmap(scene, monkeypatc
         return {"depth": [depth], "wse": [wse]}
 
     monkeypatch.setattr(RasProcess, "store_maps", native)
-    kwargs = dict(cells=cells, profiles={"wsel_a": "Max"}, ras_object=obj, min_depth=0.5)
+    kwargs = dict(cells=cells, profiles={"wsel_a": "Max"}, ras_object=obj,
+                  min_depth=0.5, postprocess_reference=postprocess,
+                  native_performance=StoreMapPerformanceOptions(max_workers=2) if independent else None)
     if failure:
         with pytest.raises(RuntimeError, match="injected native failure"):
             RasFim.compare_with_rasmapper("01", terrain, root / "comparison", **kwargs)
@@ -350,12 +358,49 @@ def test_native_comparison_uses_horizontal_and_restores_rasmap(scene, monkeypatc
         rows = RasFim.compare_with_rasmapper("01", terrain, root / "comparison", **kwargs)
         assert rows.iloc[0].csi == 1 and rows.iloc[0].wse_exact_fraction == 1
         assert rows.iloc[0].common_wet == 199
+        assert rows.iloc[0].candidate_seconds > 0
+        assert rows.iloc[0].native_total_seconds >= rows.iloc[0].native_seconds
+        assert rows.attrs["performance"]["profile_count"] == 1
+        from ras_commander.schemas import DATAFRAME_SCHEMAS
+        assert list(rows.columns) == [c["name"] for c in DATAFRAME_SCHEMAS["fim_comparison"]["columns"]]
+        assert not rows.attrs["performance"]["ratio_eligible"]
+        if postprocess:
+            with rasterio.open(rows.iloc[0].reference_filtered_depth_tif) as ds:
+                actual = ds.read(1)
+                assert np.count_nonzero(np.isfinite(actual)) == 199
+        else:
+            assert rows.iloc[0].reference_filtered_depth_tif is None
+            assert rows.iloc[0].native_postprocess_seconds == 0
     doc = json.loads((root / "comparison/comparison.json").read_text())
     assert doc["rasmap_restored"] is True
     assert doc["rasmap_sha256_before"] == doc["rasmap_sha256_after"]
     assert doc["status"] == ("aborted" if failure else "complete")
     assert rasmap.read_bytes() == original
     assert not (root / ".project.storemaps.lock").exists()
+    if not failure and not independent and not postprocess:
+        def incomplete_native(*a, **kw):
+            products = native(*a, **kw)
+            with rasterio.open(products["wse"][0], "r+") as src:
+                data = src.read(1)
+                data[0, 0] = np.nan
+                src.write(data, 1)
+            return products
+        monkeypatch.setattr(RasProcess, "store_maps", incomplete_native)
+        invalid = RasFim.compare_with_rasmapper("01", terrain, root / "invalid-reference", **kwargs)
+        assert invalid.reference_missing_wse.sum() > 0
+        assert invalid.attrs["performance"]["observed_native_to_candidate_ratio"] is None
+        assert any("do not match exactly" in x for x in invalid.attrs["performance"]["ratio_exclusions"])
+    if independent:
+        # An independent command cannot select among terrain registrations.
+        # Reject ambiguity before creating outputs or invoking either mapper.
+        monkeypatch.setattr(RasMap, "list_terrain_layers", lambda *a, **k: pd.DataFrame([
+            {"name": "terrain", "resolved_path": str(terrain)},
+            {"name": "other", "resolved_path": str(terrain)},
+        ]))
+        with pytest.raises(FimUnsupportedError, match="sole registered terrain"):
+            RasFim.compare_with_rasmapper("01", terrain, root / "ambiguous",
+                                         terrain_name="terrain", **kwargs)
+        assert not (root / "ambiguous").exists()
 
 
 def test_comparison_rejects_fractional_grid_shift(scene):
@@ -770,3 +815,100 @@ def test_native_geometry_transport_preserves_order_holes_and_multipart(tmp_path)
             actual = shapely.from_wkb(source.read(length))
             assert actual.equals_exact(expected, 0)
         assert source.read(1) == b""
+
+
+@pytest.mark.parametrize("element", ["River Centerlines", "Cross Sections", "text_reach", "malformed_reach", "orphan_node"])
+def test_2d_only_gate_rejects_mixed_models_before_mapping(scene, monkeypatch, element):
+    import h5py
+
+    cells, terrain, root = scene
+    hdf = root / "mixed.p01.hdf"
+    geom = root / "mixed.g01"
+    with h5py.File(hdf, "w") as src:
+        src.create_dataset("Geometry/2D Flow Areas/mesh/Cells Center Coordinate", data=[[0., 0.]])
+        if element in ("text_reach", "malformed_reach", "orphan_node"):
+            src.require_group("Plan Data/Plan Information").attrs["Geometry Filename"] = geom.name
+            declaration = {"text_reach": "Reach=Legacy river",
+                           "malformed_reach": "River Reach=broken",
+                           "orphan_node": "Type RM Length L Ch R=1,10,2,2,2"}[element]
+            geom.write_text("Geom Title=Mixed\n" + declaration + "\n", encoding="utf-8")
+        else:
+            src.create_dataset(f"Geometry/{element}/Attributes", data=[1])
+    def forbidden(*a, **k):
+        raise AssertionError("engine must not run for a model containing 1D elements")
+    monkeypatch.setattr(_engine, "find_engine", forbidden)
+    with pytest.raises(FimUnsupportedError, match="2D-only"):
+        RasFim.get_cells_from_plan_hdf(hdf, mesh_name="mesh")
+    with pytest.raises(FimUnsupportedError, match="2D-only"):
+        RasFim.map_horizontal_profiles(cells, terrain, root / "blocked", hdf_path=hdf)
+    cells.attrs["fim_source_hdf"] = str(hdf)
+    with pytest.raises(FimUnsupportedError, match="2D-only"):
+        RasFim.map_horizontal_profiles(cells, terrain, root / "blocked-attrs")
+    assert not (root / "blocked").exists()
+
+
+def test_2d_scope_allows_pipe_hydraulic_tables_without_river_geometry(tmp_path):
+    import h5py
+
+    path = tmp_path / "pipes.p01.hdf"
+    with h5py.File(path, "w") as src:
+        src.create_dataset("Geometry/2D Flow Areas/surface/Cells Center Coordinate", data=[[0., 0.]])
+        src.create_dataset("Geometry/Cross Sections/Property Tables/XSEC Info", data=[[0, 2, 3]])
+        src.create_dataset("Geometry/Pipe Conduits/Attributes", data=[1, 2])
+    assert RasFim.validate_2d_model(path)["dimension"] == "2D-only"
+
+
+def test_canonical_terrain_preserves_pixel_bits_and_source(scene):
+    import hashlib
+
+    _, terrain, root = scene
+    before = hashlib.sha256(terrain.read_bytes()).hexdigest()
+    path = RasFim.canonicalize_terrain_crs(terrain, root / "canonical.tif")
+    with rasterio.open(terrain) as a, rasterio.open(path) as b:
+        np.testing.assert_array_equal(a.read(1).view("u4"), b.read(1).view("u4"))
+        assert a.crs == b.crs and a.transform == b.transform and a.nodata == b.nodata
+    assert hashlib.sha256(terrain.read_bytes()).hexdigest() == before
+    receipt = json.loads(path.with_suffix(".tif.json").read_text())
+    assert receipt["pixel_bits_and_grid_preserved"] and not receipt["reprojected"]
+    with pytest.raises(FileExistsError):
+        RasFim.canonicalize_terrain_crs(terrain, path)
+
+
+def test_reference_postprocessing_independently_filters_depth_and_wse(scene):
+    from ras_commander.fim._comparison import filter_reference
+
+    rows = run(scene, min_depth=0.0)
+    folder = scene[2] / "native-filtered"
+    folder.mkdir()
+    paths = filter_reference(rows.iloc[0].depth_tif, rows.iloc[0].wse_tif, folder, .5, 1)
+    with rasterio.open(rows.iloc[0].depth_tif) as src:
+        raw = src.read(1)
+        assert (raw == .5).any()
+    with rasterio.open(paths[0]) as d, rasterio.open(paths[1]) as w:
+        depth, wse = d.read(1), w.read(1)
+        keep = np.isfinite(raw) & (raw > np.float32(.5))
+        assert np.array_equal(np.isfinite(depth), keep)
+        assert np.array_equal(np.isfinite(wse), keep)
+
+
+def test_all_meshes_keep_local_wse_identity_and_global_unique_ids(tmp_path, monkeypatch):
+    import h5py
+    import pandas as pd
+    from ras_commander import HdfMesh, HdfResultsMesh
+
+    path = tmp_path / "two.p01.hdf"
+    with h5py.File(path, "w") as src:
+        for mesh in ("left", "right"):
+            src.create_dataset(f"Geometry/2D Flow Areas/{mesh}/Cells Center Coordinate", data=[[0., 0.]])
+    polygons = gpd.GeoDataFrame({"mesh_name": ["left", "right"], "cell_id": [0, 0],
+                                "geometry": [box(0, 0, 1, 1), box(1, 0, 2, 1)]}, crs="EPSG:2278")
+    monkeypatch.setattr(HdfMesh, "get_mesh_cell_polygons", lambda *a, **k: polygons)
+    monkeypatch.setattr(HdfResultsMesh, "get_mesh_max_ws", lambda *a: pd.DataFrame(
+        {"mesh_name": ["left", "right"], "cell_id": [0, 0], "maximum_water_surface": [103., 107.]}))
+    monkeypatch.setattr(HdfResultsMesh, "get_mesh_max_depth", lambda *a: pd.DataFrame(
+        {"mesh_name": ["left", "right"], "cell_id": [0, 0], "maximum_depth": [3., 7.]}))
+    cells = RasFim.get_cells_from_plan_hdf(path, mesh_name="*")
+    assert cells.cell_idx.tolist() == [0, 1]
+    assert cells.wsel_max.tolist() == [103., 107.]
+    assert cells.attrs["fim_full_2d_coverage"]
+    assert cells.attrs["fim_mesh_names"] == ["left", "right"]

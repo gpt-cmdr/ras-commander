@@ -10,10 +10,14 @@ The feature is optional. Install the Python extra and the matching Linux x86-64
 or Windows x86-64 engine wheel into the same environment:
 
 ```bash
-pip install "ras-commander[fim]"
-pip install /path/to/ras2fim_engine-0.3.0-py3-none-<platform>.whl
+uv pip install -e ".[fim,compute]"
+uv pip install /path/to/ras2fim_engine-0.3.0-py3-none-<platform>.whl
 ras2fim-batch method
 ```
+
+Run these commands from this PR's checkout to use the new comparison and
+scope checks. The `compute` extra supplies native process supervision for
+the RAS Mapper comparison; Rust-only mapping needs the `fim` extra.
 
 The repository `wheels/` folder includes both tested wheels, checksums, and
 `BUILD.json` provenance. See `wheels/README.md` for the exact platform filenames.
@@ -27,6 +31,17 @@ run on both platforms. Step05 numerical qualification used Linux; horizontal
 corpus checks passed on both Linux and Windows.
 
 ## Horizontal cell mapping
+
+This is a **2D surface-only** mapper. Model-backed entry points reject any
+1D river centerline/reach or cross-section geometry before mapping, even
+when a 2D mesh is selected from a mixed model. Coupled pipes/conduits and
+SA/2D connections are permitted; their hydraulics must already be represented
+in the computed cell WSE. The mapper does not solve structure hydraulics.
+`RasFim.validate_2d_model(hdf_path)` exposes the same whole-model check.
+Cell tables extracted by `get_cells_from_plan_hdf` retain source-HDF provenance
+for later checks. For a manual cell table, supply `hdf_path=` to
+`map_horizontal_profiles` to enforce model inspection; a standalone polygon
+table cannot reveal elements in an unidentified source model.
 
 Use `map_horizontal_profiles` when a cell-constant horizontal water surface is
 the intended mapping method. It prepares terrain and pixel-to-cell ownership
@@ -133,6 +148,7 @@ comparison = RasFim.compare_with_rasmapper(
     max_working_mib=2048,
 )
 print(comparison[["profile", "csi", "depth_max_abs", "wse_exact_fraction"]])
+print(comparison.attrs["performance"])
 ```
 
 Without `cells`, this extracts maximum cell results from the selected plan
@@ -140,11 +156,20 @@ and mesh. For saved timesteps, supply a cell WSE table and
 `profiles={"wsel_column": "DDMMMYYYY HH:MM:SS"}` with exact available native
 timestamps. The caller must ensure those WSE columns describe the selected
 plan, mesh and time. Unknown timestamps fail before native execution.
+Use `mesh_name="*"` to include all physical 2D meshes. This assigns global
+positional cell IDs so local IDs from different meshes cannot collide;
+single-mesh extraction retains the original HDF cell IDs.
 
 Supply a float32 terrain export of the exact registered terrain, with its
 modifications applied. `RasTerrain.export_rasmapper_terrain` is the supported
 native export API. Terrain identity remains the caller's responsibility;
 the comparison does not silently substitute a different terrain.
+If custom GeoTIFF CRS keys cannot be interpreted by the native reader, call
+`RasFim.canonicalize_terrain_crs(source, new_output)` explicitly. It requires
+an equivalent EPSG definition, copies the terrain with canonical CRS keys,
+verifies all pixel bits and the grid, and writes a receipt. It performs no
+reprojection or resampling. The retained Davis HARN terrain needs this step
+with terrio 0.4.2. Terrain preparation is outside mapping timing.
 
 The returned `fim_comparison` DataFrame and CSV include wet-mask CSI,
 additional/missing wet pixels, common-wet depth differences, finite-pair WSE
@@ -154,6 +179,42 @@ effective float32 threshold, Rust batch timing and the
 original/restored `.rasmap` hashes. Both depth masks use the strict cutoff
 independently. The native TIFFs remain unmodified. No reference resampling is
 performed: incompatible CRS, pixel sizes or fractional grid shifts fail.
+
+The optional strict pixel filter is `min_depth`: direct horizontal mapping
+defaults to `0.0`, and comparison defaults to `0.5` in model elevation units.
+Both depth and WSE use the retained depth mask. `0.0` disables the half-unit
+cutoff while retaining positive depths. Cell extraction's `min_depth` is a
+separate cell wet/dry policy, not the raster postprocessing threshold.
+
+By default, comparison also writes independently thresholded native LZW
+delivery rasters, preserving the raw references. Timing columns distinguish
+`native_seconds` (stored-map generation), `native_postprocess_seconds`,
+`native_total_seconds`, `candidate_batch_seconds` and `comparison_seconds`.
+`candidate_seconds` is populated only for a single-profile call; shared batch
+time is not allocated repeatedly to individual profiles. Filtered native
+paths are returned separately. Set `postprocess_reference=False` to omit
+these written native products; comparison metrics still apply the cutoff.
+
+`comparison.attrs["performance"]` is the additional performance return,
+also persisted in JSON. It includes totals, worker settings, an observed
+native-to-Rust ratio and any ratio exclusions. A ratio is withheld for an AOI,
+unestablished full 2D coverage, native storage-area surfaces outside the 2D
+cells, disabled native delivery postprocessing, or any depth/WSE/wet-mask
+disagreement (including missing WSE). Input extraction, terrain
+export/canonicalization, identity hashing and comparison scans are excluded
+from mapping totals. Runs use Rust-first order and uncontrolled host/cache
+conditions; the observations are not a general speed guarantee.
+
+`native_performance=StoreMapPerformanceOptions(max_workers=2)` passes
+Commander's independent-helper policy to native mapping. This mode requires
+exactly one registered terrain, used implicitly by each helper. It records
+the requested policy; memory admission or runtime caps may select fewer workers. The default
+preserves aggregate `StoreAllMaps`. In the Davis qualification, aggregate
+native generation intermittently returned incomplete WSE with valid depth.
+Five independent-helper repetitions on Windows instead matched all depth/WSE pixels.
+The notebook uses two native helpers for Davis and still raises on any
+missing WSE; it never fills reference gaps with candidate data or retries
+silently. This is an observed runtime issue, not an established vendor defect.
 
 The evaluation footprint is the selected 2D cells intersected with the AOI.
 A bbox or polygon constrains Rust mapping and comparison; native stored-map

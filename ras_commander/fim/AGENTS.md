@@ -23,6 +23,10 @@ Parent `ras_commander/AGENTS.md` and root `AGENTS.md` still apply.
 
 ## Invariants
 
+- Model-backed mapping rejects any 1D river centerline/reach or cross-section geometry before
+  mesh selection or engine execution. Coupled pipe hydraulic tables alone are permitted.
+  Preserve source-HDF provenance on extracted cell tables; standalone polygon tables cannot
+  establish the dimensional scope of an unseen source model.
 - Step05 preparation is global. Wet samples, triangulation, query axes, and the wet mask use every wet
   cell before any AOI. An AOI selects output pixels on the final grid only. Never subset or
   retriangulate for an AOI.
@@ -52,3 +56,7 @@ Parent `ras_commander/AGENTS.md` and root `AGENTS.md` still apply.
   uses the same re-entrant project lock, verifies/restores the original rasmap bytes in finally,
   and rejects reference resampling. Its scope is the selected 2D cell footprint/AOI, not native
   1D/structure/sloping rendering. Report reference missing WSE separately from finite pairs.
+- Comparison performance belongs in `DataFrame.attrs["performance"]` and its JSON receipt.
+  Separate native stored-map generation, independent optional filtered delivery writes, Rust
+  batch time and comparison scanning. Do not multiply shared batch preparation by profile count
+  or promote a speed ratio for unmatched AOI, mesh or storage-area scope.

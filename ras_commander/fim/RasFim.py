@@ -45,6 +45,7 @@ from typing import TYPE_CHECKING, Any, Dict, Iterable, List, Optional, Sequence,
 if TYPE_CHECKING:
     import geopandas as gpd
     from ..RasPrj import RasPrj
+    from .._execution_types import StoreMapPerformanceOptions
 
 import numpy as np
 import pandas as pd
@@ -228,6 +229,7 @@ class RasFim:
         max_working_mib: int = 1024,
         write_floodplain: bool = True,
         raise_on_failure: bool = True,
+        hdf_path: Optional[PathLike] = None,
     ) -> pd.DataFrame:
         """Map cell-constant horizontal WSE using a shared terrain-lattice grid.
 
@@ -270,6 +272,10 @@ class RasFim:
             write_floodplain: Write product 11 from retained depth pixels.
             raise_on_failure: Raise after writing the manifest if any profile
                 failed; otherwise return the failed rows too.
+            hdf_path: Source model HDF for the 2D-only scope check. Tables from
+                get_cells_from_plan_hdf retain this provenance automatically.
+                Standalone tables must contain only 2D cell polygons; without
+                model provenance the model's other elements cannot be inspected.
 
         Returns:
             DataFrame: ``fim_product_manifest`` rows. Offsets refer to the
@@ -296,6 +302,12 @@ class RasFim:
         from . import _horizontal
 
         names = _validate_cells(cells, profiles, profile_prefix)
+        source_hdf = cells.attrs.get("fim_source_hdf")
+        if hdf_path is not None and source_hdf is not None:
+            if Path(hdf_path).resolve() != Path(source_hdf).resolve():
+                raise ValueError("hdf_path differs from the cells' source model")
+        if hdf_path is not None or source_hdf is not None:
+            RasFim.validate_2d_model(hdf_path if hdf_path is not None else source_hdf)
         if len(cells) == 0:
             raise ValueError("horizontal cells must not be empty")
         if (
@@ -491,6 +503,8 @@ class RasFim:
         threads: int = 1,
         writer_threads: int = 1,
         max_working_mib: int = 1024,
+        postprocess_reference: bool = True,
+        native_performance: Optional["StoreMapPerformanceOptions"] = None,
         terrain_name: Optional[str] = None,
         ras_object: Optional["RasPrj"] = None,
         ras_version: Optional[str] = None,
@@ -510,10 +524,11 @@ class RasFim:
                 responsibility; this function does not export or resample it.
             output_folder: New or empty comparison folder.
             cells: Optional cell polygons and WSE columns. When omitted, use
-                the plan's cell maximum results for one selected mesh.
+                the plan's cell maximum results for the selected mesh or "*".
             profiles: Mapping from WSE column to "Max" or an exact native
                 timestamp. Required with cells; caller ensures matching WSE.
-            mesh_name: Required for automatic extraction from multi-mesh plans.
+            mesh_name: Required for automatic extraction from multi-mesh plans;
+                use "*" to map all physical 2D cells with globally unique row IDs.
             bbox: Optional comparison/output bounds in aoi_crs.
             polygon: Optional polygon constraint, mutually exclusive with bbox.
             polygon_layer: Layer in a multi-layer polygon file.
@@ -523,9 +538,17 @@ class RasFim:
                 only for models whose elevations use feet.
             engine_path: Explicit Rust engine executable, or normal discovery.
             threads: Rust pixel workers (1 through 64).
-            writer_threads: Rust-product GeoTIFF compression workers (1 through
-                64); same scope and resource policy as map_horizontal_profiles.
+            writer_threads: Delivery GeoTIFF compression workers (1 through
+                64) for Rust and optional filtered native products; same
+                resource policy as map_horizontal_profiles.
             max_working_mib: Horizontal array admission budget, not RSS.
+            postprocess_reference: Write thresholded native depth/WSE LZW
+                products and time this postprocessing separately. Raw native
+                products are preserved. Defaults to True.
+            native_performance: Optional native StoreMap execution policy.
+                Default preserves aggregate StoreAllMaps. Independent helpers
+                require a sole registered terrain; their requested policy is
+                recorded. Useful for Davis's intermittent aggregate WSE output.
             terrain_name: Exact registered terrain selected for native mapping.
             ras_object: Initialized project object for multi-project use.
             ras_version: Installed native mapping runtime version.
@@ -534,7 +557,11 @@ class RasFim:
         Returns:
             DataFrame: ``fim_comparison`` metrics and raster paths. The JSON
                 report retains native runtime, original/restored rasmap hashes,
-                strict threshold and batch timing. A CSV is also written.
+                strict threshold and batch timing. ``result.attrs["performance"]``
+                additionally returns Rust batch, native mapping/postprocessing,
+                and comparison timings. Candidate per-profile time is NaN for
+                shared batches. A CSV is also written. Ratios are withheld for
+                AOIs, unestablished full coverage or native storage-area surfaces.
 
         Raises:
             FimUnsupportedError: Unsupported or misaligned grids, unavailable
@@ -543,6 +570,9 @@ class RasFim:
             RuntimeError: Native mapping or configuration restoration failed.
 
         Notes:
+            The whole source model must be 2D-only: any river centerline/reach
+            or cross section is rejected before native execution, even with
+            an explicitly selected 2D mesh. Pipe networks are permitted.
             Equality is evaluated only inside the selected 2D cell footprint
             and AOI, on matching lattice pixels without reference resampling.
             Missing WSE is counted separately. This is qualification evidence,
@@ -568,11 +598,47 @@ class RasFim:
             threads=threads,
             writer_threads=writer_threads,
             max_working_mib=max_working_mib,
+            postprocess_reference=postprocess_reference,
+            native_performance=native_performance,
             terrain_name=terrain_name,
             ras_object=ras_object,
             ras_version=ras_version,
             timeout=timeout,
         )
+
+    @staticmethod
+    @log_call
+    def canonicalize_terrain_crs(terrain_path: PathLike, output_path: PathLike) -> Path:
+        """Copy float32 terrain with equivalent canonical EPSG GeoTIFF keys.
+
+        Use explicitly when a native reader cannot interpret custom CRS keys,
+        such as the Davis HARN terrain. This is metadata encoding, with no
+        reprojection, resampling or elevation change. The source stays read-only.
+        Requires an equivalent EPSG CRS and nodata, rejects dataset/alpha masks,
+        and verifies all output pixel bits and the grid. Both output_path and
+        its .json receipt must be new. Returns the prepared path; raises on
+        unsupported input, existing outputs or failed verification. Preparation
+        is separate from mapping performance timing.
+        """
+        from . import _terrain
+
+        return _terrain.canonicalize(terrain_path, output_path)
+
+    @staticmethod
+    @log_call
+    def validate_2d_model(hdf_path: PathLike, *, geom_path: Optional[PathLike] = None) -> Dict[str, Any]:
+        """Require compiled 2D cells and reject any 1D river/reach or cross section.
+
+        Inspect the whole model, even when mapping a selected 2D mesh. Pipes,
+        conduits, storage areas and SA/2D connections are permitted. This check
+        establishes dimensional scope, not structure-rendering equivalence.
+        Source geometry is checked when supplied or resolved from the HDF.
+        Returns a scope dictionary; raises FimUnsupportedError for 1D/mixed
+        geometry. Unreadable or missing inputs raise instead of passing.
+        """
+        from . import _scope
+
+        return _scope.inspect_model(hdf_path, geom_path)
 
     @staticmethod
     @log_call
@@ -695,7 +761,12 @@ class RasFim:
         Uses ``HdfMesh.get_mesh_cell_polygons(strict=True)``,
         ``HdfResultsMesh.get_mesh_max_ws`` and ``HdfResultsMesh.get_mesh_max_depth``.
         A cell is wet when its maximum depth is greater than ``min_depth``;
-        dry cells get NaN.
+        dry cells get NaN. This is the cell wet/dry policy; mapping's pixel
+        ``min_depth`` independently filters the resulting terrain-based depths.
+        Models with 1D river/reach elements are rejected. ``mesh_name="*"``
+        combines all meshes and assigns global positional ``cell_idx`` values;
+        a single mesh retains its original cell IDs. Source-HDF provenance is
+        retained in the returned frame's attrs for later mapping scope checks.
 
         Returns:
             gpd.GeoDataFrame: Cell indices, profile WSE and polygon geometries.
@@ -709,6 +780,7 @@ class RasFim:
         from ..hdf.HdfResultsMesh import HdfResultsMesh
 
         path = _require_path(hdf_path, "hdf_path")
+        scope = RasFim.validate_2d_model(path)
         if not np.isfinite(min_depth) or min_depth < 0:
             raise ValueError(f"min_depth must be finite and >= 0, got {min_depth!r}")
         polygons = HdfMesh.get_mesh_cell_polygons(path, strict=True)
@@ -721,11 +793,11 @@ class RasFim:
                     f"{path.name} has {len(names)} 2D flow areas {names}; pass mesh_name"
                 )
             mesh_name = names[0]
-        elif mesh_name not in names:
+        elif mesh_name != "*" and mesh_name not in names:
             raise FimUnsupportedError(f"mesh {mesh_name!r} not in {path.name} (meshes: {names})")
 
-        def _one(frame, column_hint):
-            frame = frame[frame["mesh_name"] == mesh_name]
+        def _one(frame, column_hint, selected_mesh):
+            frame = frame[frame["mesh_name"] == selected_mesh]
             columns = [
                 c
                 for c in frame.columns
@@ -737,26 +809,30 @@ class RasFim:
                 )
             return frame.set_index("cell_id")[columns[0]]
 
-        wse = _one(HdfResultsMesh.get_mesh_max_ws(path), "water_surface")
-        depth = _one(HdfResultsMesh.get_mesh_max_depth(path), "depth")
-        cells = polygons[polygons["mesh_name"] == mesh_name]
-        ids = cells["cell_id"].to_numpy(dtype=np.int64)
-        missing = np.setdiff1d(ids, wse.index.to_numpy())
-        if len(missing) or len(np.setdiff1d(ids, depth.index.to_numpy())):
-            raise FimUnsupportedError(
-                f"maximum results are missing for {len(missing)} or more mesh cells"
-            )
-        wse_values = wse.loc[ids].to_numpy(dtype=np.float64)
-        wet = depth.loc[ids].to_numpy(dtype=np.float64) > float(min_depth)
-        return gpd.GeoDataFrame(
-            {
-                "cell_idx": ids,
-                profile_name: np.where(wet, wse_values, np.nan),
-                "geometry": cells.geometry.to_numpy(),
-            },
-            geometry="geometry",
-            crs=polygons.crs,
-        )
+        maximum_wse = HdfResultsMesh.get_mesh_max_ws(path)
+        maximum_depth = HdfResultsMesh.get_mesh_max_depth(path)
+        parts = []
+        for selected_mesh in (names if mesh_name == "*" else [mesh_name]):
+            wse = _one(maximum_wse, "water_surface", selected_mesh)
+            depth = _one(maximum_depth, "depth", selected_mesh)
+            cells = polygons[polygons["mesh_name"] == selected_mesh]
+            ids = cells["cell_id"].to_numpy(dtype=np.int64)
+            if len(np.setdiff1d(ids, wse.index)) or len(np.setdiff1d(ids, depth.index)):
+                raise FimUnsupportedError("maximum results are missing for mesh cells")
+            values = wse.loc[ids].to_numpy(dtype=np.float64)
+            wet = depth.loc[ids].to_numpy(dtype=np.float64) > float(min_depth)
+            parts.append(gpd.GeoDataFrame({"cell_idx": ids,
+                profile_name: np.where(wet, values, np.nan),
+                "geometry": cells.geometry.to_numpy()}, crs=polygons.crs))
+        output = gpd.GeoDataFrame(pd.concat(parts, ignore_index=True), crs=polygons.crs)
+        if mesh_name == "*":
+            # Mesh-local identifiers can collide; ownership needs one global row key.
+            output["cell_idx"] = np.arange(len(output), dtype=np.int64)
+        output.attrs.update(fim_source_hdf=str(path.resolve()),
+                            fim_mesh_names=names if mesh_name == "*" else [mesh_name],
+                            fim_full_2d_coverage=(mesh_name == "*" or len(names) == 1),
+                            fim_model_scope=scope)
+        return output
 
     @staticmethod
     @log_call
@@ -992,6 +1068,7 @@ class RasFim:
         watched = {"terrain": terrain}
         if hdf_path is not None:
             watched["hdf"] = _require_path(hdf_path, "hdf_path")
+            RasFim.validate_2d_model(watched["hdf"])
         if isinstance(polygon, (str, os.PathLike)):
             watched["polygon"] = _require_path(polygon, "polygon")
         before = {k: _file_identity(p) for k, p in watched.items()}

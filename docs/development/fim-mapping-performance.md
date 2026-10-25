@@ -308,6 +308,95 @@ No sampled peak-memory claim is made. Native ownership avoids staging the
 approximately 1.65-GB integer grid, and planned admission includes geometry
 storage; admission remains a plan rather than a hard process RSS limit.
 
+## Structure coverage and native timing, 2026-10-25
+
+The example notebook `602_rust_horizontal_mapping_comparison.ipynb` now
+drives five computed models through `RasFim.compare_with_rasmapper`.
+The public API returns timing columns and an additional dictionary at
+`comparison.attrs["performance"]`, also persisted in its JSON report.
+Native generation and independent depth-filtered delivery writes are
+separate from the comparison scan. Rust applies the same optional pixel
+filter during mapping. Native raw rasters remain available.
+
+| Computed fixture | Physical 2D cells | Inspected model elements |
+|---|---:|---|
+| eBFE Spring River p02 | 422,715 | One mesh; no SA/2D connections |
+| eBFE Spring Creek p01 | 340,163 | One mesh; no SA/2D connections |
+| BaldEagleCrkMulti2D p02 | 87,039 | Gated SA-to-2D dam and three internal levee connections |
+| BaldEagleCrkMulti2D p05 | 24,718 | Seven bridge connections, gated dam and three levee connections |
+| Davis p02 | 2,716 | Both meshes (`area2`, `DS Channel`); 132 conduits and 133 pipe nodes |
+
+None of these accepted fixtures contains river-centerline or cross-section
+geometry. Model-backed entry points now reject those 1D elements across the
+whole source model, including mixed models when only a 2D mesh is selected.
+The Muncie mixed model (one reach, 61 cross sections) and separate Bald Eagle
+Creek river example (one reach, 178 cross sections) are rejection fixtures.
+Pipe hydraulic tables under an HDF Cross Sections group are distinguished
+from river cross-section geometry, so Davis remains supported. A dedicated
+SA/2D culvert fixture was omitted from qualification; no culvert-specific
+coverage is claimed.
+
+Davis requires explicit terrain CRS-key canonicalization for terrio 0.4.2:
+the retained custom HARN GeoTIFF keys are not interpreted identically by the
+two readers. `RasFim.canonicalize_terrain_crs` writes an equivalent EPSG
+encoding and verifies every pixel bit and the grid without reprojection or
+resampling. This preparation is outside the mapping clock. CRS identity
+checks remain enabled.
+
+An initial corpus execution stopped at Davis: its aggregate native WSE
+contained 3,979 missing wet-pixel values despite exact depth. Two diagnostic
+aggregate reruns had 4,883 missing WSE values, while another matched
+completely. GDAL reported malformed nodata metadata in the incomplete files.
+These failed reference runs are retained and excluded from successful timing
+evidence. Rust remained stable. Five repetitions using Commander's
+independent depth/WSE helpers matched all 4,883 wet pixels exactly.
+The final notebook uses `native_performance=StoreMapPerformanceOptions(max_workers=2)`
+for Davis; other fixtures retain aggregate native generation. The API
+requires a sole terrain registration for independent helpers and records the
+requested policy. No reference values are repaired or substituted, and no
+automatic retry is introduced. The API withholds speed ratios for missing
+WSE or any other compared depth/WSE/wet-mask disagreement. The precise aggregate-runtime cause remains
+unresolved.
+
+The comparison uses strict float32 `depth > 0.5` in model elevation units
+(feet for these fixtures), applied independently to depth and WSE. Set
+`min_depth=0.0` to retain positive depths without the half-foot cutoff.
+The result qualifies horizontal 2D surfaces on the tested computed states,
+not bridge/pipe hydraulic calculations or native sloping/1D rendering.
+
+| Fixture | Rust delivered (s) | RAS Mapper generation (s) | Native filtering/writing (s) | Native delivered total (s) | Common wet pixels |
+|---|---:|---:|---:|---:|---:|
+| spring-river | 60.865 | 313.980 | 30.824 | 344.805 | 35,270,078 |
+| spring-creek | 55.545 | 266.934 | 23.681 | 290.615 | 79,872,550 |
+| bald-eagle | 6.108 | 8.059 | 2.109 | 10.169 | 719,163 |
+| bald-bridges | 3.142 | 7.596 | 1.027 | 8.624 | 959,043 |
+| davis | 0.257 | 1.700 | 0.024 | 1.724 | 4,883 |
+
+
+This five-case notebook execution on Windows x86-64 used HEC-RAS mapper 7.0.1, engine 0.3.0,
+C: NVMe inputs/output/scratch, four Rust workers and four compression
+workers sharing four allowed logical CPUs. Davis uses two independent native
+depth/WSE helpers; other fixtures use aggregate StoreAllMaps. Each case maps one maximum-result
+profile over all physical 2D cells, without an AOI. Input extraction, terrain
+preparation, identity hashing and comparison scanning are excluded from
+mapping totals. Native delivered time includes its stored-map call plus
+independently filtered LZW depth/WSE writes; Rust integrates the filter.
+
+All five comparisons have nonempty common wet coverage, zero extra/missing
+wet pixels, exact finite depth/WSE and no missing WSE on the evaluated 2D
+footprints. Every native call restored the original `.rasmap` bytes. Native
+grids can include blank margins and storage-area surfaces outside the 2D
+cells; those surfaces are outside the equality claim. The API withholds
+ratios for storage-area scope. These are single Rust-first observations on
+a shared workstation with uncontrolled load/cache, not a scaling curve or
+general speed guarantee. The earlier repeated terrio/GDAL observations
+remain separately scoped above.
+
+All four notebook code cells completed. Authentic outputs and comparison
+receipts are retained in an ignored private execution copy; the committed
+notebook is the clean, configurable source workflow. No generated model
+outputs or local path-bearing evidence are included in the repository.
+
 ## Proposed engine packaging
 
 Package the mapping engine separately as **`ras-commander-fast-fim`**, following
@@ -342,6 +431,6 @@ Keep installation optional through the mapping extra initially. Qualify
 Windows x86-64 and Linux x86-64 wheels against both method contracts before
 release; add other platforms only with their own evidence. Preserve upstream
 ras2fim and SciPy acknowledgments and bundled dependency notices. Extraction
-should first reproduce the existing tests and three-model comparison, then
+should first reproduce the existing tests and qualified comparison corpus, then
 introduce the binding as a separately reviewable change. No new engine
 repository or package publication is performed by this PR.

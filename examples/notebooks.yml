@@ -3051,11 +3051,11 @@ notebooks:
   executed_cells: 12
 - id: 602_rust_horizontal_mapping_comparison
   filename: 602_rust_horizontal_mapping_comparison.ipynb
-  title: Compare Rust horizontal mapping with RAS Mapper
+  title: Compare Rust 2D horizontal mapping with RAS Mapper
   series: 600
   series_name: Floodplain Mapping
-  summary: Compare native horizontal stored maps with Rust mapping on two large eBFE models and BaldEagle,
-    preserving rasmap configuration and using identical depth filtering.
+  summary: Compare Rust and native horizontal 2D maps on two eBFE models, Bald Eagle dam/levees and bridges,
+    and Davis pipes, with identical depth filtering, configuration restoration and timing returns.
   tags:
   - floodplain-mapping
   - rust
@@ -3065,12 +3065,15 @@ notebooks:
   - validation
   difficulty: intermediate
   est_runtime: null
-  data_project: BaldEagleCrkMulti2D
+  data_project: null
   functions_used:
-  - RasExamples.extract_project
-  - RasExamples.organize_ebfe_model
+  - GeomLateral.get_connections
+  - HdfPipe.get_pipe_conduits
+  - HdfStruc.get_structures
+  - RasFim.canonicalize_terrain_crs
   - RasFim.compare_with_rasmapper
   - RasFim.get_cells_from_plan_hdf
+  - RasFim.validate_2d_model
   - RasTerrain.export_rasmapper_terrain
   hec_refs: []
   learning_paths: []

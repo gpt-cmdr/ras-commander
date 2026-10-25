@@ -1963,7 +1963,14 @@ DATAFRAME_SCHEMAS["fim_comparison"] = {
             ("wse_tif", "str", "Candidate WSE raster."),
             ("reference_wse_tif", "str", "Native WSE raster, retained unmodified."),
             ("native_seconds", "float", "Native StoreMaps call wall time; not a controlled benchmark."),
+            ("native_postprocess_seconds", "float", "Independent strict depth-filter/LZW native delivery writing time; zero when disabled."),
+            ("native_total_seconds", "float", "Native stored-map generation plus delivery postprocessing."),
+            ("candidate_batch_seconds", "float", "Complete Rust batch call time, repeated for context; do not sum across rows."),
+            ("candidate_seconds", "float", "Complete candidate call time for a single-profile request; NaN for shared batches."),
+            ("comparison_seconds", "float", "Raster equality/metric scan time; excluded from mapping times."),
+            ("reference_filtered_depth_tif", "str", "Separately written thresholded native depth; None when disabled."),
+            ("reference_filtered_wse_tif", "str", "Separately written depth-masked native WSE; None when disabled."),
         )
     ],
-    "note": "Same-lattice comparison inside selected 2D cells and AOI, independently thresholded. Batch Rust timing and configuration restoration hashes are in comparison.json and DataFrame attrs.",
+    "note": "2D-only model gate; same-lattice comparison inside selected cells/AOI, independently thresholded. Additional performance dictionary is in DataFrame attrs and comparison.json; ratios withheld for unmatched scopes. No per-profile allocation of shared Rust setup.",
 }

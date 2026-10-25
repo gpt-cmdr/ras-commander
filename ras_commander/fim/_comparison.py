@@ -37,7 +37,39 @@ COLUMNS = [
     "wse_tif",
     "reference_wse_tif",
     "native_seconds",
+    "native_postprocess_seconds",
+    "native_total_seconds",
+    "candidate_batch_seconds",
+    "candidate_seconds",
+    "comparison_seconds",
+    "reference_filtered_depth_tif",
+    "reference_filtered_wse_tif",
 ]
+
+
+def filter_reference(depth_path, wse_path, folder, threshold, writer_threads):
+    """Write bounded, independently thresholded native delivery products."""
+    import rasterio
+    from rasterio.windows import Window
+
+    output_depth, output_wse = folder / "depth.tif", folder / "wse.tif"
+    with rasterio.Env(GDAL_NUM_THREADS=str(writer_threads)), rasterio.open(depth_path) as d, rasterio.open(wse_path) as w:
+        if d.shape != w.shape or d.crs != w.crs or d.transform != w.transform:
+            raise FimUnsupportedError("native depth/WSE grids differ; resampling is forbidden")
+        profile = dict(driver="GTiff", width=d.width, height=d.height, count=1,
+                       dtype="float32", nodata=np.nan, crs=d.crs,
+                       transform=d.transform, compress="lzw", tiled=False)
+        with rasterio.open(output_depth, "w", **profile) as dd, rasterio.open(output_wse, "w", **profile) as ww:
+            for row in range(0, d.height, 128):
+                window = Window(0, row, d.width, min(128, d.height - row))
+                depth = d.read(1, window=window, masked=True).astype("float32").filled(np.nan)
+                wse = w.read(1, window=window, masked=True).astype("float32").filled(np.nan)
+                keep = np.isfinite(depth) & (depth > np.float32(threshold))
+                depth[~keep] = np.nan
+                wse[~keep] = np.nan
+                dd.write(depth, 1, window=window)
+                ww.write(wse, 1, window=window)
+    return str(output_depth), str(output_wse)
 
 
 def compare_rasters(
@@ -193,6 +225,8 @@ def run(
     threads,
     writer_threads,
     max_working_mib,
+    postprocess_reference,
+    native_performance,
     terrain_name,
     ras_object,
     ras_version,
@@ -203,6 +237,7 @@ def run(
     from ..RasPrj import ras
     from ..RasUtils import RasUtils
     from ..RasPlan import RasPlan
+    from .._execution_types import StoreMapPerformanceOptions
     from .RasFim import RasFim, _prepare_output_folder, _require_path, _validate_cells
     from . import _aoi
 
@@ -216,7 +251,14 @@ def run(
     if plan_path is None:
         raise FileNotFoundError(f"plan {plan} has no resolved plan path")
     hdf = _require_path(Path(str(plan_path) + ".hdf"), "plan HDF")
-    if cells is None:
+    geometry = matches.iloc[0].get("Geom Path")
+    scope = RasFim.validate_2d_model(hdf, geom_path=geometry if isinstance(geometry, (str, Path)) else None)
+    if not isinstance(postprocess_reference, bool):
+        raise ValueError("postprocess_reference must be bool")
+    if native_performance is not None and not isinstance(native_performance, StoreMapPerformanceOptions):
+        raise TypeError("native_performance must be StoreMapPerformanceOptions or None")
+    automatic_cells = cells is None
+    if automatic_cells:
         if profiles is not None:
             raise ValueError(
                 "profiles requires an explicit cells table; automatic extraction maps Max only"
@@ -264,6 +306,9 @@ def run(
     selected = layers.loc[layers["name"] == terrain_name]
     if len(selected) != 1:
         raise ValueError("terrain_name must identify exactly one registered terrain")
+    independent_native = native_performance is not None and native_performance.max_workers != 1
+    if independent_native and len(layers) != 1:
+        raise FimUnsupportedError("Independent native helpers require a sole registered terrain; use max_workers=1")
     registered = _require_path(selected.iloc[0]["resolved_path"], "registered terrain HDF")
     folder = _prepare_output_folder(output_folder)
     state = {
@@ -276,6 +321,9 @@ def run(
         "profiles": profiles,
         "comparison": "same lattice; no reference resampling; strict depth filter independently applied",
         "scope": "selected 2D cells and AOI; native sloping/1D/structures not qualified",
+        "model_scope": scope,
+        "postprocess_reference": postprocess_reference,
+        "native_performance_requested": native_performance.to_dict() if native_performance else None,
     }
 
     def sha256(path):
@@ -344,8 +392,10 @@ def run(
                 max_working_mib=max_working_mib,
                 timeout=timeout,
                 write_floodplain=False,
+                hdf_path=hdf,
             )
             state["candidate_batch_seconds"] = time.perf_counter() - started
+            state["candidate_timings"] = json.loads((folder / "rust/fim_manifest.json").read_text(encoding="utf-8"))["timings"]
             for i, name in enumerate(names):
                 candidate = mapped.loc[mapped.profile == name].iloc[0]
                 if candidate.status not in ("complete", "no_flooded_pixels"):
@@ -363,7 +413,10 @@ def run(
                     wse=True,
                     depth=True,
                     velocity=False,
-                    terrain_name=terrain_name,
+                    # Independent StoreMap commands use the sole registration;
+                    # explicit terrain selection is an aggregate-command option.
+                    terrain_name=None if independent_native else terrain_name,
+                    performance=native_performance,
                     ras_object=ras_object,
                     ras_version=ras_version,
                     timeout=timeout,
@@ -381,6 +434,16 @@ def run(
                     return Path(paths[0])
 
                 nd, nw = one("depth"), one("wse")
+                filtered_depth = filtered_wse = None
+                postprocess_seconds = 0.0
+                if postprocess_reference:
+                    tick = time.perf_counter()
+                    delivery = native_dir / "filtered"
+                    delivery.mkdir()
+                    filtered_depth, filtered_wse = filter_reference(
+                        nd, nw, delivery, min_depth, writer_threads)
+                    postprocess_seconds = time.perf_counter() - tick
+                tick = time.perf_counter()
                 values = compare_rasters(
                     candidate.depth_tif,
                     candidate.wse_tif,
@@ -391,6 +454,7 @@ def run(
                     min_depth,
                     terrain,
                 )
+                comparison_seconds = time.perf_counter() - tick
                 rows.append(
                     {
                         "profile": name,
@@ -401,6 +465,13 @@ def run(
                         "reference_depth_tif": str(nd),
                         "reference_wse_tif": str(nw),
                         "native_seconds": native_seconds,
+                        "native_postprocess_seconds": postprocess_seconds,
+                        "native_total_seconds": native_seconds + postprocess_seconds,
+                        "candidate_batch_seconds": state["candidate_batch_seconds"],
+                        "candidate_seconds": state["candidate_batch_seconds"] if len(names) == 1 else np.nan,
+                        "comparison_seconds": comparison_seconds,
+                        "reference_filtered_depth_tif": filtered_depth,
+                        "reference_filtered_wse_tif": filtered_wse,
                     }
                 )
             changed = [
@@ -424,12 +495,41 @@ def run(
     try:
         result = execute(ras_object=obj, timeout=timeout)
         result.to_csv(folder / "comparison.csv", index=False)
+        exclusions = []
+        if constraint is not None:
+            exclusions.append("Rust is constrained to an AOI; native mapping covers the whole plan")
+        if not automatic_cells or not cells.attrs.get("fim_full_2d_coverage", False):
+            exclusions.append("Complete physical 2D cell coverage is not established")
+        if scope["storage_areas"]:
+            exclusions.append("Native mapping may include storage-area surfaces outside the 2D cells")
+        if not postprocess_reference:
+            exclusions.append("Native delivery postprocessing is disabled")
+        if any(
+            row.extra_wet or row.missing_wet or row.reference_missing_wse or row.candidate_missing_wse
+            or (row.common_wet > 0 and (row.depth_max_abs != 0 or row.wse_max_abs != 0))
+            for row in result.itertuples()
+        ):
+            exclusions.append("Compared depth/WSE values or wet masks do not match exactly, including missing WSE")
+        native_total = float(result.native_total_seconds.sum())
+        state["performance"] = {
+            "candidate_batch_seconds": state["candidate_batch_seconds"],
+            "native_store_maps_seconds": float(result.native_seconds.sum()),
+            "native_postprocess_seconds": float(result.native_postprocess_seconds.sum()),
+            "native_total_seconds": native_total,
+            "comparison_seconds": float(result.comparison_seconds.sum()),
+            "profile_count": len(names), "threads": threads, "writer_threads": writer_threads,
+            "native_performance_requested": state["native_performance_requested"],
+            "ratio_eligible": not exclusions, "ratio_exclusions": exclusions,
+            "observed_native_to_candidate_ratio": (native_total / state["candidate_batch_seconds"] if not exclusions else None),
+            "scope": "Complete mapping calls; input extraction, terrain export, hashing and comparison excluded. Native includes independently filtered LZW delivery products when enabled. Rust-first order; uncontrolled host load/cache. Shared Rust preparation is not charged to each profile again.",
+        }
         state["status"] = "complete"
         state["rows"] = json.loads(result.to_json(orient="records"))
         result.attrs.update(
             comparison_report=str(report),
             candidate_batch_seconds=state["candidate_batch_seconds"],
             rasmap_restored=True,
+            performance=state["performance"],
         )
         return result
     except BaseException as exc:
