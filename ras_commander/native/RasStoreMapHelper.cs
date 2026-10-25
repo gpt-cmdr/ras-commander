@@ -2,6 +2,8 @@ using System;
 using System.IO;
 using System.Reflection;
 using System.Xml;
+using System.Linq.Expressions;
+using System.Threading;
 
 /// <summary>
 /// Headless stored map generator that respects rendering mode.
@@ -787,8 +789,48 @@ class RasStoreMapHelper
             object[] execArgs = new object[parameters.Length];
             for (int i = 0; i < parameters.Length; i++)
                 execArgs[i] = parameters[i].DefaultValue;
-            executeMethod.Invoke(cmd, execArgs);
+
+            // Native commands can report fatal errors and return normally. Passing
+            // null installs a silent reporter, so a successful Invoke is not enough.
+            Type reporterType = parameters[0].ParameterType;
+            EventInfo messageEvent = reporterType.GetEvent("MessageReported");
+            if (messageEvent == null)
+                throw new NotSupportedException("Native command progress reporter has no MessageReported event");
+            object reporter = Activator.CreateInstance(reporterType);
+            ParameterInfo[] messageParameters = messageEvent.EventHandlerType.GetMethod("Invoke").GetParameters();
+            ParameterExpression message = Expression.Parameter(messageParameters[0].ParameterType, "message");
+            ParameterExpression kind = Expression.Parameter(messageParameters[1].ParameterType, "kind");
+            MethodInfo callback = typeof(RasStoreMapHelper).GetMethod("OnNativeMessage", BindingFlags.Static | BindingFlags.NonPublic);
+            Delegate handler = Expression.Lambda(messageEvent.EventHandlerType,
+                Expression.Call(callback, message, Expression.Convert(kind, typeof(object))), message, kind).Compile();
+            Interlocked.Exchange(ref _reportedErrors, 0);
+            messageEvent.AddEventHandler(reporter, handler);
+            execArgs[0] = reporter;
+            try
+            {
+                executeMethod.Invoke(cmd, execArgs);
+            }
+            finally
+            {
+                messageEvent.RemoveEventHandler(reporter, handler);
+            }
+            if (_reportedErrors != 0)
+                throw new Exception("Native stored-map command reported " + _reportedErrors + " error(s)");
         }
+    }
+
+    static int _reportedErrors;
+
+    static void OnNativeMessage(string message, object kind)
+    {
+        string label = kind.ToString();
+        if (label.IndexOf("Error", StringComparison.OrdinalIgnoreCase) >= 0)
+        {
+            Interlocked.Increment(ref _reportedErrors);
+            Console.Error.WriteLine("NATIVE_" + label + ": " + message);
+        }
+        else if (label != "ProgressUpdate" && label != "Debug")
+            Console.WriteLine("NATIVE_" + label + ": " + message);
     }
 
     static int HandleException(Exception ex)

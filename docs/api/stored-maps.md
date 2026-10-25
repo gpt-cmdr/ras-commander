@@ -70,6 +70,38 @@ multiple wet periods, threshold equality or general recession semantics.
 
 ## Headless mapping, resources and raster products
 
+### Native command failures
+
+The packaged `RasStoreMapHelper.exe` runs installed RAS Mapper library commands.
+Aggregate exports use `StoreAllMapsCommand`; independent map exports use the
+`StoreMapCommand` factories followed by headless native map storage. Both routes
+use the same Commander helper executable, not different mapping engines.
+
+Native aggregate commands can report a fatal error through their progress
+reporter and return without throwing. Commander captures these messages, returns
+a nonzero helper exit code, and raises an error from `RasProcess.store_maps()`.
+Files left by a failed command are not evidence of a completed export. The helper
+does not retry automatically or repair missing pixel values.
+
+In Windows HEC-RAS 7.0.1 tests of the public Davis pipe-network example, aggregate
+horizontal Max exports intermittently failed during pipe-rendering cache updates
+inside `RASPipeNetworks.RenderMeshPipeRenderOptions.SetLastMesh`. The captured
+exception reached `DataRow` mutation from parallel pipe rasterization. Failed
+exports could leave all-nodata TIFFs without georeferencing. The project PRJ,
+result HDF and terrain agreed on EPSG:2871; explicit projection initialization
+still reproduced the failure, as did exports with Python georeferencing repair
+disabled.
+
+A diagnostic control restricted inherited process affinity to one logical CPU:
+all 20 aggregate calls completed, and all 10 calls with georeferencing repair
+enabled exactly matched the Rust comparison on 4,883 wet pixels after a strict
+depth greater than 0.5 ft filter. Four-CPU diagnostic controls failed in 5 of
+8 calls, including a separate control with explicit projection initialization.
+These observations support a native concurrency defect; they do not establish
+a general repair. `max_workers=1` limits helper processes, not native internal
+threads. Commander does not automatically apply this Windows affinity control,
+and independent exports are not a guaranteed workaround.
+
 ::: ras_commander.RasProcess.RasProcess
     options:
       show_root_heading: false

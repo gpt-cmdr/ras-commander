@@ -254,6 +254,8 @@ def test_wine_helper_single_cpu_affinity_is_scoped_and_restored(monkeypatch):
 
     process = FakeProcess()
     monkeypatch.setattr(_native_helper, "_is_wine_helper_runtime", lambda: True)
+    # Exercise the psutil branch even when this test runs on native Windows.
+    monkeypatch.setattr(_native_helper.platform, "system", lambda: "Linux")
     monkeypatch.setattr(psutil, "Process", lambda: process)
 
     with _native_helper._wine_helper_single_cpu_affinity():
