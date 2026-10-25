@@ -14,9 +14,13 @@ distributed under the BSD 3-Clause license; its notice is retained in
 - [SciPy interpolation source, v1.18.1](https://github.com/scipy/scipy/blob/v1.18.1/scipy/interpolate/_interpnd.pyx)
 - [SciPy Delaunay source, v1.18.1](https://github.com/scipy/scipy/blob/v1.18.1/scipy/spatial/_qhull.pyx)
 
-Raster I/O and approximate reprojection use the separately distributed
+Raster I/O, approximate reprojection and horizontal polygon rasterization use the statically linked
 [`terrio` 0.4.2](https://github.com/opengeos/terrio) dependency, under its MIT
-license. The engine does not link GDAL. The surrounding Python workflow
+license, retained in `licenses/terrio-LICENSE.txt`. Terrio ports GDAL scanline
+rasterization rules; its ownership fill preserves feature order and pixel-centre
+inclusion. `wbvector` 0.1.6 and `wbraster` 0.2.1 provide geometry and typed raster
+data; their MIT/Apache notices are retained in `licenses/`.
+The engine does not link GDAL. The surrounding Python workflow
 continues to use rasterio and its raster stack for preparation and file output.
 
 Other Rust dependencies and their exact resolved versions are recorded in

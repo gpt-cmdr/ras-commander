@@ -18,7 +18,14 @@
     "tests/hardening.rs": "c47f0cd24fce4fe5afd0514ff7857d8e51b362492e0eb43ec8d7070159b3bf20",
     "tests/live_binary.rs": "d00846473760808dd2b1eefdc3097ab23762829f251f80f7a78a0a140d18b0af",
     "tests/live_step05.rs": "d702ab7035c6b401e70cebfc181b1cdfdd435f52431e834a6a60c595feaa3979",
-    "src/ownership.rs": "1cc6ba0eb752632e1b584caf09c972b38f135d210fc57bbfa7abe1c57d2a53c8"
+    "src/ownership.rs": "1cc6ba0eb752632e1b584caf09c972b38f135d210fc57bbfa7abe1c57d2a53c8",
+    "licenses/ras2fim-LICENSE.txt": "2c3d48c634b0a524b09e7eedc8de9e9b321dd000577ac433a7af546cae20770c",
+    "licenses/scipy-LICENSE.txt": "221e59f5e910fd7f94e44f0dac77436a11338c285c6346232e4a850a50da0e94",
+    "licenses/terrio-LICENSE.txt": "8c1ec2eadbee4b5a632b49679a177e02ed980079435a73449045aca3f2e7651e",
+    "licenses/wbraster-LICENSE-APACHE.txt": "d932025956695b7f7a6be243fe01294075bc75b18bb4a6f41922c4eba9aaacd7",
+    "licenses/wbraster-LICENSE-MIT.txt": "b3f690015a0a92922cafb40143f1642ce1712c3a44b7c6a96422c9a890956145",
+    "licenses/wbvector-LICENSE-APACHE.txt": "d932025956695b7f7a6be243fe01294075bc75b18bb4a6f41922c4eba9aaacd7",
+    "licenses/wbvector-LICENSE-MIT.txt": "b3f690015a0a92922cafb40143f1642ce1712c3a44b7c6a96422c9a890956145"
   },
   "horizontal_method": "horizontal-cell-constant/1"
 }
