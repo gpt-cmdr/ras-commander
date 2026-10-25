@@ -141,3 +141,48 @@ def test_remove_area_bc_lines_in_one_write(tmp_path):
     new_files = {p.name for p in tmp_path.iterdir()} - before
     assert len(new_files) <= 1  # one backup, not one per line
     assert bo._remove_area_bc_lines(geom, "Perimeter 1") == []
+
+
+def _grid_child():
+    """A 10x10 child of 100 ft cells in the parent's south-west corner (parent 0..5000)."""
+    xs = [(x * 100.0, 0.0) for x in range(0, 11)]
+    east = [(1000.0, y * 100.0) for y in range(1, 11)]
+    north = [(x * 100.0, 1000.0) for x in range(9, -1, -1)]
+    west = [(0.0, y * 100.0) for y in range(9, 0, -1)]
+    return Polygon(xs + east + north + west)
+
+
+def test_closed_edge_stretches_keep_two_cells_from_other_lines():
+    from shapely.geometry import LineString
+
+    parent = box(0, 0, 5000, 5000)
+    child = _grid_child()  # south and west edges lie on the parent perimeter
+    outlet = LineString([(1000, 400), (1000, 600)])  # two faces on the east (closed) edge
+    pieces = bo._closed_edge_stretches(child, parent, [outlet], gap_cells=2)
+    # East edge (10 faces) minus the 2-face outlet leaves runs of 4 (south) and 4 (north of outlet)
+    # joined to the 10-face north edge: 4 + 10 = 14. Each run loses 2 faces at each end.
+    lengths = sorted(round(g.length) for g in pieces)
+    assert lengths == [1000]  # the south run of 4 keeps nothing; the north run of 14 keeps 10
+    for g in pieces:
+        assert g.distance(outlet) >= 200 - 1e-6
+        assert g.distance(parent.exterior) >= 200 - 1e-6
+
+
+def test_closed_edge_stretches_gap_is_configurable():
+    from shapely.geometry import LineString
+
+    parent = box(0, 0, 5000, 5000)
+    child = _grid_child()
+    outlet = LineString([(1000, 400), (1000, 600)])
+    one = bo._closed_edge_stretches(child, parent, [outlet], gap_cells=1)
+    assert sorted(round(g.length) for g in one) == [200, 1200]
+    assert all(g.distance(outlet) >= 100 - 1e-6 for g in one)
+
+
+def test_child_entirely_on_parent_perimeter_has_no_closed_edges():
+    parent = box(0, 0, 1000, 1000)
+    assert bo._closed_edge_stretches(_grid_child(), parent, [], gap_cells=2) == []
+
+
+def test_closed_edge_default_slope():
+    assert bo.CLOSED_EDGE_FRICTION_SLOPE == 0.00033

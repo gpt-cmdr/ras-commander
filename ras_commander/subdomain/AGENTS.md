@@ -8,7 +8,7 @@ upstream of them.
 
 - `RasSubdomain.find_split_lines(plan_hdf_paths, streams, catchments, *, mesh_name=None, growth_plan_hdf_path=None, criteria=None, link_ids=None) -> SplitLineSearch`
 - `RasSubdomain.build_subdomains(search, *, split_line_ids=None) -> SubdomainPartition`
-- `RasSubdomain.plan_breakouts(partition, plan_number, *, ras_object, perimeter_friction_slope=0.01, subdomain_ids=None) -> SubdomainBreakoutPlan`
+- `RasSubdomain.plan_breakouts(partition, plan_number, *, ras_object, perimeter_friction_slope=0.01, subdomain_ids=None, closed_edge_outflow=False, closed_edge_friction_slope=0.00033, boundary_gap_cells=2) -> SubdomainBreakoutPlan`
 - `RasSubdomain.apply_breakouts(breakout_plan, dest_folder, *, overwrite_dest=False, hecras_version=None, time_step="parent_minimum") -> SubdomainBreakoutSet`
 - `RasSubdomain.validate_breakouts(breakout_set) -> DataFrame` (`subdomain_breakout_checks`)
 - `RasSubdomain.compute_subdomains(breakout_set, *, max_workers=2, num_cores=2) -> DataFrame` (`subdomain_compute_runs`)
@@ -29,6 +29,10 @@ Frames: `subdomain_split_lines`, `subdomain_split_candidates`,
   flow from Face Velocity here; the method is defined on native face flow.
 - Stream networks come in as TauDEM-shaped frames (`RasTauDem.delineate`).
   Pour points are link outlets (first vertex of each StreamNet LineString).
+- Closed-edge outflow is optional and off by default. Keep every closed-edge
+  line `boundary_gap_cells` faces from other BC lines so HEC-RAS never assigns
+  two lines to one face. Do not enable it where significant inter-basin flow
+  runs both ways; extend the domain instead.
 - Feet only in this release: SI parents raise `NotImplementedError`.
 - Labels are information, not gates. `plan_breakouts` turns the ones the cut
   cannot build (`HOLES`, `MULTIPART`, `STRUCTURE_ON_SPLIT_LINE`) into blocking

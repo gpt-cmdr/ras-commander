@@ -9,6 +9,15 @@ alone does not identify a development checkout.
 
 ### Unreleased
 
+**Hydraulic subdomains: optional closed-edge outflow**
+
+`RasSubdomain.plan_breakouts(..., closed_edge_outflow=True)` puts Normal Depth
+outflow lines (slope `closed_edge_friction_slope`, default 0.00033) along a
+breakout's closed edges, each kept `boundary_gap_cells` (default 2) cell faces
+from the outlet, inflow and perimeter lines so no two BC lines share a face. It
+is off by default: it lets water out only, and where flow passes between basins
+both ways the domain should include both basins.
+
 ### v0.108.1 (October 2026)
 
 **Public test fixtures (engine 0.2.1)**

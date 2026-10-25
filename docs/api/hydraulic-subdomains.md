@@ -129,7 +129,7 @@ comparison = RasSubdomain.compare_to_parent(breakouts, "Model.p01.hdf")
 
 ### `plan_breakouts`
 
-`plan_breakouts(partition, plan_number, *, ras_object, perimeter_friction_slope=0.01, subdomain_ids=None)`
+`plan_breakouts(partition, plan_number, *, ras_object, perimeter_friction_slope=0.01, subdomain_ids=None, closed_edge_outflow=False, closed_edge_friction_slope=0.00033, boundary_gap_cells=2)`
 writes nothing. Per subdomain it records:
 
 - the exact parent cells to keep;
@@ -139,10 +139,48 @@ writes nothing. Per subdomain it records:
     flow across that split line until the upstream child has run;
   - Normal Depth along each stretch of the parent perimeter.
 
-Every other edge is a closed wall, as in the parent. It runs
-`RasBreakout2D.preflight` against the parent and checks that the parent geometry
-HDF is the mesh that was searched. `HOLES`, `MULTIPART` and
-`STRUCTURE_ON_SPLIT_LINE` become blocking checks.
+Every other edge, the divide with a neighbouring subdomain, is a closed wall
+unless `closed_edge_outflow` is set. It runs `RasBreakout2D.preflight` against
+the parent and checks that the parent geometry HDF is the mesh that was searched.
+`HOLES`, `MULTIPART` and `STRUCTURE_ON_SPLIT_LINE` become blocking checks.
+
+#### Optional closed-edge outflow
+
+In a rain-on-grid parent, sheet flow does not respect a terrain-derived divide
+exactly, and some water leaves the subdomain across its closed edges. A wall
+holds that water back: on Salt Draw headwater 2864, cells just inside the walls
+peaked up to 0.53 ft higher than in the parent.
+
+`closed_edge_outflow=True` puts Normal Depth outflow lines along the closed
+edges so that water can leave as it does in the parent:
+
+- **Slope:** `closed_edge_friction_slope`, default 0.00033. This is a
+  conservative minimum that stays numerically stable while letting water
+  escape.
+- **Spacing:** each line stops `boundary_gap_cells` cell faces (default 2) short
+  of the outlet, inflow and perimeter lines along the perimeter. No two BC lines
+  then share a boundary face, which HEC-RAS rejects.
+- **Outflow only:** a normal-depth edge only lets water out. Inflow the parent
+  received across the divide is still not represented.
+
+It is off by default because it is not always appropriate. Where significant
+flow passes between basins in both directions, extend the breakout domain to
+include both basins instead.
+
+On Salt Draw headwater 2864 (HEC-RAS 6.4.1, 1% AEP) the option made agreement
+with the parent worse, so the walled default is kept there:
+
+| Headwater 2864 vs parent | Walled (default) | `closed_edge_outflow=True` |
+|---|---|---|
+| Max-WSE diff p95 / p99 / max (ft) | 0.017 / 0.083 / 1.15 | 0.032 / 0.42 / 2.98 |
+| Cells within 300 ft of a closed edge, p95 (ft) | 0.26 | 1.23 (mean −0.28) |
+| Outlet volume | +2.0% | −1.8% |
+
+The three closed-edge lines passed 4.1% of the outlet volume, against the
+parent's net 1.7% (2.6% out, 0.8% in) across the same edges. They also drained a
+4.7 ft pond that the parent's terrain and the water on the far side of the
+divide hold. Use the option where the parent shows mostly one-way spill across
+a divide with no ponded storage against it.
 
 ### `apply_breakouts`
 
