@@ -48,6 +48,20 @@ def main():
             expected[~(expected>0.5)]=np.nan
             actual=np.fromfile(root/"horizontal"/name/"depth.bin",dtype="<f4").reshape(4,6)
             np.testing.assert_array_equal(actual,expected)
+        request["stream_outputs"]=True
+        (root/"stream.json").write_text(json.dumps(request))
+        streamed=subprocess.run([engine,"horizontal",str(root/"stream.json"),str(root/"stream")],check=True,capture_output=True).stdout
+        import io
+        pipe=io.BytesIO(streamed)
+        for name in ("a","b"):
+            header=json.loads(pipe.readline())
+            assert header=={"id":name,"status":"complete","pixels":24}
+            for product in ("depth","wse"):
+                data=np.frombuffer(pipe.read(24*4),dtype="<f4")
+                expected=np.fromfile(root/"horizontal"/name/f"{product}.bin",dtype="<f4")
+                np.testing.assert_array_equal(data.view("<u4"),expected.view("<u4"))
+        assert not pipe.read()
+        assert not list((root/"stream").rglob("*.bin"))
         inputs = root / "inputs"
         inputs.mkdir()
         samples = np.array([[0., 0., 105.], [7., 0., 105.],

@@ -45,7 +45,7 @@ pub struct Profile {
 }
 
 pub fn method_record() -> Value {
-    json!({"method_id":"horizontal-cell-constant/1", "backend":"rust",
+    json!({"method_id":"horizontal-cell-constant/1", "backend":"rust", "stream_outputs":true,
         "arithmetic":"float32 cell WSE minus float32 terrain; strict float32 depth threshold",
         "ownership":"caller-supplied centre-based u32 labels; 0 dry; cell position + 1",
         "terrain":"same-CRS north-up square float32 GeoTIFF; native terrio block reads once per window",
@@ -283,8 +283,21 @@ pub fn run(req: &Request, base: &Path, out: &Path) -> Result<Value, MapError> {
                             &mut wse,
                         )
                     })?;
-                    write_values(&dir.join("depth.bin"), &depth)?;
-                    write_values(&dir.join("wse.bin"), &wse)?;
+                    if req.stream_outputs {
+                        let stdout = std::io::stdout();
+                        let mut stream = BufWriter::with_capacity(65536, stdout.lock());
+                        writeln!(
+                            stream,
+                            "{}",
+                            json!({"id":p.id,"status":"complete","pixels":count})
+                        )?;
+                        write_f32(&mut stream, &depth)?;
+                        write_f32(&mut stream, &wse)?;
+                        stream.flush()?;
+                    } else {
+                        write_values(&dir.join("depth.bin"), &depth)?;
+                        write_values(&dir.join("wse.bin"), &wse)?;
+                    }
                     Ok(())
                 })();
                 let unit = match result {
