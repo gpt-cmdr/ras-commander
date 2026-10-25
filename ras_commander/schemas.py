@@ -29,7 +29,7 @@ Each entry of :data:`DATAFRAME_SCHEMAS`:
 """
 
 # Schema contract version -- bump when the documented column surface changes meaningfully.
-SCHEMA_VERSION = "1.31"
+SCHEMA_VERSION = "1.32"
 
 _GEOMETRY_ASSOCIATION_COLUMNS = [
     {"name": "geom_number", "dtype": "str", "description": "Normalized geometry identifier."},
@@ -60,6 +60,64 @@ _GEOMETRY_ASSOCIATION_COLUMNS = [
 ]
 
 DATAFRAME_SCHEMAS = {
+    "geometry_breaklines": {
+        "description": "Authored geometry-text breaklines, source coordinates and units; CRS unset.",
+        "accessor": "GeomStorage.get_breaklines(geom_file)",
+        "source": "ras_commander.geom.GeomStorage.GeomStorage.get_breaklines()",
+        "extra_columns": False,
+        "dynamic": False,
+        "columns": [
+            {
+                "name": "Name",
+                "dtype": "str",
+                "description": "Unpadded authored name, in file order."
+            },
+            {
+                "name": "cell_size_min",
+                "dtype": "float | None",
+                "description": "Stored minimum cell spacing; None for a blank field."
+            },
+            {
+                "name": "cell_size_max",
+                "dtype": "float | None",
+                "description": "Stored maximum cell spacing; None for a blank field."
+            },
+            {
+                "name": "declared_points",
+                "dtype": "int",
+                "description": "Declared vertex count, validated against the packed payload."
+            },
+            {
+                "name": "geometry",
+                "dtype": "LineString",
+                "description": "Ordered authored vertices; degenerate blocks are named in attrs.skipped_degenerate."
+            }
+        ]
+    },
+    "geometry_2d_computation_points": {
+        "description": "Authored 2D seed points from geometry text, source coordinates and units; CRS unset.",
+        "accessor": "GeomStorage.get_2d_computation_points(geom_file)",
+        "source": "ras_commander.geom.GeomStorage.GeomStorage.get_2d_computation_points()",
+        "extra_columns": False,
+        "dynamic": False,
+        "columns": [
+            {
+                "name": "flow_area",
+                "dtype": "str",
+                "description": "Exact unpadded storage-area name."
+            },
+            {
+                "name": "point_index",
+                "dtype": "int",
+                "description": "Zero-based point index local to the area, in file order."
+            },
+            {
+                "name": "geometry",
+                "dtype": "Point",
+                "description": "Authored seed point; not a compiled mesh cell. All declarations are retained in attrs.declared_counts."
+            }
+        ]
+    },
     "taudem_streams": {
         "description": "TauDEM StreamNet stream links, one row per link, in the DEM CRS.",
         "accessor": "RasTauDem.delineate(dem_path, dest_folder).streams",
