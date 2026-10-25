@@ -885,3 +885,86 @@ def test_unsettled_dss_review_qualifies_captured_tally_without_mutating_bundle()
     assert "| Captured review tally | 1 reported:" in markdown
     assert "1 reference review(s) lack record-level evidence; treated as unverified below" in markdown
     assert bundle == before
+
+
+@pytest.mark.parametrize("state,resolved,inferred", [
+    ("yes", 0, 3), ("no", 0, 3), ("partial", 1, 2), ("yes", 1, 2),
+])
+def test_unverified_dss_records_hold_runnable_verdict_without_inventing_acquisition(state, resolved, inferred):
+    bundle = _two_d_unsteady(
+        supporting_elements={"dss": {"state": state, "referenced": True, "location": "DSS/Boundary.dss"}},
+        dss_verification={
+            "bridge_available": True, "boundaries_checked": 3, "boundaries_resolved": resolved,
+            "boundaries_acquisition": 0, "boundaries_inferred": inferred,
+            "inferred_reasons": {"catalog read failed:\nJava not found": inferred},
+        },
+    )
+    assert not any(a.kind == "acquisition" and "DSS" in a.target for a in actions_from_bundle(bundle))
+    markdown = render_audit_markdown(bundle)
+    assert "not established -- DSS boundary references need verification" in markdown
+    assert f"{inferred} of 3 boundary reference(s) could not be verified" in markdown
+    assert "catalog read failed: Java not found" in markdown
+    obtain = markdown.split("## 6. What you must obtain", 1)[1].split("## 7.", 1)[0]
+    assert "Verify the unresolved DSS boundary records before deciding whether acquisition is required" in obtain
+    assert "**Nothing external.**" not in obtain
+    if state == "yes":
+        row = next(line for line in markdown.splitlines() if line.startswith("| DSS boundary data |"))
+        assert row.split("|")[3].strip() == "Yes"
+
+
+def test_unverified_dss_hold_preserves_independently_confirmed_missing_data():
+    bundle = _two_d_unsteady(
+        supporting_elements={"dss": {
+            "state": "no", "referenced": True, "review": {"verdict": "real"},
+        }},
+        dss_verification={"boundaries_checked": 3, "boundaries_inferred": 3},
+    )
+    assert any(a.kind == "acquisition" and a.target == "DSS boundary data" for a in actions_from_bundle(bundle))
+    markdown = render_audit_markdown(bundle)
+    assert "no -- needs data not in the delivery" in markdown
+    assert "| DSS boundary verification | **Not verified**" in markdown
+
+
+def test_dss_verification_hold_uses_a_deterministic_single_line_reason():
+    bundle = _minimal_bundle(dss_verification={
+        "boundaries_checked": 3, "boundaries_inferred": 3,
+        "inferred_reasons": {"a smaller issue": 1, "catalog | unavailable\ntry again": 2},
+    })
+    row = next(line for line in render_audit_markdown(bundle).splitlines()
+               if line.startswith("| DSS boundary verification |"))
+    assert r"catalog \| unavailable try again" in row
+    assert "a smaller issue" not in row
+
+
+def test_zero_checked_boundaries_do_not_introduce_a_verification_hold():
+    bundle = _minimal_bundle(dss_verification={"boundaries_checked": 0, "boundaries_inferred": 0})
+    markdown = render_audit_markdown(bundle)
+    assert "| DSS boundary verification |" not in markdown
+    assert "| Runnable as delivered | **yes** |" in markdown
+
+
+def test_dss_hold_keeps_named_acquisition_recipes():
+    bundle = _two_d_unsteady(
+        supporting_elements={"dss": {"state": "no", "referenced": True}},
+        dss_verification={"boundaries_checked": 3, "boundaries_inferred": 3},
+    )
+    bundle.recipes = [{
+        "surface": "dss_pathname", "kind": "acquisition", "confidence": "acquisition",
+        "file": "Example.u01", "from": "Missing.dss", "acquisition_target": "Missing.dss",
+        "confidence_reason": "independent review confirmed no delivered candidate",
+    }]
+    acquisitions = [a for a in actions_from_bundle(bundle) if a.kind == "acquisition"]
+    assert len(acquisitions) == 1 and acquisitions[0].target == "DSS boundary data (Missing.dss)"
+    assert "no -- needs data not in the delivery" in render_audit_markdown(bundle)
+
+
+def test_partly_verified_dss_hold_keeps_confirmed_acquisitions():
+    bundle = _two_d_unsteady(
+        supporting_elements={"dss": {"state": "no", "referenced": True}},
+        dss_verification={"boundaries_checked": 3, "boundaries_resolved": 1,
+                          "boundaries_acquisition": 1, "boundaries_inferred": 1},
+    )
+    assert any(a.kind == "acquisition" and a.target == "DSS boundary data" for a in actions_from_bundle(bundle))
+    markdown = render_audit_markdown(bundle)
+    assert "no -- needs data not in the delivery" in markdown
+    assert "| DSS boundary verification | **Partly verified**" in markdown

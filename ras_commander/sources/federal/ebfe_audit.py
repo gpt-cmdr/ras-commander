@@ -402,6 +402,21 @@ def _analysis_gap_is_settled(review: dict, *, dss: bool = False, delivery: bool 
     return review.get("record_proven") is True
 
 
+def _dss_verification_hold(verification: dict) -> str:
+    """Describe captured boundaries whose record availability is unverified."""
+    checked = int(verification.get("boundaries_checked") or 0)
+    inferred = int(verification.get("boundaries_inferred") or 0)
+    if checked <= 0 or inferred <= 0:
+        return ""
+    reasons = verification.get("inferred_reasons") or {}
+    if isinstance(reasons, dict) and reasons:
+        reason = max(reasons.items(), key=lambda item: (int(item[1] or 0), str(item[0])))[0]
+        reason = " ".join(str(reason).split())[:200]
+    else:
+        reason = "no catalog-read reason was captured"
+    return f"{inferred} of {checked} boundary reference(s) could not be verified: {reason}"
+
+
 def _delivered_elements(bundle: AuditBundle) -> dict:
     """Best available present/absent per supporting element, with location."""
     audit = bundle.audit
@@ -625,6 +640,13 @@ def actions_from_bundle(bundle: AuditBundle) -> list[RepairAction]:
             continue
         if ekey == "dss" and acquired_files:
             continue    # the missing DSS files are already named one by one above
+        if ekey == "dss":
+            verification = bundle.audit.get("dss_verification") or {}
+            review = (delivered.get(ekey) or {}).get("review") or {}
+            if (_dss_verification_hold(verification)
+                    and not int(verification.get("boundaries_acquisition") or 0)
+                    and review.get("verdict") != "real"):
+                continue    # unverified records do not establish an acquisition
         location = (delivered.get(ekey) or {}).get("location")
         note = (delivered.get(ekey) or {}).get("note") or ""
         if state == "source_only":
@@ -823,8 +845,12 @@ def render_audit_markdown(bundle: AuditBundle) -> str:
     # Then split repairs the engineer can do from the delivery alone from those
     # that need data FEMA did not ship -- that is the question they will ask.
     needs_external = any(a.kind == "acquisition" for a in actions)
+    verification = audit.get("dss_verification") or {}
+    dss_hold = _dss_verification_hold(verification)
     if not total or loaded < total:
         runnable = "no -- one or more projects will not open"
+    elif dss_hold and not needs_external:
+        runnable = "not established -- DSS boundary references need verification"
     elif grouped["by_verdict"].get("unverifiable") and not needs_external:
         runnable = "not established -- unresolved references need verification"
     elif not actions and grouped["groups"]:
@@ -851,6 +877,9 @@ def render_audit_markdown(bundle: AuditBundle) -> str:
     w(f"| Projects | {loaded} of {total} open |")
     w(f"| Runnable as delivered | **{runnable}** |")
     w(f"| Actions required | {len(actions)} ({len(blocking)} blocking) |")
+    if dss_hold:
+        status = "Partly verified" if int(verification.get("boundaries_resolved") or 0) else "Not verified"
+        w(f"| DSS boundary verification | **{status}** -- {_md_escape(dss_hold)} |")
     # Critical data missing: delivered-but-unusable-for-fidelity. Captured as
     # audit["critical_missing"]; derived from the terrain state when absent, so a
     # missing Terrain.hdf is never quietly folded into "needs data".
@@ -1054,8 +1083,13 @@ def render_audit_markdown(bundle: AuditBundle) -> str:
     w("")
     acq = [a for a in actions if a.kind in ("acquisition", "reconstruction")]
     still_missing = grouped["groups"]
+    if dss_hold:
+        w("Verify the unresolved DSS boundary records before deciding whether acquisition is required. "
+          "The recorded verification did not establish availability for these records.")
+        w("")
     if not acq and not still_missing:
-        w("**Nothing external.** The delivery is self-contained once the steps in section 4 are applied.")
+        if not dss_hold:
+            w("**Nothing external.** The delivery is self-contained once the steps in section 4 are applied.")
     else:
         if acq:
             for a in acq:
