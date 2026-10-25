@@ -3,20 +3,20 @@
  "unavailable": [],
  "fixtures": [
   {
-   "path": "v507_D601/JUL2020_D100RAS.p04.hdf",
-   "sha256": "37d91b9f957f78067cb0a8ae5db7cf3355f9c5d7172cb40e7931c35be78b9683",
+   "path": "v507_ebfe/AustinOyster.p03.hdf",
+   "sha256": "fdaff5045ad36bf5d424489ff64b3d86a1e0e3ef92a628554488f009047cad92",
    "stored_version": "5.0.7",
-   "source": "canonical retained corpus input (supervisor-staged D601)",
+   "source": "public FEMA eBFE Austin-Oyster plan (Source: FEMA estimated Base Flood Elevation (eBFE) program; https://ebfedata.s3.amazonaws.com/12040205_AustinOyster/12040205_Models.zip)",
    "unsteady_2d": true,
    "series": {
-    "D601": "Depth"
+    "Perimeter 1": "Depth"
    },
    "baseline": {
-    "rows": 340248,
+    "rows": 1872746,
     "crs": "EPSG:6588",
-    "source": "supervisor reference-depth-baseline.json (clean 89b4ace Python route)",
+    "source": "h5py Python route (RAS_COMMANDER_FAST_HDF=0), ras-commander 0.108.0, 2026-10-24",
     "per_mesh": {
-     "D601": 340248
+     "Perimeter 1": 1872746
     }
    }
   },

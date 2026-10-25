@@ -7,9 +7,12 @@ checks, against the Python reference (``engine="h5py"``):
   composite ID and every normalized coordinate of the reference, with the
   reference diagnostic records exactly, and never reaches Python polygonize;
 * auto mode returns exactly the reference outcome (frame and diagnostics);
-* strict native fails on the first invalid source cell (5.0.7) with the
-  documented ``MeshCellPolygonError``; a detached-array probe exposes the
-  second invalid original cell identity without touching the HDF.
+* strict native fails on the first invalid source cell with the documented
+  ``MeshCellPolygonError``; a detached-array probe exposes the second invalid
+  original cell identity without touching the HDF. The public fixtures have no
+  invalid cells, so the ``invalid`` case is a derived copy of the public
+  ``AustinOyster.p01.hdf`` with two known invalid cells
+  (``tests/mesh_invalid_cells.py``), written to a temporary folder.
 
 Output JSON belongs in an ignored evidence directory, not tests. Timings
 describe mesh extraction only; no export or solver is benchmarked.
@@ -24,6 +27,7 @@ import json
 import os
 from pathlib import Path
 import sys
+import tempfile
 import threading
 import time
 
@@ -38,16 +42,23 @@ import ras_commander_fast_hdf as native
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from native_engine_provenance import accepted_engine_commits  # noqa: E402
+import mesh_invalid_cells  # noqa: E402
 
 API_VERSION = 11
-# (stored version, file name, polygon count, SHA256 of the immutable copy)
+# (case, file name, polygon count, SHA256 of the immutable copy, invalid source cells).
+# AustinOyster.p03 is the public FEMA eBFE HEC-RAS 5.0.7 plan (Source: FEMA estimated
+# Base Flood Elevation (eBFE) program). The 'invalid' file is derived at run time.
+INVALID_NAME = 'AustinOyster.p01.invalid-cells.hdf'
 FIXTURES = [
-    ('5.0.7', 'JUL2020_D100RAS.p04.hdf', 340246,
-     '37d91b9f957f78067cb0a8ae5db7cf3355f9c5d7172cb40e7931c35be78b9683'),
+    ('5.0.7', 'AustinOyster.p03.hdf', 1872746,
+     'fdaff5045ad36bf5d424489ff64b3d86a1e0e3ef92a628554488f009047cad92', []),
     ('6.6', 'BaldEagleDamBrk.p07.hdf', 87039,
-     '07cad3930a679891f87bbface1ab749b82fd7d7eae6aaac3b5ff041c44280984'),
+     '07cad3930a679891f87bbface1ab749b82fd7d7eae6aaac3b5ff041c44280984', []),
     ('7.0', 'BaldEagleDamBrk.p18.hdf', 4425,
-     '1d0063a84fd131ac95ffaa2b3f6647f2ef51c7f38f23c43e8ae6c698bfc95f0b'),
+     '1d0063a84fd131ac95ffaa2b3f6647f2ef51c7f38f23c43e8ae6c698bfc95f0b', []),
+    ('invalid', INVALID_NAME, 3312,
+     '934261ad6c090feff642876158fc26a7b18e60fcc72327eb031a3b263dc6849d',
+     list(mesh_invalid_cells.INVALID_CELLS)),
 ]
 
 
@@ -151,7 +162,7 @@ def compare(actual, reference_keys, reference_wkb, reference_diagnostics, label)
     return keys, wkb, diagnostics
 
 
-def run(version, path, count, expected_hash):
+def run(version, path, count, expected_hash, expected_invalid):
     assert path.is_file(), path
     before = digest(path)
     assert before == expected_hash, (path, before)
@@ -179,20 +190,18 @@ def run(version, path, count, expected_hash):
                                              reference_diagnostics, f'rust threads={threads}')
             invalid = [dict(d) for d in diagnostics
                        if d['status'] == 'omitted' and d['reason_code'] == 'no_polygon']
-            if version == '5.0.7':
-                assert sorted(d['cell_id'] for d in invalid) == [317422, 339176], invalid
-                assert all(d['mesh_name'] for d in invalid)
-            else:
-                assert not invalid, invalid
+            assert sorted(d['cell_id'] for d in invalid) == expected_invalid, invalid
+            assert all(d['mesh_name'] for d in invalid)
             measure.update(threads=threads, compared_composite_ids=len(keys),
                            compared_polygon_geometries=len(wkb), invalid_omissions=invalid,
                            diagnostics_by_status=dict(Counter(d['status'] for d in diagnostics)))
             result['native'].append(measure)
-        if version == '5.0.7':
+        if expected_invalid:
+            first, second = expected_invalid[:2]
             try:
                 HdfMesh.get_mesh_cell_polygons(path, engine='native', strict=True, threads=4)
             except MeshCellPolygonError as exc:
-                assert 'cell 317422:' in str(exc), str(exc)
+                assert f'cell {first}:' in str(exc), str(exc)
                 result['strict_error'] = str(exc)
             else:
                 raise AssertionError('strict native unexpectedly accepted invalid source cells')
@@ -205,11 +214,11 @@ def run(version, path, count, expected_hash):
                                                dtype='f8' if index in (0, 3) else 'i8')
                           for index, name in enumerate(adapter._MESH_ARRAYS)]
             arrays[4] = arrays[4].copy()
-            arrays[4][317422, 1] = 0
+            arrays[4][first, 1] = 0
             try:
                 native.assemble_cells(*arrays, strict=True, threads=4)
             except native.TopologyError as exc:
-                assert 'cell 339176:' in str(exc), str(exc)
+                assert f'cell {second}:' in str(exc), str(exc)
                 assert exc.mesh_structure_error is False
                 result['second_strict_error_detached_array_probe'] = str(exc)
             else:
@@ -224,7 +233,7 @@ def run(version, path, count, expected_hash):
     compare(auto, reference_keys, reference_wkb, reference_diagnostics, 'auto')
     assert auto.crs == reference.crs
     result['auto'] = measure
-    if version == '5.0.7':
+    if expected_invalid:
         outcomes = []
         for engine in ('h5py', 'auto'):
             with fast_hdf_env('auto'):
@@ -246,11 +255,11 @@ def run(version, path, count, expected_hash):
 def main():
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument('--output', required=True, type=Path)
-    parser.add_argument('--version', choices=['all', '5.0.7', '6.6', '7.0'], default='all')
+    parser.add_argument('--version', choices=['all', '5.0.7', '6.6', '7.0', 'invalid'], default='all')
     parser.add_argument('--fixture-root', type=Path,
                         default=Path(os.environ['RAS_QUAL_FIXTURES']) if os.environ.get('RAS_QUAL_FIXTURES') else None,
-                        help='Local directory holding the three pinned HDF fixtures '
-                             '(default: $RAS_QUAL_FIXTURES)')
+                        help='Local directory holding the pinned HDF fixtures and '
+                             f'{mesh_invalid_cells.SOURCE_NAME} (default: $RAS_QUAL_FIXTURES)')
     args = parser.parse_args()
     if args.fixture_root is None:
         parser.error('--fixture-root (or RAS_QUAL_FIXTURES) is required')
@@ -275,9 +284,15 @@ def main():
                'measurement_scope': 'mesh extraction only; sampled process RSS; '
                                     'adapter/output residual includes Python setup',
                'fixtures': []}
-    for version, name, count, sha in FIXTURES:
-        if args.version in ('all', version):
-            records['fixtures'].append(run(version, args.fixture_root / name, count, sha))
+    with tempfile.TemporaryDirectory() as scratch:
+        for version, name, count, sha, invalid in FIXTURES:
+            if args.version not in ('all', version):
+                continue
+            path = args.fixture_root / name
+            if name == INVALID_NAME:
+                path = mesh_invalid_cells.make_invalid_copy(
+                    args.fixture_root / mesh_invalid_cells.SOURCE_NAME, Path(scratch) / name)
+            records['fixtures'].append(run(version, path, count, sha, invalid))
             args.output.write_text(json.dumps(records, indent=2, default=str), encoding='utf-8')
             print(f'{version} full coordinate/composite-ID/diagnostic parity passed '
                   '(required native and auto)', flush=True)

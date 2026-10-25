@@ -26,7 +26,7 @@ THRESHOLD = 0.5
 UNSTEADY = entries(unsteady=True)
 # Some stored 5.0.3 plans name meshes in "Geometry/2D Flow Areas/Names" and have
 # no "Attributes"; existing public mesh discovery (both routes) returns no rows.
-# Canonical 5.0.7 D601 has Attributes and is covered normally.
+# The public 5.0.7 eBFE AustinOyster.p03 plan has Attributes and is covered normally.
 DISCOVERY_GAP = pytest.mark.xfail(
     strict=True, reason="pre-existing: mesh discovery needs Attributes (see OUTPUT.md)")
 PUBLIC = [pytest.param(e, id=e["path"], marks=DISCOVERY_GAP)

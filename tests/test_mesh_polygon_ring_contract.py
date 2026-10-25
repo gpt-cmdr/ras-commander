@@ -40,7 +40,7 @@ _KNOWN_PATHS = {
         "H:/CLB-Repos/ras-commander/working/c05_preparation_2026-08-22/real_fixtures/DavisStormSystem.p02.hdf",
     ],
     "AustinOyster.p01": ["C:/GH/rc-wt-956/working/austin_bayou_firehose/working_model/Input/AustinOyster.p01.hdf"],
-    "JUL2020_D100RAS.p04": [f"{_SCRATCH}/structures-fixtures/JUL2020_D100RAS.p04.hdf"],
+    "AustinOyster.p03": [f"{_SCRATCH}/structures-fixtures/AustinOyster.p03.hdf"],
     "Homewood.p02": ["D:/RAS_Agent_Scratch/Homewood_Demo/HECRAS/Homewood.p02.hdf"],
     "BaldEagleDamBrk.refpts.701.p03": [f"{_SCRATCH}/refpoint-fixtures/BaldEagleDamBrk.refpts.701.p03.hdf"],
 }

@@ -43,8 +43,9 @@ BINARY_SUFFIXES = {".pyd", ".so", ".dylib"}
 
 # Stored "File Version" prefix, polygon count, SHA256 of the immutable copy.
 CASES = {
-    "JUL2020_D100RAS.p04.hdf": ("HEC-RAS 5.0.7", 340246,
-                                "37d91b9f957f78067cb0a8ae5db7cf3355f9c5d7172cb40e7931c35be78b9683"),
+    # Public FEMA eBFE plan (Source: FEMA estimated Base Flood Elevation (eBFE) program).
+    "AustinOyster.p03.hdf": ("HEC-RAS 5.0.7", 1872746,
+                             "fdaff5045ad36bf5d424489ff64b3d86a1e0e3ef92a628554488f009047cad92"),
     "BaldEagleDamBrk.p07.hdf": ("HEC-RAS 6.6", 87039,
                                 "07cad3930a679891f87bbface1ab749b82fd7d7eae6aaac3b5ff041c44280984"),
     "BaldEagleDamBrk.p18.hdf": ("HEC-RAS 7.0", 4425,

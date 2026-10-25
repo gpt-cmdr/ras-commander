@@ -1,8 +1,9 @@
 """PY-ROUTE-3 item 5: engine-typed 2D mesh series domains versus PR #565's h5py rule.
 
 Engine API 9 types the HEC-RAS 5.0.7 Base Output 2D series that carry no stored
-``Location`` (JUL2020 D601 ``Depth``, ``Water Surface``, ``Face Velocity``,
-``Face Shear Stress``) with ``domain_rule == "legacy_exact_name"``.
+``Location`` (for example the public FEMA eBFE AustinOyster.p03 ``Depth``,
+``Water Surface``, ``Face Velocity``, ``Face Shear Stress``) with
+``domain_rule == "legacy_exact_name"``.
 ``fast_hdf.mesh_series_domain`` exposes that typed domain on the native path.
 
 The h5py rule lives in ras-commander PR #565 (``HdfResultsMesh._mesh_series_id_dim``),
@@ -29,7 +30,7 @@ matching ``domain_rule`` (``stored_location`` when ``Location`` is present, else
 ``legacy_exact_name``); a time-only series is engine ``domain == "other"``; an h5py
 ``ValueError`` is an engine refusal (``id_dim is None``).
 
-Inputs: ``RAS_ROUTE2_FIXTURES`` (real fixtures, JUL2020 D601 included) and
+Inputs: ``RAS_ROUTE2_FIXTURES`` (real fixtures, AustinOyster.p03 included) and
 optionally ``RAS_ROUTE3_LEGACY_EXCERPTS``, a directory holding the engine's
 legacy-location excerpts (valid, wrong_count, invalid_location, rows_mismatch,
 physical_count, physical_count_ok), read only. In a checkout of
@@ -195,7 +196,7 @@ CASES = [(f["path"], f["name"]) for f in FIXTURES] + [(p, f"excerpt:{Path(p).nam
 @pytest.mark.parametrize("path,label", CASES, ids=[c[1] for c in CASES])
 def test_native_domain_matches_pr565_rule(path, label):
     rows = _compare(path, label, pr565_id_dim)
-    if label == "JUL2020_D100RAS.p04":
+    if label == "AustinOyster.p03":
         legacy = {r["series"] for r in rows if r["domain_rule"] == "legacy_exact_name"}
         assert legacy == {"Depth", "Water Surface", "Face Velocity", "Face Shear Stress"}
 
@@ -269,11 +270,11 @@ def test_library_domain_identical_across_modes(path, label):
 
 def test_python_mode_has_no_engine_domain(monkeypatch):
     from ras_commander import fast_hdf
-    jul = [f["path"] for f in FIXTURES if f["name"] == "JUL2020_D100RAS.p04"]
-    if not jul:
-        pytest.skip("JUL2020_D100RAS.p04 not in RAS_ROUTE2_FIXTURES")
+    legacy = [f["path"] for f in FIXTURES if f["name"] == "AustinOyster.p03"]
+    if not legacy:
+        pytest.skip("AustinOyster.p03 not in RAS_ROUTE2_FIXTURES")
     monkeypatch.setenv("RAS_COMMANDER_FAST_HDF", "0")
-    with h5py.File(jul[0], "r") as f:
+    with h5py.File(legacy[0], "r") as f:
         mesh = next(iter(f[AREAS]))
         assert fast_hdf.mesh_series_domain(f[f"{AREAS}/{mesh}/Depth"]) is None
         with pytest.raises(ValueError, match="not a Base Output 2D mesh time series"):

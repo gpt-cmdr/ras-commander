@@ -27,7 +27,7 @@ CASES = {
     # fixture: (mesh names, reference CRS, stored version, physical cells per mesh)
     "BaldEagleDamBrk.p07.hdf": (["BaldEagleCr"], "EPSG:2271", "HEC-RAS 6.6 September 2024", [87039]),
     "BaldEagleDamBrk.p18.hdf": (["BaldEagleCr", "Upper 2D Area"], "EPSG:2271", "HEC-RAS 7.0 April 2026", [3359, 1066]),
-    "JUL2020_D100RAS.p04.hdf": (["D601"], "EPSG:6588", "HEC-RAS 5.0.7 March 2019", [340248]),
+    "AustinOyster.p03.hdf": (["Perimeter 1"], "EPSG:6588", "HEC-RAS 5.0.7 March 2019", [1872746]),
 }
 SELECTIONS = [
     lambda t, c: (t // 2, slice(c // 3, c // 3 + 500)),          # one time step, cell window
@@ -208,7 +208,7 @@ def test_assemble_cells_does_not_alias_caller_buffers(fixture_dir):
 
 
 # ---------------------------------------------------------------------------
-# Identity, CRS/units, geometry, and explicit D601 policy.
+# Identity, CRS/units, geometry, and explicit invalid-cell policy.
 
 
 def _reference(reference_dir, name):
@@ -257,24 +257,38 @@ def test_composite_identity_geometry_crs_units(fixture_dir, reference_dir, evide
                      "per_mesh": dict(zip(meshes, counts)), "native_calls": calls.snapshot()})
 
 
-def test_d601_strict_refuses_and_quarantine_is_explicit(fixture_dir, reference_dir, evidence):
+def test_invalid_cells_strict_refuses_and_quarantine_is_explicit(fixture_dir, tmp_path, evidence):
+    # The public fixtures have no invalid cells; a derived AustinOyster.p01 copy has two.
+    import sys
     from ras_commander import fast_hdf
     from ras_commander.hdf.HdfMesh import MeshCellPolygonError
-    path = fixture_dir / "JUL2020_D100RAS.p04.hdf"
-    with pytest.raises(MeshCellPolygonError, match="317422"):
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+    import mesh_invalid_cells
+    path = mesh_invalid_cells.make_invalid_copy(fixture_dir / mesh_invalid_cells.SOURCE_NAME,
+                                                tmp_path / "AustinOyster.p01.invalid-cells.hdf")
+    first, second = mesh_invalid_cells.INVALID_CELLS
+    with pytest.raises(MeshCellPolygonError, match=str(first)):
         fast_hdf.mesh_polygons(path, backend="rust", strict=True)
     with NativeCalls(["assemble_cells"]) as calls:
         quarantined = fast_hdf.mesh_polygons(path, backend="rust", strict=False, diagnostics=True)
     assert calls.snapshot() == {"assemble_cells": 1}
     omitted = {r["cell_id"] for r in quarantined.attrs["cell_polygon_diagnostics"] if r["status"] == "omitted"}
-    assert omitted == {317422, 339176}
-    assert len(quarantined) == 340246
-    reference = _reference(reference_dir, "JUL2020_D100RAS.p04.hdf")
-    assert len(reference) == 340248
-    missing = set(reference.cell_id) - set(quarantined.cell_id)
-    assert missing == omitted and set(quarantined.cell_id) <= set(reference.cell_id)
-    evidence.append({"test": "d601_policy", "strict": "MeshCellPolygonError(317422)",
+    assert omitted == {first, second}
+    python = fast_hdf.mesh_polygons(path, backend="python", strict=False)
+    assert set(python.cell_id) == set(quarantined.cell_id)
+    assert not omitted & set(quarantined.cell_id)
+    evidence.append({"test": "invalid_cell_policy", "strict": f"MeshCellPolygonError({first})",
                      "quarantine_rows": len(quarantined), "omitted": sorted(omitted)})
+
+
+def test_public_507_mesh_strict_equals_quarantine(fixture_dir, evidence):
+    from ras_commander import fast_hdf
+    path = fixture_dir / "AustinOyster.p03.hdf"
+    strict = fast_hdf.mesh_polygons(path, backend="rust", strict=True)
+    quarantined = fast_hdf.mesh_polygons(path, backend="rust", strict=False, diagnostics=True)
+    assert len(strict) == len(quarantined) == 1872746
+    assert not [r for r in quarantined.attrs["cell_polygon_diagnostics"] if r["status"] == "omitted"]
+    evidence.append({"test": "public_507_policy", "rows": len(strict)})
 
 
 # ---------------------------------------------------------------------------
@@ -295,7 +309,7 @@ def test_required_native_max_depth_matches_frozen_reference(fixture_dir, referen
     g = got.sort_values(key).reset_index(drop=True)
     r = reference.sort_values(key).reset_index(drop=True)
     # Max depth is reported at HDF cell centers (no polygon assembly), so all
-    # D601 physical cells, including the two with invalid polygons, are present.
+    # physical cells are present.
     assert set(g.geometry.geom_type) == {"Point"}
     assert len(g) == len(r) == sum(CASES[name][3])
     assert g[key].astype({"cell_id": "int64"}).equals(r[key].astype({"cell_id": "int64"}))

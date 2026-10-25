@@ -59,17 +59,21 @@ SHA256 values pinned in `qualification.py`) runs as a script against an
 installed extension:
 
     python tests/rust_mesh_quarantine/qualification.py \
-        --fixture-root <dir with the three HDFs> --output <ignored>/qualification.json
+        --fixture-root <dir with the pinned HDFs> --output <ignored>/qualification.json
 
 (`RAS_QUAL_FIXTURES` may replace `--fixture-root`.) For each fixture it
 compares required native at 1 and 4 threads and auto mode against the Python
 reference: every composite ID, every normalized coordinate (exact consecutive
 duplicate samples removed, orientation/start normalized with GEOS), and the
 diagnostic records exactly. Python polygonize is forbidden during required
-native runs. On 5.0.7 strict native must fail on original cell 317422, auto
-strict must raise the same exception as Python, and a detached-array probe
-(changing only the first invalid cell's count in a copy) must expose cell
-339176. The source HDF hash is checked before and after.
+native runs. The public fixtures (the FEMA eBFE `AustinOyster.p03` 5.0.7 plan,
+`BaldEagleDamBrk.p07`, `BaldEagleDamBrk.p18`) have no invalid cells, so a derived
+copy of the public `AustinOyster.p01` with two invalid cells
+(`tests/mesh_invalid_cells.py`, written to a temporary folder) covers that case:
+strict native must fail on original cell 1420, auto strict must raise the same
+exception as Python, and a detached-array probe (changing only the first invalid
+cell's count in a copy) must expose cell 1479. Source: FEMA estimated Base Flood
+Elevation (eBFE) program. The source HDF hash is checked before and after.
 
 Timing scope is mesh extraction only. Assembly, adapter dataset reads and the
 adapter/output residual, and 10 ms sampled absolute process RSS are reported

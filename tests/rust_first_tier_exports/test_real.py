@@ -16,7 +16,7 @@ from ras_commander.hdf import HdfBase, HdfMesh, HdfResultsMesh, HdfXsec, HdfStru
 from .helpers import export, table
 
 
-@pytest.fixture(scope='module', params=[('JUL2020_D100RAS.p04.hdf','5.0.7'),
+@pytest.fixture(scope='module', params=[('AustinOyster.p03.hdf','5.0.7'),
     ('BaldEagleDamBrk.p03.hdf','6.6'),('BaldEagleDamBrk.p18.hdf','7.0')])
 def real(request):
     root = os.environ.get('RAS_EXPORT_FIXTURE_ROOT')

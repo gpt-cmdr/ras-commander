@@ -45,7 +45,7 @@ READ_ROUTES = ["ondemand_native", "ondemand_python", "archival_native", "archiva
 EXPORT_ROUTES = ["export_native_parquet", "export_ref_parquet", "export_native_fgb", "export_ref_fgb"]
 READ_CASES = [
     ("BaldEagleDamBrk.p07.hdf", "BaldEagleCr"),       # 6.6, 865 x 89879, row chunks
-    ("JUL2020_D100RAS.p04.hdf", "D601"),              # 5.0.7, 193 x 352141, row chunks
+    ("AustinOyster.p03.hdf", "Perimeter 1"),          # 5.0.7 FEMA eBFE, 73 x 1882841, row chunks
     ("BaldEagleDamBrk.p18.hdf", "BaldEagleCr"),       # 7.0, 865 x 3947, 12-row chunks
 ]
 EXPORT_CASE = "BaldEagleDamBrk.p07.hdf"

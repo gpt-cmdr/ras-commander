@@ -10,7 +10,7 @@ pytestmark = pytest.mark.skipif(
 )
 
 
-@pytest.mark.parametrize('case,rows',[('cells7',4425),('cells6',18066),('cells5',340246)])
+@pytest.mark.parametrize('case,rows',[('cells7',4425),('cells6',18066),('cells5',1872746)])
 def test_full_model_release_equality_and_build_identity(case,rows):
     records=json.loads((ROOT/'working/fgb-finalization/measurements'/case/'results.json').read_text())
     assert len(records)==6

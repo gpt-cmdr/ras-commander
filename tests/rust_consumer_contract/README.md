@@ -10,7 +10,7 @@ static source/ABI inventory. Owner packet: `consumer-contract` of run
 | `inventory.py` | Source-only inventory of a ras-commander-fast-hdf checkout (`RAS_FAST_HDF_SOURCE`): registrations incl. `register(m)` delegation and `add_class`, features, git pins, PyO3/NumPy/filesystem coupling |
 | `test_source_inventory.py` | Explicit 33-entry full-feature registration set, reconciled with the accepted runtime ABI when a receipt is supplied |
 | `test_native_gate.py` | Wheel archive SHA + RECORD, inner `.pyd/.so` SHA, Python wheel vs accepted commit blobs, non-editable import origins, runtime ABI, isolated cwd |
-| `test_native_consumer.py` | Real-fixture behaviour: required-native slices with call counts and no fallback, Python reference, physical I/O bound, buffer ownership, composite identity/CRS/units, D601 policy, native max depth vs frozen reference, year-3000 ms, per-format independent reopen, PMTiles/MVT spec decode |
+| `test_native_consumer.py` | Real-fixture behaviour: required-native slices with call counts and no fallback, Python reference, physical I/O bound, buffer ownership, composite identity/CRS/units, invalid-cell policy, native max depth vs frozen reference, year-3000 ms, per-format independent reopen, PMTiles/MVT spec decode |
 | `contract.py` | Shared helpers: call recorder (signature preserving), PMTiles v3 / MVT decoder, chunk planning |
 
 Native tests skip unless all environment inputs exist:
