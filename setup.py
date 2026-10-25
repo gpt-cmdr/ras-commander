@@ -9,7 +9,7 @@ from pathlib import Path
 # (manylinux_2_28) and macOS arm64, so the marker limits the dependency to those
 # platforms and pip never tries to compile the Rust source distribution
 # elsewhere. Where the extension is not installed, every read uses h5py.
-FAST_HDF_REQUIREMENT = 'ras-commander-fast-hdf>=0.1,<0.2'
+FAST_HDF_REQUIREMENT = 'ras-commander-fast-hdf>=0.2,<0.3'
 FAST_HDF_WHEEL_MARKER = (
     'platform_python_implementation == "CPython" and ('
     '(platform_system == "Windows" and platform_machine == "AMD64")'
@@ -83,7 +83,7 @@ class CustomBuildPy(build_py):
 
 setup(
     name="ras-commander",
-    version="0.107.1",
+    version="0.108.0",
     packages=find_packages(include=['ras_commander', 'ras_commander.*']),
     include_package_data=True,
     package_data={

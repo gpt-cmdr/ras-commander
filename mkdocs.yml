@@ -96,6 +96,7 @@ plugins:
           - api/hydrofabric.md
           - api/breakout-1d.md
           - api/breakout-2d.md
+          - api/hydraulic-subdomains.md
           - api/benefits.md
           - api/fim.md
           - api/hdf.md
@@ -282,6 +283,7 @@ nav:
       - Hydrofabric Conflation: api/hydrofabric.md
       - 1D Breakout Extraction: api/breakout-1d.md
       - 2D Breakout Geometry Preparation: api/breakout-2d.md
+      - Hydraulic Subdomains: api/hydraulic-subdomains.md
     - Results & Mapping:
       - HDF Modules: api/hdf.md
       - Results Queries: api/results-queries.md

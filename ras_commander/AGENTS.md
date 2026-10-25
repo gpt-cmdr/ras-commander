@@ -20,7 +20,7 @@ This file is the canonical local instruction file for the `ras_commander/` packa
 - RasProcess.exe CLI wrapper: `RasProcess` (stored maps; geometry association; `compute_geometry()` runs HEC-RAS's headless `CompleteGeometry` pipeline via `RasProcess.exe`). `compute_geometry()` is the same pipeline as `RasGeometryCompute.compute_geometry()` but as a subprocess; it is the supported path for **Linux/Wine**. On Windows prefer `RasGeometryCompute`. (`RasProcess.complete_geometry()` is a deprecated alias for `compute_geometry()`.)
 - HDF access: `Hdf*` classes and `ras_commander/hdf/` (native engine backend, its environment variables `RAS_COMMANDER_FAST_HDF`, `RAS_COMMANDER_HDF_SESSION_CACHE`, `RAS_COMMANDER_FAST_TEXT` and the session rules: see `ras_commander/hdf/AGENTS.md`, "Native Backend")
 - USGS IC generation: `usgs/initial_conditions.py` (`generate_ic_from_usgs()`: auto-discover gauges, match to XS, generate IC table from USGS snapshot)
-- Domain subpackages: `geom/`, `remote/`, `usgs/`, `check/`, `dss/`, `fixit/`, `precip/`, `gui/`, `terrain/`
+- Domain subpackages: `geom/`, `remote/`, `usgs/`, `check/`, `dss/`, `fixit/`, `precip/`, `gui/`, `terrain/`, `subdomain/`
 - Gridded precipitation: `RasPrecipGrid` normalizes projected raster inputs;
   `PrecipCapabilities` and `RasUnsteady.get_gridded_precipitation_capabilities()`
   expose version/route evidence. Use `set_gridded_precipitation_geotiff()` or
@@ -34,6 +34,11 @@ This file is the canonical local instruction file for the `ras_commander/` packa
   `RasTerrainMod.compute_modified_terrain_raster()` is a deprecated row-sampled
   compatibility path scheduled for removal in 1.1; do not use it for new work
   or as the production consolidation fallback.
+- Terrain delineation: `terrain.RasTauDem.delineate()` runs the external TauDEM 5
+  D8 tools and returns stream links and catchments (`taudem_streams`,
+  `taudem_catchments`). TauDEM is GPL-3 and only ever runs as a separate
+  process: never import, link, vendor or install it. Keep `RasTauDem` lazily
+  exported so `import ras_commander.terrain` does not load geopandas.
 
 ## Coding Rules
 

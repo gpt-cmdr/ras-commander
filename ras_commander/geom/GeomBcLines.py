@@ -1251,3 +1251,114 @@ class GeomBcLines:
             "new_name": clean_new,
             "backup_path": str(backup_path),
         }
+
+    @staticmethod
+    @log_call
+    def offset_external_bc_lines(
+        geom_file: Union[str, Path],
+        bc_line_names: List[str],
+        offset_distance: float = 1.0,
+        *,
+        dry_run: bool = True,
+        expected_geometry_sha256: Optional[str] = None,
+        text_only: bool = False,
+        ras_object=None,
+    ) -> Dict[str, Any]:
+        """Plan or author External lines on an outward-buffered 2D area perimeter.
+
+        Args:
+            geom_file: Staged text geometry to read or modify; never a source model.
+            bc_line_names: Explicit External names. Internal lines are left unchanged.
+            offset_distance: Positive distance in native projected CRS units. Use
+                1.0 for a one-foot offset in a model whose horizontal units are feet.
+            dry_run: Return the plan without writing when True. False uses the
+                existing text writer, retains its backup, and checks readback.
+            expected_geometry_sha256: Optional text hash from the dry-run plan.
+            text_only: Explicit first-import mode when native BCs do not exist.
+                No intended face set is inferred in this mode; the caller must
+                supply independently planned face IDs for postcompile validation.
+            ras_object: Reserved project context; explicit geom_file is authoritative.
+
+        Returns:
+            Coordinates, displacement and source hash; when a compiled HDF exists,
+            also its intended face sets and numeric mesh fingerprints. HDFs are
+            read only. Run native preprocessing, then validate_external_bc_face_sets
+            before accepting any hydraulic result. No connectivity is fabricated.
+            Callers must exclude concurrent writers. Restoration handles Python
+            exceptions; it does not provide crash recovery or cross-process locking.
+            ``native_guard`` contains ``expected_face_sets``, ``bc_areas`` and
+            ``mesh_fingerprints``. Text-only mode leaves the face sets empty;
+            it cannot establish native acceptance. The readback clearance permits
+            at most two percent coordinate-rounding loss from the requested offset.
+
+        Examples:
+            Plan, apply to an owned copy, preprocess with the normal project API,
+            then verify the native handoff::
+
+                plan = GeomBcLines.offset_external_bc_lines(geom, names)
+                GeomBcLines.offset_external_bc_lines(
+                    geom, names, dry_run=False,
+                    expected_geometry_sha256=plan["geometry_sha256_before"],
+                )
+                done = RasPreprocess.preprocess_plan("01", ras_object=project)
+                if not done.success:
+                    raise ValueError(done.error)
+                guard = plan["native_guard"]
+                GeomBcLines.validate_external_bc_face_sets(
+                    str(geom) + ".hdf", guard["expected_face_sets"],
+                    expected_bc_areas=guard["bc_areas"],
+                    expected_mesh_fingerprints=guard["mesh_fingerprints"],
+                )
+
+        Raises:
+            ValueError: Invalid, ambiguous, changed or non-perimeter inputs, or
+                serialized coordinates that lose outward clearance. Failed edits
+                restore the original text and mtime; the backup is retained.
+        """
+        from ._bc_outward import offset_external_bc_lines
+
+        return offset_external_bc_lines(
+            Path(geom_file),
+            bc_line_names,
+            offset_distance,
+            dry_run=dry_run,
+            expected_geometry_sha256=expected_geometry_sha256,
+            text_only=text_only,
+        )
+
+    @staticmethod
+    @log_call
+    def validate_external_bc_face_sets(
+        hdf_path: Union[str, Path],
+        expected_face_sets: Dict[str, List[int]],
+        *,
+        expected_bc_areas: Dict[str, str],
+        expected_mesh_fingerprints: Optional[Dict[str, Any]] = None,
+        ras_object=None,
+    ) -> Dict[str, Any]:
+        """Require exact native External face IDs after geometry preprocessing.
+
+        Args:
+            hdf_path: Compiled geometry or plan HDF, opened read only.
+            expected_face_sets: Nonempty intended mesh-local face IDs per exact
+                BC name, captured before offsetting or supplied by the mesh plan.
+            expected_mesh_fingerprints: Optional numeric mesh fingerprints from
+                offset_external_bc_lines, requiring byte-identical mesh tables.
+            expected_bc_areas: Exact area ownership per BC name; IDs are mesh-local.
+            ras_object: Reserved project context; explicit hdf_path is authoritative.
+
+        Returns:
+            A valid record with the exact face sets; no files are modified.
+
+        Raises:
+            ValueError: Missing, additional or duplicate faces, or changed mesh
+                arrays. This rejects neighboring faces selected at an offset corner.
+        """
+        from ._bc_outward import validate_external_bc_face_sets
+
+        return validate_external_bc_face_sets(
+            Path(hdf_path),
+            expected_face_sets,
+            expected_mesh_fingerprints,
+            expected_bc_areas,
+        )

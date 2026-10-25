@@ -13,7 +13,7 @@ the extension moved there from `rust/fast-hdf`.
 ```powershell
 uv venv .venv --python 3.12
 uv pip install -e . pytest maturin pyarrow pyogrio geopandas pyproj shapely xarray scipy requests tqdm psutil pmtiles mapbox-vector-tile freestiler==0.3.0
-uv run maturin develop --release --locked --features extension-module,exports-all --manifest-path $env:RAS_FAST_HDF_SOURCE/python/Cargo.toml
+uv run --project $PWD --directory $env:RAS_FAST_HDF_SOURCE/python maturin develop --release --locked --features extension-module,exports-all
 $env:CARGO_TARGET_DIR=(Join-Path $PWD 'working/cargo-target')
 cargo build --release --locked --manifest-path tests/rust_whole_model_exports/harness/Cargo.toml
 # The inherited format suite also needs its separate test-harness prerequisite.

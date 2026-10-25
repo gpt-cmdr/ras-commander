@@ -17,7 +17,7 @@ try:
     __version__ = version("ras-commander")
 except PackageNotFoundError:
     # package is not installed
-    __version__ = "0.107.1"
+    __version__ = "0.108.0"
 
 # Canonical machine-readable agent index (see docs() helper below)
 __llms_txt__ = "https://rascommander.info/ras/llms.txt"
@@ -206,6 +206,13 @@ _LAZY_EXPORTS = {
             'RasBreakout2D', 'Breakout2DSpec', 'Breakout2DPreflight',
             'Breakout2DCloneResult', 'Breakout2DPreparationResult',
             'Breakout2DFluxReview',
+        )
+    },
+    **{
+        name: ('.subdomain', name)
+        for name in (
+            'RasSubdomain', 'SplitLineCriteria', 'SplitLineSearch',
+            'SubdomainPartition',
         )
     },
     'RasProcess': ('.RasProcess', 'RasProcess'),
@@ -489,6 +496,7 @@ __all__ = [
     'RasBreakout2D', 'Breakout2DSpec', 'Breakout2DPreflight',
     'Breakout2DCloneResult', 'Breakout2DPreparationResult',
     'Breakout2DFluxReview',
+    'RasSubdomain', 'SplitLineCriteria', 'SplitLineSearch', 'SubdomainPartition',
     'RasNetworkConflation', 'NetworkConflationResult',
     'NetworkEdgeCoverageResult', 'NetworkEdgeCoveragePlanResult',
     'ConflationStatus', 'NetworkAdapter', 'NHDPlusAdapter',

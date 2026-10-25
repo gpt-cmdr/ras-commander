@@ -1,6 +1,6 @@
 """Real-model qualification for the lossless Rust text core of the native extension.
 
-The core lives in ``python/src/ras_text`` of
+The core lives in ``src/python/ras_text`` of
 https://github.com/gpt-cmdr/ras-commander-fast-hdf. The standalone crate next
 to this file compiles it in place from the checkout named by
 ``RAS_FAST_HDF_SOURCE`` and drives it through its ``ras_text_probe`` binary. Projects come from RasExamples, are extracted into pytest temp folders
@@ -163,7 +163,7 @@ def test_provenance_is_this_checkout():
         "ras_commander": str(Path(ras_commander.__file__).resolve()),
         "version": ras_commander.__version__,
         "native_extension": spec.origin if spec else None,
-        "ras_text_source": str(Path(os.environ.get("RAS_FAST_HDF_SOURCE", "")) / "python/src/ras_text"),
+        "ras_text_source": str(Path(os.environ.get("RAS_FAST_HDF_SOURCE", "")) / "src/python/ras_text"),
     }
 
 
