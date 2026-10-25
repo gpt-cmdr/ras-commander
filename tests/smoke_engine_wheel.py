@@ -21,13 +21,33 @@ def main():
     assert engine, "wheel did not install ras2fim-batch on PATH"
     method = json.loads(subprocess.check_output([engine, "method"], text=True))
     assert "step05_r2" in method
+    assert method["horizontal"]["method_id"] == "horizontal-cell-constant/1"
     with tempfile.TemporaryDirectory(prefix="ras2fim-wheel-") as tmp:
         root = Path(tmp)
         terrain = root / "terrain.tif"
         with rasterio.open(terrain, "w", driver="GTiff", width=8, height=8,
                            count=1, dtype="float32", crs="EPSG:3857",
-                           transform=Affine(1, 0, 0, 0, -1, 8)) as ds:
+                           transform=Affine(1, 0, 0, 0, -1, 8), nodata=-9999) as ds:
             ds.write(np.full((8, 8), 100, dtype=np.float32), 1)
+        ownership=np.tile(np.array([1,1,1,2,2,0],dtype="<u4"),(4,1))
+        ownership.tofile(root/"owner.bin")
+        np.array([100.5,102.],dtype="<f4").tofile(root/"a.bin")
+        np.array([103.,np.nan],dtype="<f4").tofile(root/"b.bin")
+        request={"schema":"ras2fim-horizontal-request/1","terrain":str(terrain),"epsg":3857,
+                 "crs_identity":{"kind":"epsg"},"terrain_transform":[0.,1.,0.,8.,0.,-1.],
+                 "window":[1,2,6,4],"owner_file":"owner.bin","cell_count":2,
+                 "profiles":[{"id":"a","values_file":"a.bin"},{"id":"b","values_file":"b.bin"}],
+                 "min_depth":0.5,"threads":2,"max_working_bytes":256<<20}
+        (root/"horizontal.json").write_text(json.dumps(request))
+        subprocess.run([engine,"horizontal",str(root/"horizontal.json"),str(root/"horizontal")],check=True)
+        report=json.loads((root/"horizontal/report.json").read_text())
+        assert report["status"]=="complete" and len(report["profiles"])==2
+        for name,values in [("a",np.array([np.nan,100.5,102.],dtype="float32")),
+                            ("b",np.array([np.nan,103.,np.nan],dtype="float32"))]:
+            expected=values[ownership]-np.float32(100.)
+            expected[~(expected>0.5)]=np.nan
+            actual=np.fromfile(root/"horizontal"/name/"depth.bin",dtype="<f4").reshape(4,6)
+            np.testing.assert_array_equal(actual,expected)
         inputs = root / "inputs"
         inputs.mkdir()
         samples = np.array([[0., 0., 105.], [7., 0., 105.],

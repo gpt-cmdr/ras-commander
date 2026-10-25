@@ -106,11 +106,21 @@ fn run() -> Result<i32, Box<dyn std::error::Error>> {
         ("horizontal", 3) => {
             let request_path = PathBuf::from(&args[1]);
             let out = PathBuf::from(&args[2]);
-            if out.exists() { return Err("output directory exists; choose a new path".into()); }
-            let req: ras2fim_stages_r2::horizontal::Request = ras2fim_stages_r2::model::read_json(&request_path)?;
-            let base = request_path.canonicalize()?.parent().ok_or("request has no parent")?.to_path_buf();
+            if out.exists() {
+                return Err("output directory exists; choose a new path".into());
+            }
+            let req: ras2fim_stages_r2::horizontal::Request =
+                ras2fim_stages_r2::model::read_json(&request_path)?;
+            let base = request_path
+                .canonicalize()?
+                .parent()
+                .ok_or("request has no parent")?
+                .to_path_buf();
             let report = ras2fim_stages_r2::horizontal::run(&req, &base, &out)?;
-            println!("{}", serde_json::json!({"status":report["status"],"total_seconds":report["total_seconds"]}));
+            println!(
+                "{}",
+                serde_json::json!({"status":report["status"],"total_seconds":report["total_seconds"]})
+            );
             Ok(if report["status"] == "complete" { 0 } else { 2 })
         }
         ("step05", 3) => {

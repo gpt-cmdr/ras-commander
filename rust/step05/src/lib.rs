@@ -17,8 +17,8 @@
 //! - The diagnostic session's f64 arithmetic does not replace the Step05 float32 sequence.
 #![forbid(unsafe_code)]
 
-pub mod horizontal;
 pub mod cache;
+pub mod horizontal;
 pub mod interp;
 pub mod model;
 pub mod scipy_interp;
