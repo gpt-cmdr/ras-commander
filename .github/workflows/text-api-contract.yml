@@ -28,6 +28,9 @@ jobs:
       - name: Check text API and geometry write safety
         run: >-
           python -m pytest tests/ras_text_read_only_test.py
+          tests/test_geom_storage_record_preservation.py
+          tests/test_geom_storage_2d_flow_area_writer.py
+          tests/test_geom_storage_perimeter_serialization.py
           tests/test_clear_geometry_infiltration.py
           tests/test_geometry_association_inventory.py
           tests/test_area_association_sync.py
