@@ -778,3 +778,110 @@ def test_acquisition_deduplication_preserves_distinct_paths_with_same_basename()
         "DSS boundary data (../A/100YR.dss)",
         "DSS boundary data (../B/100YR.dss)",
     }
+
+
+# A delivered filename does not establish that a DSS catalog holds a record.
+@pytest.mark.parametrize("method,record_proven,settled", [
+    ("archive_member_match", False, False),
+    ("archive_member_match", True, False),
+    ("exact_relative_path", False, False),
+    ("dss_pathname_match", False, True),
+    ("dss_record_match", False, True),
+    ("unknown", False, False),
+    ("unknown", True, True),
+    ("unknown", "false", False),
+])
+def test_dss_gap_review_requires_record_evidence(method, record_proven, settled):
+    bundle = _minimal_bundle()
+    bundle.gaps = [{
+        "gap": "MISSING_REFERENCE", "source_file": "Example.u01", "role": "prj:DSS File",
+        "raw_value": r"..\Input\Boundary.dss",
+        "review": {"verdict": "analysis_gap", "method": method,
+                   "record_proven": record_proven, "evidence": "models.zip::Input/Boundary.dss"},
+    }]
+    markdown = render_audit_markdown(bundle)
+    missing = markdown.split("## 5. What is still missing", 1)[1].split(
+        "### Reclassified during review", 1)[0].split("## 6.", 1)[0]
+    assert ("Boundary.dss" not in missing) == settled
+    if not settled:
+        verdict = markdown.split("## 1. Verdict", 1)[1].split("## 2.", 1)[0]
+        obtain = markdown.split("## 6. What you must obtain", 1)[1].split("## 7.", 1)[0]
+        assert "not established -- unresolved references need verification" in verdict
+        assert "need verification before deciding whether acquisition is required" in obtain
+        assert "referenced by the model and not delivered" not in obtain
+
+
+@pytest.mark.parametrize("method,delivered", [
+    ("archive_member_match", False),
+    ("exact_relative_path", True),
+    ("dss_pathname_match", True),
+    ("dss_record_match", True),
+    ("unknown", False),
+])
+def test_dss_delivery_review_requires_exact_path_or_record_evidence(method, delivered):
+    bundle = _two_d_unsteady(supporting_elements={"dss": {
+        "state": "no", "referenced": True,
+        "review": {"verdict": "analysis_gap", "method": method,
+                   "evidence": "models.zip::Input/Boundary.dss"},
+    }})
+    markdown = render_audit_markdown(bundle)
+    row = next(line for line in markdown.splitlines() if line.startswith("| DSS boundary data |"))
+    assert (row.split("|")[3].strip() == "Yes") == delivered
+    reclassified = markdown.split("### Reclassified during review", 1)
+    assert (len(reclassified) > 1 and "DSS boundary data (layer)" in reclassified[1]) == delivered
+
+
+def test_non_dss_review_still_settles_a_filename_gap():
+    bundle = _minimal_bundle()
+    bundle.gaps = [{
+        "gap": "MISSING_REFERENCE", "source_file": "Example.rasmap",
+        "raw_value": "Projection.prj",
+        "review": {"verdict": "analysis_gap", "method": "archive_member_match",
+                   "evidence": "models.zip::Projection.prj"},
+    }]
+    markdown = render_audit_markdown(bundle)
+    assert "### Reclassified during review" in markdown
+    assert "Projection.prj" in markdown.split("### Reclassified during review", 1)[1]
+
+
+@pytest.mark.parametrize("role,surface", [("prj:DSS File", ""), ("", "dss_pathname")])
+def test_dss_gap_without_filename_extension_still_requires_record_evidence(role, surface):
+    bundle = _minimal_bundle()
+    bundle.gaps = [{
+        "gap": "MISSING_REFERENCE", "raw_value": "/BASIN/SITE/FLOW//1HOUR/RUN/",
+        "role": role, "surface": surface,
+        "review": {"verdict": "analysis_gap", "method": "archive_member_match"},
+    }]
+    markdown = render_audit_markdown(bundle)
+    assert "not established -- unresolved references need verification" in markdown
+    assert "### Reclassified during review" not in markdown
+
+
+def test_unverified_reference_does_not_hide_a_separate_confirmed_missing_file():
+    bundle = _minimal_bundle()
+    bundle.gaps = [
+        {"gap": "MISSING_REFERENCE", "raw_value": "Unverified.dss",
+         "review": {"verdict": "analysis_gap", "method": "archive_member_match"}},
+        {"gap": "MISSING_REFERENCE", "raw_value": "Missing.dss",
+         "review": {"verdict": "real", "method": "dss_record_match"}},
+    ]
+    obtain = render_audit_markdown(bundle).split("## 6. What you must obtain", 1)[1]
+    assert "1 file(s) referenced by the model and not delivered" in obtain
+    assert "1 file reference(s) need verification" in obtain
+
+
+def test_unsettled_dss_review_qualifies_captured_tally_without_mutating_bundle():
+    from copy import deepcopy
+
+    bundle = _minimal_bundle(deficiency_review={
+        "reported": 1, "real": 0, "analysis_gap": 1, "unverifiable": 0,
+    })
+    bundle.gaps = [{
+        "gap": "MISSING_REFERENCE", "raw_value": "Boundary.dss",
+        "review": {"verdict": "analysis_gap", "method": "archive_member_match"},
+    }]
+    before = deepcopy(bundle)
+    markdown = render_audit_markdown(bundle)
+    assert "| Captured review tally | 1 reported:" in markdown
+    assert "1 reference review(s) lack record-level evidence; treated as unverified below" in markdown
+    assert bundle == before
