@@ -7,9 +7,36 @@ import tempfile
 import shutil
 import subprocess
 import threading
+import time
 import numpy as np
 from . import _engine
 from .errors import FimEngineError, FimUnsupportedError
+
+
+def _write_array(path, array):
+    """Stage contiguous little-endian bytes with bounded operating-system writes."""
+    view = memoryview(array).cast("B")
+    with path.open("wb") as destination:
+        for start in range(0, len(view), 1 << 20):
+            chunk = view[start : start + (1 << 20)]
+            if destination.write(chunk) != len(chunk):
+                raise FimEngineError("short horizontal staging write")
+
+
+def _read_f32(stream, shape, expired, timeout, product):
+    """Fill one array with bounded reads, preserving partial reads and float bits."""
+    array = np.empty(shape, dtype="<f4")
+    view = memoryview(array).cast("B")
+    position = 0
+    while position < len(view):
+        size = stream.readinto(view[position : position + (1 << 20)])
+        if not size:
+            if expired.is_set():
+                raise FimEngineError(f"horizontal engine timed out after {timeout} seconds")
+            raise FimEngineError(f"truncated horizontal {product} stream")
+        position += size
+    array.setflags(write=False)
+    return array
 
 
 @contextmanager
@@ -45,7 +72,13 @@ def run_batch(
         )
     with tempfile.TemporaryDirectory(prefix=".horizontal-", dir=scratch_folder) as tmp:
         root = Path(tmp)
-        grid.owner.astype("<u4", copy=False).tofile(root / "owner.bin")
+        staging_started = time.perf_counter()
+        owner = grid.owner.astype("<i4", copy=False).view("<u4")
+        _write_array(root / "owner.bin", owner)
+        del owner
+        details.setdefault("timings", {})["owner_staging_seconds"] = (
+            time.perf_counter() - staging_started
+        )
         profiles = []
         failures = {}
         for i, name in enumerate(names):
@@ -62,7 +95,7 @@ def run_batch(
                     raise FimUnsupportedError(
                         "horizontal WSE must be finite float32-range values or NaN"
                     )
-                values.astype("<f4").tofile(root / f"values-{i}.bin")
+                _write_array(root / f"values-{i}.bin", values.astype("<f4"))
                 profiles.append({"id": name, "values_file": f"values-{i}.bin"})
             except Exception as exc:
                 failures[name] = f"{type(exc).__name__}: {exc}"
@@ -90,6 +123,9 @@ def run_batch(
         with rasterio.open(terrain) as src:
             request["terrain_transform"] = list(src.transform.to_gdal())
         (root / "request.json").write_text(json.dumps(request), encoding="utf-8")
+        timings = details.setdefault("timings", {})
+        timings["engine_staging_seconds"] = time.perf_counter() - staging_started
+        timings["stream_read_seconds"] = {}
         expected_names = [p["id"] for p in profiles]
         received = []
         received_statuses = {}
@@ -157,6 +193,7 @@ def run_batch(
             def next_result(name):
                 if name in failures:
                     return {"status": "failed", "error": failures[name]}
+                read_started = time.perf_counter()
                 line = proc.stdout.readline(16385)
                 if not line or not line.endswith(b"\n") or len(line) > 16384:
                     if expired.is_set():
@@ -181,15 +218,10 @@ def run_batch(
                     raise FimEngineError("horizontal stream pixel count mismatch")
                 result = {"status": "complete"}
                 for product in ("depth", "wse"):
-                    expected = grid.owner.size * 4
-                    data = proc.stdout.read(expected)
-                    if len(data) != expected:
-                        if expired.is_set():
-                            raise FimEngineError(
-                                f"horizontal engine timed out after {timeout} seconds"
-                            )
-                        raise FimEngineError(f"truncated horizontal {product} stream")
-                    result[product] = np.frombuffer(data, dtype="<f4").reshape(grid.plan.shape)
+                    result[product] = _read_f32(
+                        proc.stdout, grid.plan.shape, expired, timeout, product
+                    )
+                timings["stream_read_seconds"][name] = time.perf_counter() - read_started
                 return result
 
             try:

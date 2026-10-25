@@ -111,12 +111,18 @@ the same thresholded products. Rust applies the filter while mapping.
 | Full-domain Spring Creek: one maximum-result profile | End-to-end elapsed (s) |
 |---|---:|
 | Native horizontal RAS Mapper | 231.8 |
-| Rust horizontal pipeline | 359.1 |
+| Rust horizontal pipeline before transport fixes | 359.1 |
+| Rust horizontal with bounded array reads | 126.4 |
+| Rust horizontal with bounded reads/writes, overlap prefilter and four compression workers | 56.3 |
 
-Rust took 1.55 times the native elapsed time in this observation. This was
-one native-first/Rust-second pair, without an excluded warm-up or interleaved
-repetitions, on the shared Windows workstation. It is an exploratory
-measurement, not a general throughput result or a cold-cache comparison.
+The original native-first/Rust-second pair took 231.8 and 359.1 seconds.
+Follow-up Rust runs took 126.4 seconds with bounded reads, then 56.3 seconds
+with the combined optimizations. The latter is 6.38 times faster than the
+initial Rust observation and 4.12 times faster than the retained native
+observation. Each figure is one run on the shared Windows workstation;
+the follow-ups were not interleaved with fresh native runs. There was no
+excluded warm-up and cache state/external load were uncontrolled. These are
+exploratory observations, not a general throughput or cold-cache claim.
 The native grid contained 447,487,929 pixels; Rust trimmed blank terrain
 margins to the physical mesh bounds and wrote 411,674,756 pixels. Both cover
 the evaluated 2D mesh; the coverage check also counts all native wet pixels
@@ -129,16 +135,73 @@ that the comparison did not omit native wet output outside its footprint.
 Native implied-terrain residuals were zero. This is one maximum-result
 full-domain case, not all-timestep or all-mode parity.
 
-The Rust engine reported 10.9 seconds preparing terrain and 260.8 seconds in
-its profile operation, which includes writing the binary stdout stream. The
-latter is not a kernel-only timing. This full-domain request transfers about
-3.29 GB of depth/WSE arrays across the subprocess pipe. These observations
-make direct bindings and persistent prepared arrays relevant optimization
-candidates; they do not prove how much time either change would save.
+The initial Rust engine reported 10.9 seconds preparing terrain and 260.8
+seconds in its profile operation, including binary stdout transfer. That
+was not a kernel-only timing. A single depth or WSE array contains about
+1.65 GB; both arrays transfer about 3.29 GB through the subprocess pipe.
+An isolated same-size transfer test took 62.29 seconds with one large read
+and 0.60 seconds with 1 MiB `readinto` chunks. The adapter now fills NumPy
+arrays directly using bounded reads, including correct partial-read and
+truncation handling, without an intermediate whole-array bytes object.
+
+The combined run retained exact agreement on all 79,872,550 wet pixels,
+with no extra/missing wet pixels, missing WSE or implied-terrain residual.
+Its measured stages were:
+
+| Stage | Elapsed (s) |
+|---|---:|
+| Validate/rasterize ownership | 33.9 |
+| Stage ownership and profile inputs | 0.44 |
+| Stream reads, including native terrain preparation/calculation waits | 13.6 |
+| Write depth/WSE GeoTIFFs | 7.4 |
+| Full mapping call | 56.3 |
+
+Input staging now writes bounded byte chunks and views the nonnegative int32
+owner labels as uint32 bits without a whole-grid signed/unsigned copy.
+Overlap validation first tests interior intersection, constructing geometry
+only for those candidates before the original positive-area rejection.
+Shared edges, cell order, ownership rasterization and pixel arithmetic are
+unchanged. `writer_threads=4` enables lossless LZW compression workers in
+addition to the four Rust pixel workers. Both processes were restricted to
+four allowed logical CPUs for the full-domain observation; the two pools can
+overlap across profiles, so callers should budget their combined workers.
+See the [API guide](../api/fim.md) for controls and scope.
+
+These changes leave the compiled engine and its numerical method unchanged.
+The tests cover short reads, truncation, signed zero and NaN payload bits,
+staging bytes, nested writer configuration restoration, invalid worker
+counts and one/four-worker numerical equality. Terrain and ownership already
+persist across profiles within one call. Persistent prepared contexts across
+calls and direct Python bindings remain opportunities for further work.
+
+### Seven-profile catalog observation
+
+A follow-up mapped seven actual saved Spring Creek timesteps, at source
+indices 0, 24, 48, 72, 96, 120 and 144 (12-hour intervals from the initial
+state through 72 hours). Fast-HDF 0.2.1 in required-native mode read the
+selected Water Surface and Depth rows and assembled the WSE columns in
+0.86 seconds; geometry was already staged. Mapping all seven profiles in
+one call took 101.9 seconds, including preparation and both LZW GeoTIFFs
+per profile. Terrain and ownership were shared. Four Rust workers and four
+writer workers were allowed within a four-CPU affinity limit.
+
+All 14 delivered rasters matched the NumPy horizontal reference bit-for-bit
+at every output pixel, including NaNs. There were 182,956,389 wet pixel-time
+samples; the initial saved time was entirely dry. This tests transport,
+worker-count and batch reuse semantics on saved results. These seven maps
+were not independently regenerated by native RAS Mapper in this experiment;
+the direct native equality evidence above is the maximum-result map.
+
+This was one catalog observation, without interleaved native catalog
+repetitions. It is not a measured speed ratio against a seven-map native
+run. The API's existing batch interface amortizes preparation; a prepared
+native context retained across separate calls is still future work.
 
 ### Secondary comparison with triangulated mapping
 
-Five rotated, interleaved repetitions followed an excluded warm-up triplet on
+These secondary timings predate the transport, staging and writer changes
+above; they are retained as a comparison of surface methods. Five rotated,
+interleaved repetitions followed an excluded warm-up triplet on
 one polygon-constrained reach. Each method used one CPU; Rust threads and
 Step05 profiles in flight were both one. Inputs were staged before timing.
 Full calls included fresh preparation, mapping, identical strict 0.5 ft

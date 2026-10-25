@@ -37,6 +37,7 @@ import json
 import os
 import shutil
 import tempfile
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Dict, Iterable, List, Optional, Sequence, Union
@@ -222,6 +223,7 @@ class RasFim:
         backend: str = "rust",
         engine_path: Optional[PathLike] = None,
         threads: int = 1,
+        writer_threads: int = 1,
         timeout: Optional[float] = None,
         max_working_mib: int = 1024,
         write_floodplain: bool = True,
@@ -255,6 +257,10 @@ class RasFim:
             backend: "rust" (default) or explicit "numpy" reference arithmetic.
             engine_path: Optional executable path for the Rust backend.
             threads: Rust pixel worker count, 1 through 64.
+            writer_threads: GeoTIFF compression workers, 1 through 64. Can
+                overlap native work on the next profile; budget both pools.
+                Overrides caller GDAL_NUM_THREADS during writes, including
+                the default of one; restores it afterwards.
             timeout: Rust subprocess/pipe lifetime in seconds, or None. Includes
                 consumer product-writing backpressure; no automatic retry.
             max_working_mib: Planned array admission budget, not an RSS cap.
@@ -301,6 +307,9 @@ class RasFim:
             raise ValueError("min_depth must be finite and >= 0 in model vertical units")
         if backend not in ("rust", "numpy"):
             raise ValueError("backend must be rust or numpy")
+        writer_threads = _positive_int(writer_threads, "writer_threads")
+        if writer_threads > 64:
+            raise ValueError("writer_threads must be <= 64")
         threads = _positive_int(threads, "threads")
         if threads > 64:
             raise ValueError("threads must be <= 64")
@@ -322,6 +331,7 @@ class RasFim:
         if isinstance(polygon, (str, os.PathLike)):
             watched["polygon"] = _require_path(polygon, "polygon")
         before = {key: _file_identity(path) for key, path in watched.items()}
+        mapping_started = time.perf_counter()
         ordered = cells.sort_values("cell_idx", kind="stable").reset_index(drop=True)
         plan = _horizontal.plan_grid(ordered, terrain, constraint, budget, native=backend == "rust")
         folder = _prepare_output_folder(output_folder)
@@ -334,6 +344,7 @@ class RasFim:
                 "min_depth": float(min_depth),
                 "max_working_mib": budget,
                 "write_floodplain": bool(write_floodplain),
+                "writer_threads": writer_threads,
                 "arithmetic": "float32 gather and subtract",
             },
             "grid": {
@@ -358,11 +369,16 @@ class RasFim:
             from contextlib import nullcontext
             from . import _horizontal_engine
 
+            prepare_started = time.perf_counter()
             grid = (
                 _horizontal.prepare_grid(ordered, terrain, plan)
                 if backend == "numpy"
                 else _horizontal.prepare_grid(ordered, terrain, plan, False)
             )
+            details["timings"] = {
+                "prepare_grid_seconds": time.perf_counter() - prepare_started,
+                "product_write_seconds": {},
+            }
             context = (
                 _horizontal_engine.run_batch(
                     engine,
@@ -411,8 +427,15 @@ class RasFim:
                         rows[name] = _empty_row(
                             name, "pending", samples=0, wet_cells=int(np.isfinite(values).sum())
                         )
-                        rows[name].update(
-                            RasFim._write_products(folder, result, plan.crs, write_floodplain)
+                        write_started = time.perf_counter()
+                        import rasterio
+
+                        with rasterio.Env(GDAL_NUM_THREADS=str(writer_threads)):
+                            rows[name].update(
+                                RasFim._write_products(folder, result, plan.crs, write_floodplain)
+                            )
+                        details["timings"]["product_write_seconds"][name] = (
+                            time.perf_counter() - write_started
                         )
                         del depth, wse, result
                     except FimEngineError:
@@ -423,6 +446,7 @@ class RasFim:
                         rows[name] = _empty_row(
                             name, "failed", error=f"{type(exc).__name__}: {exc}"
                         )
+            details["timings"]["mapping_seconds"] = time.perf_counter() - mapping_started
             changed = [key for key, path in watched.items() if _file_identity(path) != before[key]]
             if changed:
                 raise FimMappingError(
@@ -465,6 +489,7 @@ class RasFim:
         min_depth: float = 0.5,
         engine_path: Optional[PathLike] = None,
         threads: int = 1,
+        writer_threads: int = 1,
         max_working_mib: int = 1024,
         terrain_name: Optional[str] = None,
         ras_object: Optional["RasPrj"] = None,
@@ -498,6 +523,8 @@ class RasFim:
                 only for models whose elevations use feet.
             engine_path: Explicit Rust engine executable, or normal discovery.
             threads: Rust pixel workers (1 through 64).
+            writer_threads: Rust-product GeoTIFF compression workers (1 through
+                64); same scope and resource policy as map_horizontal_profiles.
             max_working_mib: Horizontal array admission budget, not RSS.
             terrain_name: Exact registered terrain selected for native mapping.
             ras_object: Initialized project object for multi-project use.
@@ -539,6 +566,7 @@ class RasFim:
             min_depth=min_depth,
             engine_path=engine_path,
             threads=threads,
+            writer_threads=writer_threads,
             max_working_mib=max_working_mib,
             terrain_name=terrain_name,
             ras_object=ras_object,

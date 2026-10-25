@@ -376,6 +376,7 @@ def test_rust_horizontal_matches_reference(scene):
             root / f"rust-{threads}",
             engine_path=engine,
             threads=threads,
+            writer_threads=threads,
             min_depth=0.5,
             write_floodplain=False,
         )
@@ -448,6 +449,7 @@ def test_rust_horizontal_block_seams_polygon_and_float32(scene, tiled, threshold
             root / f"native-{threads}",
             engine_path=engine,
             threads=threads,
+            writer_threads=threads,
             polygon=polygon,
             aoi_crs=cells.crs,
             min_depth=threshold,
@@ -555,3 +557,103 @@ def test_rust_horizontal_preserves_abort_reason(scene):
     doc = json.loads((root / "aborted/fim_manifest.json").read_text())
     assert doc["status"] == "aborted" and doc["engine_report"]["status"] == "aborted"
     assert not list((root / "aborted").glob("*.tif"))
+
+
+@pytest.mark.parametrize("short", [1, 3, 65539])
+def test_horizontal_chunked_read_preserves_bits_and_partial_reads(short):
+    import io
+    import threading
+    from ras_commander.fim._horizontal_engine import _read_f32
+
+    bits = np.tile(np.array([0, 0x80000000, 0x7FC01234, 0x3E19999A], dtype="<u4"), 80000)
+
+    class Partial(io.BytesIO):
+        def readinto(self, buffer):
+            assert len(buffer) <= 1 << 20
+            return super().readinto(buffer[:short])
+
+    result = _read_f32(Partial(bits.tobytes()), (400, 800), threading.Event(), None, "depth")
+    assert not result.flags.writeable
+    np.testing.assert_array_equal(result.view("<u4").ravel(), bits)
+
+
+@pytest.mark.parametrize("expired", [False, True])
+def test_horizontal_chunked_read_rejects_truncation(expired):
+    import io
+    import threading
+    from ras_commander.fim._horizontal_engine import _read_f32
+    from ras_commander.fim.errors import FimEngineError
+
+    event = threading.Event()
+    if expired:
+        event.set()
+    with pytest.raises(FimEngineError, match="timed out" if expired else "truncated"):
+        _read_f32(io.BytesIO(b"123"), (2, 2), event, 10, "wse")
+
+
+def test_horizontal_staged_owner_bits_and_multiblock_write(tmp_path):
+    from ras_commander.fim._horizontal_engine import _write_array
+
+    owner = np.arange(800000, dtype="<i4")
+    path = tmp_path / "owner.bin"
+    _write_array(path, owner.view("<u4"))
+    np.testing.assert_array_equal(np.fromfile(path, dtype="<u4"), owner)
+
+
+@pytest.mark.parametrize("workers", [0, True, 65])
+def test_horizontal_rejects_invalid_writer_worker_count(scene, workers):
+    cells, terrain, root = scene
+    with pytest.raises(ValueError, match="writer_threads"):
+        RasFim.map_horizontal_profiles(
+            cells, terrain, root / "bad-workers", backend="numpy", writer_threads=workers
+        )
+    assert not (root / "bad-workers").exists()
+
+
+def test_horizontal_writer_workers_are_scoped_and_restored(scene, monkeypatch):
+    seen = []
+    original = RasFim._write_products
+
+    def inspect(*args):
+        seen.append(rasterio.env.getenv()["GDAL_NUM_THREADS"])
+        return original(*args)
+
+    monkeypatch.setattr(RasFim, "_write_products", staticmethod(inspect))
+    with rasterio.Env(GDAL_NUM_THREADS="2"):
+        run(scene, "writers", profiles=["wsel_a"], writer_threads=4)
+        assert rasterio.env.getenv()["GDAL_NUM_THREADS"] == "2"
+    assert seen == ["4"]
+
+
+@pytest.mark.parametrize("kind", ["hole", "corner", "extra_vertex", "sliver"])
+def test_horizontal_overlap_topology_edge_cases(scene, kind):
+    cells, terrain, root = scene
+    first = box(0, 0, 10, 10)
+    second = box(10, 0, 20, 10)
+    if kind == "hole":
+        first = Polygon(box(0, 0, 20, 20).exterior.coords, [box(5, 5, 15, 15).exterior.coords])
+        second = box(5, 5, 10, 10)
+    elif kind == "corner":
+        second = box(10, 10, 20, 20)
+    elif kind == "extra_vertex":
+        first = Polygon([(0, 0), (10, 0), (10, 5), (10, 10), (0, 10)])
+    else:
+        second = box(9.999, 0, 20, 10)
+    frame = gpd.GeoDataFrame(
+        {"cell_idx": [0, 1], "wsel_a": [103.0, 103.0], "geometry": [first, second]}, crs=cells.crs
+    )
+    if kind == "sliver":
+        with pytest.raises(FimUnsupportedError, match="overlapping interiors"):
+            RasFim.map_horizontal_profiles(frame, terrain, root / kind, backend="numpy")
+    else:
+        result = RasFim.map_horizontal_profiles(
+            frame, terrain, root / kind, backend="numpy", write_floodplain=False
+        )
+        assert result.iloc[0].status == "complete"
+
+
+def test_horizontal_owner_view_does_not_copy_or_change_bits():
+    owner = np.array([0, 1, np.iinfo(np.int32).max, -1], dtype="<i4")
+    staged = owner.astype("<i4", copy=False).view("<u4")
+    assert np.shares_memory(owner, staged)
+    assert staged.tobytes() == owner.astype("<u4").tobytes()

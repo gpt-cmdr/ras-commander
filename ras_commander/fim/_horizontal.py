@@ -155,10 +155,14 @@ def prepare_grid(
     # N-by-N candidate-pair array before the first overlap is rejected.
     index = cells.sindex
     for i, geometry in enumerate(geometries):
-        others = index.query(geometry, predicate="intersects")
+        others = index.query(geometry)
         others = others[others > i]
         for start in range(0, len(others), 512):
-            intersections = shapely.intersection(geometry, geometries[others[start : start + 512]])
+            candidates = geometries[others[start : start + 512]]
+            interiors = shapely.relate_pattern(geometry, candidates, "T********")
+            # Shared edges need no constructed intersection. Retain the original
+            # positive-area check for candidates whose interiors intersect.
+            intersections = shapely.intersection(geometry, candidates[interiors])
             if (shapely.area(intersections) > 0).any():
                 raise FimUnsupportedError("horizontal cells have overlapping interiors")
     with rasterio.Env(GDAL_CACHEMAX=64 << 20), rasterio.open(terrain_path) as src:

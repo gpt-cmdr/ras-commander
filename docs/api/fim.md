@@ -23,7 +23,8 @@ target glibc 2.28 or newer. The wheel installs `ras2fim-batch` on the environmen
 `PATH`; no Rust compiler or system GDAL is needed for the native engine.
 The Python GIS stack remains required. Source builds are also supported.
 The workflow does not publish to PyPI. Installed-binary synthetic mapping tests
-run on both platforms; retained real-model agreement evidence remains Linux-only.
+run on both platforms. Step05 numerical qualification used Linux; horizontal
+corpus comparisons used Windows.
 
 ## Horizontal cell mapping
 
@@ -47,9 +48,19 @@ manifest = RasFim.map_horizontal_profiles(
     min_depth=0.5,             # half-foot filter only when elevation units are feet
     max_working_mib=1024,
     threads=4,
+    writer_threads=4,         # separate compression pool; budget both pools
     write_floodplain=False,
 )
 ```
+
+`threads` caps Rust pixel workers; `writer_threads` caps GeoTIFF compression
+workers and defaults to one. The pools can overlap when Rust prepares the
+next profile while Python writes the current one. Budget both pools for
+catalog runs; four workers in each can use up to eight worker threads.
+The writer setting overrides a caller GDAL_NUM_THREADS value, including
+at its default of one. Compression uses a scoped [GDAL thread setting](https://gdal.org/en/stable/drivers/raster/gtiff.html#creation-options)
+and restores the caller's previous setting. These controls do not change
+float32 values, pixel ownership, the strict cutoff or the LZW output format.
 
 The terrain must be a single-band float32 GeoTIFF with declared nodata,
 north-up square pixels, and the same CRS as the cells. Output stays on that
@@ -74,7 +85,10 @@ The returned `fim_product_manifest` has the same columns and 09/10/11 filename
 layout as Step05 products; those names do not identify the mapping method.
 The JSON manifest records `method_id="horizontal-cell-constant/1"`,
 `backend="rust"` (or the explicitly requested reference backend), float32 arithmetic, the threshold, source identities and
-the terrain window. `samples=0` because there is no interpolation. The
+the terrain window. A `timings` section records ownership preparation,
+input staging, stream reads (including waits for the engine), product writes
+and mapping wall time; these are pipeline observations, not kernel-only
+timings. `samples=0` because there is no interpolation. The
 planned array admission budget excludes optional
 floodplain polygonization and unaccounted runtime overhead; it is not a hard
 process-memory cap. Rust profile arrays are streamed to the Python GIS writer
