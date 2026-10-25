@@ -386,6 +386,41 @@ with ProcessPoolExecutor() as pool:
 `create_vrt()` inherits the source SRS and native cell size. Do not use a
 multi-raster VRT as a HEC-RAS terrain source; use `build_terrain_raster()`.
 
+## RasTauDem
+
+D8 stream links and catchments from a DEM, using the TauDEM 5 command-line
+tools (PitRemove, D8FlowDir, AreaD8, Threshold, StreamNet). TauDEM is GPL-3
+software that RAS Commander runs only as separate processes; install it from
+[hydrology.usu.edu/taudem](https://hydrology.usu.edu/taudem/). MPI (MS-MPI on
+Windows, MPICH or Open MPI on Linux) is optional: without `mpiexec` each tool
+runs as one process.
+
+- `get_taudem_info(taudem_dir=None, mpiexec_path=None)` - Locate the tools: argument, then `RAS_COMMANDER_TAUDEM_DIR`, then `PATH`, then the default Windows folder. The launcher: argument, then `RAS_COMMANDER_MPIEXEC`, then `PATH`, then the default MS-MPI folder. Raises `TauDemNotFoundError`
+- `delineate(dem_path, dest_folder, *, stream_area_sqmi=0.1, cell_size=None, num_processes=4, edge_contamination_check=False, taudem_dir=None, mpiexec_path=None, overwrite=False, timeout=None)` - Returns `TauDemDelineation`
+
+`TauDemDelineation.streams` holds one row per link (schema `taudem_streams`):
+`LINKNO`, `DSLINKNO` (-1 at an outlet), `USLINKNO1`, `USLINKNO2`, `strmOrder`,
+`Length`, `Slope`, `DSContArea` (DEM units squared) and `contributing_area_sqmi`.
+Each LineString starts at the link outlet. `catchments` (schema
+`taudem_catchments`) is the polygonized StreamNet watershed grid. The DEM must
+be in a projected CRS with square, north-up cells; geographic DEMs are refused.
+`cell_size` resamples the DEM (average) before delineation, which keeps
+HUC-scale runs tractable: the Salt Draw (HUC-8 13070004) 10 ft terrain at
+`cell_size=100` delineated 3,204 links in 18 s on a workstation.
+
+The AreaD8 edge-contamination check is off by default (TauDEM `-nc`). A terrain
+clipped at its drainage divide touches the DEM edge everywhere, and the check
+would remove every stream. Turn it on only for a DEM buffered well past the
+divide.
+
+```python
+from ras_commander.terrain import RasTauDem
+
+result = RasTauDem.delineate("Terrain/dem.tif", "work/taudem",
+                             stream_area_sqmi=0.5, cell_size=100.0)
+outlets = result.streams[result.streams["DSLINKNO"] < 0]
+```
+
 ## Related Examples
 
 | Notebook | Description |
@@ -441,6 +476,19 @@ prerequisites and return contracts take precedence over abbreviated summaries.
         - prefetch_terrain_tiles
         - query_tiles_api
         - select_projects_for_coverage
+
+### TauDEM source reference
+
+::: ras_commander.terrain.RasTauDem
+    options:
+      show_root_heading: false
+      heading_level: 3
+      show_source: false
+      members:
+        - RasTauDem
+        - TauDemDelineation
+        - TauDemNotFoundError
+        - TauDemError
 
 ### TerrainBuildError source reference
 
