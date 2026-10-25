@@ -186,3 +186,41 @@ def test_child_entirely_on_parent_perimeter_has_no_closed_edges():
 
 def test_closed_edge_default_slope():
     assert bo.CLOSED_EDGE_FRICTION_SLOPE == 0.00033
+
+
+def _plan_hdf(path: Path, flow_file: str) -> Path:
+    import h5py
+
+    with h5py.File(path, "w") as f:
+        f.create_group("Plan Data/Plan Information").attrs["Flow Filename"] = flow_file.encode()
+    return path.resolve()
+
+
+def _search(paths):
+    return SimpleNamespace(events=("1pct", "0_2pct"), plan_hdf_paths=tuple(paths))
+
+
+def test_plan_event_matches_the_plans_unsteady_file(tmp_path):
+    pytest.importorskip("h5py")
+    paths = [_plan_hdf(tmp_path / "a.hdf", "SLDR_004.u01"), _plan_hdf(tmp_path / "b.hdf", "SLDR_004.u02")]
+    search = _search(paths)
+    row = pd.Series({"HDF_Results_Path": float("nan"), "unsteady_number": "02"})
+    assert bo._plan_event(search, row, "SLDR_004") == "0_2pct"
+    row = pd.Series({"HDF_Results_Path": float("nan"), "unsteady_number": "01"})
+    assert bo._plan_event(search, row, "SLDR_004") == "1pct"
+
+
+def test_plan_event_prefers_the_plans_own_results(tmp_path):
+    pytest.importorskip("h5py")
+    paths = [_plan_hdf(tmp_path / "a.hdf", "SLDR_004.u01"), _plan_hdf(tmp_path / "b.hdf", "SLDR_004.u01")]
+    row = pd.Series({"HDF_Results_Path": str(paths[1]), "unsteady_number": "01"})
+    assert bo._plan_event(_search(paths), row, "SLDR_004") == "0_2pct"
+
+
+def test_plan_event_is_none_without_a_unique_match(tmp_path):
+    pytest.importorskip("h5py")
+    paths = [_plan_hdf(tmp_path / "a.hdf", "SLDR_004.u01"), _plan_hdf(tmp_path / "b.hdf", "SLDR_004.u01")]
+    row = pd.Series({"HDF_Results_Path": float("nan"), "unsteady_number": "01"})
+    assert bo._plan_event(_search(paths), row, "SLDR_004") is None
+    row = pd.Series({"HDF_Results_Path": float("nan"), "unsteady_number": "03"})
+    assert bo._plan_event(_search(paths), row, "SLDR_004") is None

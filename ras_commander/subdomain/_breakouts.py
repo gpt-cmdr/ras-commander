@@ -224,14 +224,41 @@ def _merge_faces(mesh, faces: Sequence[int]):
     return list(getattr(merged, "geoms", [merged]))
 
 
-def _parent_hydrograph(search, faces: Sequence[int], signs: Sequence[float]):
-    """Parent's signed flow across ``faces`` (growth event) as an ``hour``/``value`` frame."""
+def _plan_event(search, plan_row, project_name: str) -> Optional[str]:
+    """The search event that is the parent run of ``plan_row``, or None.
+
+    The plan's own results HDF counts if the search used it. Otherwise an event
+    matches when its plan HDF was forced by the plan's unsteady flow file.
+    """
+    import h5py
+
+    plan_hdf = plan_row.get("HDF_Results_Path")
+    if isinstance(plan_hdf, (str, Path)) and str(plan_hdf) and Path(plan_hdf).is_file():
+        resolved = Path(plan_hdf).resolve()
+        if resolved in search.plan_hdf_paths:
+            return search.events[search.plan_hdf_paths.index(resolved)]
+    unsteady = plan_row.get("unsteady_number")
+    if unsteady is None or (isinstance(unsteady, float) and math.isnan(unsteady)):
+        return None
+    flow_file = f"{project_name}.u{str(unsteady).zfill(2)}".lower()
+    matches = []
+    for event, path in zip(search.events, search.plan_hdf_paths):
+        with h5py.File(path, "r") as f:
+            info = f.get("Plan Data/Plan Information")
+            name = info.attrs.get("Flow Filename", b"") if info is not None else b""
+        name = name.decode() if isinstance(name, bytes) else str(name)
+        if Path(name).name.lower() == flow_file:
+            matches.append(event)
+    return matches[0] if len(matches) == 1 else None
+
+
+def _parent_hydrograph(search, faces: Sequence[int], signs: Sequence[float], event: str):
+    """Parent's signed flow across ``faces`` in ``event`` as an ``hour``/``value`` frame."""
     import pandas as pd
 
     from ._parent import EventReader
 
-    e = search.growth_event
-    path = search.plan_hdf_paths[search.events.index(e)]
+    path = search.plan_hdf_paths[search.events.index(event)]
     reader = EventReader(path, search.mesh_name)
     ids, flow = reader.series("Face Flow", faces)
     col = {int(f): i for i, f in enumerate(ids)}
@@ -292,6 +319,14 @@ def plan_breakouts(partition, plan_number, *, ras_object, perimeter_friction_slo
         _check(rows, "*", "parent_geometry_matches_search", False, f"geometry HDF for g{geom_number} not found")
     for p, h in zip(search.plan_hdf_paths, search.plan_hdf_sha256):
         identities[f"search_event:{p.name}"] = h
+    # Inflow lines carry the parent's hydrograph from the run of this same plan.
+    forcing_event = _plan_event(search, plan_row.iloc[0], ras_object.project_name)
+    needs_inflow = [s for s in wanted if len(subs.loc[s, "upstream_subdomain_ids"])]
+    if needs_inflow:
+        _check(rows, "*", "inflow_event_matches_plan", forcing_event is not None,
+               f"inflow hydrographs from search event {forcing_event}" if forcing_event is not None else
+               f"no search event was forced by plan {plan_number}'s unsteady file; inflow lines need "
+               f"the parent run of plan {plan_number} among the search's plan HDFs")
 
     from ..hdf.HdfMesh import HdfMesh
 
@@ -333,16 +368,16 @@ def plan_breakouts(partition, plan_number, *, ras_object, perimeter_friction_slo
                 bc.append({"role": OUTLET, "name": f"{_NAME[OUTLET]}_{sid}"[:32] + (f"_{i}" if i else ""),
                            "bc_type": "Normal Depth", "friction_slope": slope,
                            "coordinates": np.asarray(g.coords), "split_line_id": outlet_id})
-        for up in sub["upstream_subdomain_ids"]:
+        for up in sub["upstream_subdomain_ids"] if forcing_event is not None else ():
             up_line = int(subs.loc[up, "split_line_id"])
             s = lines[up_line]
-            hydro = _parent_hydrograph(search, s["faces"], s["signs"])
+            hydro = _parent_hydrograph(search, s["faces"], s["signs"], forcing_event)
             for i, g in enumerate(_merge_faces(mesh, s["faces"])):
                 bc.append({"role": INFLOW, "name": f"{_NAME[INFLOW]}_{up}"[:32] + (f"_{i}" if i else ""),
                            "bc_type": "Flow Hydrograph", "friction_slope": perimeter_friction_slope,
                            "hydrograph_df": hydro, "coordinates": np.asarray(g.coords),
                            "upstream_subdomain_id": up, "split_line_id": up_line,
-                           "hydrograph_source": "parent"})
+                           "hydrograph_source": "parent", "hydrograph_event": forcing_event})
         if len(on_parent_perimeter) and poly is not None:
             pieces = _perimeter_stretches(poly, parent_area)
             for i, g in enumerate(sorted(pieces, key=lambda g: -g.length)):

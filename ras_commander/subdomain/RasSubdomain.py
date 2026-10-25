@@ -677,7 +677,9 @@ class RasSubdomain:
 
         - the outlet split line as Normal Depth at the fitted slope;
         - one Flow Hydrograph line per upstream subdomain, carrying the parent's
-          own flow across that split line until the upstream child has run;
+          own flow across that split line until the upstream child has run. The
+          flow is taken from the search event forced by this plan's unsteady
+          file; without one, the ``inflow_event_matches_plan`` check blocks;
         - Normal Depth at ``perimeter_friction_slope`` along each stretch of the
           parent perimeter.
 
