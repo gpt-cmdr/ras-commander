@@ -102,6 +102,23 @@ a general repair. `max_workers=1` limits helper processes, not native internal
 threads. Commander does not automatically apply this Windows affinity control,
 and independent exports are not a guaranteed workaround.
 
+### Sloping render options
+
+`RasProcess.store_maps(render_mode=None)` reads the project's current render
+configuration through `RasMap.get_water_surface_render_mode()`. For
+`slopingPretty`, the helper receives both `reduce_shallow_to_horizontal` and
+`use_depth_weighted_faces`; it does not replace explicit settings with helper
+defaults. Bare mode names retain their existing default behavior.
+
+Configure these flags with `RasMap.set_water_surface_render_mode()` before
+calling `store_maps(render_mode=None)`. Setting the configuration is a persistent
+project edit. The stored-map call restores the configuration present at its own
+entry, including the selected flags; it does not undo a preceding setter call.
+These options affect native sloping interpolation and are distinct from the
+optional pixel depth cutoff applied after mapping. See HEC's
+[Mapping Options](https://www.hec.usace.army.mil/confluence/rasdocs/rmum/7.0/mapping-results/mapping-options)
+for the two sloping modes and their display controls.
+
 ::: ras_commander.RasProcess.RasProcess
     options:
       show_root_heading: false

@@ -233,10 +233,10 @@ bounded Rust timings because their workloads differ.
 
 ### Further work
 
-The next roadmap item is **RAS Mapper sloping-interpolation parity**, with
+The next implementation target is **RAS Mapper sloping-interpolation parity**, with
 performance gains demonstrated by the same kind of executable notebook proof.
-Keep horizontal qualification and PR completion as the current deliverable;
-sloping implementation has not started in this PR. Its acceptance evidence
+Horizontal qualification was merged in PR #644. Sloping reference capture
+has started; a Rust sloping renderer is not yet implemented. Its acceptance evidence
 must compare native sloping and Rust on the same terrain, grid, saved states
 and varying depth cutoffs; report wet masks, depth/WSE differences, missing
 values and configuration restoration. Profile single-map and multi-timestep
@@ -254,6 +254,36 @@ geometry/query-weight reuse, batched terrain evaluation and exact aligned-grid
 shortcuts. Horizontal scaling opportunities include bounded bulk overlap
 validation, persistent prepared-grid reuse and reducing the process boundary.
 Each needs separate equality and paired-throughput evidence before adoption.
+
+### Sloping reference groundwork, 2026-10-25
+
+`scripts/benchmarks/fim_sloping_reference.py` captures native horizontal,
+`sloping` and `slopingPretty` Max products through `RasProcess.store_maps()` on
+a disposable copy of a computed 2D-only project. It rejects an existing output
+directory, restores its parent CPU affinity, checks `.rasmap` restoration after
+each export and compares matching terrain-grid pixels without resampling.
+Its JSON distinguishes differences between modes from repeatability within a
+mode. Outputs remain outside tracked source. This harness is not a Rust sloping
+parity or speed benchmark.
+
+The first run used the public Bald Eagle p05 bridge fixture (24,718 physical
+2D cells), Windows HEC-RAS 7.0.1 and four allowed logical CPUs. All six exports
+completed. Each mode matched its second run exactly for depth/WSE values and
+wet masks at strict depth cutoffs of 0.0, 0.5, 1.0 and 2.0 ft. All project
+configuration restoration checks passed. Sloping modes differed from horizontal
+at the 0.5 ft cutoff: cell-corner sloping had 1,449 additional and 816 missing
+wet pixels relative to horizontal, with a maximum common-wet WSE difference
+of 8.26904296875 ft. These are differences between rendering methods, not errors
+against a sloping oracle. No Rust sloping parity claim follows from this run.
+
+Reference preparation also exposed a Commander defect: normalization discarded
+the configured shallow-water and depth-weighting flags before invoking the
+helper. Preserve both flags through repeated normalization so native references
+reflect the selected options. A separate native check exercised all four
+`slopingPretty` flag combinations on this fixture: all produced nonempty
+Depth/WSE maps and restored the selected configuration. Native valid-pixel
+counts differed between combinations, confirming that the flags are material.
+The three-mode baseline used bare mode defaults; it is not the full flag matrix.
 
 ## Native terrio ownership rebuild, 2026-10-25
 
@@ -402,13 +432,15 @@ The comparison uses strict float32 `depth > 0.5` in model elevation units
 The result qualifies horizontal 2D surfaces on the tested computed states,
 not bridge/pipe hydraulic calculations or native sloping/1D rendering.
 
-| Fixture | Rust delivered (s) | RAS Mapper generation (s) | Native filtering/writing (s) | Native delivered total (s) | Common wet pixels |
-|---|---:|---:|---:|---:|---:|
-| spring-river | 60.865 | 313.980 | 30.824 | 344.805 | 35,270,078 |
-| spring-creek | 55.545 | 266.934 | 23.681 | 290.615 | 79,872,550 |
-| bald-eagle | 6.108 | 8.059 | 2.109 | 10.169 | 719,163 |
-| bald-bridges | 3.142 | 7.596 | 1.027 | 8.624 | 959,043 |
-| davis | 0.257 | 1.700 | 0.024 | 1.724 | 4,883 |
+| Fixture | RAS Mapper (s) | Native Engine — Rust (s) | RAS Mapper / Native Engine |
+|---|---:|---:|---:|
+| spring-river | 313.980 | 60.865 | 5.16× |
+| spring-creek | 266.934 | 55.545 | 4.81× |
+| bald-eagle | 8.059 | 6.108 | 1.32× |
+| bald-bridges | 7.596 | 3.142 | 2.42× |
+| davis | 1.700 | 0.257 | 6.62× |
+
+Ratios use the unrounded recorded mapping times. Separate native depth-filtering and delivery postprocessing are excluded. Rust applies its depth cutoff within the measured mapping pass; both timings include raster output.
 
 
 This five-case notebook execution on Windows x86-64 used HEC-RAS mapper 7.0.1, engine 0.3.0,
@@ -417,15 +449,14 @@ workers sharing four allowed logical CPUs. Davis uses two independent native
 depth/WSE helpers; other fixtures use aggregate StoreAllMaps. Each case maps one maximum-result
 profile over all physical 2D cells, without an AOI. Input extraction, terrain
 preparation, identity hashing and comparison scanning are excluded from
-mapping totals. Native delivered time includes its stored-map call plus
-independently filtered LZW depth/WSE writes; Rust integrates the filter.
+mapping totals. The table compares native stored-map generation with the Rust mapping pipeline; separate native postprocessing is excluded.
 
 All five comparisons have nonempty common wet coverage, zero extra/missing
 wet pixels, exact finite depth/WSE and no missing WSE on the evaluated 2D
 footprints. Every native call restored the original `.rasmap` bytes. Native
 grids can include blank margins and storage-area surfaces outside the 2D
 cells; those surfaces are outside the equality claim. The API withholds
-ratios for storage-area scope. These are single Rust-first observations on
+ratios for storage-area scope; the descriptive table ratios above are elapsed-time quotients, not workload-normalized speedups. These are single Rust-first observations on
 a shared workstation with uncontrolled load/cache, not a scaling curve or
 general speed guarantee. The earlier repeated terrio/GDAL observations
 remain separately scoped above.
