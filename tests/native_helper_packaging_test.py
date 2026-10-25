@@ -85,6 +85,41 @@ def test_helper_path_override_is_respected(monkeypatch, tmp_path):
         assert helper_exe == override
 
 
+@pytest.mark.parametrize("shallow", [False, True])
+@pytest.mark.parametrize("weighted", [False, True])
+def test_sloping_pretty_render_flags_survive_both_helper_boundaries(shallow, weighted):
+    options = {
+        "mode": "slopingPretty",
+        "reduce_shallow_to_horizontal": shallow,
+        "use_depth_weighted_faces": weighted,
+    }
+    expected = f"slopingPretty:{str(shallow).lower()}:{str(weighted).lower()}"
+    actual = _native_helper.normalize_store_map_render_mode(options)
+    assert actual == expected
+    assert _native_helper.normalize_store_map_render_mode(actual) == expected
+
+
+@pytest.mark.parametrize("mode", [
+    "slopingPretty:true", "slopingPretty:yes:false", "horizontal:true:false",
+    {"mode": "slopingPretty", "use_depth_weighted_faces": "false"},
+    {"mode": "slopingPretty:true:false", "use_depth_weighted_faces": True},
+])
+def test_sloping_helper_flags_reject_ambiguous_or_invalid_values(mode):
+    with pytest.raises(ValueError):
+        _native_helper.normalize_store_map_render_mode(mode)
+
+
+@pytest.mark.parametrize("options, expected", [
+    ({}, "horizontal"),
+    ({"mode": "slopingPretty", "use_depth_weighted_faces": True},
+     "slopingPretty:true:true"),
+    ({"mode": "slopingPretty", "reduce_shallow_to_horizontal": False},
+     "slopingPretty:false:false"),
+])
+def test_sloping_option_defaults_remain_explicit(options, expected):
+    assert _native_helper.normalize_store_map_render_mode(options) == expected
+
+
 def test_stage_helper_executable_builds_runtime_bundle_with_gdal(tmp_path):
     hecras_dir = tmp_path / "hecras"
     (hecras_dir / "GDAL" / "common").mkdir(parents=True)

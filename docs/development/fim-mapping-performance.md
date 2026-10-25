@@ -233,10 +233,10 @@ bounded Rust timings because their workloads differ.
 
 ### Further work
 
-The next roadmap item is **RAS Mapper sloping-interpolation parity**, with
+The next implementation target is **RAS Mapper sloping-interpolation parity**, with
 performance gains demonstrated by the same kind of executable notebook proof.
-Keep horizontal qualification and PR completion as the current deliverable;
-sloping implementation has not started in this PR. Its acceptance evidence
+Horizontal qualification was merged in PR #644. Sloping reference capture
+has started; a Rust sloping renderer is not yet implemented. Its acceptance evidence
 must compare native sloping and Rust on the same terrain, grid, saved states
 and varying depth cutoffs; report wet masks, depth/WSE differences, missing
 values and configuration restoration. Profile single-map and multi-timestep
@@ -254,6 +254,36 @@ geometry/query-weight reuse, batched terrain evaluation and exact aligned-grid
 shortcuts. Horizontal scaling opportunities include bounded bulk overlap
 validation, persistent prepared-grid reuse and reducing the process boundary.
 Each needs separate equality and paired-throughput evidence before adoption.
+
+### Sloping reference groundwork, 2026-10-25
+
+`scripts/benchmarks/fim_sloping_reference.py` captures native horizontal,
+`sloping` and `slopingPretty` Max products through `RasProcess.store_maps()` on
+a disposable copy of a computed 2D-only project. It rejects an existing output
+directory, restores its parent CPU affinity, checks `.rasmap` restoration after
+each export and compares matching terrain-grid pixels without resampling.
+Its JSON distinguishes differences between modes from repeatability within a
+mode. Outputs remain outside tracked source. This harness is not a Rust sloping
+parity or speed benchmark.
+
+The first run used the public Bald Eagle p05 bridge fixture (24,718 physical
+2D cells), Windows HEC-RAS 7.0.1 and four allowed logical CPUs. All six exports
+completed. Each mode matched its second run exactly for depth/WSE values and
+wet masks at strict depth cutoffs of 0.0, 0.5, 1.0 and 2.0 ft. All project
+configuration restoration checks passed. Sloping modes differed from horizontal
+at the 0.5 ft cutoff: cell-corner sloping had 1,449 additional and 816 missing
+wet pixels relative to horizontal, with a maximum common-wet WSE difference
+of 8.26904296875 ft. These are differences between rendering methods, not errors
+against a sloping oracle. No Rust sloping parity claim follows from this run.
+
+Reference preparation also exposed a Commander defect: normalization discarded
+the configured shallow-water and depth-weighting flags before invoking the
+helper. Preserve both flags through repeated normalization so native references
+reflect the selected options. A separate native check exercised all four
+`slopingPretty` flag combinations on this fixture: all produced nonempty
+Depth/WSE maps and restored the selected configuration. Native valid-pixel
+counts differed between combinations, confirming that the flags are material.
+The three-mode baseline used bare mode defaults; it is not the full flag matrix.
 
 ## Native terrio ownership rebuild, 2026-10-25
 
