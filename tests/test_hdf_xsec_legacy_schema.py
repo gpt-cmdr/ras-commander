@@ -1,3 +1,4 @@
+import logging
 from pathlib import Path
 
 import h5py
@@ -528,3 +529,56 @@ def test_modern_compound_schema_remains_supported(tmp_path, monkeypatch):
     assert centerlines["River Name"].tolist() == ["River A"]
     assert centerlines["US Type"].tolist() == ["External"]
     assert bank_lines["bank_side"].tolist() == ["Left", "Right"]
+
+
+def test_current_layout_row_mismatch_is_logged_and_returns_empty(tmp_path, caplog):
+    hdf_path = tmp_path / "Modern.g01.hdf"
+    _write_legacy_geometry_hdf(hdf_path)
+    _convert_fixture_to_modern_schema(hdf_path)
+    with h5py.File(hdf_path, "a") as hdf:
+        xs = hdf["Geometry/Cross Sections"]
+        del xs["Manning's n Info"]
+        xs.create_dataset("Manning's n Info", data=np.array([[0, 3]], dtype=np.int32))
+
+    with caplog.at_level(logging.ERROR, logger="ras_commander.hdf.HdfXsec"):
+        assert HdfXsec.get_cross_sections(hdf_path).empty
+    assert "row count mismatch" in caplog.text
+
+
+def test_corrupt_compound_table_is_logged_and_returns_empty(tmp_path, caplog):
+    hdf_path = tmp_path / "Corrupt.g01.hdf"
+    _write_legacy_geometry_hdf(hdf_path)
+    _convert_fixture_to_modern_schema(hdf_path)
+    with h5py.File(hdf_path, "a") as hdf:
+        xs = hdf["Geometry/Cross Sections"]
+        del xs["Attributes"]
+        xs.create_dataset("Attributes", data=np.zeros((2, 3), dtype=np.float32))
+
+    with caplog.at_level(logging.ERROR, logger="ras_commander.hdf.HdfXsec"):
+        assert HdfXsec.get_cross_sections(hdf_path).empty
+    assert "one-dimensional" in caplog.text
+
+
+def test_unreadable_file_is_logged_and_returns_empty(tmp_path, caplog):
+    hdf_path = tmp_path / "Truncated.g01.hdf"
+    hdf_path.write_bytes(b"\x89HDF\r\n\x1a\n" + b"\x00" * 64)
+
+    with caplog.at_level(logging.ERROR, logger="ras_commander.hdf.HdfXsec"):
+        assert HdfXsec.get_cross_sections(hdf_path).empty
+    assert "Error processing cross-section data" in caplog.text
+
+
+def test_absent_and_zero_row_tables_return_empty_without_error(tmp_path, caplog):
+    no_group = tmp_path / "TwoD.g01.hdf"
+    with h5py.File(no_group, "w") as hdf:
+        hdf.create_group("Geometry/2D Flow Areas")
+    assert HdfXsec.get_cross_sections(no_group).empty
+
+    zero_rows = tmp_path / "Empty.g01.hdf"
+    with h5py.File(zero_rows, "w") as hdf:
+        hdf.create_group("Geometry/Cross Sections").create_dataset(
+            "Attributes", data=np.zeros((0,), dtype=np.dtype([("RS", "S8")]))
+        )
+    assert HdfXsec.get_cross_sections(zero_rows).empty
+
+    assert not any(record.levelno >= logging.ERROR for record in caplog.records)
