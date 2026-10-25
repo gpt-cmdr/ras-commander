@@ -306,8 +306,10 @@ native failure was confirmed to give the h5py outcome in `auto` and
 - reference-line and reference-point variants of Bald Eagle dam break;
 - geometry, terrain, land-cover, soils and infiltration sidecar HDFs;
 - large production models: `BaldEagleDamBrk.p07` (87,039 cells, 865 output
-  times, 460 MB), `JUL2020_D100RAS.p04` (340,248 cells, 597 MB), Homewood
-  (68,743 cells) and the Glaise Creek eBFE model;
+  times, 460 MB), the FEMA eBFE Austin-Oyster HEC-RAS 5.0.7 plan
+  `AustinOyster.p03` (1,872,746 cells, 3.2 GB), Homewood (68,743 cells) and the
+  Glaise Creek eBFE model (Source: FEMA estimated Base Flood Elevation (eBFE)
+  program);
 - crafted excerpts with invalid `Location` attributes, missing time axes, wrong
   counts and missing geometry, to prove that error behaviour is identical.
 
@@ -412,8 +414,8 @@ result was identical between h5py and native.
 - **Faster: first read of a large file.** The engine caches the file's layout
   (group names, heaps, dataset descriptors) per session, so metadata-heavy
   operations on large models are much cheaper on first touch (an internal
-  catalogue scan of `JUL2020_D100RAS.p04` went from 30.5 s to 0.21 s during
-  the engine performance work).
+  catalogue scan of a 340,000-cell HEC-RAS 5.0.7 plan went from 30.5 s to
+  0.21 s during the engine performance work).
 - **Equal: most of a public call is not the read.** Public methods build
   pandas, xarray and GeoPandas objects (cell points and polygons, CRS
   resolution, timestamp conversion). That code is unchanged and runs the same
@@ -509,7 +511,7 @@ raises `FastHdfError`.
 | **2 GiB per-call budget** | See [Large reads](#large-reads). The budget cannot be changed from Python in this release. |
 | **Unsupported selections** | Basic slices and single increasing integer index vectors are read natively. Field names, boolean masks and other fancy indexing stay on h5py. Invalid selections raise h5py's own exception in every mode. |
 | **Group walks, `in` checks, shape probes** | Always h5py. `native` mode guarantees native *value and attribute* reads, not that h5py is never opened. |
-| **Fluvial/pluvial with `delta_t=0`** | Not supported natively (the native kernel would mark equal-time cell pairs ambiguous; the reference marks nothing). `auto` uses the Python reference. Native is also refused when a mesh lacks `Faces Cell Indexes`, when the cell set differs from the one the reference can polygonize, or when cells have invalid geometry (for example 2 cells in `JUL2020_D100RAS.p04`). |
+| **Fluvial/pluvial with `delta_t=0`** | Not supported natively (the native kernel would mark equal-time cell pairs ambiguous; the reference marks nothing). `auto` uses the Python reference. Native is also refused when a mesh lacks `Faces Cell Indexes`, when the cell set differs from the one the reference can polygonize, or when cells have invalid geometry (for example cells whose curved faces cross another cell boundary). |
 | **Mesh polygon diagnostics** | Automatic mode returns the native polygons only when their diagnostic records, warnings and `strict` outcome are provably the Python polygonizer's. Ambiguous or multi-polygon cells and other edge cases use the Python polygonizer. In `native` mode, the diagnostics records of a `no_polygon` cell can carry extra `native_reason_code`/`reason` keys. Diagnostics are attached only with `diagnostics=True`. |
 | **Methods not yet qualified** | Run on h5py in `auto` mode; see the [qualified-methods table](#qualified-methods). |
 

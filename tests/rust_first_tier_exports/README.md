@@ -14,7 +14,8 @@ $env:RAS_EXPORT_FIXTURE_ROOT=(Join-Path $PWD 'working/fixtures')
 uv run python -m pytest tests/rust_first_tier_exports -q
 ```
 
-Fixture names: `JUL2020_D100RAS.p04.hdf` (stored5.0.7),
+Fixture names: `AustinOyster.p03.hdf` (stored5.0.7, public FEMA eBFE; Source: FEMA
+estimated Base Flood Elevation (eBFE) program),
 `BaldEagleDamBrk.p03.hdf` (stored6.6), `BaldEagleDamBrk.p18.hdf` (stored7.0).
 Use immutable local copies from RasExamples/retained qualification artifacts.
 The6.6 fixture lacks the maximum-WSE summary, so that sample explicitly exports

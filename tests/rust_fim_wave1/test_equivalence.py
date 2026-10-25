@@ -104,7 +104,7 @@ def test_extrema_and_budget(fixture):
         end=min(len(ds),5)
         expected=ds[:end,:3]
         caps={v['name']:v['capability'] for v in native.mesh_series_inventory(path,area)['variables']}
-        # Engine API 9 (7d89bbb): JUL D601 series without a stored Location attribute are
+        # Engine API 9 (7d89bbb): 5.0.7 series without a stored Location attribute are
         # domain-qualified by the absent-Location legacy exact-name rule (API 8 refused them).
         assert caps['Water Surface']['status']=='supported'
         r=native.reduce_mesh_series(path,area,'Water Surface',(0,end,1),[0,1,2])

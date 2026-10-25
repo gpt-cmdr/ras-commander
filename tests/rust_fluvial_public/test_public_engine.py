@@ -3,8 +3,10 @@
 Fixtures are immutable local copies named by RAS_FLUVIAL_PUBLIC_FIXTURES:
 BaldEagleDamBrk.p07.hdf (stored 6.6, one mesh, 87039 cells),
 BaldEagleDamBrk.p18.hdf (stored 7.0, two meshes, 4425 cells) and
-BaldEagleDamBrk.p03.hdf (stored 6.6, no peak results). A missing fixture is
-reported as skipped (unavailable), never as a pass.
+BaldEagleDamBrk.p03.hdf (stored 6.6, no peak results) and AustinOyster.p01.hdf
+(public FEMA eBFE-derived, stored 6.6; source of a derived copy with two invalid
+cells, see tests/mesh_invalid_cells.py). A missing fixture is reported as skipped
+(unavailable), never as a pass.
 
 engine="h5py" is the reference. engine="native" must equal it exactly or
 raise; tests count native kernel calls and make the Python classification
@@ -425,15 +427,18 @@ def test_native_output_identical_at_1_and_4_threads():
     assert _hash_native_polygons(hdf, 1) == _hash_native_polygons(hdf, 4)
 
 
-def test_d601_invalid_source_cells_native_refuses():
-    """Stored 5.0.7 D601 p04: 2 genuinely invalid source cells (crossing boundaries).
+def test_invalid_source_cells_native_refuses(tmp_path):
+    """Derived AustinOyster.p01 copy: 2 invalid source cells (crossing boundaries).
 
     Python keeps them in its stored-topology adjacency and GEOS dissolve, which
     native polygon assembly cannot reproduce without guessing; it refuses, and
     auto uses Python. Nothing is repaired. Explicit audited quarantine remains available
     through HdfFluvialNative.Analysis(invalid_geometry='quarantine').
     """
-    hdf = fixture("JUL2020_D100RAS.p04.hdf")
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+    import mesh_invalid_cells
+    hdf = mesh_invalid_cells.make_invalid_copy(fixture(mesh_invalid_cells.SOURCE_NAME),
+                                               tmp_path / "AustinOyster.p01.invalid-cells.hdf")
     before = qualify.sha256(hdf)
     calls = native_calls()
     with pytest.raises(FluvialNativeUnsupportedError, match="2 cell\(s\) have invalid source geometry"):

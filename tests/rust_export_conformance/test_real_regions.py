@@ -16,7 +16,7 @@ from .helpers import decode, pack, pixels
 from .test_packed_pmtiles import provenance
 
 
-@pytest.mark.parametrize("filename,version", [("JUL2020_D100RAS.p04.hdf", "5.0.7"),
+@pytest.mark.parametrize("filename,version", [("AustinOyster.p03.hdf", "5.0.7"),
     ("BaldEagleDamBrk.p03.hdf", "6.6"), ("BaldEagleDamBrk.p18.hdf", "7.0")])
 def test_real_regions(tmp_path, filename, version, record_property):
     fixture_root = os.environ.get("RAS_EXPORT_FIXTURE_ROOT")

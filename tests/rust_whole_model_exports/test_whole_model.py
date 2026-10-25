@@ -16,7 +16,7 @@ pytestmark = pytest.mark.skipif(
 )
 
 
-@pytest.mark.parametrize('case,rows,omitted',[('cells7',4425,0),('cells6',18066,0),('regions7',72,0),('cells5',340246,2)])
+@pytest.mark.parametrize('case,rows,omitted',[('cells7',4425,0),('cells6',18066,0),('regions7',72,0),('cells5',1872746,0)])
 def test_complete_prepared_models(case,rows,omitted):
     path=ROOT/'working/prepared'/case
     assert (path/'receipt.json').exists(),'prepare the complete immutable model first'
@@ -28,7 +28,7 @@ def test_complete_prepared_models(case,rows,omitted):
     assert load(path/'geographic.arrow').num_rows==rows
     if case=='cells7':assert len(set(t['cell_id'].to_pylist()))<rows
     if case=='cells6':assert not receipt['summary_available'] and t['max_wse'].null_count==rows
-    if case=='cells5':assert len(receipt['diagnostics'])==2
+    if case=='cells5':assert not [d for d in receipt['diagnostics'] if d.get('status')=='omitted']
 
 
 def test_reviewed_native_imports():
@@ -80,11 +80,13 @@ def test_complete_required_native_extraction(case,rows):
         if result['backend']=='rust':assert result['native_calls']>0 and result['native_required']
 
 
-def test_large_required_native_rejection_is_explicit():
+def test_large_required_native_extraction():
+    # The 5.0.7 case (public FEMA eBFE AustinOyster.p03) has no invalid source cells;
+    # one labelled sample per backend.
     results=json.loads((ROOT/'working/extraction/cells5/results.json').read_text())
-    native=next(r for r in results if r['backend']=='rust')
-    assert native['exit_code']!=0 and native['required_native'] and native['native_calls']>0
-    assert '317422' in native['error'] and 'self-intersection' in native['error']
-    reference=next(r for r in results if r['backend']=='python')
-    assert reference['exit_code']==0 and reference['quarantined_cells']==2
-    assert reference['normalized_coordinate_equal_rows']==340246
+    assert {r['backend'] for r in results}=={'rust','python'}
+    for result in results:
+        assert result['exit_code']==0 and result['rows']==1872746
+        assert result['normalized_coordinate_equal_rows']==1872746
+        assert result['quarantined_cells']==0
+        if result['backend']=='rust':assert result['native_calls']>0 and result['native_required']

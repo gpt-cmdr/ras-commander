@@ -25,7 +25,7 @@ uv run python -m pytest tests/rust_first_tier_exports tests/rust_export_conforma
 uv run python scripts/benchmarks/rust_whole_model_exports/prepare.py --fixture working/fixtures/BaldEagleDamBrk.p18.hdf --version 7.0 --expected 4425 --output working/prepared/cells7
 uv run python scripts/benchmarks/rust_whole_model_exports/prepare.py --fixture working/fixtures/BaldEagleDamBrk.p03.hdf --version 6.6 --expected 18066 --output working/prepared/cells6
 uv run python scripts/benchmarks/rust_whole_model_exports/prepare.py --fixture working/fixtures/computed7_regions.gpkg --version regions7 --expected 72 --output working/prepared/regions7
-uv run python scripts/benchmarks/rust_whole_model_exports/prepare.py --fixture working/fixtures/JUL2020_D100RAS.p04.hdf --version 5.0.7 --expected 340246 --output working/prepared/cells5
+uv run python scripts/benchmarks/rust_whole_model_exports/prepare.py --fixture working/fixtures/AustinOyster.p03.hdf --version 5.0.7 --expected 1872746 --output working/prepared/cells5
 
 uv run python scripts/benchmarks/rust_whole_model_exports/benchmark.py --prepared working/prepared/cells7 --output working/qualification/cells7 --samples 3
 # Repeat for cells6 and regions7; use --samples 1 for cells5 if resource bounded.
@@ -82,11 +82,11 @@ call. Threads=2 is fixed for Rust. Full composite keys and every normalized
 polygon coordinate are compared with the saved complete Python oracle. The
 source HDF hash must remain unchanged.
 
-The reviewed combined native backend rejects the largest5.x model at source
-cell317422 before completing. That is a negative result, with no successful
-Rust extraction time or quarantine count. The Python reference omits317422 and
-339176 and returns340246valid cells; native failure is not replaced with a
-fallback sample. Small-model native and reference outputs match all normalized
+The 5.0.7 case is the public FEMA eBFE `AustinOyster.p03` plan (1,872,746 cells,
+no invalid source cells; Source: FEMA estimated Base Flood Elevation (eBFE)
+program). Measurements recorded on the earlier 5.0.7 model are not comparable and
+must be regenerated. A native failure is never replaced with a fallback sample.
+Small-model native and reference outputs match all normalized
 coordinates. One-time preparation including results and joins is a different
 stage/run from isolated polygon extraction, so their times are not subtracted
 or added as if they were components measured in one execution.

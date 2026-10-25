@@ -8,8 +8,8 @@
   conversion they equal h5py's ``S<width>`` bytes.
 - ``domain_rule`` on mesh series descriptors and on catalogue mesh-result layers.
 
-Gate: ``RAS_ROUTE2_FIXTURES`` (BaldEagleDamBrk.p07, AustinOyster.p01 and
-JUL2020_D100RAS.p04 must be listed; absent ones skip explicitly).
+Gate: ``RAS_ROUTE2_FIXTURES`` (BaldEagleDamBrk.p07, AustinOyster.p01 and the public
+FEMA eBFE 5.0.7 plan AustinOyster.p03 must be listed; absent ones skip explicitly).
 """
 import json
 import os
@@ -104,7 +104,7 @@ def _h5py_nullpad(raw, width, padding):
     return b"".join(out)
 
 
-@pytest.mark.parametrize("name", ["BaldEagleDamBrk.p07", "JUL2020_D100RAS.p04"])
+@pytest.mark.parametrize("name", ["BaldEagleDamBrk.p07", "AustinOyster.p03"])
 def test_raw_fixed_strings_match_h5py_bytes(native, name):
     path = _fixture(name)
     checked = 0
@@ -132,7 +132,7 @@ def test_raw_fixed_strings_refuses_numeric(native):
 
 
 def test_domain_rule_on_series_and_catalogue(native):
-    path = _fixture("JUL2020_D100RAS.p04")
+    path = _fixture("AustinOyster.p03")
     mesh = native.mesh_inventory(path)[0]["mesh_name"]
     rules = {v["name"]: (v["domain"], v["domain_rule"], v["capability"]["status"])
              for v in native.mesh_series_inventory(path, mesh)["variables"]}

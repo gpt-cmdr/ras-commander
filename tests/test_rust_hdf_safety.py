@@ -232,9 +232,8 @@ DEFAULT_REAL = [
     _SCRATCH / "real_src" / "507" / "Sacramento.g01.hdf",
     _SCRATCH / "real_src" / "507" / "WaterQualityExamp.g01.hdf",
     _H / "example_projects" / "BaldEagleCrkMulti2D_extent_demo" / "BaldEagleDamBrk.g12.hdf",
-    # Preexisting computed 5.0.7 plan result (not executed by this test slice).
-    Path("C:/Users/mallory/scratch/rust-hdf-task-workspaces/review-fluvial/qualification")
-    / "JUL2020_D100RAS.p04.hdf",
+    # Preexisting computed 5.0.7 plan result (public FEMA eBFE; not executed by this test slice).
+    _SCRATCH / "real_src" / "507" / "AustinOyster.p03.hdf",
     _SCRATCH / "real_src" / "600" / "WaterQualityExamp.p01.hdf",
     _SCRATCH / "real_src" / "600" / "Chippewa_2D.g01.hdf",
     _SCRATCH / "rasexamples" / "Muncie" / "Muncie.g02.hdf",

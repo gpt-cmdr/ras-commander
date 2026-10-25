@@ -7,7 +7,8 @@ source. Its Rust harness calls the common library directly and is test-only.
 
 Prepare the complete immutable local models with `prepare.py` in the sibling
 benchmark directory. The stored versions/expected valid counts are 7.0/4425,
-6.6/18066 and 5.0.7/340246, with 2 explicit source omissions in the last. The final
+6.6/18066 and 5.0.7/1872746 (the public FEMA eBFE `AustinOyster.p03` plan; Source:
+FEMA estimated Base Flood Elevation (eBFE) program), with no source omissions. The final
 region fixture contains all 72 retained stored 7.0 regions, without repetition.
 Source extraction uses ras-commander APIs; no model computation or adjacency
 classification is run. The metadata-iteration patch is therefore unnecessary.
@@ -45,9 +46,9 @@ qualification verifier rejects them, and real producer inputs are audited global
 That explicit producer precondition is not silently upgraded to a writer guarantee.
 
 The distinct extraction tests verify required-native execution (counted native
-calls and forbidden Python polygonizer), full normalized-coordinate equality
-on7.0/6.6, and the explicit5.0.7native rejection. A test recognizing the rejection
-is not a successful native extraction qualification for that model.
+calls and forbidden Python polygonizer) and full normalized-coordinate equality
+on 7.0/6.6/5.0.7. Measurements recorded before the 5.0.7 case moved to the public
+eBFE plan must be regenerated before these checks apply.
 
 ## Integration opt-in
 

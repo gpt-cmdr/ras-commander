@@ -26,11 +26,11 @@ uv run --no-sync python -m pytest tests/rust_export_conformance tests/test_fast_
 ```
 
 The optional real fixture directory contains locally copied, unmodified HDFs:
-JUL2020_D100RAS.p04.hdf (stored 5.0.7), BaldEagleDamBrk.p03.hdf (6.6), and
-BaldEagleDamBrk.p18.hdf (7.0). Qualification receipts contain SHA256, HDF root
+AustinOyster.p03.hdf (stored 5.0.7, the public FEMA eBFE Austin-Oyster plan; Source:
+FEMA estimated Base Flood Elevation (eBFE) program), BaldEagleDamBrk.p03.hdf (6.6),
+and BaldEagleDamBrk.p18.hdf (7.0). Qualification receipts contain SHA256, HDF root
 attributes, selected mesh/cell identities and CRS. Model computation is not used.
-The 5.x API excludes two previously diagnosed invalid source cells; this suite
-exports bounded valid regions, not a full-model validity certification.
+This suite exports bounded valid regions, not a full-model validity certification.
 
 Geometry contract: coordinates are float64[N,2]; ring_offsets spans coordinates,
 polygon_offsets spans rings (exterior first), feature_offsets spans polygons.
