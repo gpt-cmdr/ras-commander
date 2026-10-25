@@ -29,9 +29,13 @@ run on both platforms; retained real-model agreement evidence remains Linux-only
 
 Use `map_horizontal_profiles` when a cell-constant horizontal water surface is
 the intended mapping method. It prepares terrain and pixel-to-cell ownership
-once, then gathers the owning cell's WSE for every profile. It avoids convex
-hulls, Delaunay triangulation, full-grid reprojection lookups and engine process
-startup. This explicit NumPy method needs the `fim` extra but no engine wheel.
+once, then gathers the owning cell's WSE for every profile. Rust reads native
+terrain blocks through terrio and reuses the decoded window; Python prepares
+the centre-based ownership raster and writes final GIS products. It avoids convex
+hulls, Delaunay triangulation and full-grid reprojection lookups. The Rust
+backend is the default and requires the 0.2 engine wheel. The explicit
+`backend="numpy"` reference backend is retained for numerical qualification;
+there is no automatic fallback.
 
 ```python
 from ras_commander import RasFim
@@ -42,6 +46,7 @@ manifest = RasFim.map_horizontal_profiles(
     polygon="strict_domain.gpkg",
     min_depth=0.5,             # half-foot filter only when elevation units are feet
     max_working_mib=1024,
+    threads=4,
     write_floodplain=False,
 )
 ```
@@ -68,10 +73,15 @@ rules below this threshold are not reproduced.
 The returned `fim_product_manifest` has the same columns and 09/10/11 filename
 layout as Step05 products; those names do not identify the mapping method.
 The JSON manifest records `method_id="horizontal-cell-constant/1"`,
-`backend="numpy"`, float32 arithmetic, the threshold, source identities and
+`backend="rust"` (or the explicitly requested reference backend), float32 arithmetic, the threshold, source identities and
 the terrain window. `samples=0` because there is no interpolation. The
-planned array admission budget excludes raster-library caches and optional
-floodplain polygonization; it is not a hard process-memory cap.
+planned array admission budget excludes optional
+floodplain polygonization and unaccounted runtime overhead; it is not a hard
+process-memory cap. Rust profile arrays are streamed to the Python GIS writer
+without retaining binary scratch rasters. Ownership and WSE staging uses the
+output volume, with a free-space check for staging only; final GeoTIFF space
+is not included. `timeout` defaults to `None`. When set, it bounds the Rust
+process and pipe-consumer lifetime, including product-writing backpressure.
 
 This method implements cell-constant filling, consistent with the definition
 of Horizontal rendering in the [HEC-RAS Mapper 6.6 Mapping Options](https://www.hec.usace.army.mil/confluence/rasdocs/rmum/6.6/mapping-results/mapping-options).
@@ -80,6 +90,57 @@ implement native sloping surfaces, mixed 1D/2D composition or structure-specific
 renderers. Select the same render mode, terrain, timestep, grid and depth
 filter when comparing with RAS Mapper; agreement with one mode does not
 establish agreement with another.
+
+## Compare with native horizontal stored maps
+
+Use `compare_with_rasmapper` on an isolated copy of a computed project. It
+runs `RasProcess.store_maps(render_mode="horizontal")` for native depth and
+WSE, runs Rust horizontal mapping, and compares matching pixel centres. It
+holds the native mapping project lock, checks the original `.rasmap` bytes,
+and restores them on success or failure. Native mapping can write other
+project-side caches, so stage the project rather than using an immutable source.
+
+```python
+comparison = RasFim.compare_with_rasmapper(
+    "02", "terrain_with_modifications.tif", "horizontal_comparison",
+    mesh_name="selected 2D area",
+    terrain_name="registered terrain name",
+    ras_object=project,
+    ras_version="6.6",
+    min_depth=0.5,       # model elevation units; feet in this example
+    threads=4,
+    max_working_mib=2048,
+)
+print(comparison[["profile", "csi", "depth_max_abs", "wse_exact_fraction"]])
+```
+
+Without `cells`, this extracts maximum cell results from the selected plan
+and mesh. For saved timesteps, supply a cell WSE table and
+`profiles={"wsel_column": "DDMMMYYYY HH:MM:SS"}` with exact available native
+timestamps. The caller must ensure those WSE columns describe the selected
+plan, mesh and time. Unknown timestamps fail before native execution.
+
+Supply a float32 terrain export of the exact registered terrain, with its
+modifications applied. `RasTerrain.export_rasmapper_terrain` is the supported
+native export API. Terrain identity remains the caller's responsibility;
+the comparison does not silently substitute a different terrain.
+
+The returned `fim_comparison` DataFrame and CSV include wet-mask CSI,
+additional/missing wet pixels, common-wet depth differences, finite-pair WSE
+differences, separate missing-WSE counts, native implied-terrain residuals and product paths. The JSON report
+records native runtime provenance, terrain and registered-HDF hashes, the
+effective float32 threshold, Rust batch timing and the
+original/restored `.rasmap` hashes. Both depth masks use the strict cutoff
+independently. The native TIFFs remain unmodified. No reference resampling is
+performed: incompatible CRS, pixel sizes or fractional grid shifts fail.
+
+The evaluation footprint is the selected 2D cells intersected with the AOI.
+A bbox or polygon constrains Rust mapping and comparison; native stored-map
+generation still maps the selected plan. Native output must contain exactly
+one depth and one WSE mosaic; select `terrain_name` to resolve multiple
+registered terrains. Reported operation timings are not a controlled
+throughput benchmark because the two calls include different preparation
+stages. See `602_rust_horizontal_mapping_comparison.ipynb` for corpus setup.
 
 ## Method
 
@@ -301,9 +362,8 @@ published machine-readable DataFrame surface:
   `raise_on_failure=False` to return it instead.
 
 The [FIM engine comparison](../development/fim-mapping-performance.md)
-records the agreement checks and the measurement scope. Its throughput
-observations come from the ras2fim-2D adapter, not from `RasFim`, and do not
-establish a general speedup.
+records the agreement checks and the measurement scope. Throughput tables
+are observations of the listed workloads and do not establish a general speedup.
 
 ## Complete source reference
 

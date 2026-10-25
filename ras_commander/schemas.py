@@ -29,7 +29,7 @@ Each entry of :data:`DATAFRAME_SCHEMAS`:
 """
 
 # Schema contract version -- bump when the documented column surface changes meaningfully.
-SCHEMA_VERSION = "1.28"
+SCHEMA_VERSION = "1.29"
 
 _GEOMETRY_ASSOCIATION_COLUMNS = [
     {"name": "geom_number", "dtype": "str", "description": "Normalized geometry identifier."},
@@ -1749,5 +1749,45 @@ DATAFRAME_SCHEMAS["fim_product_manifest"] = {
             ("error", "str | None", "Failure diagnostic for failed or not_run rows."),
         )
     ],
-    "note": "The same rows, engine method record, engine reports, options, AOI and input identities are written to fim_manifest.json. An AOI selects output pixels only; preparation always uses every wet cell.",
+    "note": "The same rows, engine method record, engine reports, options, AOI and input identities are written to fim_manifest.json. Step05 prepares every wet cell before AOI selection; horizontal mapping prepares ownership and terrain for the constrained window.",
+}
+
+
+DATAFRAME_SCHEMAS["fim_comparison"] = {
+    "description": "One row per Rust horizontal/native horizontal stored-map comparison.",
+    "accessor": "RasFim.compare_with_rasmapper(...)",
+    "source": "ras_commander.fim.RasFim.RasFim.compare_with_rasmapper()",
+    "extra_columns": False,
+    "dynamic": False,
+    "columns": [
+        {"name": name, "dtype": dtype, "description": description}
+        for name, dtype, description in (
+            ("profile", "str", "Candidate WSE column."),
+            ("native_profile", "str", "Exact native Max or timestamp selector."),
+            ("candidate_wet", "int", "Candidate pixels strictly above threshold."),
+            ("reference_wet", "int", "Native pixels strictly above threshold."),
+            ("common_wet", "int", "Pixels wet in both products."),
+            ("extra_wet", "int", "Candidate-only wet pixels."),
+            ("missing_wet", "int", "Native-only wet pixels."),
+            ("csi", "float", "Common wet divided by wet union; 1 for an empty union."),
+            ("depth_exact_fraction", "float", "Exact fraction on common wet pixels; NaN if none."),
+            ("depth_mae", "float", "Mean absolute depth difference on common wet pixels, model units."),
+            ("depth_max_abs", "float", "Maximum absolute depth difference on common wet pixels, model units."),
+            ("wse_pairs", "int", "Jointly finite WSE pairs on common wet pixels."),
+            ("wse_exact_fraction", "float", "Exact fraction on finite WSE pairs; NaN if none."),
+            ("wse_mae", "float", "Mean absolute difference on finite WSE pairs, model units."),
+            ("wse_max_abs", "float", "Maximum absolute difference on finite WSE pairs, model units."),
+            ("reference_missing_wse", "int", "Native wet pixels with missing WSE."),
+            ("candidate_missing_wse", "int", "Candidate wet pixels with missing WSE."),
+            ("terrain_pairs", "int", "Native wet pixels with finite WSE, depth and exported terrain."),
+            ("terrain_mae", "float", "Mean absolute native WSE-minus-depth-minus-terrain residual, model units."),
+            ("terrain_max_abs", "float", "Maximum absolute native implied-terrain residual, model units."),
+            ("depth_tif", "str", "Candidate depth raster."),
+            ("reference_depth_tif", "str", "Native depth raster, retained unmodified."),
+            ("wse_tif", "str", "Candidate WSE raster."),
+            ("reference_wse_tif", "str", "Native WSE raster, retained unmodified."),
+            ("native_seconds", "float", "Native StoreMaps call wall time; not a controlled benchmark."),
+        )
+    ],
+    "note": "Same-lattice comparison inside selected 2D cells and AOI, independently thresholded. Batch Rust timing and configuration restoration hashes are in comparison.json and DataFrame attrs.",
 }

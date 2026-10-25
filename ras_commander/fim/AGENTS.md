@@ -12,9 +12,10 @@ Parent `ras_commander/AGENTS.md` and root `AGENTS.md` still apply.
   Never build, download, or install it, and never fall back to Python arithmetic.
 - Do not reimplement the engine numerics in Python or Rust here. Python owns sample preparation,
   SciPy Delaunay export, grid derivation, product writing, and the manifest. The engine source
-  is `rust/step05/` and must stay identical to the reviewed ras2fim-2D copy.
-- `map_horizontal_profiles` is a separate, explicit NumPy cell-constant method. It needs no
-  engine executable and never substitutes for a failed Step05 run. It uses float32 cell WSE,
+  is `rust/step05/`. The Step05 numerical path remains identical to the reviewed ras2fim-2D
+  copy; the independent horizontal module has its own method contract and qualification.
+- `map_horizontal_profiles` is a separate, explicit cell-constant method. Rust is the default;
+  NumPy is an explicit qualification reference, never a fallback. It uses float32 cell WSE,
   terrain-lattice ownership and subtraction, with the caller's pixel depth filter applied to
   depth and WSE. It does not implement native sloping, 1D or structure-specific rendering.
   Its manifest records `method_id`, `backend`, threshold and grid. Shared product names
@@ -46,3 +47,8 @@ Parent `ras_commander/AGENTS.md` and root `AGENTS.md` still apply.
 - Unit tests use synthetic frames and a simulated engine. Engine-backed tests are opt-in through
   `RAS_COMMANDER_FIM_ENGINE` and `RAS_COMMANDER_FIM_FIXTURE`; they never run HEC-RAS.
 - Do not commit fixtures, prepared inputs, engine builds, or products.
+
+- `compare_with_rasmapper` generates native horizontal maps only through `RasProcess`,
+  uses the same re-entrant project lock, verifies/restores the original rasmap bytes in finally,
+  and rejects reference resampling. Its scope is the selected 2D cell footprint/AOI, not native
+  1D/structure/sloping rendering. Report reference missing WSE separately from finite pairs.

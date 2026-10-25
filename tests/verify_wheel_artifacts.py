@@ -7,8 +7,8 @@ import zipfile
 root = Path(__file__).resolve().parents[1]
 folder = root / "wheels"
 build = json.loads((folder / "BUILD.json").read_text(encoding="utf-8"))
-expected_names = {"ras2fim_engine-0.1.0-py3-none-manylinux_2_28_x86_64.whl",
-                  "ras2fim_engine-0.1.0-py3-none-win_amd64.whl"}
+expected_names = {"ras2fim_engine-0.2.0-py3-none-manylinux_2_28_x86_64.whl",
+                  "ras2fim_engine-0.2.0-py3-none-win_amd64.whl"}
 assert set(build["artifact_sha256"]) == expected_names
 assert {p.name for p in folder.glob("*.whl")} == expected_names
 checksums = dict(line.split()[::-1] for line in (folder / "SHA256SUMS.txt").read_text().splitlines())
@@ -26,5 +26,5 @@ for name, expected in build["artifact_sha256"].items():
         for notice in ["THIRD_PARTY_NOTICES.md", "licenses/ras2fim-LICENSE.txt", "licenses/scipy-LICENSE.txt"]:
             assert notice in archive.namelist(), (name, notice)
         executable = "ras2fim-batch.exe" if "win_amd64" in name else "ras2fim-batch"
-        assert f"ras2fim_engine-0.1.0.data/scripts/{executable}" in archive.namelist()
+        assert f"ras2fim_engine-0.2.0.data/scripts/{executable}" in archive.namelist()
 print("Both wheel hashes, bundled notices and engine source fingerprints PASS")

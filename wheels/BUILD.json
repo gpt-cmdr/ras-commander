@@ -1,16 +1,19 @@
 {
-  "build_repository": "gpt-cmdr/ras2fim-2d",
-  "source_commit": "1c8929b403c9f74a370dbed6b9ef2215167a3b27",
-  "workflow_run": "https://github.com/gpt-cmdr/ras2fim-2d/actions/runs/39983473605",
+  "build_repository": "gpt-cmdr/ras-commander",
+  "source_commit": "065f49ac5be44490880050242b5246794f1dbb72",
+  "workflow_run": "https://github.com/gpt-cmdr/ras-commander/actions/runs/40150758281",
   "rust": "1.99.1",
   "maturin": "1.15.0",
+  "engine_version": "0.2.0",
   "engine_source_files_sha256": {
-    "Cargo.toml": "148e797cc3be2a32c74998f0539b8638591606ca99c418903d0a172b9eec8323",
-    "Cargo.lock": "0bc189b7d853a93396094a708495dd99d203565f5d9f6ca67092e30e19696d2a",
+    "Cargo.lock": "d9301b8725c855cbd4eea3e15bb42f975a0eb09e6d774522f96f1988e04c0580",
+    "Cargo.toml": "44027023ead196844774c6b39f167569f2ef52ea89b30b9d59771bf770289198",
+    "pyproject.toml": "059b852e8e62832baafc195802041ac6667845e2bbfae9c8c7e4bb2aea56e6a5",
     "src/cache.rs": "67fe5979291828d50f97fd121a0fffd68017eaab3fbc0ba2472f35256ac5d59c",
+    "src/horizontal.rs": "90288739a99546c5f33bb237d88d74c6281a29dac8865b077993517179ff37c2",
     "src/interp.rs": "1be2beb6d6d0bd622f5f3fcf410be32490a8e22bbda2aa6b9bd483a37a567575",
-    "src/lib.rs": "275680a92e1717d87196a1e6e0267f6e9e33a51bdf15bc5c301c7214200548be",
-    "src/main.rs": "242b657dd3481b870ae638e1dbeb7b465d5715937336ba3c876a32a3269ff877",
+    "src/lib.rs": "dc8cda6ff28cd34c863a59afad080339eb3093e4d584c042f1dc5dcd11cdc959",
+    "src/main.rs": "4ec34230d69004817260d4ceb221f982f6a201d22720f105efc01ab450923639",
     "src/model.rs": "2454206dcabbbb65569d538977736cb5af83894133bc1786255e278b75681bbc",
     "src/scipy_interp.rs": "8eedf291604c84faced5690da232f5d51a76658549326433b636e35a48a78e92",
     "src/session.rs": "fb9a9e1b667c5dbf9a7b32404752550bda66cd79ee8b4a73f9901c2db3b16c54",
@@ -21,9 +24,9 @@
     "tests/live_binary.rs": "d00846473760808dd2b1eefdc3097ab23762829f251f80f7a78a0a140d18b0af",
     "tests/live_step05.rs": "d702ab7035c6b401e70cebfc181b1cdfdd435f52431e834a6a60c595feaa3979"
   },
-  "tests": "Both installed wheels passed Step05 synthetic shared-terrain batch/full/bbox/polygon smoke tests on GitHub-hosted Linux and Windows runners.",
   "artifact_sha256": {
-    "ras2fim_engine-0.1.0-py3-none-manylinux_2_28_x86_64.whl": "bfc4e046cccc9a4b1a8b8dcf8101237b9b6d94ea49923bec55ae27aaf6e02034",
-    "ras2fim_engine-0.1.0-py3-none-win_amd64.whl": "9564a9cef19ab05baa4d4d11af57ecb5c3e0951e2f8f52225b5552f3bc273284"
-  }
+    "ras2fim_engine-0.2.0-py3-none-manylinux_2_28_x86_64.whl": "e9bf4749f6e4225370b40eb7ffc31a7ac84cfdfc7bc58aa12fe070e67196e741",
+    "ras2fim_engine-0.2.0-py3-none-win_amd64.whl": "158a477c4755bd270f0c851810c967d9f05c27341b68c389f7ca58cf91c289cd"
+  },
+  "tests": "Both installed wheels passed Step05 synthetic shared-terrain/full/bbox/polygon smoke tests and horizontal file/pipe float32 batch smoke tests on GitHub-hosted Linux and Windows. Commander real-model and native-horizontal comparison evidence is recorded separately."
 }

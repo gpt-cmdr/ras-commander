@@ -52,6 +52,8 @@ jobs:
           python -m pip install --no-deps --no-index --find-links dist ras2fim-engine
           python -m pip install numpy==2.3.5 scipy==1.16.3 rasterio==1.4.4
           python tests/smoke_engine_wheel.py
+          python -m pip install -e '.[fim]' pytest
+          python -c "import os, shutil, pytest; os.environ['RAS_COMMANDER_FIM_HORIZONTAL_ENGINE'] = shutil.which('ras2fim-batch'); raise SystemExit(pytest.main(['tests/test_ras_fim_horizontal.py', '-q']))"
       - name: Hash wheel artifacts
         shell: python
         run: |
