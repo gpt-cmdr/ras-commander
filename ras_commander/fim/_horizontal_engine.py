@@ -89,7 +89,7 @@ def run_batch(
     details["engine"] = {"path": str(engine), "method": method}
     pixels = int(np.prod(grid.plan.shape))
     required = (
-        (grid.plan.planned_bytes if grid.owner is None else pixels * 4)
+        (grid.plan.geometry_bytes if grid.owner is None else pixels * 4)
         + len(grid.plan.cell_positions) * 4 * len(names)
         + (64 << 20)
     )
@@ -115,9 +115,9 @@ def run_batch(
             _write_array(root / "owner.bin", owner)
             geometry_fields["owner_file"] = "owner.bin"
             del owner
-        details.setdefault("timings", {})["owner_staging_seconds"] = (
-            time.perf_counter() - staging_started
-        )
+        details.setdefault("timings", {})[
+            "geometry_staging_seconds" if grid.owner is None else "owner_staging_seconds"
+        ] = (time.perf_counter() - staging_started)
         profiles = []
         failures = {}
         for i, name in enumerate(names):

@@ -25,7 +25,9 @@
     "licenses/wbraster-LICENSE-APACHE.txt": "d932025956695b7f7a6be243fe01294075bc75b18bb4a6f41922c4eba9aaacd7",
     "licenses/wbraster-LICENSE-MIT.txt": "b3f690015a0a92922cafb40143f1642ce1712c3a44b7c6a96422c9a890956145",
     "licenses/wbvector-LICENSE-APACHE.txt": "d932025956695b7f7a6be243fe01294075bc75b18bb4a6f41922c4eba9aaacd7",
-    "licenses/wbvector-LICENSE-MIT.txt": "b3f690015a0a92922cafb40143f1642ce1712c3a44b7c6a96422c9a890956145"
+    "licenses/wbvector-LICENSE-MIT.txt": "b3f690015a0a92922cafb40143f1642ce1712c3a44b7c6a96422c9a890956145",
+    "README.md": "4c25e361f44ea0a6904a0eb58008167d8783468e2685a9fc686364ed0dc7b9c9",
+    "THIRD_PARTY_NOTICES.md": "605905225fa9d611f0c5163d22a6497505eb287c7f4bdd5309b73999a441e1b3"
   },
   "horizontal_method": "horizontal-cell-constant/1"
 }

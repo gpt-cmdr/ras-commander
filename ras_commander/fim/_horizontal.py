@@ -24,6 +24,7 @@ class GridPlan:
     mask_geometry: bool
     planned_bytes: int
     cell_positions: np.ndarray
+    geometry_bytes: int = 0
 
     @property
     def shape(self):
@@ -111,6 +112,7 @@ def plan_grid(
     # polygonization are not a hard process-RSS limit.
     pixels = int(window.width * window.height)
     planned = pixels * 40 + len(positions) * 64 + (64 << 20) + transient if pixels else 0
+    transport = 0
     if native and pixels:
         # Bound framed 2D WKB plus decoded geometry/terrio shape storage before allocation.
         geoms = cells.geometry.iloc[positions].to_numpy()
@@ -135,6 +137,7 @@ def plan_grid(
         aoi is not None and (aoi.kind != "bbox" or not _prepare.same_crs(aoi.crs, crs)),
         planned,
         positions,
+        transport,
     )
 
 
