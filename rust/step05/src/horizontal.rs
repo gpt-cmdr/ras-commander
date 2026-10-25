@@ -34,6 +34,8 @@ pub struct Request {
     pub min_depth: f64,
     pub threads: usize,
     pub max_working_bytes: u64,
+    #[serde(default)]
+    pub stream_outputs: bool,
 }
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -82,12 +84,20 @@ fn read_values(path: &Path, count: usize) -> Result<Vec<f32>, MapError> {
     }
     Ok(values)
 }
+fn write_f32(writer: &mut impl Write, values: &[f32]) -> Result<(), MapError> {
+    let mut buffer = vec![0_u8; 65536];
+    for chunk in values.chunks(16384) {
+        for (value, bytes) in chunk.iter().zip(buffer.chunks_exact_mut(4)) {
+            bytes.copy_from_slice(&value.to_le_bytes());
+        }
+        writer.write_all(&buffer[..chunk.len() * 4])?;
+    }
+    Ok(())
+}
 fn write_values(path: &Path, values: &[f32]) -> Result<(), MapError> {
     let partial = path.with_extension("bin.partial");
     let mut writer = BufWriter::new(File::create(&partial)?);
-    for v in values {
-        writer.write_all(&v.to_le_bytes())?;
-    }
+    write_f32(&mut writer, values)?;
     writer.flush()?;
     writer.get_ref().sync_all()?;
     fs::rename(partial, path)?;
@@ -131,6 +141,7 @@ pub fn run(req: &Request, base: &Path, out: &Path) -> Result<Value, MapError> {
     if req.schema != SCHEMA
         || !(1..=64).contains(&req.threads)
         || req.profiles.is_empty()
+        || req.epsg == 0
         || req.cell_count == 0
         || req.cell_count >= u32::MAX as usize
         || !req.min_depth.is_finite()
@@ -164,8 +175,11 @@ pub fn run(req: &Request, base: &Path, out: &Path) -> Result<Value, MapError> {
             "horizontal array plan exceeds budget".into(),
         ));
     }
+    let terrain_path = model::resolve(base, &req.terrain);
     let terrain = NativeTerrain::open(
-        &req.terrain,
+        terrain_path
+            .to_str()
+            .ok_or_else(|| MapError::Invalid("terrain path not UTF-8".into()))?,
         req.epsg,
         &req.crs_identity,
         QueryConvention::PixelCenter,
@@ -180,6 +194,11 @@ pub fn run(req: &Request, base: &Path, out: &Path) -> Result<Value, MapError> {
     {
         return Err(MapError::Unsupported(
             "horizontal terrain identity, nodata, square grid or window mismatch".into(),
+        ));
+    }
+    if terrain.max_block_bytes() > cache {
+        return Err(MapError::Unsupported(
+            "terrain block exceeds 64 MiB; export tiled terrain".into(),
         ));
     }
     let admitted = planned
@@ -284,6 +303,12 @@ pub fn run(req: &Request, base: &Path, out: &Path) -> Result<Value, MapError> {
                         json!({"id":p.id,"status":"failed","error":e.to_string()})
                     }
                 };
+                if req.stream_outputs && unit["status"] == "failed" {
+                    let stdout = std::io::stdout();
+                    let mut stream = stdout.lock();
+                    writeln!(stream, "{}", unit)?;
+                    stream.flush()?;
+                }
                 sink::write_json(&dir.join("unit.json"), &unit)?;
                 report["profiles"].as_array_mut().unwrap().push(unit);
                 sink::write_json(&out.join("report.json"), &report)?;

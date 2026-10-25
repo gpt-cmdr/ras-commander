@@ -9,7 +9,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 
-const USAGE: &str = "usage:\n  ras2fim-batch run <session.json> <new-output-dir>\n  ras2fim-batch step05 <request.json> <new-output-dir>\n  ras2fim-batch method\n  ras2fim-batch terrain-info <terrain.tif>";
+const USAGE: &str = "usage:\n  ras2fim-batch run <session.json> <new-output-dir>\n  ras2fim-batch horizontal <request.json> <new-output-dir>\n  ras2fim-batch step05 <request.json> <new-output-dir>\n  ras2fim-batch method\n  ras2fim-batch terrain-info <terrain.tif>";
 
 /// Samples this process's OS thread count (Linux /proc) to evidence no nested decode threads.
 struct ThreadMonitor {
@@ -117,10 +117,12 @@ fn run() -> Result<i32, Box<dyn std::error::Error>> {
                 .ok_or("request has no parent")?
                 .to_path_buf();
             let report = ras2fim_stages_r2::horizontal::run(&req, &base, &out)?;
-            println!(
-                "{}",
-                serde_json::json!({"status":report["status"],"total_seconds":report["total_seconds"]})
-            );
+            if !req.stream_outputs {
+                println!(
+                    "{}",
+                    serde_json::json!({"status":report["status"],"total_seconds":report["total_seconds"]})
+                );
+            }
             Ok(if report["status"] == "complete" { 0 } else { 2 })
         }
         ("step05", 3) => {
