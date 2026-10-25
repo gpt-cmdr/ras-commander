@@ -97,7 +97,46 @@ parity. The example notebook and `compare_with_rasmapper` API make the checks
 repeatable and record terrain identities, runtime, grid/threshold semantics,
 missing-WSE counts and configuration-restoration hashes.
 
-### Paired throughput measurements
+### Direct comparison with native horizontal RAS Mapper
+
+A full-domain Spring Creek p01 `Max` run compared the current Rust horizontal
+pipeline with native HEC-RAS 7.0.1 horizontal stored maps. Both used the
+original registered terrain, all 340,163 physical cells, four allowed logical
+CPUs, the same strict `depth > 0.5 ft` filter, and depth/WSE LZW delivery
+GeoTIFFs. There was no AOI. Inputs and imports were staged before timing;
+floodplain polygonization and numerical comparison were excluded. Native
+timing includes its stored-map call and the filter/rewrite needed to deliver
+the same thresholded products. Rust applies the filter while mapping.
+
+| Full-domain Spring Creek: one maximum-result profile | End-to-end elapsed (s) |
+|---|---:|
+| Native horizontal RAS Mapper | 231.8 |
+| Rust horizontal pipeline | 359.1 |
+
+Rust took 1.55 times the native elapsed time in this observation. This was
+one native-first/Rust-second pair, without an excluded warm-up or interleaved
+repetitions, on the shared Windows workstation. It is an exploratory
+measurement, not a general throughput result or a cold-cache comparison.
+The native grid contained 447,487,929 pixels; Rust trimmed blank terrain
+margins to the physical mesh bounds and wrote 411,674,756 pixels. Both cover
+the evaluated 2D mesh; the coverage check also counts all native wet pixels
+so that wet output outside the comparison footprint cannot be hidden.
+
+On the full physical mesh, all **79,872,550 wet pixels** matched: zero
+additional/missing wet pixels, exact depth and finite WSE, and no missing WSE.
+The independent count of all native wet pixels was also 79,872,550, confirming
+that the comparison did not omit native wet output outside its footprint.
+Native implied-terrain residuals were zero. This is one maximum-result
+full-domain case, not all-timestep or all-mode parity.
+
+The Rust engine reported 10.9 seconds preparing terrain and 260.8 seconds in
+its profile operation, which includes writing the binary stdout stream. The
+latter is not a kernel-only timing. This full-domain request transfers about
+3.29 GB of depth/WSE arrays across the subprocess pipe. These observations
+make direct bindings and persistent prepared arrays relevant optimization
+candidates; they do not prove how much time either change would save.
+
+### Secondary comparison with triangulated mapping
 
 Five rotated, interleaved repetitions followed an excluded warm-up triplet on
 one polygon-constrained reach. Each method used one CPU; Rust threads and
@@ -141,3 +180,41 @@ geometry/query-weight reuse, batched terrain evaluation and exact aligned-grid
 shortcuts. Horizontal scaling opportunities include bounded bulk overlap
 validation, persistent prepared-grid reuse and reducing the process boundary.
 Each needs separate equality and paired-throughput evidence before adoption.
+
+## Proposed engine packaging
+
+Package the mapping engine separately as **`ras-commander-fast-fim`**, following
+[ras-commander-fast-hdf](https://github.com/gpt-cmdr/ras-commander-fast-hdf).
+This is a proposed extraction, not the installation name of the retained
+`ras2fim-engine` 0.2.0 test wheels in this PR.
+
+The separate repository should own the Rust mapping crate, method contracts,
+CLI, optional PyO3 bindings, native tests, notices and platform-wheel release
+workflow. Rust consumers should use an ordinary library crate without Python;
+Python consumers should import `ras_commander_fast_fim` from `abi3` wheels
+built with maturin. Keep a CLI
+for ras2fim-2D and other process-isolated callers. Preserve the current CLI and
+request contracts during migration rather than changing names silently.
+
+Commander should retain HEC-RAS execution, HDF-to-cell table construction,
+project locking, native comparison, GeoPandas-facing validation, product
+orchestration and notebooks. The mapping package should not depend on
+Commander or invoke HEC-RAS. Both Commander and ras2fim-2D can then depend on
+one versioned engine instead of maintaining duplicate source trees.
+
+An in-process binding could remove executable startup and owner/WSE staging
+costs observed in the current CLI path. It should expose a prepared mapping
+context that owns terrain/ownership for repeated or chunked profile batches,
+releases the GIL during native computation, bounds allocations and threads,
+and converts native errors/panics to explicit exceptions. Python array
+ownership and lifetimes need tests; a binding alone does not guarantee a
+speedup. Persistent-context parity and throughput must be measured before
+making that backend the default.
+
+Keep installation optional through the mapping extra initially. Qualify
+Windows x86-64 and Linux x86-64 wheels against both method contracts before
+release; add other platforms only with their own evidence. Preserve upstream
+ras2fim and SciPy acknowledgments and bundled dependency notices. Extraction
+should first reproduce the existing tests and three-model comparison, then
+introduce the binding as a separately reviewable change. No new engine
+repository or package publication is performed by this PR.
