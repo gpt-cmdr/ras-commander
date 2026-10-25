@@ -72,7 +72,7 @@ def readers(hdf, **kw):
 def _write_hdf(path: Path) -> Path:
     """Plan-like HDF: one mesh of 3 physical + 1 ghost cell, 2 faces, 1 pump."""
     mesh_attrs = np.array(
-        [(b"Mesh A", 3.0)], dtype=np.dtype([("Name", "S16"), ("Cell Count", "f4")])
+        [(b"Mesh A", 3)], dtype=np.dtype([("Name", "S16"), ("Cell Count", "i4")])
     )
     centers = np.array([[0.0, 0.0], [1.0, 0.0], [2.0, 0.5], [3.0, 0.5]])
     pump_attrs = np.array(
@@ -83,7 +83,7 @@ def _write_hdf(path: Path) -> Path:
         geom = hdf.create_group("Geometry")
         geom.attrs["SI Units"] = np.bytes_("False")
         info = hdf.create_group("Plan Data/Plan Information")
-        info.attrs["Simulation Start Time"] = b"01Jan2000 00:00:00"
+        info.attrs["Simulation Start Time"] = np.bytes_("01Jan2000 00:00:00")
         hdf.create_dataset("Geometry/2D Flow Areas/Attributes", data=mesh_attrs)
         mesh = hdf.create_group("Geometry/2D Flow Areas/Mesh A")
         mesh.create_dataset("Cells Center Coordinate", data=centers)

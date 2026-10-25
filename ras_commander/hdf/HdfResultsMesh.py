@@ -3928,7 +3928,7 @@ class HdfResultsMesh:
                 )
                 continue
 
-            data = read_typed(group)
+            data = read_dataset(group)
             id_column = "face_id" if "Face" in var else "cell_id"
             value_column = var.lower().replace(" ", "_")
             if data.ndim == 2 and data.shape[0] == 2:
