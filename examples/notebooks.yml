@@ -3071,15 +3071,17 @@ notebooks:
   - HdfPipe.get_pipe_conduits
   - HdfStruc.get_structures
   - RasFim.canonicalize_terrain_crs
+  - RasFim.compare_rasters
   - RasFim.compare_with_rasmapper
   - RasFim.get_cells_from_plan_hdf
+  - RasFim.map_horizontal_profiles
   - RasFim.validate_2d_model
   - RasTerrain.export_rasmapper_terrain
   hec_refs: []
   learning_paths: []
   excluded: false
-  code_cells: 4
-  executed_cells: 0
+  code_cells: 5
+  executed_cells: 5
 - id: 610_generate_fluvial_pluvial_delineations_max_wse_arrival_time
   filename: 610_generate_fluvial_pluvial_delineations_max_wse_arrival_time.ipynb
   title: Generate Fluvial Pluvial Delineations using Max WSE Arrival Time

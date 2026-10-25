@@ -912,3 +912,36 @@ def test_all_meshes_keep_local_wse_identity_and_global_unique_ids(tmp_path, monk
     assert cells.wsel_max.tolist() == [103., 107.]
     assert cells.attrs["fim_full_2d_coverage"]
     assert cells.attrs["fim_mesh_names"] == ["left", "right"]
+
+
+@pytest.mark.parametrize("cutoff", [0.0, 0.5, 1.0])
+def test_compare_existing_rasters_applies_independent_cutoff_without_writes(scene, cutoff):
+    import hashlib
+
+    product = run(scene, min_depth=0.0).iloc[0]
+    paths = [Path(product.depth_tif), Path(product.wse_tif)]
+    before = [hashlib.sha256(p.read_bytes()).hexdigest() for p in paths]
+    result = RasFim.compare_rasters(*paths, *paths, cells=scene[0], min_depth=cutoff,
+                                    terrain_path=scene[1])
+    with rasterio.open(paths[0]) as src:
+        data = src.read(1, masked=True).filled(np.nan)
+    expected = np.count_nonzero(np.isfinite(data) & (data > np.float32(cutoff)))
+    assert result["common_wet"] == result["wse_pairs"] == expected
+    assert result["extra_wet"] == result["missing_wet"] == 0
+    assert result["depth_max_abs"] == result["wse_max_abs"] == 0
+    assert before == [hashlib.sha256(p.read_bytes()).hexdigest() for p in paths]
+
+
+def test_compare_existing_rasters_rejects_footprint_crs_and_terrain_lattice(scene):
+    import shutil
+
+    product = run(scene).iloc[0]
+    paths = [product.depth_tif, product.wse_tif]
+    with pytest.raises(FimUnsupportedError, match="same CRS"):
+        RasFim.compare_rasters(*paths, *paths, cells=scene[0].to_crs("EPSG:4326"))
+    shifted = scene[2] / "shifted-terrain.tif"
+    shutil.copy2(scene[1], shifted)
+    with rasterio.open(shifted, "r+") as src:
+        src.transform = src.transform * rasterio.Affine.translation(.25, 0)
+    with pytest.raises(FimUnsupportedError, match="integer pixel offsets"):
+        RasFim.compare_rasters(*paths, *paths, cells=scene[0], terrain_path=shifted)

@@ -224,6 +224,31 @@ registered terrains. Reported operation timings are not a controlled
 throughput benchmark because the two calls include different preparation
 stages. See `602_rust_horizontal_mapping_comparison.ipynb` for corpus setup.
 
+### Reuse existing reference maps across depth cutoffs
+
+`RasFim.compare_rasters` compares existing depth/WSE products without native
+execution, file changes or reference resampling:
+
+```python
+metrics = RasFim.compare_rasters(
+    "rust_depth.tif", "rust_wse.tif", "native_depth.tif", "native_wse.tif",
+    cells=cells, min_depth=1.0, terrain_path="terrain.tif",
+)
+print(metrics["extra_wet"], metrics["missing_wet"], metrics["depth_max_abs"])
+```
+
+It applies the strict float32 cutoff independently, returns the same numeric
+metrics as the native-generation comparison, and reports missing WSE
+separately. It returns no generation timings. All rasters and the cell
+footprint must share the CRS and aligned pixel lattice. Raw native inputs
+must retain the low depths being tested; a previously applied higher cutoff
+cannot be reversed. Raster provenance remains the caller's responsibility.
+
+Notebook 602 shows 0.0, 0.5, 1.0 and 2.0 ft on Davis. Common-wet depth/WSE
+matches at all four cutoffs; wet masks match at 0.5, 1.0 and 2.0 ft. At zero,
+Rust retains 50 additional pixels below 0.001 ft, so zero-cutoff wet-mask
+parity is not established. The default half-foot qualification is unchanged.
+
 ## Method
 
 The method comes from ras2fim-2D Step 05 (Andy Carter, PE, Center for Water

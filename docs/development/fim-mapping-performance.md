@@ -233,6 +233,17 @@ bounded Rust timings because their workloads differ.
 
 ### Further work
 
+The next roadmap item is **RAS Mapper sloping-interpolation parity**, with
+performance gains demonstrated by the same kind of executable notebook proof.
+Keep horizontal qualification and PR completion as the current deliverable;
+sloping implementation has not started in this PR. Its acceptance evidence
+must compare native sloping and Rust on the same terrain, grid, saved states
+and varying depth cutoffs; report wet masks, depth/WSE differences, missing
+values and configuration restoration. Profile single-map and multi-timestep
+throughput under equal CPU budgets, and retain structure/barrier cases and
+boundary diagnostics. Similar performance gains are a goal to measure, not
+an established result.
+
 Native **sloping** agreement requires hydraulically connected face/corner
 stencils, side-specific WSE across barriers, shallow-water options and
 structure-specific renderers. A global Delaunay surface cannot become that
@@ -392,10 +403,35 @@ a shared workstation with uncontrolled load/cache, not a scaling curve or
 general speed guarantee. The earlier repeated terrio/GDAL observations
 remain separately scoped above.
 
-All four notebook code cells completed. Authentic outputs and comparison
-receipts are retained in an ignored private execution copy; the committed
-notebook is the clean, configurable source workflow. No generated model
-outputs or local path-bearing evidence are included in the repository.
+All four baseline notebook code cells completed. The additional fifth
+cutoff-proof cell was then executed separately against the retained raw
+Davis reference, without repeating the baseline timing runs. The committed notebook retains authentic baseline and cutoff-proof outputs,
+with their separate execution scopes stated explicitly. Logs, tables and
+plots were not edited. Comparison receipts and large model/raster files
+remain in ignored working folders; no local path-bearing evidence is published.
+
+### Varying depth-postprocessing proof
+
+The notebook applies 0.0, 0.5, 1.0 and 2.0 ft cutoffs to Davis using
+the new public `RasFim.compare_rasters` API and fresh Rust delivery maps.
+The qualified raw native depth/WSE surfaces are held fixed, avoiding
+unnecessary native export and isolating postprocessing from generation.
+Both delivered bands use the depth mask; wet counts decrease monotonically.
+
+| Cutoff (ft), strict > | Rust wet pixels | Native wet pixels | Extra / missing Rust wet pixels | Max depth / WSE difference (ft), common wet |
+|---|---:|---:|---:|---:|
+| 0 | 20,610 | 20,560 | 50 / 0 | 0 / 0 |
+| 0.5 | 4,883 | 4,883 | 0 / 0 | 0 / 0 |
+| 1 | 1,607 | 1,607 | 0 / 0 | 0 / 0 |
+| 2 | 268 | 268 | 0 / 0 | 0 / 0 |
+
+The zero-cutoff differences are 50 Rust-only pixels with positive depths
+from 0.00005340576 to 0.0009918213 ft. Common-wet depth/WSE values match
+exactly. This is not zero-cutoff wet-mask parity. The 0.5, 1.0 and 2.0 ft
+cases match exactly, so the established half-foot qualification is unchanged.
+The native near-zero behavior remains unresolved; no suppression rule has
+been inferred or added to Rust. The notebook retains this diagnostic beside
+the successful cutoffs instead of excluding it.
 
 ## Proposed engine packaging
 

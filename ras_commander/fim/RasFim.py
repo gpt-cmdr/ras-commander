@@ -608,6 +608,62 @@ class RasFim:
 
     @staticmethod
     @log_call
+    def compare_rasters(
+        candidate_depth: PathLike, candidate_wse: PathLike,
+        reference_depth: PathLike, reference_wse: PathLike, *,
+        cells: "gpd.GeoDataFrame", min_depth: float = 0.5,
+        terrain_path: Optional[PathLike] = None,
+    ) -> Dict[str, Any]:
+        """Compare existing depth/WSE rasters on a physical 2D cell footprint.
+
+        Apply the same strict float32 depth cutoff independently to both
+        products without changing files, generating maps or resampling a
+        reference. Inputs must share a CRS, resolution and integer-offset
+        north-up lattice; cells must use that CRS. Missing WSE is counted
+        separately from jointly finite WSE differences. Optional terrain
+        supplies native implied-terrain residuals. Returns the numerical
+        metrics used by compare_with_rasmapper, without generation timings.
+
+        Reuse qualified raw native maps to demonstrate varying postprocessing
+        cutoffs. Candidate inputs must retain all depths needed by the cutoff;
+        filtering cannot recover pixels already removed by a higher cutoff.
+        Model provenance on cells is checked for the 2D-only scope. A numeric
+        comparison does not establish the provenance of caller-supplied files.
+        """
+        _require_dependencies()
+        import rasterio
+        from . import _comparison
+
+        if isinstance(min_depth, bool) or not np.isfinite(min_depth) or min_depth < 0 or min_depth > np.finfo(np.float32).max:
+            raise ValueError("min_depth must be finite and >= 0 in model elevation units")
+        if not hasattr(cells, "geometry") or cells.crs is None or not len(cells):
+            raise FimUnsupportedError("comparison requires nonempty 2D cell polygons with CRS")
+        if (cells.geometry.isna().any() or cells.geometry.is_empty.any()
+                or not cells.geometry.is_valid.all()
+                or not cells.geom_type.isin(["Polygon", "MultiPolygon"]).all()):
+            raise FimUnsupportedError("comparison requires valid nonempty 2D cell polygons")
+        source = cells.attrs.get("fim_source_hdf")
+        if source is not None:
+            RasFim.validate_2d_model(source)
+        paths = [_require_path(p, "comparison raster") for p in
+                 (candidate_depth, candidate_wse, reference_depth, reference_wse)]
+        terrain = _require_path(terrain_path, "terrain_path") if terrain_path is not None else None
+        with rasterio.open(paths[0]) as candidate:
+            if not _prepare.same_crs(cells.crs, candidate.crs):
+                raise FimUnsupportedError("comparison cells and raster must use the same CRS")
+            if terrain is not None:
+                with rasterio.open(terrain) as ground:
+                    if not _prepare.same_crs(candidate.crs, ground.crs):
+                        raise FimUnsupportedError("comparison terrain must use the raster CRS")
+        watched = [*paths, *([terrain] if terrain is not None else [])]
+        before = {p: _file_identity(p) for p in watched}
+        result = _comparison.compare_rasters(*paths, cells, None, min_depth, terrain)
+        if any(_file_identity(p) != identity for p, identity in before.items()):
+            raise RuntimeError("comparison raster inputs changed during scanning")
+        return result
+
+    @staticmethod
+    @log_call
     def canonicalize_terrain_crs(terrain_path: PathLike, output_path: PathLike) -> Path:
         """Copy float32 terrain with equivalent canonical EPSG GeoTIFF keys.
 

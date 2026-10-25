@@ -102,7 +102,7 @@ def compare_rasters(
     ) as nd, rasterio.open(native_wse) as nw, (
         rasterio.open(terrain_path) if terrain_path else nullcontext(None)
     ) as gt:
-        for other in (w, nd, nw):
+        for other in (w, nd, nw, *([gt] if gt is not None else [])):
             if (
                 not _prepare.same_crs(d.crs, other.crs)
                 or d.transform.b
