@@ -1009,3 +1009,29 @@ def test_named_terrain_hdf_review_can_settle_delivery(method):
     assert "Terrain/Terrain.HDF" in row
     assert "Terrain (layer)" in markdown
     assert not any(a.kind == "acquisition" and a.target == "Terrain" for a in actions_from_bundle(bundle))
+
+
+@pytest.mark.parametrize("method", ["exact_relative_path", "archive_member_match"])
+@pytest.mark.parametrize("projects", [[], [
+    {"project": "ModelA", "terrain_hdf": ["Terrain/Terrain.hdf"], "raster": ["DEM1.tif"]},
+    {"project": "ModelB", "terrain_hdf": ["Terrain/Terrain.hdf"], "raster": ["DEM2.tif"]},
+]])
+def test_one_reviewed_hdf_does_not_settle_a_partial_terrain_delivery(method, projects):
+    bundle = _two_d_unsteady(
+        terrain={"delivered": len(projects), "gapped": 0, "projects": projects},
+        supporting_elements={"terrain": {
+            "state": "partial", "referenced": True, "location": "ModelA/Terrain/Terrain.hdf",
+            "note": "two referenced DEM source tiles are missing",
+            "review": {"verdict": "analysis_gap", "method": method,
+                       "evidence": "models.zip::ModelA/Terrain/Terrain.hdf"},
+        }},
+    )
+    markdown = render_audit_markdown(bundle)
+    row = next(line for line in markdown.splitlines() if line.startswith("| Terrain |"))
+    assert "**Partial**" in row
+    assert "two referenced DEM source tiles are missing" in row
+    assert "Terrain (layer)" not in markdown
+    acquisitions = [a for a in actions_from_bundle(bundle) if a.kind == "acquisition" and a.target == "Terrain"]
+    assert len(acquisitions) == 1
+    assert acquisitions[0].reason == "partially_delivered"
+    assert "no -- needs data not in the delivery" in markdown
