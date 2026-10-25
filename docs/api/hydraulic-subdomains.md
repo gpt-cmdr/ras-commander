@@ -214,6 +214,19 @@ cells) was cut, preprocessed and run in 6.4.1, held at the parent's 15 s:
 Running in the parent's own version needs no mesh repair. HEC-RAS 6.6 rejects
 48 cells of the delivered mesh that have more than eight sides.
 
+## Example notebook
+
+`examples/237_hydraulic_subdomain_breakout.ipynb` runs the whole workflow on
+Salt Draw in the delivered version, HEC-RAS 6.4.1:
+
+1. organize the eBFE delivery;
+2. run the delivered parent once with native Face Flow for the 1% and 0.2% AEP
+   events (cached; no re-mesh);
+3. delineate TauDEM links;
+4. search the HUC for split lines that pass in both events;
+5. author, validate and run one headwater subdomain;
+6. compare it with the parent.
+
 ## Provenance
 
 Ported from fim-commander's rain-on-grid subdomain research on Salt Draw
