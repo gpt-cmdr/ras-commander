@@ -432,13 +432,15 @@ The comparison uses strict float32 `depth > 0.5` in model elevation units
 The result qualifies horizontal 2D surfaces on the tested computed states,
 not bridge/pipe hydraulic calculations or native sloping/1D rendering.
 
-| Fixture | Rust delivered (s) | RAS Mapper generation (s) | Native filtering/writing (s) | Native delivered total (s) | Common wet pixels |
-|---|---:|---:|---:|---:|---:|
-| spring-river | 60.865 | 313.980 | 30.824 | 344.805 | 35,270,078 |
-| spring-creek | 55.545 | 266.934 | 23.681 | 290.615 | 79,872,550 |
-| bald-eagle | 6.108 | 8.059 | 2.109 | 10.169 | 719,163 |
-| bald-bridges | 3.142 | 7.596 | 1.027 | 8.624 | 959,043 |
-| davis | 0.257 | 1.700 | 0.024 | 1.724 | 4,883 |
+| Fixture | RAS Mapper (s) | Native Engine — Rust (s) | RAS Mapper / Native Engine |
+|---|---:|---:|---:|
+| spring-river | 313.980 | 60.865 | 5.16× |
+| spring-creek | 266.934 | 55.545 | 4.81× |
+| bald-eagle | 8.059 | 6.108 | 1.32× |
+| bald-bridges | 7.596 | 3.142 | 2.42× |
+| davis | 1.700 | 0.257 | 6.62× |
+
+Ratios use the unrounded recorded mapping times. Separate native depth-filtering and delivery postprocessing are excluded. Rust applies its depth cutoff within the measured mapping pass; both timings include raster output.
 
 
 This five-case notebook execution on Windows x86-64 used HEC-RAS mapper 7.0.1, engine 0.3.0,
@@ -447,15 +449,14 @@ workers sharing four allowed logical CPUs. Davis uses two independent native
 depth/WSE helpers; other fixtures use aggregate StoreAllMaps. Each case maps one maximum-result
 profile over all physical 2D cells, without an AOI. Input extraction, terrain
 preparation, identity hashing and comparison scanning are excluded from
-mapping totals. Native delivered time includes its stored-map call plus
-independently filtered LZW depth/WSE writes; Rust integrates the filter.
+mapping totals. The table compares native stored-map generation with the Rust mapping pipeline; separate native postprocessing is excluded.
 
 All five comparisons have nonempty common wet coverage, zero extra/missing
 wet pixels, exact finite depth/WSE and no missing WSE on the evaluated 2D
 footprints. Every native call restored the original `.rasmap` bytes. Native
 grids can include blank margins and storage-area surfaces outside the 2D
 cells; those surfaces are outside the equality claim. The API withholds
-ratios for storage-area scope. These are single Rust-first observations on
+ratios for storage-area scope; the descriptive table ratios above are elapsed-time quotients, not workload-normalized speedups. These are single Rust-first observations on
 a shared workstation with uncontrolled load/cache, not a scaling curve or
 general speed guarantee. The earlier repeated terrio/GDAL observations
 remain separately scoped above.
