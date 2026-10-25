@@ -214,7 +214,16 @@ native generation intermittently returned incomplete WSE with valid depth.
 Five independent-helper repetitions on Windows instead matched all depth/WSE pixels.
 The notebook uses two native helpers for Davis and still raises on any
 missing WSE; it never fills reference gaps with candidate data or retries
-silently. This is an observed runtime issue, not an established vendor defect.
+silently. Subsequent diagnosis captured a native pipe-rendering cache exception
+during parallel rasterization; consistent EPSG:2871 metadata and explicit
+projection initialization did not prevent it. One-CPU aggregate controls
+passed 20/20 calls, supporting a native concurrency defect. Independent
+helpers are not a guaranteed workaround. Both routes use the same Commander
+`RasStoreMapHelper.exe`, which invokes installed RAS Mapper libraries.
+[PR #677](https://github.com/gpt-cmdr/ras-commander/pull/677) fixes Commander's
+separate false-success reporting of native fatal errors; it does not repair
+the native race. See the [diagnosis and controls](../development/fim-mapping-performance.md)
+for the tested conditions. Retained notebook outputs and timings are unchanged.
 
 The evaluation footprint is the selected 2D cells intersected with the AOI.
 A bbox or polygon constrains Rust mapping and comparison; native stored-map

@@ -366,8 +366,35 @@ for Davis; other fixtures retain aggregate native generation. The API
 requires a sole terrain registration for independent helpers and records the
 requested policy. No reference values are repaired or substituted, and no
 automatic retry is introduced. The API withholds speed ratios for missing
-WSE or any other compared depth/WSE/wet-mask disagreement. The precise aggregate-runtime cause remains
-unresolved.
+WSE or any other compared depth/WSE/wet-mask disagreement.
+
+Follow-up diagnosis on 2026-10-25 captured a native pipe-rendering cache
+exception: `DataTable` record allocation/`DataRow.set_Item`, reached through
+`RASPipeNetworks.RenderMeshPipeRenderOptions.SetLastMesh` during parallel
+pipe rasterization. Project PRJ, result HDF and original terrain all resolve
+to EPSG:2871. Failures occur with Python georeferencing repair disabled;
+explicit projection initialization still failed in 5/8 four-CPU aggregate
+calls. A separate four-CPU diagnostic control also failed in 5/8 calls.
+This native failure is distinct from the terrio terrain-key preparation above.
+
+All 20 aggregate calls restricted to one inherited logical CPU completed.
+All 10 repaired comparisons exactly matched depth/WSE and wet masks on
+4,883 pixels after strict depth > 0.5 ft filtering. These controls support a
+native concurrency defect, with no vendor runtime modification. Independent
+exports are not a guaranteed workaround; a later independent export also failed.
+The two native helpers are separate processes of the same Commander
+`RasStoreMapHelper.exe`: aggregate calls use native `StoreAllMapsCommand`,
+while independent calls use `StoreMapCommand` factories and headless native
+storage. `max_workers=1` does not constrain their internal native threads.
+
+[PR #677](https://github.com/gpt-cmdr/ras-commander/pull/677) fixes a separate
+Commander defect: native fatal progress messages were discarded, allowing
+the aggregate helper to report success after a failed export. The rebuilt
+helper surfaced all four failures in 12 four-CPU verification calls; all
+12 one-CPU verification calls passed, including six exact filtered
+comparisons. The reporting fix does not repair the native race or automatically
+apply Windows affinity restrictions. These diagnostic runs do not replace
+the authentic notebook outputs or baseline timings below.
 
 The comparison uses strict float32 `depth > 0.5` in model elevation units
 (feet for these fixtures), applied independently to depth and WSE. Set
