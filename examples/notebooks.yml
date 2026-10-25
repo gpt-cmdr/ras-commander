@@ -1860,6 +1860,7 @@ notebooks:
   est_runtime: 36 min (cached parent runs; computing both parent events takes about 13 h each)
   data_project: null
   functions_used:
+  - HdfMesh.get_mesh_cell_polygons
   - HdfResultsMesh.get_mesh_summary_values
   - RasCmdr.compute_plan
   - RasEbfeModels.organize_salt_draw
@@ -1877,8 +1878,8 @@ notebooks:
   hec_refs: []
   learning_paths: []
   excluded: false
-  code_cells: 11
-  executed_cells: 11
+  code_cells: 17
+  executed_cells: 17
 - id: 300_unsteady_flow_operations
   filename: 300_unsteady_flow_operations.ipynb
   title: Unsteady Flow Operations
