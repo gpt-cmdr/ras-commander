@@ -1,7 +1,8 @@
-# ras2fim-2D flood inundation mapping (optional)
+# Flood inundation mapping (optional)
 
 `RasFim` maps water-surface elevation (WSE) profiles defined on HEC-RAS 2D
-cells to depth and WSE rasters with the ras2fim-2D Step 05 method. It maps a
+cells to depth and WSE rasters with either the ras2fim-2D Step 05 method or
+the horizontal method below. It maps a
 batch of profiles against one shared terrain, accepts a bounding box or a
 polygon area of interest (AOI), and returns a product manifest DataFrame.
 
@@ -9,10 +10,14 @@ The feature is optional. Install the Python extra and the matching Linux x86-64
 or Windows x86-64 engine wheel into the same environment:
 
 ```bash
-pip install "ras-commander[fim]"
-pip install /path/to/ras2fim_engine-0.1.0-py3-none-<platform>.whl
+uv pip install -e ".[fim,compute]"
+uv pip install /path/to/ras2fim_engine-0.3.0-py3-none-<platform>.whl
 ras2fim-batch method
 ```
+
+Run these commands from this PR's checkout to use the new comparison and
+scope checks. The `compute` extra supplies native process supervision for
+the RAS Mapper comparison; Rust-only mapping needs the `fim` extra.
 
 The repository `wheels/` folder includes both tested wheels, checksums, and
 `BUILD.json` provenance. See `wheels/README.md` for the exact platform filenames.
@@ -22,7 +27,236 @@ target glibc 2.28 or newer. The wheel installs `ras2fim-batch` on the environmen
 `PATH`; no Rust compiler or system GDAL is needed for the native engine.
 The Python GIS stack remains required. Source builds are also supported.
 The workflow does not publish to PyPI. Installed-binary synthetic mapping tests
-run on both platforms; retained real-model agreement evidence remains Linux-only.
+run on both platforms. Step05 numerical qualification used Linux; horizontal
+corpus checks passed on both Linux and Windows.
+
+## Horizontal cell mapping
+
+This is a **2D surface-only** mapper. Model-backed entry points reject any
+1D river centerline/reach or cross-section geometry before mapping, even
+when a 2D mesh is selected from a mixed model. Coupled pipes/conduits and
+SA/2D connections are permitted; their hydraulics must already be represented
+in the computed cell WSE. The mapper does not solve structure hydraulics.
+`RasFim.validate_2d_model(hdf_path)` exposes the same whole-model check.
+Cell tables extracted by `get_cells_from_plan_hdf` retain source-HDF provenance
+for later checks. For a manual cell table, supply `hdf_path=` to
+`map_horizontal_profiles` to enforce model inspection; a standalone polygon
+table cannot reveal elements in an unidentified source model.
+
+Use `map_horizontal_profiles` when a cell-constant horizontal water surface is
+the intended mapping method. It prepares terrain and pixel-to-cell ownership
+once, then gathers the owning cell's WSE for every profile. Rust reads native
+terrain blocks through terrio and reuses the decoded window. The native engine
+also rasterizes the validated cells and polygon AOI through terrio, preserving
+pixel-centre inclusion and feature order; Python writes final GIS products. It avoids convex
+hulls, Delaunay triangulation and full-grid reprojection lookups. The Rust
+backend is the default and requires the 0.3 engine wheel. The explicit
+`backend="numpy"` reference backend is retained for numerical qualification;
+there is no automatic fallback.
+
+```python
+from ras_commander import RasFim
+
+manifest = RasFim.map_horizontal_profiles(
+    cells, "terrain_with_modifications.tif", "horizontal_catalog",
+    profiles=["wsel_t0198", "wsel_t0199"],
+    polygon="strict_domain.gpkg",
+    min_depth=0.5,             # half-foot filter only when elevation units are feet
+    max_working_mib=1024,
+    threads=4,
+    writer_threads=4,         # separate compression pool; budget both pools
+    write_floodplain=False,
+)
+```
+
+`threads` caps terrio rasterization and Rust pixel workers; `writer_threads` caps GeoTIFF compression
+workers and defaults to one. The pools can overlap when Rust prepares the
+next profile while Python writes the current one. Budget both pools for
+catalog runs; four workers in each can use up to eight worker threads.
+The writer setting overrides a caller GDAL_NUM_THREADS value, including
+at its default of one. Compression uses a scoped [GDAL thread setting](https://gdal.org/en/stable/drivers/raster/gtiff.html#creation-options)
+and restores the caller's previous setting. These controls do not change
+float32 values, pixel ownership, the strict cutoff or the LZW output format.
+
+Ownership and polygon masks are created once inside the native engine, without
+staging a full ownership raster through Python. Compact 2D polygon geometry is
+staged once per batch. The geometry/decode allocation plan is checked before
+raster allocation; planned admission is not a hard process memory limit. Older
+engines raise an explicit version error rather than falling back.
+
+The terrain must be a single-band float32 GeoTIFF with declared nodata,
+north-up square pixels, and the same CRS as the cells. Output stays on that
+terrain lattice; there is no reprojection or nudge. The output extent is the
+cell extent clipped to the AOI and terrain, so it can differ from
+`map_profiles` for the same bounding box. Polygon holes and multiple
+parts are retained. Only cells touching the constrained window are validated
+and rasterized. Positive-area cell overlaps are rejected; shared edges use a
+deterministic centre-based ownership rule. Geometry, terrain and WSE inputs
+remain read-only, and output must be new or empty. Declared nodata and NaN
+terrain pixels stay dry; other sentinel values present in the data but not
+declared are treated as elevations.
+
+NaN WSE marks dry cells; callers supply the cell wet/dry policy. Cell WSE is
+normalized to float32 before subtracting terrain. Depth must be **strictly
+greater** than `min_depth` to retain either product, with comparison in
+float32. The threshold uses the input elevation units; it does not convert
+feet to metres or establish a vertical datum. Native shallow-depth display
+rules below this threshold are not reproduced.
+
+The returned `fim_product_manifest` has the same columns and 09/10/11 filename
+layout as Step05 products; those names do not identify the mapping method.
+The JSON manifest records `method_id="horizontal-cell-constant/1"`,
+`backend="rust"` (or the explicitly requested reference backend), float32 arithmetic, the threshold, source identities and
+the terrain window. A `timings` section records ownership preparation,
+input staging, stream reads (including waits for the engine), product writes
+and mapping wall time; these are pipeline observations, not kernel-only
+timings. `samples=0` because there is no interpolation. The
+planned array admission budget excludes optional
+floodplain polygonization and unaccounted runtime overhead; it is not a hard
+process-memory cap. Rust profile arrays are streamed to the Python GIS writer
+without retaining binary scratch rasters. Geometry and WSE staging use the
+output volume, with a free-space check for staging only; final GeoTIFF space
+is not included. `timeout` defaults to `None`. When set, it bounds the Rust
+process and pipe-consumer lifetime, including product-writing backpressure.
+
+This method implements cell-constant filling, consistent with the definition
+of Horizontal rendering in the [HEC-RAS Mapper 6.6 Mapping Options](https://www.hec.usace.army.mil/confluence/rasdocs/rmum/6.6/mapping-results/mapping-options).
+It is separate from the ras2fim-2D triangulated method below. It does not
+implement native sloping surfaces, mixed 1D/2D composition or structure-specific
+renderers. Select the same render mode, terrain, timestep, grid and depth
+filter when comparing with RAS Mapper; agreement with one mode does not
+establish agreement with another.
+
+## Compare with native horizontal stored maps
+
+Use `compare_with_rasmapper` on an isolated copy of a computed project. It
+runs `RasProcess.store_maps(render_mode="horizontal")` for native depth and
+WSE, runs Rust horizontal mapping, and compares matching pixel centres. It
+holds the native mapping project lock, checks the original `.rasmap` bytes,
+and restores them on success or failure. Native mapping can write other
+project-side caches, so stage the project rather than using an immutable source.
+
+```python
+comparison = RasFim.compare_with_rasmapper(
+    "02", "terrain_with_modifications.tif", "horizontal_comparison",
+    mesh_name="selected 2D area",
+    terrain_name="registered terrain name",
+    ras_object=project,
+    ras_version="6.6",
+    min_depth=0.5,       # model elevation units; feet in this example
+    threads=4,
+    max_working_mib=2048,
+)
+print(comparison[["profile", "csi", "depth_max_abs", "wse_exact_fraction"]])
+print(comparison.attrs["performance"])
+```
+
+Without `cells`, this extracts maximum cell results from the selected plan
+and mesh. For saved timesteps, supply a cell WSE table and
+`profiles={"wsel_column": "DDMMMYYYY HH:MM:SS"}` with exact available native
+timestamps. The caller must ensure those WSE columns describe the selected
+plan, mesh and time. Unknown timestamps fail before native execution.
+Use `mesh_name="*"` to include all physical 2D meshes. This assigns global
+positional cell IDs so local IDs from different meshes cannot collide;
+single-mesh extraction retains the original HDF cell IDs.
+
+Supply a float32 terrain export of the exact registered terrain, with its
+modifications applied. `RasTerrain.export_rasmapper_terrain` is the supported
+native export API. Terrain identity remains the caller's responsibility;
+the comparison does not silently substitute a different terrain.
+If custom GeoTIFF CRS keys cannot be interpreted by the native reader, call
+`RasFim.canonicalize_terrain_crs(source, new_output)` explicitly. It requires
+an equivalent EPSG definition, copies the terrain with canonical CRS keys,
+verifies all pixel bits and the grid, and writes a receipt. It performs no
+reprojection or resampling. The retained Davis HARN terrain needs this step
+with terrio 0.4.2. Terrain preparation is outside mapping timing.
+
+The returned `fim_comparison` DataFrame and CSV include wet-mask CSI,
+additional/missing wet pixels, common-wet depth differences, finite-pair WSE
+differences, separate missing-WSE counts, native implied-terrain residuals and product paths. The JSON report
+records native runtime provenance, terrain and registered-HDF hashes, the
+effective float32 threshold, Rust batch timing and the
+original/restored `.rasmap` hashes. Both depth masks use the strict cutoff
+independently. The native TIFFs remain unmodified. No reference resampling is
+performed: incompatible CRS, pixel sizes or fractional grid shifts fail.
+
+The optional strict pixel filter is `min_depth`: direct horizontal mapping
+defaults to `0.0`, and comparison defaults to `0.5` in model elevation units.
+Both depth and WSE use the retained depth mask. `0.0` disables the half-unit
+cutoff while retaining positive depths. Cell extraction's `min_depth` is a
+separate cell wet/dry policy, not the raster postprocessing threshold.
+
+By default, comparison also writes independently thresholded native LZW
+delivery rasters, preserving the raw references. Timing columns distinguish
+`native_seconds` (stored-map generation), `native_postprocess_seconds`,
+`native_total_seconds`, `candidate_batch_seconds` and `comparison_seconds`.
+`candidate_seconds` is populated only for a single-profile call; shared batch
+time is not allocated repeatedly to individual profiles. Filtered native
+paths are returned separately. Set `postprocess_reference=False` to omit
+these written native products; comparison metrics still apply the cutoff.
+
+`comparison.attrs["performance"]` is the additional performance return,
+also persisted in JSON. It includes totals, worker settings, an observed
+native-to-Rust ratio and any ratio exclusions. A ratio is withheld for an AOI,
+unestablished full 2D coverage, native storage-area surfaces outside the 2D
+cells, disabled native delivery postprocessing, or any depth/WSE/wet-mask
+disagreement (including missing WSE). Input extraction, terrain
+export/canonicalization, identity hashing and comparison scans are excluded
+from mapping totals. Runs use Rust-first order and uncontrolled host/cache
+conditions; the observations are not a general speed guarantee.
+
+`native_performance=StoreMapPerformanceOptions(max_workers=2)` passes
+Commander's independent-helper policy to native mapping. This mode requires
+exactly one registered terrain, used implicitly by each helper. It records
+the requested policy; memory admission or runtime caps may select fewer workers. The default
+preserves aggregate `StoreAllMaps`. In the Davis qualification, aggregate
+native generation intermittently returned incomplete WSE with valid depth.
+Five independent-helper repetitions on Windows instead matched all depth/WSE pixels.
+The notebook uses two native helpers for Davis and still raises on any
+missing WSE; it never fills reference gaps with candidate data or retries
+silently. Subsequent diagnosis captured a native pipe-rendering cache exception
+during parallel rasterization; consistent EPSG:2871 metadata and explicit
+projection initialization did not prevent it. One-CPU aggregate controls
+passed 20/20 calls, supporting a native concurrency defect. Independent
+helpers are not a guaranteed workaround. Both routes use the same Commander
+`RasStoreMapHelper.exe`, which invokes installed RAS Mapper libraries.
+[PR #677](https://github.com/gpt-cmdr/ras-commander/pull/677) fixes Commander's
+separate false-success reporting of native fatal errors; it does not repair
+the native race. See the [diagnosis and controls](../development/fim-mapping-performance.md)
+for the tested conditions. Retained notebook outputs and timings are unchanged.
+
+The evaluation footprint is the selected 2D cells intersected with the AOI.
+A bbox or polygon constrains Rust mapping and comparison; native stored-map
+generation still maps the selected plan. Native output must contain exactly
+one depth and one WSE mosaic; select `terrain_name` to resolve multiple
+registered terrains. Reported operation timings are not a controlled
+throughput benchmark because the two calls include different preparation
+stages. See `602_rust_horizontal_mapping_comparison.ipynb` for corpus setup.
+
+### Reuse existing reference maps across depth cutoffs
+
+`RasFim.compare_rasters` compares existing depth/WSE products without native
+execution, file changes or reference resampling:
+
+```python
+metrics = RasFim.compare_rasters(
+    "rust_depth.tif", "rust_wse.tif", "native_depth.tif", "native_wse.tif",
+    cells=cells, min_depth=1.0, terrain_path="terrain.tif",
+)
+print(metrics["extra_wet"], metrics["missing_wet"], metrics["depth_max_abs"])
+```
+
+It applies the strict float32 cutoff independently, returns the same numeric
+metrics as the native-generation comparison, and reports missing WSE
+separately. It returns no generation timings. All rasters and the cell
+footprint must share the CRS and aligned pixel lattice. Raw native inputs
+must retain the low depths being tested; a previously applied higher cutoff
+cannot be reversed. Raster provenance remains the caller's responsibility.
+
+Notebook 602 shows 0.0, 0.5, 1.0 and 2.0 ft on Davis. Common-wet depth/WSE
+matches at all four cutoffs; wet masks match at 0.5, 1.0 and 2.0 ft. At zero,
+Rust retains 50 additional pixels below 0.001 ft, so zero-cutoff wet-mask
+parity is not established. The default half-foot qualification is unchanged.
 
 ## Method
 
@@ -244,9 +478,8 @@ published machine-readable DataFrame surface:
   `raise_on_failure=False` to return it instead.
 
 The [FIM engine comparison](../development/fim-mapping-performance.md)
-records the agreement checks and the measurement scope. Its throughput
-observations come from the ras2fim-2D adapter, not from `RasFim`, and do not
-establish a general speedup.
+records the agreement checks and the measurement scope. Throughput tables
+are observations of the listed workloads and do not establish a general speedup.
 
 ## Complete source reference
 

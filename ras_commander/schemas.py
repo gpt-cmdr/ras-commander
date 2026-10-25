@@ -1957,8 +1957,8 @@ DATAFRAME_SCHEMAS["terrain_modification_features"] = {
 
 
 DATAFRAME_SCHEMAS["fim_product_manifest"] = {
-    "description": "One row per mapped WSE profile from the optional ras2fim-2D FIM method.",
-    "accessor": "RasFim.map_profiles(cells, terrain_path, output_folder, ...) or RasFim.map_ras2fim_results(...)",
+    "description": "One row per mapped WSE profile; the file manifest identifies the selected RasFim method.",
+    "accessor": "RasFim.map_profiles(...), RasFim.map_ras2fim_results(...), or RasFim.map_horizontal_profiles(...)",
     "source": "ras_commander.fim.RasFim.RasFim.map_profiles()",
     "extra_columns": False,
     "dynamic": False,
@@ -1967,8 +1967,8 @@ DATAFRAME_SCHEMAS["fim_product_manifest"] = {
         for name, dtype, description in (
             ("profile", "str", "WSE profile column name; products use it in their file names."),
             ("status", "str", "complete, no_flooded_pixels, empty_aoi, failed, or not_run."),
-            ("wet_cells", "int | None", "Wet cells (non-NaN WSE) used for global sample preparation."),
-            ("samples", "int | None", "Interpolation samples: wet centres plus merged hull-exterior vertices."),
+            ("wet_cells", "int | None", "Wet cells (non-NaN WSE) in the prepared cell set for the selected method."),
+            ("samples", "int | None", "Interpolation samples: wet centres plus merged hull-exterior vertices; 0 for horizontal mapping."),
             ("depth_tif", "str | None", "Product 09 depth GeoTIFF path (float32, NaN nodata)."),
             ("wse_tif", "str | None", "Product 10 WSE GeoTIFF path (float32, NaN nodata)."),
             ("floodplain_gpkg", "str | None", "Product 11 floodplain GeoPackage path; None when not written."),
@@ -1983,5 +1983,52 @@ DATAFRAME_SCHEMAS["fim_product_manifest"] = {
             ("error", "str | None", "Failure diagnostic for failed or not_run rows."),
         )
     ],
-    "note": "The same rows, engine method record, engine reports, options, AOI and input identities are written to fim_manifest.json. An AOI selects output pixels only; preparation always uses every wet cell.",
+    "note": "The same rows, engine method record, engine reports, options, AOI and input identities are written to fim_manifest.json. Step05 prepares every wet cell before AOI selection; horizontal mapping prepares ownership and terrain for the constrained window.",
+}
+
+
+DATAFRAME_SCHEMAS["fim_comparison"] = {
+    "description": "One row per Rust horizontal/native horizontal stored-map comparison.",
+    "accessor": "RasFim.compare_with_rasmapper(...)",
+    "source": "ras_commander.fim.RasFim.RasFim.compare_with_rasmapper()",
+    "extra_columns": False,
+    "dynamic": False,
+    "columns": [
+        {"name": name, "dtype": dtype, "description": description}
+        for name, dtype, description in (
+            ("profile", "str", "Candidate WSE column."),
+            ("native_profile", "str", "Exact native Max or timestamp selector."),
+            ("candidate_wet", "int", "Candidate pixels strictly above threshold."),
+            ("reference_wet", "int", "Native pixels strictly above threshold."),
+            ("common_wet", "int", "Pixels wet in both products."),
+            ("extra_wet", "int", "Candidate-only wet pixels."),
+            ("missing_wet", "int", "Native-only wet pixels."),
+            ("csi", "float", "Common wet divided by wet union; 1 for an empty union."),
+            ("depth_exact_fraction", "float", "Exact fraction on common wet pixels; NaN if none."),
+            ("depth_mae", "float", "Mean absolute depth difference on common wet pixels, model units."),
+            ("depth_max_abs", "float", "Maximum absolute depth difference on common wet pixels, model units."),
+            ("wse_pairs", "int", "Jointly finite WSE pairs on common wet pixels."),
+            ("wse_exact_fraction", "float", "Exact fraction on finite WSE pairs; NaN if none."),
+            ("wse_mae", "float", "Mean absolute difference on finite WSE pairs, model units."),
+            ("wse_max_abs", "float", "Maximum absolute difference on finite WSE pairs, model units."),
+            ("reference_missing_wse", "int", "Native wet pixels with missing WSE."),
+            ("candidate_missing_wse", "int", "Candidate wet pixels with missing WSE."),
+            ("terrain_pairs", "int", "Native wet pixels with finite WSE, depth and exported terrain."),
+            ("terrain_mae", "float", "Mean absolute native WSE-minus-depth-minus-terrain residual, model units."),
+            ("terrain_max_abs", "float", "Maximum absolute native implied-terrain residual, model units."),
+            ("depth_tif", "str", "Candidate depth raster."),
+            ("reference_depth_tif", "str", "Native depth raster, retained unmodified."),
+            ("wse_tif", "str", "Candidate WSE raster."),
+            ("reference_wse_tif", "str", "Native WSE raster, retained unmodified."),
+            ("native_seconds", "float", "Native StoreMaps call wall time; not a controlled benchmark."),
+            ("native_postprocess_seconds", "float", "Independent strict depth-filter/LZW native delivery writing time; zero when disabled."),
+            ("native_total_seconds", "float", "Native stored-map generation plus delivery postprocessing."),
+            ("candidate_batch_seconds", "float", "Complete Rust batch call time, repeated for context; do not sum across rows."),
+            ("candidate_seconds", "float", "Complete candidate call time for a single-profile request; NaN for shared batches."),
+            ("comparison_seconds", "float", "Raster equality/metric scan time; excluded from mapping times."),
+            ("reference_filtered_depth_tif", "str", "Separately written thresholded native depth; None when disabled."),
+            ("reference_filtered_wse_tif", "str", "Separately written depth-masked native WSE; None when disabled."),
+        )
+    ],
+    "note": "2D-only model gate; same-lattice comparison inside selected cells/AOI, independently thresholded. Additional performance dictionary is in DataFrame attrs and comparison.json; ratios withheld for unmatched scopes. No per-profile allocation of shared Rust setup.",
 }

@@ -9,7 +9,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 
-const USAGE: &str = "usage:\n  ras2fim-batch run <session.json> <new-output-dir>\n  ras2fim-batch step05 <request.json> <new-output-dir>\n  ras2fim-batch method\n  ras2fim-batch terrain-info <terrain.tif>";
+const USAGE: &str = "usage:\n  ras2fim-batch run <session.json> <new-output-dir>\n  ras2fim-batch horizontal <request.json> <new-output-dir>\n  ras2fim-batch step05 <request.json> <new-output-dir>\n  ras2fim-batch method\n  ras2fim-batch terrain-info <terrain.tif>";
 
 /// Samples this process's OS thread count (Linux /proc) to evidence no nested decode threads.
 struct ThreadMonitor {
@@ -65,7 +65,7 @@ fn run() -> Result<i32, Box<dyn std::error::Error>> {
     let cmd = args.first().and_then(|a| a.to_str()).unwrap_or("");
     match (cmd, args.len()) {
         ("method", 1) => {
-            let m = serde_json::json!({"batch_session_r1": method_record(), "step05_r2": ras2fim_stages_r2::step05::method_record()});
+            let m = serde_json::json!({"batch_session_r1": method_record(), "step05_r2": ras2fim_stages_r2::step05::method_record(), "horizontal": ras2fim_stages_r2::horizontal::method_record()});
             println!("{}", serde_json::to_string_pretty(&m)?);
             Ok(0)
         }
@@ -101,6 +101,28 @@ fn run() -> Result<i32, Box<dyn std::error::Error>> {
                 "total_wall_seconds": report["timings"]["total_wall_seconds"],
             });
             println!("{summary}");
+            Ok(if report["status"] == "complete" { 0 } else { 2 })
+        }
+        ("horizontal", 3) => {
+            let request_path = PathBuf::from(&args[1]);
+            let out = PathBuf::from(&args[2]);
+            if out.exists() {
+                return Err("output directory exists; choose a new path".into());
+            }
+            let req: ras2fim_stages_r2::horizontal::Request =
+                ras2fim_stages_r2::model::read_json(&request_path)?;
+            let base = request_path
+                .canonicalize()?
+                .parent()
+                .ok_or("request has no parent")?
+                .to_path_buf();
+            let report = ras2fim_stages_r2::horizontal::run(&req, &base, &out)?;
+            if !req.stream_outputs {
+                println!(
+                    "{}",
+                    serde_json::json!({"status":report["status"],"total_seconds":report["total_seconds"]})
+                );
+            }
             Ok(if report["status"] == "complete" { 0 } else { 2 })
         }
         ("step05", 3) => {
