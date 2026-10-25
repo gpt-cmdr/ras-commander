@@ -9,6 +9,15 @@ alone does not identify a development checkout.
 
 ### Unreleased
 
+**Hydraulic subdomains: split lines and nested subdomains (`RasSubdomain`)**
+
+`ras_commander.subdomain.RasSubdomain.find_split_lines()` finds normal-depth
+split lines in a 2D parent's native `Face Flow` along TauDEM stream links.
+`build_subdomains()` traces and nests their footprints into tiered subdomains
+plus a remainder. New frames: `subdomain_split_lines`,
+`subdomain_split_candidates`, `subdomain_partition`, `subdomain_cell_owner`.
+Read only; feet models only in this release.
+
 **TauDEM delineation (`RasTauDem`)**
 
 `ras_commander.terrain.RasTauDem` runs the TauDEM 5 D8 tools (PitRemove,

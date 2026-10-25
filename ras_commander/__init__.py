@@ -208,6 +208,13 @@ _LAZY_EXPORTS = {
             'Breakout2DFluxReview',
         )
     },
+    **{
+        name: ('.subdomain', name)
+        for name in (
+            'RasSubdomain', 'SplitLineCriteria', 'SplitLineSearch',
+            'SubdomainPartition',
+        )
+    },
     'RasProcess': ('.RasProcess', 'RasProcess'),
     'RasQualification': ('.RasQualification', 'RasQualification'),
     'ProjectionInfo': ('.RasProcess', 'ProjectionInfo'),
@@ -489,6 +496,7 @@ __all__ = [
     'RasBreakout2D', 'Breakout2DSpec', 'Breakout2DPreflight',
     'Breakout2DCloneResult', 'Breakout2DPreparationResult',
     'Breakout2DFluxReview',
+    'RasSubdomain', 'SplitLineCriteria', 'SplitLineSearch', 'SubdomainPartition',
     'RasNetworkConflation', 'NetworkConflationResult',
     'NetworkEdgeCoverageResult', 'NetworkEdgeCoveragePlanResult',
     'ConflationStatus', 'NetworkAdapter', 'NHDPlusAdapter',
