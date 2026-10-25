@@ -1459,6 +1459,12 @@ class RasPreprocess:
                     info = dict(candidate.info)
                     name = info.get("name")
                     if not isinstance(name, str) or not name.strip():
+                        # Windows kernel minimal processes ("Secure System" under
+                        # virtualization-based security, "Memory Compression")
+                        # report no image name. Their parent is the kernel
+                        # (PID 0 or 4); they cannot be a RAS engine.
+                        if os.name == "nt" and candidate.ppid() in (0, 4):
+                            continue
                         raise ValueError("Process name is unavailable")
                     if name.casefold() not in {"ras.exe", "rasprocess.exe"}:
                         continue
