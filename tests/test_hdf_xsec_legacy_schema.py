@@ -582,3 +582,46 @@ def test_absent_and_zero_row_tables_return_empty_without_error(tmp_path, caplog)
     assert HdfXsec.get_cross_sections(zero_rows).empty
 
     assert not any(record.levelno >= logging.ERROR for record in caplog.records)
+
+
+@pytest.mark.parametrize("backend", ["python", "auto"])
+def test_compound_schema_remains_authoritative_with_aligned_separated_extras(tmp_path, monkeypatch, backend):
+    """Extra identity/roughness tables must not change valid compound results."""
+    monkeypatch.setenv("RAS_COMMANDER_FAST_HDF", backend)
+    path = tmp_path / "ModernWithExtras.g01.hdf"
+    _write_legacy_geometry_hdf(path)
+    _convert_fixture_to_modern_schema(path)
+    monkeypatch.setattr(HdfBase, "get_projection", lambda *_args, **_kwargs: None)
+    baseline = HdfXsec.get_cross_sections(path)
+    with h5py.File(path, "a") as hdf:
+        xs = hdf["Geometry/Cross Sections"]
+        xs.create_dataset("River Stations", data=np.array([b"X", b"Y"], dtype="S8"))
+        xs.create_dataset("Node Names", data=np.array([b"Other upper", b"Other lower"], dtype="S16"))
+        xs.create_dataset("Station Manning's n Info", data=np.array([[0, 1], [1, 1]], dtype=np.int32))
+        xs.create_dataset("Station Manning's n Values", data=np.array([[0, 0.9], [0, 0.9]], dtype=np.float32))
+    result = HdfXsec.get_cross_sections(path)
+    assert result["RS"].tolist() == baseline["RS"].tolist() == ["200", "100"]
+    assert result["Name"].tolist() == baseline["Name"].tolist()
+    assert result["n_channel"].tolist() == pytest.approx(baseline["n_channel"].tolist())
+    for index in range(len(result)):
+        assert result.iloc[index]["mannings_n"]["Mann n"] == pytest.approx(
+            baseline.iloc[index]["mannings_n"]["Mann n"])
+        assert result.iloc[index].geometry.equals(baseline.iloc[index].geometry)
+    metadata = GeomMetadata.get_geometry_counts(None, path)
+    assert metadata["geometry_metadata_valid"] is True
+    assert metadata["num_cross_sections"] == len(result) == 2
+
+
+def test_disagreeing_compound_and_separated_row_anchors_remain_unresolved(tmp_path, monkeypatch, caplog):
+    """Contradictory row counts cannot identify which representation is current."""
+    monkeypatch.setenv("RAS_COMMANDER_FAST_HDF", "python")
+    path = tmp_path / "ConflictingLayouts.g01.hdf"
+    _write_legacy_geometry_hdf(path)
+    dtype = np.dtype([("River", "S16"), ("Reach", "S16"), ("RS", "S8")])
+    with h5py.File(path, "a") as hdf:
+        hdf["Geometry/Cross Sections"].create_dataset("Attributes", data=np.zeros(3, dtype=dtype))
+    with caplog.at_level(logging.ERROR, logger="ras_commander.hdf.HdfXsec"):
+        assert HdfXsec.get_cross_sections(path).empty
+    assert "row count mismatch" in caplog.text
+    metadata = GeomMetadata.get_geometry_counts(None, path)
+    assert metadata["geometry_metadata_valid"] is False
