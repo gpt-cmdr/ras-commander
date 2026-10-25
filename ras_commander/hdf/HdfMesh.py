@@ -1653,9 +1653,15 @@ class HdfMesh:
                 d2_flow_area = hdf_file.get("Geometry/2D Flow Areas/Attributes")
                 if d2_flow_area is not None and isinstance(d2_flow_area, h5py.Dataset):
                     result = {}
+                    # Read the table once, not once per column. If that read fails,
+                    # each column below repeats it and fails exactly as before.
+                    try:
+                        table = read_typed(d2_flow_area)
+                    except Exception:
+                        table = None
                     for name in d2_flow_area.dtype.names:
                         try:
-                            value = read_typed(d2_flow_area)[name][()]
+                            value = (read_typed(d2_flow_area) if table is None else table)[name][()]
                             if isinstance(value, bytes):
                                 value = value.decode('utf-8')  # Decode as UTF-8
                             result[name] = value if not isinstance(value, bytes) else value.decode('utf-8')

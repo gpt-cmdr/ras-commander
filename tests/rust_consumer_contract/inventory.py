@@ -1,8 +1,10 @@
 """Static consumer-contract inventory of the optional native backend.
 
-The extension source lives in ``python/`` of
-https://github.com/gpt-cmdr/ras-commander-fast-hdf; set ``RAS_FAST_HDF_SOURCE``
-to a checkout of it. Reads source only: no build, no import of the native
+The extension is the ``python`` feature of the single ``ras-commander-fast-hdf``
+crate (0.2 and later): bindings in ``src/python/``, export writers in
+``src/exports/``, the wheel built from ``python/pyproject.toml``. Set
+``RAS_FAST_HDF_SOURCE`` to a checkout of
+https://github.com/gpt-cmdr/ras-commander-fast-hdf. Reads source only: no build, no import of the native
 module, no HDF access.
 Records what a Python, terrio or RustGIS consumer can bind to at the checked
 out revision, including registrations delegated to ``module::register(m)``
@@ -19,7 +21,8 @@ import subprocess
 from pathlib import Path
 
 SOURCE_ENV = "RAS_FAST_HDF_SOURCE"
-SCHEMA = "ras-commander/consumer-contract-inventory/v2"
+SCHEMA = "ras-commander/consumer-contract-inventory/v3"
+ENTRY = "src/python/mod.rs"  # the #[pymodule]; paths are repository-relative
 
 COUPLING = {
     "pyo3": re.compile(r"\bPy(?:Result|Any|Dict|List|Module|ValueError|ReadonlyArray\d?|Bytes|Tuple)\b|Python<|Bound<|#\[pyfunction\]|#\[pyclass"),
@@ -75,10 +78,10 @@ def _registered(lib_rs, sources):
             block_gate, depth, pending = pending, 1, None
             continue
         gate = pending or block_gate
-        out.extend(_line_registrations(stripped, gate, "src/lib.rs"))
+        out.extend(_line_registrations(stripped, gate, ENTRY))
         delegated = DELEGATE.search(stripped)
         if delegated:
-            rel = f"src/{delegated.group(1)}.rs"
+            rel = f"src/python/{delegated.group(1)}.rs"
             fn = REGISTER_FN.search(sources.get(rel, ""))
             if fn is None:
                 raise ValueError(f"delegated registration not found in {rel}")
@@ -115,13 +118,30 @@ def _methods(text):
 
 
 def _features(cargo):
-    section = cargo.split("[features]", 1)[1].split("\n[", 1)[0]
-    features = {}
-    for line in section.splitlines():
-        match = re.match(r'\s*([\w-]+)\s*=\s*\[(.*)\]', line)
-        if match:
-            features[match.group(1)] = re.findall(r'"([^"]+)"', match.group(2))
-    return features
+    section = _section(cargo, "features")
+    # Arrays may span lines (one feature per line in the 0.2+ manifest).
+    return {match.group(1): re.findall(r'"([^"]+)"', match.group(2))
+            for match in re.finditer(r'^\s*([\w-]+)\s*=\s*\[(.*?)\]', section, re.M | re.S)}
+
+
+def _section(cargo, name):
+    parts = cargo.split(f"[{name}]", 1)
+    return parts[1].split("\n[", 1)[0] if len(parts) == 2 else ""
+
+
+def _value(section, key):
+    match = re.search(rf'^{re.escape(key)}\s*=\s*"([^"]+)"', section, re.M)
+    return match.group(1) if match else None
+
+
+def _embedded(root):
+    """Third-party sources compiled into the crate, from vendor/PROVENANCE.json."""
+    path = root / "vendor" / "PROVENANCE.json"
+    if not path.is_file():
+        return {}
+    components = json.loads(path.read_text(encoding="utf-8"))["components"]
+    return {crate: {"upstream": c["upstream"], "commit": c["commit"], "version": version}
+            for c in components.values() for crate, version in c["crates"].items()}
 
 
 def _git_deps(cargo):
@@ -133,15 +153,17 @@ def build(root=None):
     root = root or source_root()
     if root is None:
         raise RuntimeError(f"set {SOURCE_ENV} to a ras-commander-fast-hdf checkout")
-    crate = Path(root) / "python"
-    lib_rs = (crate / "src" / "lib.rs").read_text(encoding="utf-8")
-    texts = {p.relative_to(crate).as_posix(): p.read_text(encoding="utf-8")
-             for p in sorted((crate / "src").rglob("*.rs"))}
+    root = Path(root)
+    if not (root / ENTRY).is_file():
+        raise RuntimeError(f"{root} has no {ENTRY}: not a ras-commander-fast-hdf 0.2+ checkout")
+    texts = {p.relative_to(root).as_posix(): p.read_text(encoding="utf-8")
+             for folder in ("src/python", "src/exports")
+             for p in sorted((root / folder).rglob("*.rs"))}
     signatures = {}
     for text in texts.values():
         for name, sig in _signatures(text).items():
             signatures.setdefault(name, sig)
-    registrations = _registered(lib_rs, texts)
+    registrations = _registered(texts[ENTRY], texts)
     for item in registrations:
         if item["kind"] == "class":
             item["methods"] = _methods(texts.get(item["registered_in"], ""))
@@ -152,8 +174,9 @@ def build(root=None):
                      "coupling": {k: len(rx.findall(text)) for k, rx in COUPLING.items()},
                      "pub_items": re.findall(r"^pub (?:fn|struct|enum|trait) (\w+)", text, re.M)}
                for rel, text in texts.items()}
-    main_cargo = (crate / "Cargo.toml").read_text(encoding="utf-8")
-    export_cargo = (crate / "src" / "exports" / "Cargo.toml").read_text(encoding="utf-8")
+    main_cargo = (root / "Cargo.toml").read_text(encoding="utf-8")
+    maturin = _section((root / "python" / "pyproject.toml").read_text(encoding="utf-8"), "tool.maturin")
+    maturin_features = re.search(r'^features\s*=\s*\[(.*?)\]', maturin, re.M | re.S)
     pure = {rel: m["pub_items"] for rel, m in modules.items()
             if m["pub_items"] and m["coupling"]["pyo3"] == 0 and m["coupling"]["numpy"] == 0}
     return {
@@ -161,11 +184,14 @@ def build(root=None):
         "source": {"repository": "gpt-cmdr/ras-commander-fast-hdf",
                    "commit": _git(root, "rev-parse", "HEAD"), "tree": _git(root, "rev-parse", "HEAD^{tree}"),
                    "dirty_paths": (_git(root, "status", "--porcelain") or "").splitlines()},
-        "crate": {"name": "ras-commander-fast-hdf",
-                  "crate_types": re.findall(r'"(cdylib|rlib)"', main_cargo),
-                  "features": _features(main_cargo), "git_dependencies": _git_deps(main_cargo)},
-        "export_crate": {"name": "ras-export", "features": _features(export_cargo),
-                         "git_dependencies": _git_deps(export_cargo)},
+        "crate": {"name": _value(_section(main_cargo, "package"), "name"),
+                  "lib_name": _value(_section(main_cargo, "lib"), "name"),
+                  "features": _features(main_cargo), "git_dependencies": _git_deps(main_cargo),
+                  "embedded": _embedded(root)},
+        "python_build": {"manifest_path": _value(maturin, "manifest-path"),
+                         "module_name": _value(maturin, "module-name"),
+                         "features": re.findall(r'"([^"]+)"', maturin_features.group(1))
+                         if maturin_features else []},
         "module_constants": re.findall(r'm\.add\(\s*"(\w+)"', "\n".join(texts.values())),
         "python_entry_points": registrations,
         "modules": modules,

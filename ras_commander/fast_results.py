@@ -40,6 +40,7 @@ import h5py
 import numpy as np
 
 from .Decorators import log_call
+from ._native_scope import one_read as _one_read
 from .LoggingConfig import get_logger
 from .fast_hdf import FastHdfError, _mode, _native, _safe_file, _threads
 
@@ -109,6 +110,7 @@ def _check_shape(dataset):
 
 
 @log_call
+@_one_read
 def native_temporal_reduce(dataset, offset=None, *, threshold=None, backend="auto",
                            threads=None, max_block_bytes=_DEFAULT_BLOCK_BYTES, parallel=True):
     """Run the native reduction, or return ``None`` where policy permits Python.

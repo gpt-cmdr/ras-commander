@@ -142,7 +142,8 @@ def test_domain_rule_on_series_and_catalogue(native):
     assert rules["Face Shear Stress"] == ("face", "legacy_exact_name", "supported")
     layers = [l for l in native.layer_inventory(path) if l.get("domain_rule") is not None]
     assert {l["domain_rule"] for l in layers} <= {
-        "stored_location", "legacy_exact_name", "labelled_summary", "boundary_columns", "unqualified"}
+        "stored_location", "legacy_exact_name", "labelled_summary", "legacy_row_labels",
+        "boundary_columns", "unqualified"}
     austin = _fixture("AustinOyster.p01")
     mesh = native.mesh_inventory(austin)[0]["mesh_name"]
     located = [v for v in native.mesh_series_inventory(austin, mesh)["variables"]

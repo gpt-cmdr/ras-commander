@@ -10,16 +10,17 @@ what it does not do.
 !!! info "Short version"
     - The native engine is ras-commander's **default HDF engine**. Its
       open-source (MIT) package, `ras-commander-fast-hdf`, is installed
-      automatically by `pip install ras-commander` (0.107.1 and later) on
+      automatically by `pip install ras-commander` (0.107.1 and later; 0.108.0 and
+      later install engine 0.2.x) on
       Windows x64, Linux x64 and macOS arm64. No extra is needed.
     - The default mode, `auto`, reads natively where the native path is
       qualified and uses h5py for any read the engine refuses. **Public
       results are identical to h5py**: same values, dtypes, columns, index,
       CRS, attributes and exceptions.
-    - Large reads are faster than with h5py. In the extension's 0.1.0
-      benchmark of public methods, building 2D cell polygons was 4–19× faster
-      depending on mesh size, and mesh time series 2–7× faster on large
-      meshes; small reads were a few milliseconds slower (see
+    - Large reads are faster than with h5py. In the 0.2.0 / 0.108.0 benchmark
+      of public methods, building 2D cell polygons was 4–19× faster depending
+      on mesh size, and mesh time series 2–8× faster on large meshes; small
+      reads were at most a few milliseconds slower (see
       [Performance](#performance)).
     - Set `RAS_COMMANDER_FAST_HDF=h5py` to switch the engine off. On
       platforms without a wheel the engine is not installed, and every read
@@ -65,8 +66,9 @@ refuses anything it cannot reproduce exactly (see
 The engine and its Python extension are open source (MIT) in their own
 repository,
 [gpt-cmdr/ras-commander-fast-hdf](https://github.com/gpt-cmdr/ras-commander-fast-hdf),
-and published on PyPI as `ras-commander-fast-hdf`. ras-commander 0.107.1 and
-later list it as a core dependency, limited by an environment marker to the
+and published on PyPI as `ras-commander-fast-hdf` (and, from 0.2.0, on
+crates.io as a Rust crate of the same name). ras-commander 0.107.1 and later
+list it as a core dependency (0.108.0 and later: `>=0.2,<0.3`), limited by an environment marker to the
 platforms that have wheels, so the normal install is enough:
 
 ```bash
@@ -327,28 +329,32 @@ pending.
 
 ### Release benchmark (public methods)
 
-The release benchmark of public methods for extension 0.1.0 is published on
-the extension's
+The release benchmark of public methods for extension 0.2.0 with
+ras-commander 0.108.0 is published on the extension's
 [Performance](https://github.com/gpt-cmdr/ras-commander-fast-hdf/blob/main/docs/performance.md)
 page: 19 public methods on 7 HEC-RAS result files (50 method × file cases,
-600 fresh processes) on a quiet Windows workstation, `h5py` mode against the
-default `auto` mode, with every result hashed and identical in `h5py`, `auto`
-and `native` mode. Its largest gains, repeat calls on the heaviest file for
-each method:
+1,200 fresh processes) on a quiet Windows workstation, `h5py` mode against the
+default `auto` mode, interleaved with 0.1.1 and ras-commander 0.107.1, with
+every result hashed and identical in `h5py`, `auto` and `native` mode. Its
+largest gains, repeat calls on the heaviest file for each method:
 
 | Method | Result rows | h5py | Native | Speed-up |
 |---|---:|---:|---:|---:|
-| `HdfMesh.get_mesh_cell_polygons` | 340,246 | 17,145 ms | 939 ms | 18.3× |
-| `HdfResultsMesh.get_mesh_cells_timeseries` (water surface) | 1 | 1,372 ms | 184 ms | 7.5× |
-| `HdfResultsMesh.get_mesh_timeseries` (water surface) | 193 | 1,415 ms | 213 ms | 6.6× |
-| `HdfResultsMesh.get_mesh_timeseries` (face velocity) | 865 | 1,486 ms | 291 ms | 5.1× |
-| `HdfFluvialPluvial.calculate_fluvial_pluvial_boundary` | 4,569 | 10,452 ms | 6,831 ms | 1.5× |
+| `HdfMesh.get_mesh_cell_polygons` | 340,246 | 17,252 ms | 960 ms | 18.0× |
+| `HdfResultsMesh.get_mesh_cells_timeseries` (water surface) | 1 | 1,405 ms | 173 ms | 8.1× |
+| `HdfResultsMesh.get_mesh_timeseries` (water surface) | 865 | 1,433 ms | 193 ms | 7.4× |
+| `HdfResultsMesh.get_mesh_timeseries` (face velocity) | 865 | 1,516 ms | 253 ms | 6.0× |
+| `HdfFluvialPluvial.calculate_fluvial_pluvial_boundary` | 4,569 | 10,638 ms | 6,856 ms | 1.6× |
 
-Whole-array summaries such as `get_mesh_max_ws` ran at about the same speed,
-and small reads were up to 16 ms slower on repeat calls. Across all 50 cases
-(geometric mean) the native engine was 1.07× faster on the first call in a
-process and 1.30× faster on repeat calls. Timings were taken with the files in
-the operating system's cache; cold-disk reads were not measured.
+Whole-array summaries such as `get_mesh_max_ws` ran at about the same speed.
+Small reads were at most about 7 ms slower on repeat calls and 37 ms on the
+first call in a process. Across all 50 cases (geometric mean) the native
+engine was 1.17× faster on the first call in a process and 1.41× faster on
+repeat calls (0.1.1 with ras-commander 0.107.1: 1.07× and 1.27×). The gain on
+small reads comes from ras-commander 0.108.0 opening each HDF once per public
+call and sharing that native session across the call's reads (it used to be
+opened 3 to 23 times). Timings were taken with the files in the operating
+system's cache; cold-disk reads were not measured.
 
 The figures below come from the earlier engine performance work. They measure
 the **HDF read layer** (the reads under the public methods), not complete
@@ -452,6 +458,17 @@ blocks these operations.
 Keeping sessions across calls (`persist`) saves a few percent on repeated
 reads of one file; the default favours never holding a file open.
 
+**Rewriting an HDF during a public call.** An HDF's size and modification time
+identify its cached session and typed results. They are read once per native
+read (one `read_typed`, `read_attrs` or typed engine call, which may look them
+up several times) and again by the next read. So an HDF rewritten in the middle
+of a public call is read anew by every later read of that call. That covers an
+in-place `h5py` write, a replacement after `fast_hdf.release_native_sessions(path)`,
+and HEC-RAS or RAS Mapper rewriting the file in another process, as
+ras-commander's own breakout and remesh workflows do. A writer that replaces or
+renames a file must still call `release_native_sessions` first (Windows refuses
+to replace a mapped file); ras-commander's own writers do.
+
 ## Large reads
 
 - **Per-call budget.** The engine refuses any single read larger than 2 GiB
@@ -552,10 +569,10 @@ first.
 
 | Component | This release |
 |---|---|
-| Engine | `ras-commander-rust` crate in [gpt-cmdr/ras-commander-fast-hdf](https://github.com/gpt-cmdr/ras-commander-fast-hdf), engine API 10 |
-| Bridge | Python package `ras-commander-fast-hdf` 0.1.0 (module `ras_commander_fast_hdf`), `API_VERSION` 11, text API 1, features `catalog, hdf, mesh, results`, `ENGINE_COMMIT` `7ca433ea4fbe68902a50902de815e56697eb21b2` |
-| ras-commander | requires bridge API 11 |
-| Wheels | On PyPI: Windows `cp310-abi3-win_amd64`, Linux `cp310-abi3-manylinux_2_28_x86_64`, macOS `arm64` (not yet qualified) |
+| Engine | `ras-commander-fast-hdf` crate 0.2.0 ([crates.io](https://crates.io/crates/ras-commander-fast-hdf); source in [gpt-cmdr/ras-commander-fast-hdf](https://github.com/gpt-cmdr/ras-commander-fast-hdf)), engine API 10 |
+| Bridge | Python package `ras-commander-fast-hdf` 0.2.0 (module `ras_commander_fast_hdf`), `API_VERSION` 11, text API 1, features `catalog, hdf, mesh, results`, `ENGINE_COMMIT` = the commit of tag `v0.2.0` |
+| ras-commander | 0.108.0 and later require `ras-commander-fast-hdf>=0.2,<0.3` and bridge API 11 |
+| Wheels | On PyPI: Windows `cp310-abi3-win_amd64`, Linux `cp310-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64` and `cp310-abi3-musllinux_1_2_x86_64`, macOS `cp310-abi3-macosx_11_0_arm64` (not yet qualified); source distribution |
 
 `ENGINE_COMMIT` is the commit of the ras-commander-fast-hdf repository the
 wheel was built from. Internal wheels built before the engine was published
@@ -566,8 +583,8 @@ The engine and extension are released under the MIT licence, copyright CLB
 Engineering Corporation. The wheel's `.dist-info/licenses/` folder contains
 `THIRD-PARTY-NOTICES.md`, which lists every Rust crate linked into the
 extension with its licence text, and the licence files of the engine,
-ras-commander, the vendored `hdf5-reader` (MIT), `freestiler` (ISC/MIT) and
-`i_float`/`i_overlay`. Keep these files with any copy of the wheel you
+ras-commander (`ras-commander-fast-hdf-LICENSE.txt` is the engine's), the embedded
+`hdf5-reader` (MIT), `freestiler` (ISC/MIT) and `i_float`/`i_overlay`. Keep these files with any copy of the wheel you
 redistribute.
 
 Report engine problems (a refusal you did not expect, a crash, a difference
