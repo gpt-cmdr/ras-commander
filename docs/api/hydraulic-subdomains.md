@@ -136,7 +136,10 @@ writes nothing. Per subdomain it records:
 - the BC lines:
   - the outlet split line as Normal Depth at its fitted slope;
   - one Flow Hydrograph line per upstream subdomain, carrying the parent's own
-    flow across that split line until the upstream child has run;
+    flow across that split line until the upstream child has run. The flow comes
+    from the parent run of the same plan: the search event whose plan HDF was
+    forced by that plan's unsteady file. Without one, the
+    `inflow_event_matches_plan` check blocks the plan;
   - Normal Depth along each stretch of the parent perimeter.
 
 Every other edge, the divide with a neighbouring subdomain, is a closed wall
