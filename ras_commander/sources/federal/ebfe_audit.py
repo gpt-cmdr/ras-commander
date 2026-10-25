@@ -402,6 +402,23 @@ def _analysis_gap_is_settled(review: dict, *, dss: bool = False, delivery: bool 
     return review.get("record_proven") is True
 
 
+def _element_review_is_settled(element: str, review: dict) -> bool:
+    """Require terrain delivery reviews to name an archive HDF member.
+
+    A source raster or result VRT is not the terrain HDF the element row
+    describes. The member suffix is an identity check on captured evidence,
+    not a read of the HDF contents or a spatial coverage check.
+    """
+    if not _analysis_gap_is_settled(review, dss=element == "dss", delivery=True):
+        return False
+    if element != "terrain":
+        return True
+    if review.get("method") not in ("archive_member_match", "exact_relative_path"):
+        return False
+    archive, separator, member = str(review.get("evidence") or "").partition("::")
+    return bool(separator and archive.strip() and member.strip().lower().endswith(".hdf"))
+
+
 def _dss_verification_hold(verification: dict) -> str:
     """Describe captured boundaries whose record availability is unverified."""
     checked = int(verification.get("boundaries_checked") or 0)
@@ -441,7 +458,7 @@ def _delivered_elements(bundle: AuditBundle) -> dict:
             # cover). DSS reviews must establish delivery at the referenced
             # path or record availability; a basename match cannot do that.
             review = entry.get("review") or {}
-            if (_analysis_gap_is_settled(review, dss=key == "dss", delivery=True)
+            if (_element_review_is_settled(key, review)
                     and entry.get("state") in ("no", "partial", "source_only")):
                 evidence = str(review.get("evidence") or "")
                 member = evidence.split("::", 1)[1] if "::" in evidence else None
@@ -756,7 +773,7 @@ def _group_gaps(bundle: AuditBundle) -> dict:
     labels = dict(SUPPORTING_ELEMENTS)
     for ekey, entry in (bundle.audit.get("supporting_elements") or {}).items():
         review = (entry or {}).get("review") or {}
-        if (_analysis_gap_is_settled(review, dss=ekey == "dss", delivery=True)
+        if (_element_review_is_settled(ekey, review)
                 and entry.get("state") in ("no", "partial", "source_only")):
             label = labels.get(ekey, ekey)
             analysis_counts[f"{label} (layer)"] += int(entry.get("referenced_count") or 1)
