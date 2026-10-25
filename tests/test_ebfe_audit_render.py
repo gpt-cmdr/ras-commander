@@ -968,3 +968,44 @@ def test_partly_verified_dss_hold_keeps_confirmed_acquisitions():
     markdown = render_audit_markdown(bundle)
     assert "no -- needs data not in the delivery" in markdown
     assert "| DSS boundary verification | **Partly verified**" in markdown
+
+
+@pytest.mark.parametrize("method,evidence", [
+    ("exact_relative_path", "models.zip::Results/WSE (Max).vrt"),
+    ("archive_member_match", "models.zip::Terrain/DEM.tif"),
+    ("exact_relative_path", "models.zip::Terrain/Terrain.vrt"),
+    ("unknown", "models.zip::Terrain/Terrain.hdf"),
+    ("archive_member_match", "Terrain/Terrain.hdf"),
+    ("archive_member_match", ""),
+])
+def test_terrain_review_cannot_promote_delivery_without_a_named_hdf_member(method, evidence):
+    bundle = _two_d_unsteady(
+        terrain={"delivered": 0, "gapped": 1, "projects": []},
+        supporting_elements={"terrain": {
+            "state": "no", "referenced": True,
+            "review": {"verdict": "analysis_gap", "method": method, "evidence": evidence},
+        }},
+    )
+    markdown = render_audit_markdown(bundle)
+    row = next(line for line in markdown.splitlines() if line.startswith("| Terrain |"))
+    assert row.split("|")[3].strip() == "**No**"
+    assert any(a.kind == "acquisition" and a.target == "Terrain" for a in actions_from_bundle(bundle))
+    assert "Terrain (layer)" not in markdown
+
+
+@pytest.mark.parametrize("method", ["exact_relative_path", "archive_member_match"])
+def test_named_terrain_hdf_review_can_settle_delivery(method):
+    bundle = _two_d_unsteady(
+        terrain={"delivered": 0, "gapped": 1, "projects": []},
+        supporting_elements={"terrain": {
+            "state": "no", "referenced": True,
+            "review": {"verdict": "analysis_gap", "method": method,
+                       "evidence": "models.zip::Terrain/Terrain.HDF"},
+        }},
+    )
+    markdown = render_audit_markdown(bundle)
+    row = next(line for line in markdown.splitlines() if line.startswith("| Terrain |"))
+    assert row.split("|")[3].strip() == "Yes"
+    assert "Terrain/Terrain.HDF" in row
+    assert "Terrain (layer)" in markdown
+    assert not any(a.kind == "acquisition" and a.target == "Terrain" for a in actions_from_bundle(bundle))
