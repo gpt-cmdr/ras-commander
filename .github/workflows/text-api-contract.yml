@@ -53,6 +53,8 @@ jobs:
           tests/test_subdomain_breakouts.py
           tests/test_mesh_cell_subset_native.py
           tests/test_geom_preprocessor_contract.py
+          tests/test_geom_preprocessor_handoff.py
+          tests/test_preprocess_process_inventory.py
           tests/test_hdf_completion.py
           tests/test_hdf_followup_native_contract.py
           tests/test_stored_maps_native_contract.py
