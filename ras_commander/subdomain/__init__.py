@@ -15,16 +15,24 @@ Example:
 Requires geopandas, shapely 2 and pyproj (``pip install ras-commander[full]``).
 """
 
-__all__ = ["RasSubdomain", "SplitLineCriteria", "SplitLineSearch", "SubdomainPartition"]
+_EXPORTS = {
+    "RasSubdomain": ".RasSubdomain",
+    "SplitLineCriteria": ".RasSubdomain",
+    "SplitLineSearch": ".RasSubdomain",
+    "SubdomainPartition": ".RasSubdomain",
+    "SubdomainBreakout": "._breakouts",
+    "SubdomainBreakoutPlan": "._breakouts",
+    "SubdomainBreakoutSet": "._breakouts",
+}
+__all__ = list(_EXPORTS)
 
 
 def __getattr__(name):
     """Load the subdomain API (and geopandas) only when it is requested."""
-    if name in __all__:
+    if name in _EXPORTS:
         from importlib import import_module
 
-        module = import_module(".RasSubdomain", __name__)
-        for public in __all__:
-            globals()[public] = getattr(module, public)
-        return globals()[name]
+        value = getattr(import_module(_EXPORTS[name], __name__), name)
+        globals()[name] = value
+        return value
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

@@ -29,7 +29,7 @@ Each entry of :data:`DATAFRAME_SCHEMAS`:
 """
 
 # Schema contract version -- bump when the documented column surface changes meaningfully.
-SCHEMA_VERSION = "1.30"
+SCHEMA_VERSION = "1.31"
 
 _GEOMETRY_ASSOCIATION_COLUMNS = [
     {"name": "geom_number", "dtype": "str", "description": "Normalized geometry identifier."},
@@ -77,6 +77,61 @@ DATAFRAME_SCHEMAS = {
             {"name": "DSContArea", "dtype": "float", "description": "Contributing area at the link outlet, DEM horizontal units squared."},
             {"name": "contributing_area_sqmi", "dtype": "float", "description": "DSContArea in square miles."},
             {"name": "geometry", "dtype": "LineString", "description": "Link line; its first vertex is the link outlet."},
+        ],
+    },
+    "subdomain_breakout_checks": {
+        "description": "Checks of planned or authored subdomain breakouts; blocking rows stop apply_breakouts.",
+        "accessor": "RasSubdomain.plan_breakouts(...).checks / RasSubdomain.validate_breakouts(breakout_set)",
+        "source": "ras_commander.subdomain._breakouts",
+        "extra_columns": False,
+        "dynamic": False,
+        "columns": [
+            {"name": "subdomain_id", "dtype": "str", "description": "Subdomain, or '*' for a plan-wide check."},
+            {"name": "check", "dtype": "str", "description": "Check name, for example breakout_preflight, preprocess, bc_line:<name>."},
+            {"name": "passed", "dtype": "bool", "description": "Whether the check passed."},
+            {"name": "blocking", "dtype": "bool", "description": "True when a failed check blocks authoring."},
+            {"name": "detail", "dtype": "str", "description": "Human-readable evidence."},
+        ],
+    },
+    "subdomain_compute_runs": {
+        "description": "One row per computed subdomain breakout.",
+        "accessor": "RasSubdomain.compute_subdomains(breakout_set)",
+        "source": "ras_commander.subdomain._breakouts.compute_subdomains()",
+        "extra_columns": False,
+        "dynamic": False,
+        "columns": [
+            {"name": "subdomain_id", "dtype": "str", "description": "Subdomain."},
+            {"name": "tier", "dtype": "int", "description": "Tier it ran in."},
+            {"name": "plan_number", "dtype": "str", "description": "Child plan in the working project."},
+            {"name": "success", "dtype": "bool", "description": "Plan computed."},
+            {"name": "tier_wall_clock_s", "dtype": "float", "description": "Wall clock of the tier's compute_parallel call, s."},
+            {"name": "plan_hdf_path", "dtype": "str", "description": "Child plan HDF."},
+        ],
+    },
+    "subdomain_parent_comparison": {
+        "description": "Per-subdomain comparison of a computed breakout with the parent on the same cells and outlet faces.",
+        "accessor": "RasSubdomain.compare_to_parent(breakout_set, parent_plan_hdf_path)",
+        "source": "ras_commander.subdomain._breakouts.compare_to_parent()",
+        "extra_columns": False,
+        "dynamic": False,
+        "columns": [
+            {"name": "subdomain_id", "dtype": "str", "description": "Subdomain."},
+            {"name": "status", "dtype": "str", "description": "compared or no results."},
+            {"name": "cells", "dtype": "int", "description": "Child cells."},
+            {"name": "cells_matched_to_parent", "dtype": "int", "description": "Child cells whose centre matches a parent cell."},
+            {"name": "wet_cells_compared", "dtype": "int", "description": "Cells wet above the depth threshold in both."},
+            {"name": "wse_diff_p50_ft", "dtype": "float", "description": "Median absolute maximum-WSE difference, ft."},
+            {"name": "wse_diff_p95_ft", "dtype": "float", "description": "95th percentile, ft."},
+            {"name": "wse_diff_p99_ft", "dtype": "float", "description": "99th percentile, ft."},
+            {"name": "wse_diff_max_ft", "dtype": "float", "description": "Largest absolute difference, ft."},
+            {"name": "wse_diff_mean_ft", "dtype": "float", "description": "Mean signed difference (child minus parent), ft."},
+            {"name": "wet_extent_iou", "dtype": "float", "description": "Intersection over union of the wet cells."},
+            {"name": "outlet_peak_parent_cfs", "dtype": "float", "description": "Parent peak flow across the outlet split line."},
+            {"name": "outlet_peak_child_cfs", "dtype": "float", "description": "Child outlet BC peak flow."},
+            {"name": "outlet_peak_diff_pct", "dtype": "float", "description": "Peak difference, percent."},
+            {"name": "outlet_peak_time_diff_h", "dtype": "float", "description": "Child minus parent peak time, h."},
+            {"name": "outlet_volume_diff_pct", "dtype": "float", "description": "Event volume difference, percent."},
+            {"name": "outlet_nse", "dtype": "float", "description": "Nash-Sutcliffe efficiency of the child outlet against the parent."},
         ],
     },
     "subdomain_split_lines": {

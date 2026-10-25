@@ -50,6 +50,7 @@ jobs:
           tests/test_mesh_cell_subset.py
           tests/test_ras_taudem.py
           tests/test_subdomain_split_lines.py
+          tests/test_subdomain_breakouts.py
           tests/test_mesh_cell_subset_native.py
           tests/test_geom_preprocessor_contract.py
           tests/test_hdf_completion.py

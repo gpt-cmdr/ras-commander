@@ -60,7 +60,9 @@ IDs from `HdfMesh`; ghost cells, duplicate IDs, holes, disconnected components,
 and boundary pinch points are rejected. The API never expands the selection.
 Native completion can stamp the owned geometry target `HEC-RAS Results`.
 Planning accepts that target only if its sole root group is `Geometry`.
-The parent still requires `HEC-RAS Geometry`; actual result data are rejected.
+The parent source follows the same rule: `HEC-RAS Geometry`, or a natively
+compiled `HEC-RAS Results` stamp whose sole root group is `Geometry`. Plan HDFs
+and any file holding result data are rejected.
 
 ```python
 from ras_commander.geom import GeomMesh, GeomPreprocessor
@@ -92,7 +94,7 @@ assert GeomMesh.validate_cell_subset(subset)["topology_exact"]
 Planning binds source HDF, child text and child HDF hashes. Applying refuses stale
 inputs, preserves physical cell coordinates and face polylines, reindexes native
 incidence tables, and creates one ghost cell per new perimeter face. HEC-RAS 6.6
-serializes the mesh in an isolated worker. The text perimeter is written from
+or 6.4.1 serializes the mesh in an isolated worker. The text perimeter is written from
 the exact native ring with the existing 16-character formatter. Completion
 checks can bind the full-precision ring only when that formatter reproduces
 the authored polygon exactly; the bound ring must remain unchanged and all
@@ -104,7 +106,13 @@ are rejected. Without an explicit project, the active global project's runtime
 is retained. The declared `hecras_version="6.6"` is discovered only when neither
 project selects a runtime. The caller controls serialization `timeout` in seconds
 (default 1800); an expired worker raises `RuntimeError` and preserves the inputs.
-The native worker verifies the selected executable's file version. Returned
+The native worker verifies the selected executable's file version: 6.6, or
+exactly 6.4.1 (file version 6.4.0.1; 6.4.0 is refused). 6.4.1 was qualified on
+the FEMA eBFE Salt Draw delivery, a 6.4.1 model: a 2,592-cell cut of the
+delivered mesh serialized, preprocessed and ran in 6.4.1, and reproduced the
+parent's maximum WSE to 0.017 ft at the 95th percentile. Cutting in the model's
+own version avoids re-meshing a delivered mesh that a newer version rejects.
+Returned
 `cell_subset.native_serialization` records the install directory, executable file
 version, executable SHA-256, and RasMapperLib DLL SHA-256.
 

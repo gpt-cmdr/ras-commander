@@ -25,7 +25,7 @@ from __future__ import annotations
 import math
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Sequence, Tuple, Union
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Sequence, Tuple, Union
 
 import numpy as np
 
@@ -33,6 +33,11 @@ from ..LoggingConfig import get_logger, log_call
 from . import _split_lines as sl
 from ._parent import (EventReader, face_tables, mesh_names, read_geometry, require_face_flow,
                       require_feet, same_geometry, sha256_file)
+
+if TYPE_CHECKING:
+    import pandas as pd
+
+    from ._breakouts import SubdomainBreakoutPlan, SubdomainBreakoutSet
 
 logger = get_logger(__name__)
 
@@ -655,3 +660,132 @@ class RasSubdomain:
         run_order = tuple(tuple(r["subdomain_id"] for r in rows if r["tier"] == t) for t in tiers)
         return SubdomainPartition(subdomains=subdomains, cell_owner=cell_owner,
                                   remainder_id=REMAINDER_ID, run_order=run_order, search=search)
+
+    @staticmethod
+    @log_call
+    def plan_breakouts(partition: SubdomainPartition, plan_number: Union[str, int], *, ras_object: Any,
+                       perimeter_friction_slope: float = 0.01,
+                       subdomain_ids: Optional[Sequence[str]] = None) -> SubdomainBreakoutPlan:
+        """Plan one exact-cell breakout per subdomain; nothing is written.
+
+        For each subdomain (default: all, including the remainder) this records
+        the parent cell ids to keep and the BC lines to author, and runs the
+        read-only :meth:`RasBreakout2D.preflight` against ``ras_object``:
+
+        - the outlet split line as Normal Depth at the fitted slope;
+        - one Flow Hydrograph line per upstream subdomain, carrying the parent's
+          own flow across that split line until the upstream child has run;
+        - Normal Depth at ``perimeter_friction_slope`` along each stretch of the
+          parent perimeter.
+
+        Every other edge is a closed wall, as in the parent. Labels this release
+        cannot cut (``HOLES``, ``MULTIPART``, ``STRUCTURE_ON_SPLIT_LINE``) become
+        blocking checks.
+
+        Args:
+            partition: From :meth:`build_subdomains` (same session).
+            plan_number: Parent plan whose geometry the cells come from. Its
+                geometry HDF must be the compiled geometry of the searched events.
+            ras_object: Initialized parent project (read only).
+            perimeter_friction_slope: Normal-depth slope on parent-perimeter stretches.
+            subdomain_ids: Plan only these subdomains.
+
+        Returns:
+            SubdomainBreakoutPlan; ``is_ready`` is False while a blocking check fails.
+        """
+        from ._breakouts import plan_breakouts
+
+        return plan_breakouts(partition, plan_number, ras_object=ras_object,
+                              perimeter_friction_slope=perimeter_friction_slope,
+                              subdomain_ids=subdomain_ids)
+
+    @staticmethod
+    @log_call
+    def apply_breakouts(breakout_plan: SubdomainBreakoutPlan, dest_folder: Union[str, Path], *,
+                        overwrite_dest: bool = False, hecras_version: Optional[str] = None,
+                        time_step: str = "parent_minimum", timeout: int = 1800) -> SubdomainBreakoutSet:
+        """Author every planned breakout in one staged working copy of the parent.
+
+        ``RasProject.stage_project`` copies the parent project to ``dest_folder``.
+        In that copy each subdomain becomes a cloned plan, geometry and unsteady
+        file (:meth:`RasBreakout2D.clone_plan_components`), cut to its exact parent
+        cells (``prepare_cloned_geometry(parent_cell_ids=...)``, HEC-RAS 6.6), with
+        its BC lines and forcing written by :meth:`GeomBcLines.replace_bc_lines`.
+        Meteorology, initial conditions and solver settings are inherited from
+        the parent plan. The parent is never modified.
+
+        Every BC line is checked against its compiled external faces after a full
+        preprocess; a line HEC-RAS rejects, attaches to no face, shares faces with
+        another line, or spreads over the whole perimeter moves to its next
+        placement (on the perimeter; offset 1 ft outward with ends trimmed;
+        extended; following the perimeter 200, 400 or 800 ft past each end).
+
+        Args:
+            breakout_plan: From :meth:`plan_breakouts`, with ``is_ready`` True.
+            dest_folder: New folder for the working copy. The copied root is the
+                smallest folder holding the project and its RAS Mapper assets;
+                parent result HDFs are not copied.
+            overwrite_dest: Replace an existing ``dest_folder``.
+            hecras_version: Version for the working project (default the parent's).
+            time_step: ``"parent_minimum"`` (default) fixes each child at the
+                shortest step the parent can take (its base interval halved
+                ``Max Halving`` times) with the Courant-adaptive step off. A child
+                must not out-step the parent: on Salt Draw headwater 2568 the
+                inherited adaptive step gave maximum-WSE differences up to 3.1 ft
+                (p95 0.67 ft); the parent minimum, 15 s, gave 0.26 ft (p95 0.018 ft).
+                ``"inherit"`` keeps the cloned plan's settings.
+            timeout: Seconds allowed per native step.
+
+        Returns:
+            SubdomainBreakoutSet
+        """
+        from ._breakouts import apply_breakouts
+
+        return apply_breakouts(breakout_plan, dest_folder, overwrite_dest=overwrite_dest,
+                               hecras_version=hecras_version, time_step=time_step, timeout=timeout)
+
+    @staticmethod
+    @log_call
+    def validate_breakouts(breakout_set: SubdomainBreakoutSet, *, max_wait: int = 3600) -> pd.DataFrame:
+        """Preprocess every child and check each BC line against its compiled external faces.
+
+        A BC line HEC-RAS attaches to no face, or spreads over the whole
+        perimeter, fails. Returns a checks DataFrame (``subdomain_id``, ``check``,
+        ``passed``, ``blocking``, ``detail``).
+        """
+        from ._breakouts import validate_breakouts
+
+        return validate_breakouts(breakout_set, max_wait=max_wait)
+
+    @staticmethod
+    @log_call
+    def compute_subdomains(breakout_set: SubdomainBreakoutSet, *, max_workers: int = 2,
+                           num_cores: int = 2) -> pd.DataFrame:
+        """Run the children tier by tier, handing each outlet hydrograph downstream.
+
+        Each tier is one :meth:`RasCmdr.compute_parallel` call in the working
+        project. Before a tier runs, the summed flow of each upstream child's
+        outlet BC line is written as the inline hydrograph of the matching inflow
+        line (:meth:`RasUnsteady.set_boundary_inline_hydrograph`). Returns one row
+        per subdomain: ``subdomain_id``, ``tier``, ``plan_number``, ``success``,
+        ``tier_wall_clock_s``, ``plan_hdf_path``.
+        """
+        from ._breakouts import compute_subdomains
+
+        return compute_subdomains(breakout_set, max_workers=max_workers, num_cores=num_cores)
+
+    @staticmethod
+    @log_call
+    def compare_to_parent(breakout_set: SubdomainBreakoutSet, parent_plan_hdf_path: Union[str, Path], *,
+                          depth_threshold_ft: float = 0.1) -> pd.DataFrame:
+        """Compare each computed child with the parent on the same cells and outlet.
+
+        Child cells are the parent's own cells, matched by centre. Per subdomain:
+        maximum-WSE difference (p50, p95, p99, max, mean) over cells wet above
+        ``depth_threshold_ft`` in both, wet-extent IoU, and the outlet hydrograph's
+        peak, peak time, volume and NSE against the parent's native flow across
+        the same split line. No pass/fail: the table reports.
+        """
+        from ._breakouts import compare_to_parent
+
+        return compare_to_parent(breakout_set, parent_plan_hdf_path, depth_threshold_ft=depth_threshold_ft)

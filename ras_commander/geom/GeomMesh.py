@@ -6936,8 +6936,9 @@ class GeomMesh:
         components, boundary pinch points, duplicate IDs and ghost IDs block;
         the selection is never repaired or expanded. No result HDF is read.
         An owned target stamped "HEC-RAS Results" by native completion is
-        accepted only when its sole root group is Geometry; source stamps
-        remain restricted to "HEC-RAS Geometry".
+        accepted only when its sole root group is Geometry. The source follows
+        the same rule, so a parent compiled by Ras.exe can be cut; plan HDFs
+        and files holding results are rejected.
 
         Args:
             source_geometry_hdf: Read-only parent geometry HDF, with native mesh tables.
@@ -6985,7 +6986,8 @@ class GeomMesh:
         never modified. Text points use the existing native fixed-width writer;
         its mesh timestamp is bound to the native serialized Data Date.
 
-        Only HEC-RAS 6.6 is qualified. The native worker has a caller-selected timeout.
+        Only HEC-RAS 6.4.1 and 6.6 are qualified; the native worker checks the
+        selected Ras.exe file version. The native worker has a caller-selected timeout.
         Uses sibling staging, preserves two uniquely named .bak files and restores
         original bytes if either replacement fails. Requires exclusive access;
         exception rollback is not crash-atomic across the pair. A crash between
@@ -6996,7 +6998,7 @@ class GeomMesh:
             hecras_version: Installed engine version used for native serialization.
             hecras_dir: Explicit installed runtime folder. With ras_object, it
                 must match the project's selected Ras.exe installation. Native
-                file metadata must identify HEC-RAS 6.6; hashes are returned.
+                file metadata must identify HEC-RAS 6.4.1 or 6.6; hashes are returned.
             timeout: Positive native serialization timeout in seconds, default 1800.
             ras_object: Optional isolated project forwarded to text point writing.
 
@@ -7011,9 +7013,9 @@ class GeomMesh:
             RuntimeError: Inputs change, native serialization fails, or incidence changes.
             ValueError: The runtime or planned geometry is unsupported.
         """
-        if hecras_version != "6.6":
+        if hecras_version not in ("6.6", "6.4.1"):
             raise ValueError(
-                "Exact cell subset serialization is qualified only for HEC-RAS 6.6"
+                "Exact cell subset serialization is qualified only for HEC-RAS 6.4.1 and 6.6"
             )
         if isinstance(timeout, bool) or not isinstance(timeout, int) or timeout <= 0:
             raise ValueError("timeout must be a positive integer number of seconds")

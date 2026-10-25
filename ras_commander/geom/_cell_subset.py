@@ -322,7 +322,10 @@ def _attr_text(value):
 def _geometry_source(hdf):
     value = hdf.attrs.get("File Type", b"")
     value = value.decode() if isinstance(value, bytes) else str(value)
-    if value != "HEC-RAS Geometry" or "Results" in hdf:
+    # Native completion stamps a compiled .g##.hdf "HEC-RAS Results" although it
+    # holds only Geometry; that is still a geometry source. A plan HDF is not.
+    native_geometry = value == "HEC-RAS Results" and set(hdf) == {"Geometry"}
+    if (value != "HEC-RAS Geometry" and not native_geometry) or "Results" in hdf:
         raise ValueError("source must be a geometry-only HDF, without Results")
 
 

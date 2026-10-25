@@ -265,7 +265,9 @@ def test_results_stamped_target_with_non_geometry_data_is_rejected(tmp_path, roo
         GeomMesh.plan_cell_subset(source, target, [5, 6, 9, 10], "Area")
 
 
-def test_results_stamped_source_is_rejected_even_without_results_group(tmp_path):
+def test_natively_compiled_source_with_only_geometry_is_accepted(tmp_path):
+    # Ras.exe geometry completion stamps a compiled parent .g##.hdf "HEC-RAS Results"
+    # although its sole root group is Geometry.
     source = tmp_path / "Parent.g01.hdf"
     grid(source)
     target = tmp_path / "Child.g02"
@@ -273,6 +275,20 @@ def test_results_stamped_source_is_rejected_even_without_results_group(tmp_path)
     grid(Path(str(target) + ".hdf"))
     with h5py.File(source, "r+") as handle:
         handle.attrs["File Type"] = np.bytes_("HEC-RAS Results")
+    plan = GeomMesh.plan_cell_subset(source, target, [5, 6, 9, 10], "Area")
+    assert list(plan.parent_cell_ids) == [5, 6, 9, 10]
+
+
+@pytest.mark.parametrize("extra_group", ["Plan Data", "Event Conditions"])
+def test_results_stamped_source_with_plan_content_is_rejected(tmp_path, extra_group):
+    source = tmp_path / "Parent.g01.hdf"
+    grid(source)
+    target = tmp_path / "Child.g02"
+    child_text(target)
+    grid(Path(str(target) + ".hdf"))
+    with h5py.File(source, "r+") as handle:
+        handle.attrs["File Type"] = np.bytes_("HEC-RAS Results")
+        handle.create_group(extra_group)
     with pytest.raises(ValueError, match="source.*geometry-only"):
         GeomMesh.plan_cell_subset(source, target, [5, 6, 9, 10], "Area")
 
