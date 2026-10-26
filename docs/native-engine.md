@@ -1,4 +1,12 @@
+---
+title: Native Rust HDF Engine
+description: ras-commander's native (Rust) HEC-RAS HDF engine - what it is, how it is selected, how it was proven identical to h5py, and how fast it is.
+social_image: assets/ras-commander-fast-hdf_social.png
+social_image_alt: "RAS Commander Fast-HDF: Native Rust HDF Engine"
+---
 # Native Rust HDF Engine
+
+<p align="center"><img src="../assets/ras-commander-fast-hdf_logo.svg" alt="RAS Commander Fast-HDF: Native Rust HDF Engine" width="450"></p>
 
 ras-commander reads HEC-RAS HDF files (plan results, geometry, terrain and
 land-cover sidecars) through its native HDF engine, written in Rust. h5py
