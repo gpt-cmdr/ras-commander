@@ -158,3 +158,9 @@ Engine 0.8 restores optional depth-weighted faces through use_depth_weighted_fac
 It requires stored corner elevations staged by the Commander adapter and advertises
 depth_weighted_faces. Native corner preparation is a separate explicit operation;
 production mapping remains independent of HEC-RAS.
+
+Cell-face donation also reproduces native scratch retention in fixed 256-point
+geometry ranges. Clipped-weight cells are replayed in source terrain tiles;
+complete perimeters preserve predecessor geometry outside an AOI. The repair
+shares the bounded Rayon pool. Its output and tile transients participate in
+planned admission. Plain cell-corner arithmetic remains independent of donation.

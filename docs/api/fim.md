@@ -11,7 +11,7 @@ or Windows x86-64 engine wheel into the same environment:
 
 ```bash
 uv pip install -e ".[fim,compute]"
-uv pip install /path/to/ras2fim_engine-0.7.1-py3-none-<platform>.whl
+uv pip install /path/to/ras2fim_engine-0.8.0-py3-none-<platform>.whl
 ras2fim-batch method
 ```
 
@@ -174,6 +174,61 @@ raw masks and float32 bits on Bald Eagle bridges Max and Davis timesteps 54/108,
 with one/four workers on Windows and Linux x86-64. This does not establish
 face-mode parity for the large eBFE cases or other HEC-RAS versions.
 The physical-2D scope and standalone-storage-area exclusion apply to both modes.
+
+## Depth-weighted sloping faces (engine 0.8)
+
+Set `render_mode="slopingPretty", use_depth_weighted_faces=True` to rebalance
+corner/face weights using native water depths. The shallow-to-horizontal control
+remains independent. Both controls default to false; no added depth cutoff is
+applied. The engine must advertise `depth_weighted_faces`. Numeric corner reads
+require the native fast-HDF corner reader; an older wheel without that entry
+point raises explicitly. The HDF reader separately supports an explicit h5py
+fallback, but the FIM pipeline never silently substitutes it.
+
+If the plan contains `FacePoints Elevation`, mapping reads it directly. Otherwise
+prepare a fresh cache once on Windows with HEC-RAS 7.0.1 installed:
+
+```python
+prepared = RasFim.prepare_corner_elevations(
+    "model.p02.hdf", "prepared_corners",
+    rasmap_path="model.rasmap", terrain_name="Terrain",
+)
+manifest = RasFim.map_sloping_profiles(
+    "model.p02.hdf", "canonical_terrain.tif", "weighted_catalog",
+    profiles={"maximum": "Max", "t0054": 54},
+    render_mode="slopingPretty", use_depth_weighted_faces=True,
+    reduce_shallow_to_horizontal=True,
+    postprocessing_hdf=prepared["postprocessing_hdf"],
+    polygon="reach.gpkg", threads=4, max_inflight_profiles=2,
+)
+```
+
+Preparation uses the exact registered terrain and its modifications. It copies
+stored property-table corner values when present; otherwise it runs the native
+terrain corner sampler with obstructions enabled. It writes a fresh
+`PostProcessing.hdf` and a receipt to a new/empty folder, leaves source HDF and
+rasmap bytes unchanged, and returns separate preparation time. It does not run
+hydraulics or export a reference map. Only this explicit preparation operation
+loads HEC-RAS assemblies; ordinary mapping remains Rust-native.
+
+`corner_elevation_source="auto"` refuses conflicting arrays. An explicit
+`"geometry"` or `"mapping_cache"` selects that layout. Cache-only mapping also
+requires the adjacent preparation receipt: it verifies the plan binding, cache
+bytes and recorded terrain/rasmap source identities. Historical mesh terrain
+dates can differ from fresh native sampling; only a verified current-terrain
+preparation can supersede that stale-date result, and the original checks remain
+in the manifest. A cache existing with the correct corner count is insufficient.
+
+Pass the same cache arguments to `prepare_sloping_model` to share staged corner
+inputs across reach requests. The context watches the cache, receipt and native
+preparation dependencies. Changed inputs invalidate the context. Corner source,
+dataset, hashes, terrain metadata and checks are returned under
+`DataFrame.attrs["performance"]["corner_elevations"]`.
+
+The raster terrain must also represent the effective terrain used by the native
+reference. Export a consolidated terrain with
+`RasTerrain.export_rasmapper_terrain()` when the registered terrain has multiple
+sources or modifications. Corner preparation does not change the supplied raster.
 
 ## Reuse prepared models across reach requests
 

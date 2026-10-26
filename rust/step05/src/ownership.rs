@@ -113,6 +113,33 @@ pub fn burn(layer: Layer, grid: Grid) -> Result<Vec<u32>, MapError> {
     }
 }
 
+pub fn burn_ring(points: &[[f64; 2]], grid: Grid) -> Result<Vec<u32>, MapError> {
+    if points.len() < 3 {
+        return Err(invalid("carry polygon needs three points"));
+    }
+    let closed = points.first() == points.last();
+    let mut wkb = vec![1];
+    wkb.extend(3_u32.to_le_bytes());
+    wkb.extend(1_u32.to_le_bytes());
+    wkb.extend(((points.len() + usize::from(!closed)) as u32).to_le_bytes());
+    for point in points.iter().chain((!closed).then_some(&points[0])) {
+        for value in point {
+            wkb.extend(value.to_le_bytes());
+        }
+    }
+    let geometry = Geometry::from_wkb(&wkb).map_err(|e| invalid(&e.to_string()))?;
+    let mut layer = Layer::new("carry polygon");
+    layer
+        .schema
+        .add_field(FieldDef::new("id", FieldType::Integer));
+    layer.features.push(Feature {
+        fid: 0,
+        geometry: Some(geometry),
+        attributes: vec![FieldValue::Integer(1)],
+    });
+    burn(layer, grid)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

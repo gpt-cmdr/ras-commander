@@ -138,6 +138,8 @@ def benchmark(args):
                         "render_mode",
                         "reduce_shallow_to_horizontal",
                         "use_depth_weighted_faces",
+                        "postprocessing_hdf",
+                        "corner_elevation_source",
                     )
                     if key in case
                 },

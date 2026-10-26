@@ -80,6 +80,8 @@ def _validate_method(method, render_mode, max_inflight_profiles):
         raise FimEngineError(
             "engine lacks additional sloping options; install a matching engine"
         )
+    if render_mode == "slopingPretty" and not method.get("native_donation_history"):
+        raise FimEngineError("Cell-face sloping requires native donation history (engine 0.8+)")
     selected_method_id = (
         method.get("enhanced_method_id")
         if render_mode == "slopingPretty"
@@ -379,7 +381,8 @@ def map_profiles(
                 request = dict(
                     schema="ras-commander-sloping-request/1",
                     **(
-                        {"options": selected_options}
+                        {"options": {key: value for key, value in selected_options.items()
+                                     if key != "use_depth_weighted_faces" or method.get("depth_weighted_faces")}}
                         if method.get("enhanced_options")
                         else {}
                     ),
@@ -409,6 +412,7 @@ def map_profiles(
                 except PackageNotFoundError:
                     hdf_version = None
                 details["performance"] = {
+                    "corner_elevations": details.get("corner_elevations", {}),
                     "native_hdf": {
                         "package": "ras-commander-fast-hdf",
                         "version": hdf_version,
@@ -596,6 +600,9 @@ def map_profiles(
                 )
         if _prepared is not None:
             _prepared._check_sources()
+        if postprocessing_hdf is not None and (Path(postprocessing_hdf).parent / "corner_elevation_receipt.json").exists():
+            from ._corner_preparation import validate_receipt
+            validate_receipt(hdf, postprocessing_hdf)
         changed = [
             key for key, path in watched.items() if _file_identity(path) != before[key]
         ]

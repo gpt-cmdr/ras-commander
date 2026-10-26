@@ -244,8 +244,8 @@ class RasFim:
         render_mode: str = "sloping",
         reduce_shallow_to_horizontal: bool = False,
         use_depth_weighted_faces: bool = False,
-        postprocessing_hdf=None,
-        corner_elevation_source="auto",
+        postprocessing_hdf: Optional[PathLike] = None,
+        corner_elevation_source: str = "auto",
         engine_path: Optional[PathLike] = None, threads: int = 1,
         max_working_mib: int = 1024, max_prepared_mib: int = 1024,
     ) -> "FimPreparedSlopingModel":
@@ -255,6 +255,9 @@ class RasFim:
         :meth:`map_sloping_profiles`. Geometry, spatial index and complete
         staged mesh/WSE inputs are reused. Repeated selectors share files.
         Rendering options and threads are fixed for the context's lifetime.
+        ``postprocessing_hdf`` optionally supplies a prepared native corner
+        cache. ``corner_elevation_source`` is auto, geometry or mapping_cache;
+        cache-only use requires the adjacent native preparation receipt.
         Each mapping call still starts the native CLI and reconstructs native
         stencils, terrain and hydraulic values. No extra depth cutoff is added.
 
@@ -294,8 +297,8 @@ class RasFim:
         render_mode: str = "sloping",
         reduce_shallow_to_horizontal: bool = False,
         use_depth_weighted_faces: bool = False,
-        postprocessing_hdf=None,
-        corner_elevation_source="auto",
+        postprocessing_hdf: Optional[PathLike] = None,
+        corner_elevation_source: str = "auto",
         bbox: Optional[Sequence[float]] = None, polygon: Any = None,
         polygon_layer: Optional[str] = None, aoi_crs: Any = None,
         engine_path: Optional[PathLike] = None, threads: int = 1,
@@ -347,6 +350,10 @@ class RasFim:
                 rendering for shallow cells; requires slopingPretty.
             use_depth_weighted_faces: Rebalance donated corner/face weights by
                 native depth; requires slopingPretty and stored corner elevations.
+            postprocessing_hdf: Optional native corner cache. Cache-only input
+                requires the adjacent receipt from prepare_corner_elevations.
+            corner_elevation_source: auto compares supplied layouts and refuses
+                conflicts; geometry or mapping_cache explicitly selects one.
             bbox: Optional output bounds in ``aoi_crs`` or the model CRS.
             polygon: Optional polygon geometry, frame or vector-file AOI.
             polygon_layer: Layer name when the AOI file has multiple layers.

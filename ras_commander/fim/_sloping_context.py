@@ -155,6 +155,8 @@ class FimPreparedSlopingModel:
                 native_state_reused=False,
             )
             self._check_sources()
+            if postprocessing_hdf is not None and (Path(postprocessing_hdf).parent / "corner_elevation_receipt.json").exists():
+                validate_receipt(self._hdf, postprocessing_hdf)
             self._closed = False
         except BaseException:
             self.close()

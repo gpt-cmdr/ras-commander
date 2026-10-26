@@ -200,7 +200,7 @@ def main():
     case = json.loads(args.case.read_text(encoding="utf-8"))
     fields = {
         key: case[key]
-        for key in ("bbox", "polygon", "polygon_layer", "aoi_crs")
+        for key in ("bbox", "polygon", "polygon_layer", "aoi_crs", "postprocessing_hdf", "corner_elevation_source")
         if key in case
     }
     if args.match_reference_grid:

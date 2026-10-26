@@ -216,6 +216,21 @@ impl Geometry {
             .map(|c| c.faces.clone())
             .collect::<Vec<_>>();
         let mut stencils = sloping::prepare_stencils(&mesh, &cell_faces)?;
+        for (cell, stencil) in stencils.iter_mut().enumerate() {
+            if let Some(stencil) = stencil {
+                for &face in &self.cells[cell].faces {
+                    let f = &self.faces[face];
+                    if f.cells[0] == cell {
+                        stencil.physical_ring.extend(f.polyline.iter().copied());
+                    } else {
+                        stencil
+                            .physical_ring
+                            .extend(f.polyline.iter().rev().copied());
+                    }
+                }
+                stencil.physical_ring.dedup();
+            }
+        }
         if let Some(elevations) = &self.vertex_elevations {
             sloping::set_vertex_elevations(&mut stencils, elevations, mesh.corners.len())?;
         }
@@ -228,6 +243,7 @@ pub fn method_record() -> Value {
         "native_version_qualified":"7.0.1", "stream_outputs":true, "native_ownership":true,
         "enhanced_options":true,"enhanced_method_id":"rasmapper-sloping-with-faces/1",
         "depth_weighted_faces":true,
+        "native_donation_history":true,
         "bounded_profile_concurrency":true,
         "options":{"CellRenderMode":"Sloping","CellStencilMode":"JustFacepoints",
             "FacepointAdjustmentMode":"None","ShallowBehaviorMode":"None",
@@ -331,7 +347,13 @@ pub fn run(req: &Request, base: &Path, out: &Path) -> Result<Value, MapError> {
     // JSON parsing, topology, stencils, one hydraulic profile and IO copies are
     // conservatively admitted, rather than claiming an OS-enforced RSS limit.
     let planned = (count as u64)
-        .checked_mul(40)
+        .checked_mul(
+            if req.options.render_mode == sloping::RenderMode::WithFaces {
+                56
+            } else {
+                40
+            },
+        )
         .and_then(|v| {
             geometry_bytes
                 .checked_mul(
@@ -371,6 +393,20 @@ pub fn run(req: &Request, base: &Path, out: &Path) -> Result<Value, MapError> {
     }
     let admitted = planned
         .checked_add(
+            if req.options.render_mode == sloping::RenderMode::WithFaces {
+                (terrain.block.0 as u64)
+                    .checked_mul(terrain.block.1 as u64)
+                    .and_then(|v| v.checked_mul(req.threads as u64))
+                    .and_then(|v| v.checked_mul(64))
+                    .ok_or_else(|| {
+                        MapError::Budget("native donation replay tile plan overflow".into())
+                    })?
+            } else {
+                0
+            },
+        )
+        .ok_or_else(|| MapError::Budget("native donation replay plan overflow".into()))?
+        .checked_add(
             terrain
                 .decoder_transient_bytes_per_load()
                 .checked_mul(req.threads as u64)
@@ -381,7 +417,13 @@ pub fn run(req: &Request, base: &Path, out: &Path) -> Result<Value, MapError> {
     // output/work arrays and the existing full geometry/hydraulic allowance.
     // This is planned admission, not an OS-enforced RSS limit.
     let additional = (count as u64)
-        .checked_mul(16)
+        .checked_mul(
+            if req.options.render_mode == sloping::RenderMode::WithFaces {
+                32
+            } else {
+                16
+            },
+        )
         .and_then(|v| {
             geometry_bytes
                 .checked_mul(
@@ -527,6 +569,8 @@ pub fn run(req: &Request, base: &Path, out: &Path) -> Result<Value, MapError> {
             })?;
             report["terrain_prepare_seconds"] = tick.elapsed().as_secs_f64().into();
             let window = sloping::RasterWindow {
+                source_transform: terrain.gt,
+                source_tile: [bw, bh],
                 width,
                 height,
                 transform,
