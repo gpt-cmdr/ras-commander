@@ -110,6 +110,8 @@ delivery on the complete native grid. Compression workers have a separate
 budget and may overlap native workers. GDAL settings are restored on success
 and failure.
 
+## Prepared model contexts across reach requests
+
 For repeated reach requests, use `RasFim.prepare_sloping_model()` as a context
 manager. It retains physical cell polygons/indexing, scope, terrain metadata and
 complete staged mesh/WSE files. Repeated selectors share files. Each request

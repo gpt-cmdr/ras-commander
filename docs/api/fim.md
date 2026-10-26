@@ -260,7 +260,7 @@ A closed context cannot map again. This synchronization does not provide
 cross-context scheduling or combine their memory and worker budgets.
 
 See the [prepared-context evidence](../development/fim-mapping-performance.md#prepared-model-contexts-across-reach-requests)
-for measurements and numerical comparison scope.
+for reuse behavior and numerical comparison scope.
 
 ## Bounded timestep concurrency (engine 0.6)
 
