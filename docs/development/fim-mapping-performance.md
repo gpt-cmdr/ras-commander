@@ -625,8 +625,8 @@ complete images matched raw masks and finite float32 bits:
 
 | Pair | Native RASMapper (s) | Rust, one worker (s) | Rust, four workers (s) | Native / Rust, four workers |
 |---|---:|---:|---:|---:|
-| 1 | 7.42 | 3.87 | 3.39 | 2.19× |
-| 2 | 6.87 | 4.36 | 3.53 | 1.95× |
+| 1 | 8.66 | 4.54 | 3.73 | 2.32× |
+| 2 | 9.37 | 4.07 | 5.13 | 1.83× |
 
 The parent and child processes inherited a four-CPU affinity restriction.
 Rust used the stated bounded pool; its order was reversed for the second pair.
@@ -636,7 +636,11 @@ writes. Terrain preparation, project initialization, reference selection
 and comparison scanning were outside the clocks. Rust template validation
 and delivery were included in the timed API call. There was no postprocessing
 or profile concurrency. Inputs, original rasmap bytes, engine identity and the
-benchmark harness hash were checked and recorded. The results do not establish
+benchmark harness hash were checked and recorded. The benchmark executable hash
+matches the retained Windows wheel. Complete-call four-worker time did not
+consistently beat one worker on this shared host; preparation and file delivery
+also contribute to these timings. Earlier development-wheel measurements are
+retained separately. The results do not establish
 a universal speedup or enhanced-method parity beyond the stated cases.
 
 Set `RAS_COMMANDER_SLOPING_OPTIONS_CASES` to an external JSON list of case
