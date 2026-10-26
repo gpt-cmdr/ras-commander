@@ -417,9 +417,11 @@ class RasFim:
             polygon: Polygon, MultiPolygon, frame or vector file constraint.
             polygon_layer: Layer name for a multi-layer vector file.
             aoi_crs: CRS of the constraint; see :meth:`resolve_aoi`.
-            min_depth: Keep pixels with depth strictly greater than this
-                value, in the input elevation units. Use 0.5 for a half-foot
-                filter only when those units are feet. Filters WSE too.
+            min_depth: Optional strict positive depth cutoff after native
+                visibility, in model elevation units. Zero adds no cutoff.
+                Native visibility uses float32 WSE >= float32(terrain + 0.001),
+                preserving operation order. Positive cutoffs filter both products;
+                0.5 is a half-foot filter only when elevation units are feet.
             backend: "rust" (default) or explicit "numpy" reference arithmetic.
             engine_path: Optional executable path for the Rust backend.
             threads: Rust pixel worker count, 1 through 64.
@@ -458,7 +460,9 @@ class RasFim:
             2D-cell method; it does not reproduce native sloping, 1D or
             structure-specific rendering. Finite input WSE must already
             reflect the caller's cell wet/dry policy. WSE is cast to float32
-            before subtraction, and the depth threshold compares in float32.
+            before native plotting visibility and subtraction. The intrinsic
+            0.001 plotting tolerance is compared in elevation space, not after
+            depth subtraction. Positive optional cutoffs compare in float32.
             Product names are layout conventions, not method identifiers.
         """
         _require_dependencies()
@@ -514,10 +518,12 @@ class RasFim:
         rows = {name: _empty_row(name, "not_run") for name in names}
         details = {
             "method": f"horizontal cell-constant WSE / terrain lattice / {backend}",
-            "method_id": "horizontal-cell-constant/1",
+            "method_id": "horizontal-cell-constant/2",
             "backend": backend,
             "options": {
                 "min_depth": float(min_depth),
+                "native_plot_tolerance": float(np.float32(0.001)),
+                "extra_depth_cutoff": float(min_depth) if min_depth > 0 else None,
                 "max_working_mib": budget,
                 "write_floodplain": bool(write_floodplain),
                 "writer_threads": writer_threads,
@@ -780,9 +786,10 @@ class RasFim:
     ) -> Dict[str, Any]:
         """Compare existing depth/WSE rasters on a physical 2D cell footprint.
 
-        Apply the same strict float32 depth cutoff independently to both
-        products without changing files, generating maps or resampling a
-        reference. Inputs must share a CRS, resolution and integer-offset
+        Positive cutoffs apply the same strict float32 depth filter independently
+        to both products. Zero preserves every valid pixel, including native-valid
+        zero depths. Exact fractions compare float32 bits. Files are not changed;
+        no maps are generated and references are never resampled. Inputs must share a CRS, resolution and integer-offset
         north-up lattice; cells must use that CRS. Missing WSE is counted
         separately from jointly finite WSE differences. Optional terrain
         supplies native implied-terrain residuals. Returns the numerical

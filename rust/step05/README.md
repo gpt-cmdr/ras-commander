@@ -144,3 +144,14 @@ for each admitted slot's arrays and hydraulic state. This is planned admission,
 not an enforced process RSS limit. Python/GDAL allocations are separate.
 Failing or panicking batches abort the session and clean earlier native products.
 The Python adapter additionally removes already delivered GIS products.
+
+
+### Native horizontal plotting visibility (0.7)
+
+`horizontal-cell-constant/2` preserves the native binary32 visibility comparison
+`WSE >= float32(terrain + 0.001)` before subtracting depth. A post-subtraction
+0.001 threshold is not equivalent. `min_depth=0` means no additional depth
+cutoff; positive values retain the optional strict float32 depth filter after
+native visibility. Native-valid zero depths can survive when the elevation
+addition rounds back to terrain. Horizontal method /1 engines are rejected by
+the updated Python adapter. Step05 and sloping arithmetic are unchanged.

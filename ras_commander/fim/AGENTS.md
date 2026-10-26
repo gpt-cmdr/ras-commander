@@ -16,8 +16,10 @@ Parent `ras_commander/AGENTS.md` and root `AGENTS.md` still apply.
   copy; the independent horizontal module has its own method contract and qualification.
 - `map_horizontal_profiles` is a separate, explicit cell-constant method. Rust is the default;
   NumPy is an explicit qualification reference, never a fallback. It uses float32 cell WSE,
-  terrain-lattice ownership and subtraction, with the caller's pixel depth filter applied to
-  depth and WSE. It does not implement native sloping, 1D or structure-specific rendering.
+  terrain-lattice ownership and native float32 visibility WSE >= terrain + 0.001
+  before subtraction. Preserve operation order: a post-subtraction tolerance is
+  not equivalent. Zero min_depth adds no cutoff; positive optional filters apply
+  to depth and WSE after native visibility. Method /2 requires engine0.7 or newer. It does not implement native sloping, 1D or structure-specific rendering.
   Its manifest records `method_id`, `backend`, threshold and grid. Shared product names
   are layout conventions; determine the method from the manifest.
 

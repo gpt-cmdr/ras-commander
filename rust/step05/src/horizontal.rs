@@ -50,8 +50,9 @@ pub struct Profile {
 }
 
 pub fn method_record() -> Value {
-    json!({"method_id":"horizontal-cell-constant/1", "backend":"rust", "stream_outputs":true,
-        "arithmetic":"float32 cell WSE minus float32 terrain; strict float32 depth threshold",
+    json!({"method_id":"horizontal-cell-constant/2", "backend":"rust", "stream_outputs":true,
+        "arithmetic":"native float32 WSE >= terrain + plot tolerance; float32 subtraction; optional strict positive depth cutoff",
+        "native_plot_tolerance":0.001_f32,
         "ownership":"terrio pixel-centre polygons or supplied u32 labels; 0 dry; cell position + 1",
         "native_ownership":true,
         "terrain":"same-CRS north-up square float32 GeoTIFF; native terrio block reads once per window",
@@ -137,7 +138,11 @@ fn evaluate(
             if delta.is_infinite() {
                 return Err(MapError::Invalid("float32 depth overflow".into()));
             }
-            if delta > threshold {
+            // Native visibility compares elevations before subtracting depth.
+            // Replacing this with delta >= 0.001 changes binary32 boundaries.
+            // Zero means no additional cutoff, including native-valid zero
+            // depths when terrain + tolerance rounds back to terrain.
+            if value >= ground[i] + 0.001_f32 && (threshold == 0.0 || delta > threshold) {
                 *d = delta;
                 *w = value;
             }
@@ -468,5 +473,25 @@ mod tests {
         assert!(d[0].is_nan() && d[2].is_nan() && d[3].is_nan() && d[4].is_nan());
         assert_eq!(d[1], 1.);
         assert_eq!(w[1], 101.);
+    }
+
+    #[test]
+    fn native_plot_order_masks_and_retains_binary32_boundary_pixels() {
+        let ground = [1000.0, 1000.0, 100000.0, 10.0];
+        let values = [
+            f32::from_bits(0x447a000f),
+            f32::from_bits(0x447a0010),
+            100000.0,
+            10.0005,
+        ];
+        let mut depth = [f32::NAN; 4];
+        let mut wse = depth;
+        evaluate(&[1, 2, 3, 4], &ground, &values, 0.0, &mut depth, &mut wse).unwrap();
+        assert!(depth[0].is_nan() && wse[0].is_nan());
+        assert_eq!(depth[1].to_bits(), (values[1] - ground[1]).to_bits());
+        assert!(depth[1] < 0.001); // A post-subtraction cutoff would be wrong.
+        assert_eq!(wse[1].to_bits(), values[1].to_bits());
+        assert_eq!(depth[2], 0.0); // Native addition rounds to the terrain.
+        assert!(depth[3].is_nan());
     }
 }

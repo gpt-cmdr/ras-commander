@@ -98,7 +98,7 @@ def main():
     assert engine, "wheel did not install ras2fim-batch on PATH"
     method = json.loads(subprocess.check_output([engine, "method"], text=True))
     assert "step05_r2" in method
-    assert method["horizontal"]["method_id"] == "horizontal-cell-constant/1"
+    assert method["horizontal"]["method_id"] == "horizontal-cell-constant/2"
     assert method["sloping"]["method_id"] == "rasmapper-plain-sloping/1"
     with tempfile.TemporaryDirectory(prefix="ras2fim-wheel-") as tmp:
         root = Path(tmp)

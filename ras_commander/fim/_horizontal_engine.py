@@ -75,11 +75,11 @@ def run_batch(
     method = _engine.engine_method(engine).get("horizontal")
     if (
         not isinstance(method, dict)
-        or method.get("method_id") != "horizontal-cell-constant/1"
+        or method.get("method_id") != "horizontal-cell-constant/2"
         or method.get("stream_outputs") is not True
     ):
         raise FimEngineError(
-            "engine does not support horizontal-cell-constant/1; install the matching wheel"
+            "engine does not support horizontal-cell-constant/2; install the matching wheel"
         )
     if grid.owner is None and method.get("native_ownership") is not True:
         raise FimEngineError(
@@ -215,7 +215,7 @@ def run_batch(
                     or report.get("schema") != "ras2fim-horizontal-report/1"
                     or report.get("status") not in ("complete", "failed")
                     or report.get("window") != request["window"]
-                    or report.get("method", {}).get("method_id") != "horizontal-cell-constant/1"
+                    or report.get("method", {}).get("method_id") != "horizontal-cell-constant/2"
                     or [u.get("id") for u in units] != expected_names
                     or received != expected_names
                     or any(received_statuses.get(u.get("id")) != u.get("status") for u in units)

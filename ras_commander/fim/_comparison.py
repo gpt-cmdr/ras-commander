@@ -64,7 +64,9 @@ def filter_reference(depth_path, wse_path, folder, threshold, writer_threads):
                 window = Window(0, row, d.width, min(128, d.height - row))
                 depth = d.read(1, window=window, masked=True).astype("float32").filled(np.nan)
                 wse = w.read(1, window=window, masked=True).astype("float32").filled(np.nan)
-                keep = np.isfinite(depth) & (depth > np.float32(threshold))
+                keep = np.isfinite(depth)
+                if threshold > 0:
+                    keep &= depth > np.float32(threshold)
                 depth[~keep] = np.nan
                 wse[~keep] = np.nan
                 dd.write(depth, 1, window=window)
@@ -158,8 +160,11 @@ def compare_rasters(
 
             a, b, aw, bw = read(d), read(nd), read(w), read(nw)
             ground = read(gt) if gt is not None else None
-            ca = inside & np.isfinite(a) & (a > threshold)
-            cb = inside & np.isfinite(b) & (b > threshold)
+            ca = inside & np.isfinite(a)
+            cb = inside & np.isfinite(b)
+            if threshold > 0:
+                ca &= a > threshold
+                cb &= b > threshold
             common = ca & cb
             pair = common & np.isfinite(aw) & np.isfinite(bw)
             for key, value in [
@@ -185,8 +190,8 @@ def compare_rasters(
                 terrain_max = max(terrain_max, float(residual.max(initial=0)))
             depth_sum += float(delta.sum())
             wse_sum += float(wd.sum())
-            depth_exact += int((delta == 0).sum())
-            wse_exact += int((wd == 0).sum())
+            depth_exact += int((a[common].view("u4") == b[common].view("u4")).sum())
+            wse_exact += int((aw[pair].view("u4") == bw[pair].view("u4")).sum())
             depth_max = max(depth_max, float(delta.max(initial=0)))
             wse_max = max(wse_max, float(wd.max(initial=0)))
     n = counters["common_wet"]
@@ -319,7 +324,7 @@ def run(
         "min_depth": float(min_depth),
         "effective_float32_threshold": float(np.float32(float(min_depth))),
         "profiles": profiles,
-        "comparison": "same lattice; no reference resampling; strict depth filter independently applied",
+        "comparison": "same lattice; no reference resampling; optional positive depth filter independently applied; zero preserves all valid pixels",
         "scope": "selected 2D cells and AOI; native sloping/1D/structures not qualified",
         "model_scope": scope,
         "postprocess_reference": postprocess_reference,

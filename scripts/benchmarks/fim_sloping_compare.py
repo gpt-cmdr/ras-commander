@@ -84,7 +84,7 @@ def deliver_reference_grid(candidate_path, reference_path, output_path):
     return time.perf_counter() - started
 
 
-def compare_raw(candidate_path, reference_path, cells, aoi=None, *, full_grid=False):
+def compare_raw(candidate_path, reference_path, cells, aoi=None, *, full_grid=False, chunk_rows=None):
     """Compare validity and float32 bits in the physical 2D cell footprint."""
     import rasterio
     from rasterio.features import rasterize
@@ -102,7 +102,16 @@ def compare_raw(candidate_path, reference_path, cells, aoi=None, *, full_grid=Fa
             raise ValueError("Candidate, native reference and cells must share a CRS")
         if candidate.dtypes != ("float32",) or reference.dtypes != ("float32",):
             raise ValueError("Raw sloping qualification requires float32 products")
-        for _, window in candidate.block_windows(1):
+        if chunk_rows is not None:
+            from rasterio.windows import Window
+
+            if isinstance(chunk_rows, bool) or not isinstance(chunk_rows, int) or chunk_rows < 1:
+                raise ValueError("chunk_rows must be a positive integer or None")
+            windows = (Window(0, row, candidate.width, min(chunk_rows, candidate.height-row))
+                       for row in range(0, candidate.height, chunk_rows))
+        else:
+            windows = (window for _, window in candidate.block_windows(1))
+        for window in windows:
             local_transform = transform(window, candidate.transform)
             extent = bounds(window, candidate.transform)
             reference_window = from_bounds(*extent, reference.transform)

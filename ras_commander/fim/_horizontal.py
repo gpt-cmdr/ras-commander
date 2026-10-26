@@ -47,7 +47,9 @@ def plan_grid(
     from rasterio.windows import Window
 
     if len(cells) >= np.iinfo(np.int32).max:
-        raise FimUnsupportedError("horizontal mapping has too many cells for int32 ownership")
+        raise FimUnsupportedError(
+            "horizontal mapping has too many cells for int32 ownership"
+        )
     bounds = cells.total_bounds
     if not np.isfinite(bounds).all():
         raise FimUnsupportedError("horizontal cell coordinates must be finite")
@@ -62,10 +64,13 @@ def plan_grid(
                     "horizontal terrain block exceeds 64 MiB; export tiled terrain"
                 )
             transient = (
-                block_bytes * 4 + ((src.width + bw - 1) // bw) * ((src.height + bh - 1) // bh) * 16
+                block_bytes * 4
+                + ((src.width + bw - 1) // bw) * ((src.height + bh - 1) // bh) * 16
             )
         if src.count != 1 or src.dtypes[0] != "float32":
-            raise FimUnsupportedError("horizontal mapping requires single-band float32 terrain")
+            raise FimUnsupportedError(
+                "horizontal mapping requires single-band float32 terrain"
+            )
         from rasterio.enums import MaskFlags
 
         if any(
@@ -76,9 +81,19 @@ def plan_grid(
                 "horizontal terrain with a dataset/alpha mask is unsupported; export nodata-tagged terrain"
             )
         if src.nodata is None:
-            raise FimUnsupportedError("horizontal terrain must declare its nodata value")
-        if t.b or t.d or t.a <= 0 or t.e >= 0 or not np.isclose(t.a, -t.e, rtol=1e-12, atol=0):
-            raise FimUnsupportedError("horizontal mapping requires north-up square terrain pixels")
+            raise FimUnsupportedError(
+                "horizontal terrain must declare its nodata value"
+            )
+        if (
+            t.b
+            or t.d
+            or t.a <= 0
+            or t.e >= 0
+            or not np.isclose(t.a, -t.e, rtol=1e-12, atol=0)
+        ):
+            raise FimUnsupportedError(
+                "horizontal mapping requires north-up square terrain pixels"
+            )
         if src.crs is None or not _prepare.same_crs(cells.crs, src.crs):
             raise FimUnsupportedError("horizontal cells and terrain must share a CRS")
         crs = _aoi.to_crs(src.crs)
@@ -103,7 +118,9 @@ def plan_grid(
             from rasterio.windows import bounds as window_bounds
 
             positions = np.sort(
-                cells.sindex.query(shapely.box(*window_bounds(window, t)), predicate="intersects")
+                cells.sindex.query(
+                    shapely.box(*window_bounds(window, t)), predicate="intersects"
+                )
             )
             if not len(positions):
                 window = Window(c0, r0, 0, 0)
@@ -111,16 +128,22 @@ def plan_grid(
     # arithmetic, float32 products and masks. Raster-library caches and
     # polygonization are not a hard process-RSS limit.
     pixels = int(window.width * window.height)
-    planned = pixels * 40 + len(positions) * 64 + (64 << 20) + transient if pixels else 0
+    planned = (
+        pixels * 40 + len(positions) * 64 + (64 << 20) + transient if pixels else 0
+    )
     transport = 0
     if native and pixels:
         # Bound framed 2D WKB plus decoded geometry/terrio shape storage before allocation.
         geoms = cells.geometry.iloc[positions].to_numpy()
-        transport = int(shapely.get_num_coordinates(geoms).sum()) * 16 + len(geoms) * 128
+        transport = (
+            int(shapely.get_num_coordinates(geoms).sum()) * 16 + len(geoms) * 128
+        )
         transport += int(shapely.get_num_interior_rings(geoms).sum()) * 4
         if shape is not None:
             parts = shapely.get_parts(shape)
-            transport += int(shapely.get_num_coordinates(parts).sum()) * 16 + len(parts) * 128
+            transport += (
+                int(shapely.get_num_coordinates(parts).sum()) * 16 + len(parts) * 128
+            )
             transport += int(shapely.get_num_interior_rings(parts).sum()) * 4
         planned += transport * 12
     if planned > max_working_mib * (1 << 20):
@@ -163,7 +186,9 @@ def prepare_grid(
         or shapely.is_empty(geometries).any()
         or not shapely.is_valid(geometries).all()
     ):
-        raise FimUnsupportedError("horizontal mapping requires valid, non-empty cell Polygons")
+        raise FimUnsupportedError(
+            "horizontal mapping requires valid, non-empty cell Polygons"
+        )
     # Reject positive-area overlaps: choosing a cell silently would replace
     # one hydraulic value with another. Shared edges are permitted.
     # Query one cell at a time: coincident geometries must not allocate an
@@ -208,7 +233,9 @@ def prepare_grid(
             else np.empty((0, 0), dtype=np.float32)
         )
         if np.isinf(ground).any():
-            raise FimUnsupportedError("horizontal terrain contains unmasked infinite values")
+            raise FimUnsupportedError(
+                "horizontal terrain contains unmasked infinite values"
+            )
         owner = rasterize(
             ((g, i + 1) for i, g in enumerate(cells.geometry)),
             out_shape=plan.shape,
@@ -240,11 +267,21 @@ def render(grid: HorizontalGrid, values: np.ndarray, min_depth: float):
         raise FimUnsupportedError(
             "horizontal WSE values must be finite float32-range values or NaN"
         )
-    table = np.concatenate((np.array([np.nan], dtype=np.float32), values.astype(np.float32)))
+    table = np.concatenate(
+        (np.array([np.nan], dtype=np.float32), values.astype(np.float32))
+    )
     wse = table[grid.owner]
     with np.errstate(over="raise", invalid="ignore"):
         depth = wse - grid.ground
-    keep = np.isfinite(grid.ground) & np.isfinite(depth) & (depth > min_depth)
+    # Match native binary32 addition/comparison before optional postprocessing.
+    # A depth-only 0.001 cutoff is not equivalent at float32 boundaries.
+    keep = (
+        np.isfinite(grid.ground)
+        & np.isfinite(depth)
+        & (wse >= np.add(grid.ground, np.float32(0.001), dtype=np.float32))
+    )
+    if min_depth > 0:
+        keep &= depth > np.float32(min_depth)
     depth[~keep] = np.nan
     wse[~keep] = np.nan
     return depth, wse
