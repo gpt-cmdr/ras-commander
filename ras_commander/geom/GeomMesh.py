@@ -2404,6 +2404,13 @@ def _recompile_geometry_hdf_via_rasexe(
     plan_number = _find_plan_for_geometry(geom_text_path, ras_object=ras_object)
     from .GeomPreprocessor import GeomPreprocessor
 
+    allocation = os.environ.get("SLURM_CPUS_PER_TASK", "")
+    workers = (
+        int(allocation)
+        if allocation.isascii() and allocation.isdigit() and int(allocation) > 0
+        else 1
+    )
+
     logger.info(
         f"Refreshing compiled geometry HDF for {geom_text_path.name} "
         f"through Ras.exe using plan p{plan_number}"
@@ -2415,6 +2422,7 @@ def _recompile_geometry_hdf_via_rasexe(
         force=True,
         geometry_only=True,
         require_complete_products=require_complete_products,
+        native_worker_threads=workers,
     )
     if not preprocess_result.success:
         raise RuntimeError(
