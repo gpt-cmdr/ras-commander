@@ -1,29 +1,16 @@
 {
   "build_repository": "gpt-cmdr/ras-commander",
-  "source_commit": "ddc6d182eccbe402a3baddb93b1a45a74ffbb4ef",
-  "workflow_run": "https://github.com/gpt-cmdr/ras-commander/actions/runs/40191671185",
+  "source_commit": "b2bb240719450423bfc3cb117ef6ac7b1c79e3e9",
+  "workflow_run": null,
+  "built_utc": "2026-10-26T02:00:37.714426+00:00",
   "rust": "1.99.1",
   "maturin": "1.15.0",
-  "engine_version": "0.3.0",
+  "engine_version": "0.4.0",
   "engine_source_files_sha256": {
-    "Cargo.lock": "2463a056e976cd87fc4d11655b200ef50b28b4e2f7f3bde63608295e1553ebea",
-    "Cargo.toml": "1eb3882ed41c4cf4c6c3e6704cf47131f52d8d6d872cf3144aa4500a68542433",
-    "pyproject.toml": "4102bd4be755c55c4038af710c3407fd2a2017108d71ea27819e40563433b94a",
-    "src/cache.rs": "67fe5979291828d50f97fd121a0fffd68017eaab3fbc0ba2472f35256ac5d59c",
-    "src/horizontal.rs": "29504583e6a76c55610349ee177709a1ba7d19e540564e4fd96028efaee2b812",
-    "src/interp.rs": "1be2beb6d6d0bd622f5f3fcf410be32490a8e22bbda2aa6b9bd483a37a567575",
-    "src/lib.rs": "70b30dd826f3ac3aff3dbced252a7602e186fe7f5d0a78304ba5a86580dbacdc",
-    "src/main.rs": "4ec34230d69004817260d4ceb221f982f6a201d22720f105efc01ab450923639",
-    "src/model.rs": "2454206dcabbbb65569d538977736cb5af83894133bc1786255e278b75681bbc",
-    "src/scipy_interp.rs": "8eedf291604c84faced5690da232f5d51a76658549326433b636e35a48a78e92",
-    "src/session.rs": "fb9a9e1b667c5dbf9a7b32404752550bda66cd79ee8b4a73f9901c2db3b16c54",
-    "src/sink.rs": "a6888e88a32a9ae15bf3ba4979deff5be528ff5ad7a180e3e5591341dc5dde7d",
-    "src/step05.rs": "a6a3cfa98b40e697bba88a84a151afd7c688192553ca8b47654786f63a954d52",
-    "src/terrain.rs": "66e7a32fb51cfb9e8803580d53630ee85327e52a21231399e9c98f0b4bd0b4cc",
-    "tests/hardening.rs": "c47f0cd24fce4fe5afd0514ff7857d8e51b362492e0eb43ec8d7070159b3bf20",
-    "tests/live_binary.rs": "d00846473760808dd2b1eefdc3097ab23762829f251f80f7a78a0a140d18b0af",
-    "tests/live_step05.rs": "d702ab7035c6b401e70cebfc181b1cdfdd435f52431e834a6a60c595feaa3979",
-    "src/ownership.rs": "1cc6ba0eb752632e1b584caf09c972b38f135d210fc57bbfa7abe1c57d2a53c8",
+    "Cargo.lock": "2624859be0289989a209029573e9c78133ef2dd3726de37d6431fc7db7bd60ac",
+    "Cargo.toml": "ee0e6dea216984b786d7b7725af13c33a6830f495762e276cc5b104ae5e5343b",
+    "examples/sloping_components.rs": "5c1e75416901473177591ecebeaf25a2832f27d7e2029f74605a2dcad379c2c9",
+    "examples/sloping_raster.rs": "d3ff36fb2d71d3a3abfb6c211af0bed3e7f790671d4c4a82e17f6d0140cf72e8",
     "licenses/ras2fim-LICENSE.txt": "2c3d48c634b0a524b09e7eedc8de9e9b321dd000577ac433a7af546cae20770c",
     "licenses/scipy-LICENSE.txt": "221e59f5e910fd7f94e44f0dac77436a11338c285c6346232e4a850a50da0e94",
     "licenses/terrio-LICENSE.txt": "8c1ec2eadbee4b5a632b49679a177e02ed980079435a73449045aca3f2e7651e",
@@ -31,12 +18,39 @@
     "licenses/wbraster-LICENSE-MIT.txt": "b3f690015a0a92922cafb40143f1642ce1712c3a44b7c6a96422c9a890956145",
     "licenses/wbvector-LICENSE-APACHE.txt": "d932025956695b7f7a6be243fe01294075bc75b18bb4a6f41922c4eba9aaacd7",
     "licenses/wbvector-LICENSE-MIT.txt": "b3f690015a0a92922cafb40143f1642ce1712c3a44b7c6a96422c9a890956145",
-    "README.md": "4c25e361f44ea0a6904a0eb58008167d8783468e2685a9fc686364ed0dc7b9c9",
-    "THIRD_PARTY_NOTICES.md": "605905225fa9d611f0c5163d22a6497505eb287c7f4bdd5309b73999a441e1b3"
+    "pyproject.toml": "1c4d5bcdd2d8a4a59439588620eb3e1349c29525427e8ef31d0537beac162588",
+    "README.md": "643e17bde9675d97ba199fb5e2d63866510db3f742b8f525a2d1c8f42ba8f78f",
+    "src/cache.rs": "67fe5979291828d50f97fd121a0fffd68017eaab3fbc0ba2472f35256ac5d59c",
+    "src/horizontal.rs": "c573f5c4dd231f7cd2ba46342d412f596d07de00a641e81717fb99c2ac092948",
+    "src/interp.rs": "1be2beb6d6d0bd622f5f3fcf410be32490a8e22bbda2aa6b9bd483a37a567575",
+    "src/lib.rs": "a6566deadaf053413e39912e971f5a7b21ceed0342b908b5185f170135aa8888",
+    "src/main.rs": "c795abddaccfd459afba5a4250c6de5eb87187cfa0b970009a93e830c9afcaa7",
+    "src/model.rs": "2454206dcabbbb65569d538977736cb5af83894133bc1786255e278b75681bbc",
+    "src/ownership.rs": "c5a1c390be1fc72d2c1b0ae26e61f61186b29db81b19f8b839aa8e3c95b690a6",
+    "src/scipy_interp.rs": "8eedf291604c84faced5690da232f5d51a76658549326433b636e35a48a78e92",
+    "src/session.rs": "fb9a9e1b667c5dbf9a7b32404752550bda66cd79ee8b4a73f9901c2db3b16c54",
+    "src/sink.rs": "a6888e88a32a9ae15bf3ba4979deff5be528ff5ad7a180e3e5591341dc5dde7d",
+    "src/sloping.rs": "1237650327a7a857548ba88be8ba4ae19ee92bd832c0777580ed41b03f5f8227",
+    "src/sloping_binary.rs": "f6b08ab432627b189d234544de4c954cd68ca500a057da02ec368440ecc7912d",
+    "src/sloping_session.rs": "5c2d8581f61ade99ed6979457d369d6149703a96f16f6bed214f42c6440b1c3e",
+    "src/step05.rs": "a6a3cfa98b40e697bba88a84a151afd7c688192553ca8b47654786f63a954d52",
+    "src/terrain.rs": "66e7a32fb51cfb9e8803580d53630ee85327e52a21231399e9c98f0b4bd0b4cc",
+    "tests/hardening.rs": "c47f0cd24fce4fe5afd0514ff7857d8e51b362492e0eb43ec8d7070159b3bf20",
+    "tests/live_binary.rs": "d00846473760808dd2b1eefdc3097ab23762829f251f80f7a78a0a140d18b0af",
+    "tests/live_step05.rs": "d702ab7035c6b401e70cebfc181b1cdfdd435f52431e834a6a60c595feaa3979",
+    "THIRD_PARTY_NOTICES.md": "01d5629712b42a450b18638fe2f366b4ae89498fd88aa490614b29f48a528bb4"
   },
   "artifact_sha256": {
-    "ras2fim_engine-0.3.0-py3-none-manylinux_2_28_x86_64.whl": "cf3e6e6c984780fb44d3d6ca5d8cbecc4d48a11b9024c3d88ec87d5e2e713408",
-    "ras2fim_engine-0.3.0-py3-none-win_amd64.whl": "c54e7be5aecfc323423b6699abde066513cd0cd03d801acdf965334ac396d398"
+    "ras2fim_engine-0.4.0-py3-none-manylinux_2_28_x86_64.whl": "aa27231e6a295ea48c45ad02e81ee9b7d6a75426c7f8734dff01c029a1281847",
+    "ras2fim_engine-0.4.0-py3-none-win_amd64.whl": "75629653ae1218a6bfef4adf2e3c2983a69fe2710455426c8f686464f5f81f2d"
   },
-  "tests": "Both platform build jobs passed installed Step05/horizontal file-and-stream smoke tests and 49 engine-backed horizontal tests, including no-GDAL native ownership/masks, holes, multipart AOIs, and 1/4/8 workers. Rust suites: Linux 46 passed / 5 ignored; Windows 45 passed / 5 ignored. The retained-artifact check in this source-build run still compared previous 0.2 wheels; it is checked again after retaining these 0.3 wheels. Real-model corpus/performance evidence is recorded separately."
+  "engine_binary_sha256": {
+    "ras2fim_engine-0.4.0-py3-none-manylinux_2_28_x86_64.whl": "c6c085fd1aa998f0646637743b8b190c6af7908b75fc4fd98c84630934af8abf",
+    "ras2fim_engine-0.4.0-py3-none-win_amd64.whl": "e17416afc43c2efcd11cab26c12511640f8edaab72f35a5bf730277c24881c60"
+  },
+  "build_environment": {
+    "linux": "quay.io/pypa/manylinux_2_28_x86_64@sha256:e2808351a165aa85913d79f1f8457b4f6d74047b47fba07b5b9a5e6c0055a017; CPython 3.13; glibc 2.28",
+    "windows": "WSL cross build x86_64-pc-windows-gnu; MinGW GCC 13.2; -C target-feature=+crt-static; Windows system DLL imports only"
+  },
+  "tests": "Installed wheels: Step05/horizontal/plain-sloping file and stream/AOI smoke PASS on Windows and Linux; Linux smoke additionally PASS inside glibc 2.28 container with NumPy 2.3.5, SciPy 1.16.3 and rasterio 1.4.4. Each installed wheel passes eight real-Davis API checks (Max/two changing timesteps at 1/4 workers, invalid selector, missing unused Max summary, invalid header/report abort cleanup, empty metadata-only template grid, template nodata collision cleanup). Horizontal installed-engine tests: 69 passed on each platform. Native 7.0.1 five-model corpus and performance evidence are documented separately; eBFE comparisons are bounded. Rust all-target tests: 50 passed, 5 external-fixture tests ignored; clippy all-targets -D warnings passed. Real-corpus source-build qualification used the same mathematical implementation before package-version/usage-text updates."
 }

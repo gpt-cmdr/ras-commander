@@ -2,7 +2,7 @@
 
 `RasFim` maps water-surface elevation (WSE) profiles defined on HEC-RAS 2D
 cells to depth and WSE rasters with either the ras2fim-2D Step 05 method or
-the horizontal method below. It maps a
+the horizontal or experimental plain-sloping methods below. It maps a
 batch of profiles against one shared terrain, accepts a bounding box or a
 polygon area of interest (AOI), and returns a product manifest DataFrame.
 
@@ -120,7 +120,7 @@ terrain blocks through terrio and reuses the decoded window. The native engine
 also rasterizes the validated cells and polygon AOI through terrio, preserving
 pixel-centre inclusion and feature order; Python writes final GIS products. It avoids convex
 hulls, Delaunay triangulation and full-grid reprojection lookups. The Rust
-backend is the default and requires the 0.3 engine wheel. The explicit
+backend is the default and requires a 0.3 or newer engine wheel. The explicit
 `backend="numpy"` reference backend is retained for numerical qualification;
 there is no automatic fallback.
 
