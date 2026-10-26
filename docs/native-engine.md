@@ -78,7 +78,7 @@ repository,
 [gpt-cmdr/ras-commander-fast-hdf](https://github.com/gpt-cmdr/ras-commander-fast-hdf),
 and published on PyPI as `ras-commander-fast-hdf` (and, from 0.2.0, on
 crates.io as a Rust crate of the same name). ras-commander 0.107.1 and later
-list it as a core dependency (0.108.0 and later: `>=0.2,<0.3`), limited by an environment marker to the
+list it as a core dependency (0.108.0 and later: `>=0.2,<0.3`; 0.109.0 and later: `>=0.2.3,<0.3`), limited by an environment marker to the
 platforms that have wheels, so the normal install is enough:
 
 ```bash
@@ -406,7 +406,7 @@ Shapely object per row. Each mesh's face lines are packed into coordinate and
 offset buffers and turned into lines by one `shapely.from_ragged_array` call;
 cell-center points use one `shapely.points` call. In `auto` and `native`
 mode the native engine builds the face-line buffers
-(`HdfSession.read_mesh_face_lines`, ras-commander-fast-hdf after 0.2.2); with
+(`HdfSession.read_mesh_face_lines`, ras-commander-fast-hdf 0.2.3 and later); with
 h5py, or an older extension, NumPy builds the same buffers. A layout that
 neither builder can prove identical to the per-face loop (for example a
 negative endpoint index, an out-of-range perimeter span or a non-finite
@@ -417,7 +417,10 @@ and `native` mode. The fast output is still the faster of the two, because it
 builds no geometry at all.
 
 Timings for both outputs after this change have not yet been measured on a
-quiet machine; they will be added here. The earlier figures for the fast
+quiet machine; they will be added here. Indicative only (a development
+measurement, not the quiet release benchmark): on BaldEagleDamBrk p07 (177,301
+faces) the convenient `get_mesh_max_face_v` call took about 1,760 ms before
+this change and about 290 ms after, in `h5py`, `auto` and `native` mode alike. The earlier figures for the fast
 output are on the extension's
 [Performance](https://rascommander.info/fasthdf/performance/#tables-without-geometry)
 page (`get_mesh_max_face_v` on 177,301 faces: 1,642 ms convenient, 34 ms fast,
@@ -639,7 +642,7 @@ first.
 |---|---|
 | Engine | `ras-commander-fast-hdf` crate 0.2.0 ([crates.io](https://crates.io/crates/ras-commander-fast-hdf); source in [gpt-cmdr/ras-commander-fast-hdf](https://github.com/gpt-cmdr/ras-commander-fast-hdf)), engine API 10 |
 | Bridge | Python package `ras-commander-fast-hdf` 0.2.0 (module `ras_commander_fast_hdf`), `API_VERSION` 11, text API 1, features `catalog, hdf, mesh, results`, `ENGINE_COMMIT` = the commit of tag `v0.2.0` |
-| ras-commander | 0.108.0 and later require `ras-commander-fast-hdf>=0.2,<0.3` and bridge API 11 |
+| ras-commander | 0.108.0 and later require `ras-commander-fast-hdf>=0.2,<0.3` and bridge API 11; 0.109.0 and later require `>=0.2.3,<0.3` |
 | Wheels | On PyPI: Windows `cp310-abi3-win_amd64`, Linux `cp310-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64` and `cp310-abi3-musllinux_1_2_x86_64`, macOS `cp310-abi3-macosx_11_0_arm64` (not yet qualified); source distribution |
 
 `ENGINE_COMMIT` is the commit of the ras-commander-fast-hdf repository the

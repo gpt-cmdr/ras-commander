@@ -7,7 +7,67 @@ check `ras_commander.__version__` and the documentation's
 [build provenance](https://rascommander.info/ras/version.json). A package version
 alone does not identify a development checkout.
 
-### Unreleased
+### v0.109.0 (October 2026)
+
+**Native engine 0.2.3 required**
+
+ras-commander now requires `ras-commander-fast-hdf>=0.2.3,<0.3` (bridge API
+11, unchanged). Engine 0.2.3 adds the two native reads used below: mesh corner
+ground elevations and mesh face lines as packed buffers. Both are detected at
+run time, so an older 0.2.x engine still works and those two reads fall back
+to h5py/NumPy.
+
+Qualified with the release equivalence gate on Windows (pandas 2.3.2, numpy
+2.3.3, h5py 3.14.0) against today's previous `main` with engine 0.2.2: every
+stage has the same pass and skip counts, except route 2, which gains the 140
+new corner-elevation cases (13,057 tests, previously 12,917). No result,
+outcome or refusal changed in any of the 28,447 compared records. 190 records
+read differently and give identical results: the face-line readers read the
+packed face lines, and `FacePoints Elevation` is now read through the new
+typed family.
+
+**Mesh corner elevations: what was qualified.** Both stored layouts are read.
+The RASMapper mapping cache was qualified on two caches that RASMapper 7.0.1
+copied from an existing `FacePoints Elevation` (Muncie p03,
+BaldEagleCrkMulti2D p15). It was also checked on one cache that RASMapper
+7.0.1 computed from terrain because the geometry lacks the dataset: the
+HEC-RAS 6.6 Davis example, plan p02, which has 2,851 and 25 corners.
+`get_mesh_corner_elevations` reads that cache natively, bit-identical to h5py,
+with the plan's corner counts. When the cache's terrain date differs from the
+date the mesh was preprocessed against, the result is reported as `"stale"`
+with no values, in both backends. The maintainer's own Davis/Bald Eagle caches
+and the Spring River/Spring Creek projects were not available for this check.
+
+**Rust sloping FIM mapping (`RasFim.map_sloping_profiles`)**
+
+`RasFim.map_sloping_profiles()` maps depth and water-surface rasters with the
+optional Rust mapping engine using RASMapper's Sloping (Cell Corners)
+interpolation; plain sloping is the default, and unweighted Cell Corners + Cell
+Faces and shallow-to-horizontal selection are explicit options.
+`RasFim.prepare_sloping_model()` keeps staged inputs for repeated reach
+requests. The horizontal method now applies native binary32
+`WSE >= float32(terrain + 0.001)` before depth subtraction, fixing pixel
+visibility at the plotting tolerance. Mapping is physical-2D only and needs no
+HEC-RAS installation. The optional FIM engine wheels are not published to PyPI.
+See [FIM API](../api/fim.md).
+
+**`RasProcess.store_maps` accepts sloping render-mode flags**
+
+`RasProcess.store_maps` and `store_maps_at_steady_profiles` now accept
+`render_mode="slopingPretty:a:b"` (for example `"slopingPretty:true:true"`)
+and a dict such as `{"mode": "slopingPretty", "use_depth_weighted_faces": True}`.
+Before, these raised `ValueError` or `AttributeError` before any map was made.
+The mode is validated before the `.rasmap` is written, and its
+`ReduceShallowToHorizontal` and `UseDepthWeightedFaces` settings now match the
+mode that is rendered. Plain mode names behave as before.
+
+**Known open item: the `"sloped"` alias**
+
+`RasMap.set_water_surface_render_mode` treats `"sloped"` as `slopingPretty`,
+but `normalize_store_map_render_mode` treats it as `sloping`, so
+`store_maps(render_mode="sloped")` writes `slopingPretty` to the `.rasmap`
+while the helper renders `sloping`. This is unchanged and awaits a maintainer
+decision; pass `"slopingPretty"` or `"sloping"` explicitly.
 
 **Mesh corner ground elevations**
 
@@ -29,7 +89,7 @@ ras-commander-fast-hdf 0.2.3; with 0.2.2 `auto` uses h5py. See
 - `HdfMesh.get_mesh_cell_faces` builds all face lines of a mesh in one
   `shapely.from_ragged_array` call from packed coordinate buffers instead of
   one `LineString` per face. The buffers come from the native engine
-  (`HdfSession.read_mesh_face_lines`, ras-commander-fast-hdf after 0.2.2) in
+  (`HdfSession.read_mesh_face_lines`, ras-commander-fast-hdf 0.2.3 and later) in
   `auto` and `native` mode, or from NumPy with h5py or an older extension.
   The geometry is identical (WKB, coordinate order, validity); layouts that
   neither builder can prove keep the per-face loop. Face results with
