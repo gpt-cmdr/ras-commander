@@ -1,4 +1,4 @@
-//! Explicit plain-sloping batch path. Geometry, terrain and ownership are shared
+//! Explicit sloping batch path with independently selected native rendering controls. Geometry, terrain and ownership are shared
 //! across profiles; hydraulic connectivity is reconstructed for every profile.
 use crate::{
     MapError,
@@ -18,6 +18,8 @@ pub const SCHEMA: &str = "ras-commander-sloping-request/1";
 #[serde(deny_unknown_fields)]
 pub struct Request {
     pub schema: String,
+    #[serde(default)]
+    pub options: sloping::Options,
     pub terrain: String,
     pub epsg: u32,
     pub crs_identity: CrsIdentity,
@@ -44,6 +46,8 @@ pub struct Profile {
 
 #[derive(Deserialize)]
 pub struct Geometry {
+    #[serde(default)]
+    pub vertex_elevations: Option<Vec<f32>>,
     pub cells: Vec<InputCell>,
     pub faces: Vec<InputFace>,
     pub vertices: Vec<InputVertex>,
@@ -128,7 +132,10 @@ impl Geometry {
             .iter()
             .map(|c| c.faces.clone())
             .collect::<Vec<_>>();
-        let stencils = sloping::prepare_stencils(&mesh, &cell_faces)?;
+        let mut stencils = sloping::prepare_stencils(&mesh, &cell_faces)?;
+        if let Some(elevations) = &self.vertex_elevations {
+            sloping::set_vertex_elevations(&mut stencils, elevations, mesh.corners.len())?;
+        }
         Ok((mesh, stencils))
     }
 }
@@ -136,12 +143,30 @@ impl Geometry {
 pub fn method_record() -> Value {
     json!({"method_id":"rasmapper-plain-sloping/1", "backend":"rust", "experimental":true,
         "native_version_qualified":"7.0.1", "stream_outputs":true, "native_ownership":true,
+        "enhanced_options":true,"enhanced_method_id":"rasmapper-sloping-with-faces/1",
         "options":{"CellRenderMode":"Sloping","CellStencilMode":"JustFacepoints",
             "FacepointAdjustmentMode":"None","ShallowBehaviorMode":"None",
             "UseDepthWeightedFaces":false,"FaceWSMode":"Adjusted"},
         "native_plot_tolerance":0.001_f32,"extra_depth_cutoff":null,
         "scope":"2D cells; plain cell-corner sloping; no 1D, slopingPretty or additional rendering options",
         "reuse":"geometry, terrio ownership and terrain prepared once; bounded Rayon pixel and reconstruction workers"})
+}
+
+fn selected_method(options: sloping::Options) -> Value {
+    let mut record = method_record();
+    if options.render_mode == sloping::RenderMode::WithFaces {
+        record["method_id"] = "rasmapper-sloping-with-faces/1".into();
+        record["options"]["CellStencilMode"] = "WithFaces".into();
+        record["options"]["ShallowBehaviorMode"] = if options.reduce_shallow_to_horizontal {
+            "ReduceToHorizontal"
+        } else {
+            "None"
+        }
+        .into();
+        record["options"]["UseDepthWeightedFaces"] = options.use_depth_weighted_faces.into();
+        record["scope"] = "physical 2D cells; cell-corner and face sloping; no 1D or standalone storage-area surfaces".into();
+    }
+    record
 }
 
 fn values(path: &Path, count: usize) -> Result<Vec<f32>, MapError> {
@@ -170,6 +195,7 @@ fn values(path: &Path, count: usize) -> Result<Vec<f32>, MapError> {
 }
 
 pub fn run(req: &Request, base: &Path, out: &Path) -> Result<Value, MapError> {
+    req.options.validate()?;
     let started = Instant::now();
     let [col, row, width, height] = req.window;
     let count = width
@@ -222,7 +248,13 @@ pub fn run(req: &Request, base: &Path, out: &Path) -> Result<Value, MapError> {
         .checked_mul(40)
         .and_then(|v| {
             geometry_bytes
-                .checked_mul(16)
+                .checked_mul(
+                    if req.options.render_mode == sloping::RenderMode::WithFaces {
+                        20
+                    } else {
+                        16
+                    },
+                )
                 .and_then(|g| v.checked_add(g))
         })
         .and_then(|v| v.checked_add(cache))
@@ -265,7 +297,7 @@ pub fn run(req: &Request, base: &Path, out: &Path) -> Result<Value, MapError> {
         ));
     }
     fs::create_dir(out)?;
-    let mut report = json!({"schema":"ras-commander-sloping-report/1","status":"in_progress", "method":method_record(),
+    let mut report = json!({"schema":"ras-commander-sloping-report/1","status":"in_progress", "method":selected_method(req.options),
         "threads":req.threads,"window":req.window,"planned_bytes":admitted,"profiles":[]});
     sink::write_json(&out.join("report.json"), &report)?;
     let execution = std::panic::catch_unwind(std::panic::AssertUnwindSafe(
@@ -400,12 +432,13 @@ pub fn run(req: &Request, base: &Path, out: &Path) -> Result<Value, MapError> {
                 for ((mesh, stencil), filename) in
                     meshes.iter().zip(&stencils).zip(&profile.values_files)
                 {
-                    prepared.push(sloping::prepare_profile(
+                    prepared.push(sloping::prepare_profile_with_options(
                         mesh,
                         stencil,
                         &values(&model::resolve(base, filename), mesh.cells.len())?,
                         0.001,
                         &pool,
+                        req.options,
                     )?);
                 }
                 let hydraulic_seconds = tick.elapsed().as_secs_f64();

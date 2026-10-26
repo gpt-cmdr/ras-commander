@@ -1,4 +1,4 @@
-//! Experimental plain-sloping reconstruction. Native qualification is stage-specific.
+//! Experimental sloping reconstruction. Native qualification is stage-specific.
 //!
 //! Topology is immutable; hydraulic connectivity and corner arcs are rebuilt for each
 //! profile. A supplied Rayon pool bounds parallel work without changing summation order.
@@ -6,6 +6,38 @@
 
 use crate::MapError;
 use rayon::prelude::*;
+
+/// User-visible RAS Mapper sloping controls. Internal experimental modes are excluded.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, serde::Deserialize, serde::Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct Options {
+    #[serde(default)]
+    pub render_mode: RenderMode,
+    #[serde(default)]
+    pub reduce_shallow_to_horizontal: bool,
+    #[serde(default)]
+    pub use_depth_weighted_faces: bool,
+}
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, serde::Deserialize, serde::Serialize)]
+pub enum RenderMode {
+    #[default]
+    #[serde(rename = "sloping")]
+    Corners,
+    #[serde(rename = "slopingPretty")]
+    WithFaces,
+}
+impl Options {
+    pub fn validate(self) -> Result<(), MapError> {
+        if self.render_mode == RenderMode::Corners
+            && (self.reduce_shallow_to_horizontal || self.use_depth_weighted_faces)
+        {
+            return Err(MapError::Invalid(
+                "shallow and depth-weighted controls require slopingPretty".into(),
+            ));
+        }
+        Ok(())
+    }
+}
 
 pub const NODATA: f32 = -9999.0;
 
@@ -442,6 +474,9 @@ pub struct WeightScratch {
     cross: Vec<f32>,
     products: Vec<f64>,
     weights: Vec<f32>,
+    donated: Vec<f32>,
+    clockwise: Vec<f32>,
+    counterclockwise: Vec<f32>,
 }
 
 fn cross(a: [f64; 2], b: [f64; 2], c: [f64; 2]) -> f64 {
@@ -458,6 +493,9 @@ impl WeightScratch {
             cross: vec![0.0; vertices],
             products: vec![0.0; vertices],
             weights: vec![0.0; vertices],
+            donated: vec![0.0; 2 * vertices],
+            clockwise: vec![0.0; vertices],
+            counterclockwise: vec![0.0; vertices],
         }
     }
 
@@ -465,6 +503,9 @@ impl WeightScratch {
         self.cross.resize(vertices, 0.0);
         self.products.resize(vertices, 0.0);
         self.weights.resize(vertices, 0.0);
+        self.donated.resize(2 * vertices, 0.0);
+        self.clockwise.resize(vertices, 0.0);
+        self.counterclockwise.resize(vertices, 0.0);
     }
 }
 
@@ -649,6 +690,8 @@ pub struct CellStencil {
     polygon: PolygonStencil,
     square: Option<[f64; 4]>,
     corners: Vec<[usize; 2]>, // vertex, incident-face slot
+    faces: Vec<[usize; 2]>,   // face, cell side
+    elevations: Option<Vec<f32>>,
 }
 
 /// Prepare immutable geometry once. Profiles never determine ring ordering.
@@ -697,14 +740,46 @@ pub fn prepare_stencils(
                 polygon,
                 square,
                 corners,
+                faces: faces
+                    .iter()
+                    .map(|&id| [id, usize::from(mesh.faces[id].cells[0] != cell)])
+                    .collect(),
+                elevations: None,
             }))
         })
         .collect()
 }
 
+/// Optional native stored corner elevations, required only for depth weighting.
+pub fn set_vertex_elevations(
+    stencils: &mut [Option<CellStencil>],
+    elevations: &[f32],
+    vertex_count: usize,
+) -> Result<(), MapError> {
+    if elevations.len() != vertex_count || elevations.iter().any(|x| !x.is_finite()) {
+        return Err(MapError::Invalid(
+            "sloping corner elevation dimensions or values invalid".into(),
+        ));
+    }
+    for stencil in stencils.iter_mut().flatten() {
+        stencil.elevations = Some(
+            stencil
+                .corners
+                .iter()
+                .map(|&[vertex, _]| elevations[vertex])
+                .collect(),
+        );
+    }
+    Ok(())
+}
+
 pub struct PreparedProfile {
     local_values: Vec<Vec<f32>>,
+    face_values: Vec<Vec<f32>>,
+    depth_weights: Vec<Vec<f32>>,
+    horizontal: Vec<Option<f32>>,
     wet: Vec<bool>,
+    options: Options,
 }
 
 pub fn prepare_profile(
@@ -714,19 +789,97 @@ pub fn prepare_profile(
     tolerance: f32,
     pool: &rayon::ThreadPool,
 ) -> Result<PreparedProfile, MapError> {
+    prepare_profile_with_options(mesh, stencils, values, tolerance, pool, Options::default())
+}
+
+pub fn prepare_profile_with_options(
+    mesh: &Mesh,
+    stencils: &[Option<CellStencil>],
+    values: &[f32],
+    tolerance: f32,
+    pool: &rayon::ThreadPool,
+    options: Options,
+) -> Result<PreparedProfile, MapError> {
+    options.validate()?;
     if stencils.len() != mesh.cells.len() {
         return Err(MapError::Invalid("sloping stencil count mismatch".into()));
     }
+    if options.use_depth_weighted_faces && stencils.iter().flatten().any(|s| s.elevations.is_none())
+    {
+        return Err(MapError::Unsupported(
+            "depth weighting requires stored native FacePoints Elevation".into(),
+        ));
+    }
     let reconstructed = mesh.reconstruct(values, tolerance, pool)?;
-    let local_values = stencils
+    let local_values: Vec<Vec<f32>> = pool.install(|| {
+        stencils
+            .par_iter()
+            .map(|s| match s {
+                Some(s) => s
+                    .corners
+                    .iter()
+                    .map(|&[vertex, slot]| reconstructed.corners[vertex][slot])
+                    .collect(),
+                None => Vec::new(),
+            })
+            .collect()
+    });
+    let face_values: Vec<Vec<f32>> = if options.render_mode == RenderMode::WithFaces {
+        pool.install(|| {
+            stencils
+                .par_iter()
+                .map(|s| match s {
+                    Some(s) => s
+                        .faces
+                        .iter()
+                        .map(|&[face, side]| reconstructed.faces[face].values[side])
+                        .collect(),
+                    None => Vec::new(),
+                })
+                .collect()
+        })
+    } else {
+        Vec::new()
+    };
+    let depth_weights = if options.use_depth_weighted_faces {
+        pool.install(|| {
+            stencils
+                .par_iter()
+                .enumerate()
+                .map(|(cell, s)| match s {
+                    Some(s) => {
+                        let mut result: Vec<_> = local_values[cell]
+                            .iter()
+                            .zip(s.elevations.as_ref().unwrap())
+                            .map(|(&w, &z)| depth_weight(w, z))
+                            .collect();
+                        result.extend(
+                            s.faces
+                                .iter()
+                                .zip(&face_values[cell])
+                                .map(|(&[face, _], &w)| depth_weight(w, mesh.faces[face].minimum)),
+                        );
+                        result
+                    }
+                    None => Vec::new(),
+                })
+                .collect()
+        })
+    } else {
+        Vec::new()
+    };
+    let horizontal = stencils
         .iter()
-        .map(|stencil| match stencil {
-            Some(stencil) => stencil
-                .corners
-                .iter()
-                .map(|&[vertex, slot]| reconstructed.corners[vertex][slot])
-                .collect(),
-            None => Vec::new(),
+        .enumerate()
+        .map(|(cell, s)| {
+            s.as_ref().and_then(|s| {
+                (options.reduce_shallow_to_horizontal
+                    && s.faces.iter().all(|&[face, _]| {
+                        let c = reconstructed.faces[face].connection;
+                        !c.connected() || c == Connection::DownhillShallow
+                    }))
+                .then_some(values[cell])
+            })
         })
         .collect();
     let wet = mesh
@@ -735,7 +888,71 @@ pub fn prepare_profile(
         .zip(values)
         .map(|(cell, &value)| !cell.virtual_cell && value > cell.minimum + tolerance)
         .collect();
-    Ok(PreparedProfile { local_values, wet })
+    Ok(PreparedProfile {
+        local_values,
+        face_values,
+        depth_weights,
+        horizontal,
+        wet,
+        options,
+    })
+}
+
+fn depth_weight(wse: f32, elevation: f32) -> f32 {
+    if wse == NODATA || elevation == NODATA || wse <= elevation {
+        0.01_f32
+    } else {
+        f64::from(wse - elevation).max(0.01_f64) as f32
+    }
+}
+
+impl WeightScratch {
+    /// Native node donation: all arithmetic remains binary32 and in ring order.
+    fn paint_with_faces(&mut self, corners: &[f32], faces: &[f32], depths: Option<&[f32]>) -> f32 {
+        let n = corners.len();
+        for i in 0..n {
+            let previous = (i + n - 1) % n;
+            let next = (i + 1) % n;
+            let adjacent = self.weights[previous] + self.weights[next];
+            // Fresh native pixel buffers begin at zero. Reset explicitly so reuse
+            // never carries donation from another polygon/pixel.
+            self.clockwise[i] = 0.0;
+            self.counterclockwise[i] = 0.0;
+            if adjacent != 0.0 {
+                let fraction = self.weights[i] / adjacent;
+                self.clockwise[i] = fraction * self.weights[previous];
+                self.counterclockwise[i] = fraction * self.weights[next];
+            }
+            self.donated[i] = self.weights[i];
+        }
+        for i in 0..n {
+            let next = (i + 1) % n;
+            let donation = self.counterclockwise[i].min(self.clockwise[next]);
+            self.donated[i] -= donation;
+            self.donated[next] -= donation;
+            self.donated[n + i] = donation * 2.0;
+        }
+        let mut total = 0.0_f64;
+        if let Some(depths) = depths {
+            for (weight, &depth) in self.donated.iter_mut().zip(depths) {
+                *weight *= depth;
+                total += f64::from(*weight);
+            }
+        }
+        let anchor = faces[0];
+        let mut delta = 0.0_f32;
+        for (i, &corner) in corners.iter().enumerate() {
+            delta += (corner - anchor) * self.donated[i];
+        }
+        for (i, &face) in faces.iter().enumerate() {
+            delta += (face - anchor) * self.donated[n + i];
+        }
+        if depths.is_some() {
+            (f64::from(delta) / total) as f32 + anchor
+        } else {
+            delta + anchor
+        }
+    }
 }
 
 /// Geometry and terrain belong to the caller and can be reused across timesteps.
@@ -811,6 +1028,15 @@ pub fn render_profile(
                         if !profiles[mesh].wet[cell] {
                             continue;
                         }
+                        if let Some(value) = profiles[mesh].horizontal[cell] {
+                            if let Some([delta, value]) =
+                                deliver_pixel(value, window.terrain[i], tolerance)
+                            {
+                                d[j] = delta;
+                                w[j] = value;
+                            }
+                            continue;
+                        }
                         let Some(stencil) = &stencils[mesh][cell] else {
                             continue;
                         };
@@ -827,7 +1053,20 @@ pub fn render_profile(
                         } else {
                             stencil.polygon.weights(point, scratch)?
                         };
-                        let value = paint_corner_values(weights, values)?;
+                        let value = if profiles[mesh].options.render_mode == RenderMode::WithFaces {
+                            // End the borrowed weights view before mutating scratch.
+                            let _ = weights;
+                            scratch.paint_with_faces(
+                                values,
+                                &profiles[mesh].face_values[cell],
+                                profiles[mesh]
+                                    .options
+                                    .use_depth_weighted_faces
+                                    .then(|| profiles[mesh].depth_weights[cell].as_slice()),
+                            )
+                        } else {
+                            paint_corner_values(weights, values)?
+                        };
                         if let Some([delta, value]) =
                             deliver_pixel(value, window.terrain[i], tolerance)
                         {
@@ -845,6 +1084,45 @@ pub fn render_profile(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn native_davis_donated_and_depth_rebalanced_scalar_bits() {
+        // Independent reflection of native 7.0.1 private scalar painters on
+        // public Davis corner/face values. Supplied depth coefficients isolate
+        // normalization; tiny negative donated weights must not be clamped.
+        let weights = [0x3e648a40, 0x3eda93c1, 0x3e74091d, 0x3de48a40].map(f32::from_bits);
+        let corners = [0x42452a70, 0x4244fae3, 0x4242a6f2, 0x424466fa].map(f32::from_bits);
+        let faces = [0x4244fae3, 0x4244fae3, 0x4243c5bf, 0x42453384].map(f32::from_bits);
+        let depths = [
+            0x3c23d70a, 0x3fa00000, 0x418b0000, 0x40490fd0, 0x3c23d70a, 0x3fa00000, 0x418b0000,
+            0x40490fd0,
+        ]
+        .map(f32::from_bits);
+        let mut scratch = WeightScratch::new(4);
+        scratch.weights.copy_from_slice(&weights);
+        assert_eq!(
+            scratch.paint_with_faces(&corners, &faces, None).to_bits(),
+            1111809851
+        );
+        let expected_donated = [
+            0xb2000000, 0x3d7a0954, 0xb2800000, 0x3c82b774, 0x3eb52e2d, 0x3ec17700, 0x3dca4878,
+            0x3dbd704e,
+        ];
+        assert_eq!(
+            scratch
+                .donated
+                .iter()
+                .map(|v| v.to_bits())
+                .collect::<Vec<_>>(),
+            expected_donated
+        );
+        assert_eq!(
+            scratch
+                .paint_with_faces(&corners, &faces, Some(&depths))
+                .to_bits(),
+            1111765762
+        );
+    }
 
     #[test]
     fn davis_square_pixel_preserves_native_rounding() {

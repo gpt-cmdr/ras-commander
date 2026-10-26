@@ -23,8 +23,20 @@ captured-reference format for development checks.
 Geometry, terrio ownership and terrain are prepared once. Bounded Rayon workers
 reconstruct hydraulic connections and corner values per profile, then paint
 disjoint pixels. AOIs constrain output without changing mesh connectivity.
-No extra depth cutoff, cell-face enrichment, depth weighting or shallow-water
-horizontal option is applied.
+No extra depth cutoff is applied. Defaults retain plain cell-corner sloping.
+Engine 0.5 adds optional `options` with `render_mode="slopingPretty"`,
+`reduce_shallow_to_horizontal` and `use_depth_weighted_faces` booleans.
+Enhanced reports use `rasmapper-sloping-with-faces/1`; plain reports retain
+`rasmapper-plain-sloping/1`. Shallow and depth flags require slopingPretty.
+Face donation preserves binary32 ring order. Depth reweighting uses binary32
+products/accumulation with native binary64 normalization. Shallow cells use a
+constant cell WSE and bypass polygon-weight evaluation. The optional binary
+mesh field `vertex_elevations` contains float32 native FacePoints Elevation;
+it is required for depth weighting. Older plain requests remain accepted.
+
+All four enhanced flag combinations match raw native 7.0.1 bridge Max and
+Davis timestep 54/108 references, including one/four-worker comparisons.
+Large eBFE enhanced-option coverage remains unqualified.
 
 Plain-sloping native 7.0.1 raw-mask/float32-bit qualification currently covers
 Davis Max/two timesteps, Bald Eagle bridge/dam Max, and bounded Spring River

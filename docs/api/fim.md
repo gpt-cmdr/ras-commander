@@ -11,7 +11,7 @@ or Windows x86-64 engine wheel into the same environment:
 
 ```bash
 uv pip install -e ".[fim,compute]"
-uv pip install /path/to/ras2fim_engine-0.4.0-py3-none-<platform>.whl
+uv pip install /path/to/ras2fim_engine-0.5.0-py3-none-<platform>.whl
 ras2fim-batch method
 ```
 
@@ -74,9 +74,8 @@ native model image.
 
 The method adds **no depth postprocessing cutoff**. It reproduces the native
 float32 plot tolerance of 0.001 in model elevation units, including native
-rounding; it does not replace this behavior with a 0.5 ft filter. The
-depth-weighted and shallow-to-horizontal options are disabled, and cell-face
-stencil enrichment is excluded. HEC documents these distinct controls in
+rounding; it does not replace this behavior with a 0.5 ft filter. The default disables depth weighting, shallow-to-horizontal rendering and
+cell-face stencil enrichment. HEC documents these distinct controls in
 [Mapping Options, HEC-RAS Mapper User's Manual 6.6](https://www.hec.usace.army.mil/confluence/rasdocs/rmum/6.6/mapping-results/mapping-options).
 
 Native 7.0.1 comparisons currently match raw valid/nodata masks and every
@@ -99,6 +98,44 @@ enforced process RSS limit; HDF/Python preparation and polygonization also use
 memory. A missing or incompatible engine raises without fallback. Mapping itself
 does not load HEC-RAS assemblies; the private native component oracle is used
 only during development qualification.
+
+## Additional sloping options (engine 0.5)
+
+Select `render_mode="slopingPretty"` for **Sloping (Cell Corners + Cell Faces)**.
+The two booleans select the native controls independently:
+
+```python
+manifest = RasFim.map_sloping_profiles(
+    "model.p02.hdf", "canonical_terrain.tif", "enhanced_sloping",
+    profiles={"maximum": "Max", "t0054": 54},
+    render_mode="slopingPretty",
+    use_depth_weighted_faces=True,
+    reduce_shallow_to_horizontal=True,
+    threads=4,
+)
+```
+
+With both flags false, the mapper donates corner weights to adjacent cell
+faces. `use_depth_weighted_faces=True` rebalances those weights using native
+corner/face water depths. It requires the source HDF's stored
+`Geometry/2D Flow Areas/<mesh>/FacePoints Elevation` arrays. Missing arrays
+raise `FimUnsupportedError`; production mapping never invokes HEC-RAS to
+create them or substitutes terrain samples. `reduce_shallow_to_horizontal=True`
+uses native face-connectivity classifications to paint qualifying shallow cells
+with the computed cell WSE. It bypasses their polygon interpolation work.
+Both flags require slopingPretty; plain mode rejects them instead of silently
+ignoring them. No additional depth cutoff is applied in either mode.
+
+The selected native options and `rasmapper-sloping-with-faces/1` method appear
+in the report and manifest; default plain mode retains its existing method ID.
+The adapter checks the reported options against the request. Engine 0.4 remains
+usable for plain mapping and raises explicitly for enhanced options.
+All four enhanced combinations match raw Depth/WSE masks and float32 bits on
+Bald Eagle bridges Max and Davis timesteps 54/108, with one/four workers on
+Windows and Linux x86-64. This option matrix does not establish enhanced parity
+for the large eBFE cases or other HEC-RAS versions. The physical-2D scope and
+standalone-storage-area exclusion apply to both modes. Internal experimental
+face-value and corner-adjustment switches are not exposed by this API.
 
 ## Horizontal cell mapping
 

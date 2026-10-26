@@ -316,3 +316,159 @@ def test_template_nodata_collision_is_not_silently_filtered(sloping_case, tmp_pa
         )
     assert not list(output.glob("*.tif"))
     assert json.loads((output / "fim_manifest.json").read_text())["status"] == "aborted"
+
+
+@pytest.mark.parametrize("threads", [1, 4])
+def test_real_additional_sloping_options(threads, tmp_path):
+    """External case list covers native option combinations and changing profiles."""
+    from ras_commander import RasFim, HdfMesh
+    from scripts.benchmarks.fim_sloping_compare import compare_raw
+
+    filename = os.environ.get("RAS_COMMANDER_SLOPING_OPTIONS_CASES")
+    if not filename:
+        pytest.skip(
+            "set RAS_COMMANDER_SLOPING_OPTIONS_CASES for native option qualification"
+        )
+    cases = json.loads(Path(filename).read_text(encoding="utf-8"))
+    assert cases
+    for index, case in enumerate(cases):
+        options = {
+            key: case[key]
+            for key in (
+                "render_mode",
+                "reduce_shallow_to_horizontal",
+                "use_depth_weighted_faces",
+            )
+        }
+        first = next(iter(case["profiles"]))
+        manifest = RasFim.map_sloping_profiles(
+            case["hdf"],
+            case["terrain"],
+            tmp_path / str(index),
+            profiles=case["profiles"],
+            engine_path=case["engine"],
+            threads=threads,
+            template_raster=case["references"][first]["depth"],
+            max_working_mib=case.get("max_working_mib", 4096),
+            **options,
+        )
+        method = manifest.attrs["performance"]["engine_report"]["method"]
+        assert method["method_id"] == "rasmapper-sloping-with-faces/1"
+        assert (
+            method["options"]["UseDepthWeightedFaces"]
+            == options["use_depth_weighted_faces"]
+        )
+        assert method["options"]["ShallowBehaviorMode"] == (
+            "ReduceToHorizontal" if options["reduce_shallow_to_horizontal"] else "None"
+        )
+        cells = HdfMesh.get_mesh_cell_polygons(case["hdf"], strict=True)
+        for product in manifest.itertuples():
+            for band, path in (("depth", product.depth_tif), ("wse", product.wse_tif)):
+                metrics = compare_raw(
+                    path,
+                    case["references"][product.profile][band],
+                    cells,
+                    full_grid=True,
+                )
+                assert metrics["common"] > 0
+                assert all(
+                    metrics[key] == 0
+                    for key in ("extra", "missing", "different", "outside_footprint")
+                ), (index, product.profile, band, metrics)
+
+
+@pytest.mark.parametrize(
+    "options",
+    [
+        dict(render_mode="unknown"),
+        dict(use_depth_weighted_faces=True),
+        dict(reduce_shallow_to_horizontal=True),
+        dict(render_mode="slopingPretty", use_depth_weighted_faces=1),
+    ],
+)
+def test_sloping_options_rejected_before_inputs_are_read(options, tmp_path):
+    from ras_commander import RasFim
+
+    with pytest.raises(ValueError):
+        RasFim.map_sloping_profiles(
+            "absent.hdf", "absent.tif", tmp_path / "out", **options
+        )
+    assert not (tmp_path / "out").exists()
+
+
+def test_depth_weighting_requires_stored_corner_elevations(sloping_case, tmp_path):
+    import h5py
+    import shutil
+    from ras_commander import RasFim, HdfMesh
+    from ras_commander.fim.errors import FimUnsupportedError
+
+    case = sloping_case
+    hdf = tmp_path / "missing-elevations.hdf"
+    shutil.copy2(case["hdf"], hdf)
+    names = HdfMesh.get_mesh_area_names(hdf)
+    with h5py.File(hdf, "r+") as target:
+        for name in names:
+            key = f"Geometry/2D Flow Areas/{name}/FacePoints Elevation"
+            if key in target:
+                del target[key]
+    output = tmp_path / "missing-output"
+    with pytest.raises(FimUnsupportedError, match="FacePoints Elevation"):
+        RasFim.map_sloping_profiles(
+            hdf,
+            case["terrain"],
+            output,
+            engine_path=case["engine"],
+            render_mode="slopingPretty",
+            use_depth_weighted_faces=True,
+            threads=1,
+        )
+    assert not list(output.glob("*.tif"))
+    assert json.loads((output / "fim_manifest.json").read_text())["status"] == "aborted"
+
+
+def test_real_enhanced_polygon_preserves_native_pixels(tmp_path):
+    from ras_commander import RasFim, HdfMesh
+    from scripts.benchmarks.fim_sloping_compare import compare_raw
+    from shapely.geometry import Polygon
+
+    filename = os.environ.get("RAS_COMMANDER_SLOPING_OPTIONS_CASES")
+    if not filename:
+        pytest.skip(
+            "set RAS_COMMANDER_SLOPING_OPTIONS_CASES for enhanced AOI qualification"
+        )
+    cases = json.loads(Path(filename).read_text(encoding="utf-8"))
+    case = next(
+        c
+        for c in cases
+        if c["reduce_shallow_to_horizontal"]
+        and c["use_depth_weighted_faces"]
+        and any(isinstance(v, int) for v in c["profiles"].values())
+    )
+    cells = HdfMesh.get_mesh_cell_polygons(case["hdf"], strict=True)
+    left, bottom, right, top = cells.total_bounds
+    polygon = Polygon([(left, bottom), (left, top), (right, bottom)])
+    profile = next(iter(case["profiles"]))
+    result = RasFim.map_sloping_profiles(
+        case["hdf"],
+        case["terrain"],
+        tmp_path / "polygon",
+        profiles={profile: case["profiles"][profile]},
+        engine_path=case["engine"],
+        threads=4,
+        max_working_mib=4096,
+        polygon=polygon,
+        aoi_crs=cells.crs,
+        render_mode="slopingPretty",
+        use_depth_weighted_faces=True,
+        reduce_shallow_to_horizontal=True,
+    )
+    for band, path in (
+        ("depth", result.iloc[0].depth_tif),
+        ("wse", result.iloc[0].wse_tif),
+    ):
+        metrics = compare_raw(path, case["references"][profile][band], cells, polygon)
+        assert metrics["common"] > 0
+        assert all(
+            metrics[key] == 0
+            for key in ("extra", "missing", "different", "outside_footprint")
+        )

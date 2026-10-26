@@ -28,7 +28,12 @@ Parent `ras_commander/AGENTS.md` and root `AGENTS.md` still apply.
   through the Rust HDF backend; Rust reconstructs hydraulic face connections,
   corner values and polygon/square pixel weights. Preserve binary32 operation
   order, side-specific disconnected corner values and native intrinsic plot
-  tolerance. It has no additional depth cutoff or slopingPretty options.
+  tolerance. It has no additional depth cutoff. The optional `slopingPretty`
+  mode adds native corner-to-face weight donation, optional native depth
+  reweighting and shallow-to-horizontal selection. Keep plain defaults unchanged;
+  the selected method/options must appear in the engine report and manifest.
+  Depth weighting requires stored FacePoints Elevation; never synthesize or
+  fetch elevations from a native runtime during production mapping.
 - Sloping AOIs constrain terrain/ownership/output pixels only. Keep the complete
   geometry for hydraulic connectivity and corner reconstruction across boundaries.
   Geometry, terrain and ownership are reused across all profiles in one request.

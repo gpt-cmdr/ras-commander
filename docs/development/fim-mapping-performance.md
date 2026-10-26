@@ -585,12 +585,75 @@ Use `--match-reference-grid` to include nodata-border delivery in the timing
 and compare the entire reference image. This stricter option fails when the
 reference includes valid model elements outside the engine's 2D-cell scope.
 
+## Enhanced sloping option qualification
+
+Engine 0.5 adds `rasmapper-sloping-with-faces/1` through
+`render_mode="slopingPretty"`. Native corner-to-face donation, optional
+`use_depth_weighted_faces`, and optional `reduce_shallow_to_horizontal` retain
+their native float32 operation order. Depth normalization uses the native
+binary64 denominator and binary32 accumulation. The shallow branch selects
+cells from hydraulic connectivity and avoids evaluating their polygon weights.
+No added depth cutoff is applied; plain sloping remains the default.
+
+All four shallow/depth-weighting combinations match raw native 7.0.1 masks
+and finite float32 bits for Bald Eagle bridges Max and Davis timesteps 54/108.
+The complete matrix passes with one and four workers on Windows and Linux
+x86-64. Each platform checks 48 enhanced Depth/WSE products across the matrix;
+the extra triangular Davis AOI check compares native pixels without changing
+global connectivity. The bridge variants compare the entire native raster grid,
+including its nodata border. Their native-valid pixel counts are:
+
+| Shallow reduces to horizontal | Depth weighting | Valid pixels |
+|---|---|---:|
+| False | False | 974,095 |
+| False | True | 974,216 |
+| True | False | 974,142 |
+| True | True | 974,256 |
+
+Two initial Davis exports failed with native exit 99. Both succeeded on retained
+retries with one native export worker; source HDF hashes stayed unchanged and
+original rasmap bytes were restored. Failed attempts remain separate from the
+successful reference evidence. No enhanced-option qualification is claimed for
+Spring River/Spring Creek or other HEC-RAS versions. Standalone storage-area
+surfaces remain outside the mapping scope.
+
+A fresh bridge benchmark enabled both options and timed one Max Depth/WSE pair
+on identical 4,852 × 6,705 grids, nodata and tiled DEFLATE storage. Native calls
+used RAS Mapper 7.0.1 through Commander. Rust calls used the installed 0.5.0
+Windows GNU/static-CRT wheel and direct metadata-only template delivery. Both
+complete images matched raw masks and finite float32 bits:
+
+| Pair | Native RASMapper (s) | Rust, one worker (s) | Rust, four workers (s) | Native / Rust, four workers |
+|---|---:|---:|---:|---:|
+| 1 | 7.42 | 3.87 | 3.39 | 2.19× |
+| 2 | 6.87 | 4.36 | 3.53 | 1.95× |
+
+The parent and child processes inherited a four-CPU affinity restriction.
+Rust used the stated bounded pool; its order was reversed for the second pair.
+These are interleaved warm-cache observations on a shared workstation. Complete
+API calls include HDF preparation, native process launch, mapping and product
+writes. Terrain preparation, project initialization, reference selection
+and comparison scanning were outside the clocks. Rust template validation
+and delivery were included in the timed API call. There was no postprocessing
+or profile concurrency. Inputs, original rasmap bytes, engine identity and the
+benchmark harness hash were checked and recorded. The results do not establish
+a universal speedup or enhanced-method parity beyond the stated cases.
+
+Set `RAS_COMMANDER_SLOPING_OPTIONS_CASES` to an external JSON list of case
+records to run `tests/test_ras_fim_sloping.py`. Each case supplies the normal
+HDF/terrain/engine/profiles/references fields plus the three option keywords.
+The comparison runner accepts those keywords in its single-case JSON as well.
+Stored `FacePoints Elevation` arrays are mandatory only when depth weighting
+is enabled; missing inputs raise without changing the HDF or approximating
+corner elevations. Older engine 0.4 requests remain usable for plain mapping;
+enhanced requests require the new capability record.
+
 ## Proposed engine packaging
 
 Package the mapping engine separately as **`ras-commander-fast-fim`**, following
 [ras-commander-fast-hdf](https://github.com/gpt-cmdr/ras-commander-fast-hdf).
 This is a proposed extraction, not the installation name of the retained
-`ras2fim-engine` 0.4.0 test wheels retained with the plain-sloping implementation.
+`ras2fim-engine` 0.5.0 test wheels retained with configurable sloping.
 
 The separate repository should own the Rust mapping crate, method contracts,
 CLI, optional PyO3 bindings, native tests, notices and platform-wheel release

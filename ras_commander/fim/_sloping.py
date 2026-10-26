@@ -1,4 +1,4 @@
-"""Explicit experimental plain-sloping API adapter; no arithmetic fallback."""
+"""Explicit experimental sloping API adapter; no arithmetic fallback."""
 
 from pathlib import Path
 import json
@@ -24,6 +24,9 @@ def map_profiles(
     output_folder,
     *,
     profiles=None,
+    render_mode="sloping",
+    reduce_shallow_to_horizontal=False,
+    use_depth_weighted_faces=False,
     bbox=None,
     polygon=None,
     polygon_layer=None,
@@ -46,6 +49,21 @@ def map_profiles(
         _prepare_output_folder,
     )
 
+    if render_mode not in ("sloping", "slopingPretty"):
+        raise ValueError("render_mode must be 'sloping' or 'slopingPretty'")
+    if not isinstance(reduce_shallow_to_horizontal, bool) or not isinstance(
+        use_depth_weighted_faces, bool
+    ):
+        raise ValueError("sloping option flags must be booleans")
+    if render_mode == "sloping" and (
+        reduce_shallow_to_horizontal or use_depth_weighted_faces
+    ):
+        raise ValueError("shallow and depth-weighted controls require slopingPretty")
+    selected_options = dict(
+        render_mode=render_mode,
+        reduce_shallow_to_horizontal=reduce_shallow_to_horizontal,
+        use_depth_weighted_faces=use_depth_weighted_faces,
+    )
     started = time.perf_counter()
     hdf = Path(hdf_path).resolve(strict=True)
     terrain = Path(terrain_path).resolve(strict=True)
@@ -87,6 +105,15 @@ def map_profiles(
         raise FimEngineError(
             "engine lacks rasmapper-plain-sloping/1; install a matching engine"
         )
+    if render_mode == "slopingPretty" and not method.get("enhanced_options"):
+        raise FimEngineError(
+            "engine lacks additional sloping options; install a matching engine"
+        )
+    selected_method_id = (
+        method.get("enhanced_method_id")
+        if render_mode == "slopingPretty"
+        else method["method_id"]
+    )
     watched = {"hdf": hdf, "terrain": terrain}
     if template_raster is not None:
         template_raster = Path(template_raster).resolve(strict=True)
@@ -127,8 +154,8 @@ def map_profiles(
     folder = _prepare_output_folder(output_folder)
     rows = {name: _empty_row(name, "not_run") for name in selected}
     details = dict(
-        method="RAS Mapper plain cell-corner sloping / Rust",
-        method_id=method["method_id"],
+        method="RAS Mapper sloping / Rust",
+        method_id=selected_method_id,
         backend="rust",
         model_scope=model_scope,
         mapping_scope="physical 2D cells only; standalone storage-area surfaces excluded",
@@ -137,6 +164,7 @@ def map_profiles(
         else "terrain window",
         status="in_progress",
         options={
+            **selected_options,
             "extra_depth_cutoff": None,
             "threads": threads,
             "max_working_mib": budget,
@@ -148,7 +176,7 @@ def map_profiles(
             k: {"path": str(p), "size": before[k][0], "mtime_ns": before[k][1]}
             for k, p in watched.items()
         },
-        qualification="experimental; native 7.0.1 Max on Davis/Bald Eagle and two Davis timesteps; broader corpus pending",
+        qualification="experimental native 7.0.1; plain five-model physical-2D corpus (bounded eBFE); enhanced combinations on Bald Eagle bridges Max and Davis timesteps",
     )
 
     def manifest():
@@ -173,7 +201,11 @@ def map_profiles(
             ) as temporary:
                 root = Path(temporary)
                 mesh_files, meshes, max_values = write_binary_mesh_inputs(
-                    hdf, root, threads=threads, include_max="Max" in selected.values()
+                    hdf,
+                    root,
+                    threads=threads,
+                    include_max="Max" in selected.values(),
+                    include_vertex_elevations=use_depth_weighted_faces,
                 )
                 lookup = {mesh["mesh_name"]: i for i, mesh in enumerate(meshes)}
                 addresses = [
@@ -223,6 +255,11 @@ def map_profiles(
                     full_transform = list(src.transform.to_gdal())
                 request = dict(
                     schema="ras-commander-sloping-request/1",
+                    **(
+                        {"options": selected_options}
+                        if method.get("enhanced_options")
+                        else {}
+                    ),
                     terrain=str(terrain),
                     epsg=identity["epsg"],
                     crs_identity=identity["crs_identity"],
@@ -350,7 +387,20 @@ def map_profiles(
                             code != 0
                             or report.get("status") != "complete"
                             or not isinstance(reported_method, dict)
-                            or reported_method.get("method_id") != method["method_id"]
+                            or reported_method.get("method_id") != selected_method_id
+                            or reported_method.get("options")
+                            != {
+                                "CellRenderMode": "Sloping",
+                                "CellStencilMode": "WithFaces"
+                                if render_mode == "slopingPretty"
+                                else "JustFacepoints",
+                                "FacepointAdjustmentMode": "None",
+                                "ShallowBehaviorMode": "ReduceToHorizontal"
+                                if reduce_shallow_to_horizontal
+                                else "None",
+                                "UseDepthWeightedFaces": use_depth_weighted_faces,
+                                "FaceWSMode": "Adjusted",
+                            }
                             or [p.get("id") for p in units] != expected
                             or any(p.get("status") != "complete" for p in units)
                         ):

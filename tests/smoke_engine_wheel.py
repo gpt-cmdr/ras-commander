@@ -56,6 +56,21 @@ def sloping_smoke(engine, root, terrain):
     for name,value in [("a",1),("b",2)]:
         actual=np.fromfile(folder/"files"/name/"depth.bin",dtype="<f4")
         np.testing.assert_array_equal(actual,np.full(16,value,dtype="<f4"))
+    # Elevations are optional for plain mode; enhanced depth weighting requires them.
+    np.full(4, 100, dtype="<f4").tofile(folder/"vertex_elevations.bin")
+    descriptors["vertex_elevations"] = dict(path="vertex_elevations.bin", rows=4)
+    (folder/"mesh.json").write_text(json.dumps({"schema":"ras-commander-sloping-mesh/1","arrays":descriptors}))
+    for shallow in (False, True):
+        for weighted in (False, True):
+            request["options"] = dict(render_mode="slopingPretty", reduce_shallow_to_horizontal=shallow, use_depth_weighted_faces=weighted)
+            path.write_text(json.dumps(request))
+            destination=folder/f"enhanced-{int(shallow)}-{int(weighted)}"
+            subprocess.run([engine,"sloping",str(path),str(destination)],check=True,capture_output=True)
+            report=json.loads((destination/"report.json").read_text())
+            assert report["method"]["method_id"]=="rasmapper-sloping-with-faces/1"
+            for name,value in [("a",1),("b",2)]:
+                np.testing.assert_array_equal(np.fromfile(destination/name/"depth.bin",dtype="<f4"),np.full(16,value,dtype="<f4"))
+    request["options"] = dict(render_mode="slopingPretty", reduce_shallow_to_horizontal=True, use_depth_weighted_faces=True)
     request.update(stream_outputs=True,aoi_file="aoi.wkb",threads=1)
     path.write_text(json.dumps(request))
     output=subprocess.run([engine,"sloping",str(path),str(folder/"stream")],check=True,capture_output=True).stdout
@@ -67,7 +82,7 @@ def sloping_smoke(engine, root, terrain):
             expected=np.full((4,4),level,dtype="<f4");expected[:,2:]=np.nan
             np.testing.assert_array_equal(actual,expected,err_msg=band)
     assert not stream.read()
-    print("Installed wheel: plain sloping binary geometry, profiles, file/stream AOI PASS")
+    print("Installed wheel: plain/enhanced sloping options, binary geometry, profiles, file/stream AOI PASS")
 
 
 def main():

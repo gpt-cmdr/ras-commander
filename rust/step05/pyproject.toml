@@ -4,8 +4,8 @@ build-backend = "maturin"
 
 [project]
 name = "ras2fim-engine"
-version = "0.4.0"
-description = "Optional Rust Step05, horizontal and plain-sloping FIM mapping engine"
+version = "0.5.0"
+description = "Optional Rust Step05, horizontal and configurable sloping FIM mapping engine"
 requires-python = ">=3.10"
 readme = "README.md"
 license = "MIT"

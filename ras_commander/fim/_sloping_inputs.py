@@ -1,4 +1,4 @@
-"""HDF input preparation for the optional plain-sloping Rust engine.
+"""HDF input preparation for the optional sloping Rust engine.
 
 This module reads inputs only. It never loads a native HEC-RAS assembly and
 does not manufacture hydraulic values from a captured native reference.
@@ -26,7 +26,14 @@ _BINARY_FIELDS = {
 
 
 @log_call
-def write_binary_mesh_inputs(hdf_path, output_folder, *, threads=4, include_max=True):
+def write_binary_mesh_inputs(
+    hdf_path,
+    output_folder,
+    *,
+    threads=4,
+    include_max=True,
+    include_vertex_elevations=False,
+):
     """Stage typed HDF arrays without constructing per-cell Python objects."""
     import json
     import h5py
@@ -58,10 +65,18 @@ def write_binary_mesh_inputs(hdf_path, output_folder, *, threads=4, include_max=
                 if include_max
                 else None
             )
+            vertex_elevation_path = prefix + "FacePoints Elevation"
+            if include_vertex_elevations and vertex_elevation_path not in source:
+                from .errors import FimUnsupportedError
+
+                raise FimUnsupportedError(
+                    "Depth weighting requires stored FacePoints Elevation; prepare the native model's mapping geometry first"
+                )
             arrays = read_datasets(
                 source,
                 [prefix + field for field, _ in _BINARY_FIELDS.values()]
-                + ([summary.name] if summary is not None else []),
+                + ([summary.name] if summary is not None else [])
+                + ([vertex_elevation_path] if include_vertex_elevations else []),
                 backend="rust",
                 threads=threads,
             )
@@ -72,7 +87,9 @@ def write_binary_mesh_inputs(hdf_path, output_folder, *, threads=4, include_max=
 
             def stage(key, values, dtype):
                 array = np.ascontiguousarray(values, dtype=dtype)
-                expected_columns = 1 if key.endswith("minimum") else 2
+                expected_columns = (
+                    1 if key.endswith("minimum") or key == "vertex_elevations" else 2
+                )
                 array = array.reshape(-1, expected_columns)
                 filename = f"mesh-{index}-{key}.bin"
                 _write_array(root / filename, array)
@@ -81,6 +98,8 @@ def write_binary_mesh_inputs(hdf_path, output_folder, *, threads=4, include_max=
             stage("centers", shapely.get_coordinates(points.geometry), "<f8")
             for key, (field, dtype) in _BINARY_FIELDS.items():
                 stage(key, arrays[prefix + field], dtype)
+            if include_vertex_elevations:
+                stage("vertex_elevations", arrays[vertex_elevation_path], "<f4")
             if summary is not None:
                 values = np.asarray(arrays[summary.name], dtype="<f4")
                 if values.shape != (2, len(points)):

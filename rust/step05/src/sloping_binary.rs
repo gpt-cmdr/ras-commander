@@ -43,7 +43,10 @@ fn header(path: &Path) -> Result<Header, MapError> {
     let value: Header = serde_json::from_slice(&fs::read(path)?)
         .map_err(|e| invalid(&format!("sloping binary header: {e}")))?;
     if value.schema != SCHEMA
-        || value.arrays.len() != FIELDS.len()
+        || value
+            .arrays
+            .keys()
+            .any(|key| key != "vertex_elevations" && !FIELDS.iter().any(|(name, _)| name == key))
         || FIELDS
             .iter()
             .any(|(key, _)| !value.arrays.contains_key(*key))
@@ -54,7 +57,11 @@ fn header(path: &Path) -> Result<Header, MapError> {
 }
 fn check(h: &Header, base: &Path) -> Result<u64, MapError> {
     let mut total = 0_u64;
-    for (key, width) in FIELDS {
+    for (key, width) in FIELDS.into_iter().chain(
+        h.arrays
+            .contains_key("vertex_elevations")
+            .then_some(("vertex_elevations", 4)),
+    ) {
         let array = &h.arrays[key];
         let bytes = array
             .rows
@@ -86,7 +93,11 @@ pub fn load(path: &Path) -> Result<Geometry, MapError> {
     check(&h, base)?;
     let raw = |key: &str| -> Result<Vec<u8>, MapError> {
         let value = fs::read(base.join(&h.arrays[key].path))?;
-        let width = FIELDS.iter().find(|(name, _)| *name == key).unwrap().1;
+        let width = if key == "vertex_elevations" {
+            4
+        } else {
+            FIELDS.iter().find(|(name, _)| *name == key).unwrap().1
+        };
         if value.len() != h.arrays[key].rows * width {
             return Err(invalid("sloping binary array changed size"));
         }
@@ -230,7 +241,13 @@ pub fn load(path: &Path) -> Result<Geometry, MapError> {
             polyline,
         });
     }
+    let vertex_elevations = if h.arrays.contains_key("vertex_elevations") {
+        Some(floats("vertex_elevations")?)
+    } else {
+        None
+    };
     Ok(Geometry {
+        vertex_elevations,
         cells,
         faces,
         vertices,
