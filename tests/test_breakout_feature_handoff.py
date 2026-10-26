@@ -624,8 +624,9 @@ def test_refresh_exception_keeps_original_cause(tmp_path, monkeypatch, method):
 
 
 @pytest.mark.parametrize("strict", [False, True])
+@pytest.mark.parametrize("workers", [1, 6, None])
 def test_numeric_containment_retry_uses_real_violation_identity(
-    tmp_path, monkeypatch, strict
+    tmp_path, monkeypatch, strict, workers
 ):
     import json
 
@@ -644,6 +645,7 @@ def test_numeric_containment_retry_uses_real_violation_identity(
 
     def refresh(*args, **kwargs):
         assert kwargs["require_complete_products"] is strict
+        assert kwargs["native_worker_threads"] == workers
         preprocess_calls.append(kwargs)
         _sync_native_hdf(clone.geometry_path)
         return SimpleNamespace(success=True, error=None, first_error_line=None)
@@ -671,6 +673,7 @@ def test_numeric_containment_retry_uses_real_violation_identity(
         ras_object=ras,
         refresh_method="rasexe",
         require_complete_products=strict,
+        native_worker_threads=workers,
     )
     assert len(preprocess_calls) == 2
     assert len(calls) == 2 and calls[0].violations[0].feature_name == "Crossing"

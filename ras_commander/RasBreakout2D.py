@@ -696,6 +696,7 @@ class RasBreakout2D:
         computation_points: Optional[np.ndarray] = None,
         repair_computation_points: bool = False,
         parent_cell_ids: Optional[Sequence[int]] = None,
+        native_worker_threads: Optional[int] = 1,
     ) -> Breakout2DPreparationResult:
         """Trim mesh-owned features and remesh only the cloned geometry.
 
@@ -743,6 +744,10 @@ class RasBreakout2D:
             compute_property_tables: Compute 2D property tables afterwards.
                 Requires a terrain association on the geometry.
             timeout: Seconds allowed for the text-to-HDF import.
+            native_worker_threads: Positive managed geometry worker-pool limit
+                for headless refreshes, including a containment repair retry.
+                Defaults to one; None retains inherited pool settings. This
+                execution control does not change hydraulic solver cores.
             max_mesh_iterations: Mesh auto-fix iterations.
             computation_points: Optional N-by-2 XY coordinates in the source
                 geometry CRS/units, for a cookie-cut bootstrap. Requires
@@ -792,6 +797,10 @@ class RasBreakout2D:
         """
         if refresh_method not in ("rasmapper", "rasexe"):
             raise ValueError("refresh_method must be 'rasmapper' or 'rasexe'")
+        if native_worker_threads is not None and (
+            type(native_worker_threads) is not int or native_worker_threads < 1
+        ):
+            raise ValueError("native_worker_threads must be a positive integer or None")
         if parent_cell_ids is not None:
             if (
                 not refresh_hdf
@@ -994,6 +1003,7 @@ class RasBreakout2D:
                     clear_geompre=True,
                     geometry_only=True,
                     require_complete_products=require_complete_products,
+                    native_worker_threads=native_worker_threads,
                 )
             except Exception as exc:
                 raise RuntimeError("Headless geometry HDF refresh failed") from exc
@@ -1118,6 +1128,7 @@ class RasBreakout2D:
                     clear_geompre=True,
                     geometry_only=True,
                     require_complete_products=require_complete_products,
+                    native_worker_threads=native_worker_threads,
                 )
                 repair.update(
                     status="applied", native_preprocess_success=bool(retry.success)

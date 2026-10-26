@@ -11,9 +11,11 @@ from ras_commander.geom import GeomPreprocessor
 
 @pytest.mark.parametrize("strict", [False, True])
 @pytest.mark.parametrize("stale", [False, True])
+@pytest.mark.parametrize("allocation,workers", [("", 1), ("6", 6), ("0", 1), ("²", 1)])
 def test_missing_and_stale_refresh_propagate_strictness(
-    tmp_path, monkeypatch, strict, stale
+    tmp_path, monkeypatch, strict, stale, allocation, workers
 ):
+    monkeypatch.setenv("SLURM_CPUS_PER_TASK", allocation)
     module = import_module("ras_commander.geom.GeomMesh")
     text = tmp_path / "Model.g01"
     text.write_text("Geom Title=Synthetic\n")
@@ -31,6 +33,7 @@ def test_missing_and_stale_refresh_propagate_strictness(
     def refresh(*args, **kwargs):
         calls.append(kwargs)
         assert kwargs["require_complete_products"] is strict
+        assert kwargs["native_worker_threads"] == workers
         return SimpleNamespace(
             success=False, error="controlled stop before native execution"
         )

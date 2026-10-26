@@ -522,3 +522,11 @@ def test_prepare_rejects_unknown_refresh_method():
         RasBreakout2D.prepare_cloned_geometry(
             None, None, ras_object=None, refresh_method="gui"
         )
+
+
+@pytest.mark.parametrize("workers", [0, -1, True, 1.5, "4"])
+def test_prepare_rejects_invalid_workers_before_model_access(workers):
+    with pytest.raises(ValueError, match="native_worker_threads"):
+        RasBreakout2D.prepare_cloned_geometry(
+            None, None, ras_object=None, native_worker_threads=workers
+        )
