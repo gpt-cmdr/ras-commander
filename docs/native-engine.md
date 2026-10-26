@@ -348,7 +348,9 @@ largest gains, repeat calls on the heaviest file for each method:
 | `HdfResultsMesh.get_mesh_timeseries` (face velocity) | 865 | 1,516 ms | 253 ms | 6.0× |
 | `HdfFluvialPluvial.calculate_fluvial_pluvial_boundary` | 4,569 | 10,638 ms | 6,856 ms | 1.6× |
 
-Whole-array summaries such as `get_mesh_max_ws` ran at about the same speed.
+Whole-array summaries such as `get_mesh_max_ws` ran at about the same speed,
+because most of those calls is building a Shapely geometry for every row (see
+[Tables without geometry](#tables-without-geometry)).
 Small reads were at most about 7 ms slower on repeat calls and 37 ms on the
 first call in a process. Across all 50 cases (geometric mean) the native
 engine was 1.17× faster on the first call in a process and 1.41× faster on
