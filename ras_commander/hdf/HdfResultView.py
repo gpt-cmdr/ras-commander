@@ -563,16 +563,38 @@ class HdfResultView:
         time_slice: slice,
     ) -> tuple[np.ndarray, slice]:
         """Trim active rows from one eager read while retaining all-zero data."""
-        active = (
-            values != 0
-            if values.ndim == 1
-            else np.any(values != 0, axis=1)
-        )
-        positions = np.flatnonzero(active)
-        if not len(positions):
-            return values, time_slice
-        first_position = int(positions[0])
-        last_position = int(positions[-1])
+        if values.ndim == 2:
+            # The first and last rows with a nonzero (or NaN) value, found by
+            # scanning blocks of rows from each end instead of comparing the
+            # whole array; the same rows as np.any(values != 0, axis=1).
+            block = max(1, (1 << 22) // max(1, values.shape[1]))
+            first_position = None
+            for begin in range(0, len(values), block):
+                found = np.flatnonzero(np.any(values[begin:begin + block] != 0, axis=1))
+                if len(found):
+                    first_position = begin + int(found[0])
+                    break
+            if first_position is None:
+                return values, time_slice
+            end = len(values)
+            while True:
+                begin = max(first_position, end - block)
+                found = np.flatnonzero(np.any(values[begin:end] != 0, axis=1))
+                if len(found):
+                    last_position = begin + int(found[-1])
+                    break
+                end = begin
+        else:
+            active = (
+                values != 0
+                if values.ndim == 1
+                else np.any(values != 0, axis=1)
+            )
+            positions = np.flatnonzero(active)
+            if not len(positions):
+                return values, time_slice
+            first_position = int(positions[0])
+            last_position = int(positions[-1])
         trimmed = values[first_position:last_position + 1]
         start = time_slice.start + first_position * time_slice.step
         stop = time_slice.start + (last_position + 1) * time_slice.step

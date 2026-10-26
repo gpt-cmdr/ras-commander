@@ -198,3 +198,32 @@ def test_peak_times_decline_timezone_aware_columns():
     peaks = pd.DataFrame({"mesh_name": ["A"], "cell_id": [0],
                           "maximum_water_surface_time": pd.to_datetime(["2020-01-01"]).tz_localize("UTC")})
     assert native._fast_peak_times([(0, 0)], ["A"], peaks) is None
+
+
+def _reference_trim(values, time_slice):
+    active = values != 0 if values.ndim == 1 else np.any(values != 0, axis=1)
+    positions = np.flatnonzero(active)
+    if not len(positions):
+        return values, time_slice
+    first, last = int(positions[0]), int(positions[-1])
+    return (values[first:last + 1],
+            slice(time_slice.start + first * time_slice.step,
+                  time_slice.start + (last + 1) * time_slice.step, time_slice.step))
+
+
+@pytest.mark.parametrize("rows, active", [
+    (0, []), (1, []), (1, [0]), (10, []), (10, [0]), (10, [9]), (10, [3, 6]),
+    (5000, [4999]), (5000, [0, 2]), (5000, [1234, 3000]), (5000, []),
+])
+@pytest.mark.parametrize("width", [1, 7, 5000])
+def test_trim_finds_the_same_active_rows(rows, active, width):
+    from ras_commander.hdf.HdfResultView import HdfResultView
+
+    values = np.zeros((rows, width), dtype=np.float32)
+    for row in active:
+        values[row, width // 2] = np.nan if row % 2 else -1.0
+    time_slice = slice(3, 3 + 2 * rows, 2)
+    got, got_slice = HdfResultView._trim_materialized(values, time_slice)
+    want, want_slice = _reference_trim(values, time_slice)
+    assert got_slice == want_slice
+    assert got.shape == want.shape and np.array_equal(got, want, equal_nan=True)
