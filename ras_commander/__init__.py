@@ -128,6 +128,7 @@ _LAZY_EXPORTS = {
     'RasGeometry': ('.RasGeometry', 'RasGeometry'),
     'RasGeometryUtils': ('.RasGeometryUtils', 'RasGeometryUtils'),
     'RasUnsteady': ('.RasUnsteady', 'RasUnsteady'),
+    'RasRestart': ('.RasRestart', 'RasRestart'),
     'RasSteady': ('.RasSteady', 'RasSteady'),
     'RasExamples': ('.RasExamples', 'RasExamples'),
     'RasEbfeModels': ('.sources.federal', 'RasEbfeModels'),
@@ -454,7 +455,7 @@ __all__ = [
     'RasDocker', 'ContainerResult', 'ContainerEvent', 'ContainerBatchResult',
     # Core functionality
     'RasPrj', 'init_ras_project', 'get_ras_exe', 'ras', 'create_project_from_template',
-    'RasText', 'RasPlan', 'RasUnsteady', 'RasSteady', 'RasUtils', 'RasHydroCompare',
+    'RasText', 'RasPlan', 'RasUnsteady', 'RasRestart', 'RasSteady', 'RasUtils', 'RasHydroCompare',
     'ProjectStageError', 'ProjectPopulationError', 'ProjectPathAmbiguityError',
     'ProjectLockedError', 'ProjectDriftError', 'ProjectCopyVerificationError',
     'ProjectPublicationError',

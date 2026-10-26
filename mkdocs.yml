@@ -74,6 +74,7 @@ plugins:
         User Guide:
           - user-guide/overview.md
           - user-guide/plan-execution.md
+          - user-guide/restart-header.md
           - user-guide/execution-backends.md
           - user-guide/container-execution.md
           - user-guide/container-images.md
@@ -219,6 +220,7 @@ nav:
   - User Guide:
     - Running Plans:
       - Plan Execution: user-guide/plan-execution.md
+      - Native Restart Timing: user-guide/restart-header.md
       - Output Intervals & HDF Compression: user-guide/plan-output-intervals-hdf-compression.md
       - Choose an Execution Backend: user-guide/execution-backends.md
       - Remote Execution: user-guide/remote-execution.md
