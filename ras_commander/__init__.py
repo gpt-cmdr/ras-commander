@@ -259,7 +259,7 @@ _LAZY_EXPORTS = {
     **{
         name: ('.fim', name)
         for name in (
-            'RasFim', 'FimAoi', 'FimPreparedProfile', 'FimError',
+            'RasFim', 'FimAoi', 'FimPreparedProfile', 'FimPreparedSlopingModel', 'FimError',
             'FimEngineNotFoundError', 'FimEngineError', 'FimUnsupportedError',
             'FimAoiError', 'FimMappingError',
         )
@@ -487,7 +487,7 @@ __all__ = [
     'RasPreprocess',
     'RasExamples', 'RasEbfeModels', 'AlabamaBleModels', 'M3Model', 'RasCmdr', 'RasCurrency', 'RasControl', 'RasTcu', 'TcuStatus', 'RasMap', 'RasEncroachments', 'RasProcess', 'ProjectionInfo', 'StoredMapProductsIncompleteError', 'GeoTiffWriteOptions', 'RasterOperationProfileResult', 'StoreMapPerformanceOptions', 'StoreMapProfileResult', 'StoreMapResourceEstimate', 'StoreMapResourceSample', 'TerrainResourceEstimate', 'RasGuiAutomation', 'RasScreenshot', 'HdfFluvialPluvial',
     'RasBenefits', 'BenefitAreaConfig', 'BenefitAreaResult', 'BenefitCategory',
-    'RasFim', 'FimAoi', 'FimPreparedProfile', 'FimError', 'FimEngineNotFoundError',
+    'RasFim', 'FimAoi', 'FimPreparedProfile', 'FimPreparedSlopingModel', 'FimError', 'FimEngineNotFoundError',
     'FimEngineError', 'FimUnsupportedError', 'FimAoiError', 'FimMappingError',
     'RasBreakout1D', 'Breakout1DAssemblyResult',
     'Breakout1DDomainSelection', 'Breakout1DResult',

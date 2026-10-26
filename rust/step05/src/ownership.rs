@@ -36,8 +36,8 @@ fn check_wkb(data: &[u8], multipart: bool) -> Result<usize, MapError> {
                 if points < 4 || points > (data.len() - pos) / 16 {
                     return Err(invalid("invalid polygon point count"));
                 }
-                for pair in data[pos..pos + points * 16].chunks_exact(8) {
-                    if !f64::from_le_bytes(pair.try_into().unwrap()).is_finite() {
+                for pair in data[pos..pos + points * 16].as_chunks::<8>().0 {
+                    if !f64::from_le_bytes(*pair).is_finite() {
                         return Err(invalid("nonfinite polygon coordinate"));
                     }
                 }

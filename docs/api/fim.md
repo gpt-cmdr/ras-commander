@@ -2,7 +2,7 @@
 
 `RasFim` maps water-surface elevation (WSE) profiles defined on HEC-RAS 2D
 cells to depth and WSE rasters with either the ras2fim-2D Step 05 method or
-the horizontal method below. It maps a
+the horizontal or experimental plain-sloping methods below. It maps a
 batch of profiles against one shared terrain, accepts a bounding box or a
 polygon area of interest (AOI), and returns a product manifest DataFrame.
 
@@ -11,7 +11,7 @@ or Windows x86-64 engine wheel into the same environment:
 
 ```bash
 uv pip install -e ".[fim,compute]"
-uv pip install /path/to/ras2fim_engine-0.3.0-py3-none-<platform>.whl
+uv pip install /path/to/ras2fim_engine-0.7.1-py3-none-<platform>.whl
 ras2fim-batch method
 ```
 
@@ -30,7 +30,280 @@ The workflow does not publish to PyPI. Installed-binary synthetic mapping tests
 run on both platforms. Step05 numerical qualification used Linux; horizontal
 corpus checks passed on both Linux and Windows.
 
+## Experimental plain sloping mapping
+
+Use `map_sloping_profiles` to reconstruct RAS Mapper's plain **Sloping (Cell
+Corners)** method from computed 2D HDF results. It is a separate optional Rust
+method supplied by the 0.4.0 engine wheels. Earlier 0.3.0 wheels do not contain
+this command. Use `ras2fim-batch method` to inspect installed capabilities.
+
+```python
+from ras_commander import RasFim
+
+manifest = RasFim.map_sloping_profiles(
+    "model.p02.hdf", "canonical_terrain.tif", "sloping_catalog",
+    profiles={"maximum": "Max", "t0054": 54, "t0108": 108},
+    engine_path="/path/to/new/ras2fim-batch",
+    threads=4,
+    max_working_mib=4096,
+    polygon="reach_boundary.gpkg",  # alternatively bbox=(xmin, ymin, xmax, ymax)
+    write_floodplain=False,
+)
+performance = manifest.attrs["performance"]
+```
+
+Set `writer_threads=4` to use four GeoTIFF compression workers. The default is
+one. This explicitly overrides `GDAL_NUM_THREADS` during ordinary and template
+writes and restores the enclosing setting on success or failure. `threads`
+controls native geometry extraction and Rust mapping; `writer_threads` controls
+product compression. These pools can overlap on later profiles, so budget both.
+Compression workers preserve decoded masks, values and storage layout; encoded
+TIFF bytes can differ.
+
+Numeric HDF payloads require the native Rust backend. The current qualification
+uses `ras-commander-fast-hdf` 0.2.2 and current-main typed cell coordinates,
+avoiding Shapely point construction. Immutable per-mesh result views are reused
+for timestep profiles while retaining source identity checks on each read.
+Performance attributes record the installed HDF backend version and preparation
+phases, including geometry extraction and overlap validation. HDF metadata
+inspection still uses h5py.
+
+To match an existing raster's complete layout, pass
+`template_raster="native_depth.tif"`. Only its grid, nodata and storage metadata
+are read. Rust values are delivered directly on that grid in one write pass,
+with nodata outside the mapped cells/AOI and no resampling. A template must
+share the terrain pixel lattice and contain the processing window; its nodata
+must not collide with a finite mapped value. Manifest offsets then refer to
+the template grid. Omit it for compact terrain-window outputs.
+
+Profile selectors are zero-based stored timestep indices or `"Max"`. Geometry,
+terrain and pixel ownership are shared across the request. Each profile gets
+its own hydraulic connectivity and corner reconstruction. Worker count controls
+the bounded Rayon pool. An AOI reduces the terrain/output window while retaining
+the complete mesh needed to reconstruct boundary values. Models containing 1D
+river or cross-section elements are rejected before mapping.
+Standalone storage-area surfaces outside the 2D mesh are excluded. The return
+attributes `mapping_scope` and `model_scope`, and the JSON manifest, record
+this boundary. The Bald Eagle dam-break reference also renders a storage area;
+its exact sloping comparison is restricted to physical 2D cells, not the whole
+native model image.
+
+The method adds **no depth postprocessing cutoff**. It reproduces the native
+float32 plot tolerance of 0.001 in model elevation units, including native
+rounding; it does not replace this behavior with a 0.5 ft filter. The default disables shallow-to-horizontal rendering and
+cell-face stencil enrichment. HEC documents these distinct controls in
+[Mapping Options, HEC-RAS Mapper User's Manual 6.6](https://www.hec.usace.army.mil/confluence/rasdocs/rmum/6.6/mapping-results/mapping-options).
+
+Native 7.0.1 comparisons currently match raw valid/nodata masks and every
+float32 depth/WSE value within the physical 2D footprint for Davis pipes and
+conduits (Max and two timesteps), Bald Eagle dam break (Max), and Bald Eagle
+bridges (Max). Bounded Max comparisons also match exactly on Spring River
+(422,715 physical cells) and Spring Creek (340,163 physical cells), retaining
+the complete mesh for reconstruction. Linux and Windows x86-64 native engine
+checks include one/four-worker Davis Max/timestep comparisons; the five-model
+corpus also passes on both platforms. The final Windows Max comparisons also
+match across the full physical 2D footprints of Spring River and Spring Creek.
+Full-extent Linux eBFE, unweighted face-mode eBFE and other HEC-RAS versions remain
+unqualified. A triangular AOI test also passes. Fresh single-map Windows
+performance comparisons are recorded in the
+[performance evidence](../development/fim-mapping-performance.md#plain-sloping-development-qualification).
+
+The API writes products to a new or empty directory, records the engine method,
+native option contract and timings, and removes products if the session aborts.
+Performance evidence is returned in `attrs["performance"]` and retained in
+`fim_manifest.json`. The memory budget is planned admission rather than an
+enforced process RSS limit; HDF/Python preparation and polygonization also use
+memory. A missing or incompatible engine raises without fallback. Mapping itself
+does not load HEC-RAS assemblies; the private native component oracle is used
+only during development qualification.
+
+## Additional sloping options (engine 0.5)
+
+### Reach-scale catalog masks
+
+Both sloping modes accept the same bbox/polygon inputs as horizontal mapping.
+Submit multiple timestep selectors in one call to share terrain and ownership:
+
+```python
+manifest = RasFim.map_sloping_profiles(
+    "model.p02.hdf", "canonical_terrain.tif", "reach_catalog",
+    profiles={"t0054": 54, "t0108": 108},
+    bbox=(xmin, ymin, xmax, ymax),
+    aoi_crs="EPSG:2278",  # use the actual CRS of these bounds
+    threads=4,
+    writer_threads=4,
+)
+```
+
+For a polygon, replace `bbox` with `polygon="reach_boundary.gpkg"` and,
+if needed, `polygon_layer="reaches"`. Shapely geometries and GeoDataFrames
+are also accepted. Supply one of bbox or polygon. Bbox coordinates default to
+the mesh CRS unless `aoi_crs` is supplied. A Shapely polygon requires explicit
+`aoi_crs`; file/frame CRS metadata is used when present.
+
+The mask applies to every requested profile. The mapper reads the bounded
+terrain window and writes compact Depth/WSE rasters with nodata outside the
+polygon, using pixel-center inclusion. Complete hydraulic topology and cell
+results remain available for reconstruction, preserving values at mask edges.
+Omit `template_raster` for compact catalog delivery; a full-grid template
+retains its full dimensions even when mapping is masked. An AOI reduces raster
+work, but does not eliminate full-mesh preparation. These rules also apply to
+`slopingPretty` and its shallow-to-horizontal control.
+
+Select `render_mode="slopingPretty"` for **Sloping (Cell Corners + Cell Faces)**.
+This unweighted mode donates corner weights to adjacent cell faces.
+`reduce_shallow_to_horizontal=True` uses native face-connectivity classifications
+to paint qualifying shallow cells with their computed cell WSE, bypassing their
+polygon interpolation work. That control requires slopingPretty; plain mode
+rejects it. Neither mode applies an additional depth cutoff.
+
+```python
+manifest = RasFim.map_sloping_profiles(
+    "model.p02.hdf", "canonical_terrain.tif", "sloping_faces",
+    profiles={"maximum": "Max", "t0054": 54},
+    render_mode="slopingPretty",
+    reduce_shallow_to_horizontal=True,
+    threads=4,
+)
+```
+
+The selected options and `rasmapper-sloping-with-faces/1` method appear in the
+report and manifest. Plain mode retains `rasmapper-plain-sloping/1`.
+Unweighted face mode, with the shallow control off or on, matches native 7.0.1
+raw masks and float32 bits on Bald Eagle bridges Max and Davis timesteps 54/108,
+with one/four workers on Windows and Linux x86-64. This does not establish
+face-mode parity for the large eBFE cases or other HEC-RAS versions.
+The physical-2D scope and standalone-storage-area exclusion apply to both modes.
+
+## Reuse prepared models across reach requests
+
+Use `RasFim.prepare_sloping_model` when several reach requests use the same
+computed model, terrain and profile selectors. Preparation returns a
+`FimPreparedSlopingModel` context that retains Python-side model inputs and
+staged native inputs until it is closed. Sloping preparation supports engine
+0.6 and 0.7; the 0.7 horizontal visibility correction does not change its
+sloping arithmetic or context protocol.
+
+```python
+with RasFim.prepare_sloping_model(
+    "model.p02.hdf", "canonical_terrain.tif",
+    profiles={"t0054": 54, "t0108": 108},
+    render_mode="slopingPretty",
+    reduce_shallow_to_horizontal=True,
+    threads=4,
+    max_working_mib=4096,
+    max_prepared_mib=1024,
+) as model:
+    first = model.map_profiles(
+        "reach_one", profiles=["t0054", "t0108"],
+        polygon="reach_one.gpkg", writer_threads=1,
+    )
+    second = model.map_profiles(
+        "reach_two", profiles=["t0108"],
+        polygon="reach_two.gpkg", writer_threads=1,
+    )
+    print(model.info)
+```
+
+The factory fixes the model, terrain, interpolation options, engine, native
+worker count and available profile names. Its `profiles` maps names to `"Max"`
+or zero-based stored timestep indices; omission prepares Max. A request's
+`profiles` selects a subset of those **names**, rather than new timestep
+selectors. Omit it to map the complete prepared set. Repeated selectors are
+staged once, even when several names refer to the same result.
+
+The context retains physical cell polygons and their spatial index, model
+scope, engine capabilities, terrain metadata, complete staged mesh arrays and
+the selected WSE rows in immutable temporary files. It does not retain a
+native process: each request starts the CLI, rebuilds Rust interpolation
+stencils and decodes its terrain window. Hydraulic connectivity, face values
+and shallow-cell decisions are computed for each profile. Chunked HDF
+staging, persistent native terrain/stencil caches and pixel-weight caches are
+outside this increment.
+
+Each request resolves its bbox or polygon, plans the output window, validates
+selected cell overlaps, builds ownership and raster arrays, and writes its
+products. Complete global mesh topology and prepared results remain available
+at AOI boundaries. `template_raster`, `write_floodplain`, `writer_threads`,
+`max_inflight_profiles`, `timeout` and AOI inputs have the same meaning as on
+`map_sloping_profiles`. The output folder must be new or empty. A request can
+override the factory's `max_working_mib`; compression has its separate worker
+budget. Preparation does not change the physical-2D mapping scope, native
+qualification scope or zero-added-cutoff behavior described above.
+
+`max_prepared_mib` bounds a planned retained-geometry estimate plus the actual
+staged-file bytes. The fixed prepared profile set prevents cache growth across
+requests. This budget and `max_working_mib` are admission checks, not limits on
+process RSS or total Python/GDAL memory; transient HDF reads and preparation
+allocations are outside retained admission. Preparation that exceeds its budget
+raises and cleans its temporary inputs. `info` returns a copy of preparation
+metadata, including counts, planned/staged bytes and `prepare_seconds`. Each
+request retains this copy in `attrs["performance"]["prepared_context"]`; its
+`total_seconds` measures that request and excludes the earlier preparation.
+
+The context checks HDF, terrain and engine size and nanosecond modification
+time before and after preparation and each mapping request. It also watches
+the source-text geometry file when the 2D-model guard resolves one. These are
+file identity checks, not content hashes. If no source-text geometry was
+initially available, model scope is rechecked; a newly resolved geometry file
+requires a new context. A changed source invalidates and closes
+the context, then raises; create a new context explicitly to use changed
+inputs. Request-specific polygon and template files retain their own identity
+checks. Inputs are read-only. A failed mapping request removes that request's
+delivered products; source invalidation also releases the prepared state.
+
+Use the context manager to release temporary inputs on success or exception.
+Alternatively call `close()` explicitly; it is idempotent, and `closed` reports
+whether the context has been released. Calls on one context are serialized,
+including calls from different threads; `close()` waits for an active request.
+A closed context cannot map again. This synchronization does not provide
+cross-context scheduling or combine their memory and worker budgets.
+
+See the [prepared-context evidence](../development/fim-mapping-performance.md#prepared-model-contexts-across-reach-requests)
+for reuse behavior and numerical comparison scope.
+
+## Bounded timestep concurrency (engine 0.6)
+
+Set `max_inflight_profiles=2` or `4` on `map_sloping_profiles` to evaluate
+several timesteps concurrently. The default remains one. Geometry, interpolation
+stencils, ownership and terrain are shared; each profile has independent
+hydraulic reconstruction and output arrays. Per-profile arithmetic is unchanged.
+
+```python
+manifest = RasFim.map_sloping_profiles(
+    "model.p02.hdf", "canonical_terrain.tif", "reach_catalog",
+    profiles={"t0054": 54, "t0108": 108},
+    polygon="reach_boundary.gpkg",
+    threads=4,
+    writer_threads=1,
+    max_inflight_profiles=2,
+    max_working_mib=4096,
+)
+report = manifest.attrs["performance"]["engine_report"]
+print(report["effective_inflight_profiles"])
+```
+
+All concurrent maps use the same `threads`-sized Rust pool. Effective concurrency
+is capped by this limit, profile count and memory admission. If only one map
+fits the planned budget, the engine uses one; if the serial plan exceeds the
+budget, it raises before allocating raster arrays. This is planned admission,
+not an enforced process RSS limit. Python/GDAL memory is additional.
+
+The scheduler processes bounded batches and emits maps in request order, even
+if later profiles finish first. A failed batch aborts the session and removes
+earlier delivered products. Reports record requested/effective concurrency,
+planned bytes and each additional slot's allowance. Per-profile elapsed stage
+times overlap, so their sum is not aggregate wall time.
+
+HDF row reads and binary staging remain sequential before Rust starts, and
+Python writes products sequentially. Compression can overlap subsequent native
+work; `writer_threads` remains a separate budget. Throughput gains therefore
+depend on the workload. Older engines retain the default sequential path;
+requesting concurrency without the advertised capability raises explicitly.
+
 ## Horizontal cell mapping
+
+Horizontal method /2 requires engine 0.7 or newer. Older /1 engines raise explicitly.
 
 This is a **2D surface-only** mapper. Model-backed entry points reject any
 1D river centerline/reach or cross-section geometry before mapping, even
@@ -50,7 +323,7 @@ terrain blocks through terrio and reuses the decoded window. The native engine
 also rasterizes the validated cells and polygon AOI through terrio, preserving
 pixel-centre inclusion and feature order; Python writes final GIS products. It avoids convex
 hulls, Delaunay triangulation and full-grid reprojection lookups. The Rust
-backend is the default and requires the 0.3 engine wheel. The explicit
+backend is the default and requires a 0.3 or newer engine wheel. The explicit
 `backend="numpy"` reference backend is retained for numerical qualification;
 there is no automatic fallback.
 
@@ -96,17 +369,23 @@ remain read-only, and output must be new or empty. Declared nodata and NaN
 terrain pixels stay dry; other sentinel values present in the data but not
 declared are treated as elevations.
 
-NaN WSE marks dry cells; callers supply the cell wet/dry policy. Cell WSE is
-normalized to float32 before subtracting terrain. Depth must be **strictly
-greater** than `min_depth` to retain either product, with comparison in
-float32. The threshold uses the input elevation units; it does not convert
-feet to metres or establish a vertical datum. Native shallow-depth display
-rules below this threshold are not reproduced.
+NaN WSE marks dry cells; callers supply the cell wet/dry policy. Native pixel
+visibility compares `WSE >= float32(terrain + 0.001)` in float32 before depth
+subtraction. Preserve that order: comparing the resulting depth against 0.001
+would remove some native-valid boundary pixels. Native-valid zero depths can
+also occur when terrain-plus-tolerance rounds back to terrain.
+
+`min_depth=0` adds no depth cutoff. A positive `min_depth` optionally retains
+only depths strictly greater than that value after native visibility, masking
+Depth and WSE together. All thresholds use model elevation units; they do not
+convert feet to metres or establish a vertical datum. This intrinsic native
+plotting tolerance is separate from optional depth postprocessing.
 
 The returned `fim_product_manifest` has the same columns and 09/10/11 filename
 layout as Step05 products; those names do not identify the mapping method.
-The JSON manifest records `method_id="horizontal-cell-constant/1"`,
-`backend="rust"` (or the explicitly requested reference backend), float32 arithmetic, the threshold, source identities and
+The JSON manifest records `method_id="horizontal-cell-constant/2"`,
+`backend="rust"` (or the explicitly requested reference backend), float32 arithmetic,
+the native plot tolerance, optional positive cutoff, source identities and
 the terrain window. A `timings` section records ownership preparation,
 input staging, stream reads (including waits for the engine), product writes
 and mapping wall time; these are pipeline observations, not kernel-only
@@ -127,6 +406,17 @@ renderers. Select the same render mode, terrain, timestep, grid and depth
 filter when comparing with RAS Mapper; agreement with one mode does not
 establish agreement with another.
 
+Both comparison APIs now default to zero added cutoff;
+`compare_with_rasmapper` also defaults to no reference-delivery rewrite.
+For zero-cutoff raw comparison, `RasFim.compare_rasters(..., min_depth=0)`
+preserves every valid pixel, including zero depths, and compares float32 bits.
+Positive cutoffs remain optional independent filters of candidate and reference.
+A missing zero-depth pixel is a mask difference; matching common values alone
+does not establish raster parity. The standalone
+`scripts/benchmarks/fim_horizontal_parity.py` runner checks complete physical-2D
+masks and float32 values against retained native references, requiring zero
+extra, missing, different and outside-footprint pixels for both products.
+
 ## Compare with native horizontal stored maps
 
 Use `compare_with_rasmapper` on an isolated copy of a computed project. It
@@ -142,8 +432,8 @@ comparison = RasFim.compare_with_rasmapper(
     mesh_name="selected 2D area",
     terrain_name="registered terrain name",
     ras_object=project,
-    ras_version="6.6",
-    min_depth=0.5,       # model elevation units; feet in this example
+    ras_version="7.0.1",
+    min_depth=0.0,       # raw comparison; no added depth cutoff
     threads=4,
     max_working_mib=2048,
 )
@@ -176,24 +466,24 @@ additional/missing wet pixels, common-wet depth differences, finite-pair WSE
 differences, separate missing-WSE counts, native implied-terrain residuals and product paths. The JSON report
 records native runtime provenance, terrain and registered-HDF hashes, the
 effective float32 threshold, Rust batch timing and the
-original/restored `.rasmap` hashes. Both depth masks use the strict cutoff
-independently. The native TIFFs remain unmodified. No reference resampling is
+original/restored `.rasmap` hashes. Positive optional cutoffs apply to both
+depth masks independently; zero preserves all valid pixels. The native TIFFs remain unmodified. No reference resampling is
 performed: incompatible CRS, pixel sizes or fractional grid shifts fail.
 
 The optional strict pixel filter is `min_depth`: direct horizontal mapping
-defaults to `0.0`, and comparison defaults to `0.5` in model elevation units.
-Both depth and WSE use the retained depth mask. `0.0` disables the half-unit
-cutoff while retaining positive depths. Cell extraction's `min_depth` is a
+and comparison both default to `0.0` in model elevation units.
+Both depth and WSE use the retained depth mask. `0.0` preserves all valid pixels, including zero depths. Cell extraction's `min_depth` is a
 separate cell wet/dry policy, not the raster postprocessing threshold.
 
-By default, comparison also writes independently thresholded native LZW
-delivery rasters, preserving the raw references. Timing columns distinguish
+With `postprocess_reference=True`, comparison also writes independently
+thresholded native LZW delivery rasters, preserving the raw references. Timing columns distinguish
 `native_seconds` (stored-map generation), `native_postprocess_seconds`,
 `native_total_seconds`, `candidate_batch_seconds` and `comparison_seconds`.
 `candidate_seconds` is populated only for a single-profile call; shared batch
 time is not allocated repeatedly to individual profiles. Filtered native
-paths are returned separately. Set `postprocess_reference=False` to omit
-these written native products; comparison metrics still apply the cutoff.
+paths are returned separately. The default `postprocess_reference=False`
+omits these delivery rewrites. Positive cutoffs still apply independently
+when computing comparison metrics.
 
 `comparison.attrs["performance"]` is the additional performance return,
 also persisted in JSON. It includes totals, worker settings, an observed
@@ -255,8 +545,11 @@ cannot be reversed. Raster provenance remains the caller's responsibility.
 
 Notebook 602 shows 0.0, 0.5, 1.0 and 2.0 ft on Davis. Common-wet depth/WSE
 matches at all four cutoffs; wet masks match at 0.5, 1.0 and 2.0 ft. At zero,
-Rust retains 50 additional pixels below 0.001 ft, so zero-cutoff wet-mask
-parity is not established. The default half-foot qualification is unchanged.
+An earlier /1 qualification retained 50 additional pixels below 0.001 ft.
+That is historical evidence, not the current /2 status: engine0.7 now matches
+complete zero-added-cutoff masks and float32 values on the four completed
+full-model native cases documented in the performance page. The half-foot
+filter remains optional, rather than the comparison default.
 
 ## Method
 
@@ -496,6 +789,12 @@ are observations of the listed workloads and do not establish a general speedup.
       show_source: false
 
 ::: ras_commander.fim._prepare.FimPreparedProfile
+    options:
+      show_root_heading: false
+      heading_level: 3
+      show_source: false
+
+::: ras_commander.fim.FimPreparedSlopingModel
     options:
       show_root_heading: false
       heading_level: 3

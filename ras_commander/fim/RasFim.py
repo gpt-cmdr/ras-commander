@@ -29,6 +29,10 @@ engine executable.
 horizontal WSE, with an explicit NumPy qualification reference. It reuses
 terrain-lattice ownership across profiles and never substitutes for a failed
 Step05 run.
+
+``map_sloping_profiles`` is a separate experimental plain cell-corner sloping
+method reconstructed against native RAS Mapper 7.0.1. It reads complete mesh
+topology from HDF, uses terrio terrain/ownership and has no extra depth cutoff.
 """
 
 from __future__ import annotations
@@ -45,6 +49,7 @@ from typing import TYPE_CHECKING, Any, Dict, Iterable, List, Optional, Sequence,
 if TYPE_CHECKING:
     import geopandas as gpd
     from ..RasPrj import RasPrj
+    from ._sloping_context import FimPreparedSlopingModel
     from .._execution_types import StoreMapPerformanceOptions
 
 import numpy as np
@@ -89,11 +94,14 @@ MANIFEST_COLUMNS = [
 PathLike = Union[str, os.PathLike]
 
 
-def _require_dependencies() -> None:
+def _require_dependencies(*, triangulation: bool = True) -> None:
     """Fail early with installation guidance when the ``fim`` extra is missing."""
     from .._optional_deps import require_module
 
-    for name in ("scipy.spatial", "geopandas", "shapely", "rasterio", "pyproj"):
+    modules = ("geopandas", "shapely", "rasterio", "pyproj")
+    if triangulation:
+        modules = ("scipy.spatial",) + modules
+    for name in modules:
         require_module(name, "RasFim")
 
 
@@ -209,6 +217,156 @@ class RasFim:
 
     @staticmethod
     @log_call
+    def prepare_sloping_model(
+        hdf_path: PathLike, terrain_path: PathLike, *,
+        profiles: Optional[Dict[str, Union[str, int]]] = None,
+        render_mode: str = "sloping",
+        reduce_shallow_to_horizontal: bool = False,
+        engine_path: Optional[PathLike] = None, threads: int = 1,
+        max_working_mib: int = 1024, max_prepared_mib: int = 1024,
+    ) -> "FimPreparedSlopingModel":
+        """Prepare fixed 2D sloping inputs for repeated reach/AOI requests.
+
+        ``profiles`` maps names to Max or stored timestep indices, as in
+        :meth:`map_sloping_profiles`. Geometry, spatial index and complete
+        staged mesh/WSE inputs are reused. Repeated selectors share files.
+        Rendering options and threads are fixed for the context's lifetime.
+        Each mapping call still starts the native CLI and reconstructs native
+        stencils, terrain and hydraulic values. No extra depth cutoff is added.
+
+        Use the returned context in a ``with`` block or call ``close()``.
+        Changes to HDF, terrain, engine or resolved source-text geometry
+        size/mtime invalidate and close it.
+        Calls are serialized; timestep parallelism is controlled per request
+        with ``max_inflight_profiles``. ``max_prepared_mib`` admits estimated
+        retained geometry plus actual staged bytes, independently of the
+        per-request ``max_working_mib``. Neither is a hard RSS limit; transient
+        HDF reads and preparation allocations are outside retained admission.
+
+        Returns:
+            FimPreparedSlopingModel: Owned inputs with ``map_profiles``,
+            ``info``, ``closed`` and idempotent ``close``. Its mapping method
+            accepts an optional ordered subset of prepared names, bbox or
+            polygon, and the ordinary delivery/concurrency controls.
+        """
+        _require_dependencies(triangulation=False)
+        from ._sloping_context import FimPreparedSlopingModel
+
+        return FimPreparedSlopingModel(
+            hdf_path, terrain_path, profiles=profiles, render_mode=render_mode,
+            reduce_shallow_to_horizontal=reduce_shallow_to_horizontal,
+            engine_path=engine_path, threads=threads,
+            max_working_mib=max_working_mib, max_prepared_mib=max_prepared_mib,
+        )
+
+    @staticmethod
+    @log_call
+    def map_sloping_profiles(
+        hdf_path: PathLike, terrain_path: PathLike, output_folder: PathLike, *,
+        profiles: Optional[Dict[str, Union[str, int]]] = None,
+        render_mode: str = "sloping",
+        reduce_shallow_to_horizontal: bool = False,
+        bbox: Optional[Sequence[float]] = None, polygon: Any = None,
+        polygon_layer: Optional[str] = None, aoi_crs: Any = None,
+        engine_path: Optional[PathLike] = None, threads: int = 1,
+        writer_threads: int = 1,
+        max_working_mib: int = 1024, timeout: Optional[float] = None,
+        max_inflight_profiles: int = 1,
+        write_floodplain: bool = False,
+        template_raster: Optional[PathLike] = None,
+    ) -> pd.DataFrame:
+        """Map 2D HDF WSE with the experimental Rust sloping engine.
+
+        ``profiles`` maps output names to ``"Max"`` or zero-based stored
+        timestep indices; omitted selects ``{"Max": "Max"}``. Geometry,
+        terrio ownership and terrain are reused across profiles. ``threads``
+        bounds native reconstruction and pixel workers (1 through 64).
+
+        Defaults to plain cell-corner sloping. ``render_mode="slopingPretty"``
+        includes cell faces and accepts the shallow-to-horizontal control.
+        Neither mode adds depth postprocessing. It preserves the native
+        float32 plot tolerance. Plain-mode native 7.0.1 Max products were qualified
+        on Davis pipes and Bald Eagle bridge/dam examples, and two Davis
+        timesteps. Bounded Spring River/Spring Creek comparisons retain the
+        complete mesh. Models containing 1D river or cross-section elements
+        are rejected before mapping.
+        Standalone storage-area surfaces outside the 2D mesh are not mapped.
+
+        ``terrain_path`` must be a same-CRS float32 square-pixel GeoTIFF with
+        declared nodata. ``bbox`` or ``polygon`` constrains output pixels;
+        connectivity uses the complete mesh. Polygon constraints accept the
+        same geometry/frame/file forms as :meth:`resolve_aoi`.
+
+        Outputs require a new or empty folder. The returned
+        ``fim_product_manifest`` DataFrame includes performance evidence in
+        ``attrs["performance"]``; the JSON manifest retains the same evidence.
+        ``max_working_mib`` is planned admission, not an enforced RSS ceiling.
+        ``timeout`` covers the engine stream including product writes.
+        A missing or incompatible engine raises; no arithmetic fallback runs.
+
+        Args:
+            hdf_path: Computed 2D plan-results HDF, as a string or Path.
+            terrain_path: Same-CRS, single-band float32 GeoTIFF with declared
+                nodata and north-up square pixels.
+            output_folder: New or empty directory for products and manifest.
+            profiles: Output names mapped to ``"Max"`` or nonnegative
+                zero-based stored timestep indices. Defaults to Max.
+            render_mode: ``"sloping"`` for corners or ``"slopingPretty"`` for
+                corners and faces. Defaults to plain sloping.
+            reduce_shallow_to_horizontal: Native connectivity-based horizontal
+                rendering for shallow cells; requires slopingPretty.
+            bbox: Optional output bounds in ``aoi_crs`` or the model CRS.
+            polygon: Optional polygon geometry, frame or vector-file AOI.
+            polygon_layer: Layer name when the AOI file has multiple layers.
+            aoi_crs: Coordinate reference system of the AOI.
+            engine_path: Matching engine executable, otherwise environment/PATH.
+            threads: Bounded Rust worker count, 1 through 64.
+            writer_threads: GeoTIFF compression workers, 1 through 64. Defaults
+                to one and can overlap native preparation of later profiles;
+                budget both pools. Compression and raster layout are unchanged.
+                Overrides GDAL_NUM_THREADS during writes and restores it after
+                success or failure, including when the default is used.
+            max_working_mib: Planned engine memory admission budget in MiB;
+                HDF/Python preparation and polygonization also use memory.
+            max_inflight_profiles: Maximum concurrent timestep/profile maps,
+                1 through 64. Defaults to sequential processing. Effective
+                concurrency is capped by threads, profile count and planned
+                memory admission, and recorded in the engine report. Requests
+                greater than one require engine concurrency support. All maps
+                share the same Rust worker pool, terrain and geometry.
+            timeout: Engine stream lifetime in seconds, including output writes.
+            write_floodplain: Also polygonize positive retained depth pixels.
+            template_raster: Optional float32 GeoTIFF defining the delivered
+                grid, nodata and storage profile. Must share the terrain pixel
+                lattice and contain the processing window. Values are written
+                once, with nodata padding and no resampling. Offsets in the
+                returned manifest then refer to this template grid.
+
+        Returns:
+            DataFrame: ``fim_product_manifest`` rows with timing evidence in
+            ``attrs["performance"]`` and the JSON manifest. ``mapping_scope``
+            and ``model_scope`` attributes identify the included model elements.
+
+        Raises:
+            FimUnsupportedError: Unsupported model, geometry, AOI or terrain.
+            FimEngineNotFoundError: The optional executable is unavailable.
+            FimEngineError: Engine failure, inconsistent output or changed input.
+            ValueError: Invalid profile selectors or resource options.
+            FileExistsError: The output directory is not empty.
+        """
+        _require_dependencies(triangulation=False)
+        from . import _sloping
+        return _sloping.map_profiles(hdf_path, terrain_path, output_folder,
+            profiles=profiles, render_mode=render_mode,
+            reduce_shallow_to_horizontal=reduce_shallow_to_horizontal,
+            bbox=bbox, polygon=polygon, polygon_layer=polygon_layer,
+            aoi_crs=aoi_crs, engine_path=engine_path, threads=threads, writer_threads=writer_threads,
+            max_working_mib=max_working_mib, timeout=timeout, write_floodplain=write_floodplain,
+            max_inflight_profiles=max_inflight_profiles,
+            template_raster=template_raster)
+
+    @staticmethod
+    @log_call
     def map_horizontal_profiles(
         cells: "gpd.GeoDataFrame",
         terrain_path: PathLike,
@@ -253,9 +411,11 @@ class RasFim:
             polygon: Polygon, MultiPolygon, frame or vector file constraint.
             polygon_layer: Layer name for a multi-layer vector file.
             aoi_crs: CRS of the constraint; see :meth:`resolve_aoi`.
-            min_depth: Keep pixels with depth strictly greater than this
-                value, in the input elevation units. Use 0.5 for a half-foot
-                filter only when those units are feet. Filters WSE too.
+            min_depth: Optional strict positive depth cutoff after native
+                visibility, in model elevation units. Zero adds no cutoff.
+                Native visibility uses float32 WSE >= float32(terrain + 0.001),
+                preserving operation order. Positive cutoffs filter both products;
+                0.5 is a half-foot filter only when elevation units are feet.
             backend: "rust" (default) or explicit "numpy" reference arithmetic.
             engine_path: Optional executable path for the Rust backend.
             threads: Rust pixel worker count, 1 through 64.
@@ -294,7 +454,9 @@ class RasFim:
             2D-cell method; it does not reproduce native sloping, 1D or
             structure-specific rendering. Finite input WSE must already
             reflect the caller's cell wet/dry policy. WSE is cast to float32
-            before subtraction, and the depth threshold compares in float32.
+            before native plotting visibility and subtraction. The intrinsic
+            0.001 plotting tolerance is compared in elevation space, not after
+            depth subtraction. Positive optional cutoffs compare in float32.
             Product names are layout conventions, not method identifiers.
         """
         _require_dependencies()
@@ -350,10 +512,12 @@ class RasFim:
         rows = {name: _empty_row(name, "not_run") for name in names}
         details = {
             "method": f"horizontal cell-constant WSE / terrain lattice / {backend}",
-            "method_id": "horizontal-cell-constant/1",
+            "method_id": "horizontal-cell-constant/2",
             "backend": backend,
             "options": {
                 "min_depth": float(min_depth),
+                "native_plot_tolerance": float(np.float32(0.001)),
+                "extra_depth_cutoff": float(min_depth) if min_depth > 0 else None,
                 "max_working_mib": budget,
                 "write_floodplain": bool(write_floodplain),
                 "writer_threads": writer_threads,
@@ -498,12 +662,12 @@ class RasFim:
         polygon: Any = None,
         polygon_layer: Optional[str] = None,
         aoi_crs: Any = None,
-        min_depth: float = 0.5,
+        min_depth: float = 0.0,
         engine_path: Optional[PathLike] = None,
         threads: int = 1,
         writer_threads: int = 1,
         max_working_mib: int = 1024,
-        postprocess_reference: bool = True,
+        postprocess_reference: bool = False,
         native_performance: Optional["StoreMapPerformanceOptions"] = None,
         terrain_name: Optional[str] = None,
         ras_object: Optional["RasPrj"] = None,
@@ -533,9 +697,9 @@ class RasFim:
             polygon: Optional polygon constraint, mutually exclusive with bbox.
             polygon_layer: Layer in a multi-layer polygon file.
             aoi_crs: Constraint CRS; defaults to the cells' CRS.
-            min_depth: Strict depth cutoff independently applied to both
-                products, in model elevation units. 0.5 means half a foot
-                only for models whose elevations use feet.
+            min_depth: Zero (default) preserves all native-visible pixels.
+                Positive optional cutoffs apply independently to both products
+                in model elevation units; 0.5 means half a foot only in feet.
             engine_path: Explicit Rust engine executable, or normal discovery.
             threads: Rust pixel workers (1 through 64).
             writer_threads: Delivery GeoTIFF compression workers (1 through
@@ -611,14 +775,15 @@ class RasFim:
     def compare_rasters(
         candidate_depth: PathLike, candidate_wse: PathLike,
         reference_depth: PathLike, reference_wse: PathLike, *,
-        cells: "gpd.GeoDataFrame", min_depth: float = 0.5,
+        cells: "gpd.GeoDataFrame", min_depth: float = 0.0,
         terrain_path: Optional[PathLike] = None,
     ) -> Dict[str, Any]:
         """Compare existing depth/WSE rasters on a physical 2D cell footprint.
 
-        Apply the same strict float32 depth cutoff independently to both
-        products without changing files, generating maps or resampling a
-        reference. Inputs must share a CRS, resolution and integer-offset
+        Positive cutoffs apply the same strict float32 depth filter independently
+        to both products. Zero preserves every valid pixel, including native-valid
+        zero depths. Exact fractions compare float32 bits. Files are not changed;
+        no maps are generated and references are never resampled. Inputs must share a CRS, resolution and integer-offset
         north-up lattice; cells must use that CRS. Missing WSE is counted
         separately from jointly finite WSE differences. Optional terrain
         supplies native implied-terrain residuals. Returns the numerical

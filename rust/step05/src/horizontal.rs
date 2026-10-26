@@ -50,8 +50,9 @@ pub struct Profile {
 }
 
 pub fn method_record() -> Value {
-    json!({"method_id":"horizontal-cell-constant/1", "backend":"rust", "stream_outputs":true,
-        "arithmetic":"float32 cell WSE minus float32 terrain; strict float32 depth threshold",
+    json!({"method_id":"horizontal-cell-constant/2", "backend":"rust", "stream_outputs":true,
+        "arithmetic":"native float32 WSE >= terrain + plot tolerance; float32 subtraction; optional strict positive depth cutoff",
+        "native_plot_tolerance":0.001_f32,
         "ownership":"terrio pixel-centre polygons or supplied u32 labels; 0 dry; cell position + 1",
         "native_ownership":true,
         "terrain":"same-CRS north-up square float32 GeoTIFF; native terrio block reads once per window",
@@ -80,8 +81,10 @@ fn read_bytes(path: &Path, expected: u64) -> Result<Vec<u8>, MapError> {
 fn read_values(path: &Path, count: usize) -> Result<Vec<f32>, MapError> {
     let raw = read_bytes(path, bytes(count, 4)?)?;
     let values: Vec<_> = raw
-        .chunks_exact(4)
-        .map(|v| f32::from_le_bytes(v.try_into().unwrap()))
+        .as_chunks::<4>()
+        .0
+        .iter()
+        .map(|v| f32::from_le_bytes(*v))
         .collect();
     if values.iter().any(|v| v.is_infinite()) {
         return Err(MapError::Invalid(
@@ -90,17 +93,17 @@ fn read_values(path: &Path, count: usize) -> Result<Vec<f32>, MapError> {
     }
     Ok(values)
 }
-fn write_f32(writer: &mut impl Write, values: &[f32]) -> Result<(), MapError> {
+pub(crate) fn write_f32(writer: &mut impl Write, values: &[f32]) -> Result<(), MapError> {
     let mut buffer = vec![0_u8; 65536];
     for chunk in values.chunks(16384) {
-        for (value, bytes) in chunk.iter().zip(buffer.chunks_exact_mut(4)) {
+        for (value, bytes) in chunk.iter().zip(buffer.as_chunks_mut::<4>().0.iter_mut()) {
             bytes.copy_from_slice(&value.to_le_bytes());
         }
         writer.write_all(&buffer[..chunk.len() * 4])?;
     }
     Ok(())
 }
-fn write_values(path: &Path, values: &[f32]) -> Result<(), MapError> {
+pub(crate) fn write_values(path: &Path, values: &[f32]) -> Result<(), MapError> {
     let partial = path.with_extension("bin.partial");
     let mut writer = BufWriter::new(File::create(&partial)?);
     write_f32(&mut writer, values)?;
@@ -135,7 +138,11 @@ fn evaluate(
             if delta.is_infinite() {
                 return Err(MapError::Invalid("float32 depth overflow".into()));
             }
-            if delta > threshold {
+            // Native visibility compares elevations before subtracting depth.
+            // Replacing this with delta >= 0.001 changes binary32 boundaries.
+            // Zero means no additional cutoff, including native-valid zero
+            // depths when terrain + tolerance rounds back to terrain.
+            if value >= ground[i] + 0.001_f32 && (threshold == 0.0 || delta > threshold) {
                 *d = delta;
                 *w = value;
             }
@@ -293,8 +300,10 @@ pub fn run(req: &Request, base: &Path, out: &Path) -> Result<Value, MapError> {
                 labels
             } else {
                 let raw = read_bytes(&owner_path, bytes(count, 4)?)?;
-                raw.chunks_exact(4)
-                    .map(|v| u32::from_le_bytes(v.try_into().unwrap()))
+                raw.as_chunks::<4>()
+                    .0
+                    .iter()
+                    .map(|v| u32::from_le_bytes(*v))
                     .collect::<Vec<_>>()
             };
             if owner.iter().any(|v| *v as usize > req.cell_count) {
@@ -464,5 +473,25 @@ mod tests {
         assert!(d[0].is_nan() && d[2].is_nan() && d[3].is_nan() && d[4].is_nan());
         assert_eq!(d[1], 1.);
         assert_eq!(w[1], 101.);
+    }
+
+    #[test]
+    fn native_plot_order_masks_and_retains_binary32_boundary_pixels() {
+        let ground = [1000.0, 1000.0, 100000.0, 10.0];
+        let values = [
+            f32::from_bits(0x447a000f),
+            f32::from_bits(0x447a0010),
+            100000.0,
+            10.0005,
+        ];
+        let mut depth = [f32::NAN; 4];
+        let mut wse = depth;
+        evaluate(&[1, 2, 3, 4], &ground, &values, 0.0, &mut depth, &mut wse).unwrap();
+        assert!(depth[0].is_nan() && wse[0].is_nan());
+        assert_eq!(depth[1].to_bits(), (values[1] - ground[1]).to_bits());
+        assert!(depth[1] < 0.001); // A post-subtraction cutoff would be wrong.
+        assert_eq!(wse[1].to_bits(), values[1].to_bits());
+        assert_eq!(depth[2], 0.0); // Native addition rounds to the terrain.
+        assert!(depth[3].is_nan());
     }
 }

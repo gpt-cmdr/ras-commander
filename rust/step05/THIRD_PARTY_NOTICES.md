@@ -27,3 +27,8 @@ Other Rust dependencies and their exact resolved versions are recorded in
 `Cargo.lock`. Retain their applicable notices when distributing compiled
 binaries. This provenance describes software reuse; it does not imply
 endorsement by upstream projects.
+
+The separate plain-sloping method is an independent implementation qualified
+against HEC-RAS 7.0.1 stored-map output and native intermediate values. HEC-RAS
+assemblies and decompiled vendor source are not included in the engine or
+wheels. This comparison does not imply HEC or USACE endorsement or support.

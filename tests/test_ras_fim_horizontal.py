@@ -536,7 +536,7 @@ def test_horizontal_stream_report_mismatch_removes_products(scene, monkeypatch):
     from ras_commander.fim.errors import FimEngineError
 
     method = {
-        "method_id": "horizontal-cell-constant/1",
+        "method_id": "horizontal-cell-constant/2",
         "stream_outputs": True,
         "native_ownership": True,
     }
@@ -787,7 +787,7 @@ def test_native_ownership_rejects_old_engine_without_rasterizing(scene, monkeypa
         _engine,
         "engine_method",
         lambda *a: {
-            "horizontal": {"method_id": "horizontal-cell-constant/1", "stream_outputs": True}
+            "horizontal": {"method_id": "horizontal-cell-constant/2", "stream_outputs": True}
         },
     )
     monkeypatch.setattr(
@@ -945,3 +945,85 @@ def test_compare_existing_rasters_rejects_footprint_crs_and_terrain_lattice(scen
         src.transform = src.transform * rasterio.Affine.translation(.25, 0)
     with pytest.raises(FimUnsupportedError, match="integer pixel offsets"):
         RasFim.compare_rasters(*paths, *paths, cells=scene[0], terrain_path=shifted)
+
+
+def test_overlap_validation_batches_pairs_without_quadratic_query(scene, monkeypatch):
+    import geopandas as gpd
+    import shapely
+    from ras_commander.fim import _horizontal
+    from shapely.geometry import box
+    cells = gpd.GeoDataFrame(geometry=[box(0,0,10,10)] * 5000, crs=scene[0].crs)
+    plan = _horizontal.plan_grid(cells, scene[1], None, 1024, native=True)
+    counts=[]
+    original=shapely.relate_pattern
+    def bounded(left, right, pattern):
+        counts.append(len(left))
+        assert len(left) <= 4096 and len(right) == len(left)
+        return original(left,right,pattern)
+    monkeypatch.setattr(shapely,"relate_pattern",bounded)
+    with pytest.raises(FimUnsupportedError, match="overlapping"):
+        _horizontal.prepare_grid(cells,scene[1],plan,False)
+    assert counts == [4096]
+
+
+@pytest.mark.parametrize("backend", ["numpy", "rust"])
+def test_native_plotting_order_preserves_mask_and_zero_depth(tmp_path, backend):
+    import os
+
+    engine = os.environ.get("RAS_COMMANDER_FIM_HORIZONTAL_ENGINE")
+    if backend == "rust" and not engine:
+        pytest.skip("set RAS_COMMANDER_FIM_HORIZONTAL_ENGINE for compiled engine")
+    cells = gpd.GeoDataFrame(
+        {"cell_idx": range(4), "wsel_a": np.array([1000.00091552734375, 1000.0009765625, 100000., 10.0005], dtype="float32"),
+         "geometry": [box(i, 0, i+1, 1) for i in range(4)]}, crs="EPSG:2278",
+    )
+    terrain = tmp_path / "plot-terrain.tif"
+    with rasterio.open(terrain, "w", driver="GTiff", width=4, height=1, count=1,
+                       dtype="float32", crs=cells.crs, transform=from_origin(0, 1, 1, 1), nodata=-9999.) as dst:
+        dst.write(np.array([[1000., 1000., 100000., 10.]], dtype="float32"), 1)
+    products = RasFim.map_horizontal_profiles(
+        cells, terrain, tmp_path / backend, profiles=["wsel_a"], backend=backend,
+        engine_path=engine, min_depth=0, write_floodplain=False, threads=4,
+    )
+    for band in ("depth_tif", "wse_tif"):
+        with rasterio.open(products.iloc[0][band]) as src:
+            data = src.read(1, masked=True)
+            np.testing.assert_array_equal(np.ma.getmaskarray(data), [[True, False, False, True]])
+            expected = np.array([0.0009765625, 0.], dtype="float32") if band == "depth_tif" else np.array([1000.0009765625, 100000.], dtype="float32")
+            np.testing.assert_array_equal(data.data[0, 1:3].view("u4"), expected.view("u4"))
+    manifest = json.loads((tmp_path / backend / "fim_manifest.json").read_text(encoding="utf-8"))
+    assert manifest["method_id"] == "horizontal-cell-constant/2"
+    assert manifest["options"]["extra_depth_cutoff"] is None
+
+
+def test_horizontal_rejects_previous_visibility_method(scene, monkeypatch):
+    import sys
+    from ras_commander.fim.errors import FimEngineError
+
+    monkeypatch.setattr(_engine, "engine_method", lambda *a: {"horizontal": {
+        "method_id": "horizontal-cell-constant/1", "stream_outputs": True, "native_ownership": True}})
+    with pytest.raises(FimEngineError, match="horizontal-cell-constant/2"):
+        RasFim.map_horizontal_profiles(scene[0], scene[1], scene[2]/"old-visibility", engine_path=sys.executable)
+
+
+def test_zero_cutoff_comparison_detects_missing_zero_and_signed_zero_bits(tmp_path):
+    from ras_commander.fim._comparison import filter_reference
+
+    cells = gpd.GeoDataFrame(geometry=[box(0, 0, 2, 1)], crs="EPSG:2278")
+    profile = dict(driver="GTiff", width=2, height=1, count=1, dtype="float32",
+                   crs=cells.crs, transform=from_origin(0, 1, 1, 1), nodata=np.nan)
+    files = [tmp_path / name for name in ("depth.tif", "wse.tif", "native-depth.tif", "native-wse.tif")]
+    arrays = [[[0., 1.]], [[100000., 100001.]], [[-0., 1.]], [[100000., 100001.]]]
+    for path, values in zip(files, arrays):
+        with rasterio.open(path, "w", **profile) as dst:
+            dst.write(np.asarray(values, dtype="float32"), 1)
+    result = RasFim.compare_rasters(*files, cells=cells)
+    assert result["common_wet"] == 2 and result["depth_exact_fraction"] == .5
+    with rasterio.open(files[2], "r+") as dst:
+        dst.write(np.asarray([[np.nan, 1.]], dtype="float32"), 1)
+    result = RasFim.compare_rasters(*files, cells=cells)
+    assert result["extra_wet"] == 1 and result["common_wet"] == 1
+    delivery = tmp_path / "filtered"; delivery.mkdir()
+    depth, _ = filter_reference(files[0], files[1], delivery, 0, 1)
+    with rasterio.open(depth) as src:
+        assert not np.ma.getmaskarray(src.read(1, masked=True)).any()
