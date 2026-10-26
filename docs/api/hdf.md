@@ -268,6 +268,13 @@ removed before v1.2.0:
 - `get_mesh_max_ws(hdf_path, round_to="100ms")` - GeoDataFrame with `maximum_water_surface` and, when stored, `maximum_water_surface_time`
 - `get_mesh_summary(hdf_path, var)` - GeoDataFrame for a named HEC-RAS summary variable, with cell or face geometry
 - `get_mesh_summary_values(hdf_path, var)` - Read summary values and identifiers without constructing Shapely geometry
+- `include_geometry=False` (keyword-only) on `get_mesh_max_ws`, `get_mesh_min_ws`,
+  `get_mesh_max_face_v`, `get_mesh_min_face_v`, `get_mesh_max_ws_err`,
+  `get_mesh_max_iter`, `get_mesh_last_iter`, `get_mesh_summary`,
+  `get_mesh_summary_output` and `get_mesh_max_depth` returns a typed pandas
+  DataFrame without geometry (stored value dtypes, `int64` IDs, string
+  `mesh_name`); see
+  [Typed tables without geometry](../user-guide/hdf-data-extraction.md#typed-tables-without-geometry)
 - `get_mesh_max_depth(hdf_path)` - Maximum depth from stored HEC-RAS `Depth`
   when present, otherwise derived in memory from `Water Surface - Cells Minimum
   Elevation`

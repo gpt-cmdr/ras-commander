@@ -444,7 +444,7 @@ class RasPermutation:
             )
 
         try:
-            mesh_gdf = HdfResultsMesh.get_mesh_max_ws(hdf_path)
+            mesh_gdf = HdfResultsMesh.get_mesh_max_ws(hdf_path, include_geometry=False)
             if (
                 not mesh_gdf.empty
                 and "maximum_water_surface" in mesh_gdf.columns

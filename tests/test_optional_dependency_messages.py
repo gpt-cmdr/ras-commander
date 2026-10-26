@@ -55,6 +55,9 @@ print(json.dumps({
     "RasControl": capture(lambda: ras_commander.RasControl),
     "RasTerrain": capture(lambda: ras_commander.RasTerrain),
     "HdfBndry": capture(lambda: ras_commander.hdf.HdfBndry),
+    # The class imports without geopandas; building geometry names the extra.
+    "HdfBndry geometry": capture(
+        lambda: sys.modules["ras_commander.hdf.HdfBndry"].gpd.GeoDataFrame),
     "compute_plan": capture(lambda: RasCmdr.compute_plan("01")),
 }))
 '''
@@ -77,7 +80,8 @@ def test_missing_packages_name_the_extra():
         assert "'psutil'" in message, message
         assert 'pip install "ras-commander[compute]"' in message, message
 
-    hdf_message = messages["HdfBndry"]
+    assert messages["HdfBndry"] is None
+    hdf_message = messages["HdfBndry geometry"]
     assert hdf_message is not None and not hdf_message.startswith("WRONG TYPE")
     assert "'geopandas'" in hdf_message
     assert 'pip install "ras-commander[full]"' in hdf_message

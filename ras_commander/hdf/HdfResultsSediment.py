@@ -43,6 +43,7 @@ import h5py
 
 from .HdfBase import HdfBase
 from .HdfMesh import HdfMesh
+from .HdfUtils import HdfUtils
 from ..Decorators import log_call, standardize_input
 from ..LoggingConfig import get_logger
 from ..fast_hdf import read_attr, read_typed
@@ -234,7 +235,7 @@ class HdfResultsSediment:
     @staticmethod
     def _read_cell_dataset(hdf_path, area, dataset, time_index, *,
                            unit_system=None, project_file=None,
-                           grain_diameter=False):
+                           grain_diameter=False, typed=False):
         """Read one Sediment Bed per-cell dataset and aligned geometry (numpy only).
 
         Returns a dict with ``area`` (resolved name), ``values`` (per-cell at the
@@ -244,6 +245,11 @@ class HdfResultsSediment:
 
         ``grain_diameter=True`` validates the dataset's own ``mm`` label and
         does not block on the model unit system (``length_unit`` may be None).
+
+        ``typed=True`` serves the typed tables: ``values``/``surface_area``
+        keep their stored dtypes (no float64 cast), and the cell centers and
+        CRS are not read (``centers``/``crs`` are None). Validation and its
+        messages are unchanged; the center count comes from the stored shape.
         """
         with h5py.File(hdf_path, 'r') as f:
             area = HdfResultsSediment._resolve_area(f, area)
@@ -254,25 +260,32 @@ class HdfResultsSediment:
             if grain_diameter:
                 HdfResultsSediment._require_mm_units(arr, dataset, area)
             row = HdfResultsSediment._select_time_row(arr, time_index, dataset, area)
-            sa, cc, crs = HdfResultsSediment._cell_geometry(f, area)
+            if typed:
+                base = f"Geometry/2D Flow Areas/{area}"
+                sa = read_typed(f[f"{base}/Cells Surface Area"], slice(None))
+                cc, crs = None, None
+                center_count = len(f[f"{base}/Cells Center Coordinate"])
+            else:
+                sa, cc, crs = HdfResultsSediment._cell_geometry(f, area)
+                center_count = len(cc)
             length_unit = HdfResultsSediment._length_unit(
                 f, unit_system=unit_system, project_file=project_file,
                 strict=not grain_diameter)
             physical_count = HdfMesh._physical_cell_counts(f).get(area)
 
-        values = np.asarray(row, dtype=float)
-        sa = np.asarray(sa, dtype=float)
+        values = np.asarray(row) if typed else np.asarray(row, dtype=float)
+        sa = np.asarray(sa) if typed else np.asarray(sa, dtype=float)
         # Per-cell results must align 1:1 with the geometry cells; a mismatch
         # would otherwise yield silently truncated (wrong) values/volumes.
-        if not (len(values) == len(sa) == len(cc)):
+        if not (len(values) == len(sa) == center_count):
             raise ValueError(
                 f"Cell array length mismatch in area '{area}': {dataset}={len(values)}, "
-                f"Cells Surface Area={len(sa)}, Cells Center Coordinate={len(cc)}.")
+                f"Cells Surface Area={len(sa)}, Cells Center Coordinate={center_count}.")
         if physical_count is not None:
             # Ghost cells follow the physical cells and carry no solution.
-            values, sa, cc = (
-                values[:physical_count], sa[:physical_count], cc[:physical_count]
-            )
+            values, sa = values[:physical_count], sa[:physical_count]
+            if cc is not None:
+                cc = cc[:physical_count]
         return {
             "area": area,
             "values": values,
@@ -319,6 +332,39 @@ class HdfResultsSediment:
         gdf.attrs.update({"units": units, "length_unit": data["length_unit"]})
         return gdf
 
+    @staticmethod
+    def _build_cell_table(data, value_col, units):
+        """Typed per-cell table: the GeoDataFrame columns without ``geometry``.
+
+        ``mesh_name`` is pandas ``str``/``string``, ``cell_id`` is ``int64``, and the
+        value and ``surface_area`` columns keep their stored dtypes.
+        """
+        values = data["values"]
+        table = pd.DataFrame({
+            "mesh_name": HdfUtils._text_array([data["area"]] * len(values)),
+            "cell_id": np.arange(len(values), dtype=np.int64),
+            value_col: values,
+            "surface_area": data["surface_area"],
+        })
+        table.attrs.update({"units": units, "length_unit": data["length_unit"]})
+        return table
+
+    @staticmethod
+    def _cell_result(hdf_path, mesh_name, dataset, time_index, value_col, units,
+                     include_geometry, **read_kwargs):
+        """Read one per-cell dataset as the GeoDataFrame or the typed table."""
+        if include_geometry:
+            from geopandas import GeoDataFrame
+            from shapely.geometry import Point
+        data = HdfResultsSediment._read_cell_dataset(
+            hdf_path, mesh_name, dataset, time_index,
+            typed=not include_geometry, **read_kwargs)
+        units = data["length_unit"] if units is None else units
+        if not include_geometry:
+            return HdfResultsSediment._build_cell_table(data, value_col, units)
+        return HdfResultsSediment._build_cell_gdf(
+            GeoDataFrame, Point, data, value_col, units)
+
     # ------------------------------------------------------------------ #
     # Per-cell spatial results
     # ------------------------------------------------------------------ #
@@ -327,7 +373,8 @@ class HdfResultsSediment:
     @standardize_input(file_type='plan_hdf')
     def get_cell_bed_change(hdf_path: Path, mesh_name: Optional[str] = None,
                             time_index: int = -1, ras_object: Optional[Any] = None,
-                            unit_system: Optional[str] = None):
+                            unit_system: Optional[str] = None, *,
+                            include_geometry: bool = True):
         """
         Return per-cell bed change at a time index as a GeoDataFrame.
 
@@ -342,22 +389,25 @@ class HdfResultsSediment:
         project that contains the HDF), else from the embedded HDF metadata
         (see :meth:`HdfBase.get_result_unit_metadata`). Unresolvable or
         contradictory units raise ``ValueError``.
+
+        ``include_geometry=False`` (keyword-only) returns a DataFrame with the
+        same rows, order, values and ``attrs`` but no ``geometry`` column and
+        no GeoPandas/Shapely dependency: ``mesh_name`` (pandas ``str``/``string``),
+        ``cell_id`` (``int64``), and ``bed_change``/``surface_area`` in their
+        stored dtypes (the GeoDataFrame casts them to ``float64``).
         """
-        from geopandas import GeoDataFrame
-        from shapely.geometry import Point
-        data = HdfResultsSediment._read_cell_dataset(
-            hdf_path, mesh_name, "Cell Bed Change", time_index,
-            unit_system=unit_system,
+        return HdfResultsSediment._cell_result(
+            hdf_path, mesh_name, "Cell Bed Change", time_index, "bed_change", None,
+            include_geometry, unit_system=unit_system,
             project_file=HdfResultsSediment._project_file(hdf_path, ras_object))
-        return HdfResultsSediment._build_cell_gdf(
-            GeoDataFrame, Point, data, "bed_change", data["length_unit"])
 
     @staticmethod
     @log_call
     @standardize_input(file_type='plan_hdf')
     def get_cell_bed_elevation(hdf_path: Path, mesh_name: Optional[str] = None,
                                time_index: int = -1, ras_object: Optional[Any] = None,
-                               unit_system: Optional[str] = None):
+                               unit_system: Optional[str] = None, *,
+                               include_geometry: bool = True):
         """
         Return per-cell bed elevation at a time index as a GeoDataFrame.
 
@@ -365,15 +415,13 @@ class HdfResultsSediment:
         (``bed_elevation`` in the model length unit; see ``gdf.attrs['length_unit']``).
         The length unit resolves as in :meth:`get_cell_bed_change`
         (``unit_system`` override, project ``.prj``, embedded metadata).
+        ``include_geometry=False`` returns the typed table described in
+        :meth:`get_cell_bed_change`.
         """
-        from geopandas import GeoDataFrame
-        from shapely.geometry import Point
-        data = HdfResultsSediment._read_cell_dataset(
-            hdf_path, mesh_name, "Cell Bed Elevation", time_index,
-            unit_system=unit_system,
+        return HdfResultsSediment._cell_result(
+            hdf_path, mesh_name, "Cell Bed Elevation", time_index, "bed_elevation", None,
+            include_geometry, unit_system=unit_system,
             project_file=HdfResultsSediment._project_file(hdf_path, ras_object))
-        return HdfResultsSediment._build_cell_gdf(
-            GeoDataFrame, Point, data, "bed_elevation", data["length_unit"])
 
     @staticmethod
     @log_call
@@ -381,7 +429,8 @@ class HdfResultsSediment:
     def get_active_layer_grain_class(hdf_path: Path, percentile: str = "D50",
                                      mesh_name: Optional[str] = None, time_index: int = -1,
                                      ras_object: Optional[Any] = None,
-                                     unit_system: Optional[str] = None):
+                                     unit_system: Optional[str] = None, *,
+                                     include_geometry: bool = True):
         """
         Return per-cell active-layer grain diameter (mm) at a time index.
 
@@ -399,6 +448,9 @@ class HdfResultsSediment:
                 ``attrs['length_unit']``.
             unit_system (Optional[str]): ``"SI"`` or ``"US Customary"`` override
                 for ``attrs['length_unit']``.
+            include_geometry (bool): Keyword-only. Default True returns the
+                GeoDataFrame below. False returns the typed table described in
+                :meth:`get_cell_bed_change` (``d<NN>_mm`` in its stored dtype).
 
         Returns:
             GeoDataFrame: Columns ``mesh_name, cell_id, d<NN>_mm, surface_area, geometry``.
@@ -409,16 +461,12 @@ class HdfResultsSediment:
         pct = percentile.upper()
         if pct not in ("D10", "D50", "D90"):
             raise ValueError(f"percentile must be D10, D50, or D90 (got '{percentile}').")
-        from geopandas import GeoDataFrame
-        from shapely.geometry import Point
         dataset = f"Cell Active Layer Percentile Diameters - {pct}"
-        data = HdfResultsSediment._read_cell_dataset(
-            hdf_path, mesh_name, dataset, time_index,
-            unit_system=unit_system,
+        return HdfResultsSediment._cell_result(
+            hdf_path, mesh_name, dataset, time_index, f"{pct.lower()}_mm", "mm",
+            include_geometry, unit_system=unit_system,
             project_file=HdfResultsSediment._project_file(hdf_path, ras_object),
             grain_diameter=True)
-        return HdfResultsSediment._build_cell_gdf(
-            GeoDataFrame, Point, data, f"{pct.lower()}_mm", "mm")
 
     # ------------------------------------------------------------------ #
     # Volume summary

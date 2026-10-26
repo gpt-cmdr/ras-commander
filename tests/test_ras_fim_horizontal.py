@@ -903,9 +903,9 @@ def test_all_meshes_keep_local_wse_identity_and_global_unique_ids(tmp_path, monk
     polygons = gpd.GeoDataFrame({"mesh_name": ["left", "right"], "cell_id": [0, 0],
                                 "geometry": [box(0, 0, 1, 1), box(1, 0, 2, 1)]}, crs="EPSG:2278")
     monkeypatch.setattr(HdfMesh, "get_mesh_cell_polygons", lambda *a, **k: polygons)
-    monkeypatch.setattr(HdfResultsMesh, "get_mesh_max_ws", lambda *a: pd.DataFrame(
+    monkeypatch.setattr(HdfResultsMesh, "get_mesh_max_ws", lambda *a, include_geometry: pd.DataFrame(
         {"mesh_name": ["left", "right"], "cell_id": [0, 0], "maximum_water_surface": [103., 107.]}))
-    monkeypatch.setattr(HdfResultsMesh, "get_mesh_max_depth", lambda *a: pd.DataFrame(
+    monkeypatch.setattr(HdfResultsMesh, "get_mesh_max_depth", lambda *a, include_geometry: pd.DataFrame(
         {"mesh_name": ["left", "right"], "cell_id": [0, 0], "maximum_depth": [3., 7.]}))
     cells = RasFim.get_cells_from_plan_hdf(path, mesh_name="*")
     assert cells.cell_idx.tolist() == [0, 1]

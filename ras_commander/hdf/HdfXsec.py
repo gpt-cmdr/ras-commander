@@ -33,22 +33,27 @@ attributes for the requested feature type. All functions include proper error
 handling and logging.
 """
 
+from __future__ import annotations
+
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple, Union
 
 import h5py
 import numpy as np
 import pandas as pd
-from geopandas import GeoDataFrame
-import geopandas as gpd
-from shapely.geometry import LineString, MultiLineString, Polygon
 
+from .._optional_deps import optional_module
 from ..Decorators import standardize_input, log_call
 from . import _HdfXsecSchema
 from .HdfBase import HdfBase
 from .HdfUtils import HdfUtils
 from ..fast_hdf import read_attrs, read_typed, reraise_required
 from ..LoggingConfig import get_logger
+
+# GeoPandas/Shapely load on first use, so the tabular readers work on the core
+# h5py/numpy/pandas install.
+gpd = optional_module("geopandas", "Building geometry in HdfXsec")
+shapely_geometry = optional_module("shapely.geometry", "Building geometry in HdfXsec")
 
 
 
@@ -323,7 +328,7 @@ class HdfXsec:
                     raise ValueError(
                         f"Polyline part at row {row_index} contains non-finite points"
                     )
-                feature_parts.append(LineString(part_coordinates))
+                feature_parts.append(shapely_geometry.LineString(part_coordinates))
                 expected_offset += part_points
             if expected_offset != point_count:
                 raise ValueError(
@@ -333,7 +338,7 @@ class HdfXsec:
             geometries.append(
                 feature_parts[0]
                 if len(feature_parts) == 1
-                else MultiLineString(feature_parts)
+                else shapely_geometry.MultiLineString(feature_parts)
             )
         return geometries
 
@@ -579,7 +584,7 @@ class HdfXsec:
                         river_name, reach_name, river_station, hdf_path.name,
                     )
                     continue
-                cut_line = LineString(cut_line_points)
+                cut_line = shapely_geometry.LineString(cut_line_points)
 
                 station_start, station_count = map(int, station_info[xs_index][:2])
                 profile = station_values[station_start:station_start + station_count]
@@ -979,7 +984,7 @@ class HdfXsec:
     @staticmethod
     @log_call
     @standardize_input(file_type='geom_hdf')
-    def get_river_centerlines(hdf_path: Path, datetime_to_str: bool = False) -> GeoDataFrame:
+    def get_river_centerlines(hdf_path: Path, datetime_to_str: bool = False) -> gpd.GeoDataFrame:
         """
         Extracts river centerline geometries and attributes from HDF geometry file.
 
@@ -1018,7 +1023,7 @@ class HdfXsec:
                         "No Geometry/River Centerlines group in %s; returning empty GeoDataFrame.",
                         HdfXsec._filename(hdf_path),
                     )
-                    return GeoDataFrame()
+                    return gpd.GeoDataFrame()
 
                 centerline_data = hdf_file["Geometry/River Centerlines"]
                 geoms = HdfXsec._polyline_geometries(
@@ -1089,7 +1094,7 @@ class HdfXsec:
                             centerline_dict[f"{prefix} Type"].append(connection_type)
                             centerline_dict[f"{prefix} Name"].append(connection_name)
 
-                centerline_gdf = GeoDataFrame(
+                centerline_gdf = gpd.GeoDataFrame(
                     centerline_dict,
                     geometry=geoms,
                     crs=HdfBase.get_projection(hdf_path)
@@ -1117,13 +1122,13 @@ class HdfXsec:
         except Exception as e:
             reraise_required(e)
             logger.error(f"Error reading river centerlines from {hdf_path}: {str(e)}")
-            return GeoDataFrame()
+            return gpd.GeoDataFrame()
 
 
 
     @staticmethod
     @log_call
-    def get_river_stationing(centerlines_gdf: GeoDataFrame) -> GeoDataFrame:
+    def get_river_stationing(centerlines_gdf: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
         """
         Calculates stationing along river centerlines with interpolated points.
 
@@ -1223,7 +1228,7 @@ class HdfXsec:
     @staticmethod
     @log_call
     @standardize_input(file_type='geom_hdf')
-    def get_river_reaches(hdf_path: Path, datetime_to_str: bool = False) -> GeoDataFrame:
+    def get_river_reaches(hdf_path: Path, datetime_to_str: bool = False) -> gpd.GeoDataFrame:
         """
         Return the model 1D river reach lines.
 
@@ -1267,13 +1272,13 @@ class HdfXsec:
         except Exception as e:
             reraise_required(e)
             logger.error(f"Error reading river reaches from {hdf_path}: {str(e)}")
-            return GeoDataFrame()
+            return gpd.GeoDataFrame()
 
 
     @staticmethod
     @log_call
     @standardize_input(file_type='geom_hdf')
-    def get_river_edge_lines(hdf_path: Path, datetime_to_str: bool = False) -> GeoDataFrame:
+    def get_river_edge_lines(hdf_path: Path, datetime_to_str: bool = False) -> gpd.GeoDataFrame:
         """
         Return the model river edge lines.
 
@@ -1304,7 +1309,7 @@ class HdfXsec:
                         "No Geometry/River Edge Lines group in %s; returning empty GeoDataFrame.",
                         HdfXsec._filename(hdf_path),
                     )
-                    return GeoDataFrame()
+                    return gpd.GeoDataFrame()
 
                 edge_data = hdf_file["Geometry/River Edge Lines"]
                 geoms = HdfBase.get_polylines_from_parts(
@@ -1329,7 +1334,7 @@ class HdfXsec:
                 edge_dict["bank_side"] = HdfXsec._alternating_bank_sides(len(geoms))
 
                 # Create GeoDataFrame
-                edge_gdf = GeoDataFrame(
+                edge_gdf = gpd.GeoDataFrame(
                     edge_dict,
                     geometry=geoms,
                     crs=HdfBase.get_projection(hdf_path)
@@ -1350,12 +1355,12 @@ class HdfXsec:
         except Exception as e:
             reraise_required(e)
             logger.error(f"Error reading river edge lines from {hdf_path}: {str(e)}")
-            return GeoDataFrame()
+            return gpd.GeoDataFrame()
 
     @staticmethod
     @log_call
     @standardize_input(file_type='geom_hdf')
-    def get_river_bank_lines(hdf_path: Path, datetime_to_str: bool = False) -> GeoDataFrame:
+    def get_river_bank_lines(hdf_path: Path, datetime_to_str: bool = False) -> gpd.GeoDataFrame:
         """
         Extract river bank lines from HDF geometry file.
 
@@ -1385,7 +1390,7 @@ class HdfXsec:
                         "No Geometry/River Bank Lines group in %s; returning empty GeoDataFrame.",
                         HdfXsec._filename(hdf_path),
                     )
-                    return GeoDataFrame()
+                    return gpd.GeoDataFrame()
 
                 bank_data = hdf_file["Geometry/River Bank Lines"]
                 dataset_trios = (
@@ -1419,7 +1424,7 @@ class HdfXsec:
                 }
 
                 # Create GeoDataFrame
-                bank_gdf = GeoDataFrame(
+                bank_gdf = gpd.GeoDataFrame(
                     bank_dict,
                     geometry=geoms,
                     crs=HdfBase.get_projection(hdf_path)
@@ -1434,12 +1439,12 @@ class HdfXsec:
         except Exception as e:
             reraise_required(e)
             logger.error(f"Error reading river bank lines from {hdf_path}: {str(e)}")
-            return GeoDataFrame()
+            return gpd.GeoDataFrame()
 
     @staticmethod
     @log_call
     @standardize_input(file_type='geom_hdf')
-    def get_river_flow_paths(hdf_path: Path, datetime_to_str: bool = False) -> GeoDataFrame:
+    def get_river_flow_paths(hdf_path: Path, datetime_to_str: bool = False) -> gpd.GeoDataFrame:
         """
         Return the model river flow paths (``Geometry/River Flow Paths``).
 
@@ -1467,7 +1472,7 @@ class HdfXsec:
             with h5py.File(hdf_path, 'r') as hdf_file:
                 if "Geometry/River Flow Paths" not in hdf_file:
                     logger.warning("No river flow paths found in geometry file")
-                    return GeoDataFrame()
+                    return gpd.GeoDataFrame()
 
             geoms = HdfBase.get_polylines_from_parts(
                 hdf_path,
@@ -1477,9 +1482,9 @@ class HdfXsec:
                 points_name="Flow Path Lines Points",
             )
             if not geoms:
-                return GeoDataFrame()
+                return gpd.GeoDataFrame()
 
-            flow_gdf = GeoDataFrame(
+            flow_gdf = gpd.GeoDataFrame(
                 {"flow_path_id": list(range(len(geoms)))},
                 geometry=geoms,
                 crs=HdfBase.get_projection(hdf_path),
@@ -1490,12 +1495,12 @@ class HdfXsec:
         except Exception as e:
             reraise_required(e)
             logger.error(f"Error reading river flow paths: {str(e)}")
-            return GeoDataFrame()
+            return gpd.GeoDataFrame()
 
     @staticmethod
     @log_call
     @standardize_input(file_type='geom_hdf')
-    def get_xs_interpolation_surface(hdf_path: Path) -> GeoDataFrame:
+    def get_xs_interpolation_surface(hdf_path: Path) -> gpd.GeoDataFrame:
         """
         Return the cross-section interpolation surface.
 
@@ -1526,11 +1531,11 @@ class HdfXsec:
             with h5py.File(hdf_path, 'r') as hdf_file:
                 if base not in hdf_file:
                     logger.warning("No XS interpolation surface found in geometry file")
-                    return GeoDataFrame()
+                    return gpd.GeoDataFrame()
                 grp = hdf_file[base]
                 if "TIN Info" not in grp or "TIN Points" not in grp or "TIN Triangles" not in grp:
                     logger.warning("XS interpolation surface group missing TIN datasets")
-                    return GeoDataFrame()
+                    return gpd.GeoDataFrame()
                 tin_info = read_typed(grp["TIN Info"])
                 tin_points = read_typed(grp["TIN Points"])
                 tin_tris = read_typed(grp["TIN Triangles"])
@@ -1559,7 +1564,7 @@ class HdfXsec:
                     for a, b, c in seg_tris:
                         if not (0 <= a < pnt_cnt and 0 <= b < pnt_cnt and 0 <= c < pnt_cnt):
                             continue
-                        poly = Polygon([seg_pts[a], seg_pts[b], seg_pts[c]])
+                        poly = shapely_geometry.Polygon([seg_pts[a], seg_pts[b], seg_pts[c]])
                         if poly.is_valid and poly.area > 0:
                             tri_polys.append(poly)
                     if not tri_polys:
@@ -1580,13 +1585,13 @@ class HdfXsec:
                     continue
 
             if not rows:
-                return GeoDataFrame()
-            return GeoDataFrame(rows, geometry="geometry", crs=HdfBase.get_projection(hdf_path))
+                return gpd.GeoDataFrame()
+            return gpd.GeoDataFrame(rows, geometry="geometry", crs=HdfBase.get_projection(hdf_path))
 
         except Exception as e:
             reraise_required(e)
             logger.error(f"Error reading XS interpolation surface: {str(e)}")
-            return GeoDataFrame()
+            return gpd.GeoDataFrame()
 
     # ------------------------------------------------------------------
     # Edge-line generation and 1D footprint polygonization
@@ -1599,19 +1604,19 @@ class HdfXsec:
 
         if geometry is None or getattr(geometry, "is_empty", True):
             return None
-        if isinstance(geometry, LineString):
+        if isinstance(geometry, shapely_geometry.LineString):
             return geometry if len(geometry.coords) >= 2 else None
-        if isinstance(geometry, MultiLineString):
+        if isinstance(geometry, shapely_geometry.MultiLineString):
             merged = linemerge(geometry)
-            if isinstance(merged, LineString):
+            if isinstance(merged, shapely_geometry.LineString):
                 return merged if len(merged.coords) >= 2 else None
-            if isinstance(merged, MultiLineString) and len(merged.geoms) > 0:
+            if isinstance(merged, shapely_geometry.MultiLineString) and len(merged.geoms) > 0:
                 longest = max(merged.geoms, key=lambda g: g.length)
                 return longest if len(longest.coords) >= 2 else None
         if hasattr(geometry, "geoms"):
             parts = [
                 p for p in geometry.geoms
-                if isinstance(p, LineString) and len(p.coords) >= 2
+                if isinstance(p, shapely_geometry.LineString) and len(p.coords) >= 2
             ]
             if parts:
                 return max(parts, key=lambda g: g.length)
@@ -1698,7 +1703,7 @@ class HdfXsec:
         )
         if len(coords) < 4:
             return None
-        polygon = Polygon(coords)
+        polygon = shapely_geometry.Polygon(coords)
         if not polygon.is_valid:
             # A bent cut line spliced into the ring can self-intersect; repair.
             polygon = polygon.buffer(0)
@@ -1709,7 +1714,7 @@ class HdfXsec:
     @staticmethod
     @log_call
     @standardize_input(file_type='geom_hdf')
-    def generate_river_edge_lines(hdf_path: Path, ras_object=None) -> GeoDataFrame:
+    def generate_river_edge_lines(hdf_path: Path, ras_object=None) -> gpd.GeoDataFrame:
         """
         Generate river edge lines from cross-section cut-line end points.
 
@@ -1749,11 +1754,11 @@ class HdfXsec:
         xs_gdf = HdfXsec.get_cross_sections(hdf_path, ras_object=ras_object)
         if xs_gdf is None or xs_gdf.empty:
             logger.warning("No cross sections found; cannot generate river edge lines")
-            return GeoDataFrame()
+            return gpd.GeoDataFrame()
 
         if not {"River", "Reach"}.issubset(xs_gdf.columns):
             logger.warning("Cross sections missing River/Reach columns; cannot group edge lines")
-            return GeoDataFrame()
+            return gpd.GeoDataFrame()
 
         rows = []
         edge_id = 0
@@ -1776,7 +1781,7 @@ class HdfXsec:
                     if not unique_pts or c != unique_pts[-1]:
                         unique_pts.append(c)
                 if len(unique_pts) >= 2:
-                    edge = LineString(unique_pts)
+                    edge = shapely_geometry.LineString(unique_pts)
                     rows.append({
                         "edge_id": edge_id,
                         "River": river,
@@ -1790,8 +1795,8 @@ class HdfXsec:
         crs = xs_gdf.crs if xs_gdf.crs is not None else HdfBase.get_projection(hdf_path)
         if not rows:
             logger.warning("Could not generate any river edge lines from cross sections")
-            return GeoDataFrame()
-        return GeoDataFrame(rows, geometry="geometry", crs=crs)
+            return gpd.GeoDataFrame()
+        return gpd.GeoDataFrame(rows, geometry="geometry", crs=crs)
 
     @staticmethod
     def _reach_end_cutlines(hdf_path: Path, ras_object=None):
@@ -1849,7 +1854,7 @@ class HdfXsec:
             except Exception as e:
                 reraise_required(e)
                 logger.debug(f"Could not read stored river edge lines: {e}")
-                stored = GeoDataFrame()
+                stored = gpd.GeoDataFrame()
             if stored is not None and not stored.empty and len(stored) % 2 == 0:
                 # Stored edge lines come as alternating Left/Right per reach.
                 stored_lines = list(stored.geometry)
@@ -1883,7 +1888,7 @@ class HdfXsec:
         dissolve: bool = False,
         close_with_end_xs: bool = True,
         ras_object=None,
-    ) -> GeoDataFrame:
+    ) -> gpd.GeoDataFrame:
         """
         Build the 1D model footprint polygon(s) from river edge lines.
 
@@ -1931,7 +1936,7 @@ class HdfXsec:
         pairs = HdfXsec._reach_edge_pairs(hdf_path, edge_source, ras_object=ras_object)
         if not pairs:
             logger.warning("No 1D edge-line pairs available; returning empty footprint")
-            return GeoDataFrame()
+            return gpd.GeoDataFrame()
 
         rows = []
         for river, reach, left, right, source, cut_lines in pairs:
@@ -1951,15 +1956,15 @@ class HdfXsec:
 
         if not rows:
             logger.warning("Could not build any 1D footprint polygons")
-            return GeoDataFrame()
+            return gpd.GeoDataFrame()
 
-        footprint_gdf = GeoDataFrame(rows, geometry="geometry", crs=crs)
+        footprint_gdf = gpd.GeoDataFrame(rows, geometry="geometry", crs=crs)
 
         if dissolve:
             from shapely.ops import unary_union
 
             combined = unary_union(footprint_gdf.geometry.tolist())
-            return GeoDataFrame(
+            return gpd.GeoDataFrame(
                 {"source": ["1d_footprint"]},
                 geometry=[combined],
                 crs=crs,

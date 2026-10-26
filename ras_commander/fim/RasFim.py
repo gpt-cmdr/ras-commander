@@ -865,8 +865,8 @@ class RasFim:
                 )
             return frame.set_index("cell_id")[columns[0]]
 
-        maximum_wse = HdfResultsMesh.get_mesh_max_ws(path)
-        maximum_depth = HdfResultsMesh.get_mesh_max_depth(path)
+        maximum_wse = HdfResultsMesh.get_mesh_max_ws(path, include_geometry=False)
+        maximum_depth = HdfResultsMesh.get_mesh_max_depth(path, include_geometry=False)
         parts = []
         for selected_mesh in (names if mesh_name == "*" else [mesh_name]):
             wse = _one(maximum_wse, "water_surface", selected_mesh)

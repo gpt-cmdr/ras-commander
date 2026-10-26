@@ -185,6 +185,9 @@ CASES.update({
     "HdfResultsSediment.get_cell_bed_elevation": lambda p: HdfResultsSediment.get_cell_bed_elevation(p),
     "HdfResultsSediment.get_active_layer_grain_class": lambda p: HdfResultsSediment.get_active_layer_grain_class(p),
     "HdfResultsSediment.get_bed_change_volumes": lambda p: HdfResultsSediment.get_bed_change_volumes(p),
+    "HdfResultsSediment.get_cell_bed_change[table]": lambda p: HdfResultsSediment.get_cell_bed_change(p, include_geometry=False),
+    "HdfResultsSediment.get_cell_bed_elevation[table]": lambda p: HdfResultsSediment.get_cell_bed_elevation(p, include_geometry=False),
+    "HdfResultsSediment.get_active_layer_grain_class[table]": lambda p: HdfResultsSediment.get_active_layer_grain_class(p, include_geometry=False),
     "HdfResultsSediment.get_cell_bed_change_timeseries": lambda p: HdfResultsSediment.get_cell_bed_change_timeseries(p),
 })
 

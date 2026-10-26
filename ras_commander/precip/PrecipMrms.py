@@ -1168,7 +1168,9 @@ class PrecipMrms:
 
         plan_hdf = Path(plan_hdf)
         # Physical cells only, matching the ghost-free get_mesh_timeseries().
-        cell_points = HdfMesh.get_mesh_cell_points(plan_hdf, include_ghost_cells=False)
+        cell_points = HdfMesh.get_mesh_cell_points(
+            plan_hdf, include_ghost_cells=False, include_geometry=False
+        )
         if cell_points.empty:
             raise ValueError(f"No 2D mesh cell centers found in {plan_hdf}")
 
@@ -1212,8 +1214,8 @@ class PrecipMrms:
             time_values = time_values[frame_indices]
 
         return {
-            "x": mesh_points.geometry.x.to_numpy(dtype=float),
-            "y": mesh_points.geometry.y.to_numpy(dtype=float),
+            "x": mesh_points["x"].to_numpy(dtype=float),
+            "y": mesh_points["y"].to_numpy(dtype=float),
             "values": value_array,
             "times": time_values,
             "mesh_name": mesh_name,
