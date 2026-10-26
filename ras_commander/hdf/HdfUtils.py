@@ -211,6 +211,19 @@ class HdfUtils:
         """Text values as the typed tables' string dtype (never object)."""
         return pd.array(values, dtype=HdfUtils._TEXT_DTYPE)
 
+    @staticmethod
+    def _repeat_text(value: str, count: int) -> np.ndarray:
+        """``count`` copies of ``value`` as an object array.
+
+        pandas infers the same column dtype from it as from ``[value] * count``
+        (object, or ``str`` under pandas 3 / ``future.infer_string``) without
+        converting a Python list element by element. No rows give an empty
+        list, whose column dtype differs from an empty object array's.
+        """
+        if not count:
+            return []
+        return np.full(count, value, dtype=object)
+
 
 # RENAME TO convert_ras_string and make public
 
@@ -501,6 +514,15 @@ class HdfUtils:
         # Preserve the established pandas conversion and rounding, including
         # sub-millisecond values, whenever its native arithmetic succeeds.
         try:
+            values = np.asarray(timesteps)
+            if values.ndim == 1 and values.dtype.kind == "f" and len(values) >= 4096:
+                # Summary times repeat a few output steps across many cells.
+                # The conversion is elementwise, so converting each distinct
+                # value once and taking it back is exact (NaN is one value).
+                codes, distinct = pd.factorize(values, use_na_sentinel=False)
+                if len(distinct) <= len(values) // 2:
+                    datetimes = start_time + pd.to_timedelta(distinct, unit=units[time_unit])
+                    return pd.DatetimeIndex(datetimes).round(round_to).take(codes)
             datetimes = start_time + pd.to_timedelta(timesteps, unit=units[time_unit])
             return pd.DatetimeIndex(datetimes).round(round_to)
         except (pd.errors.OutOfBoundsDatetime, pd.errors.OutOfBoundsTimedelta, OverflowError):
@@ -721,7 +743,22 @@ class HdfUtils:
             return crs_input
         if isinstance(crs_input, (bytes, np.bytes_)):
             crs_input = crs_input.decode("utf-8")
+        if isinstance(crs_input, str):
+            return HdfUtils._crs_from_text(crs_input)
         return CRS.from_user_input(crs_input)
+
+    @staticmethod
+    @lru_cache(maxsize=64)
+    def _crs_from_text(text: str):
+        """Parsed CRS of a WKT/authority string, parsed once per process.
+
+        Parsing is a pure function of the text and pyproj CRS objects are
+        immutable, so one object serves every caller (a failed parse is not
+        cached and raises again).
+        """
+        from pyproj import CRS
+
+        return CRS.from_user_input(text)
 
     @staticmethod
     def _classify_linear_unit(unit_name: Optional[str], factor: Optional[float]) -> str:

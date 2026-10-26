@@ -1194,11 +1194,42 @@ def _try_mesh_polygons(hdf_path, *, backend="auto", threads=None, strict=None):
         return None
 
 
+_PARALLEL_POLYGONS = 50_000
+
+
+def _polygons_and_validity(coordinates, offsets, count, threads):
+    """Single-ring polygons from packed buffers, and ``shapely.is_valid`` of each.
+
+    Large meshes are split into contiguous cell ranges built and checked on
+    worker threads (Shapely releases the GIL); every polygon and flag is the
+    one the single vectorized call gives, in the same order.
+    """
+    import shapely
+
+    def build(start, stop):
+        rings = np.asarray(offsets[start:stop + 1], dtype=np.int64)
+        polygons = shapely.from_ragged_array(
+            shapely.GeometryType.POLYGON, coordinates[rings[0]:rings[-1]],
+            (rings - rings[0], np.arange(stop - start + 1, dtype=np.int64)),
+        )
+        return polygons, shapely.is_valid(polygons)
+
+    workers = min(threads or os.cpu_count() or 1, 8)
+    if count < _PARALLEL_POLYGONS or workers < 2:
+        return build(0, count)
+    from concurrent.futures import ThreadPoolExecutor
+    bounds = np.linspace(0, count, workers * 4 + 1).astype(np.int64)
+    with ThreadPoolExecutor(workers) as pool:
+        parts = list(pool.map(build, bounds[:-1], bounds[1:]))
+    return (np.concatenate([part[0] for part in parts]),
+            np.concatenate([part[1] for part in parts]))
+
+
 def _native_mesh_polygons(module, mode, hdf_path, backend, threads, strict):
     from geopandas import GeoDataFrame
-    import shapely
     from .hdf.HdfBase import HdfBase
     from .hdf.HdfMesh import HdfMesh
+    from .hdf.HdfUtils import HdfUtils
     names, ids, geometries, diagnostics = [], [], [], []
     with h5py.File(hdf_path, "r") as hdf:
         mesh_names = HdfMesh.get_mesh_area_names(hdf_path)
@@ -1231,11 +1262,8 @@ def _native_mesh_polygons(module, mode, hdf_path, backend, threads, strict):
             count = len(packed["cell_ids"])
             diagnostics.extend(packed.get("diagnostics", ()))
             if count:
-                polygons = shapely.from_ragged_array(
-                    shapely.GeometryType.POLYGON, packed["coordinates"],
-                    (packed["offsets"], np.arange(count + 1, dtype=np.int64)),
-                )
-                valid = shapely.is_valid(polygons)
+                polygons, valid = _polygons_and_validity(
+                    packed["coordinates"], packed["offsets"], count, threads)
                 if not np.all(valid):
                     bad_ids = np.asarray(packed["cell_ids"])[~valid]
                     message = f"Native polygon geometry is invalid for {name}, cell IDs {bad_ids[:10].tolist()}"
@@ -1246,14 +1274,17 @@ def _native_mesh_polygons(module, mode, hdf_path, backend, threads, strict):
                         from .hdf.HdfMesh import MeshCellPolygonError
                         raise MeshCellPolygonError(message)
                     raise FastHdfError(message)
-                names.extend([name] * count)
+                names.append(HdfUtils._repeat_text(name, count))
                 ids.append(packed["cell_ids"])
                 geometries.append(polygons)
         if not names and strict is None:
             return GeoDataFrame()
-        result = GeoDataFrame({"mesh_name": names, "cell_id": np.concatenate(ids) if ids else [],
+        projection = HdfBase.get_projection(hdf)
+        result = GeoDataFrame({"mesh_name": np.concatenate(names) if names else [],
+                               "cell_id": np.concatenate(ids) if ids else [],
                                "geometry": np.concatenate(geometries) if geometries else []},
-                              geometry="geometry", crs=HdfBase.get_projection(hdf))
+                              geometry="geometry",
+                              crs=HdfUtils._to_crs(projection) if projection else projection)
         if strict is not None:
             result.attrs["cell_polygon_diagnostics"] = tuple(diagnostics)
             omitted = [record for record in diagnostics if record["status"] == "omitted"]

@@ -14,6 +14,7 @@ The extension is obtained through ``fast_hdf``'s availability and API-version
 check, so an incompatible ``ras_commander_fast_hdf`` raises ImportError here.
 """
 from collections import Counter
+from collections.abc import Mapping
 from pathlib import Path
 import math
 import time
@@ -90,6 +91,205 @@ def integer_milliseconds(value):
     return result, True
 
 
+def _int_table(value, columns):
+    """``value`` as an int64 table with at least ``columns`` columns, or None."""
+    array=np.asarray(value)
+    if array.ndim!=2 or array.shape[1]<columns or array.dtype.kind not in "iu":
+        return None
+    if array.dtype.kind=="u" and array.size and array.max()>np.iinfo(np.int64).max:
+        return None
+    return array.astype(np.int64,copy=False)
+
+
+def _fast_face_rings(topology, lines, physical, points, point_base, n_points, mesh_id, n, edge_faces):
+    """The per-face loop of ``Analysis.from_hdf`` for one mesh, vectorized.
+
+    Returns ``(face_rings, removed)`` and appends to ``points`` (and, when
+    given, ``edge_faces``) exactly what the loop appends, in the same order;
+    faces with intermediate vertices still go through ``_append_face_ring``.
+    Returns None, having changed nothing, for any input on which the loop
+    could fail or behave differently (non-integer or out-of-range tables,
+    face IDs that are not ``0..n_faces-1`` in order, non-LineString or short
+    geometry, endpoint mismatch); the caller then runs the loop itself.
+    """
+    import shapely
+    n_faces=int(topology["n_faces"])
+    cell_info=_int_table(topology["cell_face_info"],2)
+    cell_values=_int_table(topology["cell_face_values"],1)
+    face_points=_int_table(topology["face_facepoints"],2)
+    face_cells=_int_table(topology["face_cells"],2) if edge_faces is not None else None
+    if (cell_info is None or cell_values is None or face_points is None
+            or (edge_faces is not None and face_cells is None)
+            or len(face_points)<n_faces or (face_cells is not None and len(face_cells)<n_faces)
+            or len(physical)>len(cell_info)
+            or not np.array_equal(lines.index.to_numpy(),np.arange(n_faces))):
+        return None
+    rows=np.flatnonzero(physical)
+    starts,lengths=cell_info[rows,0],cell_info[rows,1]
+    if (starts<0).any() or (lengths<0).any() or (starts+lengths>len(cell_values)).any():
+        return None
+    total=int(lengths.sum())
+    within=np.arange(total)-np.repeat(np.cumsum(lengths)-lengths,lengths)
+    referenced=cell_values[np.repeat(starts,lengths)+within,0]
+    needed=np.zeros(n_faces,dtype=bool)
+    needed[referenced[(referenced>=0)&(referenced<n_faces)]]=True
+    faces=np.flatnonzero(needed)
+    a,b=face_points[faces,0],face_points[faces,1]
+    if ((a<0)|(a>=n_points)|(b<0)|(b>=n_points)).any():
+        return None
+    geometry=np.asarray(lines.array,dtype=object)[faces]
+    if not (shapely.get_type_id(geometry)==shapely.GeometryType.LINESTRING).all():
+        return None
+    coordinates,owner=shapely.get_coordinates(geometry,return_index=True)
+    sizes=np.bincount(owner,minlength=len(faces))
+    if (sizes<2).any():
+        return None
+    offsets=np.zeros(len(faces)+1,dtype=np.int64)
+    np.cumsum(sizes,out=offsets[1:])
+    source=np.asarray(points[point_base:point_base+n_points],dtype=float).reshape(-1,2)
+    straight=sizes==2
+    if not (np.array_equal(coordinates[offsets[:-1]][straight],source[a[straight]])
+            and np.array_equal(coordinates[offsets[1:]-1][straight],source[b[straight]])):
+        return None
+    face_rings=[[] for _ in range(n_faces)]
+    pairs=np.stack([a+point_base,b+point_base],axis=1).tolist()
+    removed=0
+    curved=set(np.flatnonzero(~straight).tolist())
+    for k,i in enumerate(faces.tolist()):
+        if k in curved:
+            coords=[tuple(c) for c in coordinates[offsets[k]:offsets[k+1]].tolist()]
+            ring,dropped=_append_face_ring(points,pairs[k][0],pairs[k][1],coords)
+            removed+=dropped
+            face_rings[i]=ring
+        else:
+            face_rings[i]=pairs[k]
+    if edge_faces is not None:
+        left,right=face_cells[faces,0],face_cells[faces,1]
+        inside=(left>=0)&(left<n)&(right>=0)&(right<n)
+        mask=np.asarray(physical,dtype=bool)
+        inside[inside]&=mask[left[inside]]&mask[right[inside]]
+        k=np.flatnonzero(inside)
+        edge_faces.add_mesh(mesh_id,np.minimum(left[k],right[k]),np.maximum(left[k],right[k]),
+                            faces[k],coordinates,offsets[k],offsets[k+1])
+    return face_rings,removed
+
+
+class _EdgeFaces(Mapping):
+    """``{(mesh_id, low_cell, high_cell): [(face_id, coords), ...]}``, built on lookup.
+
+    The same mapping the per-face loop builds with ``setdefault`` (lists in
+    face order, keys in first-face order, ``coords`` a tuple of ``(x, y)``
+    float tuples), but a vectorized mesh is kept as packed arrays and a key's
+    list is made only when it is looked up. Meshes the loop handles are
+    written through ``setdefault`` into an ordinary dict.
+    """
+
+    def __init__(self):
+        self._plain={}
+        self._meshes={}
+
+    def setdefault(self,key,default=None):
+        return self._plain.setdefault(key,default)
+
+    def add_mesh(self,mesh_id,low,high,face_ids,coordinates,starts,stops):
+        low=np.asarray(low,dtype=np.int64); high=np.asarray(high,dtype=np.int64)
+        combined=(low<<32)|high
+        order=np.argsort(combined,kind="stable")
+        self._meshes[mesh_id]=(combined[order],np.asarray(face_ids,dtype=np.int64)[order],
+                               coordinates,np.asarray(starts)[order],np.asarray(stops)[order],
+                               combined)
+
+    def _span(self,key):
+        if not (isinstance(key,tuple) and len(key)==3):
+            return None
+        mesh_id,low,high=key
+        block=self._meshes.get(mesh_id)
+        if block is None or type(low) is not int or type(high) is not int or not 0<=low<=high<2**31:
+            return None
+        combined=block[0]
+        target=(low<<32)|high
+        first=int(np.searchsorted(combined,target,side="left"))
+        last=int(np.searchsorted(combined,target,side="right"))
+        return (block,first,last) if last>first else None
+
+    def __getitem__(self,key):
+        if key in self._plain:
+            return self._plain[key]
+        span=self._span(key)
+        if span is None:
+            raise KeyError(key)
+        (_, face_ids, coordinates, starts, stops, _), first, last = span
+        return [(int(face_ids[k]),tuple(tuple(c) for c in coordinates[starts[k]:stops[k]].tolist()))
+                for k in range(first,last)]
+
+    def __contains__(self,key):
+        return key in self._plain or self._span(key) is not None
+
+    def _keys(self):
+        meshes=sorted(set(self._meshes)|{key[0] for key in self._plain})
+        for mesh_id in meshes:
+            if mesh_id in self._meshes:
+                combined=self._meshes[mesh_id][5]
+                _,first=np.unique(combined,return_index=True)
+                for value in combined[np.sort(first)].tolist():
+                    yield (mesh_id,value>>32,value&0xFFFFFFFF)
+            else:
+                yield from (key for key in self._plain if key[0]==mesh_id)
+
+    def __iter__(self):
+        return self._keys()
+
+    def __len__(self):
+        return len(self._plain)+sum(len(np.unique(block[5])) for block in self._meshes.values())
+
+
+def _fast_peak_times(sources, meshes, peaks):
+    """``integer_milliseconds`` of every source cell's peak, vectorized.
+
+    Returns ``(times, present)`` as the per-cell loop builds them, raising the
+    loop's error for a sub-millisecond peak, or None (use the loop) when the
+    peak times are not a timezone-naive NumPy datetime column or the keys are
+    not plain names and nonnegative integer cell IDs.
+    """
+    count=len(sources)
+    if peaks is None:
+        return [0]*count,[False]*count
+    column=peaks["maximum_water_surface_time"]
+    stamps=column.to_numpy()
+    if column.dtype.kind!="M" or stamps.dtype.kind!="M":
+        return None
+    names=peaks["mesh_name"].to_numpy(dtype=object)
+    cells=peaks["cell_id"].to_numpy()
+    if cells.dtype.kind not in "iu" or (len(cells) and cells.min()<0):
+        return None
+    if not all(type(name) is str for name in set(names.tolist())):
+        return None
+    pairs=np.asarray(sources,dtype=np.int64).reshape(-1,2) if count else np.empty((0,2),np.int64)
+    if (pairs[:,1]<0).any():
+        return None
+    found=np.full(count,-1,dtype=np.int64)
+    for mesh_index,mesh in enumerate(meshes):
+        selected=np.flatnonzero(pairs[:,0]==mesh_index)
+        if not len(selected):
+            continue
+        rows=np.flatnonzero(names==str(mesh))
+        ids=cells[rows].astype(np.int64)
+        wanted=pairs[selected,1]
+        size=int(max(ids.max() if len(ids) else -1,wanted.max())+1)
+        position=np.full(size,-1,dtype=np.int64)
+        position[ids]=rows
+        found[selected]=position[wanted]
+    if not len(stamps):
+        return [0]*count,[False]*count
+    value=stamps[np.where(found>=0,found,0)]
+    present=(found>=0)&~np.isnat(value)
+    converted=value.astype("datetime64[ms]")
+    if (converted[present].astype(value.dtype)!=value[present]).any():
+        raise ValueError("peak time has sub-millisecond precision")
+    times=np.where(present,converted.astype(np.int64),0)
+    return times.tolist(),present.tolist()
+
+
 class Analysis:
     def __setattr__(self, name, value):
         if getattr(self,"_sealed",False):
@@ -152,10 +352,8 @@ class Analysis:
                 raise ValueError("computed HDF returned an empty peak table")
             if peaks.duplicated(["mesh_name", "cell_id"]).any():
                 raise ValueError("duplicate composite peak identity")
-        peak_map = {} if peaks is None else {(str(m),int(c)): t for m,c,t in
-                    peaks[["mesh_name","cell_id","maximum_water_surface_time"]].itertuples(index=False,name=None)}
         points=[]; meshes=[]; all_rings=[]; masks=[]; cell_ids=[]; face_cells=[]
-        ring_seconds=0.0; normalized_perimeter_vertices=0; edge_faces={}
+        ring_seconds=0.0; normalized_perimeter_vertices=0; edge_faces=_EdgeFaces()
         for mesh_id,(name,count) in enumerate(counts):
             topology = HdfMesh.get_mesh_sloped_topology(path,name)
             if not topology:
@@ -163,7 +361,10 @@ class Analysis:
             n = topology["n_cells"]; count=int(count)
             if not 0<count<=n:
                 raise ValueError("invalid physical cell count")
-            physical=[i<count and (selection is None or (name,i) in selection) for i in range(n)]
+            if selection is None:
+                physical=[True]*count+[False]*(n-count)
+            else:
+                physical=[i<count and (name,i) in selection for i in range(n)]
             # Preserve source FacePoint identity, including distinct co-located
             # vertices. Curved perimeter vertices belong to their physical face
             # and are shared by its two incident cells, never welded by XY.
@@ -175,12 +376,18 @@ class Analysis:
             lines=face_frame[face_frame.mesh_name==name].set_index("face_id").geometry
             if len(lines)!=topology["n_faces"] or not lines.index.is_unique:
                 raise ValueError("face geometry identity mismatch")
+            fast=_fast_face_rings(topology,lines,physical,points,point_base,len(source_points),
+                                  mesh_id,n,edge_faces if retain_faces else None)
+            if fast is not None:
+                face_rings,removed=fast
+                normalized_perimeter_vertices+=removed
             needed=set()
-            for row in np.flatnonzero(physical):
+            for row in np.flatnonzero(physical) if fast is None else ():
                 offset,length=map(int,topology["cell_face_info"][row,:2])
                 needed.update(map(int,topology["cell_face_values"][offset:offset+length,0]))
-            face_rings=[]
-            for i in range(topology["n_faces"]):
+            if fast is None:
+                face_rings=[]
+            for i in range(topology["n_faces"]) if fast is None else ():
                 if i not in needed:
                     face_rings.append([]); continue
                 a,b=map(int,topology["face_facepoints"][i])
@@ -205,7 +412,16 @@ class Analysis:
         keys,offsets,neighbors,sources,diagnostics=_native("face_graph",list(range(len(meshes))),cell_ids,masks,face_cells)
         graph_seconds=time.perf_counter()-graph_start
         times=[]; present=[]; wet=[]; rings=[]; identities=[]
-        for mesh_index,row in sources:
+        fast=_fast_peak_times(sources,meshes,peaks) if wet_policy=="all" else None
+        if fast is None:
+            peak_map = {} if peaks is None else {(str(m),int(c)): t for m,c,t in
+                        peaks[["mesh_name","cell_id","maximum_water_surface_time"]].itertuples(index=False,name=None)}
+        if fast is not None:
+            times,present=fast
+            identities=[(meshes[mesh_index],row) for mesh_index,row in sources]
+            wet=[True]*len(identities)
+            rings=[all_rings[mesh_index][row] for mesh_index,row in sources]
+        for mesh_index,row in sources if fast is None else ():
             identity=(meshes[mesh_index],row); identities.append(identity)
             value,valid=integer_milliseconds(peak_map.get(identity))
             times.append(value); present.append(valid)

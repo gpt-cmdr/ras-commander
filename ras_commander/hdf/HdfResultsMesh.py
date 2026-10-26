@@ -3958,7 +3958,7 @@ class HdfResultsMesh:
             value_column = var.lower().replace(" ", "_")
             if data.ndim == 2 and data.shape[0] == 2:
                 frame = pd.DataFrame({
-                    "mesh_name": [mesh_name] * data.shape[1],
+                    "mesh_name": HdfUtils._repeat_text(mesh_name, data.shape[1]),
                     id_column: range(data.shape[1]),
                     value_column: data[0, :],
                     f"{value_column}_time": (
@@ -3972,7 +3972,7 @@ class HdfResultsMesh:
                 })
             elif data.ndim == 1:
                 frame = pd.DataFrame({
-                    "mesh_name": [mesh_name] * len(data),
+                    "mesh_name": HdfUtils._repeat_text(mesh_name, len(data)),
                     id_column: range(len(data)),
                     value_column: data,
                 })
@@ -4115,18 +4115,25 @@ class HdfResultsMesh:
                 geometry = HdfMesh.get_mesh_cell_points(hdf_file)
                 id_column = "cell_id"
             if not geometry.empty:
-                values = values.merge(
-                    geometry[["mesh_name", id_column, "geometry"]],
-                    on=["mesh_name", id_column],
-                    how="left",
-                )
+                rows = HdfResultsMesh._geometry_rows(values, geometry, id_column)
+                if rows is not None:
+                    # Same rows, values and geometry as the left merge below,
+                    # without hashing the keys.
+                    values = values.reset_index(drop=True)
+                    values["geometry"] = geometry["geometry"].array.take(rows)
+                else:
+                    values = values.merge(
+                        geometry[["mesh_name", id_column, "geometry"]],
+                        on=["mesh_name", id_column],
+                        how="left",
+                    )
             else:
                 values["geometry"] = None
 
             result = GeoDataFrame(values, geometry="geometry")
             crs = HdfBase.get_projection(hdf_file)
             if crs:
-                result.set_crs(crs, inplace=True)
+                result.set_crs(HdfUtils._to_crs(crs), inplace=True)
             result.attrs.update(attrs)
             logger.debug("Processed %s rows of summary output data", len(result))
             return result
@@ -4137,6 +4144,46 @@ class HdfResultsMesh:
             reraise_required(e)
             logger.error(f"Error processing summary output data: {e}")
             raise ValueError(f"Error processing summary output data: {e}")
+
+    @staticmethod
+    def _geometry_rows(values: pd.DataFrame, geometry, id_column: str) -> Optional[np.ndarray]:
+        """Geometry row of every value row, or None to use the key merge.
+
+        A left merge on ``(mesh_name, id)`` keeps the value rows in order and
+        takes the single geometry row with the same key. When the geometry
+        frame is, per mesh, one contiguous block with IDs ``0..n-1`` (as the
+        mesh geometry readers build it), that row is the block start plus the
+        ID. Every value key must be found; anything else returns None.
+        """
+        right_names = geometry["mesh_name"].to_numpy()
+        right_ids = geometry[id_column].to_numpy()
+        left_names = values["mesh_name"].to_numpy()
+        left_ids = values[id_column].to_numpy()
+        if (right_ids.dtype.kind not in "iu" or left_ids.dtype.kind not in "iu"
+                or right_names.dtype != object or left_names.dtype != object
+                or not len(right_names) or not len(left_names)):
+            return None
+        starts = np.flatnonzero(np.r_[True, right_names[1:] != right_names[:-1]])
+        block_names = right_names[starts]
+        if not all(type(name) is str for name in block_names) or len(set(block_names)) != len(block_names):
+            return None
+        sizes = np.diff(np.r_[starts, len(right_names)])
+        expected = np.arange(len(right_ids)) - np.repeat(starts, sizes)
+        if not np.array_equal(right_ids, expected):
+            return None
+        block = {name: index for index, name in enumerate(block_names)}
+        left_starts = np.flatnonzero(np.r_[True, left_names[1:] != left_names[:-1]])
+        left_sizes = np.diff(np.r_[left_starts, len(left_names)])
+        indices = []
+        for name in left_names[left_starts]:
+            if type(name) is not str or name not in block:
+                return None
+            indices.append(block[name])
+        indices = np.repeat(np.asarray(indices, dtype=np.int64), left_sizes)
+        ids = left_ids.astype(np.int64, copy=False)
+        if (ids < 0).any() or (ids >= sizes[indices]).any():
+            return None
+        return starts[indices] + ids
 
     @staticmethod
     def get_mesh_summary_output_group(hdf_file: h5py.File, mesh_name: str, var: str) -> Union[h5py.Group, h5py.Dataset]:
