@@ -6,13 +6,13 @@ used for mapping. These are x86-64 test builds; no PyPI release is made.
 Linux (glibc 2.28 or newer):
 
 ```bash
-python -m pip install wheels/ras2fim_engine-0.4.0-py3-none-manylinux_2_28_x86_64.whl
+python -m pip install wheels/ras2fim_engine-0.5.0-py3-none-manylinux_2_28_x86_64.whl
 ```
 
 Windows x86-64:
 
 ```powershell
-python -m pip install wheels/ras2fim_engine-0.4.0-py3-none-win_amd64.whl
+python -m pip install wheels/ras2fim_engine-0.5.0-py3-none-win_amd64.whl
 ```
 
 Then run `ras2fim-batch method`. Installation places the engine in the virtual
@@ -23,7 +23,7 @@ separately. The native engine needs neither a Rust compiler nor system GDAL.
 Verify each wheel against `SHA256SUMS.txt` before installation (`sha256sum -c`
 on Linux or `Get-FileHash -Algorithm SHA256` on Windows). `BUILD.json` records
 the source revision, artifact/binary hashes and local build environments.
-The retained 0.4.0 Linux wheel was built in the pinned official manylinux 2.28
+The retained 0.5.0 Linux wheel was built in the pinned official manylinux 2.28
 container. The Windows wheel was cross-built for Windows GNU with a static
 CRT and tested on Windows; it imports only Windows system DLLs. CI also builds
 MSVC wheels as separate workflow artifacts. Both retained builds execute the installed
@@ -36,9 +36,14 @@ and polygon masks through native terrio, reusing ownership and terrain across
 profiles while preserving Step05 arithmetic. Installed-wheel tests compare
 the horizontal products with the explicit NumPy reference, including shared
 boundaries, holes, multipart AOIs and bounded worker counts.
-Both 0.4 installed wheels pass eight real-Davis sloping API checks, including
-raw-bit Max/timestep comparisons with one/four workers and failure cleanup,
-including metadata-only template delivery, and 69 engine-backed horizontal tests per platform. The Linux wheel also
+Both 0.5 installed wheels pass 16 sloping API checks, including plain Davis
+Max/timesteps, all four enhanced-option combinations on bridge Max and Davis
+two timesteps with one/four workers, triangular AOI, failure cleanup and
+metadata-only template delivery. The enhanced matrix compares 48 raw Depth/WSE
+products per platform. Version 0.5 adds `rasmapper-sloping-with-faces/1`,
+independent depth-weighted and shallow-to-horizontal flags, and stored native
+corner elevations. Plain defaults remain unchanged. Both builds also pass
+69 engine-backed horizontal tests per platform. The Linux wheel also
 passes the packaging smoke in a glibc 2.28 container. The
 [sloping corpus/performance evidence](../docs/development/fim-mapping-performance.md#plain-sloping-development-qualification)
 states full versus bounded comparison scopes separately. Step05 real-model
