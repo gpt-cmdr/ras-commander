@@ -3694,6 +3694,30 @@ Step 5: Configure (optional — auto-detection usually works)
         return generated
 
     @staticmethod
+    def _set_rasmap_render_mode(render_mode, ras_obj) -> None:
+        """Write ``render_mode`` to the .rasmap, including any sloping flags.
+
+        Accepts every form the StoreMap helper accepts: a mode name,
+        ``"slopingPretty:<reduce_shallow>:<depth_weighted>"``, or a dict with
+        ``mode`` and optional ``reduce_shallow_to_horizontal`` and
+        ``use_depth_weighted_faces`` keys.
+        """
+        helper_mode = normalize_store_map_render_mode(render_mode)
+        base = render_mode.get("mode", "horizontal") if isinstance(render_mode, dict) else render_mode
+        flags = helper_mode.split(":")[1:]
+        kwargs = {}
+        if flags:
+            kwargs = {
+                "reduce_shallow_to_horizontal": flags[0] == "true",
+                "use_depth_weighted_faces": flags[1] == "true",
+            }
+        RasMap.set_water_surface_render_mode(
+            mode=str(base).strip().split(":")[0],
+            ras_object=ras_obj,
+            **kwargs,
+        )
+
+    @staticmethod
     @_serialize_store_maps
     @log_call
     def store_maps(
@@ -3762,7 +3786,13 @@ Step 5: Configure (optional — auto-detection usually works)
             profile: Profile to map - "Max", "Min", or specific timestamp string
             render_mode: Water surface rendering mode to set before generating
                 maps. Options: "horizontal", "sloping", "slopingPretty".
-                If None (default), uses whatever mode is already in the .rasmap.
+                For slopingPretty, flags can be given as
+                "slopingPretty:<reduce_shallow>:<depth_weighted>" (for example
+                "slopingPretty:true:true" for depth-weighted faces) or as a dict
+                with ``mode``, ``reduce_shallow_to_horizontal`` and
+                ``use_depth_weighted_faces``. The flags are written to the
+                .rasmap. If None (default), uses whatever mode is already in
+                the .rasmap.
             wse: Generate Water Surface Elevation map. Defaults to True for
                 ordinary stored-map generation and False for BenefitArea unless
                 ``BenefitAreaConfig.include_wse`` is True.
@@ -4031,10 +4061,7 @@ Step 5: Configure (optional — auto-detection usually works)
 
             # Set render mode if requested (before modifying stored maps)
             if render_mode is not None:
-                RasMap.set_water_surface_render_mode(
-                    mode=render_mode,
-                    ras_object=ras_obj,
-                )
+                RasProcess._set_rasmap_render_mode(render_mode, ras_obj)
                 logger.debug(f"Set render mode to '{render_mode}' before StoreAllMaps")
 
             # Clear existing stored maps if requested
@@ -4898,10 +4925,7 @@ Step 5: Configure (optional — auto-detection usually works)
                     ras_object=ras_obj,
                 )
             if render_mode is not None:
-                RasMap.set_water_surface_render_mode(
-                    mode=render_mode,
-                    ras_object=ras_obj,
-                )
+                RasProcess._set_rasmap_render_mode(render_mode, ras_obj)
 
             os.makedirs(_windows_extended_length_path(output_dir), exist_ok=True)
             if resolved_output_path is not None:
