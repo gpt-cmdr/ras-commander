@@ -68,6 +68,13 @@ Parent `ras_commander/AGENTS.md` and root `AGENTS.md` still apply.
   unsupported inputs raise or mark the profile `failed`; `map_profiles` raises `FimMappingError`
   after writing `fim_manifest.json`.
 - Cell centres come from `HdfMesh.get_mesh_cell_points`, never raw HDF paths.
+- Sloping uses typed centers (`include_geometry=False`) and reuses immutable,
+  source-indexed per-mesh timestep views. Retain required-native payload reads
+  and per-read source identity validation. Overlap predicate batches are bounded;
+  batching must not omit candidate pairs or alter ownership.
+- Sloping `writer_threads` explicitly scopes GDAL compression settings, including
+  the default of one, and restores the enclosing setting on exceptions. Rust
+  `threads` and compression workers are separate budgets that can overlap.
 - The returned manifest columns are declared as `fim_product_manifest` in `ras_commander/schemas.py`.
 
 ## Testing

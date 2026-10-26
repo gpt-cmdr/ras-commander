@@ -47,6 +47,11 @@ def test_real_sloping_raw_masks_and_float_bits(sloping_case, threads, tmp_path):
     cells = HdfMesh.get_mesh_cell_polygons(case["hdf"], strict=True)
     assert list(result.profile) == list(case["profiles"])
     assert result.attrs["performance"]["engine_report"]["status"] == "complete"
+    assert result.attrs["performance"]["profile_views_prepared"] == (
+        len(HdfMesh.get_mesh_area_names(case["hdf"]))
+        if any(isinstance(v, int) for v in case["profiles"].values())
+        else 0
+    )
     for product in result.itertuples():
         for name, filename in (("depth", product.depth_tif), ("wse", product.wse_tif)):
             with rasterio.open(filename) as candidate:
@@ -348,6 +353,7 @@ def test_real_additional_sloping_options(threads, tmp_path):
             profiles=case["profiles"],
             engine_path=case["engine"],
             threads=threads,
+            writer_threads=threads,
             template_raster=case["references"][first]["depth"],
             max_working_mib=case.get("max_working_mib", 4096),
             **options,
@@ -384,6 +390,10 @@ def test_real_additional_sloping_options(threads, tmp_path):
         dict(use_depth_weighted_faces=True),
         dict(reduce_shallow_to_horizontal=True),
         dict(render_mode="slopingPretty", use_depth_weighted_faces=1),
+        dict(writer_threads=0),
+        dict(writer_threads=True),
+        dict(writer_threads=65),
+        dict(writer_threads=1.5),
     ],
 )
 def test_sloping_options_rejected_before_inputs_are_read(options, tmp_path):
@@ -472,3 +482,120 @@ def test_real_enhanced_polygon_preserves_native_pixels(tmp_path):
             metrics[key] == 0
             for key in ("extra", "missing", "different", "outside_footprint")
         )
+
+
+@pytest.mark.parametrize("use_template", [False, True])
+def test_real_sloping_compression_workers_preserve_values_and_scope(
+    sloping_case, tmp_path, monkeypatch, use_template
+):
+    import rasterio
+    from rasterio.env import get_gdal_config
+    from ras_commander import RasFim, HdfMesh
+    from ras_commander.fim import _products, _sloping_products
+    from scripts.benchmarks.fim_sloping_compare import compare_raw
+
+    case = sloping_case
+    name = next(iter(case["profiles"]))
+    reference = case["references"][name]
+    observed = []
+    module = _sloping_products if use_template else _products
+    method = "write_array" if use_template else "write_raster"
+    original = getattr(module, method)
+
+    def record(*args, **kwargs):
+        observed.append(str(get_gdal_config("GDAL_NUM_THREADS")))
+        return original(*args, **kwargs)
+
+    monkeypatch.setattr(module, method, record)
+    previous = get_gdal_config("GDAL_NUM_THREADS")
+    with rasterio.Env(GDAL_NUM_THREADS="2"):
+        result = RasFim.map_sloping_profiles(
+            case["hdf"],
+            case["terrain"],
+            tmp_path / "workers",
+            profiles={name: case["profiles"][name]},
+            engine_path=case["engine"],
+            threads=1,
+            writer_threads=4,
+            template_raster=reference["depth"] if use_template else None,
+            max_working_mib=case.get("max_working_mib", 4096),
+        )
+        assert str(get_gdal_config("GDAL_NUM_THREADS")) == "2"
+    assert get_gdal_config("GDAL_NUM_THREADS") == previous
+    assert observed == ["4", "4"]
+    assert (
+        json.loads((tmp_path / "workers/fim_manifest.json").read_text())["options"][
+            "writer_threads"
+        ]
+        == 4
+    )
+    cells = HdfMesh.get_mesh_cell_polygons(case["hdf"], strict=True)
+    for band, path in (
+        ("depth", result.iloc[0].depth_tif),
+        ("wse", result.iloc[0].wse_tif),
+    ):
+        metrics = compare_raw(
+            path,
+            reference[band],
+            cells,
+            full_grid=use_template
+            and result.attrs["model_scope"]["storage_areas"] == 0,
+        )
+        assert metrics["common"] > 0
+        assert all(
+            metrics[key] == 0
+            for key in ("extra", "missing", "different", "outside_footprint")
+        )
+        with rasterio.open(path) as actual:
+            if use_template:
+                with rasterio.open(reference[band]) as native:
+                    assert actual.compression == native.compression
+                    assert actual.block_shapes == native.block_shapes
+                    assert actual.transform == native.transform
+                    assert actual.tags(ns="IMAGE_STRUCTURE").get(
+                        "PREDICTOR"
+                    ) == native.tags(ns="IMAGE_STRUCTURE").get("PREDICTOR")
+            else:
+                assert actual.compression.value.upper() == "LZW"
+                assert not actual.is_tiled
+
+
+@pytest.mark.parametrize("use_template", [False, True])
+def test_sloping_writer_failure_restores_worker_scope_and_aborts(
+    sloping_case, tmp_path, monkeypatch, use_template
+):
+    import rasterio
+    from rasterio.env import get_gdal_config
+    from ras_commander import RasFim
+    from ras_commander.fim import _products, _sloping_products
+
+    case = sloping_case
+    name = next(iter(case["profiles"]))
+    module = _sloping_products if use_template else _products
+
+    def fail(*args, **kwargs):
+        assert str(get_gdal_config("GDAL_NUM_THREADS")) == "4"
+        raise RuntimeError("forced scoped compression failure")
+
+    monkeypatch.setattr(module, "write_array" if use_template else "write_raster", fail)
+    output = tmp_path / "failed"
+    previous = get_gdal_config("GDAL_NUM_THREADS")
+    with rasterio.Env(GDAL_NUM_THREADS="2"):
+        with pytest.raises(RuntimeError, match="scoped compression failure"):
+            RasFim.map_sloping_profiles(
+                case["hdf"],
+                case["terrain"],
+                output,
+                profiles={name: case["profiles"][name]},
+                engine_path=case["engine"],
+                threads=1,
+                writer_threads=4,
+                template_raster=case["references"][name]["depth"]
+                if use_template
+                else None,
+                max_working_mib=case.get("max_working_mib", 4096),
+            )
+        assert str(get_gdal_config("GDAL_NUM_THREADS")) == "2"
+    assert get_gdal_config("GDAL_NUM_THREADS") == previous
+    assert not list(output.glob("*.tif"))
+    assert json.loads((output / "fim_manifest.json").read_text())["status"] == "aborted"

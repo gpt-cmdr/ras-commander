@@ -618,15 +618,15 @@ Spring River/Spring Creek or other HEC-RAS versions. Standalone storage-area
 surfaces remain outside the mapping scope.
 
 A fresh bridge benchmark enabled both options and timed one Max Depth/WSE pair
-on identical 4,852 � 6,705 grids, nodata and tiled DEFLATE storage. Native calls
+on identical 4,852 × 6,705 grids, nodata and tiled DEFLATE storage. Native calls
 used RAS Mapper 7.0.1 through Commander. Rust calls used the installed 0.5.0
 Windows GNU/static-CRT wheel and direct metadata-only template delivery. Both
 complete images matched raw masks and finite float32 bits:
 
 | Pair | Native RASMapper (s) | Rust, one worker (s) | Rust, four workers (s) | Native / Rust, four workers |
 |---|---:|---:|---:|---:|
-| 1 | 8.66 | 4.54 | 3.73 | 2.32� |
-| 2 | 9.37 | 4.07 | 5.13 | 1.83� |
+| 1 | 8.66 | 4.54 | 3.73 | 2.32× |
+| 2 | 9.37 | 4.07 | 5.13 | 1.83× |
 
 The parent and child processes inherited a four-CPU affinity restriction.
 Rust used the stated bounded pool; its order was reversed for the second pair.
@@ -651,6 +651,89 @@ Stored `FacePoints Elevation` arrays are mandatory only when depth weighting
 is enabled; missing inputs raise without changing the HDF or approximating
 corner elevations. Older engine 0.4 requests remain usable for plain mapping;
 enhanced requests require the new capability record.
+
+## Preparation and compression optimization after Astra review
+
+An independent Astra read-only review identified Python geometry validation and
+GeoTIFF delivery as larger costs than Rust interpolation in the profiled bridge
+case. The adopted changes leave the retained 0.5.0 Rust sources, executable and
+binary32 arithmetic unchanged:
+
+- Use current-main typed HDF cell coordinates without creating Shapely points.
+- Evaluate overlap predicates in bounded batches of at most 4,096 candidate
+  pairs, retaining every candidate and the same positive-area rejection rule.
+- Reuse immutable, source-indexed timestep views per mesh, with source identity
+  checks on every payload read. Max profiles retain their bulk native read.
+- Pass the requested native thread budget to polygon extraction, avoid the
+  unnecessary direct SciPy triangulation import, and record preparation clocks.
+- Expose `writer_threads` for ordinary and template GeoTIFF compression. Its
+  default of one explicitly overrides ambient GDAL settings during writes;
+  the enclosing setting is restored on success and failure. Compression and
+  mapping pools can overlap, so their budgets are separate.
+
+Current `main` at `a898333f4` was merged before this work. Both qualification
+environments use `ras-commander-fast-hdf` 0.2.2, the latest PyPI release checked
+for this run. Numeric payload reads require Rust; h5py remains in metadata
+inspection. Version metadata is now included in the performance return. No HDF
+backend replacement or arithmetic rewrite was needed.
+
+A controlled bridge comparison used three rotated/interleaved repetitions,
+four-CPU affinity, the same retained Windows engine, enhanced mapping with both
+flags, and a complete 4,852 × 6,705 Max Depth/WSE pair. All nine output pairs
+matched the complete native raster masks and finite float32 bits exactly.
+
+| Variant | Median complete-call time | Elapsed reduction from baseline |
+|---|---:|---:|
+| Previous preparation, one compression worker | 3.400 s | — |
+| Optimized preparation, one compression worker | 2.963 s | 12.9% |
+| Optimized preparation, four compression workers | 2.107 s | 38.0% |
+
+The baseline reconstructs the previous private preparation/adapter/writer
+functions from `bc610729f`, sharing the current public wrapper and dependencies.
+Imports were warmed; there was no excluded mapping warm-up. This isolates the
+changed preparation and compression behavior, rather than comparing independent
+environments or establishing cold-start performance. Later metadata and invalid
+argument validation changes do not alter the numerical pipeline. Product-write
+time fell from 1.56–1.70 s to 0.676–0.681 s with four compression workers.
+
+Separate three-repetition preparation measurements compared coordinate bits
+and ran full-mesh overlap validation without allocating a terrain raster:
+
+| Model / physical cells | Point-based → typed centers | Scalar → batched validation |
+|---|---:|---:|
+| Bald Eagle bridges / 24,718 | 31.9 → 6.2 ms | 0.917 → 0.642 s |
+| Spring River / 422,715 | 272.1 → 63.1 ms | 17.861 → 12.178 s |
+
+These are median stage timings, not enhanced/full-extent Spring River raster
+qualification or catalog throughput measurements.
+
+A fresh native comparison then used the final optimized Python runtime, the
+retained Windows wheel and four compression workers throughout. Both native
+and Rust complete calls inherited four-CPU affinity. Rust mapping worker order
+was reversed in the second pair. Grid, nodata, tiled DEFLATE storage and both
+enhanced flags matched; every full-image raw comparison passed.
+
+| Pair | RASMapper 7.0.1 (s) | Rust mapping 1 / compression 4 (s) | Rust mapping 4 / compression 4 (s) | Native / Rust mapping 4 |
+|---|---:|---:|---:|---:|
+| 1 | 6.590 | 2.432 | 2.284 | 2.88× |
+| 2 | 6.879 | 2.947 | 2.181 | 3.15× |
+
+No depth postprocessing or profile concurrency was used. Timing includes HDF
+preparation, process launch, mapping, template validation and product writes;
+terrain preparation, project initialization and comparison scanning are outside
+the clocks. Receipts verify unchanged source HDF, restored rasmap bytes,
+unchanged harness and the executable hash matching the retained Windows wheel
+(`63caee65c3420130c5c0d367a37afcbbcf6673c10f6199b2325f0b638dfece08`).
+These are interleaved warm-cache observations on a shared workstation, not a
+universal speed guarantee. The earlier tables retain their original conditions.
+
+Final Astra review found no remaining implementation blocker. Windows affected
+checks total 152 passing and four optional skips across the targeted runs;
+Linux checks include 24 distinct sloping and 70 horizontal passes. Both
+platforms cover compression layout/value preservation and restoration after
+writer exceptions. Persistent prepared contexts and an in-process binding
+remain candidates for later measurement. SIMD changes to interpolation are
+deferred: the measured bottlenecks did not justify changing arithmetic order.
 
 ## Proposed engine packaging
 

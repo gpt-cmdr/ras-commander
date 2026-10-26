@@ -93,11 +93,14 @@ MANIFEST_COLUMNS = [
 PathLike = Union[str, os.PathLike]
 
 
-def _require_dependencies() -> None:
+def _require_dependencies(*, triangulation: bool = True) -> None:
     """Fail early with installation guidance when the ``fim`` extra is missing."""
     from .._optional_deps import require_module
 
-    for name in ("scipy.spatial", "geopandas", "shapely", "rasterio", "pyproj"):
+    modules = ("geopandas", "shapely", "rasterio", "pyproj")
+    if triangulation:
+        modules = ("scipy.spatial",) + modules
+    for name in modules:
         require_module(name, "RasFim")
 
 
@@ -222,6 +225,7 @@ class RasFim:
         bbox: Optional[Sequence[float]] = None, polygon: Any = None,
         polygon_layer: Optional[str] = None, aoi_crs: Any = None,
         engine_path: Optional[PathLike] = None, threads: int = 1,
+        writer_threads: int = 1,
         max_working_mib: int = 1024, timeout: Optional[float] = None,
         write_floodplain: bool = False,
         template_raster: Optional[PathLike] = None,
@@ -274,6 +278,11 @@ class RasFim:
             aoi_crs: Coordinate reference system of the AOI.
             engine_path: Matching engine executable, otherwise environment/PATH.
             threads: Bounded Rust worker count, 1 through 64.
+            writer_threads: GeoTIFF compression workers, 1 through 64. Defaults
+                to one and can overlap native preparation of later profiles;
+                budget both pools. Compression and raster layout are unchanged.
+                Overrides GDAL_NUM_THREADS during writes and restores it after
+                success or failure, including when the default is used.
             max_working_mib: Planned engine memory admission budget in MiB;
                 HDF/Python preparation and polygonization also use memory.
             timeout: Engine stream lifetime in seconds, including output writes.
@@ -296,14 +305,14 @@ class RasFim:
             ValueError: Invalid profile selectors or resource options.
             FileExistsError: The output directory is not empty.
         """
-        _require_dependencies()
+        _require_dependencies(triangulation=False)
         from . import _sloping
         return _sloping.map_profiles(hdf_path, terrain_path, output_folder,
             profiles=profiles, render_mode=render_mode,
             reduce_shallow_to_horizontal=reduce_shallow_to_horizontal,
             use_depth_weighted_faces=use_depth_weighted_faces,
             bbox=bbox, polygon=polygon, polygon_layer=polygon_layer,
-            aoi_crs=aoi_crs, engine_path=engine_path, threads=threads,
+            aoi_crs=aoi_crs, engine_path=engine_path, threads=threads, writer_threads=writer_threads,
             max_working_mib=max_working_mib, timeout=timeout, write_floodplain=write_floodplain,
             template_raster=template_raster)
 

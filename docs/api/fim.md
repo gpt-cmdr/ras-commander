@@ -52,6 +52,22 @@ manifest = RasFim.map_sloping_profiles(
 performance = manifest.attrs["performance"]
 ```
 
+Set `writer_threads=4` to use four GeoTIFF compression workers. The default is
+one. This explicitly overrides `GDAL_NUM_THREADS` during ordinary and template
+writes and restores the enclosing setting on success or failure. `threads`
+controls native geometry extraction and Rust mapping; `writer_threads` controls
+product compression. These pools can overlap on later profiles, so budget both.
+Compression workers preserve decoded masks, values and storage layout; encoded
+TIFF bytes can differ.
+
+Numeric HDF payloads require the native Rust backend. The current qualification
+uses `ras-commander-fast-hdf` 0.2.2 and current-main typed cell coordinates,
+avoiding Shapely point construction. Immutable per-mesh result views are reused
+for timestep profiles while retaining source identity checks on each read.
+Performance attributes record the installed HDF backend version and preparation
+phases, including geometry extraction and overlap validation. HDF metadata
+inspection still uses h5py.
+
 To match an existing raster's complete layout, pass
 `template_raster="native_depth.tif"`. Only its grid, nodata and storage metadata
 are read. Rust values are delivered directly on that grid in one write pass,

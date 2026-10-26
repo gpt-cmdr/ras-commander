@@ -945,3 +945,22 @@ def test_compare_existing_rasters_rejects_footprint_crs_and_terrain_lattice(scen
         src.transform = src.transform * rasterio.Affine.translation(.25, 0)
     with pytest.raises(FimUnsupportedError, match="integer pixel offsets"):
         RasFim.compare_rasters(*paths, *paths, cells=scene[0], terrain_path=shifted)
+
+
+def test_overlap_validation_batches_pairs_without_quadratic_query(scene, monkeypatch):
+    import geopandas as gpd
+    import shapely
+    from ras_commander.fim import _horizontal
+    from shapely.geometry import box
+    cells = gpd.GeoDataFrame(geometry=[box(0,0,10,10)] * 5000, crs=scene[0].crs)
+    plan = _horizontal.plan_grid(cells, scene[1], None, 1024, native=True)
+    counts=[]
+    original=shapely.relate_pattern
+    def bounded(left, right, pattern):
+        counts.append(len(left))
+        assert len(left) <= 4096 and len(right) == len(left)
+        return original(left,right,pattern)
+    monkeypatch.setattr(shapely,"relate_pattern",bounded)
+    with pytest.raises(FimUnsupportedError, match="overlapping"):
+        _horizontal.prepare_grid(cells,scene[1],plan,False)
+    assert counts == [4096]

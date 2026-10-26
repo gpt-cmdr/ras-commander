@@ -33,6 +33,7 @@ def map_profiles(
     aoi_crs=None,
     engine_path=None,
     threads=1,
+    writer_threads=1,
     max_working_mib=1024,
     timeout=None,
     write_floodplain=False,
@@ -65,10 +66,12 @@ def map_profiles(
         use_depth_weighted_faces=use_depth_weighted_faces,
     )
     started = time.perf_counter()
-    hdf = Path(hdf_path).resolve(strict=True)
-    terrain = Path(terrain_path).resolve(strict=True)
-    model_scope = RasFim.validate_2d_model(hdf)
+    preparation = {}
+    phase = started
     threads = _positive_int(threads, "threads")
+    writer_threads = _positive_int(writer_threads, "writer_threads")
+    if writer_threads > 64:
+        raise ValueError("writer_threads must be <= 64")
     budget = _positive_int(max_working_mib, "max_working_mib")
     if threads > 64:
         raise ValueError("threads must be <= 64")
@@ -76,6 +79,9 @@ def map_profiles(
         isinstance(timeout, bool) or not np.isfinite(timeout) or timeout <= 0
     ):
         raise ValueError("timeout must be positive and finite, or None")
+    hdf = Path(hdf_path).resolve(strict=True)
+    terrain = Path(terrain_path).resolve(strict=True)
+    model_scope = RasFim.validate_2d_model(hdf)
     selected = {"Max": "Max"} if profiles is None else dict(profiles)
     if not selected or any(
         not isinstance(name, str)
@@ -121,8 +127,14 @@ def map_profiles(
     if isinstance(polygon, (str, os.PathLike)):
         watched["polygon"] = Path(polygon).resolve(strict=True)
     before = {key: _file_identity(path) for key, path in watched.items()}
+    preparation["preflight_seconds"] = time.perf_counter() - phase
+    phase = time.perf_counter()
     with backend_scope("rust"):
-        cells = HdfMesh.get_mesh_cell_polygons(hdf, strict=True)
+        cells = HdfMesh.get_mesh_cell_polygons(
+            hdf, strict=True, engine="native", threads=threads
+        )
+    preparation["cell_polygon_seconds"] = time.perf_counter() - phase
+    phase = time.perf_counter()
     if cells.empty:
         raise ValueError("sloping mapping requires physical 2D cell polygons")
     constraint = _aoi.resolve_aoi(
@@ -148,9 +160,12 @@ def map_profiles(
             raise FimUnsupportedError(
                 "sloping template delivery exceeds planned array budget"
             )
+    preparation["grid_plan_seconds"] = time.perf_counter() - phase
+    phase = time.perf_counter()
     _horizontal.prepare_grid(
         cells, terrain, plan, False
     )  # validates polygons and overlap
+    preparation["cell_validation_seconds"] = time.perf_counter() - phase
     folder = _prepare_output_folder(output_folder)
     rows = {name: _empty_row(name, "not_run") for name in selected}
     details = dict(
@@ -167,6 +182,7 @@ def map_profiles(
             **selected_options,
             "extra_depth_cutoff": None,
             "threads": threads,
+            "writer_threads": writer_threads,
             "max_working_mib": budget,
             "write_floodplain": bool(write_floodplain),
         },
@@ -221,6 +237,7 @@ def map_profiles(
                     _write_geometry(root / "aoi.wkb", [plan.geometry])
                     fields["aoi_file"] = "aoi.wkb"
                 units = []
+                profile_views = {}
                 for profile_index, (name, selector) in enumerate(selected.items()):
                     values_files = []
                     for i, mesh in enumerate(meshes):
@@ -228,15 +245,18 @@ def map_profiles(
                             values = max_values[i]
                         else:
                             with backend_scope("rust"):
-                                view = HdfResultsMesh.get_mesh_timeseries(
-                                    hdf,
-                                    mesh["mesh_name"],
-                                    "Water Surface",
-                                    truncate=False,
-                                    time_selection=int(selector),
-                                    return_type="view",
-                                    include_ghost_cells=True,
-                                )
+                                if i not in profile_views:
+                                    profile_views[i] = (
+                                        HdfResultsMesh.get_mesh_timeseries(
+                                            hdf,
+                                            mesh["mesh_name"],
+                                            "Water Surface",
+                                            truncate=False,
+                                            return_type="view",
+                                            include_ghost_cells=True,
+                                        )
+                                    )
+                                view = profile_views[i].select(time=int(selector))
                                 values = view.to_numpy(dtype=np.float32).reshape(-1)
                         if (
                             len(values) != mesh["cell_count"]
@@ -277,7 +297,20 @@ def map_profiles(
                 (root / "request.json").write_text(
                     json.dumps(request), encoding="utf-8"
                 )
+                from importlib.metadata import PackageNotFoundError, version
+
+                try:
+                    hdf_version = version("ras-commander-fast-hdf")
+                except PackageNotFoundError:
+                    hdf_version = None
                 details["performance"] = {
+                    "native_hdf": {
+                        "package": "ras-commander-fast-hdf",
+                        "version": hdf_version,
+                        "numeric_payload_backend": "rust-required",
+                    },
+                    "preparation": preparation,
+                    "profile_views_prepared": len(profile_views),
                     "hdf_and_staging_seconds": time.perf_counter() - tick,
                     "product_write_seconds": {},
                 }
@@ -344,14 +377,19 @@ def map_profiles(
                                 unit={"window": list(plan.window.flatten())},
                             )
                             write_tick = time.perf_counter()
-                            if layout is None:
-                                products = RasFim._write_products(
-                                    folder, result, plan.crs, write_floodplain
-                                )
-                            else:
-                                products = _sloping_products.write_products(
-                                    folder, result, plan.crs, write_floodplain, layout
-                                )
+                            with rasterio.Env(GDAL_NUM_THREADS=str(writer_threads)):
+                                if layout is None:
+                                    products = RasFim._write_products(
+                                        folder, result, plan.crs, write_floodplain
+                                    )
+                                else:
+                                    products = _sloping_products.write_products(
+                                        folder,
+                                        result,
+                                        plan.crs,
+                                        write_floodplain,
+                                        layout,
+                                    )
                             rows[name].update(products)
                             details["performance"]["product_write_seconds"][name] = (
                                 time.perf_counter() - write_tick

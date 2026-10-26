@@ -169,17 +169,35 @@ def prepare_grid(
     # Query one cell at a time: coincident geometries must not allocate an
     # N-by-N candidate-pair array before the first overlap is rejected.
     index = cells.sindex
+    capacity = 4096
+    left = np.empty(capacity, dtype=np.intp)
+    right = np.empty(capacity, dtype=np.intp)
+    used = 0
+
+    def check_pairs(count):
+        first = geometries[left[:count]]
+        second = geometries[right[:count]]
+        interiors = shapely.relate_pattern(first, second, "T********")
+        if interiors.any():
+            intersections = shapely.intersection(first[interiors], second[interiors])
+            if (shapely.area(intersections) > 0).any():
+                raise FimUnsupportedError("horizontal cells have overlapping interiors")
+
     for i, geometry in enumerate(geometries):
         others = index.query(geometry)
         others = others[others > i]
-        for start in range(0, len(others), 512):
-            candidates = geometries[others[start : start + 512]]
-            interiors = shapely.relate_pattern(geometry, candidates, "T********")
-            # Shared edges need no constructed intersection. Retain the original
-            # positive-area check for candidates whose interiors intersect.
-            intersections = shapely.intersection(geometry, candidates[interiors])
-            if (shapely.area(intersections) > 0).any():
-                raise FimUnsupportedError("horizontal cells have overlapping interiors")
+        start = 0
+        while start < len(others):
+            count = min(capacity - used, len(others) - start)
+            left[used : used + count] = i
+            right[used : used + count] = others[start : start + count]
+            used += count
+            start += count
+            if used == capacity:
+                check_pairs(used)
+                used = 0
+    if used:
+        check_pairs(used)
     if not read_terrain:
         # Rust owns rasterization, AOI masking and terrain for the native path.
         return HorizontalGrid(plan, None, np.empty((0, 0), dtype=np.float32))

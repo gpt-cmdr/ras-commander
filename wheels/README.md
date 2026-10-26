@@ -55,3 +55,11 @@ To regenerate, run the repository's `Engine wheels` workflow. It uploads wheels
 and hashes as platform artifacts retained for 90 days. Only retain wheels whose
 build and installed smoke test succeed. After changing engine source, replace
 these test wheels and update `BUILD.json` and `SHA256SUMS.txt` together.
+
+The subsequent Python preparation/compression optimization retains these exact
+0.5.0 wheels and Rust arithmetic. Updated integration checks pass 24 distinct
+sloping tests and 70 horizontal tests per platform. Sloping checks include
+explicit compression workers, decoded-value/layout preservation, resource
+validation and GDAL setting restoration after writer failure. The original
+build provenance above remains unchanged; the application performance evidence
+records the later optimization separately.

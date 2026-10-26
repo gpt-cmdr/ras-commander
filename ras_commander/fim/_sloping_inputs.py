@@ -38,7 +38,6 @@ def write_binary_mesh_inputs(
     import json
     import h5py
     import numpy as np
-    import shapely
     from .. import HdfMesh, HdfResultsMesh
     from ..fast_hdf import backend_scope, read_datasets
     from ._horizontal_engine import _write_array
@@ -48,7 +47,9 @@ def write_binary_mesh_inputs(
     root = Path(output_folder)
     RasFim.validate_2d_model(path)
     with backend_scope("rust"):
-        centers = HdfMesh.get_mesh_cell_points(path, include_ghost_cells=True)
+        centers = HdfMesh.get_mesh_cell_points(
+            path, include_ghost_cells=True, include_geometry=False
+        )
         names = HdfMesh.get_mesh_area_names(path)
     if centers.empty or not names:
         raise ValueError("Sloping mapping requires readable 2D cell centres")
@@ -95,7 +96,7 @@ def write_binary_mesh_inputs(
                 _write_array(root / filename, array)
                 descriptors[key] = dict(path=filename, rows=len(array))
 
-            stage("centers", shapely.get_coordinates(points.geometry), "<f8")
+            stage("centers", points[["x", "y"]].to_numpy(), "<f8")
             for key, (field, dtype) in _BINARY_FIELDS.items():
                 stage(key, arrays[prefix + field], dtype)
             if include_vertex_elevations:

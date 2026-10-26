@@ -185,6 +185,7 @@ def main():
         action="store_true",
         help="Include nodata-border delivery in timing and compare the whole reference grid",
     )
+    parser.add_argument("--writer-threads", type=int, default=1)
     args = parser.parse_args()
     case = json.loads(args.case.read_text(encoding="utf-8"))
     fields = {
@@ -239,6 +240,7 @@ def main():
         },
         engine_path=case["engine"],
         threads=args.threads,
+        writer_threads=args.writer_threads,
         max_working_mib=case.get("max_working_mib", 4096),
         write_floodplain=False,
         **fields,

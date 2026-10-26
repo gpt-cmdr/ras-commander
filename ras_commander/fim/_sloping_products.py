@@ -72,10 +72,8 @@ def write_array(path, array, layout):
     col = layout["col"]
     row = layout["row"]
     height, width = array.shape
-    with (
-        rasterio.Env(GDAL_NUM_THREADS="1"),
-        rasterio.open(path, "w", **profile) as target,
-    ):
+    # Caller owns the scoped compression worker budget for both delivery paths.
+    with rasterio.open(path, "w", **profile) as target:
         for top in range(0, profile["height"], layout["stripe_rows"]):
             bottom = min(top + layout["stripe_rows"], profile["height"])
             values = np.full(
