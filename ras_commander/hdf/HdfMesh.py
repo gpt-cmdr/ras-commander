@@ -155,6 +155,60 @@ def _integral_rows(values: np.ndarray, columns: int, label: str) -> np.ndarray:
     return result
 
 
+def _packed_face_lines(endpoints, points, perimeter_info, perimeter_values):
+    """Face polylines as packed buffers, exactly as the per-face loop builds them.
+
+    Returns ``(coordinates, offsets)``: float64 ``(N, 2)`` coordinates and
+    int64 offsets (one more than the face count), so face ``i`` is
+    ``coordinates[offsets[i]:offsets[i + 1]]``: its start point, its
+    ``Faces Perimeter Values`` rows when the count is positive, then its end
+    point. Returns ``None`` for any layout where that is not provably what
+    ``LineString`` per face gives (other column counts, unequal face tables,
+    negative or out-of-range indices or spans, non-integer connectivity,
+    nonfinite coordinates); the caller then runs the per-face loop, which
+    keeps its own result or error for those layouts.
+    """
+    endpoints = np.asarray(endpoints)
+    points = np.asarray(points)
+    perimeter_info = np.asarray(perimeter_info)
+    perimeter_values = np.asarray(perimeter_values)
+    for table in (endpoints, perimeter_info):
+        if table.ndim != 2 or table.shape[1] != 2 or table.dtype.kind not in "iu":
+            return None
+        if table.dtype.kind == "u" and table.size and table.max() > np.iinfo(np.int64).max:
+            return None
+    if len(endpoints) != len(perimeter_info):
+        return None
+    if points.ndim != 2 or points.shape[1] != 2 or points.dtype.kind != "f":
+        return None
+    endpoints = endpoints.astype(np.int64, copy=False)
+    perimeter_info = perimeter_info.astype(np.int64, copy=False)
+    if endpoints.size and (endpoints.min() < 0 or endpoints.max() >= len(points)):
+        return None
+    starts, counts = perimeter_info[:, 0], perimeter_info[:, 1]
+    inner = np.where(counts > 0, counts, 0)
+    curved = inner > 0
+    if curved.any():
+        if (perimeter_values.ndim != 2 or perimeter_values.shape[1] != 2
+                or perimeter_values.dtype.kind != "f"):
+            return None
+        if (starts[curved] < 0).any() or (
+                starts[curved] > len(perimeter_values) - inner[curved]).any():
+            return None
+    offsets = np.zeros(len(endpoints) + 1, dtype=np.int64)
+    np.cumsum(inner + 2, out=offsets[1:])
+    coordinates = np.empty((int(offsets[-1]), 2), dtype=np.float64)
+    coordinates[offsets[:-1]] = points[endpoints[:, 0]]
+    coordinates[offsets[1:] - 1] = points[endpoints[:, 1]]
+    if curved.any():
+        face = np.repeat(np.arange(len(endpoints)), inner)
+        within = np.arange(len(face)) - np.repeat(np.cumsum(inner) - inner, inner)
+        coordinates[offsets[face] + 1 + within] = perimeter_values[starts[face] + within]
+    if not np.isfinite(coordinates).all():
+        return None
+    return coordinates, offsets
+
+
 def _validate_nonoverlapping_ranges(
     ranges: List[Tuple[int, int]], total: int, label: str
 ) -> None:
@@ -1195,6 +1249,13 @@ class HdfMesh:
             - mesh_name: str - Name of the 2D flow area
             - cell_id: int - Unique cell identifier (0-indexed)
             - geometry: Point - Cell center point geometry
+
+        Notes
+        -----
+        This is the cell-center geometry to read once per model and join to
+        the fast ``include_geometry=False`` cell results of
+        :class:`HdfResultsMesh` on ``["mesh_name", "cell_id"]``. Pass
+        ``include_ghost_cells=False`` to match their default ghost-free rows.
         """
         if not include_geometry:
             return HdfMesh._get_mesh_cell_points_table(hdf_path, include_ghost_cells)
@@ -1303,10 +1364,31 @@ class HdfMesh:
             - mesh_name: str - Name of the 2D flow area
             - face_id: int - Unique face identifier (0-indexed)
             - geometry: LineString - Face edge geometry (may include intermediate perimeter points)
+
+        Notes
+        -----
+        Each face is its start point, its ``Faces Perimeter Values`` rows (the
+        intermediate points of a curved or perimeter face) and its end point,
+        in stored order. All lines of a mesh are built in one vectorized
+        Shapely call from packed coordinate buffers: the native engine builds
+        the buffers where it proves the layout (``auto`` and ``native``
+        modes), NumPy builds them otherwise, and a per-face loop handles any
+        layout neither accepts. The geometry is identical (WKB) in every case.
+
+        This is the face geometry to read once per model and join to the fast
+        ``include_geometry=False`` face results of :class:`HdfResultsMesh`
+        on ``["mesh_name", "face_id"]``:
+
+        >>> faces = HdfMesh.get_mesh_cell_faces(plan_hdf)
+        >>> vmax = HdfResultsMesh.get_mesh_max_face_v(plan_hdf, include_geometry=False)
+        >>> located = faces.merge(vmax, on=["mesh_name", "face_id"])
         """
         # Lazy imports for heavy dependencies
         from geopandas import GeoDataFrame
+        import shapely
         from shapely.geometry import LineString
+
+        from ..fast_hdf import mesh_face_lines
 
         try:
             with h5py.File(hdf_path, 'r') as hdf_file:
@@ -1344,11 +1426,28 @@ class HdfMesh:
                         raise _MeshLayoutError(
                             f"Face topology is partial for mesh {mesh_name!r}"
                         )
-                    # Read all data at once
-                    facepoints_index = read_typed(hdf_file[dataset_paths[0]])
-                    facepoints_coords = read_typed(hdf_file[dataset_paths[1]])
-                    faces_perim_info = read_typed(hdf_file[dataset_paths[2]])
-                    faces_perim_values = read_typed(hdf_file[dataset_paths[3]])
+                    # Packed buffers, built natively or by NumPy, become every
+                    # line in one Shapely call; the per-face loop below is the
+                    # reference for layouts neither builder accepts.
+                    packed = mesh_face_lines(hdf_path, mesh_name)
+                    if packed is None:
+                        facepoints_index = read_typed(hdf_file[dataset_paths[0]])
+                        facepoints_coords = read_typed(hdf_file[dataset_paths[1]])
+                        faces_perim_info = read_typed(hdf_file[dataset_paths[2]])
+                        faces_perim_values = read_typed(hdf_file[dataset_paths[3]])
+                        packed = _packed_face_lines(
+                            facepoints_index, facepoints_coords,
+                            faces_perim_info, faces_perim_values,
+                        )
+                    if packed is not None:
+                        coordinates, offsets = packed
+                        count = len(offsets) - 1
+                        all_mesh_names.extend([mesh_name] * count)
+                        all_face_ids.extend(range(count))
+                        all_geometries.extend(shapely.from_ragged_array(
+                            shapely.GeometryType.LINESTRING, coordinates, (offsets,)
+                        ))
+                        continue
 
                     # Process each face
                     for face_id, ((pnt_a_idx, pnt_b_idx), (start_row, count)) in enumerate(zip(facepoints_index, faces_perim_info)):

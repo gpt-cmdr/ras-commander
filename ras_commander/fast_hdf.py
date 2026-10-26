@@ -1134,6 +1134,46 @@ def packed_meshes(hdf_path, *, mesh_names=None, backend="auto", threads=None):
             raise FastHdfError(f"Native mesh assembly failed for {hdf.filename}: {exc}") from exc
 
 
+@_one_read
+def mesh_face_lines(hdf_path, mesh_name, *, backend="auto"):
+    """Native packed face polylines of one mesh, or ``None`` to build them in Python.
+
+    Returns ``(coordinates, offsets)`` as :func:`HdfMesh._packed_face_lines`
+    does: float64 ``(N, 2)`` coordinates and int64 offsets, face ``i`` being
+    ``coordinates[offsets[i]:offsets[i + 1]]``. The engine builds them only for
+    layouts proven identical to the Python per-face loop and refuses the rest.
+    ``None`` (build in Python) with h5py, with an extension that predates
+    ``HdfSession.read_mesh_face_lines`` (the face tables are then still read
+    natively), and in ``auto`` mode on any native refusal or failure. ``native``
+    mode raises :class:`FastHdfError` on a refusal.
+    """
+    mode = _mode(backend)
+    module = _native(mode)
+    if module is None or not hasattr(getattr(module, "HdfSession", None), "read_mesh_face_lines"):
+        return None
+    try:
+        with _session(module, hdf_path, None, any_threads=True) as session:
+            packed = session.read_mesh_face_lines(mesh_name)
+        coordinates = np.asarray(packed["coordinates"])
+        offsets = np.asarray(packed["offsets"])
+        face_ids = np.asarray(packed["face_ids"])
+        count = len(face_ids)
+        if (coordinates.dtype != np.float64 or coordinates.ndim != 2 or coordinates.shape[1] != 2
+                or offsets.dtype != np.int64 or offsets.shape != (count + 1,)
+                or offsets[0] != 0 or offsets[-1] != len(coordinates)
+                or (np.diff(offsets) < 2).any()
+                or not np.array_equal(face_ids, np.arange(count))):
+            raise FastHdfError("Native face lines are not a packed line buffer in face order")
+    except Exception as exc:
+        if mode != "auto":
+            if isinstance(exc, FastHdfError):
+                raise
+            raise FastHdfError(f"Native face lines failed for {hdf_path} mesh {mesh_name!r}: {exc}") from exc
+        logger.debug("Python face lines for %s/%s after native refusal: %s", hdf_path, mesh_name, exc)
+        return None
+    return coordinates, offsets
+
+
 def _try_mesh_polygons(hdf_path, *, backend="auto", threads=None, strict=None):
     """Internal compatibility hook; None means use the original polygonizer.
 
