@@ -582,3 +582,88 @@ def test_absent_and_zero_row_tables_return_empty_without_error(tmp_path, caplog)
     assert HdfXsec.get_cross_sections(zero_rows).empty
 
     assert not any(record.levelno >= logging.ERROR for record in caplog.records)
+
+
+def _add_stale_compound_tables(path: Path) -> None:
+    """Add compound tables that omit the second cross section.
+
+    This mirrors HEC-RAS 5.0.3 hybrid geometry files, whose compound
+    ``Attributes``, ``Manning's n Info`` and ``Ineffective Info`` tables can
+    hold fewer rows than the separated datasets and the plain-text geometry.
+    The stale values differ from the separated ones so a test can tell which
+    were read.
+    """
+    attributes_dtype = np.dtype(
+        [("River", "S16"), ("Reach", "S16"), ("RS", "S8"), ("Len Channel", "f4")]
+    )
+    ineffective_dtype = np.dtype(
+        [("Left Sta", "f4"), ("Right Sta", "f4"), ("Elevation", "f4"), ("Permanent", "?")]
+    )
+    with h5py.File(path, "a") as hdf:
+        xs = hdf["Geometry/Cross Sections"]
+        xs.create_dataset(
+            "Attributes",
+            data=np.array([(b"Stale", b"Stale", b"200", 999.0)], dtype=attributes_dtype),
+        )
+        xs.create_dataset("Manning's n Info", data=np.array([[0, 1]], dtype=np.int32))
+        xs.create_dataset(
+            "Manning's n Values", data=np.array([[0.0, 0.9]], dtype=np.float32)
+        )
+        xs.create_dataset("Ineffective Info", data=np.array([[0, 1]], dtype=np.int32))
+        xs.create_dataset(
+            "Ineffective Blocks",
+            data=np.array([(0.0, 9.0, 999.0, True)], dtype=ineffective_dtype),
+        )
+
+
+def test_hybrid_schema_reads_separated_datasets(tmp_path, monkeypatch, caplog):
+    hdf_path = tmp_path / "Hybrid.g01.hdf"
+    _write_legacy_geometry_hdf(hdf_path)
+    _add_stale_compound_tables(hdf_path)
+    monkeypatch.setattr(HdfBase, "get_projection", lambda *_args, **_kwargs: None)
+
+    with caplog.at_level(logging.WARNING, logger="ras_commander.hdf.HdfXsec"):
+        cross_sections = HdfXsec.get_cross_sections(hdf_path)
+
+    assert "Ignoring stale compound cross-section datasets" in caplog.text
+    assert "Attributes, Ineffective Info, Manning's n Info" in caplog.text
+    assert len(cross_sections) == 2
+    assert cross_sections["River"].tolist() == ["River A", "River A"]
+    assert cross_sections["RS"].tolist() == ["200", "100"]
+    assert cross_sections["Len Channel"].iloc[0] == pytest.approx(110.0)
+    assert cross_sections.iloc[1]["mannings_n"]["Mann n"] == pytest.approx(
+        [0.045, 0.035, 0.04, 0.05]
+    )
+    assert cross_sections.iloc[0]["ineffective_blocks"] == [
+        {
+            "Left Sta": 0.0,
+            "Right Sta": 1.5,
+            "Elevation": 100.0,
+            "Permanent": False,
+        }
+    ]
+
+
+def test_hybrid_schema_count_uses_separated_rows(tmp_path):
+    hdf_path = tmp_path / "Hybrid.g01.hdf"
+    _write_legacy_geometry_hdf(hdf_path)
+    _add_stale_compound_tables(hdf_path)
+
+    metadata = GeomMetadata.get_geometry_counts(None, hdf_path)
+
+    assert metadata["geometry_metadata_valid"] is True
+    assert metadata["num_cross_sections"] == 2
+
+
+def test_hybrid_schema_with_disagreeing_anchors_fails_closed(tmp_path, caplog):
+    hdf_path = tmp_path / "Hybrid.g01.hdf"
+    _write_legacy_geometry_hdf(hdf_path)
+    _add_stale_compound_tables(hdf_path)
+    with h5py.File(hdf_path, "a") as hdf:
+        xs = hdf["Geometry/Cross Sections"]
+        del xs["Node Names"]
+        xs.create_dataset("Node Names", data=np.array([b"Only one"], dtype="S16"))
+
+    with caplog.at_level(logging.ERROR, logger="ras_commander.hdf.HdfXsec"):
+        assert HdfXsec.get_cross_sections(hdf_path).empty
+    assert "row count mismatch" in caplog.text
