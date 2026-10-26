@@ -481,15 +481,27 @@ and validity were compared on all 139 release-gate fixtures in `h5py`, `auto`
 and `native` mode. The fast output is still the faster of the two, because it
 builds no geometry at all.
 
-Timings for both outputs after this change have not yet been measured on a
-quiet machine; they will be added here. Indicative only (a development
-measurement, not the quiet release benchmark): on BaldEagleDamBrk p07 (177,301
-faces) the convenient `get_mesh_max_face_v` call took about 1,760 ms before
-this change and about 290 ms after, in `h5py`, `auto` and `native` mode alike. The earlier figures for the fast
-output are on the extension's
-[Performance](https://rascommander.info/fasthdf/performance/#tables-without-geometry)
-page (`get_mesh_max_face_v` on 177,301 faces: 1,642 ms convenient, 34 ms fast,
-before this change).
+Measured on a quiet Windows workstation (October 2026) for the 0.109.0
+release, `HdfResultsMesh.get_mesh_max_face_v`: **before** is ras-commander
+`main` just before this change (9817f9484) with engine 0.2.2, **after** is the published ras-commander
+0.109.0 with engine 0.2.3, with the same NumPy 2.3.3, pandas 2.3.2, Shapely
+2.1.2 and h5py 3.14.0. Repeat calls (warm): median of 6 calls in 3 fresh
+processes per mode. Results were identical before and after, in every mode.
+
+| Output | File (faces) | Before h5py | Before `auto` | Before `native` | After h5py | After `auto` | After `native` | `auto` speed-up |
+|---|---|---:|---:|---:|---:|---:|---:|---:|
+| Convenient | BaldEagleDamBrk.p18 (9,581) | 138 ms | 140 ms | 140 ms | 41 ms | 44 ms | 45 ms | 3.2× |
+| Convenient | BaldEagleDamBrk.p07 (177,301) | 2,085 ms | 2,106 ms | 2,082 ms | 304 ms | 297 ms | 304 ms | 7.1× |
+| Convenient | Homewood.p02 (161,683) | 1,967 ms | 1,977 ms | 1,922 ms | 273 ms | 267 ms | 259 ms | 7.4× |
+| Fast | BaldEagleDamBrk.p18 (9,581) | 9.1 ms | 11.6 ms | 10.6 ms | 9.7 ms | 10.6 ms | 11.8 ms | 1.1× |
+| Fast | BaldEagleDamBrk.p07 (177,301) | 78 ms | 79 ms | 79 ms | 79 ms | 79 ms | 81 ms | 1.0× |
+| Fast | Homewood.p02 (161,683) | 70 ms | 69 ms | 70 ms | 70 ms | 72 ms | 71 ms | 1.0× |
+
+The convenient output is now about 7× faster on the large meshes, in all
+three modes, because the gain comes from building the lines in one call. The
+fast output is unchanged and is still the faster of the two. First calls in a
+process (cold) gave the same picture: BaldEagleDamBrk.p07 convenient 2,168 ms
+before and 315 ms after in `auto` mode.
 
 The figures below come from the earlier engine performance work. They measure
 the **HDF read layer** (the reads under the public methods), not complete
