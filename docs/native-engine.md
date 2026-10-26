@@ -1,19 +1,74 @@
 ---
-title: Native Rust HDF Engine
-description: ras-commander's native (Rust) HEC-RAS HDF engine - what it is, how it is selected, how it was proven identical to h5py, and how fast it is.
+title: Native Rust Engines
+description: RAS Commander's native Rust engines for HDF extraction and 2D flood inundation mapping, their installation, API controls, and measured performance. DSS Engine coming soon.
 social_image: assets/ras-commander-fast-hdf_social.png
 social_image_alt: "RAS Commander Fast-HDF: Native Rust HDF Engine"
 ---
-# Native Rust HDF Engine
+# Native Rust Engines
+
+RAS Commander uses native Rust engines for two different operations: reading
+HEC-RAS HDF data and mapping computed 2D results to depth and water surface
+elevation (WSE) rasters. The HDF engine accelerates existing `Hdf*` calls. The
+optional Mapping Engine runs through `RasFim` and uses the HDF engine to read
+its numeric model inputs. The DSS Engine is coming soon.
+
+| Engine | Operation | Python entry points | Installation and status |
+|---|---|---|---|
+| **HDF Engine** | Read stored results, geometry, text and attributes; assemble mesh geometry | `Hdf*`, `fast_hdf` | `ras-commander-fast-hdf`; installed with RAS Commander on supported wheel platforms. Default `auto` mode retains h5py fallback. |
+| **Mapping Engine** | Map computed physical 2D cells to Depth/WSE rasters using horizontal or sloping interpolation | `RasFim.map_horizontal_profiles`, `RasFim.map_sloping_profiles` | Optional Python `fim` extra plus a separate `ras2fim_engine` wheel. Explicit native mapping; no automatic Python fallback. |
+| **DSS Engine** | Coming soon | To be documented | No installation command, API contract or benchmark is published here yet. |
+
+## Choose an engine workflow
+
+For result extraction, keep using the existing `Hdf*` API. The
+[HDF installation](#installation), [mode controls](#engine-modes),
+[equivalence contract](#the-equivalence-contract) and [HDF benchmarks](#performance)
+below describe the default native reader and its h5py reference path.
+
+For inundation catalogs, use the [Mapping Engine guide](native-mapping-engine.md).
+It covers horizontal, cell-corner sloping and depth-weighted cell-face mapping,
+bbox/polygon masks, shared terrain, bounded timestep concurrency, and reusable
+prepared inputs. These methods map already-computed hydraulics; they do not
+run the HEC-RAS hydraulic solver. Models containing 1D river or cross-section
+elements are rejected, and standalone storage-area surfaces are outside the
+physical-2D mapping scope.
+
+The [mapping comparison tables](native-mapping-engine.md#mapping-time-comparisons)
+measure complete mapping calls against native RAS Mapper, separately from HDF
+read timings. Matching requires the same interpolation options and effective
+terrain. Raw qualification compares complete valid/nodata masks and float32
+Depth/WSE values, without an added depth cutoff.
+
+!!! note "Mapping development builds"
+    The Mapping Engine guide includes the 0.8.0 test wheels and depth-weighted
+    feature proposed in [PR #694](https://github.com/gpt-cmdr/ras-commander/pull/694).
+    Use that checkout for those additions; this page does not imply a PyPI
+    release. Weighted mapping also needs the native corner-reader capability
+    added after published fast-HDF 0.2.2. Its tested development wheels report
+    the same version string, so a version check alone is insufficient.
+
+## DSS engine (coming soon)
+
+DSS is the next engine planned for this documentation area. Its package,
+supported operations, Python API and performance evidence will be documented
+when available. The HDF and Mapping Engine measurements below do not establish
+DSS performance or compatibility. Existing [DSS operations](user-guide/dss-operations.md)
+remain available through their documented backends; those APIs are separate
+from the planned Rust engine.
+
+<a id="native-rust-hdf-engine"></a>
+
+## HDF engine
 
 <p align="center"><img src="../assets/ras-commander-fast-hdf_logo.svg" alt="RAS Commander Fast-HDF: Native Rust HDF Engine" width="450"></p>
 
-ras-commander reads HEC-RAS HDF files (plan results, geometry, terrain and
+RAS Commander reads HEC-RAS HDF files (plan results, geometry, terrain and
 land-cover sidecars) through its native HDF engine, written in Rust. h5py
 remains the reference implementation and serves every read the engine does
 not. This page explains what the engine is, how it is installed and selected,
 what "identical results" means and how that was proven, how fast it is, and
-what it does not do.
+what it does not do. The remaining sections retain the detailed HDF guide and
+its existing section links.
 
 !!! info "Short version"
     - The native engine is ras-commander's **default HDF engine**. Its
@@ -645,7 +700,7 @@ first.
 
 ## Versions and licence
 
-| Component | This release |
+| Component | Documented HDF qualification baseline |
 |---|---|
 | Engine | `ras-commander-fast-hdf` crate 0.2.0 ([crates.io](https://crates.io/crates/ras-commander-fast-hdf); source in [gpt-cmdr/ras-commander-fast-hdf](https://github.com/gpt-cmdr/ras-commander-fast-hdf)), engine API 10 |
 | Bridge | Python package `ras-commander-fast-hdf` 0.2.0 (module `ras_commander_fast_hdf`), `API_VERSION` 11, text API 1, features `catalog, hdf, mesh, results`, `ENGINE_COMMIT` = the commit of tag `v0.2.0` |
