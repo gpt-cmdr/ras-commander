@@ -9,6 +9,21 @@ alone does not identify a development checkout.
 
 ### Unreleased
 
+**Mesh corner ground elevations**
+
+`HdfMesh.get_mesh_corner_elevations(hdf_path, mesh_name=None, *, postprocessing_hdf=None, source="auto", engine="auto")`
+reads the stored corner (face-point) ground elevations that RASMapper's
+depth-weighted sloping interpolation uses: the geometry layout
+`Geometry/2D Flow Areas/<mesh>/FacePoints Elevation` and the RASMapper mapping
+cache `.../Processed Data/Profile (Horizontal)/FacePoint Elevation` in
+`PostProcessing.hdf`. Values are float32 in `FacePoints Coordinate` order, bit
+for bit as stored, with the source file, dataset, attributes and terrain
+metadata. Source selection is explicit; disagreeing sources are reported as a
+conflict, and a cache is checked for staleness against the mesh and terrain.
+The method only reads and never generates elevations. Native reads need
+ras-commander-fast-hdf 0.2.3; with 0.2.2 `auto` uses h5py. See
+[HDF API](../api/hdf.md#mesh-corner-elevations).
+
 **Hydraulic subdomains: optional closed-edge outflow**
 
 `RasSubdomain.plan_breakouts(..., closed_edge_outflow=True)` puts Normal Depth
