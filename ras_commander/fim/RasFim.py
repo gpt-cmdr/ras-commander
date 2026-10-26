@@ -24,6 +24,11 @@ the mapping arithmetic.
 
 Requires the ``fim`` extra (``pip install "ras-commander[fim]"``) and an
 engine executable.
+
+``map_horizontal_profiles`` is a separate optional Rust method for cell-constant
+horizontal WSE, with an explicit NumPy qualification reference. It reuses
+terrain-lattice ownership across profiles and never substitutes for a failed
+Step05 run.
 """
 
 from __future__ import annotations
@@ -32,12 +37,15 @@ import json
 import os
 import shutil
 import tempfile
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Dict, Iterable, List, Optional, Sequence, Union
 
 if TYPE_CHECKING:
     import geopandas as gpd
+    from ..RasPrj import RasPrj
+    from .._execution_types import StoreMapPerformanceOptions
 
 import numpy as np
 import pandas as pd
@@ -47,7 +55,7 @@ from ..LoggingConfig import get_logger
 from . import _aoi, _engine, _prepare, _products
 from ._aoi import FimAoi
 from ._prepare import FimPreparedProfile
-from .errors import FimMappingError, FimUnsupportedError
+from .errors import FimEngineError, FimMappingError, FimUnsupportedError
 
 logger = get_logger(__name__)
 
@@ -60,9 +68,22 @@ NUDGE_METHODS = ("lookup", "full_warp")
 # Column order of the product manifest returned by map_profiles(); declared
 # in ras_commander.schemas as "fim_product_manifest".
 MANIFEST_COLUMNS = [
-    "profile", "status", "wet_cells", "samples", "depth_tif", "wse_tif",
-    "floodplain_gpkg", "col_off", "row_off", "width", "height", "transform",
-    "crs", "depth_finite_pixels", "flooded_pixels", "error",
+    "profile",
+    "status",
+    "wet_cells",
+    "samples",
+    "depth_tif",
+    "wse_tif",
+    "floodplain_gpkg",
+    "col_off",
+    "row_off",
+    "width",
+    "height",
+    "transform",
+    "crs",
+    "depth_finite_pixels",
+    "flooded_pixels",
+    "error",
 ]
 
 PathLike = Union[str, os.PathLike]
@@ -145,7 +166,6 @@ def _validate_cells(cells, profiles: Optional[Sequence[str]], profile_prefix: st
     return profiles
 
 
-
 def _validate_centers(centers, cells):
     """Validate caller centres and preserve the upstream ascending id order."""
     from pyproj import CRS
@@ -158,9 +178,15 @@ def _validate_centers(centers, cells):
         raise TypeError("centers 'cell_idx' must be an integer column")
     if centers["cell_idx"].isna().any() or centers["cell_idx"].duplicated().any():
         raise ValueError("centers 'cell_idx' values must be non-null and unique")
-    if centers.geometry.isna().any() or centers.geometry.is_empty.any() or not centers.geom_type.eq("Point").all():
+    if (
+        centers.geometry.isna().any()
+        or centers.geometry.is_empty.any()
+        or not centers.geom_type.eq("Point").all()
+    ):
         raise FimUnsupportedError("centers geometries must be non-empty points")
-    if centers.crs is not None and CRS.from_user_input(centers.crs) != CRS.from_user_input(cells.crs):
+    if centers.crs is not None and CRS.from_user_input(centers.crs) != CRS.from_user_input(
+        cells.crs
+    ):
         raise FimUnsupportedError("centers and cells have different CRSs")
     return centers.sort_values("cell_idx", kind="stable").reset_index(drop=True)
 
@@ -172,7 +198,7 @@ def _empty_row(profile: str, status: str, **values) -> dict:
 
 
 class RasFim:
-    """Static namespace for the optional ras2fim-2D FIM mapping method.
+    """Static namespace for optional triangulated and horizontal FIM methods.
 
     All methods are static; do not instantiate.
     """
@@ -180,6 +206,495 @@ class RasFim:
     ENGINE_NAME = _engine.ENGINE_NAME
     ENGINE_ENV_VAR = _engine.ENGINE_ENV_VAR
     MANIFEST_COLUMNS = tuple(MANIFEST_COLUMNS)
+
+    @staticmethod
+    @log_call
+    def map_horizontal_profiles(
+        cells: "gpd.GeoDataFrame",
+        terrain_path: PathLike,
+        output_folder: PathLike,
+        *,
+        profiles: Optional[Sequence[str]] = None,
+        profile_prefix: str = DEFAULT_PROFILE_PREFIX,
+        bbox: Optional[Sequence[float]] = None,
+        polygon: Any = None,
+        polygon_layer: Optional[str] = None,
+        aoi_crs: Any = None,
+        min_depth: float = 0.0,
+        backend: str = "rust",
+        engine_path: Optional[PathLike] = None,
+        threads: int = 1,
+        writer_threads: int = 1,
+        timeout: Optional[float] = None,
+        max_working_mib: int = 1024,
+        write_floodplain: bool = True,
+        raise_on_failure: bool = True,
+        hdf_path: Optional[PathLike] = None,
+    ) -> pd.DataFrame:
+        """Map cell-constant horizontal WSE using a shared terrain-lattice grid.
+
+        This explicit horizontal method fills each cell with its own WSE. It
+        uses the Rust engine by default; NumPy is an explicit reference backend.
+        It does not fall back from a failed engine run, interpolate
+        between cells, or reproject the output. Cell ownership and terrain
+        are prepared once and reused across every requested profile.
+
+        Args:
+            cells (geopandas.GeoDataFrame): Valid non-overlapping cell Polygons
+                with unique integer ``cell_idx`` and numeric WSE columns.
+                NaN marks a dry cell. Not modified.
+            terrain_path: Single-band float32 terrain GeoTIFF in the cells'
+                CRS, with north-up square pixels and declared nodata.
+                Its nodata pixels stay dry.
+            output_folder: New or empty folder for rasters and the manifest.
+            profiles: Profile columns; defaults to ``profile_prefix`` matches.
+            profile_prefix: Prefix for selecting profile columns.
+            bbox: Output constraint in ``aoi_crs`` or the terrain CRS.
+            polygon: Polygon, MultiPolygon, frame or vector file constraint.
+            polygon_layer: Layer name for a multi-layer vector file.
+            aoi_crs: CRS of the constraint; see :meth:`resolve_aoi`.
+            min_depth: Keep pixels with depth strictly greater than this
+                value, in the input elevation units. Use 0.5 for a half-foot
+                filter only when those units are feet. Filters WSE too.
+            backend: "rust" (default) or explicit "numpy" reference arithmetic.
+            engine_path: Optional executable path for the Rust backend.
+            threads: Rust pixel worker count, 1 through 64.
+            writer_threads: GeoTIFF compression workers, 1 through 64. Can
+                overlap native work on the next profile; budget both pools.
+                Overrides caller GDAL_NUM_THREADS during writes, including
+                the default of one; restores it afterwards.
+            timeout: Rust subprocess/pipe lifetime in seconds, or None. Includes
+                consumer product-writing backpressure; no automatic retry.
+            max_working_mib: Planned array admission budget, not an RSS cap.
+                Includes planned terrain-cache/decoder terms; excludes
+                polygonization and unaccounted runtime overhead. Large
+                windows fail before terrain or ownership arrays load.
+            write_floodplain: Write product 11 from retained depth pixels.
+            raise_on_failure: Raise after writing the manifest if any profile
+                failed; otherwise return the failed rows too.
+            hdf_path: Source model HDF for the 2D-only scope check. Tables from
+                get_cells_from_plan_hdf retain this provenance automatically.
+                Standalone tables must contain only 2D cell polygons; without
+                model provenance the model's other elements cannot be inspected.
+
+        Returns:
+            DataFrame: ``fim_product_manifest`` rows. Offsets refer to the
+                terrain grid, shared by all profiles. Product names match
+                :meth:`map_profiles`; no nudge is performed in this method.
+
+        Raises:
+            FimUnsupportedError: Invalid or overlapping cells, grid/CRS
+                mismatch, unsupported terrain or an over-budget window.
+            FimMappingError: A failed profile or a changed input file.
+            FileExistsError: The output folder is not empty.
+
+        Notes:
+            Shared polygon edges use rasterio centre ownership, with the
+            higher sorted cell index written last. This is a horizontal
+            2D-cell method; it does not reproduce native sloping, 1D or
+            structure-specific rendering. Finite input WSE must already
+            reflect the caller's cell wet/dry policy. WSE is cast to float32
+            before subtraction, and the depth threshold compares in float32.
+            Product names are layout conventions, not method identifiers.
+        """
+        _require_dependencies()
+        from types import SimpleNamespace
+        from . import _horizontal
+
+        names = _validate_cells(cells, profiles, profile_prefix)
+        source_hdf = cells.attrs.get("fim_source_hdf")
+        if hdf_path is not None and source_hdf is not None:
+            if Path(hdf_path).resolve() != Path(source_hdf).resolve():
+                raise ValueError("hdf_path differs from the cells' source model")
+        if hdf_path is not None or source_hdf is not None:
+            RasFim.validate_2d_model(hdf_path if hdf_path is not None else source_hdf)
+        if len(cells) == 0:
+            raise ValueError("horizontal cells must not be empty")
+        if (
+            isinstance(min_depth, bool)
+            or not np.isfinite(min_depth)
+            or min_depth < 0
+            or min_depth > np.finfo(np.float32).max
+        ):
+            raise ValueError("min_depth must be finite and >= 0 in model vertical units")
+        if backend not in ("rust", "numpy"):
+            raise ValueError("backend must be rust or numpy")
+        writer_threads = _positive_int(writer_threads, "writer_threads")
+        if writer_threads > 64:
+            raise ValueError("writer_threads must be <= 64")
+        threads = _positive_int(threads, "threads")
+        if threads > 64:
+            raise ValueError("threads must be <= 64")
+        if timeout is not None and (
+            isinstance(timeout, bool) or not np.isfinite(timeout) or timeout <= 0
+        ):
+            raise ValueError("timeout must be positive and finite, or None")
+        engine = _engine.find_engine(engine_path) if backend == "rust" else None
+        budget = _positive_int(max_working_mib, "max_working_mib")
+        terrain = _require_path(terrain_path, "terrain_path")
+        constraint = _aoi.resolve_aoi(
+            bbox=bbox,
+            polygon=polygon,
+            polygon_layer=polygon_layer,
+            aoi_crs=aoi_crs,
+            default_crs=cells.crs,
+        )
+        watched = {"terrain": terrain}
+        if isinstance(polygon, (str, os.PathLike)):
+            watched["polygon"] = _require_path(polygon, "polygon")
+        before = {key: _file_identity(path) for key, path in watched.items()}
+        mapping_started = time.perf_counter()
+        ordered = cells.sort_values("cell_idx", kind="stable").reset_index(drop=True)
+        plan = _horizontal.plan_grid(ordered, terrain, constraint, budget, native=backend == "rust")
+        folder = _prepare_output_folder(output_folder)
+        rows = {name: _empty_row(name, "not_run") for name in names}
+        details = {
+            "method": f"horizontal cell-constant WSE / terrain lattice / {backend}",
+            "method_id": "horizontal-cell-constant/1",
+            "backend": backend,
+            "options": {
+                "min_depth": float(min_depth),
+                "max_working_mib": budget,
+                "write_floodplain": bool(write_floodplain),
+                "writer_threads": writer_threads,
+                "arithmetic": "float32 gather and subtract",
+            },
+            "grid": {
+                "crs": plan.crs.to_string(),
+                "window": list(plan.window.flatten()),
+                "transform": tuple(plan.transform)[:6],
+                "planned_bytes": plan.planned_bytes,
+            },
+            "aoi": constraint.describe() if constraint else None,
+            "inputs": {
+                k: {"path": str(path), "size": before[k][0], "mtime_ns": before[k][1]}
+                for k, path in watched.items()
+            },
+            "status": "in_progress",
+        }
+
+        def manifest():
+            return pd.DataFrame([rows[name] for name in names], columns=MANIFEST_COLUMNS)
+
+        RasFim._write_manifest(folder, manifest(), details)
+        try:
+            from contextlib import nullcontext
+            from . import _horizontal_engine
+
+            prepare_started = time.perf_counter()
+            grid = (
+                _horizontal.prepare_grid(ordered, terrain, plan)
+                if backend == "numpy"
+                else _horizontal.prepare_grid(ordered, terrain, plan, False)
+            )
+            details["timings"] = {
+                "prepare_grid_seconds": time.perf_counter() - prepare_started,
+                "product_write_seconds": {},
+            }
+            context = (
+                _horizontal_engine.run_batch(
+                    engine,
+                    terrain,
+                    grid,
+                    ordered,
+                    names,
+                    min_depth,
+                    threads,
+                    budget,
+                    details,
+                    folder,
+                    timeout,
+                )
+                if backend == "rust" and all(plan.shape)
+                else nullcontext(None)
+            )
+            with context as native:
+                for name in names:
+                    if not all(plan.shape):
+                        rows[name] = _empty_row(name, "empty_aoi", crs=plan.crs.to_string())
+                        continue
+                    try:
+                        values = (
+                            ordered[name]
+                            .iloc[plan.cell_positions]
+                            .to_numpy(dtype=np.float64, na_value=np.nan)
+                        )
+                        if native is None:
+                            depth, wse = _horizontal.render(grid, values, float(min_depth))
+                        else:
+                            unit = native(name)
+                            if unit["status"] != "complete":
+                                raise FimMappingError(
+                                    unit.get("error", "horizontal profile failed")
+                                )
+                            depth, wse = unit["depth"], unit["wse"]
+                            del unit
+                        result = SimpleNamespace(
+                            profile=name,
+                            depth=depth,
+                            wse=wse,
+                            transform=plan.transform,
+                            unit={"window": list(plan.window.flatten())},
+                        )
+                        rows[name] = _empty_row(
+                            name, "pending", samples=0, wet_cells=int(np.isfinite(values).sum())
+                        )
+                        write_started = time.perf_counter()
+                        import rasterio
+
+                        with rasterio.Env(GDAL_NUM_THREADS=str(writer_threads)):
+                            rows[name].update(
+                                RasFim._write_products(folder, result, plan.crs, write_floodplain)
+                            )
+                        details["timings"]["product_write_seconds"][name] = (
+                            time.perf_counter() - write_started
+                        )
+                        del depth, wse, result
+                    except FimEngineError:
+                        raise
+                    except Exception as exc:
+                        for path in _products.product_paths(folder, name):
+                            path.unlink(missing_ok=True)
+                        rows[name] = _empty_row(
+                            name, "failed", error=f"{type(exc).__name__}: {exc}"
+                        )
+            details["timings"]["mapping_seconds"] = time.perf_counter() - mapping_started
+            changed = [key for key, path in watched.items() if _file_identity(path) != before[key]]
+            if changed:
+                raise FimMappingError(
+                    f"input files changed during horizontal mapping: {changed}", manifest()
+                )
+            details["status"] = (
+                "failed" if any(row["status"] == "failed" for row in rows.values()) else "complete"
+            )
+        except BaseException as exc:
+            details["status"] = "aborted"
+            for name in names:
+                for path in _products.product_paths(folder, name):
+                    path.unlink(missing_ok=True)
+                rows[name] = _empty_row(name, "not_run", error=f"{type(exc).__name__}: {exc}")
+            if isinstance(exc, FimMappingError):
+                raise FimMappingError(str(exc), manifest()) from exc
+            raise
+        finally:
+            RasFim._write_manifest(folder, manifest(), details)
+        output = manifest()
+        failed = output.loc[output.status == "failed", "profile"].tolist()
+        if failed and raise_on_failure:
+            raise FimMappingError(f"horizontal mapping failed for {failed}", output)
+        return output
+
+    @staticmethod
+    @log_call
+    def compare_with_rasmapper(
+        plan_number: str,
+        terrain_path: PathLike,
+        output_folder: PathLike,
+        *,
+        cells: Optional["gpd.GeoDataFrame"] = None,
+        profiles: Optional[Dict[str, str]] = None,
+        mesh_name: Optional[str] = None,
+        bbox: Optional[Sequence[float]] = None,
+        polygon: Any = None,
+        polygon_layer: Optional[str] = None,
+        aoi_crs: Any = None,
+        min_depth: float = 0.5,
+        engine_path: Optional[PathLike] = None,
+        threads: int = 1,
+        writer_threads: int = 1,
+        max_working_mib: int = 1024,
+        postprocess_reference: bool = True,
+        native_performance: Optional["StoreMapPerformanceOptions"] = None,
+        terrain_name: Optional[str] = None,
+        ras_object: Optional["RasPrj"] = None,
+        ras_version: Optional[str] = None,
+        timeout: int = 1800,
+    ) -> pd.DataFrame:
+        """Generate native horizontal stored maps and compare with Rust mapping.
+
+        Native execution goes through :meth:`RasProcess.store_maps`. The
+        original .rasmap bytes are verified and restored on success or failure
+        under the same project lock. Work on a staged project: native mapping
+        can generate other project-side caches. No solver is run.
+
+        Args:
+            plan_number: Computed plan in the initialized project.
+            terrain_path: Float32 export of the exact registered native terrain,
+                including modifications. Matching terrain is the caller's
+                responsibility; this function does not export or resample it.
+            output_folder: New or empty comparison folder.
+            cells: Optional cell polygons and WSE columns. When omitted, use
+                the plan's cell maximum results for the selected mesh or "*".
+            profiles: Mapping from WSE column to "Max" or an exact native
+                timestamp. Required with cells; caller ensures matching WSE.
+            mesh_name: Required for automatic extraction from multi-mesh plans;
+                use "*" to map all physical 2D cells with globally unique row IDs.
+            bbox: Optional comparison/output bounds in aoi_crs.
+            polygon: Optional polygon constraint, mutually exclusive with bbox.
+            polygon_layer: Layer in a multi-layer polygon file.
+            aoi_crs: Constraint CRS; defaults to the cells' CRS.
+            min_depth: Strict depth cutoff independently applied to both
+                products, in model elevation units. 0.5 means half a foot
+                only for models whose elevations use feet.
+            engine_path: Explicit Rust engine executable, or normal discovery.
+            threads: Rust pixel workers (1 through 64).
+            writer_threads: Delivery GeoTIFF compression workers (1 through
+                64) for Rust and optional filtered native products; same
+                resource policy as map_horizontal_profiles.
+            max_working_mib: Horizontal array admission budget, not RSS.
+            postprocess_reference: Write thresholded native depth/WSE LZW
+                products and time this postprocessing separately. Raw native
+                products are preserved. Defaults to True.
+            native_performance: Optional native StoreMap execution policy.
+                Default preserves aggregate StoreAllMaps. Independent helpers
+                require a sole registered terrain; their requested policy is
+                recorded. Useful for Davis's intermittent aggregate WSE output.
+            terrain_name: Exact registered terrain selected for native mapping.
+            ras_object: Initialized project object for multi-project use.
+            ras_version: Installed native mapping runtime version.
+            timeout: Native per-profile mapping/lock timeout in seconds.
+
+        Returns:
+            DataFrame: ``fim_comparison`` metrics and raster paths. The JSON
+                report retains native runtime, original/restored rasmap hashes,
+                strict threshold and batch timing. ``result.attrs["performance"]``
+                additionally returns Rust batch, native mapping/postprocessing,
+                and comparison timings. Candidate per-profile time is NaN for
+                shared batches. A CSV is also written. Ratios are withheld for
+                AOIs, unestablished full coverage or native storage-area surfaces.
+
+        Raises:
+            FimUnsupportedError: Unsupported or misaligned grids, unavailable
+                products, or ambiguous native terrain mosaics.
+            ValueError: Invalid profiles, threshold or plan selection.
+            RuntimeError: Native mapping or configuration restoration failed.
+
+        Notes:
+            The whole source model must be 2D-only: any river centerline/reach
+            or cross section is rejected before native execution, even with
+            an explicitly selected 2D mesh. Pipe networks are permitted.
+            Equality is evaluated only inside the selected 2D cell footprint
+            and AOI, on matching lattice pixels without reference resampling.
+            Missing WSE is counted separately. This is qualification evidence,
+            not automatic acceptance of hydraulic accuracy. Timing includes
+            different preparation stages and is not a controlled speed benchmark.
+        """
+        _require_dependencies()
+        from . import _comparison
+
+        return _comparison.run(
+            plan_number,
+            terrain_path,
+            output_folder,
+            cells=cells,
+            profiles=profiles,
+            mesh_name=mesh_name,
+            bbox=bbox,
+            polygon=polygon,
+            polygon_layer=polygon_layer,
+            aoi_crs=aoi_crs,
+            min_depth=min_depth,
+            engine_path=engine_path,
+            threads=threads,
+            writer_threads=writer_threads,
+            max_working_mib=max_working_mib,
+            postprocess_reference=postprocess_reference,
+            native_performance=native_performance,
+            terrain_name=terrain_name,
+            ras_object=ras_object,
+            ras_version=ras_version,
+            timeout=timeout,
+        )
+
+    @staticmethod
+    @log_call
+    def compare_rasters(
+        candidate_depth: PathLike, candidate_wse: PathLike,
+        reference_depth: PathLike, reference_wse: PathLike, *,
+        cells: "gpd.GeoDataFrame", min_depth: float = 0.5,
+        terrain_path: Optional[PathLike] = None,
+    ) -> Dict[str, Any]:
+        """Compare existing depth/WSE rasters on a physical 2D cell footprint.
+
+        Apply the same strict float32 depth cutoff independently to both
+        products without changing files, generating maps or resampling a
+        reference. Inputs must share a CRS, resolution and integer-offset
+        north-up lattice; cells must use that CRS. Missing WSE is counted
+        separately from jointly finite WSE differences. Optional terrain
+        supplies native implied-terrain residuals. Returns the numerical
+        metrics used by compare_with_rasmapper, without generation timings.
+
+        Reuse qualified raw native maps to demonstrate varying postprocessing
+        cutoffs. Candidate inputs must retain all depths needed by the cutoff;
+        filtering cannot recover pixels already removed by a higher cutoff.
+        Model provenance on cells is checked for the 2D-only scope. A numeric
+        comparison does not establish the provenance of caller-supplied files.
+        """
+        _require_dependencies()
+        import rasterio
+        from . import _comparison
+
+        if isinstance(min_depth, bool) or not np.isfinite(min_depth) or min_depth < 0 or min_depth > np.finfo(np.float32).max:
+            raise ValueError("min_depth must be finite and >= 0 in model elevation units")
+        if not hasattr(cells, "geometry") or cells.crs is None or not len(cells):
+            raise FimUnsupportedError("comparison requires nonempty 2D cell polygons with CRS")
+        if (cells.geometry.isna().any() or cells.geometry.is_empty.any()
+                or not cells.geometry.is_valid.all()
+                or not cells.geom_type.isin(["Polygon", "MultiPolygon"]).all()):
+            raise FimUnsupportedError("comparison requires valid nonempty 2D cell polygons")
+        source = cells.attrs.get("fim_source_hdf")
+        if source is not None:
+            RasFim.validate_2d_model(source)
+        paths = [_require_path(p, "comparison raster") for p in
+                 (candidate_depth, candidate_wse, reference_depth, reference_wse)]
+        terrain = _require_path(terrain_path, "terrain_path") if terrain_path is not None else None
+        with rasterio.open(paths[0]) as candidate:
+            if not _prepare.same_crs(cells.crs, candidate.crs):
+                raise FimUnsupportedError("comparison cells and raster must use the same CRS")
+            if terrain is not None:
+                with rasterio.open(terrain) as ground:
+                    if not _prepare.same_crs(candidate.crs, ground.crs):
+                        raise FimUnsupportedError("comparison terrain must use the raster CRS")
+        watched = [*paths, *([terrain] if terrain is not None else [])]
+        before = {p: _file_identity(p) for p in watched}
+        result = _comparison.compare_rasters(*paths, cells, None, min_depth, terrain)
+        if any(_file_identity(p) != identity for p, identity in before.items()):
+            raise RuntimeError("comparison raster inputs changed during scanning")
+        return result
+
+    @staticmethod
+    @log_call
+    def canonicalize_terrain_crs(terrain_path: PathLike, output_path: PathLike) -> Path:
+        """Copy float32 terrain with equivalent canonical EPSG GeoTIFF keys.
+
+        Use explicitly when a native reader cannot interpret custom CRS keys,
+        such as the Davis HARN terrain. This is metadata encoding, with no
+        reprojection, resampling or elevation change. The source stays read-only.
+        Requires an equivalent EPSG CRS and nodata, rejects dataset/alpha masks,
+        and verifies all output pixel bits and the grid. Both output_path and
+        its .json receipt must be new. Returns the prepared path; raises on
+        unsupported input, existing outputs or failed verification. Preparation
+        is separate from mapping performance timing.
+        """
+        from . import _terrain
+
+        return _terrain.canonicalize(terrain_path, output_path)
+
+    @staticmethod
+    @log_call
+    def validate_2d_model(hdf_path: PathLike, *, geom_path: Optional[PathLike] = None) -> Dict[str, Any]:
+        """Require compiled 2D cells and reject any 1D river/reach or cross section.
+
+        Inspect the whole model, even when mapping a selected 2D mesh. Pipes,
+        conduits, storage areas and SA/2D connections are permitted. This check
+        establishes dimensional scope, not structure-rendering equivalence.
+        Source geometry is checked when supplied or resolved from the HDF.
+        Returns a scope dictionary; raises FimUnsupportedError for 1D/mixed
+        geometry. Unreadable or missing inputs raise instead of passing.
+        """
+        from . import _scope
+
+        return _scope.inspect_model(hdf_path, geom_path)
 
     @staticmethod
     @log_call
@@ -263,7 +778,9 @@ class RasFim:
         names = list(dict.fromkeys(points["mesh_name"]))
         if mesh_name is None:
             if len(names) != 1:
-                raise FimUnsupportedError(f"{path.name} has {len(names)} 2D flow areas {names}; pass mesh_name")
+                raise FimUnsupportedError(
+                    f"{path.name} has {len(names)} 2D flow areas {names}; pass mesh_name"
+                )
             mesh_name = names[0]
         elif mesh_name not in names:
             raise FimUnsupportedError(f"mesh {mesh_name!r} not in {path.name} (meshes: {names})")
@@ -282,7 +799,8 @@ class RasFim:
 
         return gpd.GeoDataFrame(
             {"cell_idx": ids, "geometry": by_id.loc[ids, "geometry"].to_numpy()},
-            geometry="geometry", crs=points.crs,
+            geometry="geometry",
+            crs=points.crs,
         )
 
     @staticmethod
@@ -299,7 +817,12 @@ class RasFim:
         Uses ``HdfMesh.get_mesh_cell_polygons(strict=True)``,
         ``HdfResultsMesh.get_mesh_max_ws`` and ``HdfResultsMesh.get_mesh_max_depth``.
         A cell is wet when its maximum depth is greater than ``min_depth``;
-        dry cells get NaN.
+        dry cells get NaN. This is the cell wet/dry policy; mapping's pixel
+        ``min_depth`` independently filters the resulting terrain-based depths.
+        Models with 1D river/reach elements are rejected. ``mesh_name="*"``
+        combines all meshes and assigns global positional ``cell_idx`` values;
+        a single mesh retains its original cell IDs. Source-HDF provenance is
+        retained in the returned frame's attrs for later mapping scope checks.
 
         Returns:
             gpd.GeoDataFrame: Cell indices, profile WSE and polygon geometries.
@@ -313,6 +836,7 @@ class RasFim:
         from ..hdf.HdfResultsMesh import HdfResultsMesh
 
         path = _require_path(hdf_path, "hdf_path")
+        scope = RasFim.validate_2d_model(path)
         if not np.isfinite(min_depth) or min_depth < 0:
             raise ValueError(f"min_depth must be finite and >= 0, got {min_depth!r}")
         polygons = HdfMesh.get_mesh_cell_polygons(path, strict=True)
@@ -321,32 +845,50 @@ class RasFim:
         names = list(dict.fromkeys(polygons["mesh_name"]))
         if mesh_name is None:
             if len(names) != 1:
-                raise FimUnsupportedError(f"{path.name} has {len(names)} 2D flow areas {names}; pass mesh_name")
+                raise FimUnsupportedError(
+                    f"{path.name} has {len(names)} 2D flow areas {names}; pass mesh_name"
+                )
             mesh_name = names[0]
-        elif mesh_name not in names:
+        elif mesh_name != "*" and mesh_name not in names:
             raise FimUnsupportedError(f"mesh {mesh_name!r} not in {path.name} (meshes: {names})")
 
-        def _one(frame, column_hint):
-            frame = frame[frame["mesh_name"] == mesh_name]
-            columns = [c for c in frame.columns if column_hint in str(c).lower() and "time" not in str(c).lower()]
+        def _one(frame, column_hint, selected_mesh):
+            frame = frame[frame["mesh_name"] == selected_mesh]
+            columns = [
+                c
+                for c in frame.columns
+                if column_hint in str(c).lower() and "time" not in str(c).lower()
+            ]
             if len(columns) != 1:
-                raise FimUnsupportedError(f"cannot identify the {column_hint} column in {list(frame.columns)}")
+                raise FimUnsupportedError(
+                    f"cannot identify the {column_hint} column in {list(frame.columns)}"
+                )
             return frame.set_index("cell_id")[columns[0]]
 
-        wse = _one(HdfResultsMesh.get_mesh_max_ws(path, include_geometry=False), "water_surface")
-        depth = _one(HdfResultsMesh.get_mesh_max_depth(path, include_geometry=False), "depth")
-        cells = polygons[polygons["mesh_name"] == mesh_name]
-        ids = cells["cell_id"].to_numpy(dtype=np.int64)
-        missing = np.setdiff1d(ids, wse.index.to_numpy())
-        if len(missing) or len(np.setdiff1d(ids, depth.index.to_numpy())):
-            raise FimUnsupportedError(f"maximum results are missing for {len(missing)} or more mesh cells")
-        wse_values = wse.loc[ids].to_numpy(dtype=np.float64)
-        wet = depth.loc[ids].to_numpy(dtype=np.float64) > float(min_depth)
-        return gpd.GeoDataFrame(
-            {"cell_idx": ids, profile_name: np.where(wet, wse_values, np.nan),
-             "geometry": cells.geometry.to_numpy()},
-            geometry="geometry", crs=polygons.crs,
-        )
+        maximum_wse = HdfResultsMesh.get_mesh_max_ws(path, include_geometry=False)
+        maximum_depth = HdfResultsMesh.get_mesh_max_depth(path, include_geometry=False)
+        parts = []
+        for selected_mesh in (names if mesh_name == "*" else [mesh_name]):
+            wse = _one(maximum_wse, "water_surface", selected_mesh)
+            depth = _one(maximum_depth, "depth", selected_mesh)
+            cells = polygons[polygons["mesh_name"] == selected_mesh]
+            ids = cells["cell_id"].to_numpy(dtype=np.int64)
+            if len(np.setdiff1d(ids, wse.index)) or len(np.setdiff1d(ids, depth.index)):
+                raise FimUnsupportedError("maximum results are missing for mesh cells")
+            values = wse.loc[ids].to_numpy(dtype=np.float64)
+            wet = depth.loc[ids].to_numpy(dtype=np.float64) > float(min_depth)
+            parts.append(gpd.GeoDataFrame({"cell_idx": ids,
+                profile_name: np.where(wet, values, np.nan),
+                "geometry": cells.geometry.to_numpy()}, crs=polygons.crs))
+        output = gpd.GeoDataFrame(pd.concat(parts, ignore_index=True), crs=polygons.crs)
+        if mesh_name == "*":
+            # Mesh-local identifiers can collide; ownership needs one global row key.
+            output["cell_idx"] = np.arange(len(output), dtype=np.int64)
+        output.attrs.update(fim_source_hdf=str(path.resolve()),
+                            fim_mesh_names=names if mesh_name == "*" else [mesh_name],
+                            fim_full_2d_coverage=(mesh_name == "*" or len(names) == 1),
+                            fim_model_scope=scope)
+        return output
 
     @staticmethod
     @log_call
@@ -378,13 +920,23 @@ class RasFim:
                 invalid or empty geometry.
         """
         _require_dependencies()
-        return _aoi.resolve_aoi(bbox=bbox, polygon=polygon, polygon_layer=polygon_layer,
-                                aoi_crs=aoi_crs, default_crs=default_crs)
+        return _aoi.resolve_aoi(
+            bbox=bbox,
+            polygon=polygon,
+            polygon_layer=polygon_layer,
+            aoi_crs=aoi_crs,
+            default_crs=default_crs,
+        )
 
     @staticmethod
     @log_call
-    def prepare_profile(cells, centers, profile: str, pixel_size: float,
-                        lattice_origin: Optional[Sequence[float]] = None) -> FimPreparedProfile:
+    def prepare_profile(
+        cells,
+        centers,
+        profile: str,
+        pixel_size: float,
+        lattice_origin: Optional[Sequence[float]] = None,
+    ) -> FimPreparedProfile:
         """Prepare the global interpolation samples and axes for one profile.
 
         This is the preparation ``map_profiles`` sends to the engine, exposed
@@ -399,9 +951,16 @@ class RasFim:
         if lattice_origin is not None:
             lattice_origin = tuple(float(v) for v in lattice_origin)
             if len(lattice_origin) != 2 or not np.isfinite(lattice_origin).all():
-                raise ValueError(f"lattice_origin must be two finite numbers, got {lattice_origin!r}")
-        return _prepare.prepare_profile(cells, _validate_centers(centers, cells), profile, float(pixel_size),
-                                        lattice_origin=lattice_origin)
+                raise ValueError(
+                    f"lattice_origin must be two finite numbers, got {lattice_origin!r}"
+                )
+        return _prepare.prepare_profile(
+            cells,
+            _validate_centers(centers, cells),
+            profile,
+            float(pixel_size),
+            lattice_origin=lattice_origin,
+        )
 
     @staticmethod
     @log_call
@@ -527,9 +1086,13 @@ class RasFim:
         if nudge_method not in NUDGE_METHODS:
             raise ValueError(f"nudge_method must be one of {NUDGE_METHODS}, got {nudge_method!r}")
         if grid_anchor not in _prepare.GRID_ANCHORS:
-            raise ValueError(f"grid_anchor must be one of {_prepare.GRID_ANCHORS}, got {grid_anchor!r}")
+            raise ValueError(
+                f"grid_anchor must be one of {_prepare.GRID_ANCHORS}, got {grid_anchor!r}"
+            )
         if coplanar not in _prepare.COPLANAR_POLICIES:
-            raise ValueError(f"coplanar must be one of {_prepare.COPLANAR_POLICIES}, got {coplanar!r}")
+            raise ValueError(
+                f"coplanar must be one of {_prepare.COPLANAR_POLICIES}, got {coplanar!r}"
+            )
         threads = _default_threads() if threads is None else _positive_int(threads, "threads")
         profiles_per_request = _positive_int(profiles_per_request, "profiles_per_request")
         max_inflight_profiles = _positive_int(max_inflight_profiles, "max_inflight_profiles")
@@ -547,8 +1110,13 @@ class RasFim:
             if not isinstance(aoi, FimAoi):
                 raise TypeError("aoi must be a FimAoi from RasFim.resolve_aoi()")
         else:
-            aoi = _aoi.resolve_aoi(bbox=bbox, polygon=polygon, polygon_layer=polygon_layer,
-                                   aoi_crs=aoi_crs, default_crs=output_crs)
+            aoi = _aoi.resolve_aoi(
+                bbox=bbox,
+                polygon=polygon,
+                polygon_layer=polygon_layer,
+                aoi_crs=aoi_crs,
+                default_crs=output_crs,
+            )
 
         engine = _engine.find_engine(engine_path)
         method = _engine.engine_method(engine)
@@ -556,12 +1124,15 @@ class RasFim:
         watched = {"terrain": terrain}
         if hdf_path is not None:
             watched["hdf"] = _require_path(hdf_path, "hdf_path")
+            RasFim.validate_2d_model(watched["hdf"])
         if isinstance(polygon, (str, os.PathLike)):
             watched["polygon"] = _require_path(polygon, "polygon")
         before = {k: _file_identity(p) for k, p in watched.items()}
 
         if hdf_path is not None:
-            centers = RasFim.get_cell_centers(watched["hdf"], cells["cell_idx"].to_numpy(), mesh_name=mesh_name)
+            centers = RasFim.get_cell_centers(
+                watched["hdf"], cells["cell_idx"].to_numpy(), mesh_name=mesh_name
+            )
             # HDF centres are model coordinates; as in ras2fim-2D they take the
             # cells' CRS (HDF and GeoPackage WKT spellings can differ).
             centers = centers.set_crs(cells.crs, allow_override=True)
@@ -574,13 +1145,26 @@ class RasFim:
         lattice_origin = lattice_bounds = None
         if grid_anchor == "terrain":
             t = terrain_transform
-            if t.b or t.d or t.a <= 0 or t.e >= 0 or not np.isclose(t.a, -t.e, rtol=1e-12, atol=0.0):
-                raise FimUnsupportedError("grid_anchor='terrain' needs a north-up terrain with square pixels")
-            if not _prepare.same_crs(output_crs, cells.crs):
-                raise FimUnsupportedError("grid_anchor='terrain' needs output_crs equal to the results CRS")
-            if not np.isclose(float(output_resolution), pixel_size, rtol=_prepare.LATTICE_TOLERANCE, atol=0.0):
+            if (
+                t.b
+                or t.d
+                or t.a <= 0
+                or t.e >= 0
+                or not np.isclose(t.a, -t.e, rtol=1e-12, atol=0.0)
+            ):
                 raise FimUnsupportedError(
-                    f"grid_anchor='terrain' needs output_resolution equal to the terrain pixel size {pixel_size!r}")
+                    "grid_anchor='terrain' needs a north-up terrain with square pixels"
+                )
+            if not _prepare.same_crs(output_crs, cells.crs):
+                raise FimUnsupportedError(
+                    "grid_anchor='terrain' needs output_crs equal to the results CRS"
+                )
+            if not np.isclose(
+                float(output_resolution), pixel_size, rtol=_prepare.LATTICE_TOLERANCE, atol=0.0
+            ):
+                raise FimUnsupportedError(
+                    f"grid_anchor='terrain' needs output_resolution equal to the terrain pixel size {pixel_size!r}"
+                )
             output_resolution = pixel_size
             lattice_origin = (float(t.c), float(t.f))
             lattice_bounds = terrain_bounds
@@ -594,53 +1178,88 @@ class RasFim:
         fatal: Optional[BaseException] = None
         try:
             for batch, start in enumerate(range(0, len(profiles), profiles_per_request)):
-                names = profiles[start:start + profiles_per_request]
+                names = profiles[start : start + profiles_per_request]
                 batch_dir = work / f"batch_{batch:04d}"
                 (batch_dir / "masks").mkdir(parents=True)
                 requests = []
                 for name in names:
                     try:
-                        prep = _prepare.prepare_profile(cells, centers, name, pixel_size,
-                                                        lattice_origin=lattice_origin,
-                                                        lattice_bounds=lattice_bounds)
-                        grids = _prepare.derive_grids(prep, terrain_bounds, output_crs, output_resolution)
+                        prep = _prepare.prepare_profile(
+                            cells,
+                            centers,
+                            name,
+                            pixel_size,
+                            lattice_origin=lattice_origin,
+                            lattice_bounds=lattice_bounds,
+                        )
+                        grids = _prepare.derive_grids(
+                            prep, terrain_bounds, output_crs, output_resolution
+                        )
                         window, mask_file = None, None
                         if aoi is not None:
-                            window = _aoi.aoi_window(aoi, grids.dest_transform, grids.dest_width,
-                                                     grids.dest_height, output_crs)
+                            window = _aoi.aoi_window(
+                                aoi,
+                                grids.dest_transform,
+                                grids.dest_width,
+                                grids.dest_height,
+                                output_crs,
+                            )
                             if window.is_empty:
-                                rows[name] = _empty_row(name, _aoi.AOI_STATUS_EMPTY,
-                                                        wet_cells=prep.wet_cell_count,
-                                                        samples=prep.sample_count,
-                                                        crs=output_crs.to_string())
+                                rows[name] = _empty_row(
+                                    name,
+                                    _aoi.AOI_STATUS_EMPTY,
+                                    wet_cells=prep.wet_cell_count,
+                                    samples=prep.sample_count,
+                                    crs=output_crs.to_string(),
+                                )
                                 continue
                             if window.mask is not None:
                                 mask_file = f"masks/{name}.u8"
-                                np.ascontiguousarray(window.mask, dtype=np.uint8).tofile(batch_dir / mask_file)
+                                np.ascontiguousarray(window.mask, dtype=np.uint8).tofile(
+                                    batch_dir / mask_file
+                                )
                         inputs_dir = f"inputs/{name}"
-                        written = _prepare.write_profile_inputs(batch_dir / inputs_dir, prep, grids,
-                                                                coplanar=coplanar)
+                        written = _prepare.write_profile_inputs(
+                            batch_dir / inputs_dir, prep, grids, coplanar=coplanar
+                        )
                         if written["coplanar_samples"]:
                             coplanar_samples[name] = written["coplanar_samples"]
                         grids.wet_mask = None
-                        rows[name] = _empty_row(name, "pending", wet_cells=prep.wet_cell_count,
-                                                samples=prep.sample_count)
-                        requests.append(_engine.ProfileRequest(name, inputs_dir, grids, window, mask_file))
+                        rows[name] = _empty_row(
+                            name,
+                            "pending",
+                            wet_cells=prep.wet_cell_count,
+                            samples=prep.sample_count,
+                        )
+                        requests.append(
+                            _engine.ProfileRequest(name, inputs_dir, grids, window, mask_file)
+                        )
                         del prep
                     except (OSError, MemoryError):
                         raise
                     except Exception as exc:  # e.g. Qhull errors on degenerate samples
                         logger.error("FIM profile %s failed during preparation: %s", name, exc)
-                        rows[name] = _empty_row(name, "failed", error=f"{type(exc).__name__}: {exc}")
+                        rows[name] = _empty_row(
+                            name, "failed", error=f"{type(exc).__name__}: {exc}"
+                        )
                 if not requests:
                     continue
                 request = _engine.build_request(
-                    terrain_block, requests, dst_epsg=dst_epsg, threads=threads,
+                    terrain_block,
+                    requests,
+                    dst_epsg=dst_epsg,
+                    threads=threads,
                     max_cache_bytes=max_cache_mib * 1024 * 1024,
-                    max_profile_bytes=max_profile_mib * 1024 * 1024, nudge_method=nudge_method,
-                    max_inflight_profiles=max_inflight_profiles)
-                outputs, report = _engine.run_request(engine, batch_dir, batch, request, requests, timeout)
-                reports.append({"batch": batch, "profiles": [r.profile for r in requests], "report": report})
+                    max_profile_bytes=max_profile_mib * 1024 * 1024,
+                    nudge_method=nudge_method,
+                    max_inflight_profiles=max_inflight_profiles,
+                )
+                outputs, report = _engine.run_request(
+                    engine, batch_dir, batch, request, requests, timeout
+                )
+                reports.append(
+                    {"batch": batch, "profiles": [r.profile for r in requests], "report": report}
+                )
                 for result in outputs:
                     row = rows[result.profile]
                     if result.status != "complete":
@@ -671,21 +1290,37 @@ class RasFim:
         changed = [k for k in watched if before[k] != after[k]]
 
         manifest = pd.DataFrame([rows[p] for p in profiles], columns=MANIFEST_COLUMNS)
-        RasFim._write_manifest(folder, manifest, {
-            "engine_path": str(engine), "method": method, "reports": reports,
-            "inputs": {k: {"path": str(p), "size": after[k][0], "mtime_ns": after[k][1]}
-                       for k, p in watched.items()},
-            "options": {"output_crs": output_crs.to_string(), "output_resolution": float(output_resolution),
-                        "pixel_size": pixel_size, "threads": threads,
-                        "profiles_per_request": profiles_per_request,
-                        "max_inflight_profiles": max_inflight_profiles, "max_cache_mib": max_cache_mib,
-                        "max_profile_mib": max_profile_mib, "nudge_method": nudge_method,
-                        "grid_anchor": grid_anchor, "coplanar": coplanar,
-                        "write_floodplain": bool(write_floodplain), "mesh_name": mesh_name},
-            "coplanar_samples": coplanar_samples,
-            "aoi": aoi.describe() if aoi is not None else None,
-            "work_folder": str(work) if keep_work else None,
-        })
+        RasFim._write_manifest(
+            folder,
+            manifest,
+            {
+                "engine_path": str(engine),
+                "method": method,
+                "reports": reports,
+                "inputs": {
+                    k: {"path": str(p), "size": after[k][0], "mtime_ns": after[k][1]}
+                    for k, p in watched.items()
+                },
+                "options": {
+                    "output_crs": output_crs.to_string(),
+                    "output_resolution": float(output_resolution),
+                    "pixel_size": pixel_size,
+                    "threads": threads,
+                    "profiles_per_request": profiles_per_request,
+                    "max_inflight_profiles": max_inflight_profiles,
+                    "max_cache_mib": max_cache_mib,
+                    "max_profile_mib": max_profile_mib,
+                    "nudge_method": nudge_method,
+                    "grid_anchor": grid_anchor,
+                    "coplanar": coplanar,
+                    "write_floodplain": bool(write_floodplain),
+                    "mesh_name": mesh_name,
+                },
+                "coplanar_samples": coplanar_samples,
+                "aoi": aoi.describe() if aoi is not None else None,
+                "work_folder": str(work) if keep_work else None,
+            },
+        )
         if fatal is not None:
             raise fatal
         if changed:
@@ -729,19 +1364,36 @@ class RasFim:
             floodplain = str(floodplain_path)
         window = result.unit.get("window", [0, 0, result.depth.shape[1], result.depth.shape[0]])
         return {
-            "status": status, "depth_tif": str(depth_path), "wse_tif": str(wse_path),
-            "floodplain_gpkg": floodplain, "col_off": int(window[0]), "row_off": int(window[1]),
-            "width": int(result.depth.shape[1]), "height": int(result.depth.shape[0]),
+            "status": status,
+            "depth_tif": str(depth_path),
+            "wse_tif": str(wse_path),
+            "floodplain_gpkg": floodplain,
+            "col_off": int(window[0]),
+            "row_off": int(window[1]),
+            "width": int(result.depth.shape[1]),
+            "height": int(result.depth.shape[0]),
             "transform": tuple(float(v) for v in tuple(result.transform)[:6]),
-            "crs": output_crs.to_string(), "depth_finite_pixels": int(np.isfinite(result.depth).sum()),
-            "flooded_pixels": flooded, "error": None,
+            "crs": output_crs.to_string(),
+            "depth_finite_pixels": int(np.isfinite(result.depth).sum()),
+            "flooded_pixels": flooded,
+            "error": None,
         }
 
     @staticmethod
     def _write_manifest(folder: Path, manifest: pd.DataFrame, details: dict) -> Path:
         records = json.loads(manifest.to_json(orient="records"))
-        document = {"schema": MANIFEST_SCHEMA, "created_utc": datetime.now(timezone.utc).isoformat(),
-                    "method": "ras2fim-2D Step 05 (ras2fim-batch engine)", **details, "profiles": records}
+        document = {
+            "schema": MANIFEST_SCHEMA,
+            "created_utc": datetime.now(timezone.utc).isoformat(),
+            "method": "ras2fim-2D Step 05 (ras2fim-batch engine)",
+            **details,
+            "profiles": records,
+        }
         path = folder / MANIFEST_NAME
-        path.write_text(json.dumps(document, indent=1, default=str), encoding="utf-8")
+        partial = path.with_suffix(".json.partial")
+        with partial.open("w", encoding="utf-8") as stream:
+            json.dump(document, stream, indent=1, default=str)
+            stream.flush()
+            os.fsync(stream.fileno())
+        os.replace(partial, path)
         return path

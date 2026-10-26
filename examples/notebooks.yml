@@ -1845,7 +1845,9 @@ notebooks:
   summary: In the delivered HEC-RAS 6.4.1, delineate TauDEM stream links on the FEMA eBFE Salt Draw terrain,
     find normal-depth split lines that hold in both the 1% and 0.2% AEP parent runs across the whole HUC,
     nest them into tiered hydraulic subdomains, then cut, author, validate and run one headwater subdomain
-    as an exact-cell breakout and compare its maximum WSE and outlet hydrograph with the parent.
+    as an exact-cell breakout and compare its maximum WSE and outlet hydrograph with the parent; compare
+    walled closed edges with closed-edge Normal Depth outflow, map the 0.1 ft agreement envelope, and
+    compare runtime with the parent.
   tags:
   - 2d
   - rain-on-grid
@@ -1860,6 +1862,8 @@ notebooks:
   est_runtime: 36 min (cached parent runs; computing both parent events takes about 13 h each)
   data_project: null
   functions_used:
+  - HdfMesh.get_mesh_cell_polygons
+  - HdfResultsMesh.get_boundary_conditions_timeseries
   - HdfResultsMesh.get_mesh_summary_values
   - RasCmdr.compute_plan
   - RasEbfeModels.organize_salt_draw
@@ -1877,8 +1881,8 @@ notebooks:
   hec_refs: []
   learning_paths: []
   excluded: false
-  code_cells: 11
-  executed_cells: 11
+  code_cells: 23
+  executed_cells: 23
 - id: 300_unsteady_flow_operations
   filename: 300_unsteady_flow_operations.ipynb
   title: Unsteady Flow Operations
@@ -3049,6 +3053,39 @@ notebooks:
   excluded: false
   code_cells: 12
   executed_cells: 12
+- id: 602_rust_horizontal_mapping_comparison
+  filename: 602_rust_horizontal_mapping_comparison.ipynb
+  title: Compare Rust 2D horizontal mapping with RAS Mapper
+  series: 600
+  series_name: Floodplain Mapping
+  summary: Compare Rust and native horizontal 2D maps on two eBFE models, Bald Eagle dam/levees and bridges,
+    and Davis pipes, with identical depth filtering, configuration restoration and timing returns.
+  tags:
+  - floodplain-mapping
+  - rust
+  - rasmapper
+  - ebfe
+  - performance
+  - validation
+  difficulty: intermediate
+  est_runtime: null
+  data_project: null
+  functions_used:
+  - GeomLateral.get_connections
+  - HdfPipe.get_pipe_conduits
+  - HdfStruc.get_structures
+  - RasFim.canonicalize_terrain_crs
+  - RasFim.compare_rasters
+  - RasFim.compare_with_rasmapper
+  - RasFim.get_cells_from_plan_hdf
+  - RasFim.map_horizontal_profiles
+  - RasFim.validate_2d_model
+  - RasTerrain.export_rasmapper_terrain
+  hec_refs: []
+  learning_paths: []
+  excluded: false
+  code_cells: 5
+  executed_cells: 5
 - id: 610_generate_fluvial_pluvial_delineations_max_wse_arrival_time
   filename: 610_generate_fluvial_pluvial_delineations_max_wse_arrival_time.ipynb
   title: Generate Fluvial Pluvial Delineations using Max WSE Arrival Time

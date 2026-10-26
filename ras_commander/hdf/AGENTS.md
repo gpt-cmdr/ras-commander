@@ -193,7 +193,7 @@ This file is the canonical local instruction file for `ras_commander/hdf/`.
   Only absent Location permits the immutable exact-name stable-core schema in
   Base Output/Unsteady Time Series/2D Flow Areas: `Depth`/`Water Surface` are
   cells; `Face Velocity`, `Face Shear Stress`, `Face Area`, and `Face Manning's n`
-  are faces. Provenance: unlabelled JUL 5.0.7 output and shared names compatible
+  are faces. Provenance: unlabelled 5.0.7 output (e.g. FEMA eBFE AustinOyster.p03) and shared names compatible
   with supported 6.x/7.x output/API fixtures; excerpts without File Version use
   only this core table. Future version-specific names need qualified entries.
   Both domain paths require numeric rank-two data, matching canonical Time rows,

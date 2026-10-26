@@ -18,6 +18,8 @@ List of Functions:
 - get_2d_flow_area_settings() - Read 2D flow area cell/face property settings
 - get_2d_flow_area_cell_spacing() - Read persisted base mesh spacing
 - set_2d_flow_area_settings() - Write 2D flow area cell/face property settings
+- get_breaklines() - Read authored breaklines and spacing from geometry text
+- get_2d_computation_points() - Read authored 2D computation seed points
 - set_breaklines() - Write breakline blocks into a 2D flow area geometry file
 - replace_breaklines() - Atomically replace the geometry-wide breakline collection
 
@@ -1936,6 +1938,149 @@ class GeomStorage:
         return backup_path if backup_path else geom_file
 
     BREAKLINE_VALUES_PER_LINE = 4
+
+    @staticmethod
+    def _read_2d_text_coordinates(lines: List[str], start: int, count: int, label: str):
+        """Read an exact native packed XY payload using the shared strict parser."""
+        from .GeomReferenceFeatures import _parse_reference_line_coordinates
+
+        if count < 0:
+            raise ValueError(f"{label} has a negative point count")
+        coords, end = _parse_reference_line_coordinates(
+            lines, start, count, start - 1, feature_label=label,
+        )
+        if end < len(lines) and lines[end].strip() and "=" not in lines[end]:
+            raise ValueError(f"{label} has extra coordinate data at line {end + 1}")
+        return coords, end
+
+    @staticmethod
+    @log_call
+    def get_breaklines(geom_file: Union[str, Path]) -> "GeoDataFrame":
+        """Read authored breaklines from geometry text without modifying the file.
+
+        Args:
+            geom_file: Path to a plain-text HEC-RAS geometry file (.g##).
+
+        Returns:
+            GeoDataFrame with ``Name`` (str), ``cell_size_min`` and
+            ``cell_size_max`` (float or None), ``declared_points`` (int), and
+            ``geometry`` (LineString), in file/vertex order. Coordinates retain
+            source units; CRS is unset. ``attrs["skipped_degenerate"]`` lists
+            names of valid blocks with fewer than two distinct vertices.
+            Empty results retain these columns. No HDF or engine is required.
+
+        Raises:
+            FileNotFoundError: The geometry file does not exist.
+            ValueError: A count, spacing value, or fixed-width XY payload is
+                malformed, non-finite, or inconsistent with its declaration.
+        """
+        import geopandas as gpd
+        from shapely.geometry import LineString
+
+        lines = Path(geom_file).read_text(encoding="utf-8", errors="replace").splitlines()
+        records, skipped = [], []
+        index = 0
+        while index < len(lines):
+            if not lines[index].startswith("BreakLine Name="):
+                index += 1
+                continue
+            name = GeomParser.extract_keyword_value(lines[index], "BreakLine Name").strip()
+            cursor = index + 1
+            spacing = {"cell_size_min": None, "cell_size_max": None}
+            while cursor < len(lines) and lines[cursor].startswith("BreakLine "):
+                line = lines[cursor]
+                if line.startswith("BreakLine Name="):
+                    break
+                if line.startswith("BreakLine Polyline="):
+                    break
+                for keyword, column in (("BreakLine CellSize Min", "cell_size_min"),
+                                        ("BreakLine CellSize Max", "cell_size_max")):
+                    if line.startswith(keyword + "="):
+                        raw = GeomParser.extract_keyword_value(line, keyword).strip()
+                        value = float(raw) if raw else None
+                        if value is not None and not math.isfinite(value):
+                            raise ValueError(f"Breakline {name!r} has non-finite spacing")
+                        spacing[column] = value
+                cursor += 1
+            if cursor >= len(lines) or not lines[cursor].startswith("BreakLine Polyline="):
+                raise ValueError(f"Breakline {name!r} has no polyline record")
+            count = int(GeomParser.extract_keyword_value(lines[cursor], "BreakLine Polyline"))
+            coords, index = GeomStorage._read_2d_text_coordinates(
+                lines, cursor + 1, count, f"Breakline {name!r}",
+            )
+            if len(set(coords)) < 2:
+                skipped.append(name)
+                continue
+            records.append({"Name": name, **spacing, "declared_points": count,
+                            "geometry": LineString(coords)})
+        frame = pd.DataFrame(records, columns=[
+            "Name", "cell_size_min", "cell_size_max", "declared_points", "geometry",
+        ])
+        frame["Name"] = frame["Name"].astype(object)
+        frame["declared_points"] = frame["declared_points"].astype("int64")
+        for column in ("cell_size_min", "cell_size_max"):
+            frame[column] = pd.Series([row[column] for row in records], dtype=object)
+        result = gpd.GeoDataFrame(frame, geometry="geometry")
+        result.attrs["skipped_degenerate"] = skipped
+        return result
+
+    @staticmethod
+    @log_call
+    def get_2d_computation_points(
+        geom_file: Union[str, Path], flow_area_name: Optional[str] = None,
+    ) -> "GeoDataFrame":
+        """Read declared 2D computation seed points from geometry text.
+
+        Args:
+            geom_file: Path to a plain-text HEC-RAS geometry file (.g##).
+            flow_area_name: Exact area name to select, or None for every area.
+
+        Returns:
+            GeoDataFrame with ``flow_area`` (str), zero-based ``point_index``
+            (int, local to each area), and ``geometry`` (Point), in file order.
+            CRS is unset; coordinates retain source units. These are authored
+            seed points, not compiled mesh cells. ``attrs["declared_counts"]``
+            maps every encountered area to its declared point count, including
+            filtered areas. Empty results retain these columns. No file is
+            modified and no HDF or engine is required.
+
+        Raises:
+            FileNotFoundError: The geometry file does not exist.
+            ValueError: Counts or fixed-width coordinates are malformed,
+                non-finite, or truncated; an area is missing or repeated.
+                Filtered blocks are validated too.
+        """
+        import geopandas as gpd
+        from shapely.geometry import Point
+
+        lines = Path(geom_file).read_text(encoding="utf-8", errors="replace").splitlines()
+        records, declared = [], {}
+        current = None
+        index = 0
+        while index < len(lines):
+            line = lines[index]
+            if line.startswith("Storage Area="):
+                current = GeomStorage._extract_storage_area_name(line)
+            if not line.startswith("Storage Area 2D Points="):
+                index += 1
+                continue
+            if not current or current in declared:
+                raise ValueError("2D computation points require a unique, nonempty storage area")
+            count = int(GeomParser.extract_keyword_value(line, "Storage Area 2D Points"))
+            coords, index = GeomStorage._read_2d_text_coordinates(
+                lines, index + 1, count, f"2D points for {current!r}",
+            )
+            declared[current] = count
+            if flow_area_name is None or current == flow_area_name:
+                records.extend({"flow_area": current, "point_index": position,
+                                "geometry": Point(x, y)}
+                               for position, (x, y) in enumerate(coords))
+        frame = pd.DataFrame(records, columns=["flow_area", "point_index", "geometry"])
+        frame["flow_area"] = frame["flow_area"].astype(object)
+        frame["point_index"] = frame["point_index"].astype("int64")
+        result = gpd.GeoDataFrame(frame, geometry="geometry")
+        result.attrs["declared_counts"] = declared
+        return result
 
     @staticmethod
     def _format_breakline_coord_lines(coords: List[tuple]) -> List[str]:

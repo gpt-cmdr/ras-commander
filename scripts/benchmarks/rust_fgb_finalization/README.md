@@ -21,7 +21,7 @@ uv run python scripts/benchmarks/rust_fgb_finalization/policy_probe.py --output 
 ```
 
 The prepared whole-model files are unchanged: 4425 cells in stored7.0,18066 in
-6.6 and340246valid cells in5.0.7, after the two explicitly diagnosed omissions.
+6.6 and 1872746 cells in 5.0.7 (the public FEMA eBFE `AustinOyster.p03` plan).
 Two builds x three samples per complete case, alternating which runs first.
 Every output independently reopens all geometry, composite IDs, properties and
 CRS through GDAL/pyogrio. A spatial-index bbox query is checked against the source

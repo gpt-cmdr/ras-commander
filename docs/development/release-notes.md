@@ -9,6 +9,28 @@ alone does not identify a development checkout.
 
 ### Unreleased
 
+**Hydraulic subdomains: optional closed-edge outflow**
+
+`RasSubdomain.plan_breakouts(..., closed_edge_outflow=True)` puts Normal Depth
+outflow lines (slope `closed_edge_friction_slope`, default 0.00033) along a
+breakout's closed edges, each kept `boundary_gap_cells` (default 2) cell faces
+from the outlet, inflow and perimeter lines so no two BC lines share a face. It
+is off by default: it lets water out only, and where flow passes between basins
+both ways the domain should include both basins.
+
+### v0.108.1 (October 2026)
+
+**Public test fixtures (engine 0.2.1)**
+
+The native-engine qualification tests, benchmarks and documentation no longer
+use a non-public HEC-RAS 5.0.7 model. HEC-RAS 5.0.7 2D cases now use the public
+FEMA eBFE Austin-Oyster plan `AustinOyster.p03` (1,872,746 cells; Source: FEMA
+estimated Base Flood Elevation (eBFE) program). Invalid-cell cases use a copy of
+the public `AustinOyster.p01` with two known invalid cells, written at test time
+(`tests/mesh_invalid_cells.py`). Engine 0.2.1 makes the same fixture change; it
+has no API or behaviour change, and ras-commander still requires
+`ras-commander-fast-hdf>=0.2,<0.3`. The fixture change does not affect library behaviour.
+
 **Hydraulic subdomains: breakout authoring, runs and parent comparison**
 
 `RasSubdomain.plan_breakouts` / `apply_breakouts` / `validate_breakouts` turn

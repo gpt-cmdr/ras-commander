@@ -140,7 +140,7 @@ HdfInput = Union[int, str, Path, h5py.File]
 
 
 # Stable-core schema for Base Output/Unsteady Time Series/2D Flow Areas only.
-# Observed without Location in HEC-RAS 5.0.7 (JUL2020_D100RAS.p04.hdf);
+# Observed without Location in HEC-RAS 5.0.7 (e.g. FEMA eBFE AustinOyster.p03.hdf);
 # shared names remain compatible with supported 6.x/7.x output and API fixtures.
 # Minimal excerpts may omit File Version. These exact rules still apply; future
 # version-specific names require separate qualification, not convenience lists.

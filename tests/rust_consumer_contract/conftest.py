@@ -7,8 +7,11 @@ from .contract import env_path, load_receipt, sha256
 
 FIXTURES = {
     # name: (expected SHA256, stored version) from fixture-readiness.json
-    "JUL2020_D100RAS.p04.hdf": ("37d91b9f957f78067cb0a8ae5db7cf3355f9c5d7172cb40e7931c35be78b9683",
-                                "HEC-RAS 5.0.7 March 2019"),
+    # Public FEMA eBFE plans (Source: FEMA estimated Base Flood Elevation (eBFE) program).
+    "AustinOyster.p03.hdf": ("fdaff5045ad36bf5d424489ff64b3d86a1e0e3ef92a628554488f009047cad92",
+                             "HEC-RAS 5.0.7 March 2019"),
+    "AustinOyster.p01.hdf": ("c9eff69c9c477ea293dcc69aea16fe88da8adf24da388c1e7249fec954da90f8",
+                             "HEC-RAS 6.6 September 2024"),
     "BaldEagleDamBrk.p03.hdf": ("98bfbeea11d31f9586b2e21b1f292974a93b97742c86eb370c3d78be1e9efa9f",
                                 "HEC-RAS 6.6 September 2024"),
     "BaldEagleDamBrk.p07.hdf": ("07cad3930a679891f87bbface1ab749b82fd7d7eae6aaac3b5ff041c44280984",

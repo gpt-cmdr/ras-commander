@@ -665,7 +665,10 @@ class RasSubdomain:
     @log_call
     def plan_breakouts(partition: SubdomainPartition, plan_number: Union[str, int], *, ras_object: Any,
                        perimeter_friction_slope: float = 0.01,
-                       subdomain_ids: Optional[Sequence[str]] = None) -> SubdomainBreakoutPlan:
+                       subdomain_ids: Optional[Sequence[str]] = None,
+                       closed_edge_outflow: bool = False,
+                       closed_edge_friction_slope: float = 0.00033,
+                       boundary_gap_cells: int = 2) -> SubdomainBreakoutPlan:
         """Plan one exact-cell breakout per subdomain; nothing is written.
 
         For each subdomain (default: all, including the remainder) this records
@@ -674,13 +677,28 @@ class RasSubdomain:
 
         - the outlet split line as Normal Depth at the fitted slope;
         - one Flow Hydrograph line per upstream subdomain, carrying the parent's
-          own flow across that split line until the upstream child has run;
+          own flow across that split line until the upstream child has run. The
+          flow is taken from the search event forced by this plan's unsteady
+          file; without one, the ``inflow_event_matches_plan`` check blocks;
         - Normal Depth at ``perimeter_friction_slope`` along each stretch of the
           parent perimeter.
 
-        Every other edge is a closed wall, as in the parent. Labels this release
-        cannot cut (``HOLES``, ``MULTIPART``, ``STRUCTURE_ON_SPLIT_LINE``) become
-        blocking checks.
+        Every other edge (the divide with a neighbouring subdomain) is a closed
+        wall unless ``closed_edge_outflow`` is set. Labels this release cannot cut
+        (``HOLES``, ``MULTIPART``, ``STRUCTURE_ON_SPLIT_LINE``) become blocking
+        checks.
+
+        **Closed-edge outflow (optional).** In a rain-on-grid parent, sheet flow
+        crosses a terrain-derived divide; a wall there holds back water the
+        parent let leave. ``closed_edge_outflow=True`` puts Normal Depth outflow
+        lines at ``closed_edge_friction_slope`` (0.00033 by default, a
+        conservative minimum that stays stable while letting water escape) along
+        those edges. Each line stops ``boundary_gap_cells`` cell faces short of
+        the outlet, inflow and perimeter lines along the perimeter, so no two BC
+        lines share a boundary face. A normal-depth edge only lets water out. It is
+        off by default because it is not always appropriate: where significant
+        flow passes between basins in both directions, extend the model domain to
+        include both basins instead.
 
         Args:
             partition: From :meth:`build_subdomains` (same session).
@@ -689,6 +707,10 @@ class RasSubdomain:
             ras_object: Initialized parent project (read only).
             perimeter_friction_slope: Normal-depth slope on parent-perimeter stretches.
             subdomain_ids: Plan only these subdomains.
+            closed_edge_outflow: Add Normal Depth outflow lines along closed edges.
+            closed_edge_friction_slope: Friction slope of those lines.
+            boundary_gap_cells: Minimum cell faces, along the perimeter, between a
+                closed-edge outflow line and any other BC line.
 
         Returns:
             SubdomainBreakoutPlan; ``is_ready`` is False while a blocking check fails.
@@ -697,7 +719,9 @@ class RasSubdomain:
 
         return plan_breakouts(partition, plan_number, ras_object=ras_object,
                               perimeter_friction_slope=perimeter_friction_slope,
-                              subdomain_ids=subdomain_ids)
+                              subdomain_ids=subdomain_ids, closed_edge_outflow=closed_edge_outflow,
+                              closed_edge_friction_slope=closed_edge_friction_slope,
+                              boundary_gap_cells=boundary_gap_cells)
 
     @staticmethod
     @log_call

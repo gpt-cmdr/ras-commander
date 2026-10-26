@@ -778,3 +778,260 @@ def test_acquisition_deduplication_preserves_distinct_paths_with_same_basename()
         "DSS boundary data (../A/100YR.dss)",
         "DSS boundary data (../B/100YR.dss)",
     }
+
+
+# A delivered filename does not establish that a DSS catalog holds a record.
+@pytest.mark.parametrize("method,record_proven,settled", [
+    ("archive_member_match", False, False),
+    ("archive_member_match", True, False),
+    ("exact_relative_path", False, False),
+    ("dss_pathname_match", False, True),
+    ("dss_record_match", False, True),
+    ("unknown", False, False),
+    ("unknown", True, True),
+    ("unknown", "false", False),
+])
+def test_dss_gap_review_requires_record_evidence(method, record_proven, settled):
+    bundle = _minimal_bundle()
+    bundle.gaps = [{
+        "gap": "MISSING_REFERENCE", "source_file": "Example.u01", "role": "prj:DSS File",
+        "raw_value": r"..\Input\Boundary.dss",
+        "review": {"verdict": "analysis_gap", "method": method,
+                   "record_proven": record_proven, "evidence": "models.zip::Input/Boundary.dss"},
+    }]
+    markdown = render_audit_markdown(bundle)
+    missing = markdown.split("## 5. What is still missing", 1)[1].split(
+        "### Reclassified during review", 1)[0].split("## 6.", 1)[0]
+    assert ("Boundary.dss" not in missing) == settled
+    if not settled:
+        verdict = markdown.split("## 1. Verdict", 1)[1].split("## 2.", 1)[0]
+        obtain = markdown.split("## 6. What you must obtain", 1)[1].split("## 7.", 1)[0]
+        assert "not established -- unresolved references need verification" in verdict
+        assert "need verification before deciding whether acquisition is required" in obtain
+        assert "referenced by the model and not delivered" not in obtain
+
+
+@pytest.mark.parametrize("method,delivered", [
+    ("archive_member_match", False),
+    ("exact_relative_path", True),
+    ("dss_pathname_match", True),
+    ("dss_record_match", True),
+    ("unknown", False),
+])
+def test_dss_delivery_review_requires_exact_path_or_record_evidence(method, delivered):
+    bundle = _two_d_unsteady(supporting_elements={"dss": {
+        "state": "no", "referenced": True,
+        "review": {"verdict": "analysis_gap", "method": method,
+                   "evidence": "models.zip::Input/Boundary.dss"},
+    }})
+    markdown = render_audit_markdown(bundle)
+    row = next(line for line in markdown.splitlines() if line.startswith("| DSS boundary data |"))
+    assert (row.split("|")[3].strip() == "Yes") == delivered
+    reclassified = markdown.split("### Reclassified during review", 1)
+    assert (len(reclassified) > 1 and "DSS boundary data (layer)" in reclassified[1]) == delivered
+
+
+def test_non_dss_review_still_settles_a_filename_gap():
+    bundle = _minimal_bundle()
+    bundle.gaps = [{
+        "gap": "MISSING_REFERENCE", "source_file": "Example.rasmap",
+        "raw_value": "Projection.prj",
+        "review": {"verdict": "analysis_gap", "method": "archive_member_match",
+                   "evidence": "models.zip::Projection.prj"},
+    }]
+    markdown = render_audit_markdown(bundle)
+    assert "### Reclassified during review" in markdown
+    assert "Projection.prj" in markdown.split("### Reclassified during review", 1)[1]
+
+
+@pytest.mark.parametrize("role,surface", [("prj:DSS File", ""), ("", "dss_pathname")])
+def test_dss_gap_without_filename_extension_still_requires_record_evidence(role, surface):
+    bundle = _minimal_bundle()
+    bundle.gaps = [{
+        "gap": "MISSING_REFERENCE", "raw_value": "/BASIN/SITE/FLOW//1HOUR/RUN/",
+        "role": role, "surface": surface,
+        "review": {"verdict": "analysis_gap", "method": "archive_member_match"},
+    }]
+    markdown = render_audit_markdown(bundle)
+    assert "not established -- unresolved references need verification" in markdown
+    assert "### Reclassified during review" not in markdown
+
+
+def test_unverified_reference_does_not_hide_a_separate_confirmed_missing_file():
+    bundle = _minimal_bundle()
+    bundle.gaps = [
+        {"gap": "MISSING_REFERENCE", "raw_value": "Unverified.dss",
+         "review": {"verdict": "analysis_gap", "method": "archive_member_match"}},
+        {"gap": "MISSING_REFERENCE", "raw_value": "Missing.dss",
+         "review": {"verdict": "real", "method": "dss_record_match"}},
+    ]
+    obtain = render_audit_markdown(bundle).split("## 6. What you must obtain", 1)[1]
+    assert "1 file(s) referenced by the model and not delivered" in obtain
+    assert "1 file reference(s) need verification" in obtain
+
+
+def test_unsettled_dss_review_qualifies_captured_tally_without_mutating_bundle():
+    from copy import deepcopy
+
+    bundle = _minimal_bundle(deficiency_review={
+        "reported": 1, "real": 0, "analysis_gap": 1, "unverifiable": 0,
+    })
+    bundle.gaps = [{
+        "gap": "MISSING_REFERENCE", "raw_value": "Boundary.dss",
+        "review": {"verdict": "analysis_gap", "method": "archive_member_match"},
+    }]
+    before = deepcopy(bundle)
+    markdown = render_audit_markdown(bundle)
+    assert "| Captured review tally | 1 reported:" in markdown
+    assert "1 reference review(s) lack record-level evidence; treated as unverified below" in markdown
+    assert bundle == before
+
+
+@pytest.mark.parametrize("state,resolved,inferred", [
+    ("yes", 0, 3), ("no", 0, 3), ("partial", 1, 2), ("yes", 1, 2),
+])
+def test_unverified_dss_records_hold_runnable_verdict_without_inventing_acquisition(state, resolved, inferred):
+    bundle = _two_d_unsteady(
+        supporting_elements={"dss": {"state": state, "referenced": True, "location": "DSS/Boundary.dss"}},
+        dss_verification={
+            "bridge_available": True, "boundaries_checked": 3, "boundaries_resolved": resolved,
+            "boundaries_acquisition": 0, "boundaries_inferred": inferred,
+            "inferred_reasons": {"catalog read failed:\nJava not found": inferred},
+        },
+    )
+    assert not any(a.kind == "acquisition" and "DSS" in a.target for a in actions_from_bundle(bundle))
+    markdown = render_audit_markdown(bundle)
+    assert "not established -- DSS boundary references need verification" in markdown
+    assert f"{inferred} of 3 boundary reference(s) could not be verified" in markdown
+    assert "catalog read failed: Java not found" in markdown
+    obtain = markdown.split("## 6. What you must obtain", 1)[1].split("## 7.", 1)[0]
+    assert "Verify the unresolved DSS boundary records before deciding whether acquisition is required" in obtain
+    assert "**Nothing external.**" not in obtain
+    if state == "yes":
+        row = next(line for line in markdown.splitlines() if line.startswith("| DSS boundary data |"))
+        assert row.split("|")[3].strip() == "Yes"
+
+
+def test_unverified_dss_hold_preserves_independently_confirmed_missing_data():
+    bundle = _two_d_unsteady(
+        supporting_elements={"dss": {
+            "state": "no", "referenced": True, "review": {"verdict": "real"},
+        }},
+        dss_verification={"boundaries_checked": 3, "boundaries_inferred": 3},
+    )
+    assert any(a.kind == "acquisition" and a.target == "DSS boundary data" for a in actions_from_bundle(bundle))
+    markdown = render_audit_markdown(bundle)
+    assert "no -- needs data not in the delivery" in markdown
+    assert "| DSS boundary verification | **Not verified**" in markdown
+
+
+def test_dss_verification_hold_uses_a_deterministic_single_line_reason():
+    bundle = _minimal_bundle(dss_verification={
+        "boundaries_checked": 3, "boundaries_inferred": 3,
+        "inferred_reasons": {"a smaller issue": 1, "catalog | unavailable\ntry again": 2},
+    })
+    row = next(line for line in render_audit_markdown(bundle).splitlines()
+               if line.startswith("| DSS boundary verification |"))
+    assert r"catalog \| unavailable try again" in row
+    assert "a smaller issue" not in row
+
+
+def test_zero_checked_boundaries_do_not_introduce_a_verification_hold():
+    bundle = _minimal_bundle(dss_verification={"boundaries_checked": 0, "boundaries_inferred": 0})
+    markdown = render_audit_markdown(bundle)
+    assert "| DSS boundary verification |" not in markdown
+    assert "| Runnable as delivered | **yes** |" in markdown
+
+
+def test_dss_hold_keeps_named_acquisition_recipes():
+    bundle = _two_d_unsteady(
+        supporting_elements={"dss": {"state": "no", "referenced": True}},
+        dss_verification={"boundaries_checked": 3, "boundaries_inferred": 3},
+    )
+    bundle.recipes = [{
+        "surface": "dss_pathname", "kind": "acquisition", "confidence": "acquisition",
+        "file": "Example.u01", "from": "Missing.dss", "acquisition_target": "Missing.dss",
+        "confidence_reason": "independent review confirmed no delivered candidate",
+    }]
+    acquisitions = [a for a in actions_from_bundle(bundle) if a.kind == "acquisition"]
+    assert len(acquisitions) == 1 and acquisitions[0].target == "DSS boundary data (Missing.dss)"
+    assert "no -- needs data not in the delivery" in render_audit_markdown(bundle)
+
+
+def test_partly_verified_dss_hold_keeps_confirmed_acquisitions():
+    bundle = _two_d_unsteady(
+        supporting_elements={"dss": {"state": "no", "referenced": True}},
+        dss_verification={"boundaries_checked": 3, "boundaries_resolved": 1,
+                          "boundaries_acquisition": 1, "boundaries_inferred": 1},
+    )
+    assert any(a.kind == "acquisition" and a.target == "DSS boundary data" for a in actions_from_bundle(bundle))
+    markdown = render_audit_markdown(bundle)
+    assert "no -- needs data not in the delivery" in markdown
+    assert "| DSS boundary verification | **Partly verified**" in markdown
+
+
+@pytest.mark.parametrize("method,evidence", [
+    ("exact_relative_path", "models.zip::Results/WSE (Max).vrt"),
+    ("archive_member_match", "models.zip::Terrain/DEM.tif"),
+    ("exact_relative_path", "models.zip::Terrain/Terrain.vrt"),
+    ("unknown", "models.zip::Terrain/Terrain.hdf"),
+    ("archive_member_match", "Terrain/Terrain.hdf"),
+    ("archive_member_match", ""),
+])
+def test_terrain_review_cannot_promote_delivery_without_a_named_hdf_member(method, evidence):
+    bundle = _two_d_unsteady(
+        terrain={"delivered": 0, "gapped": 1, "projects": []},
+        supporting_elements={"terrain": {
+            "state": "no", "referenced": True,
+            "review": {"verdict": "analysis_gap", "method": method, "evidence": evidence},
+        }},
+    )
+    markdown = render_audit_markdown(bundle)
+    row = next(line for line in markdown.splitlines() if line.startswith("| Terrain |"))
+    assert row.split("|")[3].strip() == "**No**"
+    assert any(a.kind == "acquisition" and a.target == "Terrain" for a in actions_from_bundle(bundle))
+    assert "Terrain (layer)" not in markdown
+
+
+@pytest.mark.parametrize("method", ["exact_relative_path", "archive_member_match"])
+def test_named_terrain_hdf_review_can_settle_delivery(method):
+    bundle = _two_d_unsteady(
+        terrain={"delivered": 0, "gapped": 1, "projects": []},
+        supporting_elements={"terrain": {
+            "state": "no", "referenced": True,
+            "review": {"verdict": "analysis_gap", "method": method,
+                       "evidence": "models.zip::Terrain/Terrain.HDF"},
+        }},
+    )
+    markdown = render_audit_markdown(bundle)
+    row = next(line for line in markdown.splitlines() if line.startswith("| Terrain |"))
+    assert row.split("|")[3].strip() == "Yes"
+    assert "Terrain/Terrain.HDF" in row
+    assert "Terrain (layer)" in markdown
+    assert not any(a.kind == "acquisition" and a.target == "Terrain" for a in actions_from_bundle(bundle))
+
+
+@pytest.mark.parametrize("method", ["exact_relative_path", "archive_member_match"])
+@pytest.mark.parametrize("projects", [[], [
+    {"project": "ModelA", "terrain_hdf": ["Terrain/Terrain.hdf"], "raster": ["DEM1.tif"]},
+    {"project": "ModelB", "terrain_hdf": ["Terrain/Terrain.hdf"], "raster": ["DEM2.tif"]},
+]])
+def test_one_reviewed_hdf_does_not_settle_a_partial_terrain_delivery(method, projects):
+    bundle = _two_d_unsteady(
+        terrain={"delivered": len(projects), "gapped": 0, "projects": projects},
+        supporting_elements={"terrain": {
+            "state": "partial", "referenced": True, "location": "ModelA/Terrain/Terrain.hdf",
+            "note": "two referenced DEM source tiles are missing",
+            "review": {"verdict": "analysis_gap", "method": method,
+                       "evidence": "models.zip::ModelA/Terrain/Terrain.hdf"},
+        }},
+    )
+    markdown = render_audit_markdown(bundle)
+    row = next(line for line in markdown.splitlines() if line.startswith("| Terrain |"))
+    assert "**Partial**" in row
+    assert "two referenced DEM source tiles are missing" in row
+    assert "Terrain (layer)" not in markdown
+    acquisitions = [a for a in actions_from_bundle(bundle) if a.kind == "acquisition" and a.target == "Terrain"]
+    assert len(acquisitions) == 1
+    assert acquisitions[0].reason == "partially_delivered"
+    assert "no -- needs data not in the delivery" in markdown

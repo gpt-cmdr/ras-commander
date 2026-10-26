@@ -141,3 +141,86 @@ def test_remove_area_bc_lines_in_one_write(tmp_path):
     new_files = {p.name for p in tmp_path.iterdir()} - before
     assert len(new_files) <= 1  # one backup, not one per line
     assert bo._remove_area_bc_lines(geom, "Perimeter 1") == []
+
+
+def _grid_child():
+    """A 10x10 child of 100 ft cells in the parent's south-west corner (parent 0..5000)."""
+    xs = [(x * 100.0, 0.0) for x in range(0, 11)]
+    east = [(1000.0, y * 100.0) for y in range(1, 11)]
+    north = [(x * 100.0, 1000.0) for x in range(9, -1, -1)]
+    west = [(0.0, y * 100.0) for y in range(9, 0, -1)]
+    return Polygon(xs + east + north + west)
+
+
+def test_closed_edge_stretches_keep_two_cells_from_other_lines():
+    from shapely.geometry import LineString
+
+    parent = box(0, 0, 5000, 5000)
+    child = _grid_child()  # south and west edges lie on the parent perimeter
+    outlet = LineString([(1000, 400), (1000, 600)])  # two faces on the east (closed) edge
+    pieces = bo._closed_edge_stretches(child, parent, [outlet], gap_cells=2)
+    # East edge (10 faces) minus the 2-face outlet leaves runs of 4 (south) and 4 (north of outlet)
+    # joined to the 10-face north edge: 4 + 10 = 14. Each run loses 2 faces at each end.
+    lengths = sorted(round(g.length) for g in pieces)
+    assert lengths == [1000]  # the south run of 4 keeps nothing; the north run of 14 keeps 10
+    for g in pieces:
+        assert g.distance(outlet) >= 200 - 1e-6
+        assert g.distance(parent.exterior) >= 200 - 1e-6
+
+
+def test_closed_edge_stretches_gap_is_configurable():
+    from shapely.geometry import LineString
+
+    parent = box(0, 0, 5000, 5000)
+    child = _grid_child()
+    outlet = LineString([(1000, 400), (1000, 600)])
+    one = bo._closed_edge_stretches(child, parent, [outlet], gap_cells=1)
+    assert sorted(round(g.length) for g in one) == [200, 1200]
+    assert all(g.distance(outlet) >= 100 - 1e-6 for g in one)
+
+
+def test_child_entirely_on_parent_perimeter_has_no_closed_edges():
+    parent = box(0, 0, 1000, 1000)
+    assert bo._closed_edge_stretches(_grid_child(), parent, [], gap_cells=2) == []
+
+
+def test_closed_edge_default_slope():
+    assert bo.CLOSED_EDGE_FRICTION_SLOPE == 0.00033
+
+
+def _plan_hdf(path: Path, flow_file: str) -> Path:
+    import h5py
+
+    with h5py.File(path, "w") as f:
+        f.create_group("Plan Data/Plan Information").attrs["Flow Filename"] = flow_file.encode()
+    return path.resolve()
+
+
+def _search(paths):
+    return SimpleNamespace(events=("1pct", "0_2pct"), plan_hdf_paths=tuple(paths))
+
+
+def test_plan_event_matches_the_plans_unsteady_file(tmp_path):
+    pytest.importorskip("h5py")
+    paths = [_plan_hdf(tmp_path / "a.hdf", "SLDR_004.u01"), _plan_hdf(tmp_path / "b.hdf", "SLDR_004.u02")]
+    search = _search(paths)
+    row = pd.Series({"HDF_Results_Path": float("nan"), "unsteady_number": "02"})
+    assert bo._plan_event(search, row, "SLDR_004") == "0_2pct"
+    row = pd.Series({"HDF_Results_Path": float("nan"), "unsteady_number": "01"})
+    assert bo._plan_event(search, row, "SLDR_004") == "1pct"
+
+
+def test_plan_event_prefers_the_plans_own_results(tmp_path):
+    pytest.importorskip("h5py")
+    paths = [_plan_hdf(tmp_path / "a.hdf", "SLDR_004.u01"), _plan_hdf(tmp_path / "b.hdf", "SLDR_004.u01")]
+    row = pd.Series({"HDF_Results_Path": str(paths[1]), "unsteady_number": "01"})
+    assert bo._plan_event(_search(paths), row, "SLDR_004") == "0_2pct"
+
+
+def test_plan_event_is_none_without_a_unique_match(tmp_path):
+    pytest.importorskip("h5py")
+    paths = [_plan_hdf(tmp_path / "a.hdf", "SLDR_004.u01"), _plan_hdf(tmp_path / "b.hdf", "SLDR_004.u01")]
+    row = pd.Series({"HDF_Results_Path": float("nan"), "unsteady_number": "01"})
+    assert bo._plan_event(_search(paths), row, "SLDR_004") is None
+    row = pd.Series({"HDF_Results_Path": float("nan"), "unsteady_number": "03"})
+    assert bo._plan_event(_search(paths), row, "SLDR_004") is None

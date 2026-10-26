@@ -23,8 +23,11 @@ from ..LoggingConfig import get_logger
 logger = get_logger(__name__)
 
 #: BC line role names (written into the BC line name prefix).
-OUTLET, INFLOW, PERIMETER = "outlet", "inflow", "perimeter"
-_NAME = {OUTLET: "Out_ND", INFLOW: "In", PERIMETER: "Edge_ND"}
+OUTLET, INFLOW, PERIMETER, CLOSED_EDGE = "outlet", "inflow", "perimeter", "closed_edge_outflow"
+_NAME = {OUTLET: "Out_ND", INFLOW: "In", PERIMETER: "Edge_ND", CLOSED_EDGE: "Edge_Out"}
+#: Default friction slope of optional closed-edge outflow lines: a conservative minimum
+#: that keeps the boundary stable while letting water leave across the subdomain divide.
+CLOSED_EDGE_FRICTION_SLOPE = 0.00033
 #: Labels :meth:`RasSubdomain.plan_breakouts` cannot build in this release.
 BLOCKING_LABELS = ("HOLES", "MULTIPART", "STRUCTURE_ON_SPLIT_LINE")
 
@@ -82,6 +85,9 @@ class SubdomainBreakoutPlan:
     perimeter_friction_slope: float
     partition: Any = field(repr=False)
     ras_object: Any = field(default=None, repr=False)
+    closed_edge_outflow: bool = False
+    closed_edge_friction_slope: float = CLOSED_EDGE_FRICTION_SLOPE
+    boundary_gap_cells: int = 2
     schema: str = "ras-subdomain-breakout-plan/1"
 
     @property
@@ -94,6 +100,9 @@ class SubdomainBreakoutPlan:
             "project_folder": str(self.project_folder), "is_ready": self.is_ready,
             "parent_identities": dict(self.parent_identities),
             "perimeter_friction_slope": self.perimeter_friction_slope,
+            "closed_edge_outflow": self.closed_edge_outflow,
+            "closed_edge_friction_slope": self.closed_edge_friction_slope,
+            "boundary_gap_cells": self.boundary_gap_cells,
             "breakouts": [b.to_dict() for b in self.breakouts],
             "checks": self.checks.to_dict("records"),
         }
@@ -163,6 +172,49 @@ def _perimeter_stretches(child, parent_area) -> List[Any]:
 
 
 
+def _closed_edge_stretches(child, parent_area, split_lines: Sequence[Any], gap_cells: int) -> List[Any]:
+    """Stretches of the child's exterior that are neither parent perimeter nor a split line.
+
+    These are the faces a cut turns into walls (the divide with a neighbouring
+    subdomain). Each stretch is shortened by ``gap_cells`` exterior segments (one
+    segment is one cell face) at both ends, so it keeps that many cells away along
+    the perimeter from the outlet, inflow and perimeter lines it meets and no
+    two BC lines can claim the same face.
+    """
+    import shapely
+    from shapely.geometry import LineString
+
+    ring = np.asarray(child.exterior.coords)[:-1]
+    nxt = np.roll(ring, -1, axis=0)
+    mid = shapely.points((ring + nxt) / 2.0)
+    boundary = parent_area.exterior
+    on_parent = (shapely.distance(shapely.points(ring), boundary) < _ON_PERIMETER_TOL)         & (shapely.distance(shapely.points(nxt), boundary) < _ON_PERIMETER_TOL)         & (shapely.distance(mid, boundary) < _ON_PERIMETER_TOL)
+    on_split = np.zeros(len(ring), bool)
+    for line in split_lines:
+        on_split |= shapely.distance(mid, line) < _ON_PERIMETER_TOL
+    closed = ~on_parent & ~on_split
+    if closed.all() or not closed.any():
+        return []
+    start = int(np.flatnonzero(~closed)[0]) + 1
+    runs, current = [], []
+    for k in range(len(ring)):
+        i = (start + k) % len(ring)
+        if closed[i]:
+            current.append(i)
+        elif current:
+            runs.append(current)
+            current = []
+    if current:
+        runs.append(current)
+    stretches = []
+    for run in runs:
+        kept = run[gap_cells: len(run) - gap_cells] if gap_cells else run
+        if kept:
+            coords = [ring[kept[0]]] + [nxt[i] for i in kept]
+            stretches.append(LineString(coords))
+    return [g for g in stretches if g.length > 0]
+
+
 def _merge_faces(mesh, faces: Sequence[int]):
     """Merged LineString(s) along the given parent faces."""
     import shapely
@@ -172,14 +224,41 @@ def _merge_faces(mesh, faces: Sequence[int]):
     return list(getattr(merged, "geoms", [merged]))
 
 
-def _parent_hydrograph(search, faces: Sequence[int], signs: Sequence[float]):
-    """Parent's signed flow across ``faces`` (growth event) as an ``hour``/``value`` frame."""
+def _plan_event(search, plan_row, project_name: str) -> Optional[str]:
+    """The search event that is the parent run of ``plan_row``, or None.
+
+    The plan's own results HDF counts if the search used it. Otherwise an event
+    matches when its plan HDF was forced by the plan's unsteady flow file.
+    """
+    import h5py
+
+    plan_hdf = plan_row.get("HDF_Results_Path")
+    if isinstance(plan_hdf, (str, Path)) and str(plan_hdf) and Path(plan_hdf).is_file():
+        resolved = Path(plan_hdf).resolve()
+        if resolved in search.plan_hdf_paths:
+            return search.events[search.plan_hdf_paths.index(resolved)]
+    unsteady = plan_row.get("unsteady_number")
+    if unsteady is None or (isinstance(unsteady, float) and math.isnan(unsteady)):
+        return None
+    flow_file = f"{project_name}.u{str(unsteady).zfill(2)}".lower()
+    matches = []
+    for event, path in zip(search.events, search.plan_hdf_paths):
+        with h5py.File(path, "r") as f:
+            info = f.get("Plan Data/Plan Information")
+            name = info.attrs.get("Flow Filename", b"") if info is not None else b""
+        name = name.decode() if isinstance(name, bytes) else str(name)
+        if Path(name).name.lower() == flow_file:
+            matches.append(event)
+    return matches[0] if len(matches) == 1 else None
+
+
+def _parent_hydrograph(search, faces: Sequence[int], signs: Sequence[float], event: str):
+    """Parent's signed flow across ``faces`` in ``event`` as an ``hour``/``value`` frame."""
     import pandas as pd
 
     from ._parent import EventReader
 
-    e = search.growth_event
-    path = search.plan_hdf_paths[search.events.index(e)]
+    path = search.plan_hdf_paths[search.events.index(event)]
     reader = EventReader(path, search.mesh_name)
     ids, flow = reader.series("Face Flow", faces)
     col = {int(f): i for i, f in enumerate(ids)}
@@ -189,7 +268,9 @@ def _parent_hydrograph(search, faces: Sequence[int], signs: Sequence[float]):
 
 
 def plan_breakouts(partition, plan_number, *, ras_object, perimeter_friction_slope: float = 0.01,
-                   subdomain_ids: Optional[Sequence[str]] = None) -> SubdomainBreakoutPlan:
+                   subdomain_ids: Optional[Sequence[str]] = None, closed_edge_outflow: bool = False,
+                   closed_edge_friction_slope: float = CLOSED_EDGE_FRICTION_SLOPE,
+                   boundary_gap_cells: int = 2) -> SubdomainBreakoutPlan:
     import pandas as pd
     import shapely
 
@@ -198,6 +279,10 @@ def plan_breakouts(partition, plan_number, *, ras_object, perimeter_friction_slo
 
     if not (math.isfinite(perimeter_friction_slope) and perimeter_friction_slope > 0):
         raise ValueError("perimeter_friction_slope must be a finite positive slope")
+    if not (math.isfinite(closed_edge_friction_slope) and closed_edge_friction_slope > 0):
+        raise ValueError("closed_edge_friction_slope must be a finite positive slope")
+    if isinstance(boundary_gap_cells, bool) or not isinstance(boundary_gap_cells, int) or boundary_gap_cells < 1:
+        raise ValueError("boundary_gap_cells must be a positive integer")
     ras_object.check_initialized()
     plan_number = RasUtils.normalize_ras_number(plan_number)
     search = partition.search
@@ -234,6 +319,14 @@ def plan_breakouts(partition, plan_number, *, ras_object, perimeter_friction_slo
         _check(rows, "*", "parent_geometry_matches_search", False, f"geometry HDF for g{geom_number} not found")
     for p, h in zip(search.plan_hdf_paths, search.plan_hdf_sha256):
         identities[f"search_event:{p.name}"] = h
+    # Inflow lines carry the parent's hydrograph from the run of this same plan.
+    forcing_event = _plan_event(search, plan_row.iloc[0], ras_object.project_name)
+    needs_inflow = [s for s in wanted if len(subs.loc[s, "upstream_subdomain_ids"])]
+    if needs_inflow:
+        _check(rows, "*", "inflow_event_matches_plan", forcing_event is not None,
+               f"inflow hydrographs from search event {forcing_event}" if forcing_event is not None else
+               f"no search event was forced by plan {plan_number}'s unsteady file; inflow lines need "
+               f"the parent run of plan {plan_number} among the search's plan HDFs")
 
     from ..hdf.HdfMesh import HdfMesh
 
@@ -275,25 +368,33 @@ def plan_breakouts(partition, plan_number, *, ras_object, perimeter_friction_slo
                 bc.append({"role": OUTLET, "name": f"{_NAME[OUTLET]}_{sid}"[:32] + (f"_{i}" if i else ""),
                            "bc_type": "Normal Depth", "friction_slope": slope,
                            "coordinates": np.asarray(g.coords), "split_line_id": outlet_id})
-        for up in sub["upstream_subdomain_ids"]:
+        for up in sub["upstream_subdomain_ids"] if forcing_event is not None else ():
             up_line = int(subs.loc[up, "split_line_id"])
             s = lines[up_line]
-            hydro = _parent_hydrograph(search, s["faces"], s["signs"])
+            hydro = _parent_hydrograph(search, s["faces"], s["signs"], forcing_event)
             for i, g in enumerate(_merge_faces(mesh, s["faces"])):
                 bc.append({"role": INFLOW, "name": f"{_NAME[INFLOW]}_{up}"[:32] + (f"_{i}" if i else ""),
                            "bc_type": "Flow Hydrograph", "friction_slope": perimeter_friction_slope,
                            "hydrograph_df": hydro, "coordinates": np.asarray(g.coords),
                            "upstream_subdomain_id": up, "split_line_id": up_line,
-                           "hydrograph_source": "parent"})
+                           "hydrograph_source": "parent", "hydrograph_event": forcing_event})
         if len(on_parent_perimeter) and poly is not None:
             pieces = _perimeter_stretches(poly, parent_area)
             for i, g in enumerate(sorted(pieces, key=lambda g: -g.length)):
                 bc.append({"role": PERIMETER, "name": f"{_NAME[PERIMETER]}_{i + 1}",
                            "bc_type": "Normal Depth", "friction_slope": perimeter_friction_slope,
                            "coordinates": np.asarray(g.coords)})
+        if closed_edge_outflow and poly is not None:
+            split = [shapely.LineString(np.asarray(x["coordinates"])) for x in bc if x["role"] in (OUTLET, INFLOW)]
+            for i, g in enumerate(sorted(_closed_edge_stretches(poly, parent_area, split, boundary_gap_cells),
+                                         key=lambda g: -g.length)):
+                bc.append({"role": CLOSED_EDGE, "name": f"{_NAME[CLOSED_EDGE]}_{i + 1}",
+                           "bc_type": "Normal Depth", "friction_slope": closed_edge_friction_slope,
+                           "coordinates": np.asarray(g.coords)})
         _check(rows, sid, "has_outflow_boundary", any(x["role"] in (OUTLET, PERIMETER) for x in bc),
                f"{sum(x['role'] == OUTLET for x in bc)} outlet and "
-               f"{sum(x['role'] == PERIMETER for x in bc)} perimeter normal-depth lines")
+               f"{sum(x['role'] == PERIMETER for x in bc)} perimeter and "
+               f"{sum(x['role'] == CLOSED_EDGE for x in bc)} closed-edge outflow normal-depth lines")
         if poly is not None:
             spec = Breakout2DSpec(source_plan=plan_number, source_2d_area=search.mesh_name,
                                   child_boundary=poly, breakout_id=f"sd_{sid}"[:32],
@@ -314,7 +415,8 @@ def plan_breakouts(partition, plan_number, *, ras_object, perimeter_friction_slo
         breakouts=tuple(breakouts), checks=checks, plan_number=plan_number,
         mesh_name=search.mesh_name, project_folder=Path(ras_object.project_folder),
         parent_identities=identities, perimeter_friction_slope=float(perimeter_friction_slope),
-        partition=partition, ras_object=ras_object)
+        partition=partition, ras_object=ras_object, closed_edge_outflow=bool(closed_edge_outflow),
+        closed_edge_friction_slope=float(closed_edge_friction_slope), boundary_gap_cells=int(boundary_gap_cells))
 
 
 # --- applying ------------------------------------------------------------------------------

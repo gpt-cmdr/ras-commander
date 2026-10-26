@@ -1,6 +1,7 @@
 """Independent h5py oracle for real structure result families.
 Usage:  python -I oracle_real_structures.py FIXTURE_DIR OUT.json [name-substring ...]
-Defaults select the BaldEagleDamBrk p07/p18 and JUL2020_D100RAS p04 result HDF files. Never
+Defaults select the BaldEagleDamBrk p07/p18 and the public FEMA eBFE AustinOyster p03 (5.0.7)
+result HDF files. Never
 modifies inputs. The Rust test (tests/structures_conformance.rs, ignored) reads OUT.json via
 RAS_STRUCT_ORACLE with RAS_NATIVE_FIXTURES. Floats are frozen as IEEE bit patterns plus
 SHA256 of the little-endian bytes of each selected slice; no decimal float is trusted.
@@ -13,7 +14,7 @@ import h5py, numpy as np
 BASE = 'Results/Unsteady/Output/Output Blocks/Base Output/Unsteady Time Series'
 FAMILIES = ['SA 2D Area Conn', 'Lateral Structures', 'Storage Areas']
 UNQUALIFIED = ['Structures', 'Inline Structures', 'Bridges', 'Culverts', 'Bridges/Culverts']
-DEFAULT = ['BaldEagleDamBrk.p07', 'BaldEagleDamBrk.p18', 'JUL2020_D100RAS.p04']
+DEFAULT = ['BaldEagleDamBrk.p07', 'BaldEagleDamBrk.p18', 'AustinOyster.p03']
 
 
 def raw_attr(obj, name):

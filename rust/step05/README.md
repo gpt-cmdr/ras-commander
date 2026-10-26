@@ -11,7 +11,8 @@ cargo test --locked --manifest-path rust/step05/Cargo.toml --all-targets
 cargo clippy --locked --manifest-path rust/step05/Cargo.toml --all-targets -- -D warnings
 ```
 
-The tested compiler is Rust 1.99.1 on Linux/WSL. A Windows build is not yet qualified.
+Platform wheels target Linux x86-64 (glibc 2.28+) and Windows x86-64, built
+with Rust 1.99.1. Build and qualification provenance is retained in `wheels/BUILD.json`.
 The executable is `rust/step05/target/release/ras2fim-batch` (with `.exe` on Windows).
 The crate disables terrio's default features and enables only `geotiff`; it does not
 link GDAL. The Python workflow uses SciPy, rasterio and its raster libraries for
@@ -59,3 +60,22 @@ do not belong in the repository.
 For application options and supported inputs, see
 [the mapping guide](../../docs/api/fim.md). For complete-call performance
 measurement, see [the benchmark protocol](../../docs/development/fim-mapping-performance.md).
+
+## Native horizontal ownership
+
+Engine 0.3 accepts validated cell Polygons as length-framed little-endian 2D WKB.
+It rasterizes integer ownership through terrio 0.4.2 on the exact constrained
+terrain grid, preserving input feature order and pixel-centre inclusion.
+An optional Polygon/MultiPolygon AOI uses the same grid, including holes.
+Rasterization and masking run inside the caller's bounded Rayon pool. The
+native buffers are reused with the decoded terrain for all profiles.
+
+The horizontal request retains `owner_file` compatibility for existing CLI
+callers; choose either `owner_file` or `geometry_file`. `aoi_file` requires
+`geometry_file`. Geometry records have a four-byte little-endian WKB length
+followed by the WKB bytes; cell records follow the WSE table order and an AOI
+file contains exactly one record. The caller validates cell topology and
+rejects overlapping interiors. Rust checks framing, geometry types, finite
+coordinates and planned geometry/array admission before raster allocation.
+The method capability advertises `native_ownership=true`; older binaries
+produce an explicit adapter version error. Step05 numerics are unchanged.

@@ -15,8 +15,11 @@ auto mode, so the cheap native path is kept where it is provably equal.
 
 Real fixtures: set ``RAS_MESH_DIAGNOSTIC_FIXTURES`` (or
 ``RAS_FLUVIAL_PUBLIC_FIXTURES``) to the folder holding
-``JUL2020_D100RAS.p04.hdf`` (two ``no_polygon`` cells) and
-``BaldEagleDamBrk.p18.hdf``; missing fixtures are skipped, never passed.
+``AustinOyster.p03.hdf`` (public FEMA eBFE 5.0.7 plan), ``BaldEagleDamBrk.p18.hdf``
+and ``AustinOyster.p01.hdf``, from which a derived copy with two ``no_polygon``
+cells is written to a temporary folder (``tests/mesh_invalid_cells.py``); missing
+fixtures are skipped, never passed. Source: FEMA estimated Base Flood Elevation
+(eBFE) program.
 """
 import logging
 import os
@@ -202,13 +205,21 @@ def _fixture(name):
 
 
 @pytest.mark.parametrize("name,expected", [
-    ("JUL2020_D100RAS.p04.hdf", {("omitted", "no_polygon"), ("boundary_only", "insufficient_faces")}),
+    ("AustinOyster.p03.hdf", {("boundary_only", "insufficient_faces")}),
     ("BaldEagleDamBrk.p18.hdf", {("boundary_only", "insufficient_faces")}),
+    ("AustinOyster.p01.invalid-cells.hdf", {("omitted", "no_polygon"), ("boundary_only", "insufficient_faces")}),
 ])
-def test_real_fixture_auto_diagnostics_equal_reference(caplog, monkeypatch, name, expected):
-    served, records = _compare(_fixture(name), caplog, monkeypatch)
+def test_real_fixture_auto_diagnostics_equal_reference(caplog, monkeypatch, tmp_path, name, expected):
+    if name == "AustinOyster.p01.invalid-cells.hdf":
+        import sys
+        sys.path.insert(0, str(Path(__file__).resolve().parent))
+        import mesh_invalid_cells
+        path = mesh_invalid_cells.make_invalid_copy(_fixture(mesh_invalid_cells.SOURCE_NAME), tmp_path / name)
+    else:
+        path = _fixture(name)
+    served, records = _compare(path, caplog, monkeypatch)
     assert {(r["status"], r["reason_code"]) for r in records} == expected
-    # Both fixtures are provably equal, so the native path keeps serving them.
+    # Every fixture is provably equal, so the native path keeps serving them.
     assert served == ["native"]
 
 

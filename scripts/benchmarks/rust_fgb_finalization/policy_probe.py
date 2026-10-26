@@ -21,7 +21,7 @@ if __name__=='__main__':
         for strict in [False,True]:
             started=time.perf_counter()
             try:
-                result=HdfMesh.get_mesh_cell_polygons(ROOT/'working/fixtures/JUL2020_D100RAS.p04.hdf',
+                result=HdfMesh.get_mesh_cell_polygons(ROOT/'working/fixtures/AustinOyster.p03.hdf',
                     backend='rust',strict=strict,threads=2)
                 record={'strict':strict,'rows':len(result),'diagnostics':result.attrs}
             except Exception as e:record={'strict':strict,'error_type':type(e).__name__,'error':str(e)}
