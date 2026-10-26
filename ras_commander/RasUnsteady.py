@@ -9961,6 +9961,8 @@ class RasUnsteady:
         ras_object: Optional[Any] = None,
         area_2d: Optional[str] = None,
         bc_line: Optional[str] = None,
+        *,
+        max_decimals: int = 2,
     ) -> bool:
         """
         Write an inline hydrograph table to a boundary condition, converting from DSS if needed.
@@ -10004,6 +10006,11 @@ class RasUnsteady:
         bc_line : str, optional
             Exact 2D BC line name (field 7 of ``Boundary Location=``).
             Supply together with ``area_2d``.
+        max_decimals : int, default 2
+            Maximum decimal places for ordinates, from 0 through 6. The
+            existing fixed-width formatter reduces precision as needed to fit
+            each 8-character field; the default preserves existing output.
+            Six is the most fractional places that fit with a leading zero.
 
         Returns
         -------
@@ -10013,7 +10020,8 @@ class RasUnsteady:
         Raises
         ------
         ValueError
-            If DataFrame is missing required columns or bc_type is unsupported
+            If DataFrame is missing required columns, bc_type is unsupported,
+            or max_decimals is not an integer from 0 through 6.
         FileNotFoundError
             If unsteady flow file not found
 
@@ -10067,6 +10075,9 @@ class RasUnsteady:
             "Uniform Lateral Inflow": "Uniform Lateral Inflow=",
             "Uniform Lateral Inflow Hydrograph": "Uniform Lateral Inflow Hydrograph=",
         }
+
+        if type(max_decimals) is not int or not 0 <= max_decimals <= 6:
+            raise ValueError("max_decimals must be an integer from 0 through 6")
 
         if bc_type not in SUPPORTED_TYPES:
             raise ValueError(
@@ -10160,7 +10171,8 @@ class RasUnsteady:
         for i in range(0, num_values, 10):
             row_values = values[i:i+10]
             formatted_rows.append(''.join(
-                RasUnsteady._format_fixed_width_value(v) for v in row_values
+                RasUnsteady._format_fixed_width_value(v, max_decimals=max_decimals)
+                for v in row_values
             ))
 
         # Read the file

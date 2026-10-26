@@ -757,6 +757,13 @@ The `get_comp_msgs()` method attempts to read computation messages from multiple
 
 ### RasUnsteady
 
+`RasUnsteady.set_boundary_inline_hydrograph(..., max_decimals=6)` retains
+fractional flow or stage ordinates using the existing eight-character field
+formatter. The keyword-only setting accepts integers from zero through six;
+precision is reduced where a value needs more room. Omitting it retains the
+two-decimal default. Invalid settings fail before changing the unsteady file.
+Native preprocessing and result readback remain separate validation steps.
+
 `RasUnsteady.set_constant_precipitation(path, value=0.01, units="in/hr", ratio=1.0)`
 sets a uniform rate without an inherited rainfall reduction multiplier. The
 keyword-only `ratio` is dimensionless and must round to a positive finite

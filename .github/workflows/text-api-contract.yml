@@ -41,6 +41,7 @@ jobs:
           tests/test_hdf_steady_results.py
           tests/test_rasunsteady_disable_meteorology.py
           tests/test_rasunsteady_constant_precipitation.py
+          tests/test_rasunsteady_inline_precision.py
           tests/test_rasunsteady_remove_met_sources.py
           tests/test_rasunsteady_initial_flow_validation.py
           tests/test_rasunsteady_meteorology_transaction.py
