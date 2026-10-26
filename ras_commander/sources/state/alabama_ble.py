@@ -51,8 +51,16 @@ class AlabamaBleModels:
         "https://services7.arcgis.com/iH8unQljYvyFM6F1/arcgis/rest/services/"
         "Models/FeatureServer"
     )
-    _MODEL_LAYER_ID = 2
-    _LINK_LAYER_ID = 3
+    # The publisher renumbered the service (models 2 -> 0, links 3 -> 1) and
+    # renamed GlobalID to GUID. get_source_status() checks IDs and names
+    # together so a future renumbering reports UNAVAILABLE instead of querying
+    # the wrong layer.
+    _MODEL_LAYER_ID = 0
+    _MODEL_LAYER_NAME = "Hydraulic Models"
+    _LINK_LAYER_ID = 1
+    _LINK_TABLE_NAME = "Model_Links"
+    _MODEL_FIELDS = "OBJECTID,Type,Zone,Name,HUC8_Name,Basin,County,FIPS,ModelID,GUID"
+    _LINK_FIELDS = "OBJECTID,ModelID,FileName,FileType,WebPath"
     _PAGE_SIZE = 2000
     _REQUEST_TIMEOUT = 90
     _DOWNLOAD_TIMEOUT = 300
@@ -60,7 +68,14 @@ class AlabamaBleModels:
     _MANIFEST_NAME = "alabama_ble_source_manifest.json"
     _MANIFEST_SCHEMA_NAME = "ras_commander.watershed_source_manifest"
     _MANIFEST_CONTRACT_VERSION = "1.0.0"
-    _SOURCE_POLICY = "ArcGIS layer 2 metadata joined to layer 3 WebPath only"
+    _SOURCE_POLICY = (
+        "ArcGIS Hydraulic Models metadata joined to Model_Links WebPath only"
+    )
+    # Deliveries written before the service renumbering record this policy.
+    # The join rule is unchanged, so their manifests remain valid.
+    _LEGACY_SOURCE_POLICIES = frozenset(
+        {"ArcGIS layer 2 metadata joined to layer 3 WebPath only"}
+    )
     _SOURCE_SIDECAR_SUFFIX = ".alabama-ble-source.json"
     _EXTRACTION_RECEIPT = ".ras-commander-extraction.json"
     _PUBLIC_ARCHIVE_HOSTS = frozenset({"files.alabamaflood.com"})
@@ -72,6 +87,7 @@ class AlabamaBleModels:
     # crosswalk entry only after the watershed identity is independently known.
     HUC8_NAMES: Dict[str, str] = {
         "03130002": "Middle Chattahoochee-Lake Harding",
+        "03150201": "Upper Alabama",
     }
 
     # These values are independently qualified facts, not a blanket
@@ -278,7 +294,7 @@ class AlabamaBleModels:
         return cls._query_layer(
             cls._MODEL_LAYER_ID,
             where,
-            ("OBJECTID,Type,Zone,Name,HUC8_Name,Basin,County,FIPS,ModelID,GlobalID"),
+            cls._MODEL_FIELDS,
         )
 
     @classmethod
@@ -295,7 +311,7 @@ class AlabamaBleModels:
             rows = cls._query_layer(
                 cls._LINK_LAYER_ID,
                 f"ModelID IN ({literals})",
-                "OBJECTID,ModelID,FileName,FileType,WebPath",
+                cls._LINK_FIELDS,
             )
             requested = set(chunk)
             for feature in rows:
@@ -391,7 +407,7 @@ class AlabamaBleModels:
                 "county": row.get("County"),
                 "fips": row.get("FIPS"),
                 "model_id": model_id,
-                "global_id": row.get("GlobalID"),
+                "global_id": row.get("GUID"),
                 "model_object_id": row.get("OBJECTID"),
                 "link_object_id": link.get("OBJECTID"),
                 "archive_name": archive_name,
@@ -579,7 +595,7 @@ class AlabamaBleModels:
         rows = cls._query_layer(
             cls._MODEL_LAYER_ID,
             where,
-            ("OBJECTID,Type,Zone,Name,HUC8_Name,Basin,County,FIPS,ModelID,GlobalID"),
+            cls._MODEL_FIELDS,
         )
         if len(rows) != 1:
             raise KeyError(
@@ -1711,7 +1727,8 @@ class AlabamaBleModels:
             or source_manifest.get("source_name") != cls.SOURCE_NAME
             or source_manifest.get("source_service") != cls._SERVICE_URL
             or source_manifest.get("source_url") != cls._SERVICE_URL
-            or source_manifest.get("source_policy") != cls._SOURCE_POLICY
+            or source_manifest.get("source_policy")
+            not in {cls._SOURCE_POLICY, *cls._LEGACY_SOURCE_POLICIES}
         ):
             raise RuntimeError("Alabama BLE delivery manifest identity is invalid.")
         if source_manifest.get("status") != "complete":
@@ -2083,10 +2100,27 @@ class AlabamaBleModels:
         """Return availability after checking both required anonymous layers."""
         try:
             payload = cls._request_json(cls._SERVICE_URL, {"f": "json"})
-            layer_ids = {int(item["id"]) for item in payload.get("layers", [])}
-            table_ids = {int(item["id"]) for item in payload.get("tables", [])}
-            if cls._MODEL_LAYER_ID in layer_ids and cls._LINK_LAYER_ID in table_ids:
+            layers = {
+                int(item["id"]): item.get("name") for item in payload.get("layers", [])
+            }
+            tables = {
+                int(item["id"]): item.get("name") for item in payload.get("tables", [])
+            }
+            if (
+                layers.get(cls._MODEL_LAYER_ID) == cls._MODEL_LAYER_NAME
+                and tables.get(cls._LINK_LAYER_ID) == cls._LINK_TABLE_NAME
+            ):
                 return SourceStatus.AVAILABLE
+            logger.warning(
+                "Alabama BLE service layout changed: expected layer %s %r and "
+                "table %s %r; found layers %s and tables %s.",
+                cls._MODEL_LAYER_ID,
+                cls._MODEL_LAYER_NAME,
+                cls._LINK_LAYER_ID,
+                cls._LINK_TABLE_NAME,
+                layers,
+                tables,
+            )
         except Exception as exc:
             logger.debug("Alabama BLE source status failed: %s", exc)
         return SourceStatus.UNAVAILABLE
