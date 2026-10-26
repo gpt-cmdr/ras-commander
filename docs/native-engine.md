@@ -47,7 +47,9 @@ classes, not the classes themselves:
   attributes are decoded by the engine, then handed to the same pandas,
   xarray and GeoPandas construction code as before.
 - **Mesh geometry in Rust.** 2D cell polygons are assembled natively, with the
-  same ring order, vertex order and WKB as the Python polygonizer.
+  same ring order, vertex order and WKB as the Python polygonizer. Face lines
+  are packed natively too, and every mesh's lines become Shapely geometry in
+  one vectorized call (see [Geometry: convenient or fast](#geometry-convenient-or-fast)).
 - **Hardened against damaged files.** The engine is written in safe Rust
   (`#![forbid(unsafe_code)]`), budgets every read before allocating, and turns
   a panic into a Python exception instead of a process crash. A truncated or
@@ -358,7 +360,7 @@ largest gains, repeat calls on the heaviest file for each method:
 
 Whole-array summaries such as `get_mesh_max_ws` ran at about the same speed,
 because most of those calls is building a Shapely geometry for every row (see
-[Tables without geometry](#tables-without-geometry)).
+[Geometry: convenient or fast](#geometry-convenient-or-fast)).
 Small reads were at most about 7 ms slower on repeat calls and 37 ms on the
 first call in a process. Across all 50 cases (geometric mean) the native
 engine was 1.17× faster on the first call in a process and 1.41× faster on
@@ -368,19 +370,58 @@ call and sharing that native session across the call's reads (it used to be
 opened 3 to 23 times). Timings were taken with the files in the operating
 system's cache; cold-disk reads were not measured.
 
-### Tables without geometry
+### Geometry: convenient or fast
 
-The per-cell and per-face result readers (`get_mesh_max_ws`,
-`get_mesh_max_face_v`, `get_mesh_max_depth` and the others listed in
-[HDF API](api/hdf.md)) take `include_geometry=False` to return
-a plain pandas DataFrame instead of building a Shapely point or line for every
-row. Values, order, dtypes and `attrs` are the same as the default call without
-its geometry column. On the largest test files this is up to about 50× faster
-for face maximums (`get_mesh_max_face_v`: 1,642 ms to 34 ms on 177,301 faces)
-and 4–20× faster for cell values, with roughly 60% less peak memory. The full
-table is on the extension's
+Per-cell and per-face result readers (`get_mesh_max_ws`, `get_mesh_max_face_v`,
+`get_mesh_max_depth` and the others listed in [HDF API](api/hdf.md)) have two
+outputs:
+
+| Output | Call | Returns | Use it when |
+|---|---|---|---|
+| **Convenient** (default) | `include_geometry=True` | GeoDataFrame: every row carries its cell-center point or face line, with the CRS | you want a layer to map or export in one call |
+| **Fast** | `include_geometry=False` | pandas DataFrame with the same rows, order, values, dtypes and `attrs`, keyed by `mesh_name` plus `cell_id` or `face_id`; no GeoPandas or Shapely needed | you only need the numbers, or you read several results of one model |
+
+For several results of one model, read the geometry **once** and join each
+fast table to it. `HdfMesh.get_mesh_cell_faces` (face lines) and
+`HdfMesh.get_mesh_cell_points` (cell centers; pass `include_ghost_cells=False`
+to match the default ghost-free cell results) return exactly the geometry the
+convenient output attaches:
+
+```python
+from ras_commander import HdfMesh, HdfResultsMesh
+
+faces = HdfMesh.get_mesh_cell_faces(plan_hdf)                      # once
+vmax = HdfResultsMesh.get_mesh_max_face_v(plan_hdf, include_geometry=False)
+vmin = HdfResultsMesh.get_mesh_min_face_v(plan_hdf, include_geometry=False)
+face_results = (faces.merge(vmax, on=["mesh_name", "face_id"])
+                     .merge(vmin, on=["mesh_name", "face_id"]))    # GeoDataFrame
+
+cells = HdfMesh.get_mesh_cell_points(plan_hdf, include_ghost_cells=False)
+wse = HdfResultsMesh.get_mesh_max_ws(plan_hdf, include_geometry=False)
+cell_results = cells.merge(wse, on=["mesh_name", "cell_id"])
+```
+
+**How the convenient output is built.** Geometry is no longer built one
+Shapely object per row. Each mesh's face lines are packed into coordinate and
+offset buffers and turned into lines by one `shapely.from_ragged_array` call;
+cell-center points use one `shapely.points` call. In `auto` and `native`
+mode the native engine builds the face-line buffers
+(`HdfSession.read_mesh_face_lines`, ras-commander-fast-hdf after 0.2.2); with
+h5py, or an older extension, NumPy builds the same buffers. A layout that
+neither builder can prove identical to the per-face loop (for example a
+negative endpoint index, an out-of-range perimeter span or a non-finite
+coordinate) keeps the per-face loop; in `native` mode an engine refusal raises
+`FastHdfError`. The geometry is identical in every case: WKB, coordinate order
+and validity were compared on all 139 release-gate fixtures in `h5py`, `auto`
+and `native` mode. The fast output is still the faster of the two, because it
+builds no geometry at all.
+
+Timings for both outputs after this change have not yet been measured on a
+quiet machine; they will be added here. The earlier figures for the fast
+output are on the extension's
 [Performance](https://rascommander.info/fasthdf/performance/#tables-without-geometry)
-page.
+page (`get_mesh_max_face_v` on 177,301 faces: 1,642 ms convenient, 34 ms fast,
+before this change).
 
 The figures below come from the earlier engine performance work. They measure
 the **HDF read layer** (the reads under the public methods), not complete
@@ -537,6 +578,7 @@ raises `FastHdfError`.
 | **Group walks, `in` checks, shape probes** | Always h5py. `native` mode guarantees native *value and attribute* reads, not that h5py is never opened. |
 | **Fluvial/pluvial with `delta_t=0`** | Not supported natively (the native kernel would mark equal-time cell pairs ambiguous; the reference marks nothing). `auto` uses the Python reference. Native is also refused when a mesh lacks `Faces Cell Indexes`, when the cell set differs from the one the reference can polygonize, or when cells have invalid geometry (for example cells whose curved faces cross another cell boundary). |
 | **Mesh polygon diagnostics** | Automatic mode returns the native polygons only when their diagnostic records, warnings and `strict` outcome are provably the Python polygonizer's. Ambiguous or multi-polygon cells and other edge cases use the Python polygonizer. In `native` mode, the diagnostics records of a `no_polygon` cell can carry extra `native_reason_code`/`reason` keys. Diagnostics are attached only with `diagnostics=True`. |
+| **Mesh face lines** | `auto`/`native` build face lines from native buffers only when each face table is `(rows, 2)`, the tables have one row per face, every endpoint index and perimeter span is in range, counts are not negative and coordinates are finite. Otherwise `auto` builds them in NumPy or with the per-face loop (same geometry); `native` raises `FastHdfError`. |
 | **Methods not yet qualified** | Run on h5py in `auto` mode; see the [qualified-methods table](#qualified-methods). |
 
 Other notes:

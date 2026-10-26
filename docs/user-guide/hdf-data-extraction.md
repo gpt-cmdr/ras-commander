@@ -141,7 +141,20 @@ geometry with `x` and `y` columns.
 | `HdfPump.get_pump_stations` | `station_id`, the stored attributes, `x`, `y` |
 
 The default stays `include_geometry=True` in this release, so existing code
-gets the same GeoDataFrames. Pump stations are point features and keep the
+gets the same GeoDataFrames. The default is the **convenient** output and
+`include_geometry=False` the **fast** one; when you read several results of
+one model, read the geometry once and join each table to it:
+
+```python
+faces = HdfMesh.get_mesh_cell_faces(hdf_path)            # face lines, once
+vmax = HdfResultsMesh.get_mesh_max_face_v(hdf_path, include_geometry=False)
+vmin = HdfResultsMesh.get_mesh_min_face_v(hdf_path, include_geometry=False)
+faces_v = faces.merge(vmax, on=["mesh_name", "face_id"]).merge(
+    vmin, on=["mesh_name", "face_id"])                   # still a GeoDataFrame
+```
+
+Timings are in
+[Geometry: convenient or fast](../native-engine.md#geometry-convenient-or-fast). Pump stations are point features and keep the
 GeoDataFrame as their natural default.
 
 ### Time Series
