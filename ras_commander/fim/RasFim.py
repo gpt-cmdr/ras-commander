@@ -217,11 +217,35 @@ class RasFim:
 
     @staticmethod
     @log_call
+    def prepare_corner_elevations(
+        hdf_path: PathLike, output_folder: PathLike, *, rasmap_path: PathLike,
+        terrain_name: str, hecras_version: str = "7.0.1",
+    ) -> dict:
+        """Prepare a fresh native corner-ground cache for depth-weighted mapping.
+
+        Windows/HEC-RAS 7.0.1 only; uses the exact registered terrain, including
+        its modifications. Copies stored property-table elevations when present,
+        otherwise invokes native terrain corner sampling with obstructions.
+        It does not run hydraulics or modify the source HDF/rasmap. The output
+        folder must be new/empty. Returns cache path, preparation seconds and a
+        provenance receipt. Preparation is explicit and outside mapping clocks.
+        Ordinary Rust mapping never loads HEC-RAS assemblies.
+        """
+        from ._corner_preparation import prepare
+
+        return prepare(hdf_path, output_folder, rasmap_path=rasmap_path,
+                       terrain_name=terrain_name, hecras_version=hecras_version)
+
+    @staticmethod
+    @log_call
     def prepare_sloping_model(
         hdf_path: PathLike, terrain_path: PathLike, *,
         profiles: Optional[Dict[str, Union[str, int]]] = None,
         render_mode: str = "sloping",
         reduce_shallow_to_horizontal: bool = False,
+        use_depth_weighted_faces: bool = False,
+        postprocessing_hdf=None,
+        corner_elevation_source="auto",
         engine_path: Optional[PathLike] = None, threads: int = 1,
         max_working_mib: int = 1024, max_prepared_mib: int = 1024,
     ) -> "FimPreparedSlopingModel":
@@ -255,6 +279,9 @@ class RasFim:
         return FimPreparedSlopingModel(
             hdf_path, terrain_path, profiles=profiles, render_mode=render_mode,
             reduce_shallow_to_horizontal=reduce_shallow_to_horizontal,
+            use_depth_weighted_faces=use_depth_weighted_faces,
+            postprocessing_hdf=postprocessing_hdf,
+            corner_elevation_source=corner_elevation_source,
             engine_path=engine_path, threads=threads,
             max_working_mib=max_working_mib, max_prepared_mib=max_prepared_mib,
         )
@@ -266,6 +293,9 @@ class RasFim:
         profiles: Optional[Dict[str, Union[str, int]]] = None,
         render_mode: str = "sloping",
         reduce_shallow_to_horizontal: bool = False,
+        use_depth_weighted_faces: bool = False,
+        postprocessing_hdf=None,
+        corner_elevation_source="auto",
         bbox: Optional[Sequence[float]] = None, polygon: Any = None,
         polygon_layer: Optional[str] = None, aoi_crs: Any = None,
         engine_path: Optional[PathLike] = None, threads: int = 1,
@@ -283,7 +313,7 @@ class RasFim:
         bounds native reconstruction and pixel workers (1 through 64).
 
         Defaults to plain cell-corner sloping. ``render_mode="slopingPretty"``
-        includes cell faces and accepts the shallow-to-horizontal control.
+        includes cell faces and accepts the shallow/depth-weighting flags.
         Neither mode adds depth postprocessing. It preserves the native
         float32 plot tolerance. Plain-mode native 7.0.1 Max products were qualified
         on Davis pipes and Bald Eagle bridge/dam examples, and two Davis
@@ -315,6 +345,8 @@ class RasFim:
                 corners and faces. Defaults to plain sloping.
             reduce_shallow_to_horizontal: Native connectivity-based horizontal
                 rendering for shallow cells; requires slopingPretty.
+            use_depth_weighted_faces: Rebalance donated corner/face weights by
+                native depth; requires slopingPretty and stored corner elevations.
             bbox: Optional output bounds in ``aoi_crs`` or the model CRS.
             polygon: Optional polygon geometry, frame or vector-file AOI.
             polygon_layer: Layer name when the AOI file has multiple layers.
@@ -359,6 +391,9 @@ class RasFim:
         return _sloping.map_profiles(hdf_path, terrain_path, output_folder,
             profiles=profiles, render_mode=render_mode,
             reduce_shallow_to_horizontal=reduce_shallow_to_horizontal,
+            use_depth_weighted_faces=use_depth_weighted_faces,
+            postprocessing_hdf=postprocessing_hdf,
+            corner_elevation_source=corner_elevation_source,
             bbox=bbox, polygon=polygon, polygon_layer=polygon_layer,
             aoi_crs=aoi_crs, engine_path=engine_path, threads=threads, writer_threads=writer_threads,
             max_working_mib=max_working_mib, timeout=timeout, write_floodplain=write_floodplain,

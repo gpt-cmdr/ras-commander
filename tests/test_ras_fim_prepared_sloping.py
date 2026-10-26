@@ -28,6 +28,7 @@ def case():
         {"profiles": {"a": -1}},
         {"profiles": {"a": 1, "A": 2}},
         {"render_mode": "horizontal"},
+        {"use_depth_weighted_faces": True},
     ],
 )
 def test_invalid_preparation_controls_fail_before_reading_inputs(tmp_path, options):
@@ -81,12 +82,13 @@ def test_repeated_aois_reuse_inputs_and_preserve_bits(
             c
             for c in cases
             if c["reduce_shallow_to_horizontal"]
-            and not c["use_depth_weighted_faces"]
+            and c["use_depth_weighted_faces"]
             and any(isinstance(v, int) for v in c["profiles"].values())
         )
         options = dict(
             render_mode="slopingPretty",
             reduce_shallow_to_horizontal=True,
+            use_depth_weighted_faces=True,
         )
     selected = dict(case["profiles"])
     name, selector = next(iter(selected.items()))

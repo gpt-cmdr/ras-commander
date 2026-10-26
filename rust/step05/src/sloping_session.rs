@@ -227,6 +227,7 @@ pub fn method_record() -> Value {
     json!({"method_id":"rasmapper-plain-sloping/1", "backend":"rust", "experimental":true,
         "native_version_qualified":"7.0.1", "stream_outputs":true, "native_ownership":true,
         "enhanced_options":true,"enhanced_method_id":"rasmapper-sloping-with-faces/1",
+        "depth_weighted_faces":true,
         "bounded_profile_concurrency":true,
         "options":{"CellRenderMode":"Sloping","CellStencilMode":"JustFacepoints",
             "FacepointAdjustmentMode":"None","ShallowBehaviorMode":"None",
@@ -247,6 +248,7 @@ fn selected_method(options: sloping::Options) -> Value {
             "None"
         }
         .into();
+        record["options"]["UseDepthWeightedFaces"] = options.use_depth_weighted_faces.into();
         record["scope"] = "physical 2D cells; cell-corner and face sloping; no 1D or standalone storage-area surfaces".into();
     }
     record
