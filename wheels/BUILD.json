@@ -1,14 +1,14 @@
 {
   "build_repository": "gpt-cmdr/ras-commander",
-  "source_commit": "fce477c166730f7d69ce54a58b0efffcb3b643bc",
+  "source_commit": "224947667e0b3a8bc7ba392a6b71e0d2f5fbb27c",
   "workflow_run": null,
   "built_utc": "2026-10-26T02:33:33.065179+00:00",
   "rust": "1.99.1",
   "maturin": "1.15.0",
-  "engine_version": "0.5.0",
+  "engine_version": "0.6.0",
   "engine_source_files_sha256": {
-    "Cargo.lock": "93c5ebd9cfeb779a38b5852f83802ccafdc4f75fa35f6ffde5aba41be467b289",
-    "Cargo.toml": "c7b535ac490751f80619ee37997f510cbbd79e63bb523fb39b848e0b7bd8d4a5",
+    "Cargo.lock": "907b0aebed507a8df08e5147b6696ba517de9a390a8f7c81209e0594af85083d",
+    "Cargo.toml": "11533984ebc4ad0db8bb070eca16f216abf7222c25f7d9bfa53ef97df2d76b1e",
     "examples/sloping_components.rs": "5c1e75416901473177591ecebeaf25a2832f27d7e2029f74605a2dcad379c2c9",
     "examples/sloping_raster.rs": "d3ff36fb2d71d3a3abfb6c211af0bed3e7f790671d4c4a82e17f6d0140cf72e8",
     "licenses/ras2fim-LICENSE.txt": "2c3d48c634b0a524b09e7eedc8de9e9b321dd000577ac433a7af546cae20770c",
@@ -18,8 +18,8 @@
     "licenses/wbraster-LICENSE-MIT.txt": "b3f690015a0a92922cafb40143f1642ce1712c3a44b7c6a96422c9a890956145",
     "licenses/wbvector-LICENSE-APACHE.txt": "d932025956695b7f7a6be243fe01294075bc75b18bb4a6f41922c4eba9aaacd7",
     "licenses/wbvector-LICENSE-MIT.txt": "b3f690015a0a92922cafb40143f1642ce1712c3a44b7c6a96422c9a890956145",
-    "pyproject.toml": "45f6b80f7b2ae7f6bbf8cadc62e7452656d374803415e535e2c9f9fa53b54024",
-    "README.md": "c80865fe3a3929c51a7213a3741afe3e0fac7e6a6cf35c5e09309bf767e70fc2",
+    "pyproject.toml": "e694cddc95b3463617e04535565025f20ca865dc5340fac654f3a04cd66b5cc3",
+    "README.md": "ce005eb6a613c7ea00a68f695e45f1d46ab89da8cd14f2304b8f6c8a2008d154",
     "src/cache.rs": "67fe5979291828d50f97fd121a0fffd68017eaab3fbc0ba2472f35256ac5d59c",
     "src/horizontal.rs": "c573f5c4dd231f7cd2ba46342d412f596d07de00a641e81717fb99c2ac092948",
     "src/interp.rs": "1be2beb6d6d0bd622f5f3fcf410be32490a8e22bbda2aa6b9bd483a37a567575",
@@ -32,7 +32,7 @@
     "src/sink.rs": "a6888e88a32a9ae15bf3ba4979deff5be528ff5ad7a180e3e5591341dc5dde7d",
     "src/sloping.rs": "aadad8d7d65fc9df0b8d79aeed12f3fd1d25cd1ea841cf08ff665de6d360d579",
     "src/sloping_binary.rs": "b31da37067a261afe77bafb4aa1713f65dbe195169f18c631860c3d907b41f62",
-    "src/sloping_session.rs": "6947bd718b931d6f378fbfa219227b322aa82e79cc044e2b263f4a74c836688c",
+    "src/sloping_session.rs": "d221ddc67e880f5b714f6503dc7a4e223bdfe43b27ce0e481a4c787706dbadf0",
     "src/step05.rs": "a6a3cfa98b40e697bba88a84a151afd7c688192553ca8b47654786f63a954d52",
     "src/terrain.rs": "66e7a32fb51cfb9e8803580d53630ee85327e52a21231399e9c98f0b4bd0b4cc",
     "tests/hardening.rs": "c47f0cd24fce4fe5afd0514ff7857d8e51b362492e0eb43ec8d7070159b3bf20",
@@ -41,16 +41,16 @@
     "THIRD_PARTY_NOTICES.md": "01d5629712b42a450b18638fe2f366b4ae89498fd88aa490614b29f48a528bb4"
   },
   "artifact_sha256": {
-    "ras2fim_engine-0.5.0-py3-none-manylinux_2_28_x86_64.whl": "e09a68497c52990a795f74ed45dd157e8a12a4bf1adf641529c676a271d5557e",
-    "ras2fim_engine-0.5.0-py3-none-win_amd64.whl": "093abd5330a377386c4964fb687249650fda5588bc4e5e88105fc4d68cf7ad81"
+    "ras2fim_engine-0.6.0-py3-none-manylinux_2_28_x86_64.whl": "ea5c58ab94ec23283fad7b0dd3048a5f431ab5f8ab03a9566fc896bb67fd4fa8",
+    "ras2fim_engine-0.6.0-py3-none-win_amd64.whl": "417bf3567bccd4791c023110a8ad24ec57b14731837613ab6d684e261a969faa"
   },
   "engine_binary_sha256": {
-    "ras2fim_engine-0.5.0-py3-none-manylinux_2_28_x86_64.whl": "3a4ed8a347dfda010075efcd752eb8b0f011125bc3f88265e501c9094e904583",
-    "ras2fim_engine-0.5.0-py3-none-win_amd64.whl": "63caee65c3420130c5c0d367a37afcbbcf6673c10f6199b2325f0b638dfece08"
+    "ras2fim_engine-0.6.0-py3-none-manylinux_2_28_x86_64.whl": "4c1449c468fef4c8c55cb05ec23ff8deedcc1a441c3d1c60879d8103bb0a4f50",
+    "ras2fim_engine-0.6.0-py3-none-win_amd64.whl": "264b67533456ee68d7e0d9b22ec4f677ade45b4cd1e979b381392ef006e7a53c"
   },
   "build_environment": {
     "linux": "quay.io/pypa/manylinux_2_28_x86_64@sha256:e2808351a165aa85913d79f1f8457b4f6d74047b47fba07b5b9a5e6c0055a017; CPython 3.13; glibc 2.28",
     "windows": "WSL cross build x86_64-pc-windows-gnu; MinGW GCC 13.2; -C target-feature=+crt-static; Windows system DLL imports only"
   },
-  "tests": "Installed 0.5.0 wheels: Step05/horizontal/plain and all four enhanced sloping combinations; file/stream polygon AOI smoke PASS on Windows and Linux, including actual glibc2.28 with NumPy2.3.5/SciPy1.16.3/rasterio1.4.4. Real sloping API suite:16 passed per platform; includes plain Davis Max/t54/t108, all enhanced combinations on Bald bridges Max and Davis t54/t108 at1/4workers (48 enhanced raw Depth/WSE product comparisons per platform), triangular enhanced AOI, metadata-only template, missing elevation rejection, protocol/abort cleanup. Horizontal regression69 passed per platform. Rust51 passed5 external fixtures ignored; all-target clippy-Dwarnings passed. Enhanced RASMapper7.0.1 vs installed Windows0.5 full-grid paired performance is documented separately. Plain five-model qualification remains physical2D and bounded for eBFE"
+  "tests": "Installed0.6 Windows/Linux:36 sloping and70 horizontal API checks per platform across targeted runs. Includes all four enhanced options, plain Max/timestep cases, bbox/polygon batches, reversed/repeated concurrent timestep requests at2/4inflight and1/4threads, resource rejection, scope/layout preservation and later-batch failure cleanup after two streamed profiles. Packaging file/stream smoke, default serial mode, admitted concurrency2, memory cap to1 and all enhanced options PASS on Windows/Linux and actual glibc2.28 with NumPy2.3.5/SciPy1.16.3/rasterio1.4.4. Rust53 passed5external ignored; clippy-Dwarnings. Three-repetition19timestep scheduling benchmark:27runs/513profiles/1026products, all raw masks/finite bits equal sequential output. Same-day RASMapper references retained; complete final0.6 single-map candidates remeasured and compared pixelwise to previously qualified products. Full physical2D Windows Max qualification includes Spring River/Spring Creek; full Linux and enhanced eBFE remain unqualified."
 }

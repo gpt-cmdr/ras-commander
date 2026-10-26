@@ -642,27 +642,27 @@ reach-scale catalog examples and distinguishes full-grid template delivery.
 
 | Model | Physical 2D cells | Interpolation | RASMapper (s) | Final Rust pipeline (s) | RASMapper / Rust | Raw comparison |
 |---|---:|---|---:|---:|---:|---|
-| eBFE Spring River | 422,715 | Horizontal | 230.787 | 80.561 | 2.86× | Differences present² |
-| eBFE Spring River | 422,715 | Sloping: cell corners | 240.726 | 48.274 | 4.99× | Exact in physical 2D scope |
+| eBFE Spring River | 422,715 | Horizontal | 230.787 | 83.648 | 2.76× | Differences present² |
+| eBFE Spring River | 422,715 | Sloping: cell corners | 240.726 | 50.016 | 4.81× | Exact in physical 2D scope |
 | eBFE Spring River | 422,715 | Sloping: corners + faces¹ | — | — | — | Stored corner elevations absent |
-| eBFE Spring Creek | 340,163 | Horizontal | 190.275 | 83.135 | 2.29× | Differences present² |
-| eBFE Spring Creek | 340,163 | Sloping: cell corners | 209.896 | 49.374 | 4.25× | Exact in physical 2D scope |
+| eBFE Spring Creek | 340,163 | Horizontal | 190.275 | 81.023 | 2.35× | Differences present² |
+| eBFE Spring Creek | 340,163 | Sloping: cell corners | 209.896 | 49.400 | 4.25× | Exact in physical 2D scope |
 | eBFE Spring Creek | 340,163 | Sloping: corners + faces¹ | — | — | — | Stored corner elevations absent |
-| Bald Eagle dam break | 87,039 | Horizontal | 7.693 | 6.667 | 1.15× | Differences present² |
-| Bald Eagle dam break | 87,039 | Sloping: cell corners | 7.393 | 4.750 | 1.56× | Exact in physical 2D scope |
-| Bald Eagle dam break | 87,039 | Sloping: corners + faces¹ | 16.480 | 4.693 | 3.51× | Exact in physical 2D scope |
-| Bald Eagle bridges | 24,718 | Horizontal | 8.897 | 6.895 | 1.29× | Differences present² |
-| Bald Eagle bridges | 24,718 | Sloping: cell corners | 8.585 | 2.853 | 3.01× | Exact in physical 2D scope |
-| Bald Eagle bridges | 24,718 | Sloping: corners + faces¹ | 13.018 | 2.963 | 4.39× | Exact in physical 2D scope |
+| Bald Eagle dam break | 87,039 | Horizontal | 7.693 | 6.193 | 1.24× | Differences present² |
+| Bald Eagle dam break | 87,039 | Sloping: cell corners | 7.393 | 4.634 | 1.60× | Exact in physical 2D scope |
+| Bald Eagle dam break | 87,039 | Sloping: corners + faces¹ | 16.480 | 4.340 | 3.80× | Exact in physical 2D scope |
+| Bald Eagle bridges | 24,718 | Horizontal | 8.897 | 5.006 | 1.78× | Differences present² |
+| Bald Eagle bridges | 24,718 | Sloping: cell corners | 8.585 | 2.418 | 3.55× | Exact in physical 2D scope |
+| Bald Eagle bridges | 24,718 | Sloping: corners + faces¹ | 13.018 | 2.425 | 5.37× | Exact in physical 2D scope |
 | Davis pipes/conduits | 2,716 | Horizontal | — | — | — | Native export failed |
-| Davis pipes/conduits | 2,716 | Sloping: cell corners | 1.909 | 0.723 | 2.64× | Exact in physical 2D scope |
-| Davis pipes/conduits | 2,716 | Sloping: corners + faces¹ | 2.628 | 0.446 | 5.89× | Exact in physical 2D scope |
+| Davis pipes/conduits | 2,716 | Sloping: cell corners | 1.909 | 0.448 | 4.26× | Exact in physical 2D scope |
+| Davis pipes/conduits | 2,716 | Sloping: corners + faces¹ | 2.628 | 0.365 | 7.20× | Exact in physical 2D scope |
 
 ¹ Enhanced sloping enables both depth-weighted faces and shallow-to-horizontal rendering. Those are options of the same interpolation method, not additional table methods. The two eBFE HDFs lack stored `FacePoints Elevation` arrays required by this configuration; no substitute elevations or ratio are reported.
 
 ² A timing ratio does not assert raw parity. At zero added cutoff, the completed horizontal rows have extra valid pixels but no missing pixels or differences in common finite float32 values. No 0.5 ft cutoff is applied to hide those mask differences.
 
-One fresh observation per model/method on 2026-10-26, on Windows using RASMapper 7.0.1, the final Python integration and retained engine 0.5.0 Windows binary (`63caee65c3420130c5c0d367a37afcbbcf6673c10f6199b2325f0b638dfece08`). Parent/native/Rust processes inherit four-CPU affinity. Rust mapping and initial product compression each use four workers. Native export requests one worker, except the documented Davis horizontal independent-helper retry using two. These are shared-workstation observations with uncontrolled caches, no excluded mapping warm-up and no universal speed guarantee.
+Native exports/times are retained from the same-day RASMapper run; final Rust 0.6 times were remeasured afterwards, not interleaved with those native calls. Complete final rasters match the earlier qualified candidate masks/finite bits, retaining the stated native comparison scope. One observation per model/method on 2026-10-26, on Windows using RASMapper 7.0.1, the final Python integration and retained engine 0.6.0 Windows binary (`264b67533456ee68d7e0d9b22ec4f677ade45b4cd1e979b381392ef006e7a53c`). Parent/native/Rust processes inherit four-CPU affinity. Rust mapping and initial product compression each use four workers. Native export requests one worker, except the documented Davis horizontal independent-helper retry using two. These are shared-workstation observations with uncontrolled caches, no excluded mapping warm-up and no universal speed guarantee.
 
 Each row maps one Max Depth/WSE pair on the complete native pixel lattice, nodata and storage layout. Time includes HDF preparation, launch, mapping and output delivery. Native/project initialization, canonical terrain preparation and comparison scanning are outside the clocks. Sloping uses metadata-only direct-template delivery. Horizontal includes cell-table preparation and an additional matching-grid raster rewrite (single-worker compression), included in its reported time. No resampling, added depth cutoff, floodplain polygonization or profile concurrency is used.
 
@@ -673,12 +673,72 @@ Horizontal mask observations (Depth and WSE): eBFE Spring River: 9,271 extra val
 Davis horizontal native export failed with exit 99 on both the aggregate call and a two-helper retry (depth AggregateException). No mapping time or ratio is reported for that row. Other Davis sloping exports succeeded. This is the native failure profile tracked in issue #678.
 
 
+## Bounded timestep concurrency: final engine 0.6
+
+`map_sloping_profiles(..., threads=4, writer_threads=1,
+max_inflight_profiles=2)` maps several profiles in the same bounded Rust pool.
+Geometry, stencils, terrain and ownership are shared. Effective concurrency is
+capped by threads, profile count and planned memory, and is recorded in the
+report. Bounded batches emit in request order. The default stays at one;
+earlier engines retain sequential compatibility and reject concurrency requests.
+
+| Workload / 19 timesteps | In flight 1 (s) | In flight 2 (s) | In flight 4 (s) |
+|---|---:|---:|---:|
+| Davis, full extent | 0.664 | 0.643 | 0.617 |
+| Bald Eagle bridges, 400 × 400 pixel reach bbox | 0.956 | 0.808 | 0.806 |
+| Bald Eagle bridges, full physical extent | 17.428 | 17.536 | 18.263 |
+
+These are median complete API times from three rotated/interleaved repetitions
+per configuration, with four-CPU affinity, one compression worker and 19 distinct
+computed timesteps. Both enhanced flags are enabled; no extra depth cutoff,
+floodplain generation or matching-grid rewrite is used. Compact extent/AOI
+delivery is identical across configurations. Python dependency imports are warm;
+no mapping warm-up was excluded. Caches remain uncontrolled on a shared host.
+All 27 runs (513 profiles, 1,026 products) match sequential raw masks and finite
+float32 bits; source HDF identity, engine/harness hashes and restored affinity
+are checked. Comparison scans are outside the clocks.
+
+The reach bbox median falls about 16%, and Davis about 7%, with four in flight.
+The full bridge domain demonstrates no throughput benefit. Use concurrency for
+measured catalog workloads rather than increasing it by default. This is a
+same-final-engine scheduling comparison, not a comparison with older builds.
+It does not establish native RASMapper parity for all 19 benchmark timesteps;
+native qualification remains the separately stated Max/timestep/option cases.
+
+HDF reads/staging and Python product writes remain sequential. GDAL compression
+may overlap native work and has a separate worker budget. Per-profile native
+wall-stage times overlap and must not be summed as total wall time. Admission
+is conservative planned memory, not an enforced process RSS limit.
+
+### Next performance opportunities
+
+1. Reuse prepared model state across reach requests. Cache immutable topology,
+   stencils and source-indexed HDF metadata with input-identity invalidation and
+   bounded terrain/profile caches. Each new AOI still needs its own ownership
+   window. This avoids repeatedly extracting/staging the same global model.
+2. Read selected HDF rows in bounded chunks and pipeline staging with native
+   processing. This removes repeated opens and the current all-profiles-upfront
+   barrier while retaining virtual cells and per-read source checks.
+3. Extend direct-template delivery to horizontal mapping. Its comparison path
+   currently includes an intermediate GIS write/read/rewrite. Continue profiling
+   compression and delivery before replacing compiled GDAL writing.
+4. Test a bounded geometry-weight cache or tile-first profile batches. Pixel
+   geometry weights can potentially be reused across timesteps, while hydraulic
+   connectivity, face-depth weighting and shallow decisions remain per profile.
+   Preserve f64 weight bits and operation order; include cache memory admission.
+
+SIMD is a lower priority until profiling identifies a suitable hot loop.
+Fast-math, fused operations and reordered reductions cannot be adopted without
+exact-output qualification. The current full Spring River profile spends much
+more time in geometry validation and raster delivery than hydraulic arithmetic;
+the large-map stage clocks remain in the returned performance record. In the final Windows Spring River serial run, validation took 13.63 s, product writes 20.91 s, hydraulic reconstruction 0.083 s and rendering 4.01 s. These nested stage clocks identify candidates for optimization; they are not additive independent workloads.
+
 ## Proposed engine packaging
 
 Package the mapping engine separately as **`ras-commander-fast-fim`**, following
 [ras-commander-fast-hdf](https://github.com/gpt-cmdr/ras-commander-fast-hdf).
 This is a proposed extraction, not the installation name of the retained
-`ras2fim-engine` 0.5.0 test wheels retained with configurable sloping.
+`ras2fim-engine` 0.6.0 test wheels retained with configurable sloping.
 
 The separate repository should own the Rust mapping crate, method contracts,
 CLI, optional PyO3 bindings, native tests, notices and platform-wheel release

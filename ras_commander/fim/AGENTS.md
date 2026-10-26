@@ -77,6 +77,12 @@ Parent `ras_commander/AGENTS.md` and root `AGENTS.md` still apply.
 - Sloping `writer_threads` explicitly scopes GDAL compression settings, including
   the default of one, and restores the enclosing setting on exceptions. Rust
   `threads` and compression workers are separate budgets that can overlap.
+- Sloping `max_inflight_profiles` defaults to one. All in-flight profiles share
+  one Rayon pool; cap effective admission by requested concurrency, threads,
+  profile count and available planned memory. Keep stencils/terrain/ownership
+  immutable, preserve per-profile arithmetic and ordered stream/report emission.
+  Failures clean already delivered products. Require an advertised capability
+  for concurrency, retaining sequential compatibility with older engines.
 - The returned manifest columns are declared as `fim_product_manifest` in `ras_commander/schemas.py`.
 
 ## Testing

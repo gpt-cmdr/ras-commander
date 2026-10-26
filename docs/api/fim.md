@@ -11,7 +11,7 @@ or Windows x86-64 engine wheel into the same environment:
 
 ```bash
 uv pip install -e ".[fim,compute]"
-uv pip install /path/to/ras2fim_engine-0.5.0-py3-none-<platform>.whl
+uv pip install /path/to/ras2fim_engine-0.6.0-py3-none-<platform>.whl
 ras2fim-batch method
 ```
 
@@ -185,6 +185,45 @@ Windows and Linux x86-64. This option matrix does not establish enhanced parity
 for the large eBFE cases or other HEC-RAS versions. The physical-2D scope and
 standalone-storage-area exclusion apply to both modes. Internal experimental
 face-value and corner-adjustment switches are not exposed by this API.
+
+## Bounded timestep concurrency (engine 0.6)
+
+Set `max_inflight_profiles=2` or `4` on `map_sloping_profiles` to evaluate
+several timesteps concurrently. The default remains one. Geometry, interpolation
+stencils, ownership and terrain are shared; each profile has independent
+hydraulic reconstruction and output arrays. Per-profile arithmetic is unchanged.
+
+```python
+manifest = RasFim.map_sloping_profiles(
+    "model.p02.hdf", "canonical_terrain.tif", "reach_catalog",
+    profiles={"t0054": 54, "t0108": 108},
+    polygon="reach_boundary.gpkg",
+    threads=4,
+    writer_threads=1,
+    max_inflight_profiles=2,
+    max_working_mib=4096,
+)
+report = manifest.attrs["performance"]["engine_report"]
+print(report["effective_inflight_profiles"])
+```
+
+All concurrent maps use the same `threads`-sized Rust pool. Effective concurrency
+is capped by this limit, profile count and memory admission. If only one map
+fits the planned budget, the engine uses one; if the serial plan exceeds the
+budget, it raises before allocating raster arrays. This is planned admission,
+not an enforced process RSS limit. Python/GDAL memory is additional.
+
+The scheduler processes bounded batches and emits maps in request order, even
+if later profiles finish first. A failed batch aborts the session and removes
+earlier delivered products. Reports record requested/effective concurrency,
+planned bytes and each additional slot's allowance. Per-profile elapsed stage
+times overlap, so their sum is not aggregate wall time.
+
+HDF row reads and binary staging remain sequential before Rust starts, and
+Python writes products sequentially. Compression can overlap subsequent native
+work; `writer_threads` remains a separate budget. Throughput gains therefore
+depend on the workload. Older engines retain the default sequential path;
+requesting concurrency without the advertised capability raises explicitly.
 
 ## Horizontal cell mapping
 
