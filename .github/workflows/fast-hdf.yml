@@ -13,11 +13,10 @@ on:
       - 'ras_commander/_native_scope.py'
       - 'ras_commander/fast_results.py'
       - 'ras_commander/fast_text.py'
-      - 'ras_commander/hdf/HdfMesh.py'
-      - 'ras_commander/hdf/HdfResultsMesh.py'
-      - 'ras_commander/hdf/HdfResultView.py'
+      - 'ras_commander/hdf/**'
       - 'setup.py'
       - 'tests/test_hdf_result_view.py'
+      - 'tests/test_tabular_readers_core_install.py'
       - 'tests/test_fast_hdf*.py'
       - 'tests/rust_engine_bridge/**'
       - 'tests/native_engine_provenance.py'
@@ -76,3 +75,12 @@ jobs:
       - name: Binding and fallback regression tests
         if: steps.native.outputs.available == 'true'
         run: python -m pytest tests/test_fast_hdf.py tests/test_hdf_result_view.py tests/test_hdf_results_mesh.py tests/test_hdf_mesh_cell_polygon_diagnostics.py tests/rust_engine_bridge/panic_guard_test.py tests/rust_engine_bridge/in_call_rewrite_test.py -q
+      - name: Table readers with Python reference backend
+        env:
+          RAS_COMMANDER_FAST_HDF: python
+        run: python -m pytest tests/test_tabular_readers_core_install.py -q
+      - name: Table readers with required native backend
+        if: steps.native.outputs.available == 'true'
+        env:
+          RAS_COMMANDER_FAST_HDF: required
+        run: python -m pytest tests/test_tabular_readers_core_install.py -q

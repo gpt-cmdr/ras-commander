@@ -69,7 +69,7 @@ def mesh_inputs(tmp_path, monkeypatch):
     polygons = gpd.GeoDataFrame({"mesh_name": ["Mesh"], "cell_id": [0]}, geometry=[box(0, 0, 4, 4)], crs="EPSG:32615")
     monkeypatch.setattr(HdfMesh, "get_mesh_cell_polygons", staticmethod(lambda path, **kw: polygons))
     velocities = pd.DataFrame({"mesh_name": ["Mesh"], "face_id": [0], "maximum_face_velocity": [8.0]})
-    monkeypatch.setattr(HdfResultsMesh, "get_mesh_max_face_v", staticmethod(lambda path: velocities))
+    monkeypatch.setattr(HdfResultsMesh, "get_mesh_max_face_v", staticmethod(lambda path, **_: velocities))
     return plan, geom, polygons, velocities
 
 
@@ -164,7 +164,7 @@ def test_partial_or_invalid_face_velocity_inventory_cannot_pass(mesh_inputs, mon
         "mesh_name": ["Mesh"] * len(ids), "face_id": ids,
         "maximum_face_velocity": [1.0] * len(ids),
     })
-    monkeypatch.setattr(HdfResultsMesh, "get_mesh_max_face_v", staticmethod(lambda path: incomplete))
+    monkeypatch.setattr(HdfResultsMesh, "get_mesh_max_face_v", staticmethod(lambda path, **_: incomplete))
     result = RasCheck.check_mesh_quality(plan, geom)
     assert coverage(result)["face_velocity"]["status"] == "failed"
     assert "every native face exactly once" in coverage(result)["face_velocity"]["reason"]

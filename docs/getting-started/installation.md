@@ -143,7 +143,10 @@ series such as `HdfResultsMesh.get_mesh_timeseries()` and
 GeoDataFrame (such as `HdfResultsMesh.get_mesh_max_ws()` and
 `HdfResultsMesh.get_mesh_max_depth()`) need geopandas. Without the package,
 these functions raise an `ImportError` that names the package and the install
-command. To add the complete results stack to a `compute` install:
+command. Most per-cell readers also return a typed pandas table with
+`include_geometry=False`, which works without geopandas; see
+[Typed tables without geometry](../user-guide/hdf-data-extraction.md#typed-tables-without-geometry).
+To add the complete results stack to a `compute` install:
 
 ```bash
 pip install "ras-commander[compute,full]"

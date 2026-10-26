@@ -1161,7 +1161,9 @@ class HdfMesh:
     def get_mesh_cell_points(
         hdf_path: Path,
         include_ghost_cells: bool = True,
-    ) -> 'GeoDataFrame':
+        *,
+        include_geometry: bool = True,
+    ) -> Union['GeoDataFrame', pd.DataFrame]:
         """
         Return 2D flow mesh cell center points.
 
@@ -1176,6 +1178,13 @@ class HdfMesh:
             Pass False to return physical cells only, matching mesh polygons
             and the default ghost-free ``HdfResultsMesh`` cell results. A mesh
             whose ``Cell Count`` is not recorded keeps every entry.
+        include_geometry : bool, optional, keyword-only
+            Default True returns the GeoDataFrame below. False returns a
+            DataFrame with the same rows and order and the stored coordinates
+            as two columns instead of Shapely points (no GeoPandas/Shapely,
+            no CRS lookup): ``mesh_name`` (pandas ``str``/``string``), ``cell_id``
+            (``int64``), ``x`` and ``y`` (the stored coordinate dtype,
+            ``float64`` in HEC-RAS files).
 
         Returns
         -------
@@ -1185,6 +1194,9 @@ class HdfMesh:
             - cell_id: int - Unique cell identifier (0-indexed)
             - geometry: Point - Cell center point geometry
         """
+        if not include_geometry:
+            return HdfMesh._get_mesh_cell_points_table(hdf_path, include_ghost_cells)
+
         # Lazy imports for heavy dependencies
         from geopandas import GeoDataFrame
         from shapely import points
@@ -1230,6 +1242,45 @@ class HdfMesh:
             reraise_required(e)
             logger.error(f"Error reading mesh cell points from {hdf_path}: {str(e)}")
             return GeoDataFrame()
+
+    @staticmethod
+    def _get_mesh_cell_points_table(hdf_path: Path, include_ghost_cells: bool) -> pd.DataFrame:
+        """Typed cell-center table for ``get_mesh_cell_points(include_geometry=False)``.
+
+        Same meshes, rows, order and failure policy as the GeoDataFrame path;
+        the stored ``Cells Center Coordinate`` columns become ``x``/``y``.
+        """
+        def table(names, ids, x, y) -> pd.DataFrame:
+            return pd.DataFrame({
+                "mesh_name": HdfUtils._text_array(names),
+                "cell_id": ids,
+                "x": x,
+                "y": y,
+            })
+
+        empty = lambda: table([], np.empty(0, np.int64), np.empty(0), np.empty(0))  # noqa: E731
+        try:
+            with h5py.File(hdf_path, 'r') as hdf_file:
+                mesh_area_names = HdfMesh.get_mesh_area_names(hdf_path)
+                if not mesh_area_names:
+                    return empty()
+                physical_counts = (
+                    {} if include_ghost_cells else HdfMesh._physical_cell_counts(hdf_file)
+                )
+                names, ids, centers = [], [], []
+                for mesh_name in mesh_area_names:
+                    cell_centers = read_typed(hdf_file[f"Geometry/2D Flow Areas/{mesh_name}/Cells Center Coordinate"])
+                    if mesh_name in physical_counts:
+                        cell_centers = cell_centers[:physical_counts[mesh_name]]
+                    names.extend([mesh_name] * len(cell_centers))
+                    ids.append(np.arange(len(cell_centers), dtype=np.int64))
+                    centers.append(cell_centers)
+                xy = np.concatenate(centers) if centers else np.empty((0, 2))
+                return table(names, np.concatenate(ids), xy[:, 0], xy[:, 1])
+        except Exception as e:
+            reraise_required(e)
+            logger.error(f"Error reading mesh cell points from {hdf_path}: {str(e)}")
+            return empty()
 
     @staticmethod
     @log_call

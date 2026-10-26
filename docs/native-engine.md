@@ -348,7 +348,9 @@ largest gains, repeat calls on the heaviest file for each method:
 | `HdfResultsMesh.get_mesh_timeseries` (face velocity) | 865 | 1,516 ms | 253 ms | 6.0× |
 | `HdfFluvialPluvial.calculate_fluvial_pluvial_boundary` | 4,569 | 10,638 ms | 6,856 ms | 1.6× |
 
-Whole-array summaries such as `get_mesh_max_ws` ran at about the same speed.
+Whole-array summaries such as `get_mesh_max_ws` ran at about the same speed,
+because most of those calls is building a Shapely geometry for every row (see
+[Tables without geometry](#tables-without-geometry)).
 Small reads were at most about 7 ms slower on repeat calls and 37 ms on the
 first call in a process. Across all 50 cases (geometric mean) the native
 engine was 1.17× faster on the first call in a process and 1.41× faster on
@@ -357,6 +359,20 @@ small reads comes from ras-commander 0.108.0 opening each HDF once per public
 call and sharing that native session across the call's reads (it used to be
 opened 3 to 23 times). Timings were taken with the files in the operating
 system's cache; cold-disk reads were not measured.
+
+### Tables without geometry
+
+The per-cell and per-face result readers (`get_mesh_max_ws`,
+`get_mesh_max_face_v`, `get_mesh_max_depth` and the others listed in
+[HDF API](api/hdf.md)) take `include_geometry=False` to return
+a plain pandas DataFrame instead of building a Shapely point or line for every
+row. Values, order, dtypes and `attrs` are the same as the default call without
+its geometry column. On the largest test files this is up to about 50× faster
+for face maximums (`get_mesh_max_face_v`: 1,642 ms to 34 ms on 177,301 faces)
+and 4–20× faster for cell values, with roughly 60% less peak memory. The full
+table is on the extension's
+[Performance](https://rascommander.info/fasthdf/performance/#tables-without-geometry)
+page.
 
 The figures below come from the earlier engine performance work. They measure
 the **HDF read layer** (the reads under the public methods), not complete

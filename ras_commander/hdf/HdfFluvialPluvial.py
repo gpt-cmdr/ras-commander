@@ -322,7 +322,7 @@ class HdfFluvialPluvial:
                 raise ValueError("No cell polygons found in HDF file")
 
             logger.debug("Getting maximum water surface data from HDF file...")
-            max_ws_df = HdfResultsMesh.get_mesh_max_ws(hdf_path)
+            max_ws_df = HdfResultsMesh.get_mesh_max_ws(hdf_path, include_geometry=False)
             if max_ws_df.empty:
                 raise ValueError("No maximum water surface data found in HDF file")
 
@@ -504,7 +504,7 @@ class HdfFluvialPluvial:
             # --- 1. Data Loading and Preparation ---
             logger.debug("Loading mesh and results data...")
             cell_polygons_gdf = HdfMesh.get_mesh_cell_polygons(hdf_path)
-            max_ws_df = HdfResultsMesh.get_mesh_max_ws(hdf_path)
+            max_ws_df = HdfResultsMesh.get_mesh_max_ws(hdf_path, include_geometry=False)
             max_ws_df['maximum_water_surface_time'] = max_ws_df['maximum_water_surface_time'].apply(
                 lambda x: HdfUtils.parse_ras_datetime(x) if isinstance(x, str) else x
             )

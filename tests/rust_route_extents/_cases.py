@@ -251,6 +251,8 @@ CASES = {
         Path(p), _reference_line(p), direction="signed", truncate=True),
     "HdfResultsMesh.get_mesh_max_depth": lambda p: _hdf().HdfResultsMesh.get_mesh_max_depth(Path(p)),
     "HdfResultsMesh.get_mesh_max_depth[ghosts]": lambda p: _hdf().HdfResultsMesh.get_mesh_max_depth(Path(p), include_ghost_cells=True),
+    "HdfResultsMesh.get_mesh_max_depth[table]": lambda p: _hdf().HdfResultsMesh.get_mesh_max_depth(Path(p), include_geometry=False),
+    "HdfResultsMesh.get_mesh_max_depth[ghosts,table]": lambda p: _hdf().HdfResultsMesh.get_mesh_max_depth(Path(p), include_ghost_cells=True, include_geometry=False),
     "HdfResultsMesh.export_max_depth_raster": _max_depth_raster,
     "HdfResultsMesh.export_depth_rasters_at_times": _depth_rasters,
     "HdfResultsMesh.export_depth_rasters_at_times[linear]": lambda p: _depth_rasters(p, "linear"),

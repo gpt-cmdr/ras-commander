@@ -358,7 +358,9 @@ class HdfResultsMesh:
         var: str,
         round_to: str = "100ms",
         include_ghost_cells: bool = False,
-    ) -> gpd.GeoDataFrame:
+        *,
+        include_geometry: bool = True,
+    ) -> Union[gpd.GeoDataFrame, pd.DataFrame]:
         """Get spatial summary output for a mesh variable.
 
         Args:
@@ -370,10 +372,15 @@ class HdfResultsMesh:
                 outside the mesh perimeter (default False). Ghost values are
                 placeholders, not solution results. Cell results always carry
                 an ``is_ghost_cell`` column.
+            include_geometry: Keyword-only. Default True returns a
+                GeoDataFrame with cell/face geometry. False returns the typed
+                table of :meth:`get_mesh_summary_output` (no geometry,
+                ``str``/``string`` mesh_name, ``int64`` IDs, stored value dtype).
 
         Returns:
             GeoDataFrame with mesh name, cell or face identifier, summary
-            values, optional summary times, and cell/face geometry.
+            values, optional summary times, and cell/face geometry; or the
+            typed DataFrame when ``include_geometry=False``.
 
         Raises:
             ValueError: If the summary or geometry cannot be read.
@@ -381,7 +388,8 @@ class HdfResultsMesh:
         try:
             with h5py.File(hdf_path, 'r') as hdf_file:
                 return HdfResultsMesh.get_mesh_summary_output(
-                    hdf_file, var, round_to, include_ghost_cells
+                    hdf_file, var, round_to, include_ghost_cells,
+                    include_geometry=include_geometry,
                 )
         except OptionalDependencyError:
             raise
@@ -2074,7 +2082,12 @@ class HdfResultsMesh:
     @staticmethod
     @log_call
     @standardize_input(file_type='plan_hdf')
-    def get_mesh_last_iter(hdf_file: Path, include_ghost_cells: bool = False) -> pd.DataFrame:
+    def get_mesh_last_iter(
+        hdf_file: Path,
+        include_ghost_cells: bool = False,
+        *,
+        include_geometry: bool = True,
+    ) -> Union[gpd.GeoDataFrame, pd.DataFrame]:
         """
         Get last iteration count for each mesh cell.
 
@@ -2083,12 +2096,17 @@ class HdfResultsMesh:
             include_ghost_cells (bool): Keep rows for the ghost cells HEC-RAS
                 writes outside the mesh perimeter (default False). Rows always
                 carry an ``is_ghost_cell`` column.
+            include_geometry (bool): Keyword-only. Default True returns a
+                GeoDataFrame with cell-center points. False returns the typed
+                DataFrame of :meth:`get_mesh_summary_output` (no geometry,
+                ``str``/``string`` mesh_name, ``int64`` IDs, stored value dtype).
 
         Returns:
             pd.DataFrame: DataFrame containing last iteration counts.
         """
         return HdfResultsMesh.get_mesh_summary_output(
-            hdf_file, "Cell Last Iteration", include_ghost_cells=include_ghost_cells
+            hdf_file, "Cell Last Iteration", include_ghost_cells=include_ghost_cells,
+            include_geometry=include_geometry,
         )
 
 
@@ -2099,7 +2117,9 @@ class HdfResultsMesh:
         hdf_path: Path,
         round_to: str = "100ms",
         include_ghost_cells: bool = False,
-    ) -> gpd.GeoDataFrame:
+        *,
+        include_geometry: bool = True,
+    ) -> Union[gpd.GeoDataFrame, pd.DataFrame]:
         """
         Get maximum water surface elevation for each mesh cell.
 
@@ -2109,6 +2129,10 @@ class HdfResultsMesh:
             include_ghost_cells (bool): Keep rows for the ghost cells HEC-RAS
                 writes outside the mesh perimeter (default False). Rows always
                 carry an ``is_ghost_cell`` column.
+            include_geometry (bool): Keyword-only. Default True returns a
+                GeoDataFrame with cell-center points. False returns the typed
+                DataFrame of :meth:`get_mesh_summary_output` (no geometry,
+                ``str``/``string`` mesh_name, ``int64`` IDs, stored value dtype).
 
         Returns:
             gpd.GeoDataFrame: GeoDataFrame containing maximum water surface elevations with geometry.
@@ -2116,7 +2140,8 @@ class HdfResultsMesh:
         try:
             with h5py.File(hdf_path, 'r') as hdf_file:
                 return HdfResultsMesh.get_mesh_summary_output(
-                    hdf_file, "Maximum Water Surface", round_to, include_ghost_cells
+                    hdf_file, "Maximum Water Surface", round_to, include_ghost_cells,
+                    include_geometry=include_geometry,
                 )
         except OptionalDependencyError:
             raise
@@ -2136,7 +2161,9 @@ class HdfResultsMesh:
         hdf_path: Path,
         round_to: str = "100ms",
         include_ghost_cells: bool = False,
-    ) -> gpd.GeoDataFrame:
+        *,
+        include_geometry: bool = True,
+    ) -> Union[gpd.GeoDataFrame, pd.DataFrame]:
         """
         Get minimum water surface elevation for each mesh cell.
 
@@ -2146,6 +2173,10 @@ class HdfResultsMesh:
             include_ghost_cells (bool): Keep rows for the ghost cells HEC-RAS
                 writes outside the mesh perimeter (default False). Rows always
                 carry an ``is_ghost_cell`` column.
+            include_geometry (bool): Keyword-only. Default True returns a
+                GeoDataFrame with cell-center points. False returns the typed
+                DataFrame of :meth:`get_mesh_summary_output` (no geometry,
+                ``str``/``string`` mesh_name, ``int64`` IDs, stored value dtype).
 
         Returns:
             gpd.GeoDataFrame: GeoDataFrame containing minimum water surface elevations with geometry.
@@ -2153,7 +2184,8 @@ class HdfResultsMesh:
         try:
             with h5py.File(hdf_path, 'r') as hdf_file:
                 return HdfResultsMesh.get_mesh_summary_output(
-                    hdf_file, "Minimum Water Surface", round_to, include_ghost_cells
+                    hdf_file, "Minimum Water Surface", round_to, include_ghost_cells,
+                    include_geometry=include_geometry,
                 )
         except OptionalDependencyError:
             raise
@@ -2165,20 +2197,32 @@ class HdfResultsMesh:
     @staticmethod
     @log_call
     @standardize_input(file_type='plan_hdf')
-    def get_mesh_max_face_v(hdf_path: Path, round_to: str = "100ms") -> pd.DataFrame:
+    def get_mesh_max_face_v(
+        hdf_path: Path,
+        round_to: str = "100ms",
+        *,
+        include_geometry: bool = True,
+    ) -> Union[gpd.GeoDataFrame, pd.DataFrame]:
         """
         Get maximum face velocity for each mesh face.
 
         Args:
             hdf_path (Path): Path to the HDF file.
             round_to (str): Time rounding specification (default "100ms").
+            include_geometry (bool): Keyword-only. Default True returns a
+                GeoDataFrame with face lines. False returns the typed
+                DataFrame of :meth:`get_mesh_summary_output` (no geometry,
+                ``str``/``string`` mesh_name, ``int64`` IDs, stored value dtype).
 
         Returns:
             pd.DataFrame: DataFrame containing maximum face velocities.
         """
         try:
             with h5py.File(hdf_path, 'r') as hdf_file:
-                return HdfResultsMesh.get_mesh_summary_output(hdf_file, "Maximum Face Velocity", round_to)
+                return HdfResultsMesh.get_mesh_summary_output(
+                    hdf_file, "Maximum Face Velocity", round_to,
+                    include_geometry=include_geometry,
+                )
         except OptionalDependencyError:
             raise
         except Exception as e:
@@ -2189,13 +2233,22 @@ class HdfResultsMesh:
     @staticmethod
     @log_call
     @standardize_input(file_type='plan_hdf')
-    def get_mesh_min_face_v(hdf_path: Path, round_to: str = "100ms") -> pd.DataFrame:
+    def get_mesh_min_face_v(
+        hdf_path: Path,
+        round_to: str = "100ms",
+        *,
+        include_geometry: bool = True,
+    ) -> Union[gpd.GeoDataFrame, pd.DataFrame]:
         """
         Get minimum face velocity for each mesh cell.
 
         Args:
             hdf_path (Path): Path to the HDF file.
             round_to (str): Time rounding specification (default "100ms").
+            include_geometry (bool): Keyword-only. Default True returns a
+                GeoDataFrame with face lines. False returns the typed
+                DataFrame of :meth:`get_mesh_summary_output` (no geometry,
+                ``str``/``string`` mesh_name, ``int64`` IDs, stored value dtype).
 
         Returns:
             pd.DataFrame: DataFrame containing minimum face velocities.
@@ -2205,7 +2258,10 @@ class HdfResultsMesh:
         """
         try:
             with h5py.File(hdf_path, 'r') as hdf_file:
-                return HdfResultsMesh.get_mesh_summary_output(hdf_file, "Minimum Face Velocity", round_to)
+                return HdfResultsMesh.get_mesh_summary_output(
+                    hdf_file, "Minimum Face Velocity", round_to,
+                    include_geometry=include_geometry,
+                )
         except OptionalDependencyError:
             raise
         except Exception as e:
@@ -2220,7 +2276,9 @@ class HdfResultsMesh:
         hdf_path: Path,
         round_to: str = "100ms",
         include_ghost_cells: bool = False,
-    ) -> pd.DataFrame:
+        *,
+        include_geometry: bool = True,
+    ) -> Union[gpd.GeoDataFrame, pd.DataFrame]:
         """
         Get maximum water surface error for each mesh cell.
 
@@ -2230,6 +2288,10 @@ class HdfResultsMesh:
             include_ghost_cells (bool): Keep rows for the ghost cells HEC-RAS
                 writes outside the mesh perimeter (default False). Rows always
                 carry an ``is_ghost_cell`` column.
+            include_geometry (bool): Keyword-only. Default True returns a
+                GeoDataFrame with cell-center points. False returns the typed
+                DataFrame of :meth:`get_mesh_summary_output` (no geometry,
+                ``str``/``string`` mesh_name, ``int64`` IDs, stored value dtype).
 
         Returns:
             pd.DataFrame: DataFrame containing maximum water surface errors.
@@ -2240,7 +2302,8 @@ class HdfResultsMesh:
         try:
             with h5py.File(hdf_path, 'r') as hdf_file:
                 return HdfResultsMesh.get_mesh_summary_output(
-                    hdf_file, "Cell Maximum Water Surface Error", round_to, include_ghost_cells
+                    hdf_file, "Cell Maximum Water Surface Error", round_to, include_ghost_cells,
+                    include_geometry=include_geometry,
                 )
         except OptionalDependencyError:
             raise
@@ -2257,7 +2320,9 @@ class HdfResultsMesh:
         hdf_path: Path,
         round_to: str = "100ms",
         include_ghost_cells: bool = False,
-    ) -> gpd.GeoDataFrame:
+        *,
+        include_geometry: bool = True,
+    ) -> Union[gpd.GeoDataFrame, pd.DataFrame]:
         """
         Get maximum iteration count for each mesh cell.
 
@@ -2267,6 +2332,10 @@ class HdfResultsMesh:
             include_ghost_cells (bool): Keep rows for the ghost cells HEC-RAS
                 writes outside the mesh perimeter (default False). Rows always
                 carry an ``is_ghost_cell`` column.
+            include_geometry (bool): Keyword-only. Default True returns a
+                GeoDataFrame with cell-center points. False returns the typed
+                DataFrame of :meth:`get_mesh_summary_output` (no geometry,
+                ``str``/``string`` mesh_name, ``int64`` IDs, stored value dtype).
 
         Returns:
             gpd.GeoDataFrame: GeoDataFrame containing maximum iteration counts with geometry.
@@ -2280,7 +2349,8 @@ class HdfResultsMesh:
         try:
             with h5py.File(hdf_path, 'r') as hdf_file:
                 return HdfResultsMesh.get_mesh_summary_output(
-                    hdf_file, "Cell Last Iteration", round_to, include_ghost_cells
+                    hdf_file, "Cell Last Iteration", round_to, include_ghost_cells,
+                    include_geometry=include_geometry,
                 )
         except OptionalDependencyError:
             raise
@@ -2547,7 +2617,12 @@ class HdfResultsMesh:
     @staticmethod
     @log_call
     @standardize_input(file_type='plan_hdf')
-    def get_mesh_max_depth(hdf_path: Path, include_ghost_cells: bool = False) -> gpd.GeoDataFrame:
+    def get_mesh_max_depth(
+        hdf_path: Path,
+        include_ghost_cells: bool = False,
+        *,
+        include_geometry: bool = True,
+    ) -> Union[gpd.GeoDataFrame, pd.DataFrame]:
         """
         Get the maximum depth for each 2D mesh cell.
 
@@ -2576,6 +2651,12 @@ class HdfResultsMesh:
             hdf_path (Path): Path to the HDF file.
             include_ghost_cells (bool): Keep rows for the ghost cells HEC-RAS
                 writes outside the mesh perimeter (default False).
+            include_geometry (bool): Keyword-only. Default True returns the
+                GeoDataFrame below. False returns a DataFrame with the same
+                rows, order and values but no ``geometry`` column, without
+                reading cell-center coordinates or building Shapely points:
+                ``mesh_name`` (pandas ``str``/``string``), ``cell_id`` (``int64``),
+                ``maximum_depth`` (``float32``), ``is_ghost_cell`` (``bool``).
 
         Returns:
             gpd.GeoDataFrame: GeoDataFrame with columns:
@@ -2591,15 +2672,23 @@ class HdfResultsMesh:
                 missing required geometry or result datasets, or their
                 dimensions and cell counts are inconsistent.
         """
-        GeoDataFrame = gpd.GeoDataFrame  # Fail fast with the install command.
-        Point = require_module(
-            "shapely.geometry", "Returning GeoDataFrame results from HdfResultsMesh"
-        ).Point
+        if include_geometry:
+            GeoDataFrame = gpd.GeoDataFrame  # Fail fast with the install command.
+            Point = require_module(
+                "shapely.geometry", "Returning GeoDataFrame results from HdfResultsMesh"
+            ).Point
 
         try:
             source_name = Path(hdf_path).name
 
             def empty_result(crs=None) -> gpd.GeoDataFrame:
+                if not include_geometry:
+                    return pd.DataFrame({
+                        "mesh_name": pd.Series(dtype=HdfUtils._TEXT_DTYPE),
+                        "cell_id": pd.Series(dtype="int64"),
+                        "maximum_depth": pd.Series(dtype="float32"),
+                        "is_ghost_cell": pd.Series(dtype="bool"),
+                    })
                 return GeoDataFrame(
                     {
                         "mesh_name": pd.Series(dtype="object"),
@@ -2614,7 +2703,7 @@ class HdfResultsMesh:
 
             dfs = []
             with h5py.File(hdf_path, 'r') as hdf_file:
-                crs = HdfBase.get_projection(hdf_file)
+                crs = HdfBase.get_projection(hdf_file) if include_geometry else None
                 d2_flow_areas = hdf_file.get("Geometry/2D Flow Areas/Attributes")
                 if d2_flow_areas is None or len(d2_flow_areas) == 0:
                     logger.debug("No 2D Flow Areas found in HDF file")
@@ -2631,12 +2720,19 @@ class HdfResultsMesh:
                         raise ValueError(
                             f"Cell centers are missing for mesh '{mesh_name}'"
                         )
-                    xy = np.asarray(read_typed(cc_ds), dtype=np.float64)
-                    if xy.ndim != 2 or xy.shape[1] != 2:
+                    # The table needs only the cell count, so it validates the
+                    # stored shape without reading the coordinates.
+                    xy = (
+                        np.asarray(read_typed(cc_ds), dtype=np.float64)
+                        if include_geometry else None
+                    )
+                    xy_shape = xy.shape if include_geometry else tuple(cc_ds.shape)
+                    if len(xy_shape) != 2 or xy_shape[1] != 2:
                         raise ValueError(
-                            f"Cell-center shape {xy.shape} is not an (N, 2) "
+                            f"Cell-center shape {xy_shape} is not an (N, 2) "
                             f"coordinate array for mesh '{mesh_name}'"
                         )
+                    cell_center_count = xy_shape[0]
 
                     # Read depth time series
                     depth_path = (
@@ -2645,10 +2741,10 @@ class HdfResultsMesh:
                     )
                     depth_ds = hdf_file.get(depth_path)
                     if depth_ds is not None:
-                        if depth_ds.ndim != 2 or depth_ds.shape[1] != len(xy):
+                        if depth_ds.ndim != 2 or depth_ds.shape[1] != cell_center_count:
                             raise ValueError(
                                 f"Depth shape {depth_ds.shape} does not align "
-                                f"with cell-center count {len(xy)} for mesh "
+                                f"with cell-center count {cell_center_count} for mesh "
                                 f"'{mesh_name}'"
                             )
                         max_depth = HdfResultsMesh._get_mesh_temporal_maximum(
@@ -2702,10 +2798,10 @@ class HdfResultsMesh:
                                 f"{minimum_elevation.shape[0]} for mesh "
                                 f"'{mesh_name}'"
                             )
-                        if wse_ds.shape[1] != len(xy):
+                        if wse_ds.shape[1] != cell_center_count:
                             raise ValueError(
                                 f"Depth shape {wse_ds.shape} does not align "
-                                f"with cell-center count {len(xy)} for mesh "
+                                f"with cell-center count {cell_center_count} for mesh "
                                 f"'{mesh_name}'"
                             )
 
@@ -2726,12 +2822,16 @@ class HdfResultsMesh:
                     if len(max_depth) == 0:
                         continue
 
-                    geom = [Point(x, y) for x, y in xy]
-                    df = GeoDataFrame({
+                    columns = {
                         "mesh_name": [mesh_name] * len(max_depth),
                         "cell_id": range(len(max_depth)),
                         "maximum_depth": max_depth,
-                    }, geometry=geom)
+                    }
+                    if include_geometry:
+                        geom = [Point(x, y) for x, y in xy]
+                        df = GeoDataFrame(columns, geometry=geom)
+                    else:
+                        df = pd.DataFrame(columns)
                     df = HdfResultsMesh._flag_ghost_cell_rows(
                         df, mesh_name, cell_counts, include_ghost_cells
                     )
@@ -2739,6 +2839,12 @@ class HdfResultsMesh:
 
             if not dfs:
                 return empty_result(crs)
+
+            if not include_geometry:
+                result = pd.concat(dfs, ignore_index=True)
+                result["mesh_name"] = result["mesh_name"].astype(HdfUtils._TEXT_DTYPE)
+                logger.debug(f"Extracted max depth for {len(result)} cells")
+                return result
 
             result = GeoDataFrame(
                 pd.concat(dfs, ignore_index=True),
@@ -3787,11 +3893,15 @@ class HdfResultsMesh:
         var: str,
         round_to: str = "100ms",
         include_ghost_cells: bool = False,
+        typed: bool = False,
     ) -> pd.DataFrame:
         """Read summary values from an open HDF without building geometry.
 
         Cell rows carry ``is_ghost_cell``; ``include_ghost_cells=False`` drops
-        the ghost rows. Face rows are unaffected.
+        the ghost rows. Face rows are unaffected. ``typed=True`` returns the
+        typed table layout: ``mesh_name`` as pandas ``str``/``string`` (no object
+        columns); identifiers are ``int64`` and values keep the stored dtype
+        in both layouts.
         """
         start_time = HdfBase.get_simulation_start_time(hdf_file)
         d2_flow_areas = hdf_file.get("Geometry/2D Flow Areas/Attributes")
@@ -3880,9 +3990,11 @@ class HdfResultsMesh:
         if not frames:
             return pd.DataFrame()
         result = pd.concat(frames, ignore_index=True)
+        if typed:
+            result["mesh_name"] = result["mesh_name"].astype(HdfUtils._TEXT_DTYPE)
         result.attrs.update(combined_attrs)
         return result
-    
+
     
     @staticmethod
     @log_call
@@ -3892,7 +4004,9 @@ class HdfResultsMesh:
         var: str,
         round_to: str = "100ms",
         include_ghost_cells: bool = False,
-    ) -> gpd.GeoDataFrame:
+        *,
+        include_geometry: bool = True,
+    ) -> Union[gpd.GeoDataFrame, pd.DataFrame]:
         """
         Get the summary output data for a given variable from the HDF file.
 
@@ -3909,13 +4023,36 @@ class HdfResultsMesh:
             values for ghost cells outside the mesh perimeter after the
             physical cells. Default False drops those rows; pass True to
             keep them.
+        include_geometry : bool, optional, keyword-only
+            Default True attaches cell-center points (cell variables) or face
+            lines (face variables) and returns a GeoDataFrame. False returns
+            the typed table described in Returns, read straight from the
+            stored arrays without building geometry (no GeoPandas/Shapely).
 
         Returns
         -------
-        gpd.GeoDataFrame
+        gpd.GeoDataFrame or pd.DataFrame
             A GeoDataFrame containing the summary output data with decoded attributes as metadata.
             Returns empty GeoDataFrame if variable is not found.
+
+            With ``include_geometry=False``: a DataFrame with the same rows,
+            order, columns (except ``geometry``), values and ``attrs``.
+            ``mesh_name`` is pandas ``str``/``string``; ``cell_id``/``face_id`` are
+            ``int64`` keys; the value column keeps the stored dtype; the
+            ``*_time`` column is ``datetime64``; ``is_ghost_cell`` is
+            ``bool``. Join coordinates on ``(mesh_name, cell_id)`` from
+            ``HdfMesh.get_mesh_cell_points(..., include_geometry=False)``.
+            Returns an empty DataFrame if the variable is not found.
         """
+        if not include_geometry:
+            try:
+                return HdfResultsMesh._get_mesh_summary_values_output(
+                    hdf_file, var, round_to, include_ghost_cells, typed=True
+                )
+            except Exception as e:
+                reraise_required(e)
+                logger.error(f"Error processing summary output data: {e}")
+                raise ValueError(f"Error processing summary output data: {e}")
         GeoDataFrame = gpd.GeoDataFrame  # Fail fast with the install command.
         try:
             values = HdfResultsMesh._get_mesh_summary_values_output(

@@ -25,21 +25,28 @@ List of Functions in HdfBndry:
 
 
 """
+
+from __future__ import annotations
+
 from pathlib import Path
 from typing import ClassVar, Literal, Optional, Union
 
-import geopandas as gpd
 import h5py
 import numpy as np
 import pandas as pd
-from shapely.geometry import LineString, MultiLineString, MultiPolygon, Point, Polygon
 
+from .._optional_deps import optional_module
 from ..Decorators import log_call, standardize_input
 from ..fast_hdf import read_typed, reraise_required
 from ..LoggingConfig import get_logger
 from .HdfBase import HdfBase
 from .HdfUtils import HdfUtils
 from ._packed_parts import _nonnegative_index, resolve_feature_part_ranges
+
+# GeoPandas/Shapely load on first use, so the tabular readers work on the core
+# h5py/numpy/pandas install.
+gpd = optional_module("geopandas", "Building geometry in HdfBndry")
+shapely_geometry = optional_module("shapely.geometry", "Building geometry in HdfBndry")
 
 logger = get_logger(__name__)
 
@@ -57,7 +64,7 @@ def _assemble_polygon_rings(polygons):
         for indices in containers
     ]
     shells = [
-        Polygon(
+        shapely_geometry.Polygon(
             ring.exterior.coords,
             [hole.exterior.coords for j, hole in enumerate(polygons)
              if parents[j] == i and len(containers[j]) % 2 == 1],
@@ -65,7 +72,7 @@ def _assemble_polygon_rings(polygons):
         for i, ring in enumerate(polygons)
         if len(containers[i]) % 2 == 0
     ]
-    return shells[0] if len(shells) == 1 else MultiPolygon(shells)
+    return shells[0] if len(shells) == 1 else shapely_geometry.MultiPolygon(shells)
 
 
 class HdfBndry:
@@ -636,7 +643,7 @@ class HdfBndry:
                     for row_index, (fp_start, fp_end) in enumerate(external_face_points):
                         if not topology_matches[row_index]:
                             selected_geometries.append(
-                                LineString(
+                                shapely_geometry.LineString(
                                     [
                                         point_lookup[int(fp_start)],
                                         point_lookup[int(fp_end)],
@@ -663,7 +670,7 @@ class HdfBndry:
                                 f"{mesh_name!r} from its external-face point IDs"
                             )
                         selected_geometries.append(
-                            LineString(
+                            shapely_geometry.LineString(
                                 [
                                     point_lookup[int(fp_start)],
                                     *ordered_intermediate,
@@ -879,7 +886,7 @@ class HdfBndry:
                         raise ValueError(f"Truncated points for breakline {idx} ({name})")
 
                     if part_cnt == 1:
-                        geom = LineString(points)
+                        geom = shapely_geometry.LineString(points)
                     else:
                         parts = read_typed(bl_line_data["Polyline Parts"])[part_start:part_start + part_cnt]
                         if part_start < 0 or part_cnt < 1 or len(parts) != part_cnt:
@@ -890,7 +897,7 @@ class HdfBndry:
                             if offset < 0 or count < 2 or len(line) != count:
                                 raise ValueError(f"Invalid part for breakline {idx} ({name})")
                             lines.append(line)
-                        geom = MultiLineString(lines)
+                        geom = shapely_geometry.MultiLineString(lines)
 
                     valid_ids.append(idx)
                     valid_names.append(name)
@@ -1018,14 +1025,14 @@ class HdfBndry:
                     except ValueError as exc:
                         raise ValueError(f"Invalid refinement region polygon part: {exc}") from exc
                     if part_cnt <= 1:
-                        geoms.append(Polygon(points))
+                        geoms.append(shapely_geometry.Polygon(points))
                     else:
                         polygons = []
                         for offset, part_pnt_cnt in part_ranges:
                             ring = points[offset : offset + part_pnt_cnt]
                             if len(ring) != part_pnt_cnt or len(ring) < 3:
                                 raise ValueError("Invalid refinement region polygon part")
-                            polygons.append(Polygon(ring))
+                            polygons.append(shapely_geometry.Polygon(ring))
                         geoms.append(_assemble_polygon_rings(polygons))
                 return gpd.GeoDataFrame(
                     {"rr_id": rr_ids, "Name": names, "geometry": geoms},
@@ -1169,7 +1176,7 @@ class HdfBndry:
                         "Name": names,
                         "mesh_name": mesh_names,
                         "Cell Index": cell_id,
-                        "geometry": list(map(Point, points)),
+                        "geometry": list(map(shapely_geometry.Point, points)),
                     },
                     geometry="geometry",
                     crs=HdfBase.get_projection(hdf_file),

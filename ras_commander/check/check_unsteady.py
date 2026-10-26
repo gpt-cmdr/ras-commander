@@ -573,7 +573,7 @@ class CheckUnsteady:
                 from ..hdf.HdfResultsMesh import HdfResultsMesh
 
                 # Get max iterations
-                max_iter_df = HdfResultsMesh.get_mesh_max_iter(plan_hdf)
+                max_iter_df = HdfResultsMesh.get_mesh_max_iter(plan_hdf, include_geometry=False)
 
                 if max_iter_df is not None and not max_iter_df.empty:
                     # Extract mesh name if available
@@ -673,7 +673,7 @@ class CheckUnsteady:
                         results.messages.append(msg)
 
                 # Get water surface errors
-                ws_err_df = HdfResultsMesh.get_mesh_max_ws_err(plan_hdf)
+                ws_err_df = HdfResultsMesh.get_mesh_max_ws_err(plan_hdf, include_geometry=False)
 
                 if ws_err_df is not None and not ws_err_df.empty:
                     # Find WS error column
@@ -908,7 +908,7 @@ class CheckUnsteady:
             # concealing a nonexistent or corrupt plan HDF.
             with h5py.File(plan_hdf, "r"):
                 pass
-            velocities = HdfResultsMesh.get_mesh_max_face_v(plan_hdf)
+            velocities = HdfResultsMesh.get_mesh_max_face_v(plan_hdf, include_geometry=False)
             if velocities is None or velocities.empty:
                 record("face_velocity", "unavailable", "Maximum face velocity data are absent")
             elif "maximum_face_velocity" not in velocities.columns:

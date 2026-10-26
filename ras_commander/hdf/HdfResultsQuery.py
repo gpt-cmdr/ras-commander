@@ -350,7 +350,7 @@ def _get_kdtree(
         return _kdtree_cache[cache_key]
 
     cell_points = HdfMesh.get_mesh_cell_points(
-        geom_hdf_path, include_ghost_cells=False
+        geom_hdf_path, include_ghost_cells=False, include_geometry=False
     )
     if cell_points.empty:
         raise ValueError(
@@ -359,8 +359,8 @@ def _get_kdtree(
 
     coords = np.column_stack(
         (
-            cell_points.geometry.x.to_numpy(dtype=float),
-            cell_points.geometry.y.to_numpy(dtype=float),
+            cell_points["x"].to_numpy(dtype=float),
+            cell_points["y"].to_numpy(dtype=float),
         )
     )
     mesh_names = cell_points["mesh_name"].astype(str).to_numpy()
@@ -1167,7 +1167,7 @@ def _get_max_wse_values(
     cache: Dict[str, Any],
 ) -> np.ndarray:
     """Return maximum water surface values in KDTree order."""
-    max_ws = HdfResultsMesh.get_mesh_max_ws(plan_hdf_path)
+    max_ws = HdfResultsMesh.get_mesh_max_ws(plan_hdf_path, include_geometry=False)
     if max_ws.empty:
         raise ValueError("Maximum Water Surface summary output is empty")
     return _summary_values_by_mesh(
@@ -1188,7 +1188,9 @@ def _get_cell_averaged_max_velocity(
     This follows the QA guidance to use Maximum Face Velocity envelope data,
     then map those face values back to cells using mesh topology.
     """
-    max_face_v = HdfResultsMesh.get_mesh_max_face_v(plan_hdf_path)
+    max_face_v = HdfResultsMesh.get_mesh_max_face_v(
+        plan_hdf_path, include_geometry=False
+    )
     if max_face_v.empty:
         raise ValueError("Maximum Face Velocity summary output is empty")
 
