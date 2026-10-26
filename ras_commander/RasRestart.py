@@ -14,7 +14,7 @@ logger = get_logger(__name__)
 
 
 class RasRestart:
-    """Read-only access to the qualified HEC-RAS 6.6 binary restart header.
+    """Read-only access to the observed HEC-RAS 6.6 binary restart header.
 
     This reader supports the little-endian ``21May2021`` header written by
     HEC-RAS 6.6. Unknown layouts fail explicitly. It never derives time from a
