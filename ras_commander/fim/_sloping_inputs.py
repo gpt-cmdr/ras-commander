@@ -32,6 +32,9 @@ def write_binary_mesh_inputs(
     *,
     threads=4,
     include_max=True,
+    include_vertex_elevations=False,
+    postprocessing_hdf=None,
+    corner_elevation_source="auto",
     max_staged_bytes=None,
 ):
     """Stage typed HDF arrays without constructing per-cell Python objects."""
@@ -44,6 +47,8 @@ def write_binary_mesh_inputs(
     from .RasFim import RasFim
 
     path = Path(hdf_path).resolve(strict=True)
+    if corner_elevation_source not in ("auto", "geometry", "mapping_cache"):
+        raise ValueError("corner_elevation_source must be auto, geometry or mapping_cache")
     root = Path(output_folder)
     RasFim.validate_2d_model(path)
     with backend_scope("rust"):
@@ -53,6 +58,12 @@ def write_binary_mesh_inputs(
         names = HdfMesh.get_mesh_area_names(path)
     if centers.empty or not names:
         raise ValueError("Sloping mapping requires readable 2D cell centres")
+    corners = {}
+    if include_vertex_elevations:
+        corners = HdfMesh.get_mesh_corner_elevations(
+            path, postprocessing_hdf=postprocessing_hdf,
+            source=corner_elevation_source, engine="native",
+        )
     files = []
     meshes = []
     max_values = []
@@ -67,6 +78,29 @@ def write_binary_mesh_inputs(
                 if include_max
                 else None
             )
+            corner = corners.get(name)
+            if corner is not None and corner.status == "stale":
+                # A fresh explicit native preparation may use the current
+                # registered terrain while historical mesh table dates differ.
+                # Require the receipt; never discard an unexplained stale cache.
+                from dataclasses import replace
+                from ._corner_preparation import validate_receipt
+                from ..hdf._corner_elevations import CornerElevationCheck
+                validate_receipt(path, postprocessing_hdf)
+                cache_candidate = next(c for c in corner.candidates
+                                       if c.layout == "mapping_cache" and c.status == "ok")
+                corner = replace(corner, status="ok", source=cache_candidate,
+                                 values=cache_candidate.values, reason=None,
+                                 checks=corner.checks + (CornerElevationCheck(
+                                     "native_preparation", "passed",
+                                     "Fresh native preparation binds current terrain and plan; historical mesh terrain checks retained"),))
+            if corner is not None and corner.source is not None and corner.source.layout == "mapping_cache":
+                from ._corner_preparation import validate_receipt
+                validate_receipt(path, postprocessing_hdf)
+            if include_vertex_elevations and (corner is None or corner.status != "ok"):
+                from .errors import FimUnsupportedError
+                reason = "mesh absent" if corner is None else f"{corner.status}: {corner.reason}"
+                raise FimUnsupportedError(f"Depth weighting needs stored FacePoints Elevation / FacePoint Elevation for {name!r}: {reason}")
             arrays = read_datasets(
                 source,
                 [prefix + field for field, _ in _BINARY_FIELDS.values()]
@@ -83,7 +117,7 @@ def write_binary_mesh_inputs(
                 nonlocal staged_bytes
                 array = np.ascontiguousarray(values, dtype=dtype)
                 expected_columns = (
-                    1 if key.endswith("minimum") else 2
+                    1 if key.endswith("minimum") or key == "vertex_elevations" else 2
                 )
                 array = array.reshape(-1, expected_columns)
                 filename = f"mesh-{index}-{key}.bin"
@@ -103,6 +137,8 @@ def write_binary_mesh_inputs(
             stage("centers", points[["x", "y"]].to_numpy(), "<f8")
             for key, (field, dtype) in _BINARY_FIELDS.items():
                 stage(key, arrays[prefix + field], dtype)
+            if include_vertex_elevations:
+                stage("vertex_elevations", corner.require(), "<f4")
             if summary is not None:
                 values = np.asarray(arrays[summary.name], dtype="<f4")
                 if values.shape != (2, len(points)):
@@ -125,7 +161,12 @@ def write_binary_mesh_inputs(
                 )
             (root / filename).write_bytes(encoded)
             staged_bytes += len(encoded)
-            meshes.append(dict(mesh_name=name, cell_count=len(points)))
+            record = dict(mesh_name=name, cell_count=len(points))
+            if corner is not None:
+                provenance = corner.as_dict()
+                provenance.pop("values")
+                record["corner_elevations"] = provenance
+            meshes.append(record)
     return files, meshes, max_values
 
 

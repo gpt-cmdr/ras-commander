@@ -6,6 +6,7 @@
 
 use crate::MapError;
 use rayon::prelude::*;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 /// User-visible RAS Mapper sloping controls. Internal experimental modes are excluded.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, serde::Deserialize, serde::Serialize)]
@@ -15,6 +16,8 @@ pub struct Options {
     pub render_mode: RenderMode,
     #[serde(default)]
     pub reduce_shallow_to_horizontal: bool,
+    #[serde(default)]
+    pub use_depth_weighted_faces: bool,
 }
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, serde::Deserialize, serde::Serialize)]
 pub enum RenderMode {
@@ -26,9 +29,11 @@ pub enum RenderMode {
 }
 impl Options {
     pub fn validate(self) -> Result<(), MapError> {
-        if self.render_mode == RenderMode::Corners && self.reduce_shallow_to_horizontal {
+        if self.render_mode == RenderMode::Corners
+            && (self.reduce_shallow_to_horizontal || self.use_depth_weighted_faces)
+        {
             return Err(MapError::Invalid(
-                "shallow control requires slopingPretty".into(),
+                "shallow and depth-weighted controls require slopingPretty".into(),
             ));
         }
         Ok(())
@@ -467,6 +472,7 @@ pub struct PolygonStencil {
 
 /// Reuse one scratch buffer per worker; no per-pixel allocation is necessary.
 pub struct WeightScratch {
+    clipped: bool,
     cross: Vec<f32>,
     products: Vec<f64>,
     weights: Vec<f32>,
@@ -486,6 +492,7 @@ fn cross(a: [f64; 2], b: [f64; 2], c: [f64; 2]) -> f64 {
 impl WeightScratch {
     pub fn new(vertices: usize) -> Self {
         Self {
+            clipped: false,
             cross: vec![0.0; vertices],
             products: vec![0.0; vertices],
             weights: vec![0.0; vertices],
@@ -601,6 +608,7 @@ impl PolygonStencil {
         scratch: &'a mut WeightScratch,
     ) -> Result<&'a [f32], MapError> {
         let n = self.points.len();
+        scratch.clipped = false;
         if scratch.weights.len() != n || point.iter().any(|v| !v.is_finite()) {
             return Err(MapError::Invalid(
                 "sloping weight scratch dimension or query is invalid".into(),
@@ -628,11 +636,15 @@ impl PolygonStencil {
                 has_negative_product = true;
             }
             scratch.weights[j] = (scratch.products[j] / total) as f32;
+            if scratch.weights[j] == 0.0 && scratch.products[j] != 0.0 {
+                scratch.clipped = true;
+            }
         }
         if has_negative_product {
             let mut total = 0.0_f32;
             for value in &mut scratch.weights {
                 if *value < 0.0 {
+                    scratch.clipped = true;
                     *value = 0.0;
                 } else {
                     total += *value;
@@ -683,6 +695,7 @@ pub fn deliver_pixel(wse: f32, terrain: f32, native_tolerance: f32) -> Option<[f
 }
 
 pub struct CellStencil {
+    pub physical_ring: Vec<[f64; 2]>,
     polygon: PolygonStencil,
     square: Option<[f64; 4]>,
     corners: Vec<[usize; 2]>, // vertex, incident-face slot
@@ -733,6 +746,7 @@ pub fn prepare_stencils(
             let polygon = PolygonStencil::new(points)?;
             let square = polygon.square_bounds();
             Ok(Some(CellStencil {
+                physical_ring: Vec::new(),
                 polygon,
                 square,
                 corners,
@@ -772,6 +786,7 @@ pub fn set_vertex_elevations(
 pub struct PreparedProfile {
     local_values: Vec<Vec<f32>>,
     face_values: Vec<Vec<f32>>,
+    depth_weights: Vec<Vec<f32>>,
     horizontal: Vec<Option<f32>>,
     wet: Vec<bool>,
     options: Options,
@@ -798,6 +813,12 @@ pub fn prepare_profile_with_options(
     options.validate()?;
     if stencils.len() != mesh.cells.len() {
         return Err(MapError::Invalid("sloping stencil count mismatch".into()));
+    }
+    if options.use_depth_weighted_faces && stencils.iter().flatten().any(|s| s.elevations.is_none())
+    {
+        return Err(MapError::Unsupported(
+            "depth weighting requires stored native FacePoints Elevation".into(),
+        ));
     }
     let reconstructed = mesh.reconstruct(values, tolerance, pool)?;
     let local_values: Vec<Vec<f32>> = pool.install(|| {
@@ -830,6 +851,33 @@ pub fn prepare_profile_with_options(
     } else {
         Vec::new()
     };
+    let depth_weights = if options.use_depth_weighted_faces {
+        pool.install(|| {
+            stencils
+                .par_iter()
+                .enumerate()
+                .map(|(cell, s)| match s {
+                    Some(s) => {
+                        let mut result: Vec<_> = local_values[cell]
+                            .iter()
+                            .zip(s.elevations.as_ref().unwrap())
+                            .map(|(&w, &z)| depth_weight(w, z))
+                            .collect();
+                        result.extend(
+                            s.faces
+                                .iter()
+                                .zip(&face_values[cell])
+                                .map(|(&[face, _], &w)| depth_weight(w, mesh.faces[face].minimum)),
+                        );
+                        result
+                    }
+                    None => Vec::new(),
+                })
+                .collect()
+        })
+    } else {
+        Vec::new()
+    };
     let horizontal = stencils
         .iter()
         .enumerate()
@@ -853,24 +901,45 @@ pub fn prepare_profile_with_options(
     Ok(PreparedProfile {
         local_values,
         face_values,
+        depth_weights,
         horizontal,
         wet,
         options,
     })
 }
 
+fn depth_weight(wse: f32, elevation: f32) -> f32 {
+    if wse == NODATA || elevation == NODATA || wse <= elevation {
+        0.01_f32
+    } else {
+        f64::from(wse - elevation).max(0.01_f64) as f32
+    }
+}
+
 impl WeightScratch {
     /// Native node donation: all arithmetic remains binary32 and in ring order.
     fn paint_with_faces(&mut self, corners: &[f32], faces: &[f32], depths: Option<&[f32]>) -> f32 {
+        self.paint_with_face_history(corners, faces, depths, false)
+    }
+
+    fn paint_with_face_history(
+        &mut self,
+        corners: &[f32],
+        faces: &[f32],
+        depths: Option<&[f32]>,
+        retain: bool,
+    ) -> f32 {
         let n = corners.len();
         for i in 0..n {
             let previous = (i + n - 1) % n;
             let next = (i + 1) % n;
             let adjacent = self.weights[previous] + self.weights[next];
-            // Fresh native pixel buffers begin at zero. Reset explicitly so reuse
-            // never carries donation from another polygon/pixel.
-            self.clockwise[i] = 0.0;
-            self.counterclockwise[i] = 0.0;
+            // The independent pass starts fresh; affected cells are replayed
+            // below with native scratch retention inside each geometry batch.
+            if !retain {
+                self.clockwise[i] = 0.0;
+                self.counterclockwise[i] = 0.0;
+            }
             if adjacent != 0.0 {
                 let fraction = self.weights[i] / adjacent;
                 self.clockwise[i] = fraction * self.weights[previous];
@@ -911,6 +980,8 @@ impl WeightScratch {
 /// Geometry and terrain belong to the caller and can be reused across timesteps.
 /// Labels index `owner_cells` plus one; zero is outside the physical 2D footprint.
 pub struct RasterWindow<'a> {
+    pub source_transform: [f64; 6],
+    pub source_tile: [usize; 2],
     pub width: usize,
     pub height: usize,
     pub transform: [f64; 6],
@@ -963,6 +1034,11 @@ pub fn render_profile(
     }
     let mut depth = vec![NODATA; count];
     let mut wse = vec![NODATA; count];
+    let repair: Vec<_> = window
+        .owner_cells
+        .iter()
+        .map(|_| AtomicBool::new(false))
+        .collect();
     pool.install(|| {
         depth
             .par_chunks_mut(4096)
@@ -1009,10 +1085,22 @@ pub fn render_profile(
                         let value = if profiles[mesh].options.render_mode == RenderMode::WithFaces {
                             // End the borrowed weights view before mutating scratch.
                             let _ = weights;
+                            if scratch.clipped
+                                && (0..values.len()).any(|k| {
+                                    scratch.weights[(k + values.len() - 1) % values.len()]
+                                        + scratch.weights[(k + 1) % values.len()]
+                                        == 0.0
+                                })
+                            {
+                                repair[label - 1].store(true, Ordering::Relaxed);
+                            }
                             scratch.paint_with_faces(
                                 values,
                                 &profiles[mesh].face_values[cell],
-                                None,
+                                profiles[mesh]
+                                    .options
+                                    .use_depth_weighted_faces
+                                    .then(|| profiles[mesh].depth_weights[cell].as_slice()),
                             )
                         } else {
                             paint_corner_values(weights, values)?
@@ -1028,6 +1116,141 @@ pub fn render_profile(
                 },
             )
     })?;
+    // Native geometry donation retains scratch inside fixed 256-point ranges.
+    // Replay only cells where clipped weights can expose that state. Replaying
+    // complete source tiles keeps bbox/polygon outputs equal to full-map crops.
+    let repaired = pool.install(|| {
+        window
+            .owner_cells
+            .par_iter()
+            .enumerate()
+            .filter_map(|(label, &[mesh, cell])| {
+                repair[label]
+                    .load(Ordering::Relaxed)
+                    .then_some((label + 1, mesh, cell))
+            })
+            .map(
+                |(label, mesh, cell)| -> Result<Vec<(usize, [f32; 2])>, MapError> {
+                    let stencil = stencils[mesh][cell].as_ref().unwrap();
+                    if stencil.physical_ring.is_empty() {
+                        return Err(MapError::Unsupported(
+                            "native face donation replay needs full cell perimeter geometry".into(),
+                        ));
+                    }
+                    let [tw, th] = window.source_tile;
+                    if tw == 0 || th == 0 || tw.checked_mul(th).is_none_or(|n| n > 16_777_216) {
+                        return Err(MapError::Unsupported(
+                            "unsupported native donation tile size".into(),
+                        ));
+                    }
+                    let gt = window.source_transform;
+                    let xoff = ((window.transform[0] - gt[0]) / gt[1]).round() as i64;
+                    let yoff = ((window.transform[3] - gt[3]) / gt[5]).round() as i64;
+                    let minx = stencil
+                        .physical_ring
+                        .iter()
+                        .map(|p| p[0])
+                        .fold(f64::INFINITY, f64::min);
+                    let maxx = stencil
+                        .physical_ring
+                        .iter()
+                        .map(|p| p[0])
+                        .fold(f64::NEG_INFINITY, f64::max);
+                    let miny = stencil
+                        .physical_ring
+                        .iter()
+                        .map(|p| p[1])
+                        .fold(f64::INFINITY, f64::min);
+                    let maxy = stencil
+                        .physical_ring
+                        .iter()
+                        .map(|p| p[1])
+                        .fold(f64::NEG_INFINITY, f64::max);
+                    let c0 = (((minx - gt[0]) / gt[1]).floor() as i64).max(xoff).max(0);
+                    let c1 =
+                        (((maxx - gt[0]) / gt[1]).ceil() as i64).min(xoff + window.width as i64);
+                    let r0 = (((maxy - gt[3]) / gt[5]).floor() as i64).max(yoff).max(0);
+                    let r1 =
+                        (((miny - gt[3]) / gt[5]).ceil() as i64).min(yoff + window.height as i64);
+                    let mut output = Vec::new();
+                    if c0 >= c1 || r0 >= r1 {
+                        return Ok(output);
+                    }
+                    for ty in r0 as usize / th..=(r1 as usize - 1) / th {
+                        for tx in c0 as usize / tw..=(c1 as usize - 1) / tw {
+                            let tile_gt = [
+                                gt[0] + (tx * tw) as f64 * gt[1],
+                                gt[1],
+                                0.,
+                                gt[3] + (ty * th) as f64 * gt[5],
+                                0.,
+                                gt[5],
+                            ];
+                            let owned = crate::ownership::burn_ring(
+                                &stencil.physical_ring,
+                                terrio::ops::rasterize::Grid {
+                                    geo_transform: tile_gt,
+                                    cols: tw,
+                                    rows: th,
+                                    crs: Default::default(),
+                                },
+                            )?;
+                            let values = &profiles[mesh].local_values[cell];
+                            let faces = &profiles[mesh].face_values[cell];
+                            let depths = profiles[mesh]
+                                .options
+                                .use_depth_weighted_faces
+                                .then(|| profiles[mesh].depth_weights[cell].as_slice());
+                            let mut scratch = WeightScratch::new(values.len());
+                            let mut native_index = 0;
+                            for (i, &inside) in owned.iter().enumerate() {
+                                if inside == 0 {
+                                    continue;
+                                }
+                                if native_index % 256 == 0 {
+                                    scratch.clockwise.fill(0.);
+                                    scratch.counterclockwise.fill(0.);
+                                }
+                                native_index += 1;
+                                let point = [
+                                    tile_gt[0] + (i % tw) as f64 * gt[1] + 0.5 * gt[1],
+                                    tile_gt[3] + (i / tw) as f64 * gt[5] + 0.5 * gt[5],
+                                ];
+                                stencil.polygon.weights(point, &mut scratch)?;
+                                let value =
+                                    scratch.paint_with_face_history(values, faces, depths, true);
+                                let col = (tx * tw + i % tw) as i64 - xoff;
+                                let row = (ty * th + i / tw) as i64 - yoff;
+                                if col < 0
+                                    || row < 0
+                                    || col >= window.width as i64
+                                    || row >= window.height as i64
+                                {
+                                    continue;
+                                }
+                                let index = row as usize * window.width + col as usize;
+                                if window.owner[index] as usize != label {
+                                    continue;
+                                }
+                                output.push((
+                                    index,
+                                    deliver_pixel(value, window.terrain[index], tolerance)
+                                        .unwrap_or([NODATA, NODATA]),
+                                ));
+                            }
+                        }
+                    }
+                    Ok(output)
+                },
+            )
+            .collect::<Result<Vec<_>, MapError>>()
+    })?;
+    for cell in repaired {
+        for (index, [d, w]) in cell {
+            depth[index] = d;
+            wse[index] = w;
+        }
+    }
     Ok((depth, wse))
 }
 
@@ -1036,14 +1259,25 @@ mod tests {
     use super::*;
 
     #[test]
-    fn removed_option_is_rejected_instead_of_ignored() {
-        for value in [false, true] {
-            let request = serde_json::json!({
-                "render_mode": "slopingPretty",
-                "use_depth_weighted_faces": value
-            });
-            assert!(serde_json::from_value::<Options>(request).is_err());
-        }
+    fn zero_adjacent_donation_keeps_native_batch_history() {
+        let corners = [1., 2., 3., 4., 5., 6.];
+        let faces = [2., 3., 4., 5., 6., 7.];
+        let mut carried = WeightScratch::new(6);
+        carried
+            .weights
+            .copy_from_slice(&[0.1, 0.2, 0.1, 0.2, 0.1, 0.3]);
+        carried.paint_with_face_history(&corners, &faces, None, true);
+        let previous = carried.clockwise[3];
+        assert_ne!(previous, 0.);
+        carried.weights.copy_from_slice(&[1., 0., 0., 0., 0., 0.]);
+        let value = carried.paint_with_face_history(&corners, &faces, None, true);
+        assert_eq!(carried.clockwise[3].to_bits(), previous.to_bits());
+        let mut fresh = WeightScratch::new(6);
+        fresh.weights.copy_from_slice(&[1., 0., 0., 0., 0., 0.]);
+        assert_ne!(
+            value.to_bits(),
+            fresh.paint_with_faces(&corners, &faces, None).to_bits()
+        );
     }
 
     #[test]

@@ -30,6 +30,9 @@ class FimPreparedSlopingModel:
         profiles=None,
         render_mode="sloping",
         reduce_shallow_to_horizontal=False,
+        use_depth_weighted_faces=False,
+        postprocessing_hdf=None,
+        corner_elevation_source="auto",
         engine_path=None,
         threads=1,
         max_working_mib=1024,
@@ -47,8 +50,10 @@ class FimPreparedSlopingModel:
         self._closed = True
         self._info = {}
         self._options = _sloping._validate_options(
-            render_mode, reduce_shallow_to_horizontal
+            render_mode, reduce_shallow_to_horizontal, use_depth_weighted_faces
         )
+        self._postprocessing_hdf = postprocessing_hdf
+        self._corner_elevation_source = corner_elevation_source
         self._selected = _sloping._validate_selection(profiles)
         self._threads = _positive_int(threads, "threads")
         if self._threads > 64:
@@ -61,6 +66,8 @@ class FimPreparedSlopingModel:
         self._terrain = Path(terrain_path).resolve(strict=True)
         self._engine = _engine.find_engine(engine_path)
         self._watched = dict(hdf=self._hdf, terrain=self._terrain, engine=self._engine)
+        if postprocessing_hdf is not None:
+            self._watched["postprocessing_hdf"] = Path(postprocessing_hdf).resolve(strict=True)
         self._identities = {
             key: _file_identity(path) for key, path in self._watched.items()
         }
@@ -74,6 +81,13 @@ class FimPreparedSlopingModel:
                 self._model_scope = RasFim.validate_2d_model(self._hdf)
             self._method = _engine.engine_method(self._engine).get("sloping", {})
             _sloping._validate_method(self._method, render_mode, 1)
+            if use_depth_weighted_faces and not self._method.get("depth_weighted_faces"):
+                raise FimEngineError("Depth weighting requires an engine advertising depth_weighted_faces (0.8+)")
+            if postprocessing_hdf is not None and (Path(postprocessing_hdf).parent / "corner_elevation_receipt.json").exists():
+                from ._corner_preparation import validate_receipt
+                _, sources = validate_receipt(self._hdf, postprocessing_hdf)
+                self._watched.update(sources)
+                self._identities.update({key: _file_identity(path) for key, path in sources.items()})
             with backend_scope("rust"):
                 self._cells = HdfMesh.get_mesh_cell_polygons(
                     self._hdf, strict=True, engine="native", threads=self._threads
@@ -102,6 +116,9 @@ class FimPreparedSlopingModel:
                 root,
                 threads=self._threads,
                 include_max="Max" in self._selected.values(),
+                include_vertex_elevations=use_depth_weighted_faces,
+                postprocessing_hdf=postprocessing_hdf,
+                corner_elevation_source=corner_elevation_source,
                 max_staged_bytes=prepared_budget - geometry_bytes,
             )
             mesh_bytes = sum(p.stat().st_size for p in root.iterdir())
@@ -127,6 +144,7 @@ class FimPreparedSlopingModel:
                 profiles=dict(self._selected),
                 physical_cells=len(self._cells),
                 mesh_count=len(self._meshes),
+                corner_elevations={m["mesh_name"]: m.get("corner_elevations") for m in self._meshes},
                 unique_selectors=len(set(self._selected.values())),
                 profile_views_prepared=views,
                 planned_geometry_bytes=geometry_bytes,
@@ -137,6 +155,8 @@ class FimPreparedSlopingModel:
                 native_state_reused=False,
             )
             self._check_sources()
+            if postprocessing_hdf is not None and (Path(postprocessing_hdf).parent / "corner_elevation_receipt.json").exists():
+                validate_receipt(self._hdf, postprocessing_hdf)
             self._closed = False
         except BaseException:
             self.close()
@@ -241,6 +261,8 @@ class FimPreparedSlopingModel:
                     output_folder,
                     profiles={name: self._selected[name] for name in names},
                     **self._options,
+                    postprocessing_hdf=self._postprocessing_hdf,
+                    corner_elevation_source=self._corner_elevation_source,
                     engine_path=self._engine,
                     threads=self._threads,
                     writer_threads=writer_threads,

@@ -19,17 +19,22 @@ from .errors import FimEngineError
 
 
 def _validate_options(
-    render_mode, reduce_shallow_to_horizontal
+    render_mode, reduce_shallow_to_horizontal, use_depth_weighted_faces
 ):
     if render_mode not in ("sloping", "slopingPretty"):
         raise ValueError("render_mode must be 'sloping' or 'slopingPretty'")
-    if not isinstance(reduce_shallow_to_horizontal, bool):
+    if not isinstance(reduce_shallow_to_horizontal, bool) or not isinstance(
+        use_depth_weighted_faces, bool
+    ):
         raise ValueError("sloping option flags must be booleans")
-    if render_mode == "sloping" and reduce_shallow_to_horizontal:
-        raise ValueError("shallow control requires slopingPretty")
+    if render_mode == "sloping" and (
+        reduce_shallow_to_horizontal or use_depth_weighted_faces
+    ):
+        raise ValueError("shallow and depth-weighted controls require slopingPretty")
     selected_options = dict(
         render_mode=render_mode,
         reduce_shallow_to_horizontal=reduce_shallow_to_horizontal,
+        use_depth_weighted_faces=use_depth_weighted_faces,
     )
     return selected_options
 
@@ -75,6 +80,8 @@ def _validate_method(method, render_mode, max_inflight_profiles):
         raise FimEngineError(
             "engine lacks additional sloping options; install a matching engine"
         )
+    if render_mode == "slopingPretty" and not method.get("native_donation_history"):
+        raise FimEngineError("Cell-face sloping requires native donation history (engine 0.8+)")
     selected_method_id = (
         method.get("enhanced_method_id")
         if render_mode == "slopingPretty"
@@ -144,6 +151,9 @@ def map_profiles(
     profiles=None,
     render_mode="sloping",
     reduce_shallow_to_horizontal=False,
+    use_depth_weighted_faces=False,
+    postprocessing_hdf=None,
+    corner_elevation_source="auto",
     bbox=None,
     polygon=None,
     polygon_layer=None,
@@ -170,7 +180,7 @@ def map_profiles(
     )
 
     selected_options = _validate_options(
-        render_mode, reduce_shallow_to_horizontal
+        render_mode, reduce_shallow_to_horizontal, use_depth_weighted_faces
     )
     started = time.perf_counter()
     preparation = {}
@@ -211,7 +221,15 @@ def map_profiles(
     concurrency_supported, selected_method_id = _validate_method(
         method, render_mode, max_inflight_profiles
     )
+    if use_depth_weighted_faces and not method.get("depth_weighted_faces"):
+        raise FimEngineError("Depth weighting requires an engine advertising depth_weighted_faces (0.8+)")
     watched = {"hdf": hdf, "terrain": terrain, "engine": engine}
+    if postprocessing_hdf is not None:
+        watched["postprocessing_hdf"] = Path(postprocessing_hdf).resolve(strict=True)
+        if (watched["postprocessing_hdf"].parent / "corner_elevation_receipt.json").exists():
+            from ._corner_preparation import validate_receipt
+            _, corner_sources = validate_receipt(hdf, watched["postprocessing_hdf"])
+            watched.update(corner_sources)
     if _prepared is not None:
         watched.update(_prepared._watched)
     if template_raster is not None:
@@ -289,7 +307,7 @@ def map_profiles(
             k: {"path": str(p), "size": before[k][0], "mtime_ns": before[k][1]}
             for k, p in watched.items()
         },
-        qualification="experimental native 7.0.1; plain five-model physical-2D corpus; unweighted face/shallow options on Bald Eagle bridges Max and Davis timesteps",
+        qualification="experimental native 7.0.1; plain five-model physical-2D corpus (bounded eBFE); enhanced combinations on Bald Eagle bridges Max and Davis timesteps",
     )
 
     def manifest():
@@ -323,9 +341,16 @@ def map_profiles(
                         root,
                         threads=threads,
                         include_max="Max" in selected.values(),
+                        include_vertex_elevations=use_depth_weighted_faces,
+                        postprocessing_hdf=postprocessing_hdf,
+                        corner_elevation_source=corner_elevation_source,
                     )
                 else:
                     mesh_files, meshes = _prepared._mesh_files, _prepared._meshes
+                details["corner_elevations"] = {
+                    mesh["mesh_name"]: mesh["corner_elevations"]
+                    for mesh in meshes if "corner_elevations" in mesh
+                }
                 lookup = {mesh["mesh_name"]: i for i, mesh in enumerate(meshes)}
                 addresses = [
                     [lookup[row.mesh_name], int(row.cell_id)]
@@ -356,7 +381,8 @@ def map_profiles(
                 request = dict(
                     schema="ras-commander-sloping-request/1",
                     **(
-                        {"options": selected_options}
+                        {"options": {key: value for key, value in selected_options.items()
+                                     if key != "use_depth_weighted_faces" or method.get("depth_weighted_faces")}}
                         if method.get("enhanced_options")
                         else {}
                     ),
@@ -386,6 +412,7 @@ def map_profiles(
                 except PackageNotFoundError:
                     hdf_version = None
                 details["performance"] = {
+                    "corner_elevations": details.get("corner_elevations", {}),
                     "native_hdf": {
                         "package": "ras-commander-fast-hdf",
                         "version": hdf_version,
@@ -400,7 +427,9 @@ def map_profiles(
                     details["performance"]["prepared_context"] = _prepared.info
                 tick = time.perf_counter()
                 expired = threading.Event()
-                with (root / "stderr.txt").open("w+b") as errors:
+                # Delete-on-close stderr avoids a Windows cleanup race when a
+                # terminated child briefly retains its inherited file handle.
+                with tempfile.TemporaryFile(mode="w+b") as errors:
                     process = subprocess.Popen(
                         [
                             str(engine),
@@ -545,7 +574,7 @@ def map_profiles(
                                     if reduce_shallow_to_horizontal
                                     else "None"
                                 ),
-                                "UseDepthWeightedFaces": False,
+                                "UseDepthWeightedFaces": use_depth_weighted_faces,
                                 "FaceWSMode": "Adjusted",
                             }
                             or [p.get("id") for p in units] != expected
@@ -573,6 +602,9 @@ def map_profiles(
                 )
         if _prepared is not None:
             _prepared._check_sources()
+        if postprocessing_hdf is not None and (Path(postprocessing_hdf).parent / "corner_elevation_receipt.json").exists():
+            from ._corner_preparation import validate_receipt
+            validate_receipt(hdf, postprocessing_hdf)
         changed = [
             key for key, path in watched.items() if _file_identity(path) != before[key]
         ]

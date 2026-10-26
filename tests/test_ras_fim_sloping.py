@@ -337,13 +337,12 @@ def test_real_additional_sloping_options(threads, tmp_path):
     cases = json.loads(Path(filename).read_text(encoding="utf-8"))
     assert cases
     for index, case in enumerate(cases):
-        if case.get("use_depth_weighted_faces", False):
-            continue
         options = {
             key: case[key]
             for key in (
                 "render_mode",
                 "reduce_shallow_to_horizontal",
+                "use_depth_weighted_faces",
             )
         }
         first = next(iter(case["profiles"]))
@@ -363,7 +362,7 @@ def test_real_additional_sloping_options(threads, tmp_path):
         assert method["method_id"] == "rasmapper-sloping-with-faces/1"
         assert (
             method["options"]["UseDepthWeightedFaces"]
-            is False
+            == options["use_depth_weighted_faces"]
         )
         assert method["options"]["ShallowBehaviorMode"] == (
             "ReduceToHorizontal" if options["reduce_shallow_to_horizontal"] else "None"
@@ -388,7 +387,9 @@ def test_real_additional_sloping_options(threads, tmp_path):
     "options",
     [
         dict(render_mode="unknown"),
+        dict(use_depth_weighted_faces=True),
         dict(reduce_shallow_to_horizontal=True),
+        dict(render_mode="slopingPretty", use_depth_weighted_faces=1),
         dict(writer_threads=0),
         dict(max_inflight_profiles=0),
         dict(max_inflight_profiles=True),
@@ -409,6 +410,36 @@ def test_sloping_options_rejected_before_inputs_are_read(options, tmp_path):
     assert not (tmp_path / "out").exists()
 
 
+def test_depth_weighting_requires_stored_corner_elevations(sloping_case, tmp_path):
+    import h5py
+    import shutil
+    from ras_commander import RasFim, HdfMesh
+    from ras_commander.fim.errors import FimUnsupportedError
+
+    case = sloping_case
+    hdf = tmp_path / "missing-elevations.hdf"
+    shutil.copy2(case["hdf"], hdf)
+    names = HdfMesh.get_mesh_area_names(hdf)
+    with h5py.File(hdf, "r+") as target:
+        for name in names:
+            key = f"Geometry/2D Flow Areas/{name}/FacePoints Elevation"
+            if key in target:
+                del target[key]
+    output = tmp_path / "missing-output"
+    with pytest.raises(FimUnsupportedError, match="FacePoints Elevation"):
+        RasFim.map_sloping_profiles(
+            hdf,
+            case["terrain"],
+            output,
+            engine_path=case["engine"],
+            render_mode="slopingPretty",
+            use_depth_weighted_faces=True,
+            threads=1,
+        )
+    assert not list(output.glob("*.tif"))
+    assert json.loads((output / "fim_manifest.json").read_text())["status"] == "aborted"
+
+
 @pytest.mark.parametrize("mask_kind", ["bbox", "polygon"])
 def test_real_enhanced_catalog_mask_preserves_native_pixels(tmp_path, mask_kind):
     from ras_commander import RasFim, HdfMesh
@@ -425,7 +456,7 @@ def test_real_enhanced_catalog_mask_preserves_native_pixels(tmp_path, mask_kind)
         c
         for c in cases
         if c["reduce_shallow_to_horizontal"]
-        and not c["use_depth_weighted_faces"]
+        and c["use_depth_weighted_faces"]
         and any(isinstance(v, int) for v in c["profiles"].values())
     )
     cells = HdfMesh.get_mesh_cell_polygons(case["hdf"], strict=True)
@@ -450,6 +481,7 @@ def test_real_enhanced_catalog_mask_preserves_native_pixels(tmp_path, mask_kind)
         **mask_options,
         aoi_crs=cells.crs,
         render_mode="slopingPretty",
+        use_depth_weighted_faces=True,
         reduce_shallow_to_horizontal=True,
     )
     assert len(result) == len(case["profiles"])
@@ -478,7 +510,7 @@ def test_real_concurrent_timesteps_preserve_order_bits_and_masks(
             pytest.skip("set enhanced native timestep cases for concurrency qualification")
         cases = json.loads(Path(filename).read_text(encoding="utf-8"))
         case = next(c for c in cases if c["reduce_shallow_to_horizontal"]
-                    and not c["use_depth_weighted_faces"]
+                    and c["use_depth_weighted_faces"]
                     and sum(isinstance(v, int) for v in c["profiles"].values()) >= 2)
     timesteps = [(name, index) for name, index in case["profiles"].items() if isinstance(index, int)]
     assert len(timesteps) >= 2
@@ -488,7 +520,7 @@ def test_real_concurrent_timesteps_preserve_order_bits_and_masks(
         case["hdf"], case["terrain"], tmp_path / "batch", profiles=profiles,
         engine_path=case["engine"], threads=threads, max_inflight_profiles=inflight,
         render_mode="slopingPretty" if enhanced else "sloping",
-        reduce_shallow_to_horizontal=enhanced,
+        use_depth_weighted_faces=enhanced, reduce_shallow_to_horizontal=enhanced,
         writer_threads=1, max_working_mib=4096,
     )
     report = result.attrs["performance"]["engine_report"]
@@ -656,15 +688,3 @@ def test_sloping_writer_failure_restores_worker_scope_and_aborts(
     assert get_gdal_config("GDAL_NUM_THREADS") == previous
     assert not list(output.glob("*.tif"))
     assert json.loads((output / "fim_manifest.json").read_text())["status"] == "aborted"
-
-
-@pytest.mark.parametrize("method", ["map_sloping_profiles", "prepare_sloping_model"])
-def test_deferred_option_is_not_a_public_argument(method, tmp_path):
-    from ras_commander import RasFim
-
-    with pytest.raises(TypeError, match="use_depth_weighted_faces"):
-        args = ["absent.hdf", "absent.tif"]
-        if method == "map_sloping_profiles":
-            args.append(tmp_path / "out")
-        getattr(RasFim, method)(*args, use_depth_weighted_faces=True)
-    assert not (tmp_path / "out").exists()

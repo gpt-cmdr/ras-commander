@@ -2,7 +2,7 @@
 
 The case JSON contains hdf, terrain, engine, profiles (name -> Max/index), and
 references (name -> {depth, wse}). Optional bbox/polygon/AOI fields constrain
-mapping. Optional render_mode/reduce_shallow_to_horizontal
+mapping. Optional render_mode/reduce_shallow_to_horizontal/use_depth_weighted_faces
 fields select enhanced sloping. References must use the same options and no
 added depth cutoff.
 Native generation uses the separate Commander reference harness; this runner
@@ -198,11 +198,9 @@ def main():
     parser.add_argument("--max-inflight-profiles", type=int, default=1)
     args = parser.parse_args()
     case = json.loads(args.case.read_text(encoding="utf-8"))
-    if case.get("use_depth_weighted_faces", False):
-        raise ValueError("Case requests a deferred interpolation control")
     fields = {
         key: case[key]
-        for key in ("bbox", "polygon", "polygon_layer", "aoi_crs")
+        for key in ("bbox", "polygon", "polygon_layer", "aoi_crs", "postprocessing_hdf", "corner_elevation_source")
         if key in case
     }
     if args.match_reference_grid:
@@ -246,6 +244,7 @@ def main():
             for key in (
                 "render_mode",
                 "reduce_shallow_to_horizontal",
+                "use_depth_weighted_faces",
             )
             if key in case
         },
@@ -267,7 +266,7 @@ def main():
 
     constraint = RasFim.resolve_aoi(
         default_crs=cells.crs,
-        **{k: v for k, v in fields.items() if k != "template_raster"},
+        **{k: v for k, v in fields.items() if k in ("bbox", "polygon", "polygon_layer", "aoi_crs")},
     )
     geometry = _aoi.geometry_in_crs(constraint, cells.crs) if constraint else None
     receipt = dict(

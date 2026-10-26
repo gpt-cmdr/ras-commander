@@ -34,6 +34,19 @@ Parent `ras_commander/AGENTS.md` and root `AGENTS.md` still apply.
   mode adds native corner-to-face weight donation and optional
   shallow-to-horizontal selection. Keep plain defaults unchanged;
   the selected method/options must appear in the engine report and manifest.
+  Depth-weighted faces require the advertised engine capability and stored
+  corner ground elevations read by the native HDF backend. Cache-only inputs
+  require a verified preparation receipt binding the plan and terrain sources.
+  `prepare_corner_elevations` is an explicit Windows/7.0.1 native preparation
+  operation, separate from production mapping and its clocks. Never sample
+  missing corner elevations or load HEC-RAS inside ordinary mapping.
+- Cell-face mapping requires `native_donation_history`. Preserve retained donor
+  scratch in fixed 256-point ranges per source terrain tile. Replay complete
+  physical cell geometry, including predecessors outside AOIs, for affected
+  cells; independently clearing pixel scratch changes native values. Keep the
+  original source TIFF lattice/tile layout. Full Windows weighted+shallow Max
+  checks pass all five models, including River and Creek, with complete mask/bit
+  equality. Arbitrary retiled terrain and multi-source mosaics are unqualified.
 - Sloping AOIs constrain terrain/ownership/output pixels only. Keep the complete
   geometry for hydraulic connectivity and corner reconstruction across boundaries.
   Geometry, terrain and ownership are reused across all profiles in one request.

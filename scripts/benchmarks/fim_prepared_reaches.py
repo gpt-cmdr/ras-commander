@@ -3,7 +3,7 @@
 Run with --cases local.json --output new-folder --engine executable. The JSON
 is a list of workloads, each containing name, hdf, terrain, profiles (name to
 Max/index) and requests (AOI keyword dictionaries). Optional render_mode,
-reduce_shallow_to_horizontal select the method.
+reduce_shallow_to_horizontal and use_depth_weighted_faces select the method.
 Polygon requests can use vector-file paths and aoi_crs. No HEC-RAS is executed.
 Preparation, mapping and close are timed; decoded pixel checks run outside
 timing. Retain local receipts rather than committing generated model outputs.
@@ -66,8 +66,6 @@ def benchmark(args):
     output = args.output.resolve()
     output.mkdir(parents=True, exist_ok=False)
     cases = json.loads(args.cases.read_text(encoding="utf-8"))
-    if any(case.get("use_depth_weighted_faces", False) for case in cases):
-        raise ValueError("Case requests a deferred interpolation control")
     engine = args.engine.resolve(strict=True)
     receipt = dict(
         engine_sha256=digest(engine),
@@ -139,6 +137,9 @@ def benchmark(args):
                     for key in (
                         "render_mode",
                         "reduce_shallow_to_horizontal",
+                        "use_depth_weighted_faces",
+                        "postprocessing_hdf",
+                        "corner_elevation_source",
                     )
                     if key in case
                 },
