@@ -171,8 +171,10 @@ These changes leave the compiled engine and its numerical method unchanged.
 The tests cover short reads, truncation, signed zero and NaN payload bits,
 staging bytes, nested writer configuration restoration, invalid worker
 counts and one/four-worker numerical equality. Terrain and ownership already
-persist across profiles within one call. Persistent prepared contexts across
-calls and direct Python bindings remain opportunities for further work.
+persist across profiles within one call. The later
+[prepared-model increment](#prepared-model-contexts-across-reach-requests)
+adds Python-side reuse across calls; persistent native state and direct Python
+bindings remain opportunities for further work.
 
 ### Seven-profile catalog observation
 
@@ -626,8 +628,9 @@ Final Astra review found no remaining implementation blocker. Windows affected
 checks total 152 passing and four optional skips across the targeted runs;
 Linux checks include 24 distinct sloping and 70 horizontal passes. Both
 platforms cover compression layout/value preservation and restoration after
-writer exceptions. Persistent prepared contexts and an in-process binding
-remain candidates for later measurement. SIMD changes to interpolation are
+writer exceptions. That review preceded the prepared-model increment below
+and does not cover its implementation. Persistent native state and an
+in-process binding remain candidates for later measurement. SIMD changes to interpolation are
 deferred: profiling did not justify changing arithmetic order.
 
 The subsequent catalog-mask check exercises both an interior bbox and a
@@ -710,12 +713,128 @@ may overlap native work and has a separate worker budget. Per-profile native
 wall-stage times overlap and must not be summed as total wall time. Admission
 is conservative planned memory, not an enforced process RSS limit.
 
+## Prepared model contexts across reach requests
+
+`RasFim.prepare_sloping_model` adds explicit Python-side reuse for repeated
+sloping reach requests on one model and terrain. A context retains physical
+cell polygons/spatial indexing, model scope, engine capabilities, terrain
+metadata and complete staged mesh/profile inputs. It prepares a fixed set of
+named Max/timestep profiles and deduplicates repeated selectors. Closing the
+context releases its temporary files. HDF, terrain or engine identity changes
+invalidate and close it; sources are never refreshed silently. The source-text
+geometry file is also watched when resolved by the 2D-model guard. Identity
+uses file size and nanosecond modification time, rather than content hashing.
+When no source-text geometry was initially available, the context rechecks the
+model scope; a newly resolved geometry file requires preparation again.
+
+This increment leaves the 0.6 engine binary and numerical arithmetic unchanged.
+Each request still launches a fresh CLI process, prepares native interpolation
+stencils, decodes terrain, constructs AOI ownership and computes profile
+hydraulics. AOI windows, selected overlap validation, output arrays and delivery
+remain per request. Global topology and selected results remain complete at
+reach boundaries. It does not introduce persistent native terrain/stencil
+state, pixel-weight caching or chunked HDF staging.
+
+The prepared-state budget combines a retained-geometry estimate and actual
+staged-file bytes; the fixed profile set bounds growth between requests.
+Admission is not a process RSS ceiling. Context calls are serialized, and close
+waits for an active request. These lifetime and cache controls are documented
+in the [API guide](../api/fim.md#reuse-prepared-models-across-reach-requests).
+
+### Three-reach sequence observation
+
+On Windows, three repeated reach requests per model took the following median
+complete sequence times over three repetitions. Prepared sequence times include
+initial preparation, all three requests and close; preparation is also reported
+separately and must not be added again.
+
+| Model / method | One-shot sequence (s) | Prepared sequence (s) | Preparation (s) | One-shot / prepared |
+|---|---:|---:|---:|---:|
+| Davis, corners + faces with both flags | 1.013 | 0.665 | 0.112 | 1.52× |
+| Bald Eagle bridges, corners + faces with both flags | 1.599 | 1.012 | 0.205 | 1.58× |
+| Spring River eBFE, plain cell corners | 8.644 | 5.731 | 1.839 | 1.51× |
+
+Each sequence mapped three profiles at each of two bboxes and one triangular
+file-polygon AOI. The bboxes span 400 × 400 terrain pixels before clipping to
+the physical mapping grid; the triangle occupies the corresponding central
+reach. Davis used stored timesteps 54/108/162; bridges used Max and 108/216;
+Spring River used Max and 0/1. Complete model preparation retained 2,716,
+24,718 and 422,715 physical cells, respectively. Planned retained geometry plus
+staged inputs totaled 1,642,070, 15,523,972 and 267,606,929 bytes; these are
+cache admission estimates, not measured peak memory.
+
+The 2026-10-26 run used the unchanged engine 0.6.0 Windows binary identified in
+the final model/method matrix above. One-shot/prepared sequence order alternated
+across repetitions. Four-CPU affinity, four Rust workers, one compression
+worker and two profiles in flight were used; effective concurrency was two in
+every request. Planned working/prepared budgets were 32,768/2,048 MiB. There was
+no added cutoff, floodplain polygonization or template-grid delivery.
+
+All 18 sequences completed: 54 reach requests, 162 profiles and 324 Depth/WSE
+products. The first one-shot sequence per workload supplied the reference
+(54 products, self-checked). The remaining 270 products matched those references
+in decoded grid, valid/nodata masks and valid float32 bits. Comparison scans
+were outside timing. HDF/terrain content hashes, engine/harness/case/Python
+source identities and restored affinity were checked. The final local receipt
+is `working/prepared-benchmark-03/results.json`; exploratory runs are excluded.
+
+These measurements compare preparation reuse against the one-shot API using
+the same final engine and options. They add no RAS Mapper executions or native
+qualification for the additional benchmark timesteps. Shared-host cache
+conditions were uncontrolled. The observed sequence reductions apply to these
+three-reach workloads; they do not establish a general speed guarantee or the
+benefit of a persistent native context.
+
+`scripts/benchmarks/fim_prepared_reaches.py` compares complete one-shot and
+prepared reach sequences without running HEC-RAS. Its external cases JSON
+supplies model/terrain paths, named profiles, interpolation options and a list
+of AOI keyword dictionaries. It alternates sequence order, includes context
+preparation and close in the prepared sequence clock, records each request
+separately and checks decoded grids, masks and valid float32 bits outside the
+clocks. Input, engine, harness and Python source hashes are retained in its local receipt.
+Generated products and private case paths remain outside version control.
+
+Run the harness from the repository root in the configured FIM environment:
+
+```bash
+python -m scripts.benchmarks.fim_prepared_reaches --cases local-cases.json --output new-results --engine /path/to/ras2fim-batch --cpus 4
+```
+
+`new-results` must not exist. The default controls are three repetitions, four
+Rust workers, one writer worker, two profiles in flight, 32,768 MiB planned
+working memory and 2,048 MiB prepared state. A local cases file is a JSON array;
+this example shows its structure, not a recorded qualification case:
+
+```json
+[
+  {
+    "name": "local-reaches",
+    "hdf": "/local/model.p02.hdf",
+    "terrain": "/local/canonical_terrain.tif",
+    "profiles": {"t0054": 54, "t0108": 108},
+    "render_mode": "slopingPretty",
+    "reduce_shallow_to_horizontal": true,
+    "use_depth_weighted_faces": true,
+    "requests": [
+      {"polygon": "/local/reach_one.gpkg"},
+      {"polygon": "/local/reach_two.gpkg"}
+    ]
+  }
+]
+```
+
+Requests can instead contain `bbox` and `aoi_crs`. Use computed profiles and
+AOIs from the actual model; enhanced depth weighting requires stored corner
+elevations. Dependency imports are warmed before timing. Filesystem caches
+remain uncontrolled; no mapping warm-up is excluded.
+
 ### Next performance opportunities
 
-1. Reuse prepared model state across reach requests. Cache immutable topology,
-   stencils and source-indexed HDF metadata with input-identity invalidation and
-   bounded terrain/profile caches. Each new AOI still needs its own ownership
-   window. This avoids repeatedly extracting/staging the same global model.
+1. Measure persistent native state across reach requests. The explicit context
+   now reuses Python geometry and staged global inputs. Native stencils and
+   decoded terrain are still rebuilt by each CLI request; retaining them would
+   require a separate engine lifetime and bounded-cache contract. Each new AOI
+   still needs its own ownership window.
 2. Read selected HDF rows in bounded chunks and pipeline staging with native
    processing. This removes repeated opens and the current all-profiles-upfront
    barrier while retaining virtual cells and per-read source checks.

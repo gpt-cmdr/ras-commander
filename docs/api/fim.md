@@ -186,6 +186,93 @@ for the large eBFE cases or other HEC-RAS versions. The physical-2D scope and
 standalone-storage-area exclusion apply to both modes. Internal experimental
 face-value and corner-adjustment switches are not exposed by this API.
 
+## Reuse prepared models across reach requests
+
+Use `RasFim.prepare_sloping_model` when several reach requests use the same
+computed model, terrain and profile selectors. Preparation returns a
+`FimPreparedSlopingModel` context that retains Python-side model inputs and
+staged native inputs until it is closed. It uses the existing 0.6 engine;
+no new wheel is needed.
+
+```python
+with RasFim.prepare_sloping_model(
+    "model.p02.hdf", "canonical_terrain.tif",
+    profiles={"t0054": 54, "t0108": 108},
+    render_mode="slopingPretty",
+    use_depth_weighted_faces=True,
+    reduce_shallow_to_horizontal=True,
+    threads=4,
+    max_working_mib=4096,
+    max_prepared_mib=1024,
+) as model:
+    first = model.map_profiles(
+        "reach_one", profiles=["t0054", "t0108"],
+        polygon="reach_one.gpkg", writer_threads=1,
+    )
+    second = model.map_profiles(
+        "reach_two", profiles=["t0108"],
+        polygon="reach_two.gpkg", writer_threads=1,
+    )
+    print(model.info)
+```
+
+The factory fixes the model, terrain, interpolation options, engine, native
+worker count and available profile names. Its `profiles` maps names to `"Max"`
+or zero-based stored timestep indices; omission prepares Max. A request's
+`profiles` selects a subset of those **names**, rather than new timestep
+selectors. Omit it to map the complete prepared set. Repeated selectors are
+staged once, even when several names refer to the same result.
+
+The context retains physical cell polygons and their spatial index, model
+scope, engine capabilities, terrain metadata, complete staged mesh arrays and
+the selected WSE rows in immutable temporary files. It does not retain a
+native process: each request starts the CLI, rebuilds Rust interpolation
+stencils and decodes its terrain window. Hydraulic connectivity, depth-weighted
+faces and shallow-cell decisions are computed for each profile. Chunked HDF
+staging, persistent native terrain/stencil caches and pixel-weight caches are
+outside this increment.
+
+Each request resolves its bbox or polygon, plans the output window, validates
+selected cell overlaps, builds ownership and raster arrays, and writes its
+products. Complete global mesh topology and prepared results remain available
+at AOI boundaries. `template_raster`, `write_floodplain`, `writer_threads`,
+`max_inflight_profiles`, `timeout` and AOI inputs have the same meaning as on
+`map_sloping_profiles`. The output folder must be new or empty. A request can
+override the factory's `max_working_mib`; compression has its separate worker
+budget. Preparation does not change the physical-2D mapping scope, native
+qualification scope or zero-added-cutoff behavior described above.
+
+`max_prepared_mib` bounds a planned retained-geometry estimate plus the actual
+staged-file bytes. The fixed prepared profile set prevents cache growth across
+requests. This budget and `max_working_mib` are admission checks, not limits on
+process RSS or total Python/GDAL memory; transient HDF reads and preparation
+allocations are outside retained admission. Preparation that exceeds its budget
+raises and cleans its temporary inputs. `info` returns a copy of preparation
+metadata, including counts, planned/staged bytes and `prepare_seconds`. Each
+request retains this copy in `attrs["performance"]["prepared_context"]`; its
+`total_seconds` measures that request and excludes the earlier preparation.
+
+The context checks HDF, terrain and engine size and nanosecond modification
+time before and after preparation and each mapping request. It also watches
+the source-text geometry file when the 2D-model guard resolves one. These are
+file identity checks, not content hashes. If no source-text geometry was
+initially available, model scope is rechecked; a newly resolved geometry file
+requires a new context. A changed source invalidates and closes
+the context, then raises; create a new context explicitly to use changed
+inputs. Request-specific polygon and template files retain their own identity
+checks. Inputs are read-only. A failed mapping request removes that request's
+delivered products; source invalidation also releases the prepared state.
+
+Use the context manager to release temporary inputs on success or exception.
+Alternatively call `close()` explicitly; it is idempotent, and `closed` reports
+whether the context has been released. Calls on one context are serialized,
+including calls from different threads; `close()` waits for an active request.
+A closed context cannot map again. This synchronization does not provide
+cross-context scheduling or combine their memory and worker budgets.
+
+See the [prepared-context evidence](../development/fim-mapping-performance.md#prepared-model-contexts-across-reach-requests)
+for measurements and numerical comparison scope.
+
 ## Bounded timestep concurrency (engine 0.6)
 
 Set `max_inflight_profiles=2` or `4` on `map_sloping_profiles` to evaluate
@@ -691,6 +778,12 @@ are observations of the listed workloads and do not establish a general speedup.
       show_source: false
 
 ::: ras_commander.fim._prepare.FimPreparedProfile
+    options:
+      show_root_heading: false
+      heading_level: 3
+      show_source: false
+
+::: ras_commander.fim.FimPreparedSlopingModel
     options:
       show_root_heading: false
       heading_level: 3

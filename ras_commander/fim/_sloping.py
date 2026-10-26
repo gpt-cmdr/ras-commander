@@ -18,39 +18,9 @@ from ._sloping_inputs import write_binary_mesh_inputs
 from .errors import FimEngineError
 
 
-def map_profiles(
-    hdf_path,
-    terrain_path,
-    output_folder,
-    *,
-    profiles=None,
-    render_mode="sloping",
-    reduce_shallow_to_horizontal=False,
-    use_depth_weighted_faces=False,
-    bbox=None,
-    polygon=None,
-    polygon_layer=None,
-    aoi_crs=None,
-    engine_path=None,
-    threads=1,
-    writer_threads=1,
-    max_inflight_profiles=1,
-    max_working_mib=1024,
-    timeout=None,
-    write_floodplain=False,
-    template_raster=None,
+def _validate_options(
+    render_mode, reduce_shallow_to_horizontal, use_depth_weighted_faces
 ):
-    from .. import HdfMesh, HdfResultsMesh
-    from ..fast_hdf import backend_scope
-    from .RasFim import (
-        RasFim,
-        MANIFEST_COLUMNS,
-        _empty_row,
-        _file_identity,
-        _positive_int,
-        _prepare_output_folder,
-    )
-
     if render_mode not in ("sloping", "slopingPretty"):
         raise ValueError("render_mode must be 'sloping' or 'slopingPretty'")
     if not isinstance(reduce_shallow_to_horizontal, bool) or not isinstance(
@@ -66,26 +36,10 @@ def map_profiles(
         reduce_shallow_to_horizontal=reduce_shallow_to_horizontal,
         use_depth_weighted_faces=use_depth_weighted_faces,
     )
-    started = time.perf_counter()
-    preparation = {}
-    phase = started
-    threads = _positive_int(threads, "threads")
-    writer_threads = _positive_int(writer_threads, "writer_threads")
-    max_inflight_profiles = _positive_int(max_inflight_profiles, "max_inflight_profiles")
-    if max_inflight_profiles > 64:
-        raise ValueError("max_inflight_profiles must be <= 64")
-    if writer_threads > 64:
-        raise ValueError("writer_threads must be <= 64")
-    budget = _positive_int(max_working_mib, "max_working_mib")
-    if threads > 64:
-        raise ValueError("threads must be <= 64")
-    if timeout is not None and (
-        isinstance(timeout, bool) or not np.isfinite(timeout) or timeout <= 0
-    ):
-        raise ValueError("timeout must be positive and finite, or None")
-    hdf = Path(hdf_path).resolve(strict=True)
-    terrain = Path(terrain_path).resolve(strict=True)
-    model_scope = RasFim.validate_2d_model(hdf)
+    return selected_options
+
+
+def _validate_selection(profiles):
     selected = {"Max": "Max"} if profiles is None else dict(profiles)
     if not selected or any(
         not isinstance(name, str)
@@ -107,11 +61,15 @@ def map_profiles(
             raise ValueError(
                 "profile selectors must be 'Max' or nonnegative timestep indices"
             )
-    engine = _engine.find_engine(engine_path)
-    method = _engine.engine_method(engine).get("sloping", {})
+    return selected
+
+
+def _validate_method(method, render_mode, max_inflight_profiles):
     concurrency_supported = method.get("bounded_profile_concurrency") is True
     if max_inflight_profiles > 1 and not concurrency_supported:
-        raise FimEngineError("engine lacks bounded sloping profile concurrency; install engine 0.6 or newer")
+        raise FimEngineError(
+            "engine lacks bounded sloping profile concurrency; install engine 0.6 or newer"
+        )
     if method.get("method_id") != "rasmapper-plain-sloping/1" or not method.get(
         "stream_outputs"
     ):
@@ -127,7 +85,141 @@ def map_profiles(
         if render_mode == "slopingPretty"
         else method["method_id"]
     )
-    watched = {"hdf": hdf, "terrain": terrain}
+    return concurrency_supported, selected_method_id
+
+
+def _stage_profiles(
+    hdf, root, meshes, max_values, selected, *, deduplicate=False, max_staged_bytes=None
+):
+    from .. import HdfResultsMesh
+    from ..fast_hdf import backend_scope
+    from .errors import FimUnsupportedError
+
+    staged_bytes = 0
+    cached = {}
+    units = []
+    profile_views = {}
+    for profile_index, (name, selector) in enumerate(selected.items()):
+        if deduplicate and selector in cached:
+            units.append(dict(id=name, values_files=list(cached[selector])))
+            continue
+        values_files = []
+        for i, mesh in enumerate(meshes):
+            if selector == "Max":
+                values = max_values[i]
+            else:
+                with backend_scope("rust"):
+                    if i not in profile_views:
+                        profile_views[i] = HdfResultsMesh.get_mesh_timeseries(
+                            hdf,
+                            mesh["mesh_name"],
+                            "Water Surface",
+                            truncate=False,
+                            return_type="view",
+                            include_ghost_cells=True,
+                        )
+                    view = profile_views[i].select(time=int(selector))
+                    values = view.to_numpy(dtype=np.float32).reshape(-1)
+            if len(values) != mesh["cell_count"] or not np.isfinite(values).all():
+                raise ValueError(
+                    f"Invalid complete cell profile {name!r} for {mesh['mesh_name']!r}"
+                )
+            filename = f"values-{profile_index}-{i}.bin"
+            values_files.append(filename)
+            array = np.asarray(values, dtype="<f4")
+            if (
+                max_staged_bytes is not None
+                and staged_bytes + array.nbytes > max_staged_bytes
+            ):
+                raise FimUnsupportedError(
+                    "Prepared sloping inputs exceed max_prepared_mib"
+                )
+            _write_array(root / filename, array)
+            staged_bytes += array.nbytes
+        cached[selector] = values_files
+        units.append(dict(id=name, values_files=values_files))
+    return units, len(profile_views), staged_bytes
+
+
+def map_profiles(
+    hdf_path,
+    terrain_path,
+    output_folder,
+    *,
+    profiles=None,
+    render_mode="sloping",
+    reduce_shallow_to_horizontal=False,
+    use_depth_weighted_faces=False,
+    bbox=None,
+    polygon=None,
+    polygon_layer=None,
+    aoi_crs=None,
+    engine_path=None,
+    threads=1,
+    writer_threads=1,
+    max_inflight_profiles=1,
+    max_working_mib=1024,
+    timeout=None,
+    write_floodplain=False,
+    template_raster=None,
+    _prepared=None,
+):
+    from .. import HdfMesh, HdfResultsMesh
+    from ..fast_hdf import backend_scope
+    from .RasFim import (
+        RasFim,
+        MANIFEST_COLUMNS,
+        _empty_row,
+        _file_identity,
+        _positive_int,
+        _prepare_output_folder,
+    )
+
+    selected_options = _validate_options(
+        render_mode, reduce_shallow_to_horizontal, use_depth_weighted_faces
+    )
+    started = time.perf_counter()
+    preparation = {}
+    phase = started
+    threads = _positive_int(threads, "threads")
+    writer_threads = _positive_int(writer_threads, "writer_threads")
+    max_inflight_profiles = _positive_int(
+        max_inflight_profiles, "max_inflight_profiles"
+    )
+    if max_inflight_profiles > 64:
+        raise ValueError("max_inflight_profiles must be <= 64")
+    if writer_threads > 64:
+        raise ValueError("writer_threads must be <= 64")
+    budget = _positive_int(max_working_mib, "max_working_mib")
+    if threads > 64:
+        raise ValueError("threads must be <= 64")
+    if timeout is not None and (
+        isinstance(timeout, bool) or not np.isfinite(timeout) or timeout <= 0
+    ):
+        raise ValueError("timeout must be positive and finite, or None")
+    hdf = Path(hdf_path).resolve(strict=True)
+    terrain = Path(terrain_path).resolve(strict=True)
+    if _prepared is None:
+        model_scope = RasFim.validate_2d_model(hdf)
+    else:
+        from copy import deepcopy
+
+        model_scope = deepcopy(_prepared._model_scope)
+    selected = _validate_selection(profiles)
+    engine = (
+        _engine.find_engine(engine_path) if _prepared is None else _prepared._engine
+    )
+    method = (
+        _engine.engine_method(engine).get("sloping", {})
+        if _prepared is None
+        else _prepared._method
+    )
+    concurrency_supported, selected_method_id = _validate_method(
+        method, render_mode, max_inflight_profiles
+    )
+    watched = {"hdf": hdf, "terrain": terrain, "engine": engine}
+    if _prepared is not None:
+        watched.update(_prepared._watched)
     if template_raster is not None:
         template_raster = Path(template_raster).resolve(strict=True)
         watched["template_raster"] = template_raster
@@ -136,10 +228,13 @@ def map_profiles(
     before = {key: _file_identity(path) for key, path in watched.items()}
     preparation["preflight_seconds"] = time.perf_counter() - phase
     phase = time.perf_counter()
-    with backend_scope("rust"):
-        cells = HdfMesh.get_mesh_cell_polygons(
-            hdf, strict=True, engine="native", threads=threads
-        )
+    if _prepared is None:
+        with backend_scope("rust"):
+            cells = HdfMesh.get_mesh_cell_polygons(
+                hdf, strict=True, engine="native", threads=threads
+            )
+    else:
+        cells = _prepared._cells
     preparation["cell_polygon_seconds"] = time.perf_counter() - phase
     phase = time.perf_counter()
     if cells.empty:
@@ -181,9 +276,9 @@ def map_profiles(
         backend="rust",
         model_scope=model_scope,
         mapping_scope="physical 2D cells only; standalone storage-area surfaces excluded",
-        output_grid_reference=str(template_raster)
-        if template_raster is not None
-        else "terrain window",
+        output_grid_reference=(
+            str(template_raster) if template_raster is not None else "terrain window"
+        ),
         status="in_progress",
         options={
             **selected_options,
@@ -219,18 +314,25 @@ def map_profiles(
             }
         else:
             tick = time.perf_counter()
-            identity = _engine.terrain_identity(engine, terrain, cells.crs)
+            identity = (
+                _engine.terrain_identity(engine, terrain, cells.crs)
+                if _prepared is None
+                else _prepared._terrain_identity
+            )
             with tempfile.TemporaryDirectory(
                 prefix=".sloping-", dir=folder
             ) as temporary:
                 root = Path(temporary)
-                mesh_files, meshes, max_values = write_binary_mesh_inputs(
-                    hdf,
-                    root,
-                    threads=threads,
-                    include_max="Max" in selected.values(),
-                    include_vertex_elevations=use_depth_weighted_faces,
-                )
+                if _prepared is None:
+                    mesh_files, meshes, max_values = write_binary_mesh_inputs(
+                        hdf,
+                        root,
+                        threads=threads,
+                        include_max="Max" in selected.values(),
+                        include_vertex_elevations=use_depth_weighted_faces,
+                    )
+                else:
+                    mesh_files, meshes = _prepared._mesh_files, _prepared._meshes
                 lookup = {mesh["mesh_name"]: i for i, mesh in enumerate(meshes)}
                 addresses = [
                     [lookup[row.mesh_name], int(row.cell_id)]
@@ -244,43 +346,20 @@ def map_profiles(
                 if plan.mask_geometry:
                     _write_geometry(root / "aoi.wkb", [plan.geometry])
                     fields["aoi_file"] = "aoi.wkb"
-                units = []
-                profile_views = {}
-                for profile_index, (name, selector) in enumerate(selected.items()):
-                    values_files = []
-                    for i, mesh in enumerate(meshes):
-                        if selector == "Max":
-                            values = max_values[i]
-                        else:
-                            with backend_scope("rust"):
-                                if i not in profile_views:
-                                    profile_views[i] = (
-                                        HdfResultsMesh.get_mesh_timeseries(
-                                            hdf,
-                                            mesh["mesh_name"],
-                                            "Water Surface",
-                                            truncate=False,
-                                            return_type="view",
-                                            include_ghost_cells=True,
-                                        )
-                                    )
-                                view = profile_views[i].select(time=int(selector))
-                                values = view.to_numpy(dtype=np.float32).reshape(-1)
-                        if (
-                            len(values) != mesh["cell_count"]
-                            or not np.isfinite(values).all()
-                        ):
-                            raise ValueError(
-                                f"Invalid complete cell profile {name!r} for {mesh['mesh_name']!r}"
-                            )
-                        filename = f"values-{profile_index}-{i}.bin"
-                        values_files.append(filename)
-                        _write_array(root / filename, np.asarray(values, dtype="<f4"))
-                    units.append(dict(id=name, values_files=values_files))
+                if _prepared is None:
+                    units, profile_view_count, _ = _stage_profiles(
+                        hdf, root, meshes, max_values, selected
+                    )
+                else:
+                    units = [_prepared._units[name] for name in selected]
+                    profile_view_count = 0
                 import rasterio
 
-                with rasterio.open(terrain) as src:
-                    full_transform = list(src.transform.to_gdal())
+                if _prepared is None:
+                    with rasterio.open(terrain) as src:
+                        full_transform = list(src.transform.to_gdal())
+                else:
+                    full_transform = _prepared._terrain_transform
                 request = dict(
                     schema="ras-commander-sloping-request/1",
                     **(
@@ -320,10 +399,12 @@ def map_profiles(
                         "numeric_payload_backend": "rust-required",
                     },
                     "preparation": preparation,
-                    "profile_views_prepared": len(profile_views),
+                    "profile_views_prepared": profile_view_count,
                     "hdf_and_staging_seconds": time.perf_counter() - tick,
                     "product_write_seconds": {},
                 }
+                if _prepared is not None:
+                    details["performance"]["prepared_context"] = _prepared.info
                 tick = time.perf_counter()
                 expired = threading.Event()
                 with (root / "stderr.txt").open("w+b") as errors:
@@ -434,16 +515,24 @@ def map_profiles(
                         if concurrency_supported:
                             effective = report.get("effective_inflight_profiles")
                             if (
-                                type(report.get("requested_inflight_profiles")) is not int
-                                or report.get("requested_inflight_profiles") != max_inflight_profiles
+                                type(report.get("requested_inflight_profiles"))
+                                is not int
+                                or report.get("requested_inflight_profiles")
+                                != max_inflight_profiles
                                 or isinstance(effective, bool)
                                 or not isinstance(effective, int)
-                                or not 1 <= effective <= min(max_inflight_profiles, threads, len(selected))
+                                or not 1
+                                <= effective
+                                <= min(max_inflight_profiles, threads, len(selected))
                                 or report.get("threads") != threads
                                 or type(report.get("planned_bytes")) is not int
-                                or not 0 < report["planned_bytes"] <= request["max_working_bytes"]
+                                or not 0
+                                < report["planned_bytes"]
+                                <= request["max_working_bytes"]
                             ):
-                                raise FimEngineError("Invalid sloping concurrency report")
+                                raise FimEngineError(
+                                    "Invalid sloping concurrency report"
+                                )
                         if (
                             code != 0
                             or report.get("status") != "complete"
@@ -452,13 +541,17 @@ def map_profiles(
                             or reported_method.get("options")
                             != {
                                 "CellRenderMode": "Sloping",
-                                "CellStencilMode": "WithFaces"
-                                if render_mode == "slopingPretty"
-                                else "JustFacepoints",
+                                "CellStencilMode": (
+                                    "WithFaces"
+                                    if render_mode == "slopingPretty"
+                                    else "JustFacepoints"
+                                ),
                                 "FacepointAdjustmentMode": "None",
-                                "ShallowBehaviorMode": "ReduceToHorizontal"
-                                if reduce_shallow_to_horizontal
-                                else "None",
+                                "ShallowBehaviorMode": (
+                                    "ReduceToHorizontal"
+                                    if reduce_shallow_to_horizontal
+                                    else "None"
+                                ),
                                 "UseDepthWeightedFaces": use_depth_weighted_faces,
                                 "FaceWSMode": "Adjusted",
                             }
@@ -485,6 +578,8 @@ def map_profiles(
                 details["performance"]["engine_and_delivery_seconds"] = (
                     time.perf_counter() - tick
                 )
+        if _prepared is not None:
+            _prepared._check_sources()
         changed = [
             key for key, path in watched.items() if _file_identity(path) != before[key]
         ]

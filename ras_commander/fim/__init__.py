@@ -32,11 +32,13 @@ from .errors import (
 from ._aoi import FimAoi
 from ._prepare import FimPreparedProfile
 from .RasFim import RasFim
+from ._sloping_context import FimPreparedSlopingModel
 
 __all__ = [
     "RasFim",
     "FimAoi",
     "FimPreparedProfile",
+    "FimPreparedSlopingModel",
     "FimError",
     "FimEngineNotFoundError",
     "FimEngineError",

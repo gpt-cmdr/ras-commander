@@ -33,6 +33,7 @@ def write_binary_mesh_inputs(
     threads=4,
     include_max=True,
     include_vertex_elevations=False,
+    max_staged_bytes=None,
 ):
     """Stage typed HDF arrays without constructing per-cell Python objects."""
     import json
@@ -56,6 +57,7 @@ def write_binary_mesh_inputs(
     files = []
     meshes = []
     max_values = []
+    staged_bytes = 0
     with h5py.File(path, "r") as source:
         for index, name in enumerate(names):
             prefix = f"Geometry/2D Flow Areas/{name}/"
@@ -87,13 +89,24 @@ def write_binary_mesh_inputs(
             descriptors = {}
 
             def stage(key, values, dtype):
+                nonlocal staged_bytes
                 array = np.ascontiguousarray(values, dtype=dtype)
                 expected_columns = (
                     1 if key.endswith("minimum") or key == "vertex_elevations" else 2
                 )
                 array = array.reshape(-1, expected_columns)
                 filename = f"mesh-{index}-{key}.bin"
+                if (
+                    max_staged_bytes is not None
+                    and staged_bytes + array.nbytes > max_staged_bytes
+                ):
+                    from .errors import FimUnsupportedError
+
+                    raise FimUnsupportedError(
+                        "Prepared sloping inputs exceed max_prepared_mib"
+                    )
                 _write_array(root / filename, array)
+                staged_bytes += array.nbytes
                 descriptors[key] = dict(path=filename, rows=len(array))
 
             stage("centers", points[["x", "y"]].to_numpy(), "<f8")
@@ -111,7 +124,18 @@ def write_binary_mesh_inputs(
             metadata = dict(schema="ras-commander-sloping-mesh/1", arrays=descriptors)
             filename = f"mesh-{index}.json"
             files.append(filename)
-            (root / filename).write_text(json.dumps(metadata), encoding="utf-8")
+            encoded = json.dumps(metadata).encode("utf-8")
+            if (
+                max_staged_bytes is not None
+                and staged_bytes + len(encoded) > max_staged_bytes
+            ):
+                from .errors import FimUnsupportedError
+
+                raise FimUnsupportedError(
+                    "Prepared sloping inputs exceed max_prepared_mib"
+                )
+            (root / filename).write_bytes(encoded)
+            staged_bytes += len(encoded)
             meshes.append(dict(mesh_name=name, cell_count=len(points)))
     return files, meshes, max_values
 
@@ -221,9 +245,9 @@ def read_max_mesh_inputs(hdf_path, *, threads=4):
             cells = [
                 dict(
                     point=[p.x, p.y],
-                    minimum_elevation=float(next(minimum_iter))
-                    if len(faces) > 1
-                    else 0.0,
+                    minimum_elevation=(
+                        float(next(minimum_iter)) if len(faces) > 1 else 0.0
+                    ),
                     wse=float(value),
                     virtual=len(faces) == 1,
                     faces=faces,

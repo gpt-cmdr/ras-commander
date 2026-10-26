@@ -49,6 +49,7 @@ from typing import TYPE_CHECKING, Any, Dict, Iterable, List, Optional, Sequence,
 if TYPE_CHECKING:
     import geopandas as gpd
     from ..RasPrj import RasPrj
+    from ._sloping_context import FimPreparedSlopingModel
     from .._execution_types import StoreMapPerformanceOptions
 
 import numpy as np
@@ -213,6 +214,52 @@ class RasFim:
     ENGINE_NAME = _engine.ENGINE_NAME
     ENGINE_ENV_VAR = _engine.ENGINE_ENV_VAR
     MANIFEST_COLUMNS = tuple(MANIFEST_COLUMNS)
+
+    @staticmethod
+    @log_call
+    def prepare_sloping_model(
+        hdf_path: PathLike, terrain_path: PathLike, *,
+        profiles: Optional[Dict[str, Union[str, int]]] = None,
+        render_mode: str = "sloping",
+        reduce_shallow_to_horizontal: bool = False,
+        use_depth_weighted_faces: bool = False,
+        engine_path: Optional[PathLike] = None, threads: int = 1,
+        max_working_mib: int = 1024, max_prepared_mib: int = 1024,
+    ) -> "FimPreparedSlopingModel":
+        """Prepare fixed 2D sloping inputs for repeated reach/AOI requests.
+
+        ``profiles`` maps names to Max or stored timestep indices, as in
+        :meth:`map_sloping_profiles`. Geometry, spatial index and complete
+        staged mesh/WSE inputs are reused. Repeated selectors share files.
+        Rendering options and threads are fixed for the context's lifetime.
+        Each mapping call still starts the native CLI and reconstructs native
+        stencils, terrain and hydraulic values. No extra depth cutoff is added.
+
+        Use the returned context in a ``with`` block or call ``close()``.
+        Changes to HDF, terrain, engine or resolved source-text geometry
+        size/mtime invalidate and close it.
+        Calls are serialized; timestep parallelism is controlled per request
+        with ``max_inflight_profiles``. ``max_prepared_mib`` admits estimated
+        retained geometry plus actual staged bytes, independently of the
+        per-request ``max_working_mib``. Neither is a hard RSS limit; transient
+        HDF reads and preparation allocations are outside retained admission.
+
+        Returns:
+            FimPreparedSlopingModel: Owned inputs with ``map_profiles``,
+            ``info``, ``closed`` and idempotent ``close``. Its mapping method
+            accepts an optional ordered subset of prepared names, bbox or
+            polygon, and the ordinary delivery/concurrency controls.
+        """
+        _require_dependencies(triangulation=False)
+        from ._sloping_context import FimPreparedSlopingModel
+
+        return FimPreparedSlopingModel(
+            hdf_path, terrain_path, profiles=profiles, render_mode=render_mode,
+            reduce_shallow_to_horizontal=reduce_shallow_to_horizontal,
+            use_depth_weighted_faces=use_depth_weighted_faces,
+            engine_path=engine_path, threads=threads,
+            max_working_mib=max_working_mib, max_prepared_mib=max_prepared_mib,
+        )
 
     @staticmethod
     @log_call

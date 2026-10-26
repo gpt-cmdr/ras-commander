@@ -11,6 +11,18 @@
 #       category: project_management | workers | callbacks | data_containers | utilities
 
 exception_classes:
+  - class_name: FimPreparedSlopingModel
+    module: ras_commander.fim._sloping_context
+    reason: |
+      Owns immutable staged mesh/profile inputs, retained cell geometry, source
+      identities and a lock across repeated reach requests. Context-manager and
+      explicit close semantics release its temporary files and geometry.
+    category: utilities
+    instantiation_required: true
+    example: |
+      with RasFim.prepare_sloping_model(hdf_path, terrain_path) as model:
+          products = model.map_profiles(output_folder, bbox=bounds)
+
   # ============================================================================
   # PROJECT MANAGEMENT
   # ============================================================================
