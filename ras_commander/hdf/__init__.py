@@ -80,6 +80,9 @@ _LAZY_EXPORTS = {
 _LAZY_EXPORTS["HdfResultView"] = (".HdfResultView", "HdfResultView")
 _LAZY_EXPORTS["MeshCellPolygonError"] = (".HdfMesh", "MeshCellPolygonError")
 _LAZY_EXPORTS["MeshSeriesAvailabilityError"] = (".HdfResultsMesh", "MeshSeriesAvailabilityError")
+for _name in ("MeshCornerElevations", "CornerElevationSource", "CornerElevationCheck",
+              "CornerElevationError"):
+    _LAZY_EXPORTS[_name] = ("._corner_elevations", _name)
 
 
 def _load_export(name):

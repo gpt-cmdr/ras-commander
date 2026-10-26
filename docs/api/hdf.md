@@ -182,7 +182,88 @@ See `scripts/validate_perimeter_bc.py` for real-example native compilation and
 source-preservation acceptance. Read only a current native compiled HDF after
 editing geometry text.
 
+#### Mesh corner elevations
+
+`get_mesh_corner_elevations(hdf_path, mesh_name=None, *, postprocessing_hdf=None, source="auto", engine="auto")`
+reads the static ground elevation of every mesh corner (face point). RASMapper's
+depth-weighted sloping interpolation uses these terrain values. They are not
+corner water surfaces, face water surfaces or node velocities, and turning on
+more hydraulic output variables does not produce them. HEC-RAS stores them in
+two places:
+
+| `source` layout | Dataset | Written by |
+|---|---|---|
+| `"geometry"` | `Geometry/2D Flow Areas/<mesh>/FacePoints Elevation` in the geometry or plan HDF | 2D hydraulic-table preprocessing (HEC-RAS 7.0 and later; 6.x files do not have it) |
+| `"mapping_cache"` | `Results/Unsteady/Output/Output Blocks/Base Output/Summary Output/2D Flow Areas/<mesh>/Processed Data/Profile (Horizontal)/FacePoint Elevation` in the result's `PostProcessing.hdf` (singular `FacePoint`) | RASMapper, when it renders depth-weighted maps |
+
+`hdf_path` names the meshes and gives each mesh's corner count (rows of
+`FacePoints Coordinate`) and terrain metadata. Pass the cache with
+`postprocessing_hdf`; it is usually `<project folder>/<plan Short ID>/PostProcessing.hdf`.
+
+Values are float32 in `FacePoints Coordinate` row order, bit for bit as stored,
+including NaN payloads and sentinels such as -9999. Nothing is interpolated,
+reordered or filled. The method only reads: it never generates elevations from
+terrain. Generating them needs the native terrain and belongs to a separate
+preparation step.
+
+Source selection is explicit and deterministic:
+
+- `source="geometry"` reads only `hdf_path`. Do not pass `postprocessing_hdf`.
+- `source="mapping_cache"` reads only the cache (`postprocessing_hdf` required).
+- `source="auto"` reads the geometry layout and, when given, the cache. Any
+  candidate that is present but is not one float32 value per corner makes the
+  result `"invalid"`. When both are present they must be bit-identical (result
+  `"ok"`, values from the geometry), otherwise the result is `"conflict"` with
+  no values. With only the geometry the result is `"ok"`. With only the cache it
+  is `"ok"` unless a staleness check failed (`"stale"`). With neither it is
+  `"missing"`.
+
+A cache dataset existing does not show that it matches the mesh and terrain.
+Every cache that reads successfully is checked, and each check is `passed`,
+`failed` or `not_checked` (evidence not stored):
+
+| Check | Passes when |
+|---|---|
+| `corner_count` | one value per corner of `hdf_path`'s mesh (a mismatch makes the cache `"invalid"`) |
+| `terrain_file` | the cache's `Terrain Filename` (relative to the cache folder) is the mesh's terrain (relative to `hdf_path`) |
+| `terrain_date` | the cache's `Terrain File Date` equals the mesh's `Terrain File Date` (the terrain the mesh was preprocessed against) |
+| `terrain_current` | the terrain file's modification time still equals the cache's `Terrain File Date` |
+| `cache_after_hdf` | the cache was written after `hdf_path` was last modified |
+| `agreement` | (`source="auto"`, both present) the two arrays are bit-identical |
+
+A failed check makes a cache-only result `"stale"` with no values. Copying a
+project can change file times and fail the date checks; the result then
+reports a possibly stale cache instead of trusting it.
+
+Each result (`MeshCornerElevations`) has `status`, `values` (read-only float32,
+`None` unless `"ok"`), `corner_count`, `source` (the candidate used),
+`candidates` (every source consulted, each with `file`, `dataset`, `status`,
+`detail`, dataset `attributes`, `terrain` metadata and the `sha256` of its
+float32 bytes), `checks` and `reason`. `require()` returns the values or raises
+`CornerElevationError`; `as_dict()` gives plain data.
+
+`engine` follows `RAS_COMMANDER_FAST_HDF` (`auto`, `h5py`, `native`). The
+native engine (ras-commander-fast-hdf 0.2.3 or later) and the h5py reader return
+identical results; `auto` falls back to h5py on any native refusal, and `native`
+raises `FastHdfError` instead.
+
+```python
+from ras_commander.hdf import HdfMesh
+
+result = HdfMesh.get_mesh_corner_elevations(
+    "Model.p01.hdf", "Perimeter 1",
+    postprocessing_hdf="Plan 01/PostProcessing.hdf",
+)
+elevations = result.require()            # float32, FacePoints Coordinate order
+print(result.source.layout, result.source.file, result.source.dataset)
+print([(c.name, c.status) for c in result.checks])
+```
+
 - `get_mesh_area_names(hdf_path)` - List 2D flow areas
+- `get_mesh_corner_elevations(hdf_path, mesh_name=None, *, postprocessing_hdf=None, source="auto", engine="auto")` -
+  Read the stored corner (face-point) ground elevations that RASMapper's
+  depth-weighted sloping interpolation uses, with provenance. See
+  [Mesh corner elevations](#mesh-corner-elevations).
 - `get_mesh_areas(hdf_path)` - Read named-area perimeters, with a strictly
   validated collection-level fallback for affected 6.2/6.3-era geometry HDFs
 - `diagnose_mesh_layout(hdf_path, program_version=None)` - Report version
@@ -1246,6 +1327,7 @@ prerequisites and return contracts take precedence over abbreviated summaries.
         - get_mesh_cell_points
         - get_mesh_cell_polygons
         - get_mesh_cell_property_tables
+        - get_mesh_corner_elevations
         - get_mesh_face_hydraulic_properties_at_stage
         - get_mesh_face_property_tables
         - get_mesh_perimeter_faces
