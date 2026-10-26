@@ -668,12 +668,12 @@ class RasFim:
         polygon: Any = None,
         polygon_layer: Optional[str] = None,
         aoi_crs: Any = None,
-        min_depth: float = 0.5,
+        min_depth: float = 0.0,
         engine_path: Optional[PathLike] = None,
         threads: int = 1,
         writer_threads: int = 1,
         max_working_mib: int = 1024,
-        postprocess_reference: bool = True,
+        postprocess_reference: bool = False,
         native_performance: Optional["StoreMapPerformanceOptions"] = None,
         terrain_name: Optional[str] = None,
         ras_object: Optional["RasPrj"] = None,
@@ -703,9 +703,9 @@ class RasFim:
             polygon: Optional polygon constraint, mutually exclusive with bbox.
             polygon_layer: Layer in a multi-layer polygon file.
             aoi_crs: Constraint CRS; defaults to the cells' CRS.
-            min_depth: Strict depth cutoff independently applied to both
-                products, in model elevation units. 0.5 means half a foot
-                only for models whose elevations use feet.
+            min_depth: Zero (default) preserves all native-visible pixels.
+                Positive optional cutoffs apply independently to both products
+                in model elevation units; 0.5 means half a foot only in feet.
             engine_path: Explicit Rust engine executable, or normal discovery.
             threads: Rust pixel workers (1 through 64).
             writer_threads: Delivery GeoTIFF compression workers (1 through
@@ -781,7 +781,7 @@ class RasFim:
     def compare_rasters(
         candidate_depth: PathLike, candidate_wse: PathLike,
         reference_depth: PathLike, reference_wse: PathLike, *,
-        cells: "gpd.GeoDataFrame", min_depth: float = 0.5,
+        cells: "gpd.GeoDataFrame", min_depth: float = 0.0,
         terrain_path: Optional[PathLike] = None,
     ) -> Dict[str, Any]:
         """Compare existing depth/WSE rasters on a physical 2D cell footprint.

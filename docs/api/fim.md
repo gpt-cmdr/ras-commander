@@ -11,7 +11,7 @@ or Windows x86-64 engine wheel into the same environment:
 
 ```bash
 uv pip install -e ".[fim,compute]"
-uv pip install /path/to/ras2fim_engine-0.6.0-py3-none-<platform>.whl
+uv pip install /path/to/ras2fim_engine-0.7.0-py3-none-<platform>.whl
 ras2fim-batch method
 ```
 
@@ -191,8 +191,9 @@ face-value and corner-adjustment switches are not exposed by this API.
 Use `RasFim.prepare_sloping_model` when several reach requests use the same
 computed model, terrain and profile selectors. Preparation returns a
 `FimPreparedSlopingModel` context that retains Python-side model inputs and
-staged native inputs until it is closed. It uses the existing 0.6 engine;
-no new wheel is needed.
+staged native inputs until it is closed. Sloping preparation supports engine
+0.6 and 0.7; the 0.7 horizontal visibility correction does not change its
+sloping arithmetic or context protocol.
 
 ```python
 with RasFim.prepare_sloping_model(
@@ -314,6 +315,8 @@ requesting concurrency without the advertised capability raises explicitly.
 
 ## Horizontal cell mapping
 
+Horizontal method /2 requires engine 0.7 or newer. Older /1 engines raise explicitly.
+
 This is a **2D surface-only** mapper. Model-backed entry points reject any
 1D river centerline/reach or cross-section geometry before mapping, even
 when a 2D mesh is selected from a mixed model. Coupled pipes/conduits and
@@ -378,17 +381,23 @@ remain read-only, and output must be new or empty. Declared nodata and NaN
 terrain pixels stay dry; other sentinel values present in the data but not
 declared are treated as elevations.
 
-NaN WSE marks dry cells; callers supply the cell wet/dry policy. Cell WSE is
-normalized to float32 before subtracting terrain. Depth must be **strictly
-greater** than `min_depth` to retain either product, with comparison in
-float32. The threshold uses the input elevation units; it does not convert
-feet to metres or establish a vertical datum. Native shallow-depth display
-rules below this threshold are not reproduced.
+NaN WSE marks dry cells; callers supply the cell wet/dry policy. Native pixel
+visibility compares `WSE >= float32(terrain + 0.001)` in float32 before depth
+subtraction. Preserve that order: comparing the resulting depth against 0.001
+would remove some native-valid boundary pixels. Native-valid zero depths can
+also occur when terrain-plus-tolerance rounds back to terrain.
+
+`min_depth=0` adds no depth cutoff. A positive `min_depth` optionally retains
+only depths strictly greater than that value after native visibility, masking
+Depth and WSE together. All thresholds use model elevation units; they do not
+convert feet to metres or establish a vertical datum. This intrinsic native
+plotting tolerance is separate from optional depth postprocessing.
 
 The returned `fim_product_manifest` has the same columns and 09/10/11 filename
 layout as Step05 products; those names do not identify the mapping method.
-The JSON manifest records `method_id="horizontal-cell-constant/1"`,
-`backend="rust"` (or the explicitly requested reference backend), float32 arithmetic, the threshold, source identities and
+The JSON manifest records `method_id="horizontal-cell-constant/2"`,
+`backend="rust"` (or the explicitly requested reference backend), float32 arithmetic,
+the native plot tolerance, optional positive cutoff, source identities and
 the terrain window. A `timings` section records ownership preparation,
 input staging, stream reads (including waits for the engine), product writes
 and mapping wall time; these are pipeline observations, not kernel-only
@@ -409,6 +418,17 @@ renderers. Select the same render mode, terrain, timestep, grid and depth
 filter when comparing with RAS Mapper; agreement with one mode does not
 establish agreement with another.
 
+Both comparison APIs now default to zero added cutoff;
+`compare_with_rasmapper` also defaults to no reference-delivery rewrite.
+For zero-cutoff raw comparison, `RasFim.compare_rasters(..., min_depth=0)`
+preserves every valid pixel, including zero depths, and compares float32 bits.
+Positive cutoffs remain optional independent filters of candidate and reference.
+A missing zero-depth pixel is a mask difference; matching common values alone
+does not establish raster parity. The standalone
+`scripts/benchmarks/fim_horizontal_parity.py` runner checks complete physical-2D
+masks and float32 values against retained native references, requiring zero
+extra, missing, different and outside-footprint pixels for both products.
+
 ## Compare with native horizontal stored maps
 
 Use `compare_with_rasmapper` on an isolated copy of a computed project. It
@@ -424,8 +444,8 @@ comparison = RasFim.compare_with_rasmapper(
     mesh_name="selected 2D area",
     terrain_name="registered terrain name",
     ras_object=project,
-    ras_version="6.6",
-    min_depth=0.5,       # model elevation units; feet in this example
+    ras_version="7.0.1",
+    min_depth=0.0,       # raw comparison; no added depth cutoff
     threads=4,
     max_working_mib=2048,
 )
@@ -458,24 +478,24 @@ additional/missing wet pixels, common-wet depth differences, finite-pair WSE
 differences, separate missing-WSE counts, native implied-terrain residuals and product paths. The JSON report
 records native runtime provenance, terrain and registered-HDF hashes, the
 effective float32 threshold, Rust batch timing and the
-original/restored `.rasmap` hashes. Both depth masks use the strict cutoff
-independently. The native TIFFs remain unmodified. No reference resampling is
+original/restored `.rasmap` hashes. Positive optional cutoffs apply to both
+depth masks independently; zero preserves all valid pixels. The native TIFFs remain unmodified. No reference resampling is
 performed: incompatible CRS, pixel sizes or fractional grid shifts fail.
 
 The optional strict pixel filter is `min_depth`: direct horizontal mapping
-defaults to `0.0`, and comparison defaults to `0.5` in model elevation units.
-Both depth and WSE use the retained depth mask. `0.0` disables the half-unit
-cutoff while retaining positive depths. Cell extraction's `min_depth` is a
+and comparison both default to `0.0` in model elevation units.
+Both depth and WSE use the retained depth mask. `0.0` preserves all valid pixels, including zero depths. Cell extraction's `min_depth` is a
 separate cell wet/dry policy, not the raster postprocessing threshold.
 
-By default, comparison also writes independently thresholded native LZW
-delivery rasters, preserving the raw references. Timing columns distinguish
+With `postprocess_reference=True`, comparison also writes independently
+thresholded native LZW delivery rasters, preserving the raw references. Timing columns distinguish
 `native_seconds` (stored-map generation), `native_postprocess_seconds`,
 `native_total_seconds`, `candidate_batch_seconds` and `comparison_seconds`.
 `candidate_seconds` is populated only for a single-profile call; shared batch
 time is not allocated repeatedly to individual profiles. Filtered native
-paths are returned separately. Set `postprocess_reference=False` to omit
-these written native products; comparison metrics still apply the cutoff.
+paths are returned separately. The default `postprocess_reference=False`
+omits these delivery rewrites. Positive cutoffs still apply independently
+when computing comparison metrics.
 
 `comparison.attrs["performance"]` is the additional performance return,
 also persisted in JSON. It includes totals, worker settings, an observed
@@ -537,8 +557,11 @@ cannot be reversed. Raster provenance remains the caller's responsibility.
 
 Notebook 602 shows 0.0, 0.5, 1.0 and 2.0 ft on Davis. Common-wet depth/WSE
 matches at all four cutoffs; wet masks match at 0.5, 1.0 and 2.0 ft. At zero,
-Rust retains 50 additional pixels below 0.001 ft, so zero-cutoff wet-mask
-parity is not established. The default half-foot qualification is unchanged.
+An earlier /1 qualification retained 50 additional pixels below 0.001 ft.
+That is historical evidence, not the current /2 status: engine0.7 now matches
+complete zero-added-cutoff masks and float32 values on the four completed
+full-model native cases documented in the performance page. The half-foot
+filter remains optional, rather than the comparison default.
 
 ## Method
 

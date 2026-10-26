@@ -1,14 +1,14 @@
 {
   "build_repository": "gpt-cmdr/ras-commander",
-  "source_commit": "224947667e0b3a8bc7ba392a6b71e0d2f5fbb27c",
+  "source_commit": "cc4cc0f509498d746e85a7350f29eb420de88ccb",
   "workflow_run": null,
-  "built_utc": "2026-10-26T02:33:33.065179+00:00",
+  "built_utc": "2026-10-26T13:22:31.441461+00:00",
   "rust": "1.99.1",
   "maturin": "1.15.0",
-  "engine_version": "0.6.0",
+  "engine_version": "0.7.0",
   "engine_source_files_sha256": {
-    "Cargo.lock": "907b0aebed507a8df08e5147b6696ba517de9a390a8f7c81209e0594af85083d",
-    "Cargo.toml": "11533984ebc4ad0db8bb070eca16f216abf7222c25f7d9bfa53ef97df2d76b1e",
+    "Cargo.lock": "ec7ef5c65c6318539cd02d3f654f4f9031cd9d9acd9e94042e472e0b3cc823a2",
+    "Cargo.toml": "5defb3288c0ff923cfd270fb1948c4e94175f7e33bcaa3abf389e7551b1be6ab",
     "examples/sloping_components.rs": "5c1e75416901473177591ecebeaf25a2832f27d7e2029f74605a2dcad379c2c9",
     "examples/sloping_raster.rs": "d3ff36fb2d71d3a3abfb6c211af0bed3e7f790671d4c4a82e17f6d0140cf72e8",
     "licenses/ras2fim-LICENSE.txt": "2c3d48c634b0a524b09e7eedc8de9e9b321dd000577ac433a7af546cae20770c",
@@ -18,10 +18,10 @@
     "licenses/wbraster-LICENSE-MIT.txt": "b3f690015a0a92922cafb40143f1642ce1712c3a44b7c6a96422c9a890956145",
     "licenses/wbvector-LICENSE-APACHE.txt": "d932025956695b7f7a6be243fe01294075bc75b18bb4a6f41922c4eba9aaacd7",
     "licenses/wbvector-LICENSE-MIT.txt": "b3f690015a0a92922cafb40143f1642ce1712c3a44b7c6a96422c9a890956145",
-    "pyproject.toml": "e694cddc95b3463617e04535565025f20ca865dc5340fac654f3a04cd66b5cc3",
-    "README.md": "ce005eb6a613c7ea00a68f695e45f1d46ab89da8cd14f2304b8f6c8a2008d154",
+    "pyproject.toml": "c2baf553ce62a67fe33dea2c4bae9a5555bc53ddd87c970d861b4367e74cc284",
+    "README.md": "f5bb117179d117b129547bead335c59a7f425b65b50adfbe197afe753f9b186b",
     "src/cache.rs": "67fe5979291828d50f97fd121a0fffd68017eaab3fbc0ba2472f35256ac5d59c",
-    "src/horizontal.rs": "c573f5c4dd231f7cd2ba46342d412f596d07de00a641e81717fb99c2ac092948",
+    "src/horizontal.rs": "d1aa97c78f2b011e88b6b8cb1af2dab5ab50dfed1c5534518844c1a085843da2",
     "src/interp.rs": "1be2beb6d6d0bd622f5f3fcf410be32490a8e22bbda2aa6b9bd483a37a567575",
     "src/lib.rs": "a6566deadaf053413e39912e971f5a7b21ceed0342b908b5185f170135aa8888",
     "src/main.rs": "c795abddaccfd459afba5a4250c6de5eb87187cfa0b970009a93e830c9afcaa7",
@@ -41,16 +41,16 @@
     "THIRD_PARTY_NOTICES.md": "01d5629712b42a450b18638fe2f366b4ae89498fd88aa490614b29f48a528bb4"
   },
   "artifact_sha256": {
-    "ras2fim_engine-0.6.0-py3-none-manylinux_2_28_x86_64.whl": "ea5c58ab94ec23283fad7b0dd3048a5f431ab5f8ab03a9566fc896bb67fd4fa8",
-    "ras2fim_engine-0.6.0-py3-none-win_amd64.whl": "417bf3567bccd4791c023110a8ad24ec57b14731837613ab6d684e261a969faa"
+    "ras2fim_engine-0.7.0-py3-none-manylinux_2_28_x86_64.whl": "9e7fab033f6d9b7e8348fd9d914ef82f6abcc770b3ffd759077cbc78b5805b84",
+    "ras2fim_engine-0.7.0-py3-none-win_amd64.whl": "894681d48eaadd2cafa933876b6c2ad795668c50393caaa165defbcd9551de9e"
   },
   "engine_binary_sha256": {
-    "ras2fim_engine-0.6.0-py3-none-manylinux_2_28_x86_64.whl": "4c1449c468fef4c8c55cb05ec23ff8deedcc1a441c3d1c60879d8103bb0a4f50",
-    "ras2fim_engine-0.6.0-py3-none-win_amd64.whl": "264b67533456ee68d7e0d9b22ec4f677ade45b4cd1e979b381392ef006e7a53c"
+    "ras2fim_engine-0.7.0-py3-none-manylinux_2_28_x86_64.whl": "aadf19af02c459e6e21bc8447307b0c6c95f72fb189b53312b2bd2c9c625cc33",
+    "ras2fim_engine-0.7.0-py3-none-win_amd64.whl": "075e5f913339bb3ef6e84675ab2fb2e8f912a3aa3d2f8c38912951f2f3ec6738"
   },
   "build_environment": {
     "linux": "quay.io/pypa/manylinux_2_28_x86_64@sha256:e2808351a165aa85913d79f1f8457b4f6d74047b47fba07b5b9a5e6c0055a017; CPython 3.13; glibc 2.28",
     "windows": "WSL cross build x86_64-pc-windows-gnu; MinGW GCC 13.2; -C target-feature=+crt-static; Windows system DLL imports only"
   },
-  "tests": "Installed0.6 Windows/Linux:36 sloping and70 horizontal API checks per platform across targeted runs. Includes all four enhanced options, plain Max/timestep cases, bbox/polygon batches, reversed/repeated concurrent timestep requests at2/4inflight and1/4threads, resource rejection, scope/layout preservation and later-batch failure cleanup after two streamed profiles. Packaging file/stream smoke, default serial mode, admitted concurrency2, memory cap to1 and all enhanced options PASS on Windows/Linux and actual glibc2.28 with NumPy2.3.5/SciPy1.16.3/rasterio1.4.4. Rust53 passed5external ignored; clippy-Dwarnings. Three-repetition19timestep scheduling benchmark:27runs/513profiles/1026products, all raw masks/finite bits equal sequential output. Same-day RASMapper references retained; complete final0.6 single-map candidates remeasured and compared pixelwise to previously qualified products. Full physical2D Windows Max qualification includes Spring River/Spring Creek; full Linux and enhanced eBFE remain unqualified."
+  "tests": "Installed0.7:134 horizontal/sloping/prepared API checks PASS per platform on Windows and Linux. Includes native plotting-boundary/zero-depth regression, /1 method rejection, zero-cutoff missing-mask and signed-zero bit comparison, bbox/polygon batches, concurrency, source invalidation, delivery/preparation cleanup and context reuse. Rust54 passed/five external ignored, all-target clippy-Dwarnings. Packaging file/stream Step05/horizontal/plain/enhanced smoke PASS on Windows/Linux/actual glibc2.28. Four full Windows native7.0.1 horizontal Max cases have zero extra/missing/bit-different/outside-2D pixels for both bands without added depth cutoff or reference filtering. Davis native horizontal still fails and is not qualified. Full horizontal Linux eBFE remains unqualified; installed native kernel/regression parity is covered there."
 }

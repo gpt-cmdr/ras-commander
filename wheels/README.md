@@ -6,13 +6,13 @@ used for mapping. These are x86-64 test builds; no PyPI release is made.
 Linux (glibc 2.28 or newer):
 
 ```bash
-python -m pip install wheels/ras2fim_engine-0.6.0-py3-none-manylinux_2_28_x86_64.whl
+python -m pip install wheels/ras2fim_engine-0.7.0-py3-none-manylinux_2_28_x86_64.whl
 ```
 
 Windows x86-64:
 
 ```powershell
-python -m pip install wheels/ras2fim_engine-0.6.0-py3-none-win_amd64.whl
+python -m pip install wheels/ras2fim_engine-0.7.0-py3-none-win_amd64.whl
 ```
 
 Then run `ras2fim-batch method`. Installation places the engine in the virtual
@@ -23,7 +23,7 @@ separately. The native engine needs neither a Rust compiler nor system GDAL.
 Verify each wheel against `SHA256SUMS.txt` before installation (`sha256sum -c`
 on Linux or `Get-FileHash -Algorithm SHA256` on Windows). `BUILD.json` records
 the source revision, artifact/binary hashes and local build environments.
-The retained 0.6.0 Linux wheel was built in the pinned official manylinux 2.28
+The retained 0.7.0 Linux wheel was built in the pinned official manylinux 2.28
 container. The Windows wheel was cross-built for Windows GNU with a static
 CRT and tested on Windows; it imports only Windows system DLLs. CI also builds
 MSVC wheels as separate workflow artifacts. Both retained builds execute the installed
@@ -68,3 +68,15 @@ and bbox/polygon batches. Packaging smoke also verifies memory admission can
 reduce concurrency to one, on Windows, Linux and actual glibc 2.28. See the
 performance evidence for workload-specific throughput results; concurrency is
 not a universal speedup.
+
+
+Version 0.7 fixes horizontal native plotting visibility in
+`horizontal-cell-constant/2`. The binary32 elevation comparison happens before
+subtraction: WSE >= float32(terrain + 0.001). Zero `min_depth` adds no cutoff;
+positive optional cutoffs run after native visibility. The old method /1 is
+rejected by the updated Python horizontal adapter. Step05 and sloping arithmetic
+are unchanged. Full Windows native7.0.1 horizontal Max masks and valid float32
+bits match on Spring River, Spring Creek, Bald Eagle dam break and Bald Eagle
+bridges, within the complete physical2D footprint. No added 0.5-foot filter or
+reference filtering is used. Davis horizontal native export still fails and
+is not counted as parity evidence. See the current performance page for scope.

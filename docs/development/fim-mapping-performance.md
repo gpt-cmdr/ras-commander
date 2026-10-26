@@ -69,7 +69,7 @@ All jointly finite WSE pairs on common wet pixels agreed exactly. The native
 reference has 539 wet pixel-time samples with missing WSE and finite depth;
 these are counted separately. Small depth differences reach 0.015625 ft and
 are consistent with the retained products' implied-terrain differences.
-Their precise origin is unresolved. Rust reproduced all 70 retained NumPy
+Their precise origin was unresolved in that earlier /1 assessment. Rust reproduced all 70 retained NumPy
 depth/WSE arrays exactly.
 
 Three additional computed corpus models were mapped by the native HEC-RAS
@@ -489,7 +489,7 @@ The zero-cutoff differences are 50 Rust-only pixels with positive depths
 from 0.00005340576 to 0.0009918213 ft. Common-wet depth/WSE values match
 exactly. This is not zero-cutoff wet-mask parity. The 0.5, 1.0 and 2.0 ft
 cases match exactly, so the established half-foot qualification is unchanged.
-The native near-zero behavior remains unresolved; no suppression rule has
+This earlier /1 near-zero limitation is superseded by the engine0.7 correction below; at that earlier stage no suppression rule had
 been inferred or added to Rust. The notebook retains this diagnostic beside
 the successful cutoffs instead of excluding it.
 
@@ -641,37 +641,105 @@ both tests pass on Windows and Linux. Geometry and results stay global while
 terrain/ownership/output are windowed. The API documentation includes compact
 reach-scale catalog examples and distinguishes full-grid template delivery.
 
+## Horizontal native visibility correction (engine 0.7)
+
+Horizontal method `horizontal-cell-constant/2` fixes the native-visible mask.
+The previous /1 implementation retained every positive depth at zero added
+cutoff. Native 7.0.1 visibility in the qualified runs instead compares
+`WSE >= float32(terrain + 0.001)` before subtracting terrain. This binary32
+operation order retains some values whose computed depth is below 0.001 and
+can retain zero depths when addition rounds back to the terrain elevation.
+Applying a 0.001 post-subtraction filter would incorrectly remove native-valid
+pixels; no such replacement or added 0.5-foot cutoff is used.
+
+The corrected Rust engine was rerun over all four completed horizontal Max
+cases, using the complete physical-2D footprint and retained native depth/WSE
+references. Every validity-mask pixel in that footprint is compared, including
+candidate-only and reference-only valid pixels. Both products require zero
+extra, missing and bit-different pixels; candidate pixels outside the footprint
+also fail qualification. This is complete-mask equality within the stated
+physical-2D scope, rather than equality only where values overlap.
+
+| Model | Matching valid pixels per product | Extra pixels | Missing pixels | Different float32 values |
+|---|---:|---:|---:|---:|
+| eBFE Spring River | 40,214,093 | 0 | 0 | 0 |
+| eBFE Spring Creek | 108,050,514 | 0 | 0 | 0 |
+| Bald Eagle dam break | 727,669 | 0 | 0 | 0 |
+| Bald Eagle bridges | 973,532 | 0 | 0 | 0 |
+
+Depth and WSE each pass independently. Spring River, Spring Creek and the
+bridge case also pass over the entire native raster grid, including nodata
+borders, without a cell-footprint mask. The dam-break case retains the explicit
+standalone-storage-area exclusion. The earlier /1 extras—9,271, 53,345,
+14 and 16 respectively—are removed by native visibility, while native-valid
+boundary pixels remain. Standalone storage-area surfaces outside physical 2D
+cells remain excluded. Davis horizontal native export still fails, so it does
+not supply parity evidence. These full-model horizontal results are Windows
+checks against RASMapper 7.0.1; they do not establish full Linux eBFE coverage
+or other native versions.
+
+`RasFim.compare_rasters(..., min_depth=0)` now preserves all valid pixels,
+including zero depths. Positive cutoffs remain optional independent filters.
+Exact fractions compare float32 bits, so signed-zero changes are detectable.
+The helper cannot hide a missing valid zero-depth pixel by classifying it as
+dry. The standalone `scripts/benchmarks/fim_horizontal_parity.py` runner
+checks complete masks and values against caller-supplied retained native
+references without executing HEC-RAS, filtering a reference or resampling.
+Run from the repository root with `--cases local-cases.json --engine
+/path/to/ras2fim-batch --output new-results`; its module docstring defines the
+case fields. The receipt retains native/input content hashes, engine and source
+hashes, complete-mask metrics and restored CPU affinity.
+
+The installed 0.7 Windows and Linux wheels each pass 134 API checks, including
+native plotting boundaries, native-valid zero depth, rejection of older /1
+engines, AOI/batch/worker behavior, comparison masks and prepared-context
+lifecycle. Rust has 54 passing tests and five external-fixture ignores;
+clippy passes with warnings denied. Packaging smoke passes on Windows, Linux
+and actual glibc 2.28. Step05 and sloping arithmetic are unchanged.
+
 ## Final implementation versus RASMapper: model/method matrix
 
 | Model | Physical 2D cells | Interpolation | RASMapper (s) | Final Rust pipeline (s) | RASMapper / Rust | Raw comparison |
 |---|---:|---|---:|---:|---:|---|
-| eBFE Spring River | 422,715 | Horizontal | 230.787 | 83.648 | 2.76× | Differences present² |
-| eBFE Spring River | 422,715 | Sloping: cell corners | 240.726 | 50.016 | 4.81× | Exact in physical 2D scope |
+| eBFE Spring River | 422,715 | Horizontal | 230.787 | 91.462 | 2.52× | Exact mask and values (2D) |
+| eBFE Spring River | 422,715 | Sloping: cell corners | 240.726 | 79.098 | 3.04× | Exact mask and values (2D) |
 | eBFE Spring River | 422,715 | Sloping: corners + faces¹ | — | — | — | Stored corner elevations absent |
-| eBFE Spring Creek | 340,163 | Horizontal | 190.275 | 81.023 | 2.35× | Differences present² |
-| eBFE Spring Creek | 340,163 | Sloping: cell corners | 209.896 | 49.400 | 4.25× | Exact in physical 2D scope |
+| eBFE Spring Creek | 340,163 | Horizontal | 190.275 | 99.050 | 1.92× | Exact mask and values (2D) |
+| eBFE Spring Creek | 340,163 | Sloping: cell corners | 209.896 | 88.724 | 2.37× | Exact mask and values (2D) |
 | eBFE Spring Creek | 340,163 | Sloping: corners + faces¹ | — | — | — | Stored corner elevations absent |
-| Bald Eagle dam break | 87,039 | Horizontal | 7.693 | 6.193 | 1.24× | Differences present² |
-| Bald Eagle dam break | 87,039 | Sloping: cell corners | 7.393 | 4.634 | 1.60× | Exact in physical 2D scope |
-| Bald Eagle dam break | 87,039 | Sloping: corners + faces¹ | 16.480 | 4.340 | 3.80× | Exact in physical 2D scope |
-| Bald Eagle bridges | 24,718 | Horizontal | 8.897 | 5.006 | 1.78× | Differences present² |
-| Bald Eagle bridges | 24,718 | Sloping: cell corners | 8.585 | 2.418 | 3.55× | Exact in physical 2D scope |
-| Bald Eagle bridges | 24,718 | Sloping: corners + faces¹ | 13.018 | 2.425 | 5.37× | Exact in physical 2D scope |
+| Bald Eagle dam break | 87,039 | Horizontal | 7.693 | 5.855 | 1.31× | Exact mask and values (2D) |
+| Bald Eagle dam break | 87,039 | Sloping: cell corners | 7.393 | 5.976 | 1.24× | Exact mask and values (2D) |
+| Bald Eagle dam break | 87,039 | Sloping: corners + faces¹ | 16.480 | 5.466 | 3.01× | Exact mask and values (2D) |
+| Bald Eagle bridges | 24,718 | Horizontal | 8.897 | 4.935 | 1.80× | Exact mask and values (2D) |
+| Bald Eagle bridges | 24,718 | Sloping: cell corners | 8.585 | 3.157 | 2.72× | Exact mask and values (2D) |
+| Bald Eagle bridges | 24,718 | Sloping: corners + faces¹ | 13.018 | 2.697 | 4.83× | Exact mask and values (2D) |
 | Davis pipes/conduits | 2,716 | Horizontal | — | — | — | Native export failed |
-| Davis pipes/conduits | 2,716 | Sloping: cell corners | 1.909 | 0.448 | 4.26× | Exact in physical 2D scope |
-| Davis pipes/conduits | 2,716 | Sloping: corners + faces¹ | 2.628 | 0.365 | 7.20× | Exact in physical 2D scope |
+| Davis pipes/conduits | 2,716 | Sloping: cell corners | 1.909 | 0.527 | 3.62× | Exact mask and values (2D) |
+| Davis pipes/conduits | 2,716 | Sloping: corners + faces¹ | 2.628 | 0.483 | 5.44× | Exact mask and values (2D) |
 
 ¹ Enhanced sloping enables both depth-weighted faces and shallow-to-horizontal rendering. Those are options of the same interpolation method, not additional table methods. The two eBFE HDFs lack stored `FacePoints Elevation` arrays required by this configuration; no substitute elevations or ratio are reported.
 
-² A timing ratio does not assert raw parity. At zero added cutoff, the completed horizontal rows have extra valid pixels but no missing pixels or differences in common finite float32 values. No 0.5 ft cutoff is applied to hide those mask differences.
+All completed horizontal rows now have identical complete validity masks and
+valid float32 bits within physical 2D cells, using method /2 and no added depth
+cutoff. Completed sloping rows retain the same exact-mask/value qualification;
+complete final0.7 rasters match the previously native-qualified candidates.
 
-Native exports/times are retained from the same-day RASMapper run; final Rust 0.6 times were remeasured afterwards, not interleaved with those native calls. Complete final rasters match the earlier qualified candidate masks/finite bits, retaining the stated native comparison scope. One observation per model/method on 2026-10-26, on Windows using RASMapper 7.0.1, the final Python integration and retained engine 0.6.0 Windows binary (`264b67533456ee68d7e0d9b22ec4f677ade45b4cd1e979b381392ef006e7a53c`). Parent/native/Rust processes inherit four-CPU affinity. Rust mapping and initial product compression each use four workers. Native export requests one worker, except the documented Davis horizontal independent-helper retry using two. These are shared-workstation observations with uncontrolled caches, no excluded mapping warm-up and no universal speed guarantee.
+Native exports/times are retained from the same-day RASMapper run. Final Rust
+0.7 times were remeasured afterwards, not interleaved with native calls. One
+observation per model/method on 2026-10-26, on Windows with RASMapper7.0.1 and
+the retained engine0.7 Windows binary
+(`075e5f913339bb3ef6e84675ab2fb2e8f912a3aa3d2f8c38912951f2f3ec6738`).
+Parent/native/Rust processes inherit four-CPU affinity; Rust mapping and initial
+compression each use four workers. Native export requests one worker, except
+the documented failed Davis horizontal retry using two. The first horizontal
+bridge measurement includes dependency imports; subsequent horizontal calls
+and the separately remeasured sloping calls have warm dependency imports. No
+mapping warm-up is excluded. These are shared-workstation observations with
+uncontrolled caches and no universal speed guarantee.
 
 Each row maps one Max Depth/WSE pair on the complete native pixel lattice, nodata and storage layout. Time includes HDF preparation, launch, mapping and output delivery. Native/project initialization, canonical terrain preparation and comparison scanning are outside the clocks. Sloping uses metadata-only direct-template delivery. Horizontal includes cell-table preparation and an additional matching-grid raster rewrite (single-worker compression), included in its reported time. No resampling, added depth cutoff, floodplain polygonization or profile concurrency is used.
 
 Raw comparison is within physical 2D cells. The Bald Eagle dam-break native export also renders a standalone storage area outside that scope; the native call includes that extra work. Ratios describe these measured workflows, not equal work for excluded storage-area surfaces. Every completed measurement verifies source HDF identity and restoration of original rasmap bytes. Missing/failed rows are not speedup evidence.
-
-Horizontal mask observations (Depth and WSE): eBFE Spring River: 9,271 extra valid pixels; eBFE Spring Creek: 53,345 extra valid pixels; Bald Eagle dam break: 14 extra valid pixels; Bald Eagle bridges: 16 extra valid pixels.
 
 Davis horizontal native export failed with exit 99 on both the aggregate call and a two-helper retry (depth AggregateException). No mapping time or ratio is reported for that row. Other Davis sloping exports succeeded. This is the native failure profile tracked in issue #678.
 
@@ -727,8 +795,8 @@ uses file size and nanosecond modification time, rather than content hashing.
 When no source-text geometry was initially available, the context rechecks the
 model scope; a newly resolved geometry file requires preparation again.
 
-This increment leaves the 0.6 engine binary and numerical arithmetic unchanged.
-Each request still launches a fresh CLI process, prepares native interpolation
+These prepared-context measurements used engine 0.6; engine 0.7 leaves the
+sloping arithmetic and context protocol unchanged. Each request still launches a fresh CLI process, prepares native interpolation
 stencils, decodes terrain, constructs AOI ownership and computes profile
 hydraulics. AOI windows, selected overlap validation, output arrays and delivery
 remain per request. Global topology and selected results remain complete at

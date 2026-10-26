@@ -1017,11 +1017,11 @@ def test_zero_cutoff_comparison_detects_missing_zero_and_signed_zero_bits(tmp_pa
     for path, values in zip(files, arrays):
         with rasterio.open(path, "w", **profile) as dst:
             dst.write(np.asarray(values, dtype="float32"), 1)
-    result = RasFim.compare_rasters(*files, cells=cells, min_depth=0)
+    result = RasFim.compare_rasters(*files, cells=cells)
     assert result["common_wet"] == 2 and result["depth_exact_fraction"] == .5
     with rasterio.open(files[2], "r+") as dst:
         dst.write(np.asarray([[np.nan, 1.]], dtype="float32"), 1)
-    result = RasFim.compare_rasters(*files, cells=cells, min_depth=0)
+    result = RasFim.compare_rasters(*files, cells=cells)
     assert result["extra_wet"] == 1 and result["common_wet"] == 1
     delivery = tmp_path / "filtered"; delivery.mkdir()
     depth, _ = filter_reference(files[0], files[1], delivery, 0, 1)
