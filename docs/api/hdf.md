@@ -282,8 +282,13 @@ print([(c.name, c.status) for c in result.checks])
 - `diagnose_mesh_cell_polygons(hdf_path, *, engine="auto")` - Report native
   cell IDs, face IDs, polygon counts, and reason codes for physical-cell
   reconstruction problems and expected boundary-only records
-- `get_mesh_cell_faces(hdf_path)` - Get cell face lines
-- `get_mesh_cell_points(hdf_path)` - Get cell center points
+- `get_mesh_cell_faces(hdf_path)` - Get cell face lines (built in one
+  vectorized call; natively in `auto`/`native` mode). The face geometry to read
+  once and join to `include_geometry=False` face results on
+  `["mesh_name", "face_id"]`
+- `get_mesh_cell_points(hdf_path)` - Get cell center points. The cell geometry
+  to read once and join to `include_geometry=False` cell results on
+  `["mesh_name", "cell_id"]`
 - `find_nearest_cell(point, cell_points_gdf, mesh_name=None)` - Find nearest cell ID and distance using previously read cell centers
 - `find_nearest_face(point, cell_faces_gdf, mesh_name=None)` - Find nearest face ID and distance using previously read faces
 - `get_mesh_face_property_tables(hdf_path)` - Read face elevation/area/wetted-perimeter/Manning tables
@@ -352,9 +357,10 @@ removed before v1.2.0:
 - `include_geometry=False` (keyword-only) on `get_mesh_max_ws`, `get_mesh_min_ws`,
   `get_mesh_max_face_v`, `get_mesh_min_face_v`, `get_mesh_max_ws_err`,
   `get_mesh_max_iter`, `get_mesh_last_iter`, `get_mesh_summary`,
-  `get_mesh_summary_output` and `get_mesh_max_depth` returns a typed pandas
-  DataFrame without geometry (stored value dtypes, `int64` IDs, string
-  `mesh_name`); see
+  `get_mesh_summary_output` and `get_mesh_max_depth` is the **fast** output: a
+  typed pandas DataFrame without geometry (stored value dtypes, `int64` IDs,
+  string `mesh_name`). The default GeoDataFrame is the **convenient** output; see
+  [Geometry: convenient or fast](../native-engine.md#geometry-convenient-or-fast) and
   [Typed tables without geometry](../user-guide/hdf-data-extraction.md#typed-tables-without-geometry)
 - `get_mesh_max_depth(hdf_path)` - Maximum depth from stored HEC-RAS `Depth`
   when present, otherwise derived in memory from `Water Surface - Cells Minimum

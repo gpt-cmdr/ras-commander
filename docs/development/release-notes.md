@@ -24,6 +24,26 @@ The method only reads and never generates elevations. Native reads need
 ras-commander-fast-hdf 0.2.3; with 0.2.2 `auto` uses h5py. See
 [HDF API](../api/hdf.md#mesh-corner-elevations).
 
+**Mesh geometry built in one vectorized call: convenient or fast output**
+
+- `HdfMesh.get_mesh_cell_faces` builds all face lines of a mesh in one
+  `shapely.from_ragged_array` call from packed coordinate buffers instead of
+  one `LineString` per face. The buffers come from the native engine
+  (`HdfSession.read_mesh_face_lines`, ras-commander-fast-hdf after 0.2.2) in
+  `auto` and `native` mode, or from NumPy with h5py or an older extension.
+  The geometry is identical (WKB, coordinate order, validity); layouts that
+  neither builder can prove keep the per-face loop. Face results with
+  geometry (`get_mesh_max_face_v`, `get_mesh_min_face_v`, `get_mesh_summary`
+  for face variables), the reference cell polygonizer, fluvial/pluvial and
+  ModPuls get faster with it. `get_mesh_max_depth` builds its cell-center
+  points with one `shapely.points` call.
+- The docs now name the two outputs: the default `include_geometry=True`
+  GeoDataFrame is the **convenient** output; `include_geometry=False` is the
+  **fast** output, keyed by `mesh_name` plus `cell_id`/`face_id`. Read the
+  geometry once per model with `HdfMesh.get_mesh_cell_faces` or
+  `get_mesh_cell_points` and join the tables to it. See
+  [Geometry: convenient or fast](../native-engine.md#geometry-convenient-or-fast).
+
 **Hydraulic subdomains: optional closed-edge outflow**
 
 `RasSubdomain.plan_breakouts(..., closed_edge_outflow=True)` puts Normal Depth
