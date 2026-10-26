@@ -735,8 +735,6 @@ writer exceptions. Persistent prepared contexts and an in-process binding
 remain candidates for later measurement. SIMD changes to interpolation are
 deferred: the measured bottlenecks did not justify changing arithmetic order.
 
-## Proposed engine packaging
-
 The subsequent catalog-mask check exercises both an interior bbox and a
 triangular polygon on Davis timesteps 54/108 with both enhanced flags enabled.
 Each mask maps both profiles in one request. All eight Depth/WSE products per
@@ -744,6 +742,8 @@ platform match native masks and finite float32 bits within the selected AOI;
 both tests pass on Windows and Linux. Geometry and results stay global while
 terrain/ownership/output are windowed. The API documentation includes compact
 reach-scale catalog examples and distinguishes full-grid template delivery.
+
+## Proposed engine packaging
 
 Package the mapping engine separately as **`ras-commander-fast-fim`**, following
 [ras-commander-fast-hdf](https://github.com/gpt-cmdr/ras-commander-fast-hdf).
