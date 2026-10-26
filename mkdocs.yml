@@ -225,8 +225,8 @@ nav:
       - Source (GitHub): https://github.com/gpt-cmdr/ras-commander-fast-hdf
     - Mapping Engine:
       - Guide: native-mapping-engine.md
-      - API: api/fim.md
-      - Performance and Qualification: development/fim-mapping-performance.md
+      - API: https://rascommander.info/ras/api/fim/
+      - Performance and Qualification: https://rascommander.info/ras/development/fim-mapping-performance/
     - DSS Engine (Coming Soon): https://rascommander.info/ras/native-engine/#dss-engine-coming-soon
   - User Guide:
     - Running Plans:
