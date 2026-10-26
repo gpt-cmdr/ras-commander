@@ -15,7 +15,7 @@ its numeric model inputs. The DSS Engine is coming soon.
 | Engine | Operation | Python entry points | Installation and status |
 |---|---|---|---|
 | **HDF Engine** | Read stored results, geometry, text and attributes; assemble mesh geometry | `Hdf*`, `fast_hdf` | `ras-commander-fast-hdf`; installed with RAS Commander on supported wheel platforms. Default `auto` mode retains h5py fallback. |
-| **Mapping Engine** | Map computed physical 2D cells to Depth/WSE rasters using horizontal or sloping interpolation | `RasFim.map_horizontal_profiles`, `RasFim.map_sloping_profiles` | Optional Python `fim` extra plus a separate `ras2fim_engine` wheel. Explicit native mapping; no automatic Python fallback. |
+| **Mapping Engine** | Map computed physical 2D cells to Depth/WSE rasters using horizontal or sloping interpolation | `RasFim.map_horizontal_profiles`, `RasFim.map_sloping_profiles` | External `ras-commander-fast-map` crate and wheel; the optional Python `fim` extra installs the wheel on supported platforms. Explicit native mapping; no automatic Python fallback. |
 | **DSS Engine** | Coming soon | To be documented | No installation command, API contract or benchmark is published here yet. |
 
 ## Choose an engine workflow
@@ -39,13 +39,13 @@ read timings. Matching requires the same interpolation options and effective
 terrain. Raw qualification compares complete valid/nodata masks and float32
 Depth/WSE values, without an added depth cutoff.
 
-!!! note "Mapping development builds"
-    The Mapping Engine guide includes the 0.8.0 test wheels and depth-weighted
-    feature proposed in [PR #694](https://github.com/gpt-cmdr/ras-commander/pull/694).
-    Use that checkout for those additions; this page does not imply a PyPI
-    release. Weighted mapping also needs the native corner-reader capability
-    added after published fast-HDF 0.2.2. Its tested development wheels report
-    the same version string, so a version check alone is insufficient.
+!!! note "Independent engine packages"
+    HDF extraction is published as `ras-commander-fast-hdf`; mapping is
+    published as `ras-commander-fast-map`. The latter preserves the compatible
+    `ras2fim-batch` executable and 0.8 mapping contracts. Weighted mapping needs
+    the corner-reader capability included in fast-HDF 0.2.3. Historical 0.2.2
+    development wheels and the published 0.2.2 release differ in that capability;
+    current installations should use 0.2.3 or newer.
 
 ## DSS engine (coming soon)
 

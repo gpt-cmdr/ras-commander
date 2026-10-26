@@ -83,7 +83,7 @@ def run_batch(
         )
     if grid.owner is None and method.get("native_ownership") is not True:
         raise FimEngineError(
-            "engine lacks native terrio ownership; install ras2fim-engine 0.3.0 or newer"
+            "engine lacks native terrio ownership; install ras-commander-fast-map 0.8 or newer"
         )
     identity = _engine.terrain_identity(engine, terrain, ordered.crs)
     details["engine"] = {"path": str(engine), "method": method}

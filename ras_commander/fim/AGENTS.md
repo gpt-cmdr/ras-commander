@@ -8,11 +8,13 @@ Parent `ras_commander/AGENTS.md` and root `AGENTS.md` still apply.
 - `RasFim.map_profiles` maps 2D cell WSE profiles with the ras2fim-2D Step 05 method through the external
   `ras2fim-batch` engine. It is not RAS Mapper stored mapping; never describe the products as
   equivalent to `RasProcess.store_maps()` output.
-- The engine is optional and explicit: `engine_path`, `RAS_COMMANDER_FIM_ENGINE`, or `PATH`.
-  Never build, download, or install it, and never fall back to Python arithmetic.
+- The engine is optional: the `fim` extra installs ras-commander-fast-map on
+  qualified Windows/Linux x64 platforms. Resolve explicit `engine_path`, then
+  `RAS_COMMANDER_FIM_ENGINE`, PATH, and the installed distribution's script.
+  Runtime mapping never builds/downloads/installs it or falls back to Python arithmetic.
 - Do not reimplement the engine numerics in Python or Rust here. Python owns sample preparation,
   SciPy Delaunay export, grid derivation, product writing, and the manifest. The engine source
-  is `rust/step05/`. The Step05 numerical path remains identical to the reviewed ras2fim-2D
+  is https://github.com/gpt-cmdr/ras-commander-fast-map. The Step05 numerical path remains identical to the reviewed ras2fim-2D
   copy; the independent horizontal module has its own method contract and qualification.
 - `map_horizontal_profiles` is a separate, explicit cell-constant method. Rust is the default;
   NumPy is an explicit qualification reference, never a fallback. It uses float32 cell WSE,

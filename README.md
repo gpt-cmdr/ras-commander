@@ -45,6 +45,27 @@ Linux x64 and macOS arm64; no extra and no code changes are needed.
 See [Native Rust HDF engine](https://rascommander.info/ras/native-engine/) for
 modes, qualification evidence, performance and limitations.
 
+## Native Rust mapping engine
+
+`RasFim` uses the separate
+[`ras-commander-fast-map`](https://github.com/gpt-cmdr/ras-commander-fast-map)
+engine for horizontal and sloping Depth/WSE mapping of computed physical 2D
+cells. Install `ras-commander[fim]` for its Windows/Linux x64 wheel and Python
+preparation/delivery stack. The compatible command remains `ras2fim-batch`.
+Rust consumers can use the crate or `cargo install ras-commander-fast-map --locked`.
+
+Mapping supports bbox/polygon masks, shared terrain, bounded timestep concurrency,
+and optional cell-face/depth-weighted sloping. Models with 1D river/cross-section
+geometry are rejected. The Rust mapping engine does not require Python, GDAL
+or HEC-RAS; the Commander workflow uses Python for HDF preparation and GeoTIFF
+delivery. Preparing missing stored corner elevations remains an explicit
+Windows/HEC-RAS/pythonnet operation.
+
+See the [Mapping Engine guide](https://rascommander.info/ras/native-mapping-engine/)
+for installation, per-model comparisons, exact-match scopes and terrain-layout
+requirements. The engine's numerical modules are unchanged by this packaging
+extraction; existing timing observations are not new distribution benchmarks.
+
 ## Docker, Slurm, and Apptainer
 
 Use `RasDocker` for Wine preprocessing and native Linux unsteady computation

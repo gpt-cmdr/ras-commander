@@ -17,6 +17,7 @@ import os
 import re
 import shutil
 import subprocess
+from importlib import metadata
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, List, Optional
@@ -42,7 +43,7 @@ _STDERR_TAIL = 4000
 
 
 def find_engine(engine_path=None) -> Path:
-    """Resolve the engine: explicit path, then the environment variable, then PATH."""
+    """Resolve an explicit path, environment, PATH, then the installed wheel."""
     if engine_path is None:
         engine_path = os.environ.get(ENGINE_ENV_VAR) or None
         source = ENGINE_ENV_VAR
@@ -55,14 +56,30 @@ def find_engine(engine_path=None) -> Path:
         if not os.access(path, os.X_OK):
             raise FimEngineNotFoundError(f"{source}: {path} is not executable")
         return path.resolve()
-    found = shutil.which(ENGINE_NAME)
+    found = shutil.which(ENGINE_NAME) or _installed_engine()
     if found is None:
         raise FimEngineNotFoundError(
             f"{ENGINE_NAME} was not found. Pass engine_path, set {ENGINE_ENV_VAR}, or put "
             f"{ENGINE_NAME} on PATH. RAS Commander does not build or install the engine and "
-            "has no Python fallback for this method."
+            "has no Python fallback for this method. Install ras-commander[fim] or "
+            "ras-commander-fast-map on a supported platform before mapping."
         )
     return Path(found).resolve()
+
+
+def _installed_engine() -> Optional[Path]:
+    """Find the external wheel's script when its environment is not on PATH."""
+    try:
+        distribution = metadata.distribution("ras-commander-fast-map")
+    except metadata.PackageNotFoundError:
+        return None
+    executable = ENGINE_NAME + (".exe" if os.name == "nt" else "")
+    for entry in distribution.files or ():
+        if entry.name == executable:
+            path = Path(distribution.locate_file(entry))
+            if path.is_file() and os.access(path, os.X_OK):
+                return path.resolve()
+    return None
 
 
 def run_engine(args: List[str], what: str, timeout: Optional[float] = None) -> subprocess.CompletedProcess:

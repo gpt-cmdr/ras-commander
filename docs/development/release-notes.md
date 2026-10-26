@@ -7,6 +7,26 @@ check `ras_commander.__version__` and the documentation's
 [build provenance](https://rascommander.info/ras/version.json). A package version
 alone does not identify a development checkout.
 
+### Unreleased
+
+**Mapping engine moved to its own crate and wheel**
+
+The Rust mapping engine is now maintained in
+[ras-commander-fast-map](https://github.com/gpt-cmdr/ras-commander-fast-map),
+published as a Rust crate and Python binary wheel of the same name. The `fim`
+extra installs its Windows/Linux x64 wheel; `fast-map` installs the engine alone.
+The `ras2fim-batch` command, request/method contracts and `RasFim` signatures
+remain compatible. Commander also locates the installed package's executable
+when its scripts directory is absent from `PATH`.
+
+Engine source, release CI and retained wheels move out of this repository;
+Commander keeps model preparation, public APIs, delivery, comparisons and
+cross-platform integration tests. The 0.8 extraction preserves numerical-module
+fingerprints and makes no new performance claim. The
+[mapping guide](../native-mapping-engine.md) links source, crate, wheel setup,
+release provenance and qualification. Preparing missing corners still requires
+explicit Windows/pythonnet/HEC-RAS preparation; that operation is not Rust-native.
+
 ### v0.109.0 (October 2026)
 
 **Native engine 0.2.3 required**

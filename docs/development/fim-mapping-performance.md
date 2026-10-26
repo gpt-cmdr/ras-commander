@@ -134,8 +134,11 @@ Real-model pytest cases use `RAS_COMMANDER_SLOPING_CASE` and
 external. The latter selects all four face-weighting/shallow combinations. Tests cover single/multiple
 workers, AOIs, timesteps, bounded concurrency, delivery failures and context
 lifecycle. Installed-wheel smoke covers file and streaming delivery on Windows,
-Linux and glibc 2.28. Retained wheel hashes and source provenance are under
-`wheels/`. Step05 remains a separate ras2fim-2D method; its products are not
+Linux and glibc 2.28. Retained wheel hashes and source provenance from that
+qualification remain in the [pre-extraction source snapshot](https://github.com/gpt-cmdr/ras-commander/tree/c7f910139af3c4df18ae421473dfbebbcf85fec5/wheels).
+Current builds and releases belong to the external
+[ras-commander-fast-map repository](https://github.com/gpt-cmdr/ras-commander-fast-map).
+Step05 remains a separate ras2fim-2D method; its products are not
 RASMapper sloping products.
 
 ## Depth-weighted sloping faces (engine 0.8)
@@ -208,6 +211,7 @@ used fast-HDF commit `6920fd8efb36831c32161156eee6c7635eee0229`, CI run
 predates the feature. Capability detection is required. The 0.8 wheel build
 metadata records these dependency artifact hashes. Cache-only real-model tests
 use `RAS_FIM_CORNER_CASE`; no model data or generated rasters are committed.
+The required corner reader is now available in published fast-HDF 0.2.3.
 
 To reproduce a weighted comparison, supply an external JSON case to
 `scripts/benchmarks/fim_sloping_compare.py`. Set `render_mode` to `slopingPretty`,
@@ -222,4 +226,8 @@ reference must use the same options and original terrain source layout.
 
 Later performance work includes chunked HDF staging, persistent native terrain
 and stencil reuse across reach requests, and bounded pixel-weight caches.
-Separate `ras-commander-fast-fim` packaging remains a future integration step.
+The engine is now separately packaged as `ras-commander-fast-map` on PyPI and
+crates.io, with Windows/Linux wheels and independent release CI. Extraction
+retains the qualified 0.8 numerical modules and their source fingerprints;
+the tables above remain the original mapping measurements, not new timing
+claims for the packaging change.

@@ -20,37 +20,48 @@ structure hydraulics or map standalone storage-area surfaces outside the 2D mesh
 
 ## Install and inspect capabilities
 
-The Mapping Engine is optional and is installed separately from the default
-[HDF Engine](native-engine.md#hdf-engine). From the checkout proposed in
-[PR #694](https://github.com/gpt-cmdr/ras-commander/pull/694), install the Python
-extra and the matching retained test wheel in the same environment:
+The Mapping Engine is the separate
+[`ras-commander-fast-map` repository](https://github.com/gpt-cmdr/ras-commander-fast-map),
+[Python package](https://pypi.org/project/ras-commander-fast-map/) and
+[Rust crate](https://crates.io/crates/ras-commander-fast-map).
+It is optional; unlike the default [HDF Engine](native-engine.md#hdf-engine),
+it is installed through the `fim` extra on qualified Windows/Linux x64 systems:
 
 ```bash
-uv pip install -e ".[fim]"
+uv pip install "ras-commander[fim]"
+ras2fim-batch method
 ```
 
-=== "Windows x64"
+From a Commander checkout, use `uv pip install -e ".[fim]"`. To install only
+the engine, use `uv pip install ras-commander-fast-map` or the `fast-map` extra.
+Uninstall the former `ras2fim-engine` package first when migrating from its
+retained test wheels, because it owns the same compatible executable.
 
-    ```powershell
-    uv pip install wheels/ras2fim_engine-0.8.0-py3-none-win_amd64.whl
-    ras2fim-batch method
-    ```
-
-=== "Linux x64 (glibc 2.28+)"
-
-    ```bash
-    uv pip install wheels/ras2fim_engine-0.8.0-py3-none-manylinux_2_28_x86_64.whl
-    ras2fim-batch method
-    ```
-
-The wheels install the `ras2fim-batch` executable; no Rust compiler is needed.
-Their checksums, source commit and tested dependency artifacts are recorded in
-the checkout's `wheels/BUILD.json` and `wheels/SHA256SUMS.txt`. These are retained
-test builds, not a Mapping Engine PyPI release. RAS Commander resolves
-`engine_path=`, then `RAS_COMMANDER_FIM_ENGINE`, then the executable on `PATH`.
+Wheels provide `ras2fim-batch` on Windows x64 and Linux x64 (glibc 2.28+), without
+a Rust compiler. [Tagged engine releases](https://github.com/gpt-cmdr/ras-commander-fast-map/releases)
+carry wheels, a source distribution, a crate archive, build identity and
+SHA-256 checksums. `ras2fim-batch method` reports the package version, source
+commit, numerical method identifiers and capabilities. Commander resolves
+`engine_path=`, then `RAS_COMMANDER_FIM_ENGINE`, the executable on `PATH`, and
+finally the script recorded by the installed external distribution. This last
+step supports callers that launch the environment's Python by its full path.
 A missing or incompatible engine raises explicitly; mapping has no automatic
 Python fallback. The horizontal NumPy reference backend is an explicit
 qualification choice.
+
+Rust consumers can use the library without Python, or install its compatible CLI:
+
+```bash
+cargo add ras-commander-fast-map
+cargo install ras-commander-fast-map --locked
+```
+
+The Rust import is `ras_commander_fast_map`. It consumes prepared geometry,
+profile arrays and terrain; Commander and fast-HDF still own model/HDF extraction.
+It does not read a plan HDF directly. The source moved from Commander's former
+`rust/step05/` directory with filtered Git history and immutable numerical-file
+fingerprints. Crate and wheel version 0.8.0 preserve those qualified methods;
+the packaging extraction does not introduce a new interpolation algorithm.
 
 Ordinary Rust mapping loads no HEC-RAS assemblies. Native reference generation
 and explicit corner preparation need an installed supported HEC-RAS runtime.
@@ -160,10 +171,11 @@ cache arguments work with `prepare_sloping_model()`.
 
 Cell-face requests require the engine 0.8 `native_donation_history` capability;
 weighted requests also require `depth_weighted_faces`. Numeric corner reads
-require fast-HDF's native `mesh_corner_elevations` entry point, added after
-published 0.2.2. Qualification used development wheels from commit
+require fast-HDF's native `mesh_corner_elevations` entry point, included in
+published 0.2.3. The original numerical qualification used development wheels from commit
 `6920fd8efb36831c32161156eee6c7635eee0229`, CI run `40351630621`; those wheels also
-report version 0.2.2. Check capabilities, not the version string alone. The
+report version 0.2.2. Current installations should use 0.2.3 or newer; those
+historical version strings alone do not identify capability. The
 general HDF API separately supports an h5py fallback, but production FIM does
 not silently substitute it. See [corner prerequisites and provenance](api/fim.md#depth-weighted-sloping-faces-engine-08).
 

@@ -10,7 +10,9 @@ on:
       - 'tests/test_ras_fim_horizontal.py'
       - 'tests/test_ras_fim_prepared_sloping.py'
       - 'tests/test_ras_fim_sloping.py'
-      - 'rust/step05/**'
+      - 'tests/test_fast_map_distribution.py'
+      - 'tests/test_fim_corner_preparation.py'
+      - 'tests/test_fim_corner_cache.py'
       - 'setup.py'
       - '.github/workflows/optional-fim.yml'
   workflow_dispatch:
@@ -20,21 +22,19 @@ permissions:
 
 jobs:
   python-interface:
-    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: '3.13'
       - run: python -m pip install -e '.[fim,compute]' pytest
-      - run: python -m pytest tests/test_ras_fim.py tests/test_ras_fim_horizontal.py tests/test_ras_fim_sloping.py tests/test_ras_fim_prepared_sloping.py -q
-  rust:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - run: rustup toolchain install 1.99.1 --profile minimal --component rustfmt --component clippy
-      - run: cargo +1.99.1 fmt --manifest-path rust/step05/Cargo.toml -- --check
-      # Preserve reviewed byte-chunk decoding and retained wheel/source identity;
-      # waive only the new equivalent-idiom style suggestion, not correctness lints.
-      - run: cargo +1.99.1 clippy --locked --manifest-path rust/step05/Cargo.toml --all-targets -- -D warnings -A clippy::chunks_exact_to_as_chunks
-      - run: cargo +1.99.1 test --locked --manifest-path rust/step05/Cargo.toml --all-targets
+      - name: Inspect installed external engine
+        run: ras2fim-batch method
+      - name: Python adapter and installed horizontal engine
+        shell: bash
+        run: |
+          python -c "import os, shutil, pytest; os.environ['RAS_COMMANDER_FIM_HORIZONTAL_ENGINE'] = shutil.which('ras2fim-batch'); raise SystemExit(pytest.main(['tests/test_ras_fim.py', 'tests/test_fast_map_distribution.py', 'tests/test_ras_fim_horizontal.py', 'tests/test_ras_fim_sloping.py', 'tests/test_ras_fim_prepared_sloping.py', 'tests/test_fim_corner_preparation.py', 'tests/test_fim_corner_cache.py', '-q']))"
