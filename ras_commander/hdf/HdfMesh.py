@@ -1285,26 +1285,44 @@ class HdfMesh:
                         cell_centers = cell_centers[:physical_counts[mesh_name]]
                     cell_count = len(cell_centers)
 
-                    # Extend lists efficiently
-                    all_mesh_names.extend([mesh_name] * cell_count)
-                    all_cell_ids.extend(range(cell_count))
-                    all_points.extend(points(cell_centers))
+                    all_mesh_names.append(HdfUtils._repeat_text(mesh_name, cell_count))
+                    all_cell_ids.append(np.arange(cell_count, dtype=np.int64))
+                    centers = points(cell_centers)
+                    if not (isinstance(centers, np.ndarray) and centers.ndim == 1):
+                        raise ValueError(f"Cells Center Coordinate of {mesh_name!r} is not an Nx2 table")
+                    all_points.append(centers)
 
                 # Create GeoDataFrame in one go
                 return GeoDataFrame(
                     {
-                        "mesh_name": all_mesh_names,
-                        "cell_id": all_cell_ids,
-                        "geometry": all_points
+                        "mesh_name": HdfMesh._join_chunks(all_mesh_names),
+                        "cell_id": HdfMesh._join_chunks(all_cell_ids),
+                        "geometry": HdfMesh._join_chunks(all_points),
                     },
                     geometry="geometry",
-                    crs=HdfBase.get_projection(hdf_file)
+                    crs=HdfMesh._frame_crs(HdfBase.get_projection(hdf_file))
                 )
 
         except Exception as e:
             reraise_required(e)
             logger.error(f"Error reading mesh cell points from {hdf_path}: {str(e)}")
             return GeoDataFrame()
+
+    @staticmethod
+    def _join_chunks(chunks: List[np.ndarray]):
+        """Concatenate per-mesh column chunks; an empty list when there are none.
+
+        The empty list keeps the column dtypes of a frame with no rows exactly
+        as the list-building readers always produced them.
+        """
+        if not sum(len(chunk) for chunk in chunks):
+            return []
+        return chunks[0] if len(chunks) == 1 else np.concatenate(chunks)
+
+    @staticmethod
+    def _frame_crs(projection: Optional[str]):
+        """The CRS object for ``projection`` (parsed once per process), or it unchanged."""
+        return HdfUtils._to_crs(projection) if isinstance(projection, str) and projection else projection
 
     @staticmethod
     def _get_mesh_cell_points_table(hdf_path: Path, include_ghost_cells: bool) -> pd.DataFrame:
@@ -1335,11 +1353,11 @@ class HdfMesh:
                     cell_centers = read_typed(hdf_file[f"Geometry/2D Flow Areas/{mesh_name}/Cells Center Coordinate"])
                     if mesh_name in physical_counts:
                         cell_centers = cell_centers[:physical_counts[mesh_name]]
-                    names.extend([mesh_name] * len(cell_centers))
+                    names.append(HdfUtils._repeat_text(mesh_name, len(cell_centers)))
                     ids.append(np.arange(len(cell_centers), dtype=np.int64))
                     centers.append(cell_centers)
                 xy = np.concatenate(centers) if centers else np.empty((0, 2))
-                return table(names, np.concatenate(ids), xy[:, 0], xy[:, 1])
+                return table(np.concatenate(names), np.concatenate(ids), xy[:, 0], xy[:, 1])
         except Exception as e:
             reraise_required(e)
             logger.error(f"Error reading mesh cell points from {hdf_path}: {str(e)}")
@@ -1442,14 +1460,15 @@ class HdfMesh:
                     if packed is not None:
                         coordinates, offsets = packed
                         count = len(offsets) - 1
-                        all_mesh_names.extend([mesh_name] * count)
-                        all_face_ids.extend(range(count))
-                        all_geometries.extend(shapely.from_ragged_array(
+                        all_mesh_names.append(HdfUtils._repeat_text(mesh_name, count))
+                        all_face_ids.append(np.arange(count, dtype=np.int64))
+                        all_geometries.append(shapely.from_ragged_array(
                             shapely.GeometryType.LINESTRING, coordinates, (offsets,)
                         ))
                         continue
 
                     # Process each face
+                    mesh_lines = []
                     for face_id, ((pnt_a_idx, pnt_b_idx), (start_row, count)) in enumerate(zip(facepoints_index, faces_perim_info)):
                         coords = [facepoints_coords[pnt_a_idx]]
 
@@ -1458,19 +1477,23 @@ class HdfMesh:
 
                         coords.append(facepoints_coords[pnt_b_idx])
 
-                        all_mesh_names.append(mesh_name)
-                        all_face_ids.append(face_id)
-                        all_geometries.append(LineString(coords))
+                        mesh_lines.append(LineString(coords))
+                    lines = np.empty(len(mesh_lines), dtype=object)
+                    lines[:] = mesh_lines
+                    all_mesh_names.append(HdfUtils._repeat_text(mesh_name, len(lines)))
+                    all_face_ids.append(np.arange(len(lines), dtype=np.int64))
+                    all_geometries.append(lines)
 
-                # Create GeoDataFrame in one go
+                # Create GeoDataFrame in one go. With no face rows the columns
+                # stay empty lists, as they always were.
                 return GeoDataFrame(
                     {
-                        "mesh_name": all_mesh_names,
-                        "face_id": all_face_ids,
-                        "geometry": all_geometries
+                        "mesh_name": HdfMesh._join_chunks(all_mesh_names),
+                        "face_id": HdfMesh._join_chunks(all_face_ids),
+                        "geometry": HdfMesh._join_chunks(all_geometries),
                     },
                     geometry="geometry",
-                    crs=HdfBase.get_projection(hdf_file)
+                    crs=HdfMesh._frame_crs(HdfBase.get_projection(hdf_file))
                 )
 
         except Exception as e:
