@@ -30,7 +30,7 @@
     "src/scipy_interp.rs": "8eedf291604c84faced5690da232f5d51a76658549326433b636e35a48a78e92",
     "src/session.rs": "fb9a9e1b667c5dbf9a7b32404752550bda66cd79ee8b4a73f9901c2db3b16c54",
     "src/sink.rs": "a6888e88a32a9ae15bf3ba4979deff5be528ff5ad7a180e3e5591341dc5dde7d",
-    "src/sloping.rs": "56ada275ecd3ae0f5aa59bbe8ea62ecf27b9d6acbdebdbc8fa36545d0b1dc3e0",
+    "src/sloping.rs": "4459c04a2a6bb3f772038b3ae3ec0352cb901ba1e7b0e1c39b7a022d262e2c41",
     "src/sloping_binary.rs": "b31da37067a261afe77bafb4aa1713f65dbe195169f18c631860c3d907b41f62",
     "src/sloping_session.rs": "a59a50c6f515f27e0e532dbfc950d1b51b94680a98c8393d77313a1b9136fbcb",
     "src/step05.rs": "a6a3cfa98b40e697bba88a84a151afd7c688192553ca8b47654786f63a954d52",

@@ -636,12 +636,15 @@ impl PolygonStencil {
                 has_negative_product = true;
             }
             scratch.weights[j] = (scratch.products[j] / total) as f32;
+            if scratch.weights[j] == 0.0 && scratch.products[j] != 0.0 {
+                scratch.clipped = true;
+            }
         }
         if has_negative_product {
-            scratch.clipped = true;
             let mut total = 0.0_f32;
             for value in &mut scratch.weights {
                 if *value < 0.0 {
+                    scratch.clipped = true;
                     *value = 0.0;
                 } else {
                     total += *value;
