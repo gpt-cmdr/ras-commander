@@ -358,6 +358,20 @@ call and sharing that native session across the call's reads (it used to be
 opened 3 to 23 times). Timings were taken with the files in the operating
 system's cache; cold-disk reads were not measured.
 
+### Tables without geometry
+
+The per-cell and per-face result readers (`get_mesh_max_ws`,
+`get_mesh_max_face_v`, `get_mesh_max_depth` and the others listed in
+[HDF API](api/hdf.md)) take `include_geometry=False` to return
+a plain pandas DataFrame instead of building a Shapely point or line for every
+row. Values, order, dtypes and `attrs` are the same as the default call without
+its geometry column. On the largest test files this is up to about 50× faster
+for face maximums (`get_mesh_max_face_v`: 1,642 ms to 34 ms on 177,301 faces)
+and 4–20× faster for cell values, with roughly 60% less peak memory. The full
+table is on the extension's
+[Performance](https://rascommander.info/fasthdf/performance/#tables-without-geometry)
+page.
+
 The figures below come from the earlier engine performance work. They measure
 the **HDF read layer** (the reads under the public methods), not complete
 public calls.
