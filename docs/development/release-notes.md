@@ -7,6 +7,42 @@ check `ras_commander.__version__` and the documentation's
 [build provenance](https://rascommander.info/ras/version.json). A package version
 alone does not identify a development checkout.
 
+### v0.110.0 (October 2026)
+
+**Depth-weighted sloping FIM mapping** (#694)
+
+The optional 0.8.0 mapping engine adds
+`RasFim.map_sloping_profiles(..., render_mode="slopingPretty", use_depth_weighted_faces=True)`
+and stored corner-elevation inputs. `RasFim.prepare_corner_elevations()` explicitly
+prepares a fresh native cache on Windows/HEC-RAS 7.0.1 when the plan lacks them;
+mapping then runs without HEC-RAS on Windows/Linux. Cache provenance is verified
+and watched by prepared contexts. Bbox/polygon constraints and bounded timestep
+concurrency remain available. Native cell-face donor history is preserved across
+pixel batches, including predecessors outside an output mask.
+
+Weighted/shallow Max Depth/WSE comparisons match complete masks and float32 bits
+on five real models. Measured mapping ratios range from 1.78× to 7.34× under the
+reported workflow scopes. See the [per-model table and qualification limits](fim-mapping-performance.md#depth-weighted-sloping-faces-engine-08).
+Updated Windows/Linux test wheels, hashes, API usage and benchmarks are included.
+The original source terrain grid/tile layout must be preserved for cell-face
+matching; arbitrary retiled rasters and multi-source mosaics are unqualified.
+
+`RasFim.map_sloping_profiles` reads stored corner elevations with
+`HdfMesh.get_mesh_corner_elevations`, which reads natively with the required
+`ras-commander-fast-hdf>=0.2.3,<0.3` (unchanged from 0.109.0). The optional
+mapping engine (`ras2fim-engine` 0.8.0, Windows and Linux x86-64) is still
+installed separately from the wheels in the repository's `wheels/` folder and is
+not published to PyPI; see [Native mapping engine](../native-mapping-engine.md).
+
+**Documentation**
+
+- New [Native mapping engine](../native-mapping-engine.md) page; the native
+  engine page covers the HDF and mapping engines and the DSS roadmap.
+- FIM navigation no longer produces duplicate HTML IDs.
+- Measured geometry timings for 0.109.0 (#696): `HdfResultsMesh.get_mesh_max_face_v`,
+  convenient and fast output, before and after, in h5py, auto and native mode.
+  See [Geometry: convenient or fast](../native-engine.md#geometry-convenient-or-fast).
+
 ### v0.109.0 (October 2026)
 
 **Native engine 0.2.3 required**
@@ -69,24 +105,6 @@ but `normalize_store_map_render_mode` treats it as `sloping`, so
 while the helper renders `sloping`. This is unchanged and awaits a maintainer
 decision; pass `"slopingPretty"` or `"sloping"` explicitly.
 
-**Depth-weighted sloping FIM mapping**
-
-The optional 0.8.0 mapping engine adds
-`RasFim.map_sloping_profiles(..., render_mode="slopingPretty", use_depth_weighted_faces=True)`
-and stored corner-elevation inputs. `RasFim.prepare_corner_elevations()` explicitly
-prepares a fresh native cache on Windows/HEC-RAS 7.0.1 when the plan lacks them;
-mapping then runs without HEC-RAS on Windows/Linux. Cache provenance is verified
-and watched by prepared contexts. Bbox/polygon constraints and bounded timestep
-concurrency remain available. Native cell-face donor history is preserved across
-pixel batches, including predecessors outside an output mask.
-
-Weighted/shallow Max Depth/WSE comparisons match complete masks and float32 bits
-on five real models. Measured mapping ratios range from 1.78× to 7.34× under the
-reported workflow scopes. See the [per-model table and qualification limits](fim-mapping-performance.md#depth-weighted-sloping-faces-engine-08).
-Updated Windows/Linux test wheels, hashes, API usage and benchmarks are included.
-The original source terrain grid/tile layout must be preserved for cell-face
-matching; arbitrary retiled rasters and multi-source mosaics are unqualified.
-
 **Mesh corner ground elevations**
 
 `HdfMesh.get_mesh_corner_elevations(hdf_path, mesh_name=None, *, postprocessing_hdf=None, source="auto", engine="auto")`
@@ -98,10 +116,8 @@ cache `.../Processed Data/Profile (Horizontal)/FacePoint Elevation` in
 for bit as stored, with the source file, dataset, attributes and terrain
 metadata. Source selection is explicit; disagreeing sources are reported as a
 conflict, and a cache is checked for staleness against the mesh and terrain.
-The method only reads and never generates elevations. Native reads need the
-`mesh_corner_elevations` capability added after published fast-HDF 0.2.2;
-without it `auto` uses h5py. The development qualification wheels also identify
-as 0.2.2, so inspect capability rather than version alone. See
+The method only reads and never generates elevations. Native reads need
+ras-commander-fast-hdf 0.2.3; with 0.2.2 `auto` uses h5py. See
 [HDF API](../api/hdf.md#mesh-corner-elevations).
 
 **Mesh geometry built in one vectorized call: convenient or fast output**
