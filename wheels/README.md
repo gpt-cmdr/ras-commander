@@ -33,6 +33,19 @@ version string. Missing corner inputs can be prepared explicitly through
 is runtime independent on Windows/Linux. Preserve the native source terrain grid
 and tile layout for cell-face matching.
 
+Until a release includes that reader, download the tested development wheel
+with GitHub CLI (choose the artifact for your platform), verify its hash against
+`BUILD.json`, and install its wheel into the mapping environment:
+
+```bash
+gh run download 40351630621 --repo gpt-cmdr/ras-commander-fast-hdf --name wheel-Windows --dir fast-hdf-corners
+# Linux x86-64 glibc: use --name wheel-Linux instead.
+```
+
+These CI artifacts require GitHub access and have finite retention. The source
+commit remains the rebuild reference if the artifact expires. They are
+development builds, not a published fast-HDF release.
+
 Verify `SHA256SUMS.txt` before installation. `BUILD.json` records the source
 commit, source hashes, wheel/executable hashes and build environments. Linux is
 built in the pinned official manylinux 2.28 container. Windows is cross-built

@@ -36,6 +36,16 @@ what it does not do.
 
 ## What it is and why
 
+For native 2D inundation mapping, the optional FIM engine uses this HDF reader
+to stage model inputs, then reconstructs horizontal or sloping surfaces in Rust.
+Depth-weighted sloping additionally requires the stored-corner reader capability
+added after published fast-HDF 0.2.2. See the
+[FIM API](api/fim.md#depth-weighted-sloping-faces-engine-08) and
+[five-model RASMapper comparison](development/fim-mapping-performance.md#depth-weighted-sloping-faces-engine-08)
+for setup, retained Windows/Linux wheels, exact mask/value qualification, and
+mapping times. Those mapping measurements are separate from the HDF-read
+benchmarks on this page.
+
 ras-commander's `Hdf*` classes originally read HDF5 only through h5py and the
 HDF5 C library. The native engine replaces the *value reads* underneath those
 classes, not the classes themselves:

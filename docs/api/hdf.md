@@ -243,7 +243,8 @@ float32 bytes), `checks` and `reason`. `require()` returns the values or raises
 `CornerElevationError`; `as_dict()` gives plain data.
 
 `engine` follows `RAS_COMMANDER_FAST_HDF` (`auto`, `h5py`, `native`). The
-native engine (ras-commander-fast-hdf 0.2.3 or later) and the h5py reader return
+native engine with the `mesh_corner_elevations` entry point (added after
+published ras-commander-fast-hdf 0.2.2) and the h5py reader return
 identical results; `auto` falls back to h5py on any native refusal, and `native`
 raises `FastHdfError` instead.
 

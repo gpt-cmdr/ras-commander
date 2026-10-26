@@ -9,6 +9,24 @@ alone does not identify a development checkout.
 
 ### Unreleased
 
+**Depth-weighted sloping FIM mapping**
+
+The optional 0.8.0 mapping engine adds
+`RasFim.map_sloping_profiles(..., render_mode="slopingPretty", use_depth_weighted_faces=True)`
+and stored corner-elevation inputs. `RasFim.prepare_corner_elevations()` explicitly
+prepares a fresh native cache on Windows/HEC-RAS 7.0.1 when the plan lacks them;
+mapping then runs without HEC-RAS on Windows/Linux. Cache provenance is verified
+and watched by prepared contexts. Bbox/polygon constraints and bounded timestep
+concurrency remain available. Native cell-face donor history is preserved across
+pixel batches, including predecessors outside an output mask.
+
+Weighted/shallow Max Depth/WSE comparisons match complete masks and float32 bits
+on five real models. Measured mapping ratios range from 1.78× to 7.34× under the
+reported workflow scopes. See the [per-model table and qualification limits](fim-mapping-performance.md#depth-weighted-sloping-faces-engine-08).
+Updated Windows/Linux test wheels, hashes, API usage and benchmarks are included.
+The original source terrain grid/tile layout must be preserved for cell-face
+matching; arbitrary retiled rasters and multi-source mosaics are unqualified.
+
 **Mesh corner ground elevations**
 
 `HdfMesh.get_mesh_corner_elevations(hdf_path, mesh_name=None, *, postprocessing_hdf=None, source="auto", engine="auto")`
@@ -20,8 +38,10 @@ cache `.../Processed Data/Profile (Horizontal)/FacePoint Elevation` in
 for bit as stored, with the source file, dataset, attributes and terrain
 metadata. Source selection is explicit; disagreeing sources are reported as a
 conflict, and a cache is checked for staleness against the mesh and terrain.
-The method only reads and never generates elevations. Native reads need
-ras-commander-fast-hdf 0.2.3; with 0.2.2 `auto` uses h5py. See
+The method only reads and never generates elevations. Native reads need the
+`mesh_corner_elevations` capability added after published fast-HDF 0.2.2;
+without it `auto` uses h5py. The development qualification wheels also identify
+as 0.2.2, so inspect capability rather than version alone. See
 [HDF API](../api/hdf.md#mesh-corner-elevations).
 
 **Mesh geometry built in one vectorized call: convenient or fast output**
