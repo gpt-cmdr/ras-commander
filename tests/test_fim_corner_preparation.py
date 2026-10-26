@@ -21,6 +21,7 @@ def bound_cache(tmp_path):
                     hdf=_identity(plan), hdf_sha256=_digest(plan),
                     rasmap=_identity(rasmap), rasmap_sha256=_digest(rasmap),
                     cache_sha256=_digest(cache),
+                    input_sha256={str(path): _digest(path) for path in (plan, terrain, rasmap)},
                     inputs={str(path): _identity(path) for path in (plan, terrain, rasmap)})
     receipt = folder / "corner_elevation_receipt.json"
     receipt.write_text(json.dumps(document))
@@ -61,6 +62,41 @@ def test_unbound_cache_is_not_accepted(bound_cache):
     receipt.unlink()
     with pytest.raises(ValueError, match="prepare_corner_elevations"):
         validate_receipt(plan, cache)
+
+
+def test_relative_source_paths_support_workspace_relocation(bound_cache):
+    import os
+    from ras_commander.fim._corner_preparation import validate_receipt
+
+    plan, cache, receipt, terrain, _ = bound_cache
+    document = json.loads(receipt.read_text())
+    old = str(terrain)
+    foreign = "X:/native-preparation/terrain.tif"
+    document["inputs"][foreign] = document["inputs"].pop(old)
+    document["relative_inputs"] = {foreign: os.path.relpath(terrain, cache.parent)}
+    document["input_sha256"][foreign] = document["input_sha256"].pop(old)
+    receipt.write_text(json.dumps(document))
+    _, watched = validate_receipt(plan, cache)
+    assert terrain in watched.values()
+
+
+def test_unchanged_source_bytes_survive_timestamp_only_changes(bound_cache):
+    from ras_commander.fim._corner_preparation import validate_receipt
+
+    plan, cache, _, terrain, _ = bound_cache
+    terrain.write_bytes(terrain.read_bytes())
+    validate_receipt(plan, cache)
+
+
+def test_cell_face_engine_requires_donation_history_capability():
+    from ras_commander.fim._sloping import _validate_method
+    from ras_commander.fim.errors import FimEngineError
+
+    old = dict(method_id="rasmapper-plain-sloping/1", stream_outputs=True,
+               enhanced_options=True, enhanced_method_id="rasmapper-sloping-with-faces/1")
+    assert _validate_method(old, "sloping", 1)[1] == old["method_id"]
+    with pytest.raises(FimEngineError, match="donation history"):
+        _validate_method(old, "slopingPretty", 1)
 
 
 def test_preparation_rejects_unqualified_native_version_before_loading(tmp_path):

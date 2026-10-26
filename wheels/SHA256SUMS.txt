@@ -1,2 +1,2 @@
-6d1b30e3cd3add1be12e84075d27610ce0223e555bf9f98ce8befd6f7c9e20d2  ras2fim_engine-0.7.1-py3-none-manylinux_2_28_x86_64.whl
-ab44a2d877095f8d7a17619492e985e4f0016b248adc071645a49107e95993f0  ras2fim_engine-0.7.1-py3-none-win_amd64.whl
+b745abbc7ee57d48dcedef23d49ef4a4da87bb6478ef33d9961aadde9b7f419c  ras2fim_engine-0.8.0-py3-none-manylinux_2_28_x86_64.whl
+47dd18978153cc659d30bef87d81c84b2d9b7d67d603bd7fe0aeeea72369039d  ras2fim_engine-0.8.0-py3-none-win_amd64.whl

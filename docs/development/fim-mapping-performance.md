@@ -131,24 +131,94 @@ without invoking HEC-RAS or filtering the references.
 
 Real-model pytest cases use `RAS_COMMANDER_SLOPING_CASE` and
 `RAS_COMMANDER_SLOPING_OPTIONS_CASES`; datasets and generated rasters stay
-external. The latter selects unweighted cases only. Tests cover single/multiple
+external. The latter selects all four face-weighting/shallow combinations. Tests cover single/multiple
 workers, AOIs, timesteps, bounded concurrency, delivery failures and context
 lifecycle. Installed-wheel smoke covers file and streaming delivery on Windows,
 Linux and glibc 2.28. Retained wheel hashes and source provenance are under
 `wheels/`. Step05 remains a separate ras2fim-2D method; its products are not
 RASMapper sloping products.
 
-## Roadmap and dependencies
+## Depth-weighted sloping faces (engine 0.8)
 
-Depth-weighted faces are deferred. They require a shared Rust/Python HDF reader
-for stored corner ground elevations in geometry/plan HDFs and native
-`PostProcessing.hdf`, plus mesh-order/identity and effective-terrain provenance
-validation. Missing inputs need an explicit, separately timed Commander native
-preparation API using the same terrain and obstructions as RASMapper. Production
-mapping must remain native-runtime independent. Reintroduce the control only
-after complete-mask/float32-bit qualification, including Spring River and Spring
-Creek, and renewed benchmarks. The pre-deferral implementation is preserved on
-`archive/fim-depth-weighted-20261026`.
+Use `render_mode="slopingPretty", use_depth_weighted_faces=True` with
+`RasFim.map_sloping_profiles()` or `prepare_sloping_model()`. Stored corner ground
+elevations come from the native HDF reader. When absent from the plan, call
+`RasFim.prepare_corner_elevations()` explicitly on Windows/HEC-RAS 7.0.1, then
+pass its `postprocessing_hdf` to mapping. Preparation uses the registered terrain
+and native corner sampler or stored property-table values. A receipt binds the
+cache to its plan and terrain sources. Preparation is a separate operation and
+clock; ordinary mapping loads no HEC-RAS runtime.
+
+The final 0.8.0 Windows engine produced these Max-profile results against native
+7.0.1 **Sloping (Cell Corners + Cell Faces)**, with depth weighting and
+shallow-to-horizontal enabled. No additional depth cutoff or reference
+resampling was applied. Each Depth and WSE comparison has zero extra valid,
+missing valid, differing float32-bit, or outside-footprint pixels.
+
+| Model | Valid pixels per band | RASMapper mapping (s) | Rust mapping (s) | RASMapper / Rust |
+|---|---:|---:|---:|---:|
+| Spring River | 42,633,555 | 467.13 | 63.68 | 7.34× |
+| Spring Creek | 111,408,171 | 418.99 | 76.17 | 5.50× |
+| Bald Eagle dam break | 727,989 | 11.54 | 6.50 | 1.78× |
+| Bald Eagle bridges | 974,256 | 12.50 | 4.43 | 2.82× |
+| Davis pipes/conduits | 21,114 | 3.44 | 0.71 | 4.81× |
+
+River, Creek and bridges match the complete native raster grid, including
+nodata borders. Dam and Davis use the physical 2D footprint; standalone
+storage-area surfaces are excluded. The dam native call includes additional
+storage-area work. These are workflow mapping times, not isolated kernel times.
+The Rust clock includes HDF staging, mapping and Depth/WSE delivery. Comparison
+scanning and explicit corner preparation are excluded. Fresh corner preparation
+took 38.78 s for River, 57.51 s for Creek and 1.84 s for Davis; the first two ran
+while builds competed for resources, so they are not controlled preparation
+benchmarks. Reuse prepared corners across timesteps and catalog requests.
+
+Both processes had the same four-CPU affinity budget. Rust used four workers
+and four compression workers, with one in-flight profile. Native export used
+one stored-map worker. Calls ran sequentially per model on a shared workstation;
+the River native reference was retained from an earlier same-day call and
+compared to the final engine afterward. These are single observations with
+uncontrolled filesystem caches, not repeated or interleaved benchmark estimates.
+Source HDF hashes and original rasmap bytes were verified unchanged; affinity
+was restored. This table does not re-time horizontal or plain sloping in 0.8.
+
+Matching cell-face output also requires native donation history. Where adjacent
+clipped corner weights sum to zero, the native implementation retains donor
+scratch values from preceding pixels inside fixed 256-point ranges, per source
+terrain tile. The engine detects affected cells and replays their complete
+physical geometry in parallel by cell. Ordinary pixels retain the independent
+parallel path. AOIs replay the required predecessor geometry outside the output
+mask without reading extra terrain there. Clearing scratch independently per
+pixel changes the native output and must not be substituted as an optimization.
+
+Qualification preserves the native source TIFF grid and 256-square tile layout.
+Arbitrarily cropped/retiled terrain and multi-source terrain mosaics are not
+qualified for cell-face matching. Mapping-time bbox/polygon constraints preserve
+that original grid and history. A difficult River bbox and polygon both match
+raw native masks and bits with one/four workers. Windows and Linux cache-only
+Davis mapping also match with one/four workers, and changed caches invalidate
+prepared contexts. All four face/shallow combinations and Davis timesteps
+54/108 pass on Windows and Linux. Full-extent Linux eBFE, other native versions,
+and terrain-modification-specific cases remain outside this evidence.
+
+`HdfMesh.get_mesh_corner_elevations()` supports native reads and an explicit
+h5py fallback; production FIM requires the native entry point. Qualification
+used fast-HDF commit `6920fd8efb36831c32161156eee6c7635eee0229`, CI run
+`40351630621`. Its development wheels still identify as 0.2.2; published 0.2.2
+predates the feature. Capability detection is required. The 0.8 wheel build
+metadata records these dependency artifact hashes. Cache-only real-model tests
+use `RAS_FIM_CORNER_CASE`; no model data or generated rasters are committed.
+
+To reproduce a weighted comparison, supply an external JSON case to
+`scripts/benchmarks/fim_sloping_compare.py`. Set `render_mode` to `slopingPretty`,
+`use_depth_weighted_faces` and `reduce_shallow_to_horizontal` to true, and provide
+`postprocessing_hdf` when using a prepared cache. The case also contains `hdf`,
+`terrain`, `engine`, `profiles`, and `references` (profile name to Depth/WSE
+paths). Use `--match-reference-grid` to include native nodata borders. The same
+cache arguments are accepted by the prepared-reach benchmark. The native
+reference must use the same options and original terrain source layout.
+
+## Roadmap and dependencies
 
 Later performance work includes chunked HDF staging, persistent native terrain
 and stencil reuse across reach requests, and bounded pixel-weight caches.

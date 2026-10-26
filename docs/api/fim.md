@@ -172,7 +172,7 @@ report and manifest. Plain mode retains `rasmapper-plain-sloping/1`.
 Unweighted face mode, with the shallow control off or on, matches native 7.0.1
 raw masks and float32 bits on Bald Eagle bridges Max and Davis timesteps 54/108,
 with one/four workers on Windows and Linux x86-64. This does not establish
-face-mode parity for the large eBFE cases or other HEC-RAS versions.
+unweighted face-mode parity for the large eBFE cases or other HEC-RAS versions.
 The physical-2D scope and standalone-storage-area exclusion apply to both modes.
 
 ## Depth-weighted sloping faces (engine 0.8)
@@ -180,10 +180,17 @@ The physical-2D scope and standalone-storage-area exclusion apply to both modes.
 Set `render_mode="slopingPretty", use_depth_weighted_faces=True` to rebalance
 corner/face weights using native water depths. The shallow-to-horizontal control
 remains independent. Both controls default to false; no added depth cutoff is
-applied. The engine must advertise `depth_weighted_faces`. Numeric corner reads
+applied. Cell-face requests require engine 0.8's `native_donation_history`
+capability; weighted requests also require `depth_weighted_faces`. Numeric corner reads
 require the native fast-HDF corner reader; an older wheel without that entry
 point raises explicitly. The HDF reader separately supports an explicit h5py
 fallback, but the FIM pipeline never silently substitutes it.
+
+The reader was added in fast-HDF PR #21 after the published 0.2.2 release.
+Qualification used its CI development wheels from commit
+`6920fd8efb36831c32161156eee6c7635eee0229`, which also report version 0.2.2.
+Check for the `mesh_corner_elevations` entry point; the version string alone is
+insufficient. Retained build metadata records the tested artifacts.
 
 If the plan contains `FacePoints Elevation`, mapping reads it directly. Otherwise
 prepare a fresh cache once on Windows with HEC-RAS 7.0.1 installed:
@@ -199,7 +206,7 @@ manifest = RasFim.map_sloping_profiles(
     render_mode="slopingPretty", use_depth_weighted_faces=True,
     reduce_shallow_to_horizontal=True,
     postprocessing_hdf=prepared["postprocessing_hdf"],
-    polygon="reach.gpkg", threads=4, max_inflight_profiles=2,
+    polygon="reach.gpkg", threads=4, max_inflight_profiles=2, max_working_mib=4096,
 )
 ```
 
@@ -224,20 +231,34 @@ inputs across reach requests. The context watches the cache, receipt and native
 preparation dependencies. Changed inputs invalidate the context. Corner source,
 dataset, hashes, terrain metadata and checks are returned under
 `DataFrame.attrs["performance"]["corner_elevations"]`.
+Receipts include relative source paths for moving a complete prepared workspace
+between Windows and Linux. Recorded source files remain required for validation.
+Byte-identical copies with changed timestamps are verified by their hashes;
+verified digests are reused in a bounded cache keyed by file fingerprints.
 
 The raster terrain must also represent the effective terrain used by the native
-reference. Export a consolidated terrain with
-`RasTerrain.export_rasmapper_terrain()` when the registered terrain has multiple
-sources or modifications. Corner preparation does not change the supplied raster.
+reference. Corner preparation does not change the supplied raster.
+Cell-face donation additionally uses the source TIFF lattice and tile boundaries.
+Preserve the native source grid and tile layout for stored-map matching; arbitrary
+retiled/cropped terrain inputs and multi-source mosaics are not qualified for
+this option. An AOI on the mapping call preserves the source tile layout and
+replays the required predecessor geometry outside the output mask.
+
+With depth weighting and shallow-to-horizontal enabled, engine 0.8 matches
+native 7.0.1 Max Depth/WSE masks and float32 bits on Spring River, Spring Creek,
+Bald Eagle dam break, Bald Eagle bridges, and Davis pipes/conduits. Comparisons
+cover physical 2D output; River, Creek and bridges also match the entire native
+raster grid including nodata borders. Standalone storage-area surfaces remain
+excluded. See the [qualification and timing table](../development/fim-mapping-performance.md#depth-weighted-sloping-faces-engine-08)
+for scope and timing details.
 
 ## Reuse prepared models across reach requests
 
 Use `RasFim.prepare_sloping_model` when several reach requests use the same
 computed model, terrain and profile selectors. Preparation returns a
 `FimPreparedSlopingModel` context that retains Python-side model inputs and
-staged native inputs until it is closed. Sloping preparation supports engine
-0.6 and 0.7; the 0.7 horizontal visibility correction does not change its
-sloping arithmetic or context protocol.
+staged native inputs until it is closed. Plain sloping retains compatibility
+with engines 0.6/0.7; cell-face requests require engine 0.8.
 
 ```python
 with RasFim.prepare_sloping_model(

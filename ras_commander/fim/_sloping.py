@@ -427,7 +427,9 @@ def map_profiles(
                     details["performance"]["prepared_context"] = _prepared.info
                 tick = time.perf_counter()
                 expired = threading.Event()
-                with (root / "stderr.txt").open("w+b") as errors:
+                # Delete-on-close stderr avoids a Windows cleanup race when a
+                # terminated child briefly retains its inherited file handle.
+                with tempfile.TemporaryFile(mode="w+b") as errors:
                     process = subprocess.Popen(
                         [
                             str(engine),

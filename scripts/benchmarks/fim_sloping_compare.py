@@ -266,7 +266,7 @@ def main():
 
     constraint = RasFim.resolve_aoi(
         default_crs=cells.crs,
-        **{k: v for k, v in fields.items() if k != "template_raster"},
+        **{k: v for k, v in fields.items() if k in ("bbox", "polygon", "polygon_layer", "aoi_crs")},
     )
     geometry = _aoi.geometry_in_crs(constraint, cells.crs) if constraint else None
     receipt = dict(

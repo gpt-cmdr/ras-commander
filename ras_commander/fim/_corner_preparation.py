@@ -6,7 +6,9 @@ Receipt validation never loads the native HEC-RAS runtime.
 from pathlib import Path
 import hashlib
 import json
+import os
 import time
+from functools import lru_cache
 
 from .. import get_logger
 
@@ -22,6 +24,18 @@ def _identity(path):
 def _digest(path):
     with Path(path).open("rb") as source:
         return hashlib.file_digest(source, "sha256").hexdigest()
+
+
+@lru_cache(maxsize=64)
+def _checked_digest(filename, size, mtime_ns, inode):
+    """Bounded digest reuse; retains no HDF/file handles or numeric arrays."""
+    return _digest(filename)
+
+
+def _verification_digest(path):
+    path = Path(path).resolve(strict=True)
+    stat = path.stat()
+    return _checked_digest(str(path), stat.st_size, stat.st_mtime_ns, stat.st_ino)
 
 
 def prepare(hdf_path, output_folder, *, rasmap_path, terrain_name, hecras_version):
@@ -63,7 +77,7 @@ def prepare(hdf_path, output_folder, *, rasmap_path, terrain_name, hecras_versio
             from System import Array, Int32, Object
             from System.Reflection import BindingFlags
             from System.Xml import XmlDocument
-            from RasMapperLib import RASResults, SharedData, TerrainLayer
+            from RasMapperLib import RASResults, RASMapperCom, SharedData, TerrainLayer
             from Utility.Progress import ProgressReporter
 
             assembly_path = Path(str(clr.GetClrType(RASResults).Assembly.Location))
@@ -77,8 +91,14 @@ def prepare(hdf_path, output_folder, *, rasmap_path, terrain_name, hecras_versio
             if len(matches) != 1:
                 raise ValueError("terrain_name must match exactly one registered terrain")
             old_map = str(SharedData.RasMapFilename or "")
+            old_srs = SharedData.SRSFilename
+            old_units = SharedData.Units
             try:
                 SharedData.RasMapFilename = str(rasmap)
+                SharedData.SRSFilename = RASMapperCom.GetSRSFromRasmapDoc(document, str(rasmap))
+                units = document.SelectSingleNode("/RASMapper/Units")
+                if units is not None and str(units.InnerText).strip():
+                    SharedData.SetUnitsSystem(str(units.InnerText).strip())
                 terrain = TerrainLayer(terrain_name)
                 terrain.XMLLoad(matches[0])
                 if not terrain.AllSourceFilesExist():
@@ -119,8 +139,11 @@ def prepare(hdf_path, output_folder, *, rasmap_path, terrain_name, hecras_versio
                     result["meshes"][name] = dict(operation=method_name)
                 result["runtime_assembly"] = str(clr.GetClrType(RASResults).Assembly.FullName)
                 result["runtime_assembly_path"] = str(clr.GetClrType(RASResults).Assembly.Location)
+                result["units"] = str(SharedData.UnitsSystem())
             finally:
                 SharedData.RasMapFilename = old_map
+                SharedData.SRSFilename = old_srs
+                SharedData.SetUnitsSystem(old_units)
                 RasGeometryCompute._release_geometry(geometry)
                 geometry = native_results = terrain = None
         # Verify immutable sources and retain hashes for portable provenance.
@@ -129,8 +152,18 @@ def prepare(hdf_path, output_folder, *, rasmap_path, terrain_name, hecras_versio
         for path, identity in inputs.items():
             if _identity(path) != identity:
                 raise RuntimeError(f"Preparation source changed: {path}")
+        relative_inputs = {}
+        for path in inputs:
+            try:
+                relative_inputs[path] = os.path.relpath(path, folder).replace("\\", "/")
+            except ValueError:
+                relative_inputs[path] = None
         result.update(status="complete", cache=_identity(cache), cache_sha256=_digest(cache),
+                      relative_inputs=relative_inputs,
+                      input_sha256={path: (hdf_hash if path == str(hdf) else _digest(path)) for path in inputs},
                       elapsed_seconds=time.perf_counter() - started)
+        if any(_identity(path) != identity for path, identity in inputs.items()):
+            raise RuntimeError("Preparation sources changed while recording provenance")
         receipt.write_text(json.dumps(result, indent=2), encoding="utf-8")
         return {**result, "receipt_path": str(receipt)}
     except BaseException as error:
@@ -152,18 +185,26 @@ def validate_receipt(hdf_path, cache_path):
     actual = _identity(hdf_path)
     expected = document["hdf"]
     if actual != expected:
-        if actual["size"] != expected["size"] or _digest(hdf_path) != document["hdf_sha256"]:
+        if actual["size"] != expected["size"] or _verification_digest(hdf_path) != document["hdf_sha256"]:
             raise ValueError("Corner cache belongs to a different or changed plan HDF")
-    if _digest(cache) != document["cache_sha256"]:
+    if _verification_digest(cache) != document["cache_sha256"]:
         raise ValueError("Corner cache changed after preparation")
     watched = {"corner_receipt": receipt}
     for index, (filename, identity) in enumerate(document["inputs"].items()):
         if filename == document["hdf"]["path"]:
             continue
         path = Path(filename)
+        relative = document.get("relative_inputs", {}).get(filename)
+        if not path.exists() and relative is not None:
+            path = (cache.parent / relative.replace("\\", "/")).resolve()
         same_rasmap = (filename == document.get("rasmap", {}).get("path")
-                       and path.exists() and _digest(path) == document["rasmap_sha256"])
-        if not path.exists() or (_identity(path) != identity and not same_rasmap):
+                       and path.exists() and _verification_digest(path) == document["rasmap_sha256"])
+        actual_source = _identity(path) if path.exists() else None
+        same_stat = actual_source is not None and all(actual_source[key] == identity[key] for key in ("size", "mtime_ns"))
+        expected_hash = document.get("input_sha256", {}).get(filename)
+        same_bytes = (actual_source is not None and expected_hash is not None
+                      and _verification_digest(path) == expected_hash) if not same_stat else False
+        if not path.exists() or not (same_stat or same_rasmap or same_bytes):
             raise ValueError(f"Corner preparation terrain/rasmap source changed: {path}")
         watched[f"corner_source_{index}"] = path
     return document, watched

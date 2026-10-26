@@ -230,6 +230,22 @@ class RasFim:
         folder must be new/empty. Returns cache path, preparation seconds and a
         provenance receipt. Preparation is explicit and outside mapping clocks.
         Ordinary Rust mapping never loads HEC-RAS assemblies.
+
+        Args:
+            hdf_path: Computed 2D-only plan HDF.
+            output_folder: New or empty folder for the cache and receipt.
+            rasmap_path: Model rasmap containing the registered terrain.
+            terrain_name: Exact registered terrain layer name.
+            hecras_version: Qualified native runtime version, currently 7.0.1.
+
+        Returns:
+            Dictionary containing ``postprocessing_hdf``, ``receipt_path``,
+            ``elapsed_seconds``, per-mesh operations and source provenance.
+
+        Raises:
+            ValueError: Unsupported model, runtime, terrain or input binding.
+            FileExistsError: Output folder contains existing files.
+            RuntimeError: Native preparation fails or changes a source input.
         """
         from ._corner_preparation import prepare
 
