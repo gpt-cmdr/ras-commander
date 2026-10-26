@@ -117,6 +117,37 @@ only during development qualification.
 
 ## Additional sloping options (engine 0.5)
 
+### Reach-scale catalog masks
+
+Both sloping modes accept the same bbox/polygon inputs as horizontal mapping.
+Submit multiple timestep selectors in one call to share terrain and ownership:
+
+```python
+manifest = RasFim.map_sloping_profiles(
+    "model.p02.hdf", "canonical_terrain.tif", "reach_catalog",
+    profiles={"t0054": 54, "t0108": 108},
+    bbox=(xmin, ymin, xmax, ymax),
+    aoi_crs="EPSG:2278",  # use the actual CRS of these bounds
+    threads=4,
+    writer_threads=4,
+)
+```
+
+For a polygon, replace `bbox` with `polygon="reach_boundary.gpkg"` and,
+if needed, `polygon_layer="reaches"`. Shapely geometries and GeoDataFrames
+are also accepted. Supply one of bbox or polygon. Bbox coordinates default to
+the mesh CRS unless `aoi_crs` is supplied. A Shapely polygon requires explicit
+`aoi_crs`; file/frame CRS metadata is used when present.
+
+The mask applies to every requested profile. The mapper reads the bounded
+terrain window and writes compact Depth/WSE rasters with nodata outside the
+polygon, using pixel-center inclusion. Complete hydraulic topology and cell
+results remain available for reconstruction, preserving values at mask edges.
+Omit `template_raster` for compact catalog delivery; a full-grid template
+retains its full dimensions even when mapping is masked. An AOI reduces raster
+work, but does not eliminate full-mesh preparation. These rules also apply to
+`slopingPretty` and both of its native option flags.
+
 Select `render_mode="slopingPretty"` for **Sloping (Cell Corners + Cell Faces)**.
 The two booleans select the native controls independently:
 

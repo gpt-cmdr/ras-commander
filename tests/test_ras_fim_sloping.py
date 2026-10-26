@@ -436,10 +436,11 @@ def test_depth_weighting_requires_stored_corner_elevations(sloping_case, tmp_pat
     assert json.loads((output / "fim_manifest.json").read_text())["status"] == "aborted"
 
 
-def test_real_enhanced_polygon_preserves_native_pixels(tmp_path):
+@pytest.mark.parametrize("mask_kind", ["bbox", "polygon"])
+def test_real_enhanced_catalog_mask_preserves_native_pixels(tmp_path, mask_kind):
     from ras_commander import RasFim, HdfMesh
     from scripts.benchmarks.fim_sloping_compare import compare_raw
-    from shapely.geometry import Polygon
+    from shapely.geometry import Polygon, box
 
     filename = os.environ.get("RAS_COMMANDER_SLOPING_OPTIONS_CASES")
     if not filename:
@@ -456,32 +457,38 @@ def test_real_enhanced_polygon_preserves_native_pixels(tmp_path):
     )
     cells = HdfMesh.get_mesh_cell_polygons(case["hdf"], strict=True)
     left, bottom, right, top = cells.total_bounds
-    polygon = Polygon([(left, bottom), (left, top), (right, bottom)])
-    profile = next(iter(case["profiles"]))
+    if mask_kind == "bbox":
+        dx, dy = right - left, top - bottom
+        bounds = (left + dx * 0.2, bottom + dy * 0.2,
+                  right - dx * 0.2, top - dy * 0.2)
+        polygon = box(*bounds)
+        mask_options = {"bbox": bounds}
+    else:
+        polygon = Polygon([(left, bottom), (left, top), (right, bottom)])
+        mask_options = {"polygon": polygon}
     result = RasFim.map_sloping_profiles(
         case["hdf"],
         case["terrain"],
-        tmp_path / "polygon",
-        profiles={profile: case["profiles"][profile]},
+        tmp_path / mask_kind,
+        profiles=case["profiles"],
         engine_path=case["engine"],
         threads=4,
         max_working_mib=4096,
-        polygon=polygon,
+        **mask_options,
         aoi_crs=cells.crs,
         render_mode="slopingPretty",
         use_depth_weighted_faces=True,
         reduce_shallow_to_horizontal=True,
     )
-    for band, path in (
-        ("depth", result.iloc[0].depth_tif),
-        ("wse", result.iloc[0].wse_tif),
-    ):
-        metrics = compare_raw(path, case["references"][profile][band], cells, polygon)
-        assert metrics["common"] > 0
-        assert all(
-            metrics[key] == 0
-            for key in ("extra", "missing", "different", "outside_footprint")
-        )
+    assert len(result) == len(case["profiles"])
+    for profile, row in zip(case["profiles"], result.itertuples(), strict=True):
+        for band, path in (("depth", row.depth_tif), ("wse", row.wse_tif)):
+            metrics = compare_raw(path, case["references"][profile][band], cells, polygon)
+            assert metrics["common"] > 0
+            assert all(
+                metrics[key] == 0
+                for key in ("extra", "missing", "different", "outside_footprint")
+            )
 
 
 @pytest.mark.parametrize("use_template", [False, True])
