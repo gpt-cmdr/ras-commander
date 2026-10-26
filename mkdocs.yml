@@ -48,6 +48,10 @@ theme:
   logo: assets/ras-commander_logo.svg
   favicon: assets/ras-commander_logo.svg
 
+# Link-preview (Open Graph) tags for pages with social_image front matter.
+hooks:
+  - scripts/mkdocs_social_meta.py
+
 plugins:
   - search
   - llmstxt:

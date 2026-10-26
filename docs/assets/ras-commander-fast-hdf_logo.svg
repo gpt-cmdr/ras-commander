@@ -1,0 +1,37 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 450 300" width="450" height="300">
+  <!-- RAS Commander Native Rust Engine (fast-hdf), Option C "Engine Inside": the original green emblem is kept and a rust cog drives it from outside -->
+  <defs>
+    <linearGradient id="bg-gradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#05386B" />
+      <stop offset="100%" stop-color="#0B93C7" />
+    </linearGradient>
+    <pattern id="circuit-pattern" patternUnits="userSpaceOnUse" width="50" height="50" patternTransform="rotate(45)">
+      <path d="M10,0 L10,50 M0,10 L50,10 M20,20 L30,20 L30,30 M40,10 L40,40 L30,40" fill="none" stroke="#5CDB95" stroke-width="0.5" stroke-opacity="0.3" />
+    </pattern>
+  </defs>
+  <rect width="450" height="300" fill="url(#bg-gradient)" />
+  <rect width="450" height="300" fill="url(#circuit-pattern)" opacity="0.2" />
+
+  <path d="M220.01,46.12 L221.44,36.06 L228.56,36.06 L229.99,46.12 A104,104 0 0 1 238.12,46.83 L241.28,37.17 L248.29,38.40 L247.95,48.56 A104,104 0 0 1 255.84,50.68 L260.63,41.71 L267.31,44.14 L265.22,54.09 A104,104 0 0 1 272.62,57.54 L278.89,49.54 L285.05,53.10 L281.26,62.53 A104,104 0 0 1 287.95,67.22 L295.52,60.43 L300.97,65.00 L295.60,73.63 A104,104 0 0 1 301.37,79.40 L310.00,74.03 L314.57,79.48 L307.78,87.05 A104,104 0 0 1 312.47,93.74 L321.90,89.95 L325.46,96.11 L317.46,102.38 A104,104 0 0 1 320.91,109.78 L330.86,107.69 L333.29,114.37 L324.32,119.16 A104,104 0 0 1 326.44,127.05 L336.60,126.71 L337.83,133.72 L328.17,136.88 A104,104 0 0 1 328.88,145.01 L338.94,146.44 L338.94,153.56 L328.88,154.99 A104,104 0 0 1 328.17,163.12 L337.83,166.28 L336.60,173.29 L326.44,172.95 A104,104 0 0 1 324.32,180.84 L333.29,185.63 L330.86,192.31 L320.91,190.22 A104,104 0 0 1 317.46,197.62 L325.46,203.89 L321.90,210.05 L312.47,206.26 A104,104 0 0 1 307.78,212.95 L314.57,220.52 L310.00,225.97 L301.37,220.60 A104,104 0 0 1 295.60,226.37 L300.97,235.00 L295.52,239.57 L287.95,232.78 A104,104 0 0 1 281.26,237.47 L285.05,246.90 L278.89,250.46 L272.62,242.46 A104,104 0 0 1 265.22,245.91 L267.31,255.86 L260.63,258.29 L255.84,249.32 A104,104 0 0 1 247.95,251.44 L248.29,261.60 L241.28,262.83 L238.12,253.17 A104,104 0 0 1 229.99,253.88 L228.56,263.94 L221.44,263.94 L220.01,253.88 A104,104 0 0 1 211.88,253.17 L208.72,262.83 L201.71,261.60 L202.05,251.44 A104,104 0 0 1 194.16,249.32 L189.37,258.29 L182.69,255.86 L184.78,245.91 A104,104 0 0 1 177.38,242.46 L171.11,250.46 L164.95,246.90 L168.74,237.47 A104,104 0 0 1 162.05,232.78 L154.48,239.57 L149.03,235.00 L154.40,226.37 A104,104 0 0 1 148.63,220.60 L140.00,225.97 L135.43,220.52 L142.22,212.95 A104,104 0 0 1 137.53,206.26 L128.10,210.05 L124.54,203.89 L132.54,197.62 A104,104 0 0 1 129.09,190.22 L119.14,192.31 L116.71,185.63 L125.68,180.84 A104,104 0 0 1 123.56,172.95 L113.40,173.29 L112.17,166.28 L121.83,163.12 A104,104 0 0 1 121.12,154.99 L111.06,153.56 L111.06,146.44 L121.12,145.01 A104,104 0 0 1 121.83,136.88 L112.17,133.72 L113.40,126.71 L123.56,127.05 A104,104 0 0 1 125.68,119.16 L116.71,114.37 L119.14,107.69 L129.09,109.78 A104,104 0 0 1 132.54,102.38 L124.54,96.11 L128.10,89.95 L137.53,93.74 A104,104 0 0 1 142.22,87.05 L135.43,79.48 L140.00,74.03 L148.63,79.40 A104,104 0 0 1 154.40,73.63 L149.03,65.00 L154.48,60.43 L162.05,67.22 A104,104 0 0 1 168.74,62.53 L164.95,53.10 L171.11,49.54 L177.38,57.54 A104,104 0 0 1 184.78,54.09 L182.69,44.14 L189.37,41.71 L194.16,50.68 A104,104 0 0 1 202.05,48.56 L201.71,38.40 L208.72,37.17 L211.88,46.83 A104,104 0 0 1 220.01,46.12 Z" fill="#B7410E" stroke="#E5652E" stroke-width="2" stroke-linejoin="round" />
+  <circle cx="225" cy="150" r="100" fill="#05386B" stroke="#5CDB95" stroke-width="2" />
+  <rect x="55" y="185" width="340" height="50" fill="#05386B" stroke="#5CDB95" stroke-width="2" rx="2" ry="2" />
+
+  <rect x="160" y="75" width="130" height="55" rx="5" ry="5" fill="#000" fill-opacity="0.85" />
+  <text x="170" y="95" font-family="Consolas, monospace" font-size="16" fill="#5CDB95">$ pip install</text>
+  <text x="170" y="120" font-family="Consolas, monospace" font-size="16" fill="#5CDB95">ras-commander</text>
+  <rect x="170" y="125" width="8" height="2" fill="#5CDB95">
+    <animate attributeName="opacity" values="1;0;1" dur="1.2s" repeatCount="indefinite" />
+  </rect>
+
+  <g opacity="0.7">
+    <path d="M125,130 C145,120 165,140 185,130 C205,120 225,140 245,130 C265,120 285,140 325,130" fill="none" stroke="#5CDB95" stroke-width="4" />
+    <path d="M125,150 C145,140 165,160 185,150 C205,140 225,160 245,150 C265,140 285,160 325,150" fill="none" stroke="#5CDB95" stroke-width="4" />
+    <path d="M125,170 C145,160 165,180 185,170 C205,160 225,180 245,170 C265,160 285,180 325,170" fill="none" stroke="#5CDB95" stroke-width="4" />
+  </g>
+
+  <text x="225" y="222" font-family="Arial, sans-serif" font-size="36" font-weight="bold" text-anchor="middle" fill="#EDF5E1">RAS-COMMANDER</text>
+  <!-- FAST-HDF pill and tagline -->
+  <rect x="62" y="263" width="96" height="24" rx="12" ry="12" fill="#E5652E" />
+  <text x="110" y="280" font-family="Arial, sans-serif" font-size="14" font-weight="bold" text-anchor="middle" fill="#FFFFFF">FAST-HDF</text>
+  <text x="170" y="281" font-family="Arial, sans-serif" font-size="17" font-style="italic" fill="#8EE4AF">Native Rust HDF Engine</text>
+</svg>
