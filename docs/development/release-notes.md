@@ -27,6 +27,34 @@ fingerprints and makes no new performance claim. The
 release provenance and qualification. Preparing missing corners still requires
 explicit Windows/pythonnet/HEC-RAS preparation; that operation is not Rust-native.
 
+### v0.110.1 (October 2026)
+
+**Faster mesh results, cell polygons and native fluvial-pluvial analysis** (#699)
+
+Python overhead that dominated several public HDF calls on large models is
+removed; results are unchanged (values, dtypes, index, column order, attrs, CRS
+and geometry WKB) in `h5py`, `auto` and `native` mode.
+
+- `HdfFluvialPluvial.calculate_fluvial_pluvial_boundary` and
+  `generate_fluvial_pluvial_polygons` (native path): the snapshot handed to the
+  Rust kernels is built with NumPy instead of per-face and per-cell Python
+  loops (BaldEagleDamBrk.p07, 87,039 cells: about 6.9 s to 0.9 s).
+- `get_mesh_max_ws`, `get_mesh_max_face_v`, `get_mesh_summary` and the other
+  summary readers: geometry is joined by position when it is provably in the
+  same order (the key merge remains the fallback), summary times are converted
+  once per distinct value, and `mesh_name` columns are built without Python
+  lists (JUL2020_D100RAS.p04, 705,332 faces: `get_mesh_max_face_v` about
+  1.1 s to 0.6 s).
+- `HdfMesh.get_mesh_cell_polygons` (native): large meshes are built and
+  validated in chunks on worker threads; `get_mesh_cell_faces` and
+  `get_mesh_cell_points` concatenate per-mesh arrays.
+- Eager `get_mesh_timeseries` finds the trimmed rows without comparing the
+  whole array; CRS strings are parsed once per process.
+
+Proven identical on all 139 release-gate fixtures (6,038 result digests in
+three modes) and by release gate route1/route2 (every record identical). The
+`ras-commander-fast-hdf` requirement is unchanged (`>=0.2.3,<0.3`).
+
 ### v0.110.0 (October 2026)
 
 **Depth-weighted sloping FIM mapping** (#694)
