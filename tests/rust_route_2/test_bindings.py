@@ -35,11 +35,15 @@ def _fixture(name):
 
 
 def test_read_families_and_unknown_family(native):
-    assert native.read_families() == [
+    families = [
         "pipe_geometry", "pipe_run_summary", "pipe_results", "reference_line_results",
         "reference_point_results", "reference_summaries", "breach", "plan_metadata",
         "land_cover", "infiltration", "sediment", "encroachments", "terrain",
         "terrain_modifications", "event_conditions", "steady_output"]
+    # Engine 0.2.3 adds mesh corner elevations; 0.2.2 (same API 11) does not have it.
+    if hasattr(native, "mesh_corner_elevations"):
+        families.append("mesh_corner_elevations")
+    assert native.read_families() == families
     with pytest.raises(ValueError, match="unknown read family"):
         native.read_family_inventory(_fixture("DavisStormSystem.p02"), "pipes")
 

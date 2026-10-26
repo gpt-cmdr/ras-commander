@@ -1,4 +1,4 @@
-"""Explicit API11 full-feature native entrypoint contract (78); additions require review."""
+"""Explicit API11 full-feature native entrypoint contract (79); additions require review."""
 EXPECTED = {
     # Test hook: panics inside the boundary guard (contained as FastHdfPanicError).
     "_panic_for_test": ("function", None, "src/python/panic_guard.rs"),
@@ -44,6 +44,8 @@ EXPECTED = {
     "reference_point_geometry": ("function", None, "src/python/wave3.rs"),
     "classification_catalogue": ("function", None, "src/python/wave3.rs"),
     "stored_family_index": ("function", None, "src/python/wave3.rs"),
+    # Additive within API 11 (engine 0.2.3): HdfMesh.get_mesh_corner_elevations.
+    "mesh_corner_elevations": ("function", None, "src/python/wave3.rs"),
 
     "structure_inventory": ("function", None, "src/python/structures.rs"),
     "read_structure_series": ("function", None, "src/python/structures.rs"),

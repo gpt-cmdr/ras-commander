@@ -277,3 +277,13 @@ CASES.update({
     "HdfCompletion.inspect_time_coverage": lambda p: HdfCompletion.inspect_time_coverage(p),
     "HdfResultsMesh.get_profile_line_flow_timeseries[recorded]": _first_ref_line_flow,
 })
+
+
+# ---------------------------------------------------------------- mesh corner elevations
+def _corner_elevations(path):
+    """Geometry-layout corner elevations of every mesh, as exactly comparable plain data."""
+    return {mesh: result.as_dict()
+            for mesh, result in HdfMesh.get_mesh_corner_elevations(path).items()}
+
+
+CASES["HdfMesh.get_mesh_corner_elevations"] = _corner_elevations
