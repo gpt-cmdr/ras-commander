@@ -11,7 +11,7 @@ or Windows x86-64 engine wheel into the same environment:
 
 ```bash
 uv pip install -e ".[fim,compute]"
-uv pip install /path/to/ras2fim_engine-0.3.0-py3-none-<platform>.whl
+uv pip install /path/to/ras2fim_engine-0.4.0-py3-none-<platform>.whl
 ras2fim-batch method
 ```
 
@@ -29,6 +29,63 @@ The Python GIS stack remains required. Source builds are also supported.
 The workflow does not publish to PyPI. Installed-binary synthetic mapping tests
 run on both platforms. Step05 numerical qualification used Linux; horizontal
 corpus checks passed on both Linux and Windows.
+
+## Experimental plain sloping mapping
+
+Use `map_sloping_profiles` to reconstruct RAS Mapper's plain **Sloping (Cell
+Corners)** method from computed 2D HDF results. It is a separate optional Rust
+method supplied by the 0.4.0 engine wheels. Earlier 0.3.0 wheels do not contain
+this command. Use `ras2fim-batch method` to inspect installed capabilities.
+
+```python
+from ras_commander import RasFim
+
+manifest = RasFim.map_sloping_profiles(
+    "model.p02.hdf", "canonical_terrain.tif", "sloping_catalog",
+    profiles={"maximum": "Max", "t0054": 54, "t0108": 108},
+    engine_path="/path/to/new/ras2fim-batch",
+    threads=4,
+    max_working_mib=4096,
+    polygon="reach_boundary.gpkg",  # alternatively bbox=(xmin, ymin, xmax, ymax)
+    write_floodplain=False,
+)
+performance = manifest.attrs["performance"]
+```
+
+Profile selectors are zero-based stored timestep indices or `"Max"`. Geometry,
+terrain and pixel ownership are shared across the request. Each profile gets
+its own hydraulic connectivity and corner reconstruction. Worker count controls
+the bounded Rayon pool. An AOI reduces the terrain/output window while retaining
+the complete mesh needed to reconstruct boundary values. Models containing 1D
+river or cross-section elements are rejected before mapping.
+
+The method adds **no depth postprocessing cutoff**. It reproduces the native
+float32 plot tolerance of 0.001 in model elevation units, including native
+rounding; it does not replace this behavior with a 0.5 ft filter. The
+depth-weighted and shallow-to-horizontal options are disabled, and cell-face
+stencil enrichment is excluded. HEC documents these distinct controls in
+[Mapping Options, HEC-RAS Mapper User's Manual 6.6](https://www.hec.usace.army.mil/confluence/rasdocs/rmum/6.6/mapping-results/mapping-options).
+
+Native 7.0.1 comparisons currently match raw valid/nodata masks and every
+float32 depth/WSE value within the physical 2D footprint for Davis pipes and
+conduits (Max and two timesteps), Bald Eagle dam break (Max), and Bald Eagle
+bridges (Max). Bounded Max comparisons also match exactly on Spring River
+(422,715 physical cells) and Spring Creek (340,163 physical cells), retaining
+the complete mesh for reconstruction. Linux and Windows x86-64 native engine
+checks include one/four-worker Davis Max/timestep comparisons; the five-model
+corpus also passes on both platforms. Full-extent eBFE and other HEC-RAS versions
+remain unqualified. A triangular AOI test also passes. Fresh single-map Windows
+performance comparisons are recorded in the
+[performance evidence](../development/fim-mapping-performance.md#plain-sloping-development-qualification).
+
+The API writes products to a new or empty directory, records the engine method,
+native option contract and timings, and removes products if the session aborts.
+Performance evidence is returned in `attrs["performance"]` and retained in
+`fim_manifest.json`. The memory budget is planned admission rather than an
+enforced process RSS limit; HDF/Python preparation and polygonization also use
+memory. A missing or incompatible engine raises without fallback. Mapping itself
+does not load HEC-RAS assemblies; the private native component oracle is used
+only during development qualification.
 
 ## Horizontal cell mapping
 

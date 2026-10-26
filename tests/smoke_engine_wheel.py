@@ -16,12 +16,67 @@ from affine import Affine
 from scipy.spatial import Delaunay
 
 
+def sloping_smoke(engine, root, terrain):
+    """Packaging smoke: typed geometry, two profiles, native ownership and AOI."""
+    import io
+    import struct
+    folder=root/"sloping-inputs";folder.mkdir()
+    tables={
+        "centers":([[2,2],[-1,2],[2,5],[5,2],[2,-1]],"<f8"),
+        "cell_info":([[0,4],[4,1],[5,1],[6,1],[7,1]],"<i4"),
+        "cell_faces":([[0,1],[1,1],[2,1],[3,1],[0,-1],[1,-1],[2,-1],[3,-1]],"<i4"),
+        "cell_minimum":([100,0,0,0,0],"<f4"),
+        "face_vertices":([[0,1],[1,2],[2,3],[3,0]],"<i4"),
+        "face_cells":([[0,1],[0,2],[0,3],[0,4]],"<i4"),
+        "face_info":(np.zeros((4,2)),"<i4"),
+        "face_points":(np.empty((0,2)),"<f8"),
+        "face_minimum":([100]*4,"<f4"),
+        "vertices":([[0,0],[0,4],[4,4],[4,0]],"<f8"),
+        "vertex_info":([[0,2],[2,2],[4,2],[6,2]],"<i4"),
+        "vertex_faces":([[3,1],[0,1],[0,1],[1,1],[1,1],[2,1],[2,1],[3,1]],"<i4"),
+    }
+    descriptors={}
+    for key,(data,dtype) in tables.items():
+        array=np.asarray(data,dtype=dtype);filename=f"{key}.bin";array.tofile(folder/filename)
+        descriptors[key]={"path":filename,"rows":len(array)}
+    (folder/"mesh.json").write_text(json.dumps({"schema":"ras-commander-sloping-mesh/1","arrays":descriptors}))
+    def polygon(filename,points):
+        wkb=struct.pack("<BIII",1,3,1,len(points))+np.asarray(points,dtype="<f8").tobytes()
+        (folder/filename).write_bytes(struct.pack("<I",len(wkb))+wkb)
+    polygon("cell.wkb",[[0,0],[0,4],[4,4],[4,0],[0,0]])
+    polygon("aoi.wkb",[[0,0],[0,4],[2,4],[2,0],[0,0]])
+    for name,value in [("a",101),("b",102)]:np.array([value,0,0,0,0],dtype="<f4").tofile(folder/f"{name}.bin")
+    request=dict(schema="ras-commander-sloping-request/1",terrain=str(terrain),epsg=3857,
+        crs_identity={"kind":"epsg"},terrain_transform=[0.,1.,0.,8.,0.,-1.],window=[0,4,4,4],
+        geometry_file="cell.wkb",mesh_files=["mesh.json"],owner_cells=[[0,0]],
+        profiles=[dict(id=name,values_files=[f"{name}.bin"]) for name in ["a","b"]],
+        threads=4,max_working_bytes=256<<20)
+    path=folder/"request.json";path.write_text(json.dumps(request))
+    subprocess.run([engine,"sloping",str(path),str(folder/"files")],check=True,capture_output=True)
+    for name,value in [("a",1),("b",2)]:
+        actual=np.fromfile(folder/"files"/name/"depth.bin",dtype="<f4")
+        np.testing.assert_array_equal(actual,np.full(16,value,dtype="<f4"))
+    request.update(stream_outputs=True,aoi_file="aoi.wkb",threads=1)
+    path.write_text(json.dumps(request))
+    output=subprocess.run([engine,"sloping",str(path),str(folder/"stream")],check=True,capture_output=True).stdout
+    stream=io.BytesIO(output)
+    for name,value in [("a",1),("b",2)]:
+        assert json.loads(stream.readline())==dict(id=name,status="complete",pixels=16)
+        for band,level in [("depth",value),("wse",100+value)]:
+            actual=np.frombuffer(stream.read(64),dtype="<f4").reshape(4,4)
+            expected=np.full((4,4),level,dtype="<f4");expected[:,2:]=np.nan
+            np.testing.assert_array_equal(actual,expected,err_msg=band)
+    assert not stream.read()
+    print("Installed wheel: plain sloping binary geometry, profiles, file/stream AOI PASS")
+
+
 def main():
     engine = shutil.which("ras2fim-batch")
     assert engine, "wheel did not install ras2fim-batch on PATH"
     method = json.loads(subprocess.check_output([engine, "method"], text=True))
     assert "step05_r2" in method
     assert method["horizontal"]["method_id"] == "horizontal-cell-constant/1"
+    assert method["sloping"]["method_id"] == "rasmapper-plain-sloping/1"
     with tempfile.TemporaryDirectory(prefix="ras2fim-wheel-") as tmp:
         root = Path(tmp)
         terrain = root / "terrain.tif"
@@ -29,6 +84,7 @@ def main():
                            count=1, dtype="float32", crs="EPSG:3857",
                            transform=Affine(1, 0, 0, 0, -1, 8), nodata=-9999) as ds:
             ds.write(np.full((8, 8), 100, dtype=np.float32), 1)
+        sloping_smoke(engine,root,terrain)
         ownership=np.tile(np.array([1,1,1,2,2,0],dtype="<u4"),(4,1))
         ownership.tofile(root/"owner.bin")
         np.array([100.5,102.],dtype="<f4").tofile(root/"a.bin")

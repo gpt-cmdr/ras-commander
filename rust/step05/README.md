@@ -1,5 +1,39 @@
 # Optional Step05 Rust engine
 
+The branch also provides the experimental `sloping` command and library
+modules `sloping` / `sloping_session`, supplied by engine wheels 0.4.0 or later.
+The earlier 0.3.0 wheels predate this command. `ras2fim-batch method` reports
+`rasmapper-plain-sloping/1` separately from the unchanged Step05 and horizontal
+methods.
+
+```text
+ras2fim-batch sloping request.json new-output-directory
+```
+
+The `ras-commander-sloping-request/1` request supplies immutable binary mesh geometry,
+ordered WKB cell polygons, terrain identity/window, ownership addresses and
+per-mesh little-endian float32 profile files including virtual cells. The
+Commander `map_sloping_profiles` adapter generates this contract from HDF.
+`mesh_files` point to small `ras-commander-sloping-mesh/1` JSON descriptors for
+typed little-endian arrays; coordinates remain float64, elevations float32,
+and incidence tables int32. This avoids per-element JSON conversion/parsing
+and preserves coordinate bits. Array sizes participate in admission checks
+before loading. The numerical component example retains its independent
+captured-reference format for development checks.
+Geometry, terrio ownership and terrain are prepared once. Bounded Rayon workers
+reconstruct hydraulic connections and corner values per profile, then paint
+disjoint pixels. AOIs constrain output without changing mesh connectivity.
+No extra depth cutoff, cell-face enrichment, depth weighting or shallow-water
+horizontal option is applied.
+
+Plain-sloping native 7.0.1 raw-mask/float32-bit qualification currently covers
+Davis Max/two timesteps, Bald Eagle bridge/dam Max, and bounded Spring River
+and Spring Creek Max fixtures on Linux, with complete topology reconstruction.
+The same corpus passes on Windows x86-64; full-extent eBFE remains unqualified. Native
+component capture is development-only; production code uses direct HDF inputs
+and Rust geometry calculations. The optional real-fixture pytest contract is
+documented in `tests/test_ras_fim_sloping.py`.
+
 Install the matching engine wheel (see the API guide), or build explicitly,
 then pass its path to
 `RasFim.map_profiles(..., engine_path="/path/to/ras2fim-batch")`.

@@ -80,8 +80,10 @@ fn read_bytes(path: &Path, expected: u64) -> Result<Vec<u8>, MapError> {
 fn read_values(path: &Path, count: usize) -> Result<Vec<f32>, MapError> {
     let raw = read_bytes(path, bytes(count, 4)?)?;
     let values: Vec<_> = raw
-        .chunks_exact(4)
-        .map(|v| f32::from_le_bytes(v.try_into().unwrap()))
+        .as_chunks::<4>()
+        .0
+        .iter()
+        .map(|v| f32::from_le_bytes(*v))
         .collect();
     if values.iter().any(|v| v.is_infinite()) {
         return Err(MapError::Invalid(
@@ -90,17 +92,17 @@ fn read_values(path: &Path, count: usize) -> Result<Vec<f32>, MapError> {
     }
     Ok(values)
 }
-fn write_f32(writer: &mut impl Write, values: &[f32]) -> Result<(), MapError> {
+pub(crate) fn write_f32(writer: &mut impl Write, values: &[f32]) -> Result<(), MapError> {
     let mut buffer = vec![0_u8; 65536];
     for chunk in values.chunks(16384) {
-        for (value, bytes) in chunk.iter().zip(buffer.chunks_exact_mut(4)) {
+        for (value, bytes) in chunk.iter().zip(buffer.as_chunks_mut::<4>().0.iter_mut()) {
             bytes.copy_from_slice(&value.to_le_bytes());
         }
         writer.write_all(&buffer[..chunk.len() * 4])?;
     }
     Ok(())
 }
-fn write_values(path: &Path, values: &[f32]) -> Result<(), MapError> {
+pub(crate) fn write_values(path: &Path, values: &[f32]) -> Result<(), MapError> {
     let partial = path.with_extension("bin.partial");
     let mut writer = BufWriter::new(File::create(&partial)?);
     write_f32(&mut writer, values)?;
@@ -293,8 +295,10 @@ pub fn run(req: &Request, base: &Path, out: &Path) -> Result<Value, MapError> {
                 labels
             } else {
                 let raw = read_bytes(&owner_path, bytes(count, 4)?)?;
-                raw.chunks_exact(4)
-                    .map(|v| u32::from_le_bytes(v.try_into().unwrap()))
+                raw.as_chunks::<4>()
+                    .0
+                    .iter()
+                    .map(|v| u32::from_le_bytes(*v))
                     .collect::<Vec<_>>()
             };
             if owner.iter().any(|v| *v as usize > req.cell_count) {

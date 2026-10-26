@@ -491,6 +491,78 @@ The native near-zero behavior remains unresolved; no suppression rule has
 been inferred or added to Rust. The notebook retains this diagnostic beside
 the successful cutoffs instead of excluding it.
 
+## Plain sloping development qualification
+
+The experimental `rasmapper-plain-sloping/1` method is separate from the
+horizontal evidence above. It reconstructs native 7.0.1 plain cell-corner
+sloping without an additional depth cutoff. Direct HDF inputs, Rust face
+application points, hydraulic connectivity, side-specific corner regression,
+general polygon weights and the native square-cell fast path are qualified
+against captured native components and raw stored maps. Production mapping
+does not load HEC-RAS assemblies.
+
+Raw valid/nodata masks and every common float32 Depth/WSE value match in the
+physical 2D footprint on these cases:
+
+| Model / profile | Physical cells | Valid pixels compared | Extent |
+|---|---:|---:|---|
+| Davis pipes/conduits, Max | 2,716 across two meshes | 22,041 | Full physical footprint |
+| Davis, timestep 54 | 2,716 | 15,860 | Full physical footprint |
+| Davis, timestep 108 | 2,716 | 11,970 | Full physical footprint |
+| Bald Eagle dam break, Max | 87,039 | 727,879 | Full physical footprint |
+| Bald Eagle bridges, Max | 24,718 | 973,902 | Full physical footprint |
+| Spring River eBFE, Max | 422,715 | 977,194 | Bounded window; complete mesh reconstruction |
+| Spring Creek eBFE, Max | 340,163 | 1,826,754 | Bounded window; complete mesh reconstruction |
+
+The complete numerical method runs in a bounded Rayon pool. One/four-worker
+Davis Max/timestep tests and a one-worker triangular AOI test pass. Repeated
+Max profiles in one request also pass, testing shared preparation separately
+from the two distinct timestep checks. The five cases also pass with a Windows
+x86-64 engine, including one/four-worker Davis Max/timestep pytest checks.
+Full-extent eBFE remains unqualified. Davis native timestep capture retained two
+successful references; a later independent WSE helper failed with exit 99,
+and a separate aggregate export also failed. Neither failure is counted as
+qualification, and both attempts preserve rasmap restoration/HDF identity
+receipts.
+
+Two interleaved single-map bridge-model comparisons on Windows measured the complete
+mapping APIs, including reading/preparation and writing one Depth/WSE pair,
+with no added filtering and no profile concurrency:
+
+| Pair | Native RASMapper (s) | Rust, one worker (s) | Rust, four workers (s) | Native / Rust, four workers |
+|---|---:|---:|---:|---:|
+| 1 | 10.14 | 4.40 | 3.77 | 2.69× |
+| 2 | 9.78 | 3.95 | 3.51 | 2.79× |
+
+Each candidate was compared to its fresh native reference and matched raw
+masks and float32 bits. RASMapper used native 7.0.1; Rust used a Windows GNU
+static-CRT build. The parent and children were restricted to four CPUs;
+Rust used the stated worker count. The Rust order was reversed in the second
+pair. These are shared-workstation timings with warm, uncontrolled caches,
+not a universal speedup claim. Comparison scanning and reference metadata
+setup were outside the timed API calls. Original rasmap bytes were restored
+and the result HDF hash remained unchanged.
+
+An earlier interleaved comparison used Windows RASMapper against the Rust
+Linux engine under WSL2. Native times were 18.12/12.61 s and Rust four-worker
+times were 9.91/7.94 s, with exact raw comparisons. Those mixed-platform
+results are retained separately from the same-platform table above.
+
+Profiling identified geometry serialization as a larger cost than arithmetic.
+The engine now accepts typed binary geometry arrays with small JSON
+descriptors, preserving coordinate bits and avoiding per-element conversion.
+An exploratory two-profile Spring River bounded run fell from 76.73 s with
+the initial JSON geometry handoff to 11.27 s with the binary handoff; geometry
+preparation inside Rust fell from 32.45 s to 2.08 s. Both runs matched the same
+native reference exactly. These development timings are not a controlled
+comparison with RASMapper. Terrain blocks are decoded in the same bounded
+pool, and blocks outside ownership/AOI are skipped.
+
+`scripts/benchmarks/fim_sloping_compare.py` reproduces raw comparisons from
+an external case JSON. `tests/test_ras_fim_sloping.py` runs real-model
+one/four-worker raw-bit checks when `RAS_COMMANDER_SLOPING_CASE` points to
+that case. Fixtures and generated evidence remain external to the repository.
+
 ## Proposed engine packaging
 
 Package the mapping engine separately as **`ras-commander-fast-fim`**, following

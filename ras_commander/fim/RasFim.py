@@ -29,6 +29,10 @@ engine executable.
 horizontal WSE, with an explicit NumPy qualification reference. It reuses
 terrain-lattice ownership across profiles and never substitutes for a failed
 Step05 run.
+
+``map_sloping_profiles`` is a separate experimental plain cell-corner sloping
+method reconstructed against native RAS Mapper 7.0.1. It reads complete mesh
+topology from HDF, uses terrio terrain/ownership and has no extra depth cutoff.
 """
 
 from __future__ import annotations
@@ -206,6 +210,80 @@ class RasFim:
     ENGINE_NAME = _engine.ENGINE_NAME
     ENGINE_ENV_VAR = _engine.ENGINE_ENV_VAR
     MANIFEST_COLUMNS = tuple(MANIFEST_COLUMNS)
+
+    @staticmethod
+    @log_call
+    def map_sloping_profiles(
+        hdf_path: PathLike, terrain_path: PathLike, output_folder: PathLike, *,
+        profiles: Optional[Dict[str, Union[str, int]]] = None,
+        bbox: Optional[Sequence[float]] = None, polygon: Any = None,
+        polygon_layer: Optional[str] = None, aoi_crs: Any = None,
+        engine_path: Optional[PathLike] = None, threads: int = 1,
+        max_working_mib: int = 1024, timeout: Optional[float] = None,
+        write_floodplain: bool = False,
+    ) -> pd.DataFrame:
+        """Map 2D HDF WSE with the experimental Rust plain-sloping engine.
+
+        ``profiles`` maps output names to ``"Max"`` or zero-based stored
+        timestep indices; omitted selects ``{"Max": "Max"}``. Geometry,
+        terrio ownership and terrain are reused across profiles. ``threads``
+        bounds native reconstruction and pixel workers (1 through 64).
+
+        This method reproduces plain cell-corner sloping, without additional
+        depth postprocessing or slopingPretty options. It preserves the native
+        float32 plot tolerance. Native 7.0.1 Max products have been qualified
+        on Davis pipes and Bald Eagle bridge/dam examples, and two Davis
+        timesteps. Bounded Spring River/Spring Creek comparisons retain the
+        complete mesh. Models containing 1D river or cross-section elements
+        are rejected before mapping.
+
+        ``terrain_path`` must be a same-CRS float32 square-pixel GeoTIFF with
+        declared nodata. ``bbox`` or ``polygon`` constrains output pixels;
+        connectivity uses the complete mesh. Polygon constraints accept the
+        same geometry/frame/file forms as :meth:`resolve_aoi`.
+
+        Outputs require a new or empty folder. The returned
+        ``fim_product_manifest`` DataFrame includes performance evidence in
+        ``attrs["performance"]``; the JSON manifest retains the same evidence.
+        ``max_working_mib`` is planned admission, not an enforced RSS ceiling.
+        ``timeout`` covers the engine stream including product writes.
+        A missing or incompatible engine raises; no arithmetic fallback runs.
+
+        Args:
+            hdf_path: Computed 2D plan-results HDF, as a string or Path.
+            terrain_path: Same-CRS, single-band float32 GeoTIFF with declared
+                nodata and north-up square pixels.
+            output_folder: New or empty directory for products and manifest.
+            profiles: Output names mapped to ``"Max"`` or nonnegative
+                zero-based stored timestep indices. Defaults to Max.
+            bbox: Optional output bounds in ``aoi_crs`` or the model CRS.
+            polygon: Optional polygon geometry, frame or vector-file AOI.
+            polygon_layer: Layer name when the AOI file has multiple layers.
+            aoi_crs: Coordinate reference system of the AOI.
+            engine_path: Matching engine executable, otherwise environment/PATH.
+            threads: Bounded Rust worker count, 1 through 64.
+            max_working_mib: Planned engine memory admission budget in MiB;
+                HDF/Python preparation and polygonization also use memory.
+            timeout: Engine stream lifetime in seconds, including output writes.
+            write_floodplain: Also polygonize positive retained depth pixels.
+
+        Returns:
+            DataFrame: ``fim_product_manifest`` rows with timing evidence in
+            ``attrs["performance"]`` and the JSON manifest.
+
+        Raises:
+            FimUnsupportedError: Unsupported model, geometry, AOI or terrain.
+            FimEngineNotFoundError: The optional executable is unavailable.
+            FimEngineError: Engine failure, inconsistent output or changed input.
+            ValueError: Invalid profile selectors or resource options.
+            FileExistsError: The output directory is not empty.
+        """
+        _require_dependencies()
+        from . import _sloping
+        return _sloping.map_profiles(hdf_path, terrain_path, output_folder,
+            profiles=profiles, bbox=bbox, polygon=polygon, polygon_layer=polygon_layer,
+            aoi_crs=aoi_crs, engine_path=engine_path, threads=threads,
+            max_working_mib=max_working_mib, timeout=timeout, write_floodplain=write_floodplain)
 
     @staticmethod
     @log_call

@@ -8,13 +8,17 @@
 //! The application uses [`step05`], which preserves the upstream float32 sequence
 //! and native approximate reprojection over supplied SciPy transforms and axes.
 //! The older [`session`] diagnostic retains its distinct f64 arithmetic.
-//! Shared scope boundaries:
+//! Step05 and triangulated-session scope boundaries:
 //! - Interpolation topology is always caller-supplied global SciPy/Qhull simplices. There is no
 //!   native triangulation and never a per-AOI or per-tile retriangulation.
 //! - Wet masks and sample preparation are caller-supplied (upstream/Python adapters).
 //! - Native terrain is same-CRS, north-up, single-band float32 GeoTIFF read through terrio with
 //!   an explicit sampling formula. Other terrain types require separate qualification.
 //! - The diagnostic session's f64 arithmetic does not replace the Step05 float32 sequence.
+//!
+//! Independent [`horizontal`] and [`sloping_session`] methods prepare pixel ownership
+//! directly from cell polygons. Plain sloping reconstructs hydraulic connectivity
+//! and corner interpolation rather than using the Step05 SciPy topology.
 #![forbid(unsafe_code)]
 
 pub mod cache;
@@ -25,6 +29,9 @@ pub mod ownership;
 pub mod scipy_interp;
 pub mod session;
 pub mod sink;
+pub mod sloping;
+mod sloping_binary;
+pub mod sloping_session;
 pub mod step05;
 pub mod terrain;
 
