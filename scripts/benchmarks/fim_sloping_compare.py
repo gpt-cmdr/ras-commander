@@ -2,7 +2,7 @@
 
 The case JSON contains hdf, terrain, engine, profiles (name -> Max/index), and
 references (name -> {depth, wse}). Optional bbox/polygon/AOI fields constrain
-mapping. Optional render_mode/reduce_shallow_to_horizontal/use_depth_weighted_faces
+mapping. Optional render_mode/reduce_shallow_to_horizontal
 fields select enhanced sloping. References must use the same options and no
 added depth cutoff.
 Native generation uses the separate Commander reference harness; this runner
@@ -198,6 +198,8 @@ def main():
     parser.add_argument("--max-inflight-profiles", type=int, default=1)
     args = parser.parse_args()
     case = json.loads(args.case.read_text(encoding="utf-8"))
+    if case.get("use_depth_weighted_faces", False):
+        raise ValueError("Case requests a deferred interpolation control")
     fields = {
         key: case[key]
         for key in ("bbox", "polygon", "polygon_layer", "aoi_crs")
@@ -244,7 +246,6 @@ def main():
             for key in (
                 "render_mode",
                 "reduce_shallow_to_horizontal",
-                "use_depth_weighted_faces",
             )
             if key in case
         },

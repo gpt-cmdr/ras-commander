@@ -30,7 +30,6 @@ class FimPreparedSlopingModel:
         profiles=None,
         render_mode="sloping",
         reduce_shallow_to_horizontal=False,
-        use_depth_weighted_faces=False,
         engine_path=None,
         threads=1,
         max_working_mib=1024,
@@ -48,7 +47,7 @@ class FimPreparedSlopingModel:
         self._closed = True
         self._info = {}
         self._options = _sloping._validate_options(
-            render_mode, reduce_shallow_to_horizontal, use_depth_weighted_faces
+            render_mode, reduce_shallow_to_horizontal
         )
         self._selected = _sloping._validate_selection(profiles)
         self._threads = _positive_int(threads, "threads")
@@ -103,7 +102,6 @@ class FimPreparedSlopingModel:
                 root,
                 threads=self._threads,
                 include_max="Max" in self._selected.values(),
-                include_vertex_elevations=use_depth_weighted_faces,
                 max_staged_bytes=prepared_budget - geometry_bytes,
             )
             mesh_bytes = sum(p.stat().st_size for p in root.iterdir())

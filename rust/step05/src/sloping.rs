@@ -15,8 +15,6 @@ pub struct Options {
     pub render_mode: RenderMode,
     #[serde(default)]
     pub reduce_shallow_to_horizontal: bool,
-    #[serde(default)]
-    pub use_depth_weighted_faces: bool,
 }
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, serde::Deserialize, serde::Serialize)]
 pub enum RenderMode {
@@ -28,11 +26,9 @@ pub enum RenderMode {
 }
 impl Options {
     pub fn validate(self) -> Result<(), MapError> {
-        if self.render_mode == RenderMode::Corners
-            && (self.reduce_shallow_to_horizontal || self.use_depth_weighted_faces)
-        {
+        if self.render_mode == RenderMode::Corners && self.reduce_shallow_to_horizontal {
             return Err(MapError::Invalid(
-                "shallow and depth-weighted controls require slopingPretty".into(),
+                "shallow control requires slopingPretty".into(),
             ));
         }
         Ok(())
@@ -776,7 +772,6 @@ pub fn set_vertex_elevations(
 pub struct PreparedProfile {
     local_values: Vec<Vec<f32>>,
     face_values: Vec<Vec<f32>>,
-    depth_weights: Vec<Vec<f32>>,
     horizontal: Vec<Option<f32>>,
     wet: Vec<bool>,
     options: Options,
@@ -803,12 +798,6 @@ pub fn prepare_profile_with_options(
     options.validate()?;
     if stencils.len() != mesh.cells.len() {
         return Err(MapError::Invalid("sloping stencil count mismatch".into()));
-    }
-    if options.use_depth_weighted_faces && stencils.iter().flatten().any(|s| s.elevations.is_none())
-    {
-        return Err(MapError::Unsupported(
-            "depth weighting requires stored native FacePoints Elevation".into(),
-        ));
     }
     let reconstructed = mesh.reconstruct(values, tolerance, pool)?;
     let local_values: Vec<Vec<f32>> = pool.install(|| {
@@ -841,33 +830,6 @@ pub fn prepare_profile_with_options(
     } else {
         Vec::new()
     };
-    let depth_weights = if options.use_depth_weighted_faces {
-        pool.install(|| {
-            stencils
-                .par_iter()
-                .enumerate()
-                .map(|(cell, s)| match s {
-                    Some(s) => {
-                        let mut result: Vec<_> = local_values[cell]
-                            .iter()
-                            .zip(s.elevations.as_ref().unwrap())
-                            .map(|(&w, &z)| depth_weight(w, z))
-                            .collect();
-                        result.extend(
-                            s.faces
-                                .iter()
-                                .zip(&face_values[cell])
-                                .map(|(&[face, _], &w)| depth_weight(w, mesh.faces[face].minimum)),
-                        );
-                        result
-                    }
-                    None => Vec::new(),
-                })
-                .collect()
-        })
-    } else {
-        Vec::new()
-    };
     let horizontal = stencils
         .iter()
         .enumerate()
@@ -891,19 +853,10 @@ pub fn prepare_profile_with_options(
     Ok(PreparedProfile {
         local_values,
         face_values,
-        depth_weights,
         horizontal,
         wet,
         options,
     })
-}
-
-fn depth_weight(wse: f32, elevation: f32) -> f32 {
-    if wse == NODATA || elevation == NODATA || wse <= elevation {
-        0.01_f32
-    } else {
-        f64::from(wse - elevation).max(0.01_f64) as f32
-    }
 }
 
 impl WeightScratch {
@@ -1059,10 +1012,7 @@ pub fn render_profile(
                             scratch.paint_with_faces(
                                 values,
                                 &profiles[mesh].face_values[cell],
-                                profiles[mesh]
-                                    .options
-                                    .use_depth_weighted_faces
-                                    .then(|| profiles[mesh].depth_weights[cell].as_slice()),
+                                None,
                             )
                         } else {
                             paint_corner_values(weights, values)?
@@ -1084,6 +1034,17 @@ pub fn render_profile(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn removed_option_is_rejected_instead_of_ignored() {
+        for value in [false, true] {
+            let request = serde_json::json!({
+                "render_mode": "slopingPretty",
+                "use_depth_weighted_faces": value
+            });
+            assert!(serde_json::from_value::<Options>(request).is_err());
+        }
+    }
 
     #[test]
     fn native_davis_donated_and_depth_rebalanced_scalar_bits() {

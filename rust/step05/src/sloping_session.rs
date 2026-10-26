@@ -247,7 +247,6 @@ fn selected_method(options: sloping::Options) -> Value {
             "None"
         }
         .into();
-        record["options"]["UseDepthWeightedFaces"] = options.use_depth_weighted_faces.into();
         record["scope"] = "physical 2D cells; cell-corner and face sloping; no 1D or standalone storage-area surfaces".into();
     }
     record

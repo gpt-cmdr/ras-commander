@@ -222,7 +222,6 @@ class RasFim:
         profiles: Optional[Dict[str, Union[str, int]]] = None,
         render_mode: str = "sloping",
         reduce_shallow_to_horizontal: bool = False,
-        use_depth_weighted_faces: bool = False,
         engine_path: Optional[PathLike] = None, threads: int = 1,
         max_working_mib: int = 1024, max_prepared_mib: int = 1024,
     ) -> "FimPreparedSlopingModel":
@@ -256,7 +255,6 @@ class RasFim:
         return FimPreparedSlopingModel(
             hdf_path, terrain_path, profiles=profiles, render_mode=render_mode,
             reduce_shallow_to_horizontal=reduce_shallow_to_horizontal,
-            use_depth_weighted_faces=use_depth_weighted_faces,
             engine_path=engine_path, threads=threads,
             max_working_mib=max_working_mib, max_prepared_mib=max_prepared_mib,
         )
@@ -268,7 +266,6 @@ class RasFim:
         profiles: Optional[Dict[str, Union[str, int]]] = None,
         render_mode: str = "sloping",
         reduce_shallow_to_horizontal: bool = False,
-        use_depth_weighted_faces: bool = False,
         bbox: Optional[Sequence[float]] = None, polygon: Any = None,
         polygon_layer: Optional[str] = None, aoi_crs: Any = None,
         engine_path: Optional[PathLike] = None, threads: int = 1,
@@ -286,7 +283,7 @@ class RasFim:
         bounds native reconstruction and pixel workers (1 through 64).
 
         Defaults to plain cell-corner sloping. ``render_mode="slopingPretty"``
-        includes cell faces and accepts the shallow/depth-weighting flags.
+        includes cell faces and accepts the shallow-to-horizontal control.
         Neither mode adds depth postprocessing. It preserves the native
         float32 plot tolerance. Plain-mode native 7.0.1 Max products were qualified
         on Davis pipes and Bald Eagle bridge/dam examples, and two Davis
@@ -318,8 +315,6 @@ class RasFim:
                 corners and faces. Defaults to plain sloping.
             reduce_shallow_to_horizontal: Native connectivity-based horizontal
                 rendering for shallow cells; requires slopingPretty.
-            use_depth_weighted_faces: Rebalance donated corner/face weights by
-                native depth; requires slopingPretty and stored corner elevations.
             bbox: Optional output bounds in ``aoi_crs`` or the model CRS.
             polygon: Optional polygon geometry, frame or vector-file AOI.
             polygon_layer: Layer name when the AOI file has multiple layers.
@@ -364,7 +359,6 @@ class RasFim:
         return _sloping.map_profiles(hdf_path, terrain_path, output_folder,
             profiles=profiles, render_mode=render_mode,
             reduce_shallow_to_horizontal=reduce_shallow_to_horizontal,
-            use_depth_weighted_faces=use_depth_weighted_faces,
             bbox=bbox, polygon=polygon, polygon_layer=polygon_layer,
             aoi_crs=aoi_crs, engine_path=engine_path, threads=threads, writer_threads=writer_threads,
             max_working_mib=max_working_mib, timeout=timeout, write_floodplain=write_floodplain,

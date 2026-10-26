@@ -19,22 +19,17 @@ from .errors import FimEngineError
 
 
 def _validate_options(
-    render_mode, reduce_shallow_to_horizontal, use_depth_weighted_faces
+    render_mode, reduce_shallow_to_horizontal
 ):
     if render_mode not in ("sloping", "slopingPretty"):
         raise ValueError("render_mode must be 'sloping' or 'slopingPretty'")
-    if not isinstance(reduce_shallow_to_horizontal, bool) or not isinstance(
-        use_depth_weighted_faces, bool
-    ):
+    if not isinstance(reduce_shallow_to_horizontal, bool):
         raise ValueError("sloping option flags must be booleans")
-    if render_mode == "sloping" and (
-        reduce_shallow_to_horizontal or use_depth_weighted_faces
-    ):
-        raise ValueError("shallow and depth-weighted controls require slopingPretty")
+    if render_mode == "sloping" and reduce_shallow_to_horizontal:
+        raise ValueError("shallow control requires slopingPretty")
     selected_options = dict(
         render_mode=render_mode,
         reduce_shallow_to_horizontal=reduce_shallow_to_horizontal,
-        use_depth_weighted_faces=use_depth_weighted_faces,
     )
     return selected_options
 
@@ -149,7 +144,6 @@ def map_profiles(
     profiles=None,
     render_mode="sloping",
     reduce_shallow_to_horizontal=False,
-    use_depth_weighted_faces=False,
     bbox=None,
     polygon=None,
     polygon_layer=None,
@@ -176,7 +170,7 @@ def map_profiles(
     )
 
     selected_options = _validate_options(
-        render_mode, reduce_shallow_to_horizontal, use_depth_weighted_faces
+        render_mode, reduce_shallow_to_horizontal
     )
     started = time.perf_counter()
     preparation = {}
@@ -295,7 +289,7 @@ def map_profiles(
             k: {"path": str(p), "size": before[k][0], "mtime_ns": before[k][1]}
             for k, p in watched.items()
         },
-        qualification="experimental native 7.0.1; plain five-model physical-2D corpus (bounded eBFE); enhanced combinations on Bald Eagle bridges Max and Davis timesteps",
+        qualification="experimental native 7.0.1; plain five-model physical-2D corpus; unweighted face/shallow options on Bald Eagle bridges Max and Davis timesteps",
     )
 
     def manifest():
@@ -329,7 +323,6 @@ def map_profiles(
                         root,
                         threads=threads,
                         include_max="Max" in selected.values(),
-                        include_vertex_elevations=use_depth_weighted_faces,
                     )
                 else:
                     mesh_files, meshes = _prepared._mesh_files, _prepared._meshes
@@ -552,7 +545,7 @@ def map_profiles(
                                     if reduce_shallow_to_horizontal
                                     else "None"
                                 ),
-                                "UseDepthWeightedFaces": use_depth_weighted_faces,
+                                "UseDepthWeightedFaces": False,
                                 "FaceWSMode": "Adjusted",
                             }
                             or [p.get("id") for p in units] != expected

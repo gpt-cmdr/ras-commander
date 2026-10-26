@@ -31,11 +31,9 @@ Parent `ras_commander/AGENTS.md` and root `AGENTS.md` still apply.
   corner values and polygon/square pixel weights. Preserve binary32 operation
   order, side-specific disconnected corner values and native intrinsic plot
   tolerance. It has no additional depth cutoff. The optional `slopingPretty`
-  mode adds native corner-to-face weight donation, optional native depth
-  reweighting and shallow-to-horizontal selection. Keep plain defaults unchanged;
+  mode adds native corner-to-face weight donation and optional
+  shallow-to-horizontal selection. Keep plain defaults unchanged;
   the selected method/options must appear in the engine report and manifest.
-  Depth weighting requires stored FacePoints Elevation; never synthesize or
-  fetch elevations from a native runtime during production mapping.
 - Sloping AOIs constrain terrain/ownership/output pixels only. Keep the complete
   geometry for hydraulic connectivity and corner reconstruction across boundaries.
   Geometry, terrain and ownership are reused across all profiles in one request.
@@ -44,7 +42,7 @@ Parent `ras_commander/AGENTS.md` and root `AGENTS.md` still apply.
   currently pass. Bounded Max tests also pass on Spring River and Spring Creek
   with full global topology. Final Windows Max checks also match the full
   physical 2D footprints of both eBFE fixtures. This evidence does not establish
-  full-extent Linux eBFE or enhanced eBFE,
+  full-extent Linux eBFE or unweighted face-mode eBFE,
   other native versions, 1D,
   storage areas outside the physical 2D footprint, or all option combinations.
 - `_sloping_oracle.py` is a development reference reader only. Production mapping

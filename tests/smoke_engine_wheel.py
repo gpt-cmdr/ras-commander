@@ -56,29 +56,31 @@ def sloping_smoke(engine, root, terrain):
     for name,value in [("a",1),("b",2)]:
         actual=np.fromfile(folder/"files"/name/"depth.bin",dtype="<f4")
         np.testing.assert_array_equal(actual,np.full(16,value,dtype="<f4"))
-    # Elevations are optional for plain mode; enhanced depth weighting requires them.
-    np.full(4, 100, dtype="<f4").tofile(folder/"vertex_elevations.bin")
-    descriptors["vertex_elevations"] = dict(path="vertex_elevations.bin", rows=4)
-    (folder/"mesh.json").write_text(json.dumps({"schema":"ras-commander-sloping-mesh/1","arrays":descriptors}))
     for shallow in (False, True):
-        for weighted in (False, True):
-            request["max_inflight_profiles"] = 2
-            request["options"] = dict(render_mode="slopingPretty", reduce_shallow_to_horizontal=shallow, use_depth_weighted_faces=weighted)
-            path.write_text(json.dumps(request))
-            destination=folder/f"enhanced-{int(shallow)}-{int(weighted)}"
-            subprocess.run([engine,"sloping",str(path),str(destination)],check=True,capture_output=True)
-            report=json.loads((destination/"report.json").read_text())
-            assert report["method"]["method_id"]=="rasmapper-sloping-with-faces/1"
-            assert report["effective_inflight_profiles"] == 2
-            for name,value in [("a",1),("b",2)]:
-                np.testing.assert_array_equal(np.fromfile(destination/name/"depth.bin",dtype="<f4"),np.full(16,value,dtype="<f4"))
+        request["max_inflight_profiles"] = 2
+        request["options"] = dict(render_mode="slopingPretty", reduce_shallow_to_horizontal=shallow)
+        path.write_text(json.dumps(request))
+        destination = folder / f"faces-{int(shallow)}"
+        subprocess.run([engine, "sloping", str(path), str(destination)], check=True, capture_output=True)
+        report = json.loads((destination / "report.json").read_text())
+        assert report["method"]["method_id"] == "rasmapper-sloping-with-faces/1"
+        assert report["method"]["options"]["UseDepthWeightedFaces"] is False
+        assert report["effective_inflight_profiles"] == 2
+        for name, value in [("a", 1), ("b", 2)]:
+            np.testing.assert_array_equal(np.fromfile(destination/name/"depth.bin", dtype="<f4"), np.full(16, value, dtype="<f4"))
+    request["options"]["use_depth_weighted_faces"] = True
+    path.write_text(json.dumps(request))
+    rejected = subprocess.run([engine, "sloping", str(path), str(folder/"removed")], capture_output=True)
+    assert rejected.returncode != 0
+    assert not list((folder/"removed").rglob("*.bin"))
+    del request["options"]["use_depth_weighted_faces"]
     # An upper bound may be reduced by memory admission before allocation.
     request["max_working_bytes"] = report["planned_bytes"] - report["additional_profile_planned_bytes"]
     path.write_text(json.dumps(request))
     subprocess.run([engine,"sloping",str(path),str(folder/"memory-capped")],check=True,capture_output=True)
     assert json.loads((folder/"memory-capped/report.json").read_text())["effective_inflight_profiles"] == 1
     request["max_working_bytes"] = 256 << 20
-    request["options"] = dict(render_mode="slopingPretty", reduce_shallow_to_horizontal=True, use_depth_weighted_faces=True)
+    request["options"] = dict(render_mode="slopingPretty", reduce_shallow_to_horizontal=True)
     request.update(stream_outputs=True,aoi_file="aoi.wkb",threads=1)
     path.write_text(json.dumps(request))
     output=subprocess.run([engine,"sloping",str(path),str(folder/"stream")],check=True,capture_output=True).stdout

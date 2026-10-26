@@ -11,7 +11,7 @@ or Windows x86-64 engine wheel into the same environment:
 
 ```bash
 uv pip install -e ".[fim,compute]"
-uv pip install /path/to/ras2fim_engine-0.7.0-py3-none-<platform>.whl
+uv pip install /path/to/ras2fim_engine-0.7.1-py3-none-<platform>.whl
 ras2fim-batch method
 ```
 
@@ -90,7 +90,7 @@ native model image.
 
 The method adds **no depth postprocessing cutoff**. It reproduces the native
 float32 plot tolerance of 0.001 in model elevation units, including native
-rounding; it does not replace this behavior with a 0.5 ft filter. The default disables depth weighting, shallow-to-horizontal rendering and
+rounding; it does not replace this behavior with a 0.5 ft filter. The default disables shallow-to-horizontal rendering and
 cell-face stencil enrichment. HEC documents these distinct controls in
 [Mapping Options, HEC-RAS Mapper User's Manual 6.6](https://www.hec.usace.army.mil/confluence/rasdocs/rmum/6.6/mapping-results/mapping-options).
 
@@ -103,7 +103,7 @@ the complete mesh for reconstruction. Linux and Windows x86-64 native engine
 checks include one/four-worker Davis Max/timestep comparisons; the five-model
 corpus also passes on both platforms. The final Windows Max comparisons also
 match across the full physical 2D footprints of Spring River and Spring Creek.
-Full-extent Linux eBFE, enhanced eBFE and other HEC-RAS versions remain
+Full-extent Linux eBFE, unweighted face-mode eBFE and other HEC-RAS versions remain
 unqualified. A triangular AOI test also passes. Fresh single-map Windows
 performance comparisons are recorded in the
 [performance evidence](../development/fim-mapping-performance.md#plain-sloping-development-qualification).
@@ -148,43 +148,32 @@ results remain available for reconstruction, preserving values at mask edges.
 Omit `template_raster` for compact catalog delivery; a full-grid template
 retains its full dimensions even when mapping is masked. An AOI reduces raster
 work, but does not eliminate full-mesh preparation. These rules also apply to
-`slopingPretty` and both of its native option flags.
+`slopingPretty` and its shallow-to-horizontal control.
 
 Select `render_mode="slopingPretty"` for **Sloping (Cell Corners + Cell Faces)**.
-The two booleans select the native controls independently:
+This unweighted mode donates corner weights to adjacent cell faces.
+`reduce_shallow_to_horizontal=True` uses native face-connectivity classifications
+to paint qualifying shallow cells with their computed cell WSE, bypassing their
+polygon interpolation work. That control requires slopingPretty; plain mode
+rejects it. Neither mode applies an additional depth cutoff.
 
 ```python
 manifest = RasFim.map_sloping_profiles(
-    "model.p02.hdf", "canonical_terrain.tif", "enhanced_sloping",
+    "model.p02.hdf", "canonical_terrain.tif", "sloping_faces",
     profiles={"maximum": "Max", "t0054": 54},
     render_mode="slopingPretty",
-    use_depth_weighted_faces=True,
     reduce_shallow_to_horizontal=True,
     threads=4,
 )
 ```
 
-With both flags false, the mapper donates corner weights to adjacent cell
-faces. `use_depth_weighted_faces=True` rebalances those weights using native
-corner/face water depths. It requires the source HDF's stored
-`Geometry/2D Flow Areas/<mesh>/FacePoints Elevation` arrays. Missing arrays
-raise `FimUnsupportedError`; production mapping never invokes HEC-RAS to
-create them or substitutes terrain samples. `reduce_shallow_to_horizontal=True`
-uses native face-connectivity classifications to paint qualifying shallow cells
-with the computed cell WSE. It bypasses their polygon interpolation work.
-Both flags require slopingPretty; plain mode rejects them instead of silently
-ignoring them. No additional depth cutoff is applied in either mode.
-
-The selected native options and `rasmapper-sloping-with-faces/1` method appear
-in the report and manifest; default plain mode retains its existing method ID.
-The adapter checks the reported options against the request. Engine 0.4 remains
-usable for plain mapping and raises explicitly for enhanced options.
-All four enhanced combinations match raw Depth/WSE masks and float32 bits on
-Bald Eagle bridges Max and Davis timesteps 54/108, with one/four workers on
-Windows and Linux x86-64. This option matrix does not establish enhanced parity
-for the large eBFE cases or other HEC-RAS versions. The physical-2D scope and
-standalone-storage-area exclusion apply to both modes. Internal experimental
-face-value and corner-adjustment switches are not exposed by this API.
+The selected options and `rasmapper-sloping-with-faces/1` method appear in the
+report and manifest. Plain mode retains `rasmapper-plain-sloping/1`.
+Unweighted face mode, with the shallow control off or on, matches native 7.0.1
+raw masks and float32 bits on Bald Eagle bridges Max and Davis timesteps 54/108,
+with one/four workers on Windows and Linux x86-64. This does not establish
+face-mode parity for the large eBFE cases or other HEC-RAS versions.
+The physical-2D scope and standalone-storage-area exclusion apply to both modes.
 
 ## Reuse prepared models across reach requests
 
@@ -200,7 +189,6 @@ with RasFim.prepare_sloping_model(
     "model.p02.hdf", "canonical_terrain.tif",
     profiles={"t0054": 54, "t0108": 108},
     render_mode="slopingPretty",
-    use_depth_weighted_faces=True,
     reduce_shallow_to_horizontal=True,
     threads=4,
     max_working_mib=4096,
@@ -228,8 +216,8 @@ The context retains physical cell polygons and their spatial index, model
 scope, engine capabilities, terrain metadata, complete staged mesh arrays and
 the selected WSE rows in immutable temporary files. It does not retain a
 native process: each request starts the CLI, rebuilds Rust interpolation
-stencils and decodes its terrain window. Hydraulic connectivity, depth-weighted
-faces and shallow-cell decisions are computed for each profile. Chunked HDF
+stencils and decodes its terrain window. Hydraulic connectivity, face values
+and shallow-cell decisions are computed for each profile. Chunked HDF
 staging, persistent native terrain/stencil caches and pixel-weight caches are
 outside this increment.
 

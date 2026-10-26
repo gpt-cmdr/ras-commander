@@ -1,82 +1,33 @@
 # Optional engine test wheels
 
-Install the wheel matching your operating system and CPU into the environment
-used for mapping. These are x86-64 test builds; no PyPI release is made.
-
-Linux (glibc 2.28 or newer):
-
-```bash
-python -m pip install wheels/ras2fim_engine-0.7.0-py3-none-manylinux_2_28_x86_64.whl
-```
-
-Windows x86-64:
+Install the matching x86-64 wheel into the environment used for mapping:
 
 ```powershell
-python -m pip install wheels/ras2fim_engine-0.7.0-py3-none-win_amd64.whl
+python -m pip install wheels/ras2fim_engine-0.7.1-py3-none-win_amd64.whl
 ```
 
-Then run `ras2fim-batch method`. Installation places the engine in the virtual
-environment's scripts directory. Activate that environment or pass the engine's
-full path to the Python API. The application and GIS dependencies are installed
-separately. The native engine needs neither a Rust compiler nor system GDAL.
+```bash
+python -m pip install wheels/ras2fim_engine-0.7.1-py3-none-manylinux_2_28_x86_64.whl
+```
 
-Verify each wheel against `SHA256SUMS.txt` before installation (`sha256sum -c`
-on Linux or `Get-FileHash -Algorithm SHA256` on Windows). `BUILD.json` records
-the source revision, artifact/binary hashes and local build environments.
-The retained 0.7.0 Linux wheel was built in the pinned official manylinux 2.28
-container. The Windows wheel was cross-built for Windows GNU with a static
-CRT and tested on Windows; it imports only Windows system DLLs. CI also builds
-MSVC wheels as separate workflow artifacts. Both retained builds execute the installed
-binary on synthetic terrain with shared profiles, bbox and polygon masks,
-plus horizontal and plain-sloping file and streaming-pipe output. Version 0.4
-adds `rasmapper-plain-sloping/1`, direct typed geometry arrays, shared terrain
-and ownership across profiles, and bounded parallel reconstruction/painting.
-It applies no additional depth cutoff. Version 0.3 introduced ownership
-and polygon masks through native terrio, reusing ownership and terrain across
-profiles while preserving Step05 arithmetic. Installed-wheel tests compare
-the horizontal products with the explicit NumPy reference, including shared
-boundaries, holes, multipart AOIs and bounded worker counts.
-The earlier 0.5 qualification included plain Davis
-Max/timesteps, all four enhanced-option combinations on bridge Max and Davis
-two timesteps with one/four workers, triangular AOI, failure cleanup and
-metadata-only template delivery. The enhanced matrix compares 48 raw Depth/WSE
-products per platform. Version 0.5 adds `rasmapper-sloping-with-faces/1`,
-independent depth-weighted and shallow-to-horizontal flags, and stored native
-corner elevations. Plain defaults remain unchanged. The
-[sloping corpus/performance evidence](../docs/development/fim-mapping-performance.md#plain-sloping-development-qualification)
-states full versus bounded comparison scopes separately. Step05 real-model
-numerical qualification was performed on Linux; horizontal corpus checks
-passed on both Linux and Windows. Wheel hashes establish
-artifact integrity; they are not a signature or an independent trust anchor.
+Run `ras2fim-batch method` to inspect capabilities. Pass the installed engine
+path explicitly or activate its environment. Python/GIS dependencies are
+installed separately. No Rust compiler or system GDAL is needed by the engine.
+These are test builds; no PyPI publication is made.
 
-To regenerate, run the repository's `Engine wheels` workflow. It uploads wheels
-and hashes as platform artifacts retained for 90 days. Only retain wheels whose
-build and installed smoke test succeed. After changing engine source, replace
-these test wheels and update `BUILD.json` and `SHA256SUMS.txt` together.
+Engine 0.7.1 supports Step05, horizontal method /2, plain sloping and unweighted
+cell-corner/face sloping with optional shallow-to-horizontal selection. It shares
+terrain and geometry across bounded in-flight profiles. File and streaming AOI
+delivery are covered by installed-wheel smoke tests. Mapping scopes and measured
+performance are documented in the
+[performance report](../docs/development/fim-mapping-performance.md).
 
-Version 0.6 adds bounded sloping timestep concurrency without changing profile
-arithmetic. All profiles share one Rayon pool and immutable terrain/geometry;
-effective concurrency is capped by threads, profile count and planned memory.
-Ordered file/stream delivery and failure cleanup are retained. Request
-`max_inflight_profiles=2` or `4`; the default remains one.
+Verify `SHA256SUMS.txt` before installation. `BUILD.json` records the source
+commit, source hashes, wheel/executable hashes and build environments. Linux is
+built in the pinned official manylinux 2.28 container. Windows is cross-built
+with a static GNU CRT and tested on Windows. CI MSVC builds are separate
+artifacts. Hashes establish integrity, not a signature or independent trust.
 
-Both installed 0.6 wheels pass 36 sloping and 70 horizontal API checks per
-platform. Coverage includes reversed/repeated concurrent timesteps for plain
-and enhanced modes, one-worker caps, later-batch cleanup after successful
-delivery, compression settings/layout preservation, native option combinations
-and bbox/polygon batches. Packaging smoke also verifies memory admission can
-reduce concurrency to one, on Windows, Linux and actual glibc 2.28. See the
-performance evidence for workload-specific throughput results; concurrency is
-not a universal speedup.
-
-
-Version 0.7 fixes horizontal native plotting visibility in
-`horizontal-cell-constant/2`. The binary32 elevation comparison happens before
-subtraction: WSE >= float32(terrain + 0.001). Zero `min_depth` adds no cutoff;
-positive optional cutoffs run after native visibility. The old method /1 is
-rejected by the updated Python horizontal adapter. Step05 and sloping arithmetic
-are unchanged. Full Windows native7.0.1 horizontal Max masks and valid float32
-bits match on Spring River, Spring Creek, Bald Eagle dam break and Bald Eagle
-bridges, within the complete physical2D footprint. No added 0.5-foot filter or
-reference filtering is used. Davis horizontal native export still fails and
-is not counted as parity evidence. See the current performance page for scope.
+The `Engine wheels` workflow regenerates artifacts and runs installed smoke.
+Replace both retained wheels, source manifest, BUILD.json and SHA256SUMS.txt
+together whenever engine source changes.
