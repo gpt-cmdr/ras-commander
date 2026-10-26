@@ -372,10 +372,12 @@ class HdfResultsMesh:
                 outside the mesh perimeter (default False). Ghost values are
                 placeholders, not solution results. Cell results always carry
                 an ``is_ghost_cell`` column.
-            include_geometry: Keyword-only. Default True returns a
-                GeoDataFrame with cell/face geometry. False returns the typed
-                table of :meth:`get_mesh_summary_output` (no geometry,
-                ``str``/``string`` mesh_name, ``int64`` IDs, stored value dtype).
+            include_geometry: Keyword-only. Default True is the convenient
+                output: a GeoDataFrame with cell/face geometry. False is the
+                fast output: the typed table of
+                :meth:`get_mesh_summary_output` (no geometry, ``str``/``string``
+                mesh_name, ``int64`` IDs, stored value dtype), keyed by
+                ``mesh_name`` and ``cell_id``/``face_id``.
 
         Returns:
             GeoDataFrame with mesh name, cell or face identifier, summary
@@ -2096,10 +2098,13 @@ class HdfResultsMesh:
             include_ghost_cells (bool): Keep rows for the ghost cells HEC-RAS
                 writes outside the mesh perimeter (default False). Rows always
                 carry an ``is_ghost_cell`` column.
-            include_geometry (bool): Keyword-only. Default True returns a
-                GeoDataFrame with cell-center points. False returns the typed
-                DataFrame of :meth:`get_mesh_summary_output` (no geometry,
-                ``str``/``string`` mesh_name, ``int64`` IDs, stored value dtype).
+            include_geometry (bool): Keyword-only. Default True is the
+                convenient output: a GeoDataFrame with cell-center points.
+                False is the fast output: the typed DataFrame of
+                :meth:`get_mesh_summary_output` (no geometry, ``str``/``string``
+                mesh_name, ``int64`` IDs, stored value dtype), keyed by
+                ``mesh_name`` and ``cell_id`` for a join to geometry read once
+                per model (see :meth:`get_mesh_summary_output`).
 
         Returns:
             pd.DataFrame: DataFrame containing last iteration counts.
@@ -2129,10 +2134,13 @@ class HdfResultsMesh:
             include_ghost_cells (bool): Keep rows for the ghost cells HEC-RAS
                 writes outside the mesh perimeter (default False). Rows always
                 carry an ``is_ghost_cell`` column.
-            include_geometry (bool): Keyword-only. Default True returns a
-                GeoDataFrame with cell-center points. False returns the typed
-                DataFrame of :meth:`get_mesh_summary_output` (no geometry,
-                ``str``/``string`` mesh_name, ``int64`` IDs, stored value dtype).
+            include_geometry (bool): Keyword-only. Default True is the
+                convenient output: a GeoDataFrame with cell-center points.
+                False is the fast output: the typed DataFrame of
+                :meth:`get_mesh_summary_output` (no geometry, ``str``/``string``
+                mesh_name, ``int64`` IDs, stored value dtype), keyed by
+                ``mesh_name`` and ``cell_id`` for a join to geometry read once
+                per model (see :meth:`get_mesh_summary_output`).
 
         Returns:
             gpd.GeoDataFrame: GeoDataFrame containing maximum water surface elevations with geometry.
@@ -2173,10 +2181,13 @@ class HdfResultsMesh:
             include_ghost_cells (bool): Keep rows for the ghost cells HEC-RAS
                 writes outside the mesh perimeter (default False). Rows always
                 carry an ``is_ghost_cell`` column.
-            include_geometry (bool): Keyword-only. Default True returns a
-                GeoDataFrame with cell-center points. False returns the typed
-                DataFrame of :meth:`get_mesh_summary_output` (no geometry,
-                ``str``/``string`` mesh_name, ``int64`` IDs, stored value dtype).
+            include_geometry (bool): Keyword-only. Default True is the
+                convenient output: a GeoDataFrame with cell-center points.
+                False is the fast output: the typed DataFrame of
+                :meth:`get_mesh_summary_output` (no geometry, ``str``/``string``
+                mesh_name, ``int64`` IDs, stored value dtype), keyed by
+                ``mesh_name`` and ``cell_id`` for a join to geometry read once
+                per model (see :meth:`get_mesh_summary_output`).
 
         Returns:
             gpd.GeoDataFrame: GeoDataFrame containing minimum water surface elevations with geometry.
@@ -2209,10 +2220,13 @@ class HdfResultsMesh:
         Args:
             hdf_path (Path): Path to the HDF file.
             round_to (str): Time rounding specification (default "100ms").
-            include_geometry (bool): Keyword-only. Default True returns a
-                GeoDataFrame with face lines. False returns the typed
-                DataFrame of :meth:`get_mesh_summary_output` (no geometry,
-                ``str``/``string`` mesh_name, ``int64`` IDs, stored value dtype).
+            include_geometry (bool): Keyword-only. Default True is the
+                convenient output: a GeoDataFrame with face lines.
+                False is the fast output: the typed DataFrame of
+                :meth:`get_mesh_summary_output` (no geometry, ``str``/``string``
+                mesh_name, ``int64`` IDs, stored value dtype), keyed by
+                ``mesh_name`` and ``face_id`` for a join to geometry read once
+                per model (see :meth:`get_mesh_summary_output`).
 
         Returns:
             pd.DataFrame: DataFrame containing maximum face velocities.
@@ -2245,10 +2259,13 @@ class HdfResultsMesh:
         Args:
             hdf_path (Path): Path to the HDF file.
             round_to (str): Time rounding specification (default "100ms").
-            include_geometry (bool): Keyword-only. Default True returns a
-                GeoDataFrame with face lines. False returns the typed
-                DataFrame of :meth:`get_mesh_summary_output` (no geometry,
-                ``str``/``string`` mesh_name, ``int64`` IDs, stored value dtype).
+            include_geometry (bool): Keyword-only. Default True is the
+                convenient output: a GeoDataFrame with face lines.
+                False is the fast output: the typed DataFrame of
+                :meth:`get_mesh_summary_output` (no geometry, ``str``/``string``
+                mesh_name, ``int64`` IDs, stored value dtype), keyed by
+                ``mesh_name`` and ``face_id`` for a join to geometry read once
+                per model (see :meth:`get_mesh_summary_output`).
 
         Returns:
             pd.DataFrame: DataFrame containing minimum face velocities.
@@ -2288,10 +2305,13 @@ class HdfResultsMesh:
             include_ghost_cells (bool): Keep rows for the ghost cells HEC-RAS
                 writes outside the mesh perimeter (default False). Rows always
                 carry an ``is_ghost_cell`` column.
-            include_geometry (bool): Keyword-only. Default True returns a
-                GeoDataFrame with cell-center points. False returns the typed
-                DataFrame of :meth:`get_mesh_summary_output` (no geometry,
-                ``str``/``string`` mesh_name, ``int64`` IDs, stored value dtype).
+            include_geometry (bool): Keyword-only. Default True is the
+                convenient output: a GeoDataFrame with cell-center points.
+                False is the fast output: the typed DataFrame of
+                :meth:`get_mesh_summary_output` (no geometry, ``str``/``string``
+                mesh_name, ``int64`` IDs, stored value dtype), keyed by
+                ``mesh_name`` and ``cell_id`` for a join to geometry read once
+                per model (see :meth:`get_mesh_summary_output`).
 
         Returns:
             pd.DataFrame: DataFrame containing maximum water surface errors.
@@ -2332,10 +2352,13 @@ class HdfResultsMesh:
             include_ghost_cells (bool): Keep rows for the ghost cells HEC-RAS
                 writes outside the mesh perimeter (default False). Rows always
                 carry an ``is_ghost_cell`` column.
-            include_geometry (bool): Keyword-only. Default True returns a
-                GeoDataFrame with cell-center points. False returns the typed
-                DataFrame of :meth:`get_mesh_summary_output` (no geometry,
-                ``str``/``string`` mesh_name, ``int64`` IDs, stored value dtype).
+            include_geometry (bool): Keyword-only. Default True is the
+                convenient output: a GeoDataFrame with cell-center points.
+                False is the fast output: the typed DataFrame of
+                :meth:`get_mesh_summary_output` (no geometry, ``str``/``string``
+                mesh_name, ``int64`` IDs, stored value dtype), keyed by
+                ``mesh_name`` and ``cell_id`` for a join to geometry read once
+                per model (see :meth:`get_mesh_summary_output`).
 
         Returns:
             gpd.GeoDataFrame: GeoDataFrame containing maximum iteration counts with geometry.
@@ -2651,8 +2674,9 @@ class HdfResultsMesh:
             hdf_path (Path): Path to the HDF file.
             include_ghost_cells (bool): Keep rows for the ghost cells HEC-RAS
                 writes outside the mesh perimeter (default False).
-            include_geometry (bool): Keyword-only. Default True returns the
-                GeoDataFrame below. False returns a DataFrame with the same
+            include_geometry (bool): Keyword-only. Default True is the
+                convenient output: the GeoDataFrame below. False is the fast
+                output: a DataFrame with the same
                 rows, order and values but no ``geometry`` column, without
                 reading cell-center coordinates or building Shapely points:
                 ``mesh_name`` (pandas ``str``/``string``), ``cell_id`` (``int64``),
@@ -2674,9 +2698,9 @@ class HdfResultsMesh:
         """
         if include_geometry:
             GeoDataFrame = gpd.GeoDataFrame  # Fail fast with the install command.
-            Point = require_module(
-                "shapely.geometry", "Returning GeoDataFrame results from HdfResultsMesh"
-            ).Point
+            points = require_module(
+                "shapely", "Returning GeoDataFrame results from HdfResultsMesh"
+            ).points
 
         try:
             source_name = Path(hdf_path).name
@@ -2828,7 +2852,8 @@ class HdfResultsMesh:
                         "maximum_depth": max_depth,
                     }
                     if include_geometry:
-                        geom = [Point(x, y) for x, y in xy]
+                        # One vectorized call; Point(x, y) per row builds the same points.
+                        geom = points(xy)
                         df = GeoDataFrame(columns, geometry=geom)
                     else:
                         df = pd.DataFrame(columns)
@@ -4024,10 +4049,18 @@ class HdfResultsMesh:
             physical cells. Default False drops those rows; pass True to
             keep them.
         include_geometry : bool, optional, keyword-only
-            Default True attaches cell-center points (cell variables) or face
-            lines (face variables) and returns a GeoDataFrame. False returns
-            the typed table described in Returns, read straight from the
-            stored arrays without building geometry (no GeoPandas/Shapely).
+            Default True is the **convenient** output: a GeoDataFrame with a
+            cell-center point (cell variables) or face line (face variables)
+            on every row. The geometry is built from packed coordinate
+            buffers in one vectorized Shapely call (natively, where the
+            engine proves the layout), but it is still most of the call.
+            False is the **fast** output: the typed table described in
+            Returns, read straight from the stored arrays without building
+            geometry (no GeoPandas/Shapely). Use it when you only need the
+            values, or when you read several results of one model: read the
+            geometry once with :meth:`HdfMesh.get_mesh_cell_faces` or
+            :meth:`HdfMesh.get_mesh_cell_points` and join each table to it on
+            ``["mesh_name", "face_id"]`` or ``["mesh_name", "cell_id"]``.
 
         Returns
         -------
@@ -4040,9 +4073,19 @@ class HdfResultsMesh:
             ``mesh_name`` is pandas ``str``/``string``; ``cell_id``/``face_id`` are
             ``int64`` keys; the value column keeps the stored dtype; the
             ``*_time`` column is ``datetime64``; ``is_ghost_cell`` is
-            ``bool``. Join coordinates on ``(mesh_name, cell_id)`` from
-            ``HdfMesh.get_mesh_cell_points(..., include_geometry=False)``.
-            Returns an empty DataFrame if the variable is not found.
+            ``bool``. Join geometry on ``(mesh_name, face_id)`` from
+            :meth:`HdfMesh.get_mesh_cell_faces`, or on ``(mesh_name, cell_id)``
+            from :meth:`HdfMesh.get_mesh_cell_points` (``x``/``y`` columns with
+            ``include_geometry=False``). Returns an empty DataFrame if the
+            variable is not found.
+
+        Examples
+        --------
+        Read the face lines once, then join any number of face results:
+
+        >>> faces = HdfMesh.get_mesh_cell_faces(plan_hdf)
+        >>> vmax = HdfResultsMesh.get_mesh_max_face_v(plan_hdf, include_geometry=False)
+        >>> located = faces.merge(vmax, on=["mesh_name", "face_id"])  # GeoDataFrame
         """
         if not include_geometry:
             try:
