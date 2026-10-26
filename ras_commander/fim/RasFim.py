@@ -221,6 +221,7 @@ class RasFim:
         engine_path: Optional[PathLike] = None, threads: int = 1,
         max_working_mib: int = 1024, timeout: Optional[float] = None,
         write_floodplain: bool = False,
+        template_raster: Optional[PathLike] = None,
     ) -> pd.DataFrame:
         """Map 2D HDF WSE with the experimental Rust plain-sloping engine.
 
@@ -236,6 +237,7 @@ class RasFim:
         timesteps. Bounded Spring River/Spring Creek comparisons retain the
         complete mesh. Models containing 1D river or cross-section elements
         are rejected before mapping.
+        Standalone storage-area surfaces outside the 2D mesh are not mapped.
 
         ``terrain_path`` must be a same-CRS float32 square-pixel GeoTIFF with
         declared nodata. ``bbox`` or ``polygon`` constrains output pixels;
@@ -266,10 +268,16 @@ class RasFim:
                 HDF/Python preparation and polygonization also use memory.
             timeout: Engine stream lifetime in seconds, including output writes.
             write_floodplain: Also polygonize positive retained depth pixels.
+            template_raster: Optional float32 GeoTIFF defining the delivered
+                grid, nodata and storage profile. Must share the terrain pixel
+                lattice and contain the processing window. Values are written
+                once, with nodata padding and no resampling. Offsets in the
+                returned manifest then refer to this template grid.
 
         Returns:
             DataFrame: ``fim_product_manifest`` rows with timing evidence in
-            ``attrs["performance"]`` and the JSON manifest.
+            ``attrs["performance"]`` and the JSON manifest. ``mapping_scope``
+            and ``model_scope`` attributes identify the included model elements.
 
         Raises:
             FimUnsupportedError: Unsupported model, geometry, AOI or terrain.
@@ -283,7 +291,8 @@ class RasFim:
         return _sloping.map_profiles(hdf_path, terrain_path, output_folder,
             profiles=profiles, bbox=bbox, polygon=polygon, polygon_layer=polygon_layer,
             aoi_crs=aoi_crs, engine_path=engine_path, threads=threads,
-            max_working_mib=max_working_mib, timeout=timeout, write_floodplain=write_floodplain)
+            max_working_mib=max_working_mib, timeout=timeout, write_floodplain=write_floodplain,
+            template_raster=template_raster)
 
     @staticmethod
     @log_call

@@ -160,3 +160,159 @@ def test_timestep_mapping_does_not_require_max_summary(sloping_case, tmp_path):
             metrics[key] == 0
             for key in ("extra", "missing", "different", "outside_footprint")
         )
+
+
+@pytest.mark.parametrize("fault", ["header", "report"])
+def test_invalid_engine_protocol_aborts_delivery(
+    sloping_case, tmp_path, monkeypatch, fault
+):
+    import subprocess
+    import sys
+    from ras_commander import RasFim
+    from ras_commander.fim import _sloping
+    from ras_commander.fim.errors import FimEngineError
+
+    original = subprocess.Popen
+    program = """
+import json,pathlib,struct,sys
+request=json.loads(pathlib.Path(sys.argv[1]).read_text())
+if sys.argv[3]=='header':
+    print('invalid json',flush=True)
+else:
+    pixels=request['window'][2]*request['window'][3]
+    for profile in request['profiles']:
+        print(json.dumps(dict(id=profile['id'],status='complete',pixels=pixels)),flush=True)
+        sys.stdout.buffer.write(struct.pack('<f',float('nan'))*pixels*2)
+        sys.stdout.buffer.flush()
+    output=pathlib.Path(sys.argv[2]);output.mkdir()
+    (output/'report.json').write_text('invalid json')
+"""
+
+    def launch(arguments, *args, **kwargs):
+        if len(arguments) > 1 and arguments[1] == "sloping":
+            arguments = [
+                sys.executable,
+                "-c",
+                program,
+                arguments[2],
+                arguments[3],
+                fault,
+            ]
+        return original(arguments, *args, **kwargs)
+
+    monkeypatch.setattr(_sloping.subprocess, "Popen", launch)
+    case = sloping_case
+    output = tmp_path / fault
+    with pytest.raises(
+        FimEngineError,
+        match="Invalid sloping stream header JSON|Missing or invalid sloping engine report",
+    ):
+        RasFim.map_sloping_profiles(
+            case["hdf"],
+            case["terrain"],
+            output,
+            profiles={"Max": "Max"},
+            engine_path=case["engine"],
+            threads=4,
+            max_working_mib=case.get("max_working_mib", 4096),
+        )
+    assert not list(output.glob("*.tif"))
+    manifest = json.loads((output / "fim_manifest.json").read_text())
+    assert manifest["status"] == "aborted"
+    assert all(p["status"] == "failed" for p in manifest["profiles"])
+
+
+def test_template_grid_preserves_native_pixels_and_layout(sloping_case, tmp_path):
+    import rasterio
+    from ras_commander import HdfMesh, RasFim
+    from scripts.benchmarks.fim_sloping_compare import compare_raw
+
+    case = sloping_case
+    name = next(iter(case["profiles"]))
+    reference = case["references"][name]
+    template = tmp_path / "grid-only.tif"
+    with rasterio.open(reference["depth"]) as source:
+        profile = source.profile.copy()
+    # No native pixel data are copied into this template or the mapper.
+    with rasterio.open(template, "w", **profile):
+        pass
+    result = RasFim.map_sloping_profiles(
+        case["hdf"],
+        case["terrain"],
+        tmp_path / "native-grid",
+        profiles={name: case["profiles"][name]},
+        template_raster=template,
+        engine_path=case["engine"],
+        threads=4,
+        max_working_mib=case.get("max_working_mib", 4096),
+    )
+    cells = HdfMesh.get_mesh_cell_polygons(case["hdf"], strict=True)
+    for band, path in [
+        ("depth", result.iloc[0].depth_tif),
+        ("wse", result.iloc[0].wse_tif),
+    ]:
+        with rasterio.open(path) as actual, rasterio.open(reference[band]) as expected:
+            assert actual.shape == expected.shape
+            assert actual.transform == expected.transform
+            assert actual.nodata == expected.nodata
+            assert actual.compression == expected.compression
+            assert actual.block_shapes == expected.block_shapes
+        metrics = compare_raw(
+            path,
+            reference[band],
+            cells,
+            full_grid=result.attrs["model_scope"]["storage_areas"] == 0,
+        )
+        assert metrics["common"] > 0
+        assert all(
+            metrics[k] == 0
+            for k in ("extra", "missing", "different", "outside_footprint")
+        )
+    assert result.iloc[0].col_off == result.iloc[0].row_off == 0
+
+
+def test_template_nodata_collision_is_not_silently_filtered(sloping_case, tmp_path):
+    import rasterio
+    from ras_commander import RasFim
+    from ras_commander.fim.errors import FimUnsupportedError
+
+    case = sloping_case
+    name = next(iter(case["profiles"]))
+    reference = case["references"][name]
+    template = tmp_path / "collision.tif"
+    baseline = RasFim.map_sloping_profiles(
+        case["hdf"],
+        case["terrain"],
+        tmp_path / "collision-baseline",
+        profiles={name: case["profiles"][name]},
+        engine_path=case["engine"],
+        threads=4,
+        max_working_mib=case.get("max_working_mib", 4096),
+    )
+    with rasterio.open(baseline.iloc[0].wse_tif) as source:
+        for _, window in source.block_windows(1):
+            data = source.read(1, window=window, masked=True).compressed()
+            if len(data):
+                value = float(data[0])
+                break
+        else:
+            pytest.fail("collision fixture requires finite mapped WSE")
+    with rasterio.open(reference["wse"]) as source:
+        profile = source.profile.copy()
+    profile["nodata"] = value
+    with rasterio.open(template, "w", **profile):
+        pass
+    output = tmp_path / "collision-output"
+    with pytest.raises(FimUnsupportedError, match="nodata collides"):
+        RasFim.map_sloping_profiles(
+            case["hdf"],
+            case["terrain"],
+            output,
+            profiles={name: case["profiles"][name]},
+            template_raster=template,
+            engine_path=case["engine"],
+            threads=4,
+            max_working_mib=case.get("max_working_mib", 4096),
+        )
+    assert not list(output.glob("*.tif"))
+    assert json.loads((output / "fim_manifest.json").read_text())["status"] == "aborted"

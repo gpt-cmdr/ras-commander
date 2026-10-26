@@ -33,6 +33,7 @@ def map_profiles(
     max_working_mib=1024,
     timeout=None,
     write_floodplain=False,
+    template_raster=None,
 ):
     from .. import HdfMesh, HdfResultsMesh
     from ..fast_hdf import backend_scope
@@ -48,7 +49,7 @@ def map_profiles(
     started = time.perf_counter()
     hdf = Path(hdf_path).resolve(strict=True)
     terrain = Path(terrain_path).resolve(strict=True)
-    RasFim.validate_2d_model(hdf)
+    model_scope = RasFim.validate_2d_model(hdf)
     threads = _positive_int(threads, "threads")
     budget = _positive_int(max_working_mib, "max_working_mib")
     if threads > 64:
@@ -87,6 +88,9 @@ def map_profiles(
             "engine lacks rasmapper-plain-sloping/1; install a matching engine"
         )
     watched = {"hdf": hdf, "terrain": terrain}
+    if template_raster is not None:
+        template_raster = Path(template_raster).resolve(strict=True)
+        watched["template_raster"] = template_raster
     if isinstance(polygon, (str, os.PathLike)):
         watched["polygon"] = Path(polygon).resolve(strict=True)
     before = {key: _file_identity(path) for key, path in watched.items()}
@@ -104,6 +108,19 @@ def map_profiles(
     # Windowing selects output pixels; the complete mesh remains available for
     # face connectivity and corner reconstruction across an AOI boundary.
     plan = _horizontal.plan_grid(cells, terrain, constraint, budget, native=True)
+    layout = None
+    buffer_bytes = 0
+    if template_raster is not None and all(plan.shape):
+        from . import _sloping_products
+
+        layout = _sloping_products.template_profile(template_raster, plan)
+        buffer_bytes = layout["planned_buffer_bytes"]
+        if plan.planned_bytes + buffer_bytes > budget * (1 << 20):
+            from .errors import FimUnsupportedError
+
+            raise FimUnsupportedError(
+                "sloping template delivery exceeds planned array budget"
+            )
     _horizontal.prepare_grid(
         cells, terrain, plan, False
     )  # validates polygons and overlap
@@ -113,6 +130,11 @@ def map_profiles(
         method="RAS Mapper plain cell-corner sloping / Rust",
         method_id=method["method_id"],
         backend="rust",
+        model_scope=model_scope,
+        mapping_scope="physical 2D cells only; standalone storage-area surfaces excluded",
+        output_grid_reference=str(template_raster)
+        if template_raster is not None
+        else "terrain window",
         status="in_progress",
         options={
             "extra_depth_cutoff": None,
@@ -132,6 +154,8 @@ def map_profiles(
     def manifest():
         frame = pd.DataFrame(list(rows.values()), columns=MANIFEST_COLUMNS)
         frame.attrs["performance"] = details.get("performance", {})
+        frame.attrs["mapping_scope"] = details["mapping_scope"]
+        frame.attrs["model_scope"] = model_scope
         return frame
 
     RasFim._write_manifest(folder, manifest(), details)
@@ -209,7 +233,7 @@ def map_profiles(
                     owner_cells=addresses,
                     profiles=units,
                     threads=threads,
-                    max_working_bytes=budget * (1 << 20),
+                    max_working_bytes=budget * (1 << 20) - buffer_bytes,
                     stream_outputs=True,
                     **fields,
                 )
@@ -254,9 +278,15 @@ def map_profiles(
                                 raise FimEngineError(
                                     "Missing or invalid sloping stream header"
                                 )
-                            unit = json.loads(header)
+                            try:
+                                unit = json.loads(header)
+                            except (ValueError, UnicodeError) as exc:
+                                raise FimEngineError(
+                                    "Invalid sloping stream header JSON"
+                                ) from exc
                             if (
-                                unit.get("id") != name
+                                not isinstance(unit, dict)
+                                or unit.get("id") != name
                                 or unit.get("status") != "complete"
                                 or unit.get("pixels") != int(np.prod(plan.shape))
                             ):
@@ -277,11 +307,15 @@ def map_profiles(
                                 unit={"window": list(plan.window.flatten())},
                             )
                             write_tick = time.perf_counter()
-                            rows[name].update(
-                                RasFim._write_products(
+                            if layout is None:
+                                products = RasFim._write_products(
                                     folder, result, plan.crs, write_floodplain
                                 )
-                            )
+                            else:
+                                products = _sloping_products.write_products(
+                                    folder, result, plan.crs, write_floodplain, layout
+                                )
+                            rows[name].update(products)
                             details["performance"]["product_write_seconds"][name] = (
                                 time.perf_counter() - write_tick
                             )
@@ -295,19 +329,30 @@ def map_profiles(
                             raise FimEngineError(
                                 f"Sloping engine timed out after {timeout} seconds"
                             )
-                        report = json.loads(
-                            (root / "out/report.json").read_text(encoding="utf-8")
-                        )
+                        try:
+                            report = json.loads(
+                                (root / "out/report.json").read_text(encoding="utf-8")
+                            )
+                        except (OSError, ValueError, UnicodeError) as exc:
+                            raise FimEngineError(
+                                "Missing or invalid sloping engine report"
+                            ) from exc
                         expected = list(selected)
+                        units = (
+                            report.get("profiles") if isinstance(report, dict) else None
+                        )
+                        if not isinstance(units, list) or any(
+                            not isinstance(p, dict) for p in units
+                        ):
+                            raise FimEngineError("Invalid sloping report profile table")
+                        reported_method = report.get("method")
                         if (
                             code != 0
                             or report.get("status") != "complete"
-                            or [p.get("id") for p in report.get("profiles", [])]
-                            != expected
-                            or any(
-                                p.get("status") != "complete"
-                                for p in report["profiles"]
-                            )
+                            or not isinstance(reported_method, dict)
+                            or reported_method.get("method_id") != method["method_id"]
+                            or [p.get("id") for p in units] != expected
+                            or any(p.get("status") != "complete" for p in units)
                         ):
                             raise FimEngineError(
                                 f"Sloping engine failed with exit {code}: {report.get('error', 'invalid report')}"

@@ -514,6 +514,11 @@ physical 2D footprint on these cases:
 | Spring River eBFE, Max | 422,715 | 977,194 | Bounded window; complete mesh reconstruction |
 | Spring Creek eBFE, Max | 340,163 | 1,826,754 | Bounded window; complete mesh reconstruction |
 
+The dam-break native reference contains 1,192,324 valid pixels overall;
+727,879 lie in the compared 2D footprint. The project also has a standalone
+storage area. Storage-area surfaces outside the 2D mesh are not mapped by
+this engine, so this row does not establish whole-model image parity.
+
 The complete numerical method runs in a bounded Rayon pool. One/four-worker
 Davis Max/timestep tests and a one-worker triangular AOI test pass. Repeated
 Max profiles in one request also pass, testing shared preparation separately
@@ -525,17 +530,26 @@ and a separate aggregate export also failed. Neither failure is counted as
 qualification, and both attempts preserve rasmap restoration/HDF identity
 receipts.
 
-Two interleaved single-map bridge-model comparisons on Windows measured the complete
-mapping APIs, including reading/preparation and writing one Depth/WSE pair,
-with no added filtering and no profile concurrency:
+Two interleaved single-map bridge-model comparisons on Windows used identical
+4,852 × 6,705 output grids, including the nodata border, with the same tiled
+DEFLATE storage layout and nodata value. Rust timing included the complete
+mapping API using `template_raster` for direct native-grid delivery. Both complete
+images matched valid/nodata masks and every finite float32 Depth/WSE value,
+with no added filtering, resampling or profile concurrency:
 
 | Pair | Native RASMapper (s) | Rust, one worker (s) | Rust, four workers (s) | Native / Rust, four workers |
 |---|---:|---:|---:|---:|
-| 1 | 10.14 | 4.40 | 3.77 | 2.69× |
-| 2 | 9.78 | 3.95 | 3.51 | 2.79× |
+| 1 | 6.42 | 4.27 | 3.64 | 1.76× |
+| 2 | 6.70 | 4.46 | 3.73 | 1.80× |
 
-Each candidate was compared to its fresh native reference and matched raw
-masks and float32 bits. RASMapper used native 7.0.1; Rust used a Windows GNU
+The API ordinarily writes the cell/AOI extent. With `template_raster`, it
+writes native-sized GeoTIFFs directly, padding nodata without an intermediate
+raster read/rewrite. The template contributes metadata only; the real-model
+test uses an empty template to confirm native reference pixels are not used
+for mapping. Canonical terrain was prepared before timing. Source rasters
+and authentic outputs were retained separately.
+
+RASMapper used native 7.0.1; Rust used the installed 0.4.0 Windows GNU
 static-CRT build. The parent and children were restricted to four CPUs;
 Rust used the stated worker count. The Rust order was reversed in the second
 pair. These are shared-workstation timings with warm, uncontrolled caches,
@@ -543,10 +557,15 @@ not a universal speedup claim. Comparison scanning and reference metadata
 setup were outside the timed API calls. Original rasmap bytes were restored
 and the result HDF hash remained unchanged.
 
-An earlier interleaved comparison used Windows RASMapper against the Rust
-Linux engine under WSL2. Native times were 18.12/12.61 s and Rust four-worker
-times were 9.91/7.94 s, with exact raw comparisons. Those mixed-platform
-results are retained separately from the same-platform table above.
+Earlier comparisons wrote a smaller nodata border for Rust: native output
+was 4,852 × 6,705, while Rust output was 4,071 × 5,941. Their values matched in
+the physical footprint, but those elapsed ratios are not used in the
+equal-grid table. The exploratory mixed Windows/WSL timings are also retained
+separately. An intermediate equal-grid comparison included an extra delivery
+rewrite; it is superseded by the direct-template table. Four workers reduced
+the measured complete-call time relative to one in these pairs, while raster
+delivery and preparation still limit scaling. The benchmark harness hash was
+recorded alongside the timings.
 
 Profiling identified geometry serialization as a larger cost than arithmetic.
 The engine now accepts typed binary geometry arrays with small JSON
@@ -562,13 +581,16 @@ pool, and blocks outside ownership/AOI are skipped.
 an external case JSON. `tests/test_ras_fim_sloping.py` runs real-model
 one/four-worker raw-bit checks when `RAS_COMMANDER_SLOPING_CASE` points to
 that case. Fixtures and generated evidence remain external to the repository.
+Use `--match-reference-grid` to include nodata-border delivery in the timing
+and compare the entire reference image. This stricter option fails when the
+reference includes valid model elements outside the engine's 2D-cell scope.
 
 ## Proposed engine packaging
 
 Package the mapping engine separately as **`ras-commander-fast-fim`**, following
 [ras-commander-fast-hdf](https://github.com/gpt-cmdr/ras-commander-fast-hdf).
 This is a proposed extraction, not the installation name of the retained
-`ras2fim-engine` 0.3.0 test wheels in this PR.
+`ras2fim-engine` 0.4.0 test wheels retained with the plain-sloping implementation.
 
 The separate repository should own the Rust mapping crate, method contracts,
 CLI, optional PyO3 bindings, native tests, notices and platform-wheel release

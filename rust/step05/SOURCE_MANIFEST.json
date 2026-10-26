@@ -18,7 +18,7 @@
     "licenses/wbvector-LICENSE-APACHE.txt": "d932025956695b7f7a6be243fe01294075bc75b18bb4a6f41922c4eba9aaacd7",
     "licenses/wbvector-LICENSE-MIT.txt": "b3f690015a0a92922cafb40143f1642ce1712c3a44b7c6a96422c9a890956145",
     "pyproject.toml": "1c4d5bcdd2d8a4a59439588620eb3e1349c29525427e8ef31d0537beac162588",
-    "README.md": "c5bbf80639afff5561c1dbeffb6a12933cb1f9120e577bda8af49c94bf1253ea",
+    "README.md": "643e17bde9675d97ba199fb5e2d63866510db3f742b8f525a2d1c8f42ba8f78f",
     "src/cache.rs": "67fe5979291828d50f97fd121a0fffd68017eaab3fbc0ba2472f35256ac5d59c",
     "src/horizontal.rs": "c573f5c4dd231f7cd2ba46342d412f596d07de00a641e81717fb99c2ac092948",
     "src/interp.rs": "1be2beb6d6d0bd622f5f3fcf410be32490a8e22bbda2aa6b9bd483a37a567575",

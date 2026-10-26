@@ -33,6 +33,8 @@ The same corpus passes on Windows x86-64; full-extent eBFE remains unqualified. 
 component capture is development-only; production code uses direct HDF inputs
 and Rust geometry calculations. The optional real-fixture pytest contract is
 documented in `tests/test_ras_fim_sloping.py`.
+These comparisons cover physical 2D cells. Standalone storage-area surfaces
+outside those cells are excluded; the dam-break case is not whole-model parity.
 
 Install the matching engine wheel (see the API guide), or build explicitly,
 then pass its path to

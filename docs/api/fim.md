@@ -52,12 +52,25 @@ manifest = RasFim.map_sloping_profiles(
 performance = manifest.attrs["performance"]
 ```
 
+To match an existing raster's complete layout, pass
+`template_raster="native_depth.tif"`. Only its grid, nodata and storage metadata
+are read. Rust values are delivered directly on that grid in one write pass,
+with nodata outside the mapped cells/AOI and no resampling. A template must
+share the terrain pixel lattice and contain the processing window; its nodata
+must not collide with a finite mapped value. Manifest offsets then refer to
+the template grid. Omit it for compact terrain-window outputs.
+
 Profile selectors are zero-based stored timestep indices or `"Max"`. Geometry,
 terrain and pixel ownership are shared across the request. Each profile gets
 its own hydraulic connectivity and corner reconstruction. Worker count controls
 the bounded Rayon pool. An AOI reduces the terrain/output window while retaining
 the complete mesh needed to reconstruct boundary values. Models containing 1D
 river or cross-section elements are rejected before mapping.
+Standalone storage-area surfaces outside the 2D mesh are excluded. The return
+attributes `mapping_scope` and `model_scope`, and the JSON manifest, record
+this boundary. The Bald Eagle dam-break reference also renders a storage area;
+its exact sloping comparison is restricted to physical 2D cells, not the whole
+native model image.
 
 The method adds **no depth postprocessing cutoff**. It reproduces the native
 float32 plot tolerance of 0.001 in model elevation units, including native
