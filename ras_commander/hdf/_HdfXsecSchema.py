@@ -61,6 +61,44 @@ def _row_count(group: h5py.Group, name: str):
     return int(dataset.shape[0])
 
 
+def _decoded(values) -> list:
+    return [
+        (bytes(value).decode("utf-8", errors="replace") if isinstance(value, bytes) else str(value)).strip()
+        for value in values
+    ]
+
+
+def _compound_rows_omit_separated_rows(group: h5py.Group) -> bool:
+    """Return True when the compound rows are an in-order subset of the separated rows.
+
+    Cross sections are identified by (River, Reach, RS). The compound
+    ``Attributes`` table must name only cross sections that the separated
+    ``River Names``, ``Reach Names`` and ``River Stations`` datasets also
+    list, in the same order, and must omit at least one of them.
+    """
+    attributes = group["Attributes"]
+    names = attributes.dtype.names or ()
+    if not {"River", "Reach", "RS"} <= set(names):
+        return False
+    separated_names = ("River Names", "Reach Names", "River Stations")
+    if not all(_row_count(group, name) is not None for name in separated_names):
+        return False
+    compound = list(
+        zip(
+            _decoded(attributes["River"]),
+            _decoded(attributes["Reach"]),
+            _decoded(attributes["RS"]),
+        )
+    )
+    separated = list(
+        zip(*(_decoded(group[name][()]) for name in separated_names))
+    )
+    if len(compound) >= len(separated):
+        return False
+    remaining = iter(separated)
+    return all(row in remaining for row in compound)
+
+
 def cross_section_layout(group: h5py.Group) -> Tuple[str, int, FrozenSet[str]]:
     """Return ``(layout, row_count, stale_datasets)`` for a cross-section group.
 
@@ -73,11 +111,12 @@ def cross_section_layout(group: h5py.Group) -> Tuple[str, int, FrozenSet[str]]:
     ``Ineffective Info``) that omits cross sections, next to separated datasets
     that agree with the plain-text geometry. A file is treated as hybrid only
     when the separated anchors ``Node Names``, ``River Stations``,
-    ``Polyline Info`` and ``Station Elevation Info`` are all present, agree
-    among themselves, and disagree with the compound table. The compound
+    ``Polyline Info`` and ``Station Elevation Info`` are all present and agree
+    among themselves, and the compound table lists an in-order subset of the
+    separated cross sections with at least one omitted. The compound
     datasets whose row count differs from the anchors are returned as stale and
-    must not be read. Files without all separated anchors, or whose compound
-    table agrees with them, keep the compound layout.
+    must not be read. Any other disagreement cannot identify the current
+    representation, so it keeps the compound layout and fails the row check.
     """
     if "Attributes" in group:
         attributes = group["Attributes"]
@@ -90,7 +129,9 @@ def cross_section_layout(group: h5py.Group) -> Tuple[str, int, FrozenSet[str]]:
         anchor_rows = {_row_count(group, name) for name in HYBRID_ANCHORS}
         if None not in anchor_rows and len(anchor_rows) == 1:
             separated_rows = anchor_rows.pop()
-            if separated_rows != compound_rows:
+            if separated_rows != compound_rows and _compound_rows_omit_separated_rows(
+                group
+            ):
                 stale = frozenset(
                     name
                     for name in COMPOUND_ROW_DATASETS

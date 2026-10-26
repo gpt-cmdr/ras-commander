@@ -589,7 +589,8 @@ def _add_stale_compound_tables(path: Path) -> None:
 
     This mirrors HEC-RAS 5.0.3 hybrid geometry files, whose compound
     ``Attributes``, ``Manning's n Info`` and ``Ineffective Info`` tables can
-    hold fewer rows than the separated datasets and the plain-text geometry.
+    omit a cross section that the separated datasets and the plain-text
+    geometry contain.
     The stale values differ from the separated ones so a test can tell which
     were read.
     """
@@ -603,7 +604,7 @@ def _add_stale_compound_tables(path: Path) -> None:
         xs = hdf["Geometry/Cross Sections"]
         xs.create_dataset(
             "Attributes",
-            data=np.array([(b"Stale", b"Stale", b"200", 999.0)], dtype=attributes_dtype),
+            data=np.array([(b"River A", b"Reach 1", b"200", 999.0)], dtype=attributes_dtype),
         )
         xs.create_dataset("Manning's n Info", data=np.array([[0, 1]], dtype=np.int32))
         xs.create_dataset(
@@ -667,3 +668,31 @@ def test_hybrid_schema_with_disagreeing_anchors_fails_closed(tmp_path, caplog):
     with caplog.at_level(logging.ERROR, logger="ras_commander.hdf.HdfXsec"):
         assert HdfXsec.get_cross_sections(hdf_path).empty
     assert "row count mismatch" in caplog.text
+
+
+@pytest.mark.parametrize(
+    "rows",
+    [
+        [(b"River A", b"Reach 1", b"999")],
+        [
+            (b"River A", b"Reach 1", b"200"),
+            (b"River A", b"Reach 1", b"100"),
+            (b"River A", b"Reach 1", b"50"),
+        ],
+    ],
+    ids=["unknown-station", "more-compound-rows"],
+)
+def test_compound_table_that_is_not_an_omission_fails_closed(tmp_path, caplog, rows):
+    hdf_path = tmp_path / "Conflicting.g01.hdf"
+    _write_legacy_geometry_hdf(hdf_path)
+    dtype = np.dtype([("River", "S16"), ("Reach", "S16"), ("RS", "S8")])
+    with h5py.File(hdf_path, "a") as hdf:
+        hdf["Geometry/Cross Sections"].create_dataset(
+            "Attributes", data=np.array(rows, dtype=dtype)
+        )
+
+    with caplog.at_level(logging.ERROR, logger="ras_commander.hdf.HdfXsec"):
+        assert HdfXsec.get_cross_sections(hdf_path).empty
+    assert "row count mismatch" in caplog.text
+    metadata = GeomMetadata.get_geometry_counts(None, hdf_path)
+    assert metadata["geometry_metadata_valid"] is False
