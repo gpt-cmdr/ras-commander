@@ -101,8 +101,10 @@ bridges (Max). Bounded Max comparisons also match exactly on Spring River
 (422,715 physical cells) and Spring Creek (340,163 physical cells), retaining
 the complete mesh for reconstruction. Linux and Windows x86-64 native engine
 checks include one/four-worker Davis Max/timestep comparisons; the five-model
-corpus also passes on both platforms. Full-extent eBFE and other HEC-RAS versions
-remain unqualified. A triangular AOI test also passes. Fresh single-map Windows
+corpus also passes on both platforms. The final Windows Max comparisons also
+match across the full physical 2D footprints of Spring River and Spring Creek.
+Full-extent Linux eBFE, enhanced eBFE and other HEC-RAS versions remain
+unqualified. A triangular AOI test also passes. Fresh single-map Windows
 performance comparisons are recorded in the
 [performance evidence](../development/fim-mapping-performance.md#plain-sloping-development-qualification).
 

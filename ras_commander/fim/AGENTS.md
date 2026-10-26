@@ -40,7 +40,9 @@ Parent `ras_commander/AGENTS.md` and root `AGENTS.md` still apply.
 - Sloping raw-mask/bit qualification targets native 7.0.1. Max profiles on Davis
   pipes/conduits and Bald Eagle dam/bridge meshes, plus two Davis timesteps,
   currently pass. Bounded Max tests also pass on Spring River and Spring Creek
-  with full global topology. This evidence does not establish full-extent eBFE,
+  with full global topology. Final Windows Max checks also match the full
+  physical 2D footprints of both eBFE fixtures. This evidence does not establish
+  full-extent Linux eBFE or enhanced eBFE,
   other native versions, 1D,
   storage areas outside the physical 2D footprint, or all option combinations.
 - `_sloping_oracle.py` is a development reference reader only. Production mapping

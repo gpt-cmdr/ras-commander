@@ -513,6 +513,8 @@ physical 2D footprint on these cases:
 | Bald Eagle bridges, Max | 24,718 | 973,902 | Full physical footprint |
 | Spring River eBFE, Max | 422,715 | 977,194 | Bounded window; complete mesh reconstruction |
 | Spring Creek eBFE, Max | 340,163 | 1,826,754 | Bounded window; complete mesh reconstruction |
+| Spring River eBFE, Max, final Windows run | 422,715 | 56,822,200 | Full physical footprint |
+| Spring Creek eBFE, Max, final Windows run | 340,163 | 107,934,719 | Full physical footprint |
 
 The dam-break native reference contains 1,192,324 valid pixels overall;
 727,879 lie in the compared 2D footprint. The project also has a standalone
@@ -524,58 +526,22 @@ Davis Max/timestep tests and a one-worker triangular AOI test pass. Repeated
 Max profiles in one request also pass, testing shared preparation separately
 from the two distinct timestep checks. The five cases also pass with a Windows
 x86-64 engine, including one/four-worker Davis Max/timestep pytest checks.
-Full-extent eBFE remains unqualified. Davis native timestep capture retained two
+The final matrix below adds full-physical-footprint Windows Max checks for both
+eBFE fixtures; full-extent Linux and enhanced eBFE remain unqualified.
+Davis native timestep capture retained two
 successful references; a later independent WSE helper failed with exit 99,
 and a separate aggregate export also failed. Neither failure is counted as
 qualification, and both attempts preserve rasmap restoration/HDF identity
 receipts.
 
-Two interleaved single-map bridge-model comparisons on Windows used identical
-4,852 × 6,705 output grids, including the nodata border, with the same tiled
-DEFLATE storage layout and nodata value. Rust timing included the complete
-mapping API using `template_raster` for direct native-grid delivery. Both complete
-images matched valid/nodata masks and every finite float32 Depth/WSE value,
-with no added filtering, resampling or profile concurrency:
+Performance reporting below compares only the final implementation against
+RASMapper. Sloping template delivery reads only layout metadata and writes the
+matching native-sized output directly, without resampling or an intermediate
+raster rewrite. The ordinary API can instead write compact cell/AOI extents.
 
-| Pair | Native RASMapper (s) | Rust, one worker (s) | Rust, four workers (s) | Native / Rust, four workers |
-|---|---:|---:|---:|---:|
-| 1 | 6.42 | 4.27 | 3.64 | 1.76× |
-| 2 | 6.70 | 4.46 | 3.73 | 1.80× |
-
-The API ordinarily writes the cell/AOI extent. With `template_raster`, it
-writes native-sized GeoTIFFs directly, padding nodata without an intermediate
-raster read/rewrite. The template contributes metadata only; the real-model
-test uses an empty template to confirm native reference pixels are not used
-for mapping. Canonical terrain was prepared before timing. Source rasters
-and authentic outputs were retained separately.
-
-RASMapper used native 7.0.1; Rust used the installed 0.4.0 Windows GNU
-static-CRT build. The parent and children were restricted to four CPUs;
-Rust used the stated worker count. The Rust order was reversed in the second
-pair. These are shared-workstation timings with warm, uncontrolled caches,
-not a universal speedup claim. Comparison scanning and reference metadata
-setup were outside the timed API calls. Original rasmap bytes were restored
-and the result HDF hash remained unchanged.
-
-Earlier comparisons wrote a smaller nodata border for Rust: native output
-was 4,852 × 6,705, while Rust output was 4,071 × 5,941. Their values matched in
-the physical footprint, but those elapsed ratios are not used in the
-equal-grid table. The exploratory mixed Windows/WSL timings are also retained
-separately. An intermediate equal-grid comparison included an extra delivery
-rewrite; it is superseded by the direct-template table. Four workers reduced
-the measured complete-call time relative to one in these pairs, while raster
-delivery and preparation still limit scaling. The benchmark harness hash was
-recorded alongside the timings.
-
-Profiling identified geometry serialization as a larger cost than arithmetic.
-The engine now accepts typed binary geometry arrays with small JSON
-descriptors, preserving coordinate bits and avoiding per-element conversion.
-An exploratory two-profile Spring River bounded run fell from 76.73 s with
-the initial JSON geometry handoff to 11.27 s with the binary handoff; geometry
-preparation inside Rust fell from 32.45 s to 2.08 s. Both runs matched the same
-native reference exactly. These development timings are not a controlled
-comparison with RASMapper. Terrain blocks are decoded in the same bounded
-pool, and blocks outside ownership/AOI are skipped.
+Typed binary geometry arrays preserve coordinate bits and avoid per-element
+JSON conversion. Terrain blocks are decoded in the bounded worker pool, and
+blocks outside ownership/AOI are skipped.
 
 `scripts/benchmarks/fim_sloping_compare.py` reproduces raw comparisons from
 an external case JSON. `tests/test_ras_fim_sloping.py` runs real-model
@@ -617,31 +583,9 @@ successful reference evidence. No enhanced-option qualification is claimed for
 Spring River/Spring Creek or other HEC-RAS versions. Standalone storage-area
 surfaces remain outside the mapping scope.
 
-A fresh bridge benchmark enabled both options and timed one Max Depth/WSE pair
-on identical 4,852 × 6,705 grids, nodata and tiled DEFLATE storage. Native calls
-used RAS Mapper 7.0.1 through Commander. Rust calls used the installed 0.5.0
-Windows GNU/static-CRT wheel and direct metadata-only template delivery. Both
-complete images matched raw masks and finite float32 bits:
-
-| Pair | Native RASMapper (s) | Rust, one worker (s) | Rust, four workers (s) | Native / Rust, four workers |
-|---|---:|---:|---:|---:|
-| 1 | 8.66 | 4.54 | 3.73 | 2.32× |
-| 2 | 9.37 | 4.07 | 5.13 | 1.83× |
-
-The parent and child processes inherited a four-CPU affinity restriction.
-Rust used the stated bounded pool; its order was reversed for the second pair.
-These are interleaved warm-cache observations on a shared workstation. Complete
-API calls include HDF preparation, native process launch, mapping and product
-writes. Terrain preparation, project initialization, reference selection
-and comparison scanning were outside the clocks. Rust template validation
-and delivery were included in the timed API call. There was no postprocessing
-or profile concurrency. Inputs, original rasmap bytes, engine identity and the
-benchmark harness hash were checked and recorded. The benchmark executable hash
-matches the retained Windows wheel. Complete-call four-worker time did not
-consistently beat one worker on this shared host; preparation and file delivery
-also contribute to these timings. Earlier development-wheel measurements are
-retained separately. The results do not establish
-a universal speedup or enhanced-method parity beyond the stated cases.
+The final-version model/method performance matrix below reports the enhanced
+method with both flags enabled. Option-matrix parity checks remain separate
+from elapsed-time measurements.
 
 Set `RAS_COMMANDER_SLOPING_OPTIONS_CASES` to an external JSON list of case
 records to run `tests/test_ras_fim_sloping.py`. Each case supplies the normal
@@ -677,63 +621,14 @@ for this run. Numeric payload reads require Rust; h5py remains in metadata
 inspection. Version metadata is now included in the performance return. No HDF
 backend replacement or arithmetic rewrite was needed.
 
-A controlled bridge comparison used three rotated/interleaved repetitions,
-four-CPU affinity, the same retained Windows engine, enhanced mapping with both
-flags, and a complete 4,852 × 6,705 Max Depth/WSE pair. All nine output pairs
-matched the complete native raster masks and finite float32 bits exactly.
-
-| Variant | Median complete-call time | Elapsed reduction from baseline |
-|---|---:|---:|
-| Previous preparation, one compression worker | 3.400 s | — |
-| Optimized preparation, one compression worker | 2.963 s | 12.9% |
-| Optimized preparation, four compression workers | 2.107 s | 38.0% |
-
-The baseline reconstructs the previous private preparation/adapter/writer
-functions from `bc610729f`, sharing the current public wrapper and dependencies.
-Imports were warmed; there was no excluded mapping warm-up. This isolates the
-changed preparation and compression behavior, rather than comparing independent
-environments or establishing cold-start performance. Later metadata and invalid
-argument validation changes do not alter the numerical pipeline. Product-write
-time fell from 1.56–1.70 s to 0.676–0.681 s with four compression workers.
-
-Separate three-repetition preparation measurements compared coordinate bits
-and ran full-mesh overlap validation without allocating a terrain raster:
-
-| Model / physical cells | Point-based → typed centers | Scalar → batched validation |
-|---|---:|---:|
-| Bald Eagle bridges / 24,718 | 31.9 → 6.2 ms | 0.917 → 0.642 s |
-| Spring River / 422,715 | 272.1 → 63.1 ms | 17.861 → 12.178 s |
-
-These are median stage timings, not enhanced/full-extent Spring River raster
-qualification or catalog throughput measurements.
-
-A fresh native comparison then used the final optimized Python runtime, the
-retained Windows wheel and four compression workers throughout. Both native
-and Rust complete calls inherited four-CPU affinity. Rust mapping worker order
-was reversed in the second pair. Grid, nodata, tiled DEFLATE storage and both
-enhanced flags matched; every full-image raw comparison passed.
-
-| Pair | RASMapper 7.0.1 (s) | Rust mapping 1 / compression 4 (s) | Rust mapping 4 / compression 4 (s) | Native / Rust mapping 4 |
-|---|---:|---:|---:|---:|
-| 1 | 6.590 | 2.432 | 2.284 | 2.88× |
-| 2 | 6.879 | 2.947 | 2.181 | 3.15× |
-
-No depth postprocessing or profile concurrency was used. Timing includes HDF
-preparation, process launch, mapping, template validation and product writes;
-terrain preparation, project initialization and comparison scanning are outside
-the clocks. Receipts verify unchanged source HDF, restored rasmap bytes,
-unchanged harness and the executable hash matching the retained Windows wheel
-(`63caee65c3420130c5c0d367a37afcbbcf6673c10f6199b2325f0b638dfece08`).
-These are interleaved warm-cache observations on a shared workstation, not a
-universal speed guarantee. The earlier tables retain their original conditions.
-
+The final-version matrix below replaces development-version speed comparisons.
 Final Astra review found no remaining implementation blocker. Windows affected
 checks total 152 passing and four optional skips across the targeted runs;
 Linux checks include 24 distinct sloping and 70 horizontal passes. Both
 platforms cover compression layout/value preservation and restoration after
 writer exceptions. Persistent prepared contexts and an in-process binding
 remain candidates for later measurement. SIMD changes to interpolation are
-deferred: the measured bottlenecks did not justify changing arithmetic order.
+deferred: profiling did not justify changing arithmetic order.
 
 The subsequent catalog-mask check exercises both an interior bbox and a
 triangular polygon on Davis timesteps 54/108 with both enhanced flags enabled.
@@ -742,6 +637,41 @@ platform match native masks and finite float32 bits within the selected AOI;
 both tests pass on Windows and Linux. Geometry and results stay global while
 terrain/ownership/output are windowed. The API documentation includes compact
 reach-scale catalog examples and distinguishes full-grid template delivery.
+
+## Final implementation versus RASMapper: model/method matrix
+
+| Model | Physical 2D cells | Interpolation | RASMapper (s) | Final Rust pipeline (s) | RASMapper / Rust | Raw comparison |
+|---|---:|---|---:|---:|---:|---|
+| eBFE Spring River | 422,715 | Horizontal | 230.787 | 80.561 | 2.86× | Differences present² |
+| eBFE Spring River | 422,715 | Sloping: cell corners | 240.726 | 48.274 | 4.99× | Exact in physical 2D scope |
+| eBFE Spring River | 422,715 | Sloping: corners + faces¹ | — | — | — | Stored corner elevations absent |
+| eBFE Spring Creek | 340,163 | Horizontal | 190.275 | 83.135 | 2.29× | Differences present² |
+| eBFE Spring Creek | 340,163 | Sloping: cell corners | 209.896 | 49.374 | 4.25× | Exact in physical 2D scope |
+| eBFE Spring Creek | 340,163 | Sloping: corners + faces¹ | — | — | — | Stored corner elevations absent |
+| Bald Eagle dam break | 87,039 | Horizontal | 7.693 | 6.667 | 1.15× | Differences present² |
+| Bald Eagle dam break | 87,039 | Sloping: cell corners | 7.393 | 4.750 | 1.56× | Exact in physical 2D scope |
+| Bald Eagle dam break | 87,039 | Sloping: corners + faces¹ | 16.480 | 4.693 | 3.51× | Exact in physical 2D scope |
+| Bald Eagle bridges | 24,718 | Horizontal | 8.897 | 6.895 | 1.29× | Differences present² |
+| Bald Eagle bridges | 24,718 | Sloping: cell corners | 8.585 | 2.853 | 3.01× | Exact in physical 2D scope |
+| Bald Eagle bridges | 24,718 | Sloping: corners + faces¹ | 13.018 | 2.963 | 4.39× | Exact in physical 2D scope |
+| Davis pipes/conduits | 2,716 | Horizontal | — | — | — | Native export failed |
+| Davis pipes/conduits | 2,716 | Sloping: cell corners | 1.909 | 0.723 | 2.64× | Exact in physical 2D scope |
+| Davis pipes/conduits | 2,716 | Sloping: corners + faces¹ | 2.628 | 0.446 | 5.89× | Exact in physical 2D scope |
+
+¹ Enhanced sloping enables both depth-weighted faces and shallow-to-horizontal rendering. Those are options of the same interpolation method, not additional table methods. The two eBFE HDFs lack stored `FacePoints Elevation` arrays required by this configuration; no substitute elevations or ratio are reported.
+
+² A timing ratio does not assert raw parity. At zero added cutoff, the completed horizontal rows have extra valid pixels but no missing pixels or differences in common finite float32 values. No 0.5 ft cutoff is applied to hide those mask differences.
+
+One fresh observation per model/method on 2026-10-26, on Windows using RASMapper 7.0.1, the final Python integration and retained engine 0.5.0 Windows binary (`63caee65c3420130c5c0d367a37afcbbcf6673c10f6199b2325f0b638dfece08`). Parent/native/Rust processes inherit four-CPU affinity. Rust mapping and initial product compression each use four workers. Native export requests one worker, except the documented Davis horizontal independent-helper retry using two. These are shared-workstation observations with uncontrolled caches, no excluded mapping warm-up and no universal speed guarantee.
+
+Each row maps one Max Depth/WSE pair on the complete native pixel lattice, nodata and storage layout. Time includes HDF preparation, launch, mapping and output delivery. Native/project initialization, canonical terrain preparation and comparison scanning are outside the clocks. Sloping uses metadata-only direct-template delivery. Horizontal includes cell-table preparation and an additional matching-grid raster rewrite (single-worker compression), included in its reported time. No resampling, added depth cutoff, floodplain polygonization or profile concurrency is used.
+
+Raw comparison is within physical 2D cells. The Bald Eagle dam-break native export also renders a standalone storage area outside that scope; the native call includes that extra work. Ratios describe these measured workflows, not equal work for excluded storage-area surfaces. Every completed measurement verifies source HDF identity and restoration of original rasmap bytes. Missing/failed rows are not speedup evidence.
+
+Horizontal mask observations (Depth and WSE): eBFE Spring River: 9,271 extra valid pixels; eBFE Spring Creek: 53,345 extra valid pixels; Bald Eagle dam break: 14 extra valid pixels; Bald Eagle bridges: 16 extra valid pixels.
+
+Davis horizontal native export failed with exit 99 on both the aggregate call and a two-helper retry (depth AggregateException). No mapping time or ratio is reported for that row. Other Davis sloping exports succeeded. This is the native failure profile tracked in issue #678.
+
 
 ## Proposed engine packaging
 
