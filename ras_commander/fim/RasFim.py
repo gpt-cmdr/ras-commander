@@ -925,11 +925,13 @@ class RasFim:
         """Return the path of the ``ras2fim-batch`` engine executable.
 
         Resolution order: ``engine_path``, then the ``RAS_COMMANDER_FIM_ENGINE``
-        environment variable, then ``ras2fim-batch`` on ``PATH``.
+        environment variable, ``ras2fim-batch`` on ``PATH``, then the installed
+        ``ras-commander-fast-map`` distribution's script. The optional ``fim``
+        extra installs that external wheel on qualified platforms.
 
         Raises:
             FimEngineNotFoundError: No executable was found. The engine is
-                never built or installed automatically.
+                never built or installed by a runtime mapping call.
         """
         return _engine.find_engine(engine_path)
 

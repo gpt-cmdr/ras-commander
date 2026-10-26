@@ -6,29 +6,31 @@ the horizontal or experimental plain-sloping methods below. It maps a
 batch of profiles against one shared terrain, accepts a bounding box or a
 polygon area of interest (AOI), and returns a product manifest DataFrame.
 
-The feature is optional. Install the Python extra and the matching Linux x86-64
-or Windows x86-64 engine wheel into the same environment:
+The feature is optional. The `fim` extra installs the external
+`ras-commander-fast-map` wheel on qualified Windows/Linux x64 platforms:
 
 ```bash
-uv pip install -e ".[fim,compute]"
-uv pip install /path/to/ras2fim_engine-0.8.0-py3-none-<platform>.whl
+uv pip install "ras-commander[fim,compute]"
 ras2fim-batch method
 ```
 
-Run these commands from this PR's checkout to use the new comparison and
-scope checks. The `compute` extra supplies native process supervision for
-the RAS Mapper comparison; Rust-only mapping needs the `fim` extra.
+For a source checkout, use `uv pip install -e ".[fim,compute]"` instead.
+The `compute` extra supplies native process supervision for the RAS Mapper
+comparison; Rust mapping needs the `fim` extra.
 
-The repository `wheels/` folder includes both tested wheels, checksums, and
-`BUILD.json` provenance. See `wheels/README.md` for the exact platform filenames.
-Wheels are rebuilt by the `Engine wheels` workflow
-and available as its platform artifacts with SHA-256 checksums. Linux wheels
-target glibc 2.28 or newer. The wheel installs `ras2fim-batch` on the environment's
-`PATH`; no Rust compiler or system GDAL is needed for the native engine.
-The Python GIS stack remains required. Source builds are also supported.
-The workflow does not publish to PyPI. Installed-binary synthetic mapping tests
-run on both platforms. Step05 numerical qualification used Linux; horizontal
-corpus checks passed on both Linux and Windows.
+The engine has its own [repository](https://github.com/gpt-cmdr/ras-commander-fast-map),
+[Python package](https://pypi.org/project/ras-commander-fast-map/) and
+[Rust crate](https://crates.io/crates/ras-commander-fast-map).
+[Tagged releases](https://github.com/gpt-cmdr/ras-commander-fast-map/releases)
+carry Windows/Linux wheels, a source distribution, checksums and build identity.
+Linux wheels target glibc 2.28 or newer. The compatible executable remains
+`ras2fim-batch`; no Rust compiler or system GDAL is needed when using a wheel.
+The Python GIS stack remains required for preparation and final delivery.
+Rust consumers can use the crate directly or install the CLI with
+`cargo install ras-commander-fast-map --locked`. Model/HDF preparation remains
+in Commander. Runtime mapping does not download, build or install packages.
+Uninstall the former `ras2fim-engine` package before installing Fast-Map if
+both would own the same executable.
 
 ## Experimental plain sloping mapping
 
@@ -186,11 +188,12 @@ require the native fast-HDF corner reader; an older wheel without that entry
 point raises explicitly. The HDF reader separately supports an explicit h5py
 fallback, but the FIM pipeline never silently substitutes it.
 
-The reader was added in fast-HDF PR #21 after the published 0.2.2 release.
-Qualification used its CI development wheels from commit
+The reader is included in published fast-HDF 0.2.3. The original qualification
+used CI development wheels from commit
 `6920fd8efb36831c32161156eee6c7635eee0229`, which also report version 0.2.2.
 Check for the `mesh_corner_elevations` entry point; the version string alone is
-insufficient. Retained build metadata records the tested artifacts.
+insufficient for those historical development builds. Install fast-HDF 0.2.3 or
+newer; the retained qualification records identify the original artifacts.
 
 If the plan contains `FacePoints Elevation`, mapping reads it directly. Otherwise
 prepare a fresh cache once on Windows with HEC-RAS 7.0.1 installed:
@@ -661,17 +664,21 @@ The interpolation, terrain, and reprojection arithmetic runs in the
 `ras2fim-batch` engine. Python prepares the global samples, the SciPy Delaunay
 topology, the query axes, the wet mask, and the explicit final grid, then
 validates each engine output before writing products. The engine source and
-build instructions are in `rust/step05/` of the RAS Commander repository.
-The tested scope is x86-64 Linux; a Windows engine build is not qualified.
+build instructions are in the external
+[ras-commander-fast-map repository](https://github.com/gpt-cmdr/ras-commander-fast-map).
+The standalone package preserves the qualified 0.8 numerical methods. Windows
+and Linux wheels are qualified; individual method/model scopes are listed in
+the performance report.
 
 `RasFim` resolves the engine in this order:
 
 1. the `engine_path=` argument;
 2. the `RAS_COMMANDER_FIM_ENGINE` environment variable;
-3. `ras2fim-batch` on `PATH`.
+3. `ras2fim-batch` on `PATH`;
+4. the script recorded by the installed `ras-commander-fast-map` distribution.
 
-A missing engine raises `FimEngineNotFoundError`. RAS Commander never builds,
-downloads, or installs the engine, and it has no Python fallback for this
+A missing engine raises `FimEngineNotFoundError`. Runtime calls never build,
+download, or install the engine, and there is no Python fallback for this
 method.
 
 ```python

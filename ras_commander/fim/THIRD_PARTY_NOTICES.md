@@ -9,7 +9,8 @@ its optional mapping-engine adapter. The adapted portions are reorganized for th
 API; they are not a copy of the ras2fim-2D command-line program.
 
 The `ras2fim-batch` engine is a separate program and is not distributed in the Python package.
-Its source, build instructions, and notices are in `rust/step05/` of the source repository.
+Its source, build instructions, and notices are in the external
+[ras-commander-fast-map repository](https://github.com/gpt-cmdr/ras-commander-fast-map).
 
 ```text
 BSD 3-Clause License

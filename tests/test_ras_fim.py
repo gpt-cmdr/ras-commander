@@ -252,6 +252,7 @@ def test_find_engine_explicit_missing_raises(tmp_path):
 
 
 def test_find_engine_env_and_path(tmp_path, monkeypatch):
+    monkeypatch.setattr(_engine, "_installed_engine", lambda: None)
     monkeypatch.setenv(_engine.ENGINE_ENV_VAR, str(tmp_path / "missing"))
     with pytest.raises(FimEngineNotFoundError, match=_engine.ENGINE_ENV_VAR):
         RasFim.find_engine()
@@ -262,6 +263,7 @@ def test_find_engine_env_and_path(tmp_path, monkeypatch):
 
 
 def test_map_profiles_without_engine_raises_before_writing(tmp_path, monkeypatch):
+    monkeypatch.setattr(_engine, "_installed_engine", lambda: None)
     monkeypatch.delenv(_engine.ENGINE_ENV_VAR, raising=False)
     monkeypatch.setenv("PATH", str(tmp_path))
     cells = _cells()

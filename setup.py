@@ -10,6 +10,11 @@ from pathlib import Path
 # platforms and pip never tries to compile the Rust source distribution
 # elsewhere. Where the extension is not installed, every read uses h5py.
 FAST_HDF_REQUIREMENT = 'ras-commander-fast-hdf>=0.2.3,<0.3'
+FAST_MAP_REQUIREMENT = 'ras-commander-fast-map>=0.8,<0.9'
+FAST_MAP_WHEEL_MARKER = (
+    '(platform_system == "Windows" and platform_machine == "AMD64")'
+    ' or (platform_system == "Linux" and platform_machine == "x86_64")'
+)
 FAST_HDF_WHEEL_MARKER = (
     'platform_python_implementation == "CPython" and ('
     '(platform_system == "Windows" and platform_machine == "AMD64")'
@@ -32,6 +37,7 @@ COMPUTE_DEPENDENCIES = [
 ]
 
 FULL_FEATURE_DEPENDENCIES = [
+    f'{FAST_MAP_REQUIREMENT}; {FAST_MAP_WHEEL_MARKER}',
     'requests',
     'tqdm',
     'scipy',
@@ -153,9 +159,11 @@ setup(
             'psutil>=5.6.6',
             'comtypes>=1.4.0; sys_platform == "win32"',
         ],
-        # Optional ras2fim-2D FIM mapping (RasFim). The ras2fim-batch engine
-        # executable is separate and is never installed by this extra.
-        'fim': ['scipy', 'geopandas', 'shapely>=2.0', 'rasterio', 'pyproj'],
+        # Optional mapping engine and Python preparation/delivery stack.
+        # Runtime calls never download or compile the engine.
+        'fast-map': [f'{FAST_MAP_REQUIREMENT}; {FAST_MAP_WHEEL_MARKER}'],
+        'fim': ['scipy', 'geopandas', 'shapely>=2.0', 'rasterio', 'pyproj',
+                f'{FAST_MAP_REQUIREMENT}; {FAST_MAP_WHEEL_MARKER}'],
         # USGS gauge data integration
         'usgs': ['dataretrieval>=1.0'],
         # FEMA eBFE archives that use Deflate64 compression (ZIP method 9).
