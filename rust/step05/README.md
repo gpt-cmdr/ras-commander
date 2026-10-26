@@ -127,3 +127,20 @@ rejects overlapping interiors. Rust checks framing, geometry types, finite
 coordinates and planned geometry/array admission before raster allocation.
 The method capability advertises `native_ownership=true`; older binaries
 produce an explicit adapter version error. Step05 numerics are unchanged.
+
+### Bounded sloping profile concurrency (0.6)
+
+Sloping requests accept `max_inflight_profiles` (default 1, range 1–64).
+The effective number is capped by requested threads, profile count and planned
+memory admission. All profiles share one Rayon pool and immutable geometry,
+stencils, terrain and ownership. Bounded batches reconstruct and paint in
+parallel, then emit profiles in request order. Each batch completes before the
+next starts; hydraulic arithmetic inside each profile is unchanged.
+
+The method advertises `bounded_profile_concurrency=true`. Reports record
+requested/effective concurrency and the additional per-profile memory plan.
+The serial memory plan is retained, with an additional conservative allowance
+for each admitted slot's arrays and hydraulic state. This is planned admission,
+not an enforced process RSS limit. Python/GDAL allocations are separate.
+Failing or panicking batches abort the session and clean earlier native products.
+The Python adapter additionally removes already delivered GIS products.

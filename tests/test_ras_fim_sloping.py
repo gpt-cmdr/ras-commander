@@ -391,6 +391,10 @@ def test_real_additional_sloping_options(threads, tmp_path):
         dict(reduce_shallow_to_horizontal=True),
         dict(render_mode="slopingPretty", use_depth_weighted_faces=1),
         dict(writer_threads=0),
+        dict(max_inflight_profiles=0),
+        dict(max_inflight_profiles=True),
+        dict(max_inflight_profiles=65),
+        dict(max_inflight_profiles=1.5),
         dict(writer_threads=True),
         dict(writer_threads=65),
         dict(writer_threads=1.5),
@@ -489,6 +493,84 @@ def test_real_enhanced_catalog_mask_preserves_native_pixels(tmp_path, mask_kind)
                 metrics[key] == 0
                 for key in ("extra", "missing", "different", "outside_footprint")
             )
+
+
+@pytest.mark.parametrize("inflight,threads", [(2, 4), (4, 4), (4, 1)])
+@pytest.mark.parametrize("enhanced", [False, True])
+def test_real_concurrent_timesteps_preserve_order_bits_and_masks(
+    sloping_case, tmp_path, inflight, threads, enhanced
+):
+    from ras_commander import RasFim, HdfMesh
+    from scripts.benchmarks.fim_sloping_compare import compare_raw
+
+    case = sloping_case
+    if enhanced:
+        filename = os.environ.get("RAS_COMMANDER_SLOPING_OPTIONS_CASES")
+        if not filename:
+            pytest.skip("set enhanced native timestep cases for concurrency qualification")
+        cases = json.loads(Path(filename).read_text(encoding="utf-8"))
+        case = next(c for c in cases if c["reduce_shallow_to_horizontal"]
+                    and c["use_depth_weighted_faces"]
+                    and sum(isinstance(v, int) for v in c["profiles"].values()) >= 2)
+    timesteps = [(name, index) for name, index in case["profiles"].items() if isinstance(index, int)]
+    assert len(timesteps) >= 2
+    first, last = timesteps[0], timesteps[-1]
+    profiles = {last[0]: last[1], first[0]: first[1], "repeat": last[1]}
+    result = RasFim.map_sloping_profiles(
+        case["hdf"], case["terrain"], tmp_path / "batch", profiles=profiles,
+        engine_path=case["engine"], threads=threads, max_inflight_profiles=inflight,
+        render_mode="slopingPretty" if enhanced else "sloping",
+        use_depth_weighted_faces=enhanced, reduce_shallow_to_horizontal=enhanced,
+        writer_threads=1, max_working_mib=4096,
+    )
+    report = result.attrs["performance"]["engine_report"]
+    assert report["requested_inflight_profiles"] == inflight
+    assert report["effective_inflight_profiles"] == min(inflight, threads, len(profiles))
+    assert [unit["id"] for unit in report["profiles"]] == list(profiles)
+    assert list(result.profile) == list(profiles)
+    references = case["references"]
+    cells = HdfMesh.get_mesh_cell_polygons(case["hdf"], strict=True)
+    for product in result.itertuples():
+        reference_name = last[0] if product.profile == "repeat" else product.profile
+        for band, path in (("depth", product.depth_tif), ("wse", product.wse_tif)):
+            metrics = compare_raw(path, references[reference_name][band], cells)
+            assert metrics["common"] > 0
+            assert all(metrics[k] == 0 for k in ("extra", "missing", "different", "outside_footprint"))
+
+
+def test_later_concurrent_batch_failure_removes_earlier_products(sloping_case, tmp_path, monkeypatch):
+    from ras_commander import RasFim
+    from ras_commander.fim import _sloping
+    from ras_commander.fim.errors import FimEngineError
+
+    original = _sloping._write_array
+    written = []
+    def corrupt_later_profile(path, values):
+        if Path(path).name == "values-2-0.bin":
+            values = np.array(values, copy=True)
+            values[0] = np.nan
+        return original(path, values)
+    write_products = RasFim._write_products
+    def observe_products(*args, **kwargs):
+        result = write_products(*args, **kwargs)
+        written.append(result)
+        return result
+    monkeypatch.setattr(_sloping, "_write_array", corrupt_later_profile)
+    monkeypatch.setattr(RasFim, "_write_products", staticmethod(observe_products))
+    case = sloping_case
+    output = tmp_path / "aborted"
+    with pytest.raises(FimEngineError):
+        RasFim.map_sloping_profiles(
+            case["hdf"], case["terrain"], output,
+            profiles={"first": "Max", "second": "Max", "bad": "Max", "last": "Max"},
+            engine_path=case["engine"], threads=4, max_inflight_profiles=2,
+            max_working_mib=4096,
+        )
+    assert len(written) == 2  # Exercise cleanup after successful streamed delivery.
+    assert not list(output.glob("*.tif"))
+    manifest = json.loads((output / "fim_manifest.json").read_text(encoding="utf-8"))
+    assert manifest["status"] == "aborted"
+    assert all(p["status"] == "failed" for p in manifest["profiles"])
 
 
 @pytest.mark.parametrize("use_template", [False, True])

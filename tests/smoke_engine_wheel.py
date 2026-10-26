@@ -62,14 +62,22 @@ def sloping_smoke(engine, root, terrain):
     (folder/"mesh.json").write_text(json.dumps({"schema":"ras-commander-sloping-mesh/1","arrays":descriptors}))
     for shallow in (False, True):
         for weighted in (False, True):
+            request["max_inflight_profiles"] = 2
             request["options"] = dict(render_mode="slopingPretty", reduce_shallow_to_horizontal=shallow, use_depth_weighted_faces=weighted)
             path.write_text(json.dumps(request))
             destination=folder/f"enhanced-{int(shallow)}-{int(weighted)}"
             subprocess.run([engine,"sloping",str(path),str(destination)],check=True,capture_output=True)
             report=json.loads((destination/"report.json").read_text())
             assert report["method"]["method_id"]=="rasmapper-sloping-with-faces/1"
+            assert report["effective_inflight_profiles"] == 2
             for name,value in [("a",1),("b",2)]:
                 np.testing.assert_array_equal(np.fromfile(destination/name/"depth.bin",dtype="<f4"),np.full(16,value,dtype="<f4"))
+    # An upper bound may be reduced by memory admission before allocation.
+    request["max_working_bytes"] = report["planned_bytes"] - report["additional_profile_planned_bytes"]
+    path.write_text(json.dumps(request))
+    subprocess.run([engine,"sloping",str(path),str(folder/"memory-capped")],check=True,capture_output=True)
+    assert json.loads((folder/"memory-capped/report.json").read_text())["effective_inflight_profiles"] == 1
+    request["max_working_bytes"] = 256 << 20
     request["options"] = dict(render_mode="slopingPretty", reduce_shallow_to_horizontal=True, use_depth_weighted_faces=True)
     request.update(stream_outputs=True,aoi_file="aoi.wkb",threads=1)
     path.write_text(json.dumps(request))

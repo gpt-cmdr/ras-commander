@@ -227,6 +227,7 @@ class RasFim:
         engine_path: Optional[PathLike] = None, threads: int = 1,
         writer_threads: int = 1,
         max_working_mib: int = 1024, timeout: Optional[float] = None,
+        max_inflight_profiles: int = 1,
         write_floodplain: bool = False,
         template_raster: Optional[PathLike] = None,
     ) -> pd.DataFrame:
@@ -285,6 +286,12 @@ class RasFim:
                 success or failure, including when the default is used.
             max_working_mib: Planned engine memory admission budget in MiB;
                 HDF/Python preparation and polygonization also use memory.
+            max_inflight_profiles: Maximum concurrent timestep/profile maps,
+                1 through 64. Defaults to sequential processing. Effective
+                concurrency is capped by threads, profile count and planned
+                memory admission, and recorded in the engine report. Requests
+                greater than one require engine concurrency support. All maps
+                share the same Rust worker pool, terrain and geometry.
             timeout: Engine stream lifetime in seconds, including output writes.
             write_floodplain: Also polygonize positive retained depth pixels.
             template_raster: Optional float32 GeoTIFF defining the delivered
@@ -314,6 +321,7 @@ class RasFim:
             bbox=bbox, polygon=polygon, polygon_layer=polygon_layer,
             aoi_crs=aoi_crs, engine_path=engine_path, threads=threads, writer_threads=writer_threads,
             max_working_mib=max_working_mib, timeout=timeout, write_floodplain=write_floodplain,
+            max_inflight_profiles=max_inflight_profiles,
             template_raster=template_raster)
 
     @staticmethod

@@ -32,9 +32,92 @@ pub struct Request {
     pub owner_cells: Vec<[usize; 2]>,
     pub profiles: Vec<Profile>,
     pub threads: usize,
+    #[serde(default = "one_profile")]
+    pub max_inflight_profiles: usize,
     pub max_working_bytes: u64,
     #[serde(default)]
     pub stream_outputs: bool,
+}
+
+fn one_profile() -> usize {
+    1
+}
+
+fn admit_profiles(
+    requested: usize,
+    threads: usize,
+    profiles: usize,
+    budget: u64,
+    serial: u64,
+    additional: u64,
+) -> Result<(usize, u64), MapError> {
+    if serial > budget || additional == 0 || requested == 0 || threads == 0 || profiles == 0 {
+        return Err(MapError::Budget(
+            "sloping decoder plan exceeds budget".into(),
+        ));
+    }
+    let limit = requested.min(threads).min(profiles);
+    let extra = ((budget - serial) / additional).min((limit - 1) as u64);
+    Ok((extra as usize + 1, serial + extra * additional))
+}
+
+fn map_batch<T: Sync, R: Send>(
+    batch: &[T],
+    pool: &rayon::ThreadPool,
+    compute: impl Fn(&T) -> Result<R, MapError> + Sync + Send,
+) -> Result<Vec<R>, MapError> {
+    pool.install(|| batch.par_iter().map(compute).collect())
+}
+
+struct RenderedProfile {
+    depth: Vec<f32>,
+    wse: Vec<f32>,
+    hydraulic_seconds: f64,
+    render_seconds: f64,
+}
+
+fn render(
+    profile: &Profile,
+    base: &Path,
+    meshes: &[Mesh],
+    stencils: &[Vec<Option<sloping::CellStencil>>],
+    window: &sloping::RasterWindow<'_>,
+    pool: &rayon::ThreadPool,
+    options: sloping::Options,
+) -> Result<RenderedProfile, MapError> {
+    let tick = Instant::now();
+    let mut prepared = Vec::new();
+    for ((mesh, stencil), filename) in meshes.iter().zip(stencils).zip(&profile.values_files) {
+        prepared.push(sloping::prepare_profile_with_options(
+            mesh,
+            stencil,
+            &values(&model::resolve(base, filename), mesh.cells.len())?,
+            0.001,
+            pool,
+            options,
+        )?);
+    }
+    let hydraulic_seconds = tick.elapsed().as_secs_f64();
+    let tick = Instant::now();
+    let (mut depth, mut wse) = sloping::render_profile(stencils, &prepared, window, 0.001, pool)?;
+    let render_seconds = tick.elapsed().as_secs_f64();
+    pool.install(|| {
+        depth
+            .par_iter_mut()
+            .zip(wse.par_iter_mut())
+            .for_each(|(d, w)| {
+                if *d == sloping::NODATA {
+                    *d = f32::NAN;
+                    *w = f32::NAN;
+                }
+            })
+    });
+    Ok(RenderedProfile {
+        depth,
+        wse,
+        hydraulic_seconds,
+        render_seconds,
+    })
 }
 
 #[derive(Deserialize)]
@@ -144,6 +227,7 @@ pub fn method_record() -> Value {
     json!({"method_id":"rasmapper-plain-sloping/1", "backend":"rust", "experimental":true,
         "native_version_qualified":"7.0.1", "stream_outputs":true, "native_ownership":true,
         "enhanced_options":true,"enhanced_method_id":"rasmapper-sloping-with-faces/1",
+        "bounded_profile_concurrency":true,
         "options":{"CellRenderMode":"Sloping","CellStencilMode":"JustFacepoints",
             "FacepointAdjustmentMode":"None","ShallowBehaviorMode":"None",
             "UseDepthWeightedFaces":false,"FaceWSMode":"Adjusted"},
@@ -204,6 +288,7 @@ pub fn run(req: &Request, base: &Path, out: &Path) -> Result<Value, MapError> {
         .ok_or_else(|| MapError::Budget("sloping window empty or too large".into()))?;
     if req.schema != SCHEMA
         || !(1..=64).contains(&req.threads)
+        || !(1..=64).contains(&req.max_inflight_profiles)
         || req.epsg == 0
         || req.mesh_files.is_empty()
         || req.owner_cells.is_empty()
@@ -291,14 +376,36 @@ pub fn run(req: &Request, base: &Path, out: &Path) -> Result<Value, MapError> {
                 .ok_or_else(|| MapError::Budget("sloping parallel decoder plan overflow".into()))?,
         )
         .ok_or_else(|| MapError::Budget("sloping decoder plan overflow".into()))?;
-    if admitted > req.max_working_bytes {
-        return Err(MapError::Budget(
-            "sloping decoder plan exceeds budget".into(),
-        ));
-    }
+    // Retain the serial plan. Each additional slot conservatively reserves
+    // output/work arrays and the existing full geometry/hydraulic allowance.
+    // This is planned admission, not an OS-enforced RSS limit.
+    let additional = (count as u64)
+        .checked_mul(16)
+        .and_then(|v| {
+            geometry_bytes
+                .checked_mul(
+                    if req.options.render_mode == sloping::RenderMode::WithFaces {
+                        20
+                    } else {
+                        16
+                    },
+                )
+                .and_then(|g| v.checked_add(g))
+        })
+        .ok_or_else(|| MapError::Budget("sloping concurrent profile plan overflow".into()))?;
+    let (effective, admitted) = admit_profiles(
+        req.max_inflight_profiles,
+        req.threads,
+        req.profiles.len(),
+        req.max_working_bytes,
+        admitted,
+        additional,
+    )?;
     fs::create_dir(out)?;
     let mut report = json!({"schema":"ras-commander-sloping-report/1","status":"in_progress", "method":selected_method(req.options),
-        "threads":req.threads,"window":req.window,"planned_bytes":admitted,"profiles":[]});
+        "threads":req.threads,"window":req.window,"planned_bytes":admitted,
+        "requested_inflight_profiles":req.max_inflight_profiles,"effective_inflight_profiles":effective,
+        "additional_profile_planned_bytes":additional,"profiles":[]});
     sink::write_json(&out.join("report.json"), &report)?;
     let execution = std::panic::catch_unwind(std::panic::AssertUnwindSafe(
         || -> Result<(), MapError> {
@@ -426,58 +533,49 @@ pub fn run(req: &Request, base: &Path, out: &Path) -> Result<Value, MapError> {
                 terrain: &ground,
                 owner_cells: &req.owner_cells,
             };
-            for profile in &req.profiles {
-                let tick = Instant::now();
-                let mut prepared = Vec::new();
-                for ((mesh, stencil), filename) in
-                    meshes.iter().zip(&stencils).zip(&profile.values_files)
-                {
-                    prepared.push(sloping::prepare_profile_with_options(
-                        mesh,
-                        stencil,
-                        &values(&model::resolve(base, filename), mesh.cells.len())?,
-                        0.001,
+            for batch in req.profiles.chunks(effective) {
+                let results = map_batch(batch, &pool, |profile| {
+                    render(
+                        profile,
+                        base,
+                        &meshes,
+                        &stencils,
+                        &window,
                         &pool,
                         req.options,
-                    )?);
+                    )
+                })?;
+                // Indexed collection and ordered emission preserve the pipe/report
+                // contract even when later profiles finish first.
+                for (profile, rendered) in batch.iter().zip(results) {
+                    let RenderedProfile {
+                        depth,
+                        wse,
+                        hydraulic_seconds,
+                        render_seconds,
+                    } = rendered;
+                    let dir = out.join(&profile.id);
+                    fs::create_dir(&dir)?;
+                    if req.stream_outputs {
+                        let mut stream =
+                            std::io::BufWriter::with_capacity(65536, std::io::stdout().lock());
+                        writeln!(
+                            stream,
+                            "{}",
+                            json!({"id":profile.id,"status":"complete","pixels":count})
+                        )?;
+                        crate::horizontal::write_f32(&mut stream, &depth)?;
+                        crate::horizontal::write_f32(&mut stream, &wse)?;
+                        stream.flush()?;
+                    } else {
+                        crate::horizontal::write_values(&dir.join("depth.bin"), &depth)?;
+                        crate::horizontal::write_values(&dir.join("wse.bin"), &wse)?;
+                    }
+                    let unit = json!({"id":profile.id,"status":"complete","hydraulic_seconds":hydraulic_seconds,"render_seconds":render_seconds});
+                    sink::write_json(&dir.join("unit.json"), &unit)?;
+                    report["profiles"].as_array_mut().unwrap().push(unit);
+                    sink::write_json(&out.join("report.json"), &report)?;
                 }
-                let hydraulic_seconds = tick.elapsed().as_secs_f64();
-                let tick = Instant::now();
-                let (mut depth, mut wse) =
-                    sloping::render_profile(&stencils, &prepared, &window, 0.001, &pool)?;
-                let render_seconds = tick.elapsed().as_secs_f64();
-                pool.install(|| {
-                    depth
-                        .par_iter_mut()
-                        .zip(wse.par_iter_mut())
-                        .for_each(|(d, w)| {
-                            if *d == sloping::NODATA {
-                                *d = f32::NAN;
-                                *w = f32::NAN;
-                            }
-                        })
-                });
-                let dir = out.join(&profile.id);
-                fs::create_dir(&dir)?;
-                if req.stream_outputs {
-                    let mut stream =
-                        std::io::BufWriter::with_capacity(65536, std::io::stdout().lock());
-                    writeln!(
-                        stream,
-                        "{}",
-                        json!({"id":profile.id,"status":"complete","pixels":count})
-                    )?;
-                    crate::horizontal::write_f32(&mut stream, &depth)?;
-                    crate::horizontal::write_f32(&mut stream, &wse)?;
-                    stream.flush()?;
-                } else {
-                    crate::horizontal::write_values(&dir.join("depth.bin"), &depth)?;
-                    crate::horizontal::write_values(&dir.join("wse.bin"), &wse)?;
-                }
-                let unit = json!({"id":profile.id,"status":"complete","hydraulic_seconds":hydraulic_seconds,"render_seconds":render_seconds});
-                sink::write_json(&dir.join("unit.json"), &unit)?;
-                report["profiles"].as_array_mut().unwrap().push(unit);
-                sink::write_json(&out.join("report.json"), &report)?;
             }
             Ok(())
         },
@@ -519,4 +617,58 @@ pub fn run(req: &Request, base: &Path, out: &Path) -> Result<Value, MapError> {
     report["total_seconds"] = started.elapsed().as_secs_f64().into();
     sink::write_json(&out.join("report.json"), &report)?;
     Ok(report)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::sync::{
+        Barrier,
+        atomic::{AtomicUsize, Ordering},
+    };
+
+    #[test]
+    fn admission_caps_threads_profiles_memory_and_overflow() {
+        assert_eq!(admit_profiles(8, 4, 6, 1000, 100, 50).unwrap(), (4, 250));
+        assert_eq!(admit_profiles(8, 4, 2, 1000, 100, 50).unwrap(), (2, 150));
+        assert_eq!(admit_profiles(8, 4, 6, 149, 100, 50).unwrap(), (1, 100));
+        assert!(admit_profiles(8, 4, 6, 99, 100, 50).is_err());
+        assert_eq!(
+            admit_profiles(64, 64, 64, u64::MAX, u64::MAX - 1, u64::MAX).unwrap(),
+            (1, u64::MAX - 1)
+        );
+        assert!(admit_profiles(0, 1, 1, 100, 50, 10).is_err());
+    }
+
+    #[test]
+    fn batches_really_overlap_without_exceeding_bound_and_keep_order() {
+        let pool = rayon::ThreadPoolBuilder::new()
+            .num_threads(2)
+            .build()
+            .unwrap();
+        let active = AtomicUsize::new(0);
+        let peak = AtomicUsize::new(0);
+        let barrier = Barrier::new(2);
+        let mut output = Vec::new();
+        for batch in [0, 1, 2, 3].chunks(2) {
+            output.extend(
+                map_batch(batch, &pool, |&i| {
+                    let n = active.fetch_add(1, Ordering::SeqCst) + 1;
+                    peak.fetch_max(n, Ordering::SeqCst);
+                    barrier.wait();
+                    active.fetch_sub(1, Ordering::SeqCst);
+                    Ok(i)
+                })
+                .unwrap(),
+            );
+        }
+        assert_eq!(peak.load(Ordering::SeqCst), 2);
+        assert_eq!(output, vec![0, 1, 2, 3]);
+        assert!(
+            map_batch(&[0, 1], &pool, |_| -> Result<(), MapError> {
+                Err(MapError::Invalid("failed profile".into()))
+            })
+            .is_err()
+        );
+    }
 }

@@ -34,6 +34,7 @@ def map_profiles(
     engine_path=None,
     threads=1,
     writer_threads=1,
+    max_inflight_profiles=1,
     max_working_mib=1024,
     timeout=None,
     write_floodplain=False,
@@ -70,6 +71,9 @@ def map_profiles(
     phase = started
     threads = _positive_int(threads, "threads")
     writer_threads = _positive_int(writer_threads, "writer_threads")
+    max_inflight_profiles = _positive_int(max_inflight_profiles, "max_inflight_profiles")
+    if max_inflight_profiles > 64:
+        raise ValueError("max_inflight_profiles must be <= 64")
     if writer_threads > 64:
         raise ValueError("writer_threads must be <= 64")
     budget = _positive_int(max_working_mib, "max_working_mib")
@@ -105,6 +109,9 @@ def map_profiles(
             )
     engine = _engine.find_engine(engine_path)
     method = _engine.engine_method(engine).get("sloping", {})
+    concurrency_supported = method.get("bounded_profile_concurrency") is True
+    if max_inflight_profiles > 1 and not concurrency_supported:
+        raise FimEngineError("engine lacks bounded sloping profile concurrency; install engine 0.6 or newer")
     if method.get("method_id") != "rasmapper-plain-sloping/1" or not method.get(
         "stream_outputs"
     ):
@@ -183,6 +190,7 @@ def map_profiles(
             "extra_depth_cutoff": None,
             "threads": threads,
             "writer_threads": writer_threads,
+            "max_inflight_profiles": max_inflight_profiles,
             "max_working_mib": budget,
             "write_floodplain": bool(write_floodplain),
         },
@@ -294,6 +302,8 @@ def map_profiles(
                     stream_outputs=True,
                     **fields,
                 )
+                if concurrency_supported:
+                    request["max_inflight_profiles"] = max_inflight_profiles
                 (root / "request.json").write_text(
                     json.dumps(request), encoding="utf-8"
                 )
@@ -421,6 +431,19 @@ def map_profiles(
                         ):
                             raise FimEngineError("Invalid sloping report profile table")
                         reported_method = report.get("method")
+                        if concurrency_supported:
+                            effective = report.get("effective_inflight_profiles")
+                            if (
+                                type(report.get("requested_inflight_profiles")) is not int
+                                or report.get("requested_inflight_profiles") != max_inflight_profiles
+                                or isinstance(effective, bool)
+                                or not isinstance(effective, int)
+                                or not 1 <= effective <= min(max_inflight_profiles, threads, len(selected))
+                                or report.get("threads") != threads
+                                or type(report.get("planned_bytes")) is not int
+                                or not 0 < report["planned_bytes"] <= request["max_working_bytes"]
+                            ):
+                                raise FimEngineError("Invalid sloping concurrency report")
                         if (
                             code != 0
                             or report.get("status") != "complete"
