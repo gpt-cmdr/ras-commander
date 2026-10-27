@@ -20,7 +20,7 @@ Production mapping requires no HEC-RAS assemblies.
 | Bald Eagle dam break | 87,039 | Sloping: cell corners | 7.393 | 5.976 | 1.24× | Exact mask and values (2D) |
 | Bald Eagle bridges | 24,718 | Horizontal | 8.897 | 4.935 | 1.80× | Exact mask and values (2D) |
 | Bald Eagle bridges | 24,718 | Sloping: cell corners | 8.585 | 3.157 | 2.72× | Exact mask and values (2D) |
-| Davis pipes/conduits | 2,716 | Horizontal | — | — | — | Native export failed |
+| Davis pipes/conduits | 2,716 | Horizontal | 4.235 | 1.046 | 4.05× | Exact mask and values (2D); fresh rerun |
 | Davis pipes/conduits | 2,716 | Sloping: cell corners | 1.909 | 0.527 | 3.62× | Exact mask and values (2D) |
 
 
@@ -30,7 +30,8 @@ WSE have identical complete validity masks and valid float32 bits within the
 physical 2D footprint. There is no added depth cutoff, reference filtering or
 resampling. Equality only where both rasters are valid is insufficient.
 
-Native exports/times were retained from the same-day reference run; Rust 0.7.0
+Except for the Davis horizontal rerun described below, native exports/times
+were retained from the same-day reference run; Rust 0.7.0
 was measured afterwards rather than interleaved. Engine 0.7.1 removes an
 unreleased control without changing these horizontal/plain-sloping kernels.
 These measurements are observations, not a universal speed guarantee.
@@ -52,9 +53,30 @@ are uncontrolled.
 The dam-break reference also renders standalone storage-area surfaces outside
 physical 2D cells. Those pixels are excluded from comparison, but their native
 rendering time is included. Its ratio therefore compares the measured workflows,
-not equal work outside the supported scope. Davis horizontal native export
-failed with exit 99; no time or ratio is claimed. See issue
+not equal work outside the supported scope.
+
+The Davis horizontal row replaces an earlier failed reference export with a
+fresh 2026-10-26 rerun using the published Fast-Map 0.8.0 engine and Fast-HDF
+0.2.3. Native aggregate export succeeded with four-CPU affinity and one
+stored-map worker; Rust used four mapping and compression workers. Each band
+has 20,560 valid physical-2D pixels, with zero extra, missing or differing
+float32 pixels. Both comparison directions cover the complete physical
+footprint, without depth filtering or resampling. The Rust clock includes cell
+preparation and output delivery on its terrain grid; unlike the older
+horizontal rows, it excludes a nodata-border rewrite. Native and candidate
+affine resolutions differ by about 2.7e-13 map units per pixel; the comparison
+checks their lattice alignment within 1e-8 map units without modifying either
+output. The copied project's rasmap bytes, source HDF and terrain hashes, and
+process affinity were verified restored or unchanged. Rust was measured after
+earlier grid-delivery checks had already run mapping; imports and filesystem
+caches were warm. These are single-call observations, not a repeated or
+interleaved benchmark.
+
+This successful export does not establish a repair of the intermittent native
+pipe-rendering failure tracked in issue
 [#678](https://github.com/gpt-cmdr/ras-commander/issues/678).
+PR [#677](https://github.com/gpt-cmdr/ras-commander/pull/677) fixed Commander's
+false-success reporting. Failed export attempts remain excluded from ratios.
 
 ## Plain sloping development qualification
 
