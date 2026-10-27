@@ -284,3 +284,7 @@ crates.io, with Windows/Linux wheels and independent release CI. Extraction
 retains the qualified 0.8 numerical modules and their source fingerprints;
 the tables above remain the original mapping measurements, not new timing
 claims for the packaging change.
+
+Rust-native inundation boundaries remain separate qualification work. They need
+a reproducible native reference and complete contour topology/coordinate checks
+before adoption; see the [boundary tracking issue](https://github.com/gpt-cmdr/ras-commander-fast-map/issues/4).
