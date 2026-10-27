@@ -623,6 +623,16 @@ def map_profiles(
                             raise FimEngineError(
                                 f"Sloping engine failed with exit {code}: {report.get('error', 'invalid report')}"
                             )
+                        # A persistent child outlives this request. Drain any
+                        # callback already running before accepting success or
+                        # allowing the next request to reuse that process.
+                        if timer:
+                            timer.cancel()
+                            timer.join()
+                        if expired.is_set():
+                            raise FimEngineError(
+                                f"Sloping engine timed out after {timeout} seconds"
+                            )
                         details["performance"]["engine_report"] = report
                         if _prepared is not None:
                             _prepared._info["native_state_reused"] = bool(report.get("session", {}).get("geometry_reused"))
@@ -639,6 +649,7 @@ def map_profiles(
                     finally:
                         if timer:
                             timer.cancel()
+                            timer.join()
                         if not persistent:
                             process.stdout.close()
                         elif process.poll() is not None:

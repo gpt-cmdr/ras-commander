@@ -406,3 +406,50 @@ def test_failed_preparation_removes_staged_files(case, tmp_path, monkeypatch, fa
             case["hdf"], case["terrain"], engine_path=case["engine"], **options
         )
     assert all(not path.exists() for path in created)
+
+
+def test_session_drains_inflight_timeout_before_accepting_success(case, tmp_path, monkeypatch):
+    """An already-running timeout must finish before a child can be reused."""
+    from ras_commander import RasFim
+    from ras_commander.fim import _sloping
+    from ras_commander.fim.errors import FimEngineError
+
+    if not RasFim.get_engine_info(case["engine"])["method"]["sloping"].get("persistent_session"):
+        pytest.skip("engine does not advertise persistent sessions")
+
+    timers = []
+
+    class InflightTimer:
+        def __init__(self, interval, callback):
+            self.callback = callback
+            self.joined = False
+            self.cancelled = False
+            timers.append(self)
+
+        def start(self):
+            pass
+
+        def cancel(self):
+            self.cancelled = True
+
+        def join(self):
+            # Model a callback that passed its cancellation gate before cancel,
+            # then resumes at the completion fence.
+            assert self.cancelled
+            if not self.joined:
+                self.joined = True
+                self.callback()
+
+    with RasFim.prepare_sloping_model(
+        case["hdf"], case["terrain"], profiles={"Max": "Max"},
+        engine_path=case["engine"], threads=4, max_working_mib=4096,
+    ) as prepared:
+        with monkeypatch.context() as patch:
+            patch.setattr(_sloping.threading, "Timer", InflightTimer)
+            with pytest.raises(FimEngineError, match="timed out"):
+                prepared.map_profiles(tmp_path / "expired", timeout=60)
+        assert len(timers) == 1 and timers[0].joined
+        assert prepared._native_session is None
+        assert not list((tmp_path / "expired").glob("*.tif"))
+        recovered = prepared.map_profiles(tmp_path / "retry")
+        assert list(recovered.status) == ["complete"]
