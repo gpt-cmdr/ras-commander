@@ -38,6 +38,7 @@ class FimPreparedSlopingModel:
         max_working_mib=1024,
         max_prepared_mib=1024,
         native_session=True,
+        terrain_crs_fnv1a64=None,
     ):
         from .. import HdfMesh
         from ..fast_hdf import backend_scope
@@ -111,7 +112,8 @@ class FimPreparedSlopingModel:
             # Retain the model-wide spatial index once, before reach planning.
             self._cells.sindex
             self._terrain_identity = _engine.terrain_identity(
-                self._engine, self._terrain, self._cells.crs
+                self._engine, self._terrain, self._cells.crs,
+                terrain_crs_fnv1a64=terrain_crs_fnv1a64,
             )
             with rasterio.open(self._terrain) as source:
                 self._terrain_transform = list(source.transform.to_gdal())

@@ -8,6 +8,84 @@ rasterizes ownership through terrio, reconstructs sloping surfaces and maps
 pixels with bounded Rayon workers. Python manages requests and GeoTIFF delivery.
 Production mapping requires no HEC-RAS assemblies.
 
+## Deterministic vector boundary qualification
+
+Use `RasFim.map_inundation_boundaries()` for
+`deterministic-zero-depth-contours/1`, with no additional depth filtering.
+This is a distinct vector method with stable union order and canonical rings;
+the raster parity tables below do not establish native polygon equality.
+See the [boundary API](../api/fim.md#deterministic-inundation-boundaries)
+for original-terrain requirements and unsupported options.
+
+Development qualification on 27 October 2026 used Fast-Map 0.10.0, required-native
+Fast-HDF bitfield support from PR #31, and public computed Davis pipes/conduits.
+Horizontal and plain sloping each mapped Max, timestep 54 and timestep 108.
+All product bytes matched across two repeated batches at 1 worker/1 in-flight
+profile, 4 workers/1 profile, and 4 workers/4 profiles. Six Windows GNU release
+products also matched Linux release bytes. Bbox and polygon-with-hole tests
+retained deterministic output across workers, respected the selected extent,
+and retained the polygon exclusion. The standalone Rust concurrency test also
+passed on the staged real model. These checks establish repeatability for the
+listed inputs, rather than native vector parity.
+
+A public eBFE Spring River reach test also passed for horizontal and plain
+sloping Max. A 4,000-by-4,000 projected-unit bbox selected nine source tiles;
+full model hydraulics and stitch connectivity remained staged. Products matched
+byte-for-byte at 1/1, 4/1 and 4/4 requested worker/profile settings. With one
+profile the effective in-flight count was one. The sloping product contained
+42 polygons, 38 holes and 12,257 vertices. This bounded reach test does not
+qualify a full-terrain vector export or native polygon parity for Spring River.
+
+Fresh native references were generated through `RasProcess.store_maps()` on an
+isolated Davis project copy with RASMapper 7.0.1 and plain sloping. The rasmap
+and complete project-file inventory were unchanged after both native calls.
+The Rust call used four workers and two in-flight profiles. Raw workflow times
+on the shared workstation were:
+
+| Work | Native stored-map calls (s) | Rust batch (s) |
+| --- | ---: | ---: |
+| Davis Max and timestep 108, plain sloping | 85.165 (54.059 + 31.106) | 3.537 |
+
+The Rust batch includes shared Python preparation, native contour generation
+and GeoJSON delivery once. Native clocks cover two complete stored-map calls.
+Source hashing and geometry comparison are outside these clocks. These are
+observed workflow times, with no speed ratio because the vector methods and
+output formats differ. They are not a dedicated uncontended benchmark.
+
+The fresh native comparison measured the complete geometry, without repair,
+resampling, reference rounding or a depth cutoff. Areas below are square US
+survey feet in EPSG:2871; vertex counts include ring closure coordinates.
+
+| Profile | Rust / native polygons | Rust / native holes | Rust / native vertices | Rust-only area | Native-only area |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Max | 274 / 274 | 66 / 65 | 47,426 / 47,396 | 0.001034 | 7,423.028321 |
+| Timestep 108 | 469 / 469 | 10 / 9 | 35,616 / 35,587 | 0.004348 | 2,647.603286 |
+
+Both topological equality and quantized-coordinate equality were false.
+A separately retained timestep-108 export had 10 holes and 35,614 vertices;
+its symmetric difference from Rust was 0.009367 square feet. Thus the fresh
+timestamp export also differed from its retained native reference. Native
+variation is not restricted to Max. The comparison receipt retains the
+particular reference identities and each direction of difference rather than
+selecting a favorable native run. Hausdorff distance was omitted because the
+vertex-pair product exceeded its 25-million admission limit.
+
+Reproduce Rust repeatability with
+`scripts/benchmarks/fim_boundary_compare.py case.json output_folder`.
+The external case supplies `hdf_path`, original `terrain_path`, `terrain_hdf`,
+`profiles` and `engine_path`; optionally supply `bbox`, `polygon`, `aoi_crs`
+and an independently verified `terrain_crs_fnv1a64`. Optional retained exports
+use `native_boundaries={"sloping": {"Max": "reference.shp"}}`, with every
+selected profile named for each supplied interpolation method. The script
+checks source hashes before/after and rejects product-byte differences across
+worker configurations. It never executes HEC-RAS. Use the comparison API on a
+project copy to generate fresh references and collect native timings.
+
+Initial boundaries require one original unmodified terrain source, matching
+terrain-HDF sample metadata, horizontal or plain sloping, and physical 2D
+geometry. Multi-source mosaics, terrain modifications, cell-face/shallow/weighted
+boundary options and native vector equality remain outside this qualification.
+
 ## Final implementation versus RASMapper
 
 | Model | Physical 2D cells | Interpolation | RASMapper (s) | Final Rust pipeline (s) | RASMapper / Rust | Raw comparison |

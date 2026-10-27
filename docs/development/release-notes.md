@@ -9,6 +9,18 @@ alone does not identify a development checkout.
 
 ### Unreleased
 
+**Deterministic Rust inundation boundaries**
+
+`RasFim.map_inundation_boundaries()` adds horizontal/plain-sloping zero-depth
+contours, bbox/polygon clipping and bounded tile/timestep concurrency.
+`RasFim.compare_inundation_boundaries()` generates native reference polygons
+through the stored-map API or accepts retained exports, and reports complete
+geometry differences and separate workflow clocks. The vector method is
+explicitly distinct from native stored polygons; existing raster methods retain
+their numerical contracts. See the [API](../api/fim.md#deterministic-inundation-boundaries)
+and [qualification](fim-mapping-performance.md#deterministic-vector-boundary-qualification)
+for terrain and engine prerequisites, measured differences and scope.
+
 **Bounded profile staging and persistent reach mapping**
 
 Selected Max and timestep rows use bounded required-native HDF slabs. Prepared

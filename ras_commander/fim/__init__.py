@@ -15,6 +15,8 @@ Main class:
         - map_horizontal_profiles(): Rust cell-constant mapping,
           with terrain and ownership reused across profiles
         - compare_with_rasmapper(): native horizontal stored-map qualification
+        - map_inundation_boundaries(): deterministic 2D zero-depth vector contours
+        - compare_inundation_boundaries(): full native polygon differences/timings
 
 Requires ``pip install "ras-commander[fim]"``. Rust mapping requires the matching engine
 executable. Horizontal mapping does not implement native
