@@ -427,22 +427,38 @@ def test_native_output_identical_at_1_and_4_threads():
     assert _hash_native_polygons(hdf, 1) == _hash_native_polygons(hdf, 4)
 
 
-def test_invalid_source_cells_native_refuses(tmp_path):
+def test_invalid_source_cells_boundary_native_polygons_refuse(tmp_path):
     """Derived AustinOyster.p01 copy: 2 invalid source cells (crossing boundaries).
 
-    Python keeps them in its stored-topology adjacency and GEOS dissolve, which
-    native polygon assembly cannot reproduce without guessing; it refuses, and
-    auto uses Python. Nothing is repaired. Explicit audited quarantine remains available
-    through HdfFluvialNative.Analysis(invalid_geometry='quarantine').
+    The Python reference omits both as ``no_polygon``, so they are in none of
+    its stored-topology adjacencies. The native boundary decides that with the
+    reference polygonizer's own rule and drops their pairs, so it equals the
+    reference, also at a threshold where pairs with them qualify (1/128 h).
+    Polygons still refuse: native region growth and assembly over the physical
+    cells cannot reproduce the reference dissolve without guessing, and auto
+    uses Python. Nothing is repaired. Explicit audited quarantine remains
+    available through HdfFluvialNative.Analysis(invalid_geometry='quarantine').
     """
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
     import mesh_invalid_cells
     hdf = mesh_invalid_cells.make_invalid_copy(fixture(mesh_invalid_cells.SOURCE_NAME),
                                                tmp_path / "AustinOyster.p01.invalid-cells.hdf")
     before = qualify.sha256(hdf)
-    calls = native_calls()
-    with pytest.raises(FluvialNativeUnsupportedError, match="2 cell\(s\) have invalid source geometry"):
-        HdfFluvialPluvial.calculate_fluvial_pluvial_boundary(hdf, engine="native")
-    used = delta(calls)
-    assert used["validate_geometry"] == 1 and used.get("NativeAnalysis.qualifying_edges", 0) == 0
+    for delta_t in (12, 1 / 128):
+        reference = HdfFluvialPluvial.calculate_fluvial_pluvial_boundary(
+            hdf, delta_t=delta_t, engine="h5py")
+        assert not reference.empty
+        calls = native_calls()
+        native = HdfFluvialPluvial.calculate_fluvial_pluvial_boundary(
+            hdf, delta_t=delta_t, engine="native", diagnostics=True)
+        used = delta(calls)
+        assert used["validate_geometry"] == 1 and used["NativeAnalysis.qualifying_edges"] == 1
+        assert native.attrs["fluvial_native"]["reference_omitted_cells"] == [
+            (mesh_invalid_cells.MESH, cell) for cell in mesh_invalid_cells.INVALID_CELLS]
+        assert native.attrs.pop("fluvial_engine")["used"] == "native"
+        native.attrs.clear()
+        assert list(native.columns) == list(reference.columns) and native.crs == reference.crs
+        assert native.to_wkb().equals(reference.to_wkb())
+    with pytest.raises(FluvialNativeUnsupportedError, match=r"2 cell\(s\) have invalid source geometry"):
+        HdfFluvialPluvial.generate_fluvial_pluvial_polygons(hdf, engine="native")
     assert qualify.sha256(hdf) == before

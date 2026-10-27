@@ -36,7 +36,7 @@ from ..Decorators import standardize_input, log_call
 from .HdfResultsMesh import HdfResultsMesh
 from ..LoggingConfig import get_logger
 from ..fast_hdf import reraise_required
-from ..fast_hdf import backend_scope
+from ..fast_hdf import backend_scope, read_typed
 from pathlib import Path
 
 logger = get_logger(__name__)
@@ -112,12 +112,67 @@ def _hours_to_ms(value, name):
     return int(ms)
 
 
-def _native_snapshot(hdf_path, retain_faces):
+def _reference_omitted_cells(hdf_path, analysis, invalid):
+    """Which cells with invalid native rings the Python reference leaves out of its analysis.
+
+    The reference analyses the cells ``HdfMesh.get_mesh_cell_polygons``
+    returns. Its polygonizer (``HdfMesh._reference_mesh_cell_polygons``)
+    omits a cell whose face span is out of range, that references a face
+    absent from ``get_mesh_cell_faces``, that has fewer than three faces, or
+    whose face lines ``shapely.ops.polygonize`` turns into no polygon (for
+    example a self-intersecting ring); it keeps any other cell, even an
+    invalid or multi-polygon one. That rule is applied here, to the same face
+    lines, for each cell whose native ring is invalid. A cell with a valid
+    native ring uses every face of its cell once and is kept by the reference,
+    as the native path already relies on. Returns ``{(mesh_index, cell_id)}``
+    in ``analysis.sources`` identities.
+    """
+    from shapely.ops import polygonize
+    suspects = defaultdict(list)
+    for index, _ in invalid:
+        mesh_index, cell = analysis.sources[index]
+        suspects[mesh_index].append(int(cell))
+    faces = HdfMesh.get_mesh_cell_faces(hdf_path)
+    if faces.empty:
+        raise FluvialNativeUnsupportedError("no face geometry to apply the reference polygonizer")
+    omitted = set()
+    with h5py.File(hdf_path, "r") as hdf_file:
+        for mesh_index, cells in sorted(suspects.items()):
+            mesh_name = analysis.meshes[mesh_index]
+            base = f"Geometry/2D Flow Areas/{mesh_name}"
+            info = read_typed(hdf_file[f"{base}/Cells Face and Orientation Info"])
+            values = read_typed(hdf_file[f"{base}/Cells Face and Orientation Values"])[:, 0]
+            lines = faces[faces["mesh_name"] == mesh_name].set_index("face_id").geometry
+            if not lines.index.is_unique:
+                raise FluvialNativeUnsupportedError(
+                    f"mesh {mesh_name!r}: duplicate face IDs; the reference keeps the last one")
+            for cell in cells:
+                start, length = (int(value) for value in info[cell, :2])
+                if (start < 0 or length < 0 or start > len(values)
+                        or start + length > len(values)):
+                    omitted.add((mesh_index, cell))
+                    continue
+                face_ids = values[start:start + length]
+                if any(face_id not in lines.index for face_id in face_ids) or length < 3:
+                    omitted.add((mesh_index, cell))
+                    continue
+                if not list(polygonize([lines.loc[face_id] for face_id in face_ids])):
+                    omitted.add((mesh_index, cell))
+    return omitted
+
+
+def _native_snapshot(hdf_path, retain_faces, *, reference_omissions=False):
     """Immutable native snapshot built from Python-compatible inputs, or unsupported.
 
     Several meshes are analysed in isolation under (mesh_name, cell_id)
     identities, as the Python reference keys them; the face graph never
     connects cells of different meshes.
+
+    With ``reference_omissions`` it returns ``(analysis, omitted)``: when some
+    cells have invalid source geometry, ``omitted`` is the set of
+    ``(mesh_index, cell_id)`` the reference leaves out of its analysis (see
+    :func:`_reference_omitted_cells`), else empty. Without it, invalid source
+    geometry is unsupported.
     """
     # Same availability and API-version gate (fast_hdf.API 11) as every other native read.
     from .. import fast_hdf
@@ -162,14 +217,20 @@ def _native_snapshot(hdf_path, retain_faces):
                                  retain_faces=retain_faces)
     from .HdfFluvialNative import _native
     invalid = _native("validate_geometry", list(analysis.points), list(analysis.rings))
+    if invalid and reference_omissions:
+        # The boundary uses no cell geometry, only which cells the reference
+        # analyses: decide that for these cells with the reference's own rule.
+        return analysis, _reference_omitted_cells(hdf_path, analysis, invalid)
     if invalid:
-        # Python dissolves invalid cell polygons with GEOS (and, without stored
-        # topology, drops them from adjacency); native polygon assembly cannot
-        # reproduce either without guessing.
+        # The reference omits cells whose faces do not polygonize and dissolves
+        # the rest with GEOS; native region growth and polygon assembly over
+        # the physical cells cannot reproduce that without guessing.
+        cells = [(analysis.meshes[analysis.sources[index][0]], analysis.sources[index][1])
+                 for index, _ in invalid[:5]]
         raise FluvialNativeUnsupportedError(
             f"{len(invalid)} cell(s) have invalid source geometry, which the native engine "
-            f"does not reproduce; e.g. vertices {[index for index, _ in invalid[:5]]}")
-    return analysis
+            f"does not reproduce; e.g. (mesh, cell) {cells}")
+    return (analysis, set()) if reference_omissions else analysis
 
 
 _PYTHON_POLICY_REASON = "RAS_COMMANDER_FAST_HDF selects the Python backend"
@@ -839,12 +900,17 @@ class HdfFluvialPluvial:
         cells share (unrounded stored coordinates, line-merged by the same
         ``_merge_shared_pieces`` helper, so a MultiLineString when the shared
         faces are not contiguous).
+
+        A cell the reference omits from its polygons (see
+        ``_reference_omitted_cells``) is in no reference adjacency, so no pair
+        with it is output. The predicate is per pair, so dropping those pairs
+        leaves exactly the reference's.
         """
         import time
         delta_ms = _hours_to_ms(delta_t, "delta_t")
         timings = {}
         begin = time.perf_counter()
-        analysis = _native_snapshot(hdf_path, retain_faces=True)
+        analysis, omitted = _native_snapshot(hdf_path, retain_faces=True, reference_omissions=True)
         timings["snapshot_seconds"] = time.perf_counter() - begin
         begin = time.perf_counter()
         edges = analysis.qualifying_edges(delta_ms)
@@ -854,6 +920,8 @@ class HdfFluvialPluvial:
             (mesh, a), (other, b) = analysis.sources[i], analysis.sources[j]
             if mesh != other:
                 raise ValueError(f"native face graph links meshes {mesh} and {other}")
+            if (mesh, a) in omitted or (mesh, b) in omitted:
+                continue
             pairs.append((str(analysis.meshes[mesh]), min(a, b), max(a, b), mesh))
         pairs.sort()
         lines, merged = [], 0
@@ -864,8 +932,9 @@ class HdfFluvialPluvial:
         if min_line_length is not None:
             lines = [line for line in lines if line.length >= min_line_length]
         boundary_gdf = gpd.GeoDataFrame(geometry=lines, crs=analysis.crs)
-        boundary_gdf.attrs["fluvial_native"] = {"timings": timings, "multi_face_pairs": merged,
-                                                "qualifying_edges": len(edges)}
+        boundary_gdf.attrs["fluvial_native"] = {
+            "timings": timings, "multi_face_pairs": merged, "qualifying_edges": len(edges),
+            "reference_omitted_cells": sorted((analysis.meshes[m], c) for m, c in omitted)}
         logger.info(f"Fluvial/pluvial boundary (native): {len(boundary_gdf)} line(s), delta_t={delta_t} hr.")
         return boundary_gdf
 
