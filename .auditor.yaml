@@ -16,7 +16,8 @@ exception_classes:
     reason: |
       Owns immutable staged mesh/profile inputs, retained cell geometry, source
       identities and a lock across repeated reach requests. Context-manager and
-      explicit close semantics release its temporary files and geometry.
+      explicit close semantics release its temporary files, geometry and an
+      optional capability-detected native child process and bounded caches.
     category: utilities
     instantiation_required: true
     example: |

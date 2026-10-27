@@ -9,6 +9,18 @@ alone does not identify a development checkout.
 
 ### Unreleased
 
+**Bounded profile staging and persistent reach mapping**
+
+Selected Max and timestep rows use bounded required-native HDF slabs. Prepared
+sloping contexts use Fast-Map 0.9's persistent-session capability to retain one
+Rust process, pool, mesh/stencils, decoded terrain blocks and a bounded
+last-window/plain-weight cache. `native_session=False` preserves the fresh-CLI
+control; older engines keep that behavior. Source changes close the context,
+and failures reject partial products. See the
+[catalog benchmarks](fim-mapping-performance.md#prepared-model-contexts-across-reach-requests)
+for raw-equality checks and measured reuse gains. Cell-face donor-history
+evaluation and zero-added-cutoff behavior remain unchanged.
+
 **Native fluvial-pluvial boundary on meshes with invalid cells**
 
 `HdfFluvialPluvial.calculate_fluvial_pluvial_boundary` no longer refuses the

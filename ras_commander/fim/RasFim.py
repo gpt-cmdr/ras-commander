@@ -264,6 +264,7 @@ class RasFim:
         corner_elevation_source: str = "auto",
         engine_path: Optional[PathLike] = None, threads: int = 1,
         max_working_mib: int = 1024, max_prepared_mib: int = 1024,
+        native_session: bool = True,
     ) -> "FimPreparedSlopingModel":
         """Prepare fixed 2D sloping inputs for repeated reach/AOI requests.
 
@@ -274,8 +275,11 @@ class RasFim:
         ``postprocessing_hdf`` optionally supplies a prepared native corner
         cache. ``corner_elevation_source`` is auto, geometry or mapping_cache;
         cache-only use requires the adjacent native preparation receipt.
-        Each mapping call still starts the native CLI and reconstructs native
-        stencils, terrain and hydraulic values. No extra depth cutoff is added.
+        ``native_session=True`` retains one serialized native process when the
+        engine advertises persistent sessions (0.9+). It reuses geometry,
+        stencils, terrain blocks and a bounded last-window/plain-weight cache.
+        False, or an older engine, starts a fresh CLI per request. Hydraulic
+        values are always reconstructed per profile. No depth cutoff is added.
 
         Use the returned context in a ``with`` block or call ``close()``.
         Changes to HDF, terrain, engine or resolved source-text geometry
@@ -283,8 +287,11 @@ class RasFim:
         Calls are serialized; timestep parallelism is controlled per request
         with ``max_inflight_profiles``. ``max_prepared_mib`` admits estimated
         retained geometry plus actual staged bytes, independently of the
-        per-request ``max_working_mib``. Neither is a hard RSS limit; transient
-        HDF reads and preparation allocations are outside retained admission.
+        per-request ``max_working_mib``. Persistent requests additionally admit
+        a 64 MiB retained window/weight budget. Neither is a hard RSS limit;
+        decoder and preparation allocations are outside retained admission.
+        Numeric profile staging uses native-HDF slabs of at most 8 MiB source
+        values, with a bounded float32 conversion buffer.
 
         Returns:
             FimPreparedSlopingModel: Owned inputs with ``map_profiles``,
@@ -303,6 +310,7 @@ class RasFim:
             corner_elevation_source=corner_elevation_source,
             engine_path=engine_path, threads=threads,
             max_working_mib=max_working_mib, max_prepared_mib=max_prepared_mib,
+            native_session=native_session,
         )
 
     @staticmethod

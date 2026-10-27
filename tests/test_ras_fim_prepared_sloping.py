@@ -64,6 +64,35 @@ def equal_products(left, right):
                 )
 
 
+def test_native_session_reuses_geometry_window_weights_and_closes_process(case, tmp_path):
+    from ras_commander import RasFim
+
+    if not RasFim.get_engine_info(case["engine"])["method"]["sloping"].get("persistent_session"):
+        pytest.skip("engine does not advertise persistent sessions")
+    profiles = {"Max": "Max"}
+    with RasFim.prepare_sloping_model(case["hdf"], case["terrain"], profiles=profiles, engine_path=case["engine"], threads=4, max_working_mib=4096) as prepared:
+        first = prepared.map_profiles(tmp_path / "first")
+        process = prepared._native_session.process
+        second = prepared.map_profiles(tmp_path / "second")
+        assert prepared._native_session.process.pid == process.pid
+        session = second.attrs["performance"]["engine_report"]["session"]
+        assert session["geometry_reused"] and session["terrain_reused"] and session["window_reused"]
+        assert 0 < session["pixel_weight_cache_bytes"] <= 32 << 20
+        equal_products(first, second)
+        reference = RasFim.map_sloping_profiles(case["hdf"], case["terrain"], tmp_path / "reference", profiles=profiles, engine_path=case["engine"], threads=4, max_working_mib=4096)
+        equal_products(second, reference)
+        process.kill()
+        process.wait()
+        from ras_commander.fim.errors import FimEngineError
+        with pytest.raises(FimEngineError, match="exited unexpectedly"):
+            prepared.map_profiles(tmp_path / "dead-session")
+        assert not list((tmp_path / "dead-session").glob("*.tif"))
+        recovered = prepared.map_profiles(tmp_path / "explicit-retry")
+        assert prepared._native_session.process.pid != process.pid
+        equal_products(recovered, reference)
+    assert process.poll() is not None
+
+
 @pytest.mark.parametrize("enhanced", [False, True])
 def test_repeated_aois_reuse_inputs_and_preserve_bits(
     case, enhanced, tmp_path, monkeypatch
@@ -152,8 +181,8 @@ def test_repeated_aois_reuse_inputs_and_preserve_bits(
             results.append((result, aoi))
             assert result.attrs["performance"]["profile_views_prepared"] == 0
             assert (
-                result.attrs["performance"]["prepared_context"]["native_state_reused"]
-                is False
+                result.attrs["performance"]["prepared_context"]["native_session_enabled"]
+                is prepared._reuse_native
             )
         assert counts == dict(polygons=1, mesh=1)
         for index, (result, aoi) in enumerate(results):
@@ -377,3 +406,50 @@ def test_failed_preparation_removes_staged_files(case, tmp_path, monkeypatch, fa
             case["hdf"], case["terrain"], engine_path=case["engine"], **options
         )
     assert all(not path.exists() for path in created)
+
+
+def test_session_drains_inflight_timeout_before_accepting_success(case, tmp_path, monkeypatch):
+    """An already-running timeout must finish before a child can be reused."""
+    from ras_commander import RasFim
+    from ras_commander.fim import _sloping
+    from ras_commander.fim.errors import FimEngineError
+
+    if not RasFim.get_engine_info(case["engine"])["method"]["sloping"].get("persistent_session"):
+        pytest.skip("engine does not advertise persistent sessions")
+
+    timers = []
+
+    class InflightTimer:
+        def __init__(self, interval, callback):
+            self.callback = callback
+            self.joined = False
+            self.cancelled = False
+            timers.append(self)
+
+        def start(self):
+            pass
+
+        def cancel(self):
+            self.cancelled = True
+
+        def join(self):
+            # Model a callback that passed its cancellation gate before cancel,
+            # then resumes at the completion fence.
+            assert self.cancelled
+            if not self.joined:
+                self.joined = True
+                self.callback()
+
+    with RasFim.prepare_sloping_model(
+        case["hdf"], case["terrain"], profiles={"Max": "Max"},
+        engine_path=case["engine"], threads=4, max_working_mib=4096,
+    ) as prepared:
+        with monkeypatch.context() as patch:
+            patch.setattr(_sloping.threading, "Timer", InflightTimer)
+            with pytest.raises(FimEngineError, match="timed out"):
+                prepared.map_profiles(tmp_path / "expired", timeout=60)
+        assert len(timers) == 1 and timers[0].joined
+        assert prepared._native_session is None
+        assert not list((tmp_path / "expired").glob("*.tif"))
+        recovered = prepared.map_profiles(tmp_path / "retry")
+        assert list(recovered.status) == ["complete"]

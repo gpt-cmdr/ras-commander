@@ -293,12 +293,21 @@ staged once, even when several names refer to the same result.
 
 The context retains physical cell polygons and their spatial index, model
 scope, engine capabilities, terrain metadata, complete staged mesh arrays and
-the selected WSE rows in immutable temporary files. It does not retain a
-native process: each request starts the CLI, rebuilds Rust interpolation
-stencils and decodes its terrain window. Hydraulic connectivity, face values
-and shallow-cell decisions are computed for each profile. Chunked HDF
-staging, persistent native terrain/stencil caches and pixel-weight caches are
-outside this increment.
+the selected WSE rows in immutable temporary files. Max values and selected
+timesteps are staged through required-native HDF reads in spatial slabs of at
+most 8 MiB source values, with a bounded float32 conversion buffer.
+
+With Fast-Map 0.9 or a later compatible engine advertising `persistent_session`,
+the default `native_session=True` retains one Rust process and Rayon pool. It
+reuses immutable mesh/stencil geometry and the bounded 64 MiB terrain block
+cache across reach requests. A separate 64 MiB budget retains at most the last
+small output window's ownership/terrain and up to 32 MiB of plain-sloping pixel
+weights. Larger windows run without retained window data. Changing the AOI
+invalidates that window cache; complete hydraulic topology remains available.
+Cell-face rendering keeps its original weight/donor-history evaluation path.
+Hydraulic connectivity, face values and shallow decisions are recomputed for
+each profile. Set `native_session=False` for a fresh CLI on every request.
+Older engines retain the same CLI-per-request behavior.
 
 Each request resolves its bbox or polygon, plans the output window, validates
 selected cell overlaps, builds ownership and raster arrays, and writes its
