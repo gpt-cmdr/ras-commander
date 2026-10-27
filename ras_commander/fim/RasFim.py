@@ -257,6 +257,7 @@ class RasFim:
     def prepare_sloping_model(
         hdf_path: PathLike, terrain_path: PathLike, *,
         profiles: Optional[Dict[str, Union[str, int]]] = None,
+        wsel_profiles: Optional[pd.DataFrame] = None,
         render_mode: str = "sloping",
         reduce_shallow_to_horizontal: bool = False,
         use_depth_weighted_faces: bool = False,
@@ -270,6 +271,11 @@ class RasFim:
         ``profiles`` maps names to Max or stored timestep indices, as in
         :meth:`map_sloping_profiles`. Geometry, spatial index and complete
         staged mesh/WSE inputs are reused. Repeated selectors share files.
+        Alternatively pass ``wsel_profiles`` as documented by
+        :meth:`map_sloping_profiles`, leaving ``profiles=None``. Values and
+        keys are copied and staged during preparation; later caller edits
+        do not change the prepared profiles. ``max_prepared_mib`` also admits
+        the planned caller-vector snapshot. ``info`` records its provenance.
         Rendering options and threads are fixed for the context's lifetime.
         ``postprocessing_hdf`` optionally supplies a prepared native corner
         cache. ``corner_elevation_source`` is auto, geometry or mapping_cache;
@@ -296,7 +302,7 @@ class RasFim:
         from ._sloping_context import FimPreparedSlopingModel
 
         return FimPreparedSlopingModel(
-            hdf_path, terrain_path, profiles=profiles, render_mode=render_mode,
+            hdf_path, terrain_path, profiles=profiles, wsel_profiles=wsel_profiles, render_mode=render_mode,
             reduce_shallow_to_horizontal=reduce_shallow_to_horizontal,
             use_depth_weighted_faces=use_depth_weighted_faces,
             postprocessing_hdf=postprocessing_hdf,
@@ -310,6 +316,7 @@ class RasFim:
     def map_sloping_profiles(
         hdf_path: PathLike, terrain_path: PathLike, output_folder: PathLike, *,
         profiles: Optional[Dict[str, Union[str, int]]] = None,
+        wsel_profiles: Optional[pd.DataFrame] = None,
         render_mode: str = "sloping",
         reduce_shallow_to_horizontal: bool = False,
         use_depth_weighted_faces: bool = False,
@@ -330,6 +337,27 @@ class RasFim:
         timestep indices; omitted selects ``{"Max": "Max"}``. Geometry,
         terrio ownership and terrain are reused across profiles. ``threads``
         bounds native reconstruction and pixel workers (1 through 64).
+
+        Alternatively supply ``wsel_profiles`` and leave ``profiles=None``.
+        This wide DataFrame has ``mesh_name``, integer ``cell_id``, and one
+        real numeric column per named profile. Include every cell of every
+        HDF mesh, including ghost cells, exactly once. Row order is arbitrary;
+        IDs are zero-based HDF cell IDs, local to each exact mesh name.
+        Missing, duplicate, extra or unknown IDs are errors. NaN explicitly
+        means dry and is staged as finite float32 minimum. Other values cast
+        to float32 without aggregation or decimal rounding; infinity and
+        overflow are errors. Finite stored dry sentinels remain unchanged.
+        Values are absolute elevations in the same vertical units and datum
+        as the original HDF and selected terrain; no conversion is inferred.
+        ``hdf_path`` binds identities and hydraulic geometry. Optional table
+        attrs ``fim_source_hdf`` and ``crs`` must match when present. Matching
+        numeric IDs alone cannot prove a caller used the right source model.
+        Do not mutate the input during the call. Prepared contexts own their
+        staged snapshot after construction.
+
+        A supplied aggregate or healed terrain does not acquire native parity
+        from selector-equivalence tests. The selected rendering options remain
+        explicit, and the manifest records caller-vector hashes and scope.
 
         Defaults to plain cell-corner sloping. ``render_mode="slopingPretty"``
         includes cell faces and accepts the shallow/depth-weighting flags.
@@ -360,6 +388,9 @@ class RasFim:
             output_folder: New or empty directory for products and manifest.
             profiles: Output names mapped to ``"Max"`` or nonnegative
                 zero-based stored timestep indices. Defaults to Max.
+            wsel_profiles: Optional complete cell-keyed WSEL table, mutually
+                exclusive with profiles. Requires physical and ghost rows in
+                every mesh. See ``fim_cell_wsel_profiles`` schema and above.
             render_mode: ``"sloping"`` for corners or ``"slopingPretty"`` for
                 corners and faces. Defaults to plain sloping.
             reduce_shallow_to_horizontal: Native connectivity-based horizontal
@@ -401,18 +432,22 @@ class RasFim:
             DataFrame: ``fim_product_manifest`` rows with timing evidence in
             ``attrs["performance"]`` and the JSON manifest. ``mapping_scope``
             and ``model_scope`` attributes identify the included model elements.
+            Supplied vectors add ``attrs["profile_source"]`` with canonical
+            per-mesh/profile hashes for rendered requests.
 
         Raises:
             FimUnsupportedError: Unsupported model, geometry, AOI or terrain.
             FimEngineNotFoundError: The optional executable is unavailable.
             FimEngineError: Engine failure, inconsistent output or changed input.
-            ValueError: Invalid profile selectors or resource options.
+            ValueError: Invalid profile selectors, supplied identities/values,
+                source metadata or resource options.
+            TypeError: wsel_profiles is not a pandas DataFrame.
             FileExistsError: The output directory is not empty.
         """
         _require_dependencies(triangulation=False)
         from . import _sloping
         return _sloping.map_profiles(hdf_path, terrain_path, output_folder,
-            profiles=profiles, render_mode=render_mode,
+            profiles=profiles, wsel_profiles=wsel_profiles, render_mode=render_mode,
             reduce_shallow_to_horizontal=reduce_shallow_to_horizontal,
             use_depth_weighted_faces=use_depth_weighted_faces,
             postprocessing_hdf=postprocessing_hdf,

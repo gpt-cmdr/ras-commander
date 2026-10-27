@@ -28,6 +28,7 @@ class FimPreparedSlopingModel:
         terrain_path,
         *,
         profiles=None,
+        wsel_profiles=None,
         render_mode="sloping",
         reduce_shallow_to_horizontal=False,
         use_depth_weighted_faces=False,
@@ -54,7 +55,6 @@ class FimPreparedSlopingModel:
         )
         self._postprocessing_hdf = postprocessing_hdf
         self._corner_elevation_source = corner_elevation_source
-        self._selected = _sloping._validate_selection(profiles)
         self._threads = _positive_int(threads, "threads")
         if self._threads > 64:
             raise ValueError("threads must be <= 64")
@@ -62,6 +62,12 @@ class FimPreparedSlopingModel:
         prepared_budget = _positive_int(max_prepared_mib, "max_prepared_mib") * (
             1 << 20
         )
+        self._supplied = wsel_profiles is not None
+        supplied = None
+        if self._supplied:
+            from ._supplied_wsel import snapshot
+            supplied = snapshot(wsel_profiles, hdf_path, profiles=profiles, max_bytes=prepared_budget)
+        self._selected = supplied.selection if supplied is not None else _sloping._validate_selection(profiles)
         self._hdf = Path(hdf_path).resolve(strict=True)
         self._terrain = Path(terrain_path).resolve(strict=True)
         self._engine = _engine.find_engine(engine_path)
@@ -94,6 +100,8 @@ class FimPreparedSlopingModel:
                 )
             if self._cells.empty:
                 raise ValueError("sloping mapping requires physical 2D cell polygons")
+            if supplied is not None:
+                supplied.check_crs(self._cells.crs)
             # Planned retained frame/GEOS/index allowance, not an RSS limit.
             geometry_bytes = (
                 int(self._cells.memory_usage(deep=True).sum())
@@ -122,15 +130,18 @@ class FimPreparedSlopingModel:
                 max_staged_bytes=prepared_budget - geometry_bytes,
             )
             mesh_bytes = sum(p.stat().st_size for p in root.iterdir())
-            units, views, values_bytes = _sloping._stage_profiles(
-                self._hdf,
-                root,
-                self._meshes,
-                max_values,
-                self._selected,
-                deduplicate=True,
-                max_staged_bytes=prepared_budget - geometry_bytes - mesh_bytes,
-            )
+            profile_source = None
+            if supplied is not None:
+                from ._supplied_wsel import stage
+                units, values_bytes, profile_source = stage(supplied, root, self._meshes,
+                    max_staged_bytes=prepared_budget - geometry_bytes - mesh_bytes)
+                views = 0
+            else:
+                units, views, values_bytes = _sloping._stage_profiles(
+                    self._hdf, root, self._meshes, max_values, self._selected,
+                    deduplicate=True,
+                    max_staged_bytes=prepared_budget - geometry_bytes - mesh_bytes,
+                )
             self._mesh_files = [str(root / name) for name in files]
             self._units = {
                 unit["id"]: dict(
@@ -145,7 +156,7 @@ class FimPreparedSlopingModel:
                 physical_cells=len(self._cells),
                 mesh_count=len(self._meshes),
                 corner_elevations={m["mesh_name"]: m.get("corner_elevations") for m in self._meshes},
-                unique_selectors=len(set(self._selected.values())),
+                unique_selectors=0 if self._supplied else len(set(self._selected.values())),
                 profile_views_prepared=views,
                 planned_geometry_bytes=geometry_bytes,
                 staged_bytes=mesh_bytes + values_bytes,
@@ -154,6 +165,8 @@ class FimPreparedSlopingModel:
                 prepare_seconds=time.perf_counter() - started,
                 native_state_reused=False,
             )
+            if profile_source is not None:
+                self._info["profile_source"] = profile_source
             self._check_sources()
             if postprocessing_hdf is not None and (Path(postprocessing_hdf).parent / "corner_elevation_receipt.json").exists():
                 validate_receipt(self._hdf, postprocessing_hdf)

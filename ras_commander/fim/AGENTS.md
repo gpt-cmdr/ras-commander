@@ -102,6 +102,15 @@ Parent `ras_commander/AGENTS.md` and root `AGENTS.md` still apply.
 
 ## Testing
 
+- Supplied `wsel_profiles` tables bind complete mesh-local cell IDs to the original
+  source HDF. Require every mesh and every physical/ghost row; never fill absent
+  IDs from Max or a timestep. NaN explicitly means dry and becomes finite float32
+  minimum; reject infinity/overflow. Preserve float32 bits and caller ordering of
+  profile columns while aligning row IDs. Caller snapshots/staged hashes identify
+  the source, and an AOI never relaxes completeness. Aggregation, decimal rounding,
+  elevation-unit/datum correctness and new-terrain qualification remain caller
+  responsibilities. The mapping terrain stays independent of hydraulic geometry.
+
 - Unit tests use synthetic frames and a simulated engine. Engine-backed tests are opt-in through
   `RAS_COMMANDER_FIM_ENGINE` and `RAS_COMMANDER_FIM_FIXTURE`; they never run HEC-RAS.
 - Do not commit fixtures, prepared inputs, engine builds, or products.
