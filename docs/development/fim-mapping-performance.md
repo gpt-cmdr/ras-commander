@@ -70,6 +70,71 @@ particular reference identities and each direction of difference rather than
 selecting a favorable native run. Hausdorff distance was omitted because the
 vertex-pair product exceeded its 25-million admission limit.
 
+### Boundary agreement and native ordering investigation
+
+The figures below use the complete, retained Davis vectors without geometry
+repair, reprojection, coordinate snapping or difference buffering. Blue is
+agreement, orange is native-only area, and purple is Rust-only area in the
+first two figures. Grey terrain supplies context. Dashed overview boxes locate
+the largest-divergence close-ups; narrow coordinate differences can be too small
+to see at these scales. All coordinates and areas use EPSG:2871 US survey feet.
+
+![Davis Max: overview agreement and close-up of the native-only filled hole.](../assets/images/fim-boundaries/davis-max.png)
+
+For Max, 7,423.019980 square feet of native-only area lies inside one Rust
+interior hole: 99.99989% of the total native-only difference. The small remainder
+and Rust-only slivers are separate coordinate differences.
+
+![Davis timestep 108: overview agreement and close-up of the native-only filled hole.](../assets/images/fim-boundaries/davis-t108.png)
+
+At timestep 108, the dominant native-only region is a 2,647.598266-square-foot
+Rust hole, accounting for 99.99981% of native-only area.
+
+![Two native Davis Max exports with one-CPU affinity: agreement and diverging interior holes.](../assets/images/fim-boundaries/davis-native-repeat.png)
+
+In the native-to-native figure, purple means run A only and orange means run B
+only. Both successful exports had 274 polygon parts and 65 holes. Nevertheless,
+one filled a 72,043.233529-square-foot hole and the other filled a different
+115,456.482041-square-foot hole. Their symmetric difference is 187,499.715569
+square feet, entirely inside interior holes of the opposite output. The 14
+watched HDF/TIFF/project input hashes were unchanged before and after each call,
+including the stored corner cache; rasmap restoration was verified.
+
+The investigation isolated an order-sensitive merge mechanism. Native contour
+workers collect results in an unordered collection and concatenate their contour
+streams. The final union assigns the first ring to the Subject set and subsequent
+rings to the Clip set, with NonZero filling evaluated for each set. Separating an
+exterior from its interior ring this way can fill a hole; evaluating all rings in
+one set preserves their winding relationship. Microsoft documents
+[`ConcurrentBag<T>` as unordered](https://learn.microsoft.com/en-us/dotnet/api/system.collections.concurrent.concurrentbag-1?view=netframework-4.8).
+
+A new isolated replay using unmodified `clipper2-rust` 1.2.0 changed only ring
+order. The separate-set merge changed a simple two-square example from area
+16,400 to 20,000 by filling its 3,600-unit hole. On retained Davis Max contours,
+changing the first ring filled the same 7,423.019980-square-foot hole visible
+above. The all-subject control retained the hole with both orders. The selected
+ring was a diagnostic counterexample, not a production rule or native parity fix.
+The executable counterexample and input format are in
+`scripts/benchmarks/rust_boundary_order/README.md`; it checks both orderings and
+both merge controls without executing HEC-RAS.
+
+This is strong evidence that collection/merge ordering explains the observed
+whole-hole instability. The exact worker partitions and contour stream order
+were not captured for each native export, so attributing every native difference
+to that mechanism remains an inference. Small intersection-coordinate differences
+also remain independent of hole topology. The one-CPU runs still had multiple
+helper threads: processor affinity restricts where threads execute and does not
+force a serial contour loop. See Microsoft's
+[processor-affinity description](https://learn.microsoft.com/en-us/dotnet/api/system.diagnostics.process.processoraffinity).
+These observations concern the tested 7.0.1 runtime and Davis inputs.
+
+Recreate figures from retained files with
+`scripts/benchmarks/fim_boundary_figures.py figure_case.json new_output`.
+The external JSON contains optional `terrain` and a `comparisons` list, each
+with `label`, `left_label`, `right_label`, `left` and `right` vector paths.
+It writes overview/close-up PNGs, a combined PDF, exact difference GeoJSONs and
+a source-hashed metrics receipt. Matplotlib is a plotting-only dependency.
+
 Reproduce Rust repeatability with
 `scripts/benchmarks/fim_boundary_compare.py case.json output_folder`.
 The external case supplies `hdf_path`, original `terrain_path`, `terrain_hdf`,
