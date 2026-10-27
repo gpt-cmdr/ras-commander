@@ -440,17 +440,13 @@ repeat calls on that model, ranked by the 0.106.1 time:
   geometry joined by position, summary times converted once per distinct
   value), so h5py mode gets it too. The remaining time in those calls is
   mostly building the Shapely geometry, which is the same in both modes.
-- The fluvial-pluvial boundary on the 87,039-cell model was not measured:
-  0.106.1 did not finish one first call plus one repeat call within the
-  harness's 1,800 s per-process limit, and the run stopped there.
 - **Small calls** (under 100 ms even on the largest models: cross sections,
   structures, boundary lines, run statistics, timestamps and the like) stay
   within a few milliseconds of 0.106.1 either way; opening the file and
   building the result dominate them. Their absolute times are on the
   [Performance](https://rascommander.info/fasthdf/performance/#small-calls-under-100-ms)
   page.
-- Timings were taken with the files in the operating system's cache;
-  cold-disk reads were not measured.
+- Timings were taken with the files in the operating system's cache.
 
 ### Geometry: convenient or fast
 
