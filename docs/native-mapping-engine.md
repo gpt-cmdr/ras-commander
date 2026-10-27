@@ -206,15 +206,17 @@ The criterion includes masks, not just values where both products are valid.
 | Bald Eagle dam break | Cell-corner sloping | 7.393 | 5.976 | 1.24× |
 | Bald Eagle bridges | Horizontal | 8.897 | 4.935 | 1.80× |
 | Bald Eagle bridges | Cell-corner sloping | 8.585 | 3.157 | 2.72× |
-| Davis pipes/conduits | Horizontal | — | — | — |
+| Davis pipes/conduits | Horizontal | 4.235 | 1.046 | 4.05× |
 | Davis pipes/conduits | Cell-corner sloping | 1.909 | 0.527 | 3.62× |
 
 These are retained 2026-10-26 Windows engine 0.7.0 measurements; 0.7.1 did not
-change these kernels. They have not been re-timed in 0.8. The Davis horizontal
-reference export failed in that benchmark run, so it supplies no timing or raw
-match result here. Earlier successful exports are retained separately; the
-reporting fix and remaining intermittent native failure are distinguished in
-the [Davis benchmark note](development/fim-mapping-performance.md#final-implementation-versus-rasmapper).
+change these kernels. Except for Davis horizontal, they have not been re-timed
+in 0.8. Davis horizontal is a fresh 0.8.0 rerun: both bands match 20,560 valid
+pixels with zero extra, missing or differing float32 pixels and no depth filter.
+It compares the complete physical footprint in both directions without a
+nodata-border rewrite or resampling. See the
+[Davis benchmark note](development/fim-mapping-performance.md#final-implementation-versus-rasmapper)
+for timing differences and the remaining intermittent native export issue.
 Comparisons cover the physical 2D footprint; Spring River, Spring Creek and
 bridges also have complete-native-grid horizontal checks. The dam native call
 includes standalone storage-area work excluded from the comparison footprint.

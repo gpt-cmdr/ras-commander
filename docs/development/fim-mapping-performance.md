@@ -20,7 +20,7 @@ Production mapping requires no HEC-RAS assemblies.
 | Bald Eagle dam break | 87,039 | Sloping: cell corners | 7.393 | 5.976 | 1.24× | Exact mask and values (2D) |
 | Bald Eagle bridges | 24,718 | Horizontal | 8.897 | 4.935 | 1.80× | Exact mask and values (2D) |
 | Bald Eagle bridges | 24,718 | Sloping: cell corners | 8.585 | 3.157 | 2.72× | Exact mask and values (2D) |
-| Davis pipes/conduits | 2,716 | Horizontal | — | — | — | Reference export failed in this run; see below |
+| Davis pipes/conduits | 2,716 | Horizontal | 4.235 | 1.046 | 4.05× | Exact mask and values (2D); fresh rerun |
 | Davis pipes/conduits | 2,716 | Sloping: cell corners | 1.909 | 0.527 | 3.62× | Exact mask and values (2D) |
 
 
@@ -30,7 +30,8 @@ WSE have identical complete validity masks and valid float32 bits within the
 physical 2D footprint. There is no added depth cutoff, reference filtering or
 resampling. Equality only where both rasters are valid is insufficient.
 
-Native exports/times were retained from the same-day reference run; Rust 0.7.0
+Except for the Davis horizontal rerun described below, native exports/times
+were retained from the same-day reference run; Rust 0.7.0
 was measured afterwards rather than interleaved. Engine 0.7.1 removes an
 unreleased control without changing these horizontal/plain-sloping kernels.
 These measurements are observations, not a universal speed guarantee.
@@ -54,18 +55,28 @@ physical 2D cells. Those pixels are excluded from comparison, but their native
 rendering time is included. Its ratio therefore compares the measured workflows,
 not equal work outside the supported scope.
 
-The Davis horizontal reference export failed with exit 99 in this benchmark
-run, so its elapsed times and ratio are unavailable. This is a run-specific
-reference failure, not a Rust mapping failure or a statement that Davis cannot
-be mapped. Earlier successful horizontal exports and comparisons are retained
-separately. PR [#677](https://github.com/gpt-cmdr/ras-commander/pull/677) fixed
-Commander's false-success reporting; the intermittent native pipe-rendering
-failure remains tracked in issue
-[#678](https://github.com/gpt-cmdr/ras-commander/issues/678). That issue records
-successful one-CPU controls and earlier comparisons using a 0.5 ft depth filter;
-those results do not replace this table's unfiltered benchmark. The successful
-Davis cell-corner and depth-weighted sloping results on this page use their
-own native references.
+The Davis horizontal row replaces an earlier failed reference export with a
+fresh 2026-10-26 rerun using the published Fast-Map 0.8.0 engine and Fast-HDF
+0.2.3. Native aggregate export succeeded with four-CPU affinity and one
+stored-map worker; Rust used four mapping and compression workers. Each band
+has 20,560 valid physical-2D pixels, with zero extra, missing or differing
+float32 pixels. Both comparison directions cover the complete physical
+footprint, without depth filtering or resampling. The Rust clock includes cell
+preparation and output delivery on its terrain grid; unlike the older
+horizontal rows, it excludes a nodata-border rewrite. Native and candidate
+affine resolutions differ by about 2.7e-13 map units per pixel; the comparison
+checks their lattice alignment within 1e-8 map units without modifying either
+output. The copied project's rasmap bytes, source HDF and terrain hashes, and
+process affinity were verified restored or unchanged. Rust was measured after
+earlier grid-delivery checks had already run mapping; imports and filesystem
+caches were warm. These are single-call observations, not a repeated or
+interleaved benchmark.
+
+This successful export does not establish a repair of the intermittent native
+pipe-rendering failure tracked in issue
+[#678](https://github.com/gpt-cmdr/ras-commander/issues/678).
+PR [#677](https://github.com/gpt-cmdr/ras-commander/pull/677) fixed Commander's
+false-success reporting. Failed export attempts remain excluded from ratios.
 
 ## Plain sloping development qualification
 
@@ -235,8 +246,20 @@ reference must use the same options and original terrain source layout.
 
 ## Roadmap and dependencies
 
-Later performance work includes chunked HDF staging, persistent native terrain
-and stencil reuse across reach requests, and bounded pixel-weight caches.
+Chunked HDF staging, persistent native terrain/stencil reuse across reach
+requests, and bounded pixel-weight caches are **not implemented**. Current
+prepared contexts retain geometry, metadata and staged mesh/WSE files; numeric
+profile staging still materializes complete selected mesh arrays. Each mapping
+request starts a fresh Rust process, prepares stencils and decodes its terrain
+window. Geometry, terrain and ownership are shared across timesteps within that
+request. These existing optimizations do not provide persistent native reuse
+across reach requests.
+
+The next performance work is chunked staging with bounded buffers, a bounded
+native session retaining terrain and stencils across requests, and measured
+pixel-weight caching with explicit memory limits and invalidation. Each change
+requires raw mask/float32 parity checks and single-map/catalog benchmarks before
+adoption.
 The engine is now separately packaged as `ras-commander-fast-map` on PyPI and
 crates.io, with Windows/Linux wheels and independent release CI. Extraction
 retains the qualified 0.8 numerical modules and their source fingerprints;
