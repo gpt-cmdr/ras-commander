@@ -341,3 +341,9 @@ preserves holes consistently; native stored boundary exports can have different
 hole topology and quantized vertices. It does not change raster mapping or
 claim native vector equality. Cell-face boundary options and multi-source
 terrain HDFs and terrain modifications are outside the initial qualification.
+
+For multi-source models, preprocess one dedicated mapping terrain and generate
+matching terrain-HDF metadata from that source before mapping. Preserve and
+verify the effective elevations, grid, CRS, nodata and source priority. Retain
+the original terrain, record provenance, and reuse the prepared pair across
+timesteps and reaches. See the [input preparation workflow](api/fim.md#deterministic-inundation-boundaries).
