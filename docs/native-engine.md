@@ -1,10 +1,12 @@
 ---
 title: Native Rust Engines
 description: RAS Commander's native Rust engines for HDF extraction and 2D flood inundation mapping, their installation, API controls, and measured performance. DSS Engine coming soon.
-social_image: assets/ras-commander-fast-hdf_social.png
-social_image_alt: "RAS Commander Fast-HDF: Native Rust HDF Engine"
+social_image: assets/ras-commander-rust-engines-dss_social.png
+social_image_alt: "RAS Commander Native Rust Engines: FAST-HDF, FAST-MAP and FAST-DSS"
 ---
 # Native Rust Engines
+
+<p align="center"><img src="../assets/ras-commander-rust-engines-dss_logo.svg" alt="RAS Commander Native Rust Engines: FAST-HDF, FAST-MAP and FAST-DSS" width="450"></p>
 
 RAS Commander uses native Rust engines for two different operations: reading
 HEC-RAS HDF data and mapping computed 2D results to depth and water surface
