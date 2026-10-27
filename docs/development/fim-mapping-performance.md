@@ -128,6 +128,20 @@ force a serial contour loop. See Microsoft's
 [processor-affinity description](https://learn.microsoft.com/en-us/dotnet/api/system.diagnostics.process.processoraffinity).
 These observations concern the tested 7.0.1 runtime and Davis inputs.
 
+The order-sensitive collection and merge are inside the native RASMapper
+implementation. Commander invokes that implementation and does not perform
+its polygon union. Headless execution can influence thread scheduling and
+therefore which native order occurs. The observed variability was reproduced
+through Commander-driven native exports; repeated standalone RASMapper GUI
+exports have not been qualified. Do not extend this evidence to a GUI-specific
+claim or to every native runtime.
+
+The accepted boundary implementation is the deterministic Rust method, with
+these native vector differences disclosed. Native references remain available
+for comparison. Exact native polygon equality is not an acceptance criterion
+for this method; full raster mask and float32 equality requirements remain
+unchanged for the qualified Depth/WSE methods.
+
 Recreate figures from retained files with
 `scripts/benchmarks/fim_boundary_figures.py figure_case.json new_output`.
 The external JSON contains optional `terrain` and a `comparisons` list, each
