@@ -225,11 +225,9 @@ def _native_snapshot(hdf_path, retain_faces, *, reference_omissions=False):
         # The reference omits cells whose faces do not polygonize and dissolves
         # the rest with GEOS; native region growth and polygon assembly over
         # the physical cells cannot reproduce that without guessing.
-        cells = [(analysis.meshes[analysis.sources[index][0]], analysis.sources[index][1])
-                 for index, _ in invalid[:5]]
         raise FluvialNativeUnsupportedError(
             f"{len(invalid)} cell(s) have invalid source geometry, which the native engine "
-            f"does not reproduce; e.g. (mesh, cell) {cells}")
+            f"does not reproduce; e.g. vertices {[index for index, _ in invalid[:5]]}")
     return (analysis, set()) if reference_omissions else analysis
 
 
