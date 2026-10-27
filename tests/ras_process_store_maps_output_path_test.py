@@ -1504,3 +1504,188 @@ def test_mapper_staging_keeps_original_if_swap_and_restore_fail(tmp_path, monkey
     assert len(backups) == 1
     assert backups[0].read_bytes() == b"irreplaceable original"
     assert not list(tmp_path.glob("*.mapper-work"))
+
+
+def _write_boundary_bundle(path, *, empty=False):
+    """Write a real ESRI polygon bundle, including an empty native-style product."""
+    gpd = pytest.importorskip("geopandas")
+    from shapely.geometry import Polygon
+
+    geometry = [] if empty else [Polygon([(0, 0), (3, 0), (3, 2), (0, 2)])]
+    frame = gpd.GeoDataFrame(
+        {"id": list(range(len(geometry)))}, geometry=geometry, crs="EPSG:32615"
+    )
+    frame.to_file(path)
+
+
+@pytest.mark.parametrize("profile", ["Max", "Min", "10JAN2000 21:00:00"])
+def test_store_maps_native_boundary_collects_value_suffix_and_restores(
+    monkeypatch, tmp_path, profile
+):
+    add_map = RasProcess._add_stored_map_to_rasmap
+    ras_obj, output_dir, destination = _configure_store_maps_test(monkeypatch, tmp_path)
+    monkeypatch.setattr(RasProcess, "_add_stored_map_to_rasmap", staticmethod(add_map))
+    monkeypatch.setattr(
+        RasProcess, "get_plan_timestamps", staticmethod(lambda *args: [profile])
+    )
+    rasmap = tmp_path / "Demo.rasmap"
+    original = rasmap.read_bytes()
+    safe = profile.replace(":", " ")
+    filename = f"Inundation Boundary ({safe} Value_0).shp"
+
+    def helper(**kwargs):
+        params = ET.parse(rasmap).find(".//MapParameters")
+        assert params.get("MapType") == "depth"
+        assert params.get("OutputMode") == "Stored Polygon Specified Depth"
+        assert params.get("ContourPolygonValue") == "0"
+        assert params.get("ArrivalDepth") is None
+        assert params.get("ProfileName") == profile
+        expected_index = (
+            -2147483648 if profile == "Min" else 2147483647 if profile == "Max" else 0
+        )
+        assert int(params.get("ProfileIndex")) == expected_index
+        assert params.get("StoredFilename").endswith(
+            f"Inundation Boundary ({safe}).shp"
+        )
+        _write_boundary_bundle(output_dir / filename)
+        # A different profile and a nonzero depth must not be claimed.
+        _write_boundary_bundle(
+            output_dir / f"Inundation Boundary ({safe} extra Value_0).shp"
+        )
+        _write_boundary_bundle(output_dir / f"Inundation Boundary ({safe} Value_2).shp")
+        return subprocess.CompletedProcess([], 0, "", "")
+
+    monkeypatch.setattr(ras_process_module, "run_store_all_maps_helper", helper)
+    result = RasProcess.store_maps(
+        "01",
+        profile=profile,
+        wse=False,
+        depth=False,
+        velocity=False,
+        inundation_boundary=True,
+        output_path=destination,
+        fix_georef=False,
+        ras_object=ras_obj,
+    )
+    assert result == {"inundation_boundary": [destination / filename]}
+    assert rasmap.read_bytes() == original
+    for ext in (".shp", ".shx", ".dbf", ".prj"):
+        assert (destination / filename).with_suffix(ext).is_file()
+        assert not (output_dir / filename).with_suffix(ext).exists()
+
+
+@pytest.mark.parametrize(
+    "product",
+    [
+        "missing",
+        "empty",
+        "truncated",
+        "incomplete",
+        "stale",
+        "stale_sidecars",
+        "legacy_name",
+    ],
+)
+def test_store_maps_boundary_rejects_unusable_products(
+    monkeypatch, tmp_path, caplog, product
+):
+    ras_obj, output_dir, destination = _configure_store_maps_test(monkeypatch, tmp_path)
+    rasmap = tmp_path / "Demo.rasmap"
+    original = rasmap.read_bytes()
+    filename = (
+        "Inundation Boundary (Max).shp"
+        if product == "legacy_name"
+        else "Inundation Boundary (Max Value_0).shp"
+    )
+    path = output_dir / filename
+    if product in ("stale", "stale_sidecars"):
+        _write_boundary_bundle(path)
+    stale_bytes = path.read_bytes() if path.exists() else None
+
+    def helper(**kwargs):
+        if product == "stale_sidecars":
+            # Only the SHP is refreshed; old index/attributes are not a new bundle.
+            import os
+
+            stat = path.stat()
+            os.utime(path, ns=(stat.st_atime_ns, stat.st_mtime_ns + 1_000_000))
+        elif product not in ("missing", "stale"):
+            _write_boundary_bundle(path, empty=product == "empty")
+            if product == "truncated":
+                path.write_bytes(path.read_bytes()[:104])
+            if product == "incomplete":
+                path.with_suffix(".dbf").unlink()
+        return subprocess.CompletedProcess([], 0, "", "")
+
+    monkeypatch.setattr(ras_process_module, "run_store_all_maps_helper", helper)
+    result = RasProcess.store_maps(
+        "01",
+        wse=False,
+        depth=False,
+        velocity=False,
+        inundation_boundary=True,
+        output_path=destination,
+        fix_georef=False,
+        ras_object=ras_obj,
+    )
+    assert rasmap.read_bytes() == original
+    if product == "legacy_name":
+        assert result == {"inundation_boundary": [destination / filename]}
+    else:
+        assert result == {}
+        assert "No fresh nonempty native inundation boundary" in caplog.text
+    if product == "stale":
+        assert path.read_bytes() == stale_bytes
+        assert not (destination / filename).exists()
+
+
+def test_store_maps_boundary_helper_failure_restores_rasmap(monkeypatch, tmp_path):
+    ras_obj, output_dir, destination = _configure_store_maps_test(monkeypatch, tmp_path)
+    rasmap = tmp_path / "Demo.rasmap"
+    original = rasmap.read_bytes()
+
+    def helper(**kwargs):
+        rasmap.write_text("<changed/>")
+        return subprocess.CompletedProcess([], 7, "", "native boundary failed")
+
+    monkeypatch.setattr(ras_process_module, "run_store_all_maps_helper", helper)
+    with pytest.raises(RuntimeError, match="native boundary failed"):
+        RasProcess.store_maps(
+            "01",
+            wse=False,
+            depth=False,
+            velocity=False,
+            inundation_boundary=True,
+            fix_georef=False,
+            ras_object=ras_obj,
+        )
+    assert rasmap.read_bytes() == original
+
+
+def test_store_maps_boundary_configuration_failure_restores_rasmap(
+    monkeypatch, tmp_path
+):
+    ras_obj, _, _ = _configure_store_maps_test(monkeypatch, tmp_path)
+    rasmap = tmp_path / "Demo.rasmap"
+    original = rasmap.read_bytes()
+
+    def fail_configuration(*args, **kwargs):
+        rasmap.write_text("<changed/>")
+        return False
+
+    monkeypatch.setattr(
+        RasProcess, "_add_stored_map_to_rasmap", staticmethod(fail_configuration)
+    )
+    with pytest.raises(
+        RuntimeError, match="Could not configure native inundation boundary"
+    ):
+        RasProcess.store_maps(
+            "01",
+            wse=False,
+            depth=False,
+            velocity=False,
+            inundation_boundary=True,
+            fix_georef=False,
+            ras_object=ras_obj,
+        )
+    assert rasmap.read_bytes() == original
