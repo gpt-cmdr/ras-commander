@@ -210,8 +210,11 @@ The criterion includes masks, not just values where both products are valid.
 | Davis pipes/conduits | Cell-corner sloping | 1.909 | 0.527 | 3.62× |
 
 These are retained 2026-10-26 Windows engine 0.7.0 measurements; 0.7.1 did not
-change these kernels. They have not been re-timed in 0.8. Davis horizontal native
-export failed, so no ratio or horizontal match is claimed for that case.
+change these kernels. They have not been re-timed in 0.8. The Davis horizontal
+reference export failed in that benchmark run, so it supplies no timing or raw
+match result here. Earlier successful exports are retained separately; the
+reporting fix and remaining intermittent native failure are distinguished in
+the [Davis benchmark note](development/fim-mapping-performance.md#final-implementation-versus-rasmapper).
 Comparisons cover the physical 2D footprint; Spring River, Spring Creek and
 bridges also have complete-native-grid horizontal checks. The dam native call
 includes standalone storage-area work excluded from the comparison footprint.

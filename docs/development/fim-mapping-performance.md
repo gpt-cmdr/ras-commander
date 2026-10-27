@@ -20,7 +20,7 @@ Production mapping requires no HEC-RAS assemblies.
 | Bald Eagle dam break | 87,039 | Sloping: cell corners | 7.393 | 5.976 | 1.24× | Exact mask and values (2D) |
 | Bald Eagle bridges | 24,718 | Horizontal | 8.897 | 4.935 | 1.80× | Exact mask and values (2D) |
 | Bald Eagle bridges | 24,718 | Sloping: cell corners | 8.585 | 3.157 | 2.72× | Exact mask and values (2D) |
-| Davis pipes/conduits | 2,716 | Horizontal | — | — | — | Native export failed |
+| Davis pipes/conduits | 2,716 | Horizontal | — | — | — | Reference export failed in this run; see below |
 | Davis pipes/conduits | 2,716 | Sloping: cell corners | 1.909 | 0.527 | 3.62× | Exact mask and values (2D) |
 
 
@@ -52,9 +52,20 @@ are uncontrolled.
 The dam-break reference also renders standalone storage-area surfaces outside
 physical 2D cells. Those pixels are excluded from comparison, but their native
 rendering time is included. Its ratio therefore compares the measured workflows,
-not equal work outside the supported scope. Davis horizontal native export
-failed with exit 99; no time or ratio is claimed. See issue
-[#678](https://github.com/gpt-cmdr/ras-commander/issues/678).
+not equal work outside the supported scope.
+
+The Davis horizontal reference export failed with exit 99 in this benchmark
+run, so its elapsed times and ratio are unavailable. This is a run-specific
+reference failure, not a Rust mapping failure or a statement that Davis cannot
+be mapped. Earlier successful horizontal exports and comparisons are retained
+separately. PR [#677](https://github.com/gpt-cmdr/ras-commander/pull/677) fixed
+Commander's false-success reporting; the intermittent native pipe-rendering
+failure remains tracked in issue
+[#678](https://github.com/gpt-cmdr/ras-commander/issues/678). That issue records
+successful one-CPU controls and earlier comparisons using a 0.5 ft depth filter;
+those results do not replace this table's unfiltered benchmark. The successful
+Davis cell-corner and depth-weighted sloping results on this page use their
+own native references.
 
 ## Plain sloping development qualification
 
