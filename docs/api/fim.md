@@ -930,6 +930,16 @@ from a TIFF/HDF pair: supply a terrain with no external modifications. An empty
 modification group is permitted and recorded. A replacement effective TIFF also
 needs matching regenerated terrain metadata and separate qualification.
 
+For a model with multiple terrain sources, first preprocess a dedicated single
+mapping terrain. Preserve source priority, CRS, grid, nodata and effective
+elevations, then generate its matching terrain HDF from that single source.
+Keep the project terrain unchanged and verify the prepared surface against the
+original effective terrain. Record preparation provenance and reuse this
+TIFF/HDF pair across all reach and timestep requests. This is a one-time
+preparation workflow; a flattened TIFF paired with the old multi-source HDF
+does not satisfy the input contract. Newly prepared layouts require qualification
+before numerical equivalence is claimed.
+
 The method ID is `deterministic-zero-depth-contours/1`. It uses a stable
 all-subject NonZero union and a 0.001 projected-coordinate-unit lattice,
 retaining canonical exterior and interior rings. Native RASMapper boundary

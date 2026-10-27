@@ -134,3 +134,14 @@ Keep canonical holes, explicit projected CRS, bounded tile/profile workers,
 source identities and complete geometry comparison metrics. Preserve existing
 raster arithmetic. Explicit CRS identity pins belong in persisted provenance;
 never apply an automatic CRS override or silently repair reference polygons.
+
+When a model uses multiple terrain sources, the agent must preprocess them into
+one dedicated mapping terrain before invoking this boundary mapper. Preserve
+source priority, CRS, grid, nodata and effective elevations; retain the original
+project terrain unchanged. Generate matching terrain-HDF masks, perimeters and
+stitch connectivity from the prepared single source. A flattened TIFF paired
+with the original multi-source HDF is not a valid input. Record preparation
+provenance and check the prepared surface against the original effective terrain
+before reuse. Cache this prepared terrain across reach and timestep requests;
+do not repeat preprocessing for every map. Additional terrain layouts remain
+subject to qualification; preprocessing alone does not establish native parity.
