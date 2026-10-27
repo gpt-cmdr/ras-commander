@@ -55,8 +55,7 @@ and geometry WKB) in `h5py`, `auto` and `native` mode.
   summary readers: geometry is joined by position when it is provably in the
   same order (the key merge remains the fallback), summary times are converted
   once per distinct value, and `mesh_name` columns are built without Python
-  lists (JUL2020_D100RAS.p04, 705,332 faces: `get_mesh_max_face_v` about
-  1.1 s to 0.6 s).
+  lists.
 - `HdfMesh.get_mesh_cell_polygons` (native): large meshes are built and
   validated in chunks on worker threads; `get_mesh_cell_faces` and
   `get_mesh_cell_points` concatenate per-mesh arrays.

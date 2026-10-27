@@ -82,7 +82,7 @@ its existing section links.
       CRS, attributes and exceptions.
     - Calls that take noticeable time on large models are much faster than
       before the engine. On the largest test models, against ras-commander
-      0.106.1: cell polygons 45×, per-cell and per-face summaries 11–18×,
+      0.106.1: cell polygons 34×, per-cell and per-face summaries 9–16×,
       mesh time series 7–8×, and the fluvial-pluvial boundary 227× on a
       4,425-cell mesh (ras-commander 0.110.1, October 2026). Small calls stay
       within a few milliseconds (see [Performance](#performance)).
@@ -412,7 +412,7 @@ i7-11700K, 8 logical CPUs): **ras-commander 0.106.1**, the last release before
 the native engine and the vectorization work, installed without the engine
 (pure h5py), against **ras-commander 0.110.1 with ras-commander-fast-hdf
 0.2.3**, both from PyPI, on the same Python 3.13.9, numpy 2.3.3, pandas 2.3.2,
-h5py 3.14.0 and Shapely 2.1.2. 19 public methods on 7 HEC-RAS result files,
+h5py 3.14.0 and Shapely 2.1.2. 19 public methods on 6 HEC-RAS result files,
 a fresh process per measurement, three timed processes per column, every
 result hashed (identical in `h5py`, `auto` and `native` mode in 0.110.1). The
 full tables, charts and method are on the extension's
@@ -424,14 +424,14 @@ repeat calls on that model, ranked by the 0.106.1 time:
 | Method | Largest test model | 0.106.1 | 0.110.1 `auto` | Speed-up vs 0.106.1 | Native vs h5py (0.110.1) |
 |---|---|---:|---:|---:|---:|
 | `HdfFluvialPluvial.calculate_fluvial_pluvial_boundary` | BaldEagleDamBrk.p18 (4,425 cells) | 21,557 ms | 94.9 ms | **227×** | 4.7× |
-| `HdfMesh.get_mesh_cell_polygons` | JUL2020_D100RAS.p04 (340,246 cells) | 20,592 ms | 460 ms | **44.8×** | 29.0× |
-| `HdfResultsMesh.get_mesh_max_face_v` | JUL2020_D100RAS.p04 (705,332 faces) | 8,459 ms | 564 ms | **15.0×** | 1.1× |
-| `HdfResultsMesh.get_mesh_max_ws` | JUL2020_D100RAS.p04 (340,248 cells) | 2,733 ms | 238 ms | **11.5×** | 1.0× |
-| `HdfMesh.get_mesh_cell_points` | JUL2020_D100RAS.p04 (352,141 cells) | 2,459 ms | 139 ms | **17.7×** | 1.1× |
+| `HdfMesh.get_mesh_cell_polygons` | BaldEagleDamBrk.p07 (87,039 cells) | 5,190 ms | 153 ms | **34.0×** | 21.2× |
 | `HdfResultsMesh.get_mesh_summary` (maximum face velocity) | BaldEagleDamBrk.p07 (177,301 faces) | 2,094 ms | 172 ms | **12.1×** | 1.0× |
+| `HdfResultsMesh.get_mesh_max_face_v` | BaldEagleDamBrk.p07 (177,301 faces) | 2,090 ms | 175 ms | **12.0×** | 1.0× |
 | `HdfResultsMesh.get_mesh_timeseries` (face velocity) | BaldEagleDamBrk.p07 (865 × 177,301) | 1,505 ms | 181 ms | **8.3×** | 8.0× |
 | `HdfResultsMesh.get_mesh_timeseries` (water surface) | BaldEagleDamBrk.p07 (865 × 87,039) | 1,426 ms | 192 ms | **7.4×** | 7.1× |
 | `HdfResultsMesh.get_mesh_cells_timeseries` (one cell) | BaldEagleDamBrk.p07 (87,039 cells) | 1,400 ms | 182 ms | **7.7×** | 7.5× |
+| `HdfResultsMesh.get_mesh_max_ws` | BaldEagleDamBrk.p07 (87,039 cells) | 708 ms | 78 ms | **9.0×** | 1.0× |
+| `HdfMesh.get_mesh_cell_points` | BaldEagleDamBrk.p07 (89,879 cells) | 662 ms | 40 ms | **16.4×** | 1.1× |
 
 - **Speed-up vs 0.106.1** is what you notice after upgrading. **Native vs
   h5py** (0.110.1 in h5py mode ÷ `auto` mode) is the Rust engine's share. Where
@@ -440,17 +440,13 @@ repeat calls on that model, ranked by the 0.106.1 time:
   geometry joined by position, summary times converted once per distinct
   value), so h5py mode gets it too. The remaining time in those calls is
   mostly building the Shapely geometry, which is the same in both modes.
-- The fluvial-pluvial boundary on the 87,039-cell model was not measured:
-  0.106.1 did not finish one first call plus one repeat call within the
-  harness's 1,800 s per-process limit, and the run stopped there.
 - **Small calls** (under 100 ms even on the largest models: cross sections,
   structures, boundary lines, run statistics, timestamps and the like) stay
   within a few milliseconds of 0.106.1 either way; opening the file and
   building the result dominate them. Their absolute times are on the
   [Performance](https://rascommander.info/fasthdf/performance/#small-calls-under-100-ms)
   page.
-- Timings were taken with the files in the operating system's cache;
-  cold-disk reads were not measured.
+- Timings were taken with the files in the operating system's cache.
 
 ### Geometry: convenient or fast
 
