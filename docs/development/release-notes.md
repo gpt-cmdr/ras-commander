@@ -9,6 +9,20 @@ alone does not identify a development checkout.
 
 ### Unreleased
 
+**Native fluvial-pluvial boundary on meshes with invalid cells**
+
+`HdfFluvialPluvial.calculate_fluvial_pluvial_boundary` no longer refuses the
+native engine when some cells have invalid geometry (for example
+self-intersecting rings). The Python reference leaves a cell out when its faces
+polygonize to nothing, and with it every cell pair it belongs to. The native
+path now decides this for each invalid cell with the reference polygonizer's
+own rule and drops those pairs, so the lines are identical to the reference's.
+On a 582,934-cell FEMA eBFE model with three self-intersecting cells, `auto`
+took about 92 s (Python fallback) and now takes about 18 s, with identical
+output. `generate_fluvial_pluvial_polygons` still uses the Python reference for
+such meshes. With `diagnostics=True`, `attrs["fluvial_native"]` lists the
+omitted cells as `reference_omitted_cells`.
+
 **Mapping engine moved to its own crate and wheel**
 
 The Rust mapping engine is now maintained in
