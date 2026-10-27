@@ -32,10 +32,10 @@ Linux x64 and macOS arm64; no extra and no code changes are needed.
   implementation. On Windows and Linux this was checked on 201 public method
   cases across 137 HEC-RAS 5.x–7.x files (3,800 method × file pairs).
 - **Faster on large models.** Against ras-commander 0.106.1 (before the
-  engine), ras-commander 0.110.1 is 34× faster at building 2D cell polygons,
-  9–16× faster at per-cell and per-face summaries, 7–8× faster at mesh time
-  series on the largest test models, and 227× faster at the fluvial-pluvial
-  boundary on a 4,425-cell mesh; small calls stay within a few milliseconds
+  engine), ras-commander 0.110.1 is 46× faster at building 2D cell polygons,
+  10–16× faster at per-cell and per-face summaries, 7–8× faster at mesh time
+  series on the largest test models, and over 700× faster at the
+  fluvial-pluvial boundary on an 18,066-cell mesh; small calls stay within a few milliseconds
   ([Performance](https://rascommander.info/fasthdf/performance/)). This makes it practical to extract results from many
   large 2D models for flood science, research and new kinds of analysis.
 - **h5py fallback.** In the default `auto` mode, any read the engine refuses,
