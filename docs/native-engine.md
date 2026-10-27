@@ -82,9 +82,9 @@ its existing section links.
       CRS, attributes and exceptions.
     - Calls that take noticeable time on large models are much faster than
       before the engine. On the largest test models, against ras-commander
-      0.106.1: cell polygons 34×, per-cell and per-face summaries 9–16×,
-      mesh time series 7–8×, and the fluvial-pluvial boundary 227× on a
-      4,425-cell mesh (ras-commander 0.110.1, October 2026). Small calls stay
+      0.106.1: cell polygons 46×, per-cell and per-face summaries 10–16×,
+      mesh time series 7–8×, and the fluvial-pluvial boundary over 700× on an
+      18,066-cell mesh (ras-commander 0.110.1, October 2026). Small calls stay
       within a few milliseconds (see [Performance](#performance)).
     - Set `RAS_COMMANDER_FAST_HDF=h5py` to switch the engine off. On
       platforms without a wheel the engine is not installed, and every read
@@ -412,7 +412,7 @@ i7-11700K, 8 logical CPUs): **ras-commander 0.106.1**, the last release before
 the native engine and the vectorization work, installed without the engine
 (pure h5py), against **ras-commander 0.110.1 with ras-commander-fast-hdf
 0.2.3**, both from PyPI, on the same Python 3.13.9, numpy 2.3.3, pandas 2.3.2,
-h5py 3.14.0 and Shapely 2.1.2. 19 public methods on 6 HEC-RAS result files,
+h5py 3.14.0 and Shapely 2.1.2. 19 public methods on 8 HEC-RAS result files,
 a fresh process per measurement, three timed processes per column, every
 result hashed (identical in `h5py`, `auto` and `native` mode in 0.110.1). The
 full tables, charts and method are on the extension's
@@ -423,15 +423,21 @@ repeat calls on that model, ranked by the 0.106.1 time:
 
 | Method | Largest test model | 0.106.1 | 0.110.1 `auto` | Speed-up vs 0.106.1 | Native vs h5py (0.110.1) |
 |---|---|---:|---:|---:|---:|
-| `HdfFluvialPluvial.calculate_fluvial_pluvial_boundary` | BaldEagleDamBrk.p18 (4,425 cells) | 21,557 ms | 94.9 ms | **227×** | 4.7× |
-| `HdfMesh.get_mesh_cell_polygons` | BaldEagleDamBrk.p07 (87,039 cells) | 5,190 ms | 153 ms | **34.0×** | 21.2× |
+| `HdfFluvialPluvial.calculate_fluvial_pluvial_boundary` | BaldEagleDamBrk.p03 (18,066 cells)\* | 169,135 ms | 238 ms | **711×** | 7.7× |
+| `HdfMesh.get_mesh_cell_polygons` | Glaise Creek (582,931 cells)\* | 40,074 ms | 867 ms | **46.2×** | 29.0× |
+| `HdfResultsMesh.get_mesh_max_face_v` | Glaise Creek (1,393,564 faces)\* | 17,204 ms | 1,272 ms | **13.5×** | 1.1× |
+| `HdfResultsMesh.get_mesh_max_ws` | Glaise Creek (582,934 cells)\* | 4,574 ms | 478 ms | **9.6×** | 1.0× |
+| `HdfMesh.get_mesh_cell_points` | Glaise Creek (586,935 cells)\* | 4,249 ms | 261 ms | **16.3×** | 1.1× |
 | `HdfResultsMesh.get_mesh_summary` (maximum face velocity) | BaldEagleDamBrk.p07 (177,301 faces) | 2,094 ms | 172 ms | **12.1×** | 1.0× |
-| `HdfResultsMesh.get_mesh_max_face_v` | BaldEagleDamBrk.p07 (177,301 faces) | 2,090 ms | 175 ms | **12.0×** | 1.0× |
 | `HdfResultsMesh.get_mesh_timeseries` (face velocity) | BaldEagleDamBrk.p07 (865 × 177,301) | 1,505 ms | 181 ms | **8.3×** | 8.0× |
 | `HdfResultsMesh.get_mesh_timeseries` (water surface) | BaldEagleDamBrk.p07 (865 × 87,039) | 1,426 ms | 192 ms | **7.4×** | 7.1× |
 | `HdfResultsMesh.get_mesh_cells_timeseries` (one cell) | BaldEagleDamBrk.p07 (87,039 cells) | 1,400 ms | 182 ms | **7.7×** | 7.5× |
-| `HdfResultsMesh.get_mesh_max_ws` | BaldEagleDamBrk.p07 (87,039 cells) | 708 ms | 78 ms | **9.0×** | 1.0× |
-| `HdfMesh.get_mesh_cell_points` | BaldEagleDamBrk.p07 (89,879 cells) | 662 ms | 40 ms | **16.4×** | 1.1× |
+
+\* Measured in a separate targeted run on October 26, 2026 (21:44–22:24 EDT)
+with the same harness, software and settings. Glaise Creek is the Glaise
+Creek–White River model (1101001306.p01) from FEMA's estimated Base Flood
+Elevation (eBFE) program; BaldEagleDamBrk.p03 is the single 2D area plan of
+HEC's BaldEagleCrkMulti2D example.
 
 - **Speed-up vs 0.106.1** is what you notice after upgrading. **Native vs
   h5py** (0.110.1 in h5py mode ÷ `auto` mode) is the Rust engine's share. Where
