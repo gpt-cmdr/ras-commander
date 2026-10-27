@@ -80,11 +80,12 @@ its existing section links.
       qualified and uses h5py for any read the engine refuses. **Public
       results are identical to h5py**: same values, dtypes, columns, index,
       CRS, attributes and exceptions.
-    - Large reads are faster than with h5py. In the 0.2.0 / 0.108.0 benchmark
-      of public methods, building 2D cell polygons was 4–19× faster depending
-      on mesh size, and mesh time series 2–8× faster on large meshes; small
-      reads were at most a few milliseconds slower (see
-      [Performance](#performance)).
+    - Calls that take noticeable time on large models are much faster than
+      before the engine. On the largest test models, against ras-commander
+      0.106.1: cell polygons 45×, per-cell and per-face summaries 11–18×,
+      mesh time series 7–8×, and the fluvial-pluvial boundary 227× on a
+      4,425-cell mesh (ras-commander 0.110.1, October 2026). Small calls stay
+      within a few milliseconds (see [Performance](#performance)).
     - Set `RAS_COMMANDER_FAST_HDF=h5py` to switch the engine off. On
       platforms without a wheel the engine is not installed, and every read
       uses h5py automatically.
@@ -406,34 +407,50 @@ pending.
 
 ### Release benchmark (public methods)
 
-The release benchmark of public methods for extension 0.2.0 with
-ras-commander 0.108.0 is published on the extension's
-[Performance](https://github.com/gpt-cmdr/ras-commander-fast-hdf/blob/main/docs/performance.md)
-page: 19 public methods on 7 HEC-RAS result files (50 method × file cases,
-1,200 fresh processes) on a quiet Windows workstation, `h5py` mode against the
-default `auto` mode, interleaved with 0.1.1 and ras-commander 0.107.1, with
-every result hashed and identical in `h5py`, `auto` and `native` mode. Its
-largest gains, repeat calls on the heaviest file for each method:
+Measured on October 26, 2026 on a quiet Windows workstation (CLB01, Intel Core
+i7-11700K, 8 logical CPUs): **ras-commander 0.106.1**, the last release before
+the native engine and the vectorization work, installed without the engine
+(pure h5py), against **ras-commander 0.110.1 with ras-commander-fast-hdf
+0.2.3**, both from PyPI, on the same Python 3.13.9, numpy 2.3.3, pandas 2.3.2,
+h5py 3.14.0 and Shapely 2.1.2. 19 public methods on 7 HEC-RAS result files,
+a fresh process per measurement, three timed processes per column, every
+result hashed (identical in `h5py`, `auto` and `native` mode in 0.110.1). The
+full tables, charts and method are on the extension's
+[Performance](https://rascommander.info/fasthdf/performance/) page.
 
-| Method | Result rows | h5py | Native | Speed-up |
-|---|---:|---:|---:|---:|
-| `HdfMesh.get_mesh_cell_polygons` | 340,246 | 17,252 ms | 960 ms | 18.0× |
-| `HdfResultsMesh.get_mesh_cells_timeseries` (water surface) | 1 | 1,405 ms | 173 ms | 8.1× |
-| `HdfResultsMesh.get_mesh_timeseries` (water surface) | 865 | 1,433 ms | 193 ms | 7.4× |
-| `HdfResultsMesh.get_mesh_timeseries` (face velocity) | 865 | 1,516 ms | 253 ms | 6.0× |
-| `HdfFluvialPluvial.calculate_fluvial_pluvial_boundary` | 4,569 | 10,638 ms | 6,856 ms | 1.6× |
+**Calls that take 100 ms or more with 0.106.1 on the largest test model**,
+repeat calls on that model, ranked by the 0.106.1 time:
 
-Whole-array summaries such as `get_mesh_max_ws` ran at about the same speed,
-because most of those calls is building a Shapely geometry for every row (see
-[Geometry: convenient or fast](#geometry-convenient-or-fast)).
-Small reads were at most about 7 ms slower on repeat calls and 37 ms on the
-first call in a process. Across all 50 cases (geometric mean) the native
-engine was 1.17× faster on the first call in a process and 1.41× faster on
-repeat calls (0.1.1 with ras-commander 0.107.1: 1.07× and 1.27×). The gain on
-small reads comes from ras-commander 0.108.0 opening each HDF once per public
-call and sharing that native session across the call's reads (it used to be
-opened 3 to 23 times). Timings were taken with the files in the operating
-system's cache; cold-disk reads were not measured.
+| Method | Largest test model | 0.106.1 | 0.110.1 `auto` | Speed-up vs 0.106.1 | Native vs h5py (0.110.1) |
+|---|---|---:|---:|---:|---:|
+| `HdfFluvialPluvial.calculate_fluvial_pluvial_boundary` | BaldEagleDamBrk.p18 (4,425 cells) | 21,557 ms | 94.9 ms | **227×** | 4.7× |
+| `HdfMesh.get_mesh_cell_polygons` | JUL2020_D100RAS.p04 (340,246 cells) | 20,592 ms | 460 ms | **44.8×** | 29.0× |
+| `HdfResultsMesh.get_mesh_max_face_v` | JUL2020_D100RAS.p04 (705,332 faces) | 8,459 ms | 564 ms | **15.0×** | 1.1× |
+| `HdfResultsMesh.get_mesh_max_ws` | JUL2020_D100RAS.p04 (340,248 cells) | 2,733 ms | 238 ms | **11.5×** | 1.0× |
+| `HdfMesh.get_mesh_cell_points` | JUL2020_D100RAS.p04 (352,141 cells) | 2,459 ms | 139 ms | **17.7×** | 1.1× |
+| `HdfResultsMesh.get_mesh_summary` (maximum face velocity) | BaldEagleDamBrk.p07 (177,301 faces) | 2,094 ms | 172 ms | **12.1×** | 1.0× |
+| `HdfResultsMesh.get_mesh_timeseries` (face velocity) | BaldEagleDamBrk.p07 (865 × 177,301) | 1,505 ms | 181 ms | **8.3×** | 8.0× |
+| `HdfResultsMesh.get_mesh_timeseries` (water surface) | BaldEagleDamBrk.p07 (865 × 87,039) | 1,426 ms | 192 ms | **7.4×** | 7.1× |
+| `HdfResultsMesh.get_mesh_cells_timeseries` (one cell) | BaldEagleDamBrk.p07 (87,039 cells) | 1,400 ms | 182 ms | **7.7×** | 7.5× |
+
+- **Speed-up vs 0.106.1** is what you notice after upgrading. **Native vs
+  h5py** (0.110.1 in h5py mode ÷ `auto` mode) is the Rust engine's share. Where
+  it is about 1.0× but the speed-up is large, the gain is from vectorizing
+  ras-commander itself (face lines and points built in one Shapely call,
+  geometry joined by position, summary times converted once per distinct
+  value), so h5py mode gets it too. The remaining time in those calls is
+  mostly building the Shapely geometry, which is the same in both modes.
+- The fluvial-pluvial boundary on the 87,039-cell model was not measured:
+  0.106.1 did not finish one first call plus one repeat call within the
+  harness's 1,800 s per-process limit, and the run stopped there.
+- **Small calls** (under 100 ms even on the largest models: cross sections,
+  structures, boundary lines, run statistics, timestamps and the like) stay
+  within a few milliseconds of 0.106.1 either way; opening the file and
+  building the result dominate them. Their absolute times are on the
+  [Performance](https://rascommander.info/fasthdf/performance/#small-calls-under-100-ms)
+  page.
+- Timings were taken with the files in the operating system's cache;
+  cold-disk reads were not measured.
 
 ### Geometry: convenient or fast
 
@@ -481,27 +498,10 @@ and validity were compared on all 139 release-gate fixtures in `h5py`, `auto`
 and `native` mode. The fast output is still the faster of the two, because it
 builds no geometry at all.
 
-Measured on a quiet Windows workstation (October 2026) for the 0.109.0
-release, `HdfResultsMesh.get_mesh_max_face_v`: **before** is ras-commander
-`main` just before this change (9817f9484) with engine 0.2.2, **after** is the published ras-commander
-0.109.0 with engine 0.2.3, with the same NumPy 2.3.3, pandas 2.3.2, Shapely
-2.1.2 and h5py 3.14.0. Repeat calls (warm): median of 6 calls in 3 fresh
-processes per mode. Results were identical before and after, in every mode.
-
-| Output | File (faces) | Before h5py | Before `auto` | Before `native` | After h5py | After `auto` | After `native` | `auto` speed-up |
-|---|---|---:|---:|---:|---:|---:|---:|---:|
-| Convenient | BaldEagleDamBrk.p18 (9,581) | 138 ms | 140 ms | 140 ms | 41 ms | 44 ms | 45 ms | 3.2× |
-| Convenient | BaldEagleDamBrk.p07 (177,301) | 2,085 ms | 2,106 ms | 2,082 ms | 304 ms | 297 ms | 304 ms | 7.1× |
-| Convenient | Homewood.p02 (161,683) | 1,967 ms | 1,977 ms | 1,922 ms | 273 ms | 267 ms | 259 ms | 7.4× |
-| Fast | BaldEagleDamBrk.p18 (9,581) | 9.1 ms | 11.6 ms | 10.6 ms | 9.7 ms | 10.6 ms | 11.8 ms | 1.1× |
-| Fast | BaldEagleDamBrk.p07 (177,301) | 78 ms | 79 ms | 79 ms | 79 ms | 79 ms | 81 ms | 1.0× |
-| Fast | Homewood.p02 (161,683) | 70 ms | 69 ms | 70 ms | 70 ms | 72 ms | 71 ms | 1.0× |
-
-The convenient output is now about 7× faster on the large meshes, in all
-three modes, because the gain comes from building the lines in one call. The
-fast output is unchanged and is still the faster of the two. First calls in a
-process (cold) gave the same picture: BaldEagleDamBrk.p07 convenient 2,168 ms
-before and 315 ms after in `auto` mode.
+The convenient output's current timings are in the
+[release benchmark](#release-benchmark-public-methods) above
+(`get_mesh_max_face_v`, `get_mesh_max_ws`, `get_mesh_summary`,
+`get_mesh_cell_points`).
 
 The figures below come from the earlier engine performance work. They measure
 the **HDF read layer** (the reads under the public methods), not complete
@@ -563,9 +563,11 @@ result was identical between h5py and native.
   0.21 s during the engine performance work).
 - **Equal: most of a public call is not the read.** Public methods build
   pandas, xarray and GeoPandas objects (cell points and polygons, CRS
-  resolution, timestamp conversion). That code is unchanged and runs the same
-  in both modes, so a method's end-to-end gain is smaller than its read gain,
-  and on small models it can be negligible.
+  resolution, timestamp conversion). That code runs the same in both modes,
+  so a method's end-to-end native gain is smaller than its read gain, and on
+  small models it can be negligible. ras-commander 0.109.0 and 0.110.1
+  vectorized much of it, which made those calls faster in h5py mode too (see
+  the [release benchmark](#release-benchmark-public-methods)).
 - **Slower: very small reads, and reused h5py handles.** For reads of a few
   milliseconds (single boundary-condition series, small summaries on
   3-5k-cell models), the engine's fixed per-read cost (selection checks,
