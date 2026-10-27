@@ -297,6 +297,12 @@ hole topology and quantized vertices. It does not change raster mapping or
 claim native vector equality. Cell-face boundary options and multi-source
 terrain HDFs and terrain modifications are outside the initial qualification.
 
+The accepted boundary method prioritizes deterministic output and discloses
+native vector differences. Native variability was observed through
+Commander-driven RASMapper 7.0.1 exports; repeated standalone GUI exports
+have not been qualified. The order-sensitive native merge is executed inside
+RASMapper, while Commander supplies the invocation and comparison workflow.
+
 For multi-source models, preprocess one dedicated mapping terrain and generate
 matching terrain-HDF metadata from that source before mapping. Preserve and
 verify the effective elevations, grid, CRS, nodata and source priority. Retain

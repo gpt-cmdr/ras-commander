@@ -948,6 +948,12 @@ identical native Max calls. Products record `native_vector_parity=False`;
 this method does not claim native polygon equality. Existing Depth/WSE raster
 methods and their qualification are unchanged.
 
+The accepted vector behavior is deterministic Rust contour merging with
+disclosed native differences. The observed native variability occurred in
+Commander-driven RASMapper 7.0.1 exports. The order-sensitive merge belongs to
+the native implementation; Commander performs no native polygon union.
+Repeated standalone GUI exports have not been qualified.
+
 The intrinsic cell-wet gate is float32 `WSE > minimum_elevation + 0.001`.
 Signed sample depths remain available to find zero crossings; raster plot
 visibility is not applied to contour samples. Valid negative depths, including
