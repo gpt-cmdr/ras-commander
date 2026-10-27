@@ -202,3 +202,16 @@ Parent `ras_commander/AGENTS.md` and root `AGENTS.md` still apply.
   Separate native stored-map generation, independent optional filtered delivery writes, Rust
   batch time and comparison scanning. Do not multiply shared batch preparation by profile count
   or promote a speed ratio for unmatched AOI, mesh or storage-area scope.
+
+## Deterministic boundaries
+
+`map_inundation_boundaries` is `deterministic-zero-depth-contours/1`, not native
+vector parity. Preserve signed sample depths and sample-coverage activation;
+never derive this layer by polygonizing the plotted depth raster. Original
+single-source terrain HDF masks/perimeters/stitch TIN require native numeric
+reads, including bitfield support. Global hydraulics remain complete across
+AOIs, and final contours use stable all-subject NonZero union and clipping.
+Keep canonical holes, explicit projected CRS, bounded tile/profile workers,
+source identities and complete geometry comparison metrics. Preserve existing
+raster arithmetic. Explicit CRS identity pins belong in persisted provenance;
+never apply an automatic CRS override or silently repair reference polygons.

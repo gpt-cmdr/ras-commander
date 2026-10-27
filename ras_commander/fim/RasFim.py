@@ -441,6 +441,9 @@ class RasFim:
         decoder and preparation allocations are outside retained admission.
         Numeric profile staging uses native-HDF slabs of at most 8 MiB source
         values, with a bounded float32 conversion buffer.
+        ``terrain_crs_fnv1a64`` explicitly pins the native reader's WKT identity
+        after independent verification of the original terrain/model CRS. It
+        never reprojects coordinates; the default retains strict CRS matching.
 
         Returns:
             FimPreparedSlopingModel: Owned inputs with ``map_profiles``,
@@ -473,6 +476,138 @@ class RasFim:
             window_cache_mib=window_cache_mib, hydraulic_cache_mib=hydraulic_cache_mib,
             validation_cache_mib=validation_cache_mib,
             terrain_crs_fnv1a64=terrain_crs_fnv1a64,
+        )
+
+    @staticmethod
+    @log_call
+    def compare_inundation_boundaries(
+        hdf_path: PathLike, terrain_path: PathLike, output_folder: PathLike, *,
+        terrain_hdf: PathLike,
+        profiles: Optional[Dict[str, Union[str, int]]] = None,
+        interpolation: str = "sloping", native_boundaries: Optional[Dict[str, PathLike]] = None,
+        plan_number: Optional[str] = None, terrain_name: Optional[str] = None,
+        ras_object: Any = None, ras_version: Optional[str] = None,
+        bbox: Optional[Sequence[float]] = None, polygon: Any = None, polygon_layer: Optional[str] = None,
+        aoi_crs: Any = None, engine_path: Optional[PathLike] = None,
+        threads: int = 1, max_inflight_profiles: int = 1,
+        max_working_mib: int = 1024, max_prepared_mib: int = 1024,
+        timeout: Optional[float] = None,
+        terrain_crs_fnv1a64: Optional[str] = None,
+    ) -> "pd.DataFrame":
+        """Compare deterministic Rust boundaries with native stored polygons.
+
+        Args:
+            hdf_path: Computed 2D-only plan HDF.
+            terrain_path: Original single-source terrain TIFF.
+            output_folder: New or empty comparison/evidence folder.
+            terrain_hdf: Original terrain masks, perimeters and stitch TIN.
+            profiles: Output names mapped to Max or stored timestep indices.
+            interpolation: horizontal or plain cell-corner sloping.
+            native_boundaries: Optional profile-to-vector-file references.
+                When absent, generate references through RasProcess.store_maps.
+            plan_number: Plan for native reference generation.
+            terrain_name: Native terrain registration, if selection is needed.
+            ras_object: Initialized RasPrj for native generation.
+            ras_version: Native HEC-RAS version for reference generation.
+            bbox: Optional AOI bounds, applied to both comparison geometries.
+            polygon: Optional polygon AOI or vector source.
+            polygon_layer: Polygon file layer.
+            aoi_crs: AOI CRS. Bounds default to model CRS; a Shapely
+                geometry requires an explicit CRS.
+            engine_path: Explicit Fast-Map executable, if needed.
+            threads: Shared Rust worker count.
+            max_inflight_profiles: Bounded Rust timestep concurrency.
+            max_working_mib: Planned working-array budget.
+            max_prepared_mib: Geometry and staging budget.
+            timeout: Per-engine/native-call timeout in seconds.
+            terrain_crs_fnv1a64: Optional caller-verified terrain WKT identity.
+
+        Returns:
+            Full geometry/topology difference metrics and timing receipt.
+            Native generation, Rust batch mapping and comparison scans have
+            separate clocks in attrs["performance"]. No post-depth filter is
+            applied. Native Max polygons may vary between identical exports.
+
+        Raises:
+            FimUnsupportedError: Unsupported CRS, geometry or input scope.
+            FimEngineError: Failed native or Rust execution.
+            ValueError: Invalid controls or reference selection.
+        """
+        from ._boundary_comparison import run
+        return run(
+            hdf_path, terrain_path, output_folder, terrain_hdf=terrain_hdf,
+            profiles=profiles, interpolation=interpolation,
+            native_boundaries=native_boundaries, plan_number=plan_number,
+            terrain_name=terrain_name, ras_object=ras_object,
+            ras_version=ras_version, bbox=bbox, polygon=polygon,
+            polygon_layer=polygon_layer, aoi_crs=aoi_crs,
+            engine_path=engine_path, threads=threads,
+            max_inflight_profiles=max_inflight_profiles,
+            max_working_mib=max_working_mib, max_prepared_mib=max_prepared_mib,
+            timeout=timeout, terrain_crs_fnv1a64=terrain_crs_fnv1a64,
+        )
+
+    @staticmethod
+    @log_call
+    def map_inundation_boundaries(
+        hdf_path: PathLike, terrain_path: PathLike, output_folder: PathLike, *,
+        terrain_hdf: PathLike,
+        profiles: Optional[Dict[str, Union[str, int]]] = None,
+        interpolation: str = "sloping", bbox: Optional[Sequence[float]] = None, polygon: Any = None,
+        polygon_layer: Optional[str] = None, aoi_crs: Any = None,
+        engine_path: Optional[PathLike] = None, threads: int = 1,
+        max_inflight_profiles: int = 1, max_working_mib: int = 1024,
+        max_prepared_mib: int = 1024, timeout: Optional[float] = None,
+        terrain_crs_fnv1a64: Optional[str] = None,
+    ) -> "pd.DataFrame":
+        """Generate deterministic 2D zero-depth contour polygons in Rust.
+
+        The method preserves holes with a deterministic NonZero union. It is
+        distinct from RASMapper's order-dependent stored boundary polygons;
+        compare full topology and coordinates rather than assuming equality.
+        Existing Depth/WSE raster methods are unchanged.
+
+        Args:
+            hdf_path: Computed 2D-only plan HDF; 1D elements are rejected.
+            terrain_path: Original unmodified single-source float32 terrain TIFF.
+            output_folder: New or empty product folder.
+            terrain_hdf: Original associated terrain HDF containing level-zero
+                masks, perimeters and optional stitch TIN. No substitute masks
+                are constructed from a flattened terrain raster.
+            profiles: Output names mapped to Max or stored timestep indices.
+            interpolation: horizontal or plain cell-corner sloping.
+            bbox: Optional bounds in aoi_crs.
+            polygon: Optional Polygon/MultiPolygon, GeoDataFrame or file path.
+            polygon_layer: Layer name for a polygon file.
+            aoi_crs: AOI CRS. Bounds default to model CRS; a Shapely
+                geometry requires an explicit CRS.
+            engine_path: Explicit matching Fast-Map executable, if needed.
+            threads: Shared native worker count, 1 through 64.
+            max_inflight_profiles: Bounded timestep concurrency.
+            max_working_mib: Planned engine allocation budget; not hard RSS.
+            max_prepared_mib: Retained geometry/staged-input budget.
+            timeout: Engine execution timeout in seconds.
+            terrain_crs_fnv1a64: Optional caller-verified native-reader WKT
+                identity, after checking the original terrain CRS independently.
+
+        Returns:
+            Product manifest with GeoJSON paths and polygon statistics.
+            Timing and provenance are in attrs and boundary_manifest.json.
+
+        Raises:
+            FimUnsupportedError: Unsupported terrain/model or resource limits.
+            FimEngineError: Missing capability or unsuccessful mapping.
+            ValueError: Invalid controls or incompatible AOIs.
+        """
+        from ._boundary import map_inundation_boundaries
+        return map_inundation_boundaries(
+            hdf_path, terrain_path, output_folder, terrain_hdf=terrain_hdf,
+            profiles=profiles, interpolation=interpolation, bbox=bbox,
+            polygon=polygon, polygon_layer=polygon_layer, aoi_crs=aoi_crs,
+            engine_path=engine_path, threads=threads,
+            max_inflight_profiles=max_inflight_profiles,
+            max_working_mib=max_working_mib, max_prepared_mib=max_prepared_mib,
+            timeout=timeout, terrain_crs_fnv1a64=terrain_crs_fnv1a64,
         )
 
     @staticmethod

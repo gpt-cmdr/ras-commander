@@ -324,3 +324,20 @@ and the [FIM API](api/fim.md) for input contracts and result interpretation.
 These comparisons establish the stated numerical agreement on the listed
 models and runtime. They do not establish hydraulic accuracy or parity for
 every HEC-RAS version, terrain source layout or model feature.
+
+
+## Deterministic vector boundaries
+
+The engine also exposes `deterministic-zero-depth-contours/1` for horizontal
+and plain cell-corner sloping zero-depth polygons. Use
+`RasFim.map_inundation_boundaries()` with the original unmodified single-source TIFF and
+associated terrain HDF. Bbox/polygon constraints clip final contours while
+full hydraulic connectivity and contour sample halos remain available.
+Multiple timesteps share terrain, geometry and ownership in one bounded worker
+pool. See the [boundary API and comparison workflow](api/fim.md#deterministic-inundation-boundaries).
+
+This is a separately identified vector method. Its stable NonZero union
+preserves holes consistently; native stored boundary exports can have different
+hole topology and quantized vertices. It does not change raster mapping or
+claim native vector equality. Cell-face boundary options and multi-source
+terrain HDFs and terrain modifications are outside the initial qualification.
