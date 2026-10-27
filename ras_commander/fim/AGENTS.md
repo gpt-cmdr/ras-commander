@@ -52,6 +52,13 @@ Parent `ras_commander/AGENTS.md` and root `AGENTS.md` still apply.
 - Sloping AOIs constrain terrain/ownership/output pixels only. Keep the complete
   geometry for hydraulic connectivity and corner reconstruction across boundaries.
   Geometry, terrain and ownership are reused across all profiles in one request.
+- Selected numeric HDF rows are staged in bounded required-native spatial slabs;
+  retain complete ghost/virtual cell values and check admission before reads.
+  Prepared contexts may own a capability-detected serialized native process.
+  Native geometry/stencils and the bounded terrio block cache persist across
+  requests; retain at most one window within 64 MiB, with at most 32 MiB plain
+  weights. Face/donor-history rendering must keep its existing evaluation path.
+  Close/invalidation must stop the process before removing staged inputs.
 - Sloping raw-mask/bit qualification targets native 7.0.1. Max profiles on Davis
   pipes/conduits and Bald Eagle dam/bridge meshes, plus two Davis timesteps,
   currently pass. Bounded Max tests also pass on Spring River and Spring Creek

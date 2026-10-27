@@ -76,6 +76,8 @@ def benchmark(args):
         max_inflight_profiles=args.inflight,
         max_working_mib=args.max_working_mib,
         max_prepared_mib=args.max_prepared_mib,
+        native_session=args.native_session,
+        compare_native_session=args.compare_native_session,
         repetitions=args.repetitions,
         rows=[],
         inputs={},
@@ -147,9 +149,12 @@ def benchmark(args):
             baseline = None
             for repeat in range(args.repetitions):
                 order = (
+                    tuple(("one-shot", "prepared-cli", "prepared")[(repeat + i) % 3] for i in range(3))
+                    if args.compare_native_session else (
                     ("one-shot", "prepared")
                     if repeat % 2 == 0
                     else ("prepared", "one-shot")
+                    )
                 )
                 for method in order:
                     print(f"MAP {name} repeat={repeat} method={method}", flush=True)
@@ -159,11 +164,12 @@ def benchmark(args):
                     timings = []
                     performance = []
                     try:
-                        if method == "prepared":
+                        if method.startswith("prepared"):
                             mapper = RasFim.prepare_sloping_model(
                                 case["hdf"],
                                 case["terrain"],
                                 max_prepared_mib=args.max_prepared_mib,
+                                native_session=args.native_session and method != "prepared-cli",
                                 **common,
                             )
                         prepared_info = mapper.info if mapper else None
@@ -198,6 +204,8 @@ def benchmark(args):
                     check = compare_products(
                         maps, maps if baseline is None else baseline
                     )
+                    if case.get("require_finite", True) and check["finite_pixels"] == 0:
+                        raise AssertionError("Benchmark has no finite pixels; choose a wet AOI or explicitly set require_finite=false for a dry-only workload")
                     if baseline is None:
                         baseline = maps
                     row = dict(
@@ -229,13 +237,14 @@ def benchmark(args):
                 method: statistics.median(
                     row["sequence_seconds"] for row in rows if row["method"] == method
                 )
-                for method in ("one-shot", "prepared")
+                for method in (("one-shot", "prepared-cli", "prepared") if args.compare_native_session else ("one-shot", "prepared"))
             }
             summaries.append(
                 dict(
                     workload=case["name"],
                     **medians,
                     speed_ratio=medians["one-shot"] / medians["prepared"],
+                    native_session_ratio=(medians["prepared-cli"] / medians["prepared"] if args.compare_native_session else None),
                     prepare_seconds=statistics.median(
                         row["prepared_info"]["prepare_seconds"]
                         for row in rows
@@ -280,6 +289,10 @@ def main():
     parser.add_argument("--threads", type=int, default=4)
     parser.add_argument("--writer-threads", type=int, default=1)
     parser.add_argument("--inflight", type=int, default=2)
+    parser.add_argument("--native-session", action=argparse.BooleanOptionalAction, default=True,
+                        help="Retain capable native processes in prepared contexts; disable for CLI-per-request control")
+    parser.add_argument("--compare-native-session", action="store_true",
+                        help="Rotate one-shot, prepared CLI and prepared native sessions in one run")
     parser.add_argument("--max-working-mib", type=int, default=32768)
     parser.add_argument("--max-prepared-mib", type=int, default=2048)
     parser.add_argument(

@@ -91,12 +91,19 @@ def _validate_method(method, render_mode, max_inflight_profiles):
 
 
 def _stage_profiles(
-    hdf, root, meshes, max_values, selected, *, deduplicate=False, max_staged_bytes=None
+    hdf, root, meshes, max_values, selected, *, deduplicate=False, max_staged_bytes=None,
+    chunk_bytes=8 * 1024 * 1024,
 ):
+    """Stage selected numeric rows in bounded native-HDF spatial slabs."""
+    import h5py
     from .. import HdfResultsMesh
-    from ..fast_hdf import backend_scope
+    from ..fast_hdf import backend_scope, read_dataset
     from .errors import FimUnsupportedError
+    from .RasFim import _file_identity
 
+    if isinstance(chunk_bytes, bool) or not isinstance(chunk_bytes, int) or chunk_bytes < 4:
+        raise ValueError("chunk_bytes must be an integer >= 4")
+    before = _file_identity(hdf)
     staged_bytes = 0
     cached = {}
     units = []
@@ -107,8 +114,16 @@ def _stage_profiles(
             continue
         values_files = []
         for i, mesh in enumerate(meshes):
+            size = mesh["cell_count"]
+            if max_staged_bytes is not None and staged_bytes + size * 4 > max_staged_bytes:
+                raise FimUnsupportedError("Prepared sloping inputs exceed max_prepared_mib")
+            filename = f"values-{profile_index}-{i}.bin"
+            destination = root / filename
+            partial = destination.with_suffix(".partial")
             if selector == "Max":
-                values = max_values[i]
+                source = max_values[i]
+                dataset_path = source["dataset"] if isinstance(source, dict) else None
+                time_index = 0
             else:
                 with backend_scope("rust"):
                     if i not in profile_views:
@@ -121,23 +136,35 @@ def _stage_profiles(
                             include_ghost_cells=True,
                         )
                     view = profile_views[i].select(time=int(selector))
-                    values = view.to_numpy(dtype=np.float32).reshape(-1)
-            if len(values) != mesh["cell_count"] or not np.isfinite(values).all():
-                raise ValueError(
-                    f"Invalid complete cell profile {name!r} for {mesh['mesh_name']!r}"
-                )
-            filename = f"values-{profile_index}-{i}.bin"
+                    if view.shape != (1, size):
+                        raise ValueError("Sloping profile source dimensions changed")
+                    dataset_path = view.dataset_path
+                    time_index = int(selector)
+            try:
+                with h5py.File(hdf, "r") as handle, partial.open("wb") as stream:
+                    dataset = handle[dataset_path] if dataset_path is not None else None
+                    if dataset is not None and (len(dataset.shape) != 2 or dataset.shape[1] != size):
+                        raise ValueError("Sloping profile source dimensions changed")
+                    source_itemsize = dataset.dtype.itemsize if dataset is not None else np.asarray(source).dtype.itemsize
+                    chunk_cells = max(1, chunk_bytes // max(4, source_itemsize))
+                    for start in range(0, size, chunk_cells):
+                        stop = min(size, start + chunk_cells)
+                        values = (
+                            read_dataset(dataset, (slice(time_index, time_index + 1), slice(start, stop)), backend="rust")
+                            if dataset is not None else source[start:stop]
+                        )
+                        array = np.asarray(values, dtype="<f4").reshape(-1)
+                        if len(array) != stop - start or not np.isfinite(array).all():
+                            raise ValueError(f"Invalid complete cell profile {name!r} for {mesh['mesh_name']!r}")
+                        stream.write(memoryview(np.ascontiguousarray(array)).cast("B"))
+                if _file_identity(hdf) != before:
+                    raise FimEngineError("HDF source changed during chunked staging")
+                partial.replace(destination)
+            except BaseException:
+                partial.unlink(missing_ok=True)
+                raise
             values_files.append(filename)
-            array = np.asarray(values, dtype="<f4")
-            if (
-                max_staged_bytes is not None
-                and staged_bytes + array.nbytes > max_staged_bytes
-            ):
-                raise FimUnsupportedError(
-                    "Prepared sloping inputs exceed max_prepared_mib"
-                )
-            _write_array(root / filename, array)
-            staged_bytes += array.nbytes
+            staged_bytes += size * 4
         cached[selector] = values_files
         units.append(dict(id=name, values_files=values_files))
     return units, len(profile_views), staged_bytes
@@ -427,10 +454,17 @@ def map_profiles(
                     details["performance"]["prepared_context"] = _prepared.info
                 tick = time.perf_counter()
                 expired = threading.Event()
+                persistent = _prepared is not None and _prepared._reuse_native
+                if persistent and _prepared._native_session is None:
+                    from ._native_session import NativeSlopingSession
+                    _prepared._native_session = NativeSlopingSession(engine)
+                from contextlib import nullcontext
                 # Delete-on-close stderr avoids a Windows cleanup race when a
                 # terminated child briefly retains its inherited file handle.
-                with tempfile.TemporaryFile(mode="w+b") as errors:
-                    process = subprocess.Popen(
+                with (nullcontext(_prepared._native_session.errors) if persistent else tempfile.TemporaryFile(mode="w+b")) as errors:
+                    errors.seek(0)
+                    errors.truncate()
+                    process = (_prepared._native_session.submit(root / "request.json", root / "out") if persistent else subprocess.Popen(
                         [
                             str(engine),
                             "sloping",
@@ -439,7 +473,7 @@ def map_profiles(
                         ],
                         stdout=subprocess.PIPE,
                         stderr=errors,
-                    )
+                    ))
 
                     def expire():
                         if process.poll() is None:
@@ -508,11 +542,17 @@ def map_profiles(
                                 time.perf_counter() - write_tick
                             )
                             del depth, wse, result
-                        if process.stdout.read(1):
-                            raise FimEngineError(
-                                "Unexpected trailing sloping stream bytes"
-                            )
-                        code = process.wait()
+                        if persistent:
+                            terminal = process.stdout.readline(65537)
+                            if len(terminal) > 65536 or not terminal.endswith(b"\n") or json.loads(terminal) != {"command_status": "complete"}:
+                                raise FimEngineError("Invalid native session completion frame")
+                            if process.poll() is not None:
+                                raise FimEngineError("Native session exited unexpectedly")
+                            code = 0
+                        else:
+                            if process.stdout.read(1):
+                                raise FimEngineError("Unexpected trailing sloping stream bytes")
+                            code = process.wait()
                         if expired.is_set():
                             raise FimEngineError(
                                 f"Sloping engine timed out after {timeout} seconds"
@@ -584,6 +624,9 @@ def map_profiles(
                                 f"Sloping engine failed with exit {code}: {report.get('error', 'invalid report')}"
                             )
                         details["performance"]["engine_report"] = report
+                        if _prepared is not None:
+                            _prepared._info["native_state_reused"] = bool(report.get("session", {}).get("geometry_reused"))
+                            details["performance"]["prepared_context"] = _prepared.info
                     except BaseException:
                         if process.poll() is None:
                             process.kill()
@@ -596,7 +639,11 @@ def map_profiles(
                     finally:
                         if timer:
                             timer.cancel()
-                        process.stdout.close()
+                        if not persistent:
+                            process.stdout.close()
+                        elif process.poll() is not None:
+                            _prepared._native_session.close()
+                            _prepared._native_session = None
                 details["performance"]["engine_and_delivery_seconds"] = (
                     time.perf_counter() - tick
                 )

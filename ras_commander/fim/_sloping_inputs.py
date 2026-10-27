@@ -103,8 +103,7 @@ def write_binary_mesh_inputs(
                 raise FimUnsupportedError(f"Depth weighting needs stored FacePoints Elevation / FacePoint Elevation for {name!r}: {reason}")
             arrays = read_datasets(
                 source,
-                [prefix + field for field, _ in _BINARY_FIELDS.values()]
-                + ([summary.name] if summary is not None else []),
+                [prefix + field for field, _ in _BINARY_FIELDS.values()],
                 backend="rust",
                 threads=threads,
             )
@@ -140,10 +139,9 @@ def write_binary_mesh_inputs(
             if include_vertex_elevations:
                 stage("vertex_elevations", corner.require(), "<f4")
             if summary is not None:
-                values = np.asarray(arrays[summary.name], dtype="<f4")
-                if values.shape != (2, len(points)):
+                if summary.shape != (2, len(points)):
                     raise ValueError("Unsupported sloping Max profile dimensions")
-                max_values.append(np.ascontiguousarray(values[0]))
+                max_values.append({"dataset": summary.name})
             else:
                 max_values.append(None)
             metadata = dict(schema="ras-commander-sloping-mesh/1", arrays=descriptors)

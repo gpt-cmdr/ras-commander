@@ -114,11 +114,39 @@ and failure.
 
 For repeated reach requests, use `RasFim.prepare_sloping_model()` as a context
 manager. It retains physical cell polygons/indexing, scope, terrain metadata and
-complete staged mesh/WSE files. Repeated selectors share files. Each request
-still starts a fresh native process, reconstructs stencils and decodes its
-terrain window. Source size/mtime changes invalidate the context; close waits
-for active calls and releases staging. No current prepared-context speed ratio
-is claimed on this page.
+complete staged mesh/WSE files. Repeated selectors share files. Numeric profile
+staging uses bounded 8 MiB source slabs through the native HDF backend.
+Fast-Map 0.9 adds capability-detected persistent native sessions: one process
+retains mesh/stencils, a Rayon pool and decoded terrain blocks. A separate
+64 MiB bound admits at most the last small output window and up to 32 MiB of
+plain-sloping weights. Face rendering preserves its existing donor-history
+path. Source size/mtime changes invalidate the context; close waits for active
+calls, stops the native process and releases staging. `native_session=False`
+retains the CLI-per-request control for comparisons and constrained workloads.
+
+The 0.9 development engine's three-repetition rotated Windows comparison uses
+four requests per sequence, four allowed CPUs, four native and four compression
+workers, and one in-flight profile. All three columns below use the same final
+engine; they select its one-shot, prepared CLI, or persistent-session modes.
+The clock includes preparation, all requests and close; raw comparison and
+hashing are outside it. The 432 output products include 384 comparisons to
+separately generated one-shot baselines; those grids, complete masks and valid
+float32 bits are identical. Each workload includes wet pixels.
+
+| Workload | One-shot sequence (s) | Prepared, fresh CLI per request (s) | Prepared native session (s) | Fresh CLI / session |
+|---|---:|---:|---:|---:|
+| Davis: Max + timesteps 54/108, four full requests | 2.257 | 1.824 | 1.568 | 1.16× |
+| Bald Eagle bridges: two Max aliases, four small bbox requests | 3.024 | 1.236 | 0.842 | 1.47× |
+| Spring River: Max, four wet reach bbox requests | 14.137 | 10.505 | 5.498 | 1.91× |
+
+These are median sequence times on a shared workstation with warm imports and
+uncontrolled filesystem caches. They measure catalog reuse, not an isolated
+kernel or a new RASMapper comparison. Source identities, executable/harness
+hashes and restored CPU affinity were checked. The River workload retains all
+422,715 physical cells for reconstruction while mapping two repeated small
+reach windows. One-shot calls do not allocate or populate persistent caches.
+Use `scripts/benchmarks/fim_prepared_reaches.py --compare-native-session` to
+rotate these three modes; `--no-native-session` selects the fresh-CLI control.
 
 ## Reproduce comparisons
 
@@ -224,8 +252,11 @@ reference must use the same options and original terrain source layout.
 
 ## Roadmap and dependencies
 
-Later performance work includes chunked HDF staging, persistent native terrain
-and stencil reuse across reach requests, and bounded pixel-weight caches.
+Chunked profile staging, persistent native terrain/stencil reuse and bounded
+plain-sloping pixel-weight caching are implemented in the Fast-Map 0.9 session
+path described above. Future work includes broader weight-cache coverage for
+cell-face rendering, larger-window policies and additional corpus benchmarks;
+these require the same complete mask/float32 checks before adoption.
 The engine is now separately packaged as `ras-commander-fast-map` on PyPI and
 crates.io, with Windows/Linux wheels and independent release CI. Extraction
 retains the qualified 0.8 numerical modules and their source fingerprints;

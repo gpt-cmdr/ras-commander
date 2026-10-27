@@ -131,10 +131,12 @@ measure this additional catalog-concurrency opportunity.
 
 For repeated reach requests, use `RasFim.prepare_sloping_model()` as a context
 manager and call its `map_profiles()` method with different masks. It retains
-Python-side geometry/indexing and staged model/WSE inputs. Each request still
-starts the native executable, reconstructs stencils and decodes its terrain
-window; it is not a persistent native terrain cache. Changed source inputs
-invalidate the context. See [prepared model usage](api/fim.md#reuse-prepared-models-across-reach-requests).
+Python-side geometry/indexing and staged model/WSE inputs. With Fast-Map 0.9's
+persistent-session capability, it also retains one Rust process, pool, stencils
+and decoded terrain blocks. A bounded last-window cache reuses ownership,
+ground values and plain-sloping pixel weights. Set `native_session=False` for
+the older CLI-per-request behavior. Changed source inputs invalidate and close
+the context. See [prepared model usage](api/fim.md#reuse-prepared-models-across-reach-requests).
 
 ## Prepare corners for depth weighting
 
