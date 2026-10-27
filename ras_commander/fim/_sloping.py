@@ -149,6 +149,7 @@ def map_profiles(
     output_folder,
     *,
     profiles=None,
+    wsel_profiles=None,
     render_mode="sloping",
     reduce_shallow_to_horizontal=False,
     use_depth_weighted_faces=False,
@@ -203,13 +204,24 @@ def map_profiles(
         raise ValueError("timeout must be positive and finite, or None")
     hdf = Path(hdf_path).resolve(strict=True)
     terrain = Path(terrain_path).resolve(strict=True)
+    supplied = None
+    if wsel_profiles is not None:
+        if _prepared is not None:
+            raise ValueError("Prepared profiles cannot be replaced during mapping")
+        from ._supplied_wsel import snapshot
+        supplied = snapshot(wsel_profiles, hdf, profiles=profiles, max_bytes=budget * (1 << 20))
     if _prepared is None:
         model_scope = RasFim.validate_2d_model(hdf)
     else:
         from copy import deepcopy
 
         model_scope = deepcopy(_prepared._model_scope)
-    selected = _validate_selection(profiles)
+    if supplied is not None:
+        selected = supplied.selection
+    elif _prepared is not None and _prepared._supplied:
+        selected = dict(profiles)
+    else:
+        selected = _validate_selection(profiles)
     engine = (
         _engine.find_engine(engine_path) if _prepared is None else _prepared._engine
     )
@@ -251,6 +263,17 @@ def map_profiles(
     phase = time.perf_counter()
     if cells.empty:
         raise ValueError("sloping mapping requires physical 2D cell polygons")
+    if supplied is not None:
+        supplied.check_crs(cells.crs)
+        # Validate complete identities even when the AOI will contain no pixels.
+        # Required-native typed centres include ghosts, unlike the footprint.
+        with backend_scope("rust"):
+            source_cells = HdfMesh.get_mesh_cell_points(
+                hdf, include_ghost_cells=True, include_geometry=False
+            )
+        supplied.align([dict(mesh_name=name, cell_count=len(group))
+                        for name, group in source_cells.groupby("mesh_name", sort=False)])
+        del source_cells
     constraint = _aoi.resolve_aoi(
         bbox=bbox,
         polygon=polygon,
@@ -309,12 +332,18 @@ def map_profiles(
         },
         qualification="experimental native 7.0.1; plain five-model physical-2D corpus (bounded eBFE); enhanced combinations on Bald Eagle bridges Max and Davis timesteps",
     )
+    supplied_source = (_prepared._info.get("profile_source") if _prepared is not None else None)
+    if supplied is not None or supplied_source is not None:
+        details["qualification"] = "Caller-supplied WSEL; aggregate/changed-terrain/option combinations require independent qualification."
+        details["profile_source"] = supplied_source or {"kind": "caller-cell-wsel/1"}
 
     def manifest():
         frame = pd.DataFrame(list(rows.values()), columns=MANIFEST_COLUMNS)
         frame.attrs["performance"] = details.get("performance", {})
         frame.attrs["mapping_scope"] = details["mapping_scope"]
         frame.attrs["model_scope"] = model_scope
+        if "profile_source" in details:
+            frame.attrs["profile_source"] = details["profile_source"]
         return frame
 
     RasFim._write_manifest(folder, manifest(), details)
@@ -364,7 +393,12 @@ def map_profiles(
                 if plan.mask_geometry:
                     _write_geometry(root / "aoi.wkb", [plan.geometry])
                     fields["aoi_file"] = "aoi.wkb"
-                if _prepared is None:
+                if supplied is not None:
+                    from ._supplied_wsel import stage
+                    units, _, metadata = stage(supplied, root, meshes)
+                    details["profile_source"] = metadata
+                    profile_view_count = 0
+                elif _prepared is None:
                     units, profile_view_count, _ = _stage_profiles(
                         hdf, root, meshes, max_values, selected
                     )

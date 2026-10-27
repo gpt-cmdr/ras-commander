@@ -120,6 +120,53 @@ terrain window. Source size/mtime changes invalidate the context; close waits
 for active calls and releases staging. No current prepared-context speed ratio
 is claimed on this page.
 
+## Caller-supplied WSEL qualification
+
+The `wsel_profiles=` input on `map_sloping_profiles()` and
+`prepare_sloping_model()` was checked against their existing HDF-selector path
+on 2026-10-27 using the computed public Davis pipes/conduits model. The complete
+input has two meshes, 2,716 physical cells and 261 ghost cells. Three supplied
+columns reproduce Max and stored indices 54/108. Rows are shuffled before
+mapping. Source HDF and terrain hashes are checked before and after the run.
+
+Both plain sloping and unweighted cell-face sloping have **zero complete-mask
+differences and zero valid float32-bit differences** for Depth and WSE on each
+135,930-pixel output grid. These checks include one-shot supplied mapping and
+prepared mapping after the original DataFrame is changed. Supplied calls block
+stored-result reader entry points to detect selector fallback. Invalid missing
+rows are rejected even for an empty AOI. Separate checks compare explicit NaN
+dryness with the documented finite marker, and selector/supplied mapping on a
+task-owned modified terrain TIFF; the source terrain remains unchanged.
+
+| Platform | Method | HDF-selector call (s) | Supplied-WSEL call (s) |
+|---|---|---:|---:|
+| Windows x64, Python 3.13.12 | Sloping: cell corners | 0.705 | 0.388 |
+| Windows x64, Python 3.13.12 | Sloping: corners + unweighted faces | 0.388 | 0.394 |
+| Linux x64 (WSL), Python 3.11.15 | Sloping: cell corners | 2.040 | 1.025 |
+| Linux x64 (WSL), Python 3.11.15 | Sloping: corners + unweighted faces | 1.069 | 0.916 |
+
+Each clock maps all three profiles and includes preparation, launch and delivery.
+Building the supplied table is outside its mapping clock; comparison scanning
+is outside both clocks. The selector uses one worker/one in-flight profile;
+the supplied call uses four workers/two in-flight profiles. These are single
+qualification observations with uncontrolled caches and workstation load,
+**not a throughput comparison or a speedup ratio**. There is no added depth
+cutoff. Engine wheels are Fast-Map 0.8.0 and Fast-HDF 0.2.3 on both platforms;
+Commander is an unreleased source change based on 0.110.1.
+
+This proves that supplied vectors matching selectors retain the existing
+reconstruction on this fixture. It does not establish RAS Mapper parity for
+arbitrary window aggregates, healed terrains or other option combinations.
+No new native RAS Mapper exports or hydraulic computations were run for this
+input-contract change. Existing native qualification above remains separate.
+
+Run `scripts/benchmarks/fim_supplied_wsel_compare.py case.json new_output` with
+`hdf`, `terrain` and a `profiles` object mapping names to `"Max"` or integer
+indices; `engine` is optional. The receipt records canonical input-vector hashes,
+source/engine hashes, timings and complete-mask/bit metrics. Opt-in pytest uses
+`RAS_COMMANDER_SUPPLIED_WSEL_CASE` with the same case file. See the
+[input contract and CSV example](../api/fim.md#supply-cell-wsel-profiles).
+
 ## Reproduce comparisons
 
 `scripts/benchmarks/fim_sloping_compare.py` maps an external case and compares

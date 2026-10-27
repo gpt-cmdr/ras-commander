@@ -9,6 +9,17 @@ alone does not identify a development checkout.
 
 ### Unreleased
 
+**Caller-supplied cell WSEL profiles for native sloping mapping**
+
+`RasFim.map_sloping_profiles()` and `prepare_sloping_model()` now accept
+`wsel_profiles=`, a wide DataFrame keyed by `mesh_name` and `cell_id`, instead
+of HDF Max/timestep selectors. Complete physical/ghost coverage is required;
+NaN explicitly means dry. The original HDF still supplies geometry and
+hydraulic properties, and the caller independently selects one mapping TIFF.
+Existing defaults are unchanged, and Fast-Map 0.8.0 needs no rebuild. See the
+[input and installation contract](../api/fim.md#supply-cell-wsel-profiles) and
+[selector-equivalence evidence](fim-mapping-performance.md#caller-supplied-wsel-qualification).
+
 **Native fluvial-pluvial boundary on meshes with invalid cells**
 
 `HdfFluvialPluvial.calculate_fluvial_pluvial_boundary` no longer refuses the

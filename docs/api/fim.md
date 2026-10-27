@@ -119,6 +119,106 @@ memory. A missing or incompatible engine raises without fallback. Mapping itself
 does not load HEC-RAS assemblies; the private native component oracle is used
 only during development qualification.
 
+## Supply cell WSEL profiles
+
+Pass `wsel_profiles=` to `RasFim.map_sloping_profiles()` or
+`RasFim.prepare_sloping_model()` when the requested elevations are computed by
+the caller, such as cell-level maxima over a discharge window. Leave
+`profiles=None`; supplying both is an error. Window selection, aggregation and
+any decimal rounding belong to the caller. This API never substitutes an HDF
+timestep or whole-plan maximum for supplied values.
+
+Use a wide pandas DataFrame. `mesh_name` and `cell_id` identify rows; **every
+other column** is a named WSEL profile. Drop geometry and diagnostic columns
+before passing the table. The contract is declared as `fim_cell_wsel_profiles`
+in `ras_commander.schemas.DATAFRAME_SCHEMAS`.
+
+| Field or condition | Contract |
+|---|---|
+| `mesh_name` | Exact HDF mesh name, including case. Include every source mesh. |
+| `cell_id` | Nonnegative integer HDF cell ID, local to its mesh, starting at zero. |
+| Coverage | Every physical **and ghost** cell exactly once. Obtain complete keys with `HdfMesh.get_mesh_cell_points(hdf_path, include_ghost_cells=True, include_geometry=False)`. |
+| Row order | Arbitrary; values are aligned by mesh/cell identity before staging. |
+| Profile columns | Real numeric dtypes. Safe distinct names identify outputs; names must also be distinct ignoring case and cannot be reserved Windows filenames. |
+| Dry values | NaN (including nullable numeric missing values) explicitly means dry and is encoded as finite float32 minimum, approximately −3.4028235 × 10³⁸. Other finite stored sentinels pass through unchanged. |
+| Precision | Values cast once to float32. No decimal rounding, aggregation, unit or datum conversion is applied. Infinity, float32 overflow, complex, Boolean and numeric-string columns are rejected. |
+| Units | Absolute WSEL in the vertical units and datum of HDF hydraulic properties and the chosen terrain. The caller establishes this agreement. |
+| Identity errors | Missing, extra, duplicate or unknown mesh/cell IDs raise. An AOI does not relax complete input coverage or fill omitted ghost values. |
+| Source binding | `hdf_path` supplies authoritative geometry/properties. Optional table attrs `fim_source_hdf` and `crs` are checked against that source. Correct numeric IDs alone cannot detect a caller's mislabeled model or vertical datum. |
+| Ownership | Do not mutate the table during a call. Preparation owns staged values after its constructor returns; later caller changes do not alter the context. |
+
+Read a complete caller-produced table, bind its declared source, and map it:
+
+```python
+from pathlib import Path
+import pandas as pd
+from ras_commander import RasFim
+
+hdf = Path("model.p02.hdf")
+table = pd.read_csv("cell_window_maxima.csv", dtype={"mesh_name": str, "cell_id": "int64"})
+# CSV columns: mesh_name,cell_id,window_01,window_02,...
+# Include physical and ghost rows; blank numeric values explicitly mean dry.
+table.attrs["fim_source_hdf"] = str(hdf.resolve())
+manifest = RasFim.map_sloping_profiles(
+    hdf, "chosen_mapping_terrain.tif", "window_catalog",
+    wsel_profiles=table,
+    polygon="reach_boundary.gpkg",  # or bbox=(xmin, ymin, xmax, ymax)
+    threads=4, max_inflight_profiles=2, max_working_mib=2048,
+)
+print(manifest[["profile", "status", "depth_tif", "wse_tif"]])
+print(manifest.attrs["profile_source"])
+```
+
+For repeated masks, pass the same table to `prepare_sloping_model()` and then
+call the context's `map_profiles()` with subsets of the prepared column names.
+`max_prepared_mib` admits the input snapshot and retained prepared files;
+one-shot mapping checks the planned snapshot against `max_working_mib`.
+These checks are planned admission, not process RSS limits. Input DataFrame,
+transient arrays, geometry and GIS delivery also consume memory. Prepared
+metadata has `unique_selectors=0` and `profile_views_prepared=0` for supplied
+inputs. Profile values in its `info["profiles"]` are `None`, marking caller
+vectors rather than HDF selectors. Rendered requests record per-mesh/profile canonical
+float32 hashes and explicit dry-marker counts under `profile_source`.
+
+Select one independent `terrain_path`, original or healed. It must satisfy the
+same grid, CRS and raster requirements as ordinary mapping. Hydraulic geometry
+and properties continue to come from the original HDF; neither hydraulics nor
+the terrain is modified. No terrain healer is bundled or invoked by this API.
+Mapping-time bbox/polygon masks retain global hydraulic inputs.
+
+The published Fast-Map **0.8.0** wheel already accepts these vectors; no new
+engine build is required. The new Commander keyword requires a version or
+source commit containing this feature. On Linux x64 with glibc 2.28+, including
+a Python 3.11 container with a Commander checkout copied to `/app`, install:
+
+```dockerfile
+FROM python:3.11-slim
+WORKDIR /app
+COPY . /app
+RUN python -m pip install --no-cache-dir '.[fim]' 'ras-commander-fast-map==0.8.0'
+ENTRYPOINT ["python", "scripts/examples/map_supplied_wsel.py"]
+```
+
+Mount source HDF/geometry files, the TIFF, CSV and an output parent into the
+container. Supply paths within that container; output folders must be new or
+empty. The engine wheel needs no Rust compiler or system GDAL. The optional
+Terrio healer in a consuming application is independent of this installation.
+This Dockerfile is an installation recipe; qualification used Linux CPython
+3.11 directly rather than a Docker build.
+
+The runnable CSV example is `scripts/examples/map_supplied_wsel.py`. The
+qualification harness `scripts/benchmarks/fim_supplied_wsel_compare.py` creates
+complete tables through public native HDF readers and checks both complete
+validity masks and every valid float32 bit against selector mapping. Davis
+pipes/conduits Max and timesteps 54/108 pass on Windows and Linux with shuffled
+IDs, one/four workers, two in-flight profiles and prepared snapshots, for plain
+sloping and unweighted cell-face sloping. Explicit NaN dryness and a separately
+changed terrain copy are also tested. See the
+[qualification record](../development/fim-mapping-performance.md#caller-supplied-wsel-qualification).
+Selector equivalence does **not** establish RAS Mapper parity for arbitrary
+window aggregates, healed terrains or unqualified rendering combinations.
+Existing depth-weighting/corner requirements and 2D-only restrictions remain.
+
 ## Additional sloping options (engine 0.5)
 
 ### Reach-scale catalog masks

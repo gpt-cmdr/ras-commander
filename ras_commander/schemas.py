@@ -1956,6 +1956,19 @@ DATAFRAME_SCHEMAS["terrain_modification_features"] = {
 }
 
 
+DATAFRAME_SCHEMAS["fim_cell_wsel_profiles"] = {
+    "description": "Caller-supplied complete cell WSEL profiles for native sloping reconstruction.",
+    "accessor": "RasFim.map_sloping_profiles(wsel_profiles=...) / prepare_sloping_model(wsel_profiles=...)",
+    "source": "Caller-owned DataFrame; identities bound to the supplied source HDF.",
+    "extra_columns": True,
+    "dynamic": True,
+    "columns": [
+        {"name": "mesh_name", "dtype": "str", "description": "Exact HDF mesh name; all source meshes required."},
+        {"name": "cell_id", "dtype": "int64", "description": "Zero-based mesh-local source cell ID, physical and ghost rows exactly once."},
+    ],
+    "note": "Every additional column is a safely named real numeric WSEL profile in model vertical units/datum. NaN explicitly means dry; infinities/float32 overflow refuse. IDs must cover the full HDF meshes, including ghosts, regardless of AOI. Optional attrs fim_source_hdf/crs must match. No automatic time aggregation, rounding policy, unit conversion or native parity claim.",
+}
+
 DATAFRAME_SCHEMAS["fim_product_manifest"] = {
     "description": "One row per mapped WSE profile; the file manifest identifies the selected RasFim method.",
     "accessor": "RasFim.map_profiles(...), RasFim.map_ras2fim_results(...), or RasFim.map_horizontal_profiles(...)",

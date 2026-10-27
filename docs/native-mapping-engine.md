@@ -136,6 +136,24 @@ starts the native executable, reconstructs stencils and decodes its terrain
 window; it is not a persistent native terrain cache. Changed source inputs
 invalidate the context. See [prepared model usage](api/fim.md#reuse-prepared-models-across-reach-requests).
 
+## Map caller-computed elevations
+
+`map_sloping_profiles(..., wsel_profiles=table)` and
+`prepare_sloping_model(..., wsel_profiles=table)` accept named WSEL columns keyed
+by `mesh_name` and mesh-local `cell_id`. Include every physical and ghost cell
+of every mesh, and omit the mutually exclusive `profiles` selector argument.
+NaN explicitly means dry. Supplied elevations cast to float32 without window
+aggregation, decimal rounding or unit conversion. The original HDF supplies
+hydraulic geometry/properties; the caller chooses one original or healed
+mapping TIFF independently. Bbox/polygon masks and bounded profile concurrency
+work with these inputs.
+
+Fast-Map 0.8.0 already supports the vector transport; only Commander needs the
+new API. The [input contract, Python 3.11 installation and runnable CSV example](api/fim.md#supply-cell-wsel-profiles)
+describe source binding, units, completeness and failure behavior. Full-mask
+and float32 selector-equivalence checks do not qualify arbitrary aggregate
+profiles or changed terrains as RAS Mapper products.
+
 ## Prepare corners for depth weighting
 
 Depth-weighted mapping needs native stored corner ground elevations. If the
