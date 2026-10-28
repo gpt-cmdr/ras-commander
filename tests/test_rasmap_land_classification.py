@@ -738,3 +738,26 @@ def test_classification_polygon_reader_uses_feature_relative_part_offsets(
     assert len(records[1]["geometry"].interiors) == 1
     assert records[1]["geometry"].bounds == (0.0, 0.0, 10.0, 10.0)
     assert records[1]["geometry"].area == pytest.approx(96.0)
+
+
+@pytest.mark.parametrize(
+    "native_type,expected", [
+        ("Soils", "soils"), ("LandCover", "landcover"),
+        ("InfiltrationSCSCurveNumber", "infiltration"),
+    ],
+)
+def test_native_sidecar_type_overrides_filename_heuristics(tmp_path, native_type, expected):
+    project = _make_temp_project(tmp_path, "NativeMetadata")
+    sidecar = project / "large.hdf"
+    with h5py.File(sidecar, "w") as hdf:
+        hdf.attrs["LC Type"] = np.bytes_(native_type)
+    (project / "NativeMetadata.rasmap").write_text(
+        '<RASMapper><MapLayers><Layer Name="Custom" Type="LandCoverLayer" '
+        'Filename=".\\large.hdf" SelectedParameterForSurfaceFillLabel="ID" />'
+        '</MapLayers></RASMapper>'
+    )
+    layers = RasMap.list_land_classification_layers(project)
+    assert layers.iloc[0]["classification_kind"] == expected
+    if native_type == "Soils":
+        assert RasMap.list_soils_layers(project)["name"].tolist() == ["Custom"]
+        assert RasMap.parse_rasmap(project / "NativeMetadata.rasmap").at[0, "soil_layer_path"] == [str(sidecar)]

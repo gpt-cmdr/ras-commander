@@ -1102,6 +1102,10 @@ class RasMap:
         """
         Create and register a soils layer from direct GSSURGO input.
 
+        For restricted extents, read whole polygons intersecting the buffered,
+        grid-aligned bounds. Rasterize in tiles of at most 10 million cells;
+        all tiles share one mapping and feed one native soils-layer computation.
+
         ``restrict_to_extent`` accepts the same polygon and legacy bounds inputs
         as :meth:`add_landcover_layer`. ``buffer_distance`` is applied in project
         CRS units before raster bounds are derived and defaults to ``0.0``.

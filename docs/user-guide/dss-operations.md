@@ -292,6 +292,11 @@ except RuntimeError as e:
 2. **Large files**: Successfully tested up to 1.3 GB DSS files
 3. **Memory**: Large time series may require chunked reading
 4. **Caching**: Catalog is cached per file during session
+5. **File release**: Java-bridge reads and writes (`get_catalog()`,
+   `read_timeseries()`, `read_grid()`, `write_timeseries()`,
+   `write_grid_timeseries()`) release the native file handle before they
+   return, so the file can be renamed, deleted, or opened by another program
+   while the JVM keeps running
 
 ## Writing Gridded DSS Precipitation
 

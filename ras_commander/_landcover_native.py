@@ -436,7 +436,7 @@ def _create_modern_landcover(
 def create_soils(
     *,
     rasmap_path: Union[str, Path],
-    source_raster_path: Union[str, Path],
+    source_raster_path: Union[str, Path, list[Union[str, Path]]],
     raster_map_rows: list[tuple[int, str]],
     cell_size: float,
     output_hdf_path: Union[str, Path],
@@ -444,8 +444,8 @@ def create_soils(
 ) -> Path:
     """Author a hydrologic-soils sidecar through the target RasMapperLib.
 
-    The input raster may be prepared with normal GIS tooling, but HEC-RAS owns
-    creation and serialization of the output TIFF/HDF pair.
+    Accept one source raster or a list of aligned tiles sharing the same class
+    mapping. HEC-RAS creates and serializes one output TIFF/HDF pair.
     """
     if _major_version(hecras_version) <= 5:
         raise NotImplementedError(
@@ -454,12 +454,19 @@ def create_soils(
         )
 
     rasmap_path = RasUtils.safe_resolve(Path(rasmap_path))
-    source_raster_path = RasUtils.safe_resolve(Path(source_raster_path))
+    source_paths = (
+        [source_raster_path] if isinstance(source_raster_path, (str, Path))
+        else list(source_raster_path)
+    )
+    if not source_paths:
+        raise ValueError("At least one soils source raster is required.")
+    source_paths = [RasUtils.safe_resolve(Path(path)) for path in source_paths]
     output_hdf_path = RasUtils.safe_resolve(Path(output_hdf_path))
     if not rasmap_path.exists():
         raise FileNotFoundError(rasmap_path)
-    if not source_raster_path.exists():
-        raise FileNotFoundError(source_raster_path)
+    for source_path in source_paths:
+        if not source_path.exists():
+            raise FileNotFoundError(source_path)
     if not math.isfinite(float(cell_size)) or float(cell_size) <= 0:
         raise ValueError("cell_size must be positive and finite.")
 
@@ -504,18 +511,13 @@ def create_soils(
     from Utility.Progress import ProgressReporter  # type: ignore
 
     _initialize_shared_projection(rasmap_path)
-    source = LandCoverFile(
-        str(source_raster_path),
-        None,
-        SharedData.SRSProjection,
-    )
-    names, ids = _populate_modern_input_mapping(
-        source,
-        normalized_rows,
-        source_field=None,
-    )
     inputs = List[LandCoverFile]()
-    inputs.Add(source)
+    for source_path in source_paths:
+        source = LandCoverFile(str(source_path), None, SharedData.SRSProjection)
+        names, ids = _populate_modern_input_mapping(
+            source, normalized_rows, source_field=None,
+        )
+        inputs.Add(source)
     extras = List[Array[Single]]()
     payload_columns = List[Int32]()
     computable = LandCoverComputable(
