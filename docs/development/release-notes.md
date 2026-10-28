@@ -9,6 +9,56 @@ alone does not identify a development checkout.
 
 ### Unreleased
 
+**DSS files are released when a Java-bridge call returns**
+
+With HEC Monolith, `HecDss.done()` only drops the bridge's file-cache
+reference. The native file stayed open, with its DSS locks held, until a
+deferred close ran a few seconds later. During that window other programs
+could refuse to write the file, and Windows could not rename or delete it.
+`RasDss.get_catalog()`, `read_timeseries()`, `read_grid()`,
+`write_timeseries()` and `write_grid_timeseries()` now also close the file
+through `HecDSSFileAccess.close(path, True)`, using the same resolved path
+string that opened it. A failed release is logged at DEBUG and never masks the
+call's own error. Public signatures and return values are unchanged.
+
+**Crop-invariant polygon AOI edges**
+
+Horizontal/sloping masks use global source pixel coordinates and an explicit
+half-open edge rule, eliminating crop-origin differences at pixel-center
+boundary ties. Polygon mapping requires Fast-Map's
+`global-terrain-lattice/1` capability (0.10.1+); older engines raise rather than
+silently use the old coverage. Unbounded/same-CRS bbox compatibility remains.
+The NumPy reference and bbox planning use the same normalized convention.
+This intentionally changes legacy edge inclusion, while leaving hydraulic
+cell ownership and surface arithmetic unchanged. See the
+[AOI contract](../api/fim.md#global-terrain-lattice-aoi-coverage-engine-0101).
+
+**FIM: priority-1 terrain source, whole-simulation products and velocity**
+
+`RasFim.top_priority_terrain_source()` identifies a registered terrain's
+priority-1 source TIFF from its `Priority` attributes or VRT order.
+`map_sloping_profiles()`, `map_horizontal_profiles()` and the new
+`map_whole_simulation()` accept `terrain_hdf=` to map on that TIFF without a
+RAS Mapper terrain export. `map_whole_simulation()` writes arrival time and
+percent time inundated (duration opt-in), and `map_sloping_profiles(velocity=True)`
+adds a `velocity_tif` manifest column. All need a Fast-Map engine that
+advertises the matching methods; engine refusals raise `FimUnsupportedError`,
+and storage-area plans are refused. Products are qualified against RAS Mapper
+output on Davis p02 and BaldEagleCrkMulti2D bridges p05 for pure 2D FIM
+library creation. See [the FIM guide](../api/fim.md#map-on-the-priority-1-terrain-source-no-terrain-export).
+
+**Columnar PMTiles properties**
+
+`fast_hdf.export_mesh_pmtiles()` builds its property columns as NumPy arrays
+(`mesh_name` as a categorical, result columns gathered by cell ID, masked where
+a mesh lacks the column) and `fast_hdf.export_pmtiles()` passes typed arrays,
+`(values, valid)` pairs and `{"codes", "categories"}` columns to an engine
+that reads them without a Python object per value. Support is detected by
+capability; older engines receive the equivalent lists, and the archives are
+byte-identical either way. On Bald Eagle p07 (87,039 cells, 15 columns,
+z10-14) Python preparation drops from 2.9 s to 0.4 s and peak working set from
+400 MiB to 352 MiB. See [HDF API](../api/hdf.md).
+
 **Caller-supplied cell WSEL profiles for native sloping mapping**
 
 `RasFim.map_sloping_profiles()` and `prepare_sloping_model()` now accept

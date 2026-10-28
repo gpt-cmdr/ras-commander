@@ -1994,9 +1994,40 @@ DATAFRAME_SCHEMAS["fim_product_manifest"] = {
             ("depth_finite_pixels", "int | None", "Finite depth pixels in the written raster."),
             ("flooded_pixels", "int | None", "Pixels with 0 < depth <= 10000, the floodplain polygon support."),
             ("error", "str | None", "Failure diagnostic for failed or not_run rows."),
+            ("velocity_tif", "str | None", "Velocity magnitude GeoTIFF (float32, NaN nodata) from map_sloping_profiles(velocity=True); None otherwise."),
         )
     ],
     "note": "The same rows, engine method record, engine reports, options, AOI and input identities are written to fim_manifest.json. Step05 prepares every wet cell before AOI selection; horizontal mapping prepares ownership and terrain for the constrained window.",
+}
+
+
+DATAFRAME_SCHEMAS["fim_whole_simulation_manifest"] = {
+    "description": "One row per whole-simulation product (arrival time, percent time inundated, optional duration).",
+    "accessor": "RasFim.map_whole_simulation(...)",
+    "source": "ras_commander.fim.RasFim.RasFim.map_whole_simulation()",
+    "extra_columns": False,
+    "dynamic": False,
+    "columns": [
+        {"name": name, "dtype": dtype, "description": description}
+        for name, dtype, description in (
+            ("product", "str", "arrival_time, percent_inundated or duration."),
+            ("status", "str", "complete, empty_aoi, failed or not_run."),
+            ("tif", "str | None", "Product GeoTIFF path (float32, NaN where never wet)."),
+            ("units", "str", "hours (since simulation start for arrival_time) or percent."),
+            ("threshold", "float", "Wet depth threshold in model vertical units."),
+            ("output_times", "int", "Stored output times evaluated."),
+            ("wet_pixels", "int | None", "Pixels wet at least once."),
+            ("qualified", "bool", "True for arrival_time and percent_inundated; duration is unqualified."),
+            ("col_off", "int | None", "Column offset of the written window on the terrain grid."),
+            ("row_off", "int | None", "Row offset of the written window on the terrain grid."),
+            ("width", "int | None", "Written raster width in pixels."),
+            ("height", "int | None", "Written raster height in pixels."),
+            ("transform", "tuple[float, ...] | None", "Affine (a, b, c, d, e, f) of the written raster."),
+            ("crs", "str | None", "Output CRS."),
+            ("error", "str | None", "Failure diagnostic."),
+        )
+    ],
+    "note": "fim_manifest.json records the engine report, time reference, unqualified-case counts and input identities.",
 }
 
 
