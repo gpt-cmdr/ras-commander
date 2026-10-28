@@ -611,3 +611,10 @@ gauges over four bounded windows, including both 2024 daylight-saving
 transitions. All 52 observation times and values matched after both datasets
 were clipped to the same UTC bounds. Legacy hourly query bounds themselves
 differed; this observation does not establish universal endpoint equivalence.
+
+Gauge discovery uses modern monitoring-location and time-series metadata.
+With `active_only=True`, a site must have a requested parameter series with an
+observation during the last 183 days. When no parameters are specified, any
+time series can qualify. This is an observation-recency filter, not the legacy
+NWIS maintenance status, which also considered manual samples and USGS
+overrides. Set `active_only=False` to include historical series.

@@ -36,10 +36,8 @@ Example Usage:
 
 from pathlib import Path
 from typing import Union, Optional, List, Tuple, TYPE_CHECKING
-import io
 
 import pandas as pd
-import requests
 
 from ..hdf import HdfProject
 from ..Decorators import log_call
@@ -77,46 +75,50 @@ class UsgsGaugeSpatial:
         return gpd.GeoDataFrame(geometry=[], crs="EPSG:4326")
 
     @staticmethod
-    def _query_legacy_site_service(
-        west: float,
-        south: float,
-        east: float,
-        north: float,
-        site_type: str,
-        param_codes: Optional[str],
-        active_only: bool,
-    ) -> pd.DataFrame:
-        """Query the NWIS site service when dataretrieval lacks filters."""
-        params = {
-            "format": "rdb",
-            "bBox": ",".join(
-                f"{float(value):.7f}" for value in [west, south, east, north]
-            ),
-            "siteStatus": "active" if active_only else "all",
-        }
+    def _query_modern_sites(west, south, east, north, site_type, param_codes, active_only, api):
+        """Intersect locations with requested, optionally recent time series."""
+        from ._waterdata_adapter import _wait
+
+        kwargs = {"bbox": [float(west), float(south), float(east), float(north)], "agency_code": "USGS"}
         if site_type:
-            params["siteType"] = site_type
-        if param_codes:
-            params["parameterCd"] = param_codes
-
-        response = requests.get(
-            "https://waterservices.usgs.gov/nwis/site/",
-            params=params,
-            timeout=30,
-        )
-        response.raise_for_status()
-
-        lines = [
-            line for line in response.text.splitlines()
-            if line and not line.startswith("#")
-        ]
-        if len(lines) < 2:
-            return pd.DataFrame()
-
-        df = pd.read_csv(io.StringIO("\n".join(lines)), sep="\t", dtype=str)
-        if len(df) and df.iloc[0].astype(str).str.match(r"^\d+s$").any():
-            df = df.iloc[1:].reset_index(drop=True)
-        return df
+            kwargs["site_type_code"] = site_type
+        _wait()
+        locations, _ = api.get_monitoring_locations(**kwargs)
+        if locations is None or locations.empty or (not active_only and not param_codes):
+            return locations
+        if "monitoring_location_id" not in locations:
+            raise ValueError("Monitoring locations lack monitoring_location_id")
+        ids = locations["monitoring_location_id"].drop_duplicates().tolist()
+        codes = param_codes.split(",") if param_codes else None
+        now = pd.Timestamp.now(tz="UTC")
+        threshold = now - pd.Timedelta(days=183)
+        selected = set()
+        # Batches bound URL length without querying every station separately.
+        for offset in range(0, len(ids), 50):
+            batch = ids[offset:offset + 50]
+            query = {"monitoring_location_id": batch}
+            if codes:
+                query["parameter_code"] = codes
+            _wait()
+            series, _ = api.get_time_series_metadata(**query)
+            if series is None or series.empty:
+                continue
+            if "monitoring_location_id" not in series or not series["monitoring_location_id"].isin(batch).all():
+                raise ValueError("Time-series metadata contains unexpected locations")
+            if codes:
+                if "parameter_code" not in series:
+                    raise ValueError("Time-series metadata lacks parameter_code")
+                series = series[series["parameter_code"].isin(codes)]
+            if active_only:
+                # v1 uses end; v0 used end_utc. This is observation recency,
+                # not the retired NWIS maintenance-status field.
+                field = "end" if "end" in series else "end_utc"
+                if field not in series:
+                    raise ValueError("Time-series metadata lacks its most recent observation time")
+                latest = pd.to_datetime(series[field], utc=True, errors="raise", format="mixed")
+                series = series[(latest >= threshold) & (latest <= now)]
+            selected.update(series["monitoring_location_id"])
+        return locations[locations["monitoring_location_id"].isin(selected)].copy()
 
     @staticmethod
     @log_call
@@ -160,6 +162,9 @@ class UsgsGaugeSpatial:
             - 'stage' or '00065' : Gage height
             - ['flow', 'stage'] : Multiple parameters
         active_only : bool, default True
+            Require a requested series with an observation in the last 183 days.
+            If no parameters are requested, any time series qualifies. This
+            measures observation recency, not legacy NWIS maintenance status.
             If True, only return currently active gauges. If False,
             include inactive/historical gauges.
         project_crs : str, optional
@@ -288,35 +293,9 @@ class UsgsGaugeSpatial:
 
         # Query USGS Water Services API
         try:
-            if param_codes is not None:
-                logger.debug(
-                    "Using legacy NWIS site service for parameterCd filter"
-                )
-                df = UsgsGaugeSpatial._query_legacy_site_service(
-                    west,
-                    south,
-                    east,
-                    north,
-                    site_type=site_type,
-                    param_codes=param_codes,
-                    active_only=active_only,
-                )
-            else:
-                kwargs = {
-                    'bbox': [
-                        float(west),
-                        float(south),
-                        float(east),
-                        float(north),
-                    ],
-                }
-                if site_type:
-                    kwargs['site_type_code'] = site_type
-
-                logger.debug(f"USGS query parameters: {kwargs}")
-
-                # Query monitoring locations
-                df, md = waterdata.get_monitoring_locations(**kwargs)
+            df = UsgsGaugeSpatial._query_modern_sites(
+                west, south, east, north, site_type, param_codes, active_only, waterdata,
+            )
 
         except Exception as e:
             logger.error(f"USGS API query failed: {e}")
@@ -436,14 +415,6 @@ class UsgsGaugeSpatial:
                 filtered_count = initial_count - len(gdf)
                 if filtered_count > 0:
                     logger.info(f"Filtered out {filtered_count} non-{site_type} sites ({len(gdf)} {site_type} sites remaining)")
-
-            # Filter for active sites if requested
-            if active_only and 'site_status' in gdf.columns:
-                initial_count = len(gdf)
-                gdf = gdf[gdf['site_status'] == 'Active'].copy()
-                filtered_count = initial_count - len(gdf)
-                if filtered_count > 0:
-                    logger.info(f"Filtered out {filtered_count} inactive sites ({len(gdf)} active remaining)")
 
             return gdf
 
