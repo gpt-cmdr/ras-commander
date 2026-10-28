@@ -1438,6 +1438,12 @@ class RasFim:
     ) -> pd.DataFrame:
         """Map a batch of cell WSE profiles to depth and WSE rasters.
 
+        This is the triangulated ras2fim-2D Step 05 method. It can produce
+        different wet extents from native horizontal cell filling. Use
+        :meth:`map_horizontal_profiles` when cell-constant horizontal WSE is
+        the intended mapping method; changing a grid anchor does not change
+        triangulation into cell filling.
+
         Every profile shares one terrain and one engine session per request
         of ``profiles_per_request`` profiles. Sample preparation, Delaunay
         topology, query axes and the wet mask always use every wet cell of a

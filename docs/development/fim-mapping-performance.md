@@ -333,3 +333,59 @@ crates.io, with Windows/Linux wheels and independent release CI. Extraction
 retains the qualified 0.8 numerical modules and their source fingerprints;
 the tables above remain the original mapping measurements, not new timing
 claims for the packaging change.
+
+## UPGU1 wet-extent report (#628)
+
+Use `RasFim.map_horizontal_profiles()` when comparing cell-constant horizontal
+surfaces. `map_profiles()` retains the triangulated ras2fim-2D Step 05 method;
+its grid anchor and polygon constraint do not change that interpolation method.
+The following bounded qualification addresses the large wet-extent discrepancy
+reported in [#628](https://github.com/gpt-cmdr/ras-commander/issues/628).
+
+The 2026-10-28 check reuses the original five UPGU1 reaches and seven saved
+p02 indices (198, 199, 201, 215, 216, 217, 220), parent-extract WSE, 500-ft cell
+selection buffer, strict reach domains, modifications-applied native terrain
+export and retained native horizontal Depth/WSE maps. Cell selection remains
+`WSE - minimum_elevation > 0`; no source values, hydraulic model or thresholds
+were changed. The terrain SHA256 is
+`7aeee3b977cabbc02025b6fb93ae703d94c7804973011d1992ae998eeb31b0be`.
+
+Both the explicit NumPy polygon path and released Fast-Map 0.8.0 Rust bbox path
+completed all 35 reach/time cases. Each was independently compared on the
+entire strict-domain bounding window of the native lattice. Native wet pixels
+outside a candidate extent count as missing. The same strict-domain mask is
+applied to both products; no reprojection or resampling occurs.
+
+| Strict depth cutoff (ft) | Candidate wet samples | Native wet samples | Extra / missing samples | Minimum per-case CSI |
+|---|---:|---:|---:|---:|
+| 0 | 46,602,055 | 46,602,057 | 2 / 4 | 0.999998255 |
+| 0.5 | 37,208,891 | 37,208,898 | 3 / 10 | 0.999997854 |
+| 2 | 23,574,365 | 23,574,367 | 2 / 4 | 0.999997731 |
+
+Counts sum raster samples across the 35 cases, not unique area or a seven-time
+maximum envelope. NumPy and Rust have the same reported counts. WSE values are
+exact on common-wet samples where both WSE bands are valid; maximum common-wet depth difference is
+0.015625 ft. The retained native maps have missing WSE at 580 positive-depth
+samples (539 above 0.5 ft, 357 above 2 ft); those gaps are reported, not filled
+from candidate values. These observations do not establish complete-band bit
+parity or resolve every native Depth/WSE/terrain inconsistency. No new numerical
+tolerance or threshold adjustment was introduced.
+
+The former 1.3–2.0 wet-area ratio is absent in this horizontal-method check.
+This supports surface-construction choice as the cause of the large discrepancy
+in the triangulated workflow. Existing triangulated products remain labelled
+with their own method; their results and defaults are not silently changed.
+
+Fast-Map 0.8.0 lacks `global-terrain-lattice/1`; it is qualified here only for bbox
+mapping followed by independent strict-domain comparison. Native polygon
+requests still require a capable newer engine and reject older wheels. The
+NumPy reference explicitly supports the current polygon rule; it is never an
+automatic fallback. This check reused historical native maps, so it provides no
+new native-generation timing or native/Rust speed ratio.
+
+Recheck retained products with
+`scripts/qualification/compare_horizontal_reach_products.py`. Supply product,
+domain and native-reference folders plus the reach IDs and saved indices. It
+checks full-AOI coverage, lattice/CRS, independent Depth/WSE validity, thresholds
+and band errors, and writes a JSON receipt. Large source/results stay outside
+the repository.
