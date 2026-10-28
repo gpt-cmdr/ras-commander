@@ -11,8 +11,10 @@
   DEBUG/INFO; anything else is logged at WARNING.
 
 The environment variable ``RAS_COMMANDER_DSS_BACKEND``, when set, overrides
-``RasDss.backend``. Writes, grid reads and ``get_file_version()`` stay on Java under
-every backend in this release.
+``RasDss.backend``. Catalog, time-series, paired-data and file-version reads switch.
+Native grid reads are gated until the wheel advertises qualified CRS (``native_grid_qualified()``).
+Writes stay on Java under every backend in this release. ``CAPABILITIES`` lists the
+support matrix that ``RasDss.get_capabilities()`` reports.
 
 This module is private. Its comparison rules mirror the P09a parity harness
 (``feature_dev_notes/rust_dss/packets/evidence/P09a/scripts/parity.py``).
@@ -505,3 +507,328 @@ def summary() -> Dict[str, int]:
     """Shadow outcome counts as ``{"operation|outcome|label": n}``."""
     with _lock:
         return {"|".join(k): v for k, v in sorted(SHADOW_STATS.items())}
+
+
+# ---------------------------------------------------------------------------
+# Capabilities (P18): paired data, grids and file version
+# ---------------------------------------------------------------------------
+
+#: Feature name a dss-commander wheel advertises (in ``dss_commander.FEATURES``) once
+#: its grid CRS strings are qualified against HEC Monolith (engine packet P13).
+NATIVE_GRID_FEATURE = "grid_srs_monolith_parity"
+
+
+def native_grid_qualified() -> bool:
+    """True when the installed dss-commander advertises qualified grid CRS strings.
+
+    This is a capability check, not a version pin: a wheel qualifies by listing
+    ``NATIVE_GRID_FEATURE`` in ``dss_commander.FEATURES``. Wheels without that
+    attribute (every wheel up to and including 0.0.1) are not qualified.
+    """
+    dc = _maybe_native()
+    if dc is None:
+        return False
+    try:
+        return NATIVE_GRID_FEATURE in set(getattr(dc, "FEATURES", ()) or ())
+    except TypeError:
+        return False
+
+NATIVE_GRID_GATE_MESSAGE = (
+    "Native DSS grid reads are not yet qualified: the native CRS string is wrong "
+    "or empty for some legacy Albers grids (engine packet P13), and the installed "
+    "dss-commander does not advertise the 'grid_srs_monolith_parity' feature. RasDss does not "
+    "fall back to Java. Use RasDss.backend = 'java' (or 'shadow'), or pass "
+    "allow_unqualified_native=True to accept native cells and metadata with an "
+    "unqualified CRS (metadata['crs_qualified'] is False)."
+)
+
+#: Backend support per public DSS operation. Values: "yes"; "gated" (explicit
+#: opt-in required); "java" (runs on Java whatever the backend); "no".
+CAPABILITIES = (
+    # operation, java, native, shadow, note
+    ("get_catalog", "yes", "yes", "yes", ""),
+    ("read_timeseries", "yes", "yes", "yes", "native and shadow honor start_date/end_date"),
+    ("read_multiple_timeseries", "yes", "yes", "yes", ""),
+    ("read_paired_data", "yes", "yes", "yes", "all curves, labels, units, types, stored precision"),
+    ("read_grid", "yes", "gated", "yes",
+     "native requires a dss-commander wheel advertising 'grid_srs_monolith_parity' "
+     "or allow_unqualified_native=True; shadow returns the Java grid until then"),
+    ("get_file_version", "yes", "yes", "yes", ""),
+    ("write_timeseries", "yes", "java", "java", "writes stay on Java"),
+    ("write_grid_timeseries", "yes", "java", "java", "writes stay on Java"),
+    ("copy_grid_with_zero_tail", "yes", "java", "java", "writes stay on Java"),
+    ("write_paired_data", "no", "no", "no", "not provided by RasDss yet"),
+)
+
+
+def _float_bits_equal(a: np.ndarray, b: np.ndarray) -> bool:
+    """Bitwise equality of two float arrays of the same dtype and shape."""
+    a, b = np.asarray(a), np.asarray(b)
+    if a.dtype != b.dtype or a.shape != b.shape:
+        return False
+    width = {4: np.int32, 8: np.int64}.get(a.dtype.itemsize)
+    if width is None or a.dtype.kind != "f":
+        return bool(np.array_equal(a, b))
+    return bool(np.array_equal(np.ascontiguousarray(a).view(width),
+                               np.ascontiguousarray(b).view(width)))
+
+
+def compare_paired_data(java_df: pd.DataFrame, native_df: pd.DataFrame) -> List[str]:
+    """Differences between a Java and a native ``read_paired_data`` frame.
+
+    Compares the index (name, dtype, bits), the columns (names, order, dtype and
+    bits of every curve) and every ``attrs`` key.
+    """
+    diffs: List[str] = []
+    if java_df.index.name != native_df.index.name:
+        diffs.append("index_name")
+    if java_df.index.dtype != native_df.index.dtype:
+        diffs.append(f"index_dtype:{java_df.index.dtype}->{native_df.index.dtype}")
+    elif not _float_bits_equal(java_df.index.to_numpy(), native_df.index.to_numpy()):
+        diffs.append("ordinates_bits")
+    if list(java_df.columns) != list(native_df.columns):
+        diffs.append("columns")
+    if java_df.shape != native_df.shape:
+        diffs.append("shape")
+    else:
+        for i in range(java_df.shape[1]):
+            jv, nv = java_df.iloc[:, i].to_numpy(), native_df.iloc[:, i].to_numpy()
+            if jv.dtype != nv.dtype:
+                diffs.append(f"curve_dtype:{i}")
+            elif not _float_bits_equal(jv, nv):
+                diffs.append(f"curve_bits:{i}")
+    for key in sorted(set(java_df.attrs) | set(native_df.attrs)):
+        jv_ = java_df.attrs.get(key, "<absent>")
+        nv_ = native_df.attrs.get(key, "<absent>")
+        if jv_ != nv_:
+            if isinstance(jv_, str) and isinstance(nv_, str) and jv_.strip() == nv_.strip():
+                diffs.append(f"attr_ws:{key}")
+            else:
+                diffs.append(f"attr:{key}")
+    return diffs
+
+
+def _default_curve_names(df: pd.DataFrame) -> bool:
+    return list(df.columns) == [f"curve_{i + 1}" for i in range(df.shape[1])]
+
+
+def classify_paired_data(
+    java_df: Optional[pd.DataFrame],
+    java_exc: Optional[BaseException],
+    native_df: Optional[pd.DataFrame],
+    native_exc: Optional[BaseException],
+) -> Tuple[str, str, List[str]]:
+    """Classify one ``read_paired_data`` comparison.
+
+    Known differences (logged as ``expected``):
+
+    - ``PD1``: the Java DSS6 reader strips leading blanks from curve labels; HEC's
+      C library (and native) keeps them. Labels must agree after ``lstrip``; the
+      column names derived from them may differ accordingly.
+    - ``PD2``: Java does not expose the DSS7 paired-data time zone.
+    - ``PD3``: whitespace-only differences in unit/type/parameter strings.
+    - ``PD4``: DSS6 precision: Monolith reports -1 (unset); native decodes the stored
+      ``KIPREC`` word (``zpdRetrieve6.c``), which can be 0.
+    """
+    from . import _errors
+
+    if java_unavailable(java_exc):
+        return "skipped", "java unavailable", []
+    not_found = _errors.get("DssPathnameNotFoundError")
+    if java_df is not None and native_df is not None:
+        diffs = compare_paired_data(java_df, native_df)
+        if not diffs:
+            return "identical", "identical", diffs
+        labels: List[str] = []
+        rest = set(diffs)
+        if "attr:labels" in rest:
+            jl = [s.lstrip() for s in java_df.attrs.get("labels", [])]
+            nl = [s.lstrip() for s in native_df.attrs.get("labels", [])]
+            if jl == nl:
+                rest.discard("attr:labels")
+                if "columns" in rest and (
+                    [str(c).lstrip() for c in java_df.columns]
+                    == [str(c).lstrip() for c in native_df.columns]
+                    or _default_curve_names(java_df) or _default_curve_names(native_df)
+                ):
+                    rest.discard("columns")
+                labels.append("PD1 DSS6 label leading blanks (Java strips)")
+        if "attr:time_zone" in rest and java_df.attrs.get("time_zone") is None:
+            rest.discard("attr:time_zone")
+            labels.append("PD2 DSS7 time zone (Java does not report it)")
+        precision = {"attr:x_precision", "attr:y_precision"} & rest
+        if (precision and native_df.attrs.get("dss_version") == 6
+                and all(java_df.attrs.get(k.split(":", 1)[1]) == -1 for k in precision)):
+            rest -= precision
+            labels.append("PD4 DSS6 precision (Java reports -1; native reads KIPREC)")
+        ws = {d for d in rest if d.startswith("attr_ws:")}
+        if ws:
+            rest -= ws
+            labels.append("PD3 unit/type whitespace")
+        if not rest:
+            return "expected", "; ".join(labels), diffs
+        return "unexpected", "paired-data difference", diffs
+    if java_df is None and native_df is None:
+        if isinstance(native_exc, not_found) and isinstance(java_exc, not_found):
+            return "expected", "not found on both backends", []
+        return "unexpected", "both failed", []
+    if native_df is not None:
+        return "unexpected", "native data, Java error", []
+    return "unexpected", "Java data, native error", []
+
+
+def _same(a: Any, b: Any) -> bool:
+    """Equality that treats None/NaT pairs as equal."""
+    a_missing = a is None or (isinstance(a, (pd.Timestamp, type(pd.NaT))) and pd.isna(a))
+    b_missing = b is None or (isinstance(b, (pd.Timestamp, type(pd.NaT))) and pd.isna(b))
+    if a_missing or b_missing:
+        return a_missing and b_missing
+    try:
+        return bool(a == b)
+    except Exception:  # pragma: no cover - defensive
+        return False
+
+
+def _grid_meta_diffs(java: Dict[str, Any], native: Dict[str, Any]) -> List[str]:
+    """Metadata differences between two ``read_grid`` dictionaries (cells excluded)."""
+    diffs: List[str] = []
+    for key in ("pathname", "shape", "units", "data_type", "grid_type", "crs",
+                "cell_size", "start_time", "end_time", "row_order"):
+        jv, nv = java.get(key), native.get(key)
+        if not _same(jv, nv):
+            if isinstance(jv, str) and isinstance(nv, str) and jv.strip() == nv.strip():
+                diffs.append(f"ws:{key}")
+            else:
+                diffs.append(key)
+    jm, nm = java.get("metadata", {}) or {}, native.get("metadata", {}) or {}
+    for key in ("pathname_parts", "grid_class", "grid_type_code", "data_type_code",
+                "shape", "number_of_cells_x", "number_of_cells_y", "lower_left_cell",
+                "origin", "nodata_value", "compression", "number_missing", "timing"):
+        if not _same(jm.get(key), nm.get(key)):
+            diffs.append(f"metadata.{key}")
+    jp, np_ = jm.get("projection", {}) or {}, nm.get("projection", {}) or {}
+    for key in sorted(set(jp) | set(np_)):
+        jv, nv = jp.get(key), np_.get(key)
+        if not _same(jv, nv):
+            if isinstance(jv, str) and isinstance(nv, str) and jv.strip() == nv.strip():
+                diffs.append(f"ws:projection.{key}")
+            else:
+                diffs.append(f"projection.{key}")
+    return diffs
+
+
+def _grid_cell_diffs(java: Dict[str, Any], native: Dict[str, Any]) -> Tuple[List[str], bool]:
+    """Cell differences, and whether extra native NaN cells are the known G1 case.
+
+    Java maps only the grid no-data marker (-FLT_MAX) to NaN; native also maps the
+    grid's null value and -901/-902.
+    """
+    jd = np.asarray(java.get("data"), dtype=np.float32)
+    nd = np.asarray(native.get("data"), dtype=np.float32)
+    if jd.shape != nd.shape:
+        return ["cells_shape"], False
+    jm, nm = np.isnan(jd), np.isnan(nd)
+    diffs: List[str] = []
+    extra_ok = False
+    if np.any(jm & ~nm):
+        diffs.append("cells_missing_java_only")
+    extra = nm & ~jm
+    if np.any(extra):
+        null = ((native.get("metadata") or {}).get("native") or {}).get("null_value")
+        markers = [-901.0, -902.0] + ([null] if null is not None else [])
+        extra_ok = bool(np.all(np.isin(jd[extra], np.asarray(markers, dtype=np.float32))))
+        diffs.append("cells_missing_native_only")
+    both = ~jm & ~nm
+    if not np.array_equal(jd[both].view(np.int32), nd[both].view(np.int32)):
+        diffs.append("cells_bits")
+    return diffs, extra_ok
+
+
+def classify_grid(
+    java: Optional[Dict[str, Any]],
+    java_exc: Optional[BaseException],
+    native: Optional[Dict[str, Any]],
+    native_exc: Optional[BaseException],
+) -> Tuple[str, str, List[str]]:
+    """Classify one ``read_grid`` comparison. Cells and metadata are judged separately
+    (diffs are prefixed ``cells:`` or ``meta:``).
+
+    Known differences (logged as ``expected``):
+
+    - ``G-CRS``: the CRS string differs (native grid CRS is unqualified; P13).
+    - ``G1``: native maps the grid null value and -901/-902 to NaN; Java maps only
+      -FLT_MAX.
+    - ``G2``: whitespace-only differences (Java pads legacy unit strings).
+    - ``G3``: untimed grid records (odd record types): native reports no time;
+      Java reports the header times.
+    - ``G4``: ``number_missing``: Java reports its own count; native counts NaN cells.
+
+    Any cell bit difference is ``unexpected``.
+    """
+    from . import _errors
+
+    if java_unavailable(java_exc):
+        return "skipped", "java unavailable", []
+    if java is not None and native is not None:
+        cell_diffs, extra_ok = _grid_cell_diffs(java, native)
+        meta_diffs = _grid_meta_diffs(java, native)
+        diffs = [f"cells:{d}" for d in cell_diffs] + [f"meta:{d}" for d in meta_diffs]
+        if not diffs:
+            return "identical", "identical", diffs
+        labels: List[str] = []
+        rest_cells = set(cell_diffs)
+        if rest_cells == {"cells_missing_native_only"} and extra_ok:
+            rest_cells.clear()
+            labels.append("G1 native maps grid null/-901/-902 to NaN")
+        rest_meta = set(meta_diffs)
+        if rest_meta & {"crs", "ws:crs"}:
+            rest_meta -= {"crs", "ws:crs"}
+            labels.insert(0, "G-CRS native grid CRS unqualified (P13)")
+        ws = {d for d in rest_meta if d.startswith("ws:")}
+        if ws:
+            rest_meta -= ws
+            labels.append("G2 whitespace")
+        native_md = (native.get("metadata") or {}).get("native") or {}
+        untimed = int(native_md.get("record_type", 0) or 0) % 2 == 1
+        timing = {"start_time", "end_time", "metadata.timing"}
+        if untimed and rest_meta & timing:
+            rest_meta -= timing
+            labels.append("G3 untimed grid: native reports no time")
+        if "metadata.number_missing" in rest_meta:
+            rest_meta.discard("metadata.number_missing")
+            labels.append("G4 number_missing count rule")
+        if rest_cells:
+            return "unexpected", "grid cell difference", diffs
+        if rest_meta:
+            return "unexpected", "grid metadata difference", diffs
+        return "expected", "; ".join(labels), diffs
+    if java is None and native is None:
+        for name in ("DssPathnameNotFoundError", "DssRecordTypeError"):
+            cls = _errors.get(name)
+            if isinstance(java_exc, cls) and isinstance(native_exc, cls):
+                return "expected", f"{name} on both backends", []
+        return "unexpected", "both failed", []
+    if native is not None:
+        return "unexpected", "native grid, Java error", []
+    return "unexpected", "Java grid, native error", []
+
+
+def classify_file_version(
+    java_version: Optional[int],
+    java_exc: Optional[BaseException],
+    native_version: Optional[int],
+    native_exc: Optional[BaseException],
+) -> Tuple[str, str, List[str]]:
+    """Classify one ``get_file_version`` comparison."""
+    from . import _errors
+
+    if java_unavailable(java_exc):
+        return "skipped", "java unavailable", []
+    if java_exc is None and native_exc is None:
+        if java_version == native_version:
+            return "identical", "identical", []
+        return "unexpected", "version difference", ["version"]
+    invalid = _errors.get("DssInvalidFileError")
+    if isinstance(java_exc, invalid) and isinstance(native_exc, invalid):
+        return "expected", "invalid file on both backends", []
+    return "unexpected", "error difference", []

@@ -11,9 +11,11 @@ native DSS record workflows, see [using pydsstools directly](../about/related-li
 
 ## Read backends
 
-`RasDss.backend` selects how catalogs and time series are read: `java`
-(default, HEC Monolith), `native` (optional dss-commander package, no Java)
-or `shadow` (native result with a logged Java cross-check). See
+`RasDss.backend` selects how catalogs, time series, paired data and the file
+version are read: `java` (default, HEC Monolith), `native` (optional
+dss-commander package, no Java) or `shadow` (native result with a logged Java
+cross-check). Native grid reads are gated until the native grid CRS is
+qualified. `RasDss.get_capabilities()` reports the support matrix. See
 [DSS Read Backends](dss-native-backend.md) for selection, installation and
 every difference from the Java path.
 
@@ -188,6 +190,41 @@ results = RasDss.read_multiple_timeseries(dss_file, pathnames)
 for path, df in results.items():
     print(f"{path}: {len(df)} records")
 ```
+
+### Read Paired Data
+
+`read_paired_data()` reads one paired-data record (rating curves, damage
+curves, elevation-storage tables, Atlas 14 temporal patterns) with every curve:
+
+```python
+rating = RasDss.read_paired_data(dss_file, "/BASIN/LOC/STAGE-FLOW///RATING/")
+
+stage = rating.index.to_numpy()          # ordinates, stored order
+flows = rating.to_numpy()                # one column per curve
+print(rating.columns.tolist())           # curve labels, or curve_1..curve_n
+print(rating.attrs["x_units"], rating.attrs["y_units"])   # e.g. FEET, CFS
+print(rating.attrs["x_type"], rating.attrs["y_type"])     # e.g. UNT, LOG, PROB
+print(rating.attrs["labels"], rating.attrs["stored_dtype"])
+```
+
+- Values keep the stored precision by default: `float32` for PD records,
+  `float64` for PDD records. Pass `dtype="float64"` to widen (exact).
+- HEC missing markers are returned as stored, not NaN.
+- With `ignore_d_part=True` (default) a pathname whose D part does not match
+  falls back to the first paired-data record with the same A, B, C, E and F
+  parts, as `HecDss.get(pathname, True)` does. `attrs["record_pathname"]`
+  names the record read.
+- No record raises `DssPathnameNotFoundError` (a `ValueError`); a record of
+  another kind raises `DssRecordTypeError` (a `TypeError`). Both classes are
+  importable from `ras_commander.dss` and are the same on every backend.
+
+### DSS File Version
+
+```python
+RasDss.get_file_version(dss_file)   # 6 or 7; never creates or modifies the file
+```
+
+A file that is not DSS6/DSS7 raises `DssInvalidFileError` (a `ValueError`).
 
 ## Integration with HEC-RAS Projects
 
@@ -383,8 +420,9 @@ the bundled HEC Monolith version.
 | DSS Version 7 | Supported |
 | Write time series | Supported |
 | Write gridded precipitation | Supported |
-| Paired data | Not yet supported |
-| General grid reading API | Not yet supported |
+| Read paired data (all curves) | Supported (`read_paired_data`) |
+| Read one grid record | Supported (`read_grid`; native route gated) |
+| Write paired data | Not yet supported |
 
 ## Technology Stack
 

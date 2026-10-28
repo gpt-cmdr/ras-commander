@@ -55,15 +55,21 @@ If `dss-commander` is not installed:
 | Method | Backend used |
 |---|---|
 | `get_catalog`, `read_timeseries`, `read_multiple_timeseries` | Selected backend |
+| `read_paired_data`, `get_file_version` | Selected backend |
+| `read_grid` | Java, or native when qualified or explicitly opted in (see [Grids](#grids-gated-native-route)) |
 | `get_info`, `extract_boundary_timeseries` | Selected backend (built on the methods above) |
 | `check_pathname_exists`, `check_data_availability`, `check_pathname`, `is_pathname_available` | Selected backend (built on the methods above) |
 | `check_pathname_format`, `is_valid_pathname`, `check_file_exists` | No DSS access |
-| `write_timeseries`, `write_timeseries_from_dataframe`, `write_grid_timeseries`, `copy_grid_with_zero_tail` | Java under every backend |
-| `read_grid`, `get_file_version` | Java under every backend |
+| `write_timeseries`, `write_timeseries_from_dataframe`, `write_grid_timeseries`, `copy_grid_with_zero_tail` | Java under every backend (their internal grid reads and version checks also stay on Java) |
 | `write_precip_grid_arrays` | pydsstools (unchanged) |
 
+`RasDss.get_capabilities()` returns this matrix as a DataFrame (`operation`,
+`java`, `native`, `shadow`, `note`; values `yes`, `gated`, `java`, `no`).
+
 Writes stay on Java until the native writers are released. A workflow that
-writes, or that reads grids, still needs Java under `native`.
+writes still needs Java under `native`. Under `native`, an operation the
+backend does not support raises `DssCapabilityError`; it never falls back to
+Java.
 
 Under `native`, `read_multiple_timeseries` opens the file once for all
 pathnames. On the RasExamples shadow run this made reads 9.6 times faster than
@@ -224,6 +230,162 @@ This is sampled read-contract qualification for these artifacts and runtimes,
 not a claim that every possible DSS record or native-engine version is covered.
 The optional native wheel remains unpublished; Java remains the default.
 Future engine or comparison changes require a fresh corpus run.
+
+## Paired data on each backend
+
+`read_paired_data()` returns the same frame on every backend: every curve,
+the ordinates as the index, and the full metadata in `attrs` (see the
+[canonical API](#canonical-dss-api-for-consumers-hms-conformance-target)).
+Values keep the stored precision: the Java path reads doubles and narrows PD
+(type 200) records back to their stored `float32`, which is exact.
+
+Shadow compares the index, every curve bitwise, the column names and every
+`attrs` key. Known differences are logged as `expected`:
+
+| Label | Difference |
+|---|---|
+| PD1 | The Java DSS6 reader strips leading blanks from curve labels (`" 5%LIMIT"` reads `"5%LIMIT"`). Native keeps them, as HEC's C library does. Labels agree after removing leading blanks. |
+| PD2 | Java does not expose the DSS7 paired-data time zone; native reports it in `attrs["time_zone"]`. |
+| PD3 | Unit or type strings that differ only in whitespace. |
+| PD4 | DSS6 precision: Monolith reports `-1`, native decodes the stored `KIPREC` word (often `0`). |
+
+Java runs in shadow only when native returned data or `DssPathnameNotFoundError`.
+A record of another kind is not compared. HEC Monolith 3.3.27 cannot read the
+paired-data records of the synthetic engine fixture `synthetic_pd6.dss`; native
+reads them.
+
+**Evidence (2026-10-27).** A shadow run over every paired-data record of the 53
+public RasExamples DSS files (43 files with PD records, all DSS6) compared
+57,839 records. Every ordinate, curve value, label, unit and type matched
+bit for bit. All 57,839 were classified PD4 only, and none was unexpected.
+`get_file_version` agreed on all 44 files swept (43 PD files and one grid file). The working copies' SHA-256 hashes
+were unchanged after the JVM exited. Runtimes: HEC Monolith 3.3.27 on Java
+17.0.11 and the private ABI3 wheel built from native engine main `f0b7acd`.
+
+## Grids: gated native route
+
+`read_grid()` keeps the Java dictionary schema on every backend. Row zero is
+the southern row on both (`row_order="south_up"`). The native route does not
+run by default because the native CRS string is not yet qualified for every
+legacy Albers grid (engine packet P13).
+
+- `backend="native"` raises `DssCapabilityError` (a `NotImplementedError`)
+  unless one of two conditions holds. Either the installed dss-commander
+  advertises the feature `"grid_srs_monolith_parity"` in
+  `dss_commander.FEATURES`, or the caller passes
+  `allow_unqualified_native=True`. It does not fall back to Java.
+- `backend="shadow"` returns the Java grid, also reads natively, and compares
+  them. It returns the native grid once qualified, or with
+  `allow_unqualified_native=True`.
+- `metadata["crs_qualified"]` reports whether the wheel advertises
+  qualification. `metadata["native"]` holds every native field: null value,
+  extent, SRS name and type, statistics, compression and raw times.
+
+Shadow judges cells and metadata separately; diffs are prefixed `cells:` or
+`meta:`. A cell bit difference is always unexpected. Known differences:
+
+| Label | Difference |
+|---|---|
+| G-CRS | CRS strings differ (native grid CRS unqualified, P13). |
+| G1 | Native maps the grid null value and -901/-902 to NaN; Java maps only -3.4028235e38. |
+| G2 | Whitespace-only differences (Java pads legacy unit strings, for example `"MM  "`). |
+| G3 | Untimed grid records: native reports no time; Java reports the header times. |
+| G4 | `metadata["number_missing"]`: Java's count against native's NaN-cell count. |
+
+**Evidence (2026-10-27).** All 4,170 legacy DSS6 Albers precipitation grids of
+the public RasExamples file were identical in cells and metadata, CRS included,
+with native engine main `f0b7acd`. On the synthetic engine fixtures (9 grids)
+that wheel shows G-CRS on the two synthetic Albers records. The P13 review
+wheel (`fix/p13-albers-crs`) shows no CRS difference on any of the 4,179 grids.
+Neither wheel advertises the qualification feature yet, so the gate stays
+closed.
+
+## File version
+
+`get_file_version()` uses the selected backend. Native reads the header
+without a JVM. A file that is not DSS6/DSS7 raises `DssInvalidFileError` (a
+`ValueError` and `DssFormatError`) on both backends.
+
+## Canonical DSS API for consumers (HMS conformance target)
+
+This is the generic read contract that `RasDss` offers to other consumers,
+including the planned hms-commander conformance. Every method is a static
+method, accepts `str` or `pathlib.Path`, never creates or modifies the file it
+reads, and raises the same exception classes on every backend.
+
+| Method | Returns |
+|---|---|
+| `RasDss.get_catalog(dss_file)` | DataFrame with column `pathname` (catalog order) |
+| `RasDss.read_timeseries(dss_file, pathname, start_date=None, end_date=None)` | DataFrame, `DatetimeIndex` named `datetime`, column `value` (float64; NaN for missing under native); `attrs`: `pathname`, `units`, `type`, `interval` (minutes; 0 irregular), `dss_file` |
+| `RasDss.read_multiple_timeseries(dss_file, pathnames)` | `{pathname: DataFrame or None}` |
+| `RasDss.read_paired_data(dss_file, pathname, *, ignore_d_part=True, dtype="stored")` | Paired-data frame (below) |
+| `RasDss.read_grid(dss_file, pathname, *, allow_unqualified_native=False)` | Grid dictionary (below) |
+| `RasDss.get_file_version(dss_file)` | `6` or `7` |
+| `RasDss.get_capabilities()` | Support matrix DataFrame |
+
+**Paired-data frame.**
+
+- Index: the ordinates, named `"ordinate"`, in stored order.
+- Columns: one per curve, in stored order, named after the curve labels when
+  every curve has a distinct non-blank label, otherwise `curve_1..curve_n`.
+- dtype: `float32` (PD, type 200) or `float64` (PDD, type 205) with
+  `dtype="stored"`; `float64` with `dtype="float64"`.
+- HEC missing markers are kept as stored.
+- `attrs`, always in this order:
+  - `pathname` and `record_pathname`: the pathname requested and the record
+    read (they differ when the D part was ignored).
+  - `dss_file`, `record_type`, `dss_version` and `stored_dtype`.
+  - `n_ordinates` and `n_curves`.
+  - `x_parameter` and `y_parameter`, from the C part.
+  - `x_units`, `x_type`, `y_units` and `y_type`, for example `LINEAR`, `LOG`
+    or `PROB`.
+  - `labels`: one string per curve, `""` when absent; trailing blanks are
+    removed and leading blanks kept.
+  - `x_precision` and `y_precision`: `-1` when unset.
+  - `time_zone`: DSS7 only, otherwise `None`; it is never applied.
+
+An Atlas 14 temporal pattern is a single-curve record: `index` holds the hours
+and the curve holds cumulative fractions. A multi-curve rating or damage table
+keeps every curve. Consumers that need hms-commander's old first-curve
+dictionary can derive it: `x_values=df.index`, `y_values=df.iloc[:, 0]`,
+`x_units`/`y_units` from `attrs`, and `x_label`/`y_label` from `x_type`/`y_type`.
+That dictionary is not part of this contract.
+
+**Grid dictionary.**
+
+| Key | Contents |
+|---|---|
+| `dss_file`, `pathname` | Resolved file path and the exact pathname |
+| `data` | `float32` array `(rows, columns)`; row zero south, columns west to east; missing cells are NaN |
+| `row_order` | `"south_up"`; flip rows for north-up rasters |
+| `shape` | `(rows, columns)` |
+| `units`, `data_type` | Data units and `PER-AVER`/`PER-CUM`/`INST-VAL`/`INST-CUM` |
+| `grid_type` | `albers`, `specified`, `hrap`, or the HEC grid-info class name |
+| `crs` | HEC spatial-reference string (WKT where available) |
+| `cell_size` | Cell size in CRS units |
+| `start_time`, `end_time` | Naive `pandas.Timestamp` from parts D/E (or the record), else `None` |
+| `metadata` | `pathname_parts`, `grid_class`, `grid_type_code`, `data_type_code`, `shape`, `number_of_cells_x/y`, `lower_left_cell`, `origin` (lower-left corner; Albers/specified), `projection` (cell-zero coordinates; Albers parameters), `number_missing`, `nodata_value`, `compression`, `timing`; native route adds `crs_qualified` and `native` |
+
+**Exceptions** (importable from `ras_commander.dss`; the first four are the
+dss-commander classes when that package is installed):
+
+| Class | Bases | Raised when |
+|---|---|---|
+| `DssError` | `RuntimeError` | Any other DSS failure |
+| `DssFormatError` | `DssError` | Damaged or non-DSS file (native reads) |
+| `DssUnsupportedRecordError` | `DssError` | Record encoding not decoded |
+| `DssPathnameNotFoundError` | `DssError`, `ValueError` | No record or no data for the pathname |
+| `DssRecordTypeError` | `DssUnsupportedRecordError`, `TypeError` | The record is another kind (`read_paired_data`, `read_grid`) |
+| `DssInvalidFileError` | `DssFormatError`, `ValueError` | `get_file_version` on a non-DSS6/DSS7 file |
+| `DssCapabilityError` | `DssError`, `NotImplementedError` | The selected backend does not support or has not qualified the operation |
+
+A missing file raises `FileNotFoundError` and a directory raises
+`IsADirectoryError`. Invalid arguments raise `ValueError`. A missing optional
+engine (pyjnius for `java`, dss-commander for `native`) raises `ImportError`.
+
+Not yet in the contract: paired-data, profile and location writes, a native
+grid route without the gate, and `read_timeseries` errors under Java (Java
+still raises its historical untyped errors; see the table above).
 
 ## Related
 

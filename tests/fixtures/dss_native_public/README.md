@@ -1,0 +1,23 @@
+# Synthetic DSS fixtures for paired-data and grid tests
+
+These four files are synthetic. The dss-commander engine's test generators wrote them
+byte by byte (`grid_read.rs::synthetic_grid_fixtures` and
+`pd_synthetic.rs::synthetic_pd_fixtures`, engine packet P12). No HEC software was used
+and they contain no project or client data. They are copied unchanged from the engine's
+`fixtures/public/` directory.
+
+`tests/test_rasdss_paired_grid_version.py` reads them. Copy them to a temporary
+folder before HEC software (Java) opens them, because HEC software can modify files
+it opens.
+
+| File | DSS | Bytes | Content | SHA-256 |
+|---|---|---|---|---|
+| `synthetic_pd6.dss` | 6 | 4,096 | PD with short labels (one with leading blanks), PDD with long labels, one time-series record | `4d217ce74def15ec5a847dc44f5aa375fb01ebd51d5c65491b41777ffb692a23` |
+| `synthetic_pd7.dss` | 7 | 4,400 | PD with three labelled curves, padded units, time zone and precision; PDD keeping -0.0 and a subnormal; one time-series record | `2de7129eb3f5a8cf07aff5df2388c3fbff3b27627e33c2e1b25791a99e71b018` |
+| `synthetic_grid6.dss` | 6 | 5,120 | Legacy grids: specified 3x2 with a null cell, Albers 2x2, HRAP 3x1, untimed specified 2x1 | `07494a5c8a064126f409dce90678d34f6040b6b4d2465e4584cf136486f8ea69` |
+| `synthetic_grid7.dss` | 7 | 7,664 | The four legacy grids above plus a modern (-100) specified 3x3 grid with a null cell and a NaN payload | `2a0b3e60ef5021d960573d060c2c2179afae51ce7cce0ae0b393c808b94edbcd` |
+
+HEC Monolith 3.3.27 cannot read the paired-data records in `synthetic_pd6.dss`
+(`HecDss.get` reports "Unable to access record"). The Java-backed tests therefore
+author their DSS6/DSS7 paired data with Monolith at test time and use these files
+for native-only checks.

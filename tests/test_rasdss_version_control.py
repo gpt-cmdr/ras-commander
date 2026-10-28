@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import inspect
+import os
 import subprocess
 import sys
 import textwrap
@@ -159,6 +160,9 @@ def test_get_file_version_uses_authoritative_java_result(
         def getDssFileVersion(_path):
             return reported
 
+    # This checks the Java path whatever backend the caller selected.
+    monkeypatch.delenv("RAS_COMMANDER_DSS_BACKEND", raising=False)
+    monkeypatch.setattr(RasDss, "backend", "java")
     monkeypatch.setattr(RasDss, "_configure_jvm", staticmethod(lambda: None))
     monkeypatch.setattr(RasUtils, "safe_resolve", staticmethod(lambda path: Path(path)))
     monkeypatch.setitem(
@@ -221,7 +225,7 @@ def test_existing_version_mismatch_fails_before_writer_open(
     dss_file.write_bytes(original)
     monkeypatch.setattr(
         RasDss,
-        "get_file_version",
+        "_get_file_version_java",
         staticmethod(lambda _path: 6),
     )
     monkeypatch.setattr(
@@ -251,7 +255,7 @@ def test_existing_grid_version_mismatch_fails_before_writer_open(
     dss_file.write_bytes(original)
     monkeypatch.setattr(
         RasDss,
-        "get_file_version",
+        "_get_file_version_java",
         staticmethod(lambda _path: 6),
     )
     monkeypatch.setattr(
@@ -274,9 +278,11 @@ def test_existing_grid_version_mismatch_fails_before_writer_open(
 
 
 def _run_bridge_script(script: str, *args: object) -> subprocess.CompletedProcess[str]:
+    # Java bridge checks cover the Java path whatever backend the caller selected.
     return subprocess.run(
         [sys.executable, "-c", textwrap.dedent(script), *(str(arg) for arg in args)],
         check=False,
+        env={k: v for k, v in os.environ.items() if k != "RAS_COMMANDER_DSS_BACKEND"},
         capture_output=True,
         text=True,
     )
