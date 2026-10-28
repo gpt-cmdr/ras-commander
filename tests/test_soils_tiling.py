@@ -10,6 +10,7 @@ import pytest
 
 rasterio = pytest.importorskip("rasterio")
 gpd = pytest.importorskip("geopandas")
+from rasterio.transform import from_origin
 from rasterio.features import rasterize
 from rasterio.merge import merge
 from shapely.geometry import Polygon, box
@@ -94,7 +95,9 @@ def test_native_soils_passes_all_tiles_and_same_mapping_to_one_computable(tmp_pa
     rasmap.touch()
     paths = [tmp_path / f"tile{i}.tif" for i in range(2 if multiple else 1)]
     for path in paths:
-        path.touch()
+        with rasterio.open(path, "w", driver="GTiff", width=2, height=2,
+                           count=1, dtype="uint8", transform=from_origin(0, 2, 1, 1)):
+            pass
     calls = []
     mappings = []
 
@@ -208,3 +211,23 @@ def test_empty_native_source_list_fails_before_loading_runtime(tmp_path, monkeyp
             raster_map_rows=[(0, "NoData")], cell_size=1,
             output_hdf_path=tmp_path / "Soils.hdf", hecras_version="7.0.1",
         )
+
+
+def test_direct_oversized_soils_raster_fails_before_native_load(tmp_path, monkeypatch):
+    source = tmp_path / "oversized.tif"
+    # Sparse GTiff exercises the real header without allocating 100M cells.
+    with rasterio.open(source, "w", driver="GTiff", width=10_001, height=10_000,
+                       count=1, dtype="uint8", nodata=0, tiled=True,
+                       sparse_ok=True, transform=from_origin(0, 10_000, 1, 1)):
+        pass
+    rasmap = tmp_path / "project.rasmap"
+    rasmap.write_text("<RASMapper />")
+    def unexpected_load(*args):
+        raise AssertionError("Oversized input must not reach native modal initialization")
+    monkeypatch.setattr(native, "find_hecras_install", unexpected_load)
+    output = tmp_path / "soils.hdf"
+    with pytest.raises(ValueError, match="100,000,000.*tile or crop"):
+        native.create_soils(rasmap_path=rasmap, source_raster_path=source,
+            raster_map_rows=[(0, "NoData"), (1, "A")], cell_size=30,
+            output_hdf_path=output, hecras_version="7.0.1")
+    assert not output.exists()
