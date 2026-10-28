@@ -2779,6 +2779,12 @@ Step 5: Configure (optional — auto-detection usually works)
                 _windows_extended_length_path(source),
                 _windows_extended_length_path(working_copy),
             )
+            # copy2 preserves a read-only source's permissions/attributes.
+            # Only this task-owned copy is opened for mutation and cleanup;
+            # the original backup retains the source's permissions unchanged.
+            import stat
+            working_io = _windows_extended_length_path(working_copy)
+            os.chmod(working_io, os.stat(working_io).st_mode | stat.S_IWUSR)
             changed = RasProcess._normalize_mapper_geometry_timestamps(working_copy)
             if not changed:
                 os.remove(_windows_extended_length_path(working_copy))

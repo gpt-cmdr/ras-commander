@@ -1450,3 +1450,34 @@ def test_drop_unreadable_tifs_preserves_vector_outputs(tmp_path):
 
     assert results["inundation_boundary"] == [boundary]
     assert boundary.read_bytes() == b"vector-output"
+
+
+@pytest.mark.parametrize("hour", ["06", "19"])
+@pytest.mark.parametrize("interrupt", [False, True])
+def test_mapper_staging_preserves_readonly_source_on_exit(tmp_path, monkeypatch, hour, interrupt):
+    import stat
+    path = tmp_path / "Readonly.p01.hdf"
+    with h5py.File(path, "w") as hdf:
+        hdf.create_group("Geometry").attrs["Geometry Time"] = f"15Jul2026 {hour}:33:14".encode()
+    path.chmod(stat.S_IRUSR)
+    original_bytes, original_mode = path.read_bytes(), stat.S_IMODE(path.stat().st_mode)
+    normalize = RasProcess._normalize_mapper_geometry_timestamps
+    def checked(copy):
+        # Explicit mode check reproduces the Windows write/delete restriction
+        # even on POSIX hosts whose test account can bypass mode bits.
+        assert copy.stat().st_mode & stat.S_IWUSR, "Mapper's private staging copy must be writable"
+        return normalize(copy)
+    monkeypatch.setattr(RasProcess, "_normalize_mapper_geometry_timestamps", checked)
+    try:
+        if interrupt:
+            with pytest.raises(RuntimeError, match="Interrupted mapping"):
+                with RasProcess._mapper_compatible_result_hdf(path, "7.0.1"):
+                    raise RuntimeError("Interrupted mapping")
+        else:
+            with RasProcess._mapper_compatible_result_hdf(path, "7.0.1") as mapped:
+                assert mapped == path
+        assert path.read_bytes() == original_bytes
+        assert stat.S_IMODE(path.stat().st_mode) == original_mode
+        assert not list(tmp_path.glob("*.mapper-*"))
+    finally:
+        path.chmod(stat.S_IRUSR | stat.S_IWUSR)
