@@ -421,6 +421,21 @@ def validate_helper_request(request: dict[str, Any]) -> None:
             raise ValueError("rasterize_modifications must be boolean")
 
 
+def _helper_failure_detail(response: dict[str, Any], stderr: str = "") -> str:
+    """Retain the native exception details when temporary receipts are removed."""
+    summary = str(response.get("error") or stderr.strip() or "unknown native error")
+    parts = [summary]
+    error_type = response.get("error_type")
+    if error_type and str(error_type) not in summary:
+        parts.append(f"Native exception type: {error_type}")
+    details = response.get("details")
+    if details and str(details).strip() != summary:
+        parts.append(f"Native details:\n{details}")
+    if stderr.strip() and stderr.strip() not in "\n".join(parts):
+        parts.append(f"Native stderr:\n{stderr.strip()}")
+    return "\n".join(parts)
+
+
 def validate_helper_response(
     response: dict[str, Any], operation: str, require_success: bool = True
 ) -> None:
@@ -435,7 +450,7 @@ def validate_helper_response(
         raise RuntimeError("Terrain helper response success field is invalid")
     if not response["success"]:
         if require_success:
-            raise RuntimeError(str(response.get("error") or "Native terrain helper failed"))
+            raise RuntimeError(_helper_failure_detail(response))
         return
     if response.get("operation") != operation:
         raise RuntimeError("Terrain helper response operation does not match its request")
@@ -906,7 +921,7 @@ def _run_helper(
         raise RuntimeError("Terrain helper returned invalid JSON") from exc
     validate_helper_response(response, request["operation"], require_success=False)
     if completed.returncode != 0 or not response["success"]:
-        detail = response.get("error") or completed.stderr.strip() or "unknown native error"
+        detail = _helper_failure_detail(response, completed.stderr)
         raise RuntimeError(f"Native terrain helper failed: {detail}")
     validate_helper_response(response, request["operation"])
     return response

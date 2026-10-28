@@ -668,6 +668,59 @@ def test_request_and_response_schema_validation():
         host.validate_helper_response({**response, "resample_method": "average"}, "export")
 
 
+@pytest.mark.parametrize("exit_code", [0, 1])
+def test_native_failure_preserves_details_and_stderr(tmp_path, monkeypatch, exit_code):
+    response = {
+        "schema_version": 1,
+        "helper": "RasMapperTerrainExportHelper",
+        "success": False,
+        "error": "Insufficient memory",
+        "error_type": "System.OutOfMemoryException",
+        "details": "System.OutOfMemoryException: Insufficient memory\n  at SpatialIndex.Initialize()",
+    }
+
+    def complete(command, **kwargs):
+        Path(command[-1]).write_text(json.dumps(response), encoding="utf-8")
+        return subprocess.CompletedProcess(command, exit_code, "", "native diagnostic")
+
+    monkeypatch.setattr(host, "run_owned_process", complete)
+    monkeypatch.setattr(host, "_runtime_env", lambda *_: {})
+    request = {
+        "schema_version": 1, "operation": "inspect", "terrain_name": "Terrain",
+        "rasmap_path": str(tmp_path / "example.rasmap"),
+    }
+    with pytest.raises(RuntimeError) as error:
+        host._run_helper(tmp_path / "helper.exe", tmp_path, None, request, tmp_path, 1)
+    message = str(error.value)
+    for expected in ["Insufficient memory", "System.OutOfMemoryException", "SpatialIndex.Initialize", "native diagnostic"]:
+        assert expected in message
+    with pytest.raises(RuntimeError, match="SpatialIndex.Initialize"):
+        host.validate_helper_response(response, "inspect")
+
+
+def test_export_result_preserves_native_failure_details(tmp_path, monkeypatch):
+    rasmap, output = _configure_successful_export(monkeypatch, tmp_path)
+
+    def fail(*args, **kwargs):
+        host.validate_helper_response({
+            "schema_version": 1, "helper": "RasMapperTerrainExportHelper",
+            "success": False, "error": "Insufficient memory",
+            "details": "System.OutOfMemoryException\n  at SpatialIndex.Initialize()",
+        }, "inspect")
+
+    monkeypatch.setattr(host, "_run_helper", fail)
+    result = RasTerrain.export_rasmapper_terrain(rasmap, output, hecras_version="6.6")
+    assert not result.success
+    assert "SpatialIndex.Initialize" in result.error
+    assert not output.exists()
+
+
+def test_native_failure_short_and_stderr_only_fallbacks():
+    assert host._helper_failure_detail({"error": "short"}) == "short"
+    assert host._helper_failure_detail({}, "stderr only") == "stderr only"
+    assert host._helper_failure_detail({}) == "unknown native error"
+
+
 def test_inspect_response_requires_deep_valid_extent_and_source_shape():
     response = {
         "schema_version": 1,
