@@ -107,6 +107,39 @@ def _json_stdout(proc: subprocess.CompletedProcess, what: str) -> dict:
     return value
 
 
+class EngineRefusal(FimUnsupportedError):
+    """The engine refused the request as outside its qualified contract."""
+
+
+def engine_refusal(*texts) -> Optional[FimUnsupportedError]:
+    """Return a FimUnsupportedError when the engine reported an ``unsupported:`` refusal.
+
+    The engine formats contract refusals (for example terrain pixels outside a
+    top-priority source footprint) as ``unsupported: ...``. Callers raise the
+    result so mapping callers can fall back instead of treating it as a crash.
+    """
+    for text in texts:
+        if not text:
+            continue
+        text = str(text)
+        index = text.find("unsupported:")
+        if index >= 0:
+            return EngineRefusal(f"engine refused the request: {text[index:].strip()[:_STDERR_TAIL]}")
+    return None
+
+
+def read_refusal(out_dir: Path, stderr: str = "") -> Optional[FimUnsupportedError]:
+    """Inspect a best-effort report and stderr for an engine refusal."""
+    error = None
+    try:
+        report = json.loads((Path(out_dir) / "report.json").read_text(encoding="utf-8"))
+        if isinstance(report, dict):
+            error = report.get("error")
+    except (OSError, ValueError, UnicodeError):
+        pass
+    return engine_refusal(error, stderr)
+
+
 def engine_method(engine: Path) -> dict:
     """Return the engine's method record (``ras2fim-batch method``)."""
     return _json_stdout(run_engine([str(engine), "method"], "method"), "ras2fim-batch method")

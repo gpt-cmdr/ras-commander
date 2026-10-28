@@ -14,6 +14,7 @@ on:
       - 'tests/test_fim_corner_preparation.py'
       - 'tests/test_fim_corner_cache.py'
       - 'tests/test_fim_supplied_wsel*.py'
+      - 'tests/test_fim_terrain_scope_adr_velocity.py'
       - 'setup.py'
       - '.github/workflows/optional-fim.yml'
   workflow_dispatch:
@@ -39,4 +40,4 @@ jobs:
       - name: Python adapter and installed horizontal engine
         shell: bash
         run: |
-          python -c "import os, shutil, pytest; os.environ['RAS_COMMANDER_FIM_HORIZONTAL_ENGINE'] = shutil.which('ras2fim-batch'); raise SystemExit(pytest.main(['tests/test_ras_fim.py', 'tests/test_fast_map_distribution.py', 'tests/test_ras_fim_horizontal.py', 'tests/test_ras_fim_sloping.py', 'tests/test_ras_fim_prepared_sloping.py', 'tests/test_fim_corner_preparation.py', 'tests/test_fim_corner_cache.py', 'tests/test_fim_supplied_wsel.py', 'tests/test_fim_supplied_wsel_real.py', '-q']))"
+          python -c "import os, shutil, pytest; os.environ['RAS_COMMANDER_FIM_HORIZONTAL_ENGINE'] = shutil.which('ras2fim-batch'); raise SystemExit(pytest.main(['tests/test_ras_fim.py', 'tests/test_fast_map_distribution.py', 'tests/test_ras_fim_horizontal.py', 'tests/test_ras_fim_sloping.py', 'tests/test_ras_fim_prepared_sloping.py', 'tests/test_fim_corner_preparation.py', 'tests/test_fim_corner_cache.py', 'tests/test_fim_supplied_wsel.py', 'tests/test_fim_supplied_wsel_real.py', 'tests/test_fim_terrain_scope_adr_velocity.py', '-q']))"
