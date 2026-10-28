@@ -1,15 +1,45 @@
 # USGS Gauge Data Retrieval
 
-The USGS integration module provides seamless connectivity between USGS NWIS gauge data and HEC-RAS models. It handles everything from spatial discovery to boundary condition generation to model validation.
+## Water Data migration scope
 
-!!! tip "USGS API Key"
-    While the USGS NWIS API is free and doesn't require authentication for basic use, obtaining an **API key from USGS** is strongly encouraged for:
+Core flow/stage retrieval, real-time readings, initial-condition observations,
+and API-key checks use `dataretrieval.waterdata` and require
+`dataretrieval>=1.4`. Public result columns remain unchanged. Approval status is
+read separately from other qualifiers; missing approval, unexpected units, and
+conflicting observations at one timestamp raise instead of silently selecting
+an interpretation.
 
-    - Higher rate limits
-    - Priority queue access
-    - Better reliability for automated workflows
+Queries use UTC: naive timestamps are interpreted as UTC, aware timestamps are
+converted to UTC, and date-only end bounds include the entire UTC date. Daily
+means use statistic `00003` and their returned date labels are represented at
+UTC midnight. Legacy site-local calendar bounds can select different intervals;
+check date boundaries and alignment when migrating existing studies. Use
+explicit timezone-aware timestamps for precise continuous-data windows.
+A datetime end bound is an exact instant, including when its time is midnight:
+`datetime(2024, 1, 31)` ends at the start of January 31. Use the date-only string
+`"2024-01-31"` to include that entire UTC day. Convert local model times to
+explicit timezone-aware timestamps before retrieving initial conditions.
 
-    **Get your free API key**: [https://waterservices.usgs.gov/](https://waterservices.usgs.gov/)
+Commander rate-limits each dataretrieval call, including each year-sized query
+interval. The client handles HTTP pagination and 429 retries internally; a
+single call can make multiple page requests. The annual-peaks route uses its
+own rate-limited pagination and currently does not use the configured API key
+or retry HTTP 429 responses.
+
+Spatial discovery uses modern monitoring locations and time-series metadata;
+annual peak discharge uses the modern peaks collection. The USGS module no
+longer calls the legacy site, instantaneous, daily or peak services. See the
+[official USGS migration guide](https://api.waterdata.usgs.gov/docs/ogcapi/migration/)
+for endpoint and field changes.
+
+
+The USGS integration module retrieves gauge data and supports spatial discovery, boundary-condition generation, and model-validation workflows.
+
+!!! tip "USGS API key"
+    The modern services support an API key for higher request limits. Configure
+    it through `API_USGS_PAT` using the existing USGS configuration helpers.
+    See [USGS API-key registration](https://api.waterdata.usgs.gov/signup/)
+    and the [provider's key documentation](https://api.waterdata.usgs.gov/docs/ogcapi/keys/).
 
 ## Overview
 
@@ -578,3 +608,22 @@ Comprehensive workflow demonstrations:
 - [Boundary Conditions](boundary-conditions.md) - General boundary condition workflows
 - [HDF Data Extraction](hdf-data-extraction.md) - Extracting modeled results for validation
 - [Project File Validation](project-file-validation.md) - Validating external data files
+
+Annual peak discharge retrieval uses the modern USGS `peaks` collection.
+Peak dates remain calendar dates; the reader retains water year and qualifiers.
+Records without a complete date or discharge are omitted with a warning.
+Stage maxima can occur at different times and are not reported as the gage
+height of a discharge peak.
+
+UTC alignment was checked against decoded legacy observations for two public
+gauges over four bounded windows, including both 2024 daylight-saving
+transitions. All 52 observation times and values matched after both datasets
+were clipped to the same UTC bounds. Legacy hourly query bounds themselves
+differed; this observation does not establish universal endpoint equivalence.
+
+Gauge discovery uses modern monitoring-location and time-series metadata.
+With `active_only=True`, a site must have a requested parameter series with an
+observation during the last 183 days. When no parameters are specified, any
+time series can qualify. This is an observation-recency filter, not the legacy
+NWIS maintenance status, which also considered manual samples and USGS
+overrides. Set `active_only=False` to include historical series.

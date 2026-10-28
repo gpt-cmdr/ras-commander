@@ -61,14 +61,21 @@ def test_require_existing_dss_file_does_not_create(tmp_path) -> None:
 def test_java_read_fixes_on_rasexamples(tmp_path) -> None:
     script = textwrap.dedent(
         """
+        import os
         import shutil
         import sys
         from pathlib import Path
+
+        # These checks cover the Java read path whatever backend the caller selected.
+        os.environ.pop("RAS_COMMANDER_DSS_BACKEND", None)
 
         import numpy as np
         import pandas as pd
 
         from ras_commander import RasDss, RasExamples
+
+        if hasattr(RasDss, "backend"):
+            RasDss.backend = "java"
 
         try:
             RasDss._configure_jvm()
