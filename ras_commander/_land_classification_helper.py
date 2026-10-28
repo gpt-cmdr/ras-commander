@@ -17,7 +17,7 @@ import warnings
 import xml.etree.ElementTree as ET
 from dataclasses import dataclass
 from pathlib import Path, PureWindowsPath
-from typing import Any, Optional, Union
+from typing import Any, Iterator, Optional, Union
 
 import h5py
 import numpy as np
@@ -924,7 +924,29 @@ def _normalize_soil_group(value: Any) -> Optional[str]:
     return text
 
 
-def _load_gssurgo_dataframe(gssurgo_path: Path) -> pd.DataFrame:
+def _read_soil_polygons(
+    path: Path, *, bounds: Optional[tuple[float, float, float, float]] = None,
+    bounds_crs: Any = None, **kwargs: Any,
+) -> Any:
+    """Filter in the source CRS while retaining whole polygons and source order."""
+    import geopandas as gpd
+    from rasterio.warp import transform_bounds
+
+    if bounds is not None:
+        metadata = gpd.read_file(path, rows=0, **kwargs)
+        if metadata.crs is None:
+            raise ValueError(f"GSSURGO polygons have no CRS: {path}")
+        kwargs["bbox"] = transform_bounds(
+            bounds_crs, metadata.crs, *bounds, densify_pts=21,
+        )
+    return gpd.read_file(path, **kwargs)
+
+
+def _load_gssurgo_dataframe(
+    gssurgo_path: Path, *,
+    bounds: Optional[tuple[float, float, float, float]] = None,
+    bounds_crs: Any = None,
+) -> pd.DataFrame:
     try:
         import geopandas as gpd
     except ImportError as exc:  # pragma: no cover - depends on local env
@@ -951,8 +973,9 @@ def _load_gssurgo_dataframe(gssurgo_path: Path) -> pd.DataFrame:
                     "GSSURGO geodatabase must contain MUPOLYGON and muaggatt layers"
                 )
 
-            polygons = gpd.read_file(
+            polygons = _read_soil_polygons(
                 gssurgo_path,
+                bounds=bounds, bounds_crs=bounds_crs,
                 layer=polygon_layer,
                 engine="pyogrio",
             )
@@ -977,7 +1000,10 @@ def _load_gssurgo_dataframe(gssurgo_path: Path) -> pd.DataFrame:
                     "GSSURGO geodatabase must contain MUPOLYGON and muaggatt layers"
                 )
 
-            polygons = gpd.read_file(gssurgo_path, layer=polygon_layer)
+            polygons = _read_soil_polygons(
+                gssurgo_path, layer=polygon_layer, engine="fiona",
+                bounds=bounds, bounds_crs=bounds_crs,
+            )
             with fiona.open(gssurgo_path, layer=muaggatt_layer) as src:
                 muaggatt = pd.DataFrame.from_records(feature["properties"] for feature in src)
     else:
@@ -988,7 +1014,9 @@ def _load_gssurgo_dataframe(gssurgo_path: Path) -> pd.DataFrame:
             raise ValueError(
                 "SSURGO folder must contain a polygon shapefile matching spatial/soilmu_a*.shp"
             )
-        polygons = gpd.read_file(polygon_candidates[0])
+        polygons = _read_soil_polygons(
+            polygon_candidates[0], bounds=bounds, bounds_crs=bounds_crs,
+        )
 
         muaggatt_candidates = list(tabular_dir.glob("muaggatt.*"))
         if not muaggatt_candidates:
@@ -1021,8 +1049,9 @@ def _load_gssurgo_dataframe(gssurgo_path: Path) -> pd.DataFrame:
         & ~merged.geometry.is_empty
         & merged["soil_group"].notna()
     ].copy()
-    if merged.empty:
+    if merged.empty and bounds is None:
         raise ValueError("No valid hydrologic soil group polygons were found in GSSURGO")
+    merged.attrs["soil_groups"] = set(muaggatt["soil_group"].dropna())
     return merged
 
 
@@ -1032,7 +1061,8 @@ def _rasterize_soils_source(
     project_crs: Any,
     restrict_to_extent: Optional[Any],
     buffer_distance: float,
-) -> tuple[np.ndarray, Any, list[tuple[int, str]]]:
+    output_dir: Path,
+) -> tuple[list[Path], list[tuple[int, str]]]:
     try:
         from rasterio import features
     except ImportError as exc:  # pragma: no cover - depends on local env
@@ -1041,27 +1071,31 @@ def _rasterize_soils_source(
             "Install the geospatial dependencies before calling this API."
         ) from exc
 
-    gdf = _load_gssurgo_dataframe(gssurgo_path)
+    restrict_bounds = normalize_restrict_to_extent(
+        restrict_to_extent, buffer_distance=buffer_distance,
+    )
+    # Query the entire snapped grid, including cells beyond an unsnapped extent.
+    query_bounds = (
+        _snap_bounds_to_grid(restrict_bounds, cell_size)
+        if restrict_bounds is not None else None
+    )
+    gdf = _load_gssurgo_dataframe(
+        gssurgo_path, bounds=query_bounds, bounds_crs=project_crs,
+    )
     if gdf.crs is None:
         raise ValueError(f"GSSURGO polygons have no CRS: {gssurgo_path}")
-
+    soil_groups = gdf.attrs["soil_groups"]
     gdf = gdf.to_crs(project_crs)
-    bounds = tuple(gdf.total_bounds.tolist())
-    restrict_bounds = normalize_restrict_to_extent(
-        restrict_to_extent,
-        buffer_distance=buffer_distance,
-    )
-    if restrict_bounds is not None:
-        bounds = restrict_bounds
+    bounds = restrict_bounds if restrict_bounds is not None else tuple(gdf.total_bounds)
 
     encountered_groups = [
         soil_group
         for soil_group in _STANDARD_SOIL_GROUP_ORDER
-        if soil_group in set(gdf["soil_group"].dropna().unique())
+        if soil_group in soil_groups
     ]
     encountered_groups.extend(
         sorted(
-            set(gdf["soil_group"].dropna().unique()) - set(encountered_groups),
+            soil_groups - set(encountered_groups),
         )
     )
     soil_id_lookup = {
@@ -1071,23 +1105,55 @@ def _rasterize_soils_source(
 
     transform, width, height = _bounds_to_grid(bounds, cell_size)
     gdf["_class_id"] = gdf["soil_group"].map(soil_id_lookup).astype(int)
-    shapes = (
-        (geom, int(class_id))
-        for geom, class_id in zip(gdf.geometry, gdf["_class_id"], strict=False)
-    )
-    array = features.rasterize(
-        shapes=shapes,
-        out_shape=(height, width),
-        transform=transform,
-        fill=0,
-        dtype="int32",
-    )
-
     raster_map_rows = [(0, "NoData")] + [
         (class_id, soil_group)
         for soil_group, class_id in soil_id_lookup.items()
     ]
-    return array.astype(np.int32), transform, raster_map_rows
+    from rasterio.windows import bounds as window_bounds, transform as window_transform
+    from shapely.geometry import box
+
+    logger.info(
+        "Rasterizing soils grid %s x %s with at most %s cells per tile",
+        width, height, _SOILS_MAX_TILE_CELLS,
+    )
+    paths = []
+    for index, window in enumerate(_soil_tile_windows(width, height)):
+        tile_transform = window_transform(window, transform)
+        # Spatial-index results are sorted back into source order so overlap
+        # precedence matches a single rasterization of the full polygon list.
+        positions = sorted(gdf.sindex.query(box(*window_bounds(window, transform))))
+        subset = gdf.iloc[positions]
+        shape = (int(window.height), int(window.width))
+        if len(subset):
+            array = features.rasterize(
+                shapes=list(zip(subset.geometry, subset["_class_id"], strict=True)),
+                out_shape=shape, transform=tile_transform, fill=0, dtype="int32",
+            )
+        else:
+            array = np.zeros(shape, dtype=np.int32)
+        paths.append(_create_output_raster(
+            Path(output_dir) / f"gssurgo_soils_source_{index:05d}.tif",
+            array, tile_transform, project_crs,
+        ))
+    return paths, raster_map_rows
+
+
+# Bound Python raster memory and stay below the native 100-million-cell prompt.
+_SOILS_MAX_TILE_CELLS = 10_000_000
+
+
+def _soil_tile_windows(width: int, height: int) -> Iterator[Any]:
+    """Partition the grid without overlaps, including exceptionally wide grids."""
+    from rasterio.windows import Window
+
+    tile_width = min(width, _SOILS_MAX_TILE_CELLS)
+    tile_height = max(1, _SOILS_MAX_TILE_CELLS // tile_width)
+    for row in range(0, height, tile_height):
+        for column in range(0, width, tile_width):
+            yield Window(
+                column, row, min(tile_width, width - column),
+                min(tile_height, height - row),
+            )
 
 
 def _decode_hdf_string(value: Any) -> str:
@@ -1979,29 +2045,20 @@ def add_soils_layer(
     output_hdf_path.parent.mkdir(parents=True, exist_ok=True)
     _remove_output_artifacts(output_hdf_path)
 
-    raster_array, transform, raster_map_rows = _rasterize_soils_source(
-        gssurgo_path=gssurgo_path,
-        cell_size=float(cell_size),
-        project_crs=project_crs,
-        restrict_to_extent=restrict_to_extent,
-        buffer_distance=buffer_distance,
-    )
-
     from ._landcover_native import create_soils
 
     with tempfile.TemporaryDirectory(
         prefix="ras-commander-soils-",
         dir=output_hdf_path.parent,
     ) as temp_dir:
-        source_raster_path = _create_output_raster(
-            Path(temp_dir) / "gssurgo_soils_source.tif",
-            raster_array,
-            transform,
-            project_crs,
+        source_raster_paths, raster_map_rows = _rasterize_soils_source(
+            gssurgo_path=gssurgo_path, cell_size=float(cell_size),
+            project_crs=project_crs, restrict_to_extent=restrict_to_extent,
+            buffer_distance=buffer_distance, output_dir=Path(temp_dir),
         )
         create_soils(
             rasmap_path=project_paths.rasmap_path,
-            source_raster_path=source_raster_path,
+            source_raster_path=source_raster_paths,
             raster_map_rows=raster_map_rows,
             cell_size=float(cell_size),
             output_hdf_path=output_hdf_path,
