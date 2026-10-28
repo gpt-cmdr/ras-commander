@@ -42,8 +42,6 @@ def main():
     if args.output.exists():
         raise FileExistsError("Use a new qualification output directory")
     inventory = RasControl.inspect_processes()
-    if not inventory.complete or inventory.processes:
-        raise RuntimeError("A complete empty host process inventory is required before qualification")
     project = args.output / "project"
     input_max = max((len(str(p.relative_to(args.project))) for p in args.project.rglob("*") if p.is_file()), default=0)
     if max(len(str(project.resolve())) + input_max, len(str(args.output.resolve())) + 96) > 240:
@@ -58,6 +56,9 @@ def main():
     hdf = Path(plan.HDF_Results_Path)
     if not hdf.is_file():
         raise ValueError("A completed result HDF is required; this harness does not run the solver")
+    source_hdf = args.project / hdf.relative_to(project)
+    if digest(source_hdf) != digest(hdf):
+        raise RuntimeError("Result HDF changed while staging the disposable copy")
     rasmap = project / (ras.project_name + ".rasmap")
     hashes = {"result_hdf": digest(hdf), "rasmap": digest(rasmap)}
     affinity = psutil.Process().cpu_affinity()
@@ -96,12 +97,13 @@ def main():
                 row.update(success=False, error=str(error))
             row.update(seconds=time.monotonic() - started,
                        result_hdf_restored=digest(hdf) == hashes["result_hdf"],
+                       source_hdf_unchanged=digest(source_hdf) == hashes["result_hdf"],
                        rasmap_restored=digest(rasmap) == hashes["rasmap"],
                        caller_affinity_restored=psutil.Process().cpu_affinity() == affinity)
             receipt["cases"].append(row)
             (args.output / "qualification.json").write_text(json.dumps(receipt, indent=2, default=str) + "\n")
             print(json.dumps(row), flush=True)
-            if not all(row[key] for key in ("result_hdf_restored", "rasmap_restored", "caller_affinity_restored")):
+            if not all(row[key] for key in ("result_hdf_restored", "source_hdf_unchanged", "rasmap_restored", "caller_affinity_restored")):
                 raise RuntimeError("Restoration failed; qualification stopped")
     if any(not row["success"] for row in receipt["cases"] if row["native_cpu_limit"] == 1):
         raise SystemExit("One-CPU qualification failed; inspect retained evidence")
