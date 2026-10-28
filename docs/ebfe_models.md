@@ -1042,15 +1042,6 @@ Complete working examples demonstrating each model:
 - Reading generated HDF compute messages after successful steady-plan execution.
 - Distinguishing 1D steady result generation from 2D preprocessor validation.
 
-### 954_ebfe_lake_maurepas_validation.ipynb
-
-**Demonstrates**:
-- Organizing Pattern 3 single-archive Louisiana 2D model delivery.
-- Validating the delivered Lake Maurepas HEC-HMS project from `HMS Model/` with hms-commander.
-- Confirming local projection, terrain, land-cover, and RASMapper assets.
-- Reusing saved ras-commander geometry-preprocessor evidence for plan 02.
-- Documenting a preprocessor-valid model where full hydraulic result HDFs are absent from the source archive.
-
 ### 955_ebfe_tickfaw_validation.ipynb
 
 **Demonstrates**:
@@ -1167,7 +1158,6 @@ Current validation is tracked in the repository-level
   `RasGeomWriter` / `ERROR: Incorrect Type in ./Projection. (Expected String)`
   failure and requires manual terrain rebuild or repair inside RASMapper.
 - Tickfaw: organized, path-audited, preprocessor-valid, and results-ready with seven local hydraulic plan HDFs; see `examples/955_ebfe_tickfaw_validation.ipynb`.
-- Lake Maurepas: organized, HMS-validated through hms-commander, path-audited, and preprocessor-valid; source archive scan found no RAS plan-result HDFs, so it is not yet a results-ready demo; see `examples/954_ebfe_lake_maurepas_validation.ipynb`.
 
 ### Notebook Testing
 
