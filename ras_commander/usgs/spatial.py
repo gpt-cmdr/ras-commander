@@ -165,8 +165,7 @@ class UsgsGaugeSpatial:
             Require a requested series with an observation in the last 183 days.
             If no parameters are requested, any time series qualifies. This
             measures observation recency, not legacy NWIS maintenance status.
-            If True, only return currently active gauges. If False,
-            include inactive/historical gauges.
+            If False, include historical series.
         project_crs : str, optional
             Override CRS for projects without embedded projection. Use EPSG codes
             like "EPSG:26918" (UTM Zone 18N) or "EPSG:2271" (PA State Plane North).

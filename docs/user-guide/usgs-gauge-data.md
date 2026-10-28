@@ -16,10 +16,9 @@ UTC midnight. Legacy site-local calendar bounds can select different intervals;
 check date boundaries and alignment when migrating existing studies. Use
 explicit timezone-aware timestamps for precise continuous-data windows.
 
-This is a scoped migration. Parameter-filtered spatial discovery still uses a
-legacy site-service fallback, and annual-peak retrieval still uses its legacy
-endpoint. Those paths require separate migration and qualification before the
-whole USGS module can be considered independent of retired services. See the
+Spatial discovery uses modern monitoring locations and time-series metadata;
+annual peak discharge uses the modern peaks collection. The USGS module no
+longer calls the legacy site, instantaneous, daily or peak services. See the
 [official USGS migration guide](https://api.waterdata.usgs.gov/docs/ogcapi/migration/)
 for endpoint and field changes.
 
