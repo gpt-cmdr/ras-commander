@@ -9,6 +9,14 @@ alone does not identify a development checkout.
 
 ### Unreleased
 
+**Fast-Map 0.10.1 is the minimum mapping engine** (#736)
+
+The `fim`, `fast-map`, `full` and `all` extras now require
+`ras-commander-fast-map>=0.10.1,<0.11` (was `>=0.8,<0.11`). 0.10.1 is the first
+release with the `global-terrain-lattice/1` polygon AOI mask that Commander
+requires since 0.110.2; with the old floor pip could keep 0.8.0, and polygon AOIs
+then failed at run time. The FIM container example now pins 0.10.1.
+
 **Opt-in native and shadow read backends for RasDss** (#592)
 
 - `RasDss.backend` (`"java"`, `"native"` or `"shadow"`) and

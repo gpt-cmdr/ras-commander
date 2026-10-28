@@ -33,7 +33,9 @@ ras2fim-batch method
 ```
 
 From a Commander checkout, use `uv pip install -e ".[fim]"`. To install only
-the engine, use `uv pip install ras-commander-fast-map` or the `fast-map` extra.
+the engine, use `uv pip install "ras-commander-fast-map>=0.10.1,<0.11"` or the
+`fast-map` extra. Commander's `fim` and `fast-map` extras require 0.10.1 or later,
+the first release with the `global-terrain-lattice/1` polygon AOI mask.
 Uninstall the former `ras2fim-engine` package first when migrating from its
 retained test wheels, because it owns the same compatible executable.
 
@@ -60,8 +62,8 @@ The Rust import is `ras_commander_fast_map`. It consumes prepared geometry,
 profile arrays and terrain; Commander and fast-HDF still own model/HDF extraction.
 It does not read a plan HDF directly. The source moved from Commander's former
 `rust/step05/` directory with filtered Git history and immutable numerical-file
-fingerprints. Crate and wheel version 0.8.0 preserve those qualified methods;
-the packaging extraction does not introduce a new interpolation algorithm.
+fingerprints. Crate and wheel version 0.8.0, the first standalone release,
+preserve those qualified methods; the packaging extraction does not introduce a new interpolation algorithm.
 
 Ordinary Rust mapping loads no HEC-RAS assemblies. Native reference generation
 and explicit corner preparation need an installed supported HEC-RAS runtime.
@@ -155,7 +157,7 @@ hydraulic geometry/properties; the caller chooses one original or healed
 mapping TIFF independently. Bbox/polygon masks and bounded profile concurrency
 work with these inputs.
 
-Fast-Map 0.8.0 already supports the vector transport; only Commander needs the
+Fast-Map supports the vector transport from 0.8.0 onward; only Commander needs the
 new API. The [input contract, Python 3.11 installation and runnable CSV example](api/fim.md#supply-cell-wsel-profiles)
 describe source binding, units, completeness and failure behavior. Full-mask
 and float32 selector-equivalence checks do not qualify arbitrary aggregate
