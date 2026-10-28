@@ -297,3 +297,14 @@ def test_recorded_usgs_observations_align_in_utc_across_dst():
         result = adapter._normalize(frame, case["site"], "00060", "00011")
         assert result.index.equals(pd.DatetimeIndex(pd.to_datetime(rows["datetime"], utc=True), name="datetime"))
         assert result[f"{case['site']}_00060"].tolist() == rows["legacy"].tolist()
+
+
+def test_core_rate_limits_once_per_actual_request(service, monkeypatch):
+    from ras_commander.usgs import core
+    waits = []
+    monkeypatch.setattr(core, "_apply_rate_limit", lambda: waits.append(1))
+    monkeypatch.setattr(adapter, "_wait", lambda: core._apply_rate_limit())
+    _, calls = service
+    result = RasUsgsCore.retrieve_flow_data("01646500", "2024-01-01", "2024-01-01")
+    assert not result.empty
+    assert len(calls) == len(waits) == 1

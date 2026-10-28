@@ -237,9 +237,6 @@ class RasUsgsCore:
             end_datetime = end_datetime.isoformat()
 
         try:
-            # Apply rate limiting before API request
-            _apply_rate_limit()
-
             if data_type.lower() == 'iv':
                 # Instantaneous values
                 data_df, metadata = reader.get_iv(
@@ -357,9 +354,6 @@ class RasUsgsCore:
             end_datetime = end_datetime.isoformat()
 
         try:
-            # Apply rate limiting before API request
-            _apply_rate_limit()
-
             if data_type.lower() == 'iv':
                 # Instantaneous values
                 data_df, metadata = reader.get_iv(
@@ -462,9 +456,6 @@ class RasUsgsCore:
         logger.debug(f"Retrieving metadata for site {site_id}")
 
         try:
-            # Apply rate limiting before API request
-            _apply_rate_limit()
-
             # Get site information
             # Note: dataretrieval 1.1.0+ returns tuple (DataFrame, metadata_dict)
             result = reader.get_info(sites=site_id)
@@ -496,7 +487,6 @@ class RasUsgsCore:
             # Get available parameters by querying data availability
             try:
                 # Apply rate limiting before API request
-                _apply_rate_limit()
 
                 # Query what data is available (without downloading full dataset)
                 availability = reader.what_sites(
@@ -598,9 +588,6 @@ class RasUsgsCore:
             end_datetime = end_datetime.strftime("%Y-%m-%d")
 
         try:
-            # Apply rate limiting before API request
-            _apply_rate_limit()
-
             # Try to get a small sample of data to verify availability
             # Get just first day to minimize data transfer
             test_df, metadata = reader.get_iv(
