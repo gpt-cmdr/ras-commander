@@ -156,12 +156,16 @@ def test_real_exports_equal_whole_grid_reference(tmp_path, monkeypatch, method, 
             source, [label], folder, mesh_name=mesh, resolution=resolution, method=method,
         )[str(label)]
 
-    def whole_grid(points, values, grid_x, grid_y, method, fill_value, **kwargs):
-        result = scipy_interpolate.griddata(
-            points, values, np.meshgrid(grid_x, grid_y), method=method, fill_value=fill_value,
-        ).astype(np.float32)
-        result[np.isnan(result)] = fill_value
-        return result
+    def whole_writer(dst, grid_x, grid_y, interpolator, fill_value, *,
+                     mesh_mask=None, nearest_values=None, nearest_indices=None):
+        if interpolator is None:
+            values = nearest_values[nearest_indices].reshape(len(grid_y), len(grid_x))
+        else:
+            values = interpolator(tuple(np.meshgrid(grid_x, grid_y))).astype(np.float32)
+            values[np.isnan(values)] = fill_value
+        if mesh_mask is not None:
+            values = np.where(mesh_mask, values, fill_value).astype(np.float32)
+        dst.write(values, 1)
 
     def whole_nearest(points, grid_x, grid_y):
         gx, gy = np.meshgrid(grid_x, grid_y)
@@ -169,7 +173,7 @@ def test_real_exports_equal_whole_grid_reference(tmp_path, monkeypatch, method, 
 
     module = importlib.import_module("ras_commander.hdf.HdfResultsMesh")
     with monkeypatch.context() as reference:
-        reference.setattr(module, "_interpolate_to_grid", whole_grid)
+        reference.setattr(module, "_write_interpolated_raster", whole_writer)
         reference.setattr(module, "_nearest_grid_indices", whole_nearest)
         expected_path = export(tmp_path / "reference")
     monkeypatch.setattr(raster, "_QUERY_BLOCK_PIXELS", 113)
@@ -180,3 +184,6 @@ def test_real_exports_equal_whole_grid_reference(tmp_path, monkeypatch, method, 
         assert actual.profile == expected.profile
         assert actual.tags() == expected.tags()
         assert actual.overviews(1) == expected.overviews(1)
+        for factor in actual.overviews(1):
+            shape = (1, (actual.height + factor - 1) // factor, (actual.width + factor - 1) // factor)
+            np.testing.assert_array_equal(actual.read(out_shape=shape), expected.read(out_shape=shape))
