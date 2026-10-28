@@ -1,4 +1,4 @@
-"""Explicit API11 full-feature native entrypoint contract (79); additions require review."""
+"""Explicit API11 full-feature native entrypoint contract (80); additions require review."""
 EXPECTED = {
     # Test hook: panics inside the boundary guard (contained as FastHdfPanicError).
     "_panic_for_test": ("function", None, "src/python/panic_guard.rs"),
@@ -58,6 +58,8 @@ EXPECTED = {
     "write_pmtiles": ("function", None, "src/python/mod.rs"),
     "export_ipc_file": ("function", "exports-arrow", "src/python/mod.rs"),
     "validate_export_wkb": ("function", "exports-arrow", "src/python/mod.rs"),
+    # Additive within API 11 (engine main after 0.2.3, PR #36): GeoParquet archive profile.
+    "export_geoparquet_ipc_files": ("function", "exports-geoparquet", "src/python/mod.rs"),
     "export_pmtiles_ipc_file": ("function", "exports-pmtiles", "src/python/mod.rs"),
     "NativeAnalysis": ("class", None, "src/python/fluvial_bindings.rs"),
     "assemble_rings": ("function", None, "src/python/fluvial_bindings.rs"),
