@@ -9,7 +9,30 @@ alone does not identify a development checkout.
 
 ### Unreleased
 
-**DSS files are released when a Java-bridge call returns**
+### v0.110.2 (October 2026)
+
+**For FIM users**
+
+- `RasFim.map_sloping_profiles()` and `prepare_sloping_model()` take
+  `invalid_cells=`, default `"repair"`. A mesh with self-intersecting cell
+  rings now maps instead of raising `MeshCellPolygonError`; pass
+  `invalid_cells="raise"` to keep the old refusal.
+- `fim_manifest.json` (and `attrs["invalid_cells"]`) gains an `invalid_cells`
+  record, schema `fim-invalid-cells/1`, with the policy, a count and one entry
+  per affected cell. Each entry's `action` is `repaired`, `convex_hull`,
+  `omitted`, `overlap_trimmed` or `overlap_consumed`, and `pieces` gives the
+  number of polygon pieces the cell kept (0 when it owns no pixels).
+- Polygon AOIs need Fast-Map **0.10.1** or later (`global-terrain-lattice/1`);
+  older engines raise rather than use the old edge rule. Bbox AOIs and
+  unbounded mapping still work on Fast-Map 0.8.0. The `fim`/`fast-map` extras
+  now accept `ras-commander-fast-map>=0.8,<0.11`.
+
+The `ras-commander-fast-hdf` requirement is unchanged (`>=0.2.3,<0.3`); every
+change below works with the published 0.2.3 engine. Columnar PMTiles
+properties (#715) are capability-detected and take effect only with a later
+engine release; 0.2.3 receives the equivalent lists.
+
+**DSS files are released when a Java-bridge call returns** (#727)
 
 With HEC Monolith, `HecDss.done()` only drops the bridge's file-cache
 reference. The native file stayed open, with its DSS locks held, until a
@@ -21,7 +44,7 @@ through `HecDSSFileAccess.close(path, True)`, using the same resolved path
 string that opened it. A failed release is logged at DEBUG and never masks the
 call's own error. Public signatures and return values are unchanged.
 
-**Crop-invariant polygon AOI edges**
+**Crop-invariant polygon AOI edges** (#722)
 
 Horizontal/sloping masks use global source pixel coordinates and an explicit
 half-open edge rule, eliminating crop-origin differences at pixel-center
@@ -33,7 +56,7 @@ This intentionally changes legacy edge inclusion, while leaving hydraulic
 cell ownership and surface arithmetic unchanged. See the
 [AOI contract](../api/fim.md#global-terrain-lattice-aoi-coverage-engine-0101).
 
-**Sloping maps no longer fail a whole mesh for one invalid cell**
+**Sloping maps no longer fail a whole mesh for one invalid cell** (#733)
 
 `RasFim.map_sloping_profiles()` and `prepare_sloping_model()` previously
 refused a mesh with any self-intersecting cell ring (`MeshCellPolygonError`),
@@ -52,7 +75,7 @@ strict. Published fast-hdf 0.2.3 already provides the non-strict assembly; no
 engine release is needed. See
 [Invalid cell polygons](../api/fim.md#invalid-cell-polygons).
 
-**FIM: priority-1 terrain source, whole-simulation products and velocity**
+**FIM: priority-1 terrain source, whole-simulation products and velocity** (#724)
 
 `RasFim.top_priority_terrain_source()` identifies a registered terrain's
 priority-1 source TIFF from its `Priority` attributes or VRT order.
@@ -66,7 +89,7 @@ and storage-area plans are refused. Products are qualified against RAS Mapper
 output on Davis p02 and BaldEagleCrkMulti2D bridges p05 for pure 2D FIM
 library creation. See [the FIM guide](../api/fim.md#map-on-the-priority-1-terrain-source-no-terrain-export).
 
-**Columnar PMTiles properties**
+**Columnar PMTiles properties** (#715)
 
 `fast_hdf.export_mesh_pmtiles()` builds its property columns as NumPy arrays
 (`mesh_name` as a categorical, result columns gathered by cell ID, masked where
@@ -78,7 +101,7 @@ byte-identical either way. On Bald Eagle p07 (87,039 cells, 15 columns,
 z10-14) Python preparation drops from 2.9 s to 0.4 s and peak working set from
 400 MiB to 352 MiB. See [HDF API](../api/hdf.md).
 
-**Caller-supplied cell WSEL profiles for native sloping mapping**
+**Caller-supplied cell WSEL profiles for native sloping mapping** (#710)
 
 `RasFim.map_sloping_profiles()` and `prepare_sloping_model()` now accept
 `wsel_profiles=`, a wide DataFrame keyed by `mesh_name` and `cell_id`, instead
@@ -89,7 +112,7 @@ Existing defaults are unchanged, and Fast-Map 0.8.0 needs no rebuild. See the
 [input and installation contract](../api/fim.md#supply-cell-wsel-profiles) and
 [selector-equivalence evidence](fim-mapping-performance.md#caller-supplied-wsel-qualification).
 
-**Native fluvial-pluvial boundary on meshes with invalid cells**
+**Native fluvial-pluvial boundary on meshes with invalid cells** (#708)
 
 `HdfFluvialPluvial.calculate_fluvial_pluvial_boundary` no longer refuses the
 native engine when some cells have invalid geometry (for example
@@ -103,23 +126,32 @@ output. `generate_fluvial_pluvial_polygons` still uses the Python reference for
 such meshes. With `diagnostics=True`, `attrs["fluvial_native"]` lists the
 omitted cells as `reference_omitted_cells`.
 
-**Mapping engine moved to its own crate and wheel**
+**Bounded memory in depth raster exports** (#716, #719, #720)
 
-The Rust mapping engine is now maintained in
-[ras-commander-fast-map](https://github.com/gpt-cmdr/ras-commander-fast-map),
-published as a Rust crate and Python binary wheel of the same name. The `fim`
-extra installs its Windows/Linux x64 wheel; `fast-map` installs the engine alone.
-The `ras2fim-batch` command, request/method contracts and `RasFim` signatures
-remain compatible. Commander also locates the installed package's executable
-when its scripts directory is absent from `PATH`.
+`HdfResultsMesh` max-depth and timestep depth exports interpolate in blocks of
+at most 262,144 pixels and write bounded windows straight to the GeoTIFF, so
+neither the query grid nor the complete output raster is held in memory.
+Multi-timestamp linear/cubic exports reuse one triangulation per call. Pixels,
+masks, profiles, tags and overviews are unchanged. On a synthetic
+4096 x 4096 export, peak memory fell from about 752 MiB to 191 MiB for the
+query step, and the writer from 306 MiB to 246 MiB; four linear timestep
+exports on BaldEagleCrkMulti2D p05 went from 1.2 s to 0.47 s.
 
-Engine source, release CI and retained wheels move out of this repository;
-Commander keeps model preparation, public APIs, delivery, comparisons and
-cross-platform integration tests. The 0.8 extraction preserves numerical-module
-fingerprints and makes no new performance claim. The
-[mapping guide](../native-mapping-engine.md) links source, crate, wheel setup,
-release provenance and qualification. Preparing missing corners still requires
-explicit Windows/pythonnet/HEC-RAS preparation; that operation is not Rust-native.
+**HEC-RAS 7.x geometry refresh and empty-area bootstrap** (#721)
+
+Stale 7.x geometry HDFs no longer fail derived-product invalidation.
+`GeomMesh.generate(recompile_via_rasexe=True)` now bootstraps computation
+points for an area left empty by a perimeter edit before regenerating the mesh.
+Preprocessing process inventory recovers names of unnamed processes, so
+unrelated processes no longer block handoff.
+
+**Large soils layers** (#723)
+
+`RasMap.add_soils_layer()` filters source polygons to the buffered extent and
+rasterizes aligned tiles of at most 10 million cells into one native soils
+layer, avoiding the RasMapperLib confirmation dialog above 100 million cells.
+`list_soils_layers()` now reads the HDF's `LC Type`, so custom-named soils
+outputs are no longer classified as land cover.
 
 ### v0.110.1 (October 2026)
 
@@ -147,6 +179,24 @@ and geometry WKB) in `h5py`, `auto` and `native` mode.
 Proven identical on all 139 release-gate fixtures (6,038 result digests in
 three modes) and by release gate route1/route2 (every record identical). The
 `ras-commander-fast-hdf` requirement is unchanged (`>=0.2.3,<0.3`).
+
+**Mapping engine moved to its own crate and wheel** (#698)
+
+The Rust mapping engine is now maintained in
+[ras-commander-fast-map](https://github.com/gpt-cmdr/ras-commander-fast-map),
+published as a Rust crate and Python binary wheel of the same name. The `fim`
+extra installs its Windows/Linux x64 wheel; `fast-map` installs the engine alone.
+The `ras2fim-batch` command, request/method contracts and `RasFim` signatures
+remain compatible. Commander also locates the installed package's executable
+when its scripts directory is absent from `PATH`.
+
+Engine source, release CI and retained wheels move out of this repository;
+Commander keeps model preparation, public APIs, delivery, comparisons and
+cross-platform integration tests. The 0.8 extraction preserves numerical-module
+fingerprints and makes no new performance claim. The
+[mapping guide](../native-mapping-engine.md) links source, crate, wheel setup,
+release provenance and qualification. Preparing missing corners still requires
+explicit Windows/pythonnet/HEC-RAS preparation; that operation is not Rust-native.
 
 ### v0.110.0 (October 2026)
 
