@@ -25,6 +25,7 @@ class GridPlan:
     planned_bytes: int
     cell_positions: np.ndarray
     geometry_bytes: int = 0
+    source_transform: Any = None
 
     @property
     def shape(self):
@@ -97,6 +98,9 @@ def plan_grid(
         if src.crs is None or not _prepare.same_crs(cells.crs, src.crs):
             raise FimUnsupportedError("horizontal cells and terrain must share a CRS")
         crs = _aoi.to_crs(src.crs)
+        # Preserve the unbounded output extent; an AOI may only remove pixels.
+        fc0, fc1 = _aoi.center_index_range(bounds[0], bounds[2], t.c, t.a, src.width)
+        fr0, fr1 = _aoi.center_index_range(bounds[1], bounds[3], t.f, t.e, src.height)
         shape = _aoi.geometry_in_crs(aoi, crs) if aoi else None
         if shape is not None:
             ab = shape.bounds
@@ -108,9 +112,14 @@ def plan_grid(
             )
         if bounds[0] >= bounds[2] or bounds[1] >= bounds[3]:
             c0 = c1 = r0 = r1 = 0
+        elif shape is None:
+            c0, c1, r0, r1 = fc0, fc1, fr0, fr1
         else:
-            c0, c1 = _aoi.center_index_range(bounds[0], bounds[2], t.c, t.a, src.width)
-            r0, r1 = _aoi.center_index_range(bounds[1], bounds[3], t.f, t.e, src.height)
+            from ._aoi_lattice import index_range
+            c0, c1 = index_range(bounds[0], bounds[2], t.c, t.a, src.width)
+            r0, r1 = index_range(bounds[1], bounds[3], t.f, t.e, src.height)
+            c0, c1 = max(c0, fc0), min(c1, fc1)
+            r0, r1 = max(r0, fr0), min(r1, fr1)
         window = Window(c0, r0, max(0, c1 - c0), max(0, r1 - r0))
         transform = src.window_transform(window)
         positions = np.array([], dtype=np.int64)
@@ -161,6 +170,7 @@ def plan_grid(
         planned,
         positions,
         transport,
+        t,
     )
 
 
@@ -169,7 +179,7 @@ def prepare_grid(
 ) -> HorizontalGrid:
     """Cache terrain and centre-based cell ownership for one admitted window."""
     import rasterio
-    from rasterio.features import geometry_mask, rasterize
+    from rasterio.features import rasterize
 
     if not all(plan.shape):
         return HorizontalGrid(
@@ -245,13 +255,8 @@ def prepare_grid(
             all_touched=False,
         )
     if plan.mask_geometry:
-        keep = geometry_mask(
-            [plan.geometry],
-            out_shape=plan.shape,
-            transform=plan.transform,
-            invert=True,
-            all_touched=False,
-        )
+        from ._aoi_lattice import mask
+        keep = mask(plan.geometry, plan.source_transform, plan.window)
         owner[~keep] = 0
     owner.setflags(write=False)
     ground.setflags(write=False)

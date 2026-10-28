@@ -328,6 +328,8 @@ def map_profiles(
     # Windowing selects output pixels; the complete mesh remains available for
     # face connectivity and corner reconstruction across an AOI boundary.
     plan = _horizontal.plan_grid(cells, terrain, constraint, budget, native=True)
+    if plan.mask_geometry and method.get("aoi_mask") != "global-terrain-lattice/1":
+        raise FimEngineError("Polygon masking requires Fast-Map global-terrain-lattice/1 (0.10.1+)")
     layout = None
     buffer_bytes = 0
     if template_raster is not None and all(plan.shape):
@@ -368,6 +370,7 @@ def map_profiles(
         },
         source_profiles=selected,
         aoi=constraint.describe() if constraint else None,
+        aoi_mask="global-terrain-lattice/1" if constraint else None,
         inputs={
             k: {"path": str(p), "size": before[k][0], "mtime_ns": before[k][1]}
             for k, p in watched.items()
