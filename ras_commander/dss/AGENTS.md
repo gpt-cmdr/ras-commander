@@ -25,7 +25,10 @@ This file is the canonical local instruction file for `ras_commander/dss/`.
 
 - Configure the JVM before importing Java classes with `jnius`.
 - Resolve DSS paths to absolute paths before opening files.
-- Close DSS handles in `finally` blocks.
+- Close DSS handles in `finally` blocks. `HecDss.done()` and
+  `GriddedData.done()` do not close the native file; follow each with
+  `RasDss._release_dss_file(<exact path string used to open>)`. Never call
+  `HecDSSFileAccess.closeAllFiles()`, which closes every DSS file in the JVM.
 - Remember that the JVM can only be started once per process.
 - Keep Part D blank when writing standard DSS pathnames unless the method explicitly requires otherwise.
 
