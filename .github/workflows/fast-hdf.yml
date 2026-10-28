@@ -17,6 +17,7 @@ on:
       - 'setup.py'
       - 'tests/test_hdf_result_view.py'
       - 'tests/test_hdf_raster_interpolation.py'
+      - 'tests/test_hdf_raster_triangulation.py'
       - 'tests/test_hdf_results_mesh_max_depth.py'
       - 'tests/test_tabular_readers_core_install.py'
       - 'tests/test_fast_hdf*.py'
@@ -78,7 +79,7 @@ jobs:
         if: steps.native.outputs.available == 'true'
         run: python -m pytest tests/test_fast_hdf.py tests/test_fast_hdf_pmtiles_columnar.py tests/test_hdf_result_view.py tests/test_hdf_results_mesh.py tests/test_hdf_mesh_cell_polygon_diagnostics.py tests/rust_engine_bridge/panic_guard_test.py tests/rust_engine_bridge/in_call_rewrite_test.py -q
       - name: Raster interpolation regression tests
-        run: python -m pytest tests/test_hdf_raster_interpolation.py tests/test_hdf_results_mesh_max_depth.py -q
+        run: python -m pytest tests/test_hdf_raster_interpolation.py tests/test_hdf_raster_triangulation.py tests/test_hdf_results_mesh_max_depth.py -q
       - name: Table readers with Python reference backend
         env:
           RAS_COMMANDER_FAST_HDF: python
