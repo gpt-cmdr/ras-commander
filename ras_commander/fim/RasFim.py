@@ -474,9 +474,12 @@ class RasFim:
                 largest part. ``"hull"`` uses the face-point convex hull with
                 the same overlap removal. ``"omit"`` leaves the cell unmapped.
                 ``"raise"`` keeps the strict refusal, but only when the AOI (or
-                the whole mesh, without one) intersects an invalid cell's
-                face-point hull. Hydraulic connectivity, corners and
-                interpolation stencils always use the complete HDF topology.
+                the whole mesh, without one) intersects an affected cell.
+                Overlapping neighbours of an invalid cell are resolved by
+                ascending cell ID; split cells keep every piece and fully
+                overlapped cells own no pixels. Hydraulic connectivity,
+                corners and interpolation stencils always use the complete HDF
+                topology. Horizontal and whole-simulation mapping remain strict.
                 ``fim_manifest.json`` and ``attrs["invalid_cells"]`` record each
                 cell, the reason and the action taken.
 

@@ -161,7 +161,7 @@ def test_manifest_record_is_json_and_reports_aoi_intersection(bowtie):
     assert document["policy"] == "repair" and document["count"] == 2
     first = document["cells"][0]
     assert set(first) == {"mesh", "cell_id", "reason", "action", "original_area",
-                          "fallback_area", "overlap_with", "intersects_aoi"}
+                          "fallback_area", "pieces", "overlap_with", "intersects_aoi"}
     assert (first["mesh"], first["cell_id"], first["intersects_aoi"]) == (MESH, 0, True)
     assert document["cells"][1]["intersects_aoi"] is False
     assert _invalid_cells.describe(records, "repair", None)["cells"][0]["intersects_aoi"] is None
@@ -177,6 +177,139 @@ def test_unknown_policy_is_rejected_before_inputs_are_read(tmp_path, value):
     with pytest.raises(ValueError, match="invalid_cells"):
         RasFim.prepare_sloping_model(tmp_path / "absent.hdf", tmp_path / "absent.tif",
                                      invalid_cells=value)
+
+
+# Polygon-cell meshes: cell 0 is always the bowtie ring (0,0)-(10,10)-(0,10)-(10,0),
+# whose face-point hull is the 10 x 10 square; later rings are simple cells.
+BOWTIE_RING = [(0, 0), (10, 10), (0, 10), (10, 0)]
+
+
+def _write_cells(path: Path, shapes) -> Path:
+    points, faces, info, values = [], [], [], []
+    for ring in [BOWTIE_RING] + [list(shape.exterior.coords)[:-1] for shape in shapes]:
+        first_point, first_face = len(points), len(faces)
+        points.extend(ring)
+        faces.extend((first_point + i, first_point + (i + 1) % len(ring)) for i in range(len(ring)))
+        info.append((len(values), len(ring)))
+        values.extend((first_face + i, 1) for i in range(len(ring)))
+    attributes = np.zeros(1, dtype=[("Name", "S64")])
+    attributes["Name"] = MESH.encode()
+    with h5py.File(path, "w") as hdf:
+        hdf.attrs["Projection"] = np.bytes_(CRS.from_epsg(26915).to_wkt(version="WKT1_ESRI"))
+        hdf["Geometry/2D Flow Areas/Attributes"] = attributes
+        base = f"Geometry/2D Flow Areas/{MESH}"
+        hdf[f"{base}/FacePoints Coordinate"] = np.asarray(points, dtype=float)
+        hdf[f"{base}/Faces FacePoint Indexes"] = np.asarray(faces, dtype=np.int32)
+        hdf[f"{base}/Faces Perimeter Info"] = np.zeros((len(faces), 2), dtype=np.int32)
+        hdf[f"{base}/Faces Perimeter Values"] = np.empty((0, 2), dtype=float)
+        hdf[f"{base}/Cells Face and Orientation Info"] = np.asarray(info, dtype=np.int32)
+        hdf[f"{base}/Cells Face and Orientation Values"] = np.asarray(values, dtype=np.int32)
+    return path
+
+
+def _by_id(records):
+    return {record["cell_id"]: record for record in records}
+
+
+@pytest.mark.parametrize("policy", ["repair", "hull", "omit"])
+def test_split_neighbour_keeps_every_piece_under_its_own_id(tmp_path, policy):
+    import shapely
+    from shapely.geometry import box
+    from ras_commander.fim import _invalid_cells
+
+    shapes = [box(4, -1, 6, 11), box(0, 0, 10, 10)]
+    cells, records = _invalid_cells.load_cells(_write_cells(tmp_path / "split.hdf", shapes),
+                                               policy=policy, threads=1)
+    _assert_partition(cells)
+    # The lower-ID strip cuts cell 2 in two; both pieces remain cell 2.
+    assert cells["cell_id"].tolist() == [1, 2, 2]
+    assert sorted(cells.area[cells.cell_id == 2]) == [40.0, 40.0]
+    assert shapely.union_all(shapes).difference(shapely.union_all(cells.geometry)).area == 0
+    split = _by_id(records)[2]
+    assert (split["action"], split["pieces"], split["fallback_area"], split["overlap_with"]) == (
+        "overlap_trimmed", 2, 80.0, [1])
+    # Nothing is left for the bowtie, so it owns no pixels under any policy.
+    assert _by_id(records)[0]["action"] == "omitted"
+
+
+def test_fully_consumed_neighbour_loses_ownership_and_is_recorded(tmp_path):
+    from shapely.geometry import box
+    from ras_commander.fim import _invalid_cells
+
+    path = _write_cells(tmp_path / "consumed.hdf", [box(0, 0, 10, 10), box(1, 1, 9, 9)])
+    for policy in ("repair", "hull", "omit", "raise"):
+        cells, records = _invalid_cells.load_cells(path, policy=policy, threads=1)
+        _assert_partition(cells)
+        assert cells["cell_id"].tolist() == [1]
+        consumed = _by_id(records)[2]
+        assert (consumed["action"], consumed["fallback_area"], consumed["pieces"],
+                consumed["original_area"], consumed["overlap_with"]) == (
+            "overlap_consumed", 0.0, 0, 64.0, [1])
+        entry = _by_id(_invalid_cells.describe(records, policy, None)["cells"])[2]
+        assert entry["action"] == "overlap_consumed" and entry["fallback_area"] == 0.0
+
+
+def test_cascading_overlaps_resolve_in_cell_id_order(tmp_path):
+    from shapely.geometry import box
+    from ras_commander.fim import _invalid_cells
+
+    # Only cell 1 touches the bowtie hull; 2 overlaps 1 and 3 overlaps 2.
+    shapes = [box(9, 0, 20, 10), box(15, 0, 30, 10), box(25, 0, 40, 10)]
+    cells, records = _invalid_cells.load_cells(_write_cells(tmp_path / "cascade.hdf", shapes),
+                                               policy="repair", threads=1)
+    _assert_partition(cells)
+    geometry = dict(zip(cells.cell_id, cells.geometry))
+    assert geometry[2].equals(box(20, 0, 30, 10)) and geometry[3].equals(box(30, 0, 40, 10))
+    assert [(r["cell_id"], r["overlap_with"]) for r in records if r["action"] == "overlap_trimmed"] == [
+        (2, [1]), (3, [2])]
+    # Cell 1 trims both bowtie triangles equally; the tie keeps the lower one.
+    assert _by_id(records)[0]["fallback_area"] == pytest.approx(24.5)
+
+
+def test_trimming_can_leave_a_hole(tmp_path):
+    from shapely.geometry import box
+    from ras_commander.fim import _invalid_cells
+
+    shapes = [box(12, 2, 14, 4), box(10, 0, 20, 10)]
+    cells, records = _invalid_cells.load_cells(_write_cells(tmp_path / "hole.hdf", shapes),
+                                               policy="omit", threads=1)
+    _assert_partition(cells)
+    outer = cells.geometry[cells.cell_id == 2].iloc[0]
+    assert len(outer.interiors) == 1 and outer.area == 96.0
+    assert _by_id(records)[2]["pieces"] == 1
+
+
+def test_equal_area_repair_pieces_break_ties_to_the_lower_left(tmp_path):
+    from ras_commander.fim import _invalid_cells
+
+    # The bowtie alone polygonizes into equal upper and lower triangles.
+    cells, records = _invalid_cells.load_cells(_write_cells(tmp_path / "tie.hdf", []),
+                                               policy="repair", threads=1)
+    assert cells["cell_id"].tolist() == [0]
+    assert cells.geometry.iloc[0].bounds == (0.0, 0.0, 10.0, 5.0)
+    assert records[0]["fallback_area"] == pytest.approx(25.0)
+    assert records[0]["original_area"] == pytest.approx(50.0)
+
+
+def test_empty_ownership_names_the_policy_and_cells(tmp_path):
+    from ras_commander.fim import _invalid_cells
+
+    cells, records = _invalid_cells.load_cells(_write_cells(tmp_path / "only.hdf", []),
+                                               policy="omit", threads=1)
+    with pytest.raises(ValueError, match=r"invalid_cells='omit'.*Bowtie Mesh cell 0 \(omitted\)"):
+        _invalid_cells.require_cells(cells, records, "omit")
+
+
+def test_prepared_policy_keyword_is_accepted_and_checked(tmp_path):
+    import inspect
+    from types import SimpleNamespace
+    from ras_commander.fim import _sloping
+    from ras_commander.fim._sloping_context import FimPreparedSlopingModel
+
+    assert "invalid_cells" in inspect.signature(FimPreparedSlopingModel.map_profiles).parameters
+    with pytest.raises(ValueError, match="fixed when the sloping model is prepared"):
+        _sloping.map_profiles(tmp_path / "absent.hdf", tmp_path / "absent.tif", tmp_path / "out",
+                              invalid_cells="omit", _prepared=SimpleNamespace(_invalid_policy="repair"))
 
 
 @pytest.fixture

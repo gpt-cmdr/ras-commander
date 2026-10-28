@@ -188,8 +188,11 @@ def map_profiles(
     from . import _invalid_cells
 
     if _prepared is not None:
-        if invalid_cells is not None:
-            raise ValueError("invalid_cells is fixed when the sloping model is prepared")
+        if invalid_cells is not None and invalid_cells != _prepared._invalid_policy:
+            raise ValueError(
+                f"invalid_cells is fixed when the sloping model is prepared "
+                f"({_prepared._invalid_policy!r}); prepare a new model to change it"
+            )
         invalid_policy = _prepared._invalid_policy
     else:
         invalid_policy = _invalid_cells.validate_policy(
@@ -315,8 +318,7 @@ def map_profiles(
         cells, invalid_records = _prepared._cells, _prepared._invalid_records
     preparation["cell_polygon_seconds"] = time.perf_counter() - phase
     phase = time.perf_counter()
-    if cells.empty:
-        raise ValueError("sloping mapping requires physical 2D cell polygons")
+    _invalid_cells.require_cells(cells, invalid_records, invalid_policy)
     if supplied is not None:
         supplied.check_crs(cells.crs)
         # Validate complete identities even when the AOI will contain no pixels.

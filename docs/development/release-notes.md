@@ -38,14 +38,18 @@ cell ownership and surface arithmetic unchanged. See the
 `RasFim.map_sloping_profiles()` and `prepare_sloping_model()` previously
 refused a mesh with any self-intersecting cell ring (`MeshCellPolygonError`),
 whatever the AOI. They now take `invalid_cells="repair" | "hull" | "omit" |
-"raise"`. The default, `"repair"`, maps the cell's polygonized face regions not
-owned by valid cells and trims overlapping neighbours by lower cell ID. This
-matched native RAS Mapper 7.0.1 sloping Max pixels bit-for-bit around three
-Glaise Creek cells; `"omit"` left 22 holes. `"raise"` keeps the strict refusal,
-now scoped to AOIs that intersect an affected cell. Affected cells and actions
-are recorded under `invalid_cells` in `fim_manifest.json` and
-`attrs["invalid_cells"]`. Valid meshes are unchanged. Published fast-hdf 0.2.3
-already provides the non-strict assembly; no engine release is needed. See
+"raise"`. The default, `"repair"`, maps the cell's polygonized face regions
+that no valid cell owns. Overlapping neighbours are resolved by cell ID: split
+cells keep every piece, and fully overlapped cells own no pixels. `"raise"`
+keeps the strict refusal, scoped to AOIs that intersect an affected cell.
+Affected cells and actions are recorded under `invalid_cells` in
+`fim_manifest.json` and `attrs["invalid_cells"]`. Valid meshes are unchanged.
+
+Around three Glaise Creek cells, the default reproduced native RAS Mapper 7.0.1
+sloping Max pixels and `"omit"` left 22 holes. That is limited evidence, not
+general equivalence. Horizontal, whole-simulation and comparison mapping remain
+strict. Published fast-hdf 0.2.3 already provides the non-strict assembly; no
+engine release is needed. See
 [Invalid cell polygons](../api/fim.md#invalid-cell-polygons).
 
 **FIM: priority-1 terrain source, whole-simulation products and velocity**

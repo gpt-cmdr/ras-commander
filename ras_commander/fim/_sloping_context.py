@@ -107,8 +107,7 @@ class FimPreparedSlopingModel:
                 self._hdf, policy=self._invalid_policy, threads=self._threads
             )
             cell_seconds = time.perf_counter() - cell_started
-            if self._cells.empty:
-                raise ValueError("sloping mapping requires physical 2D cell polygons")
+            _invalid_cells.require_cells(self._cells, self._invalid_records, self._invalid_policy)
             if supplied is not None:
                 supplied.check_crs(self._cells.crs)
             # Planned retained frame/GEOS/index allowance, not an RSS limit.
@@ -162,7 +161,7 @@ class FimPreparedSlopingModel:
             self._info = dict(
                 cache_kind="python-geometry-and-staged-inputs/1",
                 profiles=dict(self._selected),
-                physical_cells=len(self._cells),
+                physical_cells=int(self._cells[["mesh_name", "cell_id"]].drop_duplicates().shape[0]),
                 mesh_count=len(self._meshes),
                 corner_elevations={m["mesh_name"]: m.get("corner_elevations") for m in self._meshes},
                 unique_selectors=0 if self._supplied else len(set(self._selected.values())),
@@ -247,6 +246,7 @@ class FimPreparedSlopingModel:
         timeout=None,
         write_floodplain=False,
         template_raster=None,
+        invalid_cells=None,
     ):
         """Map all prepared names or an ordered subset into a new/empty folder.
 
@@ -258,6 +258,8 @@ class FimPreparedSlopingModel:
         covers this call only. No additional depth cutoff is applied.
         ``max_working_mib=None`` inherits the factory budget. Source changes
         close the context; invalid profile names leave it usable.
+        ``invalid_cells`` is fixed at preparation; ``None`` or the prepared
+        policy is accepted and any other value raises ``ValueError``.
         """
         with self._lock:
             if self._closed:
@@ -303,6 +305,7 @@ class FimPreparedSlopingModel:
                     timeout=timeout,
                     write_floodplain=write_floodplain,
                     template_raster=template_raster,
+                    invalid_cells=invalid_cells,
                     _prepared=self,
                 )
             except BaseException:

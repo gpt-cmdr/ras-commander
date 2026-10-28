@@ -5,14 +5,21 @@ the same cell (a "bowtie"). Strict polygon assembly refuses the whole mesh.
 Mapping instead assembles the mesh non-strictly, rebuilds each omitted cell
 from its own face polylines and applies an explicit policy:
 
-- ``"repair"``: polygonize the noded face polylines (the regions RAS Mapper's
-  polygon fill covers), remove area already owned by valid cells and keep the
-  largest remaining part as the ownership polygon.
+- ``"repair"``: polygonize the noded face polylines, remove area already
+  owned by valid cells and keep the largest remaining part as the ownership
+  polygon (ties go to the lower-left part).
 - ``"hull"``: the convex hull of the face points, with the same overlap
   removal and largest-part selection.
 - ``"omit"``: the cell owns no pixels.
 - ``"raise"``: refuse when an invalid cell can contribute to the requested
   output (no AOI, or an AOI intersecting the cell's face-point hull).
+
+A crossing face also distorts the cells on its other side. Overlaps among the
+valid cells touching an invalid cell's hull, and among every cell connected to
+them through further overlaps, are resolved in ascending cell-ID order: each
+cell loses the area of lower-ID cells it overlaps. A cell split by that
+subtraction keeps every piece (one ownership row per piece, same address); a
+cell left with no area owns no pixels.
 
 Hydraulic stencils, connectivity and corner reconstruction always use the
 complete HDF topology; only pixel ownership changes.
@@ -48,12 +55,18 @@ def _face_lines(group, faces):
     return lines
 
 
-def _largest_polygon(geometry):
+def _polygon_parts(geometry):
+    """Positive-area Polygon parts, by descending area, then lower-left."""
     import shapely
 
     parts = [part for part in shapely.get_parts(geometry)
              if part.geom_type == "Polygon" and part.area > 0]
-    return max(parts, key=lambda part: part.area) if parts else None
+    return sorted(parts, key=lambda part: (-part.area, part.bounds[0], part.bounds[1]))
+
+
+def _largest_polygon(geometry):
+    parts = _polygon_parts(geometry)
+    return parts[0] if parts else None
 
 
 def _candidate(lines, policy):
@@ -94,20 +107,20 @@ def _invalid_records(cells):
     return [record for record in records if record.get("status") == "omitted"]
 
 
-def load_cells(hdf_path, *, policy, threads, _overlap_rule="lower_id"):
+def load_cells(hdf_path, *, policy, threads):
     """Native cell polygons with invalid cells handled by ``policy``.
 
-    Returns the GeoDataFrame and a list of records. Invalid cells carry
-    ``mesh``, ``cell_id``, ``reason``, ``action`` (``repaired``,
-    ``convex_hull`` or ``omitted``), ``original_area`` (polygonized face
-    area), ``fallback_area`` (``None`` unless a polygon was substituted) and
-    ``overlap_with``. A crossing face also distorts the cells on its other
-    side, so valid cells touching an invalid cell's face-point hull that
-    overlap another cell are trimmed (``action="overlap_trimmed"``); the
-    lower cell ID keeps the shared area. ``extent`` (internal; removed by
-    :func:`describe`) is the hull used for AOI scoping.
+    Returns the GeoDataFrame and a list of records. A cell split by overlap
+    resolution appears as several Polygon rows with the same ``mesh_name`` and
+    ``cell_id``. Records carry ``mesh``, ``cell_id``, ``reason``, ``action``,
+    ``original_area``, ``fallback_area`` (mapped area; ``None`` when an invalid
+    cell is omitted, ``0.0`` when a valid cell is consumed), ``pieces`` and
+    ``overlap_with`` (lower-ID cells that kept shared area). ``extent``
+    (internal; removed by :func:`describe`) is the area used for AOI scoping.
     """
+    import geopandas as gpd
     import h5py
+    import pandas as pd
     import shapely
     from shapely.geometry import MultiPoint
 
@@ -130,7 +143,7 @@ def load_cells(hdf_path, *, policy, threads, _overlap_rule="lower_id"):
             lines = _face_lines(hdf[f"Geometry/2D Flow Areas/{mesh}"], record.get("face_ids", ()))
             entry = dict(mesh=mesh, cell_id=cell_id, reason=_reason(record, lines),
                          action="omitted", original_area=None, fallback_area=None,
-                         overlap_with=[], extent=None)
+                         pieces=0, overlap_with=[], extent=None)
             if lines:
                 entry["extent"] = MultiPoint(np.concatenate(lines)).convex_hull
                 entry["original_area"] = float(_candidate(lines, "repair").area)
@@ -138,50 +151,70 @@ def load_cells(hdf_path, *, policy, threads, _overlap_rule="lower_id"):
                     substitutes[(mesh, cell_id)] = _candidate(lines, policy)
             records.append(entry)
     cells = cells.reset_index(drop=True)
-    geometries = cells.geometry.to_numpy().copy()
-    keys = list(zip(cells["mesh_name"], cells["cell_id"].astype(int)))
+    original = cells.geometry.to_numpy()
+    geometries = original.copy()
+    meshes = cells["mesh_name"].to_numpy()
+    ids = cells["cell_id"].to_numpy().astype(np.int64)
     index = cells.sindex
-    # Valid cells touching an invalid cell's hull, and every cell overlapping them.
+    order = {name: i for i, name in enumerate(dict.fromkeys(
+        list(meshes) + [record["mesh_name"] for record in invalid]))}
+
+    def rank(i):
+        return order[meshes[i]], int(ids[i])
+
+    def overlapping(i):
+        found = []
+        for j in np.sort(index.query(original[i], predicate="intersects")):
+            j = int(j)
+            if j != i and meshes[j] == meshes[i] and shapely.area(
+                    shapely.intersection(original[i], original[j])) > 0:
+                found.append(j)
+        return found
+
+    # Valid cells touching an invalid cell's hull, then every cell connected
+    # to them through positive-area overlaps.
+    pending = sorted({int(i) for e in records if e["extent"] is not None
+                      for i in index.query(e["extent"], predicate="intersects")
+                      if meshes[i] == e["mesh"]}, key=rank)
+    partners, seen = {}, set(pending)
+    while pending:
+        i = pending.pop(0)
+        partners[i] = overlapping(i)
+        for j in partners[i]:
+            if j not in seen:
+                seen.add(j)
+                pending.append(j)
     trimmed = {}
-    for entry in records:
-        if entry["extent"] is None:
+    for i in sorted(partners, key=rank):
+        lower = [j for j in partners[i] if rank(j) < rank(i)]
+        if not lower:
             continue
-        for i in index.query(entry["extent"], predicate="intersects"):
-            if keys[i][0] != entry["mesh"]:
-                continue
-            for j in index.query(geometries[i], predicate="intersects"):
-                if i == j or keys[j][0] != keys[i][0]:
-                    continue
-                overlap = shapely.intersection(geometries[i], geometries[j])
-                if shapely.area(overlap) <= 0:
-                    continue
-                lower, upper = sorted((i, j), key=lambda k: keys[k][1])
-                loser = upper if _overlap_rule == "lower_id" else lower
-                winner = lower if loser == upper else upper
-                shape = _largest_polygon(shapely.difference(geometries[loser], geometries[winner]))
-                if shape is None:
-                    continue
-                if loser not in trimmed:
-                    trimmed[loser] = dict(
-                        mesh=keys[loser][0], cell_id=keys[loser][1],
-                        reason="overlaps a neighbouring cell next to an invalid cell",
-                        action="overlap_trimmed", original_area=float(geometries[loser].area),
-                        fallback_area=None, overlap_with=[], extent=geometries[loser],
-                    )
-                trimmed[loser]["overlap_with"].append(int(keys[winner][1]))
-                geometries[loser] = shape
-    for k, entry in trimmed.items():
-        entry["fallback_area"] = float(geometries[k].area)
-        entry["overlap_with"] = sorted(set(entry["overlap_with"]))
+        # Lower-ID geometries are already final; a consumed one owns nothing.
+        winners = [geometries[j] for j in lower if geometries[j] is not None]
+        remainder = (shapely.difference(original[i], shapely.union_all(winners))
+                     if winners else original[i])
+        parts = _polygon_parts(remainder)
+        if len(parts) > 1:
+            geometries[i] = shapely.MultiPolygon(parts)
+        else:
+            geometries[i] = parts[0] if parts else None
+        trimmed[i] = dict(
+            mesh=meshes[i], cell_id=int(ids[i]),
+            reason="overlaps a lower-ID cell next to an invalid cell",
+            action="overlap_trimmed" if parts else "overlap_consumed",
+            original_area=float(original[i].area),
+            fallback_area=float(sum(part.area for part in parts)),
+            pieces=len(parts), overlap_with=sorted(int(ids[j]) for j in lower),
+            extent=original[i],
+        )
     # Invalid cells take only area no valid cell owns, in cell-ID order.
     additions = []
     for entry in records:
         shape = substitutes.get((entry["mesh"], entry["cell_id"]))
         if shape is None:
             continue
-        owners = [i for i in index.query(shape, predicate="intersects")
-                  if keys[i][0] == entry["mesh"]]
-        occupied = [geometries[i] for i in owners]
+        occupied = [geometries[i] for i in np.sort(index.query(shape, predicate="intersects"))
+                    if meshes[i] == entry["mesh"] and geometries[i] is not None]
         occupied += [g for m, g in additions if m == entry["mesh"] and g.intersects(shape)]
         if occupied:
             shape = shapely.difference(shape, shapely.union_all(occupied))
@@ -189,27 +222,39 @@ def load_cells(hdf_path, *, policy, threads, _overlap_rule="lower_id"):
         if shape is None or not shape.is_valid:
             continue
         additions.append((entry["mesh"], shape))
-        entry["action"] = "repaired" if policy == "repair" else "convex_hull"
-        entry["fallback_area"] = float(shape.area)
-        entry["_geometry"] = shape
-    cells = cells.set_geometry(geometries, crs=cells.crs)
-    rows = [dict(mesh_name=e["mesh"], cell_id=e["cell_id"], geometry=e.pop("_geometry"))
-            for e in records if "_geometry" in e]
-    if rows:
-        import geopandas as gpd
-        import pandas as pd
-
-        extra = gpd.GeoDataFrame(rows, geometry="geometry", crs=cells.crs)
+        entry.update(action="repaired" if policy == "repair" else "convex_hull",
+                     fallback_area=float(shape.area), pieces=1, _geometry=shape)
+    keep = np.array([g is not None for g in geometries], dtype=bool)
+    rows = gpd.GeoDataFrame(
+        {"mesh_name": meshes[keep], "cell_id": cells["cell_id"].to_numpy()[keep]},
+        geometry=list(geometries[keep]), crs=cells.crs,
+    )
+    extra = [dict(mesh_name=e["mesh"], cell_id=e["cell_id"], geometry=e.pop("_geometry"))
+             for e in records if "_geometry" in e]
+    if extra:
+        extra = gpd.GeoDataFrame(extra, geometry="geometry", crs=cells.crs)
         extra["cell_id"] = extra["cell_id"].astype(cells["cell_id"].dtype)
-        order = {name: i for i, name in enumerate(pd.unique(cells["mesh_name"]))}
-        merged = pd.concat([cells, extra], ignore_index=True)
-        merged = merged.sort_values(
-            ["mesh_name", "cell_id"],
-            key=lambda s: s.map(order) if s.name == "mesh_name" else s,
-            kind="stable",
-        ).reset_index(drop=True)
-        cells = gpd.GeoDataFrame(merged, geometry="geometry", crs=cells.crs)
-    return cells, records + [trimmed[k] for k in sorted(trimmed, key=lambda k: keys[k])]
+        rows = pd.concat([rows, extra], ignore_index=True)
+    # One Polygon row per ownership piece, in mesh/cell-ID order.
+    rows = rows.explode(index_parts=False, ignore_index=True)
+    stride = int(rows["cell_id"].max()) + 1 if len(rows) else 1
+    position = rows["mesh_name"].map(order).to_numpy() * stride + rows["cell_id"].to_numpy()
+    rows = rows.iloc[np.argsort(position, kind="stable")].reset_index(drop=True)
+    cells = gpd.GeoDataFrame(rows, geometry="geometry", crs=cells.crs)
+    return cells, records + [trimmed[k] for k in sorted(trimmed, key=rank)]
+
+
+def require_cells(cells, records, policy):
+    """Refuse an empty ownership set, naming invalid cells when they caused it."""
+    if not cells.empty:
+        return
+    if records:
+        listed = ", ".join(f"{r['mesh']} cell {r['cell_id']} ({r['action']})" for r in records[:10])
+        raise ValueError(
+            "sloping mapping has no physical 2D cell polygons left under "
+            f"invalid_cells={policy!r}: {listed}"
+        )
+    raise ValueError("sloping mapping requires physical 2D cell polygons")
 
 
 def check_scope(records, policy, aoi_geometry):
