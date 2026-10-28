@@ -764,6 +764,8 @@ class RasDss:
                 ``ValueError``).
             DssRecordTypeError: The matching record is not paired data (a
                 ``TypeError`` and ``DssUnsupportedRecordError``).
+            DssReadError: The record exists but the backend failed to read it
+                (a ``DssFormatError``; the cause is chained).
             ImportError: The selected backend's optional dependency (pyjnius or
                 dss-commander) is not installed.
 
@@ -942,13 +944,20 @@ class RasDss:
         dss = None
         try:
             dss = HecDss.open(dss_file_str)
+            record = RasDss._java_matching_record(dss, pathname, ignore_d_part)
+            if record is None:
+                raise not_found(f"No data found for pathname: {pathname}")
             try:
                 container = dss.get(pathname, bool(ignore_d_part))
             except Exception as exc:
-                # HecDss.get raises "Unable to access record" for absent records.
-                raise not_found(f"No data found for pathname: {pathname}") from exc
+                # The record exists, so this is a read failure, not "not found".
+                raise _errors.get("DssReadError")(
+                    f"HEC Monolith failed to read existing record {record}: {exc}"
+                ) from exc
             if container is None:
-                raise not_found(f"No data found for pathname: {pathname}")
+                raise _errors.get("DssReadError")(
+                    f"HEC Monolith returned no container for existing record {record}"
+                )
             container_class = str(container.getClass().getName())
             if container_class != 'hec.io.PairedDataContainer':
                 raise _errors.get("DssRecordTypeError")(
@@ -1001,6 +1010,29 @@ class RasDss:
         finally:
             if dss is not None:
                 dss.done()
+
+    @staticmethod
+    def _java_matching_record(dss: Any, pathname: str, ignore_d_part: bool) -> Optional[str]:
+        """The record ``HecDss.get(pathname, ignore_d_part)`` would read, or None.
+
+        Exact pathname first (``recordExists``); with ``ignore_d_part``, the first
+        cataloged pathname whose A, B, C, E and F parts match case-insensitively.
+        """
+        if dss.recordExists(pathname):
+            return pathname
+        if not ignore_d_part:
+            return None
+        parts = pathname.split("/")
+        if len(parts) != 8:
+            return None
+        key = tuple(parts[i].upper() for i in (1, 2, 3, 5, 6))
+        catalog = dss.getCatalogedPathnames()
+        for i in range(catalog.size()):
+            candidate = str(catalog.get(i))
+            cparts = candidate.split("/")
+            if len(cparts) == 8 and tuple(cparts[i].upper() for i in (1, 2, 3, 5, 6)) == key:
+                return candidate
+        return None
 
     @staticmethod
     def _read_paired_data_shadow(
@@ -1206,11 +1238,10 @@ class RasDss:
         }
 
     @staticmethod
-    def _read_grid_shadow(
-        dss_file: Union[str, Path], pathname: str, return_native: bool = False
-    ) -> Dict[str, Any]:
-        """Grid read on both backends. Returns Java (default) or native; logs cell
-        and metadata differences separately. The comparison never raises."""
+    def _read_grid_shadow(dss_file: Union[str, Path], pathname: str) -> Dict[str, Any]:
+        """Grid read on both backends. Always returns Java's grid (or raises Java's
+        error); the native grid is only compared. Cell and metadata differences are
+        logged separately. The comparison never raises."""
         import time
 
         java_grid, java_exc, native_grid, native_exc = None, None, None, None
@@ -1234,15 +1265,11 @@ class RasDss:
                 "read_grid", outcome, label, dss_file=dss_file, pathname=pathname,
                 diffs=diffs, java_seconds=java_s, native_seconds=native_s,
                 java_error=java_exc, native_error=native_exc,
-                detail={"returned": "native" if return_native else "java"},
+                detail={"returned": "java"},
             )
         except Exception as exc:  # the comparison must never break the read
             logger.warning("DSS shadow read_grid comparison failed for %s %s: %s",
                            dss_file, pathname, exc)
-        if return_native:
-            if native_exc is not None:
-                raise native_exc
-            return native_grid
         if java_exc is not None:
             raise java_exc
         return java_grid
@@ -1287,21 +1314,21 @@ class RasDss:
 
         Args (keyword-only):
             allow_unqualified_native: Opt in to the native grid reader under
-                ``backend="native"`` (and to returning the native result under
-                ``"shadow"``) when the installed dss-commander does not
+                ``backend="native"`` when the installed dss-commander does not
                 advertise qualified grid CRS strings (feature
                 ``"grid_srs_monolith_parity"`` in ``dss_commander.FEATURES``).
                 Cells, geometry, units and times are native; ``crs`` may be
                 wrong or empty for legacy Albers grids, and
-                ``metadata["crs_qualified"]`` is ``False``. Default ``False``.
+                ``metadata["crs_qualified"]`` is ``False``. Ignored, with a
+                warning, under ``"java"`` and ``"shadow"``. Default ``False``.
 
         Backends:
             ``"java"`` (default) reads through HEC Monolith. ``"native"``
             raises ``DssCapabilityError`` unless the wheel advertises
             qualified grid CRS or ``allow_unqualified_native`` is ``True``; it
-            never falls back to Java. ``"shadow"`` returns the Java result
-            (the native result once qualified or with
-            ``allow_unqualified_native=True``), also reads natively,
+            never falls back to Java. ``"shadow"`` always returns Java's grid
+            (and raises Java's error, even when the native read succeeded);
+            the native grid is only compared. It reads natively,
             and logs cell and metadata differences separately; a CRS
             disagreement is logged as the known difference ``G-CRS``.
 
@@ -1325,11 +1352,14 @@ class RasDss:
             if not (allow_unqualified_native or _backend.native_grid_qualified()):
                 raise _errors.get("DssCapabilityError")(_backend.NATIVE_GRID_GATE_MESSAGE)
             return RasDss._read_grid_native(dss_file, pathname)
-        if backend == "shadow":
-            return RasDss._read_grid_shadow(
-                dss_file, pathname,
-                return_native=allow_unqualified_native or _backend.native_grid_qualified(),
+        if allow_unqualified_native:
+            logger.warning(
+                "read_grid: allow_unqualified_native=True is ignored under the %r "
+                "backend; the Java grid is returned%s.", backend,
+                " and the native grid is only compared" if backend == "shadow" else "",
             )
+        if backend == "shadow":
+            return RasDss._read_grid_shadow(dss_file, pathname)
         return RasDss._read_grid_java(dss_file, pathname)
 
     @staticmethod

@@ -9,6 +9,27 @@ alone does not identify a development checkout.
 
 ### Unreleased
 
+**RasDss reads paired data on every backend; typed errors for grids and file version**
+
+- `RasDss.read_paired_data(dss_file, pathname, *, ignore_d_part=True, dtype="stored")`
+  is new. It returns every curve as a DataFrame (ordinate index, one column per
+  curve, stored `float32`/`float64` precision) with labels, units, types,
+  parameters and precision in `attrs`, on the `java`, `native` and `shadow`
+  backends.
+- `RasDss.get_file_version()` now follows `RasDss.backend`.
+- `RasDss.read_grid()` gains a keyword-only `allow_unqualified_native` argument
+  and a gated native route. Under `native` it raises `DssCapabilityError` until
+  the native engine advertises qualified grid CRS strings. `shadow` always
+  returns Java's grid. The result dictionary gains the additive key
+  `row_order="south_up"`; existing keys are unchanged.
+- `RasDss.get_capabilities()` is new and reports the per-backend support matrix.
+- Typed exceptions are exported from `ras_commander.dss`. Each keeps the builtin
+  previously raised for its condition: `DssPathnameNotFoundError` (`ValueError`),
+  `DssRecordTypeError` (`TypeError`), `DssInvalidFileError` (`ValueError`),
+  `DssReadError`, `DssCapabilityError` (`NotImplementedError`).
+- Defaults are unchanged: `java` remains the default backend, and writes stay
+  on Java. See [DSS Read Backends](../user-guide/dss-native-backend.md).
+
 **Compute-message classification rejects observed early termination**
 
 `ResultsParser` classifies `Unsteady Flow Simulation Terminated` and the

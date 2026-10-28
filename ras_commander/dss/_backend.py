@@ -16,8 +16,12 @@ Native grid reads are gated until the wheel advertises qualified CRS (``native_g
 Writes stay on Java under every backend in this release. ``CAPABILITIES`` lists the
 support matrix that ``RasDss.get_capabilities()`` reports.
 
-This module is private. Its comparison rules mirror the P09a parity harness
-(``feature_dev_notes/rust_dss/packets/evidence/P09a/scripts/parity.py``).
+This module is private. Its time-series comparison rules mirror the native-vs-Java
+parity harness used to qualify the native backend on the public RasExamples corpus.
+
+The Java backend never imports ``dss_commander``. Every import of the native engine
+is guarded so that a missing or broken wheel (``ImportError``, or for example an
+``OSError`` while loading its extension) cannot break the Java backend.
 """
 
 from __future__ import annotations
@@ -27,6 +31,7 @@ import logging
 import os
 import threading
 from collections import Counter, deque
+from collections.abc import Mapping
 from typing import Any, Deque, Dict, List, Optional, Tuple
 
 import numpy as np
@@ -89,20 +94,25 @@ def requested_backend(attribute_value: Any) -> str:
 
 
 def native_available() -> bool:
-    """True when ``dss_commander`` can be imported."""
-    try:
-        importlib.import_module("dss_commander")
-    except ImportError:
-        return False
-    return True
+    """True when ``dss_commander`` can be imported (a broken wheel counts as absent)."""
+    return _maybe_native() is not None
 
 
 def import_native():
-    """Import ``dss_commander`` or raise an ``ImportError`` naming the extra."""
+    """Import ``dss_commander`` or raise an ``ImportError`` naming the extra.
+
+    A wheel that fails to load (for example an ``OSError`` from its extension)
+    also raises ``ImportError``, with the original error chained.
+    """
     try:
         return importlib.import_module("dss_commander")
     except ImportError as exc:
         raise ImportError(_NATIVE_INSTALL_HINT) from exc
+    except Exception as exc:  # broken native wheel
+        raise ImportError(
+            f"dss-commander is installed but failed to load ({type(exc).__name__}: {exc}). "
+            + _NATIVE_INSTALL_HINT
+        ) from exc
 
 
 def effective_backend(attribute_value: Any) -> str:
@@ -214,7 +224,7 @@ def java_missing(values: np.ndarray) -> np.ndarray:
 def compare_frames(java_df: pd.DataFrame, native_df: pd.DataFrame) -> List[str]:
     """Differences between a Java and a native ``read_timeseries`` frame.
 
-    Rules (P09a ``compare_df``): columns, index name and dtype, value dtype, length,
+    Rules: columns, index name and dtype, value dtype, length,
     index stamps (int64), missing positions (Java markers or NaN against native NaN),
     the remaining values bitwise, and every ``attrs`` key. ``attr_ws:<key>`` marks
     string attributes that differ only in surrounding whitespace.
@@ -289,7 +299,7 @@ def cut_window(
     """Cut a whole-dataset Java frame to a ``read_timeseries`` window.
 
     Mirrors the native window semantics, which equal HEC Monolith's own windowed
-    ``HecDss.get(path, start, end)`` (verified in P09b):
+    ``HecDss.get(path, start, end)`` (verified on the public RasExamples corpus):
 
     - One-sided windows: stamps ``>= start`` or ``<= end``.
     - Both ends, regular data: each end selects the standard interval period that
@@ -379,7 +389,8 @@ def classify_timeseries(
     """Classify one ``read_timeseries`` comparison.
 
     Returns ``(outcome, label, diffs)`` where outcome is ``identical``, ``expected``,
-    ``skipped`` (Java could not run) or ``unexpected``. Labels name the P09a classes (REPORT.md section 6.3).
+    ``skipped`` (Java could not run) or ``unexpected``. Labels name the classes in
+    ``docs/user-guide/dss-native-backend.md``.
     """
     if java_unavailable(java_exc):
         return "skipped", "java unavailable", []
@@ -497,9 +508,10 @@ def classify_catalog(
 
 
 def _maybe_native():
+    """``dss_commander`` or None. Never raises: a broken wheel counts as absent."""
     try:
         return importlib.import_module("dss_commander")
-    except ImportError:
+    except Exception:
         return None
 
 
@@ -510,32 +522,40 @@ def summary() -> Dict[str, int]:
 
 
 # ---------------------------------------------------------------------------
-# Capabilities (P18): paired data, grids and file version
+# Capabilities: paired data, grids and file version
 # ---------------------------------------------------------------------------
 
 #: Feature name a dss-commander wheel advertises (in ``dss_commander.FEATURES``) once
-#: its grid CRS strings are qualified against HEC Monolith (engine packet P13).
+#: its grid CRS strings are qualified against HEC Monolith.
 NATIVE_GRID_FEATURE = "grid_srs_monolith_parity"
 
 
 def native_grid_qualified() -> bool:
     """True when the installed dss-commander advertises qualified grid CRS strings.
 
-    This is a capability check, not a version pin: a wheel qualifies by listing
-    ``NATIVE_GRID_FEATURE`` in ``dss_commander.FEATURES``. Wheels without that
-    attribute (every wheel up to and including 0.0.1) are not qualified.
+    This is a capability check, not a version pin. ``dss_commander.FEATURES`` must be
+    a set, frozenset, tuple or list of ``str`` containing ``NATIVE_GRID_FEATURE``, or
+    a mapping whose ``NATIVE_GRID_FEATURE`` value is truthy. Anything else, a missing
+    attribute (every wheel up to and including 0.0.1), or an engine that fails to
+    import, is not qualified.
     """
     dc = _maybe_native()
     if dc is None:
         return False
     try:
-        return NATIVE_GRID_FEATURE in set(getattr(dc, "FEATURES", ()) or ())
-    except TypeError:
+        features = getattr(dc, "FEATURES", None)
+        if isinstance(features, Mapping):
+            return bool(features.get(NATIVE_GRID_FEATURE, False))
+        if isinstance(features, (set, frozenset, tuple, list)):
+            return any(isinstance(f, str) and f == NATIVE_GRID_FEATURE for f in features)
+    except Exception:
         return False
+    return False
+
 
 NATIVE_GRID_GATE_MESSAGE = (
-    "Native DSS grid reads are not yet qualified: the native CRS string is wrong "
-    "or empty for some legacy Albers grids (engine packet P13), and the installed "
+    "Native DSS grid reads are not yet qualified: the native CRS string can differ "
+    "from HEC Monolith's for some legacy Albers grids, and the installed "
     "dss-commander does not advertise the 'grid_srs_monolith_parity' feature. RasDss does not "
     "fall back to Java. Use RasDss.backend = 'java' (or 'shadow'), or pass "
     "allow_unqualified_native=True to accept native cells and metadata with an "
@@ -552,7 +572,8 @@ CAPABILITIES = (
     ("read_paired_data", "yes", "yes", "yes", "all curves, labels, units, types, stored precision"),
     ("read_grid", "yes", "gated", "yes",
      "native requires a dss-commander wheel advertising 'grid_srs_monolith_parity' "
-     "or allow_unqualified_native=True; shadow returns the Java grid until then"),
+     "or allow_unqualified_native=True; shadow returns Java's grid and only compares "
+     "the native result"),
     ("get_file_version", "yes", "yes", "yes", ""),
     ("write_timeseries", "yes", "java", "java", "writes stay on Java"),
     ("write_grid_timeseries", "yes", "java", "java", "writes stay on Java"),
@@ -622,13 +643,13 @@ def classify_paired_data(
 
     Known differences (logged as ``expected``):
 
-    - ``PD1``: the Java DSS6 reader strips leading blanks from curve labels; HEC's
+    - ``PD1`` (DSS6 only): the Java DSS6 reader strips leading blanks from curve labels; HEC's
       C library (and native) keeps them. Labels must agree after ``lstrip``; the
       column names derived from them may differ accordingly.
     - ``PD2``: Java does not expose the DSS7 paired-data time zone.
     - ``PD3``: whitespace-only differences in unit/type/parameter strings.
     - ``PD4``: DSS6 precision: Monolith reports -1 (unset); native decodes the stored
-      ``KIPREC`` word (``zpdRetrieve6.c``), which can be 0.
+      ``KIPREC`` word (``zpdRetrieve6.c``) to a value ``>= 0``. Both sides must be DSS6.
     """
     from . import _errors
 
@@ -641,7 +662,9 @@ def classify_paired_data(
             return "identical", "identical", diffs
         labels: List[str] = []
         rest = set(diffs)
-        if "attr:labels" in rest:
+        dss6 = (native_df.attrs.get("dss_version") == 6
+                and java_df.attrs.get("dss_version") == 6)
+        if "attr:labels" in rest and dss6:
             jl = [s.lstrip() for s in java_df.attrs.get("labels", [])]
             nl = [s.lstrip() for s in native_df.attrs.get("labels", [])]
             if jl == nl:
@@ -657,8 +680,10 @@ def classify_paired_data(
             rest.discard("attr:time_zone")
             labels.append("PD2 DSS7 time zone (Java does not report it)")
         precision = {"attr:x_precision", "attr:y_precision"} & rest
-        if (precision and native_df.attrs.get("dss_version") == 6
-                and all(java_df.attrs.get(k.split(":", 1)[1]) == -1 for k in precision)):
+        if (precision and dss6
+                and all(java_df.attrs.get(k.split(":", 1)[1]) == -1 for k in precision)
+                and all(isinstance(native_df.attrs.get(k.split(":", 1)[1]), int)
+                        and native_df.attrs.get(k.split(":", 1)[1]) >= 0 for k in precision)):
             rest -= precision
             labels.append("PD4 DSS6 precision (Java reports -1; native reads KIPREC)")
         ws = {d for d in rest if d.startswith("attr_ws:")}
@@ -755,7 +780,8 @@ def classify_grid(
 
     Known differences (logged as ``expected``):
 
-    - ``G-CRS``: the CRS string differs (native grid CRS is unqualified; P13).
+    - ``G-CRS``: the CRS string differs while the native grid CRS is unqualified
+      (``native_grid_qualified()`` is False). Once qualified it is unexpected.
     - ``G1``: native maps the grid null value and -901/-902 to NaN; Java maps only
       -FLT_MAX.
     - ``G2``: whitespace-only differences (Java pads legacy unit strings).
@@ -781,9 +807,9 @@ def classify_grid(
             rest_cells.clear()
             labels.append("G1 native maps grid null/-901/-902 to NaN")
         rest_meta = set(meta_diffs)
-        if rest_meta & {"crs", "ws:crs"}:
+        if rest_meta & {"crs", "ws:crs"} and not native_grid_qualified():
             rest_meta -= {"crs", "ws:crs"}
-            labels.insert(0, "G-CRS native grid CRS unqualified (P13)")
+            labels.insert(0, "G-CRS native grid CRS unqualified")
         ws = {d for d in rest_meta if d.startswith("ws:")}
         if ws:
             rest_meta -= ws

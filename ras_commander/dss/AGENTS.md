@@ -28,8 +28,12 @@ This file is the canonical local instruction file for `ras_commander/dss/`.
   - `read_grid` is gated: under `native` it raises `DssCapabilityError`
     unless `_backend.native_grid_qualified()` (the wheel lists
     `"grid_srs_monolith_parity"` in `dss_commander.FEATURES`) or the caller
-    passes `allow_unqualified_native=True`. Shadow returns the Java grid until
-    then. Never fall back to Java from `native`.
+    passes `allow_unqualified_native=True`. Shadow always returns Java's grid
+    (and Java's error) and only compares the native grid. Never fall back to
+    Java from `native`.
+  - The Java backend must never import `dss_commander`. `_errors` resolves
+    classes from `sys.modules` only, and every native import is guarded with
+    `except Exception`, so a broken wheel cannot break Java.
   - Each switched method dispatches to `_<method>_java`, `_<method>_native` or
     `_<method>_shadow`. Internal Java-only code (the grid and time-series
     writers) must call the `_java` variant directly
@@ -59,7 +63,8 @@ This file is the canonical local instruction file for `ras_commander/dss/`.
   when installed (local stand-ins otherwise). Do not wrap native exceptions in
   unrelated types. The only additions are subclasses that keep a historical
   builtin (D32): `DssRecordTypeError` (`TypeError`), `DssInvalidFileError`
-  (`ValueError`), `DssCapabilityError` (`NotImplementedError`). New APIs must
+  (`ValueError`), `DssReadError` (`DssFormatError`; existing record failed to read),
+  `DssCapabilityError` (`NotImplementedError`). New APIs must
   raise the same class on the Java and native paths.
 - Shadow comparisons must never raise. Do not run Java in shadow mode where
   the native result shows it is unsafe:
@@ -67,7 +72,7 @@ This file is the canonical local instruction file for `ras_commander/dss/`.
   - a record of another kind in `read_paired_data`;
   - missing files (Java creates them).
 - Shadow classifications (`_backend.classify_*`) name every known difference
-  (D*, J*, PD1-PD4, G-CRS, G1-G4). Anything else is `unexpected`; do not widen
+  (D*, J*, PD1-PD4, G-CRS, G1-G4; G-CRS only while the grid CRS is unqualified). Anything else is `unexpected`; do not widen
   an allowance without corpus evidence.
 - Keep `java` the default until the shadow release ends (decision D4).
 

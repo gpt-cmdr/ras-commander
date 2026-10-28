@@ -56,7 +56,7 @@ If `dss-commander` is not installed:
 |---|---|
 | `get_catalog`, `read_timeseries`, `read_multiple_timeseries` | Selected backend |
 | `read_paired_data`, `get_file_version` | Selected backend |
-| `read_grid` | Java, or native when qualified or explicitly opted in (see [Grids](#grids-gated-native-route)) |
+| `read_grid` | `java`: Java. `native`: native when qualified or explicitly opted in (see [Grids](#grids-gated-native-route)). `shadow`: returns Java's grid; native results are compared only |
 | `get_info`, `extract_boundary_timeseries` | Selected backend (built on the methods above) |
 | `check_pathname_exists`, `check_data_availability`, `check_pathname`, `is_pathname_available` | Selected backend (built on the methods above) |
 | `check_pathname_format`, `is_valid_pathname`, `check_file_exists` | No DSS access |
@@ -216,8 +216,8 @@ The earlier comparison evidence used broader historical rules. A fresh
 2026-10-22 run under the stricter rules completed all 11,045 comparisons across
 53 public RasExamples DSS files, sampling 4,108 time-series datasets, with zero
 unexpected differences and no source or working-copy hash changes. It used
-HEC Monolith 3.3.27, Java 17.0.11 and a private ABI3 wheel built from native
-engine commit `7053eae464ae1b7a9ff798b9ff1de6a95d81adf6`.
+HEC Monolith 3.3.27, Java 17.0.11 and a development build of the dss-commander
+engine.
 
 The 506 expected comparisons comprise 468 missing-marker mappings, 16 typed
 no-data outcomes, 15 whole-minute tail truncations and seven whole-read failures
@@ -244,39 +244,42 @@ Shadow compares the index, every curve bitwise, the column names and every
 
 | Label | Difference |
 |---|---|
-| PD1 | The Java DSS6 reader strips leading blanks from curve labels (`" 5%LIMIT"` reads `"5%LIMIT"`). Native keeps them, as HEC's C library does. Labels agree after removing leading blanks. |
+| PD1 | DSS6 only. The Java DSS6 reader strips leading blanks from curve labels (`" 5%LIMIT"` reads `"5%LIMIT"`). Native keeps them, as HEC's C library does. Labels agree after removing leading blanks. |
 | PD2 | Java does not expose the DSS7 paired-data time zone; native reports it in `attrs["time_zone"]`. |
 | PD3 | Unit or type strings that differ only in whitespace. |
-| PD4 | DSS6 precision: Monolith reports `-1`, native decodes the stored `KIPREC` word (often `0`). |
+| PD4 | DSS6 only. Monolith reports precision `-1`; native decodes the stored `KIPREC` word to a value `>= 0` (often `0`). |
 
 Java runs in shadow only when native returned data or `DssPathnameNotFoundError`.
-A record of another kind is not compared. HEC Monolith 3.3.27 cannot read the
-paired-data records of the synthetic engine fixture `synthetic_pd6.dss`; native
-reads them.
+A record of another kind is not compared. The Java path raises
+`DssPathnameNotFoundError` only when no matching record exists; when a record
+exists but HEC Monolith cannot read it, Java raises `DssReadError`. HEC
+Monolith 3.3.27 cannot read the paired-data records of the synthetic test
+fixture `synthetic_pd6.dss`; native reads them.
 
-**Evidence (2026-10-27).** A shadow run over every paired-data record of the 53
-public RasExamples DSS files (43 files with PD records, all DSS6) compared
-57,839 records. Every ordinate, curve value, label, unit and type matched
-bit for bit. All 57,839 were classified PD4 only, and none was unexpected.
-`get_file_version` agreed on all 44 files swept (43 PD files and one grid file). The working copies' SHA-256 hashes
-were unchanged after the JVM exited. Runtimes: HEC Monolith 3.3.27 on Java
-17.0.11 and the private ABI3 wheel built from native engine main `f0b7acd`.
+The native and Java backends were compared on every paired-data record of the
+public RasExamples DSS files, using HEC Monolith 3.3.27 on Java 17.0.11 and a
+development build of the dss-commander engine. Differences were limited to the
+classified labels above; ordinates and curve values matched bit for bit.
 
 ## Grids: gated native route
 
 `read_grid()` keeps the Java dictionary schema on every backend. Row zero is
-the southern row on both (`row_order="south_up"`). The native route does not
-run by default because the native CRS string is not yet qualified for every
-legacy Albers grid (engine packet P13).
+the southern row on both. The result carries the key `row_order="south_up"`,
+which is new in this release; it is additive and existing keys are unchanged.
+The native route does not run by default because the native CRS string is not
+yet qualified against HEC Monolith for every legacy Albers grid.
 
 - `backend="native"` raises `DssCapabilityError` (a `NotImplementedError`)
   unless one of two conditions holds. Either the installed dss-commander
   advertises the feature `"grid_srs_monolith_parity"` in
   `dss_commander.FEATURES`, or the caller passes
   `allow_unqualified_native=True`. It does not fall back to Java.
-- `backend="shadow"` returns the Java grid, also reads natively, and compares
-  them. It returns the native grid once qualified, or with
-  `allow_unqualified_native=True`.
+- `backend="shadow"` always returns Java's grid; the native grid is only
+  compared. This does not change when a qualified engine is installed. If the
+  Java read fails, shadow raises Java's error even when the native read
+  succeeded. Use `backend="native"` to read grids without Java.
+- `allow_unqualified_native=True` is ignored, with a warning, under `java` and
+  `shadow`.
 - `metadata["crs_qualified"]` reports whether the wheel advertises
   qualification. `metadata["native"]` holds every native field: null value,
   extent, SRS name and type, statistics, compression and raw times.
@@ -286,18 +289,16 @@ Shadow judges cells and metadata separately; diffs are prefixed `cells:` or
 
 | Label | Difference |
 |---|---|
-| G-CRS | CRS strings differ (native grid CRS unqualified, P13). |
+| G-CRS | CRS strings differ while the native grid CRS is unqualified. Once the engine advertises qualification, a CRS difference is unexpected. |
 | G1 | Native maps the grid null value and -901/-902 to NaN; Java maps only -3.4028235e38. |
 | G2 | Whitespace-only differences (Java pads legacy unit strings, for example `"MM  "`). |
 | G3 | Untimed grid records: native reports no time; Java reports the header times. |
 | G4 | `metadata["number_missing"]`: Java's count against native's NaN-cell count. |
 
-**Evidence (2026-10-27).** All 4,170 legacy DSS6 Albers precipitation grids of
-the public RasExamples file were identical in cells and metadata, CRS included,
-with native engine main `f0b7acd`. On the synthetic engine fixtures (9 grids)
-that wheel shows G-CRS on the two synthetic Albers records. The P13 review
-wheel (`fix/p13-albers-crs`) shows no CRS difference on any of the 4,179 grids.
-Neither wheel advertises the qualification feature yet, so the gate stays
+The native and Java backends were compared on every grid record of the public
+RasExamples DSS files and on synthetic grid fixtures. Cells matched bit for bit,
+and the remaining differences were limited to the classified labels above. No
+released engine advertises the qualification feature yet, so the gate stays
 closed.
 
 ## File version
@@ -366,8 +367,11 @@ That dictionary is not part of this contract.
 | `start_time`, `end_time` | Naive `pandas.Timestamp` from parts D/E (or the record), else `None` |
 | `metadata` | `pathname_parts`, `grid_class`, `grid_type_code`, `data_type_code`, `shape`, `number_of_cells_x/y`, `lower_left_cell`, `origin` (lower-left corner; Albers/specified), `projection` (cell-zero coordinates; Albers parameters), `number_missing`, `nodata_value`, `compression`, `timing`; native route adds `crs_qualified` and `native` |
 
-**Exceptions** (importable from `ras_commander.dss`; the first four are the
-dss-commander classes when that package is installed):
+**Exceptions** (importable from `ras_commander.dss`). The first four are the
+dss-commander classes once the native engine has been imported by a `native` or
+`shadow` call, and local classes with the same names and bases otherwise. The
+Java backend never imports dss-commander, so a missing or broken native wheel
+cannot affect it.
 
 | Class | Bases | Raised when |
 |---|---|---|
@@ -377,6 +381,7 @@ dss-commander classes when that package is installed):
 | `DssPathnameNotFoundError` | `DssError`, `ValueError` | No record or no data for the pathname |
 | `DssRecordTypeError` | `DssUnsupportedRecordError`, `TypeError` | The record is another kind (`read_paired_data`, `read_grid`) |
 | `DssInvalidFileError` | `DssFormatError`, `ValueError` | `get_file_version` on a non-DSS6/DSS7 file |
+| `DssReadError` | `DssFormatError` | The record exists but the backend failed to read it (cause chained) |
 | `DssCapabilityError` | `DssError`, `NotImplementedError` | The selected backend does not support or has not qualified the operation |
 
 A missing file raises `FileNotFoundError` and a directory raises

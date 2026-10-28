@@ -6,7 +6,7 @@ and HEC software can modify files it opens, so Java runs here, on working copies
 argv: requests.json out.pkl
 Each request is a dict with ``op`` and arguments; results are returned in order.
 Exceptions are returned as picklable summaries (the typed classes are created at
-run time and do not pickle). Exit code 77 with ``P18_BRIDGE_UNAVAILABLE:`` on stdout
+run time and do not pickle). Exit code 77 with ``PDGRID_BRIDGE_UNAVAILABLE:`` on stdout
 means pyjnius, Java or Monolith is unavailable.
 """
 
@@ -114,7 +114,7 @@ def main():
 
         autoclass("hec.heclib.dss.HecDss")
     except Exception as exc:  # noqa: BLE001
-        print(f"P18_BRIDGE_UNAVAILABLE:{type(exc).__name__}:{exc}")
+        print(f"PDGRID_BRIDGE_UNAVAILABLE:{type(exc).__name__}:{exc}")
         sys.exit(77)
     results = []
     for req in requests:

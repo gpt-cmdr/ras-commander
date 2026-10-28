@@ -1,4 +1,4 @@
-"""RasDss paired data, grids and file version on the java, native and shadow backends (P18).
+"""RasDss paired data, grids and file version on the java, native and shadow backends.
 
 - Classification, capability and error-class tests need no optional dependency.
 - Native tests use the synthetic public fixtures in ``tests/fixtures/dss_native_public``
@@ -112,22 +112,72 @@ def test_error_classes_are_dss_commander_classes_when_installed():
     assert issubclass(dss_pkg.DssRecordTypeError, dc.DssUnsupportedRecordError)
 
 
-def test_local_fallback_classes_have_the_same_contract(monkeypatch):
+def test_local_fallback_classes_have_the_same_contract():
+    class BrokenModule:
+        def __getattr__(self, name):
+            raise OSError("simulated broken native extension")
+
+    for dc in (None, BrokenModule()):
+        local = _errors._build(dc)
+        assert local.DssError.__module__ == "ras_commander.dss"
+        assert issubclass(local.DssPathnameNotFoundError, ValueError)
+        assert issubclass(local.DssRecordTypeError, local.DssUnsupportedRecordError)
+        assert issubclass(local.DssRecordTypeError, TypeError)
+        assert issubclass(local.DssReadError, local.DssFormatError)
+        assert local.DssRecordTypeError.__qualname__ == "DssRecordTypeError"
+
+
+def test_java_path_never_imports_dss_commander(tmp_path):
+    """Resolving errors and running the Java dispatch must not load the native engine."""
+    script = tmp_path / "probe.py"
+    script.write_text(
+        "import os, sys\n"
+        "os.environ.pop('RAS_COMMANDER_DSS_BACKEND', None)\n"
+        "import ras_commander.dss as d\n"
+        "from ras_commander import RasDss\n"
+        "from ras_commander.dss import _errors\n"
+        "assert RasDss.get_backend() == 'java'\n"
+        "for name in _errors.ERROR_NAMES:\n"
+        "    getattr(d, name)\n"
+        "try:\n"
+        "    RasDss.read_paired_data(sys.argv[1], '/A/B/C///F/')\n"
+        "except FileNotFoundError:\n"
+        "    pass\n"
+        "print('IMPORTED' if 'dss_commander' in sys.modules else 'NOT_IMPORTED')\n",
+        encoding="utf-8",
+    )
+    completed = subprocess.run(
+        [sys.executable, str(script), str(tmp_path / "missing.dss")],
+        capture_output=True, text=True, timeout=300,
+    )
+    assert completed.returncode == 0, completed.stderr[-2000:]
+    assert completed.stdout.strip().splitlines()[-1] == "NOT_IMPORTED"
+
+
+def test_broken_native_wheel_cannot_break_java(monkeypatch, no_jvm):
+    """A native engine whose import raises OSError counts as absent."""
     import importlib
 
     real = importlib.import_module
 
-    def no_dc(name, *a, **k):
+    def broken(name, *a, **k):
         if name == "dss_commander":
-            raise ImportError("simulated")
+            raise OSError("simulated DLL load failure")
         return real(name, *a, **k)
 
-    monkeypatch.setattr(_errors.importlib, "import_module", no_dc)
-    local = _errors._build()
-    assert local.DssError.__module__ == "ras_commander.dss"
-    assert issubclass(local.DssPathnameNotFoundError, ValueError)
-    assert issubclass(local.DssRecordTypeError, (local.DssUnsupportedRecordError, TypeError))
-    assert local.DssRecordTypeError.__qualname__ == "DssRecordTypeError"
+    monkeypatch.setattr(_backend.importlib, "import_module", broken)
+    assert _backend._maybe_native() is None
+    assert _backend.native_available() is False
+    assert _backend.native_grid_qualified() is False
+    caps = RasDss.get_capabilities()
+    assert caps.attrs["native_installed"] is False
+    monkeypatch.setattr(RasDss, "backend", "shadow")
+    _backend.reset_fallback_warning()
+    assert RasDss.get_backend() == "java"
+    monkeypatch.setattr(RasDss, "backend", "native")
+    with pytest.raises(ImportError) as exc:
+        RasDss.get_backend()
+    assert isinstance(exc.value.__cause__, OSError)
 
 
 def test_capabilities_matrix(no_jvm):
@@ -148,6 +198,17 @@ def test_native_grid_qualification_is_an_advertised_feature(monkeypatch):
     assert not _backend.native_grid_qualified()
     monkeypatch.setattr(dc, "FEATURES", frozenset({_backend.NATIVE_GRID_FEATURE}), raising=False)
     assert _backend.native_grid_qualified()
+    monkeypatch.setattr(dc, "FEATURES", [_backend.NATIVE_GRID_FEATURE], raising=False)
+    assert _backend.native_grid_qualified()
+    monkeypatch.setattr(dc, "FEATURES", {_backend.NATIVE_GRID_FEATURE: False}, raising=False)
+    assert not _backend.native_grid_qualified()
+    monkeypatch.setattr(dc, "FEATURES", {_backend.NATIVE_GRID_FEATURE: True}, raising=False)
+    assert _backend.native_grid_qualified()
+    # A bare string is not a feature collection ("in" would match substrings).
+    monkeypatch.setattr(dc, "FEATURES", _backend.NATIVE_GRID_FEATURE, raising=False)
+    assert not _backend.native_grid_qualified()
+    monkeypatch.setattr(dc, "FEATURES", [b"grid_srs_monolith_parity"], raising=False)
+    assert not _backend.native_grid_qualified()
 
 
 # ---------------------------------------------------------------------------
@@ -362,9 +423,51 @@ def test_shadow_grid_returns_java_and_classifies_crs(shadow, fixtures, monkeypat
     assert rec["outcome"] == "expected" and rec["label"].startswith("G-CRS")
     assert "G2" in rec["label"] and rec["returned"] == "java"
 
+    # Shadow always returns Java's grid, even when opted in or qualified.
     out = RasDss.read_grid(f, ALBERS_GRID, allow_unqualified_native=True)
-    assert out["crs"] == native_grid["crs"]
-    assert _records("read_grid")[-1]["returned"] == "native"
+    assert out is java
+    monkeypatch.setattr(_backend, "native_grid_qualified", lambda: True)
+    assert RasDss.read_grid(f, ALBERS_GRID) is java
+    rec = _records("read_grid")[-1]
+    # Once the engine is qualified, a CRS difference is no longer expected.
+    assert rec["returned"] == "java" and rec["outcome"] == "unexpected"
+
+
+def test_shadow_grid_raises_java_error_even_when_native_succeeds(shadow, fixtures, monkeypatch):
+    def java_fails(*_a):
+        raise RuntimeError("Java not found")
+
+    monkeypatch.setattr(RasDss, "_read_grid_java", staticmethod(java_fails))
+    with pytest.raises(RuntimeError, match="Java not found"):
+        RasDss.read_grid(fixtures["synthetic_grid7"], MODERN_GRID)
+    assert _records("read_grid")[-1]["outcome"] == "skipped"
+
+
+def test_allow_unqualified_native_is_ignored_with_warning_under_java(fixtures, monkeypatch, caplog):
+    sentinel = {"from": "java"}
+    monkeypatch.setattr(RasDss, "_read_grid_java", staticmethod(lambda *a: sentinel))
+    assert RasDss.read_grid(fixtures["synthetic_grid7"], MODERN_GRID,
+                            allow_unqualified_native=True) is sentinel
+    assert "allow_unqualified_native=True is ignored" in caplog.text
+
+
+def test_paired_data_known_labels_require_dss6():
+    idx = pd.Index(np.float32([1.0, 2.0]), name="ordinate")
+
+    def frame(version, labels, xp):
+        df = pd.DataFrame({"curve_1": np.float32([3.0, 4.0])}, index=idx)
+        df.attrs = {"dss_version": version, "labels": labels, "x_precision": xp,
+                    "y_precision": xp, "time_zone": None}
+        return df
+
+    java6, native6 = frame(6, ["A"], -1), frame(6, [" A"], 0)
+    outcome, label, _ = _backend.classify_paired_data(java6, None, native6, None)
+    assert outcome == "expected" and "PD1" in label and "PD4" in label
+    java7, native7 = frame(7, ["A"], -1), frame(7, [" A"], 0)
+    assert _backend.classify_paired_data(java7, None, native7, None)[0] == "unexpected"
+    # PD4 requires a decoded native precision >= 0.
+    assert _backend.classify_paired_data(frame(6, ["A"], -1), None, frame(6, ["A"], -5),
+                                         None)[0] == "unexpected"
 
 
 def test_shadow_grid_cell_difference_is_unexpected(shadow, fixtures, monkeypatch):
@@ -411,7 +514,7 @@ def _run_java(requests, work: Path):
         capture_output=True, text=True, timeout=1800,
     )
     marker = next((ln for ln in completed.stdout.splitlines()
-                   if ln.startswith("P18_BRIDGE_UNAVAILABLE:")), None)
+                   if ln.startswith("PDGRID_BRIDGE_UNAVAILABLE:")), None)
     if completed.returncode == 77 or marker:
         pytest.skip(" ".join((marker or "Java bridge unavailable").split()))
     assert completed.returncode == 0, completed.stdout[-2000:] + completed.stderr[-2000:]
@@ -420,10 +523,10 @@ def _run_java(requests, work: Path):
 
 
 JAVA_PD_RECORDS = [
-    {"pathname": "/P18/RATING/STAGE-FLOW///JAVA/", "x": [1.0, 2.0, 3.25],
+    {"pathname": "/TEST/RATING/STAGE-FLOW///JAVA/", "x": [1.0, 2.0, 3.25],
      "y": [[10.0, 20.5, 31.0], [11.0, 21.0, 0.1]], "x_units": "FEET", "y_units": "CFS",
      "x_type": "UNT", "y_type": "UNT", "labels": ["LOW", "HIGH"], "doubles": False},
-    {"pathname": "/P18/ATLAS14/TIME-PRECIP///50%/", "x": [0.0, 0.5, 12.0, 24.0],
+    {"pathname": "/TEST/ATLAS14/TIME-PRECIP///50%/", "x": [0.0, 0.5, 12.0, 24.0],
      "y": [[0.0, 0.01, 0.6, 1.0]], "x_units": "HOURS", "y_units": "FRACTION",
      "x_type": "TIME", "y_type": "CUMULATIVE", "doubles": True},
 ]
@@ -440,7 +543,7 @@ def java_results(tmp_path_factory):
         for rec in JAVA_PD_RECORDS:
             requests.append({"op": "pd", "dss_file": str(f), "pathname": rec["pathname"]})
         requests.append({"op": "version", "dss_file": str(f)})
-        requests.append({"op": "pd", "dss_file": str(f), "pathname": "/P18/NONE/STAGE-FLOW///X/"})
+        requests.append({"op": "pd", "dss_file": str(f), "pathname": "/TEST/NONE/STAGE-FLOW///X/"})
     grid7 = work / "synthetic_grid7.dss"
     shutil.copyfile(FIXTURES / "synthetic_grid7.dss", grid7)
     pd7 = work / "synthetic_pd7.dss"
@@ -448,6 +551,10 @@ def java_results(tmp_path_factory):
     for p in (MODERN_GRID, ALBERS_GRID, UNTIMED_GRID):
         requests.append({"op": "grid", "dss_file": str(grid7), "pathname": p})
     requests.append({"op": "pd", "dss_file": str(pd7), "pathname": PD7_PATH})
+    pd6 = work / "synthetic_pd6.dss"
+    shutil.copyfile(FIXTURES / "synthetic_pd6.dss", pd6)
+    requests.append({"op": "pd", "dss_file": str(pd6), "pathname": PD6_PATH})
+    requests.append({"op": "pd", "dss_file": str(pd6), "pathname": "/A/B/STAGE-FLOW///NONE/"})
     requests.append({"op": "pd", "dss_file": str(pd7), "pathname": TS7_PATH})
     requests.append({"op": "grid", "dss_file": str(pd7), "pathname": PDD7_PATH})
     requests.append({"op": "shadow_pd", "dss_file": str(work / "java_pd7.dss"),
@@ -488,12 +595,23 @@ def test_java_and_native_paired_data_agree(java_results, version, monkeypatch, n
 
 
 def test_java_errors_match_native_classes(java_results):
-    nf = _result(java_results, "pd", "java_pd7.dss", "/P18/NONE/STAGE-FLOW///X/")
+    nf = _result(java_results, "pd", "java_pd7.dss", "/TEST/NONE/STAGE-FLOW///X/")
     assert nf["error"] == "DssPathnameNotFoundError" and nf["is_value_error"]
     wrong = _result(java_results, "pd", "synthetic_pd7.dss", TS7_PATH)
     assert wrong["error"] == "DssRecordTypeError" and wrong["is_type_error"]
     grid_wrong = _result(java_results, "grid", "synthetic_pd7.dss", PDD7_PATH)
     assert grid_wrong["error"] == "DssRecordTypeError" and grid_wrong["is_type_error"]
+
+
+def test_java_read_failure_on_existing_record_is_not_not_found(java_results):
+    """Monolith cannot read this synthetic DSS6 record; that is a read error."""
+    failed = _result(java_results, "pd", "synthetic_pd6.dss", PD6_PATH)
+    if isinstance(failed, pd.DataFrame):
+        pytest.skip("this Monolith build reads the synthetic DSS6 paired data")
+    assert failed["error"] == "DssReadError", failed
+    assert "DssFormatError" in failed["mro"] and not failed["is_value_error"]
+    absent = _result(java_results, "pd", "synthetic_pd6.dss", "/A/B/STAGE-FLOW///NONE/")
+    assert absent["error"] == "DssPathnameNotFoundError"
 
 
 def test_java_reads_synthetic_dss7_paired_data_like_native(java_results, monkeypatch, no_jvm):
