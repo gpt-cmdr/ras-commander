@@ -127,6 +127,7 @@ from .HdfBase import HdfBase
 from .HdfMesh import HdfMesh
 from .HdfResultView import HdfResultView, Selection
 from .HdfUtils import HdfUtils
+from ._raster_interpolation import _interpolate_to_grid, _nearest_grid_indices
 
 gpd = optional_module("geopandas", "Returning GeoDataFrame results from HdfResultsMesh")
 xr = optional_module("xarray", "Returning xarray results from HdfResultsMesh")
@@ -2906,8 +2907,9 @@ class HdfResultsMesh:
         Illinois State Water Survey. See results.py:cells_to_raster().
 
         Reads cell centers and max depth from the HDF file, interpolates onto
-        a regular grid using scipy.interpolate.griddata, and writes a COG with
-        LZW compression and overviews.
+        a regular grid using a SciPy interpolator evaluated in bounded blocks,
+        and writes a COG with LZW compression and overviews. The output raster
+        remains in memory; interpolation query arrays are bounded by block size.
 
         Args:
             hdf_path (Path): Path to the HDF file.
@@ -2927,7 +2929,6 @@ class HdfResultsMesh:
         """
         import rasterio
         from rasterio.transform import from_bounds
-        from scipy.interpolate import griddata as scipy_griddata
 
         gdf = HdfResultsMesh.get_mesh_max_depth(hdf_path)
         if gdf.empty:
@@ -2964,17 +2965,14 @@ class HdfResultsMesh:
         rows = max(2, int(np.ceil((y_max - y_min) / resolution_m)) + 1)
         grid_x = np.linspace(x_min, x_max, cols)
         grid_y = np.linspace(y_max, y_min, rows)
-        gx, gy = np.meshgrid(grid_x, grid_y)
-
-        grid_vals = scipy_griddata(
+        grid_vals = _interpolate_to_grid(
             points=xy,
             values=values.astype(np.float64),
-            xi=(gx, gy),
+            grid_x=grid_x,
+            grid_y=grid_y,
             method=method,
             fill_value=nodata,
-        ).astype(np.float32)
-
-        grid_vals = np.where(np.isnan(grid_vals), nodata, grid_vals)
+        )
         transform = from_bounds(x_min, y_min, x_max, y_max, cols, rows)
 
         if owns_temporary_output:
@@ -3043,7 +3041,8 @@ class HdfResultsMesh:
                 ``resolution`` is omitted.
             method: Rasterization method. ``nearest`` uses a precomputed cell
                 center nearest-neighbor lookup. ``linear`` and ``cubic`` use
-                scipy grid interpolation.
+                SciPy interpolation evaluated in bounded blocks. The raster,
+                mesh mask, and nearest-cell indices remain in memory.
             nodata: GeoTIFF nodata value.
 
         Returns:
@@ -3151,18 +3150,11 @@ class HdfResultsMesh:
         y_res = (y_max - y_min) / rows
         grid_x = np.linspace(x_min + x_res / 2.0, x_max - x_res / 2.0, cols)
         grid_y = np.linspace(y_max - y_res / 2.0, y_min + y_res / 2.0, rows)
-        gx, gy = np.meshgrid(grid_x, grid_y)
-        grid_points = np.column_stack([gx.ravel(), gy.ravel()])
-
-        if method == "nearest":
-            from scipy.spatial import cKDTree
-
-            tree = cKDTree(np.column_stack([x, y]))
-            _, nearest_indices = tree.query(grid_points)
-        else:
-            from scipy.interpolate import griddata as scipy_griddata
-
-            nearest_indices = None
+        points = np.column_stack([x, y])
+        nearest_indices = (
+            _nearest_grid_indices(points, grid_x, grid_y)
+            if method == "nearest" else None
+        )
 
         mesh_areas = HdfMesh.get_mesh_areas(geom_source)
         mesh_areas = mesh_areas[mesh_areas["mesh_name"] == mesh_name] if not mesh_areas.empty else mesh_areas
@@ -3260,14 +3252,14 @@ class HdfResultsMesh:
                 if method == "nearest":
                     grid_values = values[nearest_indices].reshape(rows, cols)
                 else:
-                    grid_values = scipy_griddata(
-                        points=np.column_stack([x, y]),
+                    grid_values = _interpolate_to_grid(
+                        points=points,
                         values=values.astype(np.float64),
-                        xi=(gx, gy),
+                        grid_x=grid_x,
+                        grid_y=grid_y,
                         method=method,
                         fill_value=nodata,
-                    ).astype(np.float32)
-                    grid_values = np.where(np.isnan(grid_values), nodata, grid_values)
+                    )
 
                 grid_values = np.where(mesh_mask, grid_values, nodata).astype(np.float32)
                 safe_label = _safe_timestamp_label(original_value, target_time)
