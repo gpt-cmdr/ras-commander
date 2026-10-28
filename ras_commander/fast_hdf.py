@@ -1335,6 +1335,133 @@ def _property_values(values, count, name):
     return result
 
 
+# NumPy dtypes ``write_pmtiles`` reads without a Python object per value
+# (ras-commander-fast-hdf PR #37). Narrower integer and float dtypes widen
+# exactly to one of these first.
+_COLUMNAR_DTYPES = frozenset(np.dtype(code) for code in ("f8", "f4", "i8", "i4", "u8", "u4", "?"))
+_COLUMNAR_WIDEN = {"i": np.dtype("i4"), "u": np.dtype("u4"), "f": np.dtype("f4")}
+_COLUMNAR_SUPPORT = {}
+_COLUMNAR_LOCK = RLock()
+
+
+def _supports_columnar_properties(module) -> bool:
+    """Whether this engine's ``write_pmtiles`` takes columnar property forms.
+
+    Detected by capability, not by version: engines without it parse every
+    property column as a Python list and reject a NumPy column with
+    ``TypeError``. The probe is an empty layer carrying one column of each
+    form (array, ``(values, valid)`` pair, categorical dict). A columnar
+    engine parses all three and then refuses the featureless layer with
+    ``ValueError`` before any output is opened. Cached per ``write_pmtiles``.
+    """
+    write = getattr(module, "write_pmtiles", None)
+    if write is None:
+        return False
+    with _COLUMNAR_LOCK:
+        try:
+            return _COLUMNAR_SUPPORT[write]
+        except (KeyError, TypeError):
+            pass
+        empty = np.zeros(0, dtype=np.float64)
+        layer = {"name": "probe", "coordinates": np.zeros((0, 2), dtype=np.float64),
+                 "offsets": np.zeros(1, dtype=np.int64), "cell_ids": np.zeros(0, dtype=np.int64),
+                 "properties": {"array": empty, "masked": (empty, np.zeros(0, dtype=bool)),
+                                "categorical": {"codes": np.zeros(0, dtype=np.int64),
+                                                "categories": []}}}
+        with tempfile.TemporaryDirectory(prefix="ras-commander-pmtiles-probe-") as folder:
+            try:
+                write([layer], str(Path(folder) / "probe.pmtiles"), 0, 0, threads=1)
+                supported = False
+            except ValueError as exc:
+                supported = "nonempty layer" in str(exc)
+            except Exception:  # noqa: BLE001 - any other refusal means list-only
+                supported = False
+        try:
+            _COLUMNAR_SUPPORT[write] = supported
+        except TypeError:
+            pass
+        logger.debug("write_pmtiles columnar properties: %s", supported)
+        return supported
+
+
+def _columnar_array(values):
+    """Return ``values`` as an array ``write_pmtiles`` reads natively, or None.
+
+    Only typed NumPy arrays qualify; lists and object arrays keep the list form,
+    whose per-value scalar rules (for example ``[1, "a"]``) must not change.
+    Widening (int8 -> int32, float16 -> float32) and byte-order normalisation
+    are exact, so the tiles equal those of the list form.
+    """
+    if not isinstance(values, np.ndarray) or values.ndim != 1:
+        return None
+    dtype = values.dtype
+    if dtype.kind in _COLUMNAR_WIDEN and dtype.itemsize < 4:
+        dtype = _COLUMNAR_WIDEN[dtype.kind]
+    elif not dtype.isnative:
+        dtype = dtype.newbyteorder("=")
+    if dtype not in _COLUMNAR_DTYPES:
+        return None
+    return np.ascontiguousarray(values, dtype=dtype)
+
+
+def _categorical_column(values):
+    """A one-dimensional NumPy unicode array as ``{"codes", "categories"}``, or None."""
+    if not isinstance(values, np.ndarray) or values.ndim != 1 or values.dtype.kind != "U":
+        return None
+    categories, codes = np.unique(values, return_inverse=True)
+    return {"codes": np.ascontiguousarray(codes.reshape(-1), dtype=np.int64),
+            "categories": [str(value) for value in categories]}
+
+
+def _pmtiles_column(value, count, name, module):
+    """Prepare one property column in the cheapest form the engine accepts.
+
+    Accepted inputs: a sequence of scalars (list form), a typed 1-D NumPy
+    array, a ``(values, valid)`` pair (``False`` meaning null) or a
+    ``{"codes", "categories"}`` dict (code ``-1`` meaning null). Columnar
+    inputs are passed through when the engine supports them and converted to
+    the equivalent list otherwise; both give byte-identical archives.
+    """
+    if isinstance(value, tuple):
+        if len(value) != 2:
+            raise ValueError(f"Property {name!r}: a masked column is a (values, valid) pair")
+        values, valid = _columnar_array(value[0]), value[1]
+        if values is None:
+            raise ValueError(f"Property {name!r}: masked values must be a typed 1-D NumPy array")
+        if not isinstance(valid, np.ndarray) or valid.dtype != np.bool_ or valid.shape != values.shape:
+            raise ValueError(f"Property {name!r}: the validity mask must be a bool array of the same length")
+        if len(values) != count:
+            raise ValueError(f"Property {name!r} must have one value per feature")
+        if _supports_columnar_properties(module):
+            return values, np.ascontiguousarray(valid)
+        result = _property_values(values, count, name)
+        return [item if ok else None for item, ok in zip(result, valid.tolist())]
+    if isinstance(value, Mapping):
+        if set(value) != {"codes", "categories"}:
+            raise ValueError(f"Property {name!r}: a categorical column has exactly 'codes' and 'categories'")
+        codes = np.asarray(value["codes"])
+        categories = list(value["categories"])
+        if codes.ndim != 1 or codes.dtype.kind not in "iu" or len(codes) != count:
+            raise ValueError(f"Property {name!r}: categorical codes must be one integer per feature")
+        if not all(isinstance(item, str) for item in categories):
+            raise TypeError(f"Property {name!r}: categories must be strings")
+        if len(codes) and (codes.min() < -1 or codes.max() >= len(categories)):
+            raise ValueError(f"Property {name!r}: categorical code out of range")
+        if _supports_columnar_properties(module):
+            return {"codes": np.ascontiguousarray(codes, dtype=np.int64), "categories": categories}
+        return [None if code < 0 else categories[code] for code in codes.tolist()]
+    native = _columnar_array(value)
+    if native is None:
+        native = _categorical_column(value)
+    if native is not None:
+        length = len(native["codes"]) if isinstance(native, dict) else len(native)
+        if length != count:
+            raise ValueError(f"Property {name!r} must have one value per feature")
+        if _supports_columnar_properties(module):
+            return native
+    return _property_values(value, count, name)
+
+
 @log_call
 def export_pmtiles(output_path, layers: Mapping, *, source_crs="EPSG:4326",
                    min_zoom=0, max_zoom=12, backend="auto", threads=None):
@@ -1342,6 +1469,12 @@ def export_pmtiles(output_path, layers: Mapping, *, source_crs="EPSG:4326",
 
     ``layers`` maps source-layer names to coordinates, offsets, cell_ids and
     optional property columns. Properties are aligned with the supplied IDs.
+    A property column is a sequence of scalars, a typed 1-D NumPy array, a
+    ``(values, valid)`` pair (``False`` meaning null) or a
+    ``{"codes": int array, "categories": [str, ...]}`` dict (``-1`` null).
+    Engines that read columns natively (detected by capability) receive the
+    arrays without a Python object per value; others receive the equivalent
+    lists. Both give byte-identical archives.
     Each layer may override ``source_crs``. No feature-dropping is requested.
     Legacy ``offsets`` describes one closed exterior ring per feature.
     For holes/multipart, replace it with ``ring_offsets`` (coordinate spans),
@@ -1395,7 +1528,7 @@ def export_pmtiles(output_path, layers: Mapping, *, source_crs="EPSG:4326",
         for values in (ids,):
             if values.size and values.max() > np.iinfo(np.int64).max:
                 raise ValueError("Packed indices exceed int64")
-        columns = {key: _property_values(value, len(ids), key)
+        columns = {key: _pmtiles_column(value, len(ids), key, module)
                    for key, value in layer.get("properties", {}).items()}
         if any(not isinstance(key, str) for key in columns):
             raise TypeError("Property names must be strings")
@@ -1434,6 +1567,30 @@ def export_pmtiles(output_path, layers: Mapping, *, source_crs="EPSG:4326",
     return output
 
 
+def _mesh_property_column(parts, counts, key):
+    """Concatenate one property across meshes; ``None`` parts are missing (null).
+
+    Typed parts sharing one native dtype become an array, or a
+    ``(values, valid)`` pair when some mesh lacks the column. Anything else
+    (object, string or mixed dtypes) keeps the per-value list form, so the
+    scalar type of every value is exactly what it was.
+    """
+    present = [part for part in parts if part is not None]
+    dtypes = {part.dtype for part in present}
+    if len(dtypes) == 1 and _columnar_array(present[0][:0]) is not None:
+        dtype = dtypes.pop()
+        values = np.concatenate([np.zeros(count, dtype=dtype) if part is None else part
+                                 for part, count in zip(parts, counts)])
+        if len(present) == len(parts):
+            return values
+        valid = np.concatenate([np.full(count, part is not None) for part, count in zip(parts, counts)])
+        return values, valid
+    column = []
+    for part, count in zip(parts, counts):
+        column.extend([None] * count if part is None else _property_values(part, count, key))
+    return column
+
+
 @log_call
 def export_mesh_pmtiles(hdf_path, output_path, *, mesh_names=None, properties=None,
                         layer_name="mesh_cells", source_crs=None, min_zoom=0,
@@ -1466,30 +1623,42 @@ def export_mesh_pmtiles(hdf_path, output_path, *, mesh_names=None, properties=No
     property_names = list(dict.fromkeys(key for columns in properties.values() for key in columns))
     if set(property_names) & {"mesh_name", "cell_id"}:
         raise ValueError("mesh_name and cell_id are reserved source identity properties")
-    columns = {key: [] for key in ["mesh_name", "cell_id", *property_names]}
-    coordinates, offsets, cursor = [], [0], 0
+    # Columns are built as arrays: mesh_name as a categorical, typed result
+    # columns gathered by cell ID (masked where a mesh lacks the column).
+    # export_pmtiles passes them to an engine that reads columns natively and
+    # converts them to the equivalent lists for one that does not.
+    names, counts, id_parts, offset_parts = [], [], [], [np.zeros(1, dtype=np.int64)]
+    parts = {key: [] for key in property_names}
+    coordinates, cursor = [], 0
     for name, packed in meshes.items():
         ids = np.asarray(packed["cell_ids"])
         count = len(ids)
         if not count:
             continue
         coordinates.append(packed["coordinates"])
-        offsets.extend((np.asarray(packed["offsets"])[1:] + cursor).tolist())
+        offset_parts.append(np.asarray(packed["offsets"], dtype=np.int64)[1:] + cursor)
         cursor += len(packed["coordinates"])
-        columns["mesh_name"].extend([name] * count)
-        columns["cell_id"].extend(ids.tolist())
+        names.append(name)
+        counts.append(count)
+        id_parts.append(ids)
         for key in property_names:
             if key not in properties.get(name, {}):
-                columns[key].extend([None] * count)
+                parts[key].append(None)
                 continue
-            values = np.asarray(properties[name][key], dtype=object)
+            source = properties[name][key]
+            values = source if isinstance(source, np.ndarray) else np.asarray(source, dtype=object)
             if values.ndim != 1 or len(values) <= int(ids.max()):
                 raise ValueError(f"Property {name}/{key} does not cover every source cell ID")
-            columns[key].extend(_property_values(values[ids], count, key))
+            parts[key].append(values[ids])
     if not coordinates:
         raise ValueError("No mesh cell polygons are available for export")
-    count = len(columns["cell_id"])
-    layer = {"coordinates": np.concatenate(coordinates), "offsets": np.asarray(offsets, dtype=np.int64),
+    columns = {"mesh_name": {"codes": np.repeat(np.arange(len(names), dtype=np.int64), counts),
+                             "categories": names},
+               "cell_id": np.concatenate(id_parts)}
+    for key in property_names:
+        columns[key] = _mesh_property_column(parts[key], counts, key)
+    count = sum(counts)
+    layer = {"coordinates": np.concatenate(coordinates), "offsets": np.concatenate(offset_parts),
              "cell_ids": np.arange(count, dtype=np.int64), "properties": columns}
     return export_pmtiles(output_path, {layer_name: layer}, source_crs=source_crs,
                           min_zoom=min_zoom, max_zoom=max_zoom, backend=backend, threads=threads)
