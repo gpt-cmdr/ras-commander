@@ -3,7 +3,8 @@
 Set RAS_NN_FIXTURE_ROOT to the retained ``full_2core`` directory. These tests
 never execute HEC-RAS or manufacture/modify HDF data. Native completion does
 not establish hydraulic convergence: the fixtures retain iteration warnings.
-Viscosity's contradictory native label/width must remain an explicit refusal.
+Viscosity's contradictory native label/width must remain an explicit refusal;
+its raw diagnostic must preserve stored identity without relabelling.
 """
 
 from datetime import datetime
@@ -152,3 +153,29 @@ def test_clear_water_control_has_no_rheology_datasets(native_paths):
     path = native_paths["clear"]
     with h5py.File(path, "r") as hdf:
         assert all(variable not in hdf[SERIES] for variable in (*STRESSES, VISCOSITY))
+
+
+@pytest.mark.parametrize("variant", VARIANTS)
+def test_native_viscosity_raw_diagnostic_preserves_stored_identity(native_paths, variant):
+    path = native_paths[variant]
+    before = (path.stat().st_size, path.stat().st_mtime_ns)
+    values, attrs, times, face_ids, cell_count = _oracle(path, VISCOSITY)
+    report = HdfResultsMesh.inspect_mesh_series_raw(path, MESH, VISCOSITY, include_values=True)
+    assert report["dataset_path"] == f"/{SERIES}/{VISCOSITY}"
+    assert "7.0.1" in report["file_version"]
+    assert report["shape"] == values.shape == (len(times), cell_count)
+    assert report["axes"] == ("raw_row", "raw_column")
+    assert set(report["attrs"]) == set(attrs)
+    # The oracle stringifies attributes; the stored NaN maximum stays numeric.
+    assert all(report["attrs"][key] == value for key, value in attrs.items()
+               if key != "Maximum Value of Data Set")
+    assert report["stored_location"] == "Faces" and report["stored_units"] == "lb/ft^2*s"
+    assert report["time_axis"]["rows"] == len(times) and report["time_axis"]["matches_rows"]
+    assert report["geometry_counts"] == {
+        "stored_cells": cell_count, "physical_cells": 10201, "faces": len(face_ids),
+    }
+    assert report["typed_status"] == "refused" and report["typed_domain"] is None
+    assert "Qualified series domain contradicts geometry count" in report["refusal_reason"]
+    assert report["physical_domain"] == report["units_interpretation"] == "unqualified"
+    assert report["values"].tobytes() == values.tobytes()
+    assert (path.stat().st_size, path.stat().st_mtime_ns) == before

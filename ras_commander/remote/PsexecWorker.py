@@ -114,7 +114,7 @@ class PsexecWorker(RasWorker):
             hostname="WORKSTATION-01",
             share_path=r"\\\\WORKSTATION-01\\RasRemote",
             worker_folder=r"C:\\RasRemote",
-            credentials={"username": "DOMAIN\\\\user", "password": "SecurePass123"},
+            credentials={"username": "DOMAIN\\\\user", "password": "YOUR_PASSWORD"},
             ras_exe_path=r"C:\\Program Files\\HEC\\HEC-RAS\\6.3\\RAS.exe",
             session_id=2,
             process_priority="low",

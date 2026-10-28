@@ -98,6 +98,65 @@ simultaneous profile: different cells can reach their maxima at different
 times. For the profile and extraction workflow, see
 [2D profiles and reference results](2d-profile-and-reference-workflows.md#read-maximum-result-datasets).
 
+### Typed Tables Without Geometry
+
+Per-cell and per-face results are keyed by `mesh_name` and `cell_id` or
+`face_id`; the default GeoDataFrame adds the cell-center point or face line
+from the mesh geometry. Pass the keyword `include_geometry=False` to get a
+plain pandas `DataFrame` read straight from the stored arrays instead. It needs
+only h5py, numpy and pandas (no GeoPandas, Shapely or pyproj), and skips the
+coordinate read and Shapely construction:
+
+```python
+from ras_commander import HdfMesh, HdfResultsMesh
+
+max_ws = HdfResultsMesh.get_mesh_max_ws(hdf_path, include_geometry=False)
+max_ws.dtypes
+# mesh_name                                str
+# cell_id                                int64
+# maximum_water_surface                float32
+# maximum_water_surface_time    datetime64[ns]
+# is_ghost_cell                           bool
+
+# Join coordinates only where needed: x/y columns in the stored dtype.
+points = HdfMesh.get_mesh_cell_points(hdf_path, include_geometry=False)
+located = max_ws.merge(points, on=["mesh_name", "cell_id"], how="left")
+```
+
+The table has the same rows, order, values, `attrs` and columns as the default
+result, without `geometry`. Values keep the stored HDF dtype (often
+`float32`), `cell_id`/`face_id` are `int64`, and `mesh_name` uses the pandas
+string dtype (`str` on pandas 3, `string` on pandas 2), never `object`.
+`get_mesh_cell_points` and `HdfPump.get_pump_stations` replace the point
+geometry with `x` and `y` columns.
+
+| Reader | `include_geometry=False` columns |
+|---|---|
+| `HdfResultsMesh.get_mesh_max_ws`, `get_mesh_min_ws`, `get_mesh_max_ws_err`, `get_mesh_max_iter`, `get_mesh_last_iter` | `mesh_name`, `cell_id`, value, optional `*_time`, `is_ghost_cell` |
+| `HdfResultsMesh.get_mesh_max_face_v`, `get_mesh_min_face_v` | `mesh_name`, `face_id`, value, optional `*_time` |
+| `HdfResultsMesh.get_mesh_summary`, `get_mesh_summary_output` | as above, for any summary variable |
+| `HdfResultsMesh.get_mesh_max_depth` | `mesh_name`, `cell_id`, `maximum_depth`, `is_ghost_cell` |
+| `HdfMesh.get_mesh_cell_points` | `mesh_name`, `cell_id`, `x`, `y` |
+| `HdfResultsSediment.get_cell_bed_change`, `get_cell_bed_elevation`, `get_active_layer_grain_class` | `mesh_name`, `cell_id`, value, `surface_area` |
+| `HdfPump.get_pump_stations` | `station_id`, the stored attributes, `x`, `y` |
+
+The default stays `include_geometry=True` in this release, so existing code
+gets the same GeoDataFrames. The default is the **convenient** output and
+`include_geometry=False` the **fast** one; when you read several results of
+one model, read the geometry once and join each table to it:
+
+```python
+faces = HdfMesh.get_mesh_cell_faces(hdf_path)            # face lines, once
+vmax = HdfResultsMesh.get_mesh_max_face_v(hdf_path, include_geometry=False)
+vmin = HdfResultsMesh.get_mesh_min_face_v(hdf_path, include_geometry=False)
+faces_v = faces.merge(vmax, on=["mesh_name", "face_id"]).merge(
+    vmin, on=["mesh_name", "face_id"])                   # still a GeoDataFrame
+```
+
+Timings are in
+[Geometry: convenient or fast](../native-engine.md#geometry-convenient-or-fast). Pump stations are point features and keep the
+GeoDataFrame as their natural default.
+
 ### Time Series
 
 ```python

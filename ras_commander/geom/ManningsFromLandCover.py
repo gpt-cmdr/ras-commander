@@ -549,6 +549,9 @@ class ManningsFromLandCover:
             polygons = HdfLandCover.get_classification_polygons(landcover_hdf_path)
             raster_map = HdfLandCover.get_landcover_raster_map(landcover_hdf_path)
         except Exception as exc:
+            from ..fast_hdf import reraise_required
+
+            reraise_required(exc)
             logger.debug(f"Could not read land-cover sidecar regions: {exc}")
             return []
 
@@ -588,6 +591,9 @@ class ManningsFromLandCover:
             cal_table = HdfLandCover.get_mannings_calibration_table(geom_hdf)
             region_polygons = HdfLandCover.get_mannings_region_polygons(geom_hdf)
         except Exception as exc:
+            from ..fast_hdf import reraise_required
+
+            reraise_required(exc)
             logger.debug(f"Could not read geometry HDF calibration regions: {exc}")
             return []
 

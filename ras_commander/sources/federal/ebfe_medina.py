@@ -29,6 +29,7 @@ from ras_commander.LoggingConfig import get_logger, log_call
 from ras_commander.sources.federal.ebfe_extract import StreamingZipReader
 
 from ..._ras_text import _write_ras_text
+from ...fast_hdf import read_attr, reraise_required
 
 logger = get_logger(__name__)
 
@@ -511,12 +512,13 @@ def _association_paths_are_valid(project_root: Path, spec: Mapping[str, Any]) ->
                     ]
                 )
             for group, attribute, expected in checks:
-                value = group.attrs.get(attribute)
+                value = read_attr(group, attribute, None)
                 if value is None or not _path_equivalent(value, expected):
                     return False
                 if group.attrs.get_id(attribute).dtype.kind != "S":
                     return False
-    except (KeyError, OSError, RuntimeError, TypeError, ValueError):
+    except (KeyError, OSError, RuntimeError, TypeError, ValueError) as exc:
+        reraise_required(exc)
         return False
     return True
 

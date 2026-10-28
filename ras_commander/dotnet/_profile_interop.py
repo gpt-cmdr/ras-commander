@@ -11,6 +11,7 @@ import h5py
 import numpy as np
 
 from ..LoggingConfig import get_logger
+from ..fast_hdf import read_attr, read_typed, reraise_required
 from .clr_bootstrap import load_clr
 
 logger = get_logger(__name__)
@@ -83,9 +84,10 @@ def _uses_si_units(hdf_path: Path | None) -> bool:
             geometry_group = hdf_file.get("Geometry")
             raw_si_units = None
             if geometry_group is not None:
-                raw_si_units = geometry_group.attrs.get("SI Units")
-            raw_unit_system = hdf_file.attrs.get("Units System")
-    except Exception:
+                raw_si_units = read_attr(geometry_group, "SI Units", None)
+            raw_unit_system = read_attr(hdf_file, "Units System", None)
+    except Exception as exc:
+        reraise_required(exc)
         return False
 
     si_text = _decode_hdf_text(raw_si_units).strip().lower()
@@ -114,14 +116,15 @@ def _smallest_mesh_face_length(geometry_hdf_path: Path | None) -> float | None:
                 )
                 if normals_path not in hdf_file:
                     continue
-                values = np.asarray(hdf_file[normals_path])
+                values = np.asarray(read_typed(hdf_file[normals_path]))
                 if values.ndim != 2 or values.shape[1] < 3:
                     continue
                 lengths = values[:, 2].astype(float)
                 lengths = lengths[np.isfinite(lengths) & (lengths > 0.0)]
                 if lengths.size:
                     face_lengths.append(float(np.nanmin(lengths)))
-    except Exception:
+    except Exception as exc:
+        reraise_required(exc)
         return None
 
     if not face_lengths:
@@ -379,7 +382,7 @@ def _mesh_names_from_hdf(geometry_hdf_path: Path | None) -> list[str]:
         attrs_path = "Geometry/2D Flow Areas/Attributes"
         if attrs_path not in hdf_file:
             return []
-        attrs = hdf_file[attrs_path][()]
+        attrs = read_typed(hdf_file[attrs_path])
         if getattr(attrs, "dtype", None) is not None and attrs.dtype.names:
             name_field = "Name" if "Name" in attrs.dtype.names else attrs.dtype.names[0]
             return [_decode_hdf_name(row[name_field]) for row in attrs]
@@ -465,8 +468,8 @@ def _nearest_face_ids(
             if fp_path not in hdf_file or face_path not in hdf_file:
                 continue
 
-            face_points = np.asarray(hdf_file[fp_path][()], dtype=float)
-            face_indexes = np.asarray(hdf_file[face_path][()], dtype=int)
+            face_points = np.asarray(read_typed(hdf_file[fp_path]), dtype=float)
+            face_indexes = np.asarray(read_typed(hdf_file[face_path]), dtype=int)
             valid_faces = (
                 (face_indexes[:, 0] >= 0)
                 & (face_indexes[:, 1] >= 0)
@@ -868,11 +871,11 @@ def _profile_times(context: MapPointsContext) -> np.ndarray:
         with h5py.File(context.plan_hdf_path, "r") as hdf_file:
             if time_path in hdf_file:
                 return np.asarray(
-                    [_decode_time_value(value) for value in hdf_file[time_path][()]],
+                    [_decode_time_value(value) for value in read_typed(hdf_file[time_path])],
                     dtype=object,
                 )
-    except Exception:
-        pass
+    except Exception as exc:
+        reraise_required(exc)
 
     values = []
     for idx in range(_profile_count(context.results)):

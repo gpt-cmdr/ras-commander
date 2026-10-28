@@ -1,6 +1,13 @@
 # Rust-accelerated HDF reading (optional `fast-hdf` backend)
 
-Status: research complete (2026-10-17); not started. Tracking issue: [#544](https://github.com/gpt-cmdr/ras-commander/issues/544).
+Status: research complete (2026-10-17). Tracking issue: [#544](https://github.com/gpt-cmdr/ras-commander/issues/544).
+
+Update: the backend shipped as the `ras-commander-fast-hdf` extension
+([user guide](../../docs/native-engine.md)) and is now ras-commander's default HDF
+engine, installed with ras-commander on Windows x64, Linux x64 and macOS arm64.
+Its source, engine included, lives in
+[gpt-cmdr/ras-commander-fast-hdf](https://github.com/gpt-cmdr/ras-commander-fast-hdf).
+The notes below are the original research.
 
 ## Outcome
 

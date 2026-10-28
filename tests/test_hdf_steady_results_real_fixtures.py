@@ -60,6 +60,46 @@ STEADY_BASE = (
 )
 
 
+@pytest.mark.parametrize(
+    "relative_path,expected_hash",
+    [
+        (
+            "66/Balde_Eagle_Creek/p02/steady/BaldEagle.p02.hdf",
+            "62e1ffb332e02e34d1b4e0b7458c4a95ba467c4609a01dd087151818c37b81ee",
+        ),
+        (
+            "701/Balde_Eagle_Creek/p02/steady/BaldEagle.p02.hdf",
+            "619ceef96561a7b97709e60fcd8bfdbd380e2b8780e5a6295f1046fea8abd256",
+        ),
+    ],
+)
+def test_golden_steady_energy_and_optional_availability(relative_path, expected_hash):
+    root = os.environ.get("RAS_STEADY_GOLDEN_ROOT")
+    if not root:
+        pytest.skip("Set RAS_STEADY_GOLDEN_ROOT to the retained public-example corpus")
+    path = Path(root) / relative_path
+    if not path.is_file():
+        pytest.skip("Retained public-example steady HDF is not mounted")
+    assert _sha256(path) == expected_hash
+
+    result = HdfResultsPlan.get_steady_results(path)
+
+    with h5py.File(path, "r") as hdf:
+        source = f"{STEADY_BASE}/Cross Sections/Energy Grade"
+        expected = hdf[source][()].reshape(-1)
+        assert f"{STEADY_BASE}/Cross Sections/Additional Variables/Froude # Channel" not in hdf
+        assert f"{STEADY_BASE}/Cross Sections/Additional Variables/Min Ch El" not in hdf
+    assert len(result) == 1424
+    np.testing.assert_array_equal(result["energy"], expected)
+    assert np.isfinite(result["energy"]).all()
+    assert result.attrs["column_sources"]["energy"] == source
+    assert result.attrs["unavailable_columns"] == ["froude", "min_ch_el"]
+    for column in result.attrs["unavailable_columns"]:
+        assert result[column].isna().all()
+        assert result.attrs["column_sources"][column] is None
+    assert _sha256(path) == expected_hash
+
+
 def _sha256(path: Path) -> str:
     digest = hashlib.sha256()
     with path.open("rb") as handle:

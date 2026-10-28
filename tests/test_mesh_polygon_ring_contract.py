@@ -40,7 +40,7 @@ _KNOWN_PATHS = {
         "H:/CLB-Repos/ras-commander/working/c05_preparation_2026-08-22/real_fixtures/DavisStormSystem.p02.hdf",
     ],
     "AustinOyster.p01": ["C:/GH/rc-wt-956/working/austin_bayou_firehose/working_model/Input/AustinOyster.p01.hdf"],
-    "JUL2020_D100RAS.p04": [f"{_SCRATCH}/structures-fixtures/JUL2020_D100RAS.p04.hdf"],
+    "AustinOyster.p03": [f"{_SCRATCH}/structures-fixtures/AustinOyster.p03.hdf"],
     "Homewood.p02": ["D:/RAS_Agent_Scratch/Homewood_Demo/HECRAS/Homewood.p02.hdf"],
     "BaldEagleDamBrk.refpts.701.p03": [f"{_SCRATCH}/refpoint-fixtures/BaldEagleDamBrk.refpts.701.p03.hdf"],
 }
@@ -68,11 +68,21 @@ def _fixture(name: str) -> Path:
     return path
 
 
+def _engine_kwargs(engine: str) -> dict:
+    """``engine=``/``diagnostics=`` on this checkout; legacy ``backend=`` spelling elsewhere."""
+    parameters = inspect.signature(HdfMesh.get_mesh_cell_polygons).parameters
+    kwargs = {"diagnostics": True} if "diagnostics" in parameters else {}
+    if "engine" in parameters:
+        kwargs["engine"] = engine
+    elif "backend" in parameters:
+        kwargs["backend"] = {"h5py": "python", "native": "rust"}[engine]
+    return kwargs
+
+
 def _python_polygons(name: str):
     if name not in _POLYGONS:
         path = _fixture(name)
-        kwargs = {"backend": "python"} if "backend" in inspect.signature(HdfMesh.get_mesh_cell_polygons).parameters else {}
-        gdf = HdfMesh.get_mesh_cell_polygons(path, **kwargs)
+        gdf = HdfMesh.get_mesh_cell_polygons(path, **_engine_kwargs("h5py"))
         assert len(gdf), f"{name}: no polygons"
         _POLYGONS[name] = (path, gdf)
     return _POLYGONS[name]
@@ -221,8 +231,8 @@ def test_curved_perimeter_vertices_are_kept_in_the_ring(name):
 def _native_unavailable_reason() -> str | None:
     if importlib.util.find_spec("ras_commander_fast_hdf") is None:
         return "ras_commander_fast_hdf is not installed"
-    if "backend" not in inspect.signature(HdfMesh.get_mesh_cell_polygons).parameters:
-        return "HdfMesh.get_mesh_cell_polygons has no backend= switch on this checkout"
+    if not {"engine", "backend"} & set(inspect.signature(HdfMesh.get_mesh_cell_polygons).parameters):
+        return "HdfMesh.get_mesh_cell_polygons has no engine=/backend= switch on this checkout"
     return None
 
 
@@ -232,7 +242,7 @@ def native_and_python(request):
     if reason:
         pytest.skip(reason)
     path, py = _python_polygons(request.param)
-    native = HdfMesh.get_mesh_cell_polygons(path, backend="native")
+    native = HdfMesh.get_mesh_cell_polygons(path, **_engine_kwargs("native"))
     return request.param, path, py, native
 
 

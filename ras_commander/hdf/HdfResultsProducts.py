@@ -17,6 +17,7 @@ import numpy as np
 import pandas as pd
 
 from ..Decorators import log_call, standardize_input
+from ..fast_hdf import read_attr, read_typed, reraise_required
 from ..LoggingConfig import get_logger
 from ..RasUtils import RasUtils
 from .HdfBase import HdfBase
@@ -817,7 +818,7 @@ class HdfResultsProducts:
         datasets = []
         missing_meshes = []
         physical_counts = HdfMesh._physical_cell_counts(hdf_file)
-        for row in attributes[:]:
+        for row in read_typed(attributes, slice(None)):
             mesh_name = HdfUtils.convert_ras_string(row[0])
             path = (
                 f"{HdfResultsProducts._SUMMARY_BASE}/2D Flow Areas/"
@@ -848,7 +849,7 @@ class HdfResultsProducts:
                     if dataset.ndim == 1
                     else (0, slice(start, start + chunk_size))
                 )
-                values = np.asarray(dataset[selection], dtype=float)
+                values = np.asarray(read_typed(dataset, selection), dtype=float)
                 finite = values[np.isfinite(values)]
                 if finite.size:
                     chunk_maximum = float(np.max(finite))
@@ -1043,7 +1044,7 @@ class HdfResultsProducts:
         raw_attribute = (
             None
             if event_conditions is None
-            else event_conditions.attrs.get("Completed Successfully")
+            else read_attr(event_conditions, "Completed Successfully", None)
         )
         attribute = HdfResultsProducts._optional_bool(
             raw_attribute,
@@ -1102,9 +1103,11 @@ class HdfResultsProducts:
                 continue
             try:
                 axes[path] = pd.DatetimeIndex(
-                    [parser(HdfResultsProducts._decode(value)) for value in dataset[:]]
+                    [parser(HdfResultsProducts._decode(value))
+                     for value in read_typed(dataset, slice(None))]
                 )
             except Exception as exc:
+                reraise_required(exc)
                 raise ValueError(
                     f"Could not parse result time dataset '{path}': {exc}"
                 ) from exc
@@ -1135,7 +1138,7 @@ class HdfResultsProducts:
 
     @staticmethod
     def _embedded_crs(hdf_file: h5py.File, source: Path) -> str:
-        raw_projection = hdf_file.attrs.get("Projection")
+        raw_projection = read_attr(hdf_file, "Projection", None)
         if raw_projection is None:
             raise ValueError(
                 "Result HDF does not contain an embedded Projection attribute"
@@ -1181,7 +1184,7 @@ class HdfResultsProducts:
 
         meshes: list[dict[str, Any]] = []
         checked = [attributes_path]
-        for row in attributes[:]:
+        for row in read_typed(attributes, slice(None)):
             mesh_name = HdfUtils.convert_ras_string(row[0])
             declared_cell_count = int(row[-1])
             if not mesh_name or declared_cell_count <= 0:
@@ -1282,12 +1285,12 @@ class HdfResultsProducts:
                 minimum_columns=1,
                 require_integer=True,
             )
-            info = np.asarray(face_info[:, :2], dtype=np.int64)
+            info = np.asarray(read_typed(face_info, (slice(None), slice(None, 2))), dtype=np.int64)
             if np.any(info < 0) or np.any(info[:, 0] + info[:, 1] > len(face_values)):
                 raise ValueError(
                     f"Cell-face topology offsets are invalid for mesh '{mesh_name}'"
                 )
-            face_ids = np.asarray(face_values[:, 0], dtype=np.int64)
+            face_ids = np.asarray(read_typed(face_values, (slice(None), 0)), dtype=np.int64)
             if np.any(face_ids < 0) or np.any(face_ids >= face_count):
                 raise ValueError(
                     f"Cell-face topology IDs are invalid for mesh '{mesh_name}'"
@@ -1372,7 +1375,7 @@ class HdfResultsProducts:
     def _dataset_text(dataset: h5py.Dataset | h5py.Group | None) -> str:
         if not isinstance(dataset, h5py.Dataset):
             return ""
-        raw = dataset[()]
+        raw = read_typed(dataset)
         if isinstance(raw, np.ndarray):
             return "\n".join(
                 HdfResultsProducts._decode(value) for value in raw.flat
@@ -1388,7 +1391,7 @@ class HdfResultsProducts:
             group = hdf_file if not group_path else hdf_file.get(group_path)
             if group is None:
                 continue
-            value = group.attrs.get(attribute)
+            value = read_attr(group, attribute, None)
             if value is not None and HdfResultsProducts._decode(value).strip():
                 return HdfResultsProducts._decode(value).strip()
         return None

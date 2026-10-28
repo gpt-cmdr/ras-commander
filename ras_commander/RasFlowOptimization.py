@@ -21,10 +21,12 @@ import pandas as pd
 
 from ._ras_text import _write_ras_text
 from .Decorators import log_call
+from .fast_hdf import read_attr, read_typed, reraise_required
 from .LoggingConfig import get_logger
 from .RasPlan import RasPlan
 from .RasPrj import ras
 from .RasUtils import RasUtils
+from .fast_hdf import h5py_until_qualified
 
 logger = get_logger(__name__)
 
@@ -1183,6 +1185,7 @@ class RasFlowOptimization:
         return ""
 
     @staticmethod
+    @h5py_until_qualified
     def _extract_trial_results_from_hdf(hdf_path: Path) -> pd.DataFrame:
         rows = []
         with h5py.File(hdf_path, "r") as hdf_file:
@@ -1214,7 +1217,7 @@ class RasFlowOptimization:
 
     @staticmethod
     def _dataset_to_dataframe(dataset: h5py.Dataset) -> pd.DataFrame:
-        data = dataset[()]
+        data = read_typed(dataset)
         if isinstance(data, (bytes, str)) or np.isscalar(data):
             return pd.DataFrame()
 
@@ -1250,7 +1253,7 @@ class RasFlowOptimization:
         ):
             if attr_name not in dataset.attrs:
                 continue
-            raw = dataset.attrs[attr_name]
+            raw = read_attr(dataset, attr_name)
             values = np.atleast_1d(raw).tolist()
             columns = [
                 str(RasFlowOptimization._decode_hdf_value(value)).strip()
@@ -1320,9 +1323,10 @@ class RasFlowOptimization:
                 with h5py.File(hdf_path, "r") as hdf_file:
                     path = "Results/Summary/Compute Messages (text)"
                     if path in hdf_file:
-                        data = hdf_file[path][()]
+                        data = read_typed(hdf_file[path])
                         return str(RasFlowOptimization._decode_compute_message_data(data))
             except Exception as exc:
+                reraise_required(exc)
                 logger.debug("Could not read HDF compute messages: %s", exc)
 
         candidate_paths: List[Path] = []

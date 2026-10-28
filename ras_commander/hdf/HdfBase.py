@@ -48,6 +48,7 @@ from pathlib import Path
 import logging
 
 from .HdfUtils import HdfUtils
+from ..fast_hdf import read_attr, read_attrs, read_typed, reraise_required
 from ..Decorators import standardize_input, log_call
 from ..LoggingConfig import setup_logging, get_logger
 
@@ -144,14 +145,15 @@ class HdfBase:
         plan_info = hdf_file.get("Plan Data/Plan Information")
         if plan_info is None:
             raise ValueError("Plan Information not found in HDF file")
+        plan_attrs = read_attrs(plan_info)
 
         # Primary (HEC-RAS 6.x): explicit 'Simulation Start Time' attribute.
-        time_str = plan_info.attrs.get('Simulation Start Time')
+        time_str = plan_attrs.get('Simulation Start Time')
         if time_str is not None:
             return HdfUtils.parse_ras_datetime(_decode(time_str))
 
         # Fallback 1 (HEC-RAS 5.0.x): 'Time Window' = "<start> to <end>".
-        time_window = plan_info.attrs.get('Time Window')
+        time_window = plan_attrs.get('Time Window')
         if time_window is not None:
             start_str = _decode(time_window).split(" to ")[0].strip()
             if start_str:
@@ -162,7 +164,7 @@ class HdfBase:
         for ts_name, has_ms in (("Time Date Stamp", False), ("Time Date Stamp (ms)", True)):
             ds = hdf_file.get(f"{base}/{ts_name}")
             if ds is not None and ds.shape[0] > 0:
-                first = _decode(ds[0])
+                first = _decode(read_typed(ds, 0))
                 return HdfUtils.parse_ras_datetime_ms(first) if has_ms else HdfUtils.parse_ras_datetime(first)
 
         raise ValueError(
@@ -197,7 +199,7 @@ class HdfBase:
         ):
             dataset = hdf_file.get(f"{base}/{ts_name}")
             if dataset is not None:
-                return [parse(x.decode("utf-8")) for x in dataset[:]]
+                return [parse(x.decode("utf-8")) for x in read_typed(dataset, slice(None))]
         file_label = Path(getattr(hdf_file, "filename", "HDF file")).name
         raise ValueError(
             f"No unsteady output timestamps in {file_label}: neither "
@@ -240,7 +242,7 @@ class HdfBase:
                         f"{missing} in {Path(hdf_path).name}."
                     )
 
-                attributes = hdf_file[attributes_path][()]
+                attributes = read_typed(hdf_file[attributes_path])
                 if "Name" not in attributes.dtype.names:
                     raise ValueError(
                         f"2D flow area attributes at '{attributes_path}' in "
@@ -248,7 +250,7 @@ class HdfBase:
                     )
                 names = [HdfUtils.convert_ras_string(name) for name in attributes["Name"]]
 
-                cell_info = hdf_file[cell_info_path][()]
+                cell_info = read_typed(hdf_file[cell_info_path])
                 cell_counts = [info[1] for info in cell_info]
                 if len(names) != len(cell_counts):
                     raise ValueError(
@@ -260,6 +262,7 @@ class HdfBase:
         except ValueError:
             raise
         except Exception as e:
+            reraise_required(e)
             raise ValueError(
                 f"Failed to read 2D flow area names/counts from "
                 f"{Path(hdf_path).name}: {e}"
@@ -353,6 +356,7 @@ class HdfBase:
         return None
 
     @staticmethod
+    @log_call
     @standardize_input(file_type='plan_hdf')
     def get_projection(hdf_path: Path) -> Optional[str]:
         """
@@ -506,7 +510,7 @@ class HdfBase:
                 return
             values = {
                 HdfBase._decode_unit_attribute(item).casefold()
-                for item in np.asarray(obj.attrs["Units"]).reshape(-1)
+                for item in np.asarray(read_attr(obj, "Units")).reshape(-1)
             }
             for unit, paths in labels.items():
                 if unit in values:
@@ -582,7 +586,7 @@ class HdfBase:
 
         geometry = hdf_file.get("Geometry")
         if geometry is not None and "SI Units" in geometry.attrs:
-            raw_value = geometry.attrs["SI Units"]
+            raw_value = read_attr(geometry, "SI Units")
             si_units = HdfBase._parse_si_units_attribute(raw_value)
             evidence.append(
                 {
@@ -606,7 +610,7 @@ class HdfBase:
                 recognized.append(("/Geometry/@SI Units", si_units))
 
         if "Units System" in hdf_file.attrs:
-            raw_value = hdf_file.attrs["Units System"]
+            raw_value = read_attr(hdf_file, "Units System")
             si_units = HdfBase._parse_unit_system_attribute(raw_value)
             evidence.append(
                 {
@@ -853,8 +857,9 @@ class HdfBase:
                 logger.debug("Attribute path '%s' not found in HDF file", attr_path)
                 return {}
 
-            return HdfUtils.convert_hdf5_attrs_to_dict(hdf_file[attr_path].attrs)
+            return HdfUtils.convert_hdf5_attrs_to_dict(read_attrs(hdf_file[attr_path]))
         except Exception as e:
+            reraise_required(e)
             file_label = Path(getattr(hdf_file, "filename", "HDF file")).name
             raise ValueError(
                 f"Failed to read HDF attributes at '{attr_path}' in "
@@ -1064,9 +1069,9 @@ class HdfBase:
                         f"{missing} under '{path}' in {Path(hdf_path).name}."
                     )
 
-                polyline_info = hdf_file[polyline_info_path][()]
-                polyline_parts = hdf_file[polyline_parts_path][()]
-                polyline_points = hdf_file[polyline_points_path][()]
+                polyline_info = read_typed(hdf_file[polyline_info_path])
+                polyline_parts = read_typed(hdf_file[polyline_parts_path])
+                polyline_points = read_typed(hdf_file[polyline_points_path])
 
                 geoms = []
                 for pnt_start, pnt_cnt, part_start, part_cnt in polyline_info:
@@ -1091,6 +1096,7 @@ class HdfBase:
         except ValueError:
             raise
         except Exception as e:
+            reraise_required(e)
             raise ValueError(
                 f"Failed to extract polylines from '{path}' in "
                 f"{Path(hdf_path).name}: {e}"

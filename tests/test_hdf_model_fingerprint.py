@@ -84,3 +84,73 @@ def test_nested_selection_refuses_external_ancestor_before_lookup(tmp_path):
         h["Geometry"] = h5py.ExternalLink("forbidden.hdf", "/Geometry")
     with pytest.raises(ValueError, match="refuses non-hard"):
         HdfBase.fingerprint_model_inputs(p, groups=("Geometry/Cells",))
+
+
+
+def test_dataset_receipts_localize_exact_center_and_face_changes(tmp_path):
+    path = tmp_path / "components.g01.hdf"
+    root = "/Geometry/2D Flow Areas/Mesh"
+    centers = root + "/Cells Center Coordinate"
+    faces = root + "/Faces Cell Indexes"
+    properties = root + "/Faces Area Elevation Values"
+    with h5py.File(path, "w") as hdf:
+        hdf.create_dataset(centers, data=np.array([[1.0, 2.0], [3.0, 4.0]]))
+        hdf.create_dataset(faces, data=np.array([[0, -1], [0, 1]], dtype="i4"))
+        hdf.create_dataset(properties, data=np.array([[0.0, 0.25]]))
+    before_bytes = path.read_bytes()
+    before = HdfBase.fingerprint_model_inputs(path)
+    assert path.read_bytes() == before_bytes
+
+    with h5py.File(path, "r+") as hdf:
+        hdf[centers][0, 0] = np.nextafter(1.0, 2.0)
+    after_center = HdfBase.fingerprint_model_inputs(path)
+    changed = {
+        name for name, record in before["datasets"].items()
+        if record != after_center["datasets"][name]
+    }
+    assert changed == {centers}
+
+    with h5py.File(path, "r+") as hdf:
+        hdf[faces][0, 1] = -2
+    after_face = HdfBase.fingerprint_model_inputs(path)
+    changed = {
+        name for name, record in after_center["datasets"].items()
+        if record != after_face["datasets"][name]
+    }
+    assert changed == {faces}
+    assert after_face["datasets"][properties] == before["datasets"][properties]
+
+
+def test_dtype_and_shape_are_part_of_dataset_receipt_identity(tmp_path):
+    path = tmp_path / "identity.hdf"
+    name = "/Geometry/Values"
+    records = []
+    for values in (
+        np.zeros(4, dtype="i4"),
+        np.zeros(4, dtype="f4"),
+        np.zeros((2, 2), dtype="f4"),
+    ):
+        with h5py.File(path, "w") as hdf:
+            hdf.create_dataset(name, data=values)
+        records.append(HdfBase.fingerprint_model_inputs(path)["datasets"][name])
+    # These arrays have equal raw bytes; compare complete receipt identities.
+    assert records[0]["dtype"] != records[1]["dtype"]
+    assert records[1]["shape"] != records[2]["shape"]
+    assert records[0] != records[1] != records[2]
+
+
+def test_missing_selected_topology_is_reported_separately_from_empty(tmp_path):
+    path = tmp_path / "missing.hdf"
+    root = "/Geometry/2D Flow Areas/Mesh"
+    with h5py.File(path, "w") as hdf:
+        hdf.create_group(root)
+    empty = HdfBase.fingerprint_model_inputs(path, groups=(root,))
+    assert empty["groups"] == {root: {"attributes": {}}}
+    assert empty["datasets"] == {}
+    assert empty["missing_groups"] == []
+    with h5py.File(path, "r+") as hdf:
+        del hdf[root]
+    missing = HdfBase.fingerprint_model_inputs(path, groups=(root,))
+    assert missing["groups"] == {}
+    assert missing["datasets"] == {}
+    assert missing["missing_groups"] == [root]

@@ -24,22 +24,38 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
       - name: Install public library and focused test runner
-        run: python -m pip install -e . pytest geopandas 'shapely>=2.0' xarray requests rasterio
+        run: python -m pip install -e . pytest geopandas 'shapely>=2.0' xarray requests rasterio psutil
       - name: Check text API and geometry write safety
         run: >-
           python -m pytest tests/ras_text_read_only_test.py
+          tests/test_geom_storage_record_preservation.py
+          tests/test_geom_storage_2d_flow_area_writer.py
+          tests/test_geom_storage_perimeter_serialization.py
           tests/test_clear_geometry_infiltration.py
           tests/test_geometry_association_inventory.py
+          tests/test_area_association_sync.py
           tests/test_property_tables_worker.py
           tests/test_mesh_quality_coverage.py
           tests/test_mannings_region_recovery.py
           tests/test_hdf_reference_flow_provenance.py
+          tests/test_hdf_steady_results.py
           tests/test_rasunsteady_disable_meteorology.py
+          tests/test_rasunsteady_constant_precipitation.py
+          tests/test_rasunsteady_inline_precision.py
+          tests/test_rasrestart_header.py
           tests/test_rasunsteady_remove_met_sources.py
           tests/test_rasunsteady_initial_flow_validation.py
           tests/test_rasunsteady_meteorology_transaction.py
           tests/test_breakout_feature_handoff.py
           tests/test_explicit_computation_points.py
+          tests/test_supplied_seed_repair.py
+          tests/test_mesh_cell_subset.py
+          tests/test_ras_taudem.py
+          tests/test_subdomain_split_lines.py
+          tests/test_subdomain_breakouts.py
+          tests/test_mesh_cell_subset_native.py
+          tests/test_geom_preprocessor_contract.py
+          tests/test_preprocess_process_inventory.py
           tests/test_hdf_completion.py
           tests/test_hdf_followup_native_contract.py
           tests/test_stored_maps_native_contract.py

@@ -25,20 +25,28 @@ List of Functions in HdfBndry:
 
 
 """
+
+from __future__ import annotations
+
 from pathlib import Path
 from typing import ClassVar, Literal, Optional, Union
 
-import geopandas as gpd
 import h5py
 import numpy as np
 import pandas as pd
-from shapely.geometry import LineString, MultiLineString, MultiPolygon, Point, Polygon
 
+from .._optional_deps import optional_module
 from ..Decorators import log_call, standardize_input
+from ..fast_hdf import read_typed, reraise_required
 from ..LoggingConfig import get_logger
 from .HdfBase import HdfBase
 from .HdfUtils import HdfUtils
 from ._packed_parts import _nonnegative_index, resolve_feature_part_ranges
+
+# GeoPandas/Shapely load on first use, so the tabular readers work on the core
+# h5py/numpy/pandas install.
+gpd = optional_module("geopandas", "Building geometry in HdfBndry")
+shapely_geometry = optional_module("shapely.geometry", "Building geometry in HdfBndry")
 
 logger = get_logger(__name__)
 
@@ -56,7 +64,7 @@ def _assemble_polygon_rings(polygons):
         for indices in containers
     ]
     shells = [
-        Polygon(
+        shapely_geometry.Polygon(
             ring.exterior.coords,
             [hole.exterior.coords for j, hole in enumerate(polygons)
              if parents[j] == i and len(containers[j]) % 2 == 1],
@@ -64,7 +72,7 @@ def _assemble_polygon_rings(polygons):
         for i, ring in enumerate(polygons)
         if len(containers[i]) % 2 == 0
     ]
-    return shells[0] if len(shells) == 1 else MultiPolygon(shells)
+    return shells[0] if len(shells) == 1 else shapely_geometry.MultiPolygon(shells)
 
 
 class HdfBndry:
@@ -309,7 +317,7 @@ class HdfBndry:
                     report_ownership=on_duplicate_ownership == "report",
                 )
 
-            native = hdf_file[HdfBndry._BC_EXTERNAL_FACES_PATH][()]
+            native = read_typed(hdf_file[HdfBndry._BC_EXTERNAL_FACES_PATH])
             if len(native) == 0:
                 return HdfBndry._empty_bc_external_faces(
                     "empty",
@@ -401,7 +409,7 @@ class HdfBndry:
             result["bc_line_type"] = pd.Series(pd.NA, index=result.index, dtype="string")
 
             if HdfBndry._BC_ATTRIBUTES_PATH in hdf_file:
-                attributes = hdf_file[HdfBndry._BC_ATTRIBUTES_PATH][()]
+                attributes = read_typed(hdf_file[HdfBndry._BC_ATTRIBUTES_PATH])
                 attribute_fields = attributes.dtype.names or ()
                 name_field = HdfBndry._find_structured_field(attribute_fields, "Name")
                 mesh_field = HdfBndry._find_structured_field(
@@ -519,7 +527,7 @@ class HdfBndry:
                         return_inverse=True,
                     )
                     selected_face_points = np.asarray(
-                        face_points_dataset[unique_face_ids][inverse_unique_faces],
+                        read_typed(face_points_dataset, unique_face_ids)[inverse_unique_faces],
                         dtype=np.int64,
                     )
 
@@ -540,7 +548,7 @@ class HdfBndry:
                                 f"perimeter-info counts for mesh {mesh_name!r}"
                             )
                         unique_perimeter_info = np.asarray(
-                            perimeter_info_dataset[unique_face_ids],
+                            read_typed(perimeter_info_dataset, unique_face_ids),
                             dtype=np.int64,
                         )
                         selected_perimeter_info = unique_perimeter_info[
@@ -576,7 +584,7 @@ class HdfBndry:
                             else np.array([], dtype=np.int64)
                         )
                         selected_perimeter_values = np.asarray(
-                            perimeter_values_dataset[perimeter_value_ids],
+                            read_typed(perimeter_values_dataset, perimeter_value_ids),
                             dtype=np.float64,
                         )
                         perimeter_lookup = {
@@ -625,7 +633,7 @@ class HdfBndry:
 
                     point_ids = np.unique(external_face_points)
                     selected_coordinates = np.asarray(
-                        coordinates_dataset[point_ids], dtype=np.float64
+                        read_typed(coordinates_dataset, point_ids), dtype=np.float64
                     )
                     point_lookup = {
                         int(point_id): selected_coordinates[index]
@@ -635,7 +643,7 @@ class HdfBndry:
                     for row_index, (fp_start, fp_end) in enumerate(external_face_points):
                         if not topology_matches[row_index]:
                             selected_geometries.append(
-                                LineString(
+                                shapely_geometry.LineString(
                                     [
                                         point_lookup[int(fp_start)],
                                         point_lookup[int(fp_end)],
@@ -662,7 +670,7 @@ class HdfBndry:
                                 f"{mesh_name!r} from its external-face point IDs"
                             )
                         selected_geometries.append(
-                            LineString(
+                            shapely_geometry.LineString(
                                 [
                                     point_lookup[int(fp_start)],
                                     *ordered_intermediate,
@@ -735,7 +743,7 @@ class HdfBndry:
                 geoms = HdfBase.get_polylines_from_parts(hdf_path, bc_lines_path)
                 
                 # Get attributes
-                attributes = pd.DataFrame(bc_line_data["Attributes"][()])
+                attributes = pd.DataFrame(read_typed(bc_line_data["Attributes"]))
                 
                 # Convert string columns
                 str_columns = ['Name', 'SA-2D', 'Type']
@@ -757,6 +765,7 @@ class HdfBndry:
                 return gdf
 
         except Exception as e:
+            reraise_required(e)
             logger.error(
                 "Error reading boundary condition lines from %s (%s): %s",
                 hdf_path,
@@ -814,8 +823,8 @@ class HdfBndry:
                     return result
 
                 bl_line_data = hdf_file[breaklines_path]
-                attributes = bl_line_data["Attributes"][()]
-                source_points = bl_line_data["Polyline Points"][()]
+                attributes = read_typed(bl_line_data["Attributes"])
+                source_points = read_typed(bl_line_data["Polyline Points"])
                 diagnostics = []
 
                 # Initialize lists to store valid breakline data
@@ -828,7 +837,7 @@ class HdfBndry:
                 valid_geoms = []
 
                 # Process each breakline
-                for idx, (pnt_start, pnt_cnt, part_start, part_cnt) in enumerate(bl_line_data["Polyline Info"][()]):
+                for idx, (pnt_start, pnt_cnt, part_start, part_cnt) in enumerate(read_typed(bl_line_data["Polyline Info"])):
                     name = HdfUtils.convert_ras_string(attributes["Name"][idx])
 
                     # Validate the native span before tolerating a degenerate
@@ -877,9 +886,9 @@ class HdfBndry:
                         raise ValueError(f"Truncated points for breakline {idx} ({name})")
 
                     if part_cnt == 1:
-                        geom = LineString(points)
+                        geom = shapely_geometry.LineString(points)
                     else:
-                        parts = bl_line_data["Polyline Parts"][()][part_start:part_start + part_cnt]
+                        parts = read_typed(bl_line_data["Polyline Parts"])[part_start:part_start + part_cnt]
                         if part_start < 0 or part_cnt < 1 or len(parts) != part_cnt:
                             raise ValueError(f"Invalid parts for breakline {idx} ({name})")
                         lines = []
@@ -888,7 +897,7 @@ class HdfBndry:
                             if offset < 0 or count < 2 or len(line) != count:
                                 raise ValueError(f"Invalid part for breakline {idx} ({name})")
                             lines.append(line)
-                        geom = MultiLineString(lines)
+                        geom = shapely_geometry.MultiLineString(lines)
 
                     valid_ids.append(idx)
                     valid_names.append(name)
@@ -938,6 +947,7 @@ class HdfBndry:
                 return result
 
         except Exception as e:
+            reraise_required(e)
             logger.error(
                 "Error reading breaklines from %s (%s): %s",
                 hdf_path,
@@ -982,13 +992,13 @@ class HdfBndry:
                     )
                     return gpd.GeoDataFrame()
                 rr_data = hdf_file[refinement_regions_path]
-                attributes = rr_data["Attributes"][()]
+                attributes = read_typed(rr_data["Attributes"])
                 rr_ids = range(len(attributes))
                 names = [HdfUtils.convert_ras_string(name) for name in attributes["Name"]]
-                polygon_points = rr_data["Polygon Points"][()]
-                polygon_parts = rr_data["Polygon Parts"][()] if "Polygon Parts" in rr_data else None
+                polygon_points = read_typed(rr_data["Polygon Points"])
+                polygon_parts = read_typed(rr_data["Polygon Parts"]) if "Polygon Parts" in rr_data else None
                 geoms = list()
-                for pnt_start, pnt_cnt, part_start, part_cnt in rr_data["Polygon Info"][()]:
+                for pnt_start, pnt_cnt, part_start, part_cnt in read_typed(rr_data["Polygon Info"]):
                     try:
                         pnt_start, pnt_cnt = map(_nonnegative_index, (pnt_start, pnt_cnt))
                     except ValueError as exc:
@@ -1015,14 +1025,14 @@ class HdfBndry:
                     except ValueError as exc:
                         raise ValueError(f"Invalid refinement region polygon part: {exc}") from exc
                     if part_cnt <= 1:
-                        geoms.append(Polygon(points))
+                        geoms.append(shapely_geometry.Polygon(points))
                     else:
                         polygons = []
                         for offset, part_pnt_cnt in part_ranges:
                             ring = points[offset : offset + part_pnt_cnt]
                             if len(ring) != part_pnt_cnt or len(ring) < 3:
                                 raise ValueError("Invalid refinement region polygon part")
-                            polygons.append(Polygon(ring))
+                            polygons.append(shapely_geometry.Polygon(ring))
                         geoms.append(_assemble_polygon_rings(polygons))
                 return gpd.GeoDataFrame(
                     {"rr_id": rr_ids, "Name": names, "geometry": geoms},
@@ -1030,6 +1040,7 @@ class HdfBndry:
                     crs=HdfBase.get_projection(hdf_file),
                 )
         except Exception as e:
+            reraise_required(e)
             logger.error(
                 "Error reading refinement regions from %s (%s): %s",
                 hdf_path,
@@ -1069,7 +1080,7 @@ class HdfBndry:
                     )
                     return gpd.GeoDataFrame()
                 
-                attributes = hdf_file[attributes_path][()]
+                attributes = read_typed(hdf_file[attributes_path])
                 refline_ids = range(attributes.shape[0])
                 v_conv_str = np.vectorize(HdfUtils.convert_ras_string)
                 names = v_conv_str(attributes["Name"])
@@ -1107,6 +1118,7 @@ class HdfBndry:
                 return gdf
                 
         except Exception as e:
+            reraise_required(e)
             logger.error(
                 "Error reading reference lines from %s (%s): %s",
                 hdf_path,
@@ -1151,12 +1163,12 @@ class HdfBndry:
                     return gpd.GeoDataFrame()
                 
                 ref_points_group = hdf_file[reference_points_path]
-                attributes = ref_points_group["Attributes"][:]
+                attributes = read_typed(ref_points_group["Attributes"], slice(None))
                 v_conv_str = np.vectorize(HdfUtils.convert_ras_string)
                 names = v_conv_str(attributes["Name"])
                 mesh_names = v_conv_str(attributes["SA/2D"])
                 cell_id = attributes["Cell Index"]
-                points = ref_points_group["Points"][()]
+                points = read_typed(ref_points_group["Points"])
                 
                 gdf = gpd.GeoDataFrame(
                     {
@@ -1164,7 +1176,7 @@ class HdfBndry:
                         "Name": names,
                         "mesh_name": mesh_names,
                         "Cell Index": cell_id,
-                        "geometry": list(map(Point, points)),
+                        "geometry": list(map(shapely_geometry.Point, points)),
                     },
                     geometry="geometry",
                     crs=HdfBase.get_projection(hdf_file),
@@ -1177,6 +1189,7 @@ class HdfBndry:
                 return gdf
                 
         except Exception as e:
+            reraise_required(e)
             logger.error(
                 "Error reading reference points from %s (%s): %s",
                 hdf_path,

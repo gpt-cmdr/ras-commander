@@ -35,6 +35,7 @@ from .HdfBase import HdfBase
 from .HdfUtils import HdfUtils
 from ..Decorators import standardize_input, log_call
 from ..LoggingConfig import get_logger
+from ..fast_hdf import read_attr, read_typed, reraise_required
 
 logger = get_logger(__name__)
 
@@ -184,7 +185,8 @@ class HdfStruc1D:
         for record, dataset in matches:
             flow_label = 'Total Flow' if record['Type'] == 'Inline' else 'Flow'
             quantities = {'Stage HW': 'hw', 'Stage TW': 'tw', flow_label: 'flow'}
-            labels = dataset.attrs['Variable_Unit']
+            labels = read_attr(dataset, 'Variable_Unit')
+            values_2d = None
             selected = set()
             for i, label in enumerate(labels):
                 name = HdfStruc1D._identity_text(label[0])
@@ -194,7 +196,9 @@ class HdfStruc1D:
                 if quantity in selected:
                     raise ValueError(f"{dataset.name}: ambiguous {name} columns")
                 selected.add(quantity)
-                values = dataset[:, i]
+                if values_2d is None:
+                    values_2d = read_typed(dataset)
+                values = values_2d[:, i]
                 if values.size and not np.isnan(values).all():
                     result[f'max_{quantity}'] = float(np.nanmax(values))
                     result[f'{quantity}_source'] = f"{dataset.name} [{name}]"
@@ -227,7 +231,7 @@ class HdfStruc1D:
                 f"'{attrs_path}'. Confirm the plan HDF includes 1D cross-section output."
             )
 
-        attrs_data = hdf_file[attrs_path][()]
+        attrs_data = read_typed(hdf_file[attrs_path])
 
         # Build location lookup
         xs_locations = []
@@ -287,7 +291,7 @@ class HdfStruc1D:
             # Water Surface for headwater
             ws_path = f"{base_path}/Water Surface"
             if ws_path in hdf_file:
-                ws_data = hdf_file[ws_path][:]
+                ws_data = read_typed(hdf_file[ws_path], slice(None))
                 if hw_idx < ws_data.shape[1]:
                     result['max_hw'] = float(np.nanmax(ws_data[:, hw_idx]))
                     result['found'] = True
@@ -296,7 +300,7 @@ class HdfStruc1D:
             # Flow for headwater location
             flow_path = f"{base_path}/Flow"
             if flow_path in hdf_file:
-                flow_data = hdf_file[flow_path][:]
+                flow_data = read_typed(hdf_file[flow_path], slice(None))
                 if hw_idx < flow_data.shape[1]:
                     result['max_flow'] = float(np.nanmax(flow_data[:, hw_idx]))
                     result['flow_source'] = result['hw_source']
@@ -306,7 +310,7 @@ class HdfStruc1D:
             # Water Surface for tailwater
             ws_path = f"{base_path}/Water Surface"
             if ws_path in hdf_file:
-                ws_data = hdf_file[ws_path][:]
+                ws_data = read_typed(hdf_file[ws_path], slice(None))
                 if tw_idx < ws_data.shape[1]:
                     result['max_tw'] = float(np.nanmax(ws_data[:, tw_idx]))
                     result['found'] = True
@@ -364,7 +368,7 @@ class HdfStruc1D:
                     or not set(fields).issubset(table.dtype.names or ())):
                 raise ValueError(f'{table_path}: invalid structure identity columns')
             identities = {}
-            for row in table[()]:
+            for row in read_typed(table):
                 if struct_type == 'Pump':
                     name = text(row['Name'])
                     # Pumps have a Name identity, not a river station. Keep the
@@ -402,7 +406,7 @@ class HdfStruc1D:
                 if not isinstance(structure, h5py.Group):
                     raise ValueError(f'{path}/{name}: expected a structure group')
                 if 'Node Pointer' in structure.attrs:
-                    pointer = np.asarray(structure.attrs['Node Pointer'])
+                    pointer = np.asarray(read_attr(structure, 'Node Pointer'))
                     if pointer.size != 1 or pointer.dtype.kind not in 'iu':
                         raise ValueError(f'{structure.name}: invalid Node Pointer')
                     pointer = int(pointer.item())
@@ -416,7 +420,7 @@ class HdfStruc1D:
                         or dataset.dtype.kind not in 'fi'
                         or dataset.shape[0] != time_rows[0]):
                     raise ValueError(f'{structure.name}/{variable}: invalid numeric time/column layout')
-                labels = np.asarray(dataset.attrs.get('Variable_Unit', []))
+                labels = np.asarray(read_attr(dataset, 'Variable_Unit', []))
                 if labels.shape != (dataset.shape[1], 2):
                     raise ValueError(f'{dataset.name}: invalid or missing Variable_Unit labels')
                 for label in labels.flat:
@@ -465,7 +469,7 @@ class HdfStruc1D:
                     "geometry output."
                 )
 
-        attrs_data = hdf_file[attrs_path][()]
+        attrs_data = read_typed(hdf_file[attrs_path])
 
         xs_locations = []
         for i, attr in enumerate(attrs_data):
@@ -556,7 +560,7 @@ class HdfStruc1D:
         if hw_idx is not None:
             ws_path = f"{base_path}/Water Surface"
             if ws_path in hdf_file:
-                ws_data = hdf_file[ws_path][:]
+                ws_data = read_typed(hdf_file[ws_path], slice(None))
                 if hw_idx < ws_data.shape[1]:
                     result['max_hw'] = float(np.nanmax(ws_data[:, hw_idx]))
                     result['found'] = True
@@ -568,7 +572,7 @@ class HdfStruc1D:
                 flow_path = f"{base_path}/Additional Variables/Flow"
 
             if flow_path in hdf_file:
-                flow_data = hdf_file[flow_path][:]
+                flow_data = read_typed(hdf_file[flow_path], slice(None))
                 if hw_idx < flow_data.shape[1]:
                     result['max_flow'] = float(np.nanmax(flow_data[:, hw_idx]))
                     result['flow_source'] = result['hw_source']
@@ -611,20 +615,20 @@ class HdfStruc1D:
                         source = f"{river}/{reach}/{rs} (Structure output)"
 
                         if "Headwater" in struct_group:
-                            hw_data = struct_group["Headwater"][:]
+                            hw_data = read_typed(struct_group["Headwater"], slice(None))
                             if i < hw_data.shape[1]:
                                 result['max_hw'] = float(np.nanmax(hw_data[:, i]))
                                 result['hw_source'] = source
                                 result['found'] = True
 
                         if "Tailwater" in struct_group:
-                            tw_data = struct_group["Tailwater"][:]
+                            tw_data = read_typed(struct_group["Tailwater"], slice(None))
                             if i < tw_data.shape[1]:
                                 result['max_tw'] = float(np.nanmax(tw_data[:, i]))
                                 result['tw_source'] = source
 
                         if "Flow" in struct_group:
-                            flow_data = struct_group["Flow"][:]
+                            flow_data = read_typed(struct_group["Flow"], slice(None))
                             if i < flow_data.shape[1]:
                                 result['max_flow'] = float(np.nanmax(flow_data[:, i]))
                                 result['flow_source'] = source
@@ -632,6 +636,7 @@ class HdfStruc1D:
                         break
 
         except Exception as e:
+            reraise_required(e)
             logger.debug(f"Could not extract from Structures group: {e}")
 
         return result

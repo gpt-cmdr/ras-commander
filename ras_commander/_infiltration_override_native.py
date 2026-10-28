@@ -29,6 +29,7 @@ import h5py
 import pandas as pd
 
 from .LoggingConfig import get_logger
+from .fast_hdf import read_attr
 from .RasUtils import RasUtils
 from .dotnet.clr_bootstrap import find_hecras_install, load_clr
 
@@ -91,7 +92,7 @@ def _geometry_path(path: Union[str, Path]) -> Path:
         )
     try:
         with h5py.File(resolved, "r") as hdf_file:
-            raw_file_type = hdf_file.attrs.get("File Type")
+            raw_file_type = read_attr(hdf_file, "File Type", None)
             root_groups = set(hdf_file.keys())
     except OSError as exc:
         raise ValueError(f"Could not open geometry HDF read-only: {resolved}") from exc

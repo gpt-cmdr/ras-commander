@@ -89,7 +89,7 @@ Use the **ID** value (2 in this example) for `session_id`.
       "hostname": "192.168.1.10",
       "share_path": "\\\\192.168.1.10\\RasRemote",
       "username": "bill",
-      "password": "pass1",
+      "password": "YOUR_PASSWORD",
       "ras_exe_path": "C:\\Program Files (x86)\\HEC\\HEC-RAS\\6.6\\RAS.exe",
       "session_id": 2,
       "enabled": true
@@ -99,7 +99,7 @@ Use the **ID** value (2 in this example) for `session_id`.
       "hostname": "192.168.1.11",
       "share_path": "\\\\192.168.1.11\\RasRemote",
       "username": "user2",
-      "password": "pass2",
+      "password": "YOUR_PASSWORD",
       "ras_exe_path": "C:\\Program Files\\HEC\\HEC-RAS\\6.3\\RAS.exe",
       "session_id": 2,
       "enabled": true
@@ -109,7 +109,7 @@ Use the **ID** value (2 in this example) for `session_id`.
       "hostname": "192.168.1.12",
       "share_path": "\\\\192.168.1.12\\RasRemote",
       "username": "user3",
-      "password": "pass3",
+      "password": "YOUR_PASSWORD",
       "ras_exe_path": "C:\\Program Files\\HEC\\HEC-RAS\\6.6\\RAS.exe",
       "session_id": 2,
       "enabled": false

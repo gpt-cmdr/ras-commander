@@ -69,6 +69,7 @@ from .GeomReferenceFeatures import GeomReferenceFeatures
 from .GeomBcLines import GeomBcLines
 from .GeomMesh import GeomMesh
 from .GeomMeshRepair import GeomMeshRepair
+from ._seed_repair import ComputationPointRepairPlan
 from .GeomPipeNetwork import GeomPipeNetwork
 from .GeomMeshDataclasses import (
     BCConflict,
@@ -77,6 +78,8 @@ from .GeomMeshDataclasses import (
     DomainContainmentViolation,
     GridAnchor,
     MeshResult,
+    MeshCellSubsetPlan,
+    MeshSeedRepairResult,
 )
 
 __all__ = [
@@ -106,6 +109,9 @@ __all__ = [
     'GeomMeshRepair',
     'GeomPipeNetwork',
     'MeshResult',
+    'MeshCellSubsetPlan',
+    'MeshSeedRepairResult',
+    'ComputationPointRepairPlan',
     'BCConflict',
     'BCFixResult',
     'DomainContainmentResult',

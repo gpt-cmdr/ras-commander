@@ -30,6 +30,431 @@ alone does not identify a development checkout.
 - Defaults are unchanged: `java` remains the default backend, and writes stay
   on Java. See [DSS Read Backends](../user-guide/dss-native-backend.md).
 
+**Caller-supplied cell WSEL profiles for native sloping mapping**
+
+`RasFim.map_sloping_profiles()` and `prepare_sloping_model()` now accept
+`wsel_profiles=`, a wide DataFrame keyed by `mesh_name` and `cell_id`, instead
+of HDF Max/timestep selectors. Complete physical/ghost coverage is required;
+NaN explicitly means dry. The original HDF still supplies geometry and
+hydraulic properties, and the caller independently selects one mapping TIFF.
+Existing defaults are unchanged, and Fast-Map 0.8.0 needs no rebuild. See the
+[input and installation contract](../api/fim.md#supply-cell-wsel-profiles) and
+[selector-equivalence evidence](fim-mapping-performance.md#caller-supplied-wsel-qualification).
+
+**Native fluvial-pluvial boundary on meshes with invalid cells**
+
+`HdfFluvialPluvial.calculate_fluvial_pluvial_boundary` no longer refuses the
+native engine when some cells have invalid geometry (for example
+self-intersecting rings). The Python reference leaves a cell out when its faces
+polygonize to nothing, and with it every cell pair it belongs to. The native
+path now decides this for each invalid cell with the reference polygonizer's
+own rule and drops those pairs, so the lines are identical to the reference's.
+On a 582,934-cell FEMA eBFE model with three self-intersecting cells, `auto`
+took about 92 s (Python fallback) and now takes about 18 s, with identical
+output. `generate_fluvial_pluvial_polygons` still uses the Python reference for
+such meshes. With `diagnostics=True`, `attrs["fluvial_native"]` lists the
+omitted cells as `reference_omitted_cells`.
+
+**Mapping engine moved to its own crate and wheel**
+
+The Rust mapping engine is now maintained in
+[ras-commander-fast-map](https://github.com/gpt-cmdr/ras-commander-fast-map),
+published as a Rust crate and Python binary wheel of the same name. The `fim`
+extra installs its Windows/Linux x64 wheel; `fast-map` installs the engine alone.
+The `ras2fim-batch` command, request/method contracts and `RasFim` signatures
+remain compatible. Commander also locates the installed package's executable
+when its scripts directory is absent from `PATH`.
+
+Engine source, release CI and retained wheels move out of this repository;
+Commander keeps model preparation, public APIs, delivery, comparisons and
+cross-platform integration tests. The 0.8 extraction preserves numerical-module
+fingerprints and makes no new performance claim. The
+[mapping guide](../native-mapping-engine.md) links source, crate, wheel setup,
+release provenance and qualification. Preparing missing corners still requires
+explicit Windows/pythonnet/HEC-RAS preparation; that operation is not Rust-native.
+
+### v0.110.1 (October 2026)
+
+**Faster mesh results, cell polygons and native fluvial-pluvial analysis** (#699)
+
+Python overhead that dominated several public HDF calls on large models is
+removed; results are unchanged (values, dtypes, index, column order, attrs, CRS
+and geometry WKB) in `h5py`, `auto` and `native` mode.
+
+- `HdfFluvialPluvial.calculate_fluvial_pluvial_boundary` and
+  `generate_fluvial_pluvial_polygons` (native path): the snapshot handed to the
+  Rust kernels is built with NumPy instead of per-face and per-cell Python
+  loops (BaldEagleDamBrk.p07, 87,039 cells: about 6.9 s to 0.9 s).
+- `get_mesh_max_ws`, `get_mesh_max_face_v`, `get_mesh_summary` and the other
+  summary readers: geometry is joined by position when it is provably in the
+  same order (the key merge remains the fallback), summary times are converted
+  once per distinct value, and `mesh_name` columns are built without Python
+  lists.
+- `HdfMesh.get_mesh_cell_polygons` (native): large meshes are built and
+  validated in chunks on worker threads; `get_mesh_cell_faces` and
+  `get_mesh_cell_points` concatenate per-mesh arrays.
+- Eager `get_mesh_timeseries` finds the trimmed rows without comparing the
+  whole array; CRS strings are parsed once per process.
+
+Proven identical on all 139 release-gate fixtures (6,038 result digests in
+three modes) and by release gate route1/route2 (every record identical). The
+`ras-commander-fast-hdf` requirement is unchanged (`>=0.2.3,<0.3`).
+
+### v0.110.0 (October 2026)
+
+**Depth-weighted sloping FIM mapping** (#694)
+
+The optional 0.8.0 mapping engine adds
+`RasFim.map_sloping_profiles(..., render_mode="slopingPretty", use_depth_weighted_faces=True)`
+and stored corner-elevation inputs. `RasFim.prepare_corner_elevations()` explicitly
+prepares a fresh native cache on Windows/HEC-RAS 7.0.1 when the plan lacks them;
+mapping then runs without HEC-RAS on Windows/Linux. Cache provenance is verified
+and watched by prepared contexts. Bbox/polygon constraints and bounded timestep
+concurrency remain available. Native cell-face donor history is preserved across
+pixel batches, including predecessors outside an output mask.
+
+Weighted/shallow Max Depth/WSE comparisons match complete masks and float32 bits
+on five real models. Measured mapping ratios range from 1.78× to 7.34× under the
+reported workflow scopes. See the [per-model table and qualification limits](fim-mapping-performance.md#depth-weighted-sloping-faces-engine-08).
+Updated Windows/Linux test wheels, hashes, API usage and benchmarks are included.
+The original source terrain grid/tile layout must be preserved for cell-face
+matching; arbitrary retiled rasters and multi-source mosaics are unqualified.
+
+`RasFim.map_sloping_profiles` reads stored corner elevations with
+`HdfMesh.get_mesh_corner_elevations`, which reads natively with the required
+`ras-commander-fast-hdf>=0.2.3,<0.3` (unchanged from 0.109.0). The optional
+mapping engine (`ras2fim-engine` 0.8.0, Windows and Linux x86-64) was installed
+separately from the [bundled wheel snapshot](https://github.com/gpt-cmdr/ras-commander/tree/c7f910139af3c4df18ae421473dfbebbcf85fec5/wheels)
+and was not published to PyPI at that release. For the external package's
+current installation, see [Native mapping engine](../native-mapping-engine.md).
+
+**Documentation**
+
+- New [Native mapping engine](../native-mapping-engine.md) page; the native
+  engine page covers the HDF and mapping engines and the DSS roadmap.
+- FIM navigation no longer produces duplicate HTML IDs.
+- Measured geometry timings for 0.109.0 (#696): `HdfResultsMesh.get_mesh_max_face_v`,
+  convenient and fast output, before and after, in h5py, auto and native mode.
+  See [Geometry: convenient or fast](../native-engine.md#geometry-convenient-or-fast).
+
+### v0.109.0 (October 2026)
+
+**Native engine 0.2.3 required**
+
+ras-commander now requires `ras-commander-fast-hdf>=0.2.3,<0.3` (bridge API
+11, unchanged). Engine 0.2.3 adds the two native reads used below: mesh corner
+ground elevations and mesh face lines as packed buffers. Both are detected at
+run time, so an older 0.2.x engine still works and those two reads fall back
+to h5py/NumPy.
+
+Qualified with the release equivalence gate on Windows (pandas 2.3.2, numpy
+2.3.3, h5py 3.14.0) against today's previous `main` with engine 0.2.2: every
+stage has the same pass and skip counts, except route 2, which gains the 140
+new corner-elevation cases (13,057 tests, previously 12,917). No result,
+outcome or refusal changed in any of the 28,447 compared records. 190 records
+read differently and give identical results: the face-line readers read the
+packed face lines, and `FacePoints Elevation` is now read through the new
+typed family.
+
+**Mesh corner elevations: what was qualified.** Both stored layouts are read.
+The RASMapper mapping cache was qualified on two caches that RASMapper 7.0.1
+copied from an existing `FacePoints Elevation` (Muncie p03,
+BaldEagleCrkMulti2D p15). It was also checked on one cache that RASMapper
+7.0.1 computed from terrain because the geometry lacks the dataset: the
+HEC-RAS 6.6 Davis example, plan p02, which has 2,851 and 25 corners.
+`get_mesh_corner_elevations` reads that cache natively, bit-identical to h5py,
+with the plan's corner counts. When the cache's terrain date differs from the
+date the mesh was preprocessed against, the result is reported as `"stale"`
+with no values, in both backends. The maintainer's own Davis/Bald Eagle caches
+and the Spring River/Spring Creek projects were not available for this check.
+
+**Rust sloping FIM mapping (`RasFim.map_sloping_profiles`)**
+
+`RasFim.map_sloping_profiles()` maps depth and water-surface rasters with the
+optional Rust mapping engine using RASMapper's Sloping (Cell Corners)
+interpolation; plain sloping is the default, and unweighted Cell Corners + Cell
+Faces and shallow-to-horizontal selection are explicit options.
+`RasFim.prepare_sloping_model()` keeps staged inputs for repeated reach
+requests. The horizontal method now applies native binary32
+`WSE >= float32(terrain + 0.001)` before depth subtraction, fixing pixel
+visibility at the plotting tolerance. Mapping is physical-2D only and needs no
+HEC-RAS installation. The optional FIM engine wheels are not published to PyPI.
+See [FIM API](../api/fim.md).
+
+**`RasProcess.store_maps` accepts sloping render-mode flags**
+
+`RasProcess.store_maps` and `store_maps_at_steady_profiles` now accept
+`render_mode="slopingPretty:a:b"` (for example `"slopingPretty:true:true"`)
+and a dict such as `{"mode": "slopingPretty", "use_depth_weighted_faces": True}`.
+Before, these raised `ValueError` or `AttributeError` before any map was made.
+The mode is validated before the `.rasmap` is written, and its
+`ReduceShallowToHorizontal` and `UseDepthWeightedFaces` settings now match the
+mode that is rendered. Plain mode names behave as before.
+
+**Known open item: the `"sloped"` alias**
+
+`RasMap.set_water_surface_render_mode` treats `"sloped"` as `slopingPretty`,
+but `normalize_store_map_render_mode` treats it as `sloping`, so
+`store_maps(render_mode="sloped")` writes `slopingPretty` to the `.rasmap`
+while the helper renders `sloping`. This is unchanged and awaits a maintainer
+decision; pass `"slopingPretty"` or `"sloping"` explicitly.
+
+**Mesh corner ground elevations**
+
+`HdfMesh.get_mesh_corner_elevations(hdf_path, mesh_name=None, *, postprocessing_hdf=None, source="auto", engine="auto")`
+reads the stored corner (face-point) ground elevations that RASMapper's
+depth-weighted sloping interpolation uses: the geometry layout
+`Geometry/2D Flow Areas/<mesh>/FacePoints Elevation` and the RASMapper mapping
+cache `.../Processed Data/Profile (Horizontal)/FacePoint Elevation` in
+`PostProcessing.hdf`. Values are float32 in `FacePoints Coordinate` order, bit
+for bit as stored, with the source file, dataset, attributes and terrain
+metadata. Source selection is explicit; disagreeing sources are reported as a
+conflict, and a cache is checked for staleness against the mesh and terrain.
+The method only reads and never generates elevations. Native reads need
+ras-commander-fast-hdf 0.2.3; with 0.2.2 `auto` uses h5py. See
+[HDF API](../api/hdf.md#mesh-corner-elevations).
+
+**Mesh geometry built in one vectorized call: convenient or fast output**
+
+- `HdfMesh.get_mesh_cell_faces` builds all face lines of a mesh in one
+  `shapely.from_ragged_array` call from packed coordinate buffers instead of
+  one `LineString` per face. The buffers come from the native engine
+  (`HdfSession.read_mesh_face_lines`, ras-commander-fast-hdf 0.2.3 and later) in
+  `auto` and `native` mode, or from NumPy with h5py or an older extension.
+  The geometry is identical (WKB, coordinate order, validity); layouts that
+  neither builder can prove keep the per-face loop. Face results with
+  geometry (`get_mesh_max_face_v`, `get_mesh_min_face_v`, `get_mesh_summary`
+  for face variables), the reference cell polygonizer, fluvial/pluvial and
+  ModPuls get faster with it. `get_mesh_max_depth` builds its cell-center
+  points with one `shapely.points` call.
+- The docs now name the two outputs: the default `include_geometry=True`
+  GeoDataFrame is the **convenient** output; `include_geometry=False` is the
+  **fast** output, keyed by `mesh_name` plus `cell_id`/`face_id`. Read the
+  geometry once per model with `HdfMesh.get_mesh_cell_faces` or
+  `get_mesh_cell_points` and join the tables to it. See
+  [Geometry: convenient or fast](../native-engine.md#geometry-convenient-or-fast).
+
+**Hydraulic subdomains: optional closed-edge outflow**
+
+`RasSubdomain.plan_breakouts(..., closed_edge_outflow=True)` puts Normal Depth
+outflow lines (slope `closed_edge_friction_slope`, default 0.00033) along a
+breakout's closed edges, each kept `boundary_gap_cells` (default 2) cell faces
+from the outlet, inflow and perimeter lines so no two BC lines share a face. It
+is off by default: it lets water out only, and where flow passes between basins
+both ways the domain should include both basins.
+
+### v0.108.1 (October 2026)
+
+**Public test fixtures (engine 0.2.1)**
+
+The native-engine qualification tests, benchmarks and documentation no longer
+use a non-public HEC-RAS 5.0.7 model. HEC-RAS 5.0.7 2D cases now use the public
+FEMA eBFE Austin-Oyster plan `AustinOyster.p03` (1,872,746 cells; Source: FEMA
+estimated Base Flood Elevation (eBFE) program). Invalid-cell cases use a copy of
+the public `AustinOyster.p01` with two known invalid cells, written at test time
+(`tests/mesh_invalid_cells.py`). Engine 0.2.1 makes the same fixture change; it
+has no API or behaviour change, and ras-commander still requires
+`ras-commander-fast-hdf>=0.2,<0.3`. The fixture change does not affect library behaviour.
+
+**Hydraulic subdomains: breakout authoring, runs and parent comparison**
+
+`RasSubdomain.plan_breakouts` / `apply_breakouts` / `validate_breakouts` turn
+subdomains into exact-cell breakout models (HEC-RAS 6.6) with normal-depth
+outlets, perimeter normal depth and upstream inflow hydrographs.
+`compute_subdomains` runs them tier by tier with the hydrograph hand-off, and
+`compare_to_parent` reports maximum-WSE and outlet agreement. Children are held
+at the parent's minimum time step by default. Natively compiled parent geometry
+HDFs (stamped `HEC-RAS Results`, sole root group `Geometry`) are now accepted as
+cell-subset sources.
+
+**Hydraulic subdomains: split lines and nested subdomains (`RasSubdomain`)**
+
+`ras_commander.subdomain.RasSubdomain.find_split_lines()` finds normal-depth
+split lines in a 2D parent's native `Face Flow` along TauDEM stream links.
+`build_subdomains()` traces and nests their footprints into tiered subdomains
+plus a remainder. New frames: `subdomain_split_lines`,
+`subdomain_split_candidates`, `subdomain_partition`, `subdomain_cell_owner`.
+Read only; feet models only in this release.
+
+**TauDEM delineation (`RasTauDem`)**
+
+`ras_commander.terrain.RasTauDem` runs the TauDEM 5 D8 tools (PitRemove,
+D8FlowDir, AreaD8, Threshold, StreamNet) on a DEM and returns the stream links
+and catchments as GeoDataFrames (schemas `taudem_streams`, `taudem_catchments`).
+TauDEM and MPI are external programs, found by argument, environment variable
+or `PATH`; RAS Commander does not install them. It is the first part of the
+hydraulic-subdomain workflow, which takes its pour points and contributing
+areas from these links.
+
+**Typed tables for per-cell HDF results; geometry-free imports**
+
+- **`include_geometry=False`** (keyword-only) returns a pandas `DataFrame`
+  instead of a GeoDataFrame from `HdfResultsMesh.get_mesh_max_ws`,
+  `get_mesh_min_ws`, `get_mesh_max_face_v`, `get_mesh_min_face_v`,
+  `get_mesh_max_ws_err`, `get_mesh_max_iter`, `get_mesh_last_iter`,
+  `get_mesh_summary`, `get_mesh_summary_output` and `get_mesh_max_depth`;
+  `HdfMesh.get_mesh_cell_points`; `HdfResultsSediment.get_cell_bed_change`,
+  `get_cell_bed_elevation` and `get_active_layer_grain_class`; and
+  `HdfPump.get_pump_stations`. The table has the same rows, order, values and
+  `attrs`, keeps the stored value dtypes (no `float64` upcast), uses `int64`
+  IDs and a string `mesh_name` (never `object`), and needs no
+  GeoPandas/Shapely. Point readers give `x`/`y` columns. The default is
+  unchanged. See
+  [Typed tables without geometry](../user-guide/hdf-data-extraction.md#typed-tables-without-geometry).
+- **Geometry-free imports:** `HdfBndry`, `HdfXsec` and `HdfStruc` (and so
+  `HdfStorageArea`, `HdfProject` and `HdfResultsBreach.get_breaching_variables`)
+  import without GeoPandas, Shapely or pyproj; the geometry functions load
+  them when called.
+- **Internal callers use the tables** where they need no geometry:
+  `CheckUnsteady.check_stability`/`check_mesh_quality`, `HdfResultsQuery`
+  point queries, `HdfFluvialPluvial` boundary/polygon timing, the native
+  fluvial-pluvial peaks, `RasFim.get_cells_from_plan_hdf`, `RasMonteCarlo`,
+  `RasPermutation` and `PrecipMrms` flood points. Their results are unchanged.
+
+### v0.108.0 (October 2026)
+
+**Native HDF engine 0.2.0; faster small native reads**
+
+`ras-commander-fast-hdf>=0.2,<0.3` is now the core dependency, so
+`pip install ras-commander` installs engine 0.2.x on Windows x64, Linux x64
+and macOS arm64 (same environment marker as 0.107.1).
+
+- **Engine 0.2.0** is one Rust crate, published on PyPI and, for Rust
+  programs, on [crates.io](https://crates.io/crates/ras-commander-fast-hdf).
+  Its Python API, `API_VERSION` (11) and results are unchanged. HEC-RAS 5.0
+  row-label water-surface summaries (`domain_rule` `legacy_row_labels`) now
+  read natively; values are the same as before.
+- **Faster small reads.** A public `Hdf*` call opens each HDF once and shares
+  that native session across its typed reads; it used to open the file 3 to
+  23 times. In the release benchmark (50 method × file cases, results identical
+  in every mode), the native engine is 1.17× faster than h5py on a first call
+  and 1.41× on repeat calls (geometric mean; 0.107.1 with engine 0.1.1: 1.07×
+  and 1.27×). Cross-section reads no longer decode the property-table values
+  they do not use (`get_cross_sections` first call on BaldEagle: 141 → 26 ms; h5py 17 ms),
+  and `HdfMesh.get_mesh_area_attributes` reads its table once.
+- **HDFs rewritten during a call are read anew.** File identity (size and
+  modification time) is checked on every native read, so a file rewritten in
+  the middle of a public call (in place with h5py, after
+  `fast_hdf.release_native_sessions`, or by HEC-RAS / RAS Mapper) is never
+  served from a stale cache.
+- **Licence file names:** the engine's licence in the wheel is now
+  `ras-commander-fast-hdf-LICENSE.txt` (was `ras-commander-rust-LICENSE.txt`).
+- **Contributors:** the optional source-checkout tests follow the engine's
+  single-crate layout (`src/python/`, `src/exports/`, `tests/`).
+
+See [Native Rust HDF engine](../native-engine.md#performance).
+
+### v0.107.1 (October 2026)
+
+**The native Rust HDF engine is installed by default**
+
+`ras-commander-fast-hdf>=0.1,<0.2` is now a core dependency, so
+`pip install ras-commander` installs the native HDF engine. An environment
+marker limits it to the platforms with published wheels: CPython on Windows x64
+(`platform_system == "Windows" and platform_machine == "AMD64"`), Linux x64
+(`"Linux"`, `"x86_64"`) and macOS arm64 (`"Darwin"`, `"arm64"`). pip therefore
+never tries to compile the Rust source distribution on other platforms.
+
+- **Behaviour:** unchanged public results. The default `auto` mode reads
+  natively where the method is qualified and uses h5py, the reference
+  implementation, for any read the engine refuses and for methods not yet
+  proven on the test corpus.
+- **Opt out:** set `RAS_COMMANDER_FAST_HDF=h5py` to use h5py for every read.
+  The package stays installed, but no HDF read uses it.
+- **Other platforms** (for example Linux aarch64, macOS x86_64, Windows ARM64,
+  PyPy): the engine is not installed, and every read uses h5py, as in 0.107.0.
+  `pip install "ras-commander[fast]"` still requests it there, which builds it
+  from source and needs Rust. On Linux x64 with glibc older than 2.28 or musl,
+  and on free-threaded CPython, the marker matches but no wheel does; see
+  [Installation](../native-engine.md#installation).
+- **Extras:** `fast` and `fast-hdf` are no longer needed and are kept so
+  existing install commands keep working.
+
+See [Native Rust HDF engine](../native-engine.md).
+
+### v0.107.0 (October 2026)
+
+**Native HDF extension moved to its own repository and published on PyPI**
+
+The optional native extension, `ras-commander-fast-hdf`, and its engine now
+live in
+[gpt-cmdr/ras-commander-fast-hdf](https://github.com/gpt-cmdr/ras-commander-fast-hdf)
+(MIT licence). It is published on PyPI, so install it with
+`pip install "ras-commander[fast]"` or `pip install ras-commander-fast-hdf`
+instead of building it from this repository. The `rust/fast-hdf` folder is
+removed. ras-commander's behaviour and the required extension `API_VERSION`
+(11) do not change. The extension's `ENGINE_COMMIT` is now the commit of the
+new repository the wheel was built from (`b2ab828` for 0.1.0). See
+[Native Rust HDF engine](../native-engine.md#installing-the-extension).
+
+**Optional native (Rust) HDF backend (additive; default results unchanged)**
+
+`ras_commander.fast_hdf` adds an optional native backend for HDF reads, mesh
+polygon assembly and direct PMTiles/Arrow export. It is used only when the
+separately installed `ras-commander-fast-hdf` extension (API version 11) is
+installed; ordinary installations are unaffected. In the default automatic
+mode every public `Hdf*` result, dtype, column, attribute and exception is
+the h5py result: any native failure falls back to h5py.
+
+- Engine vocabulary: every selector and `RAS_COMMANDER_FAST_HDF` use `auto`
+  (default; native first, h5py on any refusal), `h5py` (never native) and
+  `native` (native or `FastHdfError`). Legacy spellings `0`/`python` and
+  `required`/`rust` are still accepted. Functions whose native path the test
+  corpus has not yet exercised run on h5py in auto mode
+  (`fast_hdf.UNQUALIFIED_NATIVE`).
+- Environment: `RAS_COMMANDER_FAST_HDF`, `RAS_COMMANDER_HDF_SESSION_CACHE` (native file sessions; none stays
+  open after a public call returns unless set to `persist`) and
+  `RAS_COMMANDER_FAST_TEXT` (only for direct `fast_text` callers).
+- Supported `fast_hdf` names: `available`, `close_sessions`, `FastHdfError`,
+  `FastHdfPanicError`, `mesh_polygons`, `packed_meshes`, `export_pmtiles`,
+  `export_mesh_pmtiles`, `export_arrow` and `export_arrow_pmtiles`. Other
+  `fast_hdf`/`fast_results` names and `hdf/HdfFluvialNative` are internal.
+- New keyword-only parameters: `HdfMesh.get_mesh_cell_polygons(..., engine="auto",
+  threads=None, diagnostics=False)` and
+  `HdfMesh.diagnose_mesh_cell_polygons(..., engine="auto")`;
+  `HdfFluvialPluvial.calculate_fluvial_pluvial_boundary(..., engine="auto")`
+  and `generate_fluvial_pluvial_polygons(..., engine="auto")`, with
+  `FluvialNativeUnsupportedError` (a `ValueError`, in
+  `ras_commander.hdf.HdfFluvialPluvial`) for inputs the native engine cannot
+  reproduce. In auto mode every result is the reference result.
+- Behaviour change: `HdfMesh.get_mesh_cell_polygons` attaches
+  `attrs["cell_polygon_diagnostics"]` only with `diagnostics=True` (it was
+  always attached); `diagnose_mesh_cell_polygons` is unchanged. Fluvial results
+  carry `attrs["fluvial_engine"]` (which engine produced them); native kernel
+  timings and counts (`attrs["fluvial_native"]`) only with `diagnostics=True`.
+- New `HdfUtils` helpers: `get_units_system`, `linear_unit_to_meters`,
+  `area_to_square_meters`, `get_stored_ras_version` and
+  `parse_ras_file_version`.
+
+See [Optional Rust acceleration](../api/hdf.md#optional-rust-acceleration).
+
+**Legacy 2D `Log Hydraulics` diagnostic reader (new API)**
+
+`HdfResultsMesh.get_mesh_log_hydraulics(hdf_path, mesh_name)` reads the
+per-mesh `Log Hydraulics` table that HEC-RAS 6.0-6.3.x can write beside 2D
+Base Output. It returns the ten producer-labelled fields as named columns with
+Base Output time provenance. It accepts only HEC-RAS 6.0-6.3.x files and the
+producer's exact `Column N` labels. Units come only from label suffixes that
+agree with the file's `Units System`; values are never converted. Row semantics
+within an output interval and the cell-location index base are not
+established. The table is a diagnostic, not proof of convergence.
+`get_mesh_timeseries()` and `iter_mesh_timeseries()` continue to refuse the
+dataset, so its columns are never read as cells or faces.
+
+**Raw diagnostic for unqualified mesh series; viscosity refusal retained**
+
+`HdfResultsMesh.inspect_mesh_series_raw()` is a new read-only diagnostic for one
+stored Base Output mesh series. It returns the dataset path, file version,
+shape, dtype, stored attributes, Time row match, stored geometry counts and the
+typed readers' qualification outcome or refusal reason. Axes are `raw_row` and
+`raw_column`; `physical_domain` and `units_interpretation` are always
+`"unqualified"`. It assigns no cell or face identifiers, timestamps or unit
+conversions. Existing typed readers are unchanged: `Face Mixture Dynamic
+Viscosity`, whose `Location=Faces` label contradicts its stored-cell width in
+the inspected HEC-RAS 6.6 and 7.0.1 output, remains refused. `Face Yield Stress`
+and `Face Viscous Stress` remain qualified face series. Public synthetic tests
+pin both contracts. Readable output does not establish hydraulic convergence.
+
 **Compute-message classification rejects observed early termination**
 
 `ResultsParser` classifies `Unsteady Flow Simulation Terminated` and the
@@ -45,6 +470,25 @@ synthetic controls. It does not qualify all plan types or independently
 verify the final result timestamp. The broader message corpus and endpoint
 coverage checks in #403 remain open. Existing HDF structure, freshness and
 explicit error-check opt-outs are unchanged.
+
+**Mesh series availability diagnostics for one-row placeholders**
+
+Eager, view and streamed `HdfResultsMesh` time-series reads still refuse a
+dataset whose rows differ from the Base Output `Time` axis. They now raise
+`MeshSeriesAvailabilityError`, a `ValueError` subclass with the historical
+message prefix. It names the dataset, its row count, the clock length,
+stored bytes and a `disposition`. `"unwritten_placeholder"` means that the
+producer stored no data, so the readable values are only HDF5 fill values.
+`"row_count_mismatch"` means stored data that cannot be aligned. The new
+`HdfResultsMesh.get_mesh_timeseries_availability()` reports these
+dispositions per dataset from metadata only.
+
+HEC-RAS 6.6 and 7.0.1 public-example runs without wind forcing leave
+`Face Wind Term` as an extendable one-row dataset with no stored chunks.
+HEC-RAS 6.6 Diffusion Wave runs also leave `Face Water Surface` this way;
+7.0.1 writes it in full. These datasets are reported as unavailable. They
+are not broadcast, given timestamps or interpreted as a constant zero field.
+Successful reads, signatures and the face/cell discovery skips are unchanged.
 
 **Mesh operations use one successful status (API behavior change)**
 

@@ -21,6 +21,7 @@ import pandas as pd
 from scipy.optimize import minimize
 
 from .Decorators import log_call
+from .fast_hdf import reraise_required
 from .LoggingConfig import get_logger
 from .RasCmdr import RasCmdr
 from .RasPermutation import RasPermutation
@@ -452,7 +453,8 @@ def _normalize_steady_wse_frame(
                 profile_names = HdfResultsPlan.get_steady_profile_names(plan_hdf)
                 if len(profile_names) == 1:
                     resolved_profile = profile_names[0]
-            except Exception:
+            except Exception as exc:
+                reraise_required(exc)
                 resolved_profile = None
         result["Profile"] = resolved_profile or "Profile_1"
 
@@ -738,6 +740,7 @@ def _get_reference_dataset(
         if len(dataset.data_vars) > 0:
             return dataset
     except Exception as exc:
+        reraise_required(exc)
         logger.debug(
             "Reference %s getter failed for %s; falling back to internal "
             "helper: %s",

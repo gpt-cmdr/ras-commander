@@ -1,0 +1,36 @@
+{
+  "license": "MIT",
+  "purpose": "Supplemental binding conversions; real qualification is separate",
+  "files": [
+    {
+      "file": "tolerant.h5",
+      "source_kind": "engine_owned_fixture",
+      "engine_commit": "62fb45d97245d2634f23334b7669e744702575b5",
+      "engine_relative_path": "crates/ras-commander-rust/tests/fixtures/attribute-isolation/tolerant.h5",
+      "sha256": "2404f5cb8578ac5f7abbeeae42d0a0b722d52df339819fc1421864faffda1fe5"
+    },
+    {
+      "file": "corrupt-projection.h5",
+      "source_kind": "engine_owned_fixture",
+      "engine_commit": "62fb45d97245d2634f23334b7669e744702575b5",
+      "engine_relative_path": "crates/ras-commander-rust/tests/fixtures/attribute-isolation/corrupt-projection.h5",
+      "sha256": "48cff7084c919a4cff477fc906eedab098a482a19578d9419b8920d476a2fdd1"
+    },
+    {
+      "file": "steady.h5",
+      "source_kind": "synthetic_run_evidence",
+      "generator": "generate_1d.py",
+      "generator_sha256": "550b0c70a89c12f4c792eaac49392bd6cae805b8c2c55faeee54815c2d2f2940",
+      "description": "Regenerated two-section supplemental 1D binding fixture; not real computed HEC-RAS evidence",
+      "sha256": "4c87d84da5935ea0387e7daa82f5666ef157e391183eabf98b47ec7ab7f2dbf8"
+    },
+    {
+      "file": "unsteady.h5",
+      "source_kind": "synthetic_run_evidence",
+      "generator": "generate_1d.py",
+      "generator_sha256": "550b0c70a89c12f4c792eaac49392bd6cae805b8c2c55faeee54815c2d2f2940",
+      "description": "Regenerated two-section supplemental 1D binding fixture; not real computed HEC-RAS evidence",
+      "sha256": "7096f854c408ad92a8610930bee97bb663a3711b25d2dd2bbff2abf315c6b892"
+    }
+  ]
+}

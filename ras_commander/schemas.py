@@ -29,7 +29,7 @@ Each entry of :data:`DATAFRAME_SCHEMAS`:
 """
 
 # Schema contract version -- bump when the documented column surface changes meaningfully.
-SCHEMA_VERSION = "1.26"
+SCHEMA_VERSION = "1.32"
 
 _GEOMETRY_ASSOCIATION_COLUMNS = [
     {"name": "geom_number", "dtype": "str", "description": "Normalized geometry identifier."},
@@ -60,6 +60,253 @@ _GEOMETRY_ASSOCIATION_COLUMNS = [
 ]
 
 DATAFRAME_SCHEMAS = {
+    "geometry_breaklines": {
+        "description": "Authored geometry-text breaklines, source coordinates and units; CRS unset.",
+        "accessor": "GeomStorage.get_breaklines(geom_file)",
+        "source": "ras_commander.geom.GeomStorage.GeomStorage.get_breaklines()",
+        "extra_columns": False,
+        "dynamic": False,
+        "columns": [
+            {
+                "name": "Name",
+                "dtype": "str",
+                "description": "Unpadded authored name, in file order."
+            },
+            {
+                "name": "cell_size_min",
+                "dtype": "float | None",
+                "description": "Stored minimum cell spacing; None for a blank field."
+            },
+            {
+                "name": "cell_size_max",
+                "dtype": "float | None",
+                "description": "Stored maximum cell spacing; None for a blank field."
+            },
+            {
+                "name": "declared_points",
+                "dtype": "int",
+                "description": "Declared vertex count, validated against the packed payload."
+            },
+            {
+                "name": "geometry",
+                "dtype": "LineString",
+                "description": "Ordered authored vertices; degenerate blocks are named in attrs.skipped_degenerate."
+            }
+        ]
+    },
+    "geometry_2d_computation_points": {
+        "description": "Authored 2D seed points from geometry text, source coordinates and units; CRS unset.",
+        "accessor": "GeomStorage.get_2d_computation_points(geom_file)",
+        "source": "ras_commander.geom.GeomStorage.GeomStorage.get_2d_computation_points()",
+        "extra_columns": False,
+        "dynamic": False,
+        "columns": [
+            {
+                "name": "flow_area",
+                "dtype": "str",
+                "description": "Exact unpadded storage-area name."
+            },
+            {
+                "name": "point_index",
+                "dtype": "int",
+                "description": "Zero-based point index local to the area, in file order."
+            },
+            {
+                "name": "geometry",
+                "dtype": "Point",
+                "description": "Authored seed point; not a compiled mesh cell. All declarations are retained in attrs.declared_counts."
+            }
+        ]
+    },
+    "taudem_streams": {
+        "description": "TauDEM StreamNet stream links, one row per link, in the DEM CRS.",
+        "accessor": "RasTauDem.delineate(dem_path, dest_folder).streams",
+        "source": "ras_commander.terrain.RasTauDem.RasTauDem.delineate()",
+        "extra_columns": True,
+        "dynamic": False,
+        "columns": [
+            {"name": "LINKNO", "dtype": "int64", "description": "TauDEM link id."},
+            {"name": "DSLINKNO", "dtype": "int64", "description": "Downstream link id; -1 at an outlet."},
+            {"name": "USLINKNO1", "dtype": "int64", "description": "First upstream link id; -1 at a headwater."},
+            {"name": "USLINKNO2", "dtype": "int64", "description": "Second upstream link id; -1 when absent."},
+            {"name": "strmOrder", "dtype": "int64", "description": "Strahler order."},
+            {"name": "Length", "dtype": "float", "description": "Link length in DEM horizontal units."},
+            {"name": "Slope", "dtype": "float", "description": "Link drop over length (dimensionless)."},
+            {"name": "DSContArea", "dtype": "float", "description": "Contributing area at the link outlet, DEM horizontal units squared."},
+            {"name": "contributing_area_sqmi", "dtype": "float", "description": "DSContArea in square miles."},
+            {"name": "geometry", "dtype": "LineString", "description": "Link line; its first vertex is the link outlet."},
+        ],
+    },
+    "subdomain_breakout_checks": {
+        "description": "Checks of planned or authored subdomain breakouts; blocking rows stop apply_breakouts.",
+        "accessor": "RasSubdomain.plan_breakouts(...).checks / RasSubdomain.validate_breakouts(breakout_set)",
+        "source": "ras_commander.subdomain._breakouts",
+        "extra_columns": False,
+        "dynamic": False,
+        "columns": [
+            {"name": "subdomain_id", "dtype": "str", "description": "Subdomain, or '*' for a plan-wide check."},
+            {"name": "check", "dtype": "str", "description": "Check name, for example breakout_preflight, preprocess, bc_line:<name>."},
+            {"name": "passed", "dtype": "bool", "description": "Whether the check passed."},
+            {"name": "blocking", "dtype": "bool", "description": "True when a failed check blocks authoring."},
+            {"name": "detail", "dtype": "str", "description": "Human-readable evidence."},
+        ],
+    },
+    "subdomain_compute_runs": {
+        "description": "One row per computed subdomain breakout.",
+        "accessor": "RasSubdomain.compute_subdomains(breakout_set)",
+        "source": "ras_commander.subdomain._breakouts.compute_subdomains()",
+        "extra_columns": False,
+        "dynamic": False,
+        "columns": [
+            {"name": "subdomain_id", "dtype": "str", "description": "Subdomain."},
+            {"name": "tier", "dtype": "int", "description": "Tier it ran in."},
+            {"name": "plan_number", "dtype": "str", "description": "Child plan in the working project."},
+            {"name": "success", "dtype": "bool", "description": "Plan computed."},
+            {"name": "tier_wall_clock_s", "dtype": "float", "description": "Wall clock of the tier's compute_parallel call, s."},
+            {"name": "plan_hdf_path", "dtype": "str", "description": "Child plan HDF."},
+        ],
+    },
+    "subdomain_parent_comparison": {
+        "description": "Per-subdomain comparison of a computed breakout with the parent on the same cells and outlet faces.",
+        "accessor": "RasSubdomain.compare_to_parent(breakout_set, parent_plan_hdf_path)",
+        "source": "ras_commander.subdomain._breakouts.compare_to_parent()",
+        "extra_columns": False,
+        "dynamic": False,
+        "columns": [
+            {"name": "subdomain_id", "dtype": "str", "description": "Subdomain."},
+            {"name": "status", "dtype": "str", "description": "compared or no results."},
+            {"name": "cells", "dtype": "int", "description": "Child cells."},
+            {"name": "cells_matched_to_parent", "dtype": "int", "description": "Child cells whose centre matches a parent cell."},
+            {"name": "wet_cells_compared", "dtype": "int", "description": "Cells wet above the depth threshold in both."},
+            {"name": "wse_diff_p50_ft", "dtype": "float", "description": "Median absolute maximum-WSE difference, ft."},
+            {"name": "wse_diff_p95_ft", "dtype": "float", "description": "95th percentile, ft."},
+            {"name": "wse_diff_p99_ft", "dtype": "float", "description": "99th percentile, ft."},
+            {"name": "wse_diff_max_ft", "dtype": "float", "description": "Largest absolute difference, ft."},
+            {"name": "wse_diff_mean_ft", "dtype": "float", "description": "Mean signed difference (child minus parent), ft."},
+            {"name": "wet_extent_iou", "dtype": "float", "description": "Intersection over union of the wet cells."},
+            {"name": "outlet_peak_parent_cfs", "dtype": "float", "description": "Parent peak flow across the outlet split line."},
+            {"name": "outlet_peak_child_cfs", "dtype": "float", "description": "Child outlet BC peak flow."},
+            {"name": "outlet_peak_diff_pct", "dtype": "float", "description": "Peak difference, percent."},
+            {"name": "outlet_peak_time_diff_h", "dtype": "float", "description": "Child minus parent peak time, h."},
+            {"name": "outlet_volume_diff_pct", "dtype": "float", "description": "Event volume difference, percent."},
+            {"name": "outlet_nse", "dtype": "float", "description": "Nash-Sutcliffe efficiency of the child outlet against the parent."},
+        ],
+    },
+    "subdomain_split_lines": {
+        "description": "Accepted normal-depth split lines, one per TauDEM pour point; per-event metrics carry an _<event> suffix.",
+        "accessor": "RasSubdomain.find_split_lines(...).split_lines",
+        "source": "ras_commander.subdomain.RasSubdomain.RasSubdomain.find_split_lines()",
+        "extra_columns": True,
+        "dynamic": False,
+        "columns": [
+            {"name": "split_line_id", "dtype": "int64", "description": "TauDEM LINKNO of the pour point."},
+            {"name": "also_link_ids", "dtype": "list[int]", "description": "Other pour points whose chosen line is the same set of faces."},
+            {"name": "walk_step", "dtype": "int", "description": "Walk-up step of the chosen line (0 at the link outlet)."},
+            {"name": "distance_up_ft", "dtype": "float", "description": "Distance up the link from its outlet, ft."},
+            {"name": "seed_face_id", "dtype": "int", "description": "Face the channel crosses where the line grew from."},
+            {"name": "face_ids", "dtype": "list[int]", "description": "Parent faces of the line, bank to bank."},
+            {"name": "face_signs", "dtype": "list[float]", "description": "+1 where the stored face normal points downstream, else -1."},
+            {"name": "line_length_ft", "dtype": "float", "description": "Sum of face lengths, ft."},
+            {"name": "downstream_x", "dtype": "float", "description": "Unit downstream direction, x."},
+            {"name": "downstream_y", "dtype": "float", "description": "Unit downstream direction, y."},
+            {"name": "link_slope", "dtype": "float", "description": "TauDEM link slope."},
+            {"name": "normal_depth_slope", "dtype": "float", "description": "Mean best-fit normal-depth friction slope over the events."},
+            {"name": "contributing_area_sqmi", "dtype": "float", "description": "Area of the link's upstream catchments, sq mi."},
+            {"name": "contributing_inside_fraction", "dtype": "float", "description": "Share of that area inside the parent mesh."},
+            {"name": "labels", "dtype": "list[str]", "description": "Information labels: SHARED_LINE, CONTRIBUTING_AREA_EXTENDS_PAST_MESH."},
+            {"name": "geometry", "dtype": "LineString", "description": "Line along the parent faces, parent CRS."},
+        ],
+    },
+    "subdomain_split_candidates": {
+        "description": "Every scored walk-up step and event of the split-line search, with the criteria it failed.",
+        "accessor": "RasSubdomain.find_split_lines(...).candidates",
+        "source": "ras_commander.subdomain.RasSubdomain.RasSubdomain.find_split_lines()",
+        "extra_columns": False,
+        "dynamic": False,
+        "columns": [
+            {"name": "split_line_id", "dtype": "int64", "description": "TauDEM LINKNO of the pour point."},
+            {"name": "event", "dtype": "str", "description": "Event label (plan ShortID)."},
+            {"name": "walk_step", "dtype": "int", "description": "Walk-up step."},
+            {"name": "distance_up_ft", "dtype": "float", "description": "Distance up the link, ft."},
+            {"name": "seed_face_id", "dtype": "int", "description": "Seed face."},
+            {"name": "face_count", "dtype": "int", "description": "Faces in the line."},
+            {"name": "line_length_ft", "dtype": "float", "description": "Line length, ft."},
+            {"name": "closed", "dtype": "bool", "description": "Both banks closed on the wet edge."},
+            {"name": "link_slope", "dtype": "float", "description": "TauDEM link slope."},
+            {"name": "peak_flow", "dtype": "float", "description": "Peak native flow across the line, ft3/s."},
+            {"name": "line_volume", "dtype": "float", "description": "Net event volume across the line, ft3."},
+            {"name": "reverse_fraction", "dtype": "float | None", "description": "Upstream share of gross volume."},
+            {"name": "best_slope", "dtype": "float | None", "description": "Best single normal-depth slope."},
+            {"name": "rmse_ft", "dtype": "float | None", "description": "Stage RMSE at the best slope, ft."},
+            {"name": "peak_error_ft", "dtype": "float | None", "description": "Stage error at the flow peak, ft."},
+            {"name": "loop_ft", "dtype": "float | None", "description": "Rising minus falling mean error, ft."},
+            {"name": "rmse_bed_slope_ft", "dtype": "float | None", "description": "Stage RMSE at the link slope, ft."},
+            {"name": "contributing_outflow", "dtype": "float", "description": "Outward event volume of the contributing area, ft3."},
+            {"name": "outflow_share", "dtype": "float | None", "description": "line_volume over contributing_outflow."},
+            {"name": "failed_criteria", "dtype": "list[str]", "description": "LINE_OPEN, REVERSE_FLOW, NORMAL_DEPTH_RMSE, NORMAL_DEPTH_PEAK, NORMAL_DEPTH_LOOP, SLOPE_RATIO, OUTFLOW_SHARE, NO_FLOW."},
+            {"name": "passes", "dtype": "bool", "description": "No failed criteria in this event."},
+            {"name": "chosen", "dtype": "bool", "description": "The accepted step of an accepted split line."},
+        ],
+    },
+    "subdomain_partition": {
+        "description": "Nested subdomains of a parent plus the remainder; per-event exchange volumes carry an _<event> suffix.",
+        "accessor": "RasSubdomain.build_subdomains(search).subdomains",
+        "source": "ras_commander.subdomain.RasSubdomain.RasSubdomain.build_subdomains()",
+        "extra_columns": True,
+        "dynamic": False,
+        "columns": [
+            {"name": "subdomain_id", "dtype": "str", "description": "Split-line id as text, or 'remainder'."},
+            {"name": "split_line_id", "dtype": "int64 | None", "description": "Outlet split line; None for the remainder."},
+            {"name": "tier", "dtype": "int", "description": "1 for headwater subdomains; upstream tiers run first."},
+            {"name": "role", "dtype": "str", "description": "headwater, downstream or remainder."},
+            {"name": "upstream_subdomain_ids", "dtype": "list[str]", "description": "Subdomains whose outlets flow into this one."},
+            {"name": "cell_count", "dtype": "int", "description": "Parent cells owned."},
+            {"name": "area_sqmi", "dtype": "float", "description": "Area of the owned cells, sq mi."},
+            {"name": "footprint_cell_count", "dtype": "int", "description": "Cells of the full traced footprint."},
+            {"name": "dropped_area_sqmi", "dtype": "float", "description": "Footprint parts dropped as detached, sq mi."},
+            {"name": "labels", "dtype": "list[str]", "description": "CLOSED_EDGE_LEAKAGE, FOOTPRINT_OVERLAP, FOOTPRINT_PARTS_DROPPED, MULTIPART, STRUCTURE_ON_SPLIT_LINE, INTERIOR_SUBDOMAIN, HOLES."},
+            {"name": "geometry", "dtype": "Polygon | MultiPolygon", "description": "Union of the owned cells, parent CRS."},
+        ],
+    },
+    "subdomain_cell_owner": {
+        "description": "Owning subdomain of every physical parent cell.",
+        "accessor": "RasSubdomain.build_subdomains(search).cell_owner",
+        "source": "ras_commander.subdomain.RasSubdomain.RasSubdomain.build_subdomains()",
+        "extra_columns": False,
+        "dynamic": False,
+        "columns": [
+            {"name": "cell_id", "dtype": "int64", "description": "Parent physical cell id."},
+            {"name": "subdomain_id", "dtype": "str", "description": "Owning subdomain."},
+        ],
+    },
+    "taudem_catchments": {
+        "description": "Polygonized TauDEM StreamNet watershed grid, one row per link.",
+        "accessor": "RasTauDem.delineate(dem_path, dest_folder).catchments",
+        "source": "ras_commander.terrain.RasTauDem.RasTauDem.delineate()",
+        "extra_columns": False,
+        "dynamic": False,
+        "columns": [
+            {"name": "LINKNO", "dtype": "int64", "description": "Link whose local catchment this is."},
+            {"name": "DSLINKNO", "dtype": "int64", "description": "Downstream link id; -1 at an outlet."},
+            {"name": "strmOrder", "dtype": "int64", "description": "Strahler order of the link."},
+            {"name": "area", "dtype": "float", "description": "Catchment area, DEM horizontal units squared."},
+            {"name": "area_sqmi", "dtype": "float", "description": "Catchment area in square miles."},
+            {"name": "geometry", "dtype": "Polygon | MultiPolygon", "description": "Catchment polygon in the DEM CRS."},
+        ],
+    },
+    "geometry_bc_lines": {
+        "description": "Authored BC line identities and ordered vertices from plain-text geometry, in file order.",
+        "accessor": "GeomBcLines.get_bc_lines(geom_file)",
+        "source": "ras_commander.geom.GeomBcLines.GeomBcLines.get_bc_lines()",
+        "extra_columns": False,
+        "dynamic": False,
+        "columns": [
+            {"name": "name", "dtype": "str", "description": "BC line name with surrounding whitespace removed."},
+            {"name": "storage_area", "dtype": "str", "description": "Associated storage-area name with surrounding whitespace removed."},
+            {"name": "coordinates", "dtype": "list[tuple[float, float]]", "description": "Ordered (x, y) vertices in source coordinates and units, without CRS inference or rounding."},
+            {"name": "coordinate_count", "dtype": "int", "description": "Declared vertex count, validated against the coordinate payload."},
+        ],
+    },
     "mesh_geometry_inventory": {
         "description": "Read-only exact identities of native 2D geometry datasets; no hydraulic acceptance.",
         "accessor": "HdfMesh.get_mesh_geometry_inventory(hdf_path, dataset_paths=None)",
@@ -1706,4 +1953,95 @@ DATAFRAME_SCHEMAS["terrain_modification_features"] = {
         {"name": "geometry", "dtype": "geometry", "description": "Complete LineString/MultiLineString, Polygon, or Point for a native single-vertex record, in the caller-declared terrain CRS."},
     ],
     "note": "Read-only. Unknown layouts or unavailable support fail. No terrain grid is loaded or CRS inferred. Empty frames retain the same columns and explicit CRS.",
+}
+
+
+DATAFRAME_SCHEMAS["fim_cell_wsel_profiles"] = {
+    "description": "Caller-supplied complete cell WSEL profiles for native sloping reconstruction.",
+    "accessor": "RasFim.map_sloping_profiles(wsel_profiles=...) / prepare_sloping_model(wsel_profiles=...)",
+    "source": "Caller-owned DataFrame; identities bound to the supplied source HDF.",
+    "extra_columns": True,
+    "dynamic": True,
+    "columns": [
+        {"name": "mesh_name", "dtype": "str", "description": "Exact HDF mesh name; all source meshes required."},
+        {"name": "cell_id", "dtype": "int64", "description": "Zero-based mesh-local source cell ID, physical and ghost rows exactly once."},
+    ],
+    "note": "Every additional column is a safely named real numeric WSEL profile in model vertical units/datum. NaN explicitly means dry; infinities/float32 overflow refuse. IDs must cover the full HDF meshes, including ghosts, regardless of AOI. Optional attrs fim_source_hdf/crs must match. No automatic time aggregation, rounding policy, unit conversion or native parity claim.",
+}
+
+DATAFRAME_SCHEMAS["fim_product_manifest"] = {
+    "description": "One row per mapped WSE profile; the file manifest identifies the selected RasFim method.",
+    "accessor": "RasFim.map_profiles(...), RasFim.map_ras2fim_results(...), or RasFim.map_horizontal_profiles(...)",
+    "source": "ras_commander.fim.RasFim.RasFim.map_profiles()",
+    "extra_columns": False,
+    "dynamic": False,
+    "columns": [
+        {"name": name, "dtype": dtype, "description": description}
+        for name, dtype, description in (
+            ("profile", "str", "WSE profile column name; products use it in their file names."),
+            ("status", "str", "complete, no_flooded_pixels, empty_aoi, failed, or not_run."),
+            ("wet_cells", "int | None", "Wet cells (non-NaN WSE) in the prepared cell set for the selected method."),
+            ("samples", "int | None", "Interpolation samples: wet centres plus merged hull-exterior vertices; 0 for horizontal mapping."),
+            ("depth_tif", "str | None", "Product 09 depth GeoTIFF path (float32, NaN nodata)."),
+            ("wse_tif", "str | None", "Product 10 WSE GeoTIFF path (float32, NaN nodata)."),
+            ("floodplain_gpkg", "str | None", "Product 11 floodplain GeoPackage path; None when not written."),
+            ("col_off", "int | None", "Column offset of the written window on the full output grid."),
+            ("row_off", "int | None", "Row offset of the written window on the full output grid."),
+            ("width", "int | None", "Written raster width in pixels."),
+            ("height", "int | None", "Written raster height in pixels."),
+            ("transform", "tuple[float, ...] | None", "Affine (a, b, c, d, e, f) of the written raster."),
+            ("crs", "str | None", "Output CRS."),
+            ("depth_finite_pixels", "int | None", "Finite depth pixels in the written raster."),
+            ("flooded_pixels", "int | None", "Pixels with 0 < depth <= 10000, the floodplain polygon support."),
+            ("error", "str | None", "Failure diagnostic for failed or not_run rows."),
+        )
+    ],
+    "note": "The same rows, engine method record, engine reports, options, AOI and input identities are written to fim_manifest.json. Step05 prepares every wet cell before AOI selection; horizontal mapping prepares ownership and terrain for the constrained window.",
+}
+
+
+DATAFRAME_SCHEMAS["fim_comparison"] = {
+    "description": "One row per Rust horizontal/native horizontal stored-map comparison.",
+    "accessor": "RasFim.compare_with_rasmapper(...)",
+    "source": "ras_commander.fim.RasFim.RasFim.compare_with_rasmapper()",
+    "extra_columns": False,
+    "dynamic": False,
+    "columns": [
+        {"name": name, "dtype": dtype, "description": description}
+        for name, dtype, description in (
+            ("profile", "str", "Candidate WSE column."),
+            ("native_profile", "str", "Exact native Max or timestamp selector."),
+            ("candidate_wet", "int", "Candidate valid depth pixels; positive optional cutoff excludes shallower pixels, zero preserves all valid depths."),
+            ("reference_wet", "int", "Native valid depth pixels; positive optional cutoff excludes shallower pixels, zero preserves all valid depths."),
+            ("common_wet", "int", "Pixels retained in both depth masks."),
+            ("extra_wet", "int", "Candidate-only retained depth pixels."),
+            ("missing_wet", "int", "Native-only retained depth pixels."),
+            ("csi", "float", "Intersection of retained depth masks divided by their union; 1 for an empty union."),
+            ("depth_exact_fraction", "float", "Bitwise float32 exact fraction on common retained depth pixels; NaN if none."),
+            ("depth_mae", "float", "Mean absolute depth difference on common wet pixels, model units."),
+            ("depth_max_abs", "float", "Maximum absolute depth difference on common wet pixels, model units."),
+            ("wse_pairs", "int", "Jointly finite WSE pairs on common wet pixels."),
+            ("wse_exact_fraction", "float", "Bitwise float32 exact fraction on finite WSE pairs; NaN if none."),
+            ("wse_mae", "float", "Mean absolute difference on finite WSE pairs, model units."),
+            ("wse_max_abs", "float", "Maximum absolute difference on finite WSE pairs, model units."),
+            ("reference_missing_wse", "int", "Native wet pixels with missing WSE."),
+            ("candidate_missing_wse", "int", "Candidate wet pixels with missing WSE."),
+            ("terrain_pairs", "int", "Native wet pixels with finite WSE, depth and exported terrain."),
+            ("terrain_mae", "float", "Mean absolute native WSE-minus-depth-minus-terrain residual, model units."),
+            ("terrain_max_abs", "float", "Maximum absolute native implied-terrain residual, model units."),
+            ("depth_tif", "str", "Candidate depth raster."),
+            ("reference_depth_tif", "str", "Native depth raster, retained unmodified."),
+            ("wse_tif", "str", "Candidate WSE raster."),
+            ("reference_wse_tif", "str", "Native WSE raster, retained unmodified."),
+            ("native_seconds", "float", "Native StoreMaps call wall time; not a controlled benchmark."),
+            ("native_postprocess_seconds", "float", "Independent strict depth-filter/LZW native delivery writing time; zero when disabled."),
+            ("native_total_seconds", "float", "Native stored-map generation plus delivery postprocessing."),
+            ("candidate_batch_seconds", "float", "Complete Rust batch call time, repeated for context; do not sum across rows."),
+            ("candidate_seconds", "float", "Complete candidate call time for a single-profile request; NaN for shared batches."),
+            ("comparison_seconds", "float", "Raster equality/metric scan time; excluded from mapping times."),
+            ("reference_filtered_depth_tif", "str", "Separately written thresholded native depth; None when disabled."),
+            ("reference_filtered_wse_tif", "str", "Separately written depth-masked native WSE; None when disabled."),
+        )
+    ],
+    "note": "2D-only model gate; same-lattice comparison inside selected cells/AOI, independently thresholded. Additional performance dictionary is in DataFrame attrs and comparison.json; ratios withheld for unmatched scopes. No per-profile allocation of shared Rust setup.",
 }

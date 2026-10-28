@@ -23,7 +23,7 @@ import tempfile
 from dataclasses import dataclass, field
 from itertools import pairwise
 from pathlib import Path
-from typing import Any, Optional, Union
+from typing import Any, Optional, Sequence, Union
 
 import geopandas as gpd
 import h5py
@@ -44,6 +44,7 @@ from shapely.geometry.polygon import orient
 from shapely.ops import linemerge, unary_union
 
 from .Decorators import log_call
+from .fast_hdf import read_attr, read_typed
 from .geom.GeomLateral import GeomLateral
 from .geom.GeomMesh import GeomMesh
 from .geom.GeomParser import GeomParser
@@ -693,6 +694,9 @@ class RasBreakout2D:
         require_complete_products: bool = False,
         anchor_grid_to_parent: bool = False,
         computation_points: Optional[np.ndarray] = None,
+        repair_computation_points: bool = False,
+        parent_cell_ids: Optional[Sequence[int]] = None,
+        native_worker_threads: Optional[int] = 1,
     ) -> Breakout2DPreparationResult:
         """Trim mesh-owned features and remesh only the cloned geometry.
 
@@ -740,13 +744,32 @@ class RasBreakout2D:
             compute_property_tables: Compute 2D property tables afterwards.
                 Requires a terrain association on the geometry.
             timeout: Seconds allowed for the text-to-HDF import.
+            native_worker_threads: Positive managed geometry worker-pool limit
+                for headless refreshes, including a containment repair retry.
+                Defaults to one; None retains inherited pool settings. This
+                execution control does not change hydraulic solver cores.
             max_mesh_iterations: Mesh auto-fix iterations.
             computation_points: Optional N-by-2 XY coordinates in the source
                 geometry CRS/units, for a cookie-cut bootstrap. Requires
                 refresh_hdf=True, refresh_method="rasexe", remesh=False and
                 anchor_grid_to_parent=False. Points are written unchanged through
-                GeomMesh.write_computation_points; native compilation and QA
-                still follow. No point repair or face-identity claim is made.
+                GeomMesh.write_computation_points unless repair_computation_points
+                is enabled; native compilation and QA still follow. Writing
+                supplied points does not establish parent face identity.
+            repair_computation_points: Opt in to the bounded supplied-seed
+                MaxFaces/perimeter recipe before headless compilation. Requires
+                computation_points. The returned computation_points_result's
+                seed_repair records its plan and readback; default False leaves
+                supplied points and perimeter unchanged. Native completion and
+                hydraulic review remain required after repair.
+            parent_cell_ids: Explicit physical cell IDs from the source geometry
+                HDF. Retain their exact cell/face topology through
+                :meth:`GeomMesh.plan_cell_subset` and
+                :meth:`GeomMesh.apply_cell_subset` before native completion.
+                Requires refresh_hdf=True, refresh_method="rasexe", remesh=False,
+                anchor_grid_to_parent=False, and computation_points=None.
+                The selected union must match the planned child perimeter in
+                its source CRS/units; holes and disconnected selections block.
             disable_meteorology: Disable and remove inherited meteorological
                 sources for an owned boundary-only child before preprocessing.
                 Defaults to False for existing precipitation-driven workflows.
@@ -774,8 +797,40 @@ class RasBreakout2D:
         """
         if refresh_method not in ("rasmapper", "rasexe"):
             raise ValueError("refresh_method must be 'rasmapper' or 'rasexe'")
+        if native_worker_threads is not None and (
+            type(native_worker_threads) is not int or native_worker_threads < 1
+        ):
+            raise ValueError("native_worker_threads must be a positive integer or None")
+        if parent_cell_ids is not None:
+            if (
+                not refresh_hdf
+                or refresh_method != "rasexe"
+                or remesh
+                or anchor_grid_to_parent
+                or computation_points is not None
+            ):
+                raise ValueError(
+                    "parent_cell_ids requires refresh_hdf=True, refresh_method='rasexe', "
+                    "remesh=False, anchor_grid_to_parent=False and computation_points=None"
+                )
+            ids = np.asarray(parent_cell_ids)
+            if (
+                ids.ndim != 1
+                or not ids.size
+                or ids.dtype.kind not in "iu"
+                or np.any(ids < 0)
+                or len(np.unique(ids)) != len(ids)
+            ):
+                raise ValueError(
+                    "parent_cell_ids must be unique nonnegative integer IDs"
+                )
+        if repair_computation_points and computation_points is None:
+            raise ValueError("repair_computation_points requires computation_points")
         if computation_points is not None and (
-            not refresh_hdf or refresh_method != "rasexe" or remesh or anchor_grid_to_parent
+            not refresh_hdf
+            or refresh_method != "rasexe"
+            or remesh
+            or anchor_grid_to_parent
         ):
             raise ValueError(
                 "computation_points requires refresh_hdf=True, refresh_method='rasexe', "
@@ -893,15 +948,39 @@ class RasBreakout2D:
 
         refresh_result = None
         points = None
+        mesh_result = None
         if refresh_hdf and refresh_method == "rasexe":
             from .geom.GeomPreprocessor import GeomPreprocessor
 
-            if computation_points is None:
+            if parent_cell_ids is not None:
+                subset_plan = GeomMesh.plan_cell_subset(
+                    preflight.source_geometry_hdf,
+                    clone.geometry_path,
+                    parent_cell_ids,
+                    preflight.spec.source_2d_area,
+                    ras_object=ras_object,
+                )
+                mesh_result = GeomMesh.apply_cell_subset(
+                    subset_plan,
+                    timeout=timeout,
+                    ras_object=ras_object,
+                )
+                points = mesh_result
+            elif computation_points is None:
                 points = GeomMesh.generate_computation_points(
                     clone.geometry_number,
                     mesh_name=preflight.spec.source_2d_area,
                     ras_object=ras_object,
                 )
+            elif repair_computation_points:
+                repair_plan = GeomMesh.plan_computation_point_repair(
+                    clone.geometry_number,
+                    computation_points,
+                    mesh_name=preflight.spec.source_2d_area,
+                    ras_object=ras_object,
+                    allow_extended_connection_support=preflight.spec.allow_extended_connection_support,
+                )
+                points = GeomMesh.apply_computation_point_repair(repair_plan)
             else:
                 points = GeomMesh.write_computation_points(
                     clone.geometry_number,
@@ -924,6 +1003,7 @@ class RasBreakout2D:
                     clear_geompre=True,
                     geometry_only=True,
                     require_complete_products=require_complete_products,
+                    native_worker_threads=native_worker_threads,
                 )
             except Exception as exc:
                 raise RuntimeError("Headless geometry HDF refresh failed") from exc
@@ -965,7 +1045,6 @@ class RasBreakout2D:
             )
 
         containment_result = None
-        mesh_result = None
         breakline_containment_repairs = []
         if remesh:
             mesh_result = GeomMesh.generate(
@@ -1049,6 +1128,7 @@ class RasBreakout2D:
                     clear_geompre=True,
                     geometry_only=True,
                     require_complete_products=require_complete_products,
+                    native_worker_threads=native_worker_threads,
                 )
                 repair.update(
                     status="applied", native_preprocess_success=bool(retry.success)
@@ -1104,6 +1184,32 @@ class RasBreakout2D:
             if not property_tables:
                 raise RuntimeError("2D property-table computation returned False")
 
+        if repair_computation_points:
+            from .geom._seed_repair import _audit_text_features
+            from .geom.GeomMesh import _hdf_flow_area_perimeter
+
+            containment_result = GeomMesh.audit_domain_containment(
+                clone.geometry_number,
+                mesh_name=preflight.spec.source_2d_area,
+                ras_object=ras_object,
+            )
+            if not containment_result.ok:
+                raise ValueError("Repaired supplied-seed mesh features fail containment: "
+                                 f"{containment_result.violations}")
+            feature_audit = _audit_text_features(
+                clone.geometry_path,
+                preflight.spec.source_2d_area,
+                Polygon(_hdf_flow_area_perimeter(clone.geometry_hdf, preflight.spec.source_2d_area)),
+                preflight.spec.allow_extended_connection_support,
+            )
+            points.seed_repair["post_preprocess_containment"] = containment_result.to_dict()
+            points.seed_repair["post_preprocess_feature_audit"] = feature_audit
+        if parent_cell_ids is not None:
+            # Ras.exe may silently regenerate topology from unchanged seeds and
+            # perimeter. Recheck exact planned arrays after every native phase.
+            mesh_result.cell_subset["post_preprocess_validation"] = (
+                GeomMesh.validate_cell_subset(subset_plan, ras_object=ras_object)
+            )
         final_unsteady_hash = _sha256_file(clone.unsteady_path)
         if final_unsteady_hash != prepared_unsteady_hash:
             raise RuntimeError("Geometry preparation modified the cloned unsteady file")
@@ -1180,13 +1286,13 @@ class RasBreakout2D:
         with h5py.File(geometry_path, "r") as hdf:
             if base not in hdf:
                 raise ValueError(f"Mesh faces/cells are unavailable for {mesh_name!r}")
-            centers = np.asarray(hdf[f"{base}/Cells Center Coordinate"][()])
+            centers = np.asarray(read_typed(hdf[f"{base}/Cells Center Coordinate"]))
             cell_count = len(centers)
             attributes = hdf.get("Geometry/2D Flow Areas/Attributes")
             if attributes is not None and "Cell Count" in (
                 attributes.dtype.names or ()
             ):
-                rows = attributes[()]
+                rows = read_typed(attributes)
                 cell_count = next(
                     int(row["Cell Count"])
                     for row in rows
@@ -1198,9 +1304,9 @@ class RasBreakout2D:
             if not 0 < cell_count <= len(centers):
                 raise ValueError(f"Invalid active cell count for {mesh_name!r}")
             centers = centers[:cell_count]
-            face_cells = np.asarray(hdf[f"{base}/Faces Cell Indexes"][()], dtype=int)
+            face_cells = np.asarray(read_typed(hdf[f"{base}/Faces Cell Indexes"]), dtype=int)
             normals = np.asarray(
-                hdf[f"{base}/Faces NormalUnitVector and Length"][()],
+                read_typed(hdf[f"{base}/Faces NormalUnitVector and Length"]),
                 dtype=float,
             )
         inside = intersects_xy(child, centers[:, 0], centers[:, 1])
@@ -1221,10 +1327,10 @@ class RasBreakout2D:
         with h5py.File(geometry_path, "r") as hdf:
             # Numeric topology is compact even for multi-million-cell meshes;
             # avoid expensive HDF fancy indexing of thousands of sparse rows.
-            point_indexes = hdf[f"{base}/Faces FacePoint Indexes"][()][selected_ids]
-            point_coords = hdf[f"{base}/FacePoints Coordinate"][()]
-            perimeter_info = hdf[f"{base}/Faces Perimeter Info"][()][selected_ids]
-            perimeter_values = hdf[f"{base}/Faces Perimeter Values"][()]
+            point_indexes = read_typed(hdf[f"{base}/Faces FacePoint Indexes"])[selected_ids]
+            point_coords = read_typed(hdf[f"{base}/FacePoints Coordinate"])
+            perimeter_info = read_typed(hdf[f"{base}/Faces Perimeter Info"])[selected_ids]
+            perimeter_values = read_typed(hdf[f"{base}/Faces Perimeter Values"])
             crs = HdfBase.get_projection(hdf)
 
         records: list[dict[str, Any]] = []
@@ -2357,7 +2463,7 @@ def _decode_hdf_text(value: Any) -> str:
 
 def _result_time_index(hdf: h5py.File) -> pd.Index:
     base = "Results/Unsteady/Output/Output Blocks/Base Output/Unsteady Time Series"
-    values = np.asarray(hdf[f"{base}/Time"][()], dtype=float)
+    values = np.asarray(read_typed(hdf[f"{base}/Time"]), dtype=float)
     try:
         start = HdfBase.get_simulation_start_time(hdf)
         return HdfUtils.convert_timesteps_to_datetimes(values, start)
@@ -2368,7 +2474,7 @@ def _result_time_index(hdf: h5py.File) -> pd.Index:
 def _read_hdf_columns(dataset: h5py.Dataset, ids: np.ndarray) -> np.ndarray:
     requested = np.asarray(ids, dtype=int)
     order = np.argsort(requested)
-    sorted_values = np.asarray(dataset[:, requested[order]], dtype=float)
+    sorted_values = np.asarray(read_typed(dataset, (slice(None), requested[order])), dtype=float)
     return sorted_values[:, np.argsort(order)]
 
 
@@ -2392,7 +2498,7 @@ def _read_boundary_face_flow(
         index = _result_time_index(result_hdf)
         if prefer_native and native_path in result_hdf:
             values = _read_hdf_columns(result_hdf[native_path], face_ids)
-            units = _decode_hdf_text(result_hdf[native_path].attrs.get("Units", ""))
+            units = _decode_hdf_text(read_attr(result_hdf[native_path], "Units", ""))
             return (
                 pd.DataFrame(values, index=index, columns=face_ids),
                 "native_face_flow",
@@ -2415,7 +2521,7 @@ def _read_boundary_face_flow(
                 cell_wse[:, position[int(row.cell_1)]],
             )
         velocity_units = _decode_hdf_text(
-            result_hdf[velocity_path].attrs.get("Units", "")
+            read_attr(result_hdf[velocity_path], "Units", "")
         )
 
     geometry_base = f"Geometry/2D Flow Areas/{mesh_name}"
@@ -2424,8 +2530,8 @@ def _read_boundary_face_flow(
         tables = geometry[f"{geometry_base}/Faces Area Elevation Values"]
         area = np.zeros_like(stage)
         for column, row in enumerate(faces.itertuples(index=False)):
-            start, count = np.asarray(info[int(row.face_id), :2], dtype=int)
-            table = np.asarray(tables[start : start + count], dtype=float)
+            start, count = np.asarray(read_typed(info, (int(row.face_id), slice(None, 2))), dtype=int)
+            table = np.asarray(read_typed(tables, slice(start, start + count)), dtype=float)
             elevations = table[:, 0]
             areas = table[:, 1]
             interpolated = np.interp(

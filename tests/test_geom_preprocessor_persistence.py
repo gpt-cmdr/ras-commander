@@ -180,9 +180,17 @@ def project_run(
     stdout="",
     verify_restoration=True,
     require_complete_products=False,
+    max_wait=600,
+    previous_process_inventory=(),
 ):
     module = importlib.import_module("ras_commander.geom.GeomPreprocessor")
     import psutil
+
+    from ras_commander import RasPreprocess
+
+    # This harness substitutes the launched process tree below. Its prior
+    # process inventory must be equally isolated from the workstation.
+    monkeypatch.setattr(RasPreprocess, "_preprocess_process_inventory", lambda: previous_process_inventory)
 
     monkeypatch.setattr(
         psutil,
@@ -269,6 +277,7 @@ def project_run(
         dialog_watchdog=use_watchdog,
         clear_geompre=clear_geompre,
         require_complete_products=require_complete_products,
+        max_wait=max_wait,
     )
     if verify_restoration:
         assert plan.read_bytes() == original

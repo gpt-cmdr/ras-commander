@@ -17,7 +17,7 @@ try:
     __version__ = version("ras-commander")
 except PackageNotFoundError:
     # package is not installed
-    __version__ = "0.106.1"
+    __version__ = "0.110.1"
 
 # Canonical machine-readable agent index (see docs() helper below)
 __llms_txt__ = "https://rascommander.info/ras/llms.txt"
@@ -128,6 +128,7 @@ _LAZY_EXPORTS = {
     'RasGeometry': ('.RasGeometry', 'RasGeometry'),
     'RasGeometryUtils': ('.RasGeometryUtils', 'RasGeometryUtils'),
     'RasUnsteady': ('.RasUnsteady', 'RasUnsteady'),
+    'RasRestart': ('.RasRestart', 'RasRestart'),
     'RasSteady': ('.RasSteady', 'RasSteady'),
     'RasExamples': ('.RasExamples', 'RasExamples'),
     'RasEbfeModels': ('.sources.federal', 'RasEbfeModels'),
@@ -208,6 +209,13 @@ _LAZY_EXPORTS = {
             'Breakout2DFluxReview',
         )
     },
+    **{
+        name: ('.subdomain', name)
+        for name in (
+            'RasSubdomain', 'SplitLineCriteria', 'SplitLineSearch',
+            'SubdomainPartition',
+        )
+    },
     'RasProcess': ('.RasProcess', 'RasProcess'),
     'RasQualification': ('.RasQualification', 'RasQualification'),
     'ProjectionInfo': ('.RasProcess', 'ProjectionInfo'),
@@ -246,6 +254,14 @@ _LAZY_EXPORTS = {
             'RasProcessQueryError', 'RasProcessInventory',
             'PlanProcessInventory', 'PlanCancellationResult',
             'FlowPathPolicyResult', 'TerrainExportResult',
+        )
+    },
+    **{
+        name: ('.fim', name)
+        for name in (
+            'RasFim', 'FimAoi', 'FimPreparedProfile', 'FimPreparedSlopingModel', 'FimError',
+            'FimEngineNotFoundError', 'FimEngineError', 'FimUnsupportedError',
+            'FimAoiError', 'FimMappingError',
         )
     },
     **{
@@ -310,7 +326,7 @@ _LAZY_EXPORTS = {
             'HdfBase', 'HdfCompletion', 'HdfUtils', 'HdfPlan', 'HdfMesh', 'MeshCellPolygonError', 'HdfXsec',
             'HdfBndry', 'HdfStruc', 'HdfStorageArea',
             'HdfHydraulicTables', 'HdfResultsPlan', 'HdfResultsMesh',
-            'HdfResultView', 'HdfResultsQuery', 'HdfResultsXsec',
+            'MeshSeriesAvailabilityError', 'HdfResultView', 'HdfResultsQuery', 'HdfResultsXsec',
             'HdfResultsBreach',
             'HdfResultsSediment', 'HdfResultsProducts', 'HdfPipe',
             'HdfPump', 'HdfInfiltration', 'HdfLandCover', 'HdfPlot',
@@ -439,7 +455,7 @@ __all__ = [
     'RasDocker', 'ContainerResult', 'ContainerEvent', 'ContainerBatchResult',
     # Core functionality
     'RasPrj', 'init_ras_project', 'get_ras_exe', 'ras', 'create_project_from_template',
-    'RasText', 'RasPlan', 'RasUnsteady', 'RasSteady', 'RasUtils', 'RasHydroCompare',
+    'RasText', 'RasPlan', 'RasUnsteady', 'RasRestart', 'RasSteady', 'RasUtils', 'RasHydroCompare',
     'ProjectStageError', 'ProjectPopulationError', 'ProjectPathAmbiguityError',
     'ProjectLockedError', 'ProjectDriftError', 'ProjectCopyVerificationError',
     'ProjectPublicationError',
@@ -471,6 +487,8 @@ __all__ = [
     'RasPreprocess',
     'RasExamples', 'RasEbfeModels', 'AlabamaBleModels', 'M3Model', 'RasCmdr', 'RasCurrency', 'RasControl', 'RasTcu', 'TcuStatus', 'RasMap', 'RasEncroachments', 'RasProcess', 'ProjectionInfo', 'StoredMapProductsIncompleteError', 'GeoTiffWriteOptions', 'RasterOperationProfileResult', 'StoreMapPerformanceOptions', 'StoreMapProfileResult', 'StoreMapResourceEstimate', 'StoreMapResourceSample', 'TerrainResourceEstimate', 'RasGuiAutomation', 'RasScreenshot', 'HdfFluvialPluvial',
     'RasBenefits', 'BenefitAreaConfig', 'BenefitAreaResult', 'BenefitCategory',
+    'RasFim', 'FimAoi', 'FimPreparedProfile', 'FimPreparedSlopingModel', 'FimError', 'FimEngineNotFoundError',
+    'FimEngineError', 'FimUnsupportedError', 'FimAoiError', 'FimMappingError',
     'RasBreakout1D', 'Breakout1DAssemblyResult',
     'Breakout1DDomainSelection', 'Breakout1DResult',
     'Breakout1DSelection', 'Breakout1DSourceCatalog',
@@ -479,6 +497,7 @@ __all__ = [
     'RasBreakout2D', 'Breakout2DSpec', 'Breakout2DPreflight',
     'Breakout2DCloneResult', 'Breakout2DPreparationResult',
     'Breakout2DFluxReview',
+    'RasSubdomain', 'SplitLineCriteria', 'SplitLineSearch', 'SubdomainPartition',
     'RasNetworkConflation', 'NetworkConflationResult',
     'NetworkEdgeCoverageResult', 'NetworkEdgeCoveragePlanResult',
     'ConflationStatus', 'NetworkAdapter', 'NHDPlusAdapter',
@@ -544,7 +563,7 @@ __all__ = [
 
     # HDF handling
     'HdfBase', 'HdfCompletion', 'HdfBndry', 'HdfMesh', 'MeshCellPolygonError', 'HdfPlan', 'HdfProject',
-    'HdfResultsMesh', 'HdfResultView', 'HdfResultsPlan',
+    'HdfResultsMesh', 'MeshSeriesAvailabilityError', 'HdfResultView', 'HdfResultsPlan',
     'HdfResultsProducts', 'HdfResultsQuery',
     'HdfResultsXsec', 'HdfResultsSediment',
     'HdfStruc', 'HdfStorageArea', 'HdfUtils', 'HdfXsec', 'HdfPump',

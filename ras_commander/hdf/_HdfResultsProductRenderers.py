@@ -11,6 +11,7 @@ import h5py
 import numpy as np
 import pandas as pd
 
+from ..fast_hdf import read_dataset, read_typed
 from .HdfMesh import HdfMesh
 from .HdfResultsMesh import HdfResultsMesh
 
@@ -73,11 +74,11 @@ class _ProductRenderers:
                     )
 
                 cell_face_info = np.asarray(
-                    hdf_file[info_path][:, :2],
+                    read_typed(hdf_file[info_path], (slice(None), slice(None, 2))),
                     dtype=np.int64,
                 )
                 cell_face_ids = np.asarray(
-                    hdf_file[values_path][:, 0],
+                    read_typed(hdf_file[values_path], (slice(None), 0)),
                     dtype=np.int64,
                 )
                 if len(cell_face_info) != cell_count:
@@ -156,8 +157,10 @@ class _ProductRenderers:
             )
             for start in range(0, time_count, chunk_rows):
                 stop = min(time_count, start + chunk_rows)
+                block = (slice(start, stop), column_selection)
                 values = np.array(
-                    result_ds[start:stop, column_selection],
+                    read_dataset(result_ds, block)
+                    if isinstance(result_ds, h5py.Dataset) else result_ds[block],
                     dtype=np.float32,
                     copy=True,
                 )

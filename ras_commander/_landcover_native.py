@@ -31,7 +31,9 @@ import pandas as pd
 from .dotnet.clr_bootstrap import find_hecras_install, load_clr
 from .LoggingConfig import get_logger
 from .RasUtils import RasUtils
+from .fast_hdf import read_attr, read_typed
 from ._spatial_extent import _normalize_extent_bounds
+from .fast_hdf import h5py_until_qualified
 
 logger = get_logger(__name__)
 
@@ -175,7 +177,7 @@ def _validate_property_tables_postcondition(
             raise RuntimeError(
                 "Native property-table computation did not leave a /Geometry group."
             )
-        if not _attribute_is_true(geometry.attrs.get("Complete Geometry")):
+        if not _attribute_is_true(read_attr(geometry, "Complete Geometry", None)):
             raise RuntimeError(
                 "Native property-table computation did not mark geometry complete."
             )
@@ -742,6 +744,7 @@ def _create_legacy_landcover(
     return RasUtils.safe_resolve(output_hdf_path)
 
 
+@h5py_until_qualified
 def validate_native_landcover(
     output_hdf_path: Union[str, Path],
     *,
@@ -757,11 +760,11 @@ def validate_native_landcover(
     with h5py.File(output_hdf_path, "r") as hdf:
         if legacy:
             required = {"IDs", "Names", "ManningsN"}
-            actual_ids = {int(value) for value in hdf["IDs"][()]} if "IDs" in hdf else set()
+            actual_ids = {int(value) for value in read_typed(hdf["IDs"])} if "IDs" in hdf else set()
         else:
             required = {"Raster Map", "Variables"}
             actual_ids = (
-                {int(row["ID"]) for row in hdf["Raster Map"][()]}
+                {int(row["ID"]) for row in read_typed(hdf["Raster Map"])}
                 if "Raster Map" in hdf
                 else set()
             )
@@ -1698,9 +1701,9 @@ def associate_landcover_to_geometry(
     with h5py.File(geometry_hdf_path, "r") as hdf:
         if "Geometry" not in hdf:
             raise RuntimeError("Geometry HDF has no /Geometry group after association.")
-        attributes = hdf["Geometry"].attrs
-        raw_filename = attributes.get("Land Cover Filename")
-        raw_layer = attributes.get("Land Cover Layername")
+        geometry = hdf["Geometry"]
+        raw_filename = read_attr(geometry, "Land Cover Filename", None)
+        raw_layer = read_attr(geometry, "Land Cover Layername", None)
         filename = (
             raw_filename.decode("utf-8", errors="replace")
             if isinstance(raw_filename, (bytes, np.bytes_))

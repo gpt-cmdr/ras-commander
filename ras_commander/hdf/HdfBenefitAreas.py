@@ -713,6 +713,9 @@ class HdfBenefitAreas:
                         adjacency[key2].add(key1)
 
             except Exception as e:
+                from ..fast_hdf import reraise_required
+
+                reraise_required(e)
                 logger.warning(f"Could not get topology for mesh {mesh_name}: {e}")
                 continue
 

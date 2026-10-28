@@ -48,6 +48,7 @@ import numpy as np
 from ..Decorators import standardize_input, log_call
 from .HdfBase import HdfBase
 from ..LoggingConfig import get_logger
+from ..fast_hdf import read_attr, read_typed
 from ..RasPrj import ras
 
 logger = get_logger(__name__)
@@ -151,11 +152,11 @@ class HdfResultsBreach:
                         continue
 
                     # Extract dataset
-                    dataset = hdf_file[var_path][:]  # shape: (n_timesteps, 4)
+                    dataset = read_typed(hdf_file[var_path], slice(None))  # shape: (n_timesteps, 4)
 
                     # Get variable names and units from attributes
                     if 'Variable_Unit' in hdf_file[var_path].attrs:
-                        var_unit = hdf_file[var_path].attrs['Variable_Unit']
+                        var_unit = read_attr(hdf_file[var_path], 'Variable_Unit')
                         # var_unit is array of [name, unit] pairs
 
                     # Create DataFrame for this structure
@@ -281,10 +282,10 @@ class HdfResultsBreach:
                     breach_var_path = f"{sa_conn_path}/{struct}/Breaching Variables"
 
                     # Extract dataset
-                    dataset = hdf_file[breach_var_path][:]  # shape: (n_timesteps, 9)
+                    dataset = read_typed(hdf_file[breach_var_path], slice(None))  # shape: (n_timesteps, 9)
 
                     # Get variable names and units from attributes
-                    var_unit = hdf_file[breach_var_path].attrs['Variable_Unit']
+                    var_unit = read_attr(hdf_file[breach_var_path], 'Variable_Unit')
                     # var_unit[0] = [b'Stage HW', b'ft'], etc.
 
                     # Create DataFrame for this structure

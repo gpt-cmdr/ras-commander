@@ -1,6 +1,7 @@
 """Mesh identity regressions on real read-only results and small edge controls."""
 from collections import defaultdict
 from itertools import combinations
+import inspect
 import logging
 import os
 from pathlib import Path
@@ -14,6 +15,11 @@ from shapely.geometry import box
 from ras_commander.hdf import HdfFluvialPluvial, HdfMesh, HdfResultsMesh
 
 LOGGER = "ras_commander.hdf.HdfFluvialPluvial"
+
+# These tests pin the reference implementation. Where the public methods take
+# ``engine=`` (default "auto", which may run the native kernels), select it.
+REFERENCE = ({"engine": "h5py"} if "engine" in inspect.signature(
+    HdfFluvialPluvial.generate_fluvial_pluvial_polygons).parameters else {})
 
 
 @pytest.mark.parametrize("method,kwargs", [
@@ -29,7 +35,7 @@ def test_processing_failure_is_logged_empty_not_raised(tmp_path, monkeypatch, ca
         raise RuntimeError("controlled mesh read failure")
     monkeypatch.setattr(HdfMesh, "get_mesh_cell_polygons", fail)
     with caplog.at_level(logging.INFO, logger=LOGGER):
-        out = getattr(HdfFluvialPluvial, method)(path, delta_t=17, **kwargs)
+        out = getattr(HdfFluvialPluvial, method)(path, delta_t=17, **kwargs, **REFERENCE)
     assert isinstance(out, gpd.GeoDataFrame) and out.empty
     assert not out.attrs
     error = next(r for r in caplog.records if r.name == LOGGER and r.levelno == logging.ERROR)
@@ -44,7 +50,7 @@ def test_processing_failure_is_logged_empty_not_raised(tmp_path, monkeypatch, ca
 @pytest.mark.parametrize("method", ["generate_fluvial_pluvial_polygons", "calculate_fluvial_pluvial_boundary"])
 def test_decorator_validation_still_raises(tmp_path, method):
     with pytest.raises(FileNotFoundError):
-        getattr(HdfFluvialPluvial, method)(tmp_path / "missing.p01.hdf")
+        getattr(HdfFluvialPluvial, method)(tmp_path / "missing.p01.hdf", **REFERENCE)
 
 
 def test_coincident_mesh_coordinates_do_not_create_cross_mesh_adjacency():
@@ -77,7 +83,7 @@ def real_davis():
 def test_full_davis_is_nonempty_complete_and_equals_separate_meshes(real_davis, monkeypatch, caplog, threshold):
     path, cells, results = real_davis
     with caplog.at_level(logging.ERROR, logger=LOGGER):
-        combined = HdfFluvialPluvial.generate_fluvial_pluvial_polygons(path, min_polygon_area_acres=threshold)
+        combined = HdfFluvialPluvial.generate_fluvial_pluvial_polygons(path, min_polygon_area_acres=threshold, **REFERENCE)
     assert not combined.empty, "An empty failure return is not successful Davis validation"
     assert combined.crs == cells.crs
     assert set(combined.mesh_name) == set(cells.mesh_name)
@@ -90,7 +96,7 @@ def test_full_davis_is_nonempty_complete_and_equals_separate_meshes(real_davis, 
         with monkeypatch.context() as patch:
             patch.setattr(HdfMesh, "get_mesh_cell_polygons", lambda *a, **k: local_cells.copy())
             patch.setattr(HdfResultsMesh, "get_mesh_max_ws", lambda *a, **k: local_results.copy())
-            separate = HdfFluvialPluvial.generate_fluvial_pluvial_polygons(path, min_polygon_area_acres=threshold)
+            separate = HdfFluvialPluvial.generate_fluvial_pluvial_polygons(path, min_polygon_area_acres=threshold, **REFERENCE)
         assert not separate.empty
         actual = combined[combined.mesh_name == mesh_name].set_index("classification")
         assert set(actual.index) == set(separate.classification)
@@ -117,7 +123,7 @@ def test_real_boundary_matches_independent_shared_edge_time_oracle(real_davis, d
                 expected.append(edge)
     assert len(expected) == expected_count
     with caplog.at_level(logging.ERROR, logger=LOGGER):
-        actual = HdfFluvialPluvial.calculate_fluvial_pluvial_boundary(path, delta_t=delta_t)
+        actual = HdfFluvialPluvial.calculate_fluvial_pluvial_boundary(path, delta_t=delta_t, **REFERENCE)
     assert not actual.empty and len(actual) == expected_count
     assert actual.crs == cells.crs
     # Lines now carry exact stored face coordinates; the oracle rounds to 8 dp.
