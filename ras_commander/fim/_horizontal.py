@@ -179,7 +179,7 @@ def prepare_grid(
 ) -> HorizontalGrid:
     """Cache terrain and centre-based cell ownership for one admitted window."""
     import rasterio
-    from rasterio.features import geometry_mask, rasterize
+    from rasterio.features import rasterize
 
     if not all(plan.shape):
         return HorizontalGrid(

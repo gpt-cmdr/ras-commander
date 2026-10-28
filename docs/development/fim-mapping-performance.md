@@ -167,6 +167,61 @@ source/engine hashes, timings and complete-mask/bit metrics. Opt-in pytest uses
 `RAS_COMMANDER_SUPPLIED_WSEL_CASE` with the same case file. See the
 [input contract and CSV example](../api/fim.md#supply-cell-wsel-profiles).
 
+## Global-lattice AOI qualification (engine 0.10.1)
+
+On 2026-10-28, the global-lattice polygon rule passed **96 bounded-map cases**
+and **480 Depth/WSE band comparisons** on Windows x64/Python 3.13.12, using a
+locally built and installed Fast-Map 0.10.1 release wheel and Fast-HDF 0.2.3.
+Davis pipes/conduits covers Max, indices 54/108 and a supplied cell-level
+maximum of the two timesteps rounded to three decimals. Bald Eagle bridges
+covers Max. Both retain complete physical/ghost input coverage.
+
+Each model runs horizontal, plain sloping and all four face-weighting/shallow
+combinations, with a bbox, triangle, concave polygon, holed polygon, multipart
+polygon, narrow diagonal sliver, tile-crossing polygon and a deliberate
+pixel-center edge case. Both source terrains use 256 × 256 tiles. Four native
+workers are used; sloping allows two in-flight profiles. No depth cutoff is
+added. All extra/missing and valid float32-bit difference counts are zero.
+
+The reference is the full Rust result masked on the **global source lattice**
+by a separate NumPy implementation of the declared half-open rule. Missing
+reference-valid pixels outside a candidate's raster extent also fail the
+comparison. All 12 unbounded model/method combinations additionally match the
+retained pre-fix products exactly: 60 band comparisons, complete masks and
+valid float32 bits. Source HDF, terrain and executable hashes bracket the run.
+This checks crop invariance; no new RAS Mapper export or hydraulic computation
+was performed, and it does not qualify native parity for the supplied aggregate.
+
+Linux x64/Python 3.11.15, using the CI-built manylinux 2.28 wheel, additionally
+passes Davis bbox and pixel-center-edge AOIs for all six configurations:
+12 cases and 96 band comparisons. Its full and bounded Davis products also
+match Windows in 144 cross-platform band comparisons. Seven global-mask unit
+tests pass on Linux. A prepared, depth-weighted/shallow Davis context separately
+passes the pixel-center-edge full/crop check on Windows. Other Linux model/shape
+combinations were not run for this change.
+
+The original GDAL full-grid versus cropped-grid mask fails six Davis
+pixel-center edge cases. The new rule intentionally replaces that ambiguous
+coverage; these results are **not** a claim of equality to legacy GDAL masks at
+boundary ties. See the [explicit coverage contract](../api/fim.md#global-terrain-lattice-aoi-coverage-engine-0101).
+
+A synthetic 2048 × 2048 rectangular-mask observation with four workers and
+20 warm iterations took 19.8 ms per mask through terrio and 24.7 ms through the
+new global-lattice kernel. It measures the mask kernel, not catalog throughput;
+the approximately 4.9 ms difference is shared once per mapping request, rather
+than repeated for each profile. This is one uncontrolled workstation observation,
+not a speed guarantee or an end-to-end performance comparison.
+
+Run `scripts/benchmarks/fim_aoi_full_crop_compare.py CASE.json NEW_OUTPUT` from
+the checkout with its root on `PYTHONPATH`. The case contains `engine`,
+`commander_commit` and `models`: each model has `label`, `hdf`, `terrain`,
+`profiles` and optional `max_working_mib`. Optional `modes`/`shapes` lists bound
+the qualification scope. `baseline_root` optionally checks retained unbounded
+products organized as `label/method/full/fim_manifest.json`. Receipts preserve
+per-band counts, geometry, grids, versions and hashes, including failures.
+The opt-in real test uses `RAS_COMMANDER_AOI_LATTICE_CASE`. Datasets and generated
+rasters stay external to the repository.
+
 ## Reproduce comparisons
 
 `scripts/benchmarks/fim_sloping_compare.py` maps an external case and compares

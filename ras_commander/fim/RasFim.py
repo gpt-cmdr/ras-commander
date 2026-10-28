@@ -376,7 +376,7 @@ class RasFim:
         coordinates with lower-y/left endpoints included, upper-y/right
         excluded, and northward y. No geometric epsilon is applied. This
         intentionally replaces crop-dependent legacy boundary ties.
-        connectivity uses the complete mesh. Polygon constraints accept the
+        Hydraulic connectivity uses the complete mesh. Polygon constraints accept the
         same geometry/frame/file forms as :meth:`resolve_aoi`.
 
         Outputs require a new or empty folder. The returned
@@ -628,6 +628,7 @@ class RasFim:
                 "planned_bytes": plan.planned_bytes,
             },
             "aoi": constraint.describe() if constraint else None,
+            "aoi_mask": "global-terrain-lattice/1" if constraint else None,
             "inputs": {
                 k: {"path": str(path), "size": before[k][0], "mtime_ns": before[k][1]}
                 for k, path in watched.items()
