@@ -60,6 +60,7 @@ jobs:
           tests/test_hdf_completion.py
           tests/test_hdf_followup_native_contract.py
           tests/test_stored_maps_native_contract.py
+          tests/ras_process_store_maps_output_path_test.py
           tests/test_store_map_native_cpu_limit.py
           tests/test_precipitation_boundary_authoring.py
           tests/test_precip_native_contract.py
