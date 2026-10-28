@@ -9,6 +9,14 @@ capability. The native writer below is an optional backend alternative.
 For paired data, quality flags, location/vertical-datum metadata, and other
 native DSS record workflows, see [using pydsstools directly](../about/related-libraries.md#pydsstools-use-native-dss-features-directly).
 
+## Read backends
+
+`RasDss.backend` selects how catalogs and time series are read: `java`
+(default, HEC Monolith), `native` (optional dss-commander package, no Java)
+or `shadow` (native result with a logged Java cross-check). See
+[DSS Read Backends](dss-native-backend.md) for selection, installation and
+every difference from the Java path.
+
 ## Direct precipitation arrays to DSS7
 
 `RasDss.write_precip_grid_arrays()` writes NumPy arrays through the native
