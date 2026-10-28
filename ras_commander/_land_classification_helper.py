@@ -782,6 +782,23 @@ def build_land_classification_record(
     ]
 
     resolved_path = resolve_rasmap_relative_path(project_folder, filename)
+    classification_kind = infer_land_classification_kind(filename, selected_parameter)
+    if legacy_landcover:
+        classification_kind = "landcover"
+    elif resolved_path is not None and resolved_path.suffix.lower() == ".hdf":
+        # Native metadata identifies custom-named sidecars that filename
+        # heuristics cannot distinguish (for example, a soils layer named a.hdf).
+        try:
+            with h5py.File(resolved_path, "r") as hdf:
+                layer_type = _read_hdf_string_attr(hdf, "LC Type") or ""
+            if layer_type == "Soils":
+                classification_kind = "soils"
+            elif layer_type == "LandCover":
+                classification_kind = "landcover"
+            elif layer_type.startswith("Infiltration"):
+                classification_kind = "infiltration"
+        except (OSError, ValueError) as exc:
+            logger.debug("Could not read layer type from %s: %s", resolved_path, exc)
 
     return {
         "name": layer_elem.attrib.get("Name", ""),
@@ -790,11 +807,7 @@ def build_land_classification_record(
         "filename": filename,
         "resolved_path": str(resolved_path) if resolved_path is not None else None,
         "selected_parameter": selected_parameter,
-        "classification_kind": (
-            "landcover"
-            if legacy_landcover
-            else infer_land_classification_kind(filename, selected_parameter)
-        ),
+        "classification_kind": classification_kind,
         "classification_layer_count": len(classification_layers),
         "classification_layer_filenames": [
             child.attrib.get("Filename") for child in classification_layers
