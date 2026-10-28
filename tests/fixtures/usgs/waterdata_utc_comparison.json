@@ -1,0 +1,322 @@
+{
+  "provenance": {
+    "retrieved_utc": "2026-10-28",
+    "modern_endpoint": "https://api.waterdata.usgs.gov/ogcapi/v1/collections/continuous/items",
+    "legacy_endpoint": "https://waterservices.usgs.gov/nwis/iv/",
+    "method": "Modern query uses UTC bounds. Legacy query requests surrounding calendar days, then clips decoded observation timestamps to those same UTC bounds. Values are not shifted."
+  },
+  "cases": [
+    {
+      "site": "01646500",
+      "start": "2024-01-01T00:00:00Z",
+      "end": "2024-01-01T02:00:00Z",
+      "legacy_count": 9,
+      "modern_count": 9,
+      "legacy_first": "2024-01-01 00:00:00+00:00",
+      "modern_first": "2024-01-01 00:00:00+00:00",
+      "unmatched": 0,
+      "different": 0,
+      "rows": [
+        {
+          "index": "2024-01-01T00:00:00.000Z",
+          "legacy": 9640.0,
+          "modern": 9640.0
+        },
+        {
+          "index": "2024-01-01T00:15:00.000Z",
+          "legacy": 9640.0,
+          "modern": 9640.0
+        },
+        {
+          "index": "2024-01-01T00:30:00.000Z",
+          "legacy": 9730.0,
+          "modern": 9730.0
+        },
+        {
+          "index": "2024-01-01T00:45:00.000Z",
+          "legacy": 9730.0,
+          "modern": 9730.0
+        },
+        {
+          "index": "2024-01-01T01:00:00.000Z",
+          "legacy": 9640.0,
+          "modern": 9640.0
+        },
+        {
+          "index": "2024-01-01T01:15:00.000Z",
+          "legacy": 9640.0,
+          "modern": 9640.0
+        },
+        {
+          "index": "2024-01-01T01:30:00.000Z",
+          "legacy": 9640.0,
+          "modern": 9640.0
+        },
+        {
+          "index": "2024-01-01T01:45:00.000Z",
+          "legacy": 9640.0,
+          "modern": 9640.0
+        },
+        {
+          "index": "2024-01-01T02:00:00.000Z",
+          "legacy": 9640.0,
+          "modern": 9640.0
+        }
+      ]
+    },
+    {
+      "site": "01646500",
+      "start": "2024-03-10T06:00:00Z",
+      "end": "2024-03-10T08:00:00Z",
+      "legacy_count": 9,
+      "modern_count": 9,
+      "legacy_first": "2024-03-10 06:00:00+00:00",
+      "modern_first": "2024-03-10 06:00:00+00:00",
+      "unmatched": 0,
+      "different": 0,
+      "rows": [
+        {
+          "index": "2024-03-10T06:00:00.000Z",
+          "legacy": 23200.0,
+          "modern": 23200.0
+        },
+        {
+          "index": "2024-03-10T06:15:00.000Z",
+          "legacy": 23600.0,
+          "modern": 23600.0
+        },
+        {
+          "index": "2024-03-10T06:30:00.000Z",
+          "legacy": 23700.0,
+          "modern": 23700.0
+        },
+        {
+          "index": "2024-03-10T06:45:00.000Z",
+          "legacy": 24000.0,
+          "modern": 24000.0
+        },
+        {
+          "index": "2024-03-10T07:00:00.000Z",
+          "legacy": 24100.0,
+          "modern": 24100.0
+        },
+        {
+          "index": "2024-03-10T07:15:00.000Z",
+          "legacy": 24200.0,
+          "modern": 24200.0
+        },
+        {
+          "index": "2024-03-10T07:30:00.000Z",
+          "legacy": 24300.0,
+          "modern": 24300.0
+        },
+        {
+          "index": "2024-03-10T07:45:00.000Z",
+          "legacy": 24500.0,
+          "modern": 24500.0
+        },
+        {
+          "index": "2024-03-10T08:00:00.000Z",
+          "legacy": 24600.0,
+          "modern": 24600.0
+        }
+      ]
+    },
+    {
+      "site": "01646500",
+      "start": "2024-11-03T05:00:00Z",
+      "end": "2024-11-03T07:00:00Z",
+      "legacy_count": 9,
+      "modern_count": 9,
+      "legacy_first": "2024-11-03 05:00:00+00:00",
+      "modern_first": "2024-11-03 05:00:00+00:00",
+      "unmatched": 0,
+      "different": 0,
+      "rows": [
+        {
+          "index": "2024-11-03T05:00:00.000Z",
+          "legacy": 2020.0,
+          "modern": 2020.0
+        },
+        {
+          "index": "2024-11-03T05:15:00.000Z",
+          "legacy": 2020.0,
+          "modern": 2020.0
+        },
+        {
+          "index": "2024-11-03T05:30:00.000Z",
+          "legacy": 2020.0,
+          "modern": 2020.0
+        },
+        {
+          "index": "2024-11-03T05:45:00.000Z",
+          "legacy": 2020.0,
+          "modern": 2020.0
+        },
+        {
+          "index": "2024-11-03T06:00:00.000Z",
+          "legacy": 2020.0,
+          "modern": 2020.0
+        },
+        {
+          "index": "2024-11-03T06:15:00.000Z",
+          "legacy": 2020.0,
+          "modern": 2020.0
+        },
+        {
+          "index": "2024-11-03T06:30:00.000Z",
+          "legacy": 2020.0,
+          "modern": 2020.0
+        },
+        {
+          "index": "2024-11-03T06:45:00.000Z",
+          "legacy": 2020.0,
+          "modern": 2020.0
+        },
+        {
+          "index": "2024-11-03T07:00:00.000Z",
+          "legacy": 2020.0,
+          "modern": 2020.0
+        }
+      ]
+    },
+    {
+      "site": "08158000",
+      "start": "2024-03-10T07:00:00Z",
+      "end": "2024-03-10T09:00:00Z",
+      "legacy_count": 25,
+      "modern_count": 25,
+      "legacy_first": "2024-03-10 07:00:00+00:00",
+      "modern_first": "2024-03-10 07:00:00+00:00",
+      "unmatched": 0,
+      "different": 0,
+      "rows": [
+        {
+          "index": "2024-03-10T07:00:00.000Z",
+          "legacy": 78.6,
+          "modern": 78.6
+        },
+        {
+          "index": "2024-03-10T07:05:00.000Z",
+          "legacy": 78.6,
+          "modern": 78.6
+        },
+        {
+          "index": "2024-03-10T07:10:00.000Z",
+          "legacy": 79.4,
+          "modern": 79.4
+        },
+        {
+          "index": "2024-03-10T07:15:00.000Z",
+          "legacy": 78.6,
+          "modern": 78.6
+        },
+        {
+          "index": "2024-03-10T07:20:00.000Z",
+          "legacy": 79.4,
+          "modern": 79.4
+        },
+        {
+          "index": "2024-03-10T07:25:00.000Z",
+          "legacy": 79.4,
+          "modern": 79.4
+        },
+        {
+          "index": "2024-03-10T07:30:00.000Z",
+          "legacy": 79.4,
+          "modern": 79.4
+        },
+        {
+          "index": "2024-03-10T07:35:00.000Z",
+          "legacy": 79.4,
+          "modern": 79.4
+        },
+        {
+          "index": "2024-03-10T07:40:00.000Z",
+          "legacy": 79.4,
+          "modern": 79.4
+        },
+        {
+          "index": "2024-03-10T07:45:00.000Z",
+          "legacy": 79.4,
+          "modern": 79.4
+        },
+        {
+          "index": "2024-03-10T07:50:00.000Z",
+          "legacy": 79.4,
+          "modern": 79.4
+        },
+        {
+          "index": "2024-03-10T07:55:00.000Z",
+          "legacy": 78.6,
+          "modern": 78.6
+        },
+        {
+          "index": "2024-03-10T08:00:00.000Z",
+          "legacy": 78.6,
+          "modern": 78.6
+        },
+        {
+          "index": "2024-03-10T08:05:00.000Z",
+          "legacy": 78.6,
+          "modern": 78.6
+        },
+        {
+          "index": "2024-03-10T08:10:00.000Z",
+          "legacy": 78.6,
+          "modern": 78.6
+        },
+        {
+          "index": "2024-03-10T08:15:00.000Z",
+          "legacy": 79.4,
+          "modern": 79.4
+        },
+        {
+          "index": "2024-03-10T08:20:00.000Z",
+          "legacy": 79.4,
+          "modern": 79.4
+        },
+        {
+          "index": "2024-03-10T08:25:00.000Z",
+          "legacy": 78.6,
+          "modern": 78.6
+        },
+        {
+          "index": "2024-03-10T08:30:00.000Z",
+          "legacy": 79.4,
+          "modern": 79.4
+        },
+        {
+          "index": "2024-03-10T08:35:00.000Z",
+          "legacy": 79.4,
+          "modern": 79.4
+        },
+        {
+          "index": "2024-03-10T08:40:00.000Z",
+          "legacy": 78.6,
+          "modern": 78.6
+        },
+        {
+          "index": "2024-03-10T08:45:00.000Z",
+          "legacy": 78.6,
+          "modern": 78.6
+        },
+        {
+          "index": "2024-03-10T08:50:00.000Z",
+          "legacy": 78.6,
+          "modern": 78.6
+        },
+        {
+          "index": "2024-03-10T08:55:00.000Z",
+          "legacy": 78.6,
+          "modern": 78.6
+        },
+        {
+          "index": "2024-03-10T09:00:00.000Z",
+          "legacy": 78.6,
+          "modern": 78.6
+        }
+      ]
+    }
+  ]
+}

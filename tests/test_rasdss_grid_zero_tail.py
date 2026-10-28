@@ -109,10 +109,10 @@ def _install_fake_family(
     )
     monkeypatch.setattr(
         RasDss,
-        "read_grid",
+        "_read_grid_java",
         staticmethod(lambda _path, pathname: by_path[pathname]),
     )
-    monkeypatch.setattr(RasDss, "get_file_version", staticmethod(lambda _path: 7))
+    monkeypatch.setattr(RasDss, "_get_file_version_java", staticmethod(lambda _path: 7))
     monkeypatch.setattr(RasDss, "_close_dss_file", staticmethod(lambda _path: None))
 
 
@@ -253,8 +253,8 @@ def _install_fake_derivative_pipeline(
         return override(returned_path) if override is not None else [returned_path]
 
     monkeypatch.setattr(RasDss, "get_catalog", staticmethod(fake_catalog))
-    monkeypatch.setattr(RasDss, "read_grid", staticmethod(fake_read))
-    monkeypatch.setattr(RasDss, "get_file_version", staticmethod(fake_version))
+    monkeypatch.setattr(RasDss, "_read_grid_java", staticmethod(fake_read))
+    monkeypatch.setattr(RasDss, "_get_file_version_java", staticmethod(fake_version))
     monkeypatch.setattr(RasDss, "_create_empty_dss", staticmethod(fake_create))
     monkeypatch.setattr(RasDss, "_close_dss_file", staticmethod(fake_close))
     monkeypatch.setattr(
@@ -419,7 +419,7 @@ def test_family_selection_rejects_zero_ambiguous_and_bad_timing(
     )
     monkeypatch.setattr(
         RasDss,
-        "read_grid",
+        "_read_grid_java",
         staticmethod(lambda *_args: pytest.fail("bad families must not be read")),
     )
     monkeypatch.setattr(RasDss, "_close_dss_file", staticmethod(lambda _path: None))
@@ -530,7 +530,7 @@ def test_writer_failure_cleans_temp_and_preserves_existing_output(
         ),
     ]
     _install_fake_family(monkeypatch, source, grids)
-    monkeypatch.setattr(RasDss, "get_file_version", staticmethod(lambda _path: 7))
+    monkeypatch.setattr(RasDss, "_get_file_version_java", staticmethod(lambda _path: 7))
     monkeypatch.setattr(
         RasDss,
         "_create_empty_dss",
@@ -1054,9 +1054,11 @@ def test_invalid_family_selector_fails_before_catalog(
 
 
 def _run_bridge_script(script: str, *args: object) -> subprocess.CompletedProcess[str]:
+    # Java bridge checks cover the Java path whatever backend the caller selected.
     return subprocess.run(
         [sys.executable, "-c", textwrap.dedent(script), *(str(arg) for arg in args)],
         check=False,
+        env={k: v for k, v in os.environ.items() if k != "RAS_COMMANDER_DSS_BACKEND"},
         capture_output=True,
         text=True,
     )

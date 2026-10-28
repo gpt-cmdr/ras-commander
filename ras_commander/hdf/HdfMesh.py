@@ -42,9 +42,11 @@ get_mesh_cell_property_tables()
 Write API (Face Property Tables) — EXPERIMENTAL / NOT RECOMMENDED:
 ------------------------------------------------------------------
 These methods are not recommended for production or any other
-non-experimental use. They have been tested only with HEC-RAS 7.0 April 2026
-``*.p##.tmp.hdf`` artifacts in one Windows-preprocess/Linux-solve workflow;
-all other versions and workflows are untested. They require explicit
+non-experimental use. They have been tested with HEC-RAS 7.0 April 2026
+``*.p##.tmp.hdf`` artifacts in one Windows-preprocess/Linux-solve workflow.
+HEC-RAS 7.0.1 June 2026 is qualified for temporary-HDF schema and
+write/readback only; its Linux solve after mutation is untested. All other
+versions and workflows are untested. They require explicit
 acknowledgement, create a full-file backup, validate the HDF role and schema,
 and verify the write by reopening the file. Windows preprocessing overwrites
 these edits.
@@ -3256,11 +3258,15 @@ class HdfMesh:
         re.IGNORECASE,
     )
     _LINUX_TMP_HDF_FILE_TYPE = "HEC-RAS Results"
-    _LINUX_TMP_HDF_FILE_VERSION = "HEC-RAS 7.0 April 2026"
+    _LINUX_TMP_HDF_FILE_VERSIONS = frozenset({
+        "HEC-RAS 7.0 April 2026", "HEC-RAS 7.0.1 June 2026",
+    })
     _LINUX_TMP_EXPERIMENTAL_NOTICE = (
         "EXPERIMENTAL / NOT RECOMMENDED FOR PRODUCTION OR OTHER "
-        "NON-EXPERIMENTAL USE. Tested only with HEC-RAS 7.0 April 2026 "
-        "in the Windows-preprocess/Linux-solve '*.p##.tmp.hdf' workflow; "
+        "NON-EXPERIMENTAL USE. HEC-RAS 7.0 April 2026 is qualified for "
+        "the Windows-preprocess/Linux-solve workflow. HEC-RAS 7.0.1 June "
+        "2026 is qualified for temporary-HDF schema and write/readback only; "
+        "its Linux solve after mutation is untested; "
         "all other versions and workflows are untested."
     )
     _FACE_PROPERTY_COLUMNS = (
@@ -3300,7 +3306,7 @@ class HdfMesh:
         hdf_path: Path,
         mesh_name: str,
     ) -> Tuple[str, str, np.ndarray, np.ndarray]:
-        """Validate the exact HEC-RAS 7.0 Linux temporary-result schema."""
+        """Validate exact qualified versions and the temporary-result schema."""
         if not HdfMesh._LINUX_TMP_HDF_PATTERN.search(hdf_path.name):
             raise ValueError(
                 "Direct face-property writes accept only filenames matching "
@@ -3317,10 +3323,10 @@ class HdfMesh:
                 f"File Type={HdfMesh._LINUX_TMP_HDF_FILE_TYPE!r}; "
                 f"observed {file_type!r}."
             )
-        if file_version != HdfMesh._LINUX_TMP_HDF_FILE_VERSION:
+        if file_version not in HdfMesh._LINUX_TMP_HDF_FILE_VERSIONS:
             raise ValueError(
                 "Linux temporary-HDF version guard requires root "
-                f"File Version={HdfMesh._LINUX_TMP_HDF_FILE_VERSION!r}; "
+                f"File Version in {sorted(HdfMesh._LINUX_TMP_HDF_FILE_VERSIONS)!r}; "
                 f"observed {file_version!r}."
             )
         if "Geometry" not in hdf_file:
@@ -3341,7 +3347,7 @@ class HdfMesh:
         for dataset_path in (info_path, values_path, facepoints_path):
             if dataset_path not in hdf_file:
                 raise KeyError(
-                    f"Required HEC-RAS 7.0 face-table dataset is missing: "
+                    f"Required face-table dataset is missing: "
                     f"{dataset_path}"
                 )
             if not isinstance(hdf_file[dataset_path], h5py.Dataset):
@@ -3499,13 +3505,15 @@ class HdfMesh:
         *,
         acknowledge_unsupported: bool = False,
     ) -> Path:
-        """Write face tables to a guarded HEC-RAS 7.0 Linux ``.tmp.hdf``.
+        """Write face tables to a guarded HEC-RAS Linux ``.tmp.hdf``.
 
         Warning:
             EXPERIMENTAL. Not recommended for production or any other
-            non-experimental use. Tested only with HEC-RAS 7.0 April 2026 in
-            the Windows-preprocess/Linux-solve temporary-HDF workflow; all
-            other versions and workflows are untested.
+            non-experimental use. HEC-RAS 7.0 April 2026 is qualified for the
+            Windows-preprocess/Linux-solve workflow. HEC-RAS 7.0.1 June 2026
+            is qualified for temporary-HDF schema and write/readback only;
+            its Linux solve after mutation is untested. All other versions
+            and workflows are untested.
 
         This API is limited to the proven two-phase workflow: preprocess a plan
         into ``*.p##.tmp.hdf``, modify that temporary result, then pass it to
@@ -3518,7 +3526,7 @@ class HdfMesh:
         It does not protect edits from Windows HEC-RAS preprocessing.
 
         Args:
-            hdf_path: HEC-RAS 7.0 ``*.p##.tmp.hdf`` path.
+            hdf_path: Qualified HEC-RAS ``*.p##.tmp.hdf`` path.
             mesh_name: Exact 2D flow-area name.
             face_tables: Face ID to DataFrame mapping. Required columns are
                 ``Elevation``, ``Area``, ``Wetted Perimeter``, and
@@ -4470,9 +4478,11 @@ class HdfMesh:
 
         Warning:
             EXPERIMENTAL. Not recommended for production or any other
-            non-experimental use. Tested only with HEC-RAS 7.0 April 2026 in
-            the Windows-preprocess/Linux-solve temporary-HDF workflow; all
-            other versions and workflows are untested.
+            non-experimental use. HEC-RAS 7.0 April 2026 is qualified for the
+            Windows-preprocess/Linux-solve workflow. HEC-RAS 7.0.1 June 2026
+            is qualified for temporary-HDF schema and write/readback only;
+            its Linux solve after mutation is untested. All other versions
+            and workflows are untested.
 
         ``Pinned`` is informational metadata that may be recognized by
         RASMapper. It is ignored by Windows HEC-RAS preprocessing and does not

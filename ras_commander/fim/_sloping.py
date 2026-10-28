@@ -168,6 +168,7 @@ def map_profiles(
     template_raster=None,
     terrain_hdf=None,
     velocity=False,
+    invalid_cells=None,
     _prepared=None,
 ):
     from .. import HdfMesh, HdfResultsMesh
@@ -184,6 +185,19 @@ def map_profiles(
     selected_options = _validate_options(
         render_mode, reduce_shallow_to_horizontal, use_depth_weighted_faces
     )
+    from . import _invalid_cells
+
+    if _prepared is not None:
+        if invalid_cells is not None and invalid_cells != _prepared._invalid_policy:
+            raise ValueError(
+                f"invalid_cells is fixed when the sloping model is prepared "
+                f"({_prepared._invalid_policy!r}); prepare a new model to change it"
+            )
+        invalid_policy = _prepared._invalid_policy
+    else:
+        invalid_policy = _invalid_cells.validate_policy(
+            _invalid_cells.DEFAULT_POLICY if invalid_cells is None else invalid_cells
+        )
     started = time.perf_counter()
     preparation = {}
     phase = started
@@ -297,16 +311,14 @@ def map_profiles(
     preparation["preflight_seconds"] = time.perf_counter() - phase
     phase = time.perf_counter()
     if _prepared is None:
-        with backend_scope("rust"):
-            cells = HdfMesh.get_mesh_cell_polygons(
-                hdf, strict=True, engine="native", threads=threads
-            )
+        cells, invalid_records = _invalid_cells.load_cells(
+            hdf, policy=invalid_policy, threads=threads
+        )
     else:
-        cells = _prepared._cells
+        cells, invalid_records = _prepared._cells, _prepared._invalid_records
     preparation["cell_polygon_seconds"] = time.perf_counter() - phase
     phase = time.perf_counter()
-    if cells.empty:
-        raise ValueError("sloping mapping requires physical 2D cell polygons")
+    _invalid_cells.require_cells(cells, invalid_records, invalid_policy)
     if supplied is not None:
         supplied.check_crs(cells.crs)
         # Validate complete identities even when the AOI will contain no pixels.
@@ -325,6 +337,8 @@ def map_profiles(
         aoi_crs=aoi_crs,
         default_crs=cells.crs,
     )
+    aoi_geometry = _aoi.geometry_in_crs(constraint, cells.crs) if constraint else None
+    _invalid_cells.check_scope(invalid_records, invalid_policy, aoi_geometry)
     # Windowing selects output pixels; the complete mesh remains available for
     # face connectivity and corner reconstruction across an AOI boundary.
     plan = _horizontal.plan_grid(cells, terrain, constraint, budget, native=True)
@@ -376,6 +390,7 @@ def map_profiles(
             for k, p in watched.items()
         },
         qualification="experimental native 7.0.1; plain five-model physical-2D corpus (bounded eBFE); enhanced combinations on Bald Eagle bridges Max and Davis timesteps",
+        invalid_cells=_invalid_cells.describe(invalid_records, invalid_policy, aoi_geometry),
     )
     if scope_info is not None:
         from . import _terrain_scope
@@ -413,6 +428,7 @@ def map_profiles(
             frame.attrs["terrain_scope"] = details["terrain_scope"]
         if "velocity" in details:
             frame.attrs["velocity"] = details["velocity"]
+        frame.attrs["invalid_cells"] = details["invalid_cells"]
         return frame
 
     RasFim._write_manifest(folder, manifest(), details)

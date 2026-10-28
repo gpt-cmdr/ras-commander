@@ -4301,6 +4301,7 @@ Step 5: Configure (optional — auto-detection usually works)
                                 performance_options.gdal_num_threads_per_helper
                             ),
                             gdal_cachemax_mb=performance_options.gdal_cachemax_mb,
+                            native_cpu_limit=performance_options.native_cpu_limit,
                         )
 
                     helper_results = _run_memory_admitted_store_map_jobs(
@@ -4382,6 +4383,7 @@ Step 5: Configure (optional — auto-detection usually works)
                             performance_options.gdal_num_threads_per_helper
                         ),
                         gdal_cachemax_mb=performance_options.gdal_cachemax_mb,
+                        native_cpu_limit=performance_options.native_cpu_limit,
                     )
 
                     logger.debug(f"StoreAllMaps stdout: {result.stdout}")

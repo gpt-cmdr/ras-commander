@@ -725,6 +725,48 @@ for map_type, files in results.items():
         print(f"  - {f}")
 ```
 
+Native pipe-network rasterization can fail intermittently on multiple CPUs
+([issue #678](https://github.com/gpt-cmdr/ras-commander/issues/678)). A helper
+process count of one does not restrict native rasterization threads. To opt
+into a CPU-affinity restriction for each helper:
+
+```python
+from ras_commander import StoreMapPerformanceOptions
+
+results = RasProcess.store_maps(
+    "02", depth=True, wse=True, velocity=False,
+    performance=StoreMapPerformanceOptions(max_workers=1, native_cpu_limit=1),
+)
+```
+
+The helper selects CPUs from its inherited allowed affinity before loading
+Mapper libraries. It verifies the setting and reports an error if it cannot
+apply it. The calling process and unrelated helpers retain their settings;
+`None` preserves the default inherited affinity. This is a scoped mitigation,
+not a repair of vendor code or a guarantee for every model/runtime. Expect
+lower native rendering throughput and validate the exported rasters. Helpers
+select the lowest CPUs from their inherited mask, so parallel helpers using
+`native_cpu_limit=1` share the same CPU. A limit exceeding that mask fails
+explicitly; a Wine launcher already restricted to one CPU cannot use a larger
+helper limit.
+
+On the retained public Davis 7.0.1 result, an eight-CPU inherited-affinity
+control failed in four of six aggregate exports. A one-CPU helper limit
+completed 12/12 aggregate and 12/12 independent Depth/WSE exports. Every
+successful band had 20,560 valid pixels and matched the retained successful
+reference's values, masks, grid and EPSG:2871 CRS. Per-case checks recorded
+`.rasmap` restoration and unchanged caller affinity. A separate three-case
+qualification-harness smoke run verified in-project result-HDF restoration.
+These bounded
+Windows observations qualify that fixture/runtime; they do not establish a
+universal repair or qualify Wine. The native vendor race remains separate from
+the supported opt-in mitigation.
+
+`scripts/qualification/qualify_native_pipe_maps.py` creates a disposable copy
+of a complete computed project and repeats both routes while recording runtime
+identity and restoration. It does not run a solver. Stage every dependency
+before using the harness; retain failed exports as failures.
+
 #### Available Map Types
 
 | Parameter | Description | Default |

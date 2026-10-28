@@ -10,6 +10,7 @@ after a read or write returns, while the JVM is still running.
 from __future__ import annotations
 
 import logging
+import os
 import subprocess
 import sys
 import textwrap
@@ -170,6 +171,8 @@ def test_rasdss_calls_release_file_handle_immediately(tmp_path) -> None:
         check=False,
         capture_output=True,
         text=True,
+        # This test exercises the Java bridge; do not inherit a native/shadow backend.
+        env={k: v for k, v in os.environ.items() if k != "RAS_COMMANDER_DSS_BACKEND"},
     )
     if completed.returncode == 77 and "RELEASE_BRIDGE_UNAVAILABLE:" in completed.stdout:
         pytest.skip(completed.stdout.strip().splitlines()[-1])
