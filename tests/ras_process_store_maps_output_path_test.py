@@ -1481,3 +1481,22 @@ def test_mapper_staging_preserves_readonly_source_on_exit(tmp_path, monkeypatch,
         assert not list(tmp_path.glob("*.mapper-*"))
     finally:
         path.chmod(stat.S_IRUSR | stat.S_IWUSR)
+
+
+def test_mapper_staging_keeps_original_if_swap_and_restore_fail(tmp_path, monkeypatch):
+    path = tmp_path / "Original.p01.hdf"
+    path.write_bytes(b"irreplaceable original")
+    monkeypatch.setattr(RasProcess, "_normalize_mapper_geometry_timestamps", lambda _: 1)
+    replace = ras_process_module.os.replace
+    def fail_work_and_restore(source, destination):
+        if str(source).endswith((".mapper-work", ".mapper-original")):
+            raise PermissionError("blocked replacement")
+        return replace(source, destination)
+    monkeypatch.setattr(ras_process_module.os, "replace", fail_work_and_restore)
+    with pytest.raises(PermissionError, match="blocked replacement"):
+        with RasProcess._mapper_compatible_result_hdf(path, "7.0.1"):
+            pytest.fail("Failed staging must not yield")
+    backups = list(tmp_path.glob("*.mapper-original"))
+    assert len(backups) == 1
+    assert backups[0].read_bytes() == b"irreplaceable original"
+    assert not list(tmp_path.glob("*.mapper-work"))
