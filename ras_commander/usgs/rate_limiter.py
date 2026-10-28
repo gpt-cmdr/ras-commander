@@ -292,7 +292,8 @@ def test_api_key(api_key: Optional[str] = None) -> bool:
     try:
         # Import dataretrieval (lazy loading)
         try:
-            import dataretrieval.nwis as nwis
+            from ._waterdata_adapter import _WaterDataAdapter as reader, _backend
+            _backend()
         except ImportError:
             logger.warning("dataretrieval package not installed, cannot test API key")
             return False
@@ -312,11 +313,10 @@ def test_api_key(api_key: Optional[str] = None) -> bool:
                 del os.environ["API_USGS_PAT"]
 
             # Make test request
-            result = nwis.get_record(
+            result = reader.get_iv(
                 sites=test_site,
                 start=test_start,
                 end=test_end,
-                service='iv',
                 parameterCd='00060'  # Flow
             )
 

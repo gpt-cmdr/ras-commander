@@ -562,11 +562,10 @@ class UsgsGaugeSpatial:
             site_no = row['site_no']
             try:
                 # Query data for this gauge
-                df, md = waterdata.get_continuous(
-                    sites=site_no,
-                    parameterCd=param_code,
-                    start=start_datetime,
-                    end=end_datetime
+                from ._waterdata_adapter import _WaterDataAdapter
+                df, md = _WaterDataAdapter.get_iv(
+                    sites=site_no, parameterCd=param_code,
+                    start=start_datetime, end=end_datetime,
                 )
 
                 # Check if data exists

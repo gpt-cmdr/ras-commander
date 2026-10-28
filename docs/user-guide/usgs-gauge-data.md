@@ -1,15 +1,36 @@
 # USGS Gauge Data Retrieval
 
-The USGS integration module provides seamless connectivity between USGS NWIS gauge data and HEC-RAS models. It handles everything from spatial discovery to boundary condition generation to model validation.
+## Water Data migration scope
 
-!!! tip "USGS API Key"
-    While the USGS NWIS API is free and doesn't require authentication for basic use, obtaining an **API key from USGS** is strongly encouraged for:
+Core flow/stage retrieval, real-time readings, initial-condition observations,
+and API-key checks use `dataretrieval.waterdata` and require
+`dataretrieval>=1.4`. Public result columns remain unchanged. Approval status is
+read separately from other qualifiers; missing approval, unexpected units, and
+conflicting observations at one timestamp raise instead of silently selecting
+an interpretation.
 
-    - Higher rate limits
-    - Priority queue access
-    - Better reliability for automated workflows
+Queries use UTC: naive timestamps are interpreted as UTC, aware timestamps are
+converted to UTC, and date-only end bounds include the entire UTC date. Daily
+means use statistic `00003` and their returned date labels are represented at
+UTC midnight. Legacy site-local calendar bounds can select different intervals;
+check date boundaries and alignment when migrating existing studies. Use
+explicit timezone-aware timestamps for precise continuous-data windows.
 
-    **Get your free API key**: [https://waterservices.usgs.gov/](https://waterservices.usgs.gov/)
+This is a scoped migration. Parameter-filtered spatial discovery still uses a
+legacy site-service fallback, and annual-peak retrieval still uses its legacy
+endpoint. Those paths require separate migration and qualification before the
+whole USGS module can be considered independent of retired services. See the
+[official USGS migration guide](https://api.waterdata.usgs.gov/docs/ogcapi/migration/)
+for endpoint and field changes.
+
+
+The USGS integration module retrieves gauge data and supports spatial discovery, boundary-condition generation, and model-validation workflows.
+
+!!! tip "USGS API key"
+    The modern services support an API key for higher request limits. Configure
+    it through `API_USGS_PAT` using the existing USGS configuration helpers.
+    See [USGS API-key registration](https://api.waterdata.usgs.gov/signup/)
+    and the [provider's key documentation](https://api.waterdata.usgs.gov/docs/ogcapi/keys/).
 
 ## Overview
 

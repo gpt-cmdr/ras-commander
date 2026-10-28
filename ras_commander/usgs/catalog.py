@@ -170,7 +170,7 @@ class UsgsGaugeCatalog:
 
         # Check for dataretrieval
         try:
-            import dataretrieval.nwis as nwis
+            from dataretrieval import waterdata
         except ImportError:
             raise ImportError(
                 "The 'dataretrieval' package is required for gauge catalog generation. "
