@@ -107,16 +107,27 @@ def test_auto_bc_batch_retains_generic_results_on_typed_refusal(fixture,mutation
         with pytest.raises(fast.FastHdfError):fast.read_datasets(f,paths,backend='rust')
 
 
-def test_non_inline_ea_auto_uses_h5py_instead_of_silent_fill(tmp_path):
+def test_non_inline_ea_is_exact_or_refused_never_silent_fill(tmp_path):
+    # An extensible-array chunk index with more elements than its index block. Engines up to
+    # 0.2.3 refuse it (their reader returned fill values past the index block); later engines,
+    # on hdf5-reader 0.10, read it. Either way: the exact h5py values or a typed refusal, and
+    # `auto` always gives the h5py values.
     import ras_commander_fast_hdf as native
     from ras_commander import fast_hdf as fast
     path=tmp_path/'ea.h5'
     expected=np.arange(50*101,dtype='f4').reshape(50,101)+1
     with h5py.File(path,'w',libver='latest') as f:
         f.create_dataset('data',data=expected,chunks=(1,101),maxshape=(None,101))
-    with pytest.raises(native.UnsupportedError) as error:native.read_numeric(path,'data')
-    assert error.value.engine_kind=='unsupported'
+    try:
+        exact(native.read_numeric(path,'data'),expected)
+        refused=False
+    except native.UnsupportedError as error:
+        assert error.engine_kind=='unsupported'
+        refused=True
     with h5py.File(path) as f:
         exact(fast.read_dataset(f['data'],backend='auto'),expected)
-        with pytest.raises(fast.FastHdfError):fast.read_dataset(f['data'],backend='rust')
+        if refused:
+            with pytest.raises(fast.FastHdfError):fast.read_dataset(f['data'],backend='rust')
+        else:
+            exact(fast.read_dataset(f['data'],backend='rust'),expected)
     fast.close_sessions()
