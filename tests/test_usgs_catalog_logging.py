@@ -29,6 +29,7 @@ def _install_fake_dataretrieval(monkeypatch):
     fake_nwis = types.ModuleType("dataretrieval.nwis")
     fake_dataretrieval = types.ModuleType("dataretrieval")
     fake_dataretrieval.nwis = fake_nwis
+    fake_dataretrieval.waterdata = fake_nwis
     monkeypatch.setitem(sys.modules, "dataretrieval", fake_dataretrieval)
     monkeypatch.setitem(sys.modules, "dataretrieval.nwis", fake_nwis)
 

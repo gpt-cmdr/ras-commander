@@ -24,7 +24,7 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
       - name: Install public library and focused test runner
-        run: python -m pip install -e . pytest geopandas 'shapely>=2.0' xarray requests rasterio psutil scipy
+        run: python -m pip install -e . pytest geopandas 'shapely>=2.0' xarray requests rasterio psutil scipy tqdm
       - name: Check text API and geometry write safety
         run: >-
           python -m pytest tests/ras_text_read_only_test.py
@@ -78,6 +78,11 @@ jobs:
           tests/test_resultsparser_write_attr_precheck.py
           tests/test_results_parser_fatal_records.py
           tests/terrain_export_host_test.py -q
+      - name: Check USGS Water Data translation without live HTTP
+        run: >-
+          python -m pytest tests/test_usgs_waterdata_migration.py
+          tests/test_usgs_study.py tests/test_usgs_catalog_logging.py
+          tests/test_usgs_spatial.py -q
       - name: Check DSS read contracts without optional runtimes
         run: >-
           python -m pytest tests/test_rasdss_java_read_fixes.py

@@ -165,7 +165,7 @@ setup(
         'fim': ['scipy', 'geopandas', 'shapely>=2.0', 'rasterio', 'pyproj',
                 f'{FAST_MAP_REQUIREMENT}; {FAST_MAP_WHEEL_MARKER}'],
         # USGS gauge data integration
-        'usgs': ['dataretrieval>=1.0'],
+        'usgs': ['dataretrieval>=1.4'],
         # FEMA eBFE archives that use Deflate64 compression (ZIP method 9).
         # Upstream publishes wheels only through CPython 3.10; keep this out of
         # the broad ``all`` extra so current Python installs do not require an
@@ -196,7 +196,7 @@ setup(
             'eccodes>=2.28',
             'pyproj',
             'aiohttp',
-            'dataretrieval>=1.0',
+            'dataretrieval>=1.4',
             'zarr>=2.14.0',
             's3fs>=2023.0.0',
             'netCDF4>=1.6.0',
@@ -216,7 +216,7 @@ setup(
             'docker>=6.0',
             'Pillow>=9.0',
             'comtypes>=1.4.0; sys_platform == "win32"',
-            'dataretrieval>=1.0',
+            'dataretrieval>=1.4',
             'zarr>=2.14.0',
             's3fs>=2023.0.0',
             'netCDF4>=1.6.0',
