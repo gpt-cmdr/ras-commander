@@ -9,6 +9,18 @@ alone does not identify a development checkout.
 
 ### Unreleased
 
+**DSS files are released when a Java-bridge call returns**
+
+With HEC Monolith, `HecDss.done()` only drops the bridge's file-cache
+reference. The native file stayed open, with its DSS locks held, until a
+deferred close ran a few seconds later. During that window other programs
+could refuse to write the file, and Windows could not rename or delete it.
+`RasDss.get_catalog()`, `read_timeseries()`, `read_grid()`,
+`write_timeseries()` and `write_grid_timeseries()` now also close the file
+through `HecDSSFileAccess.close(path, True)`, using the same resolved path
+string that opened it. A failed release is logged at DEBUG and never masks the
+call's own error. Public signatures and return values are unchanged.
+
 **Crop-invariant polygon AOI edges**
 
 Horizontal/sloping masks use global source pixel coordinates and an explicit

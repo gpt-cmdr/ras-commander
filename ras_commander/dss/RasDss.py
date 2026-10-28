@@ -302,7 +302,10 @@ class RasDss:
 
         finally:
             if dss is not None:
-                dss.done()
+                try:
+                    dss.done()
+                finally:
+                    RasDss._release_dss_file(dss_file)
 
     @staticmethod
     @log_call
@@ -402,7 +405,30 @@ class RasDss:
 
         finally:
             if dss is not None:
-                dss.done()
+                try:
+                    dss.done()
+                finally:
+                    RasDss._release_dss_file(dss_file)
+
+    @staticmethod
+    def _release_dss_file(dss_file: str) -> None:
+        """Release the bridge's native handle on one DSS file.
+
+        ``HecDss.done()`` and ``GriddedData.done()`` only drop the bridge's
+        file-cache reference; the native file can stay open, and locked,
+        until a deferred close runs. Pass the exact path string that was
+        used to open the file. The handle is shared, so other open bridge
+        objects on the same file reopen it on their next access. Failures
+        are logged at DEBUG and never raised, so a primary error is not
+        masked.
+        """
+        try:
+            from jnius import autoclass
+
+            HecDSSFileAccess = autoclass('hec.heclib.dss.HecDSSFileAccess')
+            HecDSSFileAccess.close(dss_file, True)
+        except Exception as exc:
+            logger.debug("Could not release DSS file %s (%s)", dss_file, exc)
 
     @staticmethod
     def _require_existing_dss_file(dss_file: Union[str, Path]) -> None:
@@ -664,7 +690,10 @@ class RasDss:
             ) from exc
         finally:
             if dss is not None:
-                dss.done()
+                try:
+                    dss.done()
+                finally:
+                    RasDss._release_dss_file(dss_file_str)
 
     @staticmethod
     @log_call
@@ -1730,7 +1759,10 @@ class RasDss:
             ) from e
         finally:
             if writer is not None:
-                writer.done()
+                try:
+                    writer.done()
+                finally:
+                    RasDss._release_dss_file(dss_file_str)
 
     @staticmethod
     @log_call
@@ -2374,7 +2406,10 @@ class RasDss:
             ) from e
         finally:
             if dss is not None:
-                dss.done()
+                try:
+                    dss.done()
+                finally:
+                    RasDss._release_dss_file(dss_file_str)
 
     @staticmethod
     @log_call
@@ -3008,7 +3043,10 @@ class RasDss:
                 )
         finally:
             if dss is not None:
-                dss.done()
+                try:
+                    dss.done()
+                finally:
+                    RasDss._release_dss_file(resolved_path)
         if not dss_file.is_file():
             raise RuntimeError(
                 f"HEC-DSS did not create temporary file: {dss_file}"
