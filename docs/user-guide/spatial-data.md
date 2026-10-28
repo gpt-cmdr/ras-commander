@@ -725,6 +725,27 @@ for map_type, files in results.items():
         print(f"  - {f}")
 ```
 
+Native pipe-network rasterization can fail intermittently on multiple CPUs
+([issue #678](https://github.com/gpt-cmdr/ras-commander/issues/678)). A helper
+process count of one does not restrict native rasterization threads. To opt
+into a CPU-affinity restriction for each helper:
+
+```python
+from ras_commander import StoreMapPerformanceOptions
+
+results = RasProcess.store_maps(
+    "02", depth=True, wse=True, velocity=False,
+    performance=StoreMapPerformanceOptions(max_workers=1, native_cpu_limit=1),
+)
+```
+
+The helper selects CPUs from its inherited allowed affinity before loading
+Mapper libraries. It verifies the setting and reports an error if it cannot
+apply it. The calling process and unrelated helpers retain their settings;
+`None` preserves the default inherited affinity. This is a scoped mitigation,
+not a repair of vendor code or a guarantee for every model/runtime. Expect
+lower native rendering throughput and validate the exported rasters.
+
 #### Available Map Types
 
 | Parameter | Description | Default |

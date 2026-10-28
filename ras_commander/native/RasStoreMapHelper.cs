@@ -34,6 +34,43 @@ class RasStoreMapHelper
         return null;
     }
 
+    // Applied inside the child before loading any vendor mapping assembly.
+    // The parent's affinity and unrelated helpers are never modified.
+    static bool ConfigureNativeCpuLimit()
+    {
+        string setting = Environment.GetEnvironmentVariable("RAS_COMMANDER_STORE_MAP_CPU_LIMIT");
+        if (String.IsNullOrEmpty(setting)) return true;
+        try
+        {
+            int requested;
+            if (!Int32.TryParse(setting, out requested) || requested < 1 || requested > 64)
+                throw new ArgumentException("native_cpu_limit must be between 1 and 64");
+            using (System.Diagnostics.Process process = System.Diagnostics.Process.GetCurrentProcess())
+            {
+                ulong inherited = unchecked((ulong)process.ProcessorAffinity.ToInt64());
+                ulong selected = 0;
+                int count = 0;
+                for (int bit = 0; bit < 64 && count < requested; bit++)
+                {
+                    ulong mask = 1UL << bit;
+                    if ((inherited & mask) != 0) { selected |= mask; count++; }
+                }
+                if (count != requested)
+                    throw new ArgumentException("native_cpu_limit exceeds inherited allowed CPUs");
+                process.ProcessorAffinity = new IntPtr(unchecked((long)selected));
+                if (unchecked((ulong)process.ProcessorAffinity.ToInt64()) != selected)
+                    throw new InvalidOperationException("Native helper CPU affinity verification failed");
+                Console.WriteLine("Native CPU affinity: inherited=0x{0:X}; selected=0x{1:X}; limit={2}", inherited, selected, requested);
+            }
+            return true;
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine("ERROR applying native CPU limit: " + ex.Message);
+            return false;
+        }
+    }
+
     static int Main(string[] args)
     {
         if (args.Length < 3)
@@ -44,6 +81,8 @@ class RasStoreMapHelper
             Console.Error.WriteLine("  RasStoreMapHelper.exe <hecrasDir> <renderMode> StoreMap <mapType> <resultHdf> <profileName> [outputBasePath]");
             return 1;
         }
+
+        if (!ConfigureNativeCpuLimit()) return 2;
 
         _hecrasDir = args[0];
         string renderMode = args[1].ToLowerInvariant();

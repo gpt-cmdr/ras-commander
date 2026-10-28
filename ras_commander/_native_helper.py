@@ -464,8 +464,19 @@ def _apply_gdal_performance_env(
     env: dict,
     gdal_num_threads: Optional[Union[int, str]],
     gdal_cachemax_mb: Optional[int],
+    native_cpu_limit: Optional[int] = None,
 ) -> None:
     """Apply scoped GDAL settings to a child-process environment."""
+    if native_cpu_limit is not None and (
+        isinstance(native_cpu_limit, bool) or not isinstance(native_cpu_limit, int)
+        or not 1 <= native_cpu_limit <= 64
+    ):
+        raise ValueError("native_cpu_limit must be an integer from 1 to 64 or None")
+    key = "RAS_COMMANDER_STORE_MAP_CPU_LIMIT"
+    if native_cpu_limit is None:
+        env.pop(key, None)
+    else:
+        env[key] = str(native_cpu_limit)
     if gdal_num_threads is None:
         env.pop("GDAL_NUM_THREADS", None)
     else:
@@ -731,6 +742,7 @@ def _run_store_all_maps_once(
     working_dir: Optional[Path],
     gdal_num_threads: Optional[Union[int, str]] = 1,
     gdal_cachemax_mb: Optional[int] = None,
+    native_cpu_limit: Optional[int] = None,
 ) -> subprocess.CompletedProcess:
     if _IS_LINUX:
         from .RasProcess import RasProcess
@@ -760,6 +772,7 @@ def _run_store_all_maps_once(
             env,
             gdal_num_threads,
             gdal_cachemax_mb,
+            native_cpu_limit,
         )
         with _wine_helper_single_cpu_affinity():
             result = subprocess.run(
@@ -784,6 +797,7 @@ def _run_store_all_maps_once(
         env,
         gdal_num_threads,
         gdal_cachemax_mb,
+        native_cpu_limit,
     )
     with _wine_helper_single_cpu_affinity():
         result = subprocess.run(
@@ -809,6 +823,7 @@ def _run_store_map_once(
     working_dir: Optional[Path],
     gdal_num_threads: Optional[Union[int, str]] = 1,
     gdal_cachemax_mb: Optional[int] = None,
+    native_cpu_limit: Optional[int] = None,
 ) -> subprocess.CompletedProcess:
     """Run one isolated StoreMap helper process."""
     if _IS_LINUX:
@@ -857,6 +872,7 @@ def _run_store_map_once(
         env,
         gdal_num_threads,
         gdal_cachemax_mb,
+        native_cpu_limit,
     )
 
     with _wine_helper_single_cpu_affinity():
@@ -880,6 +896,7 @@ def run_store_all_maps_helper(
     working_dir: Optional[Union[str, Path]] = None,
     gdal_num_threads: Optional[Union[int, str]] = 1,
     gdal_cachemax_mb: Optional[int] = None,
+    native_cpu_limit: Optional[int] = None,
 ) -> subprocess.CompletedProcess:
     """Run the packaged helper without mutating the HEC-RAS install folder."""
     if _env_flag("RAS_COMMANDER_MAP_HELPER_DISABLE"):
@@ -929,6 +946,7 @@ def run_store_all_maps_helper(
                 working_dir=working_dir,
                 gdal_num_threads=gdal_num_threads,
                 gdal_cachemax_mb=gdal_cachemax_mb,
+                native_cpu_limit=native_cpu_limit,
             )
         except (OSError, PermissionError, FileNotFoundError) as exc:
             staged_helper = stage_helper_executable(
@@ -960,6 +978,7 @@ def run_store_all_maps_helper(
                 working_dir=working_dir,
                 gdal_num_threads=gdal_num_threads,
                 gdal_cachemax_mb=gdal_cachemax_mb,
+                native_cpu_limit=native_cpu_limit,
             )
 
 
@@ -974,6 +993,7 @@ def run_store_map_helper(
     working_dir: Optional[Union[str, Path]] = None,
     gdal_num_threads: Optional[Union[int, str]] = 1,
     gdal_cachemax_mb: Optional[int] = None,
+    native_cpu_limit: Optional[int] = None,
 ) -> subprocess.CompletedProcess:
     """Generate one stored map in an isolated helper process.
 
@@ -1027,6 +1047,7 @@ def run_store_map_helper(
             "working_dir": working_dir,
             "gdal_num_threads": gdal_num_threads,
             "gdal_cachemax_mb": gdal_cachemax_mb,
+            "native_cpu_limit": native_cpu_limit,
         }
         try:
             return _run_store_map_once(

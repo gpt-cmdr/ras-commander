@@ -36,7 +36,14 @@ def _normalize_gdal_threads(
 
 @dataclass(frozen=True)
 class StoreMapPerformanceOptions:
-    """Execution and resource policy for independent stored-map helpers."""
+    """Execution and resource policy for stored-map helpers.
+
+    ``native_cpu_limit`` optionally restricts each helper to that many CPUs
+    from its inherited affinity before loading Mapper libraries. It is
+    independent of ``max_workers`` and leaves the calling process unchanged.
+    ``None`` preserves inherited affinity. A one-CPU limit is an opt-in
+    mitigation for native pipe-map concurrency failures, with lower throughput.
+    """
 
     max_workers: Optional[int] = 1
     memory_policy: MemoryPolicy = "enforce"
@@ -48,8 +55,13 @@ class StoreMapPerformanceOptions:
     gdal_cachemax_mb: Optional[int] = None
     admission_wait_timeout_seconds: float = 300.0
     admission_poll_interval_seconds: float = 1.0
+    native_cpu_limit: Optional[int] = None
 
     def __post_init__(self) -> None:
+        if self.native_cpu_limit is not None and (
+            not _is_strict_int(self.native_cpu_limit) or not 1 <= self.native_cpu_limit <= 64
+        ):
+            raise ValueError("native_cpu_limit must be an integer from 1 to 64 or None")
         if self.max_workers is not None and (
             not _is_strict_int(self.max_workers) or self.max_workers < 1
         ):

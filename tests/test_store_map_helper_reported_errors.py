@@ -80,3 +80,18 @@ def test_packaged_helper_propagates_reported_native_errors(fake_mapper_runtime, 
         assert result.returncode == 0, result.stderr
         assert f"NATIVE_{kind}: synthetic native diagnostic" in result.stdout
         assert "completed successfully" in result.stdout
+
+
+def test_packaged_helper_applies_single_cpu_before_mapper_loading(fake_mapper_runtime):
+    import psutil
+    caller = psutil.Process().cpu_affinity()
+    runtime = fake_mapper_runtime
+    helper = Path(__file__).resolve().parents[1] / "ras_commander/native/RasStoreMapHelper.exe"
+    env = dict(os.environ, RAS_COMMANDER_STORE_MAP_CPU_LIMIT="1")
+    result = subprocess.run([str(helper), str(runtime), "horizontal", "StoreAllMaps",
+        str(runtime / "test.rasmap"), "Status"], env=env, capture_output=True, text=True, timeout=30)
+    assert result.returncode == 0, result.stderr
+    assert "Native CPU affinity: inherited=0x" in result.stdout
+    assert "limit=1" in result.stdout
+    assert "completed successfully" in result.stdout
+    assert psutil.Process().cpu_affinity() == caller
