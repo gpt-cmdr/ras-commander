@@ -530,7 +530,29 @@ Bridge geometry authoring (deck profiles, piers, abutments, approach sections).
 
 ## GeomBcLines
 
-2D boundary condition line geometry authoring.
+Read and author boundary condition line geometry.
+
+`GeomBcLines.get_bc_lines(geom_file)` reads a plain-text `.g##` file into a
+DataFrame with `name`, `storage_area`, `coordinates`, and `coordinate_count`
+columns, in file order. Each `coordinates` value is a list of `(x, y)` tuples
+in the source coordinate system and units. The reader preserves stored
+precision, strips surrounding name padding, and rejects missing headers,
+invalid arc counts, truncated or non-finite coordinates, and missing
+text-position terminators. A file without BC lines returns an empty frame
+with the same columns. The call leaves the file unchanged and requires no
+initialized project, geometry HDF, or HEC-RAS installation.
+Start, middle, end, and text-position records must be present; their display
+position values are ignored. Returned vertices come only from the arc payload.
+
+```python
+from ras_commander import GeomBcLines
+
+bc_lines = GeomBcLines.get_bc_lines("child.g01")
+outlets = bc_lines.loc[bc_lines["storage_area"] == "Perimeter 1"]
+```
+
+Use `HdfBndry.get_bc_lines()` to read compiled geometry HDF lines instead.
+The text reader does not establish mesh attachment or boundary forcing.
 
 `replace_bc_lines(geom_file, unsteady_files, *, area_2d, lines, ras_object=None)`
 replaces the complete named-area line set and its forcing in one staged
@@ -570,6 +592,7 @@ targets `fim-hecras-wine:6.6-clb-v8`.
 
 ### Methods
 
+- `get_bc_lines(geom_file)` - Read BC line identities and vertices from geometry text
 - `add_bc_lines(geom_file, lines, replace_existing=False)` - Add or upsert named geometry lines
 - `delete_bc_line(geom_file, name)` - Delete a named geometry line
 - `rename_bc_line(geom_file, old_name, new_name)` - Rename a geometry line
@@ -1434,6 +1457,102 @@ establish software geometry completion, not hydraulic acceptance.
 
 
 ## Recorded refinement and generated-point repairs
+
+### Supplied parent-seed repair
+
+Use `GeomMesh.plan_computation_point_repair` when a child should start with its
+parent's computation points, allowing recorded native repairs at the cut edge.
+The default `write_computation_points` path still writes supplied points without
+repair. Coordinates and spacing use the geometry's horizontal CRS and units.
+
+```python
+from ras_commander.geom import GeomMesh
+
+plan = GeomMesh.plan_computation_point_repair(
+    child_geometry, parent_points, mesh_name="ChildArea", ras_object=child_project,
+)
+evidence = plan.to_dict()  # inspect seed additions, exclusions and removed vertices
+result = GeomMesh.apply_computation_point_repair(plan)
+readback = GeomMesh.validate_computation_point_repair(plan)
+```
+
+Planning performs native previews without changing the target text or compiled
+HDF. It follows the supplied-seed recipe retained in the Salt Draw subdomain
+assembly research: up to seven MaxFaces repairs at face-length ratios 0.0025,
+0.05 and 0.1, and up to six perimeter-connection repairs. MaxFaces is checked
+again after each perimeter change, sharing the same seven-repair budget. New
+midpoints are rounded to three decimal places before being moved inside, then
+deduplicated by exact equality. It removes perimeter vertices nearest native
+error locations and records seeds excluded by the repaired perimeter. Final previews must
+complete at all three ratios, both before and after native text serialization.
+Breakline and connection-line constraints participate in the native previews.
+Kept breaklines and complete connection footprints must remain contained, and
+boundary-condition line ends must still touch the repaired perimeter (within
+1e-6 model unit for text serialization). Breakout also audits compiled feature
+containment and connection/BC geometry after native preprocessing.
+
+The default loss limits are 0.001 of supplied parent seeds and 0.001 of the
+original perimeter area. Set `max_parent_seed_loss_fraction` and
+`max_area_loss_fraction` explicitly when planning if the reviewed workflow needs
+different limits. Loss uses the original polygon's excluded area, not net area
+change. Exceeding either limit raises with a `repair_evidence` dictionary; no
+successful plan or target mutation occurs. Failure or exhausted repair budgets
+also leave the target unchanged.
+
+Application requires unchanged input bytes, preserves a numbered backup and
+atomically replaces only the geometry text. The explicitly supplied project's runtime must
+agree with the actual loaded RasMapperLib assembly; use a fresh worker to switch
+runtimes. Without `ras_object`, supply explicit geometry and installation paths;
+the global project is never selected. A project's unresolved `Ras.exe` fallback
+accepts an explicit installation instead of resolving against the working folder.
+Successful readback establishes that the text matches the plan. It
+does not establish identical parent face topology or hydraulic equivalence.
+Run native Geometry and Event Conditions preprocessing and review the resulting
+compiled mesh and hydraulics separately.
+
+For breakout authoring, opt in with
+`RasBreakout2D.prepare_cloned_geometry(computation_points=parent_points,
+repair_computation_points=True, refresh_method="rasexe", remesh=False, ...)`.
+The returned `computation_points_result.seed_repair` retains the plan and
+application readback. Omitting the repair flag preserves existing behavior.
+
+The recipe was adapted from FIM Commander's retained
+`pipelines/rog/subdomain_assembly/author_piece.py` at commit `2384719e`.
+It uses GeomMesh's existing native repair helpers; no optimesh dependency is
+required.
+
+### Synchronize cloned area association caches
+
+After relocating a clone's terrain or classification sidecars, compiled 2D areas
+may retain filenames from the parent even when `/Geometry` has current links.
+Inspect and synchronize those caches through RasMap:
+
+```python
+plan = RasMap.plan_geometry_area_association_sync(child_hdf, ["ChildArea"])
+# Review plan["changes"] before application.
+receipt = RasMap.apply_geometry_area_association_sync(plan)
+```
+
+Planning requires existing current geometry-wide sidecars and records every
+selected area's filename/layer change. Application rejects changed input or a
+modified plan, verifies staged readback, preserves a numbered backup and replaces
+the HDF atomically. Area-only associations are preserved when no geometry-wide
+filename is declared. A stale area layer name is removed when the current
+geometry filename has no corresponding layer name.
+
+Absent optional area layer names remain absent; current filename links are still
+synchronized. In a HEC-RAS 6.6 geometry-refresh readback, the native save retained
+the child terrain filename but omitted the area `Terrain Layername` even though
+the canonical geometry association named the layer. The API preserves that
+cache representation instead of introducing a label that native save removes.
+An existing area layer name is still updated or removed to match the canonical
+association.
+
+Only the selected cached association attributes change. Calibration overrides,
+mesh datasets, other area attributes and canonical geometry links remain intact.
+An already synchronized plan preserves the file bytes and creates no backup.
+These APIs do not execute HEC-RAS or establish native/hydraulic acceptance;
+preprocess and review the child afterwards.
 
 `GeomMesh.clip_refinement_regions(..., invalid_regions="repair")` reads delivered
 geometry without changing the source HDF. GEOS `make_valid` supplies valid

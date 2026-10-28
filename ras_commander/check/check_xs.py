@@ -13,6 +13,7 @@ import h5py
 
 from ..Decorators import standardize_input, log_call
 from ..LoggingConfig import get_logger
+from ..fast_hdf import read_typed, reraise_required
 from .types import Severity, FlowType, CheckMessage, CheckResults
 from .thresholds import ValidationThresholds, get_default_thresholds
 from .messages import get_message_template, get_help_text, format_message
@@ -69,6 +70,7 @@ class CheckXs:
             geom_hdf = Path(geom_hdf)
             xs_gdf = HdfXsec.get_cross_sections(geom_hdf)
         except Exception as e:
+            reraise_required(e)
             logger.error("Failed to read geometry HDF for cross-section checks")
             logger.debug("Cross-section geometry HDF read failure for %s: %s", geom_hdf, e)
             msg = CheckMessage(
@@ -92,6 +94,7 @@ class CheckXs:
             if plan_hdf.exists():
                 steady_results = HdfResultsPlan.get_steady_results(plan_hdf)
         except Exception as e:
+            reraise_required(e)
             logger.debug("Could not read steady results from %s: %s", plan_hdf, e)
 
         # Create summary data
@@ -108,7 +111,7 @@ class CheckXs:
         try:
             with h5py.File(geom_hdf, 'r') as hdf:
                 if 'Geometry/Structures/Attributes' in hdf:
-                    struct_attrs = hdf['Geometry/Structures/Attributes'][:]
+                    struct_attrs = read_typed(hdf['Geometry/Structures/Attributes'], slice(None))
                     attr_names = struct_attrs.dtype.names
                     if 'US Type' in attr_names and 'DS Type' in attr_names:
                         for attr in struct_attrs:
@@ -123,6 +126,7 @@ class CheckXs:
                                 bridge_sections[(river, reach, us_rs)] = ('US', bridge_rs)
                                 bridge_sections[(river, reach, ds_rs)] = ('DS', bridge_rs)
         except Exception as e:
+            reraise_required(e)
             logger.debug(f"Could not build bridge section mapping: {e}")
 
         for idx, xs in xs_gdf.iterrows():
@@ -961,7 +965,7 @@ class CheckXs:
             with h5py.File(geom_hdf, 'r') as hdf:
                 # Check for multiple rivers/reaches indicating potential junctions
                 if 'Geometry/River Centerlines/Attributes' in hdf:
-                    river_attrs = hdf['Geometry/River Centerlines/Attributes'][:]
+                    river_attrs = read_typed(hdf['Geometry/River Centerlines/Attributes'], slice(None))
                     num_reaches = len(river_attrs)
 
                     if num_reaches > 1:
@@ -986,7 +990,7 @@ class CheckXs:
 
                 # Check for lateral structures (potential split flow indicators)
                 if 'Geometry/Structures/Attributes' in hdf:
-                    struct_attrs = hdf['Geometry/Structures/Attributes'][:]
+                    struct_attrs = read_typed(hdf['Geometry/Structures/Attributes'], slice(None))
                     for i, attr in enumerate(struct_attrs):
                         struct_type = attr['Type'].decode().strip() if isinstance(attr['Type'], bytes) else str(attr['Type']).strip()
                         if 'Lateral' in struct_type:
@@ -1006,6 +1010,7 @@ class CheckXs:
                             )
                             messages.append(msg)
         except Exception as e:
+            reraise_required(e)
             logger.debug(f"Could not check junctions/split flow: {e}")
 
         # =====================================================================
@@ -1687,7 +1692,7 @@ class CheckXs:
                 if xs_attrs_path not in hdf:
                     return messages
 
-                xs_attrs = hdf[xs_attrs_path][:]
+                xs_attrs = read_typed(hdf[xs_attrs_path], slice(None))
                 attr_names = xs_attrs.dtype.names
 
                 # Build a lookup dictionary of XS data
@@ -1737,7 +1742,7 @@ class CheckXs:
                 # Check for junctions from geometry
                 junctions = set()
                 if 'Geometry/River Centerlines/Attributes' in hdf:
-                    river_attrs = hdf['Geometry/River Centerlines/Attributes'][:]
+                    river_attrs = read_typed(hdf['Geometry/River Centerlines/Attributes'], slice(None))
                     if len(river_attrs) > 1:
                         # Multiple reaches - check for junction XS
                         # Junctions are typically at the downstream end of reaches
@@ -1839,6 +1844,7 @@ class CheckXs:
                                 messages.append(msg)
 
         except Exception as e:
+            reraise_required(e)
             logger.debug(f"Could not check contraction coefficients and widths: {e}")
 
         return messages

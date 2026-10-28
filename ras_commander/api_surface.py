@@ -15,6 +15,7 @@ PUBLIC_MODULES = [
     "ras_commander.gui",
     "ras_commander.hdf",
     "ras_commander.precip",
+    "ras_commander.subdomain",
     "ras_commander.terrain",
     "ras_commander.usgs",
 ]

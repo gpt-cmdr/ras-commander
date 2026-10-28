@@ -7,6 +7,7 @@ from pathlib import Path
 
 import h5py
 import pandas as pd
+import pytest
 
 from ras_commander.RasPreprocess import RasPreprocess
 
@@ -80,9 +81,11 @@ def test_compute_command_line_rejects_quote_in_path():
         raise AssertionError("a quoted path must be rejected")
 
 
+@pytest.mark.parametrize("require_linux_solver_ready", [True, False])
 def test_preprocess_uses_owned_launcher_and_records_alternate_signal(
     tmp_path,
     monkeypatch,
+    require_linux_solver_ready,
 ):
     ras_obj = _seed_project(tmp_path)
     process = _RunningProcess()
@@ -99,10 +102,18 @@ def test_preprocess_uses_owned_launcher_and_records_alternate_signal(
 
         def __init__(self, **kwargs):
             launched["monitor"] = kwargs
+            self.alternate_signal_condition = kwargs["alternate_signal_condition"]
 
         def monitor_until_signal(self, _process):
             _write_preprocess_outputs(tmp_path)
+            assert self.alternate_signal_condition()
             return True
+
+    def unsteady_probe(root_pid, tmp_hdf, b_file, x_file, artifact_baseline=None):
+        assert root_pid == process.pid
+        return RasPreprocess._preprocessing_artifacts_ready(
+            tmp_hdf, b_file, x_file, artifact_baseline=artifact_baseline
+        )
 
     def popen(command, **kwargs):
         launched["command"] = command
@@ -111,6 +122,8 @@ def test_preprocess_uses_owned_launcher_and_records_alternate_signal(
 
     monkeypatch.setattr(raspreprocess_module, "BcoMonitor", Monitor)
     monkeypatch.setattr(subprocess, "Popen", popen)
+    monkeypatch.setattr(RasPreprocess, "_unsteady_compute_started", staticmethod(unsteady_probe))
+    monkeypatch.setattr(RasPreprocess, "_preprocess_process_inventory", staticmethod(lambda: []))
     monkeypatch.setattr(
         RasPreprocess,
         "_tcu_supervision_availability_error",
@@ -127,6 +140,7 @@ def test_preprocess_uses_owned_launcher_and_records_alternate_signal(
         ras_object=ras_obj,
         clear_existing=False,
         fix_line_endings=False,
+        require_linux_solver_ready=require_linux_solver_ready,
     )
 
     assert result

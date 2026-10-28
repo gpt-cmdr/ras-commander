@@ -24,6 +24,39 @@ This file is the canonical local instruction file for `ras_commander/hdf/`.
   input/decorator validation exceptions remain unchanged. No status attributes are added.
 
 
+## Native Backend
+
+- The native (Rust) engine is ras-commander's default HDF engine. The `ras_commander_fast_hdf`
+  extension is a core dependency on the platforms with wheels (Windows x64, Linux x64,
+  macOS arm64) and may be absent elsewhere, so every reader must still work on h5py alone.
+  The `Hdf*` readers are served by it through the internal adapter `ras_commander.fast_hdf`. Native routing must be invisible
+  except for speed: signatures, return types, columns, dtypes, index, CRS, attrs,
+  timestamps and exceptions equal the h5py reference in `python` and `auto` mode. Only
+  `required` mode (`RAS_COMMANDER_FAST_HDF=required` or `backend="rust"`) may raise
+  `fast_hdf.FastHdfError`; broad `except Exception` handlers in readers call
+  `reraise_required(e)` first.
+- `RAS_COMMANDER_FAST_HDF`: `0`/`off`/`false`/`python`, `auto` (default; unset/empty/`1`/`on`/`true`),
+  `required`/`rust`. An unrecognised value is `auto` plus one logged warning.
+- `RAS_COMMANDER_HDF_SESSION_CACHE`: default (unset/`1`) shares one native session per file
+  inside a public call (`log_call`/`standardize_input` open the scope) and closes it when the
+  outermost public call returns, so no HDF stays open afterwards (an open file blocks
+  rename/delete/replace on Windows and network shares). `0` opens per native read; `persist`
+  keeps up to four sessions across public calls and then requires `fast_hdf.close_sessions()`
+  before moving or deleting files and before running HEC-RAS.
+- `RAS_COMMANDER_FAST_TEXT` is the same policy switch for `ras_commander.fast_text`
+  (not used by any existing `Geom*`/`Ras*` method).
+- Public `fast_hdf` names are those in its `__all__`. `read_typed`, `read_attr(s)`, `read_dataset(s)`,
+  `mesh_series_domain`, `trace_reads`, `native_required`, `reraise_required`, `backend_scope`,
+  `release_native_sessions`, `fast_results`, `hdf/HdfFluvialNative` and `_fast_hdf_typed` are
+  internal plumbing; do not document them as user API or add new public callers outside
+  `ras_commander/`. Read one attribute with `read_attr(obj, name, default)`, never
+  `read_attrs(obj).get(name)` (an unreadable sibling must not fail the read).
+- Timestamps: `HdfUtils.convert_timesteps_to_datetimes` returns exactly what pandas has always
+  returned (`datetime64[ns]` under pandas 2.x) for every date pandas can represent; only dates
+  beyond year 2262 use `datetime64[us]` (main #548).
+- Keep this contract when adding a routed method: add a test that injects a native failure
+  (see `tests/test_native_api_conservatism.py`) and a test that the result equals the python-mode result.
+
 ## Implementation Rules
 
 - Follow the existing static-class pattern.
@@ -113,6 +146,10 @@ This file is the canonical local instruction file for `ras_commander/hdf/`.
   `region_name` parameters for selective face application (precedence:
   `face_ids` > `region_name` > `polygon` > all faces).
 - 2D results extraction: `HdfResultsMesh`
+- Legacy `Log Hydraulics` (HEC-RAS 6.0-6.3.x per-mesh solver log) is read only
+  by `HdfResultsMesh.get_mesh_log_hydraulics()` as a labelled diagnostic table
+  on the Base Output clock. Never add it to `_LEGACY_MESH_SERIES_DOMAINS` or
+  infer a cell/face domain from its width.
 - `HdfFluvialPluvial` retains `(mesh_name, cell_id)` through time lookups,
   adjacency, region growth and classification joins. Coincident edges from
   different meshes are never neighbors. Polygon dissolution groups by mesh and
@@ -133,13 +170,30 @@ This file is the canonical local instruction file for `ras_commander/hdf/`.
   stored coordinates (MultiLineString if not contiguous). Dissolve uses sorted
   `(mesh_name, cell_id)` rows and normalized rings, so the `cell_id` column is
   the smallest cell in each class.
+  The opt-in `engine="native"`/`"auto"` paths reproduce this mesh-scoped reference
+  (several meshes are analysed in isolation; frames keep the
+  `mesh_name, classification, geometry, cell_id` dissolve layout) and record
+  `attrs["fluvial_engine"]`; the default `engine="python"` is the reference.
+  Native uses the same stored-face adjacency and set-based seeding (no
+  last-write replay), emits boundary lines in sorted pair order through the
+  shared `_merge_shared_pieces`, and returns topologically equal polygons with
+  the same rows and attributes. It raises `FluvialNativeUnsupportedError`
+  (`"auto"` then runs Python) when it cannot match: missing
+  `Faces Cell Indexes` (Python's ring-segment fallback), physical cells that
+  differ from the polygonizable cells, invalid source cell geometry,
+  unprojected CRS, delta_t=0 (equal-time pairs) or non-millisecond thresholds.
+  With `min_polygon_area_acres`, native classifies and then runs the
+  reference's own `_dissolve_classified_cells` (over the h5py cell polygons)
+  and `_swap_small_polygons`: the swap's 'first' `area_acres`/`cell_id` follow
+  the GEOS part order of that canonical dissolve, which native ring assembly
+  does not share, so the result is then byte-identical to the reference.
 - Mesh time-series domains use authoritative stored scalar `Location`: `Cells`
   and `Cell` mean cells; `Faces` means faces. Invalid, unknown, nonscalar or
   contradictory present Location is refused, never bypassed with a name rule.
   Only absent Location permits the immutable exact-name stable-core schema in
   Base Output/Unsteady Time Series/2D Flow Areas: `Depth`/`Water Surface` are
   cells; `Face Velocity`, `Face Shear Stress`, `Face Area`, and `Face Manning's n`
-  are faces. Provenance: unlabelled JUL 5.0.7 output and shared names compatible
+  are faces. Provenance: unlabelled 5.0.7 output (e.g. FEMA eBFE AustinOyster.p03) and shared names compatible
   with supported 6.x/7.x output/API fixtures; excerpts without File Version use
   only this core table. Future version-specific names need qualified entries.
   Both domain paths require numeric rank-two data, matching canonical Time rows,
@@ -150,9 +204,24 @@ This file is the canonical local instruction file for `ras_commander/hdf/`.
   lazy and streamed reads, without ghost flags or spatial coordinates. Default
   cell/face discovery skips time-only diagnostics and reports invalid entries;
   explicit malformed reads raise `ValueError`. One-row outputs are not broadcast.
+  Rows that differ from a valid Time axis raise `MeshSeriesAvailabilityError`
+  (a `ValueError`) from eager, view and stream reads alike; `disposition` is
+  `unwritten_placeholder` when the dataset stores no bytes (HDF5 fill only, e.g.
+  6.6/7.0.1 no-wind `Face Wind Term`, 6.6 Diffusion Wave `Face Water Surface`)
+  else `row_count_mismatch`. Never broadcast, re-time or read them as constant
+  fields. `get_mesh_timeseries_availability()` reports the same qualification.
   Ghost filtering follows qualification. `Cell Hydraulic Depth` remains distinct
   from `Depth` and WSE-minus-minimum-elevation depth. Summary wrappers retain
   their separate existing schemas and are unchanged by these series rules.
+- Non-Newtonian `Face Mixture Dynamic Viscosity` (6.6/7.0.1 Bingham output) is
+  labelled `Location=Faces` but its width equals stored cells. It has no
+  established producer domain/unit contract: typed readers must keep refusing
+  it. Do not relabel it as cells, strip ghost columns, attach IDs, or convert
+  its stored `lb/ft^2*s` value. `HdfResultsMesh.inspect_mesh_series_raw()` is the
+  diagnostic route: stored identity, attrs, Time row match, geometry counts,
+  refusal reason, `raw_row`/`raw_column` axes and always-unqualified domain and
+  units. `Face Yield Stress` and `Face Viscous Stress` remain qualified face
+  series. Reader support does not establish hydraulic convergence.
 - Unsteady `HdfResultsQuery` velocity queries at integer time indexes prefer stored
   `Cell Velocity - Velocity X/Y` components per mesh. Validate their stored
   cell Location, time/geometry axes, physical count and velocity units; compute

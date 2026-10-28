@@ -79,6 +79,7 @@ from uuid import uuid4
 
 from .._ras_text import _split_ras_records, _write_ras_text
 from ..Decorators import log_call
+from ..fast_hdf import release_native_sessions
 from .._gdal_runtime import (
     configure_hecras_gdal_runtime,
     configure_rasmapper_gdal_bridge,
@@ -94,6 +95,9 @@ from .._geometry_association import (
 )
 from ..LoggingConfig import get_logger
 from ._breakline_controls import _protection_radius_flag
+from ..fast_hdf import read_attr, read_typed, reraise_required
+from ..fast_hdf import h5py_until_qualified
+from ._seed_repair import ComputationPointRepairPlan
 from .GeomMeshDataclasses import (
     BCConflict,
     BCFixResult,
@@ -101,6 +105,8 @@ from .GeomMeshDataclasses import (
     DomainContainmentViolation,
     GridAnchor,
     MeshResult,
+    MeshCellSubsetPlan,
+    MeshSeedRepairResult,
 )
 
 if TYPE_CHECKING:
@@ -304,7 +310,7 @@ def _grid_anchor_from_hdf(
     path = Path(hdf_path)
     with h5py.File(path, "r") as hdf:
         group = hdf["Geometry/2D Flow Areas"]
-        attrs = group["Attributes"][()]
+        attrs = read_typed(group["Attributes"])
         names = [_decode_hdf_text(value).strip() for value in attrs["Name"]]
         if mesh_name is not None:
             if mesh_name not in names:
@@ -317,8 +323,8 @@ def _grid_anchor_from_hdf(
             if not 0 <= mesh_index < len(names):
                 raise ValueError(f"mesh_index {mesh_index} out of range for {path.name}")
             index = mesh_index
-        info = group["Polygon Info"][()]
-        points = group["Polygon Points"][()]
+        info = read_typed(group["Polygon Info"])
+        points = read_typed(group["Polygon Points"])
         start, count = int(info[index][0]), int(info[index][1])
         ring = np.asarray(points[start : start + count], dtype=float)
         dx = float(attrs["Spacing dx"][index])
@@ -763,7 +769,7 @@ def _screening_inset(hdf_path):
     """Return a half-foot inset expressed in geometry length units."""
     import h5py
     with h5py.File(hdf_path, "r") as hf:
-        units = hf.attrs.get("Units System", "")
+        units = read_attr(hf, "Units System", "")
     if isinstance(units, bytes):
         units = units.decode("utf-8")
     if str(units) == "US Customary":
@@ -964,7 +970,8 @@ def _inset_perimeter_midpoint(mid, face_length: float, polygon, ns: dict):
 
 
 def _autofix_max_faces(
-    mesh, seeds_as_list: list, ns: dict, perimeter=None, stats: Optional[dict] = None
+    mesh, seeds_as_list: list, ns: dict, perimeter=None, stats: Optional[dict] = None,
+    midpoint_round_decimals: int | None = None,
 ) -> Tuple[list, int, list]:
     """Add midpoints of longest 2 faces (with no internal points) per cell exceeding MAX_FACES.
 
@@ -1019,6 +1026,11 @@ def _autofix_max_faces(
             try:
                 seg = mesh.FaceSegment(fidx)
                 mid = seg.MidPoint()
+                if midpoint_round_decimals is not None:
+                    mid = ns["PointM"](
+                        round(float(mid.X), midpoint_round_decimals),
+                        round(float(mid.Y), midpoint_round_decimals),
+                    )
                 if polygon is not None:
                     mid, moved = _inset_perimeter_midpoint(
                         mid, face_key(fidx), polygon, ns
@@ -1257,8 +1269,8 @@ def _read_bc_features(area_group, shapely_line_cls) -> list[dict]:
         bc_feature = area_group["BC Lines"][bc_name]
         if not hasattr(bc_feature, "keys") or "Coordinates" not in bc_feature:
             continue
-        coords = bc_feature["Coordinates"][:]
-        bc_type_raw = bc_feature.attrs.get("Type", "")
+        coords = read_typed(bc_feature["Coordinates"], slice(None))
+        bc_type_raw = read_attr(bc_feature, "Type", "")
         if hasattr(bc_type_raw, "decode"):
             bc_type = bc_type_raw.decode("utf-8", errors="replace").strip("\x00").strip()
         else:
@@ -1277,9 +1289,9 @@ def _read_bc_features(area_group, shapely_line_cls) -> list[dict]:
 def _read_bc_face_segments(area_group, shapely_line_cls) -> List[tuple]:
     """Read perimeter faces for one 2D flow area."""
     face_segments: List[tuple] = []
-    fp_coords = area_group["FacePoints Coordinate"][:]
-    face_fp_idx = area_group["Faces FacePoint Indexes"][:]
-    perim_info = area_group["Faces Perimeter Info"][:]
+    fp_coords = read_typed(area_group["FacePoints Coordinate"], slice(None))
+    face_fp_idx = read_typed(area_group["Faces FacePoint Indexes"], slice(None))
+    perim_info = read_typed(area_group["Faces Perimeter Info"], slice(None))
 
     for fid in range(len(face_fp_idx)):
         row = perim_info[fid]
@@ -1755,7 +1767,7 @@ def _read_mesh_metadata_from_hdf(
 
     with h5py.File(str(hdf_path), "r") as hf:
         if attrs_key in hf:
-            data = hf[attrs_key][:]
+            data = read_typed(hf[attrs_key], slice(None))
             dtype_names = data.dtype.names or ()
             for i in range(len(data)):
                 if "Name" in dtype_names:
@@ -1855,7 +1867,7 @@ def _read_cell_size_from_hdf(
         with h5py.File(str(hdf_path), "r") as hf:
             if attrs_key not in hf:
                 return fallback
-            data = hf[attrs_key][:]
+            data = read_typed(hf[attrs_key], slice(None))
             if "Spacing dx" not in data.dtype.names:
                 return fallback
             for i in range(len(data)):
@@ -1866,8 +1878,8 @@ def _read_cell_size_from_hdf(
                 dx = float(data["Spacing dx"][i])
                 if dx > 0:
                     return dx
-    except Exception:
-        pass
+    except Exception as exc:
+        reraise_required(exc)
     return fallback
 
 
@@ -2392,6 +2404,13 @@ def _recompile_geometry_hdf_via_rasexe(
     plan_number = _find_plan_for_geometry(geom_text_path, ras_object=ras_object)
     from .GeomPreprocessor import GeomPreprocessor
 
+    allocation = os.environ.get("SLURM_CPUS_PER_TASK", "")
+    workers = (
+        int(allocation)
+        if allocation.isascii() and allocation.isdigit() and int(allocation) > 0
+        else 1
+    )
+
     logger.info(
         f"Refreshing compiled geometry HDF for {geom_text_path.name} "
         f"through Ras.exe using plan p{plan_number}"
@@ -2403,6 +2422,7 @@ def _recompile_geometry_hdf_via_rasexe(
         force=True,
         geometry_only=True,
         require_complete_products=require_complete_products,
+        native_worker_threads=workers,
     )
     if not preprocess_result.success:
         raise RuntimeError(
@@ -2464,7 +2484,7 @@ def _hdf_flow_area_perimeter(
 
     with h5py.File(str(hdf_path), "r") as hdf:
         group = hdf["Geometry/2D Flow Areas"]
-        attributes = group["Attributes"][()]
+        attributes = read_typed(group["Attributes"])
         names = []
         for value in attributes["Name"]:
             if isinstance(value, (bytes, np.bytes_)):
@@ -2479,10 +2499,10 @@ def _hdf_flow_area_perimeter(
                 f"2D flow area {mesh_name!r} resolved to {len(matches)} HDF rows"
             )
         point_start, point_count = (
-            int(value) for value in group["Polygon Info"][matches[0], :2]
+            int(value) for value in read_typed(group["Polygon Info"], (matches[0], slice(None, 2)))
         )
         return np.asarray(
-            group["Polygon Points"][point_start : point_start + point_count],
+            read_typed(group["Polygon Points"], slice(point_start, point_start + point_count)),
             dtype=float,
         )
 
@@ -2547,7 +2567,7 @@ def _hdf_polyline_features(
                 "Lateral Structure Count",
             )
             observed_counts = [
-                int(group.attrs[name])
+                int(read_attr(group, name))
                 for name in count_attributes
                 if name in group.attrs
             ]
@@ -2558,15 +2578,15 @@ def _hdf_polyline_features(
         raise RuntimeError(
             f"{group_path} is missing required dataset(s): {', '.join(missing)}"
         )
-    attributes = group["Attributes"][()]
-    info = group[info_name][()]
-    points = group[points_name][()]
+    attributes = read_typed(group["Attributes"])
+    info = read_typed(group[info_name])
+    points = read_typed(group[points_name])
     if len(attributes) != len(info):
         raise RuntimeError(
             f"{group_path} Attributes rows ({len(attributes)}) do not match "
             f"{info_name} rows ({len(info)})"
         )
-    parts = group[parts_name][()] if parts_name in group else None
+    parts = read_typed(group[parts_name]) if parts_name in group else None
     features: list[dict[str, Any]] = []
     for index, row in enumerate(info):
         if len(row) < 2 or any(
@@ -2656,9 +2676,9 @@ def _hdf_polygon_features(
         raise RuntimeError(
             f"{group_path} is missing required dataset(s): {', '.join(missing)}"
         )
-    attributes = group["Attributes"][()]
-    info = group["Polygon Info"][()]
-    points = group["Polygon Points"][()]
+    attributes = read_typed(group["Attributes"])
+    info = read_typed(group["Polygon Info"])
+    points = read_typed(group["Polygon Points"])
     if len(attributes) != len(info):
         raise RuntimeError(
             f"{group_path} Attributes rows ({len(attributes)}) do not match "
@@ -2666,7 +2686,7 @@ def _hdf_polygon_features(
         )
     if points.ndim != 2 or points.shape[1] < 2:
         raise RuntimeError(f"{group_path}/Polygon Points must contain XY coordinates")
-    parts = group["Polygon Parts"][()] if "Polygon Parts" in group else None
+    parts = read_typed(group["Polygon Parts"]) if "Polygon Parts" in group else None
     features: list[dict[str, Any]] = []
     for index, row in enumerate(info):
         if len(row) < 2 or any(
@@ -4003,7 +4023,7 @@ class GeomMesh:
         with h5py.File(str(hdf_path), "r") as hf:
             if rr_key not in hf:
                 return result
-            data = hf[rr_key][:]
+            data = read_typed(hf[rr_key], slice(None))
             for i, row in enumerate(data):
                 name = row["Name"].decode("utf-8", errors="replace").strip()
                 result.append((i, name))
@@ -4140,7 +4160,7 @@ class GeomMesh:
         with h5py.File(str(hdf_path), "r") as hf:
             if rr_key not in hf:
                 return result
-            data = hf[rr_key][:]
+            data = read_typed(hf[rr_key], slice(None))
             has_dx = "Spacing dx" in data.dtype.names
             has_dy = "Spacing dy" in data.dtype.names
             for i, row in enumerate(data):
@@ -4381,7 +4401,7 @@ class GeomMesh:
         }
         with h5py.File(hdf_path, "r") as hdf:
             key = "Geometry/2D Flow Area Refinement Regions/Attributes"
-            attributes = _coerce_refinement_region_attributes(hdf[key][()]) if key in hdf else []
+            attributes = _coerce_refinement_region_attributes(read_typed(hdf[key])) if key in hdf else []
         output: list[dict[str, Any]] = []
         rows = []
         repairs = []
@@ -4635,6 +4655,7 @@ class GeomMesh:
 
             if create_backup:
                 backup_path = GeomParser.create_backup(hdf_path)
+            release_native_sessions(temp_path, hdf_path)
             os.replace(temp_path, hdf_path)
         finally:
             if temp_path.exists():
@@ -4959,6 +4980,7 @@ class GeomMesh:
 
                 target_crs = HdfBase.get_projection(hdf_path)
             except Exception as exc:
+                reraise_required(exc)
                 logger.debug(f"Could not read project CRS for flowline regions: {exc}")
             if target_crs is None:
                 logger.warning(
@@ -5477,6 +5499,109 @@ class GeomMesh:
             result.error_message = f"{type(exc).__name__}: {exc}"
             logger.error("[%s] write_computation_points failed: %s", result.mesh_name, exc)
             return result
+
+    @staticmethod
+    @log_call
+    def plan_computation_point_repair(
+        geom_number: str | Number | Path,
+        computation_points: Any,
+        mesh_name: str | None = None,
+        mesh_index: int = 0,
+        hecras_dir: str | Path | None = None,
+        ras_object=None,
+        *,
+        max_parent_seed_loss_fraction: float = 0.001,
+        max_area_loss_fraction: float = 0.001,
+        allow_extended_connection_support: bool = False,
+    ) -> ComputationPointRepairPlan:
+        """Preview bounded native repair of supplied seeds without changing text.
+
+        Coordinates retain the geometry's horizontal CRS/units. This ports the
+        Salt Draw cookie authoring recipe: up to seven MaxFaces repairs at ratios
+        0.0025/0.05/0.1, adding longest-face midpoint seeds rounded to three
+        decimal places before moving them inside, with exact-equality
+        deduplication afterwards. Six perimeter-connection repairs are allowed;
+        MaxFaces is rechecked after each, sharing the seven-repair budget.
+        Seeds excluded by the repaired perimeter are recorded and removed.
+        Final previews must complete at all three ratios, including after native
+        text serialization. No regular-grid generation or HDF mutation occurs.
+
+        Args:
+            geom_number: Owned geometry text path or project geometry number.
+            computation_points: Nonempty N-by-2 finite, unique interior XY seeds.
+            mesh_name: Exact 2D-area name, otherwise use mesh_index.
+            mesh_index: Zero-based area index when mesh_name is omitted.
+            hecras_dir: Native installation; must match the selected project.
+            ras_object: Explicit isolated project. None requires geometry text
+                and hecras_dir paths; the global project is never selected.
+            max_parent_seed_loss_fraction: Maximum excluded supplied seed share,
+                between zero and one; default 0.001 (0.1 percent).
+            max_area_loss_fraction: Maximum original perimeter area excluded by
+                repair, between zero and one; default 0.001 (0.1 percent).
+            allow_extended_connection_support: Audit verified extended connection
+                footprints as supported by GeomLateral.classify_connections.
+
+        Returns:
+            Identity-bound plan with original/final seeds, removed vertices,
+            round diagnostics and native previews for review. The caller then
+            applies it and separately compiles Geometry/Event Conditions.
+
+        Raises:
+            ValueError: Invalid points, area, spacing, or conflicting runtime.
+            FileNotFoundError: Missing geometry or selected native runtime.
+            RuntimeError: Native repair fails, exhausts its budget or input changes.
+                Loss-limit errors also expose a repair_evidence dictionary with
+                dropped seeds, area lost in squared model units and both limits.
+        """
+        from ._seed_repair import _plan
+
+        return _plan(
+            geom_number, computation_points, mesh_name, mesh_index, hecras_dir, ras_object,
+            max_parent_seed_loss_fraction, max_area_loss_fraction, allow_extended_connection_support,
+        )
+
+    @staticmethod
+    @log_call
+    def apply_computation_point_repair(plan: ComputationPointRepairPlan) -> MeshSeedRepairResult:
+        """Apply a reviewed supplied-seed plan to its owned text atomically.
+
+        Args:
+            plan: Unchanged plan from plan_computation_point_repair.
+
+        Returns:
+            Computation-point MeshResult containing repair/readback evidence.
+            Only geometry text and a numbered backup are written. HDF files
+            remain unchanged. Native compilation and hydraulic review follow.
+
+        Raises:
+            TypeError: The argument is not a repair plan.
+            RuntimeError: Geometry changed since planning or readback differs.
+            OSError: Backup or atomic replacement fails.
+        """
+        from ._seed_repair import _apply
+
+        return _apply(plan)
+
+    @staticmethod
+    @log_call
+    def validate_computation_point_repair(plan: ComputationPointRepairPlan) -> dict[str, Any]:
+        """Read back applied text against the plan; no model mutation.
+
+        Args:
+            plan: Applied supplied-seed plan in the geometry's CRS/units.
+
+        Returns:
+            Text identity and seed count on success. This is not a compiled
+            mesh or hydraulic-equivalence validation.
+
+        Raises:
+            TypeError: The argument is not a repair plan.
+            RuntimeError: Current text differs from the reviewed replacement.
+            OSError: The geometry cannot be read.
+        """
+        from ._seed_repair import _validate
+
+        return _validate(plan)
 
     @staticmethod
     @log_call
@@ -6528,6 +6653,7 @@ class GeomMesh:
 
     @staticmethod
     @log_call
+    @h5py_until_qualified
     def detect_bc_conflicts(
         geom_hdf_path: Union[str, Path],
         cell_size: float,
@@ -6797,3 +6923,135 @@ class GeomMesh:
             f"(trims: {result.trims})"
         )
         return result
+
+    @staticmethod
+    @log_call
+    def plan_cell_subset(
+        source_geometry_hdf: Union[str, Path],
+        geom_file: Union[str, Path],
+        parent_cell_ids: Sequence[int],
+        mesh_name: str,
+        *,
+        boundary_tolerance: float = 1e-6,
+        ras_object=None,
+    ) -> MeshCellSubsetPlan:
+        """Plan an exact physical-cell subset without modifying either input.
+
+        The source must be a fully processed geometry-only HDF. The target is
+        an owned .g## text/HDF pair containing one named 2D area whose perimeter
+        agrees with the selected cell union within boundary_tolerance, measured
+        in source horizontal units. CRS definitions must agree. Holes, disjoint
+        components, boundary pinch points, duplicate IDs and ghost IDs block;
+        the selection is never repaired or expanded. No result HDF is read.
+        An owned target stamped "HEC-RAS Results" by native completion is
+        accepted only when its sole root group is Geometry. The source follows
+        the same rule, so a parent compiled by Ras.exe can be cut; plan HDFs
+        and files holding results are rejected.
+
+        Args:
+            source_geometry_hdf: Read-only parent geometry HDF, with native mesh tables.
+            geom_file: Owned child geometry text path; its .hdf must already exist.
+            parent_cell_ids: Explicit zero-based physical parent cell IDs.
+            mesh_name: Exact source and child 2D area name.
+            boundary_tolerance: Maximum perimeter distance in source horizontal units.
+            ras_object: Optional isolated project; path inputs require no global project.
+
+        Returns:
+            Hash-bound plan with selected IDs and topology counts. This performs
+            no native computation and produces no files or hydraulic acceptance.
+
+        Raises:
+            ValueError: The explicit selection, CRS or child perimeter is unsupported.
+            RuntimeError: An input changes during planning.
+        """
+        from ._cell_subset import _plan_cell_subset
+
+        return _plan_cell_subset(
+            source_geometry_hdf,
+            geom_file,
+            parent_cell_ids,
+            mesh_name,
+            boundary_tolerance,
+        )
+
+    @staticmethod
+    @log_call
+    def apply_cell_subset(
+        plan: MeshCellSubsetPlan,
+        *,
+        hecras_version: str = "6.6",
+        hecras_dir: Optional[Union[str, Path]] = None,
+        timeout: int = 1800,
+        ras_object=None,
+    ) -> MeshResult:
+        """Write a planned topology into an owned child text/HDF pair.
+
+        Retains physical parent centres, cell polygons and face coordinates in
+        their original horizontal CRS and units. Reindexes faces and facepoints,
+        creates one ghost per new boundary face, and checks reciprocal incidence
+        after isolated native serialization. No parent results are copied and
+        inherited hydraulic property tables are invalidated. Source bytes are
+        never modified. Text points use the existing native fixed-width writer;
+        its mesh timestamp is bound to the native serialized Data Date.
+
+        Only HEC-RAS 6.4.1 and 6.6 are qualified; the native worker checks the
+        selected Ras.exe file version. The native worker has a caller-selected timeout.
+        Uses sibling staging, preserves two uniquely named .bak files and restores
+        original bytes if either replacement fails. Requires exclusive access;
+        exception rollback is not crash-atomic across the pair. A crash between
+        replacements requires restoring both returned backups before retrying.
+
+        Args:
+            plan: Unchanged plan returned by plan_cell_subset.
+            hecras_version: Installed engine version used for native serialization.
+            hecras_dir: Explicit installed runtime folder. With ras_object, it
+                must match the project's selected Ras.exe installation. Native
+                file metadata must identify HEC-RAS 6.4.1 or 6.6; hashes are returned.
+            timeout: Positive native serialization timeout in seconds, default 1800.
+            ras_object: Optional isolated project forwarded to text point writing.
+
+        Returns:
+            MeshResult with operation="cell_subset". Its complete status means
+            topology writing only. cell_subset records the plan, native counts,
+            timestamp, invalidations and backup paths. Native geometry/property
+            preprocessing, Event Conditions completion, final readback, review
+            and hydraulic acceptance remain separate required caller phases.
+
+        Raises:
+            RuntimeError: Inputs change, native serialization fails, or incidence changes.
+            ValueError: The runtime or planned geometry is unsupported.
+        """
+        if hecras_version not in ("6.6", "6.4.1"):
+            raise ValueError(
+                "Exact cell subset serialization is qualified only for HEC-RAS 6.4.1 and 6.6"
+            )
+        if isinstance(timeout, bool) or not isinstance(timeout, int) or timeout <= 0:
+            raise ValueError("timeout must be a positive integer number of seconds")
+        from ._cell_subset import _apply_cell_subset
+
+        return _apply_cell_subset(plan, hecras_version, hecras_dir, ras_object, timeout)
+
+    @staticmethod
+    @log_call
+    def validate_cell_subset(
+        plan: MeshCellSubsetPlan, *, ras_object=None
+    ) -> dict[str, Any]:
+        """Verify retained exact topology against a hash-bound geometry-only source.
+
+        Args:
+            plan: Original subset plan. The source bytes and physical IDs remain
+                authoritative after native preprocessing changes the child HDF.
+            ras_object: Optional project context; paths are bound by the plan.
+
+        Returns:
+            Read-only ras-mesh-cell-subset-validation/v1 evidence with source and
+            child hashes, physical/ghost/face/vertex counts and topology_exact.
+            Coordinates retain their source CRS/units. No files are written,
+            native execution is launched, or hydraulic acceptance established.
+
+        Raises:
+            RuntimeError: Source identity, exact arrays, counts or reciprocity fail.
+        """
+        from ._cell_subset import _validate_cell_subset
+
+        return _validate_cell_subset(plan)

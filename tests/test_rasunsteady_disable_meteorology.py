@@ -45,7 +45,7 @@ def test_disable_meteorology_updates_text_sidecar_and_compiled_tmp(tmp_path):
     assert raw.count(b"Precipitation Mode=Disable\r\n") == 1
     assert raw.count(b"Met BC=Precipitation|Mode=None\r\n") == 1
     assert raw.count(b"Wind Mode=Disable\r\n") == 1
-    assert raw.count(b"Met BC=Evapotranspiration|Mode=Disable\r\n") == 1
+    assert raw.count(b"Met BC=Evapotranspiration|Mode=None\r\n") == 1
     assert b"Met BC=Precipitation|Gridded Source=" not in raw
     assert b"Met BC=Evapotranspiration|Point Time Series=Station A\r\n" in raw
     assert raw.endswith(b"\r\n")
@@ -93,7 +93,7 @@ def test_disable_meteorology_is_idempotent(tmp_path):
     assert lines.count("Precipitation Mode=Disable") == 1
     assert lines.count("Met BC=Precipitation|Mode=None") == 1
     assert lines.count("Wind Mode=Disable") == 1
-    assert lines.count("Met BC=Evapotranspiration|Mode=Disable") == 1
+    assert lines.count("Met BC=Evapotranspiration|Mode=None") == 1
 
 
 def test_disable_meteorology_compiled_target_is_idempotent(tmp_path):
@@ -154,3 +154,30 @@ def test_disable_meteorology_rejects_tmp_without_event_conditions(tmp_path):
         )
 
     assert unsteady.read_bytes() == original
+
+
+@pytest.mark.parametrize("remove_source_references", [False, True])
+def test_disabled_et_mode_matches_official_gui_fixture(tmp_path, remove_source_references):
+    fixture = (
+        Path(__file__).resolve().parents[1]
+        / "research/fixtures/met_data/precip_00_disabled_official_davis.u01"
+    )
+    expected = next(
+        line for line in fixture.read_text().splitlines()
+        if line.startswith("Met BC=Evapotranspiration|Mode=")
+    )
+    unsteady = tmp_path / "Model.u01"
+    unsteady.write_text(
+        "Flow Title=Clone\nProgram Version=6.60\n"
+        "Met BC=Evapotranspiration|Mode=Disable\n"
+        "Boundary Location=,,,,,Area,,BC,\n"
+    )
+    evidence = RasUnsteady.disable_meteorology(
+        unsteady, remove_source_references=remove_source_references
+    )
+    actual = [
+        line for line in unsteady.read_text().splitlines()
+        if line.startswith("Met BC=Evapotranspiration|Mode=")
+    ]
+    assert actual == [expected]
+    assert evidence["text_state"]["evapotranspiration_mode"] == expected.rsplit("=", 1)[1]

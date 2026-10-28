@@ -25,6 +25,39 @@ SUMMARY_BASE = f"{BASE}/Summary Output/2D Flow Areas/{MESH_NAME}"
 REAL_HDF_ENV = "RAS_COMMANDER_RESULT_VIEW_TEST_HDF"
 
 
+def test_native_view_pushes_selected_reads_and_bounded_batches(tmp_path, monkeypatch):
+    native = pytest.importorskip("ras_commander_fast_hdf")
+    monkeypatch.setenv("RAS_COMMANDER_FAST_HDF", "required")
+    hdf_path, values = _write_result_hdf(tmp_path / "native-slice.p01.hdf")
+    from ras_commander import fast_hdf
+    calls = []
+    original = fast_hdf._read_fim_result
+
+    # Every native mesh-series read is dispatched here with the exact selection
+    # pushed to the engine (typed series reader or generic numeric reader).
+    def record_read(module, dataset, slices, threads):
+        if dataset.name.endswith("/Water Surface"):
+            calls.append([tuple(item) for item in slices] if slices is not None else None)
+        return original(module, dataset, slices, threads)
+
+    monkeypatch.setattr(fast_hdf, "_read_fim_result", record_read)
+    view = HdfResultsMesh.get_mesh_timeseries(
+        hdf_path, MESH_NAME, "Water Surface", truncate=False,
+        time_selection=slice(1, 5, 2), spatial_selection=slice(1, 4, 2),
+        return_type="view",
+    )
+    assert calls == []
+    np.testing.assert_array_equal(view.to_numpy(), values[1:5:2, 1:4:2])
+    assert calls == [[(1, 5, 2), (1, 4, 2)]]
+    calls.clear()
+    batches = list(view.iter_batches(batch_size=1))
+    assert len(batches) == 2
+    assert all(batch.shape == (1, 2) for batch in batches)
+    np.testing.assert_array_equal(np.concatenate([batch.values for batch in batches]), values[1:5:2, 1:4:2])
+    assert len(calls) == 2
+    assert all(len(range(*selection[0])) == 1 for selection in calls)
+
+
 def _write_result_hdf(path: Path) -> tuple[Path, np.ndarray]:
     values = np.array(
         [
@@ -37,9 +70,10 @@ def _write_result_hdf(path: Path) -> tuple[Path, np.ndarray]:
         dtype=np.float32,
     )
     with h5py.File(path, "w") as hdf_file:
-        hdf_file.attrs["Projection"] = CRS.from_epsg(26915).to_wkt()
+        # Fixed-length ASCII, as HEC-RAS writes text attributes.
+        hdf_file.attrs["Projection"] = np.bytes_(CRS.from_epsg(26915).to_wkt("WKT1_ESRI"))  # ESRI WKT is ASCII
         plan_info = hdf_file.require_group("Plan Data/Plan Information")
-        plan_info.attrs["Simulation Start Time"] = "01Jan2024 00:00:00"
+        plan_info.attrs["Simulation Start Time"] = np.bytes_("01Jan2024 00:00:00")
         hdf_file.create_dataset(
             f"{TIME_BASE}/Time",
             data=np.arange(len(values), dtype=float) / 24.0,
@@ -61,7 +95,7 @@ def _write_result_hdf(path: Path) -> tuple[Path, np.ndarray]:
             data=values,
             chunks=(1, values.shape[1]),
         )
-        dataset.attrs["Units"] = "ft"
+        dataset.attrs["Units"] = np.bytes_("ft")
         summary = hdf_file.create_dataset(
             f"{SUMMARY_BASE}/Maximum Water Surface",
             data=np.array(
@@ -69,7 +103,7 @@ def _write_result_hdf(path: Path) -> tuple[Path, np.ndarray]:
                 dtype=np.float32,
             ),
         )
-        summary.attrs["Units"] = "ft"
+        summary.attrs["Units"] = np.bytes_("ft")
     return path, values
 
 
@@ -101,14 +135,16 @@ def test_view_creation_is_lazy_and_publicly_exported(tmp_path, monkeypatch):
 def test_eager_selection_is_pushed_down_and_preserves_labels(tmp_path, monkeypatch):
     hdf_path, values = _write_result_hdf(tmp_path / "slice.p01.hdf")
     reads = []
-    original = h5py.Dataset.__getitem__
+    import importlib
+    view_module = importlib.import_module("ras_commander.hdf.HdfResultView")
+    original = view_module.read_dataset
 
     def record_read(dataset, key):
         if dataset.name.endswith("/Water Surface"):
             reads.append(key)
         return original(dataset, key)
 
-    monkeypatch.setattr(h5py.Dataset, "__getitem__", record_read)
+    monkeypatch.setattr(view_module, "read_dataset", record_read)
     result = HdfResultsMesh.get_mesh_timeseries(
         hdf_path,
         MESH_NAME,
@@ -246,14 +282,16 @@ def test_truncated_shape_matches_materialized_shape(tmp_path):
 def test_eager_truncation_reads_selected_values_once(tmp_path, monkeypatch):
     hdf_path, _ = _write_result_hdf(tmp_path / "single_read.p01.hdf")
     reads = []
-    original = h5py.Dataset.__getitem__
+    import importlib
+    view_module = importlib.import_module("ras_commander.hdf.HdfResultView")
+    original = view_module.read_dataset
 
     def record_read(dataset, key):
         if dataset.name.endswith("/Water Surface"):
             reads.append(key)
         return original(dataset, key)
 
-    monkeypatch.setattr(h5py.Dataset, "__getitem__", record_read)
+    monkeypatch.setattr(view_module, "read_dataset", record_read)
     result = HdfResultsMesh.get_mesh_timeseries(
         hdf_path,
         MESH_NAME,

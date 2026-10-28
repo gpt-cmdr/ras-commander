@@ -126,11 +126,13 @@ from ._fixed_width import _format_fixed_width_value
 from .RasPrj import ras
 from .LoggingConfig import get_logger
 from .Decorators import log_call
+from .fast_hdf import read_attr, read_attrs, read_typed
 import pandas as pd
 import numpy as np
 import re
 from typing import TYPE_CHECKING, Union, Optional, Any, Tuple, Dict, List, Sequence
 from ._ras_text import _normalize_ras_newlines, _split_ras_records, _write_ras_text
+from .fast_hdf import h5py_until_qualified
 
 if TYPE_CHECKING:
     from .ComputeResults import PrecipRasterImportResult
@@ -887,6 +889,66 @@ class RasUnsteady:
         return result
 
     @staticmethod
+    def _read_output_profile_ic_entries(
+        source_plan_hdf: Path,
+        time_index: int,
+        include_1d: bool,
+        include_storage: bool,
+    ) -> list:
+        """Read the IC entries of :meth:`set_ic_from_output_profile` (read-only)."""
+        import h5py
+
+        entries: list = []
+        base = "Results/Unsteady/Output/Output Blocks/Base Output/Unsteady Time Series"
+
+        with h5py.File(source_plan_hdf, "r") as hdf:
+            if base not in hdf:
+                raise ValueError(f"No unsteady time series results in {source_plan_hdf.name}")
+
+            if include_1d:
+                xs_path = f"{base}/Cross Sections"
+                if xs_path in hdf and f"{xs_path}/Flow" in hdf:
+                    attrs = read_typed(hdf[f"{xs_path}/Cross Section Attributes"], slice(None))
+                    flow = read_typed(hdf[f"{xs_path}/Flow"], (time_index, slice(None)))
+                    for i, attr in enumerate(attrs):
+                        river = attr["River"].decode("utf-8").strip()
+                        reach = attr["Reach"].decode("utf-8").strip()
+                        station = attr["Station"].decode("utf-8").strip()
+                        try:
+                            station_val = float(station)
+                        except ValueError:
+                            station_val = station
+                        entries.append({
+                            "type": "flow",
+                            "river": river,
+                            "reach": reach,
+                            "station": station_val,
+                            "value": float(flow[i]),
+                            "area_name": None,
+                        })
+                    logger.info(f"Read flow at {len(attrs)} cross sections from {source_plan_hdf.name}")
+
+            if include_storage:
+                sa_path = f"{base}/Storage Areas"
+                geom_sa = "Geometry/Storage Areas/Attributes"
+                if sa_path in hdf and f"{sa_path}/Water Surface" in hdf and geom_sa in hdf:
+                    sa_attrs = read_typed(hdf[geom_sa], slice(None))
+                    ws = read_typed(hdf[f"{sa_path}/Water Surface"], (time_index, slice(None)))
+                    for i, sa in enumerate(sa_attrs):
+                        name = sa["Name"].decode("utf-8").strip() if isinstance(sa["Name"], bytes) else str(sa["Name"]).strip()
+                        if i < len(ws):
+                            entries.append({
+                                "type": "storage",
+                                "area_name": name,
+                                "value": float(ws[i]),
+                                "river": None,
+                                "reach": None,
+                                "station": None,
+                            })
+                    logger.info(f"Read WSE for {len(sa_attrs)} storage areas from {source_plan_hdf.name}")
+        return entries
+
+    @staticmethod
     @log_call
     def set_ic_from_output_profile(
         unsteady_number_or_path: Union[str, Path],
@@ -926,60 +988,13 @@ class RasUnsteady:
             The IC entries that were written, with columns matching
             ``get_initial_conditions()`` output.
         """
-        import h5py
-
         source_plan_hdf = Path(source_plan_hdf)
         if not source_plan_hdf.exists():
             raise FileNotFoundError(f"Source plan HDF not found: {source_plan_hdf}")
 
-        entries: list = []
-        base = "Results/Unsteady/Output/Output Blocks/Base Output/Unsteady Time Series"
-
-        with h5py.File(source_plan_hdf, "r") as hdf:
-            if base not in hdf:
-                raise ValueError(f"No unsteady time series results in {source_plan_hdf.name}")
-
-            if include_1d:
-                xs_path = f"{base}/Cross Sections"
-                if xs_path in hdf and f"{xs_path}/Flow" in hdf:
-                    attrs = hdf[f"{xs_path}/Cross Section Attributes"][:]
-                    flow = hdf[f"{xs_path}/Flow"][time_index, :]
-                    for i, attr in enumerate(attrs):
-                        river = attr["River"].decode("utf-8").strip()
-                        reach = attr["Reach"].decode("utf-8").strip()
-                        station = attr["Station"].decode("utf-8").strip()
-                        try:
-                            station_val = float(station)
-                        except ValueError:
-                            station_val = station
-                        entries.append({
-                            "type": "flow",
-                            "river": river,
-                            "reach": reach,
-                            "station": station_val,
-                            "value": float(flow[i]),
-                            "area_name": None,
-                        })
-                    logger.info(f"Read flow at {len(attrs)} cross sections from {source_plan_hdf.name}")
-
-            if include_storage:
-                sa_path = f"{base}/Storage Areas"
-                geom_sa = "Geometry/Storage Areas/Attributes"
-                if sa_path in hdf and f"{sa_path}/Water Surface" in hdf and geom_sa in hdf:
-                    sa_attrs = hdf[geom_sa][:]
-                    ws = hdf[f"{sa_path}/Water Surface"][time_index, :]
-                    for i, sa in enumerate(sa_attrs):
-                        name = sa["Name"].decode("utf-8").strip() if isinstance(sa["Name"], bytes) else str(sa["Name"]).strip()
-                        if i < len(ws):
-                            entries.append({
-                                "type": "storage",
-                                "area_name": name,
-                                "value": float(ws[i]),
-                                "river": None,
-                                "reach": None,
-                                "station": None,
-                            })
-                    logger.info(f"Read WSE for {len(sa_attrs)} storage areas from {source_plan_hdf.name}")
+        entries = RasUnsteady._read_output_profile_ic_entries(
+            source_plan_hdf, time_index, include_1d, include_storage
+        )
 
         if not entries:
             logger.warning("No IC entries extracted from output profile")
@@ -3332,7 +3347,7 @@ class RasUnsteady:
                 if precip_path in hdf_file:
                     config["hdf_attributes"] = {
                         key: RasUnsteady._decode_hdf_attr_value(value)
-                        for key, value in hdf_file[precip_path].attrs.items()
+                        for key, value in read_attrs(hdf_file[precip_path]).items()
                     }
         except (OSError, KeyError, ValueError) as exc:
             logger.warning(
@@ -3572,8 +3587,11 @@ class RasUnsteady:
 
         filtered_lines: List[str] = []
         removed_before_insert = 0
+        managed_prefixes = RasUnsteady._MET_PRECIP_MANAGED_PREFIXES + tuple(
+            f"{key}=" for key, _value in desired_entries
+        )
         for i, line in enumerate(lines):
-            if line.startswith(RasUnsteady._MET_PRECIP_MANAGED_PREFIXES):
+            if line.startswith(managed_prefixes):
                 if i < insert_index:
                     removed_before_insert += 1
                 continue
@@ -4055,7 +4073,7 @@ class RasUnsteady:
         insert_index = max(0, insert_index - removed_before_insert)
         desired_lines = [
             f"Wind Mode=Disable{newline}",
-            f"Met BC=Evapotranspiration|Mode=Disable{newline}",
+            f"Met BC=Evapotranspiration|Mode=None{newline}",
         ]
         if (
             insert_index == len(filtered_lines)
@@ -4117,7 +4135,7 @@ class RasUnsteady:
                 "precipitation_mode": "Disable",
                 "precipitation_met_mode": "None",
                 "wind_mode": "Disable",
-                "evapotranspiration_mode": "Disable",
+                "evapotranspiration_mode": "None",
             },
             "hdf_targets": hdf_evidence,
         }
@@ -5616,6 +5634,8 @@ class RasUnsteady:
         value: float = 1.0,
         units: str = "in/hr",
         ras_object: Optional[Any] = None,
+        *,
+        ratio: Optional[float] = None,
     ) -> None:
         """
         Configure constant (spatially and temporally uniform) precipitation.
@@ -5646,6 +5666,13 @@ class RasUnsteady:
             Constant precipitation rate units.
         ras_object : optional
             Custom RAS object used to resolve an unsteady number.
+        ratio : float, optional
+            Positive finite dimensionless multiplier written to both text and
+            the existing HDF sidecar. Pass 1.0 to replace an inherited rainfall
+            reduction factor and retain the supplied rate unscaled. Omission
+            preserves existing ratio records for backward compatibility. Explicit
+            values are rounded once to native Single precision; overflow and
+            underflow to zero are rejected before either file is modified.
 
         Returns
         -------
@@ -5657,7 +5684,8 @@ class RasUnsteady:
         ------
         ValueError
             If ``value`` is not a finite, non-negative real number, or ``units``
-            is not ``"in/hr"`` or ``"mm/hr"``.
+            is not ``"in/hr"`` or ``"mm/hr"``, or an explicit ``ratio`` does
+            not round to a positive finite native Single.
 
         Examples
         --------
@@ -5679,6 +5707,17 @@ class RasUnsteady:
             raise ValueError(f"value must be >= 0, got {constant_value!r}")
         if units not in {"in/hr", "mm/hr"}:
             raise ValueError("units must be either 'in/hr' or 'mm/hr'")
+        native_ratio = None
+        if ratio is not None:
+            if isinstance(ratio, bool) or not isinstance(ratio, numbers.Real):
+                raise ValueError("ratio must be a positive finite real number")
+            try:
+                with np.errstate(over="ignore", under="ignore"):
+                    native_ratio = np.float32(float(ratio))
+            except (OverflowError, ValueError) as exc:
+                raise ValueError("ratio must fit a positive finite native Single") from exc
+            if not np.isfinite(native_ratio) or native_ratio <= 0:
+                raise ValueError("ratio must fit a positive finite native Single")
 
         unsteady_path = RasUnsteady._resolve_unsteady_file_path(
             unsteady_file,
@@ -5692,21 +5731,26 @@ class RasUnsteady:
             unsteady_path.name, formatted_value, units,
         )
 
-        RasUnsteady._replace_met_precipitation_keys(
-            unsteady_path,
-            [
-                ("Precipitation Mode", "Enable"),
-                ("Met BC=Precipitation|Mode", "Constant"),
-                ("Met BC=Precipitation|Constant Value", formatted_value),
-                ("Met BC=Precipitation|Constant Units", units),
-            ],
-        )
+        precipitation_keys = [
+            ("Precipitation Mode", "Enable"),
+            ("Met BC=Precipitation|Mode", "Constant"),
+            ("Met BC=Precipitation|Constant Value", formatted_value),
+            ("Met BC=Precipitation|Constant Units", units),
+        ]
+        if ratio is not None:
+            precipitation_keys.append(
+                ("Met BC=Precipitation|Ratio", format(float(native_ratio), ".9g"))
+            )
+        RasUnsteady._replace_met_precipitation_keys(unsteady_path, precipitation_keys)
 
         hdf_path = Path(str(unsteady_path) + ".hdf")
         if hdf_path.exists():
-            RasUnsteady._update_constant_precipitation_hdf(
-                hdf_path, constant_value, units
-            )
+            if ratio is None:
+                RasUnsteady._update_constant_precipitation_hdf(hdf_path, constant_value, units)
+            else:
+                RasUnsteady._update_constant_precipitation_hdf(
+                    hdf_path, constant_value, units, ratio=float(native_ratio)
+                )
         else:
             logger.warning(
                 f"HDF file not found: {hdf_path} - constant precipitation "
@@ -5725,6 +5769,8 @@ class RasUnsteady:
         hdf_path: Path,
         value: float,
         units: str,
+        *,
+        ratio: Optional[float] = None,
     ) -> None:
         """Write constant-mode precipitation attributes to an unsteady .u##.hdf."""
         import h5py
@@ -5742,6 +5788,9 @@ class RasUnsteady:
                 precip_grp.attrs["Mode"] = np.bytes_("Constant")
                 precip_grp.attrs["Constant Value"] = np.float64(value)
                 precip_grp.attrs["Constant Units"] = np.bytes_(units)
+                RasUnsteady._write_precipitation_ratio_attribute(
+                    precip_grp, ratio, hdf_path, historic=False,
+                )
 
                 RasUnsteady._ensure_meteorology_attributes_dataset(hdf_file, met_path)
         except Exception as e:
@@ -6230,6 +6279,7 @@ class RasUnsteady:
         precip_grp.attrs["Ratio"] = np.float32(ratio)
 
     @staticmethod
+    @h5py_until_qualified
     def _preflight_precipitation_ratio(
         unsteady_path: Path,
         capabilities: Optional["GriddedPrecipitationCapabilities"],
@@ -6303,7 +6353,7 @@ class RasUnsteady:
                 precip_path = "Event Conditions/Meteorology/Precipitation"
                 with h5py.File(hdf_path, "r") as hdf_file:
                     if precip_path in hdf_file:
-                        existing = hdf_file[precip_path].attrs.get("Ratio")
+                        existing = read_attr(hdf_file[precip_path], "Ratio", None)
                         if existing is not None:
                             try:
                                 existing_ratio = float(existing)
@@ -9911,6 +9961,8 @@ class RasUnsteady:
         ras_object: Optional[Any] = None,
         area_2d: Optional[str] = None,
         bc_line: Optional[str] = None,
+        *,
+        max_decimals: int = 2,
     ) -> bool:
         """
         Write an inline hydrograph table to a boundary condition, converting from DSS if needed.
@@ -9954,6 +10006,11 @@ class RasUnsteady:
         bc_line : str, optional
             Exact 2D BC line name (field 7 of ``Boundary Location=``).
             Supply together with ``area_2d``.
+        max_decimals : int, default 2
+            Maximum decimal places for ordinates, from 0 through 6. The
+            existing fixed-width formatter reduces precision as needed to fit
+            each 8-character field; the default preserves existing output.
+            Six is the most fractional places that fit with a leading zero.
 
         Returns
         -------
@@ -9963,7 +10020,8 @@ class RasUnsteady:
         Raises
         ------
         ValueError
-            If DataFrame is missing required columns or bc_type is unsupported
+            If DataFrame is missing required columns, bc_type is unsupported,
+            or max_decimals is not an integer from 0 through 6.
         FileNotFoundError
             If unsteady flow file not found
 
@@ -10017,6 +10075,9 @@ class RasUnsteady:
             "Uniform Lateral Inflow": "Uniform Lateral Inflow=",
             "Uniform Lateral Inflow Hydrograph": "Uniform Lateral Inflow Hydrograph=",
         }
+
+        if type(max_decimals) is not int or not 0 <= max_decimals <= 6:
+            raise ValueError("max_decimals must be an integer from 0 through 6")
 
         if bc_type not in SUPPORTED_TYPES:
             raise ValueError(
@@ -10110,7 +10171,8 @@ class RasUnsteady:
         for i in range(0, num_values, 10):
             row_values = values[i:i+10]
             formatted_rows.append(''.join(
-                RasUnsteady._format_fixed_width_value(v) for v in row_values
+                RasUnsteady._format_fixed_width_value(v, max_decimals=max_decimals)
+                for v in row_values
             ))
 
         # Read the file

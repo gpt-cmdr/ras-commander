@@ -1,4 +1,5 @@
 """Unit-sensitive classification and compatible logged processing failures."""
+import inspect
 import logging
 import os
 from pathlib import Path
@@ -13,6 +14,11 @@ from shapely.geometry import box
 from ras_commander.hdf import HdfFluvialPluvial, HdfMesh, HdfResultsMesh
 
 LOGGER = "ras_commander.hdf.HdfFluvialPluvial"
+
+# These tests pin the reference implementation. Where the public methods take
+# ``engine=`` (default "auto", which may run the native kernels), select it.
+REFERENCE = ({"engine": "h5py"} if "engine" in inspect.signature(
+    HdfFluvialPluvial.generate_fluvial_pluvial_polygons).parameters else {})
 
 
 @pytest.fixture
@@ -39,7 +45,7 @@ def test_feet_and_metres_change_actual_classification(cells_and_results, monkeyp
     path, cells = cells_and_results
     cells = cells.set_crs(crs, allow_override=True)
     monkeypatch.setattr(HdfMesh, "get_mesh_cell_polygons", lambda *a, **k: cells.copy())
-    out = HdfFluvialPluvial.generate_fluvial_pluvial_polygons(str(path), min_polygon_area_acres=1)
+    out = HdfFluvialPluvial.generate_fluvial_pluvial_polygons(str(path), min_polygon_area_acres=1, **REFERENCE)
     assert not out.empty
     assert out.crs == cells.crs
     assert {"classification", "mesh_name", "cell_id", "geometry"} <= set(out.columns)
@@ -56,9 +62,9 @@ def test_missing_or_geographic_crs_retains_documented_warning_skip(cells_and_res
     path, cells = cells_and_results
     cells = cells.set_crs(crs, allow_override=True)
     monkeypatch.setattr(HdfMesh, "get_mesh_cell_polygons", lambda *a, **k: cells.copy())
-    raw = HdfFluvialPluvial.generate_fluvial_pluvial_polygons(path).set_index("classification")
+    raw = HdfFluvialPluvial.generate_fluvial_pluvial_polygons(path, **REFERENCE).set_index("classification")
     with caplog.at_level(logging.WARNING, logger=LOGGER):
-        out = HdfFluvialPluvial.generate_fluvial_pluvial_polygons(path, min_polygon_area_acres=1)
+        out = HdfFluvialPluvial.generate_fluvial_pluvial_polygons(path, min_polygon_area_acres=1, **REFERENCE)
     assert not out.empty
     assert "skipped area filter" in caplog.text
     assert out.crs == cells.crs
@@ -70,10 +76,10 @@ def test_unknown_projected_units_discards_completed_unfiltered_geometry(cells_an
     unknown = CRS.from_epsg(3857).to_wkt(version="WKT1_GDAL").replace('UNIT["metre",1', 'UNIT["unknown",1')
     cells = cells.set_crs(unknown, allow_override=True)
     monkeypatch.setattr(HdfMesh, "get_mesh_cell_polygons", lambda *a, **k: cells.copy())
-    assert not HdfFluvialPluvial.generate_fluvial_pluvial_polygons(path).empty
+    assert not HdfFluvialPluvial.generate_fluvial_pluvial_polygons(path, **REFERENCE).empty
     caplog.clear()
     with caplog.at_level(logging.INFO, logger=LOGGER):
-        out = HdfFluvialPluvial.generate_fluvial_pluvial_polygons(path, min_polygon_area_acres=1)
+        out = HdfFluvialPluvial.generate_fluvial_pluvial_polygons(path, min_polygon_area_acres=1, **REFERENCE)
     assert isinstance(out, gpd.GeoDataFrame) and out.empty
     assert not out.attrs
     error = next(r for r in caplog.records if r.name == LOGGER and r.levelno == logging.ERROR)
@@ -99,7 +105,7 @@ def test_processing_failure_returns_empty_with_context_and_traceback(cells_and_r
         monkeypatch.setattr(gpd.GeoDataFrame, "dissolve", fail)
     with caplog.at_level(logging.INFO, logger=LOGGER):
         out = HdfFluvialPluvial.generate_fluvial_pluvial_polygons(
-            path, delta_t=17, temporal_tolerance_hours=2, min_polygon_area_acres=threshold)
+            path, delta_t=17, temporal_tolerance_hours=2, min_polygon_area_acres=threshold, **REFERENCE)
     assert isinstance(out, gpd.GeoDataFrame) and out.empty
     assert not out.attrs
     error = next(r for r in caplog.records if r.name == LOGGER and r.levelno == logging.ERROR)
@@ -128,7 +134,7 @@ def test_real_single_mesh_acreage_matches_independent_unit_control(monkeypatch):
     assert len(cells) > 2000
     monkeypatch.setattr(HdfMesh, "get_mesh_cell_polygons", lambda *a, **k: cells.copy())
     monkeypatch.setattr(HdfResultsMesh, "get_mesh_max_ws", lambda *a, **k: results.copy())
-    raw = HdfFluvialPluvial.generate_fluvial_pluvial_polygons(path)
+    raw = HdfFluvialPluvial.generate_fluvial_pluvial_polygons(path, **REFERENCE)
     assert not raw.empty
     expected = raw.explode(index_parts=False, ignore_index=True)
     axis = raw.crs.coordinate_system.to_json_dict()["axis"][0]["unit"]
@@ -139,7 +145,7 @@ def test_real_single_mesh_acreage_matches_independent_unit_control(monkeypatch):
     expected.loc[small & (old == "pluvial"), "classification"] = "fluvial"
     assert (old != expected.classification).sum() == 3
     expected = expected.dissolve(by="classification")
-    out = HdfFluvialPluvial.generate_fluvial_pluvial_polygons(path, min_polygon_area_acres=5)
+    out = HdfFluvialPluvial.generate_fluvial_pluvial_polygons(path, min_polygon_area_acres=5, **REFERENCE)
     assert not out.empty and out.crs == raw.crs
     assert set(out.classification) == set(expected.index)
     assert all(row.geometry.equals(expected.loc[row.classification].geometry) for row in out.itertuples())

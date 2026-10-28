@@ -40,6 +40,7 @@ import numpy as np
 import pandas as pd
 
 from ..LoggingConfig import log_call, get_logger
+from ..fast_hdf import read_typed, reraise_required
 
 logger = get_logger(__name__)
 
@@ -241,7 +242,7 @@ class HdfChannelCapacity:
             if attr_path not in hdf:
                 continue
 
-            attrs = hdf[attr_path][:]
+            attrs = read_typed(hdf[attr_path], slice(None))
             if len(attrs) == 0 or attrs.dtype.names is None:
                 continue
 
@@ -324,17 +325,17 @@ class HdfChannelCapacity:
 
         with h5py.File(hdf_path, "r") as hdf:
             if summary_path in hdf:
-                wse = HdfChannelCapacity._as_1d_wse(hdf[summary_path][:], reducer="first")
+                wse = HdfChannelCapacity._as_1d_wse(read_typed(hdf[summary_path], slice(None)), reducer="first")
                 attrs = HdfChannelCapacity._read_cross_section_attributes(hdf, len(wse))
                 return wse, attrs, "unsteady_summary"
 
             if unsteady_path in hdf:
-                wse = HdfChannelCapacity._as_1d_wse(hdf[unsteady_path][:], reducer="max")
+                wse = HdfChannelCapacity._as_1d_wse(read_typed(hdf[unsteady_path], slice(None)), reducer="max")
                 attrs = HdfChannelCapacity._read_cross_section_attributes(hdf, len(wse))
                 return wse, attrs, "unsteady_timeseries"
 
             if steady_wse_path in hdf:
-                wse_data = np.asarray(hdf[steady_wse_path][:], dtype=float)
+                wse_data = np.asarray(read_typed(hdf[steady_wse_path], slice(None)), dtype=float)
                 if wse_data.ndim == 1:
                     wse = wse_data
                     profile_source = "steady_single_profile"
@@ -532,7 +533,7 @@ class HdfChannelCapacity:
                     f"Steady Profiles/Cross Sections/Water Surface results."
                 )
 
-            ws_data = np.asarray(hdf[ws_path][:], dtype=float)
+            ws_data = np.asarray(read_typed(hdf[ws_path], slice(None)), dtype=float)
             if ws_data.ndim == 1:
                 ws_data = ws_data.reshape(1, -1)
             n_profiles, n_xs = ws_data.shape
@@ -691,6 +692,7 @@ class HdfChannelCapacity:
                     f"  Format: {source} ({len(max_wse_values)} XS)"
                 )
             except Exception as exc:
+                reraise_required(exc)
                 logger.warning(
                     f"Could not extract WSE from {hdf_path.name}: {exc}. "
                     f"Compute the plan and verify the HDF contains steady profiles "

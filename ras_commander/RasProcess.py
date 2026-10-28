@@ -113,6 +113,7 @@ from .RasBenefits import BenefitAreaConfig, RasBenefits
 from .RasUtils import RasUtils
 from .LoggingConfig import get_logger
 from .Decorators import log_call
+from .fast_hdf import read_attr, read_typed, reraise_required
 from ._native_helper import (
     _is_wine_helper_runtime,
     normalize_store_map_render_mode,
@@ -2002,6 +2003,7 @@ Step 5: Configure (optional — auto-detection usually works)
                 rasmap_timestamps.append(formatted)
             return rasmap_timestamps
         except Exception as e:
+            reraise_required(e)
             logger.error(f"Failed to get timestamps from {hdf_path}: {e}")
             return []
 
@@ -2641,9 +2643,9 @@ Step 5: Configure (optional — auto-detection usually works)
                         elevation_path = f"{geometry_root}/{name}/{elevation_name}"
                         if wse_path not in hdf or elevation_path not in hdf:
                             continue
-                        wse = np.asarray(hdf[wse_path][()], dtype=np.float64)
+                        wse = np.asarray(read_typed(hdf[wse_path]), dtype=np.float64)
                         elevations = np.asarray(
-                            hdf[elevation_path][()], dtype=np.float64
+                            read_typed(hdf[elevation_path]), dtype=np.float64
                         ).reshape(-1)
                         if wse.ndim > 1:
                             wse = np.nanmax(wse, axis=0)
@@ -2656,6 +2658,7 @@ Step 5: Configure (optional — auto-detection usually works)
                         ):
                             return True
         except Exception as exc:
+            reraise_required(exc)
             logger.debug("Could not audit plan-HDF wet cells: %s", exc)
         return False
 
@@ -2840,11 +2843,12 @@ Step 5: Configure (optional — auto-detection usually works)
                 if "Plan Data" in hdf and "Plan Information" in hdf["Plan Data"]:
                     info = hdf["Plan Data"]["Plan Information"]
                     if "Plan ShortID" in info.attrs:
-                        short_id = info.attrs["Plan ShortID"]
+                        short_id = read_attr(info, "Plan ShortID")
                         if isinstance(short_id, bytes):
                             short_id = short_id.decode("utf-8")
                         return short_id.strip()
         except Exception as e:
+            reraise_required(e)
             logger.debug(f"Could not read Plan ShortID from {hdf_path}: {e}")
         return None
 
@@ -3690,6 +3694,30 @@ Step 5: Configure (optional — auto-detection usually works)
         return generated
 
     @staticmethod
+    def _set_rasmap_render_mode(render_mode, ras_obj) -> None:
+        """Write ``render_mode`` to the .rasmap, including any sloping flags.
+
+        Accepts every form the StoreMap helper accepts: a mode name,
+        ``"slopingPretty:<reduce_shallow>:<depth_weighted>"``, or a dict with
+        ``mode`` and optional ``reduce_shallow_to_horizontal`` and
+        ``use_depth_weighted_faces`` keys.
+        """
+        helper_mode = normalize_store_map_render_mode(render_mode)
+        base = render_mode.get("mode", "horizontal") if isinstance(render_mode, dict) else render_mode
+        flags = helper_mode.split(":")[1:]
+        kwargs = {}
+        if flags:
+            kwargs = {
+                "reduce_shallow_to_horizontal": flags[0] == "true",
+                "use_depth_weighted_faces": flags[1] == "true",
+            }
+        RasMap.set_water_surface_render_mode(
+            mode=str(base).strip().split(":")[0],
+            ras_object=ras_obj,
+            **kwargs,
+        )
+
+    @staticmethod
     @_serialize_store_maps
     @log_call
     def store_maps(
@@ -3758,7 +3786,13 @@ Step 5: Configure (optional — auto-detection usually works)
             profile: Profile to map - "Max", "Min", or specific timestamp string
             render_mode: Water surface rendering mode to set before generating
                 maps. Options: "horizontal", "sloping", "slopingPretty".
-                If None (default), uses whatever mode is already in the .rasmap.
+                For slopingPretty, flags can be given as
+                "slopingPretty:<reduce_shallow>:<depth_weighted>" (for example
+                "slopingPretty:true:true" for depth-weighted faces) or as a dict
+                with ``mode``, ``reduce_shallow_to_horizontal`` and
+                ``use_depth_weighted_faces``. The flags are written to the
+                .rasmap. If None (default), uses whatever mode is already in
+                the .rasmap.
             wse: Generate Water Surface Elevation map. Defaults to True for
                 ordinary stored-map generation and False for BenefitArea unless
                 ``BenefitAreaConfig.include_wse`` is True.
@@ -4027,10 +4061,7 @@ Step 5: Configure (optional — auto-detection usually works)
 
             # Set render mode if requested (before modifying stored maps)
             if render_mode is not None:
-                RasMap.set_water_surface_render_mode(
-                    mode=render_mode,
-                    ras_object=ras_obj,
-                )
+                RasProcess._set_rasmap_render_mode(render_mode, ras_obj)
                 logger.debug(f"Set render mode to '{render_mode}' before StoreAllMaps")
 
             # Clear existing stored maps if requested
@@ -4894,10 +4925,7 @@ Step 5: Configure (optional — auto-detection usually works)
                     ras_object=ras_obj,
                 )
             if render_mode is not None:
-                RasMap.set_water_surface_render_mode(
-                    mode=render_mode,
-                    ras_object=ras_obj,
-                )
+                RasProcess._set_rasmap_render_mode(render_mode, ras_obj)
 
             os.makedirs(_windows_extended_length_path(output_dir), exist_ok=True)
             if resolved_output_path is not None:

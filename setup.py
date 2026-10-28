@@ -4,12 +4,31 @@ import subprocess
 from pathlib import Path
 
 
+# The native (Rust) HDF engine is ras-commander's default HDF engine. It is
+# published as binary wheels only for CPython on Windows x64, Linux x64
+# (manylinux_2_28) and macOS arm64, so the marker limits the dependency to those
+# platforms and pip never tries to compile the Rust source distribution
+# elsewhere. Where the extension is not installed, every read uses h5py.
+FAST_HDF_REQUIREMENT = 'ras-commander-fast-hdf>=0.2.3,<0.3'
+FAST_MAP_REQUIREMENT = 'ras-commander-fast-map>=0.8,<0.9'
+FAST_MAP_WHEEL_MARKER = (
+    '(platform_system == "Windows" and platform_machine == "AMD64")'
+    ' or (platform_system == "Linux" and platform_machine == "x86_64")'
+)
+FAST_HDF_WHEEL_MARKER = (
+    'platform_python_implementation == "CPython" and ('
+    '(platform_system == "Windows" and platform_machine == "AMD64")'
+    ' or (platform_system == "Linux" and platform_machine == "x86_64")'
+    ' or (platform_system == "Darwin" and platform_machine == "arm64"))'
+)
+
 # Keep the default installation import-safe and suitable for inventory/HDF work.
 # Feature groups are additive so batch runners can install only what they use.
 CORE_DEPENDENCIES = [
     'h5py',
     'numpy',
     'pandas',
+    f'{FAST_HDF_REQUIREMENT}; {FAST_HDF_WHEEL_MARKER}',
 ]
 
 COMPUTE_DEPENDENCIES = [
@@ -18,6 +37,7 @@ COMPUTE_DEPENDENCIES = [
 ]
 
 FULL_FEATURE_DEPENDENCIES = [
+    f'{FAST_MAP_REQUIREMENT}; {FAST_MAP_WHEEL_MARKER}',
     'requests',
     'tqdm',
     'scipy',
@@ -69,12 +89,13 @@ class CustomBuildPy(build_py):
 
 setup(
     name="ras-commander",
-    version="0.106.1",
+    version="0.110.1",
     packages=find_packages(include=['ras_commander', 'ras_commander.*']),
     include_package_data=True,
     package_data={
         "ras_commander": [
             "LLM_GUIDE.md",
+            "fim/THIRD_PARTY_NOTICES.md",
             "resources/*.json",
             "resources/templates/*/*",
         ],
@@ -109,6 +130,13 @@ setup(
     },
     install_requires=CORE_DEPENDENCIES,
     extras_require={
+        # No longer needed: the native HDF engine is a core dependency on the
+        # platforms that have wheels. Kept so existing install commands work.
+        # Without the platform marker, these extras also request the engine on
+        # other platforms, where pip builds it from source (needs Rust).
+        # "fast-hdf" is an alias.
+        'fast': [FAST_HDF_REQUIREMENT],
+        'fast-hdf': [FAST_HDF_REQUIREMENT],
         # Lean Windows/Wine batch execution through RasCmdr.compute_plan().
         # This intentionally excludes the RasControl COM interface and the
         # geospatial/plotting stack. "execution" is a descriptive alias.
@@ -131,6 +159,11 @@ setup(
             'psutil>=5.6.6',
             'comtypes>=1.4.0; sys_platform == "win32"',
         ],
+        # Optional mapping engine and Python preparation/delivery stack.
+        # Runtime calls never download or compile the engine.
+        'fast-map': [f'{FAST_MAP_REQUIREMENT}; {FAST_MAP_WHEEL_MARKER}'],
+        'fim': ['scipy', 'geopandas', 'shapely>=2.0', 'rasterio', 'pyproj',
+                f'{FAST_MAP_REQUIREMENT}; {FAST_MAP_WHEEL_MARKER}'],
         # USGS gauge data integration
         'usgs': ['dataretrieval>=1.0'],
         # FEMA eBFE archives that use Deflate64 compression (ZIP method 9).

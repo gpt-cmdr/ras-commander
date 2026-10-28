@@ -15,6 +15,7 @@ import h5py
 import numpy as np
 
 from ._breakline_controls import _protection_radius_flag
+from ..fast_hdf import read_attr, read_typed
 
 AREA = "Geometry/2D Flow Areas"
 CALIBRATION = "Geometry/Land Cover (Manning's n)/Calibration Table"
@@ -218,23 +219,24 @@ def _feature_issues(
         len(info.shape) != 2 or info.shape[1] != 4 or "Polygon Parts" not in group
     ):
         return [f"{path}: unsupported polygon part schema"]
+    rows = read_typed(attrs)
     for index, feature in enumerate(features):
         # Native string fields are fixed width; names longer than the field are
         # not accepted as preserved identities by this contract.
-        name = bytes(attrs["Name"][index]).rstrip(b"\x00").decode("utf-8").rstrip()
-        start, count = (int(v) for v in info[index, :2])
+        name = bytes(rows["Name"][index]).rstrip(b"\x00").decode("utf-8").rstrip()
+        start, count = (int(v) for v in read_typed(info, (index, slice(None, 2))))
         if family == "Polygon":
-            part_start, part_count = (int(v) for v in info[index, 2:4])
+            part_start, part_count = (int(v) for v in read_typed(info, (index, slice(2, 4))))
             parts = group["Polygon Parts"]
             if (
                 part_count != 1
                 or part_start < 0
                 or part_start >= len(parts)
                 or parts.shape[1:] != (2,)
-                or not np.array_equal(parts[part_start], [0, count])
+                or not np.array_equal(read_typed(parts, part_start), [0, count])
             ):
                 issues.append(f"{path}/{index}: unsupported polygon part ranges")
-        coords = points[start : start + count]
+        coords = read_typed(points, slice(start, start + count))
         if (
             name != feature["name"]
             or start < 0
@@ -250,18 +252,18 @@ def _feature_issues(
             )
             if (
                 area_field is None
-                or bytes(attrs[area_field][index]).rstrip(b"\x00").decode().strip()
+                or bytes(rows[area_field][index]).rstrip(b"\x00").decode().strip()
                 != feature["storage_area"]
             ):
                 issues.append(f"{path}/{index}: authored area association changed")
         if "bc_type" in feature and (
             "Type" not in (attrs.dtype.names or ())
-            or _semantic(attrs["Type"][index]) != feature["bc_type"]
+            or _semantic(rows["Type"][index]) != feature["bc_type"]
         ):
             issues.append(f"{path}/{index}: authored BC Type changed")
         for field, value in feature.get("controls", {}).items():
             if field not in attrs.dtype.names or not _control_matches(
-                field, value, attrs[field][index], attrs.dtype[field]
+                field, value, rows[field][index], attrs.dtype[field]
             ):
                 issues.append(f"{path}/{index}: authored {field} changed")
     return issues
@@ -298,6 +300,7 @@ def snapshot(
         "manning_regions": [],
         "infiltration_methods": {},
         "projections": {},
+        "native_perimeters": {},
         "contract_qualified": True,
     }
     result["features"]["Geometry/Structures"] += sum(
@@ -417,6 +420,16 @@ def snapshot(
         return result
     current = not _mesh_hdf_consistency_issues(geometry_path, hdf_path)
     with h5py.File(hdf_path, "r") as hdf:
+        # An exact-topology mesh can retain more coordinate digits than a
+        # 16-character text field. Bind that native ring only when its canonical
+        # fixed-width serialization is exactly the current authored polygon.
+        # Keep the full array as an immutable input, never as a relaxed tolerance.
+        for name, ring in result["perimeters"].items():
+            area = hdf.get(f"{AREA}/{name}")
+            if area is not None and "Perimeter" in area:
+                native = area["Perimeter"][()]
+                if _perimeter_serialization_matches(native, ring):
+                    result["native_perimeters"][name] = native
         bc_path = "Geometry/Boundary Condition Lines"
         bc_features = result["feature_geometry"][bc_path]
         # A current feature mirror can contain explicitly authored native types.
@@ -424,8 +437,9 @@ def snapshot(
         if bc_features and not _feature_issues(hdf, bc_path, bc_features):
             attrs = hdf[bc_path]["Attributes"]
             if "Type" in (attrs.dtype.names or ()):
+                rows = read_typed(attrs)
                 for index, feature in enumerate(bc_features):
-                    value = _semantic(attrs["Type"][index])
+                    value = _semantic(rows["Type"][index])
                     if value in (b"Internal", b"External", "Internal", "External"):
                         feature["bc_type"] = value
         for path in ("/", "Geometry", *(f"{AREA}/{name}" for name in result["areas"])):
@@ -434,22 +448,22 @@ def snapshot(
             for name in (*ASSOCIATIONS, "Projection", "Units System"):
                 if name in hdf[path].attrs:
                     if name == "Projection":
-                        result["projections"][f"{path}@{name}"] = hdf[path].attrs[name]
+                        result["projections"][f"{path}@{name}"] = read_attr(hdf[path], name)
                     result["attributes"][f"{path}@{name}"] = _digest(
-                        hdf[path].attrs[name]
+                        read_attr(hdf[path], name)
                     )
         for path in ("Projection", CALIBRATION):
             if path in hdf:
-                result["inputs"][path] = _digest(hdf[path][()])
+                result["inputs"][path] = _digest(read_typed(hdf[path]))
                 if path == "Projection":
-                    result["projections"][path] = hdf[path][()]
+                    result["projections"][path] = read_typed(hdf[path])
         # Refinement regions are HDF-only authored input, including when the
         # cached parent topology has not yet been refreshed from child text.
         if REFINEMENT in hdf:
             result["features"][REFINEMENT] = len(hdf[REFINEMENT].get("Attributes", []))
             for name, obj in hdf[REFINEMENT].items():
                 if isinstance(obj, h5py.Dataset):
-                    result["inputs"][f"{REFINEMENT}/{name}"] = _digest(obj[()])
+                    result["inputs"][f"{REFINEMENT}/{name}"] = _digest(read_typed(obj))
         if "Geometry/Infiltration" in hdf:
 
             def capture_infiltration(name, obj):
@@ -458,7 +472,7 @@ def snapshot(
                     "Internal Faces",
                     "Internal Cells",
                 ):
-                    result["inputs"][f"Geometry/Infiltration/{name}"] = _digest(obj[()])
+                    result["inputs"][f"Geometry/Infiltration/{name}"] = _digest(read_typed(obj))
 
             hdf["Geometry/Infiltration"].visititems(capture_infiltration)
         # Text-backed inputs are compared with their selected text, never with
@@ -471,9 +485,9 @@ def snapshot(
 
         for name in result["areas"]:
             area = hdf.get(f"{AREA}/{name}")
-            raw = area.attrs.get("Infiltration Filename") if area is not None else None
+            raw = read_attr(area, "Infiltration Filename", None) if area is not None else None
             if raw is None and "Geometry" in hdf:
-                raw = hdf["Geometry"].attrs.get("Infiltration Filename")
+                raw = read_attr(hdf["Geometry"], "Infiltration Filename", None)
             filename = _decode_hdf_text(raw) if raw is not None else ""
             if filename:
                 asset = Path(filename.replace("\\", "/"))
@@ -563,7 +577,7 @@ def _topology_issues(area: h5py.Group) -> list[str]:
         if not isinstance(obj, h5py.Dataset):
             issues.append(f"{name}: missing topology")
             return None
-        data = obj[()]
+        data = read_typed(obj)
         if (
             (columns is None and data.ndim != 1)
             or (columns is not None and (data.ndim != 2 or data.shape[1] != columns))
@@ -652,7 +666,7 @@ def _topology_issues(area: h5py.Group) -> list[str]:
     oriented(point_owner, point_faces, faces, 1, "FacePoints Face and Orientation")
 
     obj = area.get("Cells FacePoint Indexes")
-    cell_points = obj[()] if isinstance(obj, h5py.Dataset) else None
+    cell_points = read_typed(obj) if isinstance(obj, h5py.Dataset) else None
     if (
         cell_points is None
         or cell_points.ndim != 2
@@ -724,6 +738,36 @@ def _topology_issues(area: h5py.Group) -> list[str]:
     return issues
 
 
+def _perimeter_serialization_matches(native: np.ndarray, authored: np.ndarray) -> bool:
+    """Prove polygon identity after the existing fixed-width perimeter writer."""
+    import shapely
+
+    from .GeomParser import GeomParser
+    from .GeomStorage import GeomStorage
+
+    for ring in (native, authored):
+        if (
+            ring is None
+            or ring.ndim != 2
+            or ring.shape[1] != 2
+            or len(ring) < 3
+            or not np.all(np.isfinite(ring))
+        ):
+            return False
+    lines = GeomStorage._format_surface_line_lines(native.tolist())
+    serialized = np.asarray(
+        [value for line in lines for value in GeomParser.parse_fixed_width(line, 16)]
+    ).reshape(-1, 2)
+    origin = authored[0]
+    left, right = (
+        shapely.Polygon(serialized - origin),
+        shapely.Polygon(authored - origin),
+    )
+    return bool(
+        left.is_valid and right.is_valid and not left.is_empty and left.equals(right)
+    )
+
+
 def _mesh_binding_issues(
     area: h5py.Group, seeds: np.ndarray, ring: np.ndarray
 ) -> list[str]:
@@ -743,8 +787,8 @@ def _mesh_binding_issues(
     so nonspatial preprocessing does not require Shapely.
     """
     issues = []
-    centers = area["Cells Center Coordinate"][()]
-    points = area["FacePoints Coordinate"][()]
+    centers = read_typed(area["Cells Center Coordinate"])
+    points = read_typed(area["FacePoints Coordinate"])
     if any(v.dtype.kind != "f" or v.dtype.itemsize != 8 for v in (centers, points)):
         return ["mesh coordinates: unsupported native coordinate precision"]
     if not np.array_equal(centers[: len(seeds)], seeds):
@@ -756,7 +800,7 @@ def _mesh_binding_issues(
         cell_points is not None
         and cell_points.ndim == 2
         and len(cell_points) == len(centers)
-        and np.any((cell_points[len(seeds) :] >= 0).sum(axis=1) != 2)
+        and np.any((read_typed(cell_points, slice(len(seeds), None)) >= 0).sum(axis=1) != 2)
     ):
         issues.append("Cells FacePoint Indexes: ghost cells must have two vertices")
     if (
@@ -785,9 +829,9 @@ def _mesh_binding_issues(
     shapely.prepare(domain)
     if not np.all(shapely.covers(domain, shapely.points(points))):
         issues.append("FacePoints Coordinate: points outside authored perimeter")
-    faces = area["Faces FacePoint Indexes"][()]
-    info = area["Faces Perimeter Info"][()]
-    values = area["Faces Perimeter Values"][()]
+    faces = read_typed(area["Faces FacePoint Indexes"])
+    info = read_typed(area["Faces Perimeter Info"])
+    values = read_typed(area["Faces Perimeter Values"])
     if values.dtype.kind != "f" or values.dtype.itemsize != 8:
         return issues + [
             "Faces Perimeter Values: unsupported native coordinate precision"
@@ -855,9 +899,9 @@ def validate(
     with h5py.File(hdf_path, "r") as hdf:
         for path, digest in expected["inputs"].items():
             same = path in hdf and (
-                _projection_equal(expected["projections"][path], hdf[path][()])
+                _projection_equal(expected["projections"][path], read_typed(hdf[path]))
                 if path in expected.get("projections", {})
-                else _digest(hdf[path][()]) == digest
+                else _digest(read_typed(hdf[path])) == digest
             )
             if not same:
                 changed.append(path)
@@ -868,10 +912,10 @@ def validate(
                 or name not in hdf[path].attrs
                 or not (
                     _projection_equal(
-                        expected["projections"][key], hdf[path].attrs[name]
+                        expected["projections"][key], read_attr(hdf[path], name)
                     )
                     if key in expected.get("projections", {})
-                    else _digest(hdf[path].attrs[name]) == digest
+                    else _digest(read_attr(hdf[path], name)) == digest
                 )
             ):
                 changed.append(key)
@@ -899,7 +943,7 @@ def validate(
             values = require(f"{path}/{family} Values", columns=columns)
             if info is None or values is None:
                 return
-            spans = info[()]
+            spans = read_typed(info)
             active = spans if active_rows is None else spans[:active_rows]
             if (
                 np.any(spans < 0)
@@ -929,7 +973,7 @@ def validate(
             if identity not in fields or index_field not in fields:
                 missing.append(f"{path}/{table}: invalid attachment schema")
                 return
-            data = obj[()]
+            data = read_typed(obj)
             identifiers = data[identity]
             if (
                 np.any(identifiers < 0)
@@ -953,7 +997,7 @@ def validate(
                 return
             for fid in {int(v) for v in identifiers if 0 <= v < count}:
                 area_name = (
-                    bytes(attrs[area_field][fid]).rstrip(b"\x00").decode().strip()
+                    bytes(read_typed(attrs)[area_field][fid]).rstrip(b"\x00").decode().strip()
                 )
                 if allowed_areas is not None and area_name not in allowed_areas[fid]:
                     missing.append(
@@ -989,14 +1033,16 @@ def validate(
                 attrs = collection["Attributes"]
                 names = [
                     bytes(value).rstrip(b"\x00").decode().strip()
-                    for value in attrs["Name"]
+                    for value in read_typed(attrs)["Name"]
                 ]
                 if names.count(name) != 1:
                     changed.append(f"{path}: authored area identity changed")
                 else:
                     index = names.index(name)
-                    start, count = (int(v) for v in collection["Cell Info"][index, :2])
-                    actual = collection["Cell Points"][start : start + count]
+                    start, count = (
+                        int(v) for v in read_typed(collection["Cell Info"], (index, slice(None, 2)))
+                    )
+                    actual = read_typed(collection["Cell Points"], slice(start, start + count))
                     authored = expected["seed_points"][name]
                     # Native decimal parsing can differ from Python by one ULP.
                     # Bind only the regenerated mirror proven to represent the
@@ -1027,11 +1073,11 @@ def validate(
             if cells == 0 or face_count == 0:
                 missing.append(f"{path}: empty topology")
                 continue
-            if np.any(faces[()] < 0) or np.any(faces[()] >= len(points)):
+            if np.any(read_typed(faces) < 0) or np.any(read_typed(faces) >= len(points)):
                 missing.append(f"{path}: invalid face point indexes")
             cell_indexes = require(f"{path}/Faces Cell Indexes", face_count, 2)
             if cell_indexes is not None and (
-                np.any(cell_indexes[()] < 0) or np.any(cell_indexes[()] >= cells)
+                np.any(read_typed(cell_indexes) < 0) or np.any(read_typed(cell_indexes) >= cells)
             ):
                 missing.append(f"{path}: invalid face cell indexes")
             for product in CELL_PRODUCTS[:3]:
@@ -1055,12 +1101,23 @@ def validate(
             topology_issues = _topology_issues(hdf[path])
             missing.extend(f"{path}/{issue}" for issue in topology_issues)
             if not topology_issues:
+                ring = expected["perimeters"][name]
+                if name in expected.get("native_perimeters", {}):
+                    native_ring = expected["native_perimeters"][name]
+                    if "Perimeter" not in hdf[path] or not np.array_equal(
+                        hdf[path]["Perimeter"][()], native_ring
+                    ):
+                        changed.append(
+                            f"{path}/Perimeter: bound native perimeter changed"
+                        )
+                    else:
+                        ring = native_ring
                 missing.extend(
                     f"{path}/{issue}"
                     for issue in _mesh_binding_issues(
                         hdf[path],
                         current_seeds,
-                        expected["perimeters"][name],
+                        ring,
                     )
                 )
             for product in FACE_PRODUCTS[2:]:
@@ -1076,8 +1133,8 @@ def validate(
             ):
                 associated = bool(
                     _semantic(
-                        area.attrs.get(
-                            association, hdf["Geometry"].attrs.get(association, b"")
+                        read_attr(
+                            area, association, read_attr(hdf["Geometry"], association, b"")
                         )
                     )
                 )
@@ -1110,6 +1167,10 @@ def validate(
                 "total_cells": cells,
                 "faces": face_count,
             }
+            if name in expected.get("native_perimeters", {}):
+                evidence["areas"][name]["perimeter_binding"] = (
+                    "exact_fixed_width_serialization"
+                )
 
         for path, count in expected["features"].items():
             if not count:
@@ -1119,7 +1180,7 @@ def validate(
                 # Types choose the required family; an empty external table is not completion.
                 attrs = hdf.get(f"{path}/Attributes")
                 if attrs is not None and "Type" in (attrs.dtype.names or ()):
-                    types = [bytes(v).rstrip(b"\x00").decode() for v in attrs["Type"]]
+                    types = [bytes(v).rstrip(b"\x00").decode() for v in read_typed(attrs)["Type"]]
                     for kind, table in (
                         ("External", "External Faces"),
                         ("Internal", "Internal Cells"),
@@ -1130,7 +1191,7 @@ def validate(
                             obj = require(f"{path}/{table}")
                             if obj is not None and (
                                 "BC Line ID" not in (obj.dtype.names or ())
-                                or not set(ids).issubset(set(obj["BC Line ID"]))
+                                or not set(ids).issubset(set(read_typed(obj)["BC Line ID"]))
                             ):
                                 missing.append(
                                     f"{path}/{table}: missing line attachments"
@@ -1139,7 +1200,7 @@ def validate(
                                 # Only the corresponding type must have rows;
                                 # other IDs remain valid and bounded by mesh.
                                 all_ids = (
-                                    {int(v) for v in obj["BC Line ID"]}
+                                    {int(v) for v in read_typed(obj)["BC Line ID"]}
                                     if "BC Line ID" in (obj.dtype.names or ())
                                     else set()
                                 )
@@ -1155,7 +1216,7 @@ def validate(
                                 else:
                                     for fid in all_ids & set(range(count)):
                                         area_name = (
-                                            bytes(attrs["SA-2D"][fid])
+                                            bytes(read_typed(attrs)["SA-2D"][fid])
                                             .rstrip(b"\x00")
                                             .decode()
                                             .strip()
@@ -1170,7 +1231,7 @@ def validate(
                                                 else "interior_cells"
                                             ]
                                         )
-                                        data = obj[()]
+                                        data = read_typed(obj)
                                         indices = data[field][data["BC Line ID"] == fid]
                                         if (
                                             limit is None

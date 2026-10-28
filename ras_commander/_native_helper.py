@@ -484,8 +484,11 @@ def normalize_store_map_render_mode(
     if render_mode is None:
         render_mode = default
 
+    options = render_mode if isinstance(render_mode, dict) else {}
     if isinstance(render_mode, dict):
-        render_mode = render_mode.get("mode", default)
+        render_mode = options.get("mode", default)
+
+    parts = str(render_mode).strip().split(":")
 
     mode_map = {
         "horizontal": "horizontal",
@@ -494,12 +497,28 @@ def normalize_store_map_render_mode(
         "sloped": "sloping",
     }
 
-    normalized = mode_map.get(str(render_mode).strip().lower())
+    normalized = mode_map.get(parts[0].lower())
     if normalized is None:
         raise ValueError(
             f"Invalid render_mode: {render_mode}. "
             "Valid values: horizontal, sloping, slopingPretty"
         )
+    flag_names = ("reduce_shallow_to_horizontal", "use_depth_weighted_faces")
+    if len(parts) > 1:
+        # Normalization runs at both the public-call and helper boundaries.
+        # Preserve the validated helper flags on the second pass.
+        if normalized != "slopingPretty" or len(parts) != 3 or any(
+            flag.lower() not in ("true", "false") for flag in parts[1:]
+        ):
+            raise ValueError("Sloping helper flags require slopingPretty:true|false:true|false")
+        if any(name in options for name in flag_names):
+            raise ValueError("Specify sloping flags in the mode or the dictionary, not both")
+        return ":".join([normalized, *(flag.lower() for flag in parts[1:])])
+    if normalized == "slopingPretty" and any(name in options for name in flag_names):
+        flags = [options.get(flag_names[0], True), options.get(flag_names[1], False)]
+        if any(not isinstance(flag, bool) for flag in flags):
+            raise ValueError("Sloping rendering options must be booleans")
+        return ":".join([normalized, *(str(flag).lower() for flag in flags)])
     return normalized
 
 

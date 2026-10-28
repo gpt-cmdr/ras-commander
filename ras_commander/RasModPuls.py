@@ -44,6 +44,7 @@ import pandas as pd
 
 from .LoggingConfig import get_logger
 from .Decorators import log_call
+from .fast_hdf import read_typed
 
 logger = get_logger(__name__)
 
@@ -402,7 +403,7 @@ class RasModPuls:
                     f"Ensure the plan outputs face flows for mesh '{flow_area_name}'."
                 )
 
-            face_flow_all = hdf[face_flow_path][:]  # shape: [n_timesteps, n_faces]
+            face_flow_all = read_typed(hdf[face_flow_path], slice(None))  # shape: [n_timesteps, n_faces]
             face_flow_transect = face_flow_all[:, face_ids]  # [n_timesteps, n_profile_faces]
 
             # Cell Depth time series — derived from Water Surface minus terrain elevation.
@@ -419,7 +420,7 @@ class RasModPuls:
                     f"Water Surface dataset not found at: {ws_path}\n"
                     f"Ensure the plan outputs water surface for mesh '{flow_area_name}'."
                 )
-            ws_all = hdf[ws_path][:]  # shape: [n_timesteps, n_cells]
+            ws_all = read_typed(hdf[ws_path], slice(None))  # shape: [n_timesteps, n_cells]
 
             elev_path = f"Geometry/2D Flow Areas/{flow_area_name}/Cells Minimum Elevation"
             if elev_path not in hdf:
@@ -427,7 +428,7 @@ class RasModPuls:
                     f"Cells Minimum Elevation not found at: {elev_path}\n"
                     f"Verify the geometry HDF contains 2D flow area '{flow_area_name}'."
                 )
-            cell_min_elev = hdf[elev_path][:]  # shape: [n_cells]
+            cell_min_elev = read_typed(hdf[elev_path], slice(None))  # shape: [n_cells]
 
             # depth = WS - terrain, clipped to zero for dry cells
             depth_all = np.maximum(ws_all - cell_min_elev[np.newaxis, :], 0.0)
@@ -437,7 +438,7 @@ class RasModPuls:
             if cell_area_path not in hdf:
                 raise ValueError(f"Cell surface area dataset not found: {cell_area_path}")
 
-            cell_areas = hdf[cell_area_path][:]  # sq ft, one per cell
+            cell_areas = read_typed(hdf[cell_area_path], slice(None))  # sq ft, one per cell
 
         # ---- Detect plateau timesteps ----------------------------------------
         plateau_indices = RasModPuls._detect_plateau_indices(

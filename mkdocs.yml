@@ -48,6 +48,10 @@ theme:
   logo: assets/ras-commander_logo.svg
   favicon: assets/ras-commander_logo.svg
 
+# Link-preview (Open Graph) tags for pages with social_image front matter.
+hooks:
+  - scripts/mkdocs_social_meta.py
+
 plugins:
   - search
   - llmstxt:
@@ -74,6 +78,7 @@ plugins:
         User Guide:
           - user-guide/overview.md
           - user-guide/plan-execution.md
+          - user-guide/restart-header.md
           - user-guide/execution-backends.md
           - user-guide/container-execution.md
           - user-guide/container-images.md
@@ -96,7 +101,9 @@ plugins:
           - api/hydrofabric.md
           - api/breakout-1d.md
           - api/breakout-2d.md
+          - api/hydraulic-subdomains.md
           - api/benefits.md
+          - api/fim.md
           - api/hdf.md
           - api/geometry.md
           - api/terrain.md
@@ -208,9 +215,25 @@ nav:
     - Architecture Overview: user-guide/overview.md
     - Workflows & Patterns: user-guide/workflows-and-patterns.md
   - Agent Plugin and MCPs: agent-plugin.md
+  - Native Rust Engines:
+    - Overview: native-engine.md
+    - HDF Engine:
+      - Guide: https://rascommander.info/ras/native-engine/#hdf-engine
+      - Performance: https://rascommander.info/fasthdf/performance/
+      - Architecture: https://rascommander.info/fasthdf/architecture/
+      - Developer Documentation: https://rascommander.info/fasthdf/
+      - Source (GitHub): https://github.com/gpt-cmdr/ras-commander-fast-hdf
+    - Mapping Engine:
+      - Guide: native-mapping-engine.md
+      - API: https://rascommander.info/ras/api/fim/
+      - Performance and Qualification: https://rascommander.info/ras/development/fim-mapping-performance/
+      - Source (GitHub): https://github.com/gpt-cmdr/ras-commander-fast-map
+      - Rust API (docs.rs): https://docs.rs/ras-commander-fast-map
+    - DSS Engine (Coming Soon): https://rascommander.info/ras/native-engine/#dss-engine-coming-soon
   - User Guide:
     - Running Plans:
       - Plan Execution: user-guide/plan-execution.md
+      - Native Restart Timing: user-guide/restart-header.md
       - Output Intervals & HDF Compression: user-guide/plan-output-intervals-hdf-compression.md
       - Choose an Execution Backend: user-guide/execution-backends.md
       - Remote Execution: user-guide/remote-execution.md
@@ -276,6 +299,7 @@ nav:
       - Hydrofabric Conflation: api/hydrofabric.md
       - 1D Breakout Extraction: api/breakout-1d.md
       - 2D Breakout Geometry Preparation: api/breakout-2d.md
+      - Hydraulic Subdomains: api/hydraulic-subdomains.md
     - Results & Mapping:
       - HDF Modules: api/hdf.md
       - Results Queries: api/results-queries.md
@@ -287,6 +311,8 @@ nav:
       - Remote Modules: api/remote.md
       - Model Source Utilities: api/model-sources.md
     - Benefits Analysis: api/benefits.md
+    - ras2fim-2D FIM Mapping (Optional): api/fim.md
+    - FIM Engine Comparison: development/fim-mapping-performance.md
     - DataFrame Reference: reference/dataframe-reference.md
   - RAS Data Formats:
     - Overview: reference/file-formats.md

@@ -9,6 +9,7 @@ which exercises the order-invariant shared-ring-segment fallback. The
 topology check is opt-in: set ``RAS_FLUVIAL_REAL_HDF`` to a computed,
 read-only DavisStormSystem p02 plan HDF.
 """
+import inspect
 import os
 from pathlib import Path
 
@@ -23,6 +24,11 @@ from shapely.geometry import LineString, MultiLineString, Polygon, box
 from ras_commander.hdf import HdfFluvialPluvial, HdfMesh, HdfResultsMesh
 
 T0 = pd.Timestamp("2000-01-01")
+
+# These tests pin the reference implementation. Where the public methods take
+# ``engine=`` (default "auto", which may run the native kernels), select it.
+REFERENCE = ({"engine": "h5py"} if "engine" in inspect.signature(
+    HdfFluvialPluvial.generate_fluvial_pluvial_polygons).parameters else {})
 
 
 @pytest.fixture
@@ -88,7 +94,7 @@ def test_cell_in_competing_pairs_is_seeded_ambiguous(empty_hdf, monkeypatch):
     for frame in [cells] + list(_variants(cells).values()):
         _patch(monkeypatch, frame, results)
         out = HdfFluvialPluvial.generate_fluvial_pluvial_polygons(
-            empty_hdf, delta_t=1, temporal_tolerance_hours=0.5)
+            empty_hdf, delta_t=1, temporal_tolerance_hours=0.5, **REFERENCE)
         classes = _classes(out)
         assert classes[("mesh", "pluvial")].equals(cells.geometry[0])
         assert classes[("mesh", "ambiguous")].equals(cells.geometry[1])
@@ -106,9 +112,9 @@ def test_seed_rule_is_independent_of_pair_order():
 def test_equal_times_with_zero_delta_t_seed_nothing(empty_hdf, monkeypatch):
     cells, results = _row(2, [3, 3])
     _patch(monkeypatch, cells, results)
-    out = HdfFluvialPluvial.generate_fluvial_pluvial_polygons(empty_hdf, delta_t=0)
+    out = HdfFluvialPluvial.generate_fluvial_pluvial_polygons(empty_hdf, delta_t=0, **REFERENCE)
     assert set(out.classification) == {"ambiguous"}
-    lines = HdfFluvialPluvial.calculate_fluvial_pluvial_boundary(empty_hdf, delta_t=0)
+    lines = HdfFluvialPluvial.calculate_fluvial_pluvial_boundary(empty_hdf, delta_t=0, **REFERENCE)
     assert len(lines) == 1
 
 
@@ -122,7 +128,7 @@ def test_curved_shared_face_keeps_every_segment(empty_hdf, monkeypatch):
     expected = LineString(shared)
     for frame in [cells] + list(_variants(cells).values()):
         _patch(monkeypatch, frame, results)
-        lines = HdfFluvialPluvial.calculate_fluvial_pluvial_boundary(empty_hdf, delta_t=1)
+        lines = HdfFluvialPluvial.calculate_fluvial_pluvial_boundary(empty_hdf, delta_t=1, **REFERENCE)
         assert len(lines) == 1
         assert lines.geometry.iloc[0].equals(expected)
         assert lines.geometry.iloc[0].length == pytest.approx(expected.length)
@@ -149,13 +155,13 @@ def test_synthetic_grid_is_order_invariant(empty_hdf, monkeypatch):
                             "maximum_water_surface_time": [T0 + pd.Timedelta(hours=h) for h in hours]})
     for delta_t in (1, 4):
         _patch(monkeypatch, cells, results)
-        ref = HdfFluvialPluvial.generate_fluvial_pluvial_polygons(empty_hdf, delta_t=delta_t)
-        ref_lines = HdfFluvialPluvial.calculate_fluvial_pluvial_boundary(empty_hdf, delta_t=delta_t)
+        ref = HdfFluvialPluvial.generate_fluvial_pluvial_polygons(empty_hdf, delta_t=delta_t, **REFERENCE)
+        ref_lines = HdfFluvialPluvial.calculate_fluvial_pluvial_boundary(empty_hdf, delta_t=delta_t, **REFERENCE)
         assert not ref.empty and not ref_lines.empty
         for frame in _variants(cells).values():
             _patch(monkeypatch, frame, results)
-            _assert_identical(ref, HdfFluvialPluvial.generate_fluvial_pluvial_polygons(empty_hdf, delta_t=delta_t))
-            _assert_same_lines(ref_lines, HdfFluvialPluvial.calculate_fluvial_pluvial_boundary(empty_hdf, delta_t=delta_t))
+            _assert_identical(ref, HdfFluvialPluvial.generate_fluvial_pluvial_polygons(empty_hdf, delta_t=delta_t, **REFERENCE))
+            _assert_same_lines(ref_lines, HdfFluvialPluvial.calculate_fluvial_pluvial_boundary(empty_hdf, delta_t=delta_t, **REFERENCE))
 
 
 def _real(env):
@@ -183,7 +189,7 @@ def test_real_topology_boundary_lines_are_stored_faces():
                     continue
                 if abs((times[ka] - times[kb]).total_seconds()) >= 12 * 3600:
                     expected.setdefault(tuple(sorted((ka, kb))), []).append(stored[(mesh, face_id)])
-    lines = HdfFluvialPluvial.calculate_fluvial_pluvial_boundary(path, delta_t=12)
+    lines = HdfFluvialPluvial.calculate_fluvial_pluvial_boundary(path, delta_t=12, **REFERENCE)
     assert len(lines) == len(expected) > 0
     for line, (_, pieces) in zip(lines.geometry, sorted(expected.items())):
         assert line.equals(shapely.union_all(pieces))

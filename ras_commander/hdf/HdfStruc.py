@@ -17,24 +17,28 @@ List of Functions in HdfStruc:
 - get_culvert_hydraulics()
 - get_storage_area_polygons()
 """
+
+from __future__ import annotations
+
 from pathlib import Path
 from typing import List, Union
 
 import h5py
 import numpy as np
 import pandas as pd
-from geopandas import GeoDataFrame
-from shapely.geometry import (
-    LineString,
-    MultiLineString,
-    Polygon,
-)
 
+from .._optional_deps import optional_module
 from ..Decorators import log_call, standardize_input
 from ..LoggingConfig import get_logger
 from .HdfBase import HdfBase
 from .HdfUtils import HdfUtils
 from ._packed_parts import _nonnegative_index, resolve_feature_part_ranges
+from ..fast_hdf import read_attr, read_attrs, read_typed, reraise_required
+
+# GeoPandas/Shapely load on first use, so the tabular readers work on the core
+# h5py/numpy/pandas install.
+gpd = optional_module("geopandas", "Building geometry in HdfStruc")
+shapely_geometry = optional_module("shapely.geometry", "Building geometry in HdfStruc")
 
 logger = get_logger(__name__)
 
@@ -95,8 +99,8 @@ class HdfStruc:
             return (), (), (), "Native side datasets or active-cell topology absent"
         if any(not isinstance(hdf[path], h5py.Dataset) for path in required):
             return (), (), tuple(required), "Unsupported native dataset objects"
-        cells = hdf[cell_path][()]
-        points = hdf[point_path][()]
+        cells = read_typed(hdf[cell_path])
+        points = read_typed(hdf[point_path])
         if (
             cells.ndim != 1
             or points.ndim != 1
@@ -115,8 +119,8 @@ class HdfStruc:
                 tuple(required),
                 "Unsupported native active-cell or face-point layout",
             )
-        faces = hdf[f"{mesh_path}/Faces FacePoint Indexes"][()]
-        adjacency = hdf[f"{mesh_path}/Faces Cell Indexes"][()]
+        faces = read_typed(hdf[f"{mesh_path}/Faces FacePoint Indexes"])
+        adjacency = read_typed(hdf[f"{mesh_path}/Faces Cell Indexes"])
         point_count = len(coordinates)
         if (
             faces.ndim != 2
@@ -134,8 +138,11 @@ class HdfStruc:
             or np.any(cells >= len(surface))
         ):
             return (), (), tuple(required), "Invalid native cells or face topology"
+        # One routed read of the referenced (bounds-checked) cells only.
+        referenced = np.unique(cells.astype(np.int64))
+        areas = dict(zip(referenced.tolist(), read_typed(surface, referenced)))
         if any(
-            not np.isfinite(surface[int(cell)]) or surface[int(cell)] <= 0
+            not np.isfinite(areas[int(cell)]) or areas[int(cell)] <= 0
             for cell in cells
         ):
             return (
@@ -215,7 +222,7 @@ class HdfStruc:
             attrs_path = "Geometry/Structures/Attributes"
             if attrs_path in hdf:
                 attrs = HdfStruc._decode_bytes_columns(
-                    pd.DataFrame(hdf[attrs_path][()])
+                    pd.DataFrame(read_typed(hdf[attrs_path]))
                 )
                 required = {"Type", "Connection", "US SA/2D", "DS SA/2D"}
                 if required.issubset(attrs.columns):
@@ -233,8 +240,8 @@ class HdfStruc:
                 if connections_df is not None
                 else native
             )
-            version = HdfUtils.convert_ras_string(hdf.attrs.get("File Version", ""))
-            file_type = HdfUtils.convert_ras_string(hdf.attrs.get("File Type", ""))
+            version = HdfUtils.convert_ras_string(read_attr(hdf, "File Version", ""))
+            file_type = HdfUtils.convert_ras_string(read_attr(hdf, "File Type", ""))
             qualified = (
                 str(version).startswith("HEC-RAS 6.6 ")
                 and file_type == "HEC-RAS Results"
@@ -343,7 +350,7 @@ class HdfStruc:
     @staticmethod
     @log_call
     @standardize_input(file_type='geom_hdf')
-    def get_structures(hdf_path: Union[Path, str], datetime_to_str: bool = False) -> GeoDataFrame:
+    def get_structures(hdf_path: Union[Path, str], datetime_to_str: bool = False) -> gpd.GeoDataFrame:
         """
         Extracts structure data from a HEC-RAS geometry HDF5 file.
 
@@ -402,7 +409,7 @@ class HdfStruc:
                         f"No Geometry/Structures group in {hdf_path.name}; "
                         "returning empty GeoDataFrame."
                     )
-                    return GeoDataFrame()
+                    return gpd.GeoDataFrame()
                 
                 # Native geometry may retain an empty Structures placeholder
                 # containing only an empty Property Tables group. This is not a
@@ -416,7 +423,7 @@ class HdfStruc:
                 )
                 if empty_placeholder:
                     logger.debug("Empty Geometry/Structures placeholder in %s", hdf_path.name)
-                    result = GeoDataFrame(
+                    result = gpd.GeoDataFrame(
                         {"Structure ID": pd.Series(dtype="int64")},
                         geometry=[], crs=HdfBase.get_projection(hdf),
                     )
@@ -462,7 +469,7 @@ class HdfStruc:
                         )
                         return pd.DataFrame()
                     
-                    data = hdf[path][()]
+                    data = read_typed(hdf[path])
                     
                     if data.dtype.names:
                         df = pd.DataFrame(data)
@@ -492,13 +499,13 @@ class HdfStruc:
                 # Check if 'Structure ID' was successfully assigned
                 if 'Structure ID' not in struct_attrs.columns:
                     logger.error("'Structure ID' column could not be assigned to Structures/Attributes.")
-                    return GeoDataFrame()
+                    return gpd.GeoDataFrame()
 
                 # Get centerline geometry
-                centerline_info = hdf["Geometry/Structures/Centerline Info"][()]
-                centerline_points = hdf["Geometry/Structures/Centerline Points"][()]
+                centerline_info = read_typed(hdf["Geometry/Structures/Centerline Info"])
+                centerline_points = read_typed(hdf["Geometry/Structures/Centerline Points"])
                 centerline_parts = (
-                    hdf["Geometry/Structures/Centerline Parts"][()]
+                    read_typed(hdf["Geometry/Structures/Centerline Parts"])
                     if "Centerline Parts" in structure_group
                     else None
                 )
@@ -550,14 +557,14 @@ class HdfStruc:
                     if start_idx < 0 or point_count < 2 or len(points) != point_count:
                         raise ValueError(f"Invalid centerline point range for structure {i}")
                     if part_count <= 1:
-                        geoms.append(LineString(points))
+                        geoms.append(shapely_geometry.LineString(points))
                         continue
-                    geoms.append(MultiLineString(
+                    geoms.append(shapely_geometry.MultiLineString(
                         [points[offset:offset + count] for offset, count in part_ranges]
                     ))
 
                 # Create base GeoDataFrame with Structures Attributes and geometries
-                struct_gdf = GeoDataFrame(
+                struct_gdf = gpd.GeoDataFrame(
                     struct_attrs,
                     geometry=geoms,
                     crs=HdfBase.get_projection(hdf_path)
@@ -672,6 +679,7 @@ class HdfStruc:
                 return struct_gdf
 
         except Exception as e:
+            reraise_required(e)
             logger.error(f"Error reading structures from {hdf_path} (Geometry/Structures): {str(e)}")
             raise
 
@@ -706,7 +714,7 @@ class HdfStruc:
                 
                 # Get attributes and decode byte strings
                 attrs_dict = {}
-                for key, value in dict(hdf_file["Geometry/Structures"].attrs).items():
+                for key, value in read_attrs(hdf_file["Geometry/Structures"]).items():
                     if isinstance(value, bytes):
                         attrs_dict[key] = value.decode('utf-8')
                     else:
@@ -716,6 +724,7 @@ class HdfStruc:
                 return pd.DataFrame(attrs_dict, index=[0])
 
         except Exception as e:
+            reraise_required(e)
             logger.error(f"Error reading geometry structures attributes from {hdf_path}: {str(e)}")
             return pd.DataFrame()
 
@@ -763,7 +772,7 @@ class HdfStruc:
                     logger.debug(f"No structure attributes found: {hdf_path}")
                     return pd.DataFrame()
 
-                struct_attrs = hdf_file["Geometry/Structures/Attributes"][()]
+                struct_attrs = read_typed(hdf_file["Geometry/Structures/Attributes"])
                 struct_df = pd.DataFrame(struct_attrs)
                 struct_df = HdfStruc._decode_bytes_columns(struct_df)
 
@@ -791,7 +800,7 @@ class HdfStruc:
                 # Extract culvert-specific data if available
                 culvert_data_path = "Geometry/Structures/Culvert Data"
                 if culvert_data_path in hdf_file:
-                    culvert_data = hdf_file[culvert_data_path][()]
+                    culvert_data = read_typed(hdf_file[culvert_data_path])
                     culvert_data_df = pd.DataFrame(culvert_data)
                     culvert_data_df = HdfStruc._decode_bytes_columns(culvert_data_df)
 
@@ -839,6 +848,7 @@ class HdfStruc:
                 return result_df
 
         except Exception as e:
+            reraise_required(e)
             logger.error(f"Error reading culvert hydraulics from {hdf_path}: {str(e)}")
             return pd.DataFrame()
 
@@ -882,6 +892,7 @@ class HdfStruc:
                 return HdfStruc._list_sa2d_connections_from_hdf(hdf_file, hdf_path)
 
         except Exception as e:
+            reraise_required(e)
             logger.error(f"Error listing SA/2D connection structures: {e}")
             return []
 
@@ -944,20 +955,20 @@ class HdfStruc:
                         info['has_breach'] = True
 
                         # Extract breach metadata from attributes
-                        breach_dataset = hdf_file[breach_var_path]
-                        if 'Breach at' in breach_dataset.attrs:
-                            breach_at = breach_dataset.attrs['Breach at']
+                        breach_dataset = read_attrs(hdf_file[breach_var_path])
+                        if 'Breach at' in breach_dataset:
+                            breach_at = breach_dataset['Breach at']
                             info['breach_at_date'] = breach_at.decode('utf-8') if isinstance(breach_at, bytes) else breach_at
                         else:
                             info['breach_at_date'] = None
 
-                        if 'Breach at Time (Days)' in breach_dataset.attrs:
-                            info['breach_at_time'] = float(breach_dataset.attrs['Breach at Time (Days)'])
+                        if 'Breach at Time (Days)' in breach_dataset:
+                            info['breach_at_time'] = float(breach_dataset['Breach at Time (Days)'])
                         else:
                             info['breach_at_time'] = None
 
-                        if 'Centerline Breach' in breach_dataset.attrs:
-                            info['centerline_breach'] = float(breach_dataset.attrs['Centerline Breach'])
+                        if 'Centerline Breach' in breach_dataset:
+                            info['centerline_breach'] = float(breach_dataset['Centerline Breach'])
                         else:
                             info['centerline_breach'] = None
                     else:
@@ -971,13 +982,14 @@ class HdfStruc:
                 return pd.DataFrame(info_list)
 
         except Exception as e:
+            reraise_required(e)
             logger.error(f"Error getting SA/2D breach info: {e}")
             raise
 
     @staticmethod
     @log_call
     @standardize_input(file_type='geom_hdf')
-    def get_storage_area_polygons(hdf_path: Path, *, ras_object=None) -> GeoDataFrame:
+    def get_storage_area_polygons(hdf_path: Path, *, ras_object=None) -> gpd.GeoDataFrame:
         """
         Extract storage area polygon geometry from HEC-RAS HDF file.
 
@@ -1013,7 +1025,7 @@ class HdfStruc:
         The available project CRS is attached without transforming coordinates;
         the CRS remains unset when no projection can be resolved.
         """
-        _empty = GeoDataFrame(
+        _empty = gpd.GeoDataFrame(
             columns=['Name', 'geometry', 'avg_area', 'min_elev', 'mode'],
             geometry='geometry'
         )
@@ -1031,18 +1043,18 @@ class HdfStruc:
                     )
                     return _empty
 
-                polygon_points = sa_group['Polygon Points'][:]   # (total_pts, 2) float64
-                polygon_info   = sa_group['Polygon Info'][:]     # (num_sa, 4) int32
+                polygon_points = read_typed(sa_group['Polygon Points'], slice(None))   # (total_pts, 2) float64
+                polygon_info   = read_typed(sa_group['Polygon Info'], slice(None))     # (num_sa, 4) int32
 
                 # Polygon Parts for multi-ring (holes) support
                 polygon_parts = None
                 if 'Polygon Parts' in sa_group:
-                    polygon_parts = sa_group['Polygon Parts'][:]  # (total_parts, 2) int32
+                    polygon_parts = read_typed(sa_group['Polygon Parts'], slice(None))  # (total_parts, 2) int32
 
                 # Attributes: Name S16, Mode S16, Avg Area f4, Min Elev f4, ...
                 attrs = None
                 if 'Attributes' in sa_group:
-                    attrs = sa_group['Attributes'][:]
+                    attrs = read_typed(sa_group['Attributes'], slice(None))
 
                 num_sa = len(polygon_info)
                 records = []
@@ -1064,11 +1076,11 @@ class HdfStruc:
                             ring_count   = int(sa_parts[p, 1])
                             rings.append(sa_points[local_offset: local_offset + ring_count])
                         if len(rings) == 1:
-                            polygon = Polygon(rings[0])
+                            polygon = shapely_geometry.Polygon(rings[0])
                         else:
-                            polygon = Polygon(rings[0], rings[1:])
+                            polygon = shapely_geometry.Polygon(rings[0], rings[1:])
                     else:
-                        polygon = Polygon(sa_points)
+                        polygon = shapely_geometry.Polygon(sa_points)
 
                     # Extract attributes from structured array
                     sa_name  = f"SA_{i}"
@@ -1110,7 +1122,7 @@ class HdfStruc:
                 if not records:
                     return _empty
 
-                gdf = GeoDataFrame(
+                gdf = gpd.GeoDataFrame(
                     records, geometry='geometry', crs=HdfBase.get_projection(hdf)
                 )
                 logger.debug(
@@ -1119,5 +1131,6 @@ class HdfStruc:
                 return gdf
 
         except Exception as e:
+            reraise_required(e)
             logger.error(f"Error reading storage area polygons from {hdf_path}: {str(e)}")
             raise

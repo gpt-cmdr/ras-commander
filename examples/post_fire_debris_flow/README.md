@@ -70,8 +70,11 @@ high-hazard *area* is unchanged here — the debris-flow high class is depth-dom
 ```bash
 python rigor_analysis.py rigor_status.jsonl   # timestep convergence + Cv/viscosity/yield panels
 ```
-Findings here: the peaks are converged at a 1 s computation interval (0.5 s identical; 2 s
-unstable); Cv (bulking), viscosity, and yield stress are all material controls.
+Findings here: peaks were insensitive to the computation interval between 0.5 s and 1 s (2 s
+was unstable); Cv (bulking), viscosity, and yield stress are all material controls. Matching
+peaks across time steps is a sensitivity check, not proof of hydraulic convergence: HEC-RAS
+compute messages for these debris-flow runs include maximum-iteration warnings, which HEC's
+tutorial asks modelers to evaluate.
 
 ## Channel breaklines (mesh refinement along the thalweg)
 
@@ -139,8 +142,8 @@ Effect (Ether Hollow, τy = 700 Pa): the channel-aligned refinement drops the sp
 depth 19.1 → 13.4 ft as the resolved continuous thalweg carries the flow; peak velocity rises
 modestly (17.3 → 20.0 fps), mesh 10,647 → 15,546 cells.
 **Mesh and timestep refine together**: the 12 ft mesh needs a 0.5 s computation interval (the
-33 ft mesh is converged at 1 s) — at 1 s the refined mesh runs Courant ≈ 2 and inflates peak
-velocity to ~25 fps.
+33 ft mesh gave the same peaks at 0.5 s and 1 s) — at 1 s the refined mesh runs Courant ≈ 2 and
+inflates peak velocity to ~25 fps.
 
 **Extra prerequisite for delineation:** **TauDEM 5.x** binaries (`PitRemove`, `D8FlowDir`,
 `AreaD8`, `Threshold`, `StreamNet`) on PATH, and **MS-MPI** (`mpiexec`) for multi-process runs
@@ -149,8 +152,18 @@ HEC-RAS host; stage the resulting JSON to the build machine.
 
 ## Notes
 
-- **Units:** the model is US-Customary (feet); non-Newtonian rheology is entered in **SI
-  (Pa, Pa·s)** — HEC-RAS does not convert it.
+- **Units:** the model is US-Customary (feet); non-Newtonian rheology *inputs* are entered in
+  **SI (Pa, Pa·s)**. Some rheology *outputs* are converted: HEC-RAS 7.0.1 US-Customary output
+  reports `Face Yield Stress` in lb/ft² (700 Pa → 14.62 lb/ft²).
+- **Rheology outputs:** `Face Yield Stress` and `Face Viscous Stress` read as face series via
+  `HdfResultsMesh.get_mesh_timeseries()`. `Face Mixture Dynamic Viscosity` is labelled as a
+  face series but, in inspected HEC-RAS 6.6 and 7.0.1 output, its width equals the stored cell
+  count and its stored `lb/ft^2*s` value has no established meaning; the typed readers refuse
+  it and `HdfResultsMesh.inspect_mesh_series_raw()` reports it without interpretation.
+- **Run settings differ:** this script defaults to Full Momentum (SWE-ELM) and 2 h; the
+  notebook defaults to Diffusion Wave and 6 h. Compare a plan HDF's stored settings and output
+  clock before comparing numbers between the two. Completed runs and readable outputs do not
+  establish hydraulic convergence.
 - **Concentration is entered in PERCENT** (`--cv` here is a fraction and is written ×100).
   The clear-water inflow is **not** pre-bulked; HEC-RAS bulks it internally via *Bulk Fluid
   Volume* at `Cv` (BF = 1/(1−Cv) = 3.33 at Cv = 0.70). The run records the realized inflow

@@ -345,6 +345,37 @@ def test_explicit_points_replace_generated_bootstrap_without_remeshing(tmp_path,
     assert preflight.source_geometry_path.read_bytes() == original_source
 
 
+def test_explicit_seed_repair_is_opt_in_and_precedes_native_refresh(tmp_path, monkeypatch):
+    preflight, clone, ras = _fixture(tmp_path)
+    calls = []
+
+    def plan(*args, **kwargs):
+        calls.append("plan")
+        return object()
+
+    def apply(plan):
+        calls.append("apply")
+        from ras_commander.geom import MeshSeedRepairResult
+
+        result = GeomMesh.write_computation_points(clone.geometry_path, [[20, 20]], mesh_name="Area")
+        return MeshSeedRepairResult(**vars(result))
+
+    def refresh(*args, **kwargs):
+        calls.append("refresh")
+        _sync_native_hdf(clone.geometry_path)
+        return SimpleNamespace(success=True, error=None, first_error_line=None)
+
+    monkeypatch.setattr(GeomMesh, "plan_computation_point_repair", staticmethod(plan))
+    monkeypatch.setattr(GeomMesh, "apply_computation_point_repair", staticmethod(apply))
+    monkeypatch.setattr(GeomPreprocessor, "run_geometry_preprocessor", staticmethod(refresh))
+    result = RasBreakout2D.prepare_cloned_geometry(
+        preflight, clone, ras_object=ras, computation_points=np.array([[20, 20]]),
+        repair_computation_points=True, refresh_method="rasexe", remesh=False,
+    )
+    assert result.computation_points_result.ok
+    assert calls == ["plan", "apply", "refresh"]
+
+
 @pytest.mark.parametrize("points", [[[1, 1]], [[10 + 1e-15, 50]]])
 def test_invalid_explicit_points_fail_before_breakout_mutation(tmp_path, points):
     preflight, clone, ras = _fixture(tmp_path)
@@ -355,6 +386,88 @@ def test_invalid_explicit_points_fail_before_breakout_mutation(tmp_path, points)
             refresh_method="rasexe", remesh=False,
         )
     assert clone.geometry_path.read_bytes() == original
+
+
+@pytest.mark.parametrize(
+    "kwargs",
+    [
+        {},
+        {"refresh_method": "rasexe"},
+        {
+            "refresh_method": "rasexe",
+            "remesh": False,
+            "computation_points": np.array([[20.0, 20.0]]),
+        },
+    ],
+)
+def test_parent_cell_ids_reject_incompatible_modes_before_mutation(tmp_path, kwargs):
+    preflight, clone, ras = _fixture(tmp_path)
+    original = clone.geometry_path.read_bytes()
+    with pytest.raises(ValueError, match="parent_cell_ids requires"):
+        RasBreakout2D.prepare_cloned_geometry(
+            preflight, clone, ras_object=ras, parent_cell_ids=[1, 2], **kwargs
+        )
+    assert clone.geometry_path.read_bytes() == original
+
+
+def test_parent_cell_subset_is_applied_before_native_completion(tmp_path, monkeypatch):
+    preflight, clone, ras = _fixture(tmp_path)
+    ras.ras_version = "6.6"
+    events = []
+    plan = object()
+
+    def forbidden(*args, **kwargs):
+        pytest.fail("exact subset must not regenerate cells")
+
+    def inspect(source, target, ids, name, **kwargs):
+        assert source == preflight.source_geometry_hdf and target == clone.geometry_path
+        assert ids == [1, 2] and name == "Area"
+        events.append("plan")
+        return plan
+
+    def apply(selected, **kwargs):
+        assert selected is plan and kwargs["ras_object"] is ras
+        assert kwargs['timeout']==600
+        events.append("apply")
+        return MeshResult(
+            mesh_name="Area", status="complete", cell_count=2, operation="cell_subset"
+        )
+
+    def refresh(*args, **kwargs):
+        assert events == ["plan", "apply"]
+        events.append("complete")
+        assert kwargs["require_complete_products"]
+        _sync_native_hdf(clone.geometry_path)
+        return SimpleNamespace(success=True, error=None, first_error_line=None)
+
+    def validate(selected,**kwargs):
+        assert selected is plan and kwargs['ras_object'] is ras
+        assert events==['plan','apply','complete']
+        events.append('validate')
+        return {'status':'pass','topology_exact':True}
+
+    monkeypatch.setattr(
+        GeomMesh, "generate_computation_points", staticmethod(forbidden)
+    )
+    monkeypatch.setattr(GeomMesh, "generate", staticmethod(forbidden))
+    monkeypatch.setattr(GeomMesh, "plan_cell_subset", staticmethod(inspect))
+    monkeypatch.setattr(GeomMesh, "apply_cell_subset", staticmethod(apply))
+    monkeypatch.setattr(GeomMesh, "validate_cell_subset", staticmethod(validate))
+    monkeypatch.setattr(
+        GeomPreprocessor, "run_geometry_preprocessor", staticmethod(refresh)
+    )
+    result = RasBreakout2D.prepare_cloned_geometry(
+        preflight,
+        clone,
+        ras_object=ras,
+        parent_cell_ids=[1, 2],
+        refresh_method="rasexe",
+        remesh=False,
+        require_complete_products=True,
+    )
+    assert events == ["plan", "apply", "complete", "validate"]
+    assert result.mesh_result.operation == "cell_subset"
+    assert result.mesh_result.cell_subset['post_preprocess_validation']['topology_exact']
 
 
 @pytest.mark.parametrize("empty_sidecar", [False, True])
@@ -511,8 +624,9 @@ def test_refresh_exception_keeps_original_cause(tmp_path, monkeypatch, method):
 
 
 @pytest.mark.parametrize("strict", [False, True])
+@pytest.mark.parametrize("workers", [1, 6, None])
 def test_numeric_containment_retry_uses_real_violation_identity(
-    tmp_path, monkeypatch, strict
+    tmp_path, monkeypatch, strict, workers
 ):
     import json
 
@@ -531,6 +645,7 @@ def test_numeric_containment_retry_uses_real_violation_identity(
 
     def refresh(*args, **kwargs):
         assert kwargs["require_complete_products"] is strict
+        assert kwargs["native_worker_threads"] == workers
         preprocess_calls.append(kwargs)
         _sync_native_hdf(clone.geometry_path)
         return SimpleNamespace(success=True, error=None, first_error_line=None)
@@ -558,6 +673,7 @@ def test_numeric_containment_retry_uses_real_violation_identity(
         ras_object=ras,
         refresh_method="rasexe",
         require_complete_products=strict,
+        native_worker_threads=workers,
     )
     assert len(preprocess_calls) == 2
     assert len(calls) == 2 and calls[0].violations[0].feature_name == "Crossing"

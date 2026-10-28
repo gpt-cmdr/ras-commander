@@ -7,13 +7,20 @@ import inspect
 import pandas as pd
 from numbers import Number
 
+from . import _native_scope
+
 
 def log_call(func):
     @wraps(func)
     def wrapper(*args, **kwargs):
         logger = logging.getLogger(func.__module__)
         logger.debug(f"Calling {func.__name__}")
-        result = func(*args, **kwargs)
+        # Native HDF sessions opened by this call are closed when it returns.
+        depth = _native_scope.enter()
+        try:
+            result = func(*args, **kwargs)
+        finally:
+            _native_scope.leave(depth)
         logger.debug(f"Finished {func.__name__}")
         return result
     return wrapper
@@ -302,5 +309,14 @@ def standardize_input(file_type: str = 'plan_hdf'):
                 
             return func(*new_args, **kwargs)
 
-        return wrapper
+        @wraps(wrapper)
+        def scoped(*args, **kwargs):
+            # Native HDF sessions opened by this call are closed when it returns.
+            depth = _native_scope.enter()
+            try:
+                return wrapper(*args, **kwargs)
+            finally:
+                _native_scope.leave(depth)
+
+        return scoped
     return decorator

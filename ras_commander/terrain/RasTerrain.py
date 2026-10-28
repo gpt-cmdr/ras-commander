@@ -1257,6 +1257,9 @@ class RasTerrain:
                 bank_lines_gdf = bank_lines_gdf.copy()
                 bank_lines_gdf["source"] = "hdf_bank_lines"
         except Exception as e:
+            from ..fast_hdf import reraise_required
+
+            reraise_required(e)
             logger.warning(f"Could not read river bank lines from {geom_path}: {e}")
             bank_lines_gdf = gpd.GeoDataFrame(geometry=[], crs=crs)
 

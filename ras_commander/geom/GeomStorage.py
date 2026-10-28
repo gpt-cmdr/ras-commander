@@ -18,6 +18,8 @@ List of Functions:
 - get_2d_flow_area_settings() - Read 2D flow area cell/face property settings
 - get_2d_flow_area_cell_spacing() - Read persisted base mesh spacing
 - set_2d_flow_area_settings() - Write 2D flow area cell/face property settings
+- get_breaklines() - Read authored breaklines and spacing from geometry text
+- get_2d_computation_points() - Read authored 2D computation seed points
 - set_breaklines() - Write breakline blocks into a 2D flow area geometry file
 - replace_breaklines() - Atomically replace the geometry-wide breakline collection
 
@@ -44,8 +46,10 @@ Example Usage:
 
 import hashlib
 import math
+import re
 import tempfile
 from datetime import datetime
+from decimal import Decimal, InvalidOperation
 from pathlib import Path
 from typing import TYPE_CHECKING, List, Optional, Sequence, Union
 
@@ -434,7 +438,11 @@ class GeomStorage:
         return 0
 
     @staticmethod
-    def _format_surface_line_lines(coords: List[tuple[float, float]]) -> List[str]:
+    def _format_surface_line_lines(
+        coords: List[tuple[float, float]],
+        *,
+        trailing_padding: str = "",
+    ) -> List[str]:
         """Format perimeter XY pairs in HEC-RAS fixed-width surface line form.
 
         Uses adaptive precision: each value gets the maximum decimal places
@@ -454,7 +462,7 @@ class GeomStorage:
             for val in row_values:
                 prec = GeomStorage._max_precision_for_field(val, col_w)
                 parts.append(f"{val:{col_w}.{prec}f}")
-            lines.append("".join(parts) + "\n")
+            lines.append("".join(parts) + trailing_padding + "\n")
 
         return lines
 
@@ -640,6 +648,22 @@ class GeomStorage:
 
         parts.extend([""] * (4 - len(parts)))
         return ",".join(parts[:4])
+
+    @staticmethod
+    def _point_generation_data_matches(requested: str, existing: Optional[str]) -> bool:
+        """Compare spacing fields without changing equivalent source formatting."""
+        if existing is None:
+            return False
+        try:
+            existing = GeomStorage._normalize_point_generation_data(existing)
+            return all(
+                left == right or (
+                    bool(left) and bool(right) and Decimal(left) == Decimal(right)
+                )
+                for left, right in zip(requested.split(','), existing.split(','))
+            )
+        except (ValueError, InvalidOperation):
+            return requested == existing
 
     @staticmethod
     def _build_2d_settings_lines(settings: dict) -> List[str]:
@@ -1601,6 +1625,11 @@ class GeomStorage:
     ) -> Path:
         """Create or update a storage-area-backed 2D flow area perimeter in .g## text.
 
+        Existing blocks retain unrelated records and settings in their source
+        order. Unchanged perimeters retain their original coordinate records;
+        changed perimeters use one XY pair per row with source trailing padding.
+        A perimeter change clears stored mesh points and refreshes its timestamp.
+
         Args:
             recompute_centroid: When updating an existing block, recompute the
                 header centroid from the polygon. Default False preserves the
@@ -1627,7 +1656,7 @@ class GeomStorage:
             point_generation_data
         )
 
-        with open(geom_file, 'r', encoding='utf-8', errors='replace') as f:
+        with open(geom_file, 'r', encoding='utf-8', errors='surrogateescape') as f:
             lines = f.readlines()
 
         backup_path = None
@@ -1661,79 +1690,121 @@ class GeomStorage:
                     f"Existing storage area '{flow_area_name}' is not marked as a 2D flow area"
                 )
 
-            # Check if perimeter is unchanged — preserve mesh data if so
-            perimeter_changed = True
-            existing_points_lines = None
-            existing_points_time_line = None
             try:
                 existing_coords = GeomStorage._parse_surface_line_coords(block_lines, info)
-                if GeomStorage._coords_match(coords, existing_coords):
-                    perimeter_changed = False
+                declared_count = int(GeomParser.extract_keyword_value(
+                    block_lines[info['surface_line_idx']], "Storage Area Surface Line",
+                ).strip())
+                perimeter_changed = (
+                    declared_count != len(existing_coords) or
+                    not GeomStorage._coords_match(coords, existing_coords)
+                )
             except ValueError:
-                pass
+                perimeter_changed = True
 
-            if not perimeter_changed:
-                if info['points_idx'] is not None:
-                    pts_end = info.get('points_end') or (info['points_idx'] + 1)
-                    existing_points_lines = block_lines[info['points_idx']:pts_end]
-                if info['points_time_idx'] is not None:
-                    existing_points_time_line = block_lines[info['points_time_idx']]
+            # Splice only owned records; retain all other bytes and record order.
+            edits = []
+            missing_lines = []
 
-            settings = dict(info['settings'])
-            settings['point_generation_data'] = (
-                normalized_point_generation_data or
-                info['point_generation_data'] or
-                settings.get('point_generation_data') or
-                GeomStorage.DEFAULT_2D_POINT_GENERATION_DATA
-            )
+            def section_data_end(index, end):
+                while end > index + 1 and not block_lines[end - 1].strip():
+                    end -= 1
+                return end
 
-            managed_indices = [
-                idx for idx in [
-                    info['surface_line_idx'],
-                    info['type_line_idx'],
-                    info['area_line_idx'],
-                    info['min_elev_line_idx'],
-                    info['is2d_line_idx'],
+            def replace_record(index, text, end=None):
+                if index is None:
+                    missing_lines.append(text)
+                else:
+                    raw = block_lines[index].rstrip('\r\n')
+                    padding = raw[len(raw.rstrip(' \t')):]
+                    replacement = text.rstrip('\n') + padding + '\n'
+                    last = section_data_end(index, end) if end is not None else index + 1
+                    edits.append((index, last, [replacement]))
+
+            if recompute_centroid:
+                edits.append((0, 1, [GeomStorage._format_storage_area_header(
+                    flow_area_name, centroid_x, centroid_y,
+                )]))
+
+            if perimeter_changed:
+                surface_idx = info['surface_line_idx']
+                surface_end = info['surface_line_end']
+                padding = ""
+                if surface_idx is None:
+                    surface_idx = surface_end = 1
+                    surface_header = f"Storage Area Surface Line= {len(coords)}\n"
+                else:
+                    source_header = block_lines[surface_idx].rstrip('\r\n')
+                    surface_header, substitutions = re.subn(
+                        r"(?<==)([ \t]*)\d+(?=[ \t]*$)",
+                        lambda match: match.group(1) + str(len(coords)),
+                        source_header, count=1,
+                    )
+                    if not substitutions:
+                        header_padding = source_header[len(source_header.rstrip(' \t')):]
+                        surface_header = f"Storage Area Surface Line= {len(coords)}{header_padding}"
+                    surface_header += '\n'
+                    surface_end = section_data_end(surface_idx, surface_end)
+                    for row in block_lines[surface_idx + 1:surface_end]:
+                        values = GeomParser.parse_fixed_width(row, GeomStorage.SURFACE_LINE_COLUMN)
+                        if values:
+                            raw = row.rstrip('\r\n')
+                            padding = raw[len(raw.rstrip(' \t')):]
+                            break
+                surface_lines = [surface_header] + GeomStorage._format_surface_line_lines(
+                    coords, trailing_padding=padding,
+                )
+                edits.append((surface_idx, surface_end, surface_lines))
+
+            if info['is2d_line_idx'] is None:
+                missing_lines.append("Storage Area Is2D=-1\n")
+            if info['point_generation_idx'] is None or (
+                normalized_point_generation_data is not None and
+                not GeomStorage._point_generation_data_matches(
+                    normalized_point_generation_data, info['point_generation_data'],
+                )
+            ):
+                value = (
+                    normalized_point_generation_data or
+                    GeomStorage.DEFAULT_2D_POINT_GENERATION_DATA
+                )
+                replace_record(
                     info['point_generation_idx'],
-                    info['points_idx'],
+                    f"Storage Area Point Generation Data={value}\n",
+                )
+
+            if perimeter_changed or info['points_idx'] is None:
+                replace_record(
+                    info['points_idx'], "Storage Area 2D Points= 0\n", info['points_end'],
+                )
+            if perimeter_changed or info['points_time_idx'] is None:
+                replace_record(
                     info['points_time_idx'],
-                    info['settings_start'],
-                ]
-                if idx is not None
-            ]
-            prefix_end = min(managed_indices) if managed_indices else len(block_lines)
-            prefix_lines = block_lines[1:prefix_end]
-            tail_start = GeomStorage._storage_area_tail_start(info, len(block_lines))
-            tail_lines = block_lines[tail_start:]
+                    f"Storage Area 2D PointsPerimeterTime={GeomStorage._current_timestamp()}\n",
+                )
 
-            raw_header = None if recompute_centroid else block_lines[0]
-            header_cx = centroid_x if recompute_centroid else info['header'].get('centroid_x', centroid_x)
-            header_cy = centroid_y if recompute_centroid else info['header'].get('centroid_y', centroid_y)
+            if missing_lines:
+                insert_idx = info['settings_start']
+                if insert_idx is None:
+                    insert_idx = GeomStorage._storage_area_tail_start(info, len(block_lines))
+                while insert_idx > 1 and not block_lines[insert_idx - 1].strip():
+                    insert_idx -= 1
+                if info['surface_line_idx'] is None and insert_idx == 1:
+                    surface_lines.extend(missing_lines)
+                else:
+                    edits.append((insert_idx, insert_idx, missing_lines))
 
-            new_block_lines = GeomStorage._build_2d_flow_area_block(
-                flow_area_name,
-                coords,
-                settings,
-                centroid_x=header_cx,
-                centroid_y=header_cy,
-                raw_header_line=raw_header,
-                type_value=GeomStorage._extract_block_keyword_value(
-                    block_lines, info['type_line_idx'], "Storage Area Type", "0"
-                ),
-                area_value=GeomStorage._extract_block_keyword_value(
-                    block_lines, info['area_line_idx'], "Storage Area Area", ""
-                ),
-                min_elev_value=GeomStorage._extract_block_keyword_value(
-                    block_lines, info['min_elev_line_idx'], "Storage Area Min Elev", ""
-                ),
-                prefix_lines=prefix_lines,
-                tail_lines=tail_lines,
-                existing_points_lines=existing_points_lines,
-                existing_points_time_line=existing_points_time_line,
-            )
+            new_block_lines = list(block_lines)
+            ordered_edits = sorted(edits, key=lambda edit: (edit[0], edit[1]))
+            if any(left[1] > right[0] for left, right in zip(ordered_edits, ordered_edits[1:])):
+                raise ValueError("Overlapping 2D perimeter record edits")
+            for first, last, replacement in reversed(ordered_edits):
+                if first and replacement and not new_block_lines[first - 1].endswith(('\n', '\r')):
+                    new_block_lines[first - 1] += '\n'
+                new_block_lines[first:last] = replacement
             new_lines = lines[:start_idx] + new_block_lines + lines[end_idx:]
 
-        _write_ras_text(geom_file, "".join(new_lines), encoding="utf-8")
+        _write_ras_text(geom_file, "".join(new_lines), encoding="utf-8", errors="surrogateescape")
 
         logger.info(
             f"Upserted 2D flow area perimeter for {flow_area_name}: "
@@ -1867,6 +1938,149 @@ class GeomStorage:
         return backup_path if backup_path else geom_file
 
     BREAKLINE_VALUES_PER_LINE = 4
+
+    @staticmethod
+    def _read_2d_text_coordinates(lines: List[str], start: int, count: int, label: str):
+        """Read an exact native packed XY payload using the shared strict parser."""
+        from .GeomReferenceFeatures import _parse_reference_line_coordinates
+
+        if count < 0:
+            raise ValueError(f"{label} has a negative point count")
+        coords, end = _parse_reference_line_coordinates(
+            lines, start, count, start - 1, feature_label=label,
+        )
+        if end < len(lines) and lines[end].strip() and "=" not in lines[end]:
+            raise ValueError(f"{label} has extra coordinate data at line {end + 1}")
+        return coords, end
+
+    @staticmethod
+    @log_call
+    def get_breaklines(geom_file: Union[str, Path]) -> "GeoDataFrame":
+        """Read authored breaklines from geometry text without modifying the file.
+
+        Args:
+            geom_file: Path to a plain-text HEC-RAS geometry file (.g##).
+
+        Returns:
+            GeoDataFrame with ``Name`` (str), ``cell_size_min`` and
+            ``cell_size_max`` (float or None), ``declared_points`` (int), and
+            ``geometry`` (LineString), in file/vertex order. Coordinates retain
+            source units; CRS is unset. ``attrs["skipped_degenerate"]`` lists
+            names of valid blocks with fewer than two distinct vertices.
+            Empty results retain these columns. No HDF or engine is required.
+
+        Raises:
+            FileNotFoundError: The geometry file does not exist.
+            ValueError: A count, spacing value, or fixed-width XY payload is
+                malformed, non-finite, or inconsistent with its declaration.
+        """
+        import geopandas as gpd
+        from shapely.geometry import LineString
+
+        lines = Path(geom_file).read_text(encoding="utf-8", errors="replace").splitlines()
+        records, skipped = [], []
+        index = 0
+        while index < len(lines):
+            if not lines[index].startswith("BreakLine Name="):
+                index += 1
+                continue
+            name = GeomParser.extract_keyword_value(lines[index], "BreakLine Name").strip()
+            cursor = index + 1
+            spacing = {"cell_size_min": None, "cell_size_max": None}
+            while cursor < len(lines) and lines[cursor].startswith("BreakLine "):
+                line = lines[cursor]
+                if line.startswith("BreakLine Name="):
+                    break
+                if line.startswith("BreakLine Polyline="):
+                    break
+                for keyword, column in (("BreakLine CellSize Min", "cell_size_min"),
+                                        ("BreakLine CellSize Max", "cell_size_max")):
+                    if line.startswith(keyword + "="):
+                        raw = GeomParser.extract_keyword_value(line, keyword).strip()
+                        value = float(raw) if raw else None
+                        if value is not None and not math.isfinite(value):
+                            raise ValueError(f"Breakline {name!r} has non-finite spacing")
+                        spacing[column] = value
+                cursor += 1
+            if cursor >= len(lines) or not lines[cursor].startswith("BreakLine Polyline="):
+                raise ValueError(f"Breakline {name!r} has no polyline record")
+            count = int(GeomParser.extract_keyword_value(lines[cursor], "BreakLine Polyline"))
+            coords, index = GeomStorage._read_2d_text_coordinates(
+                lines, cursor + 1, count, f"Breakline {name!r}",
+            )
+            if len(set(coords)) < 2:
+                skipped.append(name)
+                continue
+            records.append({"Name": name, **spacing, "declared_points": count,
+                            "geometry": LineString(coords)})
+        frame = pd.DataFrame(records, columns=[
+            "Name", "cell_size_min", "cell_size_max", "declared_points", "geometry",
+        ])
+        frame["Name"] = frame["Name"].astype(object)
+        frame["declared_points"] = frame["declared_points"].astype("int64")
+        for column in ("cell_size_min", "cell_size_max"):
+            frame[column] = pd.Series([row[column] for row in records], dtype=object)
+        result = gpd.GeoDataFrame(frame, geometry="geometry")
+        result.attrs["skipped_degenerate"] = skipped
+        return result
+
+    @staticmethod
+    @log_call
+    def get_2d_computation_points(
+        geom_file: Union[str, Path], flow_area_name: Optional[str] = None,
+    ) -> "GeoDataFrame":
+        """Read declared 2D computation seed points from geometry text.
+
+        Args:
+            geom_file: Path to a plain-text HEC-RAS geometry file (.g##).
+            flow_area_name: Exact area name to select, or None for every area.
+
+        Returns:
+            GeoDataFrame with ``flow_area`` (str), zero-based ``point_index``
+            (int, local to each area), and ``geometry`` (Point), in file order.
+            CRS is unset; coordinates retain source units. These are authored
+            seed points, not compiled mesh cells. ``attrs["declared_counts"]``
+            maps every encountered area to its declared point count, including
+            filtered areas. Empty results retain these columns. No file is
+            modified and no HDF or engine is required.
+
+        Raises:
+            FileNotFoundError: The geometry file does not exist.
+            ValueError: Counts or fixed-width coordinates are malformed,
+                non-finite, or truncated; an area is missing or repeated.
+                Filtered blocks are validated too.
+        """
+        import geopandas as gpd
+        from shapely.geometry import Point
+
+        lines = Path(geom_file).read_text(encoding="utf-8", errors="replace").splitlines()
+        records, declared = [], {}
+        current = None
+        index = 0
+        while index < len(lines):
+            line = lines[index]
+            if line.startswith("Storage Area="):
+                current = GeomStorage._extract_storage_area_name(line)
+            if not line.startswith("Storage Area 2D Points="):
+                index += 1
+                continue
+            if not current or current in declared:
+                raise ValueError("2D computation points require a unique, nonempty storage area")
+            count = int(GeomParser.extract_keyword_value(line, "Storage Area 2D Points"))
+            coords, index = GeomStorage._read_2d_text_coordinates(
+                lines, index + 1, count, f"2D points for {current!r}",
+            )
+            declared[current] = count
+            if flow_area_name is None or current == flow_area_name:
+                records.extend({"flow_area": current, "point_index": position,
+                                "geometry": Point(x, y)}
+                               for position, (x, y) in enumerate(coords))
+        frame = pd.DataFrame(records, columns=["flow_area", "point_index", "geometry"])
+        frame["flow_area"] = frame["flow_area"].astype(object)
+        frame["point_index"] = frame["point_index"].astype("int64")
+        result = gpd.GeoDataFrame(frame, geometry="geometry")
+        result.attrs["declared_counts"] = declared
+        return result
 
     @staticmethod
     def _format_breakline_coord_lines(coords: List[tuple]) -> List[str]:

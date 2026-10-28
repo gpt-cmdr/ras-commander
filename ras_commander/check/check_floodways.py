@@ -13,11 +13,13 @@ import h5py
 
 from ..Decorators import standardize_input, log_call
 from ..LoggingConfig import get_logger
+from ..fast_hdf import read_attr, read_typed, reraise_required
 from .types import Severity, FlowType, CheckMessage, CheckResults
 from .thresholds import ValidationThresholds, get_default_thresholds
 from .messages import get_message_template, get_help_text, format_message
 from . import _utils
 from .check_structures import CheckStructures
+from ..fast_hdf import h5py_until_qualified
 
 logger = get_logger(__name__)
 
@@ -71,6 +73,7 @@ class CheckFloodways:
         try:
             steady_results = HdfResultsPlan.get_steady_results(plan_hdf)
         except Exception as e:
+            reraise_required(e)
             logger.warning("Could not read steady results for floodway checks")
             logger.debug("Floodway steady-results read failure for %s: %s", plan_hdf, e)
             steady_results = None
@@ -572,6 +575,7 @@ class CheckFloodways:
                                 break
 
         except Exception as e:
+            reraise_required(e)
             logger.debug(f"Could not check encroachment data: {e}")
 
         return messages
@@ -888,11 +892,13 @@ class CheckFloodways:
                         messages.append(msg)
 
         except Exception as e:
+            reraise_required(e)
             logger.debug(f"Could not check encroachment methods: {e}")
 
         return messages
 
     @staticmethod
+    @h5py_until_qualified
     def _get_encroachment_parameters(
         plan_hdf: Path,
         floodway_profile: str
@@ -924,19 +930,19 @@ class CheckFloodways:
 
                         # Extract target surcharge
                         if 'Target Surcharge' in param_group.attrs:
-                            params['target_surcharge'] = float(param_group.attrs['Target Surcharge'])
+                            params['target_surcharge'] = float(read_attr(param_group, 'Target Surcharge'))
                         elif 'Target Surcharge' in param_group:
-                            params['target_surcharge'] = float(param_group['Target Surcharge'][()])
+                            params['target_surcharge'] = float(read_typed(param_group['Target Surcharge']))
 
                         # Extract max iterations
                         if 'Max Iterations' in param_group.attrs:
-                            params['max_iterations'] = int(param_group.attrs['Max Iterations'])
+                            params['max_iterations'] = int(read_attr(param_group, 'Max Iterations'))
                         elif 'Maximum Iterations' in param_group.attrs:
-                            params['max_iterations'] = int(param_group.attrs['Maximum Iterations'])
+                            params['max_iterations'] = int(read_attr(param_group, 'Maximum Iterations'))
 
                         # Extract tolerance
                         if 'Tolerance' in param_group.attrs:
-                            params['tolerance'] = float(param_group.attrs['Tolerance'])
+                            params['tolerance'] = float(read_attr(param_group, 'Tolerance'))
 
                         if params:
                             return params
@@ -945,10 +951,12 @@ class CheckFloodways:
                 return None
 
         except Exception as e:
+            reraise_required(e)
             logger.debug(f"Could not extract encroachment parameters: {e}")
             return None
 
     @staticmethod
+    @h5py_until_qualified
     def _check_floodway_boundary_conditions(
         plan_hdf: Path,
         base_profile: str,
@@ -995,7 +1003,7 @@ class CheckFloodways:
                 # Try to extract boundary condition type
                 bc_type = None
                 if 'Type' in bc_data.attrs:
-                    bc_type = bc_data.attrs['Type']
+                    bc_type = read_attr(bc_data, 'Type')
                     if isinstance(bc_type, bytes):
                         bc_type = bc_type.decode('utf-8')
 
@@ -1028,6 +1036,7 @@ class CheckFloodways:
                     messages.append(msg)
 
         except Exception as e:
+            reraise_required(e)
             logger.debug(f"Could not check boundary conditions: {e}")
 
         return messages
@@ -1115,6 +1124,7 @@ class CheckFloodways:
             try:
                 xs_gdf = HdfXsec.get_cross_sections(geom_hdf)
             except Exception as e:
+                reraise_required(e)
                 logger.debug(f"Could not read cross section geometry: {e}")
 
             # Find downstream boundary (lowest station in each reach)
@@ -1622,11 +1632,13 @@ class CheckFloodways:
                                     messages.append(msg)
 
         except Exception as e:
+            reraise_required(e)
             logger.debug(f"Could not check starting WSE: {e}")
 
         return messages
 
     @staticmethod
+    @h5py_until_qualified
     def _check_floodway_lateral_weirs(
         plan_hdf: Path,
         geom_hdf: Path,
@@ -1658,7 +1670,7 @@ class CheckFloodways:
                 if lat_path not in hdf:
                     return messages
 
-                lat_attrs = hdf[lat_path][:]
+                lat_attrs = read_typed(hdf[lat_path], slice(None))
 
                 for attr in lat_attrs:
                     river = attr['River'].decode('utf-8').strip() if isinstance(attr['River'], bytes) else str(attr['River']).strip()
@@ -1690,13 +1702,13 @@ class CheckFloodways:
                     if lat_flow_path not in hdf:
                         continue
 
-                    lat_flow = hdf[lat_flow_path][:]
+                    lat_flow = read_typed(hdf[lat_flow_path], slice(None))
 
                     # Get profile names to find floodway profile index
                     profile_path = 'Results/Steady/Output/Output Blocks/Base Output/Steady Profiles/Profile Names'
                     profile_idx = 0
                     if profile_path in hdf:
-                        profile_names = hdf[profile_path][:]
+                        profile_names = read_typed(hdf[profile_path], slice(None))
                         for i, name in enumerate(profile_names):
                             name_str = name.decode('utf-8').strip() if isinstance(name, bytes) else str(name).strip()
                             if name_str == floodway_profile:
@@ -1707,7 +1719,7 @@ class CheckFloodways:
                     xs_flow_path = 'Results/Steady/Output/Output Blocks/Base Output/Steady Profiles/Cross Sections/Flow'
                     main_channel_flows = None
                     if xs_flow_path in hdf:
-                        main_channel_flows = hdf[xs_flow_path][:]
+                        main_channel_flows = read_typed(hdf[xs_flow_path], slice(None))
 
                     # Check lateral weir flow percentages
                     for i, lat_f in enumerate(lat_flow):
@@ -1744,6 +1756,7 @@ class CheckFloodways:
                     break
 
         except Exception as e:
+            reraise_required(e)
             logger.debug(f"Could not check lateral weirs: {e}")
 
         return messages
@@ -1813,16 +1826,16 @@ class CheckFloodways:
                 if 'Geometry/Structures/Attributes' not in hdf:
                     return messages
 
-                struct_attrs = hdf['Geometry/Structures/Attributes'][:]
+                struct_attrs = read_typed(hdf['Geometry/Structures/Attributes'], slice(None))
                 attr_names = struct_attrs.dtype.names
 
                 # Try to get table info and pier data
                 table_info = None
                 pier_data = None
                 if 'Geometry/Structures/Table Info' in hdf:
-                    table_info = hdf['Geometry/Structures/Table Info'][:]
+                    table_info = read_typed(hdf['Geometry/Structures/Table Info'], slice(None))
                 if 'Geometry/Structures/Pier Data' in hdf:
-                    pier_data = hdf['Geometry/Structures/Pier Data'][:]
+                    pier_data = read_typed(hdf['Geometry/Structures/Pier Data'], slice(None))
 
                 # Process each structure
                 for struct_idx, attr in enumerate(struct_attrs):
@@ -2317,7 +2330,7 @@ class CheckFloodways:
                         area_path = 'Results/Steady/Output/Cross Sections/Flow Area'
 
                     if area_path in plan_h:
-                        area_data = plan_h[area_path][:]
+                        area_data = read_typed(plan_h[area_path], slice(None))
 
                         # Get profile indices
                         profile_path = 'Results/Steady/Output/Output Blocks/Base Output/Steady Profiles/Profile Names'
@@ -2327,7 +2340,7 @@ class CheckFloodways:
                         base_idx = -1
                         fw_idx = -1
                         if profile_path in plan_h:
-                            profile_names = plan_h[profile_path][:]
+                            profile_names = read_typed(plan_h[profile_path], slice(None))
                             for i, name in enumerate(profile_names):
                                 name_str = name.decode('utf-8').strip() if isinstance(name, bytes) else str(name).strip()
                                 if name_str == base_profile:
@@ -2339,9 +2352,9 @@ class CheckFloodways:
                             # Get structure attributes for matching
                             with h5py.File(geom_hdf, 'r') as geom_h:
                                 if 'Geometry/Structures/Attributes' in geom_h:
-                                    struct_attrs = geom_h['Geometry/Structures/Attributes'][:]
+                                    struct_attrs = read_typed(geom_h['Geometry/Structures/Attributes'], slice(None))
                                     xs_attrs_path = 'Geometry/Cross Sections/Attributes'
-                                    xs_attrs = geom_h[xs_attrs_path][:] if xs_attrs_path in geom_h else None
+                                    xs_attrs = read_typed(geom_h[xs_attrs_path], slice(None)) if xs_attrs_path in geom_h else None
 
                                     for struct_idx, attr in enumerate(struct_attrs):
                                         struct_type = attr['Type'].decode('utf-8').strip() if isinstance(attr['Type'], bytes) else str(attr['Type']).strip()
@@ -2392,9 +2405,11 @@ class CheckFloodways:
                                                     break
 
             except Exception as e:
+                reraise_required(e)
                 logger.debug(f"Could not check flow area reduction at structures: {e}")
 
         except Exception as e:
+            reraise_required(e)
             logger.warning("Could not check structure floodway encroachments")
             logger.debug("Structure floodway encroachment check failure: %s", e)
 

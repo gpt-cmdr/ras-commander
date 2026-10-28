@@ -3595,7 +3595,9 @@ class RasControl:
             dataset = source.get("Results/Summary/Compute Messages (text)")
             if dataset is None:
                 return ""
-            data = dataset[()]
+            from .fast_hdf import read_typed
+
+            data = read_typed(dataset)
             if getattr(data, "ndim", 0) > 0:
                 if data.size == 0:
                     return ""
@@ -3794,6 +3796,9 @@ class RasControl:
                     logger.debug(f"Successfully retrieved {len(hdf_contents)} characters from HDF")
                     return hdf_contents
         except Exception as e:
+            from .fast_hdf import reraise_required
+
+            reraise_required(e)
             logger.debug(f"HDF fallback failed: {e}")
 
         # Both methods failed

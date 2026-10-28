@@ -27,6 +27,8 @@ from .HdfUtils import HdfUtils
 from .HdfBase import HdfBase
 from ..Decorators import standardize_input, log_call
 from ..LoggingConfig import get_logger
+from ..fast_hdf import read_attr, read_typed
+from ..fast_hdf import h5py_until_qualified
 
 gpd = optional_module("geopandas", "Returning GeoDataFrame results from HdfPump")
 xr = optional_module("xarray", "Returning xarray results from HdfPump")
@@ -78,12 +80,22 @@ class HdfPump:
     @staticmethod
     @log_call
     @standardize_input(file_type='plan_hdf')
-    def get_pump_stations(hdf_path: Path) -> gpd.GeoDataFrame:
+    def get_pump_stations(
+        hdf_path: Path,
+        *,
+        include_geometry: bool = True,
+    ) -> Union[gpd.GeoDataFrame, pd.DataFrame]:
         """
         Extract pump station data from the HDF file.
 
         Args:
             hdf_path (Path): Path to the HEC-RAS HDF file.
+            include_geometry (bool): Keyword-only. Pump stations are point
+                features, so the default True returns the GeoDataFrame below.
+                False is a table-only convenience without GeoPandas/Shapely or
+                a CRS lookup: ``station_id`` (``int64``), the Attributes
+                fields (text as pandas ``str``/``string``, numbers in their stored
+                dtypes), then the stored ``x``/``y`` coordinates.
 
         Returns:
             gpd.GeoDataFrame: GeoDataFrame containing pump station data with columns:
@@ -95,13 +107,20 @@ class HdfPump:
         Raises:
             KeyError: If the pump station group exists but required datasets are missing.
         """
-        shapely_geometry = require_module("shapely.geometry", "Returning GeoDataFrame results from HdfPump")
-        Point = shapely_geometry.Point
+        if include_geometry:
+            shapely_geometry = require_module("shapely.geometry", "Returning GeoDataFrame results from HdfPump")
+            Point = shapely_geometry.Point
 
         with h5py.File(hdf_path, 'r') as hdf:
             pump_stations_path = "/Geometry/Pump Stations"
             if pump_stations_path not in hdf:
                 logger.debug("No pump station geometry group found in HDF file")
+                if not include_geometry:
+                    return pd.DataFrame({
+                        "station_id": pd.Series(dtype="int64"),
+                        "x": pd.Series(dtype="float64"),
+                        "y": pd.Series(dtype="float64"),
+                    })
                 return _empty_pump_stations_gdf()
 
             group = hdf[pump_stations_path]
@@ -113,8 +132,22 @@ class HdfPump:
                         "Verify the HDF was written with pump station geometry data.",
                     ))
 
-            attributes = group['Attributes'][()]
-            points = group['Points'][()]
+            attributes = read_typed(group['Attributes'])
+            points = read_typed(group['Points'])
+
+            if not include_geometry:
+                table = pd.DataFrame({"station_id": np.arange(len(points), dtype=np.int64)})
+                attr_df = pd.DataFrame(attributes)
+                for col in attr_df.columns:
+                    values = attr_df[col]
+                    if values.dtype == object:
+                        values = values.apply(
+                            lambda x: x.decode('utf-8') if isinstance(x, bytes) else x
+                        ).astype(HdfUtils._TEXT_DTYPE)
+                    table[col] = values
+                table["x"] = points[:, 0]
+                table["y"] = points[:, 1]
+                return table
 
             # Create geometries
             geometries = [Point(x, y) for x, y in points]
@@ -184,9 +217,9 @@ class HdfPump:
                     "Verify the HDF was written with pump group geometry data."
                 )
 
-            attributes = group['Attributes'][()]
-            efficiency_curves_info = group['Efficiency Curves Info'][()]
-            efficiency_curves_values = group['Efficiency Curves Values'][()]
+            attributes = read_typed(group['Attributes'])
+            efficiency_curves_info = read_typed(group['Efficiency Curves Info'])
+            efficiency_curves_values = read_typed(group['Efficiency Curves Values'])
 
             # Create DataFrame and decode byte strings
             df = pd.DataFrame(attributes)
@@ -262,11 +295,11 @@ class HdfPump:
                     _PUMP_RESULTS_ACTION,
                 ))
 
-            data = hdf[data_path][()]
+            data = read_typed(hdf[data_path])
 
             time, time_units = HdfPump._pump_block_time(hdf, data_path, data.shape)
 
-            variable_units = hdf[data_path].attrs.get('Variable_Unit', None)
+            variable_units = read_attr(hdf[data_path], 'Variable_Unit', None)
             variable_names, unit_by_variable = HdfPump._pump_variable_columns(
                 variable_units,
                 data.shape[1],
@@ -292,6 +325,7 @@ class HdfPump:
     @staticmethod
     @log_call
     @standardize_input(file_type='plan_hdf')
+    @h5py_until_qualified
     def get_pump_station_summary(hdf_path: Path) -> pd.DataFrame:
         """
         Extract summary statistics and performance data for all pump stations.
@@ -314,7 +348,7 @@ class HdfPump:
                 logger.debug("Pump station summary data not found in HDF file")
                 return pd.DataFrame()
 
-            summary_data = hdf[summary_path][()]
+            summary_data = read_typed(hdf[summary_path])
 
             # Create DataFrame and decode byte strings
             df = pd.DataFrame(summary_data)
@@ -383,11 +417,11 @@ class HdfPump:
                     _PUMP_RESULTS_ACTION,
                 ))
 
-            data = hdf[data_path][()]
+            data = read_typed(hdf[data_path])
 
             time, time_units = HdfPump._pump_block_time(hdf, data_path, data.shape)
 
-            variable_units = hdf[data_path].attrs.get('Variable_Unit', None)
+            variable_units = read_attr(hdf[data_path], 'Variable_Unit', None)
             variable_names, unit_by_variable = HdfPump._pump_variable_columns(
                 variable_units,
                 data.shape[1],
@@ -422,9 +456,9 @@ class HdfPump:
                     f"Pump time axis '{path}' has shape {dataset.shape}; "
                     f"expected ({data_shape[0]},) for '{data_path}'"
                 )
-            values = dataset[()]
+            values = read_typed(dataset)
             if name == 'Time':
-                units = HdfPump._decode_hdf_text(dataset.attrs.get('Time', ''))
+                units = HdfPump._decode_hdf_text(read_attr(dataset, 'Time', ''))
                 if (values.dtype.kind != 'f' or units.lower() != 'days'
                         or not np.all(np.isfinite(values)) or np.any(np.diff(values) < 0)):
                     raise ValueError(f"Pump time axis '{path}' requires finite nondecreasing days")

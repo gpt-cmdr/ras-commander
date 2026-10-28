@@ -35,6 +35,7 @@ from ..Decorators import log_call, standardize_input
 from ..LoggingConfig import get_logger
 from .HdfBase import HdfBase
 from .HdfUtils import HdfUtils
+from ..fast_hdf import read_attr, read_attrs, read_typed
 
 gpd = optional_module("geopandas", "Returning GeoDataFrame results from HdfPipe")
 xr = optional_module("xarray", "Returning xarray results from HdfPipe")
@@ -82,7 +83,7 @@ def _network_name(hdf, requested):
     path = "Geometry/Pipe Networks/Attributes"
     if path not in hdf:
         raise KeyError(f"Pipe network selection requires '{path}'")
-    names = [_text(row['Name']) for row in hdf[path][()]]
+    names = [_text(row['Name']) for row in read_typed(hdf[path])]
     if not names:
         raise ValueError("No pipe networks in Geometry/Pipe Networks/Attributes")
     name = names[0] if requested is None else str(requested)
@@ -105,7 +106,7 @@ _PIPE_DOMAINS = {
 
 
 def _domain(hdf, dataset, network):
-    raw = np.asarray(dataset.attrs.get("Location", []))
+    raw = np.asarray(read_attr(dataset, "Location", []))
     if raw.shape not in [(), (1,)] or raw.size != 1:
         raise ValueError(f"{dataset.name}: missing or non-scalar stored Location")
     location = _text(raw.reshape(-1)[0])
@@ -117,7 +118,7 @@ def _domain(hdf, dataset, network):
         raise ValueError(f"{dataset.name}: stored Location {location!r} contradicts geometry count")
     ids = None
     if coord:
-        ids = identity[()]
+        ids = read_typed(identity)
         if ids.ndim != 1 or ids.dtype.kind not in 'iu' or len(np.unique(ids)) != len(ids):
             raise ValueError(f"{identity.name}: expected unique rank-one integer stored IDs")
     return domain, location, coord, ids
@@ -205,7 +206,7 @@ class HdfPipe:
                         _PIPE_GEOMETRY_PREPROCESSOR_ACTION,
                     ))
 
-            attributes = group['Attributes'][:]
+            attributes = read_typed(group['Attributes'], slice(None))
             attr_df = pd.DataFrame(attributes)
             
             # Decode byte string fields to UTF-8 strings
@@ -214,13 +215,13 @@ class HdfPipe:
                 attr_df[col] = attr_df[col].apply(lambda x: x.decode('utf-8') if isinstance(x, bytes) else x)
             
             # --- Read Polyline Data ---
-            polyline_info = group['Polyline Info'][:]  # Shape (132,4) - point_start_idx, point_count, part_start_idx, part_count
-            polyline_points = group['Polyline Points'][:]  # Shape (396,2) - x,y coordinates
+            polyline_info = read_typed(group['Polyline Info'], slice(None))  # Shape (132,4) - point_start_idx, point_count, part_start_idx, part_count
+            polyline_points = read_typed(group['Polyline Points'], slice(None))  # Shape (396,2) - x,y coordinates
             
             if 'Polyline Parts' not in group:
                 raise KeyError("Pipe conduit geometry requires Polyline Parts")
             polyline_geometries = _part_geometries(
-                polyline_info, group['Polyline Parts'][()], polyline_points)
+                polyline_info, read_typed(group['Polyline Parts']), polyline_points)
             if len(attributes) != len(polyline_geometries):
                 raise ValueError("Pipe conduit Attributes/Polyline row mismatch")
 
@@ -234,8 +235,8 @@ class HdfPipe:
                     "Pipe conduit terrain profiles are partially present: both "
                     "'Terrain Profiles Info' and 'Terrain Profiles Values' are required")
             if has_profile_info and has_profile_values:
-                terrain_info = group['Terrain Profiles Info'][:]
-                terrain_values = group['Terrain Profiles Values'][:]
+                terrain_info = read_typed(group['Terrain Profiles Info'], slice(None))
+                terrain_values = read_typed(group['Terrain Profiles Values'], slice(None))
                 if len(terrain_info) != len(attr_df):
                     raise ValueError("Pipe conduit Attributes/Terrain Profiles Info row mismatch")
                 terrain_coords = list(zip(terrain_values[:, 0], terrain_values[:, 1]))
@@ -303,7 +304,7 @@ class HdfPipe:
                         _PIPE_GEOMETRY_PREPROCESSOR_ACTION,
                     ))
 
-            attributes = group['Attributes'][:]
+            attributes = read_typed(group['Attributes'], slice(None))
             attr_df = pd.DataFrame(attributes)
 
             # Decode byte string fields to UTF-8 strings
@@ -312,7 +313,7 @@ class HdfPipe:
                 attr_df[col] = attr_df[col].apply(lambda x: x.decode('utf-8') if isinstance(x, bytes) else x)
 
             # --- Read Points Data ---
-            points = group['Points'][:]
+            points = read_typed(group['Points'], slice(None))
             # Create Shapely Point geometries
             if len(points) != len(attributes):
                 raise ValueError("Pipe node Attributes/Points row mismatch")
@@ -365,7 +366,7 @@ class HdfPipe:
                     logger.debug(f"{group_path} not found in HDF file, skipping")
                     continue
 
-                data = f[group_path][:]
+                data = read_typed(f[group_path], slice(None))
                 df = pd.DataFrame(data)
 
                 # Decode byte string fields to UTF-8 strings
@@ -475,37 +476,37 @@ class HdfPipe:
                 return _part_geometries(info, parts, points)
 
             # --- Read and Process Cell Polygons ---
-            cell_polygons_info = network_group['Cell Polygons Info'][:]
-            cell_polygons_parts = network_group['Cell Polygons Parts'][:]
-            cell_polygons_points = network_group['Cell Polygons Points'][:]
+            cell_polygons_info = read_typed(network_group['Cell Polygons Info'], slice(None))
+            cell_polygons_parts = read_typed(network_group['Cell Polygons Parts'], slice(None))
+            cell_polygons_points = read_typed(network_group['Cell Polygons Points'], slice(None))
             
             cell_polygons_geometries = build_polygons(cell_polygons_info, cell_polygons_parts, cell_polygons_points)
             
             # --- Read and Process Face Polylines ---
-            face_polylines_info = network_group['Face Polylines Info'][:]
-            face_polylines_parts = network_group['Face Polylines Parts'][:]
-            face_polylines_points = network_group['Face Polylines Points'][:]
+            face_polylines_info = read_typed(network_group['Face Polylines Info'], slice(None))
+            face_polylines_parts = read_typed(network_group['Face Polylines Parts'], slice(None))
+            face_polylines_points = read_typed(network_group['Face Polylines Points'], slice(None))
             
             face_polylines_geometries = build_multilinestring(face_polylines_info, face_polylines_parts, face_polylines_points)
             
             # Network Node Indices are stored IDs into the global Pipe Nodes rows.
-            node_indices = network_group['Node Indices'][()]
-            points = f['Geometry/Pipe Nodes/Points'][()]
+            node_indices = read_typed(network_group['Node Indices'])
+            points = read_typed(f['Geometry/Pipe Nodes/Points'])
             if node_indices.dtype.kind not in 'iu' or np.any(node_indices < 0) or np.any(node_indices >= len(points)):
                 raise ValueError("Pipe network Node Indices exceed global Pipe Nodes/Points")
             from shapely.geometry import Point
             node_geometries = {int(i): Point(points[i]) for i in node_indices}
 
             # --- Read and Process Cell Property Table ---
-            cell_property_table = network_group['Cell Property Table'][:]
+            cell_property_table = read_typed(network_group['Cell Property Table'], slice(None))
             cell_property_df = pd.DataFrame(cell_property_table)
             
             # Decode byte strings if any
             cell_property_df = decode_bytes(cell_property_df)
             
             # --- Read and Process Cells DS Face Indices ---
-            cells_ds_face_info = network_group['Cells DS Face Indices Info'][:]
-            cells_ds_face_values = network_group['Cells DS Face Indices Values'][:]
+            cells_ds_face_info = read_typed(network_group['Cells DS Face Indices Info'], slice(None))
+            cells_ds_face_values = read_typed(network_group['Cells DS Face Indices Values'], slice(None))
             
             # Create lists of DS Face Indices per cell
             cells_ds_face_indices = []
@@ -516,8 +517,8 @@ class HdfPipe:
                 cells_ds_face_indices.append(indices.tolist())
             
             # --- Read and Process Cells Face Indices ---
-            cells_face_info = network_group['Cells Face Indices Info'][:]
-            cells_face_values = network_group['Cells Face Indices Values'][:]
+            cells_face_info = read_typed(network_group['Cells Face Indices Info'], slice(None))
+            cells_face_values = read_typed(network_group['Cells Face Indices Values'], slice(None))
             
             # Create lists of Face Indices per cell
             cells_face_indices = []
@@ -528,16 +529,16 @@ class HdfPipe:
                 cells_face_indices.append(indices.tolist())
             
             # --- Read and Process Cells Minimum Elevations ---
-            cells_min_elevations = network_group['Cells Minimum Elevations'][:]
+            cells_min_elevations = read_typed(network_group['Cells Minimum Elevations'], slice(None))
             cells_min_elevations_df = pd.DataFrame(cells_min_elevations, columns=['Minimum_Elevation'])
             
             # --- Read and Process Cells Node and Conduit IDs ---
-            cells_node_conduit_ids = network_group['Cells Node and Conduit IDs'][:]
+            cells_node_conduit_ids = read_typed(network_group['Cells Node and Conduit IDs'], slice(None))
             cells_node_conduit_df = pd.DataFrame(cells_node_conduit_ids, columns=['Node_ID', 'Conduit_ID'])
             
             # --- Read and Process Cells US Face Indices ---
-            cells_us_face_info = network_group['Cells US Face Indices Info'][:]
-            cells_us_face_values = network_group['Cells US Face Indices Values'][:]
+            cells_us_face_info = read_typed(network_group['Cells US Face Indices Info'], slice(None))
+            cells_us_face_values = read_typed(network_group['Cells US Face Indices Values'], slice(None))
             
             # Create lists of US Face Indices per cell
             cells_us_face_indices = []
@@ -548,23 +549,23 @@ class HdfPipe:
                 cells_us_face_indices.append(indices.tolist())
             
             # --- Read and Process Conduit Indices ---
-            conduit_indices = network_group['Conduit Indices'][:]
+            conduit_indices = read_typed(network_group['Conduit Indices'], slice(None))
             conduit_indices_df = pd.DataFrame(conduit_indices, columns=['Conduit_ID'])
             
             # --- Read and Process Face Property Table ---
-            face_property_table = network_group['Face Property Table'][:]
+            face_property_table = read_typed(network_group['Face Property Table'], slice(None))
             face_property_df = pd.DataFrame(face_property_table)
             
             # Decode byte strings if any
             face_property_df = decode_bytes(face_property_df)
             
             # --- Read and Process Face Conduit ID and Stations ---
-            faces_conduit_id_stations = network_group['Faces Conduit ID and Stations'][:]
+            faces_conduit_id_stations = read_typed(network_group['Faces Conduit ID and Stations'], slice(None))
             faces_conduit_df = pd.DataFrame(faces_conduit_id_stations, columns=['ConduitID', 'ConduitStation', 'CellUS', 'CellDS', 'Elevation'])
             
             # --- Read and Process Node Connectivity Info and Values ---
-            node_connectivity_info = network_group['Node Connectivity Info'][:]
-            node_connectivity_values = network_group['Node Connectivity Values'][:]
+            node_connectivity_info = read_typed(network_group['Node Connectivity Info'], slice(None))
+            node_connectivity_values = read_typed(network_group['Node Connectivity Values'], slice(None))
             
             # Create lists of connected nodes per node
             node_connectivity = []
@@ -575,11 +576,11 @@ class HdfPipe:
                 node_connectivity.append(connections.tolist())
             
             # --- Read and Process Node Indices ---
-            node_indices = network_group['Node Indices'][:]
+            node_indices = read_typed(network_group['Node Indices'], slice(None))
             node_indices_df = pd.DataFrame(node_indices, columns=['Node_ID'])
             
             # --- Read and Process Node Surface Connectivity ---
-            node_surface_connectivity = network_group['Node Surface Connectivity'][:]
+            node_surface_connectivity = read_typed(network_group['Node Surface Connectivity'], slice(None))
             # Read with native HDF field names, then rename to match downstream code
             node_surface_connectivity_df = pd.DataFrame(node_surface_connectivity)
             node_surface_connectivity_df.columns = ['Node_ID', 'Layer', 'Layer_ID', 'Sublayer_ID']
@@ -691,7 +692,7 @@ class HdfPipe:
                     f"{_PIPE_GEOMETRY_PREPROCESSOR_ACTION}"
                 )
 
-            terrain_profiles_info = hdf[profile_info_path][()]
+            terrain_profiles_info = read_typed(hdf[profile_info_path])
 
             if conduit_id < 0 or conduit_id >= len(terrain_profiles_info):
                 raise IndexError(
@@ -702,7 +703,7 @@ class HdfPipe:
             start, count = map(int, terrain_profiles_info[conduit_id])
             if start < 0 or count < 0 or start + count > len(hdf[profile_values_path]):
                 raise ValueError("Pipe terrain profile slice is out of bounds")
-            profile_values = hdf[profile_values_path][start:start+count]
+            profile_values = read_typed(hdf[profile_values_path], slice(start, start+count))
 
             return pd.DataFrame(profile_values, columns=['Station', 'Elevation'])
         
@@ -760,7 +761,7 @@ class HdfPipe:
             if "Geometry/Pipe Networks/Attributes" not in hdf:
                 if legacy in hdf and pipe_network_name is None:
                     # Retain the historical table contract when that dataset exists.
-                    return pd.DataFrame(hdf[legacy][()])
+                    return pd.DataFrame(read_typed(hdf[legacy]))
                 raise KeyError("No pipe-network summary output with geometry network identities")
             name = _network_name(hdf, pipe_network_name)
             base = f"Results/Unsteady/Output/Output Blocks/Base Output/Summary Output/Pipe Networks/{name}"
@@ -772,17 +773,17 @@ class HdfPipe:
                     ds = hdf[f"{base}/{variable}"]
                     if ds.ndim != 2 or ds.shape[0] not in (1, 2) or ds.dtype.kind not in 'iuf':
                         raise ValueError(f"{ds.name}: unqualified pipe summary shape/type {ds.shape}")
-                    attrs = dict(ds.attrs);metadata[ds.name] = dict(shape=ds.shape, attributes=attrs)
+                    attrs = read_attrs(ds);metadata[ds.name] = dict(shape=ds.shape, attributes=attrs)
                     labels = np.asarray(attrs.get('Rows Variables', [])).reshape(-1)
                     units = np.asarray(attrs.get('Units', [])).reshape(-1)
-                    values = ds[()]
+                    values = read_typed(ds)
                     for row in range(ds.shape[0]):
                         for col, value in enumerate(values[row]):
                             records.append(dict(network=name, source='summary', path=ds.name,
                                 row=row, location=col, row_variable=_text(labels[row]) if row < len(labels) else None,
                                 units=_text(units[row]) if row < len(units) else None, value=value))
             if volume in hdf:
-                attrs = dict(hdf[volume].attrs);metadata[hdf[volume].name] = dict(attributes=attrs)
+                attrs = read_attrs(hdf[volume]);metadata[hdf[volume].name] = dict(attributes=attrs)
                 for key, value in attrs.items():
                     if np.asarray(value).ndim != 0:
                         raise ValueError(f"{volume}: non-scalar volume attribute {key!r}")
@@ -968,7 +969,7 @@ class HdfPipe:
                     ds = hdf[f"{base}/{stamp}"]
                     if ds.shape != (dataset.shape[0],):
                         raise ValueError(f"{path}: {output_block} timestamp count/shape mismatch")
-                    time = [parse(_text(x)) for x in ds[()]]
+                    time = [parse(_text(x)) for x in read_typed(ds)]
                     break
             if time is None:
                 raise ValueError(f"{path}: no timestamps in selected output block")
@@ -977,7 +978,7 @@ class HdfPipe:
             coords = {'time': time, 'location': np.arange(dataset.shape[1])}
             if coord:
                 coords[coord] = ('location', ids)
-            da = xr.DataArray(dataset[()], dims=['time', 'location'], coords=coords, name=variable)
-            da.attrs.update(units=_text(dataset.attrs.get('Units', b'')), variable=variable,
+            da = xr.DataArray(read_typed(dataset), dims=['time', 'location'], coords=coords, name=variable)
+            da.attrs.update(units=_text(read_attr(dataset, 'Units', b'')), variable=variable,
                 domain=domain, stored_location=location, pipe_network=network_name, output_block=output_block)
             return da

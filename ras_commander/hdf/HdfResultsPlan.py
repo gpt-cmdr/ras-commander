@@ -40,8 +40,10 @@ import pandas as pd
 from ..Decorators import standardize_input, log_call
 from .HdfUtils import HdfUtils
 from ..LoggingConfig import get_logger
+from ..fast_hdf import read_attrs, read_typed, reraise_required
 import numpy as np
 from datetime import datetime
+from ..fast_hdf import h5py_until_qualified
 
 logger = get_logger(__name__)
 
@@ -93,7 +95,7 @@ class HdfResultsPlan:
                 
                 # Create dictionary from attributes and decode byte strings
                 attrs_dict = {}
-                for key, value in dict(hdf_file["Results/Unsteady"].attrs).items():
+                for key, value in read_attrs(hdf_file["Results/Unsteady"]).items():
                     if isinstance(value, bytes):
                         attrs_dict[key] = value.decode('utf-8')
                     else:
@@ -108,6 +110,7 @@ class HdfResultsPlan:
                 f"See: https://rascommander.info/ras/user-guide/hdf-data-extraction/"
             )
         except Exception as e:
+            reraise_required(e)
             raise RuntimeError(f"Error reading unsteady attributes: {str(e)}")
         
     @staticmethod
@@ -138,7 +141,7 @@ class HdfResultsPlan:
                 
                 # Create dictionary from attributes and decode byte strings
                 attrs_dict = {}
-                for key, value in dict(hdf_file["Results/Unsteady/Summary"].attrs).items():
+                for key, value in read_attrs(hdf_file["Results/Unsteady/Summary"]).items():
                     if isinstance(value, bytes):
                         attrs_dict[key] = value.decode('utf-8')
                     else:
@@ -153,6 +156,7 @@ class HdfResultsPlan:
                 f"See: https://rascommander.info/ras/user-guide/hdf-data-extraction/"
             )
         except Exception as e:
+            reraise_required(e)
             raise RuntimeError(f"Error reading unsteady summary attributes: {str(e)}")
         
     @staticmethod
@@ -183,7 +187,7 @@ class HdfResultsPlan:
                 
                 # Get attributes and decode byte strings
                 attrs_dict = {}
-                for key, value in dict(hdf_file["Results/Unsteady/Summary/Volume Accounting"].attrs).items():
+                for key, value in read_attrs(hdf_file["Results/Unsteady/Summary/Volume Accounting"]).items():
                     if isinstance(value, bytes):
                         attrs_dict[key] = value.decode('utf-8')
                     else:
@@ -197,6 +201,7 @@ class HdfResultsPlan:
                 f"See: https://rascommander.info/ras/user-guide/hdf-data-extraction/"
             )
         except Exception as e:
+            reraise_required(e)
             raise RuntimeError(f"Error reading volume accounting attributes: {str(e)}")
 
     @staticmethod
@@ -238,9 +243,10 @@ class HdfResultsPlan:
                     return None
 
                 # Extract plan information
-                plan_name = HdfUtils.convert_ras_string(plan_info.attrs.get('Plan Name', 'Unknown'))
-                start_time_str = HdfUtils.convert_ras_string(plan_info.attrs.get('Simulation Start Time', 'Unknown'))
-                end_time_str = HdfUtils.convert_ras_string(plan_info.attrs.get('Simulation End Time', 'Unknown'))
+                plan_attrs = read_attrs(plan_info)
+                plan_name = HdfUtils.convert_ras_string(plan_attrs.get('Plan Name', 'Unknown'))
+                start_time_str = HdfUtils.convert_ras_string(plan_attrs.get('Simulation Start Time', 'Unknown'))
+                end_time_str = HdfUtils.convert_ras_string(plan_attrs.get('Simulation End Time', 'Unknown'))
 
                 try:
                     # Check if times are already datetime objects
@@ -274,9 +280,11 @@ class HdfResultsPlan:
                     return None
 
                 # Process compute times
-                process_names = [HdfUtils.convert_ras_string(name) for name in compute_processes['Process'][:]]
-                filenames = [HdfUtils.convert_ras_string(filename) for filename in compute_processes['Filename'][:]]
-                completion_times = compute_processes['Compute Time (ms)'][:]
+                # One typed read of the whole table (plan_metadata family), then fields.
+                compute_table = read_typed(compute_processes, slice(None))
+                process_names = [HdfUtils.convert_ras_string(name) for name in compute_table['Process']]
+                filenames = [HdfUtils.convert_ras_string(filename) for filename in compute_table['Filename']]
+                completion_times = compute_table['Compute Time (ms)']
 
                 compute_processes_df = pd.DataFrame({
                     'Process': process_names,
@@ -329,6 +337,7 @@ class HdfResultsPlan:
                 return pd.DataFrame(compute_processes_summary)
 
         except Exception as e:
+            reraise_required(e)
             logger.error(f"Error in get_runtime_data: {str(e)}")
             return None
 
@@ -378,12 +387,14 @@ class HdfResultsPlan:
             return dataset.to_dataframe().reset_index()
 
         except Exception as e:
+            reraise_required(e)
             logger.error(f"Error reading reference {reftype} timeseries: {str(e)}")
             return pd.DataFrame()
 
     @staticmethod
     @log_call
     @standardize_input(file_type='plan_hdf')
+    @h5py_until_qualified
     def get_reference_summary(hdf_path: Path, reftype: str) -> pd.DataFrame:
         """
         Get reference line or point summary output from HDF file.
@@ -412,7 +423,7 @@ class HdfResultsPlan:
                 dfs = []
                 
                 for ref_name in ref_group.keys():
-                    ref_data = ref_group[ref_name][:]
+                    ref_data = read_typed(ref_group[ref_name], slice(None))
                     if ref_data.ndim == 2:
                         df = pd.DataFrame(ref_data.T, columns=['Value', 'Time'])
                     else:
@@ -426,6 +437,7 @@ class HdfResultsPlan:
                 return pd.concat(dfs, ignore_index=True)
 
         except Exception as e:
+            reraise_required(e)
             logger.error(f"Error reading reference {reftype} summary: {str(e)}")
             return pd.DataFrame()
 
@@ -502,7 +514,7 @@ class HdfResultsPlan:
 
                 # Read profile names dataset
                 profile_names_ds = hdf_file[profile_names_path]
-                profile_names_raw = profile_names_ds[()]
+                profile_names_raw = read_typed(profile_names_ds)
 
                 # Decode byte strings to regular strings
                 profile_names = []
@@ -523,6 +535,7 @@ class HdfResultsPlan:
         except KeyError as e:
             raise KeyError(f"Error accessing steady state profile names: {str(e)}")
         except Exception as e:
+            reraise_required(e)
             raise RuntimeError(f"Error reading steady state profile names: {str(e)}")
 
     @staticmethod
@@ -544,7 +557,7 @@ class HdfResultsPlan:
             if attribute_path not in hdf_file:
                 continue
 
-            attributes = hdf_file[attribute_path][()]
+            attributes = read_typed(hdf_file[attribute_path])
             field_names = attributes.dtype.names or ()
             field_lookup = {name.lower(): name for name in field_names}
             station_field = field_lookup.get("station") or field_lookup.get("rs")
@@ -591,7 +604,7 @@ class HdfResultsPlan:
         if geometry_path not in hdf_file:
             return np.full(len(result_attributes), np.nan, dtype=float)
 
-        geometry_attributes = hdf_file[geometry_path][()]
+        geometry_attributes = read_typed(hdf_file[geometry_path])
         field_names = geometry_attributes.dtype.names or ()
         field_lookup = {name.strip().lower(): name for name in field_names}
         geometry_fields = {
@@ -691,7 +704,7 @@ class HdfResultsPlan:
                     dataset = hdf[path]
                     if not isinstance(dataset, h5py.Dataset):
                         raise ValueError(f'expected a dataset at {path}')
-                    return np.asarray(dataset[()])
+                    return np.asarray(read_typed(dataset))
 
                 def validate_stations(values, path):
                     if values.dtype.kind not in 'fiu':
@@ -842,7 +855,7 @@ class HdfResultsPlan:
                     raise KeyError(f"WSE data not found at: {wse_path}")
                 # Get WSE dataset (shape: num_profiles × num_cross_sections)
                 wse_ds = hdf_file[wse_path]
-                wse_data = wse_ds[()]
+                wse_data = read_typed(wse_ds)
                 num_profiles, num_xs = wse_data.shape
 
                 # Get profile names
@@ -938,6 +951,7 @@ class HdfResultsPlan:
         except KeyError as e:
             raise KeyError(f"Error accessing steady state WSE data: {str(e)}")
         except Exception as e:
+            reraise_required(e)
             raise RuntimeError(f"Error reading steady state WSE data: {str(e)}")
 
     @staticmethod
@@ -985,7 +999,7 @@ class HdfResultsPlan:
                 output_path = "Results/Steady/Output"
                 if output_path in hdf_file:
                     output_group = hdf_file[output_path]
-                    for key, value in output_group.attrs.items():
+                    for key, value in read_attrs(output_group).items():
                         if isinstance(value, bytes):
                             attrs_dict[key] = value.decode('utf-8')
                         else:
@@ -995,7 +1009,7 @@ class HdfResultsPlan:
                 summary_path = "Results/Steady/Summary"
                 if summary_path in hdf_file:
                     summary_group = hdf_file[summary_path]
-                    for key, value in summary_group.attrs.items():
+                    for key, value in read_attrs(summary_group).items():
                         if isinstance(value, bytes):
                             attrs_dict[key] = value.decode('utf-8')
                         else:
@@ -1004,10 +1018,10 @@ class HdfResultsPlan:
                 # Add flow file information from Plan Data
                 plan_info_path = "Plan Data/Plan Information"
                 if plan_info_path in hdf_file:
-                    plan_info = hdf_file[plan_info_path]
+                    plan_info = read_attrs(hdf_file[plan_info_path])
                     for key in ['Flow Filename', 'Flow Title']:
-                        if key in plan_info.attrs:
-                            value = plan_info.attrs[key]
+                        if key in plan_info:
+                            value = plan_info[key]
                             if isinstance(value, bytes):
                                 attrs_dict[key] = value.decode('utf-8')
                             else:
@@ -1028,6 +1042,7 @@ class HdfResultsPlan:
         except KeyError as e:
             raise KeyError(f"Error accessing steady state info: {str(e)}")
         except Exception as e:
+            reraise_required(e)
             raise RuntimeError(f"Error reading steady state info: {str(e)}")
 
     @staticmethod
@@ -1101,7 +1116,7 @@ class HdfResultsPlan:
                 # Read dataset from HDF
                 logger.debug(f"Reading computation messages from HDF: {hdf_path.name}")
                 dataset = hdf_file[compute_msgs_path]
-                data = dataset[()]
+                data = read_typed(dataset)
 
                 # Decode byte string to UTF-8
                 if isinstance(data, bytes):
@@ -1137,6 +1152,7 @@ class HdfResultsPlan:
             return ""
 
         except Exception as e:
+            reraise_required(e)
             logger.debug(f"Error reading computation messages from HDF: {str(e)}")
 
             # Try .txt fallback on any HDF error
@@ -1192,7 +1208,7 @@ class HdfResultsPlan:
                 if compute_msgs_path in hdf_file:
                     logger.debug(f"Reading computation messages from HDF: {hdf_path.name}")
                     dataset = hdf_file[compute_msgs_path]
-                    data = dataset[()]
+                    data = read_typed(dataset)
 
                     # Decode byte string to UTF-8
                     if isinstance(data, bytes):
@@ -1216,6 +1232,7 @@ class HdfResultsPlan:
         except FileNotFoundError:
             logger.debug(f"HDF file not found: {hdf_path}")
         except Exception as e:
+            reraise_required(e)
             logger.debug(f"Error reading computation messages from HDF: {str(e)}")
 
         # Attempt 2: Read .computeMsgs.txt file (HEC-RAS 6.x+)
@@ -1329,6 +1346,20 @@ class HdfResultsPlan:
         without that dataset fall back to ``Hydraulic Depth Channel`` and
         record the selected dataset in ``df.attrs['max_depth_source']``.
 
+        ``energy`` uses the primary Cross Sections/Energy Grade dataset, with
+        Additional Variables/Energy Grade as a fallback only when the primary
+        dataset is absent. Optional profile outputs, including ``froude`` and
+        ``min_ch_el``, remain NaN when their datasets are not stored. No Froude
+        number or minimum channel elevation is inferred from other quantities.
+
+        ``df.attrs['column_sources']`` maps optional profile-output columns to
+        their selected HDF dataset paths, or None when no source is available.
+        ``df.attrs['unavailable_columns']`` lists those columns with no source;
+        one summarized warning names the missing datasets. A stored array that
+        contains only NaNs still has a source and is not listed as unavailable.
+        Existing ``max_depth_source`` and ``channel_length_source`` attributes
+        are retained. Present datasets with incorrect shapes raise ValueError.
+
         **Performance:**
 
         This method is significantly faster than COM-based extraction
@@ -1376,7 +1407,7 @@ class HdfResultsPlan:
 
                 # Get profile names
                 if profile_names_path in hdf_file:
-                    profile_names_raw = hdf_file[profile_names_path][()]
+                    profile_names_raw = read_typed(hdf_file[profile_names_path])
                     profile_names = [
                         name.decode('utf-8').strip() if isinstance(name, bytes) else str(name).strip()
                         for name in profile_names_raw
@@ -1386,9 +1417,9 @@ class HdfResultsPlan:
 
                 # Get main variables (WSE, Flow)
                 wse_data = np.asarray(
-                    hdf_file[f"{xs_path}/Water Surface"][()]
+                    read_typed(hdf_file[f"{xs_path}/Water Surface"])
                 )
-                flow_data = np.asarray(hdf_file[f"{xs_path}/Flow"][()])
+                flow_data = np.asarray(read_typed(hdf_file[f"{xs_path}/Flow"]))
                 if wse_data.ndim != 2:
                     raise ValueError(
                         "Steady Water Surface dataset must be a 2D "
@@ -1418,35 +1449,59 @@ class HdfResultsPlan:
                 # Missing optional variables are returned as null values. Do
                 # not infer a cross-section join from legacy packed arrays;
                 # their axis ordering and row coverage vary by HEC-RAS version.
-                def get_additional_var(var_name, default=np.nan):
-                    path = f"{add_vars_path}/{var_name}"
-                    if path in hdf_file:
-                        values = np.asarray(hdf_file[path][()])
+                column_sources = {}
+                optional_paths = {}
+
+                def get_optional_var(column, var_name, paths=None):
+                    paths = paths or [f"{add_vars_path}/{var_name}"]
+                    optional_paths[column] = paths
+                    column_sources[column] = None
+                    for path in paths:
+                        # Absence and shape are metadata; only a present,
+                        # correctly shaped dataset is read (natively when
+                        # selected). A malformed present dataset raises here in
+                        # every backend mode and is never replaced by a
+                        # fallback path; a native refusal propagates unchanged.
+                        if path not in hdf_file:
+                            continue
+                        dataset = hdf_file[path]
                         expected_shape = (num_profiles, num_xs)
+                        if dataset.shape != expected_shape:
+                            raise ValueError(
+                                f"Steady variable {var_name!r} has shape "
+                                f"{dataset.shape}; expected {expected_shape}"
+                            )
+                        values = np.asarray(read_typed(dataset))
                         if values.shape != expected_shape:
                             raise ValueError(
                                 f"Steady variable {var_name!r} has shape "
                                 f"{values.shape}; expected {expected_shape}"
                             )
+                        column_sources[column] = path
                         return values
-                    return np.full((num_profiles, num_xs), default)
+                    return np.full((num_profiles, num_xs), np.nan)
 
-                velocity_data = get_additional_var('Velocity Channel')
-                energy_data = get_additional_var('Energy Grade')
-                froude_data = get_additional_var('Froude # Channel')
-                hydraulic_depth_data = get_additional_var('Hydraulic Depth Channel')
+                velocity_data = get_optional_var('velocity', 'Velocity Channel')
+                energy_data = get_optional_var('energy', 'Energy Grade', paths=[
+                    f"{xs_path}/Energy Grade",
+                    f"{add_vars_path}/Energy Grade",
+                ])
+                froude_data = get_optional_var('froude', 'Froude # Channel')
+                hydraulic_depth_data = get_optional_var('hydraulic_depth', 'Hydraulic Depth Channel')
                 maximum_depth_path = f"{add_vars_path}/Maximum Depth Total"
                 if maximum_depth_path in hdf_file:
-                    max_depth_data = get_additional_var('Maximum Depth Total')
+                    max_depth_data = get_optional_var('max_depth', 'Maximum Depth Total')
                     max_depth_source = 'Maximum Depth Total'
                 else:
                     max_depth_data = hydraulic_depth_data
                     max_depth_source = 'Hydraulic Depth Channel (legacy fallback)'
-                min_ch_el_data = get_additional_var('Min Ch El')
-                top_width_data = get_additional_var('Top Width Total')
-                area_data = get_additional_var('Area Flow Total')
-                eg_slope_data = get_additional_var('EG Slope')
-                friction_slope_data = get_additional_var('Friction Slope')
+                    column_sources['max_depth'] = column_sources['hydraulic_depth']
+                    optional_paths['max_depth'] = [maximum_depth_path] + optional_paths['hydraulic_depth']
+                min_ch_el_data = get_optional_var('min_ch_el', 'Min Ch El')
+                top_width_data = get_optional_var('top_width', 'Top Width Total')
+                area_data = get_optional_var('area', 'Area Flow Total')
+                eg_slope_data = get_optional_var('eg_slope', 'EG Slope')
+                friction_slope_data = get_optional_var('friction_slope', 'Friction Slope')
 
                 # Build results DataFrame
                 rows = []
@@ -1488,6 +1543,20 @@ class HdfResultsPlan:
                     if np.isnan(channel_length_data).all()
                     else 'Geometry/Cross Sections/Attributes/Len Channel'
                 )
+                df.attrs['column_sources'] = column_sources
+                unavailable = [
+                    column for column in df.columns
+                    if column in column_sources and column_sources[column] is None
+                ]
+                df.attrs['unavailable_columns'] = unavailable
+                if unavailable:
+                    logger.warning(
+                        "Optional steady result datasets unavailable; columns remain NaN: %s",
+                        "; ".join(
+                            f"{column} ({' or '.join(path.rsplit('/', 1)[-1] for path in optional_paths[column])})"
+                            for column in unavailable
+                        ),
+                    )
                 logger.debug(f"Extracted steady results: {len(df)} rows "
                             f"({num_profiles} profiles x {num_xs} cross sections)")
                 return df

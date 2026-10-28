@@ -13,6 +13,7 @@ import h5py
 
 from ..Decorators import standardize_input, log_call
 from ..LoggingConfig import get_logger
+from ..fast_hdf import reraise_required
 from .types import Severity, FlowType, CheckMessage, CheckResults
 from .thresholds import ValidationThresholds, get_default_thresholds
 from .messages import get_message_template, get_help_text, format_message
@@ -82,6 +83,7 @@ class CheckProfiles:
             plan_hdf = Path(plan_hdf)
             steady_results = HdfResultsPlan.get_steady_results(plan_hdf)
         except Exception as e:
+            reraise_required(e)
             logger.error("Failed to read steady results for profile checks")
             logger.debug("Profile steady-results read failure for %s: %s", plan_hdf, e)
             msg = CheckMessage(
@@ -403,6 +405,7 @@ class CheckProfiles:
                     messages.append(msg)
 
             except Exception as e:
+                reraise_required(e)
                 logger.debug(f"Could not validate starting WSE method: {e}")
 
         results.messages = messages

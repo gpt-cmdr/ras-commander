@@ -42,6 +42,8 @@ from .HdfBase import HdfBase
 from .HdfUtils import HdfUtils
 from ..Decorators import standardize_input, log_call
 from ..LoggingConfig import setup_logging, get_logger
+from ..fast_hdf import read_attr, read_attrs, read_typed, reraise_required
+from ..fast_hdf import h5py_until_qualified
 
 logger = get_logger(__name__)
 
@@ -133,6 +135,7 @@ class HdfPlan:
             with h5py.File(hdf_path, 'r') as hdf_file:
                 return HdfBase.get_simulation_start_time(hdf_file)
         except Exception as e:
+            reraise_required(e)
             raise ValueError(f"Failed to get plan start time: {str(e)}")
 
     @staticmethod
@@ -156,9 +159,10 @@ class HdfPlan:
                 plan_info = hdf_file.get('Plan Data/Plan Information')
                 if plan_info is None:
                     raise ValueError("Plan Information not found in HDF file")
-                time_str = plan_info.attrs.get('Simulation End Time')
+                time_str = read_attr(plan_info, 'Simulation End Time', None)
                 return HdfUtils.parse_ras_datetime(time_str.decode('utf-8'))
         except Exception as e:
+            reraise_required(e)
             raise ValueError(f"Failed to get plan end time: {str(e)}")
 
     @staticmethod
@@ -181,6 +185,7 @@ class HdfPlan:
             with h5py.File(hdf_path, 'r') as hdf_file:
                 return HdfBase.get_unsteady_timestamps(hdf_file)
         except Exception as e:
+            reraise_required(e)
             raise ValueError(f"Failed to get plan timestamps: {str(e)}")
 
     @staticmethod
@@ -207,14 +212,16 @@ class HdfPlan:
                     raise ValueError(f"Plan Information not found in {hdf_path}")
                 
                 attrs = {}
-                for key in hdf_file[plan_info_path].attrs.keys():
-                    value = hdf_file[plan_info_path].attrs[key]
+                stored = read_attrs(hdf_file[plan_info_path])
+                for key in stored.keys():
+                    value = stored[key]
                     if isinstance(value, bytes):
                         value = HdfUtils.convert_ras_string(value)
                     attrs[key] = value
                 
                 return attrs
         except Exception as e:
+            reraise_required(e)
             raise ValueError(f"Failed to get plan information attributes: {str(e)}")
 
     @staticmethod
@@ -249,8 +256,9 @@ class HdfPlan:
                 
                 # Extract parameters
                 params_dict = {}
-                for key in hdf_file[plan_params_path].attrs.keys():
-                    value = hdf_file[plan_params_path].attrs[key]
+                stored = read_attrs(hdf_file[plan_params_path])
+                for key in stored.keys():
+                    value = stored[key]
                     
                     # Handle different types of values
                     if isinstance(value, bytes):
@@ -294,6 +302,7 @@ class HdfPlan:
                 return df
 
         except Exception as e:
+            reraise_required(e)
             raise ValueError(f"Failed to get plan parameter attributes: {str(e)}")
 
     @staticmethod
@@ -326,10 +335,11 @@ class HdfPlan:
                 write_parameters: Dict[str, Any] = {}
                 params_path = HdfPlan._PLAN_PARAMETERS_PATH
                 if params_path in hdf_file:
-                    for key in hdf_file[params_path].attrs.keys():
+                    stored = read_attrs(hdf_file[params_path])
+                    for key in stored.keys():
                         if key.startswith("HDF "):
                             write_parameters[key] = HdfPlan._decode_hdf_attr_value(
-                                hdf_file[params_path].attrs[key]
+                                stored[key]
                             )
 
                 rows: List[Dict[str, Any]] = []
@@ -369,6 +379,7 @@ class HdfPlan:
                 "file_size_mb": Path(hdf_path).stat().st_size / 1e6,
             }
         except Exception as e:
+            reraise_required(e)
             raise ValueError(f"Failed to get HDF output settings: {str(e)}")
 
     @staticmethod
@@ -429,7 +440,7 @@ class HdfPlan:
         info_path = HdfPlan._PLAN_INFORMATION_PATH
         if info_path not in hdf_file:
             return None
-        program_version = hdf_file[info_path].attrs.get("Program Version")
+        program_version = read_attr(hdf_file[info_path], "Program Version", None)
         if program_version is None:
             return None
         return str(HdfPlan._decode_hdf_attr_value(program_version))
@@ -528,7 +539,7 @@ class HdfPlan:
                 params_group = hdf_file[params_path]
                 attrs = {
                     key: HdfPlan._decode_hdf_attr_value(value)
-                    for key, value in params_group.attrs.items()
+                    for key, value in read_attrs(params_group).items()
                 }
 
                 names = attrs.get("2D Names") or []
@@ -570,7 +581,7 @@ class HdfPlan:
                 if info_path in hdf_file:
                     plan_info = {
                         key: HdfPlan._decode_hdf_attr_value(value)
-                        for key, value in hdf_file[info_path].attrs.items()
+                        for key, value in read_attrs(hdf_file[info_path]).items()
                     }
 
                 global_options = {}
@@ -590,6 +601,7 @@ class HdfPlan:
                 }
 
         except Exception as e:
+            reraise_required(e)
             raise ValueError(f"Failed to get 2D flow options from HDF: {str(e)}")
 
     @staticmethod
@@ -618,14 +630,16 @@ class HdfPlan:
                     return {}
                 
                 attrs = {}
-                for key in hdf_file[precip_path].attrs.keys():
-                    value = hdf_file[precip_path].attrs[key]
+                stored = read_attrs(hdf_file[precip_path])
+                for key in stored.keys():
+                    value = stored[key]
                     if isinstance(value, bytes):
                         value = HdfUtils.convert_ras_string(value)
                     attrs[key] = value
                 
                 return attrs
         except Exception as e:
+            reraise_required(e)
             logger.error(f"Failed to get precipitation attributes: {str(e)}")
             return {}
         
@@ -633,7 +647,8 @@ class HdfPlan:
     @log_call
     @standardize_input(file_type='plan_hdf')
     def get_plan_met_precip_values(
-        hdf_path: Union[str, Path, int, h5py.File], *, ras_object=None,
+        hdf_path: Union[str, Path, int, h5py.File], *, ras_object: Optional[Any] = None,
+        group_path: str = "Event Conditions/Meteorology/Precipitation",
     ) -> Dict[str, Any]:
         """Read materialized solver precipitation arrays without unit conversion.
 
@@ -641,6 +656,10 @@ class HdfPlan:
             hdf_path: Plan HDF path, plan identifier or open HDF handle accepted
                 by the HDF input decorator.
             ras_object: Optional RasPrj context for resolving plan identifiers.
+            group_path: Exact HDF precipitation group. The default reads a
+                compiled plan. For a retained meteorology-only snapshot, pass
+                ``"Meteorology/Precipitation"`` explicitly. No alternate group
+                is selected when the requested data are absent.
 
         Returns:
             Dictionary with ``values`` (time by precipitation-grid cell), raw
@@ -654,14 +673,23 @@ class HdfPlan:
         Raises:
             KeyError: Solver Values/Timestamp datasets are absent. An imported
                 raster sidecar alone is not materialized solver precipitation.
-            ValueError: Dataset dimensions or time-axis lengths are inconsistent.
+            ValueError: The group path is empty or not a string, or dataset
+                dimensions or time-axis lengths are inconsistent.
+
+        Notes:
+            Opens the source read-only and does not execute HEC-RAS. Snapshot
+            arrays retain the same units, timestamp encodings and shape checks
+            as compiled-plan arrays. This read does not establish that another
+            plan used the retained precipitation.
         """
-        group_path = "Event Conditions/Meteorology/Precipitation"
+        if not isinstance(group_path, str) or not group_path.strip('/'):
+            raise ValueError("group_path must be a nonempty HDF group path")
+        group_path = group_path.rstrip('/')
 
         def attributes(obj):
             return {
                 key: value.decode('utf-8') if isinstance(value, bytes) else value
-                for key, value in obj.attrs.items()
+                for key, value in read_attrs(obj).items()
             }
 
         with h5py.File(hdf_path, 'r') as hdf:
@@ -675,7 +703,7 @@ class HdfPlan:
                     or values.shape[0] != times.shape[0]):
                 raise ValueError(f"Inconsistent precipitation shapes: {values.shape}, {times.shape}")
             return {
-                'values': values[...], 'timestamps': times[...],
+                'values': read_typed(values, Ellipsis), 'timestamps': read_typed(times, Ellipsis),
                 'attributes': attributes(hdf[group_path]),
                 'value_attributes': attributes(values),
                 'timestamp_attributes': attributes(times),
@@ -711,7 +739,7 @@ class HdfPlan:
                 geom_group = hdf_file[geom_attrs_path]
                 logger.debug("Getting root level geometry attributes")
                 # Get root level geometry attributes only
-                for key, value in geom_group.attrs.items():
+                for key, value in read_attrs(geom_group).items():
                     if isinstance(value, bytes):
                         try:
                             value = HdfUtils.convert_ras_string(value)
@@ -725,15 +753,18 @@ class HdfPlan:
                 return pd.DataFrame({"Value": pd.Series(attrs, dtype=object)})
 
         except (OSError, RuntimeError) as e:
+            reraise_required(e)
             logger.error(f"Failed to read HDF file {hdf_path}: {str(e)}")
             raise ValueError(f"Failed to read HDF file {hdf_path}: {str(e)}")
         except Exception as e:
+            reraise_required(e)
             logger.error(f"Failed to get geometry attributes: {str(e)}")
             raise ValueError(f"Failed to get geometry attributes: {str(e)}")
 
     @staticmethod
     @log_call
     @standardize_input(file_type='plan_hdf')
+    @h5py_until_qualified
     def get_starting_wse_method(hdf_path: Path) -> StartingWSEMethodDict:
         """
         Extract initial water surface elevation calculation method from plan HDF.
@@ -765,7 +796,9 @@ class HdfPlan:
                 # Try to get starting WSE method from Plan Parameters
                 plan_params_path = HdfPlan._PLAN_PARAMETERS_PATH
                 if plan_params_path in hdf_file:
-                    plan_params = hdf_file[plan_params_path]
+                    # Membership through h5py, values one attribute at a time (as main).
+                    plan_params_group = hdf_file[plan_params_path]
+                    plan_params = plan_params_group.attrs
 
                     # Extract starting WSE method attributes
                     # Common attribute names (adjust based on actual HDF structure):
@@ -777,8 +810,8 @@ class HdfPlan:
                     ]
 
                     for attr_name in method_attrs:
-                        if attr_name in plan_params.attrs:
-                            value = plan_params.attrs[attr_name]
+                        if attr_name in plan_params:
+                            value = read_attr(plan_params_group, attr_name)
                             if isinstance(value, bytes):
                                 value = HdfUtils.convert_ras_string(value)
                             result['method'] = value
@@ -792,8 +825,8 @@ class HdfPlan:
                             'Friction Slope',
                         ]
                         for slope_attr in slope_attrs:
-                            if slope_attr in plan_params.attrs:
-                                slope_value = plan_params.attrs[slope_attr]
+                            if slope_attr in plan_params:
+                                slope_value = read_attr(plan_params_group, slope_attr)
                                 if isinstance(slope_value, (np.number, float, int)):
                                     result['slope'] = float(slope_value)
                                     break
@@ -806,8 +839,8 @@ class HdfPlan:
                             'Boundary Water Surface',
                         ]
                         for wse_attr in wse_attrs:
-                            if wse_attr in plan_params.attrs:
-                                wse_value = plan_params.attrs[wse_attr]
+                            if wse_attr in plan_params:
+                                wse_value = read_attr(plan_params_group, wse_attr)
                                 if isinstance(wse_value, (np.number, float, int)):
                                     result['wse'] = float(wse_value)
                                     break
@@ -816,10 +849,10 @@ class HdfPlan:
                 if 'method' not in result:
                     plan_info_path = HdfPlan._PLAN_INFORMATION_PATH
                     if plan_info_path in hdf_file:
-                        plan_info = hdf_file[plan_info_path]
+                        plan_info_group = hdf_file[plan_info_path]
                         for attr_name in ['Flow Regime', 'Simulation Type']:
-                            if attr_name in plan_info.attrs:
-                                value = plan_info.attrs[attr_name]
+                            if attr_name in plan_info_group.attrs:
+                                value = read_attr(plan_info_group, attr_name)
                                 if isinstance(value, bytes):
                                     value = HdfUtils.convert_ras_string(value)
                                 result['regime'] = value
@@ -837,6 +870,7 @@ class HdfPlan:
                 return result
 
         except Exception as e:
+            reraise_required(e)
             logger.error(f"Error reading starting WSE method from {hdf_path}: {str(e)}")
             return {'method': 'Error', 'error': str(e)}
 

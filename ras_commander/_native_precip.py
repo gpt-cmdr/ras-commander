@@ -300,13 +300,15 @@ def inspect_precipitation(hdf_path: Path) -> dict:
     import h5py
     import numpy as np
 
+    from .fast_hdf import read_attr, read_typed
+
     def summarize(dataset):
         digest = hashlib.sha256()
         finite_count = nonzero = 0
         minimum, maximum = float("inf"), float("-inf")
         step = max(1, min(32, 262144 // max(1, int(np.prod(dataset.shape[1:])))))
         for offset in range(0, dataset.shape[0], step):
-            block = np.asarray(dataset[offset : offset + step])
+            block = np.asarray(read_typed(dataset, slice(offset, offset + step)))
             if block.dtype.kind in "SO":
                 digest.update(json.dumps(block.astype(str).tolist()).encode())
                 continue
@@ -327,7 +329,7 @@ def inspect_precipitation(hdf_path: Path) -> dict:
             "maximum": maximum if finite_count else None,
         }
         if dataset.dtype.kind not in "SO" and dataset.shape[0]:
-            final = np.asarray(dataset[-1])
+            final = np.asarray(read_typed(dataset, -1))
             valid_final = final[np.isfinite(final)]
             result["final_maximum"] = (
                 float(valid_final.max()) if valid_final.size else None
@@ -336,13 +338,13 @@ def inspect_precipitation(hdf_path: Path) -> dict:
         if "Times" in dataset.attrs:
             result["times"] = [
                 v.decode() if isinstance(v, bytes) else str(v)
-                for v in dataset.attrs["Times"]
+                for v in read_attr(dataset, "Times")
             ]
         result["semantics"] = {
             key: (
-                dataset.attrs[key].decode()
-                if isinstance(dataset.attrs[key], bytes)
-                else str(dataset.attrs[key])
+                read_attr(dataset, key).decode()
+                if isinstance(read_attr(dataset, key), bytes)
+                else str(read_attr(dataset, key))
             )
             for key in (
                 "Time Series Data Type",
@@ -365,7 +367,7 @@ def inspect_precipitation(hdf_path: Path) -> dict:
             {}
             if parameters is None
             else {
-                key: np.asarray(parameters.attrs[key]).tolist()
+                key: np.asarray(read_attr(parameters, key)).tolist()
                 for key in ("1D Cores", "2D Cores (per mesh)")
                 if key in parameters.attrs
             }
@@ -397,6 +399,6 @@ def inspect_precipitation(hdf_path: Path) -> dict:
             from ._preprocess_validation import _scalar_text
 
             out["event_completed"] = _scalar_text(
-                event.attrs.get("Completed Successfully")
+                read_attr(event, "Completed Successfully", None)
             ) in {"true", "1"}
     return out

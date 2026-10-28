@@ -1197,7 +1197,7 @@ class RasMonteCarlo:
         """Extract sorted cell-level maximum WSE values from one HDF."""
         from .hdf import HdfResultsMesh
 
-        mesh_df = HdfResultsMesh.get_mesh_max_ws(hdf_path)
+        mesh_df = HdfResultsMesh.get_mesh_max_ws(hdf_path, include_geometry=False)
         if mesh_df.empty:
             raise ValueError(f"No mesh max WSE rows found in {hdf_path}")
 
@@ -1400,15 +1400,15 @@ class RasMonteCarlo:
 
         # Physical cells only, matching the other full-domain extractors.
         cell_points = HdfMesh.get_mesh_cell_points(
-            geom_hdf_path, include_ghost_cells=False
+            geom_hdf_path, include_ghost_cells=False, include_geometry=False
         )
         if cell_points.empty:
             raise ValueError(f"No mesh cell points found in {geom_hdf_path}")
 
         query_points = np.column_stack(
             (
-                cell_points.geometry.x.to_numpy(dtype=float),
-                cell_points.geometry.y.to_numpy(dtype=float),
+                cell_points["x"].to_numpy(dtype=float),
+                cell_points["y"].to_numpy(dtype=float),
             )
         )
         queried = HdfResultsQuery.query_points(
@@ -1594,6 +1594,9 @@ class RasMonteCarlo:
                 sample_weights.append(float(sample_weight))
 
             except Exception as exc:
+                from .fast_hdf import reraise_required
+
+                reraise_required(exc)
                 logger.debug(
                     "Dropping sample %s during %s extraction from %s: %s",
                     sample_id,

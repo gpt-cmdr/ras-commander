@@ -1,3 +1,4 @@
+import inspect
 import logging
 from pathlib import Path
 
@@ -7,6 +8,11 @@ from ras_commander.hdf.HdfFluvialPluvial import HdfFluvialPluvial
 
 
 LOGGER_NAME = "ras_commander.hdf.HdfFluvialPluvial"
+
+# These tests pin the reference implementation. Where the public methods take
+# ``engine=`` (default "auto", which may run the native kernels), select it.
+REFERENCE = ({"engine": "h5py"} if "engine" in inspect.signature(
+    HdfFluvialPluvial.generate_fluvial_pluvial_polygons).parameters else {})
 
 
 @pytest.fixture(scope="module")
@@ -34,12 +40,14 @@ def test_fluvial_pluvial_default_info_logs_are_concise(
         boundary_gdf = HdfFluvialPluvial.calculate_fluvial_pluvial_boundary(
             bald_eagle_2d_plan_hdf,
             delta_t=72,
+            **REFERENCE,
         )
         polygon_gdf = HdfFluvialPluvial.generate_fluvial_pluvial_polygons(
             bald_eagle_2d_plan_hdf,
             delta_t=12,
             temporal_tolerance_hours=1.0,
             min_polygon_area_acres=200,
+            **REFERENCE,
         )
 
     assert not boundary_gdf.empty
@@ -75,6 +83,7 @@ def test_fluvial_pluvial_debug_logs_include_call_and_processing_context(
             bald_eagle_2d_plan_hdf,
             delta_t=72,
             min_line_length=3000,
+            **REFERENCE,
         )
 
     assert boundary_gdf.empty

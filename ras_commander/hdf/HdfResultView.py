@@ -15,6 +15,7 @@ from numpy.typing import DTypeLike
 from .._optional_deps import optional_module
 from ..Decorators import log_call
 from ..LoggingConfig import get_logger
+from ..fast_hdf import read_dataset
 from .HdfBase import HdfBase
 from .HdfUtils import HdfUtils
 
@@ -183,7 +184,7 @@ class HdfResultView:
                 if spatial_slice is None
                 else (time_slice, spatial_slice)
             )
-            values = np.asarray(dataset[key])
+            values = np.asarray(read_dataset(dataset, key))
             if self.truncate:
                 values, time_slice = self._trim_materialized(values, time_slice)
         self._validate_source_fingerprint()
@@ -218,7 +219,7 @@ class HdfResultView:
                 if spatial_slice is None
                 else (time_slice, spatial_slice)
             )
-            values = np.asarray(dataset[key])
+            values = np.asarray(read_dataset(dataset, key))
             if self.truncate:
                 values, time_slice = self._trim_materialized(values, time_slice)
             result = self._build_dataarray(
@@ -562,16 +563,38 @@ class HdfResultView:
         time_slice: slice,
     ) -> tuple[np.ndarray, slice]:
         """Trim active rows from one eager read while retaining all-zero data."""
-        active = (
-            values != 0
-            if values.ndim == 1
-            else np.any(values != 0, axis=1)
-        )
-        positions = np.flatnonzero(active)
-        if not len(positions):
-            return values, time_slice
-        first_position = int(positions[0])
-        last_position = int(positions[-1])
+        if values.ndim == 2:
+            # The first and last rows with a nonzero (or NaN) value, found by
+            # scanning blocks of rows from each end instead of comparing the
+            # whole array; the same rows as np.any(values != 0, axis=1).
+            block = max(1, (1 << 22) // max(1, values.shape[1]))
+            first_position = None
+            for begin in range(0, len(values), block):
+                found = np.flatnonzero(np.any(values[begin:begin + block] != 0, axis=1))
+                if len(found):
+                    first_position = begin + int(found[0])
+                    break
+            if first_position is None:
+                return values, time_slice
+            end = len(values)
+            while True:
+                begin = max(first_position, end - block)
+                found = np.flatnonzero(np.any(values[begin:end] != 0, axis=1))
+                if len(found):
+                    last_position = begin + int(found[-1])
+                    break
+                end = begin
+        else:
+            active = (
+                values != 0
+                if values.ndim == 1
+                else np.any(values != 0, axis=1)
+            )
+            positions = np.flatnonzero(active)
+            if not len(positions):
+                return values, time_slice
+            first_position = int(positions[0])
+            last_position = int(positions[-1])
         trimmed = values[first_position:last_position + 1]
         start = time_slice.start + first_position * time_slice.step
         stop = time_slice.start + (last_position + 1) * time_slice.step
@@ -600,7 +623,7 @@ class HdfResultView:
             stop = start + batch_count * time_slice.step
             batch_slice = slice(start, stop, time_slice.step)
             key = batch_slice if spatial_slice is None else (batch_slice, spatial_slice)
-            values = np.asarray(dataset[key], dtype=target_dtype)
+            values = np.asarray(read_dataset(dataset, key), dtype=target_dtype)
             source_indexes = np.arange(start, stop, time_slice.step, dtype=np.int64)
             yield values, source_indexes
 
@@ -614,7 +637,7 @@ class HdfResultView:
         dtype,
     ) -> xr.DataArray:
         key = time_slice if spatial_slice is None else (time_slice, spatial_slice)
-        values = np.asarray(dataset[key])
+        values = np.asarray(read_dataset(dataset, key))
         return self._build_dataarray(
             hdf_file,
             values,
@@ -635,7 +658,7 @@ class HdfResultView:
         """Build the established labeled result schema from materialized values."""
         if dtype is not None:
             values = values.astype(dtype, copy=False)
-        raw_times = np.asarray(hdf_file[self.time_path][time_slice])
+        raw_times = np.asarray(read_dataset(hdf_file[self.time_path], time_slice))
         start_time = HdfBase.get_simulation_start_time(hdf_file)
         times = HdfUtils.convert_timesteps_to_datetimes(raw_times, start_time)
         dims = ["time"]

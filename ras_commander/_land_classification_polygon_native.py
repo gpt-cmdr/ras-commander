@@ -21,6 +21,7 @@ import h5py
 
 from .dotnet.clr_bootstrap import find_hecras_install, load_clr
 from .RasUtils import RasUtils
+from .fast_hdf import read_attr
 
 _VARIABLE_VALUE_ALIASES = {
     "mannings_n": "ManningsN",
@@ -76,12 +77,12 @@ def _decode_hdf_text(value: Any) -> Optional[str]:
 
 def _sidecar_projection(layer_hdf_path: Path) -> Optional[str]:
     with h5py.File(layer_hdf_path, "r") as hdf_file:
-        return _decode_hdf_text(hdf_file.attrs.get("Projection"))
+        return _decode_hdf_text(read_attr(hdf_file, "Projection", None))
 
 
 def _require_landcover_sidecar(layer_hdf_path: Path) -> None:
     with h5py.File(layer_hdf_path, "r") as hdf_file:
-        layer_type = _decode_hdf_text(hdf_file.attrs.get("LC Type"))
+        layer_type = _decode_hdf_text(read_attr(hdf_file, "LC Type", None))
     if layer_type != "LandCover":
         raise NotImplementedError(
             "Native classification-polygon mutation is qualified only for "

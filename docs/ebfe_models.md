@@ -134,6 +134,7 @@ Current built-in organizers include:
 | `pedernales` | 12090206 | 530 HEC-RAS 4.1.0-era 1D steady projects. Eight misplaced delivered result/preprocessor assets are copied to their referenced projects; terrain is not applicable, not missing. All 530 selected plan-01 runs passed in isolated two-core HEC-RAS 6.6 copies. |
 | `cibolo` | 12100304 | One HEC-RAS 5.0.7 2D unsteady project. Terrain, land cover, seven DSS inputs, and the projection are delivered; plan 14 reached owned unsteady-solver startup in an isolated two-core copy. |
 | `medina` | 12100302 | Five HEC-RAS 6.4.1 2D unsteady projects. Four have complete modified terrain and reached owned unsteady-solver startup; UpperMedinaHeadwaters is blocked by an undelivered load-bearing modified `Terrain.hdf`. Land cover, infiltration, and soils are delivered for all five projects. |
+| `salt-draw` | 13070004 | One HEC-RAS 6.4.1 2D rain-on-grid project (`SLDR_004`, geometry `g02`) with seven plans. Terrain, land cover, DSS inputs, and the HEC-HMS model are delivered. Only the selected plan result HDFs (about 9 GB each) are extracted; the default is `p01` and `p02`. |
 | `rio-hondo` | 13060008 | 1D steady BLE reach-model collection. |
 | `amite` | 08070202 | Louisiana component delivery with terrain rebuild handling for CRS mismatches. |
 | `tickfaw` | 08070203 | Large Louisiana 2D model archive. |
@@ -269,6 +270,60 @@ the hydraulic-source blocker. Leon1, Leon2, Leon3, and MiddleLowerMedina each
 reached owned unsteady-solver startup with two cores in HEC-RAS 6.4.1; this
 does not change UpperMedinaHeadwaters' blocked status. See the
 [Medina Record of Deficiencies](https://github.com/gpt-cmdr/ras-commander/blob/main/agent_tasks/2026-09-25_medina_record_of_deficiencies.md).
+
+### Salt Draw selectable result HDFs
+
+`salt-draw` is the public FEMA eBFE delivery for HUC8 `13070004`. The
+67 GB archive holds one HEC-RAS 6.4.1 2D project, `SLDR_004`, with a single
+2D flow area of 794,234 cells driven by precipitation on the grid. All seven
+plans use geometry `g02`:
+
+| Plan | Title | Unsteady file | Event |
+|---|---|---|---|
+| `p01` | `SLDR_004_1pct` | `u01` | 1% AEP |
+| `p02` | `SLDR_004_0_2pct` | `u02` | 0.2% AEP |
+| `p03` | `SLDR_004_10pct` | `u03` | 10% AEP |
+| `p04` | `SLDR_004_4pct` | `u04` | 4% AEP |
+| `p05` | `SLDR_004_2pct` | `u05` | 2% AEP |
+| `p06` | `SLDR_004_1plu` | `u06` | 1% AEP plus (upper confidence) |
+| `p07` | `SLDR_004_1min` | `u07` | 1% AEP minus (lower confidence) |
+
+Each delivered plan result HDF is about 9 GB. The organizer reads the
+retained archive and CRC-extracts only the result HDFs named in
+`output_plans` (default `p01` and `p02`). Plan, unsteady, geometry, terrain,
+land-cover, DSS, and HMS files are always kept. The delivered
+`RAS_Submittal/{Input,Terrain,Landcover}` layout is preserved, so every
+terrain, land-cover, and DSS reference resolves without repair.
+
+```python
+from pathlib import Path
+
+from ras_commander import init_ras_project
+from ras_commander.sources import RasEbfeModels
+
+organized = RasEbfeModels.organize_model(
+    "salt-draw",
+    download_root=Path(r"H:\Testing\eBFE\13070004\raw"),
+    output_root=Path(r"H:\Testing\eBFE\13070004\organized"),
+    output_plans=["p01", "p02"],
+)
+ras = init_ras_project(organized / "RAS Model" / "RAS_Submittal" / "Input", "6.6")
+```
+
+`downloaded_folder=` also accepts the archive itself or an already-extracted
+`13070004_Models_20250416` tree. An extracted tree has no archive identity to
+check; the manifest records it as `pre_extracted_tree`, and every requested
+result HDF must be present in it.
+
+The delivered results contain water surface and face velocity but no face
+flow. HEC-RAS 6.6 cannot regenerate the delivered mesh unchanged because 48
+cells have more than eight faces. Repair the computation points with
+`GeomMesh.plan_computation_point_repair` and
+`GeomMesh.apply_computation_point_repair` before regenerating the mesh in 6.6.
+The organizer does not change the mesh, and it leaves the delivered
+`Current Plan=p07` in `SLDR_004.prj` unchanged. The four RASMapper references
+outside the delivery (two host basemaps, a profile-line layer, and a stale
+author-local `u01.hdf` event layer) are display-only.
 
 For large 2D studies, keep the authoritative organized source and durable
 receipts on the CEWS H: data library, but make bounded execution copies on a

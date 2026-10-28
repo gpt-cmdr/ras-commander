@@ -38,6 +38,10 @@ After `ras = init_ras_project(folder, "6.6")`:
 - `ras.geom_df` — geometry files and HDF preprocessor paths
 - `ras.flow_df` — steady flow files
 - `ras.unsteady_df` — unsteady flow files and configurations
+- `RasRestart.read_header(path, simulation_start=...)` — read-only HEC-RAS 6.6
+  native restart timing bound to the producing plan start; unknown formats fail.
+  See `user-guide/restart-header` in the documentation. Never select a restart
+  by its filename or treat a header read as hydraulic acceptance.
 - `ras.boundaries_df` — boundary conditions (type, name, location)
 - `ras.results_df` — lightweight HDF results summaries
 - `ras.rasmap_df` — RASMapper layers, terrain, land cover paths

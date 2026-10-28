@@ -25,6 +25,7 @@ import pandas as pd
 
 from ._ras_text import _write_ras_xml
 from .LoggingConfig import get_logger
+from .fast_hdf import read_attr, read_typed
 from .RasUtils import RasUtils
 from ._rasmap_schema import create_rasmap_dataframe, expected_rasmap_path
 from ._spatial_extent import _normalize_extent_bounds
@@ -1099,13 +1100,13 @@ def _decode_hdf_string(value: Any) -> str:
 def _read_hdf_string_attr(hdf_file: h5py.File, key: str) -> Optional[str]:
     if key not in hdf_file.attrs:
         return None
-    return _decode_hdf_string(hdf_file.attrs[key])
+    return _decode_hdf_string(read_attr(hdf_file, key))
 
 
 def _read_raster_map_rows(hdf_path: Union[str, Path]) -> list[tuple[int, str]]:
     hdf_path = Path(hdf_path)
     with h5py.File(hdf_path, "r") as hdf_file:
-        dataset = hdf_file["Raster Map"][()]
+        dataset = read_typed(hdf_file["Raster Map"])
         rows = []
         for row in dataset:
             rows.append(
@@ -1123,7 +1124,7 @@ def _read_layer_ids_for_symbology(hdf_path: Union[str, Path]) -> list[int]:
         if "Raster Map" in hdf_file:
             return [class_id for class_id, _ in _read_raster_map_rows(hdf_path)]
         if "IDs" in hdf_file:
-            return [int(value) for value in hdf_file["IDs"][()]]
+            return [int(value) for value in read_typed(hdf_file["IDs"])]
         if "Variables" in hdf_file:
             return list(range(len(hdf_file["Variables"])))
     return []
@@ -1134,7 +1135,7 @@ def _read_landcover_variable_lookup(hdf_path: Union[str, Path]) -> dict[str, dic
     with h5py.File(hdf_path, "r") as hdf_file:
         if "Variables" not in hdf_file:
             return {}
-        dataset = hdf_file["Variables"][()]
+        dataset = read_typed(hdf_file["Variables"])
         lookup: dict[str, dict[str, float]] = {}
         for row in dataset:
             class_name = row["Name"].decode("utf-8").strip()
@@ -1226,7 +1227,7 @@ def read_land_classification_polygon_records(
         if not required.issubset(set(group.keys())):
             return records
 
-        attributes = group["Attributes"][()]
+        attributes = read_typed(group["Attributes"])
         attr_fields = attributes.dtype.names or ()
         class_field = "Classification" if "Classification" in attr_fields else "Name"
         if class_field not in attr_fields:
@@ -1235,10 +1236,10 @@ def read_land_classification_polygon_records(
                 "a Classification or Name field"
             )
 
-        polygon_info = group["Polygon Info"][()]
-        polygon_points = group["Polygon Points"][()]
+        polygon_info = read_typed(group["Polygon Info"])
+        polygon_points = read_typed(group["Polygon Points"])
         polygon_parts = (
-            group["Polygon Parts"][()]
+            read_typed(group["Polygon Parts"])
             if "Polygon Parts" in group
             else np.zeros((0, 2), dtype=np.int32)
         )
@@ -1791,7 +1792,7 @@ def _read_infiltration_variable_rows(
         if "Variables" not in hdf_file:
             raise KeyError(f"No Variables dataset found in {infiltration_hdf_path}")
         dataset = hdf_file["Variables"]
-        data = dataset[()]
+        data = read_typed(dataset)
         names = [row["Name"].decode("utf-8").strip() for row in data]
     return data, names
 
