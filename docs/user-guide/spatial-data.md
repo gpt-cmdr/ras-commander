@@ -744,14 +744,20 @@ Mapper libraries. It verifies the setting and reports an error if it cannot
 apply it. The calling process and unrelated helpers retain their settings;
 `None` preserves the default inherited affinity. This is a scoped mitigation,
 not a repair of vendor code or a guarantee for every model/runtime. Expect
-lower native rendering throughput and validate the exported rasters.
+lower native rendering throughput and validate the exported rasters. Helpers
+select the lowest CPUs from their inherited mask, so parallel helpers using
+`native_cpu_limit=1` share the same CPU. A limit exceeding that mask fails
+explicitly; a Wine launcher already restricted to one CPU cannot use a larger
+helper limit.
 
 On the retained public Davis 7.0.1 result, an eight-CPU inherited-affinity
 control failed in four of six aggregate exports. A one-CPU helper limit
 completed 12/12 aggregate and 12/12 independent Depth/WSE exports. Every
 successful band had 20,560 valid pixels and matched the retained successful
-reference's values, masks, grid and EPSG:2871 CRS. The result HDF and `.rasmap`
-were restored byte for byte, and caller affinity was unchanged. These bounded
+reference's values, masks, grid and EPSG:2871 CRS. Per-case checks recorded
+`.rasmap` restoration and unchanged caller affinity. A separate three-case
+qualification-harness smoke run verified in-project result-HDF restoration.
+These bounded
 Windows observations qualify that fixture/runtime; they do not establish a
 universal repair or qualify Wine. The native vendor race remains separate from
 the supported opt-in mitigation.
