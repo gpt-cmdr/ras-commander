@@ -322,10 +322,11 @@ and do not silently replace failed detailed geometry with a convex hull,
 endpoint ring, or selected repaired component.
 
 > **EXPERIMENTAL — not recommended for production or any other
-> non-experimental use.** These direct writes have been tested only with
-> HEC-RAS 7.0 April 2026 in one Windows-preprocess/Linux-solve
-> `*.p##.tmp.hdf` workflow. All other HEC-RAS versions and workflows are
-> untested. They are not general land-cover or geometry-authoring APIs.
+> non-experimental use.** HEC-RAS 7.0 April 2026 has been tested in one
+> Windows-preprocess/Linux-solve `*.p##.tmp.hdf` workflow. The exact
+> `HEC-RAS 7.0.1 June 2026` version is also accepted after native temporary-file
+> schema and write/readback qualification; its Linux solve after mutation
+> remains untested. All other HEC-RAS versions and workflows are untested. They are not general land-cover or geometry-authoring APIs.
 
 The methods require `acknowledge_unsupported=True`, validate the exact
 temporary-result role and schema, retain a unique full-file backup, emit a

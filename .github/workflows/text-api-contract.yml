@@ -39,6 +39,7 @@ jobs:
           tests/test_mannings_region_recovery.py
           tests/test_hdf_reference_flow_provenance.py
           tests/test_hdf_steady_results.py
+          tests/test_hdf_mesh_face_hydraulic_properties.py
           tests/test_rasunsteady_disable_meteorology.py
           tests/test_rasunsteady_constant_precipitation.py
           tests/test_rasunsteady_inline_precision.py
