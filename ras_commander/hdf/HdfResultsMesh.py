@@ -3042,7 +3042,9 @@ class HdfResultsMesh:
             method: Rasterization method. ``nearest`` uses a precomputed cell
                 center nearest-neighbor lookup. ``linear`` and ``cubic`` use
                 SciPy interpolation evaluated in bounded blocks. The raster,
-                mesh mask, and nearest-cell indices remain in memory.
+                mesh mask, and nearest-cell indices remain in memory. Linear
+                and cubic batches reuse one triangulation within this call;
+                each timestamp retains its own values and cubic gradients.
             nodata: GeoTIFF nodata value.
 
         Returns:
@@ -3220,6 +3222,7 @@ class HdfResultsMesh:
                 else None
             )
 
+            triangulation = None
             for original_value, target_time in zip(timestamp_values, target_times):
                 exact_matches = np.flatnonzero(hdf_times == target_time)
                 if len(exact_matches):
@@ -3252,6 +3255,10 @@ class HdfResultsMesh:
                 if method == "nearest":
                     grid_values = values[nearest_indices].reshape(rows, cols)
                 else:
+                    if len(timestamp_values) > 1 and triangulation is None:
+                        from scipy.spatial import Delaunay
+
+                        triangulation = Delaunay(points)
                     grid_values = _interpolate_to_grid(
                         points=points,
                         values=values.astype(np.float64),
@@ -3259,6 +3266,7 @@ class HdfResultsMesh:
                         grid_y=grid_y,
                         method=method,
                         fill_value=nodata,
+                        triangulation=triangulation,
                     )
 
                 grid_values = np.where(mesh_mask, grid_values, nodata).astype(np.float32)

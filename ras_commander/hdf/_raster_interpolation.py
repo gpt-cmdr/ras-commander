@@ -17,12 +17,16 @@ def _grid_query_blocks(grid_x, grid_y):
         )
 
 
-def _interpolate_to_grid(points, values, grid_x, grid_y, method, fill_value):
+def _interpolate_to_grid(
+    points, values, grid_x, grid_y, method, fill_value, *, triangulation=None,
+):
     """Build one SciPy interpolator and fill a float32 raster in blocks.
 
     The output remains an in-memory array. Query coordinates and interpolation
     temporaries are limited to ``_QUERY_BLOCK_PIXELS`` pixels per evaluation;
-    the triangulation or search tree still scales with the input points.
+    the triangulation or search tree still scales with the input points. A
+    caller may supply a triangulation for exactly these points; values and
+    value-dependent cubic gradients are rebuilt on every call.
     """
     from scipy.interpolate import (
         CloughTocher2DInterpolator,
@@ -30,12 +34,13 @@ def _interpolate_to_grid(points, values, grid_x, grid_y, method, fill_value):
         NearestNDInterpolator,
     )
 
+    geometry = triangulation if triangulation is not None else points
     if method == "nearest":
         interpolator = NearestNDInterpolator(points, values)
     elif method == "linear":
-        interpolator = LinearNDInterpolator(points, values, fill_value=fill_value)
+        interpolator = LinearNDInterpolator(geometry, values, fill_value=fill_value)
     elif method == "cubic":
-        interpolator = CloughTocher2DInterpolator(points, values, fill_value=fill_value)
+        interpolator = CloughTocher2DInterpolator(geometry, values, fill_value=fill_value)
     else:
         raise ValueError(f"Unknown interpolation method {method!r} for 2 dimensional data")
 

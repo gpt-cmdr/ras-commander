@@ -156,7 +156,7 @@ def test_real_exports_equal_whole_grid_reference(tmp_path, monkeypatch, method, 
             source, [label], folder, mesh_name=mesh, resolution=resolution, method=method,
         )[str(label)]
 
-    def whole_grid(points, values, grid_x, grid_y, method, fill_value):
+    def whole_grid(points, values, grid_x, grid_y, method, fill_value, **kwargs):
         result = scipy_interpolate.griddata(
             points, values, np.meshgrid(grid_x, grid_y), method=method, fill_value=fill_value,
         ).astype(np.float32)
