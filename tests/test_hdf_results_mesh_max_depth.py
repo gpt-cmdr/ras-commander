@@ -487,20 +487,14 @@ def test_export_max_depth_raster_filters_values_and_coordinates_together(
     )
 
     captured = {}
-    original_griddata = scipy.interpolate.griddata
+    original_interpolator = scipy.interpolate.LinearNDInterpolator
 
-    def recording_griddata(*, points, values, xi, method, fill_value):
+    def recording_interpolator(points, values, **kwargs):
         captured["points"] = points.copy()
         captured["values"] = values.copy()
-        return original_griddata(
-            points=points,
-            values=values,
-            xi=xi,
-            method=method,
-            fill_value=fill_value,
-        )
+        return original_interpolator(points, values, **kwargs)
 
-    monkeypatch.setattr(scipy.interpolate, "griddata", recording_griddata)
+    monkeypatch.setattr(scipy.interpolate, "LinearNDInterpolator", recording_interpolator)
     output_path = tmp_path / "filtered.tif"
     hdf_path = tmp_path / "unused.p01.hdf"
     hdf_path.touch()
