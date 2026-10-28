@@ -12,14 +12,13 @@ This module now has three layers:
 
 from __future__ import annotations
 
-import io
 import json
 import re
 from datetime import date, datetime, timezone
 from itertools import combinations
 from pathlib import Path
 from typing import Any, Callable, Dict, Iterable, Mapping, Optional, Sequence, Union
-from urllib.parse import urlencode
+from urllib.parse import urlencode, urljoin, urlsplit
 from urllib.request import urlopen
 
 import numpy as np
@@ -350,7 +349,7 @@ class UsgsGaugeStudy:
 
     SCHEMA_VERSION = "1.0"
     DEFAULT_PARAMETERS = ("flow", "stage")
-    PEAK_SERVICE_URL = "https://nwis.waterdata.usgs.gov/nwis/peak"
+    PEAK_SERVICE_URL = "https://api.waterdata.usgs.gov/ogcapi/v1/collections/peaks/items"
     DATASET_UNITS = {
         "continuous_flow": "cfs",
         "daily_flow": "cfs",
@@ -748,7 +747,12 @@ class UsgsGaugeStudy:
         urlopen_func: Callable[..., Any] = urlopen
     ) -> pd.DataFrame:
         """
-        Retrieve annual/event peak-flow observations from the USGS peak service.
+        Retrieve annual peak-flow observations from the modern USGS peaks API.
+
+        Dates retain their event calendar date without inventing a timezone.
+        Records with incomplete dates or missing discharge are omitted with a
+        warning. Stage maxima are separate events and are not joined as gage
+        heights for discharge peaks. Other native peak metadata are retained.
 
         Parameters
         ----------
@@ -765,55 +769,54 @@ class UsgsGaugeStudy:
             Standardized peak-flow observations with ``datetime`` and ``value``
             columns plus any available peak-specific metadata columns.
         """
+        from ._waterdata_adapter import _location, _wait
+
+        site, location = _location(site_id)
         query = urlencode({
-            "site_no": site_id,
-            "agency_cd": "USGS",
-            "format": "rdb",
+            "monitoring_location_id": location,
+            "parameter_code": "00060",
+            "f": "json",
+            "limit": 1000,
         })
         url = f"{UsgsGaugeStudy.PEAK_SERVICE_URL}?{query}"
+        records, visited = [], set()
+        while url:
+            target = urlsplit(url)
+            if (target.scheme != "https" or target.netloc != "api.waterdata.usgs.gov"
+                    or target.path != urlsplit(UsgsGaugeStudy.PEAK_SERVICE_URL).path):
+                raise ValueError("Peak-flow pagination left the official peaks collection")
+            if url in visited:
+                raise ValueError("Peak-flow pagination repeated a page")
+            visited.add(url)
+            _wait()
+            with urlopen_func(url, timeout=60) as response:
+                page = json.loads(response.read().decode("utf-8"))
+            if page.get("type") != "FeatureCollection" or not isinstance(page.get("features"), list):
+                raise ValueError("Peak-flow response must be a GeoJSON FeatureCollection")
+            records.extend(feature["properties"] for feature in page["features"])
+            following = [link["href"] for link in page.get("links", []) if link.get("rel") == "next"]
+            if len(following) > 1:
+                raise ValueError("Peak-flow response has ambiguous pagination")
+            url = urljoin(url, following[0]) if following else None
 
-        with urlopen_func(url) as response:
-            text = response.read().decode("utf-8", errors="replace")
-
-        data_lines = [
-            line for line in text.splitlines()
-            if line and not line.startswith("#")
-        ]
-        if len(data_lines) < 3:
+        if not records:
             return pd.DataFrame(columns=["datetime", "value"])
-
-        # RDB responses include a field-width descriptor row after the header.
-        parsed = pd.read_csv(
-            io.StringIO("\n".join([data_lines[0]] + data_lines[2:])),
-            sep="\t",
-            dtype=str,
-        )
-
-        if parsed.empty:
-            return pd.DataFrame(columns=["datetime", "value"])
-
-        date_column = next(
-            (column for column in ("peak_dt", "peak_dt_va", "peak_tm") if column in parsed.columns),
-            None,
-        )
-        if date_column is None:
-            raise ValueError("Peak-flow response did not include a peak date column.")
-
-        value_column = next(
-            (column for column in ("peak_va", "peak_flow", "peak_discharge") if column in parsed.columns),
-            None,
-        )
-        if value_column is None:
-            raise ValueError("Peak-flow response did not include a peak discharge column.")
-
+        parsed = pd.DataFrame(records)
+        required = {"monitoring_location_id", "parameter_code", "unit_of_measure", "value", "year", "month", "day"}
+        if not required.issubset(parsed.columns):
+            raise ValueError("Peak-flow response is missing required fields")
+        if (not parsed["monitoring_location_id"].eq(location).all()
+                or not parsed["parameter_code"].eq("00060").all()
+                or not parsed["unit_of_measure"].isin(["ft^3/s", "ft3/s", "cfs", "ft³/s"]).all()):
+            raise ValueError("Peak-flow response contains unexpected locations, parameters or units")
         result = parsed.copy()
-        result["datetime"] = pd.to_datetime(result[date_column], errors="coerce")
-        result["value"] = pd.to_numeric(result[value_column], errors="coerce")
-
-        if "gage_ht" in result.columns:
-            result["gage_height_ft"] = pd.to_numeric(result["gage_ht"], errors="coerce")
-        elif "gage_ht_va" in result.columns:
-            result["gage_height_ft"] = pd.to_numeric(result["gage_ht_va"], errors="coerce")
+        # Annual peaks can have incomplete dates. Never infer a day or combine
+        # the discharge peak with a stage maximum from a different event.
+        result["datetime"] = pd.to_datetime(parsed[["year", "month", "day"]], errors="coerce")
+        result["value"] = pd.to_numeric(parsed["value"], errors="coerce")
+        incomplete = result["datetime"].isna() | result["value"].isna()
+        if incomplete.any():
+            logger.warning("Omitting %d peak observations without a complete date/value", int(incomplete.sum()))
 
         result = result.dropna(subset=["datetime", "value"]).reset_index(drop=True)
 

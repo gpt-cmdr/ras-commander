@@ -599,3 +599,15 @@ Comprehensive workflow demonstrations:
 - [Boundary Conditions](boundary-conditions.md) - General boundary condition workflows
 - [HDF Data Extraction](hdf-data-extraction.md) - Extracting modeled results for validation
 - [Project File Validation](project-file-validation.md) - Validating external data files
+
+Annual peak discharge retrieval uses the modern USGS `peaks` collection.
+Peak dates remain calendar dates; the reader retains water year and qualifiers.
+Records without a complete date or discharge are omitted with a warning.
+Stage maxima can occur at different times and are not reported as the gage
+height of a discharge peak.
+
+UTC alignment was checked against decoded legacy observations for two public
+gauges over four bounded windows, including both 2024 daylight-saving
+transitions. All 52 observation times and values matched after both datasets
+were clipped to the same UTC bounds. Legacy hourly query bounds themselves
+differed; this observation does not establish universal endpoint equivalence.

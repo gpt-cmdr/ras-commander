@@ -222,3 +222,78 @@ def test_ic_rejects_records_outside_exact_tolerance(service):
     from ras_commander.usgs.initial_conditions import InitialConditions
     with pytest.raises(ValueError, match='No flow data'):
         InitialConditions.get_ic_value_from_usgs('01646500', '2024-01-01 01:15:00', tolerance_hours=0)
+
+
+def test_modern_peak_flow_pagination_dates_units_and_qualifiers(monkeypatch):
+    import io
+    import json
+    from ras_commander.usgs.study import UsgsGaugeStudy
+    from urllib.parse import parse_qs, urlsplit
+    waits, queries = [], []
+    monkeypatch.setattr(adapter, "_wait", lambda: waits.append(1))
+    def row(year, month, day, value):
+        return {"type": "Feature", "properties": {
+            "monitoring_location_id": "USGS-01646500", "parameter_code": "00060",
+            "unit_of_measure": "ft^3/s", "year": year, "month": month, "day": day,
+            "value": value, "water_year": year, "qualifier": ["e"],
+        }}
+    pages = [dict(type="FeatureCollection", features=[row(2023, 4, 5, 100)], links=[
+        dict(rel="next", href="?f=json&offset=1")]),
+        dict(type="FeatureCollection", features=[row(2024, 4, 5, 200), row(2024, None, None, 300)], links=[])]
+    def fetch(url, timeout):
+        assert timeout == 60
+        queries.append(url)
+        return io.BytesIO(json.dumps(pages[len(queries) - 1]).encode())
+    frame = UsgsGaugeStudy.retrieve_peak_flow_data("01646500", "2023-01-01", "2024-12-31", fetch)
+    assert len(waits) == 2
+    assert parse_qs(urlsplit(queries[0]).query)["parameter_code"] == ["00060"]
+    assert frame["value"].tolist() == [100, 200]
+    assert frame["datetime"].dt.strftime("%Y-%m-%d").tolist() == ["2023-04-05", "2024-04-05"]
+    assert frame["qualifier"].tolist() == [["e"], ["e"]]
+    assert "gage_height_ft" not in frame
+    assert frame.attrs["units"] == "cfs"
+
+
+@pytest.mark.parametrize("change", [dict(unit_of_measure="m^3/s"), dict(parameter_code="00065"),
+    dict(monitoring_location_id="USGS-00000000")])
+def test_peak_flow_rejects_unexpected_units_parameter_or_site(monkeypatch, change):
+    import io, json
+    from ras_commander.usgs.study import UsgsGaugeStudy
+    monkeypatch.setattr(adapter, "_wait", lambda: None)
+    record = dict(monitoring_location_id="USGS-01646500", parameter_code="00060",
+        unit_of_measure="ft^3/s", year=2024, month=1, day=1, value=100)
+    record.update(change)
+    page = dict(type="FeatureCollection", features=[dict(properties=record)])
+    with pytest.raises(ValueError, match="unexpected"):
+        UsgsGaugeStudy.retrieve_peak_flow_data("01646500", urlopen_func=lambda *a, **kw: io.BytesIO(json.dumps(page).encode()))
+
+
+def test_peak_flow_rejects_external_pagination_before_fetch(monkeypatch):
+    import io, json
+    from ras_commander.usgs.study import UsgsGaugeStudy
+    monkeypatch.setattr(adapter, "_wait", lambda: None)
+    page = dict(type="FeatureCollection", features=[], links=[dict(rel="next", href="https://example.org/data")])
+    calls = []
+    def fetch(*args, **kwargs):
+        calls.append(1)
+        return io.BytesIO(json.dumps(page).encode())
+    with pytest.raises(ValueError, match="official peaks collection"):
+        UsgsGaugeStudy.retrieve_peak_flow_data("01646500", urlopen_func=fetch)
+    assert len(calls) == 1
+
+
+def test_recorded_usgs_observations_align_in_utc_across_dst():
+    import json
+    from pathlib import Path
+    fixture = json.loads((Path(__file__).parent / "fixtures/usgs/waterdata_utc_comparison.json").read_text())
+    for case in fixture["cases"]:
+        assert case["unmatched"] == case["different"] == 0
+        rows = pd.DataFrame(case["rows"])
+        rows["datetime"] = rows.pop("index")
+        assert rows["legacy"].equals(rows["modern"])
+        frame = pd.DataFrame({"time": rows["datetime"], "value": rows["modern"],
+            "monitoring_location_id": f"USGS-{case['site']}", "parameter_code": "00060",
+            "statistic_id": "00011", "unit_of_measure": "ft^3/s", "approval_status": "Approved"})
+        result = adapter._normalize(frame, case["site"], "00060", "00011")
+        assert result.index.equals(pd.DatetimeIndex(pd.to_datetime(rows["datetime"], utc=True), name="datetime"))
+        assert result[f"{case['site']}_00060"].tolist() == rows["legacy"].tolist()
