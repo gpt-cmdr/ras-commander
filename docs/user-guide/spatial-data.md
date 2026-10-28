@@ -746,6 +746,21 @@ apply it. The calling process and unrelated helpers retain their settings;
 not a repair of vendor code or a guarantee for every model/runtime. Expect
 lower native rendering throughput and validate the exported rasters.
 
+On the retained public Davis 7.0.1 result, an eight-CPU inherited-affinity
+control failed in four of six aggregate exports. A one-CPU helper limit
+completed 12/12 aggregate and 12/12 independent Depth/WSE exports. Every
+successful band had 20,560 valid pixels and matched the retained successful
+reference's values, masks, grid and EPSG:2871 CRS. The result HDF and `.rasmap`
+were restored byte for byte, and caller affinity was unchanged. These bounded
+Windows observations qualify that fixture/runtime; they do not establish a
+universal repair or qualify Wine. The native vendor race remains separate from
+the supported opt-in mitigation.
+
+`scripts/qualification/qualify_native_pipe_maps.py` creates a disposable copy
+of a complete computed project and repeats both routes while recording runtime
+identity and restoration. It does not run a solver. Stage every dependency
+before using the harness; retain failed exports as failures.
+
 #### Available Map Types
 
 | Parameter | Description | Default |

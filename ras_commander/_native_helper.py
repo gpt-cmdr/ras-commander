@@ -466,7 +466,7 @@ def _apply_gdal_performance_env(
     gdal_cachemax_mb: Optional[int],
     native_cpu_limit: Optional[int] = None,
 ) -> None:
-    """Apply scoped GDAL settings to a child-process environment."""
+    """Apply scoped GDAL and native CPU settings to a child environment."""
     if native_cpu_limit is not None and (
         isinstance(native_cpu_limit, bool) or not isinstance(native_cpu_limit, int)
         or not 1 <= native_cpu_limit <= 64
