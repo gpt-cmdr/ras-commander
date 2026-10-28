@@ -127,7 +127,9 @@ from .HdfBase import HdfBase
 from .HdfMesh import HdfMesh
 from .HdfResultView import HdfResultView, Selection
 from .HdfUtils import HdfUtils
-from ._raster_interpolation import _interpolate_to_grid, _nearest_grid_indices
+from ._raster_interpolation import (
+    _build_interpolator, _nearest_grid_indices, _write_interpolated_raster,
+)
 
 gpd = optional_module("geopandas", "Returning GeoDataFrame results from HdfResultsMesh")
 xr = optional_module("xarray", "Returning xarray results from HdfResultsMesh")
@@ -2908,8 +2910,9 @@ class HdfResultsMesh:
 
         Reads cell centers and max depth from the HDF file, interpolates onto
         a regular grid using a SciPy interpolator evaluated in bounded blocks,
-        and writes a COG with LZW compression and overviews. The output raster
-        remains in memory; interpolation query arrays are bounded by block size.
+        and writes a COG in windows with LZW compression and overviews. Output
+        values and interpolation queries are bounded by the window size; the
+        input mesh and GDAL write buffers still consume memory.
 
         Args:
             hdf_path (Path): Path to the HDF file.
@@ -2965,13 +2968,8 @@ class HdfResultsMesh:
         rows = max(2, int(np.ceil((y_max - y_min) / resolution_m)) + 1)
         grid_x = np.linspace(x_min, x_max, cols)
         grid_y = np.linspace(y_max, y_min, rows)
-        grid_vals = _interpolate_to_grid(
-            points=xy,
-            values=values.astype(np.float64),
-            grid_x=grid_x,
-            grid_y=grid_y,
-            method=method,
-            fill_value=nodata,
+        interpolator = _build_interpolator(
+            xy, values.astype(np.float64), method, nodata,
         )
         transform = from_bounds(x_min, y_min, x_max, y_max, cols, rows)
 
@@ -2989,7 +2987,7 @@ class HdfResultsMesh:
                 compress="lzw", tiled=True, blockxsize=256, blockysize=256,
                 BIGTIFF="IF_SAFER",
             ) as dst:
-                dst.write(grid_vals, 1)
+                _write_interpolated_raster(dst, grid_x, grid_y, interpolator, nodata)
                 dst.build_overviews([2, 4, 8, 16], rasterio.enums.Resampling.average)
                 dst.update_tags(ns="rio_overview", resampling="average")
         except Exception:
@@ -3041,8 +3039,8 @@ class HdfResultsMesh:
                 ``resolution`` is omitted.
             method: Rasterization method. ``nearest`` uses a precomputed cell
                 center nearest-neighbor lookup. ``linear`` and ``cubic`` use
-                SciPy interpolation evaluated in bounded blocks. The raster,
-                mesh mask, and nearest-cell indices remain in memory. Linear
+                SciPy interpolation evaluated and written in bounded windows.
+                The mesh mask and nearest-cell indices remain in memory. Linear
                 and cubic batches reuse one triangulation within this call;
                 each timestamp retains its own values and cubic gradients.
             nodata: GeoTIFF nodata value.
@@ -3252,24 +3250,17 @@ class HdfResultsMesh:
                         f"({len(cell_points)}) for mesh '{mesh_name}'"
                     )
 
-                if method == "nearest":
-                    grid_values = values[nearest_indices].reshape(rows, cols)
-                else:
+                interpolator = None
+                if method != "nearest":
                     if len(timestamp_values) > 1 and triangulation is None:
                         from scipy.spatial import Delaunay
 
                         triangulation = Delaunay(points)
-                    grid_values = _interpolate_to_grid(
-                        points=points,
-                        values=values.astype(np.float64),
-                        grid_x=grid_x,
-                        grid_y=grid_y,
-                        method=method,
-                        fill_value=nodata,
+                    interpolator = _build_interpolator(
+                        points, values.astype(np.float64), method, nodata,
                         triangulation=triangulation,
                     )
 
-                grid_values = np.where(mesh_mask, grid_values, nodata).astype(np.float32)
                 safe_label = _safe_timestamp_label(original_value, target_time)
                 raster_path = output_dir / f"Depth ({safe_label}).hdf.tif"
 
@@ -3287,7 +3278,12 @@ class HdfResultsMesh:
                     compress="lzw",
                     BIGTIFF="IF_SAFER",
                 ) as dst:
-                    dst.write(grid_values, 1)
+                    _write_interpolated_raster(
+                        dst, grid_x, grid_y, interpolator, nodata,
+                        mesh_mask=mesh_mask,
+                        nearest_values=values if method == "nearest" else None,
+                        nearest_indices=nearest_indices,
+                    )
                     dst.update_tags(
                         mesh_name=mesh_name,
                         timestamp=target_time.strftime("%d%b%Y %H:%M:%S"),

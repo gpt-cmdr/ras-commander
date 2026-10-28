@@ -634,7 +634,7 @@ def test_export_max_depth_raster_removes_owned_temp_after_write_failure(
             writer_events.append("exited")
             return False
 
-        def write(self, values, band):
+        def write(self, values, band, **kwargs):
             writer_events.append("write")
             assert values.shape == (2, 2)
             assert band == 1
