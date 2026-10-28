@@ -9,6 +9,18 @@ alone does not identify a development checkout.
 
 ### Unreleased
 
+**Columnar PMTiles properties**
+
+`fast_hdf.export_mesh_pmtiles()` builds its property columns as NumPy arrays
+(`mesh_name` as a categorical, result columns gathered by cell ID, masked where
+a mesh lacks the column) and `fast_hdf.export_pmtiles()` passes typed arrays,
+`(values, valid)` pairs and `{"codes", "categories"}` columns to an engine
+that reads them without a Python object per value. Support is detected by
+capability; older engines receive the equivalent lists, and the archives are
+byte-identical either way. On Bald Eagle p07 (87,039 cells, 15 columns,
+z10-14) Python preparation drops from 2.9 s to 0.4 s and peak working set from
+400 MiB to 352 MiB. See [HDF API](../api/hdf.md).
+
 **Caller-supplied cell WSEL profiles for native sloping mapping**
 
 `RasFim.map_sloping_profiles()` and `prepare_sloping_model()` now accept

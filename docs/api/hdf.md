@@ -1018,6 +1018,18 @@ arrays passed to `export_mesh_pmtiles(properties=...)` are grouped by mesh and
 indexed by original cell ID. Time-series ghost columns retain their existing
 behavior; geometry extraction does not infer a different physical-cell count.
 
+Property columns stay NumPy arrays when the installed engine reads them
+natively: typed arrays (`float64/32`, signed and unsigned integers, `bool`),
+`(values, valid)` pairs (`False` meaning null) and
+`{"codes": int array, "categories": [str, ...]}` columns (`-1` null) for
+strings such as `mesh_name`. `export_pmtiles(layers=...)` accepts the same forms.
+Support is detected by capability (ras-commander-fast-hdf with columnar
+`write_pmtiles` properties); older engines receive the equivalent per-value
+lists. Both give byte-identical archives. Lists and object arrays always keep
+the list form, so mixed scalar columns are unchanged. On Bald Eagle p07
+(87,039 cells, 15 columns, z10-14) the Python preparation drops from about
+2.9 s to 0.4 s and peak working set by about 50 MiB.
+
 Freestiler does not drop features by a configured density or area policy.
 The native export path repairs quantized rings on the integer tile grid.
 Very small cells can become one-pixel centroid squares at low zoom to preserve
