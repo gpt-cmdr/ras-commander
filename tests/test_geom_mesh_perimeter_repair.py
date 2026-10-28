@@ -74,7 +74,10 @@ def repair_project(tmp_path, monkeypatch):
         module._patch_text_seeds(
             path, np.array([[25.0, 25.0], [75.0, 75.0]]), mesh_name="MainArea"
         )
-        return SimpleNamespace(status="success", cell_count=2, error_message="")
+        return module.MeshResult(
+            mesh_name="MainArea", status="complete", cell_count=2,
+            operation="computation_points",
+        )
 
     def preprocessor(plan_number, **kwargs):
         calls.append(("preprocess", kwargs))
