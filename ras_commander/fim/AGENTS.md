@@ -27,6 +27,14 @@ Parent `ras_commander/AGENTS.md` and root `AGENTS.md` still apply.
 
 ## Invariants
 
+- Horizontal/sloping polygon coverage requires `global-terrain-lattice/1`.
+  Normalize AOI coordinates against the full terrain transform once; evaluate
+  scanlines and pixel centers globally, with lower-y and left endpoints
+  included, upper-y and right excluded (northward y). No crop-origin arithmetic
+  or geometric epsilon enters intersections. Keep cell ownership/interpolation
+  unchanged; older engines must refuse polygon requests rather than silently
+  using legacy mask ties. The explicit NumPy reference follows this rule.
+
 - `map_sloping_profiles` is a separate experimental native plain-sloping method,
   `rasmapper-plain-sloping/1`. It reads complete HDF topology and virtual cell WSE
   through the Rust HDF backend; Rust reconstructs hydraulic face connections,
@@ -60,6 +68,26 @@ Parent `ras_commander/AGENTS.md` and root `AGENTS.md` still apply.
   full-extent Linux eBFE or unweighted face-mode eBFE,
   other native versions, 1D,
   storage areas outside the physical 2D footprint, or all option combinations.
+- `terrain_hdf` (sloping, horizontal, whole simulation) maps on the original
+  priority-1 source TIFF with the engine's `terrain_scope`
+  (`top-priority-source-footprint/1`). Priority comes only from source
+  `Priority` attributes (0 highest) or, when none exist, the terrain's own VRT
+  order; both must agree when present. Refuse partial, duplicate or conflicting
+  declarations, modified terrains, non-256 tiling and storage-area plans. A
+  `canonicalize_terrain_crs` copy is accepted only through its receipt and a
+  fresh pixel-hash match. Engine `unsupported:` refusals surface as
+  `FimUnsupportedError` (`_engine.EngineRefusal`) so callers fall back to an
+  exported terrain; never widen the footprint or mosaic lower-priority sources.
+- `map_whole_simulation` stages every stored output time's raw cell WSE, cell
+  minimum elevations and float64 hours since the plan's simulation start; the
+  engine owns the wet gate and accumulation. Arrival time and percent
+  inundated are the qualified defaults; duration and irregular intervals need
+  `allow_unqualified`. Storage-area plans are refused.
+- Sloping `velocity=True` stages HDF face normals with face polyline lengths and
+  per-profile face velocities (Max: `Maximum Face Velocity`). Plain sloping
+  with HDF profiles only. Native velocity validity masks can differ from the
+  rendered depth mask on a small fraction of edge pixels (bridges p05 Max:
+  826 native-only and 1,196 extra of 973,532); values on common pixels match.
 - `_sloping_oracle.py` is a development reference reader only. Production mapping
   must not import it or depend on installed HEC-RAS DLLs. Never commit decompiled
   vendor source, captured project geometry, or generated raster evidence.

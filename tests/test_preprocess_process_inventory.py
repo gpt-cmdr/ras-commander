@@ -1,6 +1,7 @@
 """Process inventory used to verify native preprocessing ownership."""
 
 import sys
+from types import SimpleNamespace
 
 import pytest
 
@@ -30,7 +31,21 @@ class FakeProcess:
 
 def _inventory(monkeypatch, processes, os_name="nt"):
     monkeypatch.setattr(psutil, "process_iter", lambda attrs=None: iter(processes))
-    monkeypatch.setattr(rp.os, "name", os_name)
+    # Scope the platform double to this module; changing os.name globally
+    # also changes pathlib inside pytest while a failed test is reported.
+    monkeypatch.setattr(rp, "os", SimpleNamespace(name=os_name))
+    from ras_commander import _process_inspection as inspection
+
+    monkeypatch.setattr(inspection, "_WINDOWS_PROCESS_NAMES", os_name == "nt")
+    by_pid = {process.info["pid"]: process for process in processes}
+    monkeypatch.setattr(psutil, "Process", lambda pid: SimpleNamespace(
+        pid=pid, create_time=by_pid[pid].create_time,
+    ))
+
+    def unavailable_name(_pid):
+        raise ValueError("No readable name in this test's process snapshot")
+
+    monkeypatch.setattr(inspection, "_windows_process_snapshot_name", unavailable_name)
     return RasPreprocess._preprocess_process_inventory()
 
 

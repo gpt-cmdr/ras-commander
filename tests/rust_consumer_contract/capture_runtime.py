@@ -9,6 +9,15 @@ from pathlib import Path
 from expected import EXPECTED
 
 
+def _member_signature(member):
+    if not callable(member):
+        return '<attribute>'
+    try:
+        return str(inspect.signature(member))
+    except (TypeError, ValueError):
+        return '<unavailable>'
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--source-commit', required=True)
@@ -19,15 +28,19 @@ def main():
     entries = {}
     for name in dir(pkg):
         obj = getattr(pkg, name)
-        if name.startswith('_') or isinstance(obj, type(pkg)) or not callable(obj):
+        # Private names are skipped except listed test hooks (_panic_for_test).
+        if (name.startswith('_') and name not in EXPECTED) or isinstance(obj, type(pkg)) or not callable(obj):
             continue
         if isinstance(obj, type) and issubclass(obj, BaseException):
             continue
         entry = {'signature': str(inspect.signature(obj)),
                  'kind': 'class' if isinstance(obj, type) else 'function'}
         if isinstance(obj, type):
-            entry['methods'] = {m: str(inspect.signature(getattr(obj, m)))
-                                for m in vars(obj) if not m.startswith('_') and callable(getattr(obj, m))}
+            # Every member the source registers: methods (including private test
+            # hooks and __enter__/__exit__) and getters, as the source inventory
+            # lists them. Only the constructor and type metadata are excluded.
+            entry['methods'] = {m: _member_signature(getattr(obj, m))
+                                for m in vars(obj) if m not in {'__new__', '__doc__', '__module__'}}
         entries[name] = entry
     if set(entries) != set(EXPECTED):
         raise SystemExit(f'Full-feature ABI mismatch: missing={sorted(set(EXPECTED)-set(entries))}, extra={sorted(set(entries)-set(EXPECTED))}')

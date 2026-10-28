@@ -89,6 +89,7 @@ MANIFEST_COLUMNS = [
     "depth_finite_pixels",
     "flooded_pixels",
     "error",
+    "velocity_tif",
 ]
 
 PathLike = Union[str, os.PathLike]
@@ -330,6 +331,8 @@ class RasFim:
         max_inflight_profiles: int = 1,
         write_floodplain: bool = False,
         template_raster: Optional[PathLike] = None,
+        terrain_hdf: Optional[PathLike] = None,
+        velocity: bool = False,
     ) -> pd.DataFrame:
         """Map 2D HDF WSE with the experimental Rust sloping engine.
 
@@ -371,7 +374,12 @@ class RasFim:
 
         ``terrain_path`` must be a same-CRS float32 square-pixel GeoTIFF with
         declared nodata. ``bbox`` or ``polygon`` constrains output pixels;
-        connectivity uses the complete mesh. Polygon constraints accept the
+        polygon masks require the engine's ``global-terrain-lattice/1``
+        capability (0.10.1+). AOI edge inclusion uses global source pixel
+        coordinates with lower-y/left endpoints included, upper-y/right
+        excluded, and northward y. No geometric epsilon is applied. This
+        intentionally replaces crop-dependent legacy boundary ties.
+        Hydraulic connectivity uses the complete mesh. Polygon constraints accept the
         same geometry/frame/file forms as :meth:`resolve_aoi`.
 
         Outputs require a new or empty folder. The returned
@@ -427,13 +435,35 @@ class RasFim:
                 lattice and contain the processing window. Values are written
                 once, with nodata padding and no resampling. Offsets in the
                 returned manifest then refer to this template grid.
+            terrain_hdf: Optional registered terrain HDF. When given,
+                ``terrain_path`` must be its unmodified priority-1 source TIFF
+                (:meth:`top_priority_terrain_source`), mapped directly without
+                a RAS Mapper terrain export. The level-0 mask is staged as the
+                request's ``terrain_scope``. Pixels outside that source's
+                footprint are accepted only in cells that fail the wet gate;
+                otherwise the engine refuses and FimUnsupportedError is raised
+                so callers can map on an exported terrain. Plain sloping only;
+                terrains with modifications and plans with storage areas are
+                refused. Requires engine ``top-priority-source-footprint/1``.
+            velocity: Also render velocity magnitude (``rasmapper-sloping-velocity/0``)
+                and add ``velocity_tif`` (``12_<profile>_velocity.tif``,
+                float32, NaN nodata, model velocity units) to each row. Max
+                uses ``Maximum Face Velocity`` with Maximum Water Surface; a
+                timestep index uses ``Face Velocity`` at that output time.
+                Face normals use face polyline lengths. Drawn where rendered
+                depth > 0; native velocity masks can differ from that on a
+                small fraction of edge pixels, while values on common pixels
+                match native Max maps on the qualified models (see
+                ``attrs["velocity"]``). Plain sloping with HDF profiles only; refuses
+                ``wsel_profiles``, ``template_raster`` and storage-area plans.
 
         Returns:
             DataFrame: ``fim_product_manifest`` rows with timing evidence in
             ``attrs["performance"]`` and the JSON manifest. ``mapping_scope``
             and ``model_scope`` attributes identify the included model elements.
             Supplied vectors add ``attrs["profile_source"]`` with canonical
-            per-mesh/profile hashes for rendered requests.
+            per-mesh/profile hashes for rendered requests. ``terrain_hdf`` adds
+            ``attrs["terrain_scope"]``; ``velocity`` adds ``attrs["velocity"]``.
 
         Raises:
             FimUnsupportedError: Unsupported model, geometry, AOI or terrain.
@@ -456,7 +486,129 @@ class RasFim:
             aoi_crs=aoi_crs, engine_path=engine_path, threads=threads, writer_threads=writer_threads,
             max_working_mib=max_working_mib, timeout=timeout, write_floodplain=write_floodplain,
             max_inflight_profiles=max_inflight_profiles,
-            template_raster=template_raster)
+            template_raster=template_raster, terrain_hdf=terrain_hdf,
+            velocity=velocity)
+
+    @staticmethod
+    @log_call
+    def top_priority_terrain_source(
+        terrain_hdf: PathLike, *, rasmap_path: Optional[PathLike] = None,
+    ) -> Dict[str, Any]:
+        """Identify the priority-1 source TIFF of a registered terrain HDF.
+
+        RAS Mapper writes stored maps per terrain source, on the source's own
+        grid; inside the highest-priority source's footprint the effective
+        terrain is that source's original TIFF. Priority is read from the
+        source groups' integer ``Priority`` attributes (0 highest) or, when no
+        source carries one, from the terrain's own VRT beside the HDF, which
+        lists sources highest priority first. Both must agree when present.
+
+        Args:
+            terrain_hdf: Registered terrain HDF.
+            rasmap_path: Optional rasmap; its terrain layer's elevation
+                modification layers are then also reported.
+
+        Returns:
+            dict: ``tif`` (Path of the priority-1 source TIFF), ``source_count``,
+            ``terrain_hdf``, ``modified`` (terrain modifications present),
+            ``source``, ``sources`` (file names in priority order),
+            ``priority_basis``, ``mask_dataset``, ``mask_shape``,
+            ``modifications`` and ``rasmap_checked``.
+
+        Raises:
+            FimUnsupportedError: Priority cannot be proven (missing, partial,
+                duplicate or conflicting declarations), the source TIFF or its
+                level-0 ``Mask`` is missing, or the rasmap does not register it.
+        """
+        from . import _terrain_scope
+
+        return _terrain_scope.top_priority_source(terrain_hdf, rasmap_path)
+
+    @staticmethod
+    @log_call
+    def map_whole_simulation(
+        hdf_path: PathLike, terrain_path: PathLike, output_folder: PathLike, *,
+        products: Sequence[str] = ("arrival_time", "percent_inundated"),
+        threshold: float,
+        allow_unqualified: bool = False,
+        terrain_hdf: Optional[PathLike] = None,
+        threads: int = 1, writer_threads: int = 1,
+        max_working_mib: int = 1024, timeout: Optional[float] = None,
+        engine_path: Optional[PathLike] = None,
+    ) -> pd.DataFrame:
+        """Map arrival time, percent time inundated and (opt-in) duration.
+
+        Uses the engine's ``native-whole-simulation-horizontal/1`` method:
+        every stored output time of the plan is rendered over the physical 2D
+        cells and accumulated per pixel. A pixel is wet at an output time when
+        its rendered depth is strictly greater than ``threshold`` and its cell
+        passes RAS Mapper's thresholded gate ``wse > cell minimum + threshold``
+        (float32). These are RAS Mapper's definitions:
+
+        - ``arrival_time``: first wet output time in **hours since the plan's
+          simulation start** (``Plan Information/Simulation Start Time``),
+          float32;
+        - ``percent_inundated``: ``100 * wet output times / all output times``;
+        - ``duration`` (needs ``allow_unqualified=True``): hours from arrival
+          to the first dry output time after the last wet one, or to the last
+          wet time when that dry time is the final output or there is none.
+
+        Never-wet pixels are NaN. Arrival time and percent inundated are
+        qualified against RAS Mapper output: pixel conformance with native
+        HEC-RAS 7.0.1 stored maps on Davis p02 and BaldEagleCrkMulti2D bridges
+        p05 at a 0.5 ft threshold. RAS Mapper produces the same products in
+        horizontal and sloping render modes on those models. Duration differs
+        on a few recession pixels by one output interval and is unqualified;
+        irregular output intervals are refused unless ``allow_unqualified``.
+
+        Scope: pure 2D plans. Plans with 1D elements or storage areas are
+        refused (use RAS Mapper for them).
+
+        Args:
+            hdf_path: Computed 2D plan-results HDF.
+            terrain_path: Same-CRS float32 GeoTIFF (a RAS Mapper terrain
+                export, or with ``terrain_hdf`` the priority-1 source TIFF).
+            output_folder: New or empty folder for ``<product>.tif`` and
+                ``fim_manifest.json``.
+            products: Any of ``arrival_time``, ``percent_inundated``,
+                ``duration``. Defaults to the two qualified products.
+            threshold: Wet depth threshold in model vertical units (RAS Mapper's
+                arrival depth; 0.5 is a half foot only in feet models).
+            allow_unqualified: Required for ``duration`` and irregular intervals.
+            terrain_hdf: Optional registered terrain HDF whose unmodified
+                priority-1 source TIFF is ``terrain_path``. Horizontal
+                rendering refuses any mapped pixel outside that source's
+                footprint (FimUnsupportedError); map on an export instead.
+            threads: Rust worker count, 1 through 64.
+            writer_threads: GeoTIFF compression workers, 1 through 64.
+            max_working_mib: Planned engine admission budget in MiB.
+            timeout: Engine lifetime in seconds, or None.
+            engine_path: Engine executable, otherwise environment/PATH.
+
+        Returns:
+            DataFrame: ``fim_whole_simulation_manifest`` rows (one per product)
+            with ``tif`` paths. ``attrs`` hold ``performance``,
+            ``time_reference``, ``model_scope``, ``unqualified`` case counts
+            and, with ``terrain_hdf``, ``terrain_scope``.
+
+        Raises:
+            FimUnsupportedError: Duration without ``allow_unqualified``, storage
+                areas, 1D elements, unprovable or modified terrain, engine
+                refusals, or an engine without the method.
+            FimEngineNotFoundError: The engine executable is unavailable.
+            FimEngineError: Engine failure, inconsistent output or changed input.
+            ValueError: Invalid products, threshold or resource options.
+            FileExistsError: The output directory is not empty.
+        """
+        _require_dependencies(triangulation=False)
+        from . import _whole_simulation
+
+        return _whole_simulation.map_whole_simulation(
+            hdf_path, terrain_path, output_folder, products=products,
+            threshold=threshold, allow_unqualified=allow_unqualified,
+            terrain_hdf=terrain_hdf, threads=threads, writer_threads=writer_threads,
+            max_working_mib=max_working_mib, timeout=timeout, engine_path=engine_path,
+        )
 
     @staticmethod
     @log_call
@@ -481,6 +633,7 @@ class RasFim:
         write_floodplain: bool = True,
         raise_on_failure: bool = True,
         hdf_path: Optional[PathLike] = None,
+        terrain_hdf: Optional[PathLike] = None,
     ) -> pd.DataFrame:
         """Map cell-constant horizontal WSE using a shared terrain-lattice grid.
 
@@ -529,6 +682,15 @@ class RasFim:
                 get_cells_from_plan_hdf retain this provenance automatically.
                 Standalone tables must contain only 2D cell polygons; without
                 model provenance the model's other elements cannot be inspected.
+            terrain_hdf: Optional registered terrain HDF. When given,
+                ``terrain_path`` must be its unmodified priority-1 source TIFF
+                (see :meth:`top_priority_terrain_source`); the level-0 mask is
+                staged as ``terrain_scope`` and no terrain export is needed.
+                Horizontal rendering has no cell minimum, so the engine refuses
+                any mapped pixel outside the source footprint; the refusal is
+                raised as FimUnsupportedError so callers can map on an
+                exported terrain instead. Requires the Rust backend and an
+                engine advertising ``top-priority-source-footprint/1``.
 
         Returns:
             DataFrame: ``fim_product_manifest`` rows. Offsets refer to the
@@ -587,6 +749,13 @@ class RasFim:
         engine = _engine.find_engine(engine_path) if backend == "rust" else None
         budget = _positive_int(max_working_mib, "max_working_mib")
         terrain = _require_path(terrain_path, "terrain_path")
+        scope_info = None
+        if terrain_hdf is not None:
+            if backend != "rust":
+                raise FimUnsupportedError("terrain_hdf requires the Rust backend")
+            from . import _terrain_scope
+
+            scope_info = _terrain_scope.resolve(terrain_hdf, terrain)
         constraint = _aoi.resolve_aoi(
             bbox=bbox,
             polygon=polygon,
@@ -595,6 +764,8 @@ class RasFim:
             default_crs=cells.crs,
         )
         watched = {"terrain": terrain}
+        if scope_info is not None:
+            watched["terrain_hdf"] = scope_info["terrain_hdf"]
         if isinstance(polygon, (str, os.PathLike)):
             watched["polygon"] = _require_path(polygon, "polygon")
         before = {key: _file_identity(path) for key, path in watched.items()}
@@ -623,15 +794,23 @@ class RasFim:
                 "planned_bytes": plan.planned_bytes,
             },
             "aoi": constraint.describe() if constraint else None,
+            "aoi_mask": "global-terrain-lattice/1" if constraint else None,
             "inputs": {
                 k: {"path": str(path), "size": before[k][0], "mtime_ns": before[k][1]}
                 for k, path in watched.items()
             },
             "status": "in_progress",
         }
+        if scope_info is not None:
+            from . import _terrain_scope
+
+            details["terrain_scope"] = _terrain_scope.describe(scope_info)
 
         def manifest():
-            return pd.DataFrame([rows[name] for name in names], columns=MANIFEST_COLUMNS)
+            frame = pd.DataFrame([rows[name] for name in names], columns=MANIFEST_COLUMNS)
+            if scope_info is not None:
+                frame.attrs["terrain_scope"] = details["terrain_scope"]
+            return frame
 
         RasFim._write_manifest(folder, manifest(), details)
         try:
@@ -661,6 +840,7 @@ class RasFim:
                     details,
                     folder,
                     timeout,
+                    scope_info,
                 )
                 if backend == "rust" and all(plan.shape)
                 else nullcontext(None)
@@ -707,7 +887,7 @@ class RasFim:
                             time.perf_counter() - write_started
                         )
                         del depth, wse, result
-                    except FimEngineError:
+                    except (FimEngineError, _engine.EngineRefusal):
                         raise
                     except Exception as exc:
                         for path in _products.product_paths(folder, name):

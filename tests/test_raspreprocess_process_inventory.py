@@ -147,3 +147,36 @@ def test_unknown_inventory_never_inspects_artifacts(tmp_path, monkeypatch):
         tmp_path / "fixture.x01", {"completepreprocess_seen": True},
         started_at=1000.0,
     ) is False
+
+
+@pytest.mark.parametrize("recovered_name", ["unrelated.exe", "RasProcess.exe"])
+def test_recovered_process_name_is_used_for_writer_detection(tmp_path, monkeypatch, recovered_name):
+    from ras_commander import _process_inspection as inspection
+
+    temporary = tmp_path / "fixture.p01.tmp.hdf"
+    process = SimpleNamespace(info={
+        "pid": 90, "name": None, "create_time": 1001.0,
+        "cmdline": ["RasProcess.exe", "CompletePreProcess", str(temporary)],
+    }, create_time=lambda: 1001.0, ppid=lambda: 100)
+    monkeypatch.setattr(psutil, "process_iter", lambda _attrs: iter([process]))
+    monkeypatch.setattr(inspection, "_WINDOWS_PROCESS_NAMES", True)
+    monkeypatch.setattr(inspection, "_windows_process_snapshot_name", lambda pid: recovered_name)
+    monkeypatch.setattr(psutil, "Process", lambda pid: SimpleNamespace(pid=pid, create_time=lambda: 1001.0))
+    expected = (90,) if recovered_name == "RasProcess.exe" else ()
+    assert RasPreprocess._active_complete_preprocess_writers(temporary, 1000.0) == expected
+
+
+@pytest.mark.parametrize("times", [(1002.0, 1002.0), (1001.0, 1002.0)])
+def test_recovered_process_name_rejects_reused_pid(tmp_path, monkeypatch, times):
+    from ras_commander import _process_inspection as inspection
+
+    process = SimpleNamespace(
+        info={"pid": 90, "name": None, "create_time": 1001.0},
+        ppid=lambda: 100,
+    )
+    monkeypatch.setattr(psutil, "process_iter", lambda _attrs: iter([process]))
+    monkeypatch.setattr(inspection, "_WINDOWS_PROCESS_NAMES", True)
+    observed_times = iter(times * 2)
+    monkeypatch.setattr(inspection, "_windows_process_snapshot_name", lambda pid: "unrelated.exe")
+    monkeypatch.setattr(psutil, "Process", lambda pid: SimpleNamespace(pid=pid, create_time=lambda: next(observed_times)))
+    assert _query_both(tmp_path) == ((-1,), ((), (-1,)))

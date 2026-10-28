@@ -15,7 +15,7 @@ import pandas as pd
 from . import _aoi, _engine, _horizontal, _products
 from ._horizontal_engine import _read_f32, _write_array, _write_geometry
 from ._sloping_inputs import write_binary_mesh_inputs
-from .errors import FimEngineError
+from .errors import FimEngineError, FimUnsupportedError
 
 
 def _validate_options(
@@ -95,7 +95,6 @@ def _stage_profiles(
 ):
     from .. import HdfResultsMesh
     from ..fast_hdf import backend_scope
-    from .errors import FimUnsupportedError
 
     staged_bytes = 0
     cached = {}
@@ -167,6 +166,8 @@ def map_profiles(
     timeout=None,
     write_floodplain=False,
     template_raster=None,
+    terrain_hdf=None,
+    velocity=False,
     _prepared=None,
 ):
     from .. import HdfMesh, HdfResultsMesh
@@ -204,6 +205,30 @@ def map_profiles(
         raise ValueError("timeout must be positive and finite, or None")
     hdf = Path(hdf_path).resolve(strict=True)
     terrain = Path(terrain_path).resolve(strict=True)
+    if not isinstance(velocity, bool):
+        raise ValueError("velocity must be a boolean")
+    scope_info = None
+    if (terrain_hdf is not None or velocity) and _prepared is not None:
+        raise FimUnsupportedError("prepared sloping models do not support terrain_hdf or velocity")
+    if velocity:
+        if render_mode != "sloping":
+            raise FimUnsupportedError(
+                "velocity is qualified for plain sloping (render_mode='sloping') only"
+            )
+        if wsel_profiles is not None:
+            raise FimUnsupportedError(
+                "velocity needs stored face velocities; caller-supplied WSEL profiles have none"
+            )
+        if template_raster is not None:
+            raise FimUnsupportedError("velocity products do not support template_raster delivery")
+    if terrain_hdf is not None:
+        if render_mode != "sloping":
+            raise FimUnsupportedError(
+                "terrain_hdf (top-priority source terrain) is qualified for plain sloping only"
+            )
+        from . import _terrain_scope
+
+        scope_info = _terrain_scope.resolve(terrain_hdf, terrain)
     supplied = None
     if wsel_profiles is not None:
         if _prepared is not None:
@@ -216,6 +241,11 @@ def map_profiles(
         from copy import deepcopy
 
         model_scope = deepcopy(_prepared._model_scope)
+    if (scope_info is not None or velocity) and model_scope.get("storage_areas"):
+        raise FimUnsupportedError(
+            "terrain_hdf and velocity are not qualified for plans with storage areas "
+            f"({model_scope['storage_areas']} found); use RAS Mapper for these plans"
+        )
     if supplied is not None:
         selected = supplied.selection
     elif _prepared is not None and _prepared._supplied:
@@ -235,7 +265,21 @@ def map_profiles(
     )
     if use_depth_weighted_faces and not method.get("depth_weighted_faces"):
         raise FimEngineError("Depth weighting requires an engine advertising depth_weighted_faces (0.8+)")
+    if scope_info is not None:
+        from . import _terrain_scope
+
+        _terrain_scope.require_engine(method, "sloping")
+    if velocity:
+        from . import _velocity
+
+        if method.get("velocity") != _velocity.METHOD_ID:
+            raise FimUnsupportedError(
+                f"engine sloping method lacks {_velocity.METHOD_ID}; install ras-commander-fast-map "
+                "with velocity support"
+            )
     watched = {"hdf": hdf, "terrain": terrain, "engine": engine}
+    if scope_info is not None:
+        watched["terrain_hdf"] = scope_info["terrain_hdf"]
     if postprocessing_hdf is not None:
         watched["postprocessing_hdf"] = Path(postprocessing_hdf).resolve(strict=True)
         if (watched["postprocessing_hdf"].parent / "corner_elevation_receipt.json").exists():
@@ -284,6 +328,8 @@ def map_profiles(
     # Windowing selects output pixels; the complete mesh remains available for
     # face connectivity and corner reconstruction across an AOI boundary.
     plan = _horizontal.plan_grid(cells, terrain, constraint, budget, native=True)
+    if plan.mask_geometry and method.get("aoi_mask") != "global-terrain-lattice/1":
+        raise FimEngineError("Polygon masking requires Fast-Map global-terrain-lattice/1 (0.10.1+)")
     layout = None
     buffer_bytes = 0
     if template_raster is not None and all(plan.shape):
@@ -292,8 +338,6 @@ def map_profiles(
         layout = _sloping_products.template_profile(template_raster, plan)
         buffer_bytes = layout["planned_buffer_bytes"]
         if plan.planned_bytes + buffer_bytes > budget * (1 << 20):
-            from .errors import FimUnsupportedError
-
             raise FimUnsupportedError(
                 "sloping template delivery exceeds planned array budget"
             )
@@ -326,12 +370,33 @@ def map_profiles(
         },
         source_profiles=selected,
         aoi=constraint.describe() if constraint else None,
+        aoi_mask="global-terrain-lattice/1" if constraint else None,
         inputs={
             k: {"path": str(p), "size": before[k][0], "mtime_ns": before[k][1]}
             for k, p in watched.items()
         },
         qualification="experimental native 7.0.1; plain five-model physical-2D corpus (bounded eBFE); enhanced combinations on Bald Eagle bridges Max and Davis timesteps",
     )
+    if scope_info is not None:
+        from . import _terrain_scope
+
+        details["terrain_scope"] = _terrain_scope.describe(scope_info)
+    if velocity:
+        from . import _velocity
+
+        details["velocity"] = {
+            "method_id": _velocity.METHOD_ID,
+            "max_source": "Maximum Face Velocity with Maximum Water Surface",
+            "timestep_source": "Face Velocity at the stored output time",
+            "face_lengths": "face polyline lengths",
+            "drawn": "where rendered depth > 0",
+            "qualification": (
+                "values match native HEC-RAS 7.0.1 Max velocity on common pixels (BaldEagleCrkMulti2D "
+                "bridges p05: 972,706 bit-identical; Davis p02: 3 of 22,041 within 3e-8); the native "
+                "validity mask can differ from depth > 0 on edge pixels (bridges p05: 826 native-only, "
+                "1,196 extra)"
+            ),
+        }
     supplied_source = (_prepared._info.get("profile_source") if _prepared is not None else None)
     if supplied is not None or supplied_source is not None:
         details["qualification"] = "Caller-supplied WSEL; aggregate/changed-terrain/option combinations require independent qualification."
@@ -344,6 +409,10 @@ def map_profiles(
         frame.attrs["model_scope"] = model_scope
         if "profile_source" in details:
             frame.attrs["profile_source"] = details["profile_source"]
+        if "terrain_scope" in details:
+            frame.attrs["terrain_scope"] = details["terrain_scope"]
+        if "velocity" in details:
+            frame.attrs["velocity"] = details["velocity"]
         return frame
 
     RasFim._write_manifest(folder, manifest(), details)
@@ -405,6 +474,17 @@ def map_profiles(
                 else:
                     units = [_prepared._units[name] for name in selected]
                     profile_view_count = 0
+                if scope_info is not None:
+                    from . import _terrain_scope
+
+                    fields["terrain_scope"] = _terrain_scope.stage(scope_info, root)
+                if velocity:
+                    from . import _velocity
+
+                    units = [dict(unit) for unit in units]
+                    fields.update(
+                        _velocity.stage(hdf, root, meshes, selected, units, threads=threads)
+                    )
                 import rasterio
 
                 if _prepared is None:
@@ -506,6 +586,7 @@ def map_profiles(
                                 or unit.get("id") != name
                                 or unit.get("status") != "complete"
                                 or unit.get("pixels") != int(np.prod(plan.shape))
+                                or (unit.get("velocity") is True) != velocity
                             ):
                                 raise FimEngineError(
                                     "Sloping stream profile or dimensions mismatch"
@@ -515,6 +596,11 @@ def map_profiles(
                             )
                             wse = _read_f32(
                                 process.stdout, plan.shape, expired, timeout, "wse"
+                            )
+                            speed = (
+                                _read_f32(process.stdout, plan.shape, expired, timeout, "velocity")
+                                if velocity
+                                else None
                             )
                             result = SimpleNamespace(
                                 profile=name,
@@ -537,11 +623,19 @@ def map_profiles(
                                         write_floodplain,
                                         layout,
                                     )
+                                if speed is not None:
+                                    from . import _velocity
+
+                                    speed_path = _velocity.velocity_path(folder, name)
+                                    _products.write_raster(
+                                        speed_path, speed, plan.transform, plan.crs
+                                    )
+                                    products["velocity_tif"] = str(speed_path)
                             rows[name].update(products)
                             details["performance"]["product_write_seconds"][name] = (
                                 time.perf_counter() - write_tick
                             )
-                            del depth, wse, result
+                            del depth, wse, result, speed
                         if process.stdout.read(1):
                             raise FimEngineError(
                                 "Unexpected trailing sloping stream bytes"
@@ -618,7 +712,7 @@ def map_profiles(
                                 f"Sloping engine failed with exit {code}: {report.get('error', 'invalid report')}"
                             )
                         details["performance"]["engine_report"] = report
-                    except BaseException:
+                    except BaseException as failure:
                         if process.poll() is None:
                             process.kill()
                         process.wait()
@@ -626,6 +720,13 @@ def map_profiles(
                         details["engine_stderr"] = errors.read().decode(
                             "utf-8", errors="replace"
                         )[-4000:]
+                        refusal = (
+                            _engine.read_refusal(root / "out", details["engine_stderr"])
+                            if isinstance(failure, FimEngineError) and not expired.is_set()
+                            else None
+                        )
+                        if refusal is not None:
+                            raise refusal from failure
                         raise
                     finally:
                         if timer:
@@ -650,6 +751,10 @@ def map_profiles(
         for name in selected:
             for product in _products.product_paths(folder, name):
                 product.unlink(missing_ok=True)
+            if velocity:
+                from . import _velocity
+
+                _velocity.velocity_path(folder, name).unlink(missing_ok=True)
             rows[name] = _empty_row(
                 name, "failed", error=f"{type(exc).__name__}: {exc}"
             )

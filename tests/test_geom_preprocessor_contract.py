@@ -839,3 +839,47 @@ def test_text_modification_is_not_accepted_as_recompiled_input(tmp_path, monkeyp
     text.write_text("Geom Title=changed\n")
     assert "geometry text" in validate(text, path, expected, time.time() - 1)[0]
     assert expected["text_sha256"] != hashlib.sha256(text.read_bytes()).hexdigest()
+
+
+@pytest.mark.parametrize("file_type", ["HEC-RAS Geometry", "HEC-RAS Results"])
+@pytest.mark.parametrize("version", ["HEC-RAS 7.0.1 June 2026", "HEC-RAS 7.1"])
+def test_7x_product_invalidation_preserves_authored_geometry(tmp_path, version, file_type):
+    text, path, expected = fixture(tmp_path)
+    with h5py.File(path, "r+") as hdf:
+        hdf.attrs["File Version"] = version
+        hdf.attrs["File Type"] = file_type
+        seeds = hdf[f"{AREA}/Cell Points"][()]
+        perimeter = hdf[f"{AREA}/Polygon Points"][()]
+        hdf[f"{AREA}/Synthetic"].attrs["Property Tables Last Computed"] = "old"
+    removed = invalidate_products(path)
+    assert f"{AREA}/Synthetic/Cells Volume Elevation Info" in removed
+    with h5py.File(path) as hdf:
+        np.testing.assert_array_equal(hdf[f"{AREA}/Cell Points"][()], seeds)
+        np.testing.assert_array_equal(hdf[f"{AREA}/Polygon Points"][()], perimeter)
+        assert "Property Tables Last Computed" not in hdf[f"{AREA}/Synthetic"].attrs
+    assert invalidate_products(path) == []
+    assert validate(text, path, expected, time.time() - 1)[1]
+
+
+@pytest.mark.parametrize("version", ["HEC-RAS 8.0", "HEC-RAS 70.1", "unknown"])
+def test_unsupported_product_version_does_not_modify_file(tmp_path, version):
+    _, path, _ = fixture(tmp_path)
+    with h5py.File(path, "r+") as hdf:
+        hdf.attrs["File Version"] = version
+    before = path.read_bytes()
+    with pytest.raises(ValueError, match="GEOMETRY_CACHE_SCHEMA_UNSUPPORTED"):
+        invalidate_products(path)
+    assert path.read_bytes() == before
+
+
+@pytest.mark.parametrize("group", ["Results", "Event Conditions", "Plan Data"])
+def test_7x_results_file_is_not_invalidated(tmp_path, group):
+    _, path, _ = fixture(tmp_path)
+    with h5py.File(path, "r+") as hdf:
+        hdf.attrs["File Version"] = "HEC-RAS 7.0.1 June 2026"
+        hdf.attrs["File Type"] = "HEC-RAS Results"
+        hdf.create_group(group)
+    before = path.read_bytes()
+    with pytest.raises(ValueError, match="GEOMETRY_CACHE_SCHEMA_UNSUPPORTED"):
+        invalidate_products(path)
+    assert path.read_bytes() == before
