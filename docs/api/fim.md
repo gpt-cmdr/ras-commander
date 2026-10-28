@@ -480,6 +480,104 @@ work; `writer_threads` remains a separate budget. Throughput gains therefore
 depend on the workload. Older engines retain the default sequential path;
 requesting concurrency without the advertised capability raises explicitly.
 
+## Map on the priority-1 terrain source (no terrain export)
+
+RAS Mapper writes stored maps per terrain source, on that source's own grid.
+Inside the footprint of the highest-priority source, the effective terrain is
+that source's original TIFF. Pass the registered terrain HDF as `terrain_hdf`
+and its priority-1 source TIFF as `terrain_path`; no RAS Mapper terrain export
+or HEC-RAS installation is needed.
+
+```python
+source = RasFim.top_priority_terrain_source("Terrain/Terrain50.hdf")
+# {'tif': Path('Terrain/Terrain50.dtm_20ft.tif'), 'source_count': 2,
+#  'modified': False, 'priority_basis': 'vrt_order', ...}
+manifest = RasFim.map_sloping_profiles(
+    "model.p05.hdf", source["tif"], "maps",
+    terrain_hdf="Terrain/Terrain50.hdf", velocity=True,
+)
+manifest.attrs["terrain_scope"]   # method, source, priority basis, mask dataset
+```
+
+- Priority comes from the source groups' integer `Priority` attributes (0 is
+  the highest) or, when no source carries one, from the terrain's own VRT,
+  which lists sources highest priority first. Partial, duplicate or
+  conflicting declarations are refused.
+- The engine (`top-priority-source-footprint/1`) reads the source's level-0
+  terrain-HDF `Mask`. Pixels outside the footprint are accepted only in cells
+  that fail the wet gate. Otherwise it refuses, and RasFim raises
+  `FimUnsupportedError` so the caller can map on an exported terrain instead.
+  Horizontal and whole-simulation requests have no wet-gate exemption, so any
+  mapped pixel outside the footprint is refused.
+- Terrains with modifications, non-256-tiled sources and plans with storage
+  areas are refused. Plain sloping only for `map_sloping_profiles`.
+- When the source TIFF's CRS is not readable by the engine, pass its
+  `RasFim.canonicalize_terrain_crs()` copy; it is accepted through its receipt
+  after the source pixels re-hash to the same value.
+
+Conformance against native HEC-RAS 7.0.1 stored maps (plain sloping, Max):
+
+| Model | Terrain | Valid pixels | Depth/WSE mask and bit differences |
+|---|---|---|---|
+| BaldEagleCrkMulti2D bridges p05 | `dtm_20ft` (priority 1 of 2) | 973,902 | 0 / 0 |
+| Davis p02 | canonical copy of the single source | 22,041 | 0 / 0 |
+
+On bridges p05 the mapping itself takes about as long on the source TIFF as on
+an export (7.3 s against 4.9 to 6.8 s end to end, six threads); the saving is
+the export, which took 242.6 s through `RasTerrain.export_rasmapper_terrain`.
+Bridges whole-simulation and horizontal requests are refused on the source
+TIFF because 28 mapped 2D pixels lie outside its footprint.
+
+## Sloping velocity
+
+`velocity=True` adds `velocity_tif` (`12_<profile>_velocity.tif`) to each
+manifest row, rendered by the engine's `rasmapper-sloping-velocity/0` method.
+Max uses `Maximum Face Velocity` with the Max WSE; a timestep index uses
+`Face Velocity` at that output time. Face normals carry face polyline lengths.
+Velocity is drawn where the rendered depth is greater than zero. It requires
+plain sloping with HDF profiles; `wsel_profiles`, `template_raster` and
+storage-area plans are refused.
+
+| Model (native 7.0.1, Max) | Common pixels | Bit differences | Mask differences |
+|---|---|---|---|
+| BaldEagleCrkMulti2D bridges p05 | 972,706 | 0 | 826 native-only, 1,196 extra |
+| Davis p02 | 22,041 | 3 (at most 3e-8) | 0 |
+
+The native velocity validity mask is not always the depth mask; the bridges
+differences are edge pixels.
+
+## Whole-simulation products
+
+`map_whole_simulation` produces arrival time and percent time inundated (and,
+opt-in, duration) from every stored output time, through the engine's
+`native-whole-simulation-horizontal/1` method:
+
+```python
+manifest = RasFim.map_whole_simulation(
+    "model.p02.hdf", "terrain.tif", "adr", threshold=0.5,
+)  # products=("arrival_time", "percent_inundated")
+manifest[["product", "tif", "units", "wet_pixels"]]
+```
+
+- A pixel is wet at an output time when its rendered depth is greater than
+  `threshold` and its cell passes `wse > cell minimum + threshold` (float32).
+- `arrival_time` is the first wet output time in hours since the plan's
+  simulation start; `percent_inundated` is `100 * wet times / all times`.
+  Never-wet pixels are NaN.
+- `duration` requires `allow_unqualified=True`: some native recession
+  durations are one output interval shorter. Irregular output intervals are
+  also refused without it.
+- Plans with storage areas or 1D elements are refused.
+
+| Model (native 7.0.1, 0.5 ft) | Output times | Valid pixels | Arrival / percent differences |
+|---|---|---|---|
+| Davis p02 | 217 | 4,879 | 0 / 0 |
+| BaldEagleCrkMulti2D bridges p05 | 433 | 959,043 | 0 / 0 |
+
+Both match RAS Mapper's horizontal and sloping stored maps, which are identical
+on these models. These methods target pure 2D models for FIM library creation;
+1D models, storage areas and other products remain with RAS Mapper.
+
 ## Horizontal cell mapping
 
 Horizontal method /2 requires engine 0.7 or newer. Older /1 engines raise explicitly.

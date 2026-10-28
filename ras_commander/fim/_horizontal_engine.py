@@ -70,9 +70,14 @@ def run_batch(
     details,
     scratch_folder,
     timeout,
+    terrain_scope=None,
 ):
     """Stage shared ownership once, run all profiles, validate every committed unit."""
     method = _engine.engine_method(engine).get("horizontal")
+    if terrain_scope is not None:
+        from . import _terrain_scope
+
+        _terrain_scope.require_engine(method, "horizontal")
     if (
         not isinstance(method, dict)
         or method.get("method_id") != "horizontal-cell-constant/2"
@@ -156,6 +161,10 @@ def run_batch(
             "max_working_bytes": budget * (1 << 20),
             "stream_outputs": True,
         }
+        if terrain_scope is not None:
+            from . import _terrain_scope
+
+            request["terrain_scope"] = _terrain_scope.stage(terrain_scope, root)
         # Transform above belongs to the window; terrain identity is its full source transform.
         import rasterio
 
@@ -202,10 +211,16 @@ def run_batch(
                 errors.seek(0)
                 diagnostic = errors.read().decode("utf-8", errors="replace")[-4000:]
                 if not path.is_file():
+                    refusal = _engine.engine_refusal(diagnostic)
+                    if refusal is not None:
+                        raise refusal
                     raise FimEngineError(f"horizontal engine exit {code}: {diagnostic}")
                 report = json.loads(path.read_text(encoding="utf-8"))
                 details["engine_report"] = report
                 if report.get("status") == "aborted":
+                    refusal = _engine.engine_refusal(report.get("error"))
+                    if refusal is not None:
+                        raise refusal
                     raise FimEngineError(
                         f"horizontal session aborted: {report.get('error', diagnostic)}"
                     )
