@@ -15,6 +15,16 @@ means use statistic `00003` and their returned date labels are represented at
 UTC midnight. Legacy site-local calendar bounds can select different intervals;
 check date boundaries and alignment when migrating existing studies. Use
 explicit timezone-aware timestamps for precise continuous-data windows.
+A datetime end bound is an exact instant, including when its time is midnight:
+`datetime(2024, 1, 31)` ends at the start of January 31. Use the date-only string
+`"2024-01-31"` to include that entire UTC day. Convert local model times to
+explicit timezone-aware timestamps before retrieving initial conditions.
+
+Commander rate-limits each dataretrieval call, including each year-sized query
+interval. The client handles HTTP pagination and 429 retries internally; a
+single call can make multiple page requests. The annual-peaks route uses its
+own rate-limited pagination and currently does not use the configured API key
+or retry HTTP 429 responses.
 
 Spatial discovery uses modern monitoring locations and time-series metadata;
 annual peak discharge uses the modern peaks collection. The USGS module no

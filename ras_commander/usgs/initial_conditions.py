@@ -383,7 +383,8 @@ class InitialConditions:
         site_id : str
             USGS site ID (e.g., 'USGS-01646500' or '01646500')
         target_datetime : str or datetime
-            Target datetime for IC value (ISO format string or datetime object)
+            Target datetime for IC value (ISO format string or datetime object).
+            Naive timestamps mean UTC; provide a timezone for local model times.
         parameter : str, default 'flow'
             Parameter to retrieve: 'flow' (00060) or 'stage' (00065)
         tolerance_hours : int, default 1

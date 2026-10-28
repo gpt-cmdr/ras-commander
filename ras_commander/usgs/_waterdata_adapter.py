@@ -1,6 +1,7 @@
 """Private Water Data adapter for the existing single-site retrieval contracts."""
 
 import re
+import math
 
 import pandas as pd
 
@@ -136,10 +137,18 @@ class _WaterDataAdapter:
         row = frame.iloc[0]
         geometry = row.get("geometry")
         if isinstance(geometry, dict):
-            longitude, latitude = geometry["coordinates"][:2]
-        elif geometry is not None and not geometry.is_empty:
+            geometry = geometry.get("coordinates")
+        if isinstance(geometry, (list, tuple)) and len(geometry) >= 2:
+            longitude, latitude = geometry[:2]
+        elif getattr(geometry, "geom_type", None) == "Point" and not geometry.is_empty:
             longitude, latitude = geometry.x, geometry.y
         else:
+            raise ValueError("Monitoring location has no geographic point")
+        try:
+            longitude, latitude = float(longitude), float(latitude)
+        except (TypeError, ValueError) as exc:
+            raise ValueError("Monitoring location has no geographic point") from exc
+        if not (math.isfinite(longitude) and math.isfinite(latitude)):
             raise ValueError("Monitoring location has no geographic point")
         mapping = {"station_nm": "monitoring_location_name", "drain_area_va": "drainage_area",
                    "alt_va": "altitude", "state_cd": "state_code", "county_nm": "county_name",

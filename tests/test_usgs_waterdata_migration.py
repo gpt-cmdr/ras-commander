@@ -122,12 +122,15 @@ def test_latest_value_uses_approval_field_and_time_not_frame_index(service):
     assert RasUsgsRealTime.get_latest_value("01646500")["provisional"] is False
 
 
-def test_monitoring_location_metadata_mapping(service):
+@pytest.mark.parametrize("geometry_kind", ["point", "list", "tuple", "geojson"])
+def test_monitoring_location_metadata_mapping(service, geometry_kind):
     from shapely.geometry import Point
     api, _ = service
+    geometry = {"point": Point(-77., 39.), "list": [-77., 39.],
+                "tuple": (-77., 39.), "geojson": {"coordinates": [-77., 39.]}}[geometry_kind]
     api.get_monitoring_locations = lambda **kw: (pd.DataFrame([dict(
         monitoring_location_id="USGS-01646500", monitoring_location_name="Public Gauge",
-        geometry=Point(-77., 39.), drainage_area=100., altitude=20., state_code="24",
+        geometry=geometry, drainage_area=100., altitude=20., state_code="24",
         county_name="Example", hydrologic_unit_code="02070008", site_type_code="ST")]), {})
     api.get_time_series_metadata = lambda **kw: (pd.DataFrame({"parameter_code": ["00060", "00065"]}), {})
     result = RasUsgsCore.get_gauge_metadata("01646500")
@@ -135,6 +138,15 @@ def test_monitoring_location_metadata_mapping(service):
     assert (result["latitude"], result["longitude"]) == (39., -77.)
     assert result["drainage_area_sqmi"] == 100
     assert result["available_parameters"] == ["00060", "00065"]
+
+
+@pytest.mark.parametrize("geometry", [None, np.nan, [], [np.nan, 39.], [-77., float("inf")]])
+def test_metadata_rejects_missing_coordinates(service, geometry):
+    api, _ = service
+    api.get_monitoring_locations = lambda **kw: (pd.DataFrame([{
+        "monitoring_location_id": "USGS-01646500", "geometry": geometry}]), {})
+    with pytest.raises(ValueError, match="geographic point"):
+        adapter._WaterDataAdapter.get_info(sites="01646500")
 
 
 def test_empty_response_retains_public_empty_shape(service):
