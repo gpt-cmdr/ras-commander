@@ -58,5 +58,17 @@ See Also:
 """
 
 from .RasDss import RasDss
+from . import _errors
 
-__all__ = ['RasDss']
+__all__ = ['RasDss', *_errors.ERROR_NAMES]
+
+
+def __getattr__(name):
+    """Typed DSS exceptions (``DssPathnameNotFoundError`` and others).
+
+    Resolved on first access: they are the dss-commander classes when that optional
+    package is installed, otherwise local classes with the same names and bases.
+    """
+    if name in _errors.ERROR_NAMES:
+        return _errors.get(name)
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
