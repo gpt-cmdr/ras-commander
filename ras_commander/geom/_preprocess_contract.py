@@ -515,10 +515,10 @@ def invalidate_products(hdf_path: Path) -> list[str]:
         if (
             (file_type != "HEC-RAS Geometry" and not geometry_only_copy)
             or not re.search(r"\.g\d{1,2}\.hdf$", hdf_path.name, re.IGNORECASE)
-            or re.match(r"^HEC-RAS [56]\.\d+(?:\.\d+)?\b", version) is None
+            or re.match(r"^HEC-RAS [567]\.\d+(?:\.\d+)?\b", version) is None
         ):
             raise ValueError(
-                "GEOMETRY_CACHE_SCHEMA_UNSUPPORTED: product invalidation requires a HEC-RAS 5/6 geometry HDF or geometry-only results copy"
+                "GEOMETRY_CACHE_SCHEMA_UNSUPPORTED: product invalidation requires a HEC-RAS 5/6/7 geometry HDF or geometry-only results copy"
             )
         paths = [
             "Geometry/GeomPreprocess",

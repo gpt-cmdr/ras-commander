@@ -1465,7 +1465,12 @@ class RasPreprocess:
                         # (PID 0 or 4); they cannot be a RAS engine.
                         if os.name == "nt" and candidate.ppid() in (0, 4):
                             continue
-                        raise ValueError("Process name is unavailable")
+                        from ._process_inspection import _recover_empty_process_name
+
+                        name, recovered_created = _recover_empty_process_name(
+                            candidate, int(info["pid"]), psutil,
+                        )
+                        info.update(name=name, create_time=recovered_created)
                     if name.casefold() not in {"ras.exe", "rasprocess.exe"}:
                         continue
                     # Reuse explicitly cached fields when available. Normally

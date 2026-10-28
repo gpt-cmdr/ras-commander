@@ -3013,6 +3013,37 @@ def _count_breaklines_in_hdf(hdf_path: Path) -> int:
         return 0
 
 
+def _bootstrap_empty_mesh_for_refresh(
+    text_path: Path, *, mesh_name=None, mesh_index=0, cell_size=None,
+    hecras_dir=None, ras_object=None,
+) -> bool:
+    """Seed an empty authored area before requiring a complete native rebuild."""
+    metadata = _read_mesh_metadata_from_text(text_path)
+    names = [name for name, area in metadata.items() if area["seed_count"] is not None]
+    if mesh_name is None:
+        if not 0 <= mesh_index < len(names):
+            return False
+        mesh_name = names[mesh_index]
+    if metadata.get(mesh_name, {}).get("seed_count") != 0:
+        return False
+
+    # Resolve the native refresh route before changing authored computation points.
+    _find_plan_for_geometry(text_path, ras_object=ras_object)
+    from .GeomParser import GeomParser
+
+    GeomParser.create_backup(text_path)
+    seeds = GeomMesh.generate_computation_points(
+        text_path, mesh_name=mesh_name, cell_size=cell_size,
+        hecras_dir=hecras_dir, ras_object=ras_object,
+        repair_generated_points=True,
+    )
+    if not seeds.ok or seeds.cell_count <= 0:
+        raise RuntimeError(
+            f"Empty-area computation point bootstrap failed: {seeds.error_message}"
+        )
+    return True
+
+
 def _ensure_hdf(
     geom_text_path: Path,
     hecras_dir=None,
@@ -5798,6 +5829,9 @@ class GeomMesh:
         Workflow:
             1. Validate an existing content-current compiled .g##.hdf
                workspace, optionally refreshing it through HEC-RAS/Ras.exe.
+               If the selected area has no computation points and refresh is
+               enabled, bootstrap regular-interval points from the authored
+               perimeter first. Native recompilation still checks full products.
             2. Read per-breakline spacing from .g01 text (preserve existing)
             3. Sync text spacing -> HDF (RegenerateMeshPoints reads HDF)
             4. Load .NET geometry -> perimeter, breaklines
@@ -5847,6 +5881,8 @@ class GeomMesh:
             recompile_via_rasexe: If True, refresh a missing or content-stale
                 compiled geometry HDF through ``GeomPreprocessor``/Ras.exe.
                 The geometry must be referenced by a plan in *ras_object*.
+                An empty selected area is backed up and given initial regular
+                computation points before native compilation and regeneration.
             require_complete_products: Forward strict completion to native
                 recompilation and perimeter-repair preprocessing. Defaults False.
             refinement_region_constraints: If False (default), evaluate and
@@ -5935,6 +5971,18 @@ class GeomMesh:
         repair_reason = None
         try:
             text_path = geom_path
+            if recompile_via_rasexe and _bootstrap_empty_mesh_for_refresh(
+                text_path, mesh_name=mesh_name, mesh_index=mesh_index,
+                cell_size=cell_size, hecras_dir=hecras_dir, ras_object=ras_object,
+            ):
+                result.fixes_applied.append("Bootstrap:empty-area-computation-points")
+                # Seed-count checks are normally relaxed during regeneration.
+                # An empty-area bootstrap must still compile its new points.
+                _recompile_geometry_hdf_via_rasexe(
+                    text_path, text_path.with_suffix(text_path.suffix + ".hdf"),
+                    ras_object=ras_object,
+                    require_complete_products=require_complete_products,
+                )
 
             # ── Step 1: Validate existing compiled HDF workspace ─────
             # True .g## text -> .g##.hdf generation is a full HEC-RAS/Ras.exe
