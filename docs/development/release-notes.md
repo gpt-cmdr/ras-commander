@@ -21,6 +21,20 @@ This intentionally changes legacy edge inclusion, while leaving hydraulic
 cell ownership and surface arithmetic unchanged. See the
 [AOI contract](../api/fim.md#global-terrain-lattice-aoi-coverage-engine-0101).
 
+**FIM: priority-1 terrain source, whole-simulation products and velocity**
+
+`RasFim.top_priority_terrain_source()` identifies a registered terrain's
+priority-1 source TIFF from its `Priority` attributes or VRT order.
+`map_sloping_profiles()`, `map_horizontal_profiles()` and the new
+`map_whole_simulation()` accept `terrain_hdf=` to map on that TIFF without a
+RAS Mapper terrain export. `map_whole_simulation()` writes arrival time and
+percent time inundated (duration opt-in), and `map_sloping_profiles(velocity=True)`
+adds a `velocity_tif` manifest column. All need a Fast-Map engine that
+advertises the matching methods; engine refusals raise `FimUnsupportedError`,
+and storage-area plans are refused. Products are qualified against RAS Mapper
+output on Davis p02 and BaldEagleCrkMulti2D bridges p05 for pure 2D FIM
+library creation. See [the FIM guide](../api/fim.md#map-on-the-priority-1-terrain-source-no-terrain-export).
+
 **Columnar PMTiles properties**
 
 `fast_hdf.export_mesh_pmtiles()` builds its property columns as NumPy arrays
