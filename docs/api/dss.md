@@ -59,6 +59,28 @@ Read multiple time series at once.
 
 **Returns:** Dict of {pathname: DataFrame}
 
+#### read_paired_data(dss_file, pathname, *, ignore_d_part=True, dtype="stored")
+Read one paired-data record with every curve.
+
+**Returns:** DataFrame indexed by the ordinates (`"ordinate"`), one column per
+curve, stored precision by default (`float32` PD, `float64` PDD). `attrs` carry
+`pathname`, `record_pathname`, `dss_file`, `record_type`, `dss_version`,
+`stored_dtype`, `n_ordinates`, `n_curves`, `x_parameter`, `y_parameter`,
+`x_units`, `x_type`, `y_units`, `y_type`, `labels`, `x_precision`,
+`y_precision` and `time_zone`. Raises `DssPathnameNotFoundError` or
+`DssRecordTypeError` on every backend. See the
+[canonical DSS API](../user-guide/dss-native-backend.md#canonical-dss-api-for-consumers-hms-conformance-target).
+
+#### read_grid(dss_file, pathname, *, allow_unqualified_native=False)
+Read one exact grid record as a dictionary (`data` float32, row zero south,
+`row_order="south_up"`). Under `backend="native"` it raises
+`DssCapabilityError` unless the installed dss-commander advertises qualified
+grid CRS strings or `allow_unqualified_native=True` is passed.
+
+#### get_capabilities()
+DataFrame of `operation`, `java`, `native`, `shadow` and `note`: which
+backend supports each public DSS operation.
+
 #### write_timeseries(dss_file, pathname, times, values, ..., dss_version=None)
 Write a single time series to DSS.
 
@@ -82,7 +104,8 @@ otherwise strictly increasing model clock; merely stripping timezone metadata
 from a repeated local hour creates ambiguous duplicate model times.
 
 #### get_file_version(dss_file)
-Return the authoritative HEC-DSS major file version.
+Return the HEC-DSS major file version. Uses the selected backend; a non-DSS
+file raises `DssInvalidFileError` (a `ValueError`).
 
 **Parameters:**
 - `dss_file` (str|Path): Existing DSS file
@@ -349,9 +372,10 @@ keyword aliases are not added in this release.
 
 ## Read behavior
 
-`read_timeseries()` accepts `start_date` and `end_date`, but the current
-implementation returns the complete series without applying those filters.
-Select the desired window from the returned DatetimeIndex explicitly. Returned
+`read_timeseries()` accepts `start_date` and `end_date`. The Java backend
+returns the complete series without applying those filters; the native and
+shadow backends apply the window (see
+[DSS Read Backends](../user-guide/dss-native-backend.md)). Returned
 `attrs` retain pathname, units, type, interval, and source path.
 
 Java DSS handles are write-capable. Check that a source exists before opening it;

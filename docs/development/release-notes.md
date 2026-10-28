@@ -9,13 +9,44 @@ alone does not identify a development checkout.
 
 ### Unreleased
 
-**Fast-Map 0.10.1 is the minimum mapping engine**
+**Fast-Map 0.10.1 is the minimum mapping engine** (#736)
 
 The `fim`, `fast-map`, `full` and `all` extras now require
 `ras-commander-fast-map>=0.10.1,<0.11` (was `>=0.8,<0.11`). 0.10.1 is the first
 release with the `global-terrain-lattice/1` polygon AOI mask that Commander
 requires since 0.110.2; with the old floor pip could keep 0.8.0, and polygon AOIs
 then failed at run time. The FIM container example now pins 0.10.1.
+
+**Opt-in native and shadow read backends for RasDss** (#592)
+
+- `RasDss.backend` (`"java"`, `"native"` or `"shadow"`) and
+  `RasDss.get_backend()` select how catalogs and time series are read. The
+  `RAS_COMMANDER_DSS_BACKEND` environment variable overrides the attribute.
+- `native` reads DSS6 and DSS7 through the optional `dss-commander` package
+  without a JVM; `shadow` runs both readers and logs every difference.
+- `java` stays the default, and writes stay on Java. Intended differences are
+  listed in [DSS Read Backends](../user-guide/dss-native-backend.md).
+
+**RasDss reads paired data on every backend; typed errors for grids and file version** (#718)
+
+- `RasDss.read_paired_data(dss_file, pathname, *, ignore_d_part=True, dtype="stored")`
+  is new. It returns every curve as a DataFrame (ordinate index, one column per
+  curve, stored `float32`/`float64` precision) with labels, units, types,
+  parameters and precision in `attrs`, on the `java`, `native` and `shadow`
+  backends.
+- `RasDss.get_file_version()` now follows `RasDss.backend`.
+- `RasDss.read_grid()` gains a keyword-only `allow_unqualified_native` argument
+  and a gated native route. Under `native` it raises `DssCapabilityError` until
+  the native engine advertises qualified grid CRS strings. `shadow` always
+  returns Java's grid. The result dictionary gains the additive key
+  `row_order="south_up"`; existing keys are unchanged.
+- `RasDss.get_capabilities()` is new and reports the per-backend support matrix.
+- Typed exceptions are exported from `ras_commander.dss`. Each keeps the builtin
+  previously raised for its condition: `DssPathnameNotFoundError` (`ValueError`),
+  `DssRecordTypeError` (`TypeError`), `DssInvalidFileError` (`ValueError`),
+  `DssReadError`, `DssCapabilityError` (`NotImplementedError`).
+- Defaults are unchanged: `java` remains the default backend, and writes stay
+  on Java. See [DSS Read Backends](../user-guide/dss-native-backend.md).
 
 ### v0.110.2 (October 2026)
 

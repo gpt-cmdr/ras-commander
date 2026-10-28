@@ -17,8 +17,15 @@ Functions:
         Returns a list of all data pathnames in a DSS file.
     read_timeseries(dss_file, pathname, start_date=None, end_date=None):
         Reads a DSS time series by pathname and returns it as a pandas DataFrame.
-    read_grid(dss_file, pathname):
+    read_grid(dss_file, pathname, *, allow_unqualified_native=False):
         Reads one exact DSS spatial grid record and its metadata.
+    read_paired_data(dss_file, pathname, *, ignore_d_part=True, dtype="stored"):
+        Reads one paired-data record (every curve, labels, units, types,
+        stored precision) as a DataFrame.
+    get_file_version(dss_file):
+        Returns the major DSS version (6 or 7).
+    get_capabilities():
+        Returns the per-backend support matrix.
     read_multiple_timeseries(dss_file, pathnames):
         Reads multiple DSS time series, returning a dict of pathname to DataFrame
         (or None on failure).
@@ -39,12 +46,14 @@ Functions:
 
 Backends:
     Read methods (``get_catalog``, ``read_timeseries``,
-    ``read_multiple_timeseries`` and everything built on them) use
-    ``RasDss.backend``: ``"java"`` (default), ``"native"`` (optional
-    dss-commander package, no JVM) or ``"shadow"`` (native result, Java
-    cross-check, differences logged). The environment variable
-    ``RAS_COMMANDER_DSS_BACKEND`` overrides the attribute when set. Writes,
-    ``read_grid`` and ``get_file_version`` stay on Java under every backend.
+    ``read_multiple_timeseries``, ``read_paired_data``, ``get_file_version``
+    and everything built on them) use ``RasDss.backend``: ``"java"``
+    (default), ``"native"`` (optional dss-commander package, no JVM) or
+    ``"shadow"`` (native result, Java cross-check, differences logged). The
+    environment variable ``RAS_COMMANDER_DSS_BACKEND`` overrides the
+    attribute when set. ``read_grid`` under ``"native"`` requires
+    ``allow_unqualified_native=True`` until the native grid CRS is qualified.
+    Writes stay on Java under every backend.
 
 Lazy Loading:
     This module implements lazy loading for all heavy dependencies:
@@ -76,7 +85,7 @@ import pandas as pd
 
 # Import decorator from parent package
 from ..Decorators import log_call
-from . import _backend
+from . import _backend, _errors
 
 logger = logging.getLogger(__name__)
 
@@ -201,6 +210,46 @@ class RasDss:
             if candidate.is_dir() and RasDss._has_jvm_lib(candidate, system):
                 return candidate
         return None
+
+    @staticmethod
+    @log_call
+    def get_capabilities() -> pd.DataFrame:
+        """Return what each backend supports for every public DSS operation.
+
+        Does not start a JVM or import dss-commander's engine beyond an import
+        check.
+
+        Returns:
+            DataFrame with one row per operation and columns ``operation``,
+            ``java``, ``native``, ``shadow`` and ``note``. Cell values:
+
+            - ``"yes"``: supported on that backend;
+            - ``"gated"``: needs a qualified engine or an explicit opt-in
+              (``read_grid`` under ``native``) and otherwise raises
+              ``DssCapabilityError``. ``attrs["native_grid_qualified"]``
+              tells whether the installed wheel already qualifies;
+            - ``"java"``: always runs on Java, whatever the backend;
+            - ``"no"``: not provided.
+
+            ``attrs``: ``requested_backend`` (``RasDss.backend`` or the
+            environment override), ``native_installed`` (bool) and
+            ``native_grid_qualified`` (bool).
+
+        Example:
+            caps = RasDss.get_capabilities().set_index("operation")
+            if caps.loc["read_paired_data", "native"] == "yes":
+                rating = RasDss.read_paired_data(dss_file, pathname)
+        """
+        df = pd.DataFrame(
+            list(_backend.CAPABILITIES),
+            columns=["operation", "java", "native", "shadow", "note"],
+        )
+        df.attrs = {
+            "requested_backend": _backend.requested_backend(RasDss.backend),
+            "native_installed": _backend.native_available(),
+            "native_grid_qualified": _backend.native_grid_qualified(),
+        }
+        return df
 
     @staticmethod
     def _ensure_monolith():
@@ -718,11 +767,594 @@ class RasDss:
             return seconds // 60
         return seconds / 60
 
+    # ------------------------------------------------------------------
+    # Paired data
+    # ------------------------------------------------------------------
+
+    #: Paired-data record type codes: 200 (PD, float32) and 205 (PDD, float64).
+    _PAIRED_DATA_RECORD_TYPES = (200, 205)
+    _PAIRED_DATA_DTYPES = ("stored", "float64")
+
+    @staticmethod
+    @log_call
+    def read_paired_data(
+        dss_file: Union[str, Path],
+        pathname: str,
+        *,
+        ignore_d_part: bool = True,
+        dtype: str = "stored",
+    ) -> pd.DataFrame:
+        """
+        Read one paired-data record (rating curve, damage curve, temporal
+        pattern, elevation-storage table, ...) with every curve.
+
+        Args:
+            dss_file: Path to an existing DSS file. The file is never created.
+            pathname: DSS pathname, for example
+                ``"/BASIN/LOC/STAGE-FLOW///RATING/"``.
+            ignore_d_part: When the exact pathname has no record, use the first
+                paired-data record in catalog order whose A, B, C, E and F parts
+                match (case-insensitive), as ``HecDss.get(pathname, True)``
+                does. Default ``True``.
+            dtype: ``"stored"`` (default) keeps the stored precision:
+                ``float32`` for PD records (type 200) and ``float64`` for PDD
+                records (type 205). ``"float64"`` widens both (exact).
+
+        Returns:
+            DataFrame with one row per ordinate and one column per curve:
+
+            - Index: the independent-variable ordinates, named ``"ordinate"``,
+              in stored order (not sorted).
+            - Columns: one per curve, in stored order. Named after the curve
+              labels when every curve has a distinct, non-blank label,
+              otherwise ``"curve_1"`` .. ``"curve_n"``.
+            - Values: stored bits (``dtype="stored"``). HEC missing markers
+              (-901, -902, -3.4028235e38) are returned as stored, not NaN.
+            - ``attrs`` (always these keys, in this order): ``pathname``
+              (as requested), ``record_pathname`` (the record read; differs
+              when the D part was ignored), ``dss_file``, ``record_type``
+              (200 or 205), ``dss_version`` (6 or 7), ``stored_dtype``
+              (``"float32"`` or ``"float64"``), ``n_ordinates``,
+              ``n_curves``, ``x_parameter``, ``y_parameter`` (from the C
+              part, for example ``"STAGE"``/``"FLOW"``), ``x_units``,
+              ``x_type``, ``y_units``, ``y_type`` (for example ``"LINEAR"``,
+              ``"LOG"``, ``"PROB"``), ``labels`` (one string per curve, ``""``
+              when absent; trailing blanks removed, leading blanks kept),
+              ``x_precision``, ``y_precision`` (``-1`` when not set),
+              ``time_zone`` (DSS7 only, else ``None``; never applied).
+
+        Backends:
+            ``"java"`` reads ``hec.io.PairedDataContainer`` through HEC
+            Monolith; ``"native"`` reads through dss-commander without a JVM;
+            ``"shadow"`` returns the native frame, also reads through Java,
+            and logs differences (see ``docs/user-guide/dss-native-backend.md``).
+            Both backends return the same schema and raise the same classes.
+
+        Raises:
+            FileNotFoundError: If ``dss_file`` does not exist.
+            IsADirectoryError: If ``dss_file`` is not a file.
+            ValueError: If ``pathname`` is not a string or ``dtype`` is invalid.
+            DssPathnameNotFoundError: No paired-data record matches (a
+                ``ValueError``).
+            DssRecordTypeError: The matching record is not paired data (a
+                ``TypeError`` and ``DssUnsupportedRecordError``).
+            DssReadError: The record exists but the backend failed to read it
+                (a ``DssFormatError``; the cause is chained).
+            ImportError: The selected backend's optional dependency (pyjnius or
+                dss-commander) is not installed.
+
+        Example:
+            rating = RasDss.read_paired_data("model.dss", "/BASIN/LOC/STAGE-FLOW///RATING/")
+            stage = rating.index.to_numpy()
+            flow = rating.iloc[:, 0].to_numpy()
+            print(rating.attrs["x_units"], rating.attrs["y_units"])
+        """
+        RasDss._check_paired_data_request(dss_file, pathname, dtype)
+        backend = RasDss.get_backend()
+        if backend == "native":
+            return RasDss._read_paired_data_native(dss_file, pathname, ignore_d_part, dtype)
+        if backend == "shadow":
+            return RasDss._read_paired_data_shadow(dss_file, pathname, ignore_d_part, dtype)
+        return RasDss._read_paired_data_java(dss_file, pathname, ignore_d_part, dtype)
+
+    @staticmethod
+    def _check_paired_data_request(dss_file: Union[str, Path], pathname: str, dtype: str) -> None:
+        if not isinstance(pathname, str):
+            raise ValueError(f"DSS pathname must be a string, got {type(pathname).__name__}")
+        if dtype not in RasDss._PAIRED_DATA_DTYPES:
+            raise ValueError(f"dtype must be one of {RasDss._PAIRED_DATA_DTYPES}, not {dtype!r}")
+        RasDss._check_existing_file(dss_file)
+
+    @staticmethod
+    def _paired_data_column_names(labels: List[str], n_curves: int) -> List[str]:
+        """Labels when every curve has a distinct non-blank label, else curve_1..n
+        (the rule of ``dss_commander.PairedData.column_names``)."""
+        if (len(labels) == n_curves and all(s.strip() for s in labels)
+                and len(set(labels)) == n_curves):
+            return list(labels)
+        return [f"curve_{i + 1}" for i in range(n_curves)]
+
+    @staticmethod
+    def _paired_data_frame(
+        *,
+        pathname: str,
+        record_pathname: str,
+        dss_file: str,
+        record_type: int,
+        dss_version: int,
+        ordinates: np.ndarray,
+        values: np.ndarray,
+        labels: List[str],
+        x_parameter: str,
+        y_parameter: str,
+        x_units: str,
+        x_type: str,
+        y_units: str,
+        y_type: str,
+        x_precision: int,
+        y_precision: int,
+        time_zone: Optional[str],
+        dtype: str,
+    ) -> pd.DataFrame:
+        """Assemble the canonical paired-data frame (shared by both backends)."""
+        stored = np.dtype(np.float32 if int(record_type) == 200 else np.float64)
+        target = stored if dtype == "stored" else np.dtype(np.float64)
+        x = np.asarray(ordinates).astype(target, copy=True)
+        n_ord = int(x.shape[0])
+        v = np.asarray(values)
+        n_curves = int(v.shape[0]) if v.ndim == 2 else (0 if v.size == 0 else 1)
+        v = v.reshape(n_curves, n_ord).astype(target, copy=True)
+        labels = [str(s).rstrip() for s in labels][:n_curves]
+        labels += [""] * (n_curves - len(labels))
+        names = RasDss._paired_data_column_names(labels, n_curves)
+        index = pd.Index(x, name="ordinate", dtype=target)
+        if n_curves:
+            df = pd.DataFrame({name: v[i] for i, name in enumerate(names)}, index=index)
+        else:
+            df = pd.DataFrame(index=index)
+        df.attrs = {
+            "pathname": pathname,
+            "record_pathname": record_pathname,
+            "dss_file": dss_file,
+            "record_type": int(record_type),
+            "dss_version": int(dss_version),
+            "stored_dtype": stored.name,
+            "n_ordinates": n_ord,
+            "n_curves": n_curves,
+            "x_parameter": x_parameter or "",
+            "y_parameter": y_parameter or "",
+            "x_units": x_units or "",
+            "x_type": x_type or "",
+            "y_units": y_units or "",
+            "y_type": y_type or "",
+            "labels": labels,
+            "x_precision": int(x_precision),
+            "y_precision": int(y_precision),
+            "time_zone": time_zone or None,
+        }
+        return df
+
+    @staticmethod
+    def _native_record_type(handle: Any, pathname: str) -> Optional[int]:
+        """Record type of a catalog entry (exact, case-insensitive), or None."""
+        try:
+            cat = handle.catalog()
+        except Exception:
+            return None
+        wanted = pathname.upper()
+        for p, t in zip(cat["pathname"], cat["record_type"]):
+            if str(p).upper() == wanted:
+                return int(t)
+        return None
+
+    @staticmethod
+    def _read_paired_data_native(
+        dss_file: Union[str, Path],
+        pathname: str,
+        ignore_d_part: bool = True,
+        dtype: str = "stored",
+    ) -> pd.DataFrame:
+        """Paired data through dss-commander (no JVM)."""
+        from ras_commander.RasUtils import RasUtils
+
+        dc = _backend.import_native()
+        resolved = RasUtils.safe_resolve(Path(dss_file))
+        with dc.open(resolved) as handle:
+            try:
+                pdata = handle.read_paired_data(
+                    pathname, ignore_d_part=ignore_d_part, dtype="stored"
+                )
+            except dc.DssUnsupportedRecordError as exc:
+                # A matching record of another kind (time series, grid, text):
+                # same class as the Java path. An unsupported PD encoding stays
+                # the plain native error.
+                rtype = RasDss._native_record_type(handle, pathname)
+                if rtype not in RasDss._PAIRED_DATA_RECORD_TYPES:
+                    raise _errors.get("DssRecordTypeError")(
+                        f"DSS pathname is not a paired-data record: {pathname}"
+                        + (f" (record type {rtype})" if rtype is not None else "")
+                    ) from exc
+                raise
+        return RasDss._paired_data_frame(
+            pathname=pathname,
+            record_pathname=pdata.pathname,
+            dss_file=str(resolved),
+            record_type=pdata.record_type,
+            dss_version=pdata.dss_version,
+            ordinates=pdata.ordinates,
+            values=pdata.values,
+            labels=list(pdata.labels),
+            x_parameter=pdata.parameters[0],
+            y_parameter=pdata.parameters[1],
+            x_units=pdata.units_independent,
+            x_type=pdata.type_independent,
+            y_units=pdata.units_dependent,
+            y_type=pdata.type_dependent,
+            x_precision=pdata.x_precision,
+            y_precision=pdata.y_precision,
+            time_zone=pdata.time_zone,
+            dtype=dtype,
+        )
+
+    @staticmethod
+    def _read_paired_data_java(
+        dss_file: Union[str, Path],
+        pathname: str,
+        ignore_d_part: bool = True,
+        dtype: str = "stored",
+    ) -> pd.DataFrame:
+        """Paired data through HEC Monolith (``hec.io.PairedDataContainer``)."""
+        RasDss._configure_jvm()
+
+        from jnius import autoclass, cast
+        from ras_commander.RasUtils import RasUtils
+
+        HecDss = autoclass('hec.heclib.dss.HecDss')
+        HecDataManager = autoclass('hec.heclib.dss.HecDataManager')
+        dss_path = RasDss._check_existing_file(dss_file)
+        dss_file_str = str(RasUtils.safe_resolve(dss_path))
+        not_found = _errors.get("DssPathnameNotFoundError")
+
+        dss = None
+        try:
+            dss = HecDss.open(dss_file_str)
+            record = RasDss._java_matching_record(dss, pathname, ignore_d_part)
+            if record is None:
+                raise not_found(f"No data found for pathname: {pathname}")
+            try:
+                container = dss.get(pathname, bool(ignore_d_part))
+            except Exception as exc:
+                # The record exists, so this is a read failure, not "not found".
+                raise _errors.get("DssReadError")(
+                    f"HEC Monolith failed to read existing record {record}: {exc}"
+                ) from exc
+            if container is None:
+                raise _errors.get("DssReadError")(
+                    f"HEC Monolith returned no container for existing record {record}"
+                )
+            container_class = str(container.getClass().getName())
+            if container_class != 'hec.io.PairedDataContainer':
+                raise _errors.get("DssRecordTypeError")(
+                    f"DSS pathname is not a paired-data record: {pathname} "
+                    f"(container type: {container_class})"
+                )
+            pdc = cast('hec.io.PairedDataContainer', container)
+            n_ord = int(pdc.numberOrdinates)
+            n_curves = int(pdc.numberCurves)
+            raw_x = pdc.xOrdinates
+            x = np.asarray(raw_x if raw_x is not None else [], dtype=np.float64)[:n_ord]
+            rows = pdc.yOrdinates
+            if rows is not None and n_curves:
+                y = np.stack([np.asarray(rows[i], dtype=np.float64)[:n_ord]
+                              for i in range(n_curves)])
+            else:
+                y = np.empty((0, n_ord), dtype=np.float64)
+            labels: List[str] = []
+            if bool(pdc.labelsUsed) and pdc.labels is not None:
+                labels = [str(s) if s is not None else "" for s in pdc.labels]
+            # DataContainer.dataType is the record type (200 PD, 205 PDD).
+            record_type = int(getattr(pdc, 'dataType', 0) or 0)
+            if record_type not in RasDss._PAIRED_DATA_RECORD_TYPES:
+                record_type = 205 if bool(getattr(pdc, 'storedAsdoubles', False)) else 200
+            version = int(HecDataManager.getDssFileVersion(dss_file_str))
+
+            def text(value: Any) -> str:
+                return str(value) if value is not None else ""
+
+            return RasDss._paired_data_frame(
+                pathname=pathname,
+                record_pathname=text(pdc.fullName) or pathname,
+                dss_file=dss_file_str,
+                record_type=record_type,
+                dss_version=version,
+                ordinates=x,
+                values=y,
+                labels=labels,
+                x_parameter=text(pdc.xparameter),
+                y_parameter=text(pdc.yparameter),
+                x_units=text(pdc.xunits),
+                x_type=text(pdc.xtype),
+                y_units=text(pdc.yunits),
+                y_type=text(pdc.ytype),
+                x_precision=int(pdc.xprecision),
+                y_precision=int(pdc.yprecision),
+                time_zone=None,
+                dtype=dtype,
+            )
+        finally:
+            if dss is not None:
+                dss.done()
+
+    @staticmethod
+    def _java_matching_record(dss: Any, pathname: str, ignore_d_part: bool) -> Optional[str]:
+        """The record ``HecDss.get(pathname, ignore_d_part)`` would read, or None.
+
+        Exact pathname first (``recordExists``); with ``ignore_d_part``, the first
+        cataloged pathname whose A, B, C, E and F parts match case-insensitively.
+        """
+        if dss.recordExists(pathname):
+            return pathname
+        if not ignore_d_part:
+            return None
+        parts = pathname.split("/")
+        if len(parts) != 8:
+            return None
+        key = tuple(parts[i].upper() for i in (1, 2, 3, 5, 6))
+        catalog = dss.getCatalogedPathnames()
+        for i in range(catalog.size()):
+            candidate = str(catalog.get(i))
+            cparts = candidate.split("/")
+            if len(cparts) == 8 and tuple(cparts[i].upper() for i in (1, 2, 3, 5, 6)) == key:
+                return candidate
+        return None
+
+    @staticmethod
+    def _read_paired_data_shadow(
+        dss_file: Union[str, Path],
+        pathname: str,
+        ignore_d_part: bool = True,
+        dtype: str = "stored",
+    ) -> pd.DataFrame:
+        """Native paired data, cross-checked against Java. Comparison never raises."""
+        import time
+
+        not_found = _errors.get("DssPathnameNotFoundError")
+        native_df, native_exc = None, None
+        t0 = time.perf_counter()
+        try:
+            native_df = RasDss._read_paired_data_native(dss_file, pathname, ignore_d_part, dtype)
+        except Exception as exc:
+            native_exc = exc
+        native_s = time.perf_counter() - t0
+        # Java runs only where the result is comparable: data or not-found.
+        if native_exc is not None and not isinstance(native_exc, not_found):
+            _backend.record(
+                "read_paired_data", "skipped",
+                f"java skipped: native {type(native_exc).__name__}",
+                dss_file=dss_file, pathname=pathname, native_error=native_exc,
+                native_seconds=native_s,
+            )
+            raise native_exc
+        try:
+            java_df, java_exc = None, None
+            t1 = time.perf_counter()
+            try:
+                java_df = RasDss._read_paired_data_java(dss_file, pathname, ignore_d_part, dtype)
+            except Exception as exc:
+                java_exc = exc
+            java_s = time.perf_counter() - t1
+            outcome, label, diffs = _backend.classify_paired_data(
+                java_df, java_exc, native_df, native_exc
+            )
+            detail = {}
+            if native_df is not None:
+                detail = {"n_curves": native_df.attrs.get("n_curves"),
+                          "n_ordinates": native_df.attrs.get("n_ordinates"),
+                          "record_type": native_df.attrs.get("record_type")}
+            _backend.record(
+                "read_paired_data", outcome, label, dss_file=dss_file,
+                pathname=pathname, diffs=diffs, java_seconds=java_s,
+                native_seconds=native_s, java_error=java_exc,
+                native_error=native_exc, detail=detail,
+            )
+        except Exception as exc:  # the comparison must never break the read
+            logger.warning(
+                "DSS shadow read_paired_data comparison failed for %s %s: %s",
+                dss_file, pathname, exc,
+            )
+        if native_exc is not None:
+            raise native_exc
+        return native_df
+
+    # ------------------------------------------------------------------
+    # Grids: native and shadow routes (the Java route is _read_grid_java)
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _format_hec_time_text(
+        value: Optional[pd.Timestamp], end_of_period: bool = False
+    ) -> Optional[str]:
+        """``HecTime``-style text used in Java grid metadata (``1 January 2020, 01:00``).
+
+        Monolith prints a midnight end time as ``24:00`` of the previous day.
+        """
+        if value is None or pd.isna(value):
+            return None
+        stamp = pd.Timestamp(value)
+        if end_of_period and stamp == stamp.normalize():
+            prev = stamp - pd.Timedelta(days=1)
+            return f"{prev.day} {prev.strftime('%B %Y')}, 24:00"
+        return f"{stamp.day} {stamp.strftime('%B %Y, %H:%M')}"
+
+    @staticmethod
+    def _read_grid_native(dss_file: Union[str, Path], pathname: str) -> Dict[str, Any]:
+        """One grid record through dss-commander, in the ``read_grid`` schema.
+
+        Cells, geometry, units and times are native. ``metadata["crs_qualified"]``
+        reports whether the installed wheel advertises qualified grid CRS strings.
+        """
+        from ras_commander.RasUtils import RasUtils
+
+        path_parts = RasDss._check_grid_request(dss_file, pathname)
+        dc = _backend.import_native()
+        dss_file_str = str(RasUtils.safe_resolve(Path(dss_file)))
+        with dc.open(dss_file_str) as handle:
+            try:
+                grid = handle.read_grid(pathname, missing="nan", order="native")
+            except dc.DssPathnameNotFoundError as exc:
+                raise dc.DssPathnameNotFoundError(
+                    f"No DSS record found for exact pathname {pathname} in {dss_file_str}"
+                ) from exc
+            except dc.DssUnsupportedRecordError as exc:
+                rtype = RasDss._native_record_type(handle, pathname)
+                if rtype is not None and not 400 <= rtype < 450:
+                    raise _errors.get("DssRecordTypeError")(
+                        f"DSS pathname is not a spatial grid record: {pathname} "
+                        f"(record type {rtype})"
+                    ) from exc
+                raise
+        return RasDss._grid_dict_from_native(grid, pathname, dss_file_str, path_parts)
+
+    @staticmethod
+    def _grid_dict_from_native(
+        grid: Any, pathname: str, dss_file_str: str, path_parts: List[str]
+    ) -> Dict[str, Any]:
+        """Map a ``dss_commander.Grid`` onto the ``read_grid`` dictionary."""
+        n_rows, n_cols = int(grid.ny), int(grid.nx)
+        values = np.ascontiguousarray(grid.data, dtype=np.float32)
+        grid_type = grid.grid_type if grid.grid_type != "undefined" else "GridInfo"
+        class_names = {"albers": "AlbersInfo", "specified": "SpecifiedGridInfo",
+                       "hrap": "HrapInfo", "GridInfo": "GridInfo"}
+        cell_size = float(grid.cell_size)
+        lower_left_cell = (int(grid.lower_left_cell_x), int(grid.lower_left_cell_y))
+        md = dict(grid.metadata)
+        projection: Dict[str, Any] = {}
+        origin = None
+        if grid.grid_type in ("albers", "specified"):
+            x0 = float(grid.x_coord_of_grid_cell_zero)
+            y0 = float(grid.y_coord_of_grid_cell_zero)
+            projection.update({"x_coord_cell_zero": x0, "y_coord_cell_zero": y0})
+            origin = (x0 + lower_left_cell[0] * cell_size, y0 + lower_left_cell[1] * cell_size)
+        albers = md.get("albers")
+        if grid.grid_type == "albers" and albers:
+            projection.update({
+                "datum_code": int(albers["datum"]),
+                "units": str(albers["units"]),
+                "standard_parallel_1": float(albers["first_standard_parallel"]),
+                "standard_parallel_2": float(albers["second_standard_parallel"]),
+                "central_meridian": float(albers["central_meridian"]),
+                "latitude_of_origin": float(albers["latitude_of_projection_origin"]),
+                "false_easting": float(albers["false_easting"]),
+                "false_northing": float(albers["false_northing"]),
+            })
+
+        def native_time(value: Any) -> Optional[pd.Timestamp]:
+            return None if value is None else pd.Timestamp(value)
+
+        native_start, native_end = native_time(grid.start_time), native_time(grid.end_time)
+        start_time = RasDss._parse_grid_dss_datetime(path_parts[3]) or native_start
+        end_time = RasDss._parse_grid_dss_datetime(path_parts[4]) or native_end
+        start_text = RasDss._format_hec_time_text(native_start)
+        end_text = RasDss._format_hec_time_text(native_end, end_of_period=True)
+        record_type = int(grid.record_type)
+        metadata = {
+            "pathname_parts": dict(zip("ABCDEF", path_parts)),
+            "grid_class": f"hec.heclib.grid.{class_names.get(grid_type, grid_type)}",
+            "grid_type_code": record_type - record_type % 10,
+            "data_type_code": int(grid.data_type),
+            "shape": (n_rows, n_cols),
+            "number_of_cells_x": n_cols,
+            "number_of_cells_y": n_rows,
+            "lower_left_cell": lower_left_cell,
+            "origin": origin,
+            "projection": projection,
+            "number_missing": int(np.isnan(values).sum()),
+            "nodata_value": float(np.float32(-np.finfo(np.float32).max)),
+            "compression": {
+                "method": md.get("compression_method"),
+                "base": md.get("compression_base"),
+                "scale_factor": md.get("compression_scale_factor"),
+                "element_size": md.get("sizeof_compressed_elements"),
+            },
+            "timing": {
+                "start": start_text,
+                "end": end_text,
+                "period": f"{start_text} to {end_text}" if start_text and end_text else None,
+            },
+            "crs_qualified": _backend.native_grid_qualified(),
+            "native": {
+                "record_type": record_type,
+                "dss_version": int(grid.dss_version),
+                "null_value": float(grid.null_value),
+                "srs_name": grid.srs_name,
+                "srs_definition_type": int(grid.srs_definition_type),
+                "extent": tuple(grid.extent),
+                "min_value": grid.min_value,
+                "max_value": grid.max_value,
+                "mean_value": grid.mean_value,
+                **md,
+            },
+        }
+        return {
+            "dss_file": dss_file_str,
+            "pathname": pathname,
+            "data": values,
+            "shape": (n_rows, n_cols),
+            "units": str(grid.data_units),
+            "data_type": grid.data_type_name or "",
+            "grid_type": grid_type,
+            "crs": str(grid.srs_definition or ""),
+            "cell_size": cell_size,
+            "start_time": start_time,
+            "end_time": end_time,
+            "metadata": metadata,
+            "row_order": "south_up",
+        }
+
+    @staticmethod
+    def _read_grid_shadow(dss_file: Union[str, Path], pathname: str) -> Dict[str, Any]:
+        """Grid read on both backends. Always returns Java's grid (or raises Java's
+        error); the native grid is only compared. Cell and metadata differences are
+        logged separately. The comparison never raises."""
+        import time
+
+        java_grid, java_exc, native_grid, native_exc = None, None, None, None
+        t0 = time.perf_counter()
+        try:
+            native_grid = RasDss._read_grid_native(dss_file, pathname)
+        except Exception as exc:
+            native_exc = exc
+        native_s = time.perf_counter() - t0
+        t1 = time.perf_counter()
+        try:
+            java_grid = RasDss._read_grid_java(dss_file, pathname)
+        except Exception as exc:
+            java_exc = exc
+        java_s = time.perf_counter() - t1
+        try:
+            outcome, label, diffs = _backend.classify_grid(
+                java_grid, java_exc, native_grid, native_exc
+            )
+            _backend.record(
+                "read_grid", outcome, label, dss_file=dss_file, pathname=pathname,
+                diffs=diffs, java_seconds=java_s, native_seconds=native_s,
+                java_error=java_exc, native_error=native_exc,
+                detail={"returned": "java"},
+            )
+        except Exception as exc:  # the comparison must never break the read
+            logger.warning("DSS shadow read_grid comparison failed for %s %s: %s",
+                           dss_file, pathname, exc)
+        if java_exc is not None:
+            raise java_exc
+        return java_grid
+
     @staticmethod
     @log_call
     def read_grid(
         dss_file: Union[str, Path],
         pathname: str,
+        *,
+        allow_unqualified_native: bool = False,
     ) -> Dict[str, Any]:
         """
         Read one spatial grid record from an exact DSS pathname.
@@ -751,15 +1383,62 @@ class RasDss:
             - ``metadata``: Grid dimensions, cell indexes, origin/projection,
                 compression, type codes, missing-value count, and raw timing.
 
+            - ``row_order``: Always ``"south_up"`` (row zero is the southern
+                row), on every backend.
+
+        Args (keyword-only):
+            allow_unqualified_native: Opt in to the native grid reader under
+                ``backend="native"`` when the installed dss-commander does not
+                advertise qualified grid CRS strings (feature
+                ``"grid_srs_monolith_parity"`` in ``dss_commander.FEATURES``).
+                Cells, geometry, units and times are native; ``crs`` may be
+                wrong or empty for legacy Albers grids, and
+                ``metadata["crs_qualified"]`` is ``False``. Ignored, with a
+                warning, under ``"java"`` and ``"shadow"``. Default ``False``.
+
+        Backends:
+            ``"java"`` (default) reads through HEC Monolith. ``"native"``
+            raises ``DssCapabilityError`` unless the wheel advertises
+            qualified grid CRS or ``allow_unqualified_native`` is ``True``; it
+            never falls back to Java. ``"shadow"`` always returns Java's grid
+            (and raises Java's error, even when the native read succeeded);
+            the native grid is only compared. It reads natively,
+            and logs cell and metadata differences separately; a CRS
+            disagreement is logged as the known difference ``G-CRS``.
+
         Raises:
             FileNotFoundError: If ``dss_file`` does not exist.
             IsADirectoryError: If ``dss_file`` is not a file.
-            ValueError: If the pathname is malformed, uses wildcards, or does
-                not identify an existing exact record.
-            TypeError: If the exact pathname identifies a non-grid record.
-            ImportError: If pyjnius is not installed.
-            RuntimeError: If the Java grid read fails or returns invalid data.
+            ValueError: If the pathname is malformed or uses wildcards.
+            DssPathnameNotFoundError: If no record has the exact pathname
+                (a ``ValueError``).
+            DssRecordTypeError: If the exact pathname identifies a non-grid
+                record (a ``TypeError`` and ``DssUnsupportedRecordError``).
+            DssCapabilityError: Native backend, unqualified wheel and no
+                ``allow_unqualified_native`` (a ``NotImplementedError``).
+            ImportError: If pyjnius (Java) or dss-commander (native) is not
+                installed.
+            RuntimeError: If the grid read fails or returns invalid data.
         """
+        RasDss._check_grid_request(dss_file, pathname)
+        backend = RasDss.get_backend()
+        if backend == "native":
+            if not (allow_unqualified_native or _backend.native_grid_qualified()):
+                raise _errors.get("DssCapabilityError")(_backend.NATIVE_GRID_GATE_MESSAGE)
+            return RasDss._read_grid_native(dss_file, pathname)
+        if allow_unqualified_native:
+            logger.warning(
+                "read_grid: allow_unqualified_native=True is ignored under the %r "
+                "backend; the Java grid is returned%s.", backend,
+                " and the native grid is only compared" if backend == "shadow" else "",
+            )
+        if backend == "shadow":
+            return RasDss._read_grid_shadow(dss_file, pathname)
+        return RasDss._read_grid_java(dss_file, pathname)
+
+    @staticmethod
+    def _check_grid_request(dss_file: Union[str, Path], pathname: str) -> List[str]:
+        """Backend-independent argument checks; returns the six pathname parts."""
         if not isinstance(pathname, str):
             raise ValueError(f"DSS pathname must be a string, got {type(pathname).__name__}")
         if "*" in pathname or "?" in pathname:
@@ -767,14 +1446,20 @@ class RasDss:
                 "read_grid requires an exact DSS pathname without wildcard "
                 f"characters: {pathname}"
             )
-
         _, path_parts = RasDss._split_dss_pathname(pathname)
-
         dss_path = Path(dss_file)
         if not dss_path.exists():
             raise FileNotFoundError(f"DSS file not found: {dss_path}")
         if not dss_path.is_file():
             raise IsADirectoryError(f"DSS path is not a file: {dss_path}")
+        return path_parts
+
+    @staticmethod
+    def _read_grid_java(dss_file: Union[str, Path], pathname: str) -> Dict[str, Any]:
+        """One grid record through HEC Monolith (pyjnius). Internal Java-only
+        callers (grid writers) use this directly."""
+        path_parts = RasDss._check_grid_request(dss_file, pathname)
+        dss_path = Path(dss_file)
 
         RasDss._configure_jvm()
 
@@ -789,7 +1474,7 @@ class RasDss:
         try:
             dss = HecDss.open(dss_file_str)
             if not dss.recordExists(pathname):
-                raise ValueError(
+                raise _errors.get("DssPathnameNotFoundError")(
                     f"No DSS record found for exact pathname {pathname} "
                     f"in {dss_file_str}"
                 )
@@ -802,7 +1487,7 @@ class RasDss:
 
             container_class = str(container.getClass().getName())
             if container_class != "hec.io.GridContainer":
-                raise TypeError(
+                raise _errors.get("DssRecordTypeError")(
                     f"DSS pathname is not a spatial grid record: {pathname} "
                     f"(container type: {container_class})"
                 )
@@ -933,6 +1618,7 @@ class RasDss:
                 "start_time": start_time,
                 "end_time": end_time,
                 "metadata": metadata,
+                "row_order": "south_up",
             }
         except (ValueError, TypeError):
             raise
@@ -1955,7 +2641,7 @@ class RasDss:
         if file_existed and not dss_path.is_file():
             raise IsADirectoryError(f"DSS path is not a file: {dss_path}")
         if file_existed and dss_version is not None:
-            existing_version = RasDss.get_file_version(dss_path)
+            existing_version = RasDss._get_file_version_java(dss_path)
             if existing_version != dss_version:
                 raise ValueError(
                     f"Existing DSS file is version {existing_version}, not "
@@ -2235,7 +2921,7 @@ class RasDss:
                 selector_parts,
             )
             for record in records:
-                grid = RasDss.read_grid(source, record[2])
+                grid = RasDss._read_grid_java(source, record[2])
                 signature, mask = RasDss._validate_grid_record_metadata(
                     grid,
                     record,
@@ -2246,7 +2932,7 @@ class RasDss:
                     reference = grid
                     reference_signature = signature
                     nodata_mask = mask
-            source_version = RasDss.get_file_version(source)
+            source_version = RasDss._get_file_version_java(source)
         finally:
             RasDss._best_effort_close_dss_file(
                 source,
@@ -2331,7 +3017,7 @@ class RasDss:
             RasDss._create_empty_dss(temporary, source_version)
             try:
                 for index, record in enumerate(records):
-                    grid = RasDss.read_grid(source, record[2])
+                    grid = RasDss._read_grid_java(source, record[2])
                     RasDss._validate_grid_record_metadata(
                         grid,
                         record,
@@ -2396,7 +3082,7 @@ class RasDss:
                     "independently expected record count"
                 )
 
-            temporary_version = RasDss.get_file_version(temporary)
+            temporary_version = RasDss._get_file_version_java(temporary)
             if temporary_version != source_version:
                 raise RuntimeError(
                     "Grid derivative changed DSS major version: "
@@ -2415,7 +3101,7 @@ class RasDss:
                 )
 
             for index, expected_pathname in enumerate(expected_catalog_pathnames):
-                output_grid = RasDss.read_grid(temporary, expected_pathname)
+                output_grid = RasDss._read_grid_java(temporary, expected_pathname)
                 RasDss._validate_grid_record_metadata(
                     output_grid,
                     (
@@ -2518,18 +3204,109 @@ class RasDss:
         """Return the major HEC-DSS file version (6 or 7).
 
         Args:
-            dss_file: Existing DSS file to inspect.
+            dss_file: Existing DSS file to inspect. The file is never created
+                or modified.
+
+        Returns:
+            ``6`` or ``7`` (``int``).
+
+        Backends:
+            ``"java"`` asks HEC Monolith (``HecDataManager.getDssFileVersion``).
+            ``"native"`` reads the file header through dss-commander without a
+            JVM. ``"shadow"`` returns the native answer and logs any
+            disagreement with Java.
 
         Raises:
             FileNotFoundError: If the path does not exist.
             IsADirectoryError: If the path is not a file.
-            ValueError: If the file is not a supported DSS 6 or DSS 7 database.
+            DssInvalidFileError: If the file is not a supported DSS 6 or DSS 7
+                database (a ``ValueError`` and ``DssFormatError``).
         """
+        RasDss._check_existing_file(dss_file)
+        backend = RasDss.get_backend()
+        if backend == "native":
+            return RasDss._get_file_version_native(dss_file)
+        if backend == "shadow":
+            return RasDss._get_file_version_shadow(dss_file)
+        return RasDss._get_file_version_java(dss_file)
+
+    @staticmethod
+    def _check_existing_file(dss_file: Union[str, Path]) -> Path:
         dss_path = Path(dss_file)
         if not dss_path.exists():
             raise FileNotFoundError(f"DSS file not found: {dss_path}")
         if not dss_path.is_file():
             raise IsADirectoryError(f"DSS path is not a file: {dss_path}")
+        return dss_path
+
+    @staticmethod
+    def _get_file_version_native(dss_file: Union[str, Path]) -> int:
+        """Header version through dss-commander (no JVM)."""
+        from ras_commander.RasUtils import RasUtils
+
+        dss_path = RasDss._check_existing_file(dss_file)
+        dc = _backend.import_native()
+        try:
+            signature = dc.file_signature(RasUtils.safe_resolve(dss_path))
+        except dc.DssFormatError as exc:
+            raise _errors.get("DssInvalidFileError")(
+                f"File is not a supported HEC-DSS database: {dss_path}"
+            ) from exc
+        version = int(signature["version"])
+        if version not in (6, 7):
+            raise _errors.get("DssInvalidFileError")(
+                f"File is not a supported HEC-DSS database: {dss_path}"
+            )
+        return version
+
+    @staticmethod
+    def _get_file_version_shadow(dss_file: Union[str, Path]) -> int:
+        """Native version, cross-checked against Java. Comparison never raises."""
+        import time
+
+        invalid = _errors.get("DssInvalidFileError")
+        native_version, native_exc = None, None
+        t0 = time.perf_counter()
+        try:
+            native_version = RasDss._get_file_version_native(dss_file)
+        except Exception as exc:
+            native_exc = exc
+        native_s = time.perf_counter() - t0
+        if native_exc is not None and not isinstance(native_exc, invalid):
+            _backend.record(
+                "file_version", "skipped",
+                f"java skipped: native {type(native_exc).__name__}",
+                dss_file=dss_file, native_error=native_exc, native_seconds=native_s,
+            )
+            raise native_exc
+        try:
+            java_version, java_exc = None, None
+            t1 = time.perf_counter()
+            try:
+                java_version = RasDss._get_file_version_java(dss_file)
+            except Exception as exc:
+                java_exc = exc
+            java_s = time.perf_counter() - t1
+            outcome, label, diffs = _backend.classify_file_version(
+                java_version, java_exc, native_version, native_exc
+            )
+            _backend.record(
+                "file_version", outcome, label, dss_file=dss_file, diffs=diffs,
+                java_seconds=java_s, native_seconds=native_s, java_error=java_exc,
+                native_error=native_exc,
+                detail={"java_version": java_version, "native_version": native_version},
+            )
+        except Exception as exc:  # the comparison must never break the read
+            logger.warning("DSS shadow file_version comparison failed for %s: %s", dss_file, exc)
+        if native_exc is not None:
+            raise native_exc
+        return native_version
+
+    @staticmethod
+    def _get_file_version_java(dss_file: Union[str, Path]) -> int:
+        """Header version through HEC Monolith. Internal Java-only callers
+        (writers) use this directly."""
+        dss_path = RasDss._check_existing_file(dss_file)
 
         RasDss._configure_jvm()
 
@@ -2540,7 +3317,7 @@ class RasDss:
         resolved_path = str(RasUtils.safe_resolve(dss_path))
         version = int(HecDataManager.getDssFileVersion(resolved_path))
         if version not in (6, 7):
-            raise ValueError(
+            raise _errors.get("DssInvalidFileError")(
                 f"File is not a supported HEC-DSS database: {dss_path}"
             )
         return version
@@ -2646,7 +3423,7 @@ class RasDss:
         if file_existed and not dss_path.is_file():
             raise IsADirectoryError(f"DSS path is not a file: {dss_path}")
         if file_existed and dss_version is not None:
-            existing_version = RasDss.get_file_version(dss_path)
+            existing_version = RasDss._get_file_version_java(dss_path)
             if existing_version != dss_version:
                 raise ValueError(
                     f"Existing DSS file is version {existing_version}, not "

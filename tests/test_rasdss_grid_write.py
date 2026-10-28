@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -17,9 +18,11 @@ _BRIDGE_WORKER = Path(__file__).with_name("_rasdss_grid_bridge_worker.py")
 
 
 def _run_bridge_scenario(scenario: str, output_dir: Path) -> None:
+    # Java bridge checks cover the Java path whatever backend the caller selected.
     completed = subprocess.run(
         [sys.executable, str(_BRIDGE_WORKER), scenario, str(output_dir)],
         check=False,
+        env={k: v for k, v in os.environ.items() if k != "RAS_COMMANDER_DSS_BACKEND"},
         capture_output=True,
         text=True,
     )
