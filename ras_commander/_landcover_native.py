@@ -446,6 +446,8 @@ def create_soils(
 
     Accept one source raster or a list of aligned tiles sharing the same class
     mapping. HEC-RAS creates and serializes one output TIFF/HDF pair.
+    Individual sources above 100 million pixels raise before native loading
+    to avoid an unattended modal prompt; tile or crop those sources first.
     """
     if _major_version(hecras_version) <= 5:
         raise NotImplementedError(
@@ -495,6 +497,18 @@ def create_soils(
         )
     if not normalized_rows or 0 not in seen_ids:
         raise ValueError("Soils classes must include ID 0 for NoData.")
+
+    # Native initialization shows a modal Continue prompt for an oversized
+    # individual raster, which cannot be answered in a headless call.
+    import rasterio
+    for source_path in source_paths:
+        with rasterio.open(source_path) as raster:
+            if raster.width * raster.height > 100_000_000:
+                raise ValueError(
+                    "A soils source raster exceeds 100,000,000 pixels; tile or crop "
+                    "each source below this limit and pass the aligned tiles as a list. "
+                    "RasMap.add_soils_layer handles extent filtering and tiling for gSSURGO inputs."
+                )
 
     install = find_hecras_install(hecras_version)
     load_clr(install)
