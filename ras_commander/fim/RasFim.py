@@ -371,6 +371,11 @@ class RasFim:
 
         ``terrain_path`` must be a same-CRS float32 square-pixel GeoTIFF with
         declared nodata. ``bbox`` or ``polygon`` constrains output pixels;
+        polygon masks require the engine's ``global-terrain-lattice/1``
+        capability (0.10.1+). AOI edge inclusion uses global source pixel
+        coordinates with lower-y/left endpoints included, upper-y/right
+        excluded, and northward y. No geometric epsilon is applied. This
+        intentionally replaces crop-dependent legacy boundary ties.
         connectivity uses the complete mesh. Polygon constraints accept the
         same geometry/frame/file forms as :meth:`resolve_aoi`.
 

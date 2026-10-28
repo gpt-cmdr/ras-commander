@@ -221,6 +221,35 @@ Existing depth-weighting/corner requirements and 2D-only restrictions remain.
 
 ## Additional sloping options (engine 0.5)
 
+### Global terrain-lattice AOI coverage (engine 0.10.1)
+
+Horizontal and sloping polygon masks require an engine advertising
+`aoi_mask="global-terrain-lattice/1"`. An older engine raises explicitly for
+polygon masking; unbounded and same-CRS bbox requests remain compatible.
+The NumPy horizontal reference uses the same coverage contract.
+
+AOI vertices are normalized once against the original terrain transform.
+Pixels are tested at global centers `(column + 0.5, -row - 0.5)` in pixel units,
+with y increasing northward. Even-odd scanlines include their lower-y endpoint
+and exclude their upper-y endpoint. Filled spans include the left endpoint
+and exclude the right. Rectangles therefore include their minimum x/y edges
+and exclude maximum x/y edges. Holes, multipart polygons and reversed rings
+retain this rule; bbox windows use the same normalized coordinate convention.
+There is no geometric epsilon, resampling or added depth cutoff.
+
+Integer crop offsets only select emitted pixels: they do not enter edge
+intersection arithmetic. At exact pixel-center ties, this deliberately changes
+coverage from legacy GDAL/terrio masks, whose inclusion can depend on crop
+origin. It does not promise to reproduce those legacy ties. Hydraulic cell
+ownership and interpolation are unchanged. Manifests identify the AOI rule.
+
+The reproduction harness `scripts/benchmarks/fim_aoi_full_crop_compare.py`
+compares bounded rasters with independently masked full results using the
+NumPy rule, checking all extra/missing pixels and valid float32 bits. It also
+counts reference-valid pixels omitted outside the bounded raster extent.
+Retain the same source terrain TIFF and its grid/tile layout; changing or
+retile-preparing the terrain is a different operation.
+
 ### Reach-scale catalog masks
 
 Both sloping modes accept the same bbox/polygon inputs as horizontal mapping.

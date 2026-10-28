@@ -85,6 +85,10 @@ def run_batch(
         raise FimEngineError(
             "engine lacks native terrio ownership; install ras-commander-fast-map 0.8 or newer"
         )
+    if grid.plan.mask_geometry and method.get("aoi_mask") != "global-terrain-lattice/1":
+        raise FimEngineError("Polygon masking requires Fast-Map global-terrain-lattice/1 (0.10.1+)")
+    if grid.plan.geometry is not None:
+        details["aoi_mask"] = "global-terrain-lattice/1"
     identity = _engine.terrain_identity(engine, terrain, ordered.crs)
     details["engine"] = {"path": str(engine), "method": method}
     pixels = int(np.prod(grid.plan.shape))

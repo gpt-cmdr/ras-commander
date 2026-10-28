@@ -9,6 +9,18 @@ alone does not identify a development checkout.
 
 ### Unreleased
 
+**Crop-invariant polygon AOI edges**
+
+Horizontal/sloping masks use global source pixel coordinates and an explicit
+half-open edge rule, eliminating crop-origin differences at pixel-center
+boundary ties. Polygon mapping requires Fast-Map's
+`global-terrain-lattice/1` capability (0.10.1+); older engines raise rather than
+silently use the old coverage. Unbounded/same-CRS bbox compatibility remains.
+The NumPy reference and bbox planning use the same normalized convention.
+This intentionally changes legacy edge inclusion, while leaving hydraulic
+cell ownership and surface arithmetic unchanged. See the
+[AOI contract](../api/fim.md#global-terrain-lattice-aoi-coverage-engine-0101).
+
 **Columnar PMTiles properties**
 
 `fast_hdf.export_mesh_pmtiles()` builds its property columns as NumPy arrays

@@ -62,4 +62,4 @@ def test_mapping_engine_dependency_is_optional_and_platform_scoped():
     ):
         selected = [item for item in engines if item.marker.evaluate(dict(extra=extra, platform_system=system, platform_machine=machine))]
         assert bool(selected) is expected
-        assert all("0.8.0" in item.specifier and "0.9.0" not in item.specifier for item in selected)
+        assert all("0.8.0" in item.specifier and "0.10.1" in item.specifier and "0.11.0" not in item.specifier for item in selected)

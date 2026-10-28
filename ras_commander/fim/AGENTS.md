@@ -27,6 +27,14 @@ Parent `ras_commander/AGENTS.md` and root `AGENTS.md` still apply.
 
 ## Invariants
 
+- Horizontal/sloping polygon coverage requires `global-terrain-lattice/1`.
+  Normalize AOI coordinates against the full terrain transform once; evaluate
+  scanlines and pixel centers globally, with lower-y and left endpoints
+  included, upper-y and right excluded (northward y). No crop-origin arithmetic
+  or geometric epsilon enters intersections. Keep cell ownership/interpolation
+  unchanged; older engines must refuse polygon requests rather than silently
+  using legacy mask ties. The explicit NumPy reference follows this rule.
+
 - `map_sloping_profiles` is a separate experimental native plain-sloping method,
   `rasmapper-plain-sloping/1`. It reads complete HDF topology and virtual cell WSE
   through the Rust HDF backend; Rust reconstructs hydraulic face connections,

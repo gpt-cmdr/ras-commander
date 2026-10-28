@@ -456,6 +456,8 @@ def test_rust_horizontal_block_seams_polygon_and_float32(scene, tiled, threshold
     engine = os.environ.get("RAS_COMMANDER_FIM_HORIZONTAL_ENGINE")
     if not engine:
         pytest.skip("set RAS_COMMANDER_FIM_HORIZONTAL_ENGINE")
+    if _engine.engine_method(Path(engine)).get("horizontal", {}).get("aoi_mask") != "global-terrain-lattice/1":
+        pytest.skip("polygon qualification requires a global-lattice AOI engine (0.10.1+)")
     _, _, root = scene
     terrain = root / "blocks.tif"
     data = np.full((37, 45), 100.0, dtype="float32")
@@ -744,6 +746,8 @@ def test_native_terrio_owns_boundary_and_polygon_mask(scene, monkeypatch, worker
     engine = os.environ.get("RAS_COMMANDER_FIM_HORIZONTAL_ENGINE")
     if not engine:
         pytest.skip("set RAS_COMMANDER_FIM_HORIZONTAL_ENGINE to the rebuilt engine")
+    if _engine.engine_method(Path(engine)).get("horizontal", {}).get("aoi_mask") != "global-terrain-lattice/1":
+        pytest.skip("polygon qualification requires a global-lattice AOI engine (0.10.1+)")
     cells, terrain, root = scene
     # Put a shared boundary exactly on pixel centres, with distinct cell values.
     cells.loc[0, "geometry"] = box(0, 0, 10.5, 10)

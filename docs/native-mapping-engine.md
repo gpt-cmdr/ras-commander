@@ -138,6 +138,13 @@ invalidate the context. See [prepared model usage](api/fim.md#reuse-prepared-mod
 
 ## Map caller-computed elevations
 
+For polygon masks, use Fast-Map 0.10.1 or newer with the advertised
+`global-terrain-lattice/1` capability. Global source pixel coordinates keep
+AOI edge inclusion independent of output crop origin, including edges through
+pixel centers. This is an explicit half-open coverage rule, not an epsilon or
+a reproduction of legacy GDAL boundary ties. See the
+[edge contract](api/fim.md#global-terrain-lattice-aoi-coverage-engine-0101).
+
 `map_sloping_profiles(..., wsel_profiles=table)` and
 `prepare_sloping_model(..., wsel_profiles=table)` accept named WSEL columns keyed
 by `mesh_name` and mesh-local `cell_id`. Include every physical and ghost cell
