@@ -274,16 +274,17 @@ and properties continue to come from the original HDF; neither hydraulics nor
 the terrain is modified. No terrain healer is bundled or invoked by this API.
 Mapping-time bbox/polygon masks retain global hydraulic inputs.
 
-The published Fast-Map **0.8.0** wheel already accepts these vectors; no new
-engine build is required. The new Commander keyword requires a version or
-source commit containing this feature. On Linux x64 with glibc 2.28+, including
+Fast-Map accepts these vectors from 0.8.0 onward; no new engine build is
+required. Commander's `fim` extra requires Fast-Map **0.10.1** or later. The
+new Commander keyword requires a version or source commit containing this
+feature. On Linux x64 with glibc 2.28+, including
 a Python 3.11 container with a Commander checkout copied to `/app`, install:
 
 ```dockerfile
 FROM python:3.11-slim
 WORKDIR /app
 COPY . /app
-RUN python -m pip install --no-cache-dir '.[fim]' 'ras-commander-fast-map==0.8.0'
+RUN python -m pip install --no-cache-dir '.[fim]' 'ras-commander-fast-map==0.10.1'
 ENTRYPOINT ["python", "scripts/examples/map_supplied_wsel.py"]
 ```
 
