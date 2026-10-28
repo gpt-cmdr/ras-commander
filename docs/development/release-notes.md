@@ -33,6 +33,21 @@ This intentionally changes legacy edge inclusion, while leaving hydraulic
 cell ownership and surface arithmetic unchanged. See the
 [AOI contract](../api/fim.md#global-terrain-lattice-aoi-coverage-engine-0101).
 
+**Sloping maps no longer fail a whole mesh for one invalid cell**
+
+`RasFim.map_sloping_profiles()` and `prepare_sloping_model()` previously
+refused a mesh with any self-intersecting cell ring (`MeshCellPolygonError`),
+whatever the AOI. They now take `invalid_cells="repair" | "hull" | "omit" |
+"raise"`. The default, `"repair"`, maps the cell's polygonized face regions not
+owned by valid cells and trims overlapping neighbours by lower cell ID. This
+matched native RAS Mapper 7.0.1 sloping Max pixels bit-for-bit around three
+Glaise Creek cells; `"omit"` left 22 holes. `"raise"` keeps the strict refusal,
+now scoped to AOIs that intersect an affected cell. Affected cells and actions
+are recorded under `invalid_cells` in `fim_manifest.json` and
+`attrs["invalid_cells"]`. Valid meshes are unchanged. Published fast-hdf 0.2.3
+already provides the non-strict assembly; no engine release is needed. See
+[Invalid cell polygons](../api/fim.md#invalid-cell-polygons).
+
 **FIM: priority-1 terrain source, whole-simulation products and velocity**
 
 `RasFim.top_priority_terrain_source()` identifies a registered terrain's

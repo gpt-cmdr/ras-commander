@@ -259,6 +259,7 @@ class RasFim:
         hdf_path: PathLike, terrain_path: PathLike, *,
         profiles: Optional[Dict[str, Union[str, int]]] = None,
         wsel_profiles: Optional[pd.DataFrame] = None,
+        invalid_cells: str = "repair",
         render_mode: str = "sloping",
         reduce_shallow_to_horizontal: bool = False,
         use_depth_weighted_faces: bool = False,
@@ -298,6 +299,12 @@ class RasFim:
             ``info``, ``closed`` and idempotent ``close``. Its mapping method
             accepts an optional ordered subset of prepared names, bbox or
             polygon, and the ordinary delivery/concurrency controls.
+
+        ``invalid_cells`` is fixed at preparation and handled as in
+        :meth:`map_sloping_profiles`; ``info["invalid_cells"]`` lists the
+        affected cells. With ``"raise"``, preparation succeeds and each request
+        refuses only when its AOI (or the whole mesh, without one) intersects
+        an invalid cell.
         """
         _require_dependencies(triangulation=False)
         from ._sloping_context import FimPreparedSlopingModel
@@ -306,6 +313,7 @@ class RasFim:
             hdf_path, terrain_path, profiles=profiles, wsel_profiles=wsel_profiles, render_mode=render_mode,
             reduce_shallow_to_horizontal=reduce_shallow_to_horizontal,
             use_depth_weighted_faces=use_depth_weighted_faces,
+            invalid_cells=invalid_cells,
             postprocessing_hdf=postprocessing_hdf,
             corner_elevation_source=corner_elevation_source,
             engine_path=engine_path, threads=threads,
@@ -333,6 +341,7 @@ class RasFim:
         template_raster: Optional[PathLike] = None,
         terrain_hdf: Optional[PathLike] = None,
         velocity: bool = False,
+        invalid_cells: str = "repair",
     ) -> pd.DataFrame:
         """Map 2D HDF WSE with the experimental Rust sloping engine.
 
@@ -456,6 +465,20 @@ class RasFim:
                 match native Max maps on the qualified models (see
                 ``attrs["velocity"]``). Plain sloping with HDF profiles only; refuses
                 ``wsel_profiles``, ``template_raster`` and storage-area plans.
+            invalid_cells: Pixel ownership for physical cells whose face
+                polylines do not form a valid polygon (for example, a face that
+                crosses back over another face of the same cell). HEC-RAS
+                computes such cells; strict polygon assembly refuses them.
+                ``"repair"`` (default) polygonizes the cell's noded face
+                polylines, removes area owned by valid cells and keeps the
+                largest part. ``"hull"`` uses the face-point convex hull with
+                the same overlap removal. ``"omit"`` leaves the cell unmapped.
+                ``"raise"`` keeps the strict refusal, but only when the AOI (or
+                the whole mesh, without one) intersects an invalid cell's
+                face-point hull. Hydraulic connectivity, corners and
+                interpolation stencils always use the complete HDF topology.
+                ``fim_manifest.json`` and ``attrs["invalid_cells"]`` record each
+                cell, the reason and the action taken.
 
         Returns:
             DataFrame: ``fim_product_manifest`` rows with timing evidence in
@@ -469,6 +492,8 @@ class RasFim:
             FimUnsupportedError: Unsupported model, geometry, AOI or terrain.
             FimEngineNotFoundError: The optional executable is unavailable.
             FimEngineError: Engine failure, inconsistent output or changed input.
+            MeshCellPolygonError: ``invalid_cells="raise"`` and an invalid
+                cell intersects the requested output.
             ValueError: Invalid profile selectors, supplied identities/values,
                 source metadata or resource options.
             TypeError: wsel_profiles is not a pandas DataFrame.
@@ -487,7 +512,7 @@ class RasFim:
             max_working_mib=max_working_mib, timeout=timeout, write_floodplain=write_floodplain,
             max_inflight_profiles=max_inflight_profiles,
             template_raster=template_raster, terrain_hdf=terrain_hdf,
-            velocity=velocity)
+            velocity=velocity, invalid_cells=invalid_cells)
 
     @staticmethod
     @log_call

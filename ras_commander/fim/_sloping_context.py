@@ -32,6 +32,7 @@ class FimPreparedSlopingModel:
         render_mode="sloping",
         reduce_shallow_to_horizontal=False,
         use_depth_weighted_faces=False,
+        invalid_cells=None,
         postprocessing_hdf=None,
         corner_elevation_source="auto",
         engine_path=None,
@@ -52,6 +53,12 @@ class FimPreparedSlopingModel:
         self._info = {}
         self._options = _sloping._validate_options(
             render_mode, reduce_shallow_to_horizontal, use_depth_weighted_faces
+        )
+        from . import _invalid_cells
+
+        self._invalid_records = []
+        self._invalid_policy = _invalid_cells.validate_policy(
+            _invalid_cells.DEFAULT_POLICY if invalid_cells is None else invalid_cells
         )
         self._postprocessing_hdf = postprocessing_hdf
         self._corner_elevation_source = corner_elevation_source
@@ -94,10 +101,12 @@ class FimPreparedSlopingModel:
                 _, sources = validate_receipt(self._hdf, postprocessing_hdf)
                 self._watched.update(sources)
                 self._identities.update({key: _file_identity(path) for key, path in sources.items()})
-            with backend_scope("rust"):
-                self._cells = HdfMesh.get_mesh_cell_polygons(
-                    self._hdf, strict=True, engine="native", threads=self._threads
-                )
+            cell_started = time.perf_counter()
+            # "raise" defers to each request's AOI; other policies are fixed here.
+            self._cells, self._invalid_records = _invalid_cells.load_cells(
+                self._hdf, policy=self._invalid_policy, threads=self._threads
+            )
+            cell_seconds = time.perf_counter() - cell_started
             if self._cells.empty:
                 raise ValueError("sloping mapping requires physical 2D cell polygons")
             if supplied is not None:
@@ -163,6 +172,10 @@ class FimPreparedSlopingModel:
                 planned_prepared_bytes=geometry_bytes + mesh_bytes + values_bytes,
                 max_prepared_bytes=prepared_budget,
                 prepare_seconds=time.perf_counter() - started,
+                cell_polygon_seconds=cell_seconds,
+                invalid_cells=_invalid_cells.describe(
+                    self._invalid_records, self._invalid_policy, None
+                ),
                 native_state_reused=False,
             )
             if profile_source is not None:

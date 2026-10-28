@@ -57,6 +57,15 @@ Parent `ras_commander/AGENTS.md` and root `AGENTS.md` still apply.
   original source TIFF lattice/tile layout. Full Windows weighted+shallow Max
   checks pass all five models, including River and Creek, with complete mask/bit
   equality. Arbitrary retiled terrain and multi-source mosaics are unqualified.
+- Sloping cell polygons come from `_invalid_cells.load_cells` (non-strict
+  native assembly). A self-intersecting cell follows `invalid_cells`
+  (default `repair`: noded face regions minus valid-cell area, largest part;
+  `hull`, `omit`, or AOI-scoped `raise`). Valid cells touching its hull that
+  overlap a neighbour are trimmed, with the lower cell ID keeping the area;
+  overlaps elsewhere still refuse. Only ownership changes, never stencils or
+  topology. Record every affected cell in the manifest `invalid_cells`. The
+  default matched native 7.0.1 sloping pixels around Glaise Creek's three cells;
+  `omit` left holes. Valid meshes must stay byte-identical.
 - Sloping AOIs constrain terrain/ownership/output pixels only. Keep the complete
   geometry for hydraulic connectivity and corner reconstruction across boundaries.
   Geometry, terrain and ownership are reused across all profiles in one request.

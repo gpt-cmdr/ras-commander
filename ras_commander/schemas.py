@@ -1997,7 +1997,7 @@ DATAFRAME_SCHEMAS["fim_product_manifest"] = {
             ("velocity_tif", "str | None", "Velocity magnitude GeoTIFF (float32, NaN nodata) from map_sloping_profiles(velocity=True); None otherwise."),
         )
     ],
-    "note": "The same rows, engine method record, engine reports, options, AOI and input identities are written to fim_manifest.json. Step05 prepares every wet cell before AOI selection; horizontal mapping prepares ownership and terrain for the constrained window.",
+    "note": "The same rows, engine method record, engine reports, options, AOI and input identities are written to fim_manifest.json. Step05 prepares every wet cell before AOI selection; horizontal mapping prepares ownership and terrain for the constrained window. Sloping manifests add invalid_cells (also attrs['invalid_cells']): {schema: 'fim-invalid-cells/1', policy, count, cells: [{mesh, cell_id, reason, action (repaired|convex_hull|omitted|overlap_trimmed), original_area, fallback_area, overlap_with, intersects_aoi}]}; empty for valid meshes.",
 }
 
 

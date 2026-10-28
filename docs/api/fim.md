@@ -119,6 +119,73 @@ memory. A missing or incompatible engine raises without fallback. Mapping itself
 does not load HEC-RAS assemblies; the private native component oracle is used
 only during development qualification.
 
+## Invalid cell polygons
+
+HEC-RAS can compute a mesh in which one face polyline of a cell crosses
+another face of the same cell, making a self-intersecting "bowtie" ring.
+Strict polygon assembly refuses the whole mesh for one such cell. Sloping
+mapping instead assembles the mesh non-strictly and applies
+`invalid_cells=` to the affected cells. The parameter is accepted by
+`map_sloping_profiles()` and `prepare_sloping_model()`:
+
+| `invalid_cells` | Pixel ownership for the invalid cell |
+|---|---|
+| `"repair"` (default) | Regions enclosed by the cell's noded face polylines, minus area owned by valid cells; the largest part is kept. |
+| `"hull"` | Convex hull of the cell's face points, with the same overlap removal. |
+| `"omit"` | None. The cell's pixels are unmapped. |
+| `"raise"` | Strict refusal (`MeshCellPolygonError`), but only when the AOI, or the whole mesh without one, intersects an invalid cell's face-point hull. |
+
+A crossing face also distorts the cell on its other side. That valid cell can
+then overlap its own neighbours, which the ownership check refuses. Valid
+cells that touch an invalid cell's hull and overlap another cell are trimmed so
+that the lower cell ID keeps the shared area (`action="overlap_trimmed"`).
+Overlaps elsewhere in the mesh are still refused. Only pixel ownership changes:
+hydraulic connectivity, corner values and interpolation stencils always use the
+complete HDF topology.
+
+```python
+manifest = RasFim.map_sloping_profiles(
+    "model.p01.hdf", "terrain.tif", "maps/p01",
+    invalid_cells="repair",  # default; "raise" restores the strict refusal
+)
+for cell in manifest.attrs["invalid_cells"]["cells"]:
+    print(cell["mesh"], cell["cell_id"], cell["action"], cell["fallback_area"])
+```
+
+`fim_manifest.json` and `attrs["invalid_cells"]` record
+`{"schema": "fim-invalid-cells/1", "policy", "count", "cells"}`. Each cell
+entry has:
+
+| Field | Meaning |
+|---|---|
+| `mesh`, `cell_id` | HDF mesh name and zero-based mesh-local cell ID. |
+| `reason` | `no_polygon`, plus the GEOS explanation of the face ring (for example `Self-intersection[x y]`), or the overlap reason for trimmed cells. |
+| `action` | `repaired`, `convex_hull`, `omitted` or `overlap_trimmed`. |
+| `original_area` | Area enclosed by the noded face polylines (invalid cells) or the untrimmed polygon (trimmed cells), in model units squared. |
+| `fallback_area` | Area of the ownership polygon actually mapped; `null` when omitted. |
+| `overlap_with` | Lower-ID cells that kept the overlap (trimmed cells only). |
+| `intersects_aoi` | Whether the cell's hull intersects the request AOI; `null` without an AOI. |
+
+The list is empty (`count == 0`) for valid meshes, whose polygons, ownership
+and products are unchanged. A prepared context fixes the policy and lists the
+cells in `info["invalid_cells"]`. With `"raise"`, preparation succeeds and each
+request refuses only if its AOI intersects an affected cell.
+
+**Why `repair` is the default.** On Glaise Creek–White River p01 (eBFE
+1101001306; 582,934 cells; three self-intersecting cells in
+`default geometry`), the default was compared with native HEC-RAS 7.0.1
+RAS Mapper sloping Max stored maps. The terrain was clipped to 10 ft windows
+around each cell. Within 60 ft of the cells, `repair` and `hull` matched all
+156 wet RAS Mapper pixels with identical float32 bits and masks. `omit` left
+22 holes where RAS Mapper maps the cell (14 at cell 457262 and 8 at cell
+497876). Giving overlaps to the higher cell ID instead missed one pixel. Every
+other pixel in the three windows matched under all policies, and `repair` and
+`omit` products were identical outside the affected cells. `hull` also claims
+unowned area outside the cell's face polylines (1,201 ft² more than `repair` at
+cell 36699, where RAS Mapper had no wet pixels), so it remains an explicit
+option rather than the default. The bowtie in RAS Mapper's own fill
+is not documented; this evidence covers these three cells.
+
 ## Supply cell WSEL profiles
 
 Pass `wsel_profiles=` to `RasFim.map_sloping_profiles()` or
