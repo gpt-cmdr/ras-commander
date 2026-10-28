@@ -383,7 +383,8 @@ class InitialConditions:
         site_id : str
             USGS site ID (e.g., 'USGS-01646500' or '01646500')
         target_datetime : str or datetime
-            Target datetime for IC value (ISO format string or datetime object)
+            Target datetime for IC value (ISO format string or datetime object).
+            Naive timestamps mean UTC; provide a timezone for local model times.
         parameter : str, default 'flow'
             Parameter to retrieve: 'flow' (00060) or 'stage' (00065)
         tolerance_hours : int, default 1
@@ -425,7 +426,8 @@ class InitialConditions:
         Requires the 'dataretrieval' package: pip install dataretrieval
         """
         try:
-            from dataretrieval import nwis
+            from ._waterdata_adapter import _WaterDataAdapter as reader, _backend
+            _backend()
         except ImportError:
             logger.error("dataretrieval package not installed. Install with: pip install dataretrieval")
             raise ImportError("dataretrieval package required. Install with: pip install dataretrieval")
@@ -435,6 +437,9 @@ class InitialConditions:
             target_dt = pd.to_datetime(target_datetime)
         else:
             target_dt = target_datetime
+
+        target_dt = pd.Timestamp(target_dt)
+        target_dt = target_dt.tz_localize('UTC') if target_dt.tzinfo is None else target_dt.tz_convert('UTC')
 
         # Create time window
         start_time = target_dt - timedelta(hours=tolerance_hours)
@@ -450,11 +455,11 @@ class InitialConditions:
 
         try:
             # Query USGS
-            df = nwis.get_iv(
+            df = reader.get_iv(
                 sites=site_id_clean,
                 parameterCd=param_code,
-                start=start_time.strftime('%Y-%m-%d'),
-                end=end_time.strftime('%Y-%m-%d')
+                start=start_time.isoformat(),
+                end=end_time.isoformat()
             )
 
             if df[0].empty:
@@ -479,9 +484,9 @@ class InitialConditions:
             metadata = {
                 'actual_time': nearest_idx,
                 'time_offset_minutes': nearest_row['time_diff'].total_seconds() / 60,
-                'approval_status': 'Unknown',  # IV data doesn't include this
+                'approval_status': {'P': 'Provisional', 'A': 'Approved'}[nearest_row[f'{site_id_clean}_{param_code}_cd']],
                 'unit_of_measure': 'ft3/s' if parameter.lower() == 'flow' else 'ft',
-                'source_url': f'https://waterdata.usgs.gov/nwis/iv?site_no={site_id_clean}'
+                'source_url': f'https://api.waterdata.usgs.gov/ogcapi/v1/collections/continuous/items?monitoring_location_id=USGS-{site_id_clean}'
             }
 
             logger.info(

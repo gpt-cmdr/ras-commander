@@ -10,7 +10,7 @@ from pathlib import Path
 # platforms and pip never tries to compile the Rust source distribution
 # elsewhere. Where the extension is not installed, every read uses h5py.
 FAST_HDF_REQUIREMENT = 'ras-commander-fast-hdf>=0.2.3,<0.3'
-FAST_MAP_REQUIREMENT = 'ras-commander-fast-map>=0.8,<0.11'
+FAST_MAP_REQUIREMENT = 'ras-commander-fast-map>=0.10.1,<0.11'
 FAST_MAP_WHEEL_MARKER = (
     '(platform_system == "Windows" and platform_machine == "AMD64")'
     ' or (platform_system == "Linux" and platform_machine == "x86_64")'
@@ -89,7 +89,7 @@ class CustomBuildPy(build_py):
 
 setup(
     name="ras-commander",
-    version="0.110.1",
+    version="0.110.2",
     packages=find_packages(include=['ras_commander', 'ras_commander.*']),
     include_package_data=True,
     package_data={
@@ -165,7 +165,7 @@ setup(
         'fim': ['scipy', 'geopandas', 'shapely>=2.0', 'rasterio', 'pyproj',
                 f'{FAST_MAP_REQUIREMENT}; {FAST_MAP_WHEEL_MARKER}'],
         # USGS gauge data integration
-        'usgs': ['dataretrieval>=1.0'],
+        'usgs': ['dataretrieval>=1.4'],
         # FEMA eBFE archives that use Deflate64 compression (ZIP method 9).
         # Upstream publishes wheels only through CPython 3.10; keep this out of
         # the broad ``all`` extra so current Python installs do not require an
@@ -196,7 +196,7 @@ setup(
             'eccodes>=2.28',
             'pyproj',
             'aiohttp',
-            'dataretrieval>=1.0',
+            'dataretrieval>=1.4',
             'zarr>=2.14.0',
             's3fs>=2023.0.0',
             'netCDF4>=1.6.0',
@@ -216,7 +216,7 @@ setup(
             'docker>=6.0',
             'Pillow>=9.0',
             'comtypes>=1.4.0; sys_platform == "win32"',
-            'dataretrieval>=1.0',
+            'dataretrieval>=1.4',
             'zarr>=2.14.0',
             's3fs>=2023.0.0',
             'netCDF4>=1.6.0',

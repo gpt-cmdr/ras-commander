@@ -2779,6 +2779,12 @@ Step 5: Configure (optional — auto-detection usually works)
                 _windows_extended_length_path(source),
                 _windows_extended_length_path(working_copy),
             )
+            # copy2 preserves a read-only source's permissions/attributes.
+            # Only this task-owned copy is opened for mutation and cleanup;
+            # the original backup retains the source's permissions unchanged.
+            import stat
+            working_io = _windows_extended_length_path(working_copy)
+            os.chmod(working_io, os.stat(working_io).st_mode | stat.S_IWUSR)
             changed = RasProcess._normalize_mapper_geometry_timestamps(working_copy)
             if not changed:
                 os.remove(_windows_extended_length_path(working_copy))
@@ -2818,10 +2824,14 @@ Step 5: Configure (optional — auto-detection usually works)
                     _windows_extended_length_path(original_backup),
                     source_io,
                 )
-            for temporary_path in (working_copy, original_backup):
-                temporary_io = _windows_extended_length_path(temporary_path)
-                if os.path.exists(temporary_io):
-                    os.remove(temporary_io)
+            # A successful restoration consumes the backup via os.replace.
+            # If restoration failed, this is the only original: retain it.
+            backup_io = _windows_extended_length_path(original_backup)
+            if os.path.exists(backup_io):
+                logger.error("Mapper HDF restoration failed; original retained at %s", original_backup)
+            working_io = _windows_extended_length_path(working_copy)
+            if os.path.exists(working_io):
+                os.remove(working_io)
 
     @staticmethod
     def _get_plan_short_id(hdf_path: Path) -> Optional[str]:
@@ -4295,6 +4305,7 @@ Step 5: Configure (optional — auto-detection usually works)
                                 performance_options.gdal_num_threads_per_helper
                             ),
                             gdal_cachemax_mb=performance_options.gdal_cachemax_mb,
+                            native_cpu_limit=performance_options.native_cpu_limit,
                         )
 
                     helper_results = _run_memory_admitted_store_map_jobs(
@@ -4376,6 +4387,7 @@ Step 5: Configure (optional — auto-detection usually works)
                             performance_options.gdal_num_threads_per_helper
                         ),
                         gdal_cachemax_mb=performance_options.gdal_cachemax_mb,
+                        native_cpu_limit=performance_options.native_cpu_limit,
                     )
 
                     logger.debug(f"StoreAllMaps stdout: {result.stdout}")

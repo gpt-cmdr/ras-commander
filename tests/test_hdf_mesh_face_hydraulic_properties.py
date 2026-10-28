@@ -786,3 +786,63 @@ def test_reference_line_internal_faces_missing_group_is_empty(tmp_path):
 
     assert df.empty
     assert "reference_line_id" in df.columns
+
+
+@pytest.mark.parametrize("version", ["HEC-RAS 7.0 April 2026", "HEC-RAS 7.0.1 June 2026"])
+def test_linux_tmp_writer_exact_qualified_versions_roundtrip(tmp_path, version):
+    source = _write_face_property_hdf(tmp_path / "qualified.p01.tmp.hdf")
+    with h5py.File(source, "r+") as hdf:
+        hdf.attrs["File Version"] = version
+    before = source.read_bytes()
+    replacement = _replacement_face_table()
+    backup = HdfMesh.write_linux_tmp_face_property_tables(
+        source, "MainArea", {0: replacement}, acknowledge_unsupported=True,
+    )
+    assert backup.read_bytes() == before
+    with h5py.File(source) as changed, h5py.File(backup) as original:
+        group = "Geometry/2D Flow Areas/MainArea/"
+        actual = changed[group + "Faces Area Elevation Values"][()]
+        np.testing.assert_array_equal(actual[:2], replacement.to_numpy())
+        np.testing.assert_array_equal(actual[2:], original[group + "Faces Area Elevation Values"][()][2:])
+
+
+def test_linux_tmp_writer_native_701_roundtrip(tmp_path):
+    """Opt-in qualification on an immutable native 7.0.1 temporary result."""
+    import hashlib
+    import os
+    import shutil
+
+    fixture = os.environ.get("RAS_COMMANDER_701_TMP_HDF")
+    if not fixture:
+        pytest.skip("Set RAS_COMMANDER_701_TMP_HDF to a native 7.0.1 temporary result")
+    fixture = Path(fixture)
+    source_digest = hashlib.sha256(fixture.read_bytes()).hexdigest()
+    target = tmp_path / "qualified.p01.tmp.hdf"
+    shutil.copy2(fixture, target)
+    with h5py.File(target) as hdf:
+        assert HdfMesh._decode_hdf_attr(hdf.attrs["File Version"]) == "HEC-RAS 7.0.1 June 2026"
+        areas = hdf["Geometry/2D Flow Areas"]
+        mesh = next(name for name, obj in areas.items() if isinstance(obj, h5py.Group))
+        base = f"Geometry/2D Flow Areas/{mesh}/"
+        info = hdf[base + "Faces Area Elevation Info"][()]
+        values = hdf[base + "Faces Area Elevation Values"][()]
+        face_ids = sorted({0, len(info) // 2, len(info) - 1})
+        replacements = {}
+        for face in face_ids:
+            start, count = map(int, info[face])
+            table = values[start:start + count].copy()
+            table[:, 3] = 0.045
+            replacements[face] = pd.DataFrame(table, columns=HdfMesh._FACE_PROPERTY_COLUMNS)
+    backup = HdfMesh.write_linux_tmp_face_property_tables(
+        target, mesh, replacements, acknowledge_unsupported=True,
+    )
+    assert hashlib.sha256(backup.read_bytes()).hexdigest() == source_digest
+    with h5py.File(target) as hdf:
+        np.testing.assert_array_equal(hdf[base + "Faces Area Elevation Info"][()], info)
+        actual = hdf[base + "Faces Area Elevation Values"][()]
+        expected = values.copy()
+        for face, replacement in replacements.items():
+            start, count = map(int, info[face])
+            expected[start:start + count] = replacement.to_numpy()
+        np.testing.assert_array_equal(actual, expected)
+    assert hashlib.sha256(fixture.read_bytes()).hexdigest() == source_digest
