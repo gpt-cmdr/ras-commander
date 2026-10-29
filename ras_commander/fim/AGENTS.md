@@ -152,6 +152,33 @@ Parent `ras_commander/AGENTS.md` and root `AGENTS.md` still apply.
   for concurrency, retaining sequential compatibility with older engines.
 - The returned manifest columns are declared as `fim_product_manifest` in `ras_commander/schemas.py`.
 
+## Catalog workflow for agents
+
+- Use `RasFim.map_catalog` for multiple area/timestep groups. Read
+  `docs/api/fim.md` sections "Build jobs from a watershed layer" and
+  "Choose a throughput policy" before planning a large catalog.
+- Each job supplies one selected watershed polygon (or an intentional bbox),
+  complete source HDF/qualified terrain paths, a safe unique `job_id`, and an
+  ordered list of zero-based saved-time indices or `"Max"`. Select one feature
+  from multi-feature files/GeoDataFrames; do not pass the entire watershed union
+  to every reach. Preserve CRS, holes, duplicate times and requested ordering.
+- Start with `strategy="reuse"`, one worker, bounded preparation waves and
+  default caches for overlapping times on one model. Test parallel independent
+  jobs only under the same global CPU/RAM limits. `max_inflight_profiles` shares
+  a worker's pool; it is not another CPU allocation. Count per-worker working,
+  prepared and headroom reservations before choosing `max_workers`.
+- Fast-Map 0.11.0 release-line capabilities add hydraulic/multiple-window
+  retention and native sloping TIFF delivery. Inspect capability flags; use
+  `product_writer="native"` only when supported and compatible with the job.
+  Rasterio remains the default. Keep source arrays/global topology complete;
+  let the engine window terrain and mask outputs. Do not crop/retile cell-face
+  terrain or subset hydraulic dependencies to obtain a smaller request.
+- Check both `catalog_status` and per-row statuses. Preserve receipts and
+  source identities; report total wall time and sampled tree memory with
+  hardware/options. A returned partial manifest is not success. Use a fresh
+  output folder for retries and benchmarking. No silent fallback, auto terrain
+  preparation, added depth cutoff, or universal area-to-speedup assumption.
+
 ## Testing
 
 - Supplied `wsel_profiles` tables bind complete mesh-local cell IDs to the original

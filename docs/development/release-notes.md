@@ -9,6 +9,16 @@ alone does not identify a development checkout.
 
 ### Unreleased
 
+**Multi-polygon/timestep catalog guidance and Fast-Map 0.11 compatibility**
+
+The catalog guide now shows how to select individual watersheds from one
+vector layer, supply different ordered timestep lists, choose reuse or
+parallel workers, budget per-worker memory and inspect partial results.
+The `fim` and `fast-map` extras accept Fast-Map 0.11 alongside 0.10.1. Version
+0.11 adds the retained-state and native-writer capabilities; inspect advertised
+flags and use a qualified explicit build until registry publication completes.
+See the [catalog recipe](../api/fim.md#build-jobs-from-a-watershed-layer).
+
 **Retained reach mapping state and optional native raster delivery**
 
 Prepared sloping contexts and catalogs accept bounded hydraulic and window
