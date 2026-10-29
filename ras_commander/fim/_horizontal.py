@@ -40,9 +40,16 @@ class HorizontalGrid:
 
 
 def plan_grid(
-    cells, terrain_path: Path, aoi, max_working_mib: int, native: bool = False
+    cells, terrain_path: Path, aoi, max_working_mib: int, native: bool = False,
+    storage_areas=None,
 ) -> GridPlan:
-    """Inspect metadata and admit the window before allocating raster arrays."""
+    """Inspect metadata and admit the window before allocating raster arrays.
+
+    ``storage_areas`` (optional array of storage-area polygons in the cells'
+    CRS) widens the window to the cells and storage areas together, with one
+    pixel of margin around the storage areas, and admits the engine's
+    storage-area arrays.
+    """
     import rasterio
     import shapely
     from rasterio.windows import Window
@@ -54,8 +61,23 @@ def plan_grid(
     bounds = cells.total_bounds
     if not np.isfinite(bounds).all():
         raise FimUnsupportedError("horizontal cell coordinates must be finite")
+    storage = None
+    if storage_areas is not None and len(storage_areas):
+        storage = np.asarray(storage_areas, dtype=object)
+        extent = shapely.total_bounds(storage)
+        if not np.isfinite(extent).all():
+            raise FimUnsupportedError("storage-area coordinates must be finite")
     with rasterio.open(terrain_path) as src:
         t = src.transform
+        if storage is not None:
+            # One pixel of margin keeps every storage-area pixel centre inside.
+            pad = abs(t.a)
+            bounds = np.array([
+                min(bounds[0], extent[0] - pad),
+                min(bounds[1], extent[1] - pad),
+                max(bounds[2], extent[2] + pad),
+                max(bounds[3], extent[3] + pad),
+            ])
         transient = 0
         if native:
             bh, bw = src.block_shapes[0]
@@ -126,12 +148,14 @@ def plan_grid(
         if window.width and window.height:
             from rasterio.windows import bounds as window_bounds
 
-            positions = np.sort(
-                cells.sindex.query(
-                    shapely.box(*window_bounds(window, t)), predicate="intersects"
-                )
-            )
+            box = shapely.box(*window_bounds(window, t))
+            positions = np.sort(cells.sindex.query(box, predicate="intersects"))
             if not len(positions):
+                if storage is not None and shapely.intersects(storage, box).any():
+                    raise FimUnsupportedError(
+                        "the output window holds storage areas but no 2D cells; "
+                        "storage-area-only windows are not supported"
+                    )
                 window = Window(c0, r0, 0, 0)
     # Ownership, ground, temporary rasterization buffers, float32 WSE/depth
     # arithmetic, float32 products and masks. Raster-library caches and
@@ -155,6 +179,16 @@ def plan_grid(
             )
             transport += int(shapely.get_num_interior_rings(parts).sum()) * 4
         planned += transport * 12
+    if storage is not None and pixels:
+        # Engine storage-area burns, AOI mask and sparse pixel lists.
+        planned += pixels * 28
+        if native:
+            storage_transport = (
+                int(shapely.get_num_coordinates(storage).sum()) * 16 + len(storage) * 128
+                + int(shapely.get_num_interior_rings(storage).sum()) * 4
+            )
+            transport += storage_transport
+            planned += storage_transport * 12
     if planned > max_working_mib * (1 << 20):
         raise FimUnsupportedError(
             f"horizontal window planned {planned} bytes exceeds max_working_mib={max_working_mib}; "
