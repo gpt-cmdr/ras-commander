@@ -21,6 +21,13 @@ their numerical contracts. See the [API](../api/fim.md#deterministic-inundation-
 and [qualification](fim-mapping-performance.md#deterministic-vector-boundary-qualification)
 for terrain and engine prerequisites, measured differences and scope.
 
+- **DSS shadow mode labels HEC's DSS6 "no data" rule.** When a native read
+  raises not-found, `RasDss` shadow mode repeats it with dss-commander's
+  opt-in `no_data="refuse"` and logs a refusal as
+  `D4 HEC DSS6 no-data rule (native refusal, status 4)`. Returned results are
+  unchanged. The Java window cut keeps stored NaN values, as heclib's
+  `ztsTrim` does. Wheels without `DssNoDataError` keep the previous labels.
+
 ### 0.110.3 — 2026-10-29
 
 This patch release includes **20 change PRs** absent from the published

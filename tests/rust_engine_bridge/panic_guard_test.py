@@ -3,6 +3,9 @@
 A panic is an engine bug, so these tests inject one through test hooks:
 ``ras_commander_fast_hdf._panic_for_test`` and ``HdfSession._panic_for_test``
 (the latter panics inside an engine call while the session lock is held).
+The hooks exist only in extension builds with the ``test-hooks`` Cargo feature
+(ras-commander-fast-hdf after 0.2.4); release wheels leave them out, so these
+tests skip there.
 """
 import importlib
 import sys
@@ -14,7 +17,10 @@ import pytest
 
 @pytest.fixture
 def native():
-    return pytest.importorskip("ras_commander_fast_hdf")
+    module = pytest.importorskip("ras_commander_fast_hdf")
+    if not hasattr(module, "_panic_for_test"):
+        pytest.skip("extension built without the test-hooks feature (release wheel)")
+    return module
 
 
 @pytest.fixture
@@ -32,6 +38,18 @@ def test_standalone_panic_is_a_runtime_error_not_panic_exception(native, monkeyp
         native._panic_for_test("boom")
     assert isinstance(info.value, RuntimeError)
     assert isinstance(info.value, Exception)
+
+
+def test_contained_panic_prints_nothing(native, monkeypatch, capfd):
+    # The extension's quiet panic hook: the message is in the exception only.
+    monkeypatch.delenv("RUST_BACKTRACE", raising=False)
+    with pytest.raises(Exception, match="native extension panicked: silent") as info:
+        native._panic_for_test("silent")
+    captured = capfd.readouterr()
+    if "panicked at" in captured.err:
+        pytest.skip("extension predates the quiet panic hook")
+    assert "silent" not in captured.err
+    assert "silent" in str(info.value)
 
 
 def test_panic_maps_to_fast_hdf_error_subclass(native):
