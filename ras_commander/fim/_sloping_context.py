@@ -1,6 +1,7 @@
 """Bounded, explicitly owned HDF staging for repeated 2D reach mapping."""
 
 from copy import deepcopy
+from collections import OrderedDict
 from pathlib import Path
 import tempfile
 import threading
@@ -19,7 +20,8 @@ class FimPreparedSlopingModel:
     Use a context manager or call :meth:`close` to release staged files and
     geometry. Calls on one context are serialized. Capable engines retain one
     owned process, geometry, terrain blocks and a bounded output/weight cache.
-    Hydraulic values are reconstructed per profile. Metadata is returned by copy.
+    Capable engines share bounded reconstructed timestep state across reaches.
+    Metadata is returned by copy.
     """
 
     def __init__(
@@ -40,6 +42,9 @@ class FimPreparedSlopingModel:
         max_working_mib=1024,
         max_prepared_mib=1024,
         native_session=True,
+        window_cache_mib=64,
+        hydraulic_cache_mib=64,
+        validation_cache_mib=8,
         terrain_crs_fnv1a64=None,
     ):
         from .RasFim import RasFim, _file_identity, _positive_int
@@ -52,6 +57,22 @@ class FimPreparedSlopingModel:
         self._closed = True
         self._info = {}
         self._native_session = None
+        self._validated_positions = OrderedDict()
+        self._validation_bytes = 0
+        for label, value in (
+            ("window_cache_mib", window_cache_mib),
+            ("hydraulic_cache_mib", hydraulic_cache_mib),
+            ("validation_cache_mib", validation_cache_mib),
+        ):
+            if (
+                isinstance(value, bool)
+                or not isinstance(value, int)
+                or not 0 <= value <= 4096
+            ):
+                raise ValueError(f"{label} must be an integer from 0 through 4096")
+        self._window_cache_bytes = window_cache_mib << 20
+        self._hydraulic_cache_bytes = hydraulic_cache_mib << 20
+        self._validation_limit = validation_cache_mib << 20
         if not isinstance(native_session, bool):
             raise TypeError("native_session must be boolean")
         self._reuse_native = native_session
@@ -74,18 +95,29 @@ class FimPreparedSlopingModel:
         prepared_budget = _positive_int(max_prepared_mib, "max_prepared_mib") * (
             1 << 20
         )
+        self._validation_limit = min(self._validation_limit, prepared_budget // 8)
+        prepared_budget -= self._validation_limit
         self._supplied = wsel_profiles is not None
         supplied = None
         if self._supplied:
             from ._supplied_wsel import snapshot
-            supplied = snapshot(wsel_profiles, hdf_path, profiles=profiles, max_bytes=prepared_budget)
-        self._selected = supplied.selection if supplied is not None else _sloping._validate_selection(profiles)
+
+            supplied = snapshot(
+                wsel_profiles, hdf_path, profiles=profiles, max_bytes=prepared_budget
+            )
+        self._selected = (
+            supplied.selection
+            if supplied is not None
+            else _sloping._validate_selection(profiles)
+        )
         self._hdf = Path(hdf_path).resolve(strict=True)
         self._terrain = Path(terrain_path).resolve(strict=True)
         self._engine = _engine.find_engine(engine_path)
         self._watched = dict(hdf=self._hdf, terrain=self._terrain, engine=self._engine)
         if postprocessing_hdf is not None:
-            self._watched["postprocessing_hdf"] = Path(postprocessing_hdf).resolve(strict=True)
+            self._watched["postprocessing_hdf"] = Path(postprocessing_hdf).resolve(
+                strict=True
+            )
         self._identities = {
             key: _file_identity(path) for key, path in self._watched.items()
         }
@@ -98,22 +130,44 @@ class FimPreparedSlopingModel:
                 # Bracket the text-based 1D guard as well as the compiled HDF.
                 self._model_scope = RasFim.validate_2d_model(self._hdf)
             self._method = _engine.engine_method(self._engine).get("sloping", {})
-            self._reuse_native = self._reuse_native and self._method.get("persistent_session") is True
+            if window_cache_mib != 64 and not self._method.get("multi_window_cache"):
+                raise FimEngineError(
+                    "Configurable windows require multi_window_cache capability"
+                )
+            if not self._method.get("hydraulic_cache"):
+                self._hydraulic_cache_bytes = 0
+            self._reuse_native = (
+                self._reuse_native and self._method.get("persistent_session") is True
+            )
             _sloping._validate_method(self._method, render_mode, 1)
-            if use_depth_weighted_faces and not self._method.get("depth_weighted_faces"):
-                raise FimEngineError("Depth weighting requires an engine advertising depth_weighted_faces (0.8+)")
-            if postprocessing_hdf is not None and (Path(postprocessing_hdf).parent / "corner_elevation_receipt.json").exists():
+            if use_depth_weighted_faces and not self._method.get(
+                "depth_weighted_faces"
+            ):
+                raise FimEngineError(
+                    "Depth weighting requires an engine advertising depth_weighted_faces (0.8+)"
+                )
+            if (
+                postprocessing_hdf is not None
+                and (
+                    Path(postprocessing_hdf).parent / "corner_elevation_receipt.json"
+                ).exists()
+            ):
                 from ._corner_preparation import validate_receipt
+
                 _, sources = validate_receipt(self._hdf, postprocessing_hdf)
                 self._watched.update(sources)
-                self._identities.update({key: _file_identity(path) for key, path in sources.items()})
+                self._identities.update(
+                    {key: _file_identity(path) for key, path in sources.items()}
+                )
             cell_started = time.perf_counter()
             # "raise" defers to each request's AOI; other policies are fixed here.
             self._cells, self._invalid_records = _invalid_cells.load_cells(
                 self._hdf, policy=self._invalid_policy, threads=self._threads
             )
             cell_seconds = time.perf_counter() - cell_started
-            _invalid_cells.require_cells(self._cells, self._invalid_records, self._invalid_policy)
+            _invalid_cells.require_cells(
+                self._cells, self._invalid_records, self._invalid_policy
+            )
             if supplied is not None:
                 supplied.check_crs(self._cells.crs)
             # Planned retained frame/GEOS/index allowance, not an RSS limit.
@@ -147,12 +201,21 @@ class FimPreparedSlopingModel:
             profile_source = None
             if supplied is not None:
                 from ._supplied_wsel import stage
-                units, values_bytes, profile_source = stage(supplied, root, self._meshes,
-                    max_staged_bytes=prepared_budget - geometry_bytes - mesh_bytes)
+
+                units, values_bytes, profile_source = stage(
+                    supplied,
+                    root,
+                    self._meshes,
+                    max_staged_bytes=prepared_budget - geometry_bytes - mesh_bytes,
+                )
                 views = 0
             else:
                 units, views, values_bytes = _sloping._stage_profiles(
-                    self._hdf, root, self._meshes, max_values, self._selected,
+                    self._hdf,
+                    root,
+                    self._meshes,
+                    max_values,
+                    self._selected,
                     deduplicate=True,
                     max_staged_bytes=prepared_budget - geometry_bytes - mesh_bytes,
                 )
@@ -167,15 +230,25 @@ class FimPreparedSlopingModel:
             self._info = dict(
                 cache_kind="python-geometry-and-staged-inputs/1",
                 profiles=dict(self._selected),
-                physical_cells=int(self._cells[["mesh_name", "cell_id"]].drop_duplicates().shape[0]),
+                physical_cells=int(
+                    self._cells[["mesh_name", "cell_id"]].drop_duplicates().shape[0]
+                ),
                 mesh_count=len(self._meshes),
-                corner_elevations={m["mesh_name"]: m.get("corner_elevations") for m in self._meshes},
-                unique_selectors=0 if self._supplied else len(set(self._selected.values())),
+                corner_elevations={
+                    m["mesh_name"]: m.get("corner_elevations") for m in self._meshes
+                },
+                unique_selectors=0
+                if self._supplied
+                else len(set(self._selected.values())),
                 profile_views_prepared=views,
                 planned_geometry_bytes=geometry_bytes,
                 staged_bytes=mesh_bytes + values_bytes,
-                planned_prepared_bytes=geometry_bytes + mesh_bytes + values_bytes,
-                max_prepared_bytes=prepared_budget,
+                planned_prepared_bytes=geometry_bytes
+                + mesh_bytes
+                + values_bytes
+                + self._validation_limit,
+                max_prepared_bytes=prepared_budget + self._validation_limit,
+                validation_cache_budget_bytes=self._validation_limit,
                 prepare_seconds=time.perf_counter() - started,
                 cell_polygon_seconds=cell_seconds,
                 invalid_cells=_invalid_cells.describe(
@@ -183,14 +256,24 @@ class FimPreparedSlopingModel:
                 ),
                 native_state_reused=False,
                 native_session_enabled=self._reuse_native,
-                native_window_cache_budget_bytes=(64 << 20) if self._reuse_native else 0,
+                native_window_cache_budget_bytes=self._window_cache_bytes
+                if self._reuse_native
+                else 0,
+                native_hydraulic_cache_budget_bytes=self._hydraulic_cache_bytes
+                if self._reuse_native
+                else 0,
                 profile_staging_chunk_bytes=8 << 20,
                 terrain_crs_identity=dict(self._terrain_identity["crs_identity"]),
             )
             if profile_source is not None:
                 self._info["profile_source"] = profile_source
             self._check_sources()
-            if postprocessing_hdf is not None and (Path(postprocessing_hdf).parent / "corner_elevation_receipt.json").exists():
+            if (
+                postprocessing_hdf is not None
+                and (
+                    Path(postprocessing_hdf).parent / "corner_elevation_receipt.json"
+                ).exists()
+            ):
                 validate_receipt(self._hdf, postprocessing_hdf)
             self._closed = False
         except BaseException:
@@ -199,7 +282,7 @@ class FimPreparedSlopingModel:
 
     @property
     def info(self) -> dict:
-        """Copy of preparation timing, fixed selectors and planned cache sizes."""
+        """Copy of preparation timing, fixed selectors and planned cache ceilings."""
         with self._lock:
             return deepcopy(self._info)
 
@@ -240,6 +323,24 @@ class FimPreparedSlopingModel:
                     "Source geometry appeared; create a new prepared context"
                 )
 
+    def _validate_grid(self, plan):
+        """Reuse a passed validation only for the identical immutable cell subset."""
+        from . import _horizontal
+
+        key = plan.cell_positions.tobytes()
+        if key in self._validated_positions:
+            self._validated_positions.move_to_end(key)
+            return True
+        _horizontal.prepare_grid(self._cells, self._terrain, plan, False)
+        size = len(key) + 128
+        if size <= self._validation_limit:
+            while self._validation_bytes + size > self._validation_limit:
+                old, _ = self._validated_positions.popitem(last=False)
+                self._validation_bytes -= len(old) + 128
+            self._validated_positions[key] = None
+            self._validation_bytes += size
+        return False
+
     @log_call
     def map_profiles(
         self,
@@ -257,6 +358,7 @@ class FimPreparedSlopingModel:
         write_floodplain=False,
         template_raster=None,
         invalid_cells=None,
+        product_writer="rasterio",
     ):
         """Map all prepared names or an ordered subset into a new/empty folder.
 
@@ -270,6 +372,11 @@ class FimPreparedSlopingModel:
         close the context; invalid profile names leave it usable.
         ``invalid_cells`` is fixed at preparation; ``None`` or the prepared
         policy is accepted and any other value raises ``ValueError``.
+        ``product_writer="native"`` requires native_geotiff_outputs and writes
+        lossless LZW TIFFs through terrio without raster-array pipe transfers.
+        It excludes templates, floodplain polygonization and velocity. The
+        default ``"rasterio"`` preserves the existing delivery path. Native
+        compression uses one worker; ``writer_threads`` controls Rasterio only.
         """
         with self._lock:
             if self._closed:
@@ -317,10 +424,14 @@ class FimPreparedSlopingModel:
                     template_raster=template_raster,
                     invalid_cells=invalid_cells,
                     _prepared=self,
+                    product_writer=product_writer,
                 )
             except BaseException:
                 self._check_sources()
-                if self._native_session is not None and self._native_session.process.poll() is not None:
+                if (
+                    self._native_session is not None
+                    and self._native_session.process.poll() is not None
+                ):
                     self._native_session.close()
                     self._native_session = None
                 raise
@@ -331,6 +442,8 @@ class FimPreparedSlopingModel:
         with self._lock:
             self._closed = True
             self._cells = None
+            self._validated_positions.clear()
+            self._validation_bytes = 0
             if self._native_session is not None:
                 self._native_session.close()
                 self._native_session = None

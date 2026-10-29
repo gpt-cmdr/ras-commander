@@ -8,9 +8,10 @@ Use `RasFim` to map computed HEC-RAS 2D cell results to depth and water surface
 elevation (WSE) rasters. The Rust Mapping Engine reads terrain blocks and
 rasterizes pixel ownership through terrio, reconstructs the selected surface,
 and evaluates pixels with bounded Rayon workers. The native HDF engine reads
-numeric model inputs; Python supervises requests and writes final GIS products.
-The native mapping engine needs no system GDAL, but the Python delivery stack
-uses Rasterio/GDAL for GeoTIFF output and compression.
+numeric model inputs; Python supervises requests and final GIS delivery.
+The default delivery stack uses Rasterio/GDAL for GeoTIFF output and compression.
+The development engine also supports opt-in direct terrio LZW output on
+sloping requests and catalogs. The Rust engine needs no system GDAL.
 
 This is a **2D surface-only** mapper. Model-backed calls reject models containing
 1D river/reach or cross-section geometry, including mixed models. Pipes,
@@ -140,10 +141,13 @@ measure this additional catalog-concurrency opportunity.
 
 For repeated reach requests, use `RasFim.prepare_sloping_model()` as a context
 manager and call its `map_profiles()` method with different masks. It retains
-Python-side geometry/indexing and staged model/WSE inputs. Each request still
-starts the native executable, reconstructs stencils and decodes its terrain
-window; it is not a persistent native terrain cache. Changed source inputs
-invalidate the context. See [prepared model usage](api/fim.md#reuse-prepared-models-across-reach-requests).
+Python-side geometry/indexing and staged model/WSE inputs. A capable native
+engine retains its process, stencils and terrain blocks across calls.
+Development capabilities add bounded reconstructed-timestep and multiple-window
+caches, plus an opt-in terrio GeoTIFF writer. Passed geometry validation is
+reused only for the identical immutable cell subset. Changed source inputs
+invalidate the context. See [prepared model usage](api/fim.md#reuse-prepared-models-across-reach-requests)
+for cache budgets, capability checks, delivery limitations and close semantics.
 
 ## Map caller-computed elevations
 

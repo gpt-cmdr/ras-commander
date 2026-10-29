@@ -262,6 +262,8 @@ class RasFim:
         max_prepared_mib: int = 1024, memory_headroom_mib: int = 256,
         max_profiles_per_batch: int = 64, writer_threads: int = 1,
         max_inflight_profiles: int = 1,
+        window_cache_mib: int = 64, hydraulic_cache_mib: int = 64,
+        validation_cache_mib: int = 8, product_writer: str = "rasterio",
         engine_path: Optional[PathLike] = None,
         timeout: Optional[float] = None, cancel_event: Any = None,
         raise_on_failure: bool = True,
@@ -276,6 +278,13 @@ class RasFim:
         jobs also accept ``render_mode``, ``reduce_shallow_to_horizontal``,
         ``use_depth_weighted_faces``, ``postprocessing_hdf``,
         ``corner_elevation_source`` and ``invalid_cells``. Unknown fields raise.
+
+        Cache controls follow :meth:`prepare_sloping_model` and are shared
+        within each actor's prepared model. ``product_writer="native"`` opts
+        into terrio LZW output on engines advertising native_geotiff_outputs;
+        it currently requires sloping jobs. The default is ``"rasterio"``.
+        Native compression uses one worker. Output masks and float32 values
+        are unchanged by the writer.
 
         Batch known timesteps per reach. Compatible jobs share prepared inputs
         and a serialized native session within each bounded selector union.
@@ -356,6 +365,8 @@ class RasFim:
             max_profiles_per_batch=max_profiles_per_batch,
             writer_threads=writer_threads,
             max_inflight_profiles=max_inflight_profiles,
+            window_cache_mib=window_cache_mib, hydraulic_cache_mib=hydraulic_cache_mib,
+            validation_cache_mib=validation_cache_mib, product_writer=product_writer,
             engine_path=engine_path, timeout=timeout,
             cancel_event=cancel_event, raise_on_failure=raise_on_failure,
         )
@@ -375,6 +386,8 @@ class RasFim:
         engine_path: Optional[PathLike] = None, threads: int = 1,
         max_working_mib: int = 1024, max_prepared_mib: int = 1024,
         native_session: bool = True,
+        window_cache_mib: int = 64, hydraulic_cache_mib: int = 64,
+        validation_cache_mib: int = 8,
         terrain_crs_fnv1a64: Optional[str] = None,
     ) -> "FimPreparedSlopingModel":
         """Prepare fixed 2D sloping inputs for repeated reach/AOI requests.
@@ -393,9 +406,16 @@ class RasFim:
         cache-only use requires the adjacent native preparation receipt.
         ``native_session=True`` retains one serialized native process when the
         engine advertises persistent sessions (0.9+). It reuses geometry,
-        stencils, terrain blocks and a bounded last-window/plain-weight cache.
-        False, or an older engine, starts a fresh CLI per request. Hydraulic
-        values are always reconstructed per profile. No depth cutoff is added.
+        stencils, terrain blocks and bounded window/plain-weight caches.
+        False, or an older engine, starts a fresh CLI per request. Capable
+        engines share reconstructed timestep state across reaches. No depth
+        cutoff is added. ``window_cache_mib`` and ``hydraulic_cache_mib`` are
+        retained native cache ceilings (default 64 each; 0 disables), admitted
+        inside the working budget. Configurable windows require
+        ``multi_window_cache``; older engines disable hydraulic caching and
+        record zero. ``validation_cache_mib`` (default 8) retains passed checks
+        for identical immutable cell subsets, reserving at most one eighth of
+        the prepared budget. Each cache accepts integer MiB from 0 to 4096.
 
         Use the returned context in a ``with`` block or call ``close()``.
         Changes to HDF, terrain, engine or resolved source-text geometry
@@ -403,8 +423,9 @@ class RasFim:
         Calls are serialized; timestep parallelism is controlled per request
         with ``max_inflight_profiles``. ``max_prepared_mib`` admits estimated
         retained geometry plus actual staged bytes, independently of the
-        per-request ``max_working_mib``. Persistent requests additionally admit
-        a 64 MiB retained window/weight budget. Neither is a hard RSS limit;
+        per-request ``max_working_mib``. Persistent requests admit both native
+        cache ceilings, and the prepared budget reserves validation retention.
+        Neither is a hard RSS limit;
         decoder and preparation allocations are outside retained admission.
         Numeric profile staging uses native-HDF slabs of at most 8 MiB source
         values, with a bounded float32 conversion buffer.
@@ -437,6 +458,8 @@ class RasFim:
             engine_path=engine_path, threads=threads,
             max_working_mib=max_working_mib, max_prepared_mib=max_prepared_mib,
             native_session=native_session,
+            window_cache_mib=window_cache_mib, hydraulic_cache_mib=hydraulic_cache_mib,
+            validation_cache_mib=validation_cache_mib,
             terrain_crs_fnv1a64=terrain_crs_fnv1a64,
         )
 
@@ -455,6 +478,7 @@ class RasFim:
         polygon_layer: Optional[str] = None, aoi_crs: Any = None,
         engine_path: Optional[PathLike] = None, threads: int = 1,
         writer_threads: int = 1,
+        product_writer: str = "rasterio",
         max_working_mib: int = 1024, timeout: Optional[float] = None,
         max_inflight_profiles: int = 1,
         write_floodplain: bool = False,
@@ -559,6 +583,11 @@ class RasFim:
                 greater than one require engine concurrency support. All maps
                 share the same Rust worker pool, terrain and geometry.
             timeout: Engine stream lifetime in seconds, including output writes.
+            product_writer: ``"rasterio"`` (default), or ``"native"`` for
+                direct terrio LZW GeoTIFF output on a capable engine. Native
+                output preserves the requested CRS/grid and float32 results,
+                uses one compression worker, and excludes templates,
+                floodplain polygonization and velocity.
             write_floodplain: Also polygonize positive retained depth pixels.
             template_raster: Optional float32 GeoTIFF defining the delivered
                 grid, nodata and storage profile. Must share the terrain pixel
@@ -644,7 +673,7 @@ class RasFim:
             max_working_mib=max_working_mib, timeout=timeout, write_floodplain=write_floodplain,
             max_inflight_profiles=max_inflight_profiles,
             template_raster=template_raster, terrain_hdf=terrain_hdf,
-            velocity=velocity, invalid_cells=invalid_cells,
+            velocity=velocity, invalid_cells=invalid_cells, product_writer=product_writer,
             terrain_crs_fnv1a64=terrain_crs_fnv1a64)
 
     @staticmethod

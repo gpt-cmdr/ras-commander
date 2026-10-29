@@ -23,6 +23,8 @@ def digest(path):
 
 
 def worker(config, folder, arm):
+    config = {**config, **config.get("variants", {}).get(arm, {})}
+    arm = config.get("mode", arm)
     import psutil
     from ras_commander import RasFim
     from ras_commander.fim.RasFim import _require_dependencies
@@ -61,6 +63,7 @@ def worker(config, folder, arm):
                 profiles={f"p{i:06d}": v for i, v in enumerate(job["timesteps"])},
                 threads=config.get("threads", 4),
                 writer_threads=1,
+                engine_path=config.get("engine_path"),
                 max_working_mib=config.get("max_working_mib", 2048),
                 **options,
             )
@@ -79,6 +82,8 @@ def worker(config, folder, arm):
             max_workers={"reuse": 1, "parallel2": 2, "parallel4": 4}[arm],
             strategy="reuse" if arm == "reuse" else "parallel",
             writer_threads=1,
+            engine_path=config.get("engine_path"),
+            **config.get("catalog_options", {}),
             max_working_mib=config.get("max_working_mib", 2048),
             max_memory_mib=config.get("max_memory_mib", 16384),
         )
@@ -135,6 +140,7 @@ def main(config, output):
     import psutil
     from ras_commander import RasFim
 
+    output = output.resolve()
     output.mkdir(parents=True, exist_ok=False)
     engine = RasFim.get_engine_info()
     paths = {
@@ -145,10 +151,15 @@ def main(config, output):
     }
     paths.update(str(p.resolve()) for p in Path("ras_commander/fim").glob("*.py"))
     paths.update([str(Path(__file__).resolve()), engine["engine_path"]])
+    for variant in config.get("variants", {}).values():
+        if variant.get("engine_path"):
+            paths.add(variant["engine_path"])
+        for root in variant.get("source_roots", []):
+            paths.update(str(p.resolve()) for p in Path(root).glob("*.py"))
     identities = {p: digest(p) for p in paths}
     receipt = dict(
         status="in_progress",
-        conditions="fresh processes; imports warmed; affinity envelope includes writers; rotated arms; filesystem caches/shared workstation uncontrolled; sampled process-tree RSS/private; no cutoff; compare outside clocks",
+        conditions="fresh processes; imports warmed; affinity envelope includes writers; rotated arms; filesystem caches/shared workstation uncontrolled; 250ms RSS/private samples,500ms tree discovery; no cutoff; compare outside clocks",
         identities=identities,
         config=config,
         versions={
@@ -161,7 +172,7 @@ def main(config, output):
         },
         runs=[],
     )
-    arms = ["serial", "reuse", "parallel2", "parallel4"]
+    arms = config.get("arms", ["serial", "reuse", "parallel2", "parallel4"])
     reference = None
     try:
         for repeat in range(config.get("repetitions", 3)):
@@ -174,7 +185,9 @@ def main(config, output):
                 with (output / f"{arm}-{repeat}.log").open("wb") as log:
                     child = subprocess.Popen(
                         [
-                            sys.executable,
+                            config.get("variants", {})
+                            .get(arm, {})
+                            .get("python", sys.executable),
                             __file__,
                             str(config_path),
                             str(folder),
@@ -183,15 +196,22 @@ def main(config, output):
                         ],
                         stdout=log,
                         stderr=subprocess.STDOUT,
+                        cwd=config.get("variants", {}).get(arm, {}).get("cwd"),
                     )
                     peak_rss = peak_private = 0
+                    processes = []
+                    next_tree = 0.0
+                    sampler_cpu = 0.0
                     while child.poll() is None:
+                        sample_start = time.process_time()
                         rss = private = 0
                         try:
-                            root = psutil.Process(child.pid)
-                            processes = [root] + root.children(recursive=True)
+                            if time.monotonic() >= next_tree:
+                                root = psutil.Process(child.pid)
+                                processes = [root] + root.children(recursive=True)
+                                next_tree = time.monotonic() + 0.5
                         except psutil.NoSuchProcess:
-                            processes = []
+                            pass
                         for proc in processes:
                             try:
                                 memory = proc.memory_info()
@@ -203,7 +223,8 @@ def main(config, output):
                             max(peak_rss, rss),
                             max(peak_private, private),
                         )
-                        time.sleep(0.02)
+                        sampler_cpu += time.process_time() - sample_start
+                        time.sleep(0.25)
                 if child.returncode:
                     raise RuntimeError(f"{arm} failed; inspect its log")
                 row = json.loads(folder.with_suffix(".json").read_text())
@@ -212,6 +233,7 @@ def main(config, output):
                     repeat=repeat,
                     peak_tree_rss_bytes=peak_rss,
                     peak_tree_private_bytes=peak_private,
+                    sampler_cpu_seconds=sampler_cpu,
                 )
                 if reference is None:
                     reference = row["products"]
@@ -230,9 +252,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("config", type=Path)
     parser.add_argument("output", type=Path)
-    parser.add_argument(
-        "--worker", choices=["serial", "reuse", "parallel2", "parallel4"]
-    )
+    parser.add_argument("--worker")
     args = parser.parse_args()
     config = json.loads(args.config.read_text(encoding="utf-8"))
     if args.worker:

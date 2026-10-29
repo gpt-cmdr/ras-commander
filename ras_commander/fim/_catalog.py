@@ -293,6 +293,8 @@ def map_catalog(
     max_profiles_per_batch=64,
     writer_threads=1,
     max_inflight_profiles=1,
+    window_cache_mib=64, hydraulic_cache_mib=64, validation_cache_mib=8,
+    product_writer="rasterio",
     engine_path=None,
     timeout=None,
     cancel_event=None,
@@ -316,6 +318,15 @@ def map_catalog(
         max_inflight_profiles=max_inflight_profiles,
     )
     controls = {k: _positive_int(v, k) for k, v in controls.items()}
+    for key, value in (("window_cache_mib", window_cache_mib),
+                       ("hydraulic_cache_mib", hydraulic_cache_mib),
+                       ("validation_cache_mib", validation_cache_mib)):
+        if isinstance(value, bool) or not isinstance(value, int) or not 0 <= value <= 4096:
+            raise ValueError(f"{key} must be an integer from 0 through 4096")
+        controls[key] = value
+    if product_writer not in ("rasterio", "native"):
+        raise ValueError("product_writer must be rasterio or native")
+    controls["product_writer"] = product_writer
     if strategy not in ("reuse", "parallel"):
         raise ValueError("strategy must be reuse or parallel")
     controls["strategy"] = strategy
@@ -338,6 +349,8 @@ def map_catalog(
             "Catalog scheduling requires process CPU affinity (Windows/Linux)"
         ) from exc
     normal = _normalise_jobs(jobs)
+    if product_writer == "native" and any(j["interpolation"] != "sloping" for j in normal):
+        raise FimUnsupportedError("Native catalog products currently require sloping jobs")
     units = _plan_units(normal, controls["max_profiles_per_batch"], strategy)
     cpus = _worker_count(
         len(units),
@@ -364,6 +377,8 @@ def map_catalog(
         raise FimUnsupportedError(
             "Sloping catalogs require persistent_session capability"
         )
+    if product_writer == "native" and not engine["method"].get("sloping", {}).get("native_geotiff_outputs"):
+        raise FimUnsupportedError("Native products require native_geotiff_outputs capability")
     for job in normal:
         method = engine["method"].get(job["interpolation"], {})
         if (
@@ -543,20 +558,32 @@ def map_catalog(
                     perf.get("max_sample_gap_seconds", 0), now - previous_sample
                 )
                 previous_sample = now
+                sample_cpu = time.process_time()
                 rss = private = 0
                 for slot in workers:
                     try:
-                        proc = psutil.Process(slot["process"].pid)
-                        tree = [proc] + proc.children(recursive=True)
-                    except psutil.NoSuchProcess:
+                        # Process-tree discovery is expensive on busy Windows
+                        # hosts. Sample known owned processes at 100 ms, and
+                        # discover new descendants at 500 ms. This remains an
+                        # observed guard, never a hard allocation/RSS limit.
+                        if now - slot.get("tree_at", -math.inf) >= 0.5:
+                            proc = psutil.Process(slot["process"].pid)
+                            slot["tree"] = [proc] + proc.children(recursive=True)
+                            slot["tree_at"] = now
+                        tree = slot.get("tree", [])
+                    except (psutil.NoSuchProcess, psutil.AccessDenied):
                         continue
                     for proc in tree:
                         try:
                             mem = proc.memory_info()
                             rss += mem.rss
                             private += getattr(mem, "private", mem.rss)
-                        except psutil.NoSuchProcess:
+                        except (psutil.NoSuchProcess, psutil.AccessDenied):
                             pass
+                perf["memory_sampler_cpu_seconds"] = perf.get(
+                    "memory_sampler_cpu_seconds", 0.0
+                ) + time.process_time() - sample_cpu
+                perf["descendant_refresh_seconds"] = 0.5
                 perf["samples"] += 1
                 perf["peak_tree_rss_bytes"] = max(perf["peak_tree_rss_bytes"], rss)
                 perf["peak_tree_private_bytes"] = max(
@@ -587,21 +614,31 @@ def map_catalog(
     finally:
         for slot in workers:
             process = slot["process"]
-            if failure is not None:
-                _terminate(process)
-            else:
-                try:
-                    process.stdin.write(b'{"stop":true}\n')
-                    process.stdin.flush()
-                    process.wait(timeout=10)
-                except (OSError, subprocess.TimeoutExpired):
+            try:
+                if failure is not None:
                     _terminate(process)
+                else:
+                    try:
+                        process.stdin.write(b'{"stop":true}\n')
+                        process.stdin.flush()
+                        process.wait(timeout=10)
+                    except (OSError, subprocess.TimeoutExpired):
+                        _terminate(process)
+            except Exception as exc:
+                # One shutdown failure must not skip the remaining workers or
+                # final manifest. Retain diagnostics rather than hiding it.
+                receipt.setdefault("cleanup_errors", []).append(
+                    f"Worker {process.pid}: {type(exc).__name__}: {exc}"
+                )
+                if failure is None:
+                    failure = exc
+                    receipt.update(status="aborted", error=f"{type(exc).__name__}: {exc}")
             try:
                 process.stdin.close()
             except OSError:
                 pass
-        # Killed workers cannot safely clean their current Python staging; it
-        # lives under the owned control tree, never in a source project.
+        # Killed workers cannot clean request staging in owned job-output
+        # folders. Remaining worker temporaries live under the control tree.
         for job in normal:
             for path in (folder / job["job_id"]).glob(".batch-*"):
                 shutil.rmtree(path)

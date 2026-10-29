@@ -144,12 +144,29 @@ def test_later_failure_preserves_committed_job(case, tmp_path):
     assert not list((folder / "later").glob("*.tif"))
 
 
-def test_active_cancellation_preserves_only_acknowledged_products(case, tmp_path):
+@pytest.mark.parametrize("writer", ["rasterio", "native"])
+@pytest.mark.parametrize("shutdown_error", [False, True])
+def test_active_cancellation_preserves_only_acknowledged_products(
+    case, tmp_path, writer, shutdown_error, monkeypatch
+):
     import psutil
+    from ras_commander.fim import _catalog
+
+    if shutdown_error:
+        terminate = _catalog._terminate
+
+        def terminate_then_error(process):
+            terminate(process)
+            raise psutil.AccessDenied(process.pid)
+
+        monkeypatch.setattr(_catalog, "_terminate", terminate_then_error)
 
     folder = tmp_path / "active-cancel"
     stop = threading.Event()
     owned = []
+    native_name = Path(RasFim.get_engine_info()["engine_path"]).name.lower()
+    if writer == "native" and not RasFim.get_engine_info()["method"]["sloping"].get("native_geotiff_outputs"):
+        pytest.skip("native writer requires a capable engine")
 
     def cancel_on_native():
         import time
@@ -158,7 +175,14 @@ def test_active_cancellation_preserves_only_acknowledged_products(case, tmp_path
         while time.monotonic() < deadline:
             for child in psutil.Process().children(recursive=True):
                 try:
-                    if child.name().lower() in ("ras2fim-batch.exe", "ras2fim-batch"):
+                    if (
+                        child.name().lower() == native_name
+                        and "method" not in child.cmdline()[1:]
+                    ):
+                        # Hold a live engine until the supervisor observes
+                        # cancellation; fast fixtures can otherwise finish
+                        # between detection and the next supervisor tick.
+                        child.suspend()
                         owned.append(child)
                         stop.set()
                         return
@@ -170,12 +194,16 @@ def test_active_cancellation_preserves_only_acknowledged_products(case, tmp_path
     thread = threading.Thread(target=cancel_on_native, daemon=True)
     thread.start()
     result = RasFim.map_catalog(
-        jobs(case), folder, cancel_event=stop, raise_on_failure=False
+        jobs(case), folder, cancel_event=stop, raise_on_failure=False, product_writer=writer
     )
     thread.join(timeout=50)
     assert result.attrs["catalog_status"] == "cancelled"
     assert owned and all(not p.is_running() for p in owned)
     assert not (folder / ".catalog-control").exists()
+    receipt = json.loads((folder / "catalog_manifest.json").read_text())
+    assert receipt["status"] == "cancelled"
+    if shutdown_error:
+        assert receipt["cleanup_errors"]
     retained = {
         Path(row[key])
         for row in result.to_dict("records")

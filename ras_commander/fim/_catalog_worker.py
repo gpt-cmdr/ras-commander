@@ -95,6 +95,9 @@ def _run_unit(unit, config, emit):
             max_prepared_mib=controls["max_prepared_mib"],
             engine_path=config["engine"],
             native_session=True,
+            window_cache_mib=controls["window_cache_mib"],
+            hydraulic_cache_mib=controls["hydraulic_cache_mib"],
+            validation_cache_mib=controls["validation_cache_mib"],
             **first["options"],
         )
         context = model
@@ -127,6 +130,7 @@ def _run_unit(unit, config, emit):
                         writer_threads=controls["writer_threads"],
                         max_inflight_profiles=controls["max_inflight_profiles"],
                         timeout=config["timeout"],
+                        product_writer=controls["product_writer"],
                         **selection,
                     )
                 else:
