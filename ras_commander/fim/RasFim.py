@@ -267,6 +267,7 @@ class RasFim:
         corner_elevation_source: str = "auto",
         engine_path: Optional[PathLike] = None, threads: int = 1,
         max_working_mib: int = 1024, max_prepared_mib: int = 1024,
+        terrain_crs_fnv1a64: Optional[str] = None,
     ) -> "FimPreparedSlopingModel":
         """Prepare fixed 2D sloping inputs for repeated reach/AOI requests.
 
@@ -305,6 +306,9 @@ class RasFim:
         affected cells. With ``"raise"``, preparation succeeds and each request
         refuses only when its AOI (or the whole mesh, without one) intersects
         an invalid cell.
+
+        ``terrain_crs_fnv1a64`` is also fixed at preparation and validated as in
+        :meth:`map_sloping_profiles`.
         """
         _require_dependencies(triangulation=False)
         from ._sloping_context import FimPreparedSlopingModel
@@ -318,6 +322,7 @@ class RasFim:
             corner_elevation_source=corner_elevation_source,
             engine_path=engine_path, threads=threads,
             max_working_mib=max_working_mib, max_prepared_mib=max_prepared_mib,
+            terrain_crs_fnv1a64=terrain_crs_fnv1a64,
         )
 
     @staticmethod
@@ -342,6 +347,7 @@ class RasFim:
         terrain_hdf: Optional[PathLike] = None,
         velocity: bool = False,
         invalid_cells: str = "repair",
+        terrain_crs_fnv1a64: Optional[str] = None,
     ) -> pd.DataFrame:
         """Map 2D HDF WSE with the experimental Rust sloping engine.
 
@@ -482,6 +488,14 @@ class RasFim:
                 topology. Horizontal and whole-simulation mapping remain strict.
                 ``fim_manifest.json`` and ``attrs["invalid_cells"]`` record each
                 cell, the reason and the action taken.
+            terrain_crs_fnv1a64: Engine WKT hash to accept when the engine
+                cannot identify the terrain EPSG code, as in
+                :meth:`map_profiles`. Check the terrain with
+                ``ras2fim-batch terrain-info`` first; the hash must equal the
+                engine's ``crs_wkt_fnv1a64``. The terrain and results CRS must
+                still agree under rasterio and resolve to an EPSG code. Ignored
+                when the engine reports an EPSG code. The manifest records the
+                accepted identity as ``terrain_crs_identity``.
 
         Returns:
             DataFrame: ``fim_product_manifest`` rows with timing evidence in
@@ -515,7 +529,8 @@ class RasFim:
             max_working_mib=max_working_mib, timeout=timeout, write_floodplain=write_floodplain,
             max_inflight_profiles=max_inflight_profiles,
             template_raster=template_raster, terrain_hdf=terrain_hdf,
-            velocity=velocity, invalid_cells=invalid_cells)
+            velocity=velocity, invalid_cells=invalid_cells,
+            terrain_crs_fnv1a64=terrain_crs_fnv1a64)
 
     @staticmethod
     @log_call

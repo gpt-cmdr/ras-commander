@@ -39,6 +39,7 @@ class FimPreparedSlopingModel:
         threads=1,
         max_working_mib=1024,
         max_prepared_mib=1024,
+        terrain_crs_fnv1a64=None,
     ):
         from .. import HdfMesh
         from ..fast_hdf import backend_scope
@@ -57,6 +58,7 @@ class FimPreparedSlopingModel:
         from . import _invalid_cells
 
         self._invalid_records = []
+        self._terrain_crs_fnv1a64 = terrain_crs_fnv1a64
         self._invalid_policy = _invalid_cells.validate_policy(
             _invalid_cells.DEFAULT_POLICY if invalid_cells is None else invalid_cells
         )
@@ -121,7 +123,7 @@ class FimPreparedSlopingModel:
             # Retain the model-wide spatial index once, before reach planning.
             self._cells.sindex
             self._terrain_identity = _engine.terrain_identity(
-                self._engine, self._terrain, self._cells.crs
+                self._engine, self._terrain, self._cells.crs, terrain_crs_fnv1a64
             )
             with rasterio.open(self._terrain) as source:
                 self._terrain_transform = list(source.transform.to_gdal())
@@ -176,6 +178,7 @@ class FimPreparedSlopingModel:
                     self._invalid_records, self._invalid_policy, None
                 ),
                 native_state_reused=False,
+                terrain_crs_identity=dict(self._terrain_identity["crs_identity"]),
             )
             if profile_source is not None:
                 self._info["profile_source"] = profile_source
