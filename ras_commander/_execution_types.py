@@ -39,8 +39,11 @@ class StoreMapPerformanceOptions:
     """Execution and resource policy for stored-map helpers.
 
     ``native_cpu_limit`` optionally restricts each helper to that many CPUs
-    from its inherited affinity before loading Mapper libraries. It is
+    from its inherited affinity. Native Windows sets the child mask before
+    CLR startup, then verifies it before loading Mapper libraries. It is
     independent of ``max_workers`` and leaves the calling process unchanged.
+    On native Windows, exceeding the inherited CPU count raises ``ValueError``
+    before helper code runs; setup failures terminate the owned child.
     ``None`` preserves inherited affinity. A one-CPU limit is an opt-in
     mitigation for native pipe-map concurrency failures, with lower throughput.
     """
