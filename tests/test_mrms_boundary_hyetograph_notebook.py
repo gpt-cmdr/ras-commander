@@ -10,7 +10,7 @@ import re
 import nbformat
 
 
-NOTEBOOK = Path("examples/917_mrms_precipitation_qpe.ipynb")
+NOTEBOOK = Path(__file__).resolve().parents[1] / "examples/917_mrms_precipitation_qpe.ipynb"
 QUALIFICATION_PREFIX = "MRMS_ABSOLUTE_TIME_QUALIFICATION="
 
 
