@@ -23,7 +23,6 @@ from ..fast_hdf import read_typed, reraise_required
 from ..RasUtils import RasUtils
 from .GeomParser import GeomParser
 from .GeomStorage import GeomStorage
-from ..fast_hdf import h5py_until_qualified
 
 logger = get_logger(__name__)
 
@@ -1078,7 +1077,6 @@ class GeomProjection:
             return GeomProjection._crs_label(left_crs) == GeomProjection._crs_label(right_crs)
 
     @staticmethod
-    @h5py_until_qualified
     def _inspect_compiled_geometry_hdfs(geom_paths: Sequence[Path]) -> List[Dict[str, Any]]:
         records = []
         for geom_path in geom_paths:

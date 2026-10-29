@@ -331,14 +331,14 @@ fixture run on h5py in auto mode until a fixture proves them
 | `HdfResultsPlan` | 13 | 298 | 2 |
 | `HdfResultsProducts` | 1 | 13 | 0 |
 | `HdfResultsQuery` | 12 | 192 | 0 |
-| `HdfResultsSediment` | 6 | 28 | 2 |
+| `HdfResultsSediment` | 6 | 28 | 0 |
 | `HdfResultsXsec` | 4 | 24 | 0 |
 | `HdfStorageArea` | 6 | 129 | 0 |
 | `HdfStruc` | 6 | 214 | 0 |
 | `HdfStruc1D` | 1 | 10 | 0 |
 | `HdfUtils` | 4 | 248 | 0 |
 | `HdfXsec` | 10 | 181 | 0 |
-| **Total** | **201** | **3800** | **11** |
+| **Total** | **201** | **3800** | **9** |
 
 Public methods running on h5py in auto mode (no corpus fixture made a native read that could prove them:
 their data is absent from every fixture, or they read only metadata):
@@ -351,10 +351,10 @@ their data is absent from every fixture, or they read only metadata):
 - `HdfPump.get_pump_station_summary`
 - `HdfResultsPlan.get_reference_summary[lines]`
 - `HdfResultsPlan.get_reference_summary[points]`
-- `HdfResultsSediment.get_sediment_mesh_areas`
-- `HdfResultsSediment.is_sediment_plan`
 
-`HdfMesh.get_mesh_geometry_inventory` reads only metadata through h5py and is unaffected.
+`HdfMesh.get_mesh_geometry_inventory`, `HdfResultsSediment.is_sediment_plan` and
+`HdfResultsSediment.get_sediment_mesh_areas` read only HDF metadata (group membership)
+through h5py and have no native read path, so they are not marked.
 Internal helpers outside `ras_commander/hdf` are marked the same way (see
 `UNQUALIFIED_NATIVE`).
 <!-- /QUALIFIED_METHODS_TABLE -->
