@@ -23,12 +23,20 @@ cell left with no area owns no pixels.
 
 Hydraulic stencils, connectivity and corner reconstruction always use the
 complete HDF topology; only pixel ownership changes.
+
+Horizontal, whole-simulation and comparison mapping assemble strictly first and
+apply the policy only when strict assembly refuses the mesh, so valid meshes
+keep the strict polygons. Cell tables from ``RasFim.get_cells_from_plan_hdf``
+carry one row per cell (a split cell is a MultiPolygon) and record the policy
+and cells in ``attrs[ATTR]``; horizontal mapping splits those rows back into
+one ownership row per piece.
 """
 
 import numpy as np
 
 POLICIES = ("repair", "hull", "omit", "raise")
 DEFAULT_POLICY = "repair"
+ATTR = "fim_invalid_cells"
 
 
 def validate_policy(policy):
@@ -244,17 +252,93 @@ def load_cells(hdf_path, *, policy, threads):
     return cells, records + [trimmed[k] for k in sorted(trimmed, key=rank)]
 
 
-def require_cells(cells, records, policy):
+def load_plan_cells(hdf_path, *, policy, threads, strict_loader):
+    """``strict_loader()``'s cells, or :func:`load_cells` when strict assembly refuses.
+
+    Valid meshes keep the strict polygons unchanged and return no records.
+    """
+    from ..hdf.HdfMesh import MeshCellPolygonError
+
+    validate_policy(policy)
+    try:
+        return strict_loader(), []
+    except MeshCellPolygonError:
+        return load_cells(hdf_path, policy=policy, threads=threads)
+
+
+def merge_pieces(cells):
+    """One row per ``(mesh_name, cell_id)``; a split cell becomes a MultiPolygon."""
+    import geopandas as gpd
+    import shapely
+
+    keys = list(zip(cells["mesh_name"], cells["cell_id"]))
+    if len(set(keys)) == len(keys):
+        return cells
+    first, pieces = {}, {}
+    for position, (key, geometry) in enumerate(zip(keys, cells.geometry.to_numpy())):
+        first.setdefault(key, position)
+        pieces.setdefault(key, []).append(geometry)
+    rows = cells.iloc[sorted(first.values())].copy()
+    rows = gpd.GeoDataFrame(rows, geometry="geometry", crs=cells.crs)
+    rows["geometry"] = [
+        parts[0] if len(parts) == 1 else shapely.MultiPolygon(parts)
+        for parts in (pieces[key] for key in zip(rows["mesh_name"], rows["cell_id"]))
+    ]
+    return rows.reset_index(drop=True)
+
+
+def from_table(cells, policy):
+    """Records and split ``cell_idx`` values recorded on a cell table.
+
+    A table extracted under another policy is refused: its ownership was
+    fixed at extraction.
+    """
+    validate_policy(policy)
+    stored = cells.attrs.get(ATTR)
+    if not stored or not stored.get("records"):
+        return [], frozenset()
+    if stored.get("policy") != policy:
+        raise ValueError(
+            f"these cells were extracted with invalid_cells={stored.get('policy')!r}; pass the "
+            "same value or extract them again with get_cells_from_plan_hdf(invalid_cells=...)"
+        )
+    return list(stored["records"]), frozenset(int(v) for v in stored.get("split_cell_idx", ()))
+
+
+def explode_split(ordered, split):
+    """One Polygon ownership row per piece of each split cell, in place of its row."""
+    if not split:
+        return ordered
+    import geopandas as gpd
+
+    selected = (ordered["cell_idx"].isin(split) & (ordered.geom_type == "MultiPolygon")).to_numpy()
+    if not selected.any():
+        return ordered
+    # Repeat each split row once per piece, in place, then set the piece geometries.
+    counts = np.where(selected, ordered.geometry.apply(
+        lambda g: len(g.geoms) if g.geom_type == "MultiPolygon" else 1).to_numpy(), 1)
+    exploded = ordered.iloc[np.repeat(np.arange(len(ordered)), counts)].reset_index(drop=True)
+    geometries = []
+    for geometry, row_selected in zip(ordered.geometry.to_numpy(), selected):
+        geometries.extend(geometry.geoms if row_selected else (geometry,))
+    column = ordered.geometry.name
+    exploded[column] = gpd.GeoSeries(geometries, index=exploded.index, crs=ordered.crs)
+    exploded = gpd.GeoDataFrame(exploded, geometry=column, crs=ordered.crs)
+    exploded.attrs = dict(ordered.attrs)
+    return exploded
+
+
+def require_cells(cells, records, policy, method="sloping mapping"):
     """Refuse an empty ownership set, naming invalid cells when they caused it."""
     if not cells.empty:
         return
     if records:
         listed = ", ".join(f"{r['mesh']} cell {r['cell_id']} ({r['action']})" for r in records[:10])
         raise ValueError(
-            "sloping mapping has no physical 2D cell polygons left under "
+            f"{method} has no physical 2D cell polygons left under "
             f"invalid_cells={policy!r}: {listed}"
         )
-    raise ValueError("sloping mapping requires physical 2D cell polygons")
+    raise ValueError(f"{method} requires physical 2D cell polygons")
 
 
 def check_scope(records, policy, aoi_geometry):

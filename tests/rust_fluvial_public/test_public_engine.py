@@ -427,23 +427,25 @@ def test_native_output_identical_at_1_and_4_threads():
     assert _hash_native_polygons(hdf, 1) == _hash_native_polygons(hdf, 4)
 
 
-def test_invalid_source_cells_boundary_native_polygons_refuse(tmp_path):
+def test_invalid_source_cells_boundary_and_polygons_native_equal_reference(tmp_path):
     """Derived AustinOyster.p01 copy: 2 invalid source cells (crossing boundaries).
 
     The Python reference omits both as ``no_polygon``, so they are in none of
     its stored-topology adjacencies. The native boundary decides that with the
     reference polygonizer's own rule and drops their pairs, so it equals the
     reference, also at a threshold where pairs with them qualify (1/128 h).
-    Polygons still refuse: native region growth and assembly over the physical
-    cells cannot reproduce the reference dissolve without guessing, and auto
-    uses Python. Nothing is repaired. Explicit audited quarantine remains
-    available through HdfFluvialNative.Analysis(invalid_geometry='quarantine').
+    Polygons classify natively on the induced subgraph of the cells the
+    reference keeps; the reference's own dissolve (and swap) then turns the
+    native classes into regions over the same h5py cell polygons, so the frame
+    is identical to the reference's. Native ring assembly is not used for such
+    meshes. Nothing is repaired.
     """
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
     import mesh_invalid_cells
     hdf = mesh_invalid_cells.make_invalid_copy(fixture(mesh_invalid_cells.SOURCE_NAME),
                                                tmp_path / "AustinOyster.p01.invalid-cells.hdf")
     before = qualify.sha256(hdf)
+    omitted = [(mesh_invalid_cells.MESH, cell) for cell in mesh_invalid_cells.INVALID_CELLS]
     for delta_t in (12, 1 / 128):
         reference = HdfFluvialPluvial.calculate_fluvial_pluvial_boundary(
             hdf, delta_t=delta_t, engine="h5py")
@@ -453,12 +455,31 @@ def test_invalid_source_cells_boundary_native_polygons_refuse(tmp_path):
             hdf, delta_t=delta_t, engine="native", diagnostics=True)
         used = delta(calls)
         assert used["validate_geometry"] == 1 and used["NativeAnalysis.qualifying_edges"] == 1
-        assert native.attrs["fluvial_native"]["reference_omitted_cells"] == [
-            (mesh_invalid_cells.MESH, cell) for cell in mesh_invalid_cells.INVALID_CELLS]
+        assert native.attrs["fluvial_native"]["reference_omitted_cells"] == omitted
         assert native.attrs.pop("fluvial_engine")["used"] == "native"
         native.attrs.clear()
         assert list(native.columns) == list(reference.columns) and native.crs == reference.crs
         assert native.to_wkb().equals(reference.to_wkb())
-    with pytest.raises(FluvialNativeUnsupportedError, match=r"2 cell\(s\) have invalid source geometry"):
-        HdfFluvialPluvial.generate_fluvial_pluvial_polygons(hdf, engine="native")
+    for kwargs in ({"delta_t": 12}, {"delta_t": 1 / 128}, {"delta_t": 12, "min_polygon_area_acres": 5}):
+        reference = _python_polygons(hdf, **kwargs)
+        calls = native_calls()
+        with pytest.MonkeyPatch.context() as patch:
+            patch.setattr(module, "tqdm", lambda *a, **k: (_ for _ in ()).throw(
+                AssertionError("Python classification loop executed under engine='native'")))
+            native = HdfFluvialPluvial.generate_fluvial_pluvial_polygons(
+                hdf, engine="native", diagnostics=True, **kwargs)
+        used = delta(calls)
+        assert used["NativeAnalysis.classify"] >= 1 and "NativeAnalysis.polygons" not in used
+        assert native.attrs["fluvial_engine"]["used"] == "native"
+        geometry = native.attrs["fluvial_native"]["geometry"]
+        assert geometry["assembly"] == "reference_dissolve"
+        assert geometry["invalid_cells"] == {"reference_omitted": omitted, "invalid_kept": []}
+        auto = HdfFluvialPluvial.generate_fluvial_pluvial_polygons(hdf, engine="auto", **kwargs)
+        assert auto.attrs["fluvial_engine"] == {"requested": "auto", "used": "native", "fallback_reason": None}
+        for frame in (native, auto):
+            frame.attrs.clear()
+            assert list(frame.columns) == list(reference.columns)
+            assert list(frame.dtypes) == list(reference.dtypes)
+            assert frame.drop(columns="geometry").equals(reference.drop(columns="geometry"))
+            assert frame.to_wkb().equals(reference.to_wkb())
     assert qualify.sha256(hdf) == before

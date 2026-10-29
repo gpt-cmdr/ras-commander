@@ -129,12 +129,16 @@ def map_whole_simulation(
     max_working_mib=1024,
     timeout=None,
     engine_path=None,
+    invalid_cells="repair",
 ):
     from .. import HdfMesh, HdfResultsMesh
     from ..fast_hdf import backend_scope, read_datasets
     from .RasFim import RasFim, _file_identity, _positive_int, _prepare_output_folder
 
+    from . import _invalid_cells
+
     started = time.perf_counter()
+    _invalid_cells.validate_policy(invalid_cells)
     products, threshold = _validate(products, threshold, allow_unqualified)
     threads = _positive_int(threads, "threads")
     writer_threads = _positive_int(writer_threads, "writer_threads")
@@ -170,10 +174,17 @@ def map_whole_simulation(
     hours, start, stamps = output_hours(hdf)
     timings = {}
     tick = time.perf_counter()
-    with backend_scope("rust"):
-        cells = HdfMesh.get_mesh_cell_polygons(hdf, strict=True, engine="native", threads=threads)
-    if cells.empty:
+    def strict_cells():
+        with backend_scope("rust"):
+            return HdfMesh.get_mesh_cell_polygons(hdf, strict=True, engine="native", threads=threads)
+
+    cells, invalid_records = _invalid_cells.load_plan_cells(
+        hdf, policy=invalid_cells, threads=threads, strict_loader=strict_cells)
+    if cells.empty and not invalid_records:
         raise FimUnsupportedError("whole-simulation mapping requires physical 2D cell polygons")
+    _invalid_cells.require_cells(cells, invalid_records, invalid_cells, "whole-simulation mapping")
+    # No AOI: "raise" refuses any affected cell.
+    _invalid_cells.check_scope(invalid_records, invalid_cells, None)
     plan = _horizontal.plan_grid(cells, terrain, None, budget, native=True)
     _horizontal.prepare_grid(cells, terrain, plan, False)  # validates polygons and overlap
     timings["cell_and_grid_seconds"] = time.perf_counter() - tick
@@ -213,6 +224,7 @@ def map_whole_simulation(
         },
         "engine": {"path": str(engine), "method": whole_method},
         "status": "in_progress",
+        "invalid_cells": _invalid_cells.describe(invalid_records, invalid_cells, None),
     }
     if scope_info is not None:
         details["terrain_scope"] = _terrain_scope.describe(scope_info)
@@ -223,6 +235,7 @@ def map_whole_simulation(
         frame.attrs["method_id"] = METHOD_ID
         frame.attrs["model_scope"] = model_scope
         frame.attrs["time_reference"] = details["time_reference"]
+        frame.attrs["invalid_cells"] = details["invalid_cells"]
         for key in ("terrain_scope", "unqualified"):
             if key in details:
                 frame.attrs[key] = details[key]

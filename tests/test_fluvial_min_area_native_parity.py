@@ -160,6 +160,11 @@ class FakeAnalysis:
         raise AssertionError("native polygon assembly must not run with min_polygon_area_acres")
 
 
+def snapshot(analysis, kwargs):
+    """``_native_snapshot``'s return shape: valid geometry, no reference omissions."""
+    return (analysis, set(), []) if kwargs.get("reference_cells") else analysis
+
+
 @pytest.fixture
 def synthetic(tmp_path, monkeypatch):
     path = tmp_path / "synthetic.p01.hdf"
@@ -186,7 +191,7 @@ def test_synthetic_native_swap_equals_reference(synthetic, monkeypatch, how, are
     path, cells, state = synthetic
     labels = synthetic_reference_labels(path, monkeypatch, 12)
     assert set(labels) == {"fluvial", "pluvial"}
-    monkeypatch.setattr(module, "_native_snapshot", lambda *a, **k: FakeAnalysis(labels, cells.crs))
+    monkeypatch.setattr(module, "_native_snapshot", lambda *a, **k: snapshot(FakeAnalysis(labels, cells.crs), k))
     baseline = HdfFluvialPluvial.generate_fluvial_pluvial_polygons(
         path, delta_t=12, min_polygon_area_acres=area, engine="h5py")
     state["cells"] = present(cells, how)
@@ -213,7 +218,7 @@ def test_synthetic_native_swap_equals_reference(synthetic, monkeypatch, how, are
 def test_synthetic_native_rejects_mismatched_cell_sets(synthetic, monkeypatch):
     path, cells, state = synthetic
     labels = synthetic_reference_labels(path, monkeypatch, 12)
-    monkeypatch.setattr(module, "_native_snapshot", lambda *a, **k: FakeAnalysis(labels.iloc[1:], cells.crs))
+    monkeypatch.setattr(module, "_native_snapshot", lambda *a, **k: snapshot(FakeAnalysis(labels.iloc[1:], cells.crs), k))
     with pytest.raises(module.FluvialNativeUnsupportedError, match="native cells differ"):
         HdfFluvialPluvial.generate_fluvial_pluvial_polygons(
             path, delta_t=12, min_polygon_area_acres=1, engine="native")
