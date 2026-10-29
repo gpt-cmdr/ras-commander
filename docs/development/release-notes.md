@@ -7,6 +7,22 @@ check `ras_commander.__version__` and the documentation's
 [build provenance](https://rascommander.info/ras/version.json). A package version
 alone does not identify a development checkout.
 
+### Unreleased
+
+**FIM velocity, derived products and duration (needs a Fast-Map engine advertising the new capabilities)**
+
+- `map_sloping_profiles(velocity=True)` accepts plain `slopingPretty`
+  (`velocity_render_modes`), `velocity_depth="horizontal"` (RAS Mapper's
+  horizontal-mode velocity) and `derived_products` (D x V, D x V^2, Froude;
+  `rasmapper-depth-velocity-products/1`). The manifest gains
+  `depth_x_velocity_tif`, `depth_x_velocity_squared_tif` and `froude_tif`.
+- `RasFim.map_derived_max()` maps RAS Mapper's Max of those products in one
+  pass over every stored output time (`reduce_max/1`).
+- `map_whole_simulation` delivers duration without `allow_unqualified` when
+  the engine advertises `duration_rule` `rasmapper-backward-window-recession/1`.
+- Native HEC-RAS 7.0.1 qualification: see the
+  [velocity table](../api/fim.md#sloping-velocity).
+
 ### 0.110.3 — 2026-10-29
 
 This patch release includes **20 change PRs** absent from the published

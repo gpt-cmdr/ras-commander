@@ -238,6 +238,9 @@ def map_profiles(
     terrain_crs_fnv1a64=None,
     _prepared=None,
     product_writer="rasterio",
+    velocity_depth="rendered",
+    derived_products=(),
+    _reduce_max=False,
 ):
     from .. import HdfMesh
     from ..fast_hdf import backend_scope
@@ -299,13 +302,21 @@ def map_profiles(
     terrain = Path(terrain_path).resolve(strict=True)
     if not isinstance(velocity, bool):
         raise ValueError("velocity must be a boolean")
+    from . import _velocity as _velocity_inputs
+
+    derived_products = _velocity_inputs.validate_products(derived_products, velocity_depth)
+    if (derived_products or velocity_depth != "rendered" or _reduce_max) and not velocity:
+        raise ValueError("velocity_depth and derived_products require velocity=True")
+    if _reduce_max and not derived_products:
+        raise ValueError("the Max derived pass needs derived_products")
     scope_info = None
     if (terrain_hdf is not None or velocity) and _prepared is not None:
         raise FimUnsupportedError("prepared sloping models do not support terrain_hdf or velocity")
     if velocity:
-        if render_mode != "sloping":
+        if reduce_shallow_to_horizontal or use_depth_weighted_faces:
             raise FimUnsupportedError(
-                "velocity is qualified for plain sloping (render_mode='sloping') only"
+                "velocity is qualified for plain sloping and plain slopingPretty only "
+                "(no shallow-to-horizontal or depth-weighted faces)"
             )
         if wsel_profiles is not None:
             raise FimUnsupportedError(
@@ -364,13 +375,12 @@ def map_profiles(
 
         _terrain_scope.require_engine(method, "sloping")
     if velocity:
-        from . import _velocity
-
-        if method.get("velocity") != _velocity.METHOD_ID:
-            raise FimUnsupportedError(
-                f"engine sloping method lacks {_velocity.METHOD_ID}; install ras-commander-fast-map "
-                "with velocity support"
-            )
+        _velocity_inputs.require_engine(method, render_mode, velocity_depth, derived_products)
+        if _reduce_max and method.get("derived_max") != "reduce_max/1":
+            raise FimUnsupportedError("engine does not advertise derived_max reduce_max/1")
+    gravity = (
+        _velocity_inputs.gravity(hdf) if "froude" in derived_products else None
+    )
     watched = {"hdf": hdf, "terrain": terrain, "engine": engine}
     if scope_info is not None:
         watched["terrain_hdf"] = scope_info["terrain_hdf"]
@@ -487,14 +497,29 @@ def map_profiles(
             "max_source": "Maximum Face Velocity with Maximum Water Surface",
             "timestep_source": "Face Velocity at the stored output time",
             "face_lengths": "face polyline lengths",
-            "drawn": "where rendered depth > 0",
+            "velocity_depth": velocity_depth,
+            "drawn": (
+                "where the horizontal (cell-constant) depth > 0"
+                if velocity_depth == "horizontal"
+                else f"where the rendered {render_mode} depth > 0"
+            ),
             "qualification": (
-                "values match native HEC-RAS 7.0.1 Max velocity on common pixels (BaldEagleCrkMulti2D "
-                "bridges p05: 972,706 bit-identical; Davis p02: 3 of 22,041 within 3e-8); the native "
-                "validity mask can differ from depth > 0 on edge pixels (bridges p05: 826 native-only, "
-                "1,196 extra)"
+                "native HEC-RAS 7.0.1 velocity values do not depend on the render mode and are "
+                "clipped by that mode's depth; BaldEagleCrkMulti2D bridges p05 Max sloping "
+                "(973,902 px), slopingPretty and horizontal match in values and mask"
             ),
         }
+        if derived_products:
+            details["velocity"]["derived"] = {
+                "method_id": _velocity.DERIVED_METHOD_ID,
+                "products": list(derived_products),
+                "gravity": gravity,
+                "max": (
+                    "pixelwise maximum over every stored output time (RAS Mapper Max)"
+                    if _reduce_max
+                    else None
+                ),
+            }
     supplied_source = (_prepared._info.get("profile_source") if _prepared is not None else None)
     if supplied is not None or supplied_source is not None:
         details["qualification"] = "Caller-supplied WSEL; aggregate/changed-terrain/option combinations require independent qualification."
@@ -511,6 +536,8 @@ def map_profiles(
             frame.attrs["terrain_scope"] = details["terrain_scope"]
         if "velocity" in details:
             frame.attrs["velocity"] = details["velocity"]
+        if "max_derived" in details:
+            frame.attrs["max_derived"] = details["max_derived"]
         frame.attrs["invalid_cells"] = details["invalid_cells"]
         return frame
 
@@ -611,10 +638,18 @@ def map_profiles(
                     profiles=units,
                     threads=threads,
                     max_working_bytes=budget * (1 << 20) - buffer_bytes,
-                    stream_outputs=True,
+                    stream_outputs=not _reduce_max,
                     **({"geotiff_outputs": True} if native_products else {}),
                     **fields,
                 )
+                if velocity_depth != "rendered":
+                    request["velocity_depth"] = velocity_depth
+                if derived_products:
+                    request["derived_products"] = list(derived_products)
+                if gravity is not None:
+                    request["gravity"] = gravity
+                if _reduce_max:
+                    request["reduce_max"] = True
                 if concurrency_supported:
                     request["max_inflight_profiles"] = max_inflight_profiles
                 if _prepared is not None and _prepared._reuse_native:
@@ -682,7 +717,7 @@ def map_profiles(
                         timer.daemon = True
                         timer.start()
                     try:
-                        for name in selected:
+                        for name in ([] if _reduce_max else selected):
                             header = process.stdout.readline(65537)
                             if len(header) > 65536 or not header.endswith(b"\n"):
                                 raise FimEngineError(
@@ -700,6 +735,7 @@ def map_profiles(
                                 or unit.get("status") != "complete"
                                 or unit.get("pixels") != int(np.prod(plan.shape))
                                 or (unit.get("velocity") is True) != velocity
+                                or unit.get("derived", []) != list(derived_products)
                             ):
                                 raise FimEngineError(
                                     "Sloping stream profile or dimensions mismatch"
@@ -720,6 +756,10 @@ def map_profiles(
                                     if velocity
                                     else None
                                 )
+                                derived_arrays = [
+                                    _read_f32(process.stdout, plan.shape, expired, timeout, product)
+                                    for product in derived_products
+                                ]
                                 result = SimpleNamespace(
                                     profile=name,
                                     depth=depth,
@@ -749,6 +789,13 @@ def map_profiles(
                                             speed_path, speed, plan.transform, plan.crs
                                         )
                                         products["velocity_tif"] = str(speed_path)
+                                    for product, values in zip(derived_products, derived_arrays):
+                                        from . import _velocity
+
+                                        path = _velocity.derived_path(folder, name, product)
+                                        _products.write_raster(path, values, plan.transform, plan.crs)
+                                        products[f"{product}_tif"] = str(path)
+                                    del derived_arrays
                             rows[name].update(products)
                             details["performance"]["product_write_seconds"][name] = (
                                 time.perf_counter() - write_tick
@@ -763,7 +810,11 @@ def map_profiles(
                                 raise FimEngineError("Native session exited unexpectedly")
                             code = 0
                         else:
-                            if process.stdout.read(1):
+                            if _reduce_max:
+                                # File-output requests print the engine report; the
+                                # report file below is authoritative.
+                                process.stdout.read()
+                            elif process.stdout.read(1):
                                 raise FimEngineError("Unexpected trailing sloping stream bytes")
                             code = process.wait()
                         if expired.is_set():
@@ -842,6 +893,38 @@ def map_profiles(
                         if expired.is_set():
                             raise FimEngineError(f"Sloping engine timed out after {timeout} seconds")
                         details["performance"]["engine_report"] = report
+                        if _reduce_max:
+                            maxima = report.get("max")
+                            if (
+                                not isinstance(maxima, dict)
+                                or maxima.get("status") != "complete"
+                                or maxima.get("products") != list(derived_products)
+                            ):
+                                raise FimEngineError("Missing or invalid Max derived report")
+                            from . import _velocity
+
+                            write_tick = time.perf_counter()
+                            reduced = {}
+                            for product in derived_products:
+                                values = np.fromfile(
+                                    root / "out" / "max" / f"{product}.bin", dtype="<f4"
+                                )
+                                if values.size != int(np.prod(plan.shape)):
+                                    raise FimEngineError("Max derived product dimensions mismatch")
+                                path = _velocity.max_derived_path(folder, product)
+                                _products.write_raster(
+                                    path, values.reshape(plan.shape), plan.transform, plan.crs
+                                )
+                                reduced[f"{product}_tif"] = str(path)
+                            details["max_derived"] = {
+                                "products": reduced,
+                                "valid_pixels": dict(zip(derived_products, maxima.get("valid_pixels", []))),
+                                "output_times": len(selected),
+                            }
+                            details["performance"]["product_write_seconds"]["max"] = (
+                                time.perf_counter() - write_tick
+                            )
+                            rows = {name: _empty_row(name, "reduced") for name in selected}
                         if _prepared is not None:
                             _prepared._info["native_state_reused"] = bool(report.get("session", {}).get("geometry_reused"))
                             details["performance"]["prepared_context"] = _prepared.info
@@ -893,6 +976,8 @@ def map_profiles(
                 from . import _velocity
 
                 _velocity.velocity_path(folder, name).unlink(missing_ok=True)
+                for product in derived_products:
+                    _velocity.derived_path(folder, name, product).unlink(missing_ok=True)
             rows[name] = _empty_row(
                 name, "failed", error=f"{type(exc).__name__}: {exc}"
             )

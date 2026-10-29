@@ -9,9 +9,11 @@ thresholded cell gate ``wse > cell minimum elevation + threshold`` (float32).
 - ``arrival_time``: first wet output time, in hours since the plan's
   simulation start (float32).
 - ``percent_inundated``: ``100 * wet output times / all output times``.
-- ``duration`` (opt-in, unqualified): hours from arrival to the first dry
-  output time after the last wet one, or to the last wet time when that dry
-  time is the final output or there is none.
+- ``duration``: hours from arrival to RAS Mapper's recession time. With an
+  engine advertising ``duration_rule`` ``rasmapper-backward-window-recession/1``
+  this is the native backward window search over the cell's local-extrema
+  windows (qualified bit for bit); older engines use the first dry time after
+  the last wet one, which is unqualified and needs ``allow_unqualified``.
 
 Pixels that are never wet are NaN. Python stages the cell polygons, the cell
 minimum elevations and one WSE vector per stored output time; it performs no
@@ -37,6 +39,8 @@ METHOD_ID = "native-whole-simulation-horizontal/1"
 REQUEST_SCHEMA = "ras-commander-whole-simulation-request/1"
 REPORT_SCHEMA = "ras-commander-whole-simulation-report/1"
 PRODUCTS = ("arrival_time", "duration", "percent_inundated")
+#: Engine duration end rule qualified against RAS Mapper 7.0.1.
+DURATION_RULE = "rasmapper-backward-window-recession/1"
 QUALIFIED_PRODUCTS = ("arrival_time", "percent_inundated")
 DEFAULT_PRODUCTS = ("arrival_time", "percent_inundated")
 UNITS = {"arrival_time": "hours", "duration": "hours", "percent_inundated": "percent"}
@@ -71,11 +75,6 @@ def _validate(products, threshold, allow_unqualified):
         raise ValueError(f"products must be unique names from {PRODUCTS}")
     if not isinstance(allow_unqualified, bool):
         raise ValueError("allow_unqualified must be a boolean")
-    if "duration" in products and not allow_unqualified:
-        raise FimUnsupportedError(
-            "duration is not qualified against RAS Mapper (some recession pixels end one output "
-            "interval later than native); pass allow_unqualified=True to deliver it"
-        )
     if (
         isinstance(threshold, bool)
         or not isinstance(threshold, (int, float, np.integer, np.floating))
@@ -165,6 +164,16 @@ def map_whole_simulation(
     engine = _engine.find_engine(engine_path)
     method = _engine.engine_method(engine)
     whole_method, horizontal_method = _require_methods(method)
+    if (
+        "duration" in products
+        and whole_method.get("duration_rule") != DURATION_RULE
+        and not allow_unqualified
+    ):
+        raise FimUnsupportedError(
+            "this engine's duration is not qualified against RAS Mapper (some recession pixels "
+            f"end one output interval later than native); install an engine advertising "
+            f"duration_rule {DURATION_RULE!r}, or pass allow_unqualified=True"
+        )
     if scope_info is not None:
         _terrain_scope.require_engine(horizontal_method, "horizontal")
     watched = {"hdf": hdf, "terrain": terrain, "engine": engine}

@@ -755,22 +755,52 @@ TIFF because 28 mapped 2D pixels lie outside its footprint.
 manifest row, rendered by the engine's `rasmapper-sloping-velocity/0` method.
 Max uses `Maximum Face Velocity` with the Max WSE; a timestep index uses
 `Face Velocity` at that output time. Face normals carry face polyline lengths.
-Velocity is drawn where the rendered depth is greater than zero. It requires
-plain sloping with HDF profiles; `wsel_profiles`, `template_raster` and
+RAS Mapper's velocity values do not depend on the render mode; it clips them
+with the active mode's depth. `velocity_depth="rendered"` (default) clips with
+this request's depth (`sloping`, or plain `slopingPretty` on an engine that
+advertises it in `velocity_render_modes`). `velocity_depth="horizontal"`
+clips with the horizontal cell-constant depth, reproducing RAS Mapper's
+horizontal-mode velocity; the WSE/depth products stay sloping. HDF profiles
+only; `wsel_profiles`, `template_raster`, shallow/depth-weighted options and
 storage-area plans are refused.
 
-| Model (native 7.0.1, Max) | Common pixels | Bit differences | Mask differences |
-|---|---|---|---|
-| BaldEagleCrkMulti2D bridges p05 | 972,706 | 0 | 826 native-only, 1,196 extra |
-| Davis p02 | 22,041 | 3 (at most 3e-8) | 0 |
+`derived_products=("depth_x_velocity", "depth_x_velocity_squared", "froude")`
+adds `<product>_tif` (`13_<profile>_<product>.tif`) from the same clipping
+depth and velocity, in RAS Mapper's operation order (Froude uses the plan's
+float32 gravity, 32.174 or 9.80665). For Max use `map_derived_max`:
 
-The native velocity validity mask is not always the depth mask; the bridges
-differences are edge pixels.
+```python
+products = RasFim.map_derived_max(
+    "model.p05.hdf", "terrain.tif", "max_derived",
+    render_mode="sloping",  # or velocity_depth="horizontal"
+)
+products[["product", "tif", "valid_pixels"]]
+```
+
+RAS Mapper's Max D x V, D x V^2 and Froude are the per-output-time products'
+pixelwise maximum (the valid area is the union over times), not Max depth
+times Max velocity. The engine reduces every stored output time
+(`reduce_max/1`) without writing per-time rasters.
+
+| Native 7.0.1 reference | Product | Valid pixels | Bit / mask differences |
+|---|---|---|---|
+| bridges p05 Max, sloping | velocity | 973,902 | 0 / 0 |
+| bridges p05 Max, horizontal clip | velocity | 973,532 | 0 / 0 |
+| bridges p05 Max, slopingPretty | velocity | 974,142 | 0 on 974,067 common; mask follows the rendered slopingPretty depth (75 / 28 edge pixels where that depth differs) |
+| bridges p05 03JAN1999 00:00, sloping | velocity, D x V, D x V^2, Froude | 402,616 | 0 / 0 |
+| bridges p05 03JAN1999 00:00, horizontal | velocity, D x V, D x V^2, Froude | 402,500 | 0 / 0 |
+| bridges p05 Max over 433 times, sloping | D x V, D x V^2, Froude | 973,956 | 0 / 0 |
+| bridges p05 Max over 433 times, horizontal | D x V, D x V^2, Froude | 973,531 | 0 / 0 |
+| Davis p02 (Max, 11JAN2000 06:00, Max over 217 times) | all | 8,586-20,560 | at most 5 pixels within 2 ulp / 0 |
+
+An earlier table reported 826/1,196 bridges mask differences; that reference
+was RAS Mapper's horizontal-mode velocity compared with the sloping depth.
+Shear stress is not rendered (see the Fast-Map research notes).
 
 ## Whole-simulation products
 
-`map_whole_simulation` produces arrival time and percent time inundated (and,
-opt-in, duration) from every stored output time, through the engine's
+`map_whole_simulation` produces arrival time, percent time inundated and
+duration from every stored output time, through the engine's
 `native-whole-simulation-horizontal/1` method:
 
 ```python
@@ -785,15 +815,16 @@ manifest[["product", "tif", "units", "wet_pixels"]]
 - `arrival_time` is the first wet output time in hours since the plan's
   simulation start; `percent_inundated` is `100 * wet times / all times`.
   Never-wet pixels are NaN.
-- `duration` requires `allow_unqualified=True`: some native recession
-  durations are one output interval shorter. Irregular output intervals are
-  also refused without it.
+- `duration` runs to RAS Mapper's recession time on an engine advertising
+  `duration_rule` `rasmapper-backward-window-recession/1` (qualified below);
+  older engines use the first dry time and need `allow_unqualified=True`.
+  Irregular output intervals are refused without `allow_unqualified`.
 - Plans with storage areas or 1D elements are refused.
 
-| Model (native 7.0.1, 0.5 ft) | Output times | Valid pixels | Arrival / percent differences |
+| Model (native 7.0.1, 0.5 ft) | Output times | Valid pixels | Arrival / percent / duration differences |
 |---|---|---|---|
-| Davis p02 | 217 | 4,879 | 0 / 0 |
-| BaldEagleCrkMulti2D bridges p05 | 433 | 959,043 | 0 / 0 |
+| Davis p02 | 217 | 4,879 | 0 / 0 / 0 |
+| BaldEagleCrkMulti2D bridges p05 | 433 | 959,043 | 0 / 0 / 0 |
 
 Both match RAS Mapper's horizontal and sloping stored maps, which are identical
 on these models. These methods target pure 2D models for FIM library creation;
