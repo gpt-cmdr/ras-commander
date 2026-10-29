@@ -431,3 +431,128 @@ def test_shadow_verifies_java_window_after_whole_read_failure(
     record = list(_backend.SHADOW_RECORDS)[-1]
     assert record["java_window_verified"] == (window_result == "match")
     assert record["outcome"] == ("expected" if window_result == "match" else "unexpected")
+
+
+# ---------------------------------------------------------------------------
+# HEC DSS6 "no data" rule (dss-commander no_data="refuse", parity labelling only)
+# ---------------------------------------------------------------------------
+
+
+def _java_no_data(dss_file, path, **_kwargs):
+    raise ValueError(f"No data found for pathname: {path}")
+
+
+@pytest.mark.parametrize("route", ["single", "multiple"])
+def test_shadow_labels_hec_no_data_rule_without_changing_result(
+    shadow, monkeypatch, muncie_dss, route
+):
+    import dss_commander as dc
+
+    if not hasattr(dc, "DssNoDataError"):
+        pytest.skip("installed dss-commander has no DssNoDataError")
+    pathname = "/NO/SUCH/FLOW//1HOUR/RECORD/"
+    calls = []
+    original = dc.DssFile.read_timeseries
+
+    def read_timeseries(self, path, start=None, end=None, **kwargs):
+        calls.append(kwargs)
+        if kwargs.get("no_data") == "refuse":
+            raise dc.DssNoDataError("no data", pathname=path)
+        return original(self, path, start, end, **kwargs)
+
+    monkeypatch.setattr(dc.DssFile, "read_timeseries", read_timeseries)
+    monkeypatch.setattr(RasDss, "_read_timeseries_java", staticmethod(_java_no_data))
+    if route == "single":
+        with pytest.raises(dc.DssPathnameNotFoundError) as info:
+            RasDss.read_timeseries(muncie_dss["file"], pathname)
+        # The returned error is the default native one, never the refusal.
+        assert not isinstance(info.value, dc.DssNoDataError)
+    else:
+        assert RasDss.read_multiple_timeseries(muncie_dss["file"], [pathname]) == {pathname: None}
+    assert calls == [{}, {"no_data": "refuse"}]
+    assert _backend.summary() == {f"read_timeseries|expected|{_backend.HEC_NO_DATA_LABEL}": 1}
+    assert list(_backend.SHADOW_RECORDS)[-1]["native_hec_no_data"] is True
+
+
+def test_shadow_absent_pathname_keeps_d4_label(shadow, monkeypatch, muncie_dss):
+    import dss_commander as dc
+
+    monkeypatch.setattr(RasDss, "_read_timeseries_java", staticmethod(_java_no_data))
+    with pytest.raises(dc.DssPathnameNotFoundError):
+        RasDss.read_timeseries(muncie_dss["file"], "/NO/SUCH/FLOW//1HOUR/RECORD/")
+    assert _backend.summary() == {"read_timeseries|expected|D4/D6 no data: typed native error": 1}
+    assert list(_backend.SHADOW_RECORDS)[-1]["native_hec_no_data"] is False
+
+
+def test_native_refuses_no_data_rules(monkeypatch):
+    class NotFound(ValueError):
+        pass
+
+    class NoData(NotFound):
+        pass
+
+    engine = type("Engine", (), {"DssPathnameNotFoundError": NotFound, "DssNoDataError": NoData})
+    monkeypatch.setattr(_backend, "_maybe_native", lambda: engine)
+    calls = []
+
+    def refusing(**kwargs):
+        calls.append(kwargs)
+        raise NoData("no data")
+
+    def absent(**kwargs):
+        calls.append(kwargs)
+        raise NotFound("absent")
+
+    def returns(**kwargs):
+        calls.append(kwargs)
+        return pd.DataFrame()
+
+    assert _backend.native_refuses_no_data(refusing, NotFound("x")) is True
+    assert _backend.native_refuses_no_data(absent, NotFound("x")) is False
+    assert _backend.native_refuses_no_data(returns, NotFound("x")) is False
+    assert calls == [{"no_data": "refuse"}] * 3
+    calls.clear()
+    # Not a not-found error: no re-read.
+    assert _backend.native_refuses_no_data(refusing, RuntimeError("x")) is False
+    assert calls == []
+    # Older wheels without DssNoDataError: no re-read, broader labels stay.
+    old = type("Old", (), {"DssPathnameNotFoundError": NotFound})
+    monkeypatch.setattr(_backend, "_maybe_native", lambda: old)
+    assert _backend.native_refuses_no_data(refusing, NotFound("x")) is False
+    assert calls == []
+
+
+def test_classify_hec_no_data_label(muncie_dss):
+    import dss_commander as dc
+
+    pathname = muncie_dss["ts"][0]
+    err = dc.DssPathnameNotFoundError("no values")
+    java_error = ValueError(f"No data found for pathname: {pathname}")
+    assert _backend.classify_timeseries(pathname, None, java_error, None, err)[1] == (
+        "D4/D6 no data: typed native error"
+    )
+    assert _backend.classify_timeseries(
+        pathname, None, java_error, None, err, native_hec_no_data=True
+    ) == ("expected", _backend.HEC_NO_DATA_LABEL, [])
+    markers = pd.DataFrame(
+        {"value": [-901.0, float(-np.finfo(np.float32).max)]},
+        index=pd.DatetimeIndex(["2000-01-01", "2000-01-02"], name="datetime"),
+    )
+    assert _backend.classify_timeseries(pathname, markers, None, None, err)[1] == (
+        "D4 all-missing dataset (error type)"
+    )
+    assert _backend.classify_timeseries(
+        pathname, markers, None, None, err, native_hec_no_data=True
+    )[1] == _backend.HEC_NO_DATA_LABEL
+
+
+def test_cut_window_keeps_stored_nan_like_ztstrim():
+    pytest.importorskip("dss_commander")
+    import dss_commander as dc
+
+    flt_max = float(-np.finfo(np.float32).max)
+    index = pd.date_range("2000-01-01", periods=6, freq="D", name="datetime")
+    java_df = pd.DataFrame({"value": [-901.0, np.nan, 1.0, np.nan, flt_max, -902.0]}, index=index)
+    cut = _backend.cut_window(java_df, index[0], index[-1], 1440, dc)
+    assert len(cut) == 3
+    assert np.isnan(cut["value"].iloc[0]) and np.isnan(cut["value"].iloc[-1])
