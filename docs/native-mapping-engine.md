@@ -10,7 +10,7 @@ rasterizes pixel ownership through terrio, reconstructs the selected surface,
 and evaluates pixels with bounded Rayon workers. The native HDF engine reads
 numeric model inputs; Python supervises requests and final GIS delivery.
 The default delivery stack uses Rasterio/GDAL for GeoTIFF output and compression.
-The development engine also supports opt-in direct terrio LZW output on
+Fast-Map 0.11.0 also supports opt-in direct terrio LZW output on
 sloping requests and catalogs. The Rust engine needs no system GDAL.
 
 This is a **2D surface-only** mapper. Model-backed calls reject models containing
@@ -25,6 +25,15 @@ times per watershed, reuses compatible native model state and optionally
 partitions independent workers under shared CPU/memory admission. The
 [catalog measurements](development/fim-mapping-performance.md#reach-timestep-catalog-throughput)
 include final output writes and distinguish reuse from concurrency.
+
+For agent-driven catalog creation, start with the
+[multi-polygon/timestep recipe](api/fim.md#build-jobs-from-a-watershed-layer)
+and [throughput policy table](api/fim.md#choose-a-throughput-policy). They show
+how to select one watershed per job, preserve duplicate timestep requests,
+bound preparation waves, choose reuse versus independent workers and inspect
+partial catalogs. The optional native writer and retained timestep/window
+caches are included in the Fast-Map 0.11.0 release line; inspect capabilities
+and use an explicit qualified build until the release is published.
 
 ## Install and inspect capabilities
 
@@ -41,9 +50,14 @@ ras2fim-batch method
 ```
 
 From a Commander checkout, use `uv pip install -e ".[fim]"`. To install only
-the engine, use `uv pip install "ras-commander-fast-map>=0.10.1,<0.11"` or the
-`fast-map` extra. Commander's `fim` and `fast-map` extras require 0.10.1 or later,
-the first release with the `global-terrain-lattice/1` polygon AOI mask.
+the engine, use `uv pip install "ras-commander-fast-map>=0.10.1,<0.12"` or the
+`fast-map` extra. Commander's `fim` and `fast-map` extras accept the 0.10.1 and
+0.11 release lines. Version 0.10.1 introduced the
+`global-terrain-lattice/1` polygon AOI mask; retained hydraulic/window state
+and native TIFF delivery require 0.11.0 capabilities. After that release is
+published, select it explicitly with
+`uv pip install "ras-commander-fast-map>=0.11.0,<0.12"` when these features
+are required. Existing user pins remain in effect unless explicitly updated.
 Uninstall the former `ras2fim-engine` package first when migrating from its
 retained test wheels, because it owns the same compatible executable.
 
@@ -143,7 +157,7 @@ For repeated reach requests, use `RasFim.prepare_sloping_model()` as a context
 manager and call its `map_profiles()` method with different masks. It retains
 Python-side geometry/indexing and staged model/WSE inputs. A capable native
 engine retains its process, stencils and terrain blocks across calls.
-Development capabilities add bounded reconstructed-timestep and multiple-window
+Fast-Map 0.11.0 capabilities add bounded reconstructed-timestep and multiple-window
 caches, plus an opt-in terrio GeoTIFF writer. Passed geometry validation is
 reused only for the identical immutable cell subset. Changed source inputs
 invalidate the context. See [prepared model usage](api/fim.md#reuse-prepared-models-across-reach-requests)

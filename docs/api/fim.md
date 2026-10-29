@@ -571,7 +571,7 @@ union of the needed timestep selectors once, then keep the context open while
 mapping successive reaches. `native_session=False` starts a fresh native
 process per request. Numeric HDF staging uses bounded contiguous-time slabs.
 
-The development engine additionally advertises `hydraulic_cache` and
+Fast-Map 0.11.0 additionally advertises `hydraulic_cache` and
 `multi_window_cache`. `hydraulic_cache_mib` (default 64) retains reconstructed
 hydraulic state by staged WSE-file identity and interpolation options, sharing
 it across different reaches. `window_cache_mib` (default 64) bounds an LRU
@@ -624,7 +624,7 @@ including calls from different threads; `close()` waits for an active request.
 A closed context cannot map again. This synchronization does not provide
 cross-context scheduling or combine their memory and worker budgets.
 
-For the development engine, `RasFim.map_sloping_profiles(...,
+With Fast-Map 0.11.0, `RasFim.map_sloping_profiles(...,
 product_writer="native")` and the context's `map_profiles()` write terrio LZW
 GeoTIFFs directly without
 transferring raster arrays through Python. The default remains `"rasterio"`.
@@ -632,8 +632,9 @@ Native delivery requires `native_geotiff_outputs`, preserves float32 pixels,
 NaN nodata and the requested CRS/grid, and uses one compression worker.
 It currently excludes templates, floodplain polygonization and velocity.
 The same cache and writer controls are available on `RasFim.map_catalog()`;
-native catalog delivery currently requires sloping jobs. These development
-capabilities require an explicit engine build until its release is published.
+native catalog delivery currently requires sloping jobs. These capabilities
+are part of the 0.11.0 release line; use an explicit qualified engine build
+until that release is published.
 
 See the [prepared-context evidence](../development/fim-mapping-performance.md#prepared-model-contexts-across-reach-requests)
 for reuse behavior and numerical comparison scope.
@@ -1323,6 +1324,107 @@ existing sloping API. A job accepts one polygon or bbox, with the existing
 `polygon_layer`/`aoi_crs` rules. Unknown fields raise. Velocity, terrain
 preparation, supplied WSEL tables and floodplain polygonization remain separate
 operations; the catalog does not run HEC-RAS.
+
+### Build jobs from a watershed layer
+
+When one vector layer contains many watersheds, select each feature before
+creating its job. Passing the complete layer to every job maps the same union
+repeatedly. The example below uses the caller's reach-to-time selection; it
+does not derive relevant hydraulic conditions or select times automatically.
+Replace `divide_id` with the actual watershed identifier column.
+
+```python
+import geopandas as gpd
+from ras_commander import RasFim
+
+watersheds = gpd.read_file("watersheds.gpkg", layer="divides")
+times_by_reach = {
+    "wb-example-a": [48, 49, 54, 108],
+    "wb-example-b": [108, 48, 108],
+}
+jobs = []
+for ordinal, (reach_id, times) in enumerate(times_by_reach.items()):
+    area = watersheds.loc[watersheds["divide_id"] == reach_id].copy()
+    if len(area) != 1 or area.crs is None:
+        raise ValueError(f"Expected one georeferenced watershed for {reach_id}")
+    jobs.append({
+        "job_id": f"reach_{ordinal:06d}", "reach_id": reach_id,
+        "hdf_path": "model.p02.hdf", "terrain_path": "mapping_terrain.tif",
+        "polygon": area, "timesteps": times, "interpolation": "sloping",
+    })
+
+if __name__ == "__main__":
+    products = RasFim.map_catalog(
+        jobs, "catalog_output", strategy="reuse",
+        threads=4, max_workers=1, writer_threads=1,
+        max_inflight_profiles=1, max_profiles_per_batch=32,
+        max_memory_mib=8192, max_working_mib=4096,
+        max_prepared_mib=1024, memory_headroom_mib=256,
+        window_cache_mib=64, hydraulic_cache_mib=64, validation_cache_mib=8,
+        product_writer="native", raise_on_failure=False,
+    )
+    print(products[["job_id", "request_ordinal", "timestep", "status"]])
+    print(products.attrs["catalog_status"])
+    print(products.attrs["performance"])
+    print(products.attrs["catalog_manifest"])
+```
+
+This example needs the catalog API and an engine advertising
+`native_geotiff_outputs` (Fast-Map 0.11.0 release line). Before publication,
+use an explicit qualified development engine. Check
+`RasFim.get_engine_info()["method"]["sloping"]`; capability flags, rather than
+the version string alone, control support. Use `product_writer="rasterio"`
+for horizontal jobs or the default delivery path. Native output currently
+supports sloping jobs without velocity, templates or floodplain polygonization.
+Keep the `__main__` guard when placing the call in a Python script.
+
+The selected GeoDataFrame carries its CRS; Shapely geometries need an explicit
+`aoi_crs`. To use a bbox instead, replace `polygon` with
+`bbox=(xmin, ymin, xmax, ymax)` and identify its CRS. A job has one AOI; use
+separate jobs for separate area/time groups, even when reach IDs repeat.
+Polygon holes and multipart geometry remain part of the mask. Do not replace
+a watershed with its bounding rectangle when its exact coverage is required.
+
+Use a single qualified mapping TIFF. Resolve multiple terrain sources or
+terrain modifications into a mapping terrain before catalog execution and
+verify its CRS and surface against the intended reference. Cell-face parity
+also depends on the qualified source grid/tile layout; an arbitrary mosaic or
+retile is not qualified by these examples. Apply the AOI at mapping time rather
+than making an independently cropped terrain per reach. The catalog currently
+does not accept the one-shot/prepared `terrain_crs_fnv1a64` override.
+
+### Choose a throughput policy
+
+| Workload | Starting policy | What to measure next |
+|---|---|---|
+| Many polygons on one model/terrain with overlapping time lists | `strategy="reuse", max_workers=1` | Hydraulic cache hits and full-catalog wall time; increase hydraulic retention only if reconstructed times can remain resident. |
+| Repeated requests for the same windows | Keep reuse and the default window/validation caches | Window hits, retained bytes and peak process-tree memory; window retention alone did not improve the Spring Creek pilot median. |
+| Independent models or little shared preparation | Try `strategy="parallel", max_workers=2` | Total makespan against reuse with the same global CPU/RAM budgets; preparation and caches may be duplicated. |
+| Many times within one polygon | Start with `max_inflight_profiles=1`; test 2 | Native admission, memory high-water mark and whole-call time. In-flight profiles share a worker's Rayon pool; they do not add CPUs. |
+| Very long or mostly disjoint time lists | Bound `max_profiles_per_batch` | Staging cost versus extra preparation waves. Smaller batches bound staged results but can reduce reuse. |
+
+The example's 4 GiB working allowance is a starting configuration, not a
+prediction of required memory. One worker reserves 4,096 + 1,024 + 256 =
+5,376 MiB for admission. Two such workers need at least 10,752 MiB of global
+allowance and sufficient available host memory; an 8,192 MiB allowance admits
+only one. Increasing `max_workers` alone does not override these checks.
+
+Cache ceilings are reservations within the existing working/prepared budgets,
+not additional memory allowances. Increase the working budget together with
+larger native caches. Zero disables a cache. Complete hydraulic topology and
+selected WSE rows remain global, including cells outside the AOI; terrain and
+output operations are windowed. A small watershed therefore does not imply a
+proportional reduction in startup, HDF staging, hydraulic reconstruction or
+total memory. The API uses bounded time-slab HDF reads and native terrain block
+reads; do not manually clip hydraulic arrays to a reach.
+
+Use a new output folder for each tuning trial. Compare the returned
+`performance` attributes and `catalog_manifest.json`, including actual CPU
+partitions, wall time, sampled RSS/private memory and per-request cache reports.
+Inspect `catalog_status` and each row's `status`; an empty/dry AOI can be a
+legitimate result, while `failed`, `not_run` and cancellation require handling.
+With `raise_on_failure=False`, the partial manifest is returned for inspection;
+it does not turn a partial catalog into a complete one. Retry in a fresh folder.
 
 ### Reuse, concurrency and memory admission
 
