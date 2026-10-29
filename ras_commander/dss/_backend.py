@@ -310,7 +310,8 @@ def cut_window(
       stamp, which can precede the requested time.
     - Both ends, irregular data: stamps in ``[start, end]``.
 
-    The cut is then trimmed of leading and trailing missing values (regular data).
+    The cut is then trimmed of leading and trailing HEC missing markers (regular
+    data), as heclib's ``ztsTrim`` trims them; a stored NaN is a value and is kept.
     ``interval_minutes`` is the native frame's ``interval`` attribute (0 = irregular).
     """
     if start is None and end is None:
@@ -339,7 +340,8 @@ def cut_window(
             keep &= stamps <= _to_datetime64(dc, end)
     out = java_df.iloc[np.flatnonzero(keep)]
     if regular and len(out):
-        miss = java_missing(out["value"].to_numpy())
+        # heclib ztsTrim trims HEC markers only; a stored NaN is a value.
+        miss = np.isin(out["value"].to_numpy(dtype=np.float64), JAVA_MISSING_MARKERS)
         valid = np.flatnonzero(~miss)
         out = out.iloc[valid[0]: valid[-1] + 1] if len(valid) else out.iloc[:0]
     out = out.copy()
@@ -377,6 +379,45 @@ def _is_ascii(text: Optional[str]) -> bool:
     return True
 
 
+#: Shadow label for a native not-found error that HEC's DSS6 "no data" rule explains.
+HEC_NO_DATA_LABEL = "D4 HEC DSS6 no-data rule (native refusal, status 4)"
+
+
+def native_refuses_no_data(read, native_exc: Optional[BaseException]) -> bool:
+    """True when HEC's DSS6 "no data" rule explains a native not-found error.
+
+    For parity and testing only; never used for the value a read returns. HEC
+    Monolith (the Java path) reports a DSS6 regular time-series request as not
+    found when every value it reads is -901 or -902 (heclib ``zrrtsi.f`` status 4,
+    Monolith status -2). By default the native engine finds those blocks and, with
+    its default trim, then reports "no values" with the same not-found error type,
+    so the two errors look alike but have different causes. dss-commander's opt-in
+    ``no_data="refuse"`` applies HEC's rule and raises ``DssNoDataError`` (a
+    ``DssPathnameNotFoundError`` with ``status == 4``). Shadow mode uses it to tell
+    this case apart from an absent pathname.
+
+    ``read`` repeats the native read with extra keyword arguments. It is called
+    only when ``native_exc`` is a plain not-found error and the installed
+    dss-commander provides ``DssNoDataError``; any other failure returns False.
+    """
+    dc = _maybe_native()
+    no_data_error = getattr(dc, "DssNoDataError", None) if dc else None
+    not_found = getattr(dc, "DssPathnameNotFoundError", None) if dc else None
+    if no_data_error is None or not_found is None:
+        return False
+    if isinstance(native_exc, no_data_error):
+        return True
+    if not isinstance(native_exc, not_found):
+        return False
+    try:
+        read(no_data="refuse")
+    except no_data_error:
+        return True
+    except Exception:
+        return False
+    return False
+
+
 def classify_timeseries(
     pathname: str,
     java_df: Optional[pd.DataFrame],
@@ -385,12 +426,19 @@ def classify_timeseries(
     native_exc: Optional[BaseException],
     *,
     java_window_df: Optional[pd.DataFrame] = None,
+    native_hec_no_data: bool = False,
 ) -> Tuple[str, str, List[str]]:
     """Classify one ``read_timeseries`` comparison.
 
     Returns ``(outcome, label, diffs)`` where outcome is ``identical``, ``expected``,
     ``skipped`` (Java could not run) or ``unexpected``. Labels name the classes in
     ``docs/user-guide/dss-native-backend.md``.
+
+    ``native_hec_no_data`` is True when a native re-read with ``no_data="refuse"``
+    raised ``dss_commander.DssNoDataError`` (see ``native_refuses_no_data``): HEC's
+    DSS6 rule reports the request as "no data" because every value read is -901 or
+    -902. A native not-found error is then labelled ``HEC_NO_DATA_LABEL`` instead
+    of the broader D4 labels.
     """
     if java_unavailable(java_exc):
         return "skipped", "java unavailable", []
@@ -446,10 +494,14 @@ def classify_timeseries(
     if java_df is not None and native_df is None:
         if not_found and isinstance(native_exc, not_found):
             if "value" in java_df and java_missing(java_df["value"].to_numpy()).all():
+                if native_hec_no_data:
+                    return "expected", HEC_NO_DATA_LABEL, []
                 return "expected", "D4 all-missing dataset (error type)", []
         return "unexpected", "Java data, native error", []
 
     # Both failed.
+    if native_hec_no_data and not_found and isinstance(native_exc, not_found):
+        return "expected", HEC_NO_DATA_LABEL, []
     if (not_found and isinstance(native_exc, not_found)) or (
         unsupported and isinstance(native_exc, unsupported)
     ):
