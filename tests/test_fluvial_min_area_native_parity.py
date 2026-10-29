@@ -11,7 +11,8 @@ labels to the reference's own ``_dissolve_classified_cells`` and
 ``_swap_small_polygons`` over the same h5py cell polygons.
 
 These tests require the result frames to be identical (same columns, dtypes,
-values and WKB geometry) and prove the swap's input frame is byte-identical
+values and WKB geometry; dtypes are the installed pandas defaults, so ``str``
+columns are ``object`` on pandas 2 and ``str`` on pandas 3 for both engines) and prove the swap's input frame is byte-identical
 across engines. Real fixtures come from ``RAS_FLUVIAL_PUBLIC_FIXTURES`` and
 ``RAS_FLUVIAL_FIXTURE_DIRS``; missing fixtures skip. The synthetic tests replace
 the native snapshot with a stand-in that returns the reference labels in a
@@ -265,6 +266,7 @@ def test_real_native_swap_equals_reference(name, delta_t, area):
     if area is None:
         # Unswapped native output keeps native ring assembly: topologically equal rows.
         assert list(native.columns) == list(reference.columns)
+        assert list(native.dtypes) == list(reference.dtypes)
         assert list(zip(native.mesh_name, native.classification, native.cell_id)) == list(
             zip(reference.mesh_name, reference.classification, reference.cell_id))
         assert all(a.equals(b) for a, b in zip(native.geometry, reference.geometry))

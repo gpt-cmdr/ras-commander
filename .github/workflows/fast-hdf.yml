@@ -53,10 +53,10 @@ jobs:
         id: native
         shell: bash
         run: |
-          if python -m pip install --only-binary ras-commander-fast-hdf "ras-commander-fast-hdf==0.2.*"; then
+          if python -m pip install --only-binary ras-commander-fast-hdf "ras-commander-fast-hdf>=0.2.4,<0.3"; then
             echo "available=true" >> "$GITHUB_OUTPUT"
           else
-            echo "::notice title=Native tests skipped::ras-commander-fast-hdf 0.2.* could not be installed from PyPI for this platform."
+            echo "::notice title=Native tests skipped::ras-commander-fast-hdf >=0.2.4,<0.3 could not be installed from PyPI for this platform."
             echo "available=false" >> "$GITHUB_OUTPUT"
           fi
       - name: Check the installed extension

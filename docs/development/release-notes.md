@@ -41,6 +41,34 @@ Mapping arithmetic, AOI inclusion and depth thresholds are unchanged.
 See the [catalog API](../api/fim.md#schedule-reachtimestep-catalogs) and
 [measured scope](fim-mapping-performance.md#reach-timestep-catalog-throughput).
 
+**Fast-HDF 0.2.4 is the minimum HDF engine**
+
+The core dependency and the `fast`/`fast-hdf` extras now require
+`ras-commander-fast-hdf>=0.2.4,<0.3` (was `>=0.2.3,<0.3`). 0.2.4 restores the
+speed of `HdfResultsXsec.get_ref_lines_timeseries` and `get_xsec_timeseries`
+in `auto` and `native` mode, which 0.2.2 and 0.2.3 had slowed (fast-HDF #32;
+values were never affected). It also enables the columnar PMTiles properties
+of #715, which remain capability-detected. The 0.2.4 file-type and pipe-network
+readers are Rust-only and not used by Commander.
+
+**Fluvial-pluvial `classification` dtype is the same on every engine under pandas 3** (#743)
+
+With `min_polygon_area_acres`, `engine="native"` built its classification
+labels as `object`, while the Python reference uses the pandas default for
+strings (`object` on pandas 2, `str` on pandas 3). On pandas 3 the native and
+`auto` results therefore had an `object` `classification` column where `h5py`
+had `str`. The native path now builds the labels as the reference does; values
+and geometry are unchanged, and pandas 2 results are unchanged.
+
+**Terrain-CRS override for sloping mapping** (#744)
+
+`RasFim.map_sloping_profiles()` and `prepare_sloping_model()` accept
+`terrain_crs_fnv1a64`, with the same validation as `map_profiles()`. Terrains
+whose WKT the engine cannot map to an EPSG code, such as Davis 7.0.1's
+`PROJCS["unknown", ...]`, can now be mapped directly, without an EPSG copy.
+The manifest records the accepted identity as `terrain_crs_identity`. See
+[FIM](../api/fim.md).
+
 **Fast-Map 0.10.1 is the minimum mapping engine** (#736)
 
 The `fim`, `fast-map`, `full` and `all` extras now require

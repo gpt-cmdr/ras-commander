@@ -739,28 +739,42 @@ results = RasProcess.store_maps(
 )
 ```
 
-The helper selects CPUs from its inherited allowed affinity before loading
-Mapper libraries. It verifies the setting and reports an error if it cannot
-apply it. The calling process and unrelated helpers retain their settings;
-`None` preserves the default inherited affinity. This is a scoped mitigation,
-not a repair of vendor code or a guarantee for every model/runtime. Expect
-lower native rendering throughput and validate the exported rasters. Helpers
-select the lowest CPUs from their inherited mask, so parallel helpers using
-`native_cpu_limit=1` share the same CPU. A limit exceeding that mask fails
-explicitly; a Wine launcher already restricted to one CPU cannot use a larger
-helper limit.
+On native Windows, Commander creates each opted-in helper suspended, selects
+CPUs from its inherited allowed mask, verifies the child mask, and resumes the
+primary thread before CLR startup. The helper verifies the mask again before
+loading Mapper libraries and reports its CLR thread-pool minimum. Python's CPU
+mask stays unchanged, including while independent helpers launch concurrently.
+`None` preserves the default launch behavior. The existing Wine launch policy
+is unchanged; this Windows change does not qualify Wine.
 
-On the retained public Davis 7.0.1 result, an eight-CPU inherited-affinity
-control failed in four of six aggregate exports. A one-CPU helper limit
-completed 12/12 aggregate and 12/12 independent Depth/WSE exports. Every
-successful band had 20,560 valid pixels and matched the retained successful
-reference's values, masks, grid and EPSG:2871 CRS. Per-case checks recorded
-`.rasmap` restoration and unchanged caller affinity. A separate three-case
-qualification-harness smoke run verified in-project result-HDF restoration.
-These bounded
-Windows observations qualify that fixture/runtime; they do not establish a
-universal repair or qualify Wine. The native vendor race remains separate from
-the supported opt-in mitigation.
+This is a scoped mitigation, not a repair of vendor code or a guarantee for
+every model/runtime. A one-CPU mask does not serialize native rendering:
+multiple threads can still interleave on that CPU. Parallel helpers select the
+same lowest allowed CPU when `native_cpu_limit=1`, which can reduce throughput.
+On native Windows, a limit exceeding the inherited CPU count raises
+`ValueError` before helper code runs. Affinity setup, readback, or ambiguous
+primary-thread state fails explicitly and terminates the owned child. Hosts
+with security software that injects startup threads or ambiguous affinity
+masks may therefore refuse the opt-in launch. The qualification did not cover
+32-bit Python or hosts with more than 64 logical CPUs.
+
+The retained public Davis 7.0.1 qualification used an eight-CPU Windows host
+and the packaged helper. Unrestricted aggregate controls failed in four of
+six exports. The pre-CLR one-CPU launch completed 24/24 aggregate and 24/24
+independent Depth/WSE exports, with two helper processes on the independent
+route. All 100 bands from the 50 successful matrix calls had 20,560 valid
+pixels and matched the reference's values, masks, grid, and EPSG:2871 CRS.
+All 54 matrix calls preserved the in-project result HDF bytes and permissions,
+`.rasmap`, retained source HDF, and caller affinity, including failed controls.
+No helper processes or staging files remained after each call.
+
+A matched mechanism check with the same rebuilt helper recorded a CLR
+thread-pool minimum of eight for the earlier in-child mask and one for the
+pre-CLR mask. Both one-CPU mechanisms had zero failures in that comparison;
+the results do not establish a lower failure rate for the new launcher.
+The demonstrated change is earlier runtime sizing. These observations cover
+this fixture and installed HEC-RAS 7.0.1 runtime; the native vendor race remains
+separate from the supported opt-in mitigation.
 
 `scripts/qualification/qualify_native_pipe_maps.py` creates a disposable copy
 of a complete computed project and repeats both routes while recording runtime

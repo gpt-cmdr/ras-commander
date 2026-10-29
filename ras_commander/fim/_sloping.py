@@ -235,6 +235,7 @@ def map_profiles(
     terrain_hdf=None,
     velocity=False,
     invalid_cells=None,
+    terrain_crs_fnv1a64=None,
     _prepared=None,
     product_writer="rasterio",
 ):
@@ -266,6 +267,11 @@ def map_profiles(
                 f"({_prepared._invalid_policy!r}); prepare a new model to change it"
             )
         invalid_policy = _prepared._invalid_policy
+        if terrain_crs_fnv1a64 is not None and terrain_crs_fnv1a64 != _prepared._terrain_crs_fnv1a64:
+            raise ValueError(
+                "terrain_crs_fnv1a64 is fixed when the sloping model is prepared "
+                f"({_prepared._terrain_crs_fnv1a64!r}); prepare a new model to change it"
+            )
     else:
         invalid_policy = _invalid_cells.validate_policy(
             _invalid_cells.DEFAULT_POLICY if invalid_cells is None else invalid_cells
@@ -518,10 +524,11 @@ def map_profiles(
         else:
             tick = time.perf_counter()
             identity = (
-                _engine.terrain_identity(engine, terrain, cells.crs)
+                _engine.terrain_identity(engine, terrain, cells.crs, terrain_crs_fnv1a64)
                 if _prepared is None
                 else _prepared._terrain_identity
             )
+            details["terrain_crs_identity"] = dict(identity["crs_identity"])
             with tempfile.TemporaryDirectory(
                 prefix=".sloping-", dir=folder
             ) as temporary:

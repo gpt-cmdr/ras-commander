@@ -90,6 +90,10 @@ Parent `ras_commander/AGENTS.md` and root `AGENTS.md` still apply.
   fresh pixel-hash match. Engine `unsupported:` refusals surface as
   `FimUnsupportedError` (`_engine.EngineRefusal`) so callers fall back to an
   exported terrain; never widen the footprint or mosaic lower-priority sources.
+- `terrain_crs_fnv1a64` (Step05, sloping and prepared sloping) accepts only an
+  engine WKT hash equal to `terrain-info`'s `crs_wkt_fnv1a64`, and only when the
+  engine reports no EPSG code. rasterio must still resolve an EPSG code equal to
+  the results CRS. Record the accepted `crs_identity`; never infer or default a hash.
 - `map_whole_simulation` stages every stored output time's raw cell WSE, cell
   minimum elevations and float64 hours since the plan's simulation start; the
   engine owns the wet gate and accumulation. Arrival time and percent

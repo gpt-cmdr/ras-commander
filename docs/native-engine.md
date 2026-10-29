@@ -54,7 +54,8 @@ Depth/WSE values, without an added depth cutoff.
     `ras2fim-batch` executable and 0.8 mapping contracts. Weighted mapping needs
     the corner-reader capability included in fast-HDF 0.2.3. Historical 0.2.2
     development wheels and the published 0.2.2 release differ in that capability;
-    current installations should use 0.2.3 or newer.
+    current installations should use 0.2.3 or newer; ras-commander 0.111.0
+    requires 0.2.4.
 
 ## DSS engine (coming soon)
 
@@ -732,7 +733,7 @@ first.
 |---|---|
 | Engine | `ras-commander-fast-hdf` crate 0.2.0 ([crates.io](https://crates.io/crates/ras-commander-fast-hdf); source in [gpt-cmdr/ras-commander-fast-hdf](https://github.com/gpt-cmdr/ras-commander-fast-hdf)), engine API 10 |
 | Bridge | Python package `ras-commander-fast-hdf` 0.2.0 (module `ras_commander_fast_hdf`), `API_VERSION` 11, text API 1, features `catalog, hdf, mesh, results`, `ENGINE_COMMIT` = the commit of tag `v0.2.0` |
-| ras-commander | 0.108.0 and later require `ras-commander-fast-hdf>=0.2,<0.3` and bridge API 11; 0.109.0 and later require `>=0.2.3,<0.3` |
+| ras-commander | 0.108.0 and later require `ras-commander-fast-hdf>=0.2,<0.3` and bridge API 11; 0.109.0 and later require `>=0.2.3,<0.3`; 0.111.0 and later require `>=0.2.4,<0.3` |
 | Wheels | On PyPI: Windows `cp310-abi3-win_amd64`, Linux `cp310-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64` and `cp310-abi3-musllinux_1_2_x86_64`, macOS `cp310-abi3-macosx_11_0_arm64` (not yet qualified); source distribution |
 
 `ENGINE_COMMIT` is the commit of the ras-commander-fast-hdf repository the
