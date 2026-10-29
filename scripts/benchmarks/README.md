@@ -1,5 +1,17 @@
 # Raster performance benchmarks
 
+## Reach/timestep FIM catalogs
+
+`fim_catalog_compare.py jobs.json NEW_OUTPUT` compares direct per-reach sloping
+batches with the final catalog API's source-reuse, two-worker and four-worker
+strategies. The JSON contains a `jobs` array in `RasFim.map_catalog` format and
+optional `repetitions`, `threads`, `max_working_mib` and `max_memory_mib`.
+It uses computed external models, preserves sources and never executes HEC-RAS.
+Fresh processes rotate arm order, report whole-call time and sampled aggregate
+RSS/private memory, and compare complete masks and valid float32 bits outside
+the clocks. See `docs/development/fim-mapping-performance.md` for conditions and
+the measured scope. Outputs must be new; do not commit model products.
+
 ## HDF result reads
 
 `benchmark_hdf_result_reads.py` compares lazy-view creation, one-timestep direct

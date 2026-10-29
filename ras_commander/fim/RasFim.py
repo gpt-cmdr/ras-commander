@@ -255,6 +255,113 @@ class RasFim:
 
     @staticmethod
     @log_call
+    def map_catalog(
+        jobs: Sequence[Dict[str, Any]], output_folder: PathLike, *,
+        threads: int = 4, max_workers: int = 1, strategy: str = "reuse",
+        max_memory_mib: int = 8192, max_working_mib: int = 2048,
+        max_prepared_mib: int = 1024, memory_headroom_mib: int = 256,
+        max_profiles_per_batch: int = 64, writer_threads: int = 1,
+        max_inflight_profiles: int = 1,
+        engine_path: Optional[PathLike] = None,
+        timeout: Optional[float] = None, cancel_event: Any = None,
+        raise_on_failure: bool = True,
+    ) -> pd.DataFrame:
+        """Map ordered reach/timestep groups under shared CPU/memory budgets.
+
+        Each job is a mapping with ``job_id``, ``hdf_path``, ``terrain_path``,
+        ``timesteps`` (saved zero-based indices or ``"Max"``), and ``polygon``
+        or ``bbox``. Optional ``polygon_layer``, ``aoi_crs`` and ``reach_id``
+        follow the existing AOI contract. ``interpolation`` defaults to
+        ``"sloping"``; ``"horizontal"`` selects cell-constant mapping. Sloping
+        jobs also accept ``render_mode``, ``reduce_shallow_to_horizontal``,
+        ``use_depth_weighted_faces``, ``postprocessing_hdf``,
+        ``corner_elevation_source`` and ``invalid_cells``. Unknown fields raise.
+
+        Batch known timesteps per reach. Compatible jobs share prepared inputs
+        and a serialized native session within each bounded selector union.
+        ``max_profiles_per_batch`` limits both request occurrences and staged
+        unique selectors per source group; larger lists create additional
+        preparation waves. Requested order and duplicate selectors are retained
+        as separate ordinal output files. Complete hydraulic topology remains
+        available outside the output AOI; no depth postprocessing is added.
+
+        ``threads`` is the global logical-CPU affinity budget (at most 64).
+        ``max_workers=1`` favors reuse; ``strategy="reuse"`` combines compatible
+        source groups, while ``"parallel"`` keeps jobs as independent work units.
+        The latter can duplicate model state and should be timed on the caller's
+        workload. Additional workers are opt-in and each
+        owns a CPU partition that also contains its compression work. Memory
+        admission reserves ``max_working_mib + max_prepared_mib +
+        memory_headroom_mib`` per worker before launch. The scheduler reduces
+        worker count to fit CPU/memory admission. Each worker's native pool is
+        bounded by its partition; ``writer_threads`` must fit that partition.
+        Windows/Linux process affinity is required. Sloping requires an engine
+        advertising persistent sessions; polygons require the global-lattice
+        mask capability. No numerical fallback or engine installation occurs.
+
+        Sampled aggregate worker/descendant RSS and private memory trigger an
+        abort when exceeding ``max_memory_mib``; low available host memory also
+        aborts. Admission and sampling are not hard OS memory limits and exclude
+        the caller's existing memory. ``timeout`` applies to each native batch.
+        ``cancel_event`` accepts an object with ``is_set()``. Cancellation or a
+        failed job stops admission, terminates owned workers/native children,
+        removes uncommitted products and retains acknowledged products/receipts.
+
+        ``output_folder`` must be new or empty. Returns the declared
+        ``fim_catalog_manifest`` DataFrame in original job/timestep order.
+        ``attrs`` contain performance, catalog status and the JSON receipt path.
+        Failures raise ``FimMappingError`` with that DataFrame as ``manifest``;
+        ``raise_on_failure=False`` returns it instead. No HEC-RAS execution is
+        performed. Terrain preparation, velocity, polygonization and supplied
+        WSEL tables remain separate operations.
+
+        Args:
+            jobs: Ordered mappings describing model, terrain, AOI and times.
+            output_folder: New or empty catalog destination (str or Path).
+            threads: Shared logical-CPU budget for owned worker processes.
+            max_workers: Upper bound on simultaneous prepared workers.
+            strategy: Source reuse, or independent parallel job units.
+            max_memory_mib: Aggregate planned/sampled worker memory budget.
+            max_working_mib: Per-worker native request admission limit.
+            max_prepared_mib: Per-worker retained input admission limit.
+            memory_headroom_mib: Reserved per-worker overhead and minimum
+                available host memory required while running.
+            max_profiles_per_batch: Maximum request occurrences and staged
+                unique selectors per preparation wave.
+            writer_threads: Compression workers within each CPU partition.
+            max_inflight_profiles: Requested native profile concurrency.
+            engine_path: Optional explicit native mapping executable.
+            timeout: Optional per-native-batch timeout in seconds.
+            cancel_event: Optional object exposing is_set().
+            raise_on_failure: Raise with partial results, or return them.
+
+        Returns:
+            pd.DataFrame: Ordered fim_catalog_manifest rows with status,
+            product paths and catalog performance/receipt attrs.
+
+        Raises:
+            ValueError: Invalid controls, job fields or destination.
+            FimUnsupportedError: Unsupported engine, platform or admission.
+            FimMappingError: Execution failed or was cancelled; manifest
+                contains acknowledged results when raise_on_failure is True.
+        """
+        from ._catalog import map_catalog
+
+        return map_catalog(
+            jobs, output_folder, threads=threads, max_workers=max_workers,
+            strategy=strategy,
+            max_memory_mib=max_memory_mib, max_working_mib=max_working_mib,
+            max_prepared_mib=max_prepared_mib,
+            memory_headroom_mib=memory_headroom_mib,
+            max_profiles_per_batch=max_profiles_per_batch,
+            writer_threads=writer_threads,
+            max_inflight_profiles=max_inflight_profiles,
+            engine_path=engine_path, timeout=timeout,
+            cancel_event=cancel_event, raise_on_failure=raise_on_failure,
+        )
+
+    @staticmethod
+    @log_call
     def prepare_sloping_model(
         hdf_path: PathLike, terrain_path: PathLike, *,
         profiles: Optional[Dict[str, Union[str, int]]] = None,
@@ -267,6 +374,7 @@ class RasFim:
         corner_elevation_source: str = "auto",
         engine_path: Optional[PathLike] = None, threads: int = 1,
         max_working_mib: int = 1024, max_prepared_mib: int = 1024,
+        native_session: bool = True,
         terrain_crs_fnv1a64: Optional[str] = None,
     ) -> "FimPreparedSlopingModel":
         """Prepare fixed 2D sloping inputs for repeated reach/AOI requests.
@@ -283,8 +391,11 @@ class RasFim:
         ``postprocessing_hdf`` optionally supplies a prepared native corner
         cache. ``corner_elevation_source`` is auto, geometry or mapping_cache;
         cache-only use requires the adjacent native preparation receipt.
-        Each mapping call still starts the native CLI and reconstructs native
-        stencils, terrain and hydraulic values. No extra depth cutoff is added.
+        ``native_session=True`` retains one serialized native process when the
+        engine advertises persistent sessions (0.9+). It reuses geometry,
+        stencils, terrain blocks and a bounded last-window/plain-weight cache.
+        False, or an older engine, starts a fresh CLI per request. Hydraulic
+        values are always reconstructed per profile. No depth cutoff is added.
 
         Use the returned context in a ``with`` block or call ``close()``.
         Changes to HDF, terrain, engine or resolved source-text geometry
@@ -292,8 +403,11 @@ class RasFim:
         Calls are serialized; timestep parallelism is controlled per request
         with ``max_inflight_profiles``. ``max_prepared_mib`` admits estimated
         retained geometry plus actual staged bytes, independently of the
-        per-request ``max_working_mib``. Neither is a hard RSS limit; transient
-        HDF reads and preparation allocations are outside retained admission.
+        per-request ``max_working_mib``. Persistent requests additionally admit
+        a 64 MiB retained window/weight budget. Neither is a hard RSS limit;
+        decoder and preparation allocations are outside retained admission.
+        Numeric profile staging uses native-HDF slabs of at most 8 MiB source
+        values, with a bounded float32 conversion buffer.
 
         Returns:
             FimPreparedSlopingModel: Owned inputs with ``map_profiles``,
@@ -322,6 +436,7 @@ class RasFim:
             corner_elevation_source=corner_elevation_source,
             engine_path=engine_path, threads=threads,
             max_working_mib=max_working_mib, max_prepared_mib=max_prepared_mib,
+            native_session=native_session,
             terrain_crs_fnv1a64=terrain_crs_fnv1a64,
         )
 

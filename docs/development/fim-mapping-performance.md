@@ -114,11 +114,13 @@ and failure.
 
 For repeated reach requests, use `RasFim.prepare_sloping_model()` as a context
 manager. It retains physical cell polygons/indexing, scope, terrain metadata and
-complete staged mesh/WSE files. Repeated selectors share files. Each request
-still starts a fresh native process, reconstructs stencils and decodes its
-terrain window. Source size/mtime changes invalidate the context; close waits
-for active calls and releases staging. No current prepared-context speed ratio
-is claimed on this page.
+complete staged mesh/WSE files. Repeated selectors share files. With
+`native_session=True` (default), capable engines also retain a serialized native
+process, geometry/stencils, decoded terrain tiles and one bounded last-window
+cache. `native_session=False` explicitly uses a fresh CLI per request. Hydraulic
+values are reconstructed per profile. Source size/mtime changes invalidate the
+context; close waits for active calls and releases the process and staging.
+The catalog study below separates setup costs from warm-call observations.
 
 ## Caller-supplied WSEL qualification
 
@@ -324,10 +326,91 @@ paths). Use `--match-reference-grid` to include native nodata borders. The same
 cache arguments are accepted by the prepared-reach benchmark. The native
 reference must use the same options and original terrain source layout.
 
+## Reach timestep catalog throughput
+
+Use `RasFim.map_catalog()` for known reach/timestep groups. The final API was
+measured on Spring Creek eBFE (340,163 physical cells), with four groups across
+three unmodified NextGen watershed polygons: `wb-2408204`, `wb-2408158` and
+`wb-2408326`. Their lists contain 4, 8, 2 and 4 requested occurrences, including
+a repeated reach and duplicate selectors. Each catalog produces 18 Depth/WSE
+pairs (36 TIFFs). Saved indices are 48, 49, 50, 51, 52, 54, 96, 100, 104 and
+108; there are no Max aliases or added depth cutoffs in this comparison.
+
+| Final workflow | Median s (range) | Max sampled RSS GiB | Max sampled private GiB |
+|---|---:|---:|---:|
+| Direct sloping batch per reach, sequential | 14.592 (14.210–15.185) | 1.055 | 1.290 |
+| Catalog, source reuse, one worker | 9.137 (8.783–9.501) | 1.210 | 1.836 |
+| Catalog, independent jobs, two workers | 14.305 (14.031–14.472) | 2.141 | 3.015 |
+| Catalog, independent jobs, four workers | 12.683 (12.104–12.772) | 3.852 | 5.253 |
+
+Source reuse improved median whole-catalog throughput by **1.60×** in this
+workload. More workers did not improve its median. Reuse requires extra Python
+worker/coordinator state compared with direct calls, so it does not reduce
+private memory versus that bounded baseline. It avoids the much larger raster
+work of full-model exports; those earlier full/bounded measurements remain
+separate. These are shared-workstation observations, not a universal speedup
+or an automatic dispatch threshold.
+
+There are three rotated repetitions per arm, with warmed imports in a fresh
+outer process and an equal four-logical-CPU affinity envelope. Catalog startup,
+preparation, final LZW TIFF delivery, duplicate-output copies and close are
+included. Native workers and compression share each worker's CPU partition;
+profile concurrency and writer threads are one. Memory columns are maximum
+simultaneously sampled outer Python plus worker/native descendants across all
+three repetitions (20-ms requested interval), including process startup. The
+public API's own telemetry excludes its caller. Sampled RSS/private memory are
+not hard OS limits. Source/file caches and workstation load are uncontrolled.
+The engine is published Fast-Map 0.10.1 with Fast-HDF 0.2.4, on Windows x64 and
+Python 3.13.12. The native per-request admission limit is 2,048 MiB and the
+catalog budget is 16,384 MiB; these are plans, not the measured peaks.
+
+All **324 optimized Depth/WSE band comparisons** against the direct path have
+zero extra, missing or differing float32 bits. The receipt contains 432 band
+checks including reference self/repeat checks. Six additional independent
+full-source-lattice comparisons at saved timestep 48 cover all three watershed
+polygons; they also have zero mask/bit differences, including reference-valid
+pixels outside any candidate extent. HDF, terrain, polygons, engine and
+benchmark/mapping source hashes were unchanged. No RASMapper exports or
+hydraulic computations were performed: these checks qualify catalog/direct
+Rust consistency, not additional native RASMapper parity.
+
+### Choosing batches and workers
+
+Batch a known timestep list before adding workers. A single-use context has
+setup costs; repeated small requests benefit from prepared/native state. The
+earlier exploratory Spring Creek study observed a benefit by four timesteps
+and tested lists of 1, 4, 16 and 64. Its fitted two-timestep break-even is an
+estimate, not a measured threshold. The final table above replaces prototype
+mixed-catalog timings as the public API measurement. Start with one worker and
+measure `strategy="parallel"` for independent models, larger windows or
+different encodings before increasing the count.
+
+The source Water Surface array has shape `(145, 343014)`, gzip chunks
+`(1, 343014)`: each selected timestep occupies a whole compressed cell row.
+Spatial slices still require that row's decompression. Staging therefore keeps
+complete selected rows, deduplicates selectors, and combines contiguous times
+when their source payload fits its bounded 8-MiB read cache. Larger rows retain
+bounded spatial slabs. This does not spatially prune sloping dependencies.
+Terrain already reads only intersecting source TIFF blocks. Plain-sloping
+weights and window data follow the engine's bounded cache admission; larger
+windows can disable weight caching without changing results.
+
+Run `scripts/benchmarks/fim_catalog_compare.py jobs.json NEW_OUTPUT` from an
+installed source checkout. The JSON contains `jobs` in the
+[catalog API format](../api/fim.md#schedule-reachtimestep-catalogs), optional
+`threads`, `max_working_mib`, `max_memory_mib`, and `repetitions` (default three).
+The direct-reference harness currently targets sloping jobs. It rotates all
+four arms, records identities/time/memory and checks every emitted band outside
+the timing clocks. Real-model tests use `RAS_COMMANDER_FIM_CATALOG_CASE` with
+`hdf`, `terrain`, `polygon`, optional `polygon_layer`, and `timesteps`. Tests
+never execute HEC-RAS. Model data and generated products stay external.
+
 ## Roadmap and dependencies
 
-Later performance work includes chunked HDF staging, persistent native terrain
-and stencil reuse across reach requests, and bounded pixel-weight caches.
+Bounded HDF staging, persistent native terrain/stencil reuse and bounded plain
+pixel-weight caches are integrated through prepared contexts and catalog
+mapping. Later work includes shared hydraulic reconstruction across multiple
+windows, additional cache policies and qualified spatial dependency pruning.
 The engine is now separately packaged as `ras-commander-fast-map` on PyPI and
 crates.io, with Windows/Linux wheels and independent release CI. Extraction
 retains the qualified 0.8 numerical modules and their source fingerprints;

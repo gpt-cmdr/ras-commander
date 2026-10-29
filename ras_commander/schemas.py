@@ -2001,6 +2001,25 @@ DATAFRAME_SCHEMAS["fim_product_manifest"] = {
 }
 
 
+DATAFRAME_SCHEMAS["fim_catalog_manifest"] = {
+    "description": "One row per requested reach/timestep occurrence, in original job and timestep order.",
+    "accessor": "RasFim.map_catalog(jobs, output_folder)",
+    "source": "ras_commander.fim.RasFim.RasFim.map_catalog()",
+    "extra_columns": False,
+    "dynamic": False,
+    "columns": [
+        {"name": name, "dtype": dtype, "description": description}
+        for name, dtype, description in (
+            ("job_id", "str", "Unique caller job identifier; also the output subfolder."),
+            ("reach_id", "str", "Caller reach identifier; defaults to job_id."),
+            ("request_ordinal", "int", "Zero-based position in this job's requested timestep list, including duplicates."),
+            ("timestep", "int | str", "Zero-based saved output index or Max selector."),
+        )
+    ] + DATAFRAME_SCHEMAS["fim_product_manifest"]["columns"],
+    "note": "Catalog statuses additionally include cancelled. Complete masks/value bits follow the selected existing mapping method. catalog_manifest.json records planned admission, CPU partitions, sampled worker memory and per-request evidence; these budgets are not hard RSS limits.",
+}
+
+
 DATAFRAME_SCHEMAS["fim_whole_simulation_manifest"] = {
     "description": "One row per whole-simulation product (arrival time, percent time inundated, optional duration).",
     "accessor": "RasFim.map_whole_simulation(...)",

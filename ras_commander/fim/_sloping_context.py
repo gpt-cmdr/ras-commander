@@ -17,9 +17,9 @@ class FimPreparedSlopingModel:
     """Reusable sloping inputs created by :meth:`RasFim.prepare_sloping_model`.
 
     Use a context manager or call :meth:`close` to release staged files and
-    geometry. Calls on one context are serialized. Each call starts a fresh
-    native engine process; native terrain, stencils and hydraulic state are
-    not retained between calls. Public metadata is returned by copy.
+    geometry. Calls on one context are serialized. Capable engines retain one
+    owned process, geometry, terrain blocks and a bounded output/weight cache.
+    Hydraulic values are reconstructed per profile. Metadata is returned by copy.
     """
 
     def __init__(
@@ -39,10 +39,9 @@ class FimPreparedSlopingModel:
         threads=1,
         max_working_mib=1024,
         max_prepared_mib=1024,
+        native_session=True,
         terrain_crs_fnv1a64=None,
     ):
-        from .. import HdfMesh
-        from ..fast_hdf import backend_scope
         from .RasFim import RasFim, _file_identity, _positive_int
         import rasterio
         import shapely
@@ -52,6 +51,10 @@ class FimPreparedSlopingModel:
         self._temporary = None
         self._closed = True
         self._info = {}
+        self._native_session = None
+        if not isinstance(native_session, bool):
+            raise TypeError("native_session must be boolean")
+        self._reuse_native = native_session
         self._options = _sloping._validate_options(
             render_mode, reduce_shallow_to_horizontal, use_depth_weighted_faces
         )
@@ -95,6 +98,7 @@ class FimPreparedSlopingModel:
                 # Bracket the text-based 1D guard as well as the compiled HDF.
                 self._model_scope = RasFim.validate_2d_model(self._hdf)
             self._method = _engine.engine_method(self._engine).get("sloping", {})
+            self._reuse_native = self._reuse_native and self._method.get("persistent_session") is True
             _sloping._validate_method(self._method, render_mode, 1)
             if use_depth_weighted_faces and not self._method.get("depth_weighted_faces"):
                 raise FimEngineError("Depth weighting requires an engine advertising depth_weighted_faces (0.8+)")
@@ -178,6 +182,9 @@ class FimPreparedSlopingModel:
                     self._invalid_records, self._invalid_policy, None
                 ),
                 native_state_reused=False,
+                native_session_enabled=self._reuse_native,
+                native_window_cache_budget_bytes=(64 << 20) if self._reuse_native else 0,
+                profile_staging_chunk_bytes=8 << 20,
                 terrain_crs_identity=dict(self._terrain_identity["crs_identity"]),
             )
             if profile_source is not None:
@@ -313,6 +320,9 @@ class FimPreparedSlopingModel:
                 )
             except BaseException:
                 self._check_sources()
+                if self._native_session is not None and self._native_session.process.poll() is not None:
+                    self._native_session.close()
+                    self._native_session = None
                 raise
 
     @log_call
@@ -321,6 +331,9 @@ class FimPreparedSlopingModel:
         with self._lock:
             self._closed = True
             self._cells = None
+            if self._native_session is not None:
+                self._native_session.close()
+                self._native_session = None
             if self._temporary is not None:
                 self._temporary.cleanup()
                 self._temporary = None

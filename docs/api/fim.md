@@ -1196,6 +1196,116 @@ The [FIM engine comparison](../development/fim-mapping-performance.md)
 records the agreement checks and the measurement scope. Throughput tables
 are observations of the listed workloads and do not establish a general speedup.
 
+## Schedule reach/timestep catalogs
+
+Use `RasFim.map_catalog()` when each reach has a known list of relevant saved
+output times. Pass the NextGen watershed polygon associated with each reach;
+the library does not infer a watershed from a flowline or buffer it.
+
+```python
+from ras_commander import RasFim
+
+jobs = [
+    {
+        "job_id": "reach_a", "reach_id": "wb-example-a",
+        "hdf_path": "model.p02.hdf", "terrain_path": "mapping_terrain.tif",
+        "polygon": "watersheds.gpkg", "polygon_layer": "reach_a",
+        "timesteps": [48, 49, 54, 108],
+    },
+    {
+        "job_id": "reach_b",
+        "hdf_path": "model.p02.hdf", "terrain_path": "mapping_terrain.tif",
+        "polygon": "watersheds.gpkg", "polygon_layer": "reach_b",
+        "timesteps": [108, 48, 108],
+    },
+]
+products = RasFim.map_catalog(
+    jobs, "catalog_output", threads=4, max_workers=1,
+    max_memory_mib=8192, max_working_mib=2048, max_prepared_mib=1024,
+    max_profiles_per_batch=64,
+)
+print(products[["job_id", "request_ordinal", "timestep", "status"]])
+print(products.attrs["performance"])
+```
+
+Job and timestep order in the result follows the input, even when execution is
+reordered. Repeated selectors produce separate ordinal Depth/WSE files; shared
+staging does not remove requested outputs. `job_id` is a unique,
+case-insensitive folder name matching `[A-Za-z0-9_-]{1,64}`, excluding reserved
+Windows file names. Output folders must be new or empty. Use `"Max"` for a Max
+profile. Integer selectors are zero-based saved-output indices, not elapsed
+hours. Complete hydraulic topology is retained and no depth cutoff is added.
+
+Jobs default to plain sloping. Set `interpolation="horizontal"` within a job
+for cell-constant mapping. Sloping jobs also accept `render_mode`,
+`reduce_shallow_to_horizontal`, `use_depth_weighted_faces`,
+`postprocessing_hdf`, `corner_elevation_source` and `invalid_cells` from the
+existing sloping API. A job accepts one polygon or bbox, with the existing
+`polygon_layer`/`aoi_crs` rules. Unknown fields raise. Velocity, terrain
+preparation, supplied WSEL tables and floodplain polygonization remain separate
+operations; the catalog does not run HEC-RAS.
+
+### Reuse, concurrency and memory admission
+
+`strategy="reuse"` combines compatible model/terrain/method/options groups,
+stages their selected-time union once and keeps identical windows adjacent.
+Each sloping preparation wave owns one serialized native session. Terrain
+tiles, geometry and eligible plain-sloping weights can be reused. Horizontal
+waves retain one cell table with directly assigned float32 profile columns.
+`max_profiles_per_batch` bounds both request occurrences and unique staged
+selectors; a longer union creates further preparation waves. A wave never
+prunes hydraulic dependencies to the polygon.
+
+Start with one worker. To measure independent jobs concurrently, set
+`strategy="parallel", max_workers=2` (or another bound). This keeps jobs as
+independent units and can duplicate source preparation/cache memory. The
+scheduler has no universal fitted speedup rule: the documented Spring Creek
+pilot favored reuse over multiplying workers. Choose the policy from measured
+whole-catalog makespan, including initialization and writes.
+
+The global `threads` budget selects logical CPUs from the caller's allowed
+affinity set and partitions them among admitted worker processes. Native and
+compression threads inherit each partition. `writer_threads` must fit every
+partition; it does not gain extra CPUs. `max_inflight_profiles=1` remains the
+default. Windows/Linux CPU-affinity support is required; the caller's own work
+is outside this worker budget.
+
+Before launch, each worker reserves
+`max_working_mib + max_prepared_mib + memory_headroom_mib`. The scheduler reduces
+worker count to fit this reservation under `max_memory_mib`; it refuses a plan
+that cannot admit one worker. Admission is also capped by currently available
+host memory minus headroom. Native and prepared limits retain their existing
+planned-allocation meanings. Decoder temporaries and runtime overhead are not
+exact RSS predictions. The supervisor samples aggregate worker/descendant RSS
+and private memory, aborting on a sampled budget excess or low available host
+memory. Sampling can miss short peaks; these controls are not hard OS memory
+limits. The caller's pre-existing memory is excluded. Set budgets using
+observed high-water marks with headroom. On platforms without a private-byte
+counter, the private-memory field uses an RSS proxy; the
+published Windows table reports the actual private/commit counter.
+
+### Results, cancellation and partial catalogs
+
+`fim_catalog_manifest` adds `job_id`, `reach_id`, `request_ordinal` and
+`timestep` to the existing product columns. `catalog_manifest.json` records job
+snapshots, source identities, CPU partitions, controls, per-request native
+reports and overall timing/sampled-memory evidence. Each job also has a
+`fim_manifest.json`. Native per-request reports are stored in the job's
+`request-*.json` files. While running, per-job manifests contain acknowledged
+rows; the compact top-level checkpoint links them. Final rows are also inlined
+in the top-level receipt. Empty AOIs retain their existing mapping status.
+
+Pass a `threading.Event`-compatible `cancel_event` to request cancellation.
+Cancellation and job failures stop admission, terminate owned workers and
+native descendants, remove uncommitted files, and preserve acknowledged
+products and an aborted/cancelled receipt. Pending rows are marked explicitly.
+By default a `FimMappingError` carries the partial DataFrame in `manifest`;
+`raise_on_failure=False` returns it. This is a fail-fast catalog, not a retry or
+resume API. Use a new output folder for a retry. `timeout` applies to each
+native batch; it is not a whole-catalog deadline.
+
+See [catalog measurements and reproduction](../development/fim-mapping-performance.md#reach-timestep-catalog-throughput).
+
 ## Complete source reference
 
 ::: ras_commander.fim.RasFim.RasFim
