@@ -1,7 +1,7 @@
 # HEC-RAS Wine preprocessing container
 
-This recipe builds the `rascommander/hec-ras-wine-precompute_{6.5,6.6,7.0.1}`
-images. The container provides Wine so [ras-commander][rc] can call installed
+This recipe builds the `hec-ras-wine-precompute_<version>` images published
+on GHCR. The container provides Wine so [ras-commander][rc] can call installed
 Windows HEC-RAS on Linux. It prepares geometry and plan inputs for the matching
 [native Linux unsteady image](../hecras-unsteady/README.md). Call both stages
 from Windows or Linux with [RasDocker.preprocess_plan()][docker-api] and
@@ -14,27 +14,36 @@ the full sequence.
 mounts, and the exact ras-commander call sequence.
 [How to re-create this container](PREPARATION.md) is the build guide.
 
-## Provenance: v4 and the v5 successor
+## Published images and provenance
 
-**The published `v4` images were built from ras2fim-2d, not from this
-directory.** Their Wine controller source is
-[`gpt-cmdr/ras2fim-2d@dc60b219091e85bcb4564eca45313475c39ce58a`](https://github.com/gpt-cmdr/ras2fim-2d/tree/dc60b219091e85bcb4564eca45313475c39ce58a),
-as recorded in the [container catalog](../../docs/user-guide/container-images.md#sources-and-host-compatibility).
-The Windows library in their Wine profile is the ras-commander 0.99.2 wheel from
-[`9e4217713e954236b0c16023e1815c6f2b7a5309`](https://github.com/gpt-cmdr/ras-commander/tree/9e4217713e954236b0c16023e1815c6f2b7a5309).
-**The `v4` images do not contain the CPU shim.**
+The current images are published on GHCR as
+`ghcr.io/gpt-cmdr/hec-ras-wine-precompute_<version>:0.106.0` for HEC-RAS
+5.0.7, 6.1, 6.5, 6.6, 7.0, and 7.0.1. They include the CPU shim and the
+installed Wine runtime. Select a digest with `RasContainerImages.get` as shown
+in the [operating guide](../../docs/user-guide/container-execution.md).
+For Slurm, use the published [Wine executor SIF](../hecras-wine-executor/README.md).
 
-| Repository and tag | Registry digest |
-| --- | --- |
-| `rascommander/hec-ras-wine-precompute_6.5:v4` | `sha256:5de3b51455e7405ea0f85f1d9112c8232e41faaad74a4c13bd511fad8c8eda99` |
-| `rascommander/hec-ras-wine-precompute_6.6:v4` | `sha256:5fbc07a20693cb867578048be632d88cee02618780259c1c7ddc258c9fbb4318` |
-| `rascommander/hec-ras-wine-precompute_7.0.1:v4` | `sha256:f53db7bd9e256f203e07fee77a624aef3fe33ba23e04f94e2e3a9afc62f4359d` |
+The [runtime build](../hecras-wine-runtime/README.md) creates an empty Wine base
+prefix, installs its prerequisites, and installs the selected official HEC-RAS
+release and ras-commander wheel. The release builder names its local preprocessing
+image `v5-<commit>`; the published GHCR release tag is `0.106.0`. The
+[October qualification record](../../docs/user-guide/apptainer-images.md#qualification-status)
+covers the release builds and final SIFs. These records do not establish
+byte-for-byte rebuilds on arbitrary clean hosts.
 
-This directory is the successor recipe. Its next tag is **`v5`**. It is ported
-from ras2fim-2d commits `691454a` and `e0786ec`, which add `cpushim.c` on top of
-the `v4` controller. Other changes from `v4`:
+The older Docker Hub `rascommander/hec-ras-wine-precompute_<version>:v4`
+images for 6.5, 6.6, and 7.0.1 were built from
+[`ras2fim-2d@dc60b219091e85bcb4564eca45313475c39ce58a`](https://github.com/gpt-cmdr/ras2fim-2d/tree/dc60b219091e85bcb4564eca45313475c39ce58a),
+with the ras-commander 0.99.2 Windows wheel. Those payloads do not contain the
+CPU shim and use `RAS2FIM_*` controller environment names. Their exact digests
+and September qualification remain in the
+[historical catalog](../../docs/user-guide/container-images.md#historical-docker-hub-images).
+The current recipe uses `RAS_COMMANDER_PREPARE_*` controller names and
+`RAS_COMMANDER_WINE_CPU_SHIM`; receipts remain `ras-commander-job/v1`.
 
-| Change | `v4` (ras2fim-2d) | This recipe (`v5`) |
+### Controller changes from Docker Hub v4
+
+| Change | `v4` (ras2fim-2d) | Current recipe |
 | --- | --- | --- |
 | CPU-numbering shim | absent | `/opt/hecras-prepare/cpushim.so`, preloaded for Wine processes |
 | Shim selector | n/a (`RAS2FIM_CPU_SHIM` in the ras2fim fix branch) | `RAS_COMMANDER_WINE_CPU_SHIM`, shared with the portable executor |
@@ -43,17 +52,6 @@ the `v4` controller. Other changes from `v4`:
 | Child-program failure | reported later as invalid hydraulic tables | `Error with program: ...` from the plan HDF reported as the job error |
 | Controller environment | `RAS2FIM_JOB_ROOT`, `RAS2FIM_RUNTIME_MANIFEST`, `RAS2FIM_SCRATCH_ROOT`, `RAS2FIM_HECRAS_VERSION`, `RAS2FIM_RAS_COMMANDER_COMMIT`, `RAS2FIM_RAS_COMMANDER_WHEEL_SHA256`, `RAS2FIM_BUNDLED_RUNTIME` | the same names with the `RAS_COMMANDER_PREPARE_` prefix |
 | Labels | `io.clb.hec-ras.version`, `io.clb.ras-commander.*`, `io.clb.hec-ras.runtime` | `io.ras-commander.hec-ras-version`, `io.ras-commander.commit`, `io.ras-commander.wheel-sha256`, `io.ras-commander.cpu-shim`, `io.ras-commander.hec-ras-runtime` |
-
-Job behavior, receipts (`ras-commander-job/v1`), runtime manifests
-(`ras-commander-runtime/v1`), defaults, and exit codes are otherwise unchanged.
-The `RasDocker` host API does not set any of the renamed variables.
-
-**`v5` must be rebuilt and requalified before the tag is published.** No `v5`
-payload exists yet. Until one is built from this recipe, qualified, and
-published with its digest in the [container catalog](../../docs/user-guide/container-images.md),
-`v4` remains the published image and the qualification statements in this
-directory describe `v4` only. Qualification must repeat the `v4` sample runs
-and add the CPU-set case below.
 
 ## Why the CPU shim exists
 
@@ -79,22 +77,13 @@ to test a different build.
 With a `v4` image, avoid the crash condition by giving each container a CPU set
 that starts at CPU 0, or by running without a CPU set.
 
-## Images
+## Runtime included in the image
 
-| HEC-RAS | Published image | Successor |
-|---|---|---|
-| 6.5 | `rascommander/hec-ras-wine-precompute_6.5:v4` | `v5` from this recipe, not yet built |
-| 6.6 | `rascommander/hec-ras-wine-precompute_6.6:v4` | `v5` from this recipe, not yet built |
-| 7.0.1 | `rascommander/hec-ras-wine-precompute_7.0.1:v4` | `v5` from this recipe, not yet built |
-
-Each image includes its matching installed runtime and saved TCU acceptance.
-Normal jobs require no separate HEC-RAS installation or external runtime mount.
-The Docker Hub descriptions document `v4`; ras2fim-2d retains description
-sources at the controller commit: [6.5](https://github.com/gpt-cmdr/ras2fim-2d/blob/dc60b219091e85bcb4564eca45313475c39ce58a/containers/hecras-prepare/dockerhub/6.5.md),
-[6.6](https://github.com/gpt-cmdr/ras2fim-2d/blob/dc60b219091e85bcb4564eca45313475c39ce58a/containers/hecras-prepare/dockerhub/6.6.md),
-[7.0.1](https://github.com/gpt-cmdr/ras2fim-2d/blob/dc60b219091e85bcb4564eca45313475c39ce58a/containers/hecras-prepare/dockerhub/7.0.1.md).
-See [DOCKERHUB.md](../DOCKERHUB.md) for description maintenance. Write `v5`
-descriptions after `v5` is qualified.
+Each image includes its matching installed HEC-RAS runtime. Normal jobs need
+no separate HEC-RAS installation, external runtime mount, Windows machine, or
+Windows VM. Wine runs the Windows programs in a task-private copy of the prefix.
+Review the terms before use; HEC-RAS 6.0 and earlier require the
+[per-task acceptance setting](../../docs/user-guide/apptainer-images.md#hec-ras-60-and-earlier).
 
 ## Models created on Windows or Linux
 
@@ -119,11 +108,11 @@ attribute, or a `/Results` group is not proof of valid preprocessing.
 
 ## Run on a Linux filesystem
 
-The commands use the published `v4` image; substitute a qualified `v5`
-reference when one exists.
+The commands use the current GHCR release tag. For retained runs, use its
+digest from the [catalog](../../docs/user-guide/container-images.md).
 
 ```bash
-docker pull rascommander/hec-ras-wine-precompute_6.5:v4
+docker pull ghcr.io/gpt-cmdr/hec-ras-wine-precompute_6.5:0.106.0
 
 docker run --rm --pull always --network none --read-only \
   --user 1000:1000 --cpus 2 --memory 6g --memory-swap 6g \
@@ -134,7 +123,7 @@ docker run --rm --pull always --network none --read-only \
   --mount type=bind,src=/shared/projection,dst=/projection,readonly \
   --mount type=volume,dst=/run/ras-job \
   --device /dev/ntsync \
-  rascommander/hec-ras-wine-precompute_6.5:v4 \
+  ghcr.io/gpt-cmdr/hec-ras-wine-precompute_6.5:0.106.0 \
   prepare --project /job/model.prj --plan 01 \
           --num-cores 2 --timeout 900 --run-id example-001 --replace-generated
 ```
@@ -159,7 +148,7 @@ parent folder containing the model and both dependency folders.
 ```powershell
 $models = 'D:\models\02_model_copies'
 $name = 'model'
-docker run --rm --pull always --user root --cpus 2 --mount "type=bind,src=$models\$name,dst=/job" --mount "type=bind,src=$models\source_terrain,dst=/source_terrain,readonly" --mount "type=bind,src=$models\projection,dst=/projection,readonly" rascommander/hec-ras-wine-precompute_6.5:v4 prepare --project "/job/$name.prj" --plan 01 --num-cores 2 --timeout 900 --replace-generated
+docker run --rm --pull always --user root --cpus 2 --mount "type=bind,src=$models\$name,dst=/job" --mount "type=bind,src=$models\source_terrain,dst=/source_terrain,readonly" --mount "type=bind,src=$models\projection,dst=/projection,readonly" ghcr.io/gpt-cmdr/hec-ras-wine-precompute_6.5:0.106.0 prepare --project "/job/$name.prj" --plan 01 --num-cores 2 --timeout 900 --replace-generated
 ```
 
 ## CPU settings
@@ -172,13 +161,12 @@ preprocessing, and records it as `arguments.num_cores`.
 
 ## Slurm and Apptainer
 
-The preprocessing image is not qualified through Apptainer. A SIF is read-only,
-so `/run/ras-job` is not writable: set `RAS_COMMANDER_PREPARE_SCRATCH_ROOT` to a
-node-local writable directory and bind the model at `/job`. The CPU shim exists
-for this route, because Slurm CPU sets often do not start at CPU 0. For portable
-plan execution through Slurm, use the
-[Wine executor derivative](../hecras-wine-executor/README.md) and the
-[SIF builder](../apptainer/README.md).
+Use the published [Wine executor](../hecras-wine-executor/README.md) for
+`RasApptainer.render_prepare_job` or portable requests through `RasSlurm`.
+The Docker preprocessing controller is a different entry point; do not substitute
+its image directly. The executor supplies the CPU shim and copies the baked
+prefix into private node scratch while the SIF stays read-only. See the
+[qualification record](../../docs/user-guide/apptainer-images.md#qualification-status).
 
 ## Optional runtime override
 
@@ -202,7 +190,7 @@ The default job uses the installation already included in the image.
 | [runtime-manifest.example.json](runtime-manifest.example.json) | Manifest structure only; zero fingerprints are placeholders. |
 | [ras-commander-call-sequence.mmd](ras-commander-call-sequence.mmd) | Editable Mermaid source for the API sequence in [OPERATION.md](OPERATION.md). |
 
-The prepared profile keeps the retained wheel at
+The historical `v4` profile keeps the retained wheel at
 `C:\ras2fim-runtime\ras_commander-0.99.2-py3-none-any.whl`. That path is part of
 the existing profile data and `bundle_profile.py` keeps it; it is not an
 environment or label name.

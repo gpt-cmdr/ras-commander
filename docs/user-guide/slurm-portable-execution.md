@@ -14,8 +14,8 @@ native solver-ready artifacts for one unsteady plan per allocation.
   and an immutable `container_identity` shared by the site and requests.
 - An image with Python, the portable executor
   (`ras_commander.remote.execute_request`), and the requested HEC-RAS runtime.
-  For Windows HEC-RAS under Wine, build the
-  [Wine executor image](apptainer-images.md#wine-executor-image), which sets the
+  For Windows HEC-RAS under Wine, pull the published
+  [Wine executor SIF](apptainer-images.md#use-a-local-or-cached-image), which sets the
   Wine seed, Windows Python, and CPU-shim variables described in
   [Portable Plan Execution](../api/remote.md#portable-plan-execution).
 - Slurm commands and Apptainer on the cluster. The allocation launcher needs
@@ -23,10 +23,10 @@ native solver-ready artifacts for one unsteady plan per allocation.
 - For SSH mode, verified SSH access and rsync or scp on the transfer hosts.
   Remote scratch and the SIF must be visible to login and compute nodes.
 
-The [published Wine/native pairs](container-images.md) are qualified for
-`RasDocker`; the Wine pre-compute image by itself is not a portable executor.
-Derive an executor from it as described in [Apptainer images](apptainer-images.md)
-rather than substituting an image by name.
+Use the `wine-executor` role from the [published catalog](container-images.md)
+for portable requests. The `wine-precompute` image is the Docker preprocessing
+controller and does not expose the portable executor entry point. Custom executor
+builds are described in [Apptainer images](apptainer-images.md#wine-executor-image).
 
 !!! info "Production evidence"
     CLB ran 436 one-core HEC-RAS 6.6 steady requests through `RasSlurm` (ras-commander

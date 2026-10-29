@@ -60,13 +60,20 @@ Key fields:
 
 ## Canonical image and pulling it once
 
-The default image is `rascommander/hec-ras-linux-unsteady_6.6:v1`
-([Docker Hub](https://hub.docker.com/r/rascommander/hec-ras-linux-unsteady_6.6), linux/amd64).
-The [container catalog](container-images.md) lists its registry digest and Docker qualification.
-Its configured layout (`/opt/hecras-runtime/engine`, library directories beneath it, and no
-`RasGeomPreprocess`) is derived from its Dockerfile and registry metadata. The same layout is used
-for 6.5 and 7.0.1 (`rascommander/hec-ras-linux-unsteady_<version>:v1`); set `ras_version` and
-`oci_source` together.
+For a new site profile, use the current GHCR native SIF from the
+[container catalog](container-images.md). Pull it with
+`RasContainerImages.resolve_sif("linux-unsteady", "6.6")` on the cluster, or
+`ensure_sif_command()` from the controller. These helpers prefer the published
+ORAS SIF and verify its file hash. No local conversion is needed.
+
+The API retains `docker://rascommander/hec-ras-linux-unsteady_6.6:v1` as its
+historical `oci_source` default. Set `oci_source` explicitly to
+`"docker://" + RasContainerImages.get("linux-unsteady", "6.6").reference`
+for the current OCI identity, and set `image`, `apptainer_image_sha256`, and
+`container_identity` from the selected SIF. Set `ras_version` to the same release.
+The canonical layout uses `/opt/hecras-runtime/engine` with its library
+directories beneath it; the published images do not supply `RasGeomPreprocess`,
+so provide completed preprocessing artifacts or use a Wine prepare job.
 
 !!! info "Production evidence"
     CLB has run `RasApptainer.render_job`, `submit`, and `collect` live on its Slurm cluster
@@ -79,14 +86,18 @@ for 6.5 and 7.0.1 (`rascommander/hec-ras-linux-unsteady_<version>:v1`); set `ras
     Windows engine under Wine to within 0.012 ft at any time step (maximum-WSE map within
     0.0005 ft). Qualify the image you pull with one representative plan before a campaign.
 
-An administrator pulls it once, on a node, to shared storage, then records the digest:
+An administrator can also pull the published native SIF manually and verify it
+against the catalog's file hash:
 
 ```bash
-apptainer pull /shared/images/rascommander-hec-ras-linux-unsteady_6.6-v1.sif     docker://rascommander/hec-ras-linux-unsteady_6.6:v1
-sha256sum /shared/images/rascommander-hec-ras-linux-unsteady_6.6-v1.sif
+apptainer pull /shared/images/hec-ras-linux-unsteady_6.6.sif \
+  oras://ghcr.io/gpt-cmdr/hec-ras-linux-unsteady-sif_6.6@sha256:b14aa2d973ca7337981ddaf0482e67d368cdc092f13a7b1a06824d26c12b3f3b
+echo '2750b12ec187b2df18a2db92418793fe3186f92be001e9f9e7e959c198b3d0b4  /shared/images/hec-ras-linux-unsteady_6.6.sif' | sha256sum -c -
 ```
 
-`RasApptainer.pull_command(profile)` prints this command for a profile. To reuse a local or cached SIF (or fill a shared cache once), use
+`RasApptainer.pull_command(profile)` prints the OCI conversion command for the
+profile's `oci_source`; it does not pull the published ORAS file. To reuse a local
+or cached SIF (or fill a shared cache once), use
 `RasContainerImages.resolve_sif()` or `ensure_sif_command()`; see
 [Use a local or cached image](apptainer-images.md#use-a-local-or-cached-image).
  Put the digest in
@@ -488,7 +499,7 @@ Never stage or inspect an HDF while its writer is active.
 To keep preparation on Linux, skip the Windows call above and use
 [`render_prepare_job` and `collect_prepare`](#wine-preparation-on-the-cluster); then continue at
 step 3 with `prepared.project_folder`. On a Linux workstation with Docker,
-`RasDocker.preprocess_plan(..., image="rascommander/hec-ras-wine-precompute_6.6:v4")` is the
+`RasDocker.preprocess_plan(..., version="6.6")` is the
 equivalent single-host route.
 
 For **either** preparation route, check the completed local HDF before rendering:

@@ -13,6 +13,16 @@ it came from; record both.
 | `apptainer build x.sif docker-archive://x.tar` | you have a `docker save` archive; also works in unprivileged LXC containers | unprivileged, no fakeroot |
 | `build_sif_from_archive.sbatch` | the archive route as a Slurm job, with hash checks and no-clobber publication | unprivileged Slurm job |
 
+## Pull a published SIF
+
+For routine jobs, use `RasContainerImages.resolve_sif()` to pull the published
+ORAS artifact and verify its file SHA-256 against the packaged catalog. Native
+and Wine executor SIFs are already published on GHCR; no local image build or
+conversion is needed. See [Apptainer images](../../docs/user-guide/apptainer-images.md#use-a-local-or-cached-image).
+
+The routes below cover custom builds and OCI-to-SIF conversion. A converted
+SIF has its own file identity, separate from the published SIF and OCI digest.
+
 ## Pull from a registry by digest
 
 Pull by digest, never by tag alone, so the SIF is reproducible:
@@ -20,9 +30,9 @@ Pull by digest, never by tag alone, so the SIF is reproducible:
 ```bash
 export APPTAINER_TMPDIR=/scratch/$USER/apptainer-tmp APPTAINER_CACHEDIR=/scratch/$USER/apptainer-cache
 mkdir -p "$APPTAINER_TMPDIR" "$APPTAINER_CACHEDIR"
-apptainer pull hec-ras-linux-unsteady_6.6-v1.sif \
-  docker://rascommander/hec-ras-linux-unsteady_6.6@sha256:71dec03350996cfa8a0ccb18ae08075de9b9cc3d7fb6b1dddbf541c030abb95c
-sha256sum hec-ras-linux-unsteady_6.6-v1.sif > hec-ras-linux-unsteady_6.6-v1.sif.sha256
+apptainer pull hec-ras-linux-unsteady_6.6-converted.sif \
+  docker://ghcr.io/gpt-cmdr/hec-ras-linux-unsteady_6.6@sha256:219084e923d704a3209999fda7efdb42a731dcc632bd38c6fdabca00fc0a7ec0
+sha256sum hec-ras-linux-unsteady_6.6-converted.sif > hec-ras-linux-unsteady_6.6-converted.sif.sha256
 ```
 
 Registry digests for the published images are in the

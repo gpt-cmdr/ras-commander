@@ -300,8 +300,9 @@ mounts. Tags such as `hecras:6.6` are locally built image examples, not public
 Docker Hub references. Verify the actual vendor runtime version inside your
 image; a tag alone does not establish it.
 
-The public [Docker Hub catalog](container-images.md) contains matching Wine
-preprocessing and native unsteady images for HEC-RAS 6.5, 6.6, and 7.0.1.
+The public [container catalog](container-images.md) contains current GHCR Wine
+preprocessing and native unsteady pairs for HEC-RAS 5.0.7, 6.1, 6.5, 6.6, 7.0,
+and 7.0.1, plus historical Docker Hub payloads.
 Use those pairs through [RasDocker](container-execution.md). Their payloads
 have a different worker contract; do not substitute their names into this
 example without implementing and qualifying the required adapter.

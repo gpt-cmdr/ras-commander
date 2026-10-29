@@ -1,5 +1,11 @@
 # Docker Hub description maintenance
 
+GHCR is the current image home. The Docker Hub listings below retain the
+September `v4`/`v1` payloads and their historical qualification; they are not the
+GHCR `0.106.0` builds. Link readers to the current catalog before the older
+runtime/rebuild details so the retained-prefix history is not presented as a
+limitation of the current images.
+
 The six public repositories use the `rascommander` namespace:
 
 - `hec-ras-wine-precompute_6.5`, `hec-ras-wine-precompute_6.6`, `hec-ras-wine-precompute_7.0.1`
@@ -13,9 +19,13 @@ navigation block to each description:
 ```markdown
 ## RAS Commander container guides
 
+This Docker Hub payload is a historical release. Current GHCR images and
+published Apptainer SIFs include the Wine CPU-numbering fix and use the scripted
+runtime build. Start with the current catalog below for new workflows.
+
 - [Choose an execution backend](https://rascommander.info/ras/user-guide/execution-backends/)
 - [Docker setup and two-stage execution](https://rascommander.info/ras/user-guide/container-execution/)
-- [Published images, immutable digests, sources, and qualification](https://rascommander.info/ras/user-guide/container-images/)
+- [Current GHCR images, historical Docker Hub digests, and qualification](https://rascommander.info/ras/user-guide/container-images/)
 - [Docker Python API](https://rascommander.info/ras/api/containers/)
 - [Native Slurm + Apptainer execution](https://rascommander.info/ras/user-guide/slurm-apptainer-execution/)
 - [Portable Slurm execution](https://rascommander.info/ras/user-guide/slurm-portable-execution/)
@@ -32,10 +42,11 @@ For historical evidence links, use the retained release record at
 Pin other historical inventory/reconstruction links to their corresponding
 source commit; current guides may link to `main` or the published site.
 
-The published Wine `v4` images were built from ras2fim-2d. Their successor
-recipe is [hecras-wine-precompute](hecras-wine-precompute/README.md) (next tag
-`v5`, adding the CPU shim). Write `v5` descriptions only after those images
-are rebuilt, qualified, and published.
+The historical Wine `v4` images were built from ras2fim-2d and lack the CPU
+shim. The current [preprocessing recipe](hecras-wine-precompute/README.md) builds
+local `v5-<commit>` images; its qualified payloads are published on GHCR with
+tag `0.106.0`. Do not describe the Docker Hub `v4` bytes as containing the fix or
+retag them as the newer release.
 
 This packet updates descriptions only. It does not authorize retagging,
 rebuilding, or republishing image payloads. Retain the previous descriptions,

@@ -22,42 +22,44 @@ uv pip install "ras-commander[compute]" jupyterlab matplotlib xarray geopandas
 ```
 
 The image contains its own installed library. This command installs the host
-API used to launch the containers and inspect their outputs. This host
-revision accepts HEC-RAS 6.5, 6.6, and 7.0.1. Image qualification and
-publication status are listed below.
-
-Published native images install library source `604704d440c49a39d6f6e8bae262e2233d895dd0`. Wine controllers use `dc60b219091e85bcb4564eca45313475c39ce58a`, with Windows library source `9e4217713e954236b0c16023e1815c6f2b7a5309`. These revisions identify the published image payloads; the host API follows the installed ras-commander release.
+API used to launch the containers and inspect their outputs. The current
+published two-stage pairs cover HEC-RAS 5.0.7, 6.1, 6.5, 6.6, 7.0, and 7.0.1.
+On Linux, both stages run without a Windows machine or VM.
 
 ## Select matching images
 
-See the [Docker Hub catalog](container-images.md) for direct repository links,
-immutable digests, embedded source revisions, and the retained qualification
-record. Compare [execution backends](execution-backends.md) before using these
-images with a different API. The [rendered RasDocker reference](../api/containers.md)
-documents method parameters and result records.
+Use the GHCR images selected by `RasContainerImages`. The
+[container catalog](container-images.md) lists their digest-pinned identities,
+publication status, and qualification scope. The older Docker Hub Wine `v4`
+images are retained historical payloads and lack the CPU-numbering shim in the
+current images. Compare [execution backends](execution-backends.md) before using
+an image with another API; the [RasDocker reference](../api/containers.md)
+documents parameters and result records.
 
-**Qualification status:** All three matching versions passed the full 266-hour Linux sample and the one-hour Windows Docker Desktop notebook, using two CPUs per container. Linux results contained 267 output times; Windows results contained two, with 6,548 finite water-surface values at every time. Live progress, resume and sequential batch checks passed on both hosts; the six Linux Wine LF/CRLF cases also passed. The images are published on Docker Hub, and anonymous pulls verified all six matching payloads.
+```python
+from ras_commander import RasContainerImages
 
-| HEC-RAS | Wine preprocessing image | Native unsteady image |
-|---|---|---|
-| 6.5 | `rascommander/hec-ras-wine-precompute_6.5:v4` | `rascommander/hec-ras-linux-unsteady_6.5:v1` |
-| 6.6 | `rascommander/hec-ras-wine-precompute_6.6:v4` | `rascommander/hec-ras-linux-unsteady_6.6:v1` |
-| 7.0.1 | `rascommander/hec-ras-wine-precompute_7.0.1:v4` | `rascommander/hec-ras-linux-unsteady_7.0.1:v1` |
-
-Pull both matching images before the first run to refresh the local tags:
-
-```bash
-docker pull rascommander/hec-ras-wine-precompute_6.5:v4
-docker pull rascommander/hec-ras-linux-unsteady_6.5:v1
+version = "6.6"
+preprocess_image = RasContainerImages.get("wine-precompute", version).reference
+compute_image = RasContainerImages.get("linux-unsteady", version).reference
 ```
 
-For 6.6 or 7.0.1, change the version in both repository names. Wine `v4` and native `v1` also have matching `latest` tags. The API examples use `pull="always"` to refresh the selected image.
+The host library selects and launches the images; each image runs its own
+installed library. Record the host package version, image digest, and receipts
+together. Use `pull="always"` to check availability of the selected digest, or
+`pull="never"` for a payload already cached in the Docker engine.
+
+**Qualification:** The final GHCR pairs ran Muncie plan 03 end to end for every
+published native-engine release. The published SIFs also passed the recorded
+October 15 Slurm requalification. The
+[qualification record](apptainer-images.md#qualification-status) gives model,
+version, precipitation, and comparison limits. The September 266-hour Linux and
+one-hour Windows Docker Desktop tests used the historical Docker Hub pairs;
+they are not new tests of the GHCR payloads.
 
 Use matching HEC-RAS versions. A missing image fails explicitly; the API does not choose another version. The native worker requires populated 2D meshes and validates their complete water-surface output.
 
-Other releases with a HEC Linux engine (5.0.7, 6.1, 7.0) use the GHCR images in the
-[packaged catalog](apptainer-images.md#which-images-apply-to-which-hec-ras-release); pass
-`image=` to use a local build instead. The preparation container reads the project's
+Pass `image=` to use a local build instead. The preparation container reads the project's
 geometry HDF (`.g##.hdf`) and checks that preprocessing keeps its 2D mesh. HEC's 6.1 example
 archive and the 5.0.x/6.0 installer examples omit those files, as can models saved by older
 releases; open and save the geometry once (or compute the plan once under `RasSlurm` or
@@ -113,15 +115,15 @@ This code uses a working copy prepared beforehand. The
 
 ```python
 from pathlib import Path
-from ras_commander import RasDocker
+from ras_commander import RasContainerImages, RasDocker
 
 models = Path("/path/to/working/02_model_copies")
 # On Windows, for example: Path(r"C:\Users\you\ras-runs\02_model_copies")
 name = "your-model-name"
 project = models / name / f"{name}.prj"
 version = "6.5"
-preprocess_image = f"rascommander/hec-ras-wine-precompute_{version}:v4"
-compute_image = f"rascommander/hec-ras-linux-unsteady_{version}:v1"
+preprocess_image = RasContainerImages.get("wine-precompute", version).reference
+compute_image = RasContainerImages.get("linux-unsteady", version).reference
 
 prepared = RasDocker.preprocess_plan(
     project,
@@ -166,7 +168,7 @@ The `error` field explains host-side failures, such as a failed image pull;
 
 ## CPU limits, progress, resume, and batch summaries
 
-The pinned host API and native source above provide these features. The
+The host API provides these features. The
 container runs one selected plan at a time; scheduling multiple models stays
 on the host.
 
