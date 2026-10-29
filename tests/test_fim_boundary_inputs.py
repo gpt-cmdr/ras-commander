@@ -39,22 +39,16 @@ def terrain(tmp_path):
     return hdf, tif
 
 
-def _require_bitfields(hdf):
-    from ras_commander import fast_hdf
-    try:
-        native = fast_hdf._native("rust")
-        capability = native.numeric_capability(str(hdf), "Terrain/source/0/Mask")
-    except Exception as exc:
-        pytest.skip(f"Required native HDF bitfield capability unavailable: {exc}")
-    if not capability["supported"]:
-        pytest.skip("Requires bitfield support after published fast-HDF 0.2.3")
+def _native_bitfields(hdf):
+    from ras_commander.fim._boundary_inputs import _native_bitfields
+    return _native_bitfields(hdf, "/Terrain/source/0/Mask")
 
 
 def test_native_selected_tiles_preserve_raw_bits_and_full_stitch_connectivity(terrain, tmp_path, monkeypatch):
     from ras_commander import fast_hdf
     from ras_commander.fim import _boundary_inputs
     hdf, tif = terrain
-    _require_bitfields(hdf)
+    native_bits = _native_bitfields(hdf)
     calls = []
     read = fast_hdf.read_dataset
     open_raster = rasterio.open
@@ -98,7 +92,9 @@ def test_native_selected_tiles_preserve_raw_bits_and_full_stitch_connectivity(te
                 expected = expected[[1, 5]]
             actual = np.fromfile(output / descriptor["path"], dtype=descriptor["dtype"]).reshape(descriptor["shape"])
             assert actual.tobytes() == expected.tobytes()
-    assert len(calls) == 6
+    # Tiles 1 and 5 are two one-row mask slabs; without native bitfield
+    # support they are read through h5py, not the native reader.
+    assert len(calls) == (6 if native_bits else 4)
     assert result["staged_bytes"] == sum(p.stat().st_size for p in output.iterdir())
     assert not list(output.glob("*.partial"))
     assert not list(output.glob("*terrain*.bin"))  # TIFF pixels are never staged.
@@ -142,7 +138,6 @@ def test_failure_cleans_all_owned_staging_files(terrain, tmp_path, monkeypatch, 
     from ras_commander import fast_hdf
     from ras_commander.fim import _boundary_inputs
     hdf, tif = terrain
-    _require_bitfields(hdf)
     if failure == "index":
         with h5py.File(hdf, "a") as handle:
             handle["Terrain/Stitch TIN Triangles"][0, 0] = 3
