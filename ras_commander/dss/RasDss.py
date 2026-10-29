@@ -491,6 +491,18 @@ class RasDss:
             other non-time-series records raise
             ``dss_commander.DssUnsupportedRecordError`` (a ``RuntimeError``).
 
+            All-missing DSS6 data differs between the paths. HEC Monolith
+            reports a DSS6 regular request whose values are all -901/-902 as
+            not found (heclib's DSS6 "no data" rule). The native engine finds
+            the blocks and, after trimming the missing values, raises the same
+            ``DssPathnameNotFoundError``; a window that also contains valid
+            values is returned. ``"shadow"`` re-reads such a not-found case
+            with dss-commander's opt-in ``no_data="refuse"`` (HEC's rule) only
+            to label the comparison; that option is provided for Java/native
+            parity checks and testing and never changes the returned result.
+            Stored NaN values are values: the leading/trailing trim removes
+            HEC missing markers only, as heclib's ``ztsTrim`` does.
+
         Example:
             df = RasDss.read_timeseries("file.dss", "/BASIN/LOC/FLOW//1HOUR/OBS/")
             print(df.head())
@@ -540,6 +552,19 @@ class RasDss:
 
         Java ignores the window, so its frame is cut to the same window before
         comparison.
+
+        All-missing DSS6 data (Java/native difference): HEC Monolith reports a
+        DSS6 regular time-series request as not found when every value it reads is
+        -901 or -902 (heclib ``zrrtsi.f`` status 4). The native engine finds those
+        blocks by default and, after its default trim, reports "no values" with the
+        same ``DssPathnameNotFoundError`` type that an absent pathname raises. When
+        the native read raises not-found, shadow mode repeats it with
+        dss-commander's opt-in ``no_data="refuse"`` (HEC's rule; it raises
+        ``DssNoDataError`` with ``status == 4``) to label the case as the HEC
+        no-data rule rather than a missing record. The option exists for this
+        parity check and for testing: the returned frame or error is always the
+        default native result, as under ``"native"``. Wheels without
+        ``DssNoDataError`` keep the broader D4 labels.
         """
         import time
 
@@ -594,12 +619,22 @@ class RasDss:
                     )
                 except Exception as exc:
                     java_window_error = f"{type(exc).__name__}: {exc}"
+            def _native_reread(**options):
+                if dss_handle is not None:
+                    return dss_handle.read_timeseries(pathname, start_date, end_date, **options)
+                from ras_commander.RasUtils import RasUtils
+                with dc.open(RasUtils.safe_resolve(Path(dss_file))) as handle:
+                    return handle.read_timeseries(pathname, start_date, end_date, **options)
+
+            native_hec_no_data = native_exc is not None and _backend.native_refuses_no_data(
+                _native_reread, native_exc
+            )
             outcome, label, diffs = _backend.classify_timeseries(
                 pathname, java_df, java_exc, native_df, native_exc,
-                java_window_df=java_window_df,
+                java_window_df=java_window_df, native_hec_no_data=native_hec_no_data,
             )
             java_s = time.perf_counter() - t1
-            detail = {"windowed": windowed,
+            detail = {"windowed": windowed, "native_hec_no_data": native_hec_no_data,
                       "java_window_verified": java_window_df is not None and outcome == "expected"
                       and label.startswith("D3 "),
                       "java_window_error": java_window_error}
