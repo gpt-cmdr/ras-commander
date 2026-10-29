@@ -2,7 +2,7 @@
 
 Ported from the ras2fim-2d operating guide ([source](https://github.com/gpt-cmdr/ras2fim-2d/blob/dc60b219091e85bcb4564eca45313475c39ce58a/containers/hecras-prepare/OPERATION.md)) with
 the CPU-shim changes. The published `v4` images use the same sequence without
-the shim and with `RAS2FIM_*` environment names; see the [README](README.md#provenance-v4-and-the-v5-successor).
+the shim and with `RAS2FIM_*` environment names; see the [README](README.md#published-images-and-provenance).
 The [v4 installed-code record](https://github.com/gpt-cmdr/ras2fim-2d/blob/dc60b219091e85bcb4564eca45313475c39ce58a/containers/hecras-prepare/INSTALLED-CODE.md) lists the packaged scripts
 and the exact installed library source.
 
@@ -10,9 +10,9 @@ The container provides Wine so [ras-commander][rc] can call installed Windows
 HEC-RAS on Linux. It takes an existing model, prepares inputs for a separate
 calculation stage, and leaves those files in the host's mounted working folder.
 
-**Qualification status (published `v4` payloads, recorded September 2026):** All three matching versions passed the full 266-hour Linux sample and the one-hour Windows Docker Desktop notebook, using two CPUs per container. Linux results contained 267 output times; Windows results contained two, with 6,548 finite water-surface values at every time. Live progress, resume and sequential batch checks passed on both hosts; the six Linux Wine LF/CRLF cases also passed. The images are published on Docker Hub, and anonymous pulls verified all six matching payloads. This recipe's `v5` successor adds the CPU shim and has not yet been rebuilt or requalified.
+**Qualification status (published `v4` payloads, recorded September 2026):** All three matching versions passed the full 266-hour Linux sample and the one-hour Windows Docker Desktop notebook, using two CPUs per container. Linux results contained 267 output times; Windows results contained two, with 6,548 finite water-surface values at every time. Live progress, resume and sequential batch checks passed on both hosts; the six Linux Wine LF/CRLF cases also passed. The images are published on Docker Hub, and anonymous pulls verified all six matching payloads. These are historical Docker Hub results. The current GHCR release includes the CPU shim; its October Docker/Slurm qualification is documented in the [current catalog](../../docs/user-guide/container-images.md).
 
-The images include installed runtimes and saved TCU acceptance. The operating sequence is the same for each selected runtime. The path example below uses 6.5; other HEC-RAS versions use their matching installation directories.
+The current GHCR images include installed runtimes and saved TCU acceptance. The operating sequence is the same for each selected runtime. The path example below uses 6.5; other HEC-RAS versions use their matching installation directories.
 
 The matching [native Linux image](../hecras-unsteady/README.md) completes the unsteady
 calculation after preprocessing. The [Python operating guide](../../docs/user-guide/container-execution.md) and
@@ -124,7 +124,7 @@ container and its writable layer; the bind-mounted model folder remains.
 
 ## Exact ras-commander call sequence
 
-The Windows worker uses these [ras-commander][rc] APIs. Every library function
+The historical `v4` Windows worker uses these [ras-commander][rc] APIs. Every library function
 shown in the diagram has a source link in the tables below. Links point to
 the exact installed source at public commit
 `9e4217713e954236b0c16023e1815c6f2b7a5309`; all 239 wheel package files

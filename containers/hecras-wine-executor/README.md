@@ -10,17 +10,24 @@ Wine, where ras-commander drives the installed Windows HEC-RAS.
 
 [RasSlurm](../../docs/user-guide/slurm-portable-execution.md) launches this
 contract under Slurm and Apptainer; `RasPortableDocker` uses it with Docker.
-A 6.6 executor built from this recipe was qualified live on the CLB Slurm cluster
-on October 13, 2026 (Muncie 1D and 2D requests through `RasSlurm` pool and array
-modes, and a `RasApptainer` prepare job); see
-[Apptainer images](../../docs/user-guide/apptainer-images.md#qualification-status).
-No executor image is published. Build one, convert it to a SIF, and qualify it at
-the site before use.
+Published executors and ready-made SIFs are available on GHCR with tag
+`0.106.0` for the releases in the
+[container catalog](../../docs/user-guide/container-images.md). Each includes
+the installed Wine prefix, Windows Python, HEC-RAS, and the CPU shim. Running
+the image on Linux needs no Windows machine or VM. Use
+`RasContainerImages.resolve_sif("wine-executor", "6.6")` to pull and verify the
+published SIF, or `RasContainerImages.get("wine-executor", "6.6").reference`
+for Docker.
+
+The [October qualification record](../../docs/user-guide/apptainer-images.md#qualification-status)
+documents Muncie 1D/2D Wine execution, preparation/native handoff, and final SIF
+requalification. Run a representative model at your site before a campaign.
+The build steps below are for a custom image or a controlled rebuild.
 
 ## What the derivative adds
 
 [build_executor_image.sh](build_executor_image.sh) starts from a
-`rascommander/hec-ras-wine-precompute_<version>` image pinned by digest. It
+preprocessing image pinned by digest (GHCR for the current release). It
 installs one ras-commander wheel into both Pythons and commits the result:
 
 | Item | Inside the image |
@@ -64,16 +71,16 @@ known commit:
 CI=1 python -m pip wheel --no-deps --wheel-dir /tmp/rc-wheel .
 RAS_COMMANDER_COMMIT=$(git rev-parse HEAD) \
 bash containers/hecras-wine-executor/build_executor_image.sh 6.6 \
-  rascommander/hec-ras-wine-precompute_6.6@sha256:5fbc07a20693cb867578048be632d88cee02618780259c1c7ddc258c9fbb4318 \
+  ghcr.io/gpt-cmdr/hec-ras-wine-precompute_6.6@sha256:1eef40777dd4a1c99a18a1a6b9ce5524ea163b45133901dbe5d38895fef99c11 \
   /tmp/rc-wheel/ras_commander-<version>-py3-none-any.whl \
   local/hec-ras-wine-executor_6.6:review
 ```
 
 `CI=1` skips the knowledge-base generation step in `setup.py`. Build from a
 clean checkout so the commit identifies the wheel. Pass a pip constraints file
-as the optional fifth argument to pin the Linux dependency versions. The base
-digests for all three versions are in the
-[container catalog](../../docs/user-guide/container-images.md#immutable-registry-identities).
+as the optional fifth argument to pin the Linux dependency versions. Current base
+digests are in the
+[container catalog](../../docs/user-guide/container-images.md#current-immutable-registry-identities).
 
 Steps performed by the script:
 

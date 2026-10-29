@@ -68,8 +68,8 @@ jobs:
         run: |
           python .claude/scripts/generate_cognitive_docs.py
 
-      - name: Verify source and signature rendering regressions
-        run: python -m pytest tests/test_mkdocstrings_source_anchors.py -q
+      - name: Verify image catalog and source rendering regressions
+        run: python -m pytest tests/test_container_image_docs.py tests/test_mkdocstrings_source_anchors.py -q
 
       - name: Build — no deploy
         run: |

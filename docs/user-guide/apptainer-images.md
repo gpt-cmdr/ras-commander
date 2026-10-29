@@ -6,9 +6,9 @@ converted to a SIF once, then pinned by its SHA-256.
 
 | Role | Image | Used by | Recipe |
 | --- | --- | --- | --- |
-| Native Linux unsteady solver | `rascommander/hec-ras-linux-unsteady_<version>:v1` | [`RasApptainer.render_job`](slurm-apptainer-execution.md) | [`containers/hecras-unsteady`][native] |
-| Wine preprocessing (Docker workflow) | `rascommander/hec-ras-wine-precompute_<version>:v4` | [`RasDocker.preprocess_plan`](container-execution.md) | [`containers/hecras-wine-precompute`][precompute] |
-| Wine portable executor | Derived from the pre-compute image | [`RasSlurm`](slurm-portable-execution.md), [`RasApptainer.render_prepare_job`](slurm-apptainer-execution.md#wine-preparation-on-the-cluster), `RasPortableDocker` | [`containers/hecras-wine-executor`][executor] |
+| Native Linux unsteady solver | `ghcr.io/gpt-cmdr/hec-ras-linux-unsteady_<version>:0.106.0` | [`RasApptainer.render_job`](slurm-apptainer-execution.md) | [`containers/hecras-unsteady`][native] |
+| Wine preprocessing (Docker workflow) | `ghcr.io/gpt-cmdr/hec-ras-wine-precompute_<version>:0.106.0` | [`RasDocker.preprocess_plan`](container-execution.md) | [`containers/hecras-wine-precompute`][precompute] |
+| Wine portable executor | `ghcr.io/gpt-cmdr/hec-ras-wine-executor_<version>:0.106.0` | [`RasSlurm`](slurm-portable-execution.md), [`RasApptainer.render_prepare_job`](slurm-apptainer-execution.md#wine-preparation-on-the-cluster), `RasPortableDocker` | [`containers/hecras-wine-executor`][executor] |
 
 Qualified images for every supported release are published at `ghcr.io/gpt-cmdr`: OCI images
 as `hec-ras-<role>_<version>` and byte-identical SIFs (ORAS) as `hec-ras-<role>-sif_<version>`,
@@ -91,18 +91,31 @@ digest and a new file.
 
 ## Get a SIF manually
 
-**Pull by digest.** On a node with registry access, pull once to shared storage
+For routine use, prefer `resolve_sif()` above: it pulls the published ORAS SIF
+and checks its recorded file hash. For example, the published 6.6 executor is:
+
+```bash
+apptainer pull /shared/images/hec-ras-wine-executor_6.6.sif \
+  oras://ghcr.io/gpt-cmdr/hec-ras-wine-executor-sif_6.6@sha256:77cee520c1c0e25afe9eeb5d5a59a4fae44198ab27db55ddf3d20c62f0a02212
+echo '7d5eaf7f2b1512dab7547430ed3ef20025f7ac9c247a5c3776f3fbb88aed1481  /shared/images/hec-ras-wine-executor_6.6.sif' | sha256sum -c -
+```
+
+The conversion routes below are for OCI images or local builds when a published
+SIF is not being used. Conversion creates a new SIF identity; do not substitute
+its hash for the published file hash.
+
+**Convert an OCI image by digest.** On a node with registry access, pull once to shared storage
 and record the SIF hash:
 
 ```bash
-apptainer pull /shared/images/hec-ras-linux-unsteady_6.6-v1.sif \
-  docker://rascommander/hec-ras-linux-unsteady_6.6@sha256:71dec03350996cfa8a0ccb18ae08075de9b9cc3d7fb6b1dddbf541c030abb95c
-sha256sum /shared/images/hec-ras-linux-unsteady_6.6-v1.sif
+apptainer pull /shared/images/hec-ras-linux-unsteady_6.6-converted.sif \
+  docker://ghcr.io/gpt-cmdr/hec-ras-linux-unsteady_6.6@sha256:219084e923d704a3209999fda7efdb42a731dcc632bd38c6fdabca00fc0a7ec0
+sha256sum /shared/images/hec-ras-linux-unsteady_6.6-converted.sif
 ```
 
-**Convert a `docker save` archive.** For locally built images (such as the
-executor) or clusters without registry access, save the image with a hash
-sidecar and convert it with [`build_sif_from_archive.sbatch`][sifbuilder] as an
+**Convert a `docker save` archive.** For locally built images or clusters without
+registry access, save the image with a hash sidecar and convert it with
+[`build_sif_from_archive.sbatch`][sifbuilder] as an
 ordinary unprivileged Slurm job:
 
 ```bash
@@ -163,7 +176,7 @@ profile `environment`. Without it the executor and prepare job stop with an expl
 ## Wine executor image
 
 [`build_executor_image.sh`][executor] derives the executor from a pre-compute image:
-a digest-pinned `rascommander/hec-ras-wine-precompute_<version>` (6.5, 6.6, or 7.0.1) or a
+a digest-pinned GHCR preprocessing image or a
 locally built one passed by image ID, as `build_release_images.sh` does. It installs one ras-commander wheel into both the Linux Python
 (with the `compute` extra) and the Windows `C:\Python311` in the Wine prefix,
 adds the GDAL bridge `C:\Python311\GDAL` → `HEC-RAS\<version>\GDAL` that
@@ -181,7 +194,7 @@ the executor environment:
 CI=1 python -m pip wheel --no-deps --wheel-dir /tmp/rc-wheel .
 RAS_COMMANDER_COMMIT=$(git rev-parse HEAD) \
 bash containers/hecras-wine-executor/build_executor_image.sh 6.6 \
-  rascommander/hec-ras-wine-precompute_6.6@sha256:5fbc07a20693cb867578048be632d88cee02618780259c1c7ddc258c9fbb4318 \
+  ghcr.io/gpt-cmdr/hec-ras-wine-precompute_6.6@sha256:1eef40777dd4a1c99a18a1a6b9ce5524ea163b45133901dbe5d38895fef99c11 \
   /tmp/rc-wheel/ras_commander-<version>-py3-none-any.whl \
   local/hec-ras-wine-executor_6.6:r1
 docker save local/hec-ras-wine-executor_6.6:r1 | gzip -1 > /shared/images/hec-ras-wine-executor_6.6-r1.tar.gz
@@ -227,9 +240,9 @@ a value that is not a regular absolute file fails before any Wine state is
 created. Both also disable the Wine debugger so a crash exits instead of
 waiting for input.
 
-The published pre-compute `v4` images do not contain the shim; the executor
+The historical Docker Hub pre-compute `v4` images do not contain the shim; the executor
 build compiles it when the base lacks it. The `v5` pre-compute images built by
-`build_release_images.sh` bake it in.
+`build_release_images.sh` bake it in, including the published GHCR `0.106.0` images.
 
 The executor and prepare job also set `KMP_AFFINITY=disabled` unless it is already set:
 HEC-RAS 7.0's OpenMP runtime otherwise aborts under Wine with `OMP: Error #179`.
@@ -301,9 +314,10 @@ Notes:
   prefix copy and file cache); budget `slurm_memory` at 6–8 GiB per Wine request and measure on
   your models. TACC was not run.
 
-That is one example project per release. Build and convert the images, then run one
-representative model end to end on your cluster before a campaign. A successful job is
-computational evidence, not engineering approval.
+The Muncie checks cover one example project per release; the precipitation checks
+add the BaldEagle example. Pull the published SIFs (or build and qualify custom
+images), then run one representative model end to end on your cluster before a
+campaign. A successful job is computational evidence, not engineering approval.
 
 [native]: https://github.com/gpt-cmdr/ras-commander/blob/main/containers/hecras-unsteady/README.md
 [precompute]: https://github.com/gpt-cmdr/ras-commander/blob/main/containers/hecras-wine-precompute/README.md

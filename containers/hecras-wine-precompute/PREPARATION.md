@@ -1,4 +1,34 @@
-# How to Re-Create this Container
+# Build the HEC-RAS preprocessing container
+
+## Current build from an empty Wine prefix
+
+Routine users pull the installed [GHCR image](../../docs/user-guide/container-images.md).
+On Linux, it runs the documented preprocessing workflow without a Windows machine
+or VM and without installing Wine or .NET on the host.
+
+For a new build, follow [hecras-wine-runtime](../hecras-wine-runtime/README.md)
+and the [release build procedure](../../docs/user-guide/apptainer-images.md#build-wine-images-for-a-release).
+`build_base.sh` initializes an empty prefix and installs Wine prerequisites,
+.NET 4.8, GDI+, core fonts, and Windows Python 3.11.9 with compute dependencies.
+`build_release_images.sh` installs the selected official HEC-RAS release into a
+copy of that base, installs the selected ras-commander wheel, writes `runtime.json`,
+and builds the preprocessing image with its CPU shim and the executor derivative.
+The scripts take official installer and wheel paths; retain their hashes and
+build logs. For 7.x, extract the MSI as described in the release build procedure.
+
+The October qualification used release profiles installed from official
+installers on the shared base and recorded end-to-end Docker/Slurm runs. It does
+not establish byte-for-byte reproducibility or an independent rebuild of the
+whole dependency chain on another clean host. Qualify a rebuilt image with a
+representative model and retain its receipts before using it for a campaign.
+
+## Historical v4 retained-profile reconstruction
+
+The remainder of this page preserves the September `v4` inputs, inventory,
+and reconstruction limitations. Its old wheel, source hashes, and missing
+empty-prefix qualification describe `v4` only. They are not prerequisites or
+publication status for the current GHCR release. Use the current build above
+for a new runtime; use this historical record when inspecting the old payloads.
 
 Companion to [the operating guide](OPERATION.md) and the [v4 release verification](https://github.com/gpt-cmdr/ras-commander/blob/49d796f39f7ba2a3c136ee8129a22457743a32f3/containers/hecras-unsteady/RELEASE-CURRENT.md).
 Ported from the ras2fim-2d rebuild guide ([source](https://github.com/gpt-cmdr/ras2fim-2d/blob/dc60b219091e85bcb4564eca45313475c39ce58a/containers/hecras-prepare/PREPARATION.md)). The
@@ -9,10 +39,10 @@ source installed in the published `v4` images.
 This section is for rebuilding the image. Routine users can start with the
 installed image and the [run command](README.md#run-on-a-linux-filesystem).
 
-**The repeatable build currently starts with a retained, prepared Wine profile.**
-A complete installation recipe starting with an empty Wine prefix has not yet
-been demonstrated. The steps below identify the inputs, build procedure, and
-remaining work needed for that fully independent reconstruction.
+**The historical `v4` build started with a retained, prepared Wine profile.**
+Its release record did not demonstrate installation from an empty Wine prefix.
+The steps below identify the inputs, build procedure, and remaining work needed
+for that fully independent reconstruction.
 
 ### 1. Gather the build inputs
 
@@ -56,7 +86,7 @@ prompts, then close Wine cleanly and verify the saved state with
 inventory; it does not yet supply all prerequisite download URLs or a tested
 installer sequence.
 
-Preparation details needed to match the current runtime:
+Preparation details recorded for the historical runtime:
 
 - The retained installation wheel is
   `C:\ras2fim-runtime\ras_commander-0.99.2-py3-none-any.whl`. It was installed
@@ -153,10 +183,10 @@ changed runtime files or changed handoff files. They add file-reading work and
 are an implementation choice for release traceability; HEC-RAS and Wine do not
 need file hashing to perform preprocessing. They do not check hydraulic accuracy.
 
-### Remaining work for a build starting from nothing
+### Historical v4 reconstruction gaps
 
-A fully independent rebuild still needs a tested empty-prefix installation
-sequence, retrievable official installers and Python dependencies, locked
+Independent reconstruction of the exact `v4` environment would need a tested
+empty-prefix installation sequence, retrievable official installers and Python dependencies, locked
 Winetricks/prerequisite versions, portable manifest creation, a distributable
 validation fixture, and a clean-host rebuild test. The original HEC-RAS 6.5 setup
 EXE identity is unavailable; a retained MSI-cache identity is recorded instead.

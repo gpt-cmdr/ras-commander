@@ -14,43 +14,25 @@ require Wine or a host HEC-RAS installation.
 ## Image status
 
 The [public container catalog](https://rascommander.info/ras/user-guide/container-images/)
-provides Docker Hub links, immutable digests, and qualification scope for all
-six matching images. The [backend comparison](https://rascommander.info/ras/user-guide/execution-backends/)
-explains which runtime contracts each API requires. For prepared native plans,
-see [Slurm + Apptainer](https://rascommander.info/ras/user-guide/slurm-apptainer-execution/);
-Docker qualification does not qualify a SIF through that API.
+lists the current GHCR images, published SIFs, immutable digests, and qualification
+scope. Matching preprocessing/native pairs cover HEC-RAS 5.0.7, 6.1, 6.5, 6.6,
+7.0, and 7.0.1. Use `RasContainerImages.get` to select the packaged digest for
+each role and version. The image release tag is `0.106.0`.
 
-Maintainers can use the [Docker Hub description packet](../DOCKERHUB.md) to
-link all six listings to the published guides after documentation deployment.
+The current Wine [preprocessing recipe](../hecras-wine-precompute/README.md)
+and [executor](../hecras-wine-executor/README.md) include the CPU shim. The
+[runtime builder](../hecras-wine-runtime/README.md) creates the base from an
+empty Wine prefix and installs HEC-RAS from its official installer. Both Docker
+stages run on Linux without a Windows machine or VM.
 
-Use the matching preprocessing and compute image pair for the selected HEC-RAS
-version. Image qualification and publication evidence are maintained separately
-from this source tree.
-
-| HEC-RAS | Wine preprocessing image | Native unsteady image |
-|---|---|---|
-| 6.5 | `rascommander/hec-ras-wine-precompute_6.5:v4` | `rascommander/hec-ras-linux-unsteady_6.5:v1` |
-| 6.6 | `rascommander/hec-ras-wine-precompute_6.6:v4` | `rascommander/hec-ras-linux-unsteady_6.6:v1` |
-| 7.0.1 | `rascommander/hec-ras-wine-precompute_7.0.1:v4` | `rascommander/hec-ras-linux-unsteady_7.0.1:v1` |
-
-The published native images install source `604704d440c49a39d6f6e8bae262e2233d895dd0`; Wine controller source is `dc60b219091e85bcb4564eca45313475c39ce58a`, with Windows library source `9e4217713e954236b0c16023e1815c6f2b7a5309`. Those revisions identify the published image payloads. The host API follows the installed ras-commander release. Use the public image references below with `pull="always"`.
-
-The successor Wine preprocessing recipe is [hecras-wine-precompute](../hecras-wine-precompute/README.md);
-its next tag, `v5`, adds a CPU-numbering shim that the published `v4`
-images lack. For Slurm, [hecras-wine-executor](../hecras-wine-executor/README.md)
-derives a portable-executor image and [apptainer](../apptainer/README.md) converts
-images to SIFs.
+The [October qualification](../../docs/user-guide/apptainer-images.md#qualification-status)
+identifies the final Docker images and published SIFs that were run. The
+[historical Docker Hub pairs](../../docs/user-guide/container-images.md#historical-docker-hub-images)
+(`v4` Wine, `v1` native) retain their separate September source revisions and
+results; those Wine payloads lack the shim. For prepared native plans on Slurm,
+use [RasApptainer](../../docs/user-guide/slurm-apptainer-execution.md).
 
 ## Run through the Python API
-
-Pull both matching images before the first run to refresh the local tags:
-
-```bash
-docker pull rascommander/hec-ras-wine-precompute_6.5:v4
-docker pull rascommander/hec-ras-linux-unsteady_6.5:v1
-```
-
-For 6.6 or 7.0.1, change the version in both repository names. Wine `v4` and native `v1` also have matching `latest` tags. The API examples use `pull="always"` to refresh the selected image.
 
 Install the host API revision shown in the [operating guide][guide].
 The host needs the Docker CLI connected to a local Linux engine. On Windows,
@@ -60,14 +42,14 @@ automatic file uploads.
 
 ```python
 from pathlib import Path
-from ras_commander import RasDocker
+from ras_commander import RasContainerImages, RasDocker
 
 models = Path("/path/to/fresh/02_model_copies")
 name = "your-model-name"
 project = models / name / f"{name}.prj"
 prepared = RasDocker.preprocess_plan(
     project, "01", version="6.5",
-    image="rascommander/hec-ras-wine-precompute_6.5:v4",
+    image=RasContainerImages.get("wine-precompute", "6.5").reference,
     mounts={"/source_terrain": models / "source_terrain",
             "/projection": models / "projection"},
     timeout=900, num_cores=2, replace_generated=True, pull="always",
@@ -77,7 +59,7 @@ if not prepared:
 
 computed = RasDocker.compute_plan(
     project, "01", version="6.5",
-    image="rascommander/hec-ras-linux-unsteady_6.5:v1",
+    image=RasContainerImages.get("linux-unsteady", "6.5").reference,
     prepare_receipt=prepared.receipt_path,
     timeout=14400, num_cores=2, pull="always",
 )
@@ -110,7 +92,7 @@ not exclusive affinity. One container computes one selected plan.
 computation runs. `resume=True` records and reuses verified successful stages
 when the request and retained artifacts still agree. `RasDocker.run_batch()`
 processes independent working copies sequentially and includes failed jobs
-in its summary. These features passed the full Linux sample and one-hour Windows qualification; the [operating guide][guide] explains the options and their limits.
+in its summary. These features passed the historical Docker Hub full Linux sample and one-hour Windows qualification; the [operating guide][guide] explains the options and their limits.
 
 ## What happens inside
 
