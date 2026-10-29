@@ -122,11 +122,12 @@ only during development qualification.
 ## Invalid cell polygons
 
 !!! note "Scope"
-    Only `map_sloping_profiles()` and `prepare_sloping_model()` accept
-    `invalid_cells=`. `map_horizontal_profiles()`, `map_whole_simulation()` and
-    `compare_with_rasmapper()` still assemble cell polygons strictly and refuse
-    a mesh that contains an invalid cell. Extending the policy to them is
-    follow-up work.
+    `map_sloping_profiles()`, `prepare_sloping_model()`,
+    `map_horizontal_profiles()` (through `get_cells_from_plan_hdf()`),
+    `map_whole_simulation()` and `compare_with_rasmapper()` accept
+    `invalid_cells=`, with the same values, default and manifest record.
+    Step 05 `map_profiles()` still refuses meshes with invalid cells. See
+    [Horizontal, whole-simulation and comparison mapping](#horizontal-whole-simulation-and-comparison-mapping).
 
 HEC-RAS can compute a mesh in which one face polyline of a cell crosses
 another face of the same cell, making a self-intersecting "bowtie" ring.
@@ -206,6 +207,58 @@ conservative default that reproduced it in these cases. This is not general
 equivalence: RAS Mapper's own treatment of a bowtie is undocumented, and three
 cells on one model cannot show it. `hull` claims more unowned area (1,201 ft²
 more than `repair` at the dry cell 36699), so it remains an explicit option.
+
+### Horizontal, whole-simulation and comparison mapping
+
+These methods first assemble the cell polygons strictly, as before. Only when
+strict assembly refuses the mesh do they apply `invalid_cells=` with the
+ownership rules above. Valid meshes therefore keep exactly the polygons and
+products they had, and their manifest records `count == 0`.
+
+- `get_cells_from_plan_hdf(invalid_cells=...)` fixes the ownership of the
+  table it returns. A split cell is one MultiPolygon row, so `cell_idx` stays
+  unique; omitted and consumed cells have no row. The policy and cells are in
+  `attrs["fim_invalid_cells"]`.
+- `map_horizontal_profiles(cells, ..., invalid_cells=...)` must receive the
+  value the table was extracted with; any other value raises `ValueError`.
+  Each piece of a split cell owns its pixels with the cell's WSE. `"raise"`
+  refuses when the AOI, or the whole table without one, intersects an
+  affected cell. A table without the record is mapped strictly.
+- `map_whole_simulation(..., invalid_cells=...)` has no AOI, so `"raise"`
+  refuses any plan with an affected cell.
+- `compare_with_rasmapper(..., invalid_cells=...)` passes the value to both
+  calls and refuses `"raise"` before native mapping. The compared footprint
+  keeps omitted and consumed cells, so `"omit"` reports the native pixels it
+  leaves unmapped. `comparison.json` records `invalid_cells`.
+- `map_profiles()` and `prepare_profile()` (Step 05) refuse tables with
+  affected cells (`FimUnsupportedError`).
+
+```python
+cells = RasFim.get_cells_from_plan_hdf("model.p01.hdf")  # invalid_cells="repair"
+manifest = RasFim.map_horizontal_profiles(cells, "terrain.tif", "maps/horizontal")
+print(manifest.attrs["invalid_cells"]["count"])
+```
+
+**Evidence (Glaise Creek p01, native HEC-RAS 7.0.1).** RAS Mapper stored maps
+came from `RasProcess.store_maps` on 512 × 512-pixel windows of the 10 ft source
+terrain around cells 36699, 457262 and 497876, as for sloping:
+
+- Horizontal Max: `repair` gives the native depth on every window pixel, with
+  identical masks and float32 bits. That includes 113 wet pixels inside the
+  affected cells (the three cells and their trimmed neighbours). Native WSE
+  also matches, except one pixel at cell 36699's crossing point. There, RAS
+  Mapper writes cell 36699's WSE but leaves depth dry; the pixel centre lies in
+  valid cell 36420, whose WSE is below the terrain. `omit` leaves 87 holes.
+  Pixels outside the affected cells are identical under every policy.
+- `compare_with_rasmapper` on each window (single-source terrain):
+  `repair` gives CSI 1.0 with no depth or WSE difference. `omit` misses 43, 14
+  and 30 wet pixels.
+- Whole simulation (threshold 0.5 ft): `repair` gives the native arrival time
+  and percent inundated on every pixel, with identical float32 bits. That
+  includes 33 wet pixels inside the affected cells; cell 36699 is dry at this
+  threshold. `omit` misses 25.
+
+The limits stated for sloping apply here too.
 
 ## Supply cell WSEL profiles
 

@@ -236,6 +236,7 @@ def run(
     ras_object,
     ras_version,
     timeout,
+    invalid_cells="repair",
 ):
     from ..RasProcess import RasProcess, _serialize_store_maps
     from ..RasMap import RasMap
@@ -244,8 +245,9 @@ def run(
     from ..RasPlan import RasPlan
     from .._execution_types import StoreMapPerformanceOptions
     from .RasFim import RasFim, _prepare_output_folder, _require_path, _validate_cells
-    from . import _aoi
+    from . import _aoi, _invalid_cells
 
+    _invalid_cells.validate_policy(invalid_cells)
     obj = ras_object or ras
     obj.check_initialized()
     plan = RasUtils.normalize_ras_number(plan_number)
@@ -268,7 +270,7 @@ def run(
             raise ValueError(
                 "profiles requires an explicit cells table; automatic extraction maps Max only"
             )
-        cells = RasFim.get_cells_from_plan_hdf(hdf, mesh_name=mesh_name)
+        cells = RasFim.get_cells_from_plan_hdf(hdf, mesh_name=mesh_name, invalid_cells=invalid_cells)
         profiles = {"wsel_max": "Max"}
     elif profiles is None:
         raise ValueError("provide profiles={WSE_column: exact native profile} with cells")
@@ -301,6 +303,19 @@ def run(
         aoi_crs=aoi_crs,
         default_crs=cells.crs,
     )
+    # Refuse (or record) affected cells before any native work.
+    invalid_records, _ = _invalid_cells.from_table(cells, invalid_cells)
+    aoi_geometry = _aoi.geometry_in_crs(constraint, cells.crs) if constraint else None
+    _invalid_cells.check_scope(invalid_records, invalid_cells, aoi_geometry)
+    # Cells left without ownership (omitted, consumed) stay in the compared
+    # footprint, so native pixels there count as missing.
+    unowned = [r["extent"] for r in invalid_records
+               if r["action"] in ("omitted", "overlap_consumed") and r["extent"] is not None]
+    footprint = cells
+    if unowned:
+        import geopandas as gpd
+
+        footprint = gpd.GeoDataFrame(geometry=list(cells.geometry) + unowned, crs=cells.crs)
     layers = RasMap.list_terrain_layers(obj.project_folder, ras_object=obj)
     if terrain_name is None:
         if len(layers) != 1:
@@ -329,6 +344,8 @@ def run(
         "model_scope": scope,
         "postprocess_reference": postprocess_reference,
         "native_performance_requested": native_performance.to_dict() if native_performance else None,
+        "invalid_cells": _invalid_cells.describe(invalid_records, invalid_cells, aoi_geometry),
+        "unowned_cells_in_footprint": len(unowned),
     }
 
     def sha256(path):
@@ -398,6 +415,7 @@ def run(
                 timeout=timeout,
                 write_floodplain=False,
                 hdf_path=hdf,
+                invalid_cells=invalid_cells,
             )
             state["candidate_batch_seconds"] = time.perf_counter() - started
             state["candidate_timings"] = json.loads((folder / "rust/fim_manifest.json").read_text(encoding="utf-8"))["timings"]
@@ -454,7 +472,7 @@ def run(
                     candidate.wse_tif,
                     nd,
                     nw,
-                    cells,
+                    footprint,
                     constraint,
                     min_depth,
                     terrain,

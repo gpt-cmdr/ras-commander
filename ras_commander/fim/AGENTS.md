@@ -68,7 +68,15 @@ Parent `ras_commander/AGENTS.md` and root `AGENTS.md` still apply.
   topology. Record every affected cell in the manifest `invalid_cells`. The
   default reproduced native 7.0.1 sloping pixels around Glaise Creek's three
   cells (limited evidence; `omit` left holes). Valid meshes stay identical.
-  Horizontal, whole-simulation and comparison mapping remain strict.
+- Horizontal, whole-simulation and comparison mapping assemble strictly first
+  and call `_invalid_cells.load_cells` only after `MeshCellPolygonError`, so
+  valid meshes keep their strict polygons. `get_cells_from_plan_hdf` fixes
+  ownership (split cell = one MultiPolygon row, record in
+  `attrs["fim_invalid_cells"]`); mapping requires the same policy, explodes
+  recorded splits into per-piece rows and applies AOI-scoped `raise`.
+  Comparison footprints keep omitted/consumed cells. Step 05 refuses rebuilt
+  tables. Glaise native 7.0.1 horizontal and whole-simulation maps match
+  `repair` (one native WSE-only pixel at a crossing point; depth matches).
 - Sloping AOIs constrain terrain/ownership/output pixels only. Keep the complete
   geometry for hydraulic connectivity and corner reconstruction across boundaries.
   Geometry, terrain and ownership are reused across all profiles in one request.

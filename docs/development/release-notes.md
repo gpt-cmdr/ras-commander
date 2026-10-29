@@ -69,6 +69,49 @@ whose WKT the engine cannot map to an EPSG code, such as Davis 7.0.1's
 The manifest records the accepted identity as `terrain_crs_identity`. See
 [FIM](../api/fim.md).
 
+**Invalid-cell policy for horizontal, whole-simulation and comparison mapping**
+
+`RasFim.get_cells_from_plan_hdf()`, `map_horizontal_profiles()`,
+`map_whole_simulation()` and `compare_with_rasmapper()` take `invalid_cells=`,
+with the values, default (`"repair"`) and `fim-invalid-cells/1` manifest record
+of sloping mapping (#733). A mesh with self-intersecting cell rings now maps
+instead of raising `MeshCellPolygonError`. `"raise"` keeps the refusal, but only
+when the AOI (or the whole mesh, without one) intersects an affected cell.
+
+- Strict assembly still runs first. The policy applies only when strict
+  assembly refuses the mesh, so valid meshes produce identical polygons and
+  products.
+- `get_cells_from_plan_hdf()` fixes ownership. A split cell is one MultiPolygon
+  row, and the policy and cells are in `attrs["fim_invalid_cells"]`.
+  `map_horizontal_profiles()` must be called with the same value.
+- `compare_with_rasmapper()` keeps omitted and consumed cells in the compared
+  footprint, and records `invalid_cells` in `comparison.json`.
+- Step 05 `map_profiles()` and `prepare_profile()` refuse tables with rebuilt
+  cells (`FimUnsupportedError`).
+
+On Glaise Creek p01, `repair` reproduced native HEC-RAS 7.0.1 horizontal depth,
+and whole-simulation arrival time and percent inundated, on every pixel of
+three windows around the cells. See
+[Invalid cell polygons](../api/fim.md#horizontal-whole-simulation-and-comparison-mapping).
+
+**Native fluvial-pluvial polygons on meshes with invalid cells**
+
+`HdfFluvialPluvial.generate_fluvial_pluvial_polygons` no longer falls back to
+Python when some cells have invalid source geometry.
+
+- Classification runs natively on the cells the Python reference keeps (the
+  induced subgraph without the cells it omits).
+- The reference's own dissolve (and, with `min_polygon_area_acres`, its swap)
+  then builds the regions over the same h5py cell polygons. Native ring
+  assembly is not used for such meshes.
+- The result is identical to `engine="h5py"`: columns, dtypes, values and WKB.
+
+On the 582,934-cell Glaise Creek p01 model (three self-intersecting cells),
+`auto` took 133 s (Python) and now takes 79 s, with identical output. Meshes
+without invalid cells are unchanged. With `diagnostics=True`,
+`attrs["fluvial_native"]["geometry"]` records `assembly="reference_dissolve"`
+and the cells.
+
 **Fast-Map 0.10.1 is the minimum mapping engine** (#736)
 
 The `fim`, `fast-map`, `full` and `all` extras now require

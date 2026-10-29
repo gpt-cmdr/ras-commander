@@ -175,6 +175,18 @@ def _validate_cells(cells, profiles: Optional[Sequence[str]], profile_prefix: st
     return profiles
 
 
+def _refuse_rebuilt_cells(cells, method: str) -> None:
+    """Step 05 samples and masks use cell polygons as given; refuse rebuilt ones."""
+    stored = cells.attrs.get("fim_invalid_cells") if hasattr(cells, "attrs") else None
+    if stored and stored.get("records"):
+        listed = ", ".join(f"{r['mesh']} cell {r['cell_id']}" for r in stored["records"][:10])
+        raise FimUnsupportedError(
+            f"{method} requires valid cell polygons; this table was extracted with "
+            f"invalid_cells={stored.get('policy')!r} and has rebuilt or omitted cells ({listed}). "
+            "Use map_horizontal_profiles or map_sloping_profiles for this mesh"
+        )
+
+
 def _validate_centers(centers, cells):
     """Validate caller centres and preserve the upstream ascending id order."""
     from pyproj import CRS
@@ -629,7 +641,8 @@ class RasFim:
                 ascending cell ID; split cells keep every piece and fully
                 overlapped cells own no pixels. Hydraulic connectivity,
                 corners and interpolation stencils always use the complete HDF
-                topology. Horizontal and whole-simulation mapping remain strict.
+                topology. Horizontal, whole-simulation and comparison mapping
+                apply the same policy when strict assembly refuses the mesh.
                 ``fim_manifest.json`` and ``attrs["invalid_cells"]`` record each
                 cell, the reason and the action taken.
             terrain_crs_fnv1a64: Engine WKT hash to accept when the engine
@@ -722,6 +735,7 @@ class RasFim:
         threads: int = 1, writer_threads: int = 1,
         max_working_mib: int = 1024, timeout: Optional[float] = None,
         engine_path: Optional[PathLike] = None,
+        invalid_cells: str = "repair",
     ) -> pd.DataFrame:
         """Map arrival time, percent time inundated and (opt-in) duration.
 
@@ -771,14 +785,22 @@ class RasFim:
             max_working_mib: Planned engine admission budget in MiB.
             timeout: Engine lifetime in seconds, or None.
             engine_path: Engine executable, otherwise environment/PATH.
+            invalid_cells: Pixel ownership for cells whose face polylines do
+                not form a valid polygon, as in :meth:`map_sloping_profiles`
+                (default ``"repair"``). Applied only when strict assembly
+                refuses the mesh; valid meshes are unchanged. There is no AOI,
+                so ``"raise"`` refuses whenever the plan has such a cell.
 
         Returns:
             DataFrame: ``fim_whole_simulation_manifest`` rows (one per product)
             with ``tif`` paths. ``attrs`` hold ``performance``,
-            ``time_reference``, ``model_scope``, ``unqualified`` case counts
-            and, with ``terrain_hdf``, ``terrain_scope``.
+            ``time_reference``, ``model_scope``, ``unqualified`` case counts,
+            ``invalid_cells`` (``fim-invalid-cells/1``, also in
+            ``fim_manifest.json``) and, with ``terrain_hdf``, ``terrain_scope``.
 
         Raises:
+            MeshCellPolygonError: ``invalid_cells="raise"`` and the plan has a
+                cell whose face polylines do not form a valid polygon.
             FimUnsupportedError: Duration without ``allow_unqualified``, storage
                 areas, 1D elements, unprovable or modified terrain, engine
                 refusals, or an engine without the method.
@@ -795,6 +817,7 @@ class RasFim:
             threshold=threshold, allow_unqualified=allow_unqualified,
             terrain_hdf=terrain_hdf, threads=threads, writer_threads=writer_threads,
             max_working_mib=max_working_mib, timeout=timeout, engine_path=engine_path,
+            invalid_cells=invalid_cells,
         )
 
     @staticmethod
@@ -821,6 +844,7 @@ class RasFim:
         raise_on_failure: bool = True,
         hdf_path: Optional[PathLike] = None,
         terrain_hdf: Optional[PathLike] = None,
+        invalid_cells: str = "repair",
     ) -> pd.DataFrame:
         """Map cell-constant horizontal WSE using a shared terrain-lattice grid.
 
@@ -833,7 +857,9 @@ class RasFim:
         Args:
             cells (geopandas.GeoDataFrame): Valid non-overlapping cell Polygons
                 with unique integer ``cell_idx`` and numeric WSE columns.
-                NaN marks a dry cell. Not modified.
+                NaN marks a dry cell. Not modified. A MultiPolygon row is
+                accepted only for a split cell recorded by
+                :meth:`get_cells_from_plan_hdf` (see ``invalid_cells``).
             terrain_path: Single-band float32 terrain GeoTIFF in the cells'
                 CRS, with north-up square pixels and declared nodata.
                 Its nodata pixels stay dry.
@@ -878,6 +904,17 @@ class RasFim:
                 raised as FimUnsupportedError so callers can map on an
                 exported terrain instead. Requires the Rust backend and an
                 engine advertising ``top-priority-source-footprint/1``.
+            invalid_cells: Policy for cells whose face polylines do not form
+                a valid polygon, as in :meth:`map_sloping_profiles` (default
+                ``"repair"``). Ownership is fixed when
+                :meth:`get_cells_from_plan_hdf` extracts the table; pass the
+                same value here (another value raises ``ValueError``). Each
+                piece of a split cell owns its pixels with the cell's WSE.
+                ``"raise"`` refuses when the AOI (or the whole table, without
+                one) intersects an affected cell. Tables without a record are
+                mapped strictly. ``fim_manifest.json`` and
+                ``attrs["invalid_cells"]`` hold the ``fim-invalid-cells/1``
+                record.
 
         Returns:
             DataFrame: ``fim_product_manifest`` rows. Offsets refer to the
@@ -885,6 +922,8 @@ class RasFim:
                 :meth:`map_profiles`; no nudge is performed in this method.
 
         Raises:
+            MeshCellPolygonError: ``invalid_cells="raise"`` and an affected
+                cell intersects the requested output.
             FimUnsupportedError: Invalid or overlapping cells, grid/CRS
                 mismatch, unsupported terrain or an over-budget window.
             FimMappingError: A failed profile or a changed input file.
@@ -903,9 +942,10 @@ class RasFim:
         """
         _require_dependencies()
         from types import SimpleNamespace
-        from . import _horizontal
+        from . import _horizontal, _invalid_cells
 
         names = _validate_cells(cells, profiles, profile_prefix)
+        invalid_records, split_cells = _invalid_cells.from_table(cells, invalid_cells)
         source_hdf = cells.attrs.get("fim_source_hdf")
         if hdf_path is not None and source_hdf is not None:
             if Path(hdf_path).resolve() != Path(source_hdf).resolve():
@@ -950,6 +990,8 @@ class RasFim:
             aoi_crs=aoi_crs,
             default_crs=cells.crs,
         )
+        aoi_geometry = _aoi.geometry_in_crs(constraint, cells.crs) if constraint else None
+        _invalid_cells.check_scope(invalid_records, invalid_cells, aoi_geometry)
         watched = {"terrain": terrain}
         if scope_info is not None:
             watched["terrain_hdf"] = scope_info["terrain_hdf"]
@@ -958,6 +1000,8 @@ class RasFim:
         before = {key: _file_identity(path) for key, path in watched.items()}
         mapping_started = time.perf_counter()
         ordered = cells.sort_values("cell_idx", kind="stable").reset_index(drop=True)
+        # One ownership row per piece of a split cell, each with the cell's WSE.
+        ordered = _invalid_cells.explode_split(ordered, split_cells)
         plan = _horizontal.plan_grid(ordered, terrain, constraint, budget, native=backend == "rust")
         folder = _prepare_output_folder(output_folder)
         rows = {name: _empty_row(name, "not_run") for name in names}
@@ -987,6 +1031,7 @@ class RasFim:
                 for k, path in watched.items()
             },
             "status": "in_progress",
+            "invalid_cells": _invalid_cells.describe(invalid_records, invalid_cells, aoi_geometry),
         }
         if scope_info is not None:
             from . import _terrain_scope
@@ -997,6 +1042,7 @@ class RasFim:
             frame = pd.DataFrame([rows[name] for name in names], columns=MANIFEST_COLUMNS)
             if scope_info is not None:
                 frame.attrs["terrain_scope"] = details["terrain_scope"]
+            frame.attrs["invalid_cells"] = details["invalid_cells"]
             return frame
 
         RasFim._write_manifest(folder, manifest(), details)
@@ -1060,8 +1106,15 @@ class RasFim:
                             transform=plan.transform,
                             unit={"window": list(plan.window.flatten())},
                         )
+                        wet = np.isfinite(values)
+                        if split_cells:
+                            # Pieces of a split cell share one cell.
+                            wet = ordered["cell_idx"].iloc[plan.cell_positions].to_numpy()[wet]
+                            wet_cells = int(len(np.unique(wet)))
+                        else:
+                            wet_cells = int(wet.sum())
                         rows[name] = _empty_row(
-                            name, "pending", samples=0, wet_cells=int(np.isfinite(values).sum())
+                            name, "pending", samples=0, wet_cells=wet_cells
                         )
                         write_started = time.perf_counter()
                         import rasterio
@@ -1133,6 +1186,7 @@ class RasFim:
         ras_object: Optional["RasPrj"] = None,
         ras_version: Optional[str] = None,
         timeout: int = 1800,
+        invalid_cells: str = "repair",
     ) -> pd.DataFrame:
         """Generate native horizontal stored maps and compare with Rust mapping.
 
@@ -1177,6 +1231,13 @@ class RasFim:
             ras_object: Initialized project object for multi-project use.
             ras_version: Installed native mapping runtime version.
             timeout: Native per-profile mapping/lock timeout in seconds.
+            invalid_cells: Policy for cells whose face polylines do not form a
+                valid polygon, passed to :meth:`get_cells_from_plan_hdf` for
+                automatic extraction and to :meth:`map_horizontal_profiles`
+                (default ``"repair"``). Explicit ``cells`` must have been
+                extracted with the same value. ``"raise"`` refuses before
+                native mapping when the AOI (or the whole table) intersects an
+                affected cell. The JSON report records ``invalid_cells``.
 
         Returns:
             DataFrame: ``fim_comparison`` metrics and raster paths. The JSON
@@ -1228,6 +1289,7 @@ class RasFim:
             ras_object=ras_object,
             ras_version=ras_version,
             timeout=timeout,
+            invalid_cells=invalid_cells,
         )
 
     @staticmethod
@@ -1438,6 +1500,7 @@ class RasFim:
         mesh_name: Optional[str] = None,
         profile_name: str = "wsel_max",
         min_depth: float = 0.0,
+        invalid_cells: str = "repair",
     ) -> "gpd.GeoDataFrame":
         """Build a one-profile cell table from a plan HDF's maximum results.
 
@@ -1451,6 +1514,18 @@ class RasFim:
         a single mesh retains its original cell IDs. Source-HDF provenance is
         retained in the returned frame's attrs for later mapping scope checks.
 
+        ``invalid_cells`` applies only when strict assembly refuses the mesh
+        because a cell's face polylines do not form a valid polygon. The policy
+        is that of :meth:`map_sloping_profiles` (default ``"repair"``); the
+        ownership it fixes is used by :meth:`map_horizontal_profiles` and
+        :meth:`compare_with_rasmapper`, which must be called with the same
+        value. A cell split by overlap resolution is one MultiPolygon row;
+        omitted and consumed cells have no row. ``"raise"`` refuses later,
+        when the mapping AOI (or the whole mesh, without one) intersects an
+        affected cell. ``attrs["fim_invalid_cells"]`` records the policy and
+        cells. Valid meshes are unchanged and carry no record. :meth:`map_profiles`
+        (Step 05) refuses tables with affected cells.
+
         Returns:
             gpd.GeoDataFrame: Cell indices, profile WSE and polygon geometries.
                 Frames from plans on the same geometry can be joined on
@@ -1462,11 +1537,19 @@ class RasFim:
         from ..hdf.HdfMesh import HdfMesh
         from ..hdf.HdfResultsMesh import HdfResultsMesh
 
+        from . import _invalid_cells
+
+        _invalid_cells.validate_policy(invalid_cells)
         path = _require_path(hdf_path, "hdf_path")
         scope = RasFim.validate_2d_model(path)
         if not np.isfinite(min_depth) or min_depth < 0:
             raise ValueError(f"min_depth must be finite and >= 0, got {min_depth!r}")
-        polygons = HdfMesh.get_mesh_cell_polygons(path, strict=True)
+        polygons, invalid_records = _invalid_cells.load_plan_cells(
+            path, policy=invalid_cells, threads=1,
+            strict_loader=lambda: HdfMesh.get_mesh_cell_polygons(path, strict=True),
+        )
+        if invalid_records:
+            polygons = _invalid_cells.merge_pieces(polygons)
         if polygons is None or len(polygons) == 0:
             raise FimUnsupportedError(f"{path.name}: no 2D mesh cell polygons could be read")
         names = list(dict.fromkeys(polygons["mesh_name"]))
@@ -1515,6 +1598,15 @@ class RasFim:
                             fim_mesh_names=names if mesh_name == "*" else [mesh_name],
                             fim_full_2d_coverage=(mesh_name == "*" or len(names) == 1),
                             fim_model_scope=scope)
+        selected_meshes = set(names if mesh_name == "*" else [mesh_name])
+        invalid_records = [r for r in invalid_records if r["mesh"] in selected_meshes]
+        if invalid_records:
+            output.attrs[_invalid_cells.ATTR] = {
+                "policy": invalid_cells,
+                "records": invalid_records,
+                "split_cell_idx": sorted(
+                    int(v) for v in output.loc[output.geom_type == "MultiPolygon", "cell_idx"]),
+            }
         return output
 
     @staticmethod
@@ -1573,6 +1665,7 @@ class RasFim:
         """
         _require_dependencies()
         _validate_cells(cells, [profile], DEFAULT_PROFILE_PREFIX)
+        _refuse_rebuilt_cells(cells, "prepare_profile")
         if not (np.isfinite(pixel_size) and pixel_size > 0):
             raise ValueError(f"pixel_size must be positive, got {pixel_size!r}")
         if lattice_origin is not None:
@@ -1713,6 +1806,7 @@ class RasFim:
         from pyproj import CRS
 
         profiles = _validate_cells(cells, profiles, profile_prefix)
+        _refuse_rebuilt_cells(cells, "map_profiles")
         terrain = _require_path(terrain_path, "terrain_path")
         if (centers is None) == (hdf_path is None):
             raise ValueError("give exactly one of centers or hdf_path")

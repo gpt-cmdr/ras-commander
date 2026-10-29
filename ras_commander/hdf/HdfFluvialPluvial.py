@@ -161,7 +161,7 @@ def _reference_omitted_cells(hdf_path, analysis, invalid):
     return omitted
 
 
-def _native_snapshot(hdf_path, retain_faces, *, reference_omissions=False):
+def _native_snapshot(hdf_path, retain_faces, *, reference_omissions=False, reference_cells=False):
     """Immutable native snapshot built from Python-compatible inputs, or unsupported.
 
     Several meshes are analysed in isolation under (mesh_name, cell_id)
@@ -173,6 +173,13 @@ def _native_snapshot(hdf_path, retain_faces, *, reference_omissions=False):
     ``(mesh_index, cell_id)`` the reference leaves out of its analysis (see
     :func:`_reference_omitted_cells`), else empty. Without it, invalid source
     geometry is unsupported.
+
+    With ``reference_cells`` it returns ``(analysis, omitted, invalid)`` for
+    region classification: when the reference omits cells, the analysis is
+    rebuilt on the induced subgraph of the cells it keeps (the reference takes
+    adjacency only among those cells), and ``invalid`` lists the kept cells
+    whose native ring is invalid. Their geometry is then dissolved by the
+    reference, never by native ring assembly.
     """
     # Same availability and API-version gate (fast_hdf.API 11) as every other native read.
     from .. import fast_hdf
@@ -217,6 +224,20 @@ def _native_snapshot(hdf_path, retain_faces, *, reference_omissions=False):
                                  retain_faces=retain_faces)
     from .HdfFluvialNative import _native
     invalid = _native("validate_geometry", list(analysis.points), list(analysis.rings))
+    if reference_cells:
+        if not invalid:
+            return analysis, set(), []
+        omitted = _reference_omitted_cells(hdf_path, analysis, invalid)
+        if omitted:
+            keep = [(analysis.meshes[m], int(c)) for m, c in analysis.sources if (m, int(c)) not in omitted]
+            if not keep:
+                raise FluvialNativeUnsupportedError("the reference omits every physical cell")
+            analysis = Analysis.from_hdf(hdf_path, wet_policy="all", peak_round_to="100ms",
+                                         retain_faces=retain_faces, selection=keep)
+            invalid = _native("validate_geometry", list(analysis.points), list(analysis.rings))
+        kept_invalid = sorted((analysis.meshes[analysis.sources[i][0]], int(analysis.sources[i][1]))
+                              for i, _ in invalid)
+        return analysis, omitted, kept_invalid
     if invalid and reference_omissions:
         # The boundary uses no cell geometry, only which cells the reference
         # analyses: decide that for these cells with the reference's own rule.
@@ -505,9 +526,10 @@ class HdfFluvialPluvial:
                           native or an error (FluvialNativeUnsupportedError or data
                           errors), never a different result. Native output holds the same
                           rows, attributes and CRS as the reference with topologically
-                          equal polygons; with ``min_polygon_area_acres`` native classes go
-                          through the reference dissolve and swap, so the frame is
-                          identical to the reference's.
+                          equal polygons; with ``min_polygon_area_acres``, or on a mesh
+                          with invalid source cells (classified on the cells the
+                          reference keeps), native classes go through the reference
+                          dissolve and swap, so the frame is identical to the reference's.
                           ``engine="auto"`` follows ``RAS_COMMANDER_FAST_HDF`` like every
                           other reader: ``h5py`` runs the reference without trying native;
                           unset/``auto`` tries native and falls back; ``native`` runs native
@@ -804,7 +826,7 @@ class HdfFluvialPluvial:
                 "native kernel seeds ambiguous")
         timings = {}
         begin = time.perf_counter()
-        analysis = _native_snapshot(hdf_path, retain_faces=False)
+        analysis, omitted, invalid = _native_snapshot(hdf_path, retain_faces=False, reference_cells=True)
         timings["snapshot_seconds"] = time.perf_counter() - begin
         # No seed overrides: conflicting seeds stay ambiguous, as in the reference.
         labels, diagnostics, timings["classify_kernel_seconds"] = analysis.classify(delta_ms, tolerance_ms)
@@ -813,10 +835,17 @@ class HdfFluvialPluvial:
         # Python's finalization: remaining unclassified (incl. missing time) -> ambiguous.
         final = [3 if label in (0, 6) else label for label in labels]
         names = {1: "fluvial", 2: "pluvial", 3: "ambiguous"}
-        if min_polygon_area_acres is not None:
+        if min_polygon_area_acres is not None or omitted or invalid:
+            # Invalid source cells: native ring assembly cannot reproduce the
+            # reference's GEOS dissolve, so the reference dissolves the native classes.
+            reason = ("min_polygon_area_acres swap keeps GEOS part-order 'first' attributes"
+                      if min_polygon_area_acres is not None else
+                      "cells with invalid source geometry are dissolved by the reference")
             return HdfFluvialPluvial._native_swapped_polygons(
                 hdf_path, analysis, final, names, diagnostics, timings,
-                delta_t, temporal_tolerance_hours, min_polygon_area_acres)
+                delta_t, temporal_tolerance_hours, min_polygon_area_acres, reason=reason,
+                invalid_cells=({"reference_omitted": sorted((analysis.meshes[m], int(c)) for m, c in omitted),
+                                "invalid_kept": invalid} if omitted or invalid else None))
         begin = time.perf_counter()
         regions, geometry = analysis.polygons(final)
         timings["polygon_kernel_and_shapely_seconds"] = time.perf_counter() - begin
@@ -848,7 +877,9 @@ class HdfFluvialPluvial:
 
     @staticmethod
     def _native_swapped_polygons(hdf_path, analysis, final, names, diagnostics, timings,
-                                 delta_t, temporal_tolerance_hours, min_polygon_area_acres):
+                                 delta_t, temporal_tolerance_hours, min_polygon_area_acres, *,
+                                 reason="min_polygon_area_acres swap keeps GEOS part-order 'first' attributes",
+                                 invalid_cells=None):
         """Native classes, then the reference dissolve and minimum-area swap.
 
         The cell polygons are read exactly as the reference reads them (h5py
@@ -884,8 +915,8 @@ class HdfFluvialPluvial:
             final_regions_gdf, delta_t, temporal_tolerance_hours, diagnostics["waves"])
         final_regions_gdf.attrs["fluvial_native"] = {
             "classification": dict(diagnostics),
-            "geometry": {"assembly": "reference_dissolve",
-                         "reason": "min_polygon_area_acres swap keeps GEOS part-order 'first' attributes"},
+            "geometry": {"assembly": "reference_dissolve", "reason": reason,
+                         **({"invalid_cells": invalid_cells} if invalid_cells else {})},
             "timings": timings,
             "snapshot_setup": {k: v for k, v in analysis.setup.items() if k != "topology_diagnostics"},
         }
