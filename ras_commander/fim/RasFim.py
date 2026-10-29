@@ -742,7 +742,10 @@ class RasFim:
             render_mode: ``"sloping"`` or ``"slopingPretty"`` (plain).
             velocity_depth: ``"rendered"`` or ``"horizontal"`` (RAS Mapper's
                 horizontal mode: horizontal depth and its velocity clip).
-            bbox, polygon, polygon_layer, aoi_crs: Optional output AOI.
+            bbox: Optional output bounds in ``aoi_crs`` or the model CRS.
+            polygon: Optional polygon geometry, frame or vector-file AOI.
+            polygon_layer: Layer name when the AOI file has multiple layers.
+            aoi_crs: Coordinate reference system of the AOI.
             engine_path: Matching engine executable.
             threads: Rust worker count, 1 through 64.
             max_inflight_profiles: Concurrent output times.
