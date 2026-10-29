@@ -499,6 +499,7 @@ class RasFim:
         velocity: bool = False,
         invalid_cells: str = "repair",
         terrain_crs_fnv1a64: Optional[str] = None,
+        storage_areas: bool = False,
     ) -> pd.DataFrame:
         """Map 2D HDF WSE with the experimental Rust sloping engine.
 
@@ -536,7 +537,8 @@ class RasFim:
         timesteps. Bounded Spring River/Spring Creek comparisons retain the
         complete mesh. Models containing 1D river or cross-section elements
         are rejected before mapping.
-        Standalone storage-area surfaces outside the 2D mesh are not mapped.
+        Standalone storage-area surfaces outside the 2D mesh are not mapped
+        unless ``storage_areas=True``.
 
         ``terrain_path`` must be a same-CRS float32 square-pixel GeoTIFF with
         declared nodata. ``bbox`` or ``polygon`` constrains output pixels;
@@ -653,6 +655,22 @@ class RasFim:
                 still agree under rasterio and resolve to an EPSG code. Ignored
                 when the engine reports an EPSG code. The manifest records the
                 accepted identity as ``terrain_crs_identity``.
+            storage_areas: Also draw the plan's standalone storage areas as
+                RAS Mapper level pools (``storage-area-level-pool/1``): every
+                pixel whose centre is inside a storage-area polygon gets that
+                area's WSE (``Maximum Water Surface`` for Max, the stored
+                ``Water Surface`` for a timestep), visible where float32
+                ``wse >= terrain + 0.001``, depth ``wse - terrain``. The
+                window grows to cover the storage areas. The same in every
+                render mode; qualified against native HEC-RAS 7.0.1 stored
+                maps on BaldEagleCrkMulti2D storage-area plans. Storage areas
+                overlapping 2D cells or each other, and with ``terrain_hdf``
+                any storage-area pixel outside the priority-1 source footprint,
+                are refused (FimUnsupportedError). Not available with
+                ``wsel_profiles``, ``velocity`` or prepared models. Requires an
+                engine advertising ``storage_area_surfaces``; see
+                :meth:`supports_storage_areas`. ``attrs["storage_areas"]``
+                records the areas and their mapped pixel count.
 
         Returns:
             DataFrame: ``fim_product_manifest`` rows with timing evidence in
@@ -687,7 +705,40 @@ class RasFim:
             max_inflight_profiles=max_inflight_profiles,
             template_raster=template_raster, terrain_hdf=terrain_hdf,
             velocity=velocity, invalid_cells=invalid_cells, product_writer=product_writer,
-            terrain_crs_fnv1a64=terrain_crs_fnv1a64)
+            terrain_crs_fnv1a64=terrain_crs_fnv1a64, storage_areas=storage_areas)
+
+    #: Engine method ID of storage-area level-pool surfaces.
+    STORAGE_AREA_METHOD = "storage-area-level-pool/1"
+
+    @staticmethod
+    @log_call
+    def supports_storage_areas(engine_path: Optional[PathLike] = None) -> bool:
+        """Whether the installed engine draws storage-area level pools.
+
+        True when the engine's ``sloping``, ``horizontal`` and
+        ``whole_simulation`` methods all advertise
+        ``storage-area-level-pool/1``, so ``storage_areas`` can be passed to
+        :meth:`map_sloping_profiles`, :meth:`map_horizontal_profiles` and
+        :meth:`map_whole_simulation`. False when the engine is older or
+        missing; never raises for a missing engine.
+
+        Args:
+            engine_path: Engine executable, otherwise environment/PATH.
+
+        Returns:
+            bool: Storage-area surfaces are available.
+        """
+        from . import _storage_areas
+
+        try:
+            methods = _engine.engine_method(_engine.find_engine(engine_path))
+        except Exception:
+            return False
+        return all(
+            isinstance(methods.get(kind), dict)
+            and methods[kind].get("storage_area_surfaces") == _storage_areas.METHOD_ID
+            for kind in ("sloping", "horizontal", "whole_simulation")
+        )
 
     @staticmethod
     @log_call
@@ -736,6 +787,7 @@ class RasFim:
         max_working_mib: int = 1024, timeout: Optional[float] = None,
         engine_path: Optional[PathLike] = None,
         invalid_cells: str = "repair",
+        storage_areas: bool = False,
     ) -> pd.DataFrame:
         """Map arrival time, percent time inundated and (opt-in) duration.
 
@@ -762,8 +814,9 @@ class RasFim:
         on a few recession pixels by one output interval and is unqualified;
         irregular output intervals are refused unless ``allow_unqualified``.
 
-        Scope: pure 2D plans. Plans with 1D elements or storage areas are
-        refused (use RAS Mapper for them).
+        Scope: pure 2D plans. Plans with 1D elements are refused. Plans with
+        storage areas are refused unless ``storage_areas=True`` (use RAS
+        Mapper for them otherwise).
 
         Args:
             hdf_path: Computed 2D plan-results HDF.
@@ -790,6 +843,16 @@ class RasFim:
                 (default ``"repair"``). Applied only when strict assembly
                 refuses the mesh; valid meshes are unchanged. There is no AOI,
                 so ``"raise"`` refuses whenever the plan has such a cell.
+            storage_areas: Also accumulate the plan's standalone storage areas
+                as level pools (``storage-area-level-pool/1``): at each output
+                time a storage-area pixel is wet when the stored storage-area
+                ``Water Surface`` minus terrain is strictly greater than
+                ``threshold`` (native float32 plot test first); a level pool
+                has no cell gate. Overlaps with 2D cells or other storage
+                areas, and with ``terrain_hdf`` any storage-area pixel outside
+                the priority-1 source footprint, are refused. Requires an
+                engine advertising ``storage_area_surfaces`` on its
+                whole-simulation method (:meth:`supports_storage_areas`).
 
         Returns:
             DataFrame: ``fim_whole_simulation_manifest`` rows (one per product)
@@ -817,7 +880,7 @@ class RasFim:
             threshold=threshold, allow_unqualified=allow_unqualified,
             terrain_hdf=terrain_hdf, threads=threads, writer_threads=writer_threads,
             max_working_mib=max_working_mib, timeout=timeout, engine_path=engine_path,
-            invalid_cells=invalid_cells,
+            invalid_cells=invalid_cells, storage_areas=storage_areas,
         )
 
     @staticmethod
@@ -845,6 +908,7 @@ class RasFim:
         hdf_path: Optional[PathLike] = None,
         terrain_hdf: Optional[PathLike] = None,
         invalid_cells: str = "repair",
+        storage_areas: Optional[Dict[str, Union[str, int]]] = None,
     ) -> pd.DataFrame:
         """Map cell-constant horizontal WSE using a shared terrain-lattice grid.
 
@@ -915,6 +979,22 @@ class RasFim:
                 mapped strictly. ``fim_manifest.json`` and
                 ``attrs["invalid_cells"]`` hold the ``fim-invalid-cells/1``
                 record.
+            storage_areas: Optional mapping of every mapped profile column
+                to ``"Max"`` or a zero-based stored timestep index of the
+                source plan HDF. The plan's standalone storage areas are then
+                drawn as RAS Mapper level pools (``storage-area-level-pool/1``):
+                each pixel whose centre is inside a storage-area polygon gets
+                that area's WSE (``Maximum Water Surface`` for Max, the stored
+                ``Water Surface`` otherwise), visible where float32
+                ``wse >= terrain + 0.001``, with the same ``min_depth`` cutoff.
+                The window grows to cover the storage areas. Needs model
+                provenance (``hdf_path`` or a table from
+                :meth:`get_cells_from_plan_hdf`), the Rust backend and an
+                engine advertising ``storage_area_surfaces``. Storage areas
+                overlapping 2D cells or each other are refused
+                (FimUnsupportedError). Use :meth:`supports_storage_areas` to
+                detect the capability. ``attrs["storage_areas"]`` records the
+                areas and their mapped pixel count.
 
         Returns:
             DataFrame: ``fim_product_manifest`` rows. Offsets refer to the
@@ -952,6 +1032,32 @@ class RasFim:
                 raise ValueError("hdf_path differs from the cells' source model")
         if hdf_path is not None or source_hdf is not None:
             RasFim.validate_2d_model(hdf_path if hdf_path is not None else source_hdf)
+        storage = None
+        if storage_areas is not None:
+            from . import _storage_areas
+
+            model_hdf = hdf_path if hdf_path is not None else source_hdf
+            if model_hdf is None:
+                raise ValueError("storage_areas needs the source plan HDF (hdf_path)")
+            if backend != "rust":
+                raise FimUnsupportedError("storage_areas requires the Rust backend")
+            if not isinstance(storage_areas, dict) or set(storage_areas) != set(names):
+                raise ValueError(
+                    "storage_areas must map every mapped profile column to 'Max' or a timestep index"
+                )
+            selection = {}
+            for name in names:
+                selector = storage_areas[name]
+                if selector != "Max" and (
+                    isinstance(selector, bool) or not isinstance(selector, (int, np.integer))
+                    or selector < 0
+                ):
+                    raise ValueError("storage_areas selectors must be 'Max' or nonnegative ints")
+                selection[name] = selector if selector == "Max" else int(selector)
+            areas = _storage_areas.read(model_hdf)
+            if areas is None:
+                raise FimUnsupportedError("storage_areas given but the plan has no storage areas")
+            storage = (areas, _storage_areas.profile_values(model_hdf, areas, selection))
         if len(cells) == 0:
             raise ValueError("horizontal cells must not be empty")
         if (
@@ -1002,7 +1108,10 @@ class RasFim:
         ordered = cells.sort_values("cell_idx", kind="stable").reset_index(drop=True)
         # One ownership row per piece of a split cell, each with the cell's WSE.
         ordered = _invalid_cells.explode_split(ordered, split_cells)
-        plan = _horizontal.plan_grid(ordered, terrain, constraint, budget, native=backend == "rust")
+        plan = _horizontal.plan_grid(
+            ordered, terrain, constraint, budget, native=backend == "rust",
+            storage_areas=storage[0].polygons if storage is not None else None,
+        )
         folder = _prepare_output_folder(output_folder)
         rows = {name: _empty_row(name, "not_run") for name in names}
         details = {
@@ -1037,11 +1146,17 @@ class RasFim:
             from . import _terrain_scope
 
             details["terrain_scope"] = _terrain_scope.describe(scope_info)
+        if storage is not None:
+            from . import _storage_areas
+
+            details["storage_areas"] = _storage_areas.describe(storage[0], selection)
 
         def manifest():
             frame = pd.DataFrame([rows[name] for name in names], columns=MANIFEST_COLUMNS)
             if scope_info is not None:
                 frame.attrs["terrain_scope"] = details["terrain_scope"]
+            if storage is not None:
+                frame.attrs["storage_areas"] = details["storage_areas"]
             frame.attrs["invalid_cells"] = details["invalid_cells"]
             return frame
 
@@ -1074,6 +1189,7 @@ class RasFim:
                     folder,
                     timeout,
                     scope_info,
+                    storage,
                 )
                 if backend == "rust" and all(plan.shape)
                 else nullcontext(None)

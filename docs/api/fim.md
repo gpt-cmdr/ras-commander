@@ -84,9 +84,10 @@ its own hydraulic connectivity and corner reconstruction. Worker count controls
 the bounded Rayon pool. An AOI reduces the terrain/output window while retaining
 the complete mesh needed to reconstruct boundary values. Models containing 1D
 river or cross-section elements are rejected before mapping.
-Standalone storage-area surfaces outside the 2D mesh are excluded. The return
-attributes `mapping_scope` and `model_scope`, and the JSON manifest, record
-this boundary. The Bald Eagle dam-break reference also renders a storage area;
+Standalone storage-area surfaces outside the 2D mesh are excluded unless
+`storage_areas=True` (see [Storage-area level pools](#storage-area-level-pools)).
+The return attributes `mapping_scope` and `model_scope`, and the JSON manifest,
+record this boundary. The Bald Eagle dam-break reference also renders a storage area;
 its exact sloping comparison is restricted to physical 2D cells, not the whole
 native model image.
 
@@ -788,7 +789,9 @@ manifest[["product", "tif", "units", "wet_pixels"]]
 - `duration` requires `allow_unqualified=True`: some native recession
   durations are one output interval shorter. Irregular output intervals are
   also refused without it.
-- Plans with storage areas or 1D elements are refused.
+- Plans with 1D elements are refused. Plans with storage areas are refused
+  unless `storage_areas=True`; a storage-area pixel is then wet when its depth
+  is greater than `threshold` (a level pool has no cell gate).
 
 | Model (native 7.0.1, 0.5 ft) | Output times | Valid pixels | Arrival / percent differences |
 |---|---|---|---|
@@ -797,7 +800,42 @@ manifest[["product", "tif", "units", "wet_pixels"]]
 
 Both match RAS Mapper's horizontal and sloping stored maps, which are identical
 on these models. These methods target pure 2D models for FIM library creation;
-1D models, storage areas and other products remain with RAS Mapper.
+1D models and other products remain with RAS Mapper.
+
+## Storage-area level pools
+
+RAS Mapper draws a standalone storage area as a horizontal pool. With
+`storage_areas=True` (`map_sloping_profiles`, `map_whole_simulation`) or
+`storage_areas={profile: "Max" | index}` (`map_horizontal_profiles`, with the
+source plan HDF), the engine's `storage-area-level-pool/1` method does the same:
+every pixel whose centre is inside a storage-area polygon
+(`Geometry/Storage Areas`) gets that area's WSE (`Maximum Water Surface` for
+Max, the stored `Water Surface` for a timestep), visible where float32
+`wse >= terrain + 0.001`, depth `wse - terrain`, in every render mode. The
+output window grows to cover the storage areas.
+
+```python
+if RasFim.supports_storage_areas():
+    manifest = RasFim.map_sloping_profiles(
+        "BaldEagleDamBrk.p07.hdf", "terrain.tif", "out", storage_areas=True,
+    )
+    manifest.attrs["storage_areas"]  # names, method and mapped pixel count
+```
+
+Refused (`FimUnsupportedError`) rather than guessed: storage areas overlapping
+2D cells or each other, velocity, caller-supplied `wsel_profiles`, prepared
+models and, with `terrain_hdf`, any storage-area pixel outside the priority-1
+source footprint (BaldEagleCrkMulti2D has 28; map on an export instead).
+
+| Native 7.0.1 comparison | Products | Storage-area pixels | Differences |
+|---|---|---|---|
+| BaldEagleCrkMulti2D p07 | Max Depth/WSE horizontal, sloping, slopingPretty (with/without shallow reduction); 02JAN1999 13:00 horizontal and sloping | 466,912 (Max) | 0 mask, 0 bits |
+| BaldEagleCrkMulti2D p04 (2D levee structures) | Max Depth/WSE in the same four modes; 13:00 sloping | 461,639 (Max) | 0 mask, 0 bits |
+| p07 and p04 | Arrival time and percent inundated at 0.5 ft | 464,106 / 458,764 | 0 mask, 0 bits |
+
+Duration differences (8 and 46 pixels, one output interval) are all 2D pixels.
+Both models have one storage area connected to the 2D area; multiple storage
+areas and storage-area-to-storage-area connections are not covered.
 
 ## Horizontal cell mapping
 
