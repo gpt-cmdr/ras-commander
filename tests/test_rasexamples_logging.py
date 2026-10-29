@@ -93,6 +93,8 @@ def test_get_example_projects_download_error_includes_url_and_target(
 ):
     user_data_dir = tmp_path / "ras_examples"
     monkeypatch.setattr(RasExamples, "_user_data_dir", user_data_dir)
+    # get_example_projects() points _zip_file_path into the temporary directory.
+    monkeypatch.setattr(RasExamples, "_zip_file_path", None)
 
     def fail_get(*_args, **_kwargs):
         raise requests.exceptions.RequestException("offline")
