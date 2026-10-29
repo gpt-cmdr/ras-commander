@@ -9,6 +9,16 @@ alone does not identify a development checkout.
 
 ### Unreleased
 
+**Fast-HDF 0.2.4 is the minimum HDF engine**
+
+The core dependency and the `fast`/`fast-hdf` extras now require
+`ras-commander-fast-hdf>=0.2.4,<0.3` (was `>=0.2.3,<0.3`). 0.2.4 restores the
+speed of `HdfResultsXsec.get_ref_lines_timeseries` and `get_xsec_timeseries`
+in `auto` and `native` mode, which 0.2.2 and 0.2.3 had slowed (fast-HDF #32;
+values were never affected). It also enables the columnar PMTiles properties
+of #715, which remain capability-detected. The 0.2.4 file-type and pipe-network
+readers are Rust-only and not used by Commander.
+
 **Fast-Map 0.10.1 is the minimum mapping engine** (#736)
 
 The `fim`, `fast-map`, `full` and `all` extras now require
