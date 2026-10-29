@@ -208,8 +208,9 @@ Parent `ras_commander/AGENTS.md` and root `AGENTS.md` still apply.
 `map_inundation_boundaries` is `deterministic-zero-depth-contours/1`, not native
 vector parity. Preserve signed sample depths and sample-coverage activation;
 never derive this layer by polygonizing the plotted depth raster. Original
-single-source terrain HDF masks/perimeters/stitch TIN require native numeric
-reads, including bitfield support. Global hydraulics remain complete across
+single-source terrain HDF perimeters/stitch TIN use required native numeric
+reads; the bitfield tile Mask is copied as raw uint8 bytes through h5py when
+the native reader lacks bitfield support (published fast-HDF 0.2.4). Global hydraulics remain complete across
 AOIs, and final contours use stable all-subject NonZero union and clipping.
 Keep canonical holes, explicit projected CRS, bounded tile/profile workers,
 source identities and complete geometry comparison metrics. Preserve existing

@@ -41,6 +41,16 @@ def _modifications_state(handle):
 
 
 @log_call
+def _native_bitfields(hdf, name):
+    """Whether the required-native HDF reader advertises this bitfield dataset."""
+    from .. import fast_hdf
+    try:
+        capability = fast_hdf._native("rust").numeric_capability(str(hdf), name)
+    except Exception:
+        return False
+    return bool(capability.get("supported"))
+
+
 def stage_boundary_terrain(
     terrain_hdf, terrain_tif, root, *, threads=4,
     max_staged_bytes=512 * 1024 * 1024, selected_tiles=None,
@@ -188,10 +198,21 @@ def stage_boundary_terrain(
                             runs[-1][1] += 1
                         else:
                             runs.append([row, row + 1])
+                # RAS Mapper stores the tile Mask as an 8-bit HDF5 bitfield.
+                # Published fast-HDF (0.2.4) refuses bitfields; when the native
+                # reader lacks the capability the raw bytes are read as uint8
+                # through h5py, exactly as the terrain-scope staging does.
+                bitfield = (dataset.id.get_type().get_class() == h5py.h5t.BITFIELD
+                            and not _native_bitfields(terrain_hdf, dataset.name))
                 with partial.open("xb") as stream:
                     partials.append(partial)
                     for start, stop in runs:
-                        values = np.asarray(read_dataset(dataset, (slice(start, stop), slice(None)), backend="rust", threads=threads))
+                        if bitfield:
+                            if dataset.dtype.itemsize != 1:
+                                raise ValueError(f"Unsupported bitfield width: {dataset.name}")
+                            values = np.asarray(dataset[start:stop], dtype=np.uint8)
+                        else:
+                            values = np.asarray(read_dataset(dataset, (slice(start, stop), slice(None)), backend="rust", threads=threads))
                         if values.dtype != np.dtype(dtype) or values.shape != (stop - start, dataset.shape[1]):
                             raise ValueError(f"Invalid native terrain payload: {dataset.name}")
                         if key == "stitch_points" and not np.isfinite(values[:, :3]).all():

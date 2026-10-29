@@ -1581,11 +1581,14 @@ visibility is not applied to contour samples. Valid negative depths, including
 -9999, are distinct from missing samples. Sample activation from terrain masks
 is distinct from a polygon clipping mask.
 
-This path requires a Fast-Map build advertising the boundary capability and
-native HDF numeric bitfield support added after published fast-HDF 0.2.3.
-At initial qualification these are development builds; the library never
-builds, downloads or installs an engine during mapping, and never substitutes
-h5py arithmetic. Geometry, terrain and ownership are shared across profiles
+This path requires a Fast-Map engine advertising the boundary capability
+(`boundary.method_id` `deterministic-zero-depth-contours/1`): the published
+0.10.1 and 0.11 releases do. The terrain tile `Mask` is an 8-bit HDF5
+bitfield. When the installed fast-HDF reader does not advertise bitfield
+support (published 0.2.4 does not), its raw bytes are staged through h5py as
+uint8, exactly as the terrain-scope staging does; every other array uses the
+required native reader. The library never builds, downloads or installs an
+engine during mapping, and never substitutes h5py arithmetic. Geometry, terrain and ownership are shared across profiles
 inside a call. One Rayon pool bounds tile and timestep work. Budgets are planned
 allocation admission, not hard process RSS limits.
 
