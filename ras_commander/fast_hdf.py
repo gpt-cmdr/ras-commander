@@ -380,10 +380,14 @@ def _typed_source(module, path):
         return session
 
 
+# Typed entry points whose ``path`` argument is a plain path, not a session source.
+_PATH_ONLY_TYPED = frozenset({"read_structure_series"})
+
+
 @_one_read
 def typed_call(module, path, name, *args, **kwargs):
     """Call the path-based engine entry point ``name`` on ``path`` (see :func:`_typed_source`)."""
-    source = _typed_source(module, path)
+    source = path if name in _PATH_ONLY_TYPED else _typed_source(module, path)
     function = getattr(module, name)
     if source is path:
         return function(path, *args, **kwargs)
