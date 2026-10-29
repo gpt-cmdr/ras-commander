@@ -7,7 +7,39 @@ check `ras_commander.__version__` and the documentation's
 [build provenance](https://rascommander.info/ras/version.json). A package version
 alone does not identify a development checkout.
 
-### Unreleased
+### 0.110.3 — 2026-10-29
+
+This patch release includes **20 change PRs** absent from the published
+`v0.110.2` source tag, plus the 0.110.3 release-preparation PR. The old
+0.110.2 release merge (#735) is housekeeping and is excluded from the change
+count. The comparison baseline is the published tag, rather than PR merge
+dates; this also captures the DSS work that was not in that tagged source.
+
+- **FIM catalogs and Fast-Map 0.11:** bounded reach/timestep scheduling (#739),
+  retained mapping state and optional native TIFF delivery (#741), and the
+  multi-watershed recipe plus compatible dependency range (#748).
+- **Mapping inputs and native helpers:** terrain export diagnostics (#725),
+  temporary-HDF face-table qualification (#728), native helper CPU limits
+  (#729, #738), writable private result staging (#730), horizontal extent
+  qualification (#731), the polygon-capable engine floor (#736), sloping
+  terrain-CRS overrides (#744), and invalid-cell policies across horizontal,
+  whole-simulation and comparison mapping (#745).
+- **HDF and fluvial-pluvial paths:** extensible-array read qualification (#737),
+  Fast-HDF 0.2.4 as the minimum HDF engine (#740), and pandas 3 classification
+  dtype parity (#743).
+- **Other library updates:** native/shadow DSS reads (#592), paired-data and
+  native grid/file-version routes (#718), modern USGS retrieval (#726), early
+  refusal of oversized direct soils inputs (#732), and portable plugin
+  generation/marketplace notification fixes (#747).
+
+The mapping extras accept `ras-commander-fast-map>=0.10.1,<0.12`; install
+0.11.0 for retained hydraulic/window caches and native TIFF delivery. The
+core HDF requirement is `ras-commander-fast-hdf>=0.2.4,<0.3`. Capabilities
+remain checked at runtime, and existing user pins are not silently updated.
+See the [catalog recipe](../api/fim.md#build-jobs-from-a-watershed-layer) and
+[complete source comparison](https://github.com/gpt-cmdr/ras-commander/compare/v0.110.2...v0.110.3).
+
+### Implementation notes
 
 **Multi-polygon/timestep catalog guidance and Fast-Map 0.11 compatibility**
 
@@ -16,13 +48,13 @@ vector layer, supply different ordered timestep lists, choose reuse or
 parallel workers, budget per-worker memory and inspect partial results.
 The `fim` and `fast-map` extras accept Fast-Map 0.11 alongside 0.10.1. Version
 0.11 adds the retained-state and native-writer capabilities; inspect advertised
-flags and use a qualified explicit build until registry publication completes.
+flags before selecting them.
 See the [catalog recipe](../api/fim.md#build-jobs-from-a-watershed-layer).
 
 **Retained reach mapping state and optional native raster delivery**
 
 Prepared sloping contexts and catalogs accept bounded hydraulic and window
-cache ceilings. Capable development engines reuse reconstructed timesteps
+cache ceilings. Capable Fast-Map 0.11 engines reuse reconstructed timesteps
 across reaches and retain multiple terrain/ownership windows. Passed geometry
 validation is reused only for identical immutable cell subsets. Source changes
 still invalidate the context; complete hydraulic topology is retained.
