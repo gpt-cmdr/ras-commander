@@ -19,6 +19,15 @@ values were never affected). It also enables the columnar PMTiles properties
 of #715, which remain capability-detected. The 0.2.4 file-type and pipe-network
 readers are Rust-only and not used by Commander.
 
+**Fluvial-pluvial `classification` dtype is the same on every engine under pandas 3** (#743)
+
+With `min_polygon_area_acres`, `engine="native"` built its classification
+labels as `object`, while the Python reference uses the pandas default for
+strings (`object` on pandas 2, `str` on pandas 3). On pandas 3 the native and
+`auto` results therefore had an `object` `classification` column where `h5py`
+had `str`. The native path now builds the labels as the reference does; values
+and geometry are unchanged, and pandas 2 results are unchanged.
+
 **Fast-Map 0.10.1 is the minimum mapping engine** (#736)
 
 The `fim`, `fast-map`, `full` and `all` extras now require

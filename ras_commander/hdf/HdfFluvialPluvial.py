@@ -869,8 +869,10 @@ class HdfFluvialPluvial:
         if len(native) != len(final) or set(cell_index) != set(native):
             raise FluvialNativeUnsupportedError(
                 "the native cells differ from the cell polygons the Python reference dissolves")
-        classifications = pd.Series([native[key] for key in cell_index], index=cell_index,
-                                    name='classification', dtype=object)
+        # Built as the reference builds it, so the column dtype follows the
+        # installed pandas default (object in 2.x, str in 3.x) on both engines.
+        classifications = pd.Series('unclassified', index=cell_index, name='classification')
+        classifications[:] = [native[key] for key in cell_index]
         final_regions_gdf = HdfFluvialPluvial._dissolve_classified_cells(
             cell_polygons_gdf, classifications)
         timings["reference_dissolve_seconds"] = time.perf_counter() - begin
