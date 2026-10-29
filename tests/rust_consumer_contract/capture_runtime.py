@@ -42,8 +42,10 @@ def main():
             entry['methods'] = {m: _member_signature(getattr(obj, m))
                                 for m in vars(obj) if m not in {'__new__', '__doc__', '__module__'}}
         entries[name] = entry
-    if set(entries) != set(EXPECTED):
-        raise SystemExit(f'Full-feature ABI mismatch: missing={sorted(set(EXPECTED)-set(entries))}, extra={sorted(set(entries)-set(EXPECTED))}')
+    # Test hooks (feature test-hooks) are absent from release-feature wheels.
+    expected = {n for n, (_, gate, _) in EXPECTED.items() if gate != 'test-hooks' or n in entries}
+    if set(entries) != expected:
+        raise SystemExit(f'Full-feature ABI mismatch: missing={sorted(expected-set(entries))}, extra={sorted(set(entries)-expected)}')
     binary = Path(inner.__file__)
     result = dict(source_commit=args.source_commit,
                   native_binary_sha256=hashlib.sha256(binary.read_bytes()).hexdigest(),
