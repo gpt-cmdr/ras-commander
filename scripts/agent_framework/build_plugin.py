@@ -46,7 +46,7 @@ def confined(path: Path, root: Path) -> Path:
 def build(repo: Path, output: Path) -> None:
     repo = repo.resolve()
     canonical = repo / '.claude'
-    config = json.loads((canonical / 'plugin/package.json').read_text())
+    config = json.loads((canonical / 'plugin/package.json').read_text(encoding='utf-8'))
     if output.exists() or output.is_symlink():
         raise ValueError('Output already exists; choose a new distribution destination.')
     # Output is a disposable distribution. Prevent overwriting canonical instructions.
@@ -80,7 +80,7 @@ def build(repo: Path, output: Path) -> None:
         if source in scanned or source.suffix.lower() != '.md':
             continue
         scanned.add(source)
-        for match in markdown_targets(source.read_text()):
+        for match in markdown_targets(source.read_text(encoding='utf-8')):
             target = match.group(2)
             parts = link_parts(target)
             if parts.scheme or parts.netloc or not parts.path:
@@ -107,7 +107,7 @@ def build(repo: Path, output: Path) -> None:
                 raise ValueError(f'Package destination escapes staging: {destination}')
             target.parent.mkdir(parents=True, exist_ok=True)
             if source.suffix.lower() == '.md':
-                text = content.decode('utf-8')
+                text = content.decode('utf-8').replace('\r\n', '\n')
                 def rebase(match: re.Match) -> str:
                     link = match.group(2)
                     parts = link_parts(link)
@@ -145,7 +145,7 @@ def build(repo: Path, output: Path) -> None:
                             raise ValueError('Merge existing skill metadata before packaging.')
                         front += ['metadata:\n'] + custom
                     text = '---\n' + ''.join(front) + ''.join(lines[closing:])
-                target.write_text(text, encoding='utf-8')
+                target.write_text(text, encoding='utf-8', newline='\n')
             else:
                 target.write_bytes(content)
             provenance.append({'source': source.relative_to(repo).as_posix(),
@@ -153,14 +153,14 @@ def build(repo: Path, output: Path) -> None:
                                'packaged': destination.as_posix(),
                                'packaged_sha256': hashlib.sha256(target.read_bytes()).hexdigest()})
         manifest = config['manifest']
-        (staging / 'plugin.json').write_text(json.dumps(manifest, indent=2) + '\n')
+        (staging / 'plugin.json').write_text(json.dumps(manifest, indent=2) + '\n', encoding='utf-8', newline='\n')
         (staging / 'source-provenance.json').write_text(json.dumps({
             'source_repository': manifest['repository'],
             'package_configuration_sha256': hashlib.sha256((canonical / 'plugin/package.json').read_bytes()).hexdigest(),
-            'files': provenance}, indent=2) + '\n')
+            'files': provenance}, indent=2) + '\n', encoding='utf-8', newline='\n')
         # Check packaged relative links before promoting the assembled bundle.
         for markdown in staging.rglob('*.md'):
-            for match in markdown_targets(markdown.read_text()):
+            for match in markdown_targets(markdown.read_text(encoding='utf-8')):
                 parts = link_parts(match.group(2))
                 if not parts.scheme and not parts.netloc and parts.path:
                     confined(markdown.parent / unquote(parts.path), staging)

@@ -1,0 +1,33 @@
+name: Notify Commander plugin
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: notify-commander-plugin
+  cancel-in-progress: false
+
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Notify the plugin repository of library changes
+        env:
+          GH_TOKEN: ${{ secrets.PLUGIN_DISPATCH_TOKEN }}
+          LIBRARY_REPOSITORY: ${{ github.repository }}
+          LIBRARY_COMMIT: ${{ github.sha }}
+        shell: bash
+        run: |
+          if [ -z "$GH_TOKEN" ]; then
+            echo "::error::Set PLUGIN_DISPATCH_TOKEN with Contents: write on gpt-cmdr/ras-commander-plugin."
+            exit 1
+          fi
+          gh api --method POST repos/gpt-cmdr/ras-commander-plugin/dispatches \
+            -f event_type=library-main-updated \
+            -f "client_payload[repository]=$LIBRARY_REPOSITORY" \
+            -f "client_payload[commit]=$LIBRARY_COMMIT"

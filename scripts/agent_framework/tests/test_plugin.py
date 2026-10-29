@@ -58,6 +58,34 @@ class PluginContracts(unittest.TestCase):
         self.assertEqual({str(p.relative_to(self.output)): p.read_bytes() for p in self.output.rglob('*') if p.is_file()},
                          {str(p.relative_to(second)): p.read_bytes() for p in second.rglob('*') if p.is_file()})
 
+
+    def test_utf8_sources_without_process_utf8_mode(self):
+        self.write_skill()
+        skill = self.skill / 'SKILL.md'
+        skill.write_bytes(skill.read_bytes() + '[detail](水.md)\n'.encode('utf-8'))
+        (self.skill / '水.md').write_text('UTF-8: → 水\n', encoding='utf-8')
+        original = Path.read_text
+
+        def legacy_read(path, encoding=None, errors=None):
+            return original(path, encoding=encoding or 'cp1252', errors=errors)
+
+        with patch.object(Path, 'read_text', legacy_read):
+            build_plugin.build(self.repo, self.output)
+        self.assertIn('→ 水', (self.output / 'skills/example/水.md').read_text(encoding='utf-8'))
+
+    def test_lf_bundle_on_windows_text_defaults(self):
+        original = Path.write_text
+
+        def windows_write(path, data, encoding=None, errors=None, newline=None):
+            return original(path, data, encoding=encoding, errors=errors,
+                            newline='\r\n' if newline is None else newline)
+
+        with patch.object(Path, 'write_text', windows_write):
+            build_plugin.build(self.repo, self.output)
+        for path in self.output.rglob('*'):
+            if path.is_file() and path.suffix in ('.md', '.json'):
+                self.assertNotIn(b'\r\n', path.read_bytes(), str(path.relative_to(self.output)))
+
     def test_shared_approval(self):
         for changes in ({'source_owner':'untrusted'}, {'security_review':'unknown'}, {'harness_scope':'claude_only'}, {'shared_corpus':'false'}):
             with self.subTest(changes=changes):

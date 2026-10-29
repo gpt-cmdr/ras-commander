@@ -41,3 +41,20 @@ The GitHub workflow assembles the portable distribution as an artifact and opens
 Update PR creation requires GitHub Actions write/PR permissions and the repository setting allowing Actions to create pull requests. The workflow declares requested permissions; administrators may still prohibit this capability. No repository setting is changed by the workflow. If denied, retain the generated artifact/log and make the update PR through an authorized maintainer. No workflow auto-merges, publishes to PyPI, installs into user environments, or submits a plugin to a directory.
 
 For current Claude Code client isolation, the official [subagent guide](https://code.claude.com/docs/en/sub-agents#scope-mcp-servers-to-a-subagent) documents inline `mcpServers` on the informational child definition, instead of connecting the project server globally. Trust/host version and available server configuration still need qualification. Updated repository adapters use Claude's current `Agent` delegation tool name; portable skills do not prescribe that name for other hosts. No server configuration is activated by this package.
+
+## Notify the marketplace
+
+`notify-commander-plugin.yml` sends `library-main-updated` to
+`gpt-cmdr/ras-commander-plugin` on every push to `main`, or on manual dispatch.
+The marketplace rebuilds from both libraries' current `main` branches and
+publishes a patch only when packaged skills or resources change. Its weekly
+Monday check at 10:23 UTC recovers missed notifications.
+
+Set the Actions secret `PLUGIN_DISPATCH_TOKEN` in this library repository to a
+fine-grained GitHub token limited to `gpt-cmdr/ras-commander-plugin` with
+Contents: write. The repository dispatch endpoint requires that permission:
+[GitHub repository dispatch documentation](https://docs.github.com/en/rest/repos/repos#create-a-repository-dispatch-event).
+The default `GITHUB_TOKEN` is scoped to this repository and cannot notify the
+other repository. Missing or expired credentials fail the notification job;
+the weekly marketplace check remains available. Rotate the secret before the
+token expires. Do not store a token in source files or logs.
