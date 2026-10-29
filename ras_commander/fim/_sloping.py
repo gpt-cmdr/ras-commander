@@ -610,9 +610,11 @@ def map_profiles(
                 )
                 if concurrency_supported:
                     request["max_inflight_profiles"] = max_inflight_profiles
-                if _prepared is not None and _prepared._reuse_native and method.get("hydraulic_cache"):
-                    request["window_cache_bytes"] = _prepared._window_cache_bytes
-                    request["hydraulic_cache_bytes"] = _prepared._hydraulic_cache_bytes
+                if _prepared is not None and _prepared._reuse_native:
+                    if method.get("multi_window_cache"):
+                        request["window_cache_bytes"] = _prepared._window_cache_bytes
+                    if method.get("hydraulic_cache"):
+                        request["hydraulic_cache_bytes"] = _prepared._hydraulic_cache_bytes
                 (root / "request.json").write_text(
                     json.dumps(request), encoding="utf-8"
                 )
@@ -697,8 +699,8 @@ def map_profiles(
                                 )
                             if native_products:
                                 from ._native_products import deliver
-                                products = deliver(root / "out" / name, folder, name, unit, plan)
                                 write_tick = time.perf_counter() - unit["write_seconds"]
+                                products = deliver(root / "out" / name, folder, name, unit, plan)
                             else:
                                 depth = _read_f32(
                                     process.stdout, plan.shape, expired, timeout, "depth"

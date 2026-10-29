@@ -145,8 +145,21 @@ def test_later_failure_preserves_committed_job(case, tmp_path):
 
 
 @pytest.mark.parametrize("writer", ["rasterio", "native"])
-def test_active_cancellation_preserves_only_acknowledged_products(case, tmp_path, writer):
+@pytest.mark.parametrize("shutdown_error", [False, True])
+def test_active_cancellation_preserves_only_acknowledged_products(
+    case, tmp_path, writer, shutdown_error, monkeypatch
+):
     import psutil
+    from ras_commander.fim import _catalog
+
+    if shutdown_error:
+        terminate = _catalog._terminate
+
+        def terminate_then_error(process):
+            terminate(process)
+            raise psutil.AccessDenied(process.pid)
+
+        monkeypatch.setattr(_catalog, "_terminate", terminate_then_error)
 
     folder = tmp_path / "active-cancel"
     stop = threading.Event()
@@ -162,7 +175,14 @@ def test_active_cancellation_preserves_only_acknowledged_products(case, tmp_path
         while time.monotonic() < deadline:
             for child in psutil.Process().children(recursive=True):
                 try:
-                    if child.name().lower() == native_name:
+                    if (
+                        child.name().lower() == native_name
+                        and "method" not in child.cmdline()[1:]
+                    ):
+                        # Hold a live engine until the supervisor observes
+                        # cancellation; fast fixtures can otherwise finish
+                        # between detection and the next supervisor tick.
+                        child.suspend()
                         owned.append(child)
                         stop.set()
                         return
@@ -180,6 +200,10 @@ def test_active_cancellation_preserves_only_acknowledged_products(case, tmp_path
     assert result.attrs["catalog_status"] == "cancelled"
     assert owned and all(not p.is_running() for p in owned)
     assert not (folder / ".catalog-control").exists()
+    receipt = json.loads((folder / "catalog_manifest.json").read_text())
+    assert receipt["status"] == "cancelled"
+    if shutdown_error:
+        assert receipt["cleanup_errors"]
     retained = {
         Path(row[key])
         for row in result.to_dict("records")

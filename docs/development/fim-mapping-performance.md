@@ -116,9 +116,12 @@ For repeated reach requests, use `RasFim.prepare_sloping_model()` as a context
 manager. It retains physical cell polygons/indexing, scope, terrain metadata and
 complete staged mesh/WSE files. Repeated selectors share files. With
 `native_session=True` (default), capable engines also retain a serialized native
-process, geometry/stencils, decoded terrain tiles and one bounded last-window
-cache. `native_session=False` explicitly uses a fresh CLI per request. Hydraulic
-values are reconstructed per profile. Source size/mtime changes invalidate the
+process, geometry/stencils and decoded terrain tiles. Released Fast-Map 0.10.1
+retains one bounded last-window cache and reconstructs hydraulic values per
+profile. Development engines with `hydraulic_cache` and `multi_window_cache`
+also reuse reconstructed timesteps and retain multiple windows under explicit
+ceilings; see the retained-state measurements below. `native_session=False`
+explicitly uses a fresh CLI per request. Source size/mtime changes invalidate the
 context; close waits for active calls and releases the process and staging.
 The catalog study below separates setup costs from warm-call observations.
 

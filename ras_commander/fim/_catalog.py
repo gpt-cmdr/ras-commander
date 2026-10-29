@@ -571,14 +571,14 @@ def map_catalog(
                             slot["tree"] = [proc] + proc.children(recursive=True)
                             slot["tree_at"] = now
                         tree = slot.get("tree", [])
-                    except psutil.NoSuchProcess:
+                    except (psutil.NoSuchProcess, psutil.AccessDenied):
                         continue
                     for proc in tree:
                         try:
                             mem = proc.memory_info()
                             rss += mem.rss
                             private += getattr(mem, "private", mem.rss)
-                        except psutil.NoSuchProcess:
+                        except (psutil.NoSuchProcess, psutil.AccessDenied):
                             pass
                 perf["memory_sampler_cpu_seconds"] = perf.get(
                     "memory_sampler_cpu_seconds", 0.0
@@ -614,21 +614,31 @@ def map_catalog(
     finally:
         for slot in workers:
             process = slot["process"]
-            if failure is not None:
-                _terminate(process)
-            else:
-                try:
-                    process.stdin.write(b'{"stop":true}\n')
-                    process.stdin.flush()
-                    process.wait(timeout=10)
-                except (OSError, subprocess.TimeoutExpired):
+            try:
+                if failure is not None:
                     _terminate(process)
+                else:
+                    try:
+                        process.stdin.write(b'{"stop":true}\n')
+                        process.stdin.flush()
+                        process.wait(timeout=10)
+                    except (OSError, subprocess.TimeoutExpired):
+                        _terminate(process)
+            except Exception as exc:
+                # One shutdown failure must not skip the remaining workers or
+                # final manifest. Retain diagnostics rather than hiding it.
+                receipt.setdefault("cleanup_errors", []).append(
+                    f"Worker {process.pid}: {type(exc).__name__}: {exc}"
+                )
+                if failure is None:
+                    failure = exc
+                    receipt.update(status="aborted", error=f"{type(exc).__name__}: {exc}")
             try:
                 process.stdin.close()
             except OSError:
                 pass
-        # Killed workers cannot safely clean their current Python staging; it
-        # lives under the owned control tree, never in a source project.
+        # Killed workers cannot clean request staging in owned job-output
+        # folders. Remaining worker temporaries live under the control tree.
         for job in normal:
             for path in (folder / job["job_id"]).glob(".batch-*"):
                 shutil.rmtree(path)
