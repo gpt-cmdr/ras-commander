@@ -631,7 +631,30 @@ manifest.attrs["terrain_scope"]   # method, source, priority basis, mask dataset
   areas are refused. Plain sloping only for `map_sloping_profiles`.
 - When the source TIFF's CRS is not readable by the engine, pass its
   `RasFim.canonicalize_terrain_crs()` copy; it is accepted through its receipt
-  after the source pixels re-hash to the same value.
+  after the source pixels re-hash to the same value. For sloping, you can
+  instead map the source TIFF directly with `terrain_crs_fnv1a64` (below).
+
+**Terrain CRS the engine cannot identify (sloping).** HEC-RAS 7.0.1 can write
+terrain GeoTIFFs whose WKT the engine reads as `PROJCS["unknown", ...]` with no
+EPSG code, although rasterio identifies the EPSG code. Davis 7.0.1 is an
+example. `map_sloping_profiles` and `prepare_sloping_model` then raise
+`FimUnsupportedError`. Pass `terrain_crs_fnv1a64` with the
+`crs_wkt_fnv1a64` value reported by `ras2fim-batch terrain-info <terrain>`,
+as for `map_profiles`. The validation is the same:
+
+- the hash must equal the engine's (otherwise `FimEngineError`);
+- rasterio must still resolve the terrain CRS to an EPSG code equal to the
+  results CRS;
+- an engine-reported EPSG code takes precedence, and the hash is not used.
+
+The accepted identity is recorded as `terrain_crs_identity` in
+`fim_manifest.json` (and in a prepared model's `info`), for example
+`{"kind": "caller_verified_wkt", "fnv1a64": "e446f7bd6bdb4d7f"}`. A prepared
+model fixes the value at preparation.
+
+On Davis 7.0.1 p02 (Max), mapping the original terrain with the hash gives
+depth and WSE bit-identical to mapping its EPSG:2871 copy: 22,041 valid pixels,
+directly, through a prepared model and with `terrain_hdf`.
 
 Conformance against native HEC-RAS 7.0.1 stored maps (plain sloping, Max):
 

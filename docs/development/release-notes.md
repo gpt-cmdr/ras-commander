@@ -9,6 +9,15 @@ alone does not identify a development checkout.
 
 ### Unreleased
 
+**Terrain-CRS override for sloping mapping**
+
+`RasFim.map_sloping_profiles()` and `prepare_sloping_model()` accept
+`terrain_crs_fnv1a64`, with the same validation as `map_profiles()`. Terrains
+whose WKT the engine cannot map to an EPSG code, such as Davis 7.0.1's
+`PROJCS["unknown", ...]`, can now be mapped directly, without an EPSG copy.
+The manifest records the accepted identity as `terrain_crs_identity`. See
+[FIM](../api/fim.md).
+
 **Fast-Map 0.10.1 is the minimum mapping engine** (#736)
 
 The `fim`, `fast-map`, `full` and `all` extras now require
