@@ -34,8 +34,8 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - name: Install library and test runner
-        run: python -m pip install -e . pytest
+      - name: Install library compute dependencies and test runner
+        run: python -m pip install -e ".[compute]" pytest
       - name: Check scoped launch and packaged CLR helper without HEC-RAS
         run: >-
           python -m pytest tests/test_store_map_native_cpu_limit.py
