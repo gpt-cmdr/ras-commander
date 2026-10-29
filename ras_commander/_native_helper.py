@@ -732,6 +732,106 @@ def _filter_helper_stderr(
     )
 
 
+def _configure_suspended_child(pid: int, native_cpu_limit: int) -> None:
+    """Constrain only a suspended Windows child's mask, then resume its thread.
+
+    CREATE_SUSPENDED keeps the primary thread from entering the CLR. Python's
+    affinity is never changed. Ambiguous masks/thread state fail before resume.
+    """
+    import ctypes
+    from ctypes import wintypes
+    import psutil
+
+    kernel = ctypes.WinDLL("kernel32", use_last_error=True)
+    signatures = {
+        "OpenProcess": ([wintypes.DWORD, wintypes.BOOL, wintypes.DWORD], wintypes.HANDLE),
+        "OpenThread": ([wintypes.DWORD, wintypes.BOOL, wintypes.DWORD], wintypes.HANDLE),
+        "CloseHandle": ([wintypes.HANDLE], wintypes.BOOL),
+        "GetProcessAffinityMask": ([wintypes.HANDLE, ctypes.POINTER(ctypes.c_size_t),
+                                    ctypes.POINTER(ctypes.c_size_t)], wintypes.BOOL),
+        "SetProcessAffinityMask": ([wintypes.HANDLE, ctypes.c_size_t], wintypes.BOOL),
+        "ResumeThread": ([wintypes.HANDLE], wintypes.DWORD),
+    }
+    for name, (args, result) in signatures.items():
+        function = getattr(kernel, name)
+        function.argtypes, function.restype = args, result
+
+    def failed(operation):
+        return OSError(ctypes.get_last_error(), f"Pre-CLR helper CPU affinity: {operation}")
+
+    # PROCESS_QUERY_INFORMATION | PROCESS_SET_INFORMATION. No parent handle.
+    process = kernel.OpenProcess(0x0400 | 0x0200, False, pid)
+    if not process:
+        raise failed("OpenProcess failed")
+    thread = None
+    try:
+        inherited, system = ctypes.c_size_t(), ctypes.c_size_t()
+        if not kernel.GetProcessAffinityMask(process, ctypes.byref(inherited), ctypes.byref(system)):
+            raise failed("cannot read inherited mask")
+        selected = _select_native_cpu_mask(inherited.value, system.value, native_cpu_limit)
+        if not kernel.SetProcessAffinityMask(process, selected):
+            raise failed("cannot set child mask")
+        actual = ctypes.c_size_t()
+        if not kernel.GetProcessAffinityMask(process, ctypes.byref(actual), ctypes.byref(system)):
+            raise failed("cannot verify child mask")
+        if actual.value != selected:
+            raise RuntimeError("Pre-CLR helper CPU affinity readback did not match")
+        threads = psutil.Process(pid).threads()
+        if len(threads) != 1:
+            raise RuntimeError("Suspended helper must have exactly one primary thread before CLR startup")
+        # THREAD_SUSPEND_RESUME; the primary thread must have suspend count one.
+        thread = kernel.OpenThread(0x0002, False, threads[0].id)
+        if not thread:
+            raise failed("OpenThread failed")
+        count = kernel.ResumeThread(thread)
+        if count == 0xFFFFFFFF:
+            raise failed("ResumeThread failed")
+        if count != 1:
+            raise RuntimeError(f"Unexpected helper primary-thread suspend count: {count}")
+    finally:
+        if thread:
+            kernel.CloseHandle(thread)
+        kernel.CloseHandle(process)
+
+
+def _select_native_cpu_mask(inherited: int, system: int, limit: int) -> int:
+    """Select the lowest allowed CPUs without expanding the inherited mask."""
+    if not inherited or inherited & ~system:
+        raise RuntimeError("Pre-CLR helper requires an unambiguous nonempty CPU affinity mask")
+    available, selected = inherited, 0
+    for _ in range(limit):
+        if not available:
+            raise ValueError("native_cpu_limit exceeds the helper's inherited CPU mask")
+        lowest = available & -available
+        selected |= lowest
+        available &= ~lowest
+    return selected
+
+
+def _run_store_map_process(cmd, *, native_cpu_limit=None, **kwargs):
+    """Run an opt-in Windows helper suspended until its CPU mask is verified."""
+    if native_cpu_limit is None or platform.system() != "Windows" or _is_wine_helper_runtime():
+        return subprocess.run(cmd, **kwargs)
+    # Both callers use capture_output/text. Keep subprocess.run timeout/error
+    # semantics, and always terminate/reap an owned child on configuration errors.
+    timeout = kwargs.pop("timeout", None)
+    kwargs.pop("capture_output", None)
+    kwargs["stdout"], kwargs["stderr"] = subprocess.PIPE, subprocess.PIPE
+    with subprocess.Popen(cmd, creationflags=0x00000004, **kwargs) as child:
+        try:
+            _configure_suspended_child(child.pid, native_cpu_limit)
+            stdout, stderr = child.communicate(timeout=timeout)
+        except subprocess.TimeoutExpired as exc:
+            child.kill()
+            exc.stdout, exc.stderr = child.communicate()
+            raise
+        except BaseException:
+            child.kill()
+            child.communicate()
+            raise
+        return subprocess.CompletedProcess(cmd, child.returncode, stdout, stderr)
+
+
 def _run_store_all_maps_once(
     helper_path: Path,
     hecras_dir: Path,
@@ -775,8 +875,9 @@ def _run_store_all_maps_once(
             native_cpu_limit,
         )
         with _wine_helper_single_cpu_affinity():
-            result = subprocess.run(
+            result = _run_store_map_process(
                 cmd,
+                native_cpu_limit=native_cpu_limit,
                 capture_output=True,
                 text=True,
                 timeout=timeout,
@@ -800,8 +901,9 @@ def _run_store_all_maps_once(
         native_cpu_limit,
     )
     with _wine_helper_single_cpu_affinity():
-        result = subprocess.run(
+        result = _run_store_map_process(
             cmd,
+            native_cpu_limit=native_cpu_limit,
             capture_output=True,
             text=True,
             timeout=timeout,
@@ -876,8 +978,9 @@ def _run_store_map_once(
     )
 
     with _wine_helper_single_cpu_affinity():
-        result = subprocess.run(
+        result = _run_store_map_process(
             cmd,
+            native_cpu_limit=native_cpu_limit,
             capture_output=True,
             text=True,
             timeout=timeout,

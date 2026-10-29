@@ -60,7 +60,9 @@ class RasStoreMapHelper
                 process.ProcessorAffinity = new IntPtr(unchecked((long)selected));
                 if (unchecked((ulong)process.ProcessorAffinity.ToInt64()) != selected)
                     throw new InvalidOperationException("Native helper CPU affinity verification failed");
-                Console.WriteLine("Native CPU affinity: inherited=0x{0:X}; selected=0x{1:X}; limit={2}", inherited, selected, requested);
+                int workerMinimum, ioMinimum;
+                ThreadPool.GetMinThreads(out workerMinimum, out ioMinimum);
+                Console.WriteLine("Native CPU affinity: inherited=0x{0:X}; selected=0x{1:X}; limit={2}; thread_pool_min={3}/{4}", inherited, selected, requested, workerMinimum, ioMinimum);
             }
             return true;
         }

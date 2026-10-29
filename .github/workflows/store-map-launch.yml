@@ -1,0 +1,45 @@
+name: Windows stored-map helper launch
+
+on:
+  pull_request:
+    paths:
+      - 'ras_commander/_native_helper.py'
+      - 'ras_commander/_execution_types.py'
+      - 'ras_commander/native/RasStoreMapHelper*'
+      - 'tests/test_store_map_native_cpu_limit.py'
+      - 'tests/test_store_map_helper_reported_errors.py'
+      - 'tests/native_helper_packaging_test.py'
+      - '.github/workflows/store-map-launch.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'ras_commander/_native_helper.py'
+      - 'ras_commander/_execution_types.py'
+      - 'ras_commander/native/RasStoreMapHelper*'
+      - 'tests/test_store_map_native_cpu_limit.py'
+      - 'tests/test_store_map_helper_reported_errors.py'
+      - 'tests/native_helper_packaging_test.py'
+      - '.github/workflows/store-map-launch.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  windows-launch:
+    runs-on: windows-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install library compute dependencies and test runner
+        # The Wine environment contract imports RasProcess and its raster/GIS
+        # preparation modules, even though no native HEC-RAS runtime is needed.
+        run: python -m pip install -e ".[compute]" pytest geopandas rasterio scipy
+      - name: Check scoped launch and packaged CLR helper without HEC-RAS
+        run: >-
+          python -m pytest tests/test_store_map_native_cpu_limit.py
+          tests/test_store_map_helper_reported_errors.py
+          tests/native_helper_packaging_test.py -q
