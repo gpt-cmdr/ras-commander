@@ -236,6 +236,7 @@ def map_profiles(
     velocity=False,
     invalid_cells=None,
     _prepared=None,
+    product_writer="rasterio",
 ):
     from .. import HdfMesh
     from ..fast_hdf import backend_scope
@@ -248,6 +249,11 @@ def map_profiles(
         _prepare_output_folder,
     )
 
+    if product_writer not in ("rasterio", "native"):
+        raise ValueError("product_writer must be rasterio or native")
+    native_products = product_writer == "native"
+    if native_products and (write_floodplain or template_raster is not None or velocity):
+        raise FimUnsupportedError("Native products do not support templates, floodplain or velocity")
     selected_options = _validate_options(
         render_mode, reduce_shallow_to_horizontal, use_depth_weighted_faces
     )
@@ -340,6 +346,8 @@ def map_profiles(
         if _prepared is None
         else _prepared._method
     )
+    if native_products and not method.get("native_geotiff_outputs"):
+        raise FimUnsupportedError("Native products require native_geotiff_outputs capability")
     concurrency_supported, selected_method_id = _validate_method(
         method, render_mode, max_inflight_profiles
     )
@@ -423,9 +431,11 @@ def map_profiles(
             )
     preparation["grid_plan_seconds"] = time.perf_counter() - phase
     phase = time.perf_counter()
-    _horizontal.prepare_grid(
-        cells, terrain, plan, False
-    )  # validates polygons and overlap
+    if _prepared is None:
+        _horizontal.prepare_grid(cells, terrain, plan, False)
+        preparation["cell_validation_reused"] = False
+    else:
+        preparation["cell_validation_reused"] = _prepared._validate_grid(plan)
     preparation["cell_validation_seconds"] = time.perf_counter() - phase
     folder = _prepare_output_folder(output_folder)
     rows = {name: _empty_row(name, "not_run") for name in selected}
@@ -444,6 +454,7 @@ def map_profiles(
             "extra_depth_cutoff": None,
             "threads": threads,
             "writer_threads": writer_threads,
+            "product_writer": product_writer,
             "max_inflight_profiles": max_inflight_profiles,
             "max_working_mib": budget,
             "write_floodplain": bool(write_floodplain),
@@ -594,10 +605,14 @@ def map_profiles(
                     threads=threads,
                     max_working_bytes=budget * (1 << 20) - buffer_bytes,
                     stream_outputs=True,
+                    **({"geotiff_outputs": True} if native_products else {}),
                     **fields,
                 )
                 if concurrency_supported:
                     request["max_inflight_profiles"] = max_inflight_profiles
+                if _prepared is not None and _prepared._reuse_native and method.get("hydraulic_cache"):
+                    request["window_cache_bytes"] = _prepared._window_cache_bytes
+                    request["hydraulic_cache_bytes"] = _prepared._hydraulic_cache_bytes
                 (root / "request.json").write_text(
                     json.dumps(request), encoding="utf-8"
                 )
@@ -680,51 +695,57 @@ def map_profiles(
                                 raise FimEngineError(
                                     "Sloping stream profile or dimensions mismatch"
                                 )
-                            depth = _read_f32(
-                                process.stdout, plan.shape, expired, timeout, "depth"
-                            )
-                            wse = _read_f32(
-                                process.stdout, plan.shape, expired, timeout, "wse"
-                            )
-                            speed = (
-                                _read_f32(process.stdout, plan.shape, expired, timeout, "velocity")
-                                if velocity
-                                else None
-                            )
-                            result = SimpleNamespace(
-                                profile=name,
-                                depth=depth,
-                                wse=wse,
-                                transform=plan.transform,
-                                unit={"window": list(plan.window.flatten())},
-                            )
-                            write_tick = time.perf_counter()
-                            with rasterio.Env(GDAL_NUM_THREADS=str(writer_threads)):
-                                if layout is None:
-                                    products = RasFim._write_products(
-                                        folder, result, plan.crs, write_floodplain
-                                    )
-                                else:
-                                    products = _sloping_products.write_products(
-                                        folder,
-                                        result,
-                                        plan.crs,
-                                        write_floodplain,
-                                        layout,
-                                    )
-                                if speed is not None:
-                                    from . import _velocity
+                            if native_products:
+                                from ._native_products import deliver
+                                products = deliver(root / "out" / name, folder, name, unit, plan)
+                                write_tick = time.perf_counter() - unit["write_seconds"]
+                            else:
+                                depth = _read_f32(
+                                    process.stdout, plan.shape, expired, timeout, "depth"
+                                )
+                                wse = _read_f32(
+                                    process.stdout, plan.shape, expired, timeout, "wse"
+                                )
+                                speed = (
+                                    _read_f32(process.stdout, plan.shape, expired, timeout, "velocity")
+                                    if velocity
+                                    else None
+                                )
+                                result = SimpleNamespace(
+                                    profile=name,
+                                    depth=depth,
+                                    wse=wse,
+                                    transform=plan.transform,
+                                    unit={"window": list(plan.window.flatten())},
+                                )
+                                write_tick = time.perf_counter()
+                                with rasterio.Env(GDAL_NUM_THREADS=str(writer_threads)):
+                                    if layout is None:
+                                        products = RasFim._write_products(
+                                            folder, result, plan.crs, write_floodplain
+                                        )
+                                    else:
+                                        products = _sloping_products.write_products(
+                                            folder,
+                                            result,
+                                            plan.crs,
+                                            write_floodplain,
+                                            layout,
+                                        )
+                                    if speed is not None:
+                                        from . import _velocity
 
-                                    speed_path = _velocity.velocity_path(folder, name)
-                                    _products.write_raster(
-                                        speed_path, speed, plan.transform, plan.crs
-                                    )
-                                    products["velocity_tif"] = str(speed_path)
+                                        speed_path = _velocity.velocity_path(folder, name)
+                                        _products.write_raster(
+                                            speed_path, speed, plan.transform, plan.crs
+                                        )
+                                        products["velocity_tif"] = str(speed_path)
                             rows[name].update(products)
                             details["performance"]["product_write_seconds"][name] = (
                                 time.perf_counter() - write_tick
                             )
-                            del depth, wse, result, speed
+                            if not native_products:
+                                del depth, wse, result, speed
                         if persistent:
                             terminal = process.stdout.readline(65537)
                             if len(terminal) > 65536 or not terminal.endswith(b"\n") or json.loads(terminal) != {"command_status": "complete"}:

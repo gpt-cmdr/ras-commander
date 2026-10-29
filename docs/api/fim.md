@@ -511,12 +511,26 @@ staged once, even when several names refer to the same result.
 
 The context retains physical cell polygons and their spatial index, model
 scope, engine capabilities, terrain metadata, complete staged mesh arrays and
-the selected WSE rows in immutable temporary files. It does not retain a
-native process: each request starts the CLI, rebuilds Rust interpolation
-stencils and decodes its terrain window. Hydraulic connectivity, face values
-and shallow-cell decisions are computed for each profile. Chunked HDF
-staging, persistent native terrain/stencil caches and pixel-weight caches are
-outside this increment.
+the selected WSE rows in immutable temporary files. With `native_session=True`
+(the default), a capable engine also retains one serialized process, native
+geometry, interpolation stencils and terrain blocks across calls. Prepare the
+union of the needed timestep selectors once, then keep the context open while
+mapping successive reaches. `native_session=False` starts a fresh native
+process per request. Numeric HDF staging uses bounded contiguous-time slabs.
+
+The development engine additionally advertises `hydraulic_cache` and
+`multi_window_cache`. `hydraulic_cache_mib` (default 64) retains reconstructed
+hydraulic state by staged WSE-file identity and interpolation options, sharing
+it across different reaches. `window_cache_mib` (default 64) bounds an LRU
+cache of ownership, terrain and plain-sloping weights for multiple windows.
+Larger budgets can retain more reaches; measure them against the workload.
+`validation_cache_mib` (default 8) retains successful overlap/validity checks
+for identical cell subsets. It never certifies a different or larger subset.
+Each cache accepts 0 to disable retention and integers through 4096 MiB.
+On older engines, hydraulic caching is disabled and recorded as zero; changing
+the window budget from 64 requires the new capability. Native cache budgets
+are admitted inside `max_working_mib`; validation retention is reserved inside
+`max_prepared_mib`, capped at one eighth of that budget.
 
 Each request resolves its bbox or polygon, plans the output window, validates
 selected cell overlaps, builds ownership and raster arrays, and writes its
@@ -528,9 +542,10 @@ override the factory's `max_working_mib`; compression has its separate worker
 budget. Preparation does not change the physical-2D mapping scope, native
 qualification scope or zero-added-cutoff behavior described above.
 
-`max_prepared_mib` bounds a planned retained-geometry estimate plus the actual
-staged-file bytes. The fixed prepared profile set prevents cache growth across
-requests. This budget and `max_working_mib` are admission checks, not limits on
+`max_prepared_mib` admits a retained-geometry estimate, actual staged-file bytes
+and the validation-cache reservation. The fixed prepared profile set and
+bounded caches constrain retained state across requests. This budget and
+`max_working_mib` are admission checks, not limits on
 process RSS or total Python/GDAL memory; transient HDF reads and preparation
 allocations are outside retained admission. Preparation that exceeds its budget
 raises and cleans its temporary inputs. `info` returns a copy of preparation
@@ -555,6 +570,17 @@ whether the context has been released. Calls on one context are serialized,
 including calls from different threads; `close()` waits for an active request.
 A closed context cannot map again. This synchronization does not provide
 cross-context scheduling or combine their memory and worker budgets.
+
+For the development engine, `RasFim.map_sloping_profiles(...,
+product_writer="native")` and the context's `map_profiles()` write terrio LZW
+GeoTIFFs directly without
+transferring raster arrays through Python. The default remains `"rasterio"`.
+Native delivery requires `native_geotiff_outputs`, preserves float32 pixels,
+NaN nodata and the requested CRS/grid, and uses one compression worker.
+It currently excludes templates, floodplain polygonization and velocity.
+The same cache and writer controls are available on `RasFim.map_catalog()`;
+native catalog delivery currently requires sloping jobs. These development
+capabilities require an explicit engine build until its release is published.
 
 See the [prepared-context evidence](../development/fim-mapping-performance.md#prepared-model-contexts-across-reach-requests)
 for reuse behavior and numerical comparison scope.

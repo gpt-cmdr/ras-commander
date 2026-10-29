@@ -9,6 +9,22 @@ alone does not identify a development checkout.
 
 ### Unreleased
 
+**Retained reach mapping state and optional native raster delivery**
+
+Prepared sloping contexts and catalogs accept bounded hydraulic and window
+cache ceilings. Capable development engines reuse reconstructed timesteps
+across reaches and retain multiple terrain/ownership windows. Passed geometry
+validation is reused only for identical immutable cell subsets. Source changes
+still invalidate the context; complete hydraulic topology is retained.
+
+`product_writer="native"` opts into terrio LZW GeoTIFF encoding on prepared
+sloping calls and sloping catalogs. It preserves the raster grid, masks and
+float32 values, requires an advertised engine capability, and currently
+excludes templates, floodplain polygonization and velocity. Rasterio remains
+the default. Catalog telemetry samples known owned processes at 100 ms and
+refreshes descendant discovery at 500 ms to reduce Windows monitoring cost.
+The memory guard remains sampled, with its cadence and CPU cost recorded.
+
 **Bounded reach/timestep FIM catalogs**
 
 `RasFim.map_catalog()` batches known timestep lists per reach, retains compatible

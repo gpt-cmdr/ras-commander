@@ -45,6 +45,8 @@ def equal_products(left, right):
 
     assert list(left.profile) == list(right.profile)
     for a, b in zip(left.itertuples(), right.itertuples(), strict=True):
+        assert a.depth_finite_pixels == b.depth_finite_pixels
+        assert a.flooded_pixels == b.flooded_pixels
         for band in ("depth_tif", "wse_tif"):
             with rasterio.open(getattr(a, band)) as actual, rasterio.open(
                 getattr(b, band)
@@ -62,6 +64,80 @@ def equal_products(left, right):
                 np.testing.assert_array_equal(
                     x.data[valid].view("u4"), y.data[valid].view("u4")
                 )
+
+
+def test_new_caches_revisit_windows_and_invalidate_modified_wse(case, tmp_path):
+    """Old/new and stream/native comparisons, including a return to an earlier AOI."""
+    from shapely.geometry import Polygon
+    from ras_commander import RasFim
+
+    engine = os.environ.get("RAS_COMMANDER_RETAINED_FIM_ENGINE")
+    if not engine:
+        pytest.skip("set RAS_COMMANDER_RETAINED_FIM_ENGINE to the throughput candidate")
+    profiles = dict(case["profiles"])
+    with RasFim.prepare_sloping_model(
+        case["hdf"], case["terrain"], engine_path=engine, profiles=profiles,
+        threads=4, max_working_mib=4096, window_cache_mib=256, hydraulic_cache_mib=256,
+    ) as model:
+        if not model._method.get("native_geotiff_outputs"):
+            pytest.skip("candidate lacks native GeoTIFF outputs")
+        bounds = model._cells.total_bounds
+        x0,y0,x1,y1 = bounds
+        triangle = Polygon([(x0,y0),(x1,y0),((x0+x1)/2,y1)])
+        selections = [dict(bbox=list(bounds)),dict(polygon=triangle, aoi_crs=model._cells.crs),dict(bbox=list(bounds))]
+        for i, selection in enumerate(selections):
+            actual = model.map_profiles(tmp_path / f"cached-{i}", product_writer="native", **selection)
+            expected = RasFim.map_sloping_profiles(
+                case["hdf"], case["terrain"], tmp_path / f"reference-{i}",
+                engine_path=case["engine"], profiles=profiles, threads=4,
+                max_working_mib=4096, **selection,
+            )
+            equal_products(actual, expected)
+            report = actual.attrs["performance"]["engine_report"]
+            if i:
+                assert all(p["hydraulic_reused"] for p in report["profiles"])
+            if i == 2:
+                assert report["session"]["window_reused"]
+                assert actual.attrs["performance"]["preparation"]["cell_validation_reused"]
+            assert report["session"]["retained_window_bytes"] <= 256 << 20
+            assert report["session"]["retained_hydraulic_bytes"] <= 256 << 20
+        # Staged vectors are immutable by contract, but the native identity key
+        # must also reject stale cache hits when a direct caller changes a vector.
+        file = Path(model._units[next(iter(profiles))]["values_files"][0])
+        data = np.fromfile(file, dtype="<f4")
+        data += np.float32(1)
+        data.tofile(file)
+        result = model.map_profiles(tmp_path / "changed-values", profiles=[next(iter(profiles))], bbox=list(bounds))
+        assert not result.attrs["performance"]["engine_report"]["profiles"][0]["hydraulic_reused"]
+
+
+def test_later_native_writer_failure_cleans_delivery_and_context_recovers(case, tmp_path):
+    from ras_commander import RasFim, FimEngineError
+
+    engine = os.environ.get("RAS_COMMANDER_RETAINED_FIM_ENGINE")
+    if not engine:
+        pytest.skip("set RAS_COMMANDER_RETAINED_FIM_ENGINE to the throughput candidate")
+    names = list(case["profiles"])
+    if len(names) < 2 or len(set(case["profiles"].values())) < 2:
+        pytest.skip("requires two distinct saved profiles")
+    names = names[:2]
+    with RasFim.prepare_sloping_model(case["hdf"], case["terrain"],
+            profiles={name: case["profiles"][name] for name in names},
+            engine_path=engine, threads=4, max_working_mib=4096) as model:
+        values = Path(model._units[names[1]]["values_files"][0])
+        data = np.fromfile(values, dtype="<f4")
+        data[0] = np.float32(np.nan)
+        data.tofile(values)  # Corrupt only this context's owned temporary staging.
+        failed = tmp_path / "failed"
+        with pytest.raises(FimEngineError):
+            model.map_profiles(failed, product_writer="native")
+        assert not list(failed.rglob("*.tif"))
+        assert not model.closed
+        assert model._native_session is None
+        recovered = model.map_profiles(tmp_path / "recovered", profiles=[names[0]], product_writer="native")
+        reference = RasFim.map_sloping_profiles(case["hdf"], case["terrain"], tmp_path / "reference",
+            profiles={names[0]:case["profiles"][names[0]]}, engine_path=case["engine"], threads=4, max_working_mib=4096)
+        equal_products(recovered, reference)
 
 
 @pytest.mark.parametrize("enhanced", [False, True])

@@ -28,6 +28,10 @@ For result extraction, keep using the existing `Hdf*` API. The
 below describe the default native reader and its h5py reference path.
 
 For inundation catalogs, use the [Mapping Engine guide](native-mapping-engine.md).
+Development mapping builds add bounded shared-timestep/window caches and
+optional native terrio GeoTIFF delivery. The
+[retained-state measurements](development/fim-mapping-performance.md#retained-state-and-native-output-optimization)
+separate complete catalog calls from repeated warm-context requests.
 It covers horizontal, cell-corner sloping and depth-weighted cell-face mapping,
 bbox/polygon masks, shared terrain, bounded timestep concurrency, and reusable
 prepared inputs. `RasFim.map_catalog()` schedules known reach/timestep groups

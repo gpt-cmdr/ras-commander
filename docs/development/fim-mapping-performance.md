@@ -405,12 +405,131 @@ the timing clocks. Real-model tests use `RAS_COMMANDER_FIM_CATALOG_CASE` with
 `hdf`, `terrain`, `polygon`, optional `polygon_layer`, and `timesteps`. Tests
 never execute HEC-RAS. Model data and generated products stay external.
 
+## Retained-state and native-output optimization
+
+Keep one `RasFim.prepare_sloping_model()` context open across reach requests
+when their timestep union is known. Development Fast-Map commit `6ec2be0b`
+adds bounded hydraulic and multiple-window LRU caches. Commander also retains
+passed geometry validation for identical cell subsets and exposes optional
+direct terrio LZW GeoTIFF output. These changes retain complete global
+hydraulic dependencies, existing interpolation options and the source terrain
+lattice. No depth cutoff is added.
+
+### Complete catalog calls
+
+The final Windows comparison uses Spring Creek eBFE (340,163 physical cells),
+the three unmodified NextGen watershed polygons `wb-2408204`, `wb-2408158` and
+`wb-2408326`, and four reach groups containing 18 requested Depth/WSE pairs.
+There are 10 distinct saved timestep selectors. The catalog writes 36 TIFFs,
+including separate ordinal products for duplicate requests.
+
+Each arm runs in a fresh outer process with warmed imports and four logical
+CPUs, including compression. Clocks include worker startup, model preparation,
+HDF staging, mapping, duplicate delivery, GeoTIFF writes and cleanup. All arms
+use plain sloping, one in-flight profile, one compression worker, a 4 GiB
+working allowance and a 1 GiB prepared allowance per actor. The large-cache
+case needs more than the default 2 GiB planned working allowance on the largest
+reach; its earlier refusal is excluded from these timings.
+
+| Complete catalog configuration | Median time, s (range) | Maximum sampled RSS, GiB | Maximum sampled private memory, GiB |
+|---|---:|---:|---:|
+| Previous catalog implementation (`32269cf`), released engine 0.10.1 | 9.276 (8.965–11.750) | 1.201 | 1.833 |
+| Updated implementation, default cache ceilings, Rasterio output | 8.617 (8.612–10.934) | 1.269 | 1.910 |
+| Updated implementation, 256 MiB hydraulic + 256 MiB window ceilings, Rasterio | 9.094 (8.583–9.233) | 1.458 | 2.159 |
+| Updated implementation, those larger ceilings, native terrio output | 8.126 (8.120–9.627) | 1.373 | 2.073 |
+
+These are three rotated observations per arm on a shared workstation. The
+final native-output configuration is **1.14 times as fast** by the ratio of
+medians; its maximum sampled RSS is about 0.17 GiB higher. Larger caches alone
+show little benefit for this single cold catalog and do not establish a
+general speedup. No new RAS Mapper generation timing is claimed here.
+
+### Repeated prepared requests
+
+A separate 24-run ablation repeats the same four reach groups twice per
+process. The second pass uses an already prepared context, except the explicit
+fresh-context arm. Returned duplicate selectors reference the same written
+profile within each request; this harness does not add catalog ordinal copies.
+
+| Second-pass configuration | Median time, s (range) | Maximum sampled RSS across both passes, GiB |
+|---|---:|---:|
+| Close and prepare a new context for each pass, released engine | 7.238 (6.686–12.019) | 1.068 |
+| Keep the existing context open, released engine | 4.021 (3.689–6.380) | 1.070 |
+| New engine, all optional retention disabled | 4.090 (3.720–8.321) | 1.061 |
+| Hydraulic retention only, 256 MiB | 3.503 (3.102–4.722) | 1.263 |
+| Multiple-window retention only, 256 MiB | 4.123 (3.581–4.703) | 1.118 |
+| Passed-validation retention only, 8 MiB ceiling | 3.195 (3.107–3.881) | 1.067 |
+| Combined retention, Rasterio output | 2.498 (2.477–3.670) | 1.308 |
+| Combined retention, native terrio output | 1.606 (1.565–4.693) | 1.256 |
+
+The final native-output second pass is **2.50 times as fast** as the previous
+open-context path by median ratio. Hydraulic hits avoid reconstructing shared
+timesteps; window and validation retention pay off when their entries survive
+until a reach is revisited. Multiple-window retention alone did not improve
+the median here. Budgets must fit the retained state and active work; increasing
+cache ceilings or worker counts does not guarantee higher throughput.
+
+### Paired writer check and SIMD experiment
+
+Five additional alternating writer pairs use one shared warm context, identical
+requests, cache ceilings and four-core affinity. Rasterio delivery takes a
+median **2.483 s** (2.398–3.142); direct terrio delivery takes **1.549 s**
+(1.525–1.610), a **1.60 times** median wall-time ratio. Median aggregate
+Python/native process CPU time is 2.969 s and 3.344 s respectively: the observed
+wall-time improvement is not a claim of lower total CPU consumption. Rasterio
+remains the default; native output is an explicit option, currently excluding
+templates, floodplain polygonization and velocity.
+
+A safe SIMD nodata/counting candidate preserves randomized and special-value
+float32 bits, but shows no demonstrated performance benefit. On 4,000,003
+pixels with four threads and 10 rotated repetitions, the scalar median is
+3.839 ms and the SIMD median is 3.999 ms. SIMD remains a test-only experiment;
+production keeps the scalar finalizer and the unsafe-code prohibition.
+
+### Numerical checks and reproduction
+
+All **1,728** retained-state ablation band checks, **432** complete-catalog
+checks and **360** paired-writer checks pass. Each comparison requires equal
+grid/CRS, complete validity masks and identical float32 bits at every valid
+pixel. Input, engine and harness/source hashes remain unchanged throughout
+each completed experiment. Interrupted development trials are excluded.
+
+An additional five-model check passes **256** band comparisons against released
+Fast-Map 0.10.1: Davis pipes/conduits and Bald Eagle bridges use depth-weighted
+cell-face sloping with shallow-to-horizontal reduction; Spring River, Spring
+Creek and Bald Eagle dam break use plain sloping. Bboxes and polygons are
+revisited after intervening requests, with both Rasterio and native writers.
+The eBFE checks are bounded; complete topology is retained. This verifies
+preservation of the qualified engine output, not a new native RAS Mapper run
+or broader native-version qualification. An isolated installed Windows wheel
+also passes the CLI capability check and four one-shot native-output band
+comparisons on Davis.
+
+The setup uses native Fast-HDF 0.2.4, Rasterio 1.5.2, NumPy 2.5.4 and Shapely
+2.2.0. Filesystem caches and workstation load are uncontrolled. External memory
+samples occur about every 250 ms, with descendant discovery every 500 ms;
+shorter peaks may be missed. Reported peaks include the outer caller and owned
+native/worker processes. Catalog admission/telemetry separately excludes its
+caller and remains a sampled guard, not a hard RSS limit.
+
+Run `scripts/benchmarks/fim_retained_compare.py`,
+`scripts/benchmarks/fim_writer_compare.py` and
+`scripts/qualification/qualify_fim_retained.py` with external fixture configs.
+The complete-call harness `scripts/benchmarks/fim_catalog_compare.py` also
+accepts named `variants` with an explicit interpreter, matching checkout `cwd`,
+engine and catalog options, so previous and current worker modules come from
+their intended versions. The Rust test-only SIMD experiment is reproducible
+with `cargo test --release --lib benchmark_scalar_and_safe_simd -- --ignored
+--nocapture`. Model files, generated rasters and raw receipts stay external.
+
 ## Roadmap and dependencies
 
 Bounded HDF staging, persistent native terrain/stencil reuse and bounded plain
 pixel-weight caches are integrated through prepared contexts and catalog
-mapping. Later work includes shared hydraulic reconstruction across multiple
-windows, additional cache policies and qualified spatial dependency pruning.
+mapping. The development throughput implementation adds shared hydraulic
+reconstruction across windows, bounded multi-window retention and reuse of
+passed validation for identical cell subsets. Qualified spatial dependency
+pruning remains future work; output masks retain complete hydraulic topology.
 The engine is now separately packaged as `ras-commander-fast-map` on PyPI and
 crates.io, with Windows/Linux wheels and independent release CI. Extraction
 retains the qualified 0.8 numerical modules and their source fingerprints;
