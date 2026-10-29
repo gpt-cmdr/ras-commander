@@ -151,9 +151,8 @@ def test_repeated_aois_reuse_inputs_and_preserve_bits(
             )
             results.append((result, aoi))
             assert result.attrs["performance"]["profile_views_prepared"] == 0
-            assert (
-                result.attrs["performance"]["prepared_context"]["native_state_reused"]
-                is False
+            assert result.attrs["performance"]["prepared_context"]["native_state_reused"] == bool(
+                result.attrs["performance"]["engine_report"].get("session", {}).get("geometry_reused")
             )
         assert counts == dict(polygons=1, mesh=1)
         for index, (result, aoi) in enumerate(results):

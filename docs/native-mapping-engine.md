@@ -18,6 +18,13 @@ conduits and SA/2D connections are permitted when their hydraulic effects are
 already represented in the computed cell results. The engine does not solve
 structure hydraulics or map standalone storage-area surfaces outside the 2D mesh.
 
+For reach-by-reach catalogs with known timestep lists, use
+[`RasFim.map_catalog()`](api/fim.md#schedule-reachtimestep-catalogs). It batches
+times per watershed, reuses compatible native model state and optionally
+partitions independent workers under shared CPU/memory admission. The
+[catalog measurements](development/fim-mapping-performance.md#reach-timestep-catalog-throughput)
+include final output writes and distinguish reuse from concurrency.
+
 ## Install and inspect capabilities
 
 The Mapping Engine is the separate

@@ -18,6 +18,7 @@ on:
 
       - 'tests/test_fim_terrain_scope_adr_velocity.py'
       - 'tests/test_fim_invalid_cells.py'
+      - 'tests/test_fim_catalog*.py'
       - 'setup.py'
       - '.github/workflows/optional-fim.yml'
   workflow_dispatch:
@@ -42,6 +43,8 @@ jobs:
         run: ras2fim-batch method
       - name: Invalid 2D cell polygon policies
         run: python -m pytest tests/test_fim_invalid_cells.py -q
+      - name: Catalog admission and bounded native HDF staging
+        run: python -m pytest tests/test_fim_catalog.py tests/test_fim_catalog_real.py -q
       - name: Python adapter and installed horizontal engine
         shell: bash
         run: |

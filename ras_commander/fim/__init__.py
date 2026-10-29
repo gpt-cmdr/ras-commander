@@ -14,6 +14,7 @@ Main class:
           product manifest
         - map_horizontal_profiles(): Rust cell-constant mapping,
           with terrain and ownership reused across profiles
+        - map_catalog(): bounded scheduling of reach/timestep groups
         - compare_with_rasmapper(): native horizontal stored-map qualification
 
 Requires ``pip install "ras-commander[fim]"``. Rust mapping requires the matching engine

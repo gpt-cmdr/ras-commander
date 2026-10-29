@@ -30,7 +30,10 @@ below describe the default native reader and its h5py reference path.
 For inundation catalogs, use the [Mapping Engine guide](native-mapping-engine.md).
 It covers horizontal, cell-corner sloping and depth-weighted cell-face mapping,
 bbox/polygon masks, shared terrain, bounded timestep concurrency, and reusable
-prepared inputs. These methods map already-computed hydraulics; they do not
+prepared inputs. `RasFim.map_catalog()` schedules known reach/timestep groups
+with shared model state, bounded staging and optional CPU-partitioned workers;
+see the [catalog API](api/fim.md#schedule-reachtimestep-catalogs).
+These methods map already-computed hydraulics; they do not
 run the HEC-RAS hydraulic solver. Models containing 1D river or cross-section
 elements are rejected, and standalone storage-area surfaces are outside the
 physical-2D mapping scope.

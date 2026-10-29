@@ -543,19 +543,21 @@ def test_later_concurrent_batch_failure_removes_earlier_products(sloping_case, t
     from ras_commander.fim import _sloping
     from ras_commander.fim.errors import FimEngineError
 
-    original = _sloping._write_array
+    original = _sloping._stage_profiles
     written = []
-    def corrupt_later_profile(path, values):
-        if Path(path).name == "values-2-0.bin":
-            values = np.array(values, copy=True)
-            values[0] = np.nan
-        return original(path, values)
+    def corrupt_later_profile(*args, **kwargs):
+        result = original(*args, **kwargs)
+        # Corrupt the validated, staged file so the native third profile fails
+        # after earlier streamed delivery, rather than failing HDF staging.
+        with (Path(args[1]) / "values-2-0.bin").open("r+b") as stream:
+            stream.write(np.array([np.nan], dtype="<f4").tobytes())
+        return result
     write_products = RasFim._write_products
     def observe_products(*args, **kwargs):
         result = write_products(*args, **kwargs)
         written.append(result)
         return result
-    monkeypatch.setattr(_sloping, "_write_array", corrupt_later_profile)
+    monkeypatch.setattr(_sloping, "_stage_profiles", corrupt_later_profile)
     monkeypatch.setattr(RasFim, "_write_products", staticmethod(observe_products))
     case = sloping_case
     output = tmp_path / "aborted"

@@ -9,6 +9,22 @@ alone does not identify a development checkout.
 
 ### Unreleased
 
+**Bounded reach/timestep FIM catalogs**
+
+`RasFim.map_catalog()` batches known timestep lists per reach, retains compatible
+prepared inputs/native sessions, and schedules optional independent workers
+under shared CPU-affinity and planned-memory budgets. Results preserve job and
+timestep order, including duplicate selectors, in the declared
+`fim_catalog_manifest` schema. Atomic receipts retain acknowledged products on
+cancellation/failure; uncommitted products and owned workers are cleaned up.
+
+Prepared sloping contexts now support `native_session=True` (default on capable
+engines). HDF staging uses bounded contiguous-timestep reads; horizontal catalog
+tables assign columns directly instead of repeatedly merging profile tables.
+Mapping arithmetic, AOI inclusion and depth thresholds are unchanged.
+See the [catalog API](../api/fim.md#schedule-reachtimestep-catalogs) and
+[measured scope](fim-mapping-performance.md#reach-timestep-catalog-throughput).
+
 **Fast-Map 0.10.1 is the minimum mapping engine** (#736)
 
 The `fim`, `fast-map`, `full` and `all` extras now require
