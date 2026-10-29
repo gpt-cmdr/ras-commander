@@ -788,7 +788,10 @@ def test_reference_line_internal_faces_missing_group_is_empty(tmp_path):
     assert "reference_line_id" in df.columns
 
 
-@pytest.mark.parametrize("version", ["HEC-RAS 7.0 April 2026", "HEC-RAS 7.0.1 June 2026"])
+@pytest.mark.parametrize("version", [
+    "HEC-RAS 7.0 April 2026", "HEC-RAS 7.0.1 June 2026",
+    "HEC-RAS 7.0.2 October 2026",
+])
 def test_linux_tmp_writer_exact_qualified_versions_roundtrip(tmp_path, version):
     source = _write_face_property_hdf(tmp_path / "qualified.p01.tmp.hdf")
     with h5py.File(source, "r+") as hdf:
@@ -806,21 +809,25 @@ def test_linux_tmp_writer_exact_qualified_versions_roundtrip(tmp_path, version):
         np.testing.assert_array_equal(actual[2:], original[group + "Faces Area Elevation Values"][()][2:])
 
 
-def test_linux_tmp_writer_native_701_roundtrip(tmp_path):
-    """Opt-in qualification on an immutable native 7.0.1 temporary result."""
+@pytest.mark.parametrize(("fixture_variable", "version"), [
+    ("RAS_COMMANDER_701_TMP_HDF", "HEC-RAS 7.0.1 June 2026"),
+    ("RAS_COMMANDER_702_TMP_HDF", "HEC-RAS 7.0.2 October 2026"),
+])
+def test_linux_tmp_writer_native_7x_roundtrip(tmp_path, fixture_variable, version):
+    """Opt-in schema/write qualification on an immutable native temporary result."""
     import hashlib
     import os
     import shutil
 
-    fixture = os.environ.get("RAS_COMMANDER_701_TMP_HDF")
+    fixture = os.environ.get(fixture_variable)
     if not fixture:
-        pytest.skip("Set RAS_COMMANDER_701_TMP_HDF to a native 7.0.1 temporary result")
+        pytest.skip(f"Set {fixture_variable} to a native temporary result")
     fixture = Path(fixture)
     source_digest = hashlib.sha256(fixture.read_bytes()).hexdigest()
     target = tmp_path / "qualified.p01.tmp.hdf"
     shutil.copy2(fixture, target)
     with h5py.File(target) as hdf:
-        assert HdfMesh._decode_hdf_attr(hdf.attrs["File Version"]) == "HEC-RAS 7.0.1 June 2026"
+        assert HdfMesh._decode_hdf_attr(hdf.attrs["File Version"]) == version
         areas = hdf["Geometry/2D Flow Areas"]
         mesh = next(name for name, obj in areas.items() if isinstance(obj, h5py.Group))
         base = f"Geometry/2D Flow Areas/{mesh}/"

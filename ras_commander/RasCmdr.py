@@ -95,6 +95,11 @@ from .RasPrj import (
 )
 from .RasTcu import RasTcu
 from .RasUtils import RasUtils
+from ._single_plan_project import (
+    SinglePlanProjectError,
+    SinglePlanProjectTransaction,
+    single_plan_project_required,
+)
 
 logger = get_logger(__name__)
 
@@ -3231,6 +3236,11 @@ class RasCmdr:
                 after the engine deadline when necessary, so wall-clock return
                 time can exceed ``max_runtime`` while ras-commander proves a
                 safe terminal state.
+            - HEC-RAS 7.0.2 temporarily receives a project declaration containing
+                only this plan because its launcher runs every listed plan.
+                The original project is restored after owned processes stop.
+                An unproved stop retains the single-plan file and original
+                backup; inspect ``execution_details["single_plan_project"]``.
         """
         if type(disable_omp_affinity) is not bool:
             raise TypeError("disable_omp_affinity must be a bool")
@@ -3252,6 +3262,7 @@ class RasCmdr:
         _active_failure_stage = None
         _deadline_monotonic = None
         _prior_result_artifact_snapshot = None
+        _single_plan_guard = None
 
         def _record_async_stage(stage: str) -> None:
             nonlocal _active_failure_stage
@@ -3644,6 +3655,41 @@ class RasCmdr:
                         logger.debug(
                             "Set Current Plan=p%s for legacy project-only Ras.exe launch",
                             legacy_plan_number,
+                        )
+
+                    # HEC-RAS 7.0.2 computes the project's listed plans in
+                    # order and ignores both the plan argument and Current
+                    # Plan. Expose only the requested plan for this owned
+                    # launch; the original bytes are restored after
+                    # quiescence in the finally block below.
+                    if single_plan_project_required(
+                        ras_exe_path=compute_ras.ras_exe_path,
+                        ras_version=getattr(compute_ras, "ras_version", None),
+                    ):
+                        _active_failure_stage = "single_plan_project_guard"
+                        _single_plan_guard = SinglePlanProjectTransaction(
+                            compute_prj_path,
+                            RasUtils.normalize_ras_number(
+                                compute_plan_path.suffix.lstrip(".pP")
+                            ),
+                            launch_owner="RasCmdr.compute_plan",
+                        )
+                        try:
+                            _single_plan_guard.apply()
+                        except SinglePlanProjectError as guard_error:
+                            _execution_details.update(
+                                {
+                                    "failure_stage": "single_plan_project_guard",
+                                    "failure_type": type(guard_error).__name__,
+                                    "failure_detail": str(guard_error),
+                                    "single_plan_project": (
+                                        _single_plan_guard.to_dict()
+                                    ),
+                                }
+                            )
+                            raise
+                        _execution_details["single_plan_project"] = (
+                            _single_plan_guard.to_dict()
                         )
 
                     # Re-prove the selected executable after process preflight
@@ -4270,6 +4316,32 @@ class RasCmdr:
 
             if verify and _did_execute and _completion_verified is None:
                 _completion_verified = False
+
+            if _single_plan_guard is not None and _single_plan_guard.applied:
+                # Restore the full plan list only after the launch's processes
+                # are proved stopped; otherwise keep the recoverable backup and
+                # claim and fail closed with the recovery path.
+                _owned_quiescent = (
+                    not _did_execute
+                    or not _launch_observed
+                    or bool(_execution_quiesced)
+                )
+                _restore_outcome = _single_plan_guard.restore(
+                    owned_quiescent=_owned_quiescent
+                )
+                _execution_details["single_plan_project"] = (
+                    _single_plan_guard.to_dict()
+                )
+                if not _restore_outcome.ok:
+                    _success = False
+                    if _execution_details["failure_stage"] is None:
+                        _execution_details.update(
+                            {
+                                "failure_stage": "single_plan_project_restore",
+                                "failure_type": "SinglePlanProjectRestoreError",
+                                "failure_detail": _restore_outcome.detail,
+                            }
+                        )
 
             # Update the RAS object's dataframes ONLY if executing in original folder
             # When dest_folder is used, the original project is unchanged

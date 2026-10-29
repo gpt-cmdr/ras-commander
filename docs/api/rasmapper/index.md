@@ -277,13 +277,14 @@ directory. This route completed the public BaldEagle geometry and matched the
 7.0.1 control's three meshes dataset for dataset. It mutates geometry in place,
 so use a project copy.
 
-The isolated 7.0.2 administrative image used for these checks could run
-`RasProcess.exe` but could not run `Ras.exe` preprocessing: the required
-per-release RAS Mapper COM class was unregistered. A timeout with a visible
-“Class not registered” dialog requires installation/registration repair, rather
-than a larger timeout. Full plan compute, precipitation forcing, experimental
-temporary-HDF edits, corner preparation, and Linux/Wine execution were not
-qualified on 7.0.2 by these checks.
+`Ras.exe` preprocessing requires a registered installation: an isolated 7.0.2
+administrative image failed with an unregistered per-release RAS Mapper COM
+class. After official installation and API TCU acceptance, Windows preprocessing
+and unsteady plan computation passed with the
+[single-plan launch workaround](../../user-guide/plan-execution.md#hec-ras-702-single-plan-execution).
+The genuine 7.0.2 temporary HDF also passed guarded schema/write-readback checks;
+Linux solve after mutation remains unqualified. Precipitation forcing, corner
+preparation, and Linux/Wine execution were not qualified on 7.0.2 by these checks.
 
 Read native output layers through `HdfXsec.get_river_edge_lines()`,
 `get_xs_interpolation_surface()` and `get_river_flow_paths()` in the

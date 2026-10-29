@@ -18,6 +18,7 @@ Classes:
     RasPreprocess: Static class for Windows preprocessing operations.
 """
 
+import dataclasses
 import hashlib
 import ntpath
 import os
@@ -41,6 +42,12 @@ from .LoggingConfig import get_logger
 from .RasBco import BcoMonitor
 from .RasPlan import RasPlan
 from .RasPrj import ras
+from ._single_plan_project import (
+    SinglePlanLaunchLifecycle,
+    SinglePlanProjectError,
+    SinglePlanProjectTransaction,
+    single_plan_project_required,
+)
 
 logger = get_logger(__name__)
 
@@ -165,6 +172,11 @@ class RasPreprocess:
         does not exist. Those releases would otherwise skip the geometry and
         write no 2D mesh.
 
+        HEC-RAS 7.0.2 temporarily receives a project declaration containing only
+        this plan. The original project bytes are restored after owned processes
+        stop. An unproved stop retains the single-plan file, original backup,
+        and claim and fails the result with a recovery diagnostic.
+
         Args:
             plan_number: Plan number to preprocess (e.g., "01", 1).
             ras_object (RasPrj, optional): Optional RasPrj instance. If None, uses global ras.
@@ -199,6 +211,43 @@ class RasPreprocess:
             ...     print(f".b file: {result.b_file_path}")
             ...     print(f".x file: {result.x_file_path}")
         """
+        # A HEC-RAS 7.0.2 single-plan project declaration must be restored on
+        # every exit, including exceptions, so the launch lifecycle runs inside
+        # one owned try/finally. Result paths release it through make_result;
+        # this finally covers only exits that never built a result.
+        lifecycle = SinglePlanLaunchLifecycle()
+        try:
+            return RasPreprocess._preprocess_plan_lifecycle(
+                plan_number,
+                ras_object,
+                max_wait,
+                clear_existing,
+                fix_line_endings,
+                require_linux_solver_ready,
+                accept_tcu=accept_tcu,
+                precipitation_repair_attempts=precipitation_repair_attempts,
+                precipitation_repair_timeout=precipitation_repair_timeout,
+                lifecycle=lifecycle,
+            )
+        finally:
+            if lifecycle.pending:
+                lifecycle.finish()
+
+    @staticmethod
+    def _preprocess_plan_lifecycle(
+        plan_number: Union[str, Number],
+        ras_object=None,
+        max_wait: int = 300,
+        clear_existing: bool = True,
+        fix_line_endings: bool = True,
+        require_linux_solver_ready: bool = True,
+        *,
+        accept_tcu: bool = False,
+        precipitation_repair_attempts: int = 6,
+        precipitation_repair_timeout: Optional[int] = None,
+        lifecycle: SinglePlanLaunchLifecycle,
+    ) -> PreprocessResult:
+        """Run one owned preprocessing launch; see :meth:`preprocess_plan`."""
         if not isinstance(require_linux_solver_ready, bool):
             raise ValueError("require_linux_solver_ready must be a bool")
         if not isinstance(accept_tcu, bool):
@@ -209,8 +258,21 @@ class RasPreprocess:
 
         def make_result(**values):
             if accept_tcu:
-                return PreprocessResult(**values, tcu_acceptance_receipts=list(tcu_receipts))
-            return PreprocessResult(**values)
+                result = PreprocessResult(**values, tcu_acceptance_receipts=list(tcu_receipts))
+            else:
+                result = PreprocessResult(**values)
+            if lifecycle.pending:
+                # Every result path passes here, so the HEC-RAS 7.0.2
+                # single-plan declaration is restored before the caller sees
+                # the result. A restoration that cannot be proved fails the
+                # result and carries the recovery path.
+                outcome = lifecycle.finish()
+                if outcome is not None and not outcome.ok:
+                    error = outcome.detail
+                    if result.error:
+                        error = f"{result.error}. {error}"
+                    result = dataclasses.replace(result, success=False, error=error)
+            return result
 
         ras_obj = ras_object if ras_object is not None else ras
 
@@ -336,6 +398,33 @@ class RasPreprocess:
                 elapsed_seconds=time.time() - start_time,
             )
 
+        # HEC-RAS 7.0.2 computes the project's listed plans in order and
+        # ignores the plan argument and Current Plan. Expose only the
+        # requested plan for this owned launch; make_result and the enclosing
+        # finally restore the original project bytes.
+        if single_plan_project_required(
+            ras_exe_path=ras_exe,
+            ras_version=getattr(ras_obj, "ras_version", None),
+        ):
+            lifecycle.transaction = SinglePlanProjectTransaction(
+                prj_file,
+                plan_num,
+                launch_owner="RasPreprocess.preprocess_plan",
+            )
+            try:
+                lifecycle.transaction.apply()
+            except SinglePlanProjectError as e:
+                return make_result(
+                    success=False,
+                    plan_number=plan_num,
+                    geometry_number=geometry_number,
+                    error=(
+                        f"Could not expose plan {plan_num} as the only HEC-RAS "
+                        f"7.0.2 project plan: {e}"
+                    ),
+                    elapsed_seconds=time.time() - start_time,
+                )
+
         # Clear existing preprocessing files
         if clear_existing:
             RasPreprocess._clear_preprocessing_files(
@@ -400,6 +489,21 @@ class RasPreprocess:
                 error=f"Could not launch HEC-RAS preprocessing: {e}",
                 elapsed_seconds=time.time() - start_time,
             )
+
+        def _owned_launch_quiescent() -> bool:
+            # Restore the project only after the owned launcher and any
+            # exact-plan residue from this launch window are stopped.
+            if process.poll() is None:
+                RasPreprocess._terminate_process_tree(process)
+            _stopped, surviving = RasPreprocess._terminate_exact_preprocess_residue(
+                project_file=prj_file,
+                plan_file=plan_file,
+                tmp_hdf=tmp_hdf,
+                started_at=start_time,
+            )
+            return process.poll() is not None and not surviving
+
+        lifecycle.prove_quiescent = _owned_launch_quiescent
 
         launch_create_time = None
         if accept_tcu:
