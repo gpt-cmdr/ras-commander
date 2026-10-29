@@ -287,3 +287,26 @@ def _corner_elevations(path):
 
 
 CASES["HdfMesh.get_mesh_corner_elevations"] = _corner_elevations
+
+
+# ---------------------------------------------------------------- storage-area summaries
+SA_SUMMARY = "Results/Unsteady/Output/Output Blocks/Base Output/Summary Output/Storage Areas"
+
+
+def _storage_area_summaries(path):
+    """Every Summary Output/Storage Areas dataset through the public typed reader.
+
+    No public Hdf method reads these summaries; ``fast_hdf.read_typed`` is the public
+    reader that routes them (typed 1D-summary family). Beaver_LS_SAConn p01 stores the
+    square (2, 2) Maximum/Minimum Water Surface layout that needs the stored ``Row N``
+    attributes to tell the axes apart.
+    """
+    from ras_commander import fast_hdf
+    with h5py.File(path, "r") as f:
+        if SA_SUMMARY not in f:
+            return {}
+        names = sorted(n for n, d in f[SA_SUMMARY].items() if isinstance(d, h5py.Dataset))
+        return {n: fast_hdf.read_typed(f[f"{SA_SUMMARY}/{n}"]) for n in names}
+
+
+CASES["fast_hdf.read_typed[storage-area summaries]"] = _storage_area_summaries
