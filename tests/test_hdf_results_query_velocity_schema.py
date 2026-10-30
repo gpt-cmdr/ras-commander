@@ -47,6 +47,7 @@ def values(path, variable="Velocity", meshes=("Area",)):
     return q._get_unsteady_variable_values(path, cache(meshes), variable, 1, path)
 
 
+@pytest.mark.synthetic_hdf_layout
 @pytest.mark.parametrize("missing", ["X", "Y"])
 @pytest.mark.parametrize("legacy", ["complete", "absent", "X", "Y"])
 def test_incomplete_stored_pair_never_mixes_sources(tmp_path, missing, legacy):
@@ -62,6 +63,7 @@ def test_incomplete_stored_pair_never_mixes_sources(tmp_path, missing, legacy):
     np.testing.assert_allclose(values(path, f"Velocity {present}"), [4 if present == "Y" else 3])
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_complete_stored_pair_wins_and_trims_ghosts(tmp_path):
     path = write_velocity_hdf(tmp_path / "complete.p01.hdf")
     for axis, stored, legacy in (("X", 3, 30), ("Y", 4, 40)):
@@ -71,6 +73,7 @@ def test_complete_stored_pair_wins_and_trims_ghosts(tmp_path):
         np.testing.assert_allclose(values(path, variable), [expected])
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_multiple_meshes_select_complete_sources_independently(tmp_path):
     meshes = ("Stored", "Legacy", "Faces")
     path = write_velocity_hdf(tmp_path / "multi.p01.hdf", meshes)
@@ -114,6 +117,7 @@ def test_malformed_cell_geometry_refused(tmp_path, schema):
         values(path)
 
 
+@pytest.mark.synthetic_hdf_layout
 @pytest.mark.parametrize("legacy", [True, False])
 def test_invalid_incomplete_stored_schema_cannot_hide_behind_fallback(tmp_path, legacy):
     path = write_velocity_hdf(tmp_path / "invalid.p01.hdf")
@@ -127,12 +131,14 @@ def test_invalid_incomplete_stored_schema_cannot_hide_behind_fallback(tmp_path, 
         values(path)
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_face_only_reconstruction_unchanged(tmp_path):
     path = write_velocity_hdf(tmp_path / "faces.p01.hdf")
     for variable, expected in (("Velocity", 10), ("Velocity X", 6), ("Velocity Y", 8)):
         np.testing.assert_allclose(values(path, variable), [expected])
 
 
+@pytest.mark.synthetic_hdf_layout
 @pytest.mark.parametrize("axis", ["X", "Y"])
 @pytest.mark.parametrize("attribute,value", [("Location", "Faces"), ("Location", ["Cells", "Cells"]), ("Units", "mph"), ("Units", ["ft/s", "ft/s"])])
 def test_invalid_stored_metadata_refused_for_vector_and_direct_axis(tmp_path, axis, attribute, value):
@@ -166,6 +172,7 @@ def test_invalid_legacy_pair_cannot_hide_behind_faces(tmp_path):
         values(path)
 
 
+@pytest.mark.synthetic_hdf_layout
 @pytest.mark.parametrize("time_index", [0, 1, -1])
 def test_public_point_query_uses_coherent_legacy_pair(tmp_path, time_index):
     from pyproj import CRS

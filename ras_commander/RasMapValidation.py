@@ -9,10 +9,13 @@ Classes:
 """
 
 from pathlib import Path
-from typing import Union, Optional, List
+from typing import TYPE_CHECKING, Union, Optional, List
 
 from .LoggingConfig import get_logger
 from .Decorators import log_call
+
+if TYPE_CHECKING:
+    from .RasValidation import ValidationReport, ValidationResult
 
 logger = get_logger(__name__)
 

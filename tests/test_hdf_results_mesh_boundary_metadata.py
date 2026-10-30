@@ -85,6 +85,7 @@ def _real_davis_plan() -> Path:
     return Path(configured) if configured else DEFAULT_DAVIS_PLAN
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_stage_and_flow_metadata_do_not_replace_hydrographs(tmp_path: Path) -> None:
     hdf_path = tmp_path / "boundaries.p01.hdf"
     _write_boundary_hdf(hdf_path)
@@ -111,6 +112,7 @@ def test_stage_and_flow_metadata_do_not_replace_hydrographs(tmp_path: Path) -> N
     assert dataset["model name"].values.tolist() == ["Fixture model"]
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_normalized_metadata_names_cannot_claim_structural_names(
     tmp_path: Path,
 ) -> None:
@@ -135,6 +137,7 @@ def test_normalized_metadata_names_cannot_claim_structural_names(
     assert dataset["time"].dims == ("time",)
 
 
+@pytest.mark.synthetic_hdf_layout
 @pytest.mark.parametrize("rogue_position", ["before", "after"])
 def test_canonical_metadata_ownership_is_attribute_order_independent(
     tmp_path: Path,

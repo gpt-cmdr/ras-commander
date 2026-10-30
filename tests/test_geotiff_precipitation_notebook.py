@@ -4,7 +4,7 @@ import json
 from pathlib import Path
 
 
-NOTEBOOK_PATH = Path("examples/729_direct_geotiff_gridded_rain_on_grid.ipynb")
+NOTEBOOK_PATH = Path(__file__).resolve().parents[1] / "examples/729_direct_geotiff_gridded_rain_on_grid.ipynb"
 
 
 def _notebook() -> dict:

@@ -8,6 +8,7 @@ import numpy as np
 import pytest
 
 
+@pytest.mark.synthetic_hdf_layout
 @pytest.mark.parametrize("strict", [False, True])
 @pytest.mark.parametrize("case", ["exterior_vertex", "exterior_chord", "bent_boundary"])
 def test_public_native_face_containment(tmp_path, monkeypatch, strict, case):

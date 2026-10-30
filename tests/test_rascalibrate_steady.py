@@ -68,6 +68,7 @@ def steady_hdf(tmp_path: Path) -> Path:
     return _write_steady_hdf(tmp_path / "steady.p01.hdf")
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_extract_steady_profile_modeled_exact_station(steady_hdf: Path) -> None:
     point = CalibrationPoint(
         name="PF1 RS200",
@@ -84,6 +85,7 @@ def test_extract_steady_profile_modeled_exact_station(steady_hdf: Path) -> None:
     assert extract_modeled(point, steady_hdf) == pytest.approx(102.2)
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_extract_steady_profile_modeled_numeric_station_match(
     steady_hdf: Path,
 ) -> None:
@@ -101,6 +103,7 @@ def test_extract_steady_profile_modeled_numeric_station_match(
     assert extract_steady_profile_modeled(point, steady_hdf) == pytest.approx(202.2)
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_extract_steady_profile_modeled_station_tolerance(
     steady_hdf: Path,
 ) -> None:
@@ -119,6 +122,7 @@ def test_extract_steady_profile_modeled_station_tolerance(
     assert extract_steady_profile_modeled(point, steady_hdf) == pytest.approx(103.3)
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_extract_steady_profile_modeled_station_mismatch_is_clear(
     steady_hdf: Path,
 ) -> None:
@@ -137,6 +141,7 @@ def test_extract_steady_profile_modeled_station_mismatch_is_clear(
         extract_steady_profile_modeled(point, steady_hdf)
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_extract_observations_profile_filter_and_make_points(
     steady_hdf: Path,
 ) -> None:

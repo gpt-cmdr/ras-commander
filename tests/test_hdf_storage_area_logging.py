@@ -146,6 +146,7 @@ def test_missing_volume_elevation_curve_logs_preprocessor_guidance(tmp_path, cap
     assert str(tmp_path) not in message
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_missing_terrain_reference_is_debug_only(tmp_path, caplog):
     hdf_path = _write_storage_area_hdf(
         tmp_path / "storage.g01.hdf",
@@ -230,6 +231,7 @@ def test_compute_stage_storage_curve_uses_private_volume_helper(monkeypatch, tmp
     assert metadata["storage_units"] == "cubic project units"
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_compute_stage_storage_curve_converts_us_customary_storage_units(
     monkeypatch,
     tmp_path,
@@ -257,6 +259,7 @@ def test_compute_stage_storage_curve_converts_us_customary_storage_units(
     assert metadata["storage_area_acres"] == 1.0
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_compute_stage_storage_curve_keeps_metric_storage_units(
     monkeypatch,
     tmp_path,
@@ -284,6 +287,7 @@ def test_compute_stage_storage_curve_keeps_metric_storage_units(
     assert metadata["storage_area_acres"] == pytest.approx(1.0)
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_compute_stage_storage_curve_uses_geometry_si_units_precedence(
     monkeypatch,
     tmp_path,
@@ -308,6 +312,7 @@ def test_compute_stage_storage_curve_uses_geometry_si_units_precedence(
     assert metadata["storage_units"] == "m^3"
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_compute_stage_storage_curve_uses_root_metric_when_si_flag_absent(
     monkeypatch,
     tmp_path,

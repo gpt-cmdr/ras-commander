@@ -22,6 +22,7 @@ import pandas as pd
 from .Decorators import log_call
 from .LoggingConfig import get_logger
 from ._ras_text import _write_ras_text
+from .fast_hdf import release_native_sessions
 
 
 logger = get_logger(__name__)
@@ -600,6 +601,7 @@ class RasPermutation:
                     raise FileExistsError(
                         "Batch folder resolves to the source project folder"
                     )
+                release_native_sessions(batch_folder)
                 shutil.rmtree(batch_folder)
 
             shutil.copytree(

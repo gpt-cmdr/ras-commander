@@ -30,6 +30,7 @@ from ras_commander.sources.federal.ebfe_extract import StreamingZipReader
 
 from ..._ras_text import _write_ras_text
 from ...fast_hdf import read_attr, reraise_required
+from ...fast_hdf import release_native_sessions
 
 logger = get_logger(__name__)
 
@@ -706,9 +707,11 @@ def organize_medina(
 
         if (source.stat().st_size, source.stat().st_mtime_ns) != source_state:
             raise RuntimeError("Medina source archive changed during organization.")
+        release_native_sessions(working, output)
         os.rename(working, output)
     except Exception:
         if working.exists():
+            release_native_sessions(working)
             shutil.rmtree(working)
         raise
     return output

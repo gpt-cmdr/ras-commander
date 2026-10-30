@@ -8,12 +8,8 @@ from pathlib import Path
 import yaml
 
 
-NOTEBOOK_PATH = Path(
-    "examples/236_multi_model_1d_breakout_planning.ipynb"
-)
-ASSET_ROOT = Path(
-    "examples/assets/236_multi_model_1d_breakout_planning"
-)
+NOTEBOOK_PATH = Path(__file__).resolve().parents[1] / "examples/236_multi_model_1d_breakout_planning.ipynb"
+ASSET_ROOT = Path(__file__).resolve().parents[1] / "examples/assets/236_multi_model_1d_breakout_planning"
 
 
 def _notebook() -> dict:
@@ -101,7 +97,7 @@ def test_notebook_236_code_cells_compile_and_gallery_entry_exists():
             )
 
     metadata = yaml.safe_load(
-        Path("examples/notebooks.yml").read_text(encoding="utf-8")
+        (Path(__file__).resolve().parents[1] / "examples/notebooks.yml").read_text(encoding="utf-8")
     )
     entry = next(
         item

@@ -5,7 +5,7 @@ from pathlib import Path
 import nbformat
 
 
-NOTEBOOK = Path("examples/915_realtime_forecast_workflow.ipynb")
+NOTEBOOK = Path(__file__).resolve().parents[1] / "examples/915_realtime_forecast_workflow.ipynb"
 
 
 def test_forecast_overview_is_honest_and_uses_current_api_contracts():

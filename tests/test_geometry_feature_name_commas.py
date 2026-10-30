@@ -135,6 +135,64 @@ def test_reference_point_name_is_delimited_by_record_end(tmp_path):
     ]
 
 
+POINTS_FIXTURE = Path(__file__).parent / "fixtures/reference_lines/comma_points.g01"
+HECRAS_POINTS = [
+    {"name": "RP Upper, Bald Eagle Cr (1)", "x": 2000000.0, "y": 312250.0},
+    {"name": "RP_Middle", "x": 2030250.0, "y": 335250.0},
+    {"name": "Lower, gage 2, km 9", "x": 2063500.0, "y": 352250.0},
+]
+
+
+def test_reference_point_names_hecras_computed_with_commas_are_read(tmp_path):
+    # HEC-RAS 6.6 computed these records and kept the names verbatim (README).
+    path, _ = _geometry(tmp_path)
+    path.write_bytes(path.read_bytes() + POINTS_FIXTURE.read_bytes())
+    assert GeomReferenceFeatures.get_reference_points(path) == HECRAS_POINTS
+
+
+def test_reference_point_writer_reproduces_the_hecras_computed_records(tmp_path):
+    path, _ = _geometry(tmp_path)
+    GeomReferenceFeatures.add_reference_points(path, HECRAS_POINTS)
+    written = [
+        line for line in path.read_text(encoding="utf-8").splitlines()
+        if line.startswith("Reference Point ")
+    ]
+    assert written == POINTS_FIXTURE.read_text(encoding="utf-8").splitlines()
+    assert GeomReferenceFeatures.get_reference_points(path) == HECRAS_POINTS
+
+
+@pytest.mark.parametrize(
+    "name",
+    ["", "Gage=1", "Gage\r1", "Gage\n1", "Gage\t1", "x" * 41, "é" * 21],
+)
+def test_reference_point_writer_still_refuses_unsafe_names(tmp_path, name):
+    path, _ = _geometry(tmp_path)
+    before = path.read_bytes()
+    with pytest.raises(ValueError, match="point name"):
+        GeomReferenceFeatures.add_reference_points(path, [{"name": name, "x": 1, "y": 2}])
+    assert path.read_bytes() == before
+
+
+@pytest.mark.parametrize(
+    "records, match",
+    [
+        (["Reference Point Name=Gage=1", "Reference Point Position=1,2"], "invalid characters"),
+        (["Reference Point Name=Gage, East"], "missing its Position"),
+        (["Reference Point Name=Gage, East", "Reference Point Position=1,2,3"], "exactly X,Y"),
+        (["Reference Point Name=Gage, East", "Reference Point Position=1,nan"], "non-finite"),
+        (
+            ["Reference Point Name=Gage, East", "Reference Point Position=1,2"] * 2,
+            "Duplicate native reference point",
+        ),
+    ],
+)
+def test_reference_point_reader_still_refuses_malformed_records(tmp_path, records, match):
+    path, _ = _geometry(tmp_path)
+    path.write_bytes(path.read_bytes() + "\r\n".join(records + [""]).encode("utf-8"))
+    with pytest.raises(ValueError, match=match):
+        GeomReferenceFeatures.get_reference_points(path)
+
+
 def test_breakline_name_is_delimited_by_record_end(tmp_path):
     path, _ = _geometry(tmp_path)
     name = "Levee, East (1)"
@@ -176,6 +234,7 @@ def test_profile_line_feature_name_keeps_commas(tmp_path):
     assert HdfResultsMesh._read_profile_line_geometry(path, NAME).equals(geometry)
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_native_hdf_reference_point_attribute_name_keeps_commas(tmp_path):
     path = tmp_path / "model.g01.hdf"
     with h5py.File(path, "w") as hdf:
@@ -193,6 +252,7 @@ def test_native_hdf_reference_point_attribute_name_keeps_commas(tmp_path):
     ]
 
 
+@pytest.mark.synthetic_hdf_layout
 @pytest.mark.parametrize("line_type", ["Reference Line", "Profile Line"])
 def test_hdf_line_attribute_names_keep_commas(tmp_path, line_type):
     path = tmp_path / "model.g01.hdf"

@@ -130,7 +130,9 @@ See `.claude/rules/hec-ras/land-cover-mannings-n.md` for full documentation.
 - `GeomReferenceFeatures.add_reference_points` writes native `Reference Point Name=`
   (40-byte padded field) and `Reference Point Position=X,Y` before LCMann. It keeps
   literal names, validates finite coordinates and duplicate names before writing,
-  and uses atomic geometry writes with preserved numbered backups.
+  and uses atomic geometry writes with preserved numbered backups. Names may
+  contain commas (the name is its own record; HEC-RAS 6.6 computes such points);
+  `=`, CR/LF and control characters, and names over 40 bytes, are refused.
 - `get_reference_points` reads only native records. IC Points are separate initial
   condition features; even old `IC Point Name=Reference Point ...` records are left
   untouched and excluded. No automatic migration or prefix insertion occurs.

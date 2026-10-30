@@ -129,6 +129,10 @@ def _corrupt(path, primary, case):
             raise AssertionError(case)
 
 
+@pytest.mark.synthetic_hdf_layout(
+    "labels-shape-Variable_Unit-inventory",
+    "labels-shape-Variable_Unit-maxima",
+)
 @pytest.mark.parametrize("api", ["inventory", "maxima"])
 @pytest.mark.parametrize("case,match", [
     ("labels-shape", "Variable_Unit"), ("labels-missing", "Variable_Unit"),
@@ -165,6 +169,7 @@ def test_explicit_project_resolution_does_not_reuse_another_project(tmp_path):
         assert HdfStruc1D.get_structure_max_values("01", *identity, ras_object=project)["max_hw"] == expected
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_two_direct_structures_join_exact_geometry_not_group_or_row_order(tmp_path):
     path, identity, primary = _write_direct(tmp_path / "multiple.p01.hdf", FAMILIES[1])
     other = ("Other", "Reach", "100")

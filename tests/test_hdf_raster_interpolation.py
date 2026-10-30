@@ -104,6 +104,7 @@ def test_public_max_export_does_not_allocate_whole_grid_coordinates(tmp_path, mo
     HdfResultsMesh.export_max_depth_raster(source, tmp_path / "depth.tif", resolution_m=1)
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_public_timestep_export_uses_bounded_queries(tmp_path, monkeypatch):
     pytest.importorskip("rasterio")
     # Use the existing synthetic HDF fixture to exercise the real export path.

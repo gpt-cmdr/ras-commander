@@ -7,6 +7,7 @@ tmp.hdf here is a small synthetic stand-in; the solver is a fake ``RasUnsteady``
 
 import hashlib
 import json
+import os
 import shlex
 import shutil
 import stat
@@ -127,6 +128,7 @@ def test_profile_rejects_invalid_cfile_combinations(over, fragment):
 
 # ---- input check -------------------------------------------------------------
 
+@pytest.mark.synthetic_hdf_layout
 def test_check_solver_ready_relaxes_c_file_content_for_61(project61):
     assert check_solver_ready(project61 / "TEST.p08.tmp.hdf") == []
 
@@ -139,6 +141,7 @@ def test_check_solver_ready_still_requires_completion_flag_for_61(tmp_path):
     assert not any("GeomPreprocess" in p or "NaN" in p for p in problems)
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_check_solver_ready_stays_strict_for_631(tmp_path):
     path = tmp_path / "x.tmp.hdf"
     _make_61_tmp_hdf(path, file_version=b"HEC-RAS 6.3.1 October 2022")
@@ -150,6 +153,7 @@ def test_check_solver_ready_stays_strict_for_631(tmp_path):
 
 # ---- rendering -----------------------------------------------------------------
 
+@pytest.mark.synthetic_hdf_layout
 def test_render_job_61_stages_c_file_and_canonical_cfile_engine(project61, profile61, tmp_path):
     source_hdf = (project61 / "TEST.p08.tmp.hdf").read_bytes()
     job = RasApptainer.render_job(project61, "TEST", 8, profile61, tmp_path / "job")
@@ -223,6 +227,12 @@ def _write_executable(path: Path, text: str) -> None:
     path.chmod(path.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
 
 
+posix_site_profile = pytest.mark.skipif(
+    os.name == "nt", reason="Apptainer site profiles require absolute POSIX paths (tmp_path is not)"
+)
+
+
+@posix_site_profile
 @pytest.mark.skipif(BASH is None, reason="bash is unavailable")
 def test_rendered_61_engine_runs_cfile_and_promotes_tmp_hdf(project61, profile61, tmp_path):
     engine_dir = tmp_path / "engine"

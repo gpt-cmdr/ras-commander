@@ -6,7 +6,7 @@ import json
 from pathlib import Path
 
 
-NOTEBOOK_PATH = Path("examples/612_benefit_area_analysis.ipynb")
+NOTEBOOK_PATH = Path(__file__).resolve().parents[1] / "examples/612_benefit_area_analysis.ipynb"
 
 
 def _notebook_source() -> str:

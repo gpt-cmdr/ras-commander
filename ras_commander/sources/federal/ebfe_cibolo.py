@@ -24,6 +24,7 @@ from typing import Any
 from ras_commander.LoggingConfig import get_logger, log_call
 
 from ..._ras_text import _write_ras_text
+from ...fast_hdf import release_native_sessions
 
 logger = get_logger(__name__)
 
@@ -416,6 +417,7 @@ def _promote_atomic(working: Path, destination: Path) -> None:
     backup = destination.with_name(f".{destination.name}.replaced-{os.getpid()}")
     if backup.exists():
         raise RuntimeError(f"Cibolo atomic-promotion backup already exists: {backup}")
+    release_native_sessions(working, destination)
     moved_old = False
     try:
         if destination.exists():
@@ -589,6 +591,7 @@ def organize_cibolo_delivery(
         _promote_atomic(working, output)
     except Exception:
         if working.exists():
+            release_native_sessions(working)
             shutil.rmtree(working, ignore_errors=True)
         raise
     return output
