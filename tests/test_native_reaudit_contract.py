@@ -136,21 +136,27 @@ def test_plan_program_version_ignores_unreadable_sibling(tmp_path, monkeypatch, 
 def test_starting_wse_method_ignores_unreadable_sibling(tmp_path, monkeypatch, unreadable_sibling, mode):
     monkeypatch.setenv("RAS_COMMANDER_FAST_HDF", mode)
     path = tmp_path / "plan.p01.hdf"
-    _attrs(path, "Plan Data/Plan Parameters", **{
-        "Initial Condition Method": np.bytes_(b"Normal Depth"), "Normal Depth Slope": 0.001})
-    _attrs(path, "Plan Data/Plan Information", **{"Flow Regime": np.bytes_(b"Subcritical")})
+    bc = "Event Conditions/Unsteady/Boundary Conditions/Normal Depths/River: R  Reach: A  RS: 1.0"
+    with h5py.File(path, "a") as hdf:
+        dataset = hdf.create_dataset(bc, data=np.array([0.001], dtype="f4"))
+        for name, value in (("River", b"R"), ("Reach", b"A"), ("RS", b"1.0")):
+            dataset.attrs[name] = np.bytes_(value)
+        dataset.attrs[UNREADABLE] = 1
     result = HdfPlan.get_starting_wse_method(path)
     assert result["method"] == "Normal Depth"
     assert result["slope"] == pytest.approx(0.001)
+    assert result["boundaries"][0]["river"] == "R"
 
 
 @pytest.mark.parametrize("mode", MODES)
-def test_starting_wse_regime_ignores_unreadable_sibling(tmp_path, monkeypatch, unreadable_sibling, mode):
+def test_starting_wse_startup_mode_ignores_unreadable_sibling(tmp_path, monkeypatch, unreadable_sibling, mode):
     monkeypatch.setenv("RAS_COMMANDER_FAST_HDF", mode)
     path = tmp_path / "plan.p01.hdf"
-    _attrs(path, "Plan Data/Plan Information", **{"Flow Regime": np.bytes_(b"Subcritical")})
+    with h5py.File(path, "a") as hdf:
+        hdf.require_group("Event Conditions/Unsteady/Boundary Conditions")
+    _attrs(path, "Event Conditions/Unsteady/Initial Conditions", **{"Startup Mode": np.bytes_(b"Computed")})
     result = HdfPlan.get_starting_wse_method(path)
-    assert result["regime"] == "Subcritical" and result["method"] == "Unknown"
+    assert result["startup_mode"] == "Computed" and result["method"] == "Unknown"
 
 
 @pytest.mark.parametrize("mode", MODES)

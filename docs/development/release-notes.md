@@ -31,6 +31,19 @@ alone does not identify a development checkout.
   natively in `auto` mode (native output identical to h5py on 6.3.1, 6.6, 7.0
   and 7.0.1 plans).
 
+- **`HdfPlan.get_starting_wse_method` returns real boundary conditions
+  (behaviour change).** It looked for plan attributes HEC-RAS never writes and
+  returned `method='Unknown'` for every real plan. It now reads the unsteady
+  water-surface boundaries (normal depth slope, rating curve, stage
+  hydrograph) from `Event Conditions/Unsteady/Boundary Conditions` in the plan
+  HDF, and for steady plans the `.f##` flow file named by the HDF (with the
+  plan file's flow regime choosing downstream/upstream boundaries). The
+  result adds `boundaries`, `source` and `startup_mode`; `slope`/`wse` are set
+  only when all selected boundaries agree, and the old Plan Information
+  `regime` lookup is replaced by the steady plan file's regime line.
+  `CheckProfiles` no longer reports `PF_IC_00` for unsteady plans whose
+  boundaries are readable, and its `PF_IC_02` slope screen now runs. The
+  method is native-qualified (73 native-identical route-2 fixtures).
 - **DSS shadow mode labels HEC's DSS6 "no data" rule.** When a native read
   raises not-found, `RasDss` shadow mode repeats it with dss-commander's
   opt-in `no_data="refuse"` and logs a refusal as
