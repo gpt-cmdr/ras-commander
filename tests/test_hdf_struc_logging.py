@@ -202,6 +202,7 @@ def test_list_sa2d_connections_missing_group_is_debug_only(
     )
 
 
+@pytest.mark.synthetic_hdf_layout
 @pytest.mark.parametrize("property_tables", [False, True])
 def test_empty_native_structure_placeholder_preserves_crs_and_evidence(tmp_path, property_tables):
     from pyproj import CRS

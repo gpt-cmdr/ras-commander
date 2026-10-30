@@ -96,6 +96,7 @@ class TestDiscovery:
 
 
 class TestVolumes:
+    @pytest.mark.synthetic_hdf_layout
     def test_us_units_and_values(self, us_hdf):
         df = HdfResultsSediment.get_bed_change_volumes(us_hdf)
         assert len(df) == 1
@@ -111,12 +112,14 @@ class TestVolumes:
         assert row["max_deposition"] == pytest.approx(2.0)
         assert row["max_scour"] == pytest.approx(-1.0)
 
+    @pytest.mark.synthetic_hdf_layout
     def test_si_unit_detection(self, si_hdf):
         df = HdfResultsSediment.get_bed_change_volumes(si_hdf)
         assert df.iloc[0]["length_unit"] == "m"
 
 
 class TestPerCell:
+    @pytest.mark.synthetic_hdf_layout
     def test_cell_bed_change_gdf_contract(self, us_hdf):
         gdf = HdfResultsSediment.get_cell_bed_change(us_hdf)
         assert list(gdf.columns) == ["mesh_name", "cell_id", "bed_change",
@@ -127,6 +130,7 @@ class TestPerCell:
         # final-timestep values
         assert gdf["bed_change"].tolist() == [-1.0, 2.0, 5.0, -0.5, 9.0]
 
+    @pytest.mark.synthetic_hdf_layout
     def test_cell_bed_elevation(self, si_hdf):
         gdf = HdfResultsSediment.get_cell_bed_elevation(si_hdf)
         assert "bed_elevation" in gdf.columns
@@ -134,6 +138,7 @@ class TestPerCell:
 
 
 class TestActiveLayer:
+    @pytest.mark.synthetic_hdf_layout
     def test_d50_present(self, us_hdf):
         gdf = HdfResultsSediment.get_active_layer_grain_class(us_hdf, "D50")
         assert "d50_mm" in gdf.columns
@@ -163,6 +168,7 @@ class TestTimeseries:
 
 
 class TestTimeIndexAndPercentiles:
+    @pytest.mark.synthetic_hdf_layout
     def test_time_index_selects_row(self, us_hdf):
         # time_index=0 is the all-zero first snapshot; default -1 is the active one
         first = HdfResultsSediment.get_cell_bed_change(us_hdf, time_index=0)
@@ -170,6 +176,7 @@ class TestTimeIndexAndPercentiles:
         last = HdfResultsSediment.get_cell_bed_change(us_hdf, time_index=-1)
         assert last["bed_change"].tolist() == [-1.0, 2.0, 5.0, -0.5, 9.0]
 
+    @pytest.mark.synthetic_hdf_layout
     @pytest.mark.parametrize("pct", ["D10", "D50", "D90"])
     def test_each_percentile(self, tmp_path, pct):
         # write a model that requests all three percentiles
@@ -209,10 +216,12 @@ class TestMultiArea:
     def test_areas_listed(self, two_area_hdf):
         assert set(HdfResultsSediment.get_sediment_mesh_areas(two_area_hdf)) == {"A", "B"}
 
+    @pytest.mark.synthetic_hdf_layout
     def test_volumes_one_row_per_area(self, two_area_hdf):
         df = HdfResultsSediment.get_bed_change_volumes(two_area_hdf)
         assert len(df) == 2
 
+    @pytest.mark.synthetic_hdf_layout
     def test_mesh_name_selects_one(self, two_area_hdf):
         df = HdfResultsSediment.get_bed_change_volumes(two_area_hdf, mesh_name="B")
         assert len(df) == 1 and df.iloc[0]["mesh_name"] == "B"
@@ -233,6 +242,7 @@ class TestErrorContracts:
         with pytest.raises(ValueError, match="not found"):
             HdfResultsSediment.get_bed_change_volumes(us_hdf, mesh_name="NOPE")
 
+    @pytest.mark.synthetic_hdf_layout
     def test_length_mismatch_raises(self, tmp_path):
         p = tmp_path / "Mismatch.p01.hdf"
         with h5py.File(p, "w") as f:
@@ -247,6 +257,7 @@ class TestErrorContracts:
         with pytest.raises(ValueError, match="length mismatch"):
             HdfResultsSediment.get_bed_change_volumes(str(p))
 
+    @pytest.mark.synthetic_hdf_layout
     def test_one_d_dataset_handled(self, tmp_path):
         p = tmp_path / "OneD.p01.hdf"
         with h5py.File(p, "w") as f:
@@ -264,6 +275,7 @@ class TestErrorContracts:
         assert ts.shape == (1, 3)
 
 
+@pytest.mark.synthetic_hdf_layout
 @pytest.mark.parametrize("column", ["HDF_Results_Path", "full_path"])
 @pytest.mark.parametrize("owns_result", [False, True])
 def test_implicit_project_units_require_plan_ownership(tmp_path, monkeypatch, column, owns_result):

@@ -47,6 +47,7 @@ def _write(path):
     return path
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_synthetic_lines_summary(tmp_path):
     df = HdfResultsPlan.get_reference_summary(_write(tmp_path / "s.p01.hdf"), "lines")
 

@@ -59,6 +59,7 @@ def _write_empty_geometry_hdf(path: Path, *, epsg: int | None = 4326) -> None:
         hdf_file.create_group("Geometry")
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_2d_only_bounds_skip_optional_1d_probe_logs(
     tmp_path: Path,
     caplog: pytest.LogCaptureFixture,
@@ -75,6 +76,7 @@ def test_2d_only_bounds_skip_optional_1d_probe_logs(
     assert _messages(caplog, XSEC_LOGGER) == []
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_empty_project_extent_logs_one_concise_warning(
     tmp_path: Path,
     caplog: pytest.LogCaptureFixture,
@@ -93,6 +95,7 @@ def test_empty_project_extent_logs_one_concise_warning(
     assert str(tmp_path) not in messages[0]
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_missing_project_crs_logs_one_project_warning(
     tmp_path: Path,
     caplog: pytest.LogCaptureFixture,
@@ -111,6 +114,7 @@ def test_missing_project_crs_logs_one_project_warning(
     assert str(tmp_path) not in project_messages[0]
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_invalid_wgs84_transform_logs_single_error_no_warning(
     tmp_path: Path,
     caplog: pytest.LogCaptureFixture,

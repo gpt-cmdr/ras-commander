@@ -73,6 +73,7 @@ def mesh_inputs(tmp_path, monkeypatch):
     return plan, geom, polygons, velocities
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_metric_areas_and_native_velocities_are_converted(mesh_inputs):
     plan, geom, polygons, velocities = mesh_inputs
     result = RasCheck.check_mesh_quality(str(plan), str(geom))
@@ -88,6 +89,7 @@ def test_metric_areas_and_native_velocities_are_converted(mesh_inputs):
     assert statuses["connectivity"]["status"] == "unsupported"
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_survey_foot_crs_and_us_result_units_are_independent(mesh_inputs):
     plan, geom, polygons, velocities = mesh_inputs
     polygons.set_crs("EPSG:2278", allow_override=True, inplace=True)
@@ -109,6 +111,7 @@ def test_absent_units_prevent_velocity_success(mesh_inputs):
     assert not any(m.message_id == "US_2D_04" for m in result.messages)
 
 
+@pytest.mark.synthetic_hdf_layout
 @pytest.mark.parametrize("crs", [None, "EPSG:4326"])
 def test_missing_or_geographic_crs_prevents_geometry_success(mesh_inputs, crs):
     plan, geom, polygons, _ = mesh_inputs
@@ -120,6 +123,7 @@ def test_missing_or_geographic_crs_prevents_geometry_success(mesh_inputs, crs):
     assert result.mesh_summary is None
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_empty_polygon_reader_is_unavailable_not_passed(mesh_inputs, monkeypatch):
     plan, geom, polygons, _ = mesh_inputs
     monkeypatch.setattr(HdfMesh, "get_mesh_cell_polygons", staticmethod(lambda path, **kw: polygons.iloc[:0]))
@@ -128,6 +132,10 @@ def test_empty_polygon_reader_is_unavailable_not_passed(mesh_inputs, monkeypatch
     assert coverage(result)["face_velocity"]["status"] == "issues"
 
 
+@pytest.mark.synthetic_hdf_layout(
+    "values1",
+    "values2",
+)
 @pytest.mark.parametrize("values", [[], [np.nan], [np.inf]])
 def test_missing_or_nonfinite_velocity_cannot_pass(mesh_inputs, values):
     plan, geom, _, velocities = mesh_inputs
@@ -191,6 +199,7 @@ def test_real_public_plan_reports_coverage():
     assert all(m.severity in Severity for m in result.messages)
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_polygon_reader_failure_is_explicit(mesh_inputs, monkeypatch):
     plan, geom, _, _ = mesh_inputs
 
@@ -206,6 +215,7 @@ def test_polygon_reader_failure_is_explicit(mesh_inputs, monkeypatch):
     assert statuses["face_velocity"]["status"] == "issues"
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_run_all_preserves_unsteady_mesh_coverage_and_counts(mesh_inputs, monkeypatch):
     # Test aggregation through the public dispatcher with real HDF flow-type
     # detection. Unrelated domain checks are bounded to empty results here.

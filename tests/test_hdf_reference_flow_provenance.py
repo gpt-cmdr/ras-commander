@@ -75,6 +75,7 @@ def test_recorded_real_f3_without_face_flow_or_native(version, direction, no_nat
     assert (path.stat().st_size, path.stat().st_mtime_ns) == before
 
 
+@pytest.mark.synthetic_hdf_layout
 @pytest.mark.parametrize("direction,expected", [("signed", [-4, 0, 3]), ("absolute", [4, 0, 3])])
 def test_observed_present_does_not_substitute_and_truncate_preserves_attrs(
     tmp_path, no_native, direction, expected,
@@ -96,6 +97,7 @@ def test_observed_present_does_not_substitute_and_truncate_preserves_attrs(
     ]
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_duplicate_name_requires_mesh_and_duplicate_pair_raises(tmp_path, no_native):
     path = _write_recorded(
         tmp_path / "Project.p01.hdf", names=(b"Line|Mesh A", b"Line|Mesh B"),
@@ -113,6 +115,9 @@ def test_duplicate_name_requires_mesh_and_duplicate_pair_raises(tmp_path, no_nat
         HdfResultsMesh.get_profile_line_flow_timeseries(path, "Line", "Mesh A")
 
 
+@pytest.mark.synthetic_hdf_layout(
+    "units",
+)
 @pytest.mark.parametrize("case", [
     "group", "flow_group", "rank", "dtype", "columns", "rows", "name_missing",
     "name_rank", "name_dtype", "time_missing", "time_invalid", "time_order", "units",
@@ -195,6 +200,7 @@ def test_missing_units_and_mesh_are_not_guessed(tmp_path, no_native):
     assert result.attrs["units"] == ""
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_signed_peak_preserves_recorded_sign(tmp_path, no_native):
     path = _write_recorded(tmp_path / "Project.p01.hdf")
     result = HdfResultsMesh.get_profile_line_peak_flow(path, "Line", direction="signed")

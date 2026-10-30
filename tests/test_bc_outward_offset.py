@@ -146,6 +146,7 @@ def _hdf(path):
     return path
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_exact_faces_and_mesh_nan_bytes(tmp_path):
     path = _hdf(tmp_path / "test.g01.hdf")
     fingerprints = _mesh_fingerprints(path)
@@ -176,6 +177,7 @@ def test_exact_faces_and_mesh_nan_bytes(tmp_path):
         )
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_internal_type_is_not_accepted_as_external(tmp_path):
     path = _hdf(tmp_path / "test.g01.hdf")
     with h5py.File(path, "a") as handle:
@@ -188,6 +190,7 @@ def test_internal_type_is_not_accepted_as_external(tmp_path):
         )
 
 
+@pytest.mark.synthetic_hdf_layout
 @pytest.mark.parametrize("values", [[4.1, 5.9], [True, 5], [4, 4]])
 def test_invalid_native_face_ids_refused(tmp_path, values):
     path = _hdf(tmp_path / "test.g01.hdf")
@@ -197,6 +200,7 @@ def test_invalid_native_face_ids_refused(tmp_path, values):
         )
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_native_area_change_and_incomplete_capture_refused(tmp_path):
     path = _geometry(tmp_path / "test.g01")
     _hdf(path.with_suffix(".g01.hdf"))
@@ -230,6 +234,7 @@ def test_empty_mesh_fingerprints_fail_closed(tmp_path):
         )
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_failed_readback_restores_bytes_mtime_and_keeps_backup(tmp_path, monkeypatch):
     path = _geometry(tmp_path / "test.g01")
     hdf = _hdf(path.with_suffix(".g01.hdf"))
@@ -255,6 +260,9 @@ def test_failed_readback_restores_bytes_mtime_and_keeps_backup(tmp_path, monkeyp
     assert list(tmp_path.glob("test.g01.bak*"))
 
 
+@pytest.mark.synthetic_hdf_layout(
+    "Internal",
+)
 @pytest.mark.parametrize("condition", ["Internal", "missing"])
 def test_perimeter_line_requires_complete_external_native_evidence(tmp_path, condition):
     path = _geometry(tmp_path / "test.g01")
@@ -273,6 +281,7 @@ def test_perimeter_line_requires_complete_external_native_evidence(tmp_path, con
     assert hdf.read_bytes() == hdf_before
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_real_native_area_reassignment_is_refused(tmp_path):
     path = _hdf(tmp_path / "test.g01.hdf")
     with h5py.File(path, "a") as handle:

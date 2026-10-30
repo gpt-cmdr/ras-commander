@@ -293,6 +293,7 @@ def test_results_stamped_source_with_plan_content_is_rejected(tmp_path, extra_gr
         GeomMesh.plan_cell_subset(source, target, [5, 6, 9, 10], "Area")
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_results_source_and_crs_mismatch_block(tmp_path):
     source = tmp_path / "Parent.g01.hdf"
     grid(source)

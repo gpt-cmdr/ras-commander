@@ -128,6 +128,7 @@ def test_check_solver_ready_is_5x_aware(project507):
     assert not any("GeomPreprocess" in p or "Completed" in p or "NaN" in p for p in problems)
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_check_solver_ready_still_strict_for_6x(project507):
     import h5py
     import numpy as np

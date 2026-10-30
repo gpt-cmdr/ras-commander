@@ -28,6 +28,7 @@ def _event_hdf(path, *, complete=True, values=True, mode="Point"):
         hdf.create_group("Geometry/GeomPreprocess").create_dataset("Complete", data=[1])
 
 
+@pytest.mark.synthetic_hdf_layout
 @pytest.mark.parametrize("complete", [False, None, "False", b"False", 0, [True, False]])
 def test_apptainer_rejects_incomplete_event_conditions(tmp_path, complete):
     path = tmp_path / "model.p01.tmp.hdf"
@@ -35,6 +36,7 @@ def test_apptainer_rejects_incomplete_event_conditions(tmp_path, complete):
     assert any("Completed Successfully" in p for p in check_solver_ready(path))
 
 
+@pytest.mark.synthetic_hdf_layout
 @pytest.mark.parametrize("mode", ["Point", "Gridded"])
 @pytest.mark.parametrize("shape", [None, (0, 2), (2, 0), (2,)])
 def test_apptainer_requires_materialized_rain_values(tmp_path, mode, shape):
@@ -48,6 +50,7 @@ def test_apptainer_requires_materialized_rain_values(tmp_path, mode, shape):
     assert any("Precipitation/Values" in p for p in check_solver_ready(path))
 
 
+@pytest.mark.synthetic_hdf_layout
 @pytest.mark.parametrize("complete", [True, 1, "True", np.bytes_("True"), [True]])
 def test_completed_point_rain_needs_no_gridded_mapping(tmp_path, complete):
     path = tmp_path / "model.p01.tmp.hdf"
@@ -55,6 +58,7 @@ def test_completed_point_rain_needs_no_gridded_mapping(tmp_path, complete):
     assert check_solver_ready(path) == []
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_completed_non_rain_plan_needs_no_precipitation(tmp_path):
     path = tmp_path / "model.p01.tmp.hdf"
     _event_hdf(path)
@@ -63,6 +67,7 @@ def test_completed_non_rain_plan_needs_no_precipitation(tmp_path):
     assert check_solver_ready(path) == []
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_uniform_rain_uses_its_own_layout(tmp_path):
     path = tmp_path / "model.p01.tmp.hdf"
     _event_hdf(path, mode="Uniform", values=False)
@@ -77,6 +82,7 @@ def test_missing_event_conditions_is_not_ready(tmp_path):
     assert any("Completed Successfully" in p for p in check_solver_ready(path))
 
 
+@pytest.mark.synthetic_hdf_layout
 @pytest.mark.parametrize("natural", [False, True])
 @pytest.mark.parametrize("complete,values,success", [(False, False, False), (True, False, False), (True, True, True)])
 def test_point_preprocessing_validates_after_process_cleanup(
@@ -127,6 +133,7 @@ def test_point_preprocessing_validates_after_process_cleanup(
         assert result.tmp_hdf_path == tmp_path / "fixture.p01.tmp.hdf"
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_active_text_point_mode_cannot_be_hidden_by_missing_hdf_group(tmp_path):
     from ras_commander._preprocess_validation import _event_condition_errors
 

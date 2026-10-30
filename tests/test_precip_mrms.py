@@ -330,6 +330,7 @@ def test_mrms_netcdf_extends_flat_cumulative_tail(tmp_path):
         assert ds.attrs["zero_tail_frames"] == 3
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_animation_helpers_accept_dataarray_and_hdf(monkeypatch, tmp_path):
     gpd = pytest.importorskip("geopandas")
     h5py = pytest.importorskip("h5py")

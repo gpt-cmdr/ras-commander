@@ -16,6 +16,33 @@ _GDAL_ENVIRONMENT = ("GDAL_DATA", "PROJ_LIB", "PROJ_DATA")
 _SESSION_GDAL_ENVIRONMENT = {name: os.environ.get(name) for name in _GDAL_ENVIRONMENT}
 
 
+def pytest_collection_modifyitems(config, items):
+    """Skip synthetic_hdf_layout tests when the native engine is required.
+
+    These tests write HDF layouts (variable-length text, missing companion
+    tables, malformed fixtures) that HEC-RAS does not produce. The native engine
+    qualifies observed layouts only and refuses the rest by design, so under
+    RAS_COMMANDER_FAST_HDF=native/required they test nothing but that refusal.
+    ``@pytest.mark.synthetic_hdf_layout("id", ...)`` limits it to those
+    parametrize ids.
+    """
+    from ras_commander import fast_hdf
+
+    if not fast_hdf.native_required():
+        return
+    skip = pytest.mark.skip(
+        reason="synthetic HDF layout HEC-RAS does not write; the native engine "
+        "refuses unobserved layouts by design (RAS_COMMANDER_FAST_HDF required)"
+    )
+    for item in items:
+        marker = item.get_closest_marker("synthetic_hdf_layout")
+        if marker is None:
+            continue
+        callspec = getattr(item, "callspec", None)
+        if not marker.args or (callspec is not None and callspec.id in marker.args):
+            item.add_marker(skip)
+
+
 def _detach_dotnet_console():
     """Point .NET Console output at a null writer once the CLR is loaded.
 
