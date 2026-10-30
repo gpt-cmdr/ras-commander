@@ -49,6 +49,11 @@ alone does not identify a development checkout.
   `0.0` for every key (the legacy keys when `infiltration_params` was empty).
   `get_infiltration_parameters()` still returns the stored values unchanged.
 
+- **Floodway encroachment parameters no longer hide blank Method 4/5
+  targets.** A blank target at one node was dropped, so the other nodes' value
+  was reported as the profile's `target_surcharge`. It is now omitted when any
+  Method 4/5 node lacks a target, and the result carries `targets_complete`
+  and `nodes_missing_target` (river, reach, node, method).
 - **`HdfPump.get_pump_station_summary` now returns real data.** It used to
   read `/Results/Unsteady/Summary/Pump Station`, which HEC-RAS never writes,
   so it always returned an empty DataFrame. It now returns one row per pump
