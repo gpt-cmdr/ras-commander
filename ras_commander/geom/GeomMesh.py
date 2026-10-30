@@ -1244,6 +1244,12 @@ def _find_error_locations(mesh, cell_size: float, min_ratio: float) -> list:
 
 def _iter_bc_flow_area_groups(hf):
     """Yield 2D flow-area groups that contain the BC conflict datasets."""
+    if "Geometry/Boundary Condition Lines" in hf:
+        raise NotImplementedError(
+            "GeomMesh conflict detection and repair do not support global "
+            "boundary-condition tables (Geometry/Boundary Condition Lines). "
+            "No conflict assessment or repair was performed."
+        )
     root_key = "Geometry/2D Flow Areas"
     if root_key not in hf:
         return
@@ -6715,6 +6721,10 @@ class GeomMesh:
 
         Returns:
             List of BCConflict (one per conflicting face).
+
+        Raises:
+            NotImplementedError: The HDF contains global boundary-condition
+                tables. Only legacy per-area BC Lines groups are supported.
         """
         import h5py
         from shapely.geometry import LineString as ShapelyLine
@@ -6777,6 +6787,11 @@ class GeomMesh:
 
         Returns:
             BCFixResult with conflicts_found, conflicts_fixed, unresolvable.
+
+        Raises:
+            NotImplementedError: The HDF contains global boundary-condition
+                tables, including in dry-run mode. Only legacy per-area BC
+                Lines groups are supported; global tables are left unchanged.
         """
         import h5py
         from math import hypot
