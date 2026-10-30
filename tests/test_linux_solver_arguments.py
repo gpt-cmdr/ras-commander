@@ -18,6 +18,7 @@ from types import SimpleNamespace
 
 import h5py
 import numpy as np
+import os
 import pytest
 
 from ras_commander.RasCmdr import RasCmdr
@@ -109,6 +110,14 @@ def _make_61_install(root: Path) -> Path:
     return release
 
 
+# LD_LIBRARY_PATH is ':'-separated POSIX paths, and the solver stand-in is a
+# shell script executed directly; neither holds for a Windows tmp_path.
+posix_linux_solver = pytest.mark.skipif(
+    os.name == "nt", reason="Linux solver contract: POSIX paths and a shell-script solver"
+)
+
+
+@posix_linux_solver
 def test_ld_path_finds_61_libs_two_levels_up_and_skips_centos_7(tmp_path):
     release = _make_61_install(tmp_path)
     libs = release.parent.parent / "libs"
@@ -116,6 +125,7 @@ def test_ld_path_finds_61_libs_two_levels_up_and_skips_centos_7(tmp_path):
     assert ld.split(":") == [str(libs), str(libs / "mkl"), str(libs / "rhel_8")]
 
 
+@posix_linux_solver
 def test_ld_path_keeps_centos_7_when_it_is_the_only_variant(tmp_path):
     root = tmp_path / "install"
     (root / "libs" / "centos_7").mkdir(parents=True)
@@ -196,6 +206,7 @@ def _core_attrs(path):
         return int(params["1D Cores"]), np.asarray(params["2D Cores (per mesh)"]).tolist()
 
 
+@posix_linux_solver
 @pytest.mark.skipif(BASH is None, reason="bash is unavailable")
 def test_compute_plan_linux_61_uses_cfile_arguments_and_canonical_libs(muncie, tmp_path):
     release = _make_61_install(tmp_path / "hec")
@@ -221,6 +232,7 @@ def test_compute_plan_linux_61_uses_cfile_arguments_and_canonical_libs(muncie, t
     assert not list(muncie.project.glob("io.*"))
 
 
+@posix_linux_solver
 @pytest.mark.skipif(BASH is None, reason="bash is unavailable")
 def test_compute_plan_linux_66_keeps_tmphdf_arguments(muncie, tmp_path):
     install = tmp_path / "hec66"

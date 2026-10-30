@@ -46,6 +46,7 @@ FULL_FEATURE_DEPENDENCIES = [
     'matplotlib',
     'shapely>=2.0',
     'rasterio',
+    'affine>=3',  # ras_commander.fim composes transforms with Affine @ Affine
     'rioxarray',
     'cfgrib>=0.9.10',
     'eccodes>=2.28',
@@ -162,7 +163,7 @@ setup(
         # Optional mapping engine and Python preparation/delivery stack.
         # Runtime calls never download or compile the engine.
         'fast-map': [f'{FAST_MAP_REQUIREMENT}; {FAST_MAP_WHEEL_MARKER}'],
-        'fim': ['scipy', 'geopandas', 'shapely>=2.0', 'rasterio', 'pyproj',
+        'fim': ['scipy', 'geopandas', 'shapely>=2.0', 'rasterio', 'affine>=3', 'pyproj',
                 f'{FAST_MAP_REQUIREMENT}; {FAST_MAP_WHEEL_MARKER}'],
         # USGS gauge data integration
         'usgs': ['dataretrieval>=1.4'],

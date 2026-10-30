@@ -26,6 +26,7 @@ def test_reused_geometry_retains_each_timestamps_values(method):
     np.testing.assert_array_equal(geometry.simplices, before[1])
 
 
+@pytest.mark.synthetic_hdf_layout
 @pytest.mark.parametrize("method", ["linear", "cubic", "nearest"])
 @pytest.mark.parametrize("timestamps", [1, 2])
 def test_triangulation_owned_by_one_export_call(tmp_path, monkeypatch, method, timestamps):

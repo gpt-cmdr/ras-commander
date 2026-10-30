@@ -235,6 +235,7 @@ def _read_series(path, mode):
     return list(Mesh.iter_mesh_timeseries(path, AREA, "Log Hydraulics", batch_size=2))
 
 
+@pytest.mark.synthetic_hdf_layout
 @pytest.mark.parametrize("mode", ["eager", "lazy", "stream"])
 def test_mesh_timeseries_reader_still_refuses_log_hydraulics(source, mode):
     """The ten fields must never become a cell or face domain."""

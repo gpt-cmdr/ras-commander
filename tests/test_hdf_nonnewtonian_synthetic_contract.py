@@ -94,6 +94,7 @@ def _read(path, name, mode, **kwargs):
     return xr.concat(list(HdfResultsMesh.iter_mesh_timeseries(path, AREA, name, batch_size=2, **kwargs)), dim="time")
 
 
+@pytest.mark.synthetic_hdf_layout
 @pytest.mark.parametrize("mode", MODES)
 @pytest.mark.parametrize("name", STRESSES)
 def test_stress_series_read_exactly_as_faces(source, name, mode):
@@ -114,6 +115,7 @@ def test_stress_series_read_exactly_as_faces(source, name, mode):
     assert _fingerprint(source) == before
 
 
+@pytest.mark.synthetic_hdf_layout
 @pytest.mark.parametrize("mode", MODES)
 @pytest.mark.parametrize("kwargs", [
     {}, {"include_ghost_cells": True}, {"spatial_selection": slice(0, 2)}, {"time_selection": 0},
@@ -125,6 +127,7 @@ def test_viscosity_label_width_contradiction_is_refused(source, mode, kwargs):
     assert _fingerprint(source) == before
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_face_discovery_keeps_stresses_and_skips_viscosity(source, caplog):
     result = HdfResultsMesh.get_mesh_faces_timeseries(source, AREA, truncate=False)
     assert set(result.data_vars) == {"face_yield_stress", "face_viscous_stress"}
@@ -136,6 +139,7 @@ def test_face_discovery_keeps_stresses_and_skips_viscosity(source, caplog):
     )
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_raw_diagnostic_reports_viscosity_without_relabelling(source):
     before = _fingerprint(source)
     report = HdfResultsMesh.inspect_mesh_series_raw(source, AREA, VISCOSITY, include_values=True)
@@ -167,6 +171,7 @@ def test_raw_diagnostic_reports_viscosity_without_relabelling(source):
     assert _fingerprint(source) == before
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_raw_diagnostic_keeps_qualified_stress_unqualified_physically(source):
     report = HdfResultsMesh.inspect_mesh_series_raw(source, AREA, "Face Yield Stress")
     assert report["typed_status"] == "qualified"

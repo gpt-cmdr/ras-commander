@@ -905,6 +905,12 @@ def _launcher_batch(tmp_path, monkeypatch, *, mode):
     return launcher, rendered, scratch_root, commands
 
 
+posix_node_scratch = pytest.mark.skipif(
+    os.name == "nt", reason="Slurm node scratch must be an absolute POSIX path (tmp_path is not)"
+)
+
+
+@posix_node_scratch
 def test_launcher_binds_private_node_scratch_as_contained_tmp(tmp_path, monkeypatch):
     launcher, rendered, scratch_root, commands = _launcher_batch(
         tmp_path, monkeypatch, mode="pool"
@@ -926,6 +932,7 @@ def test_launcher_binds_private_node_scratch_as_contained_tmp(tmp_path, monkeypa
     assert list(scratch_root.iterdir()) == []
 
 
+@posix_node_scratch
 def test_launcher_uses_prolog_job_scratch_under_root_owned_parent(tmp_path, monkeypatch):
     launcher, rendered, scratch_root, commands = _launcher_batch(
         tmp_path, monkeypatch, mode="pool"
@@ -941,6 +948,7 @@ def test_launcher_uses_prolog_job_scratch_under_root_owned_parent(tmp_path, monk
     assert list((scratch_root / "77").iterdir()) == []
 
 
+@posix_node_scratch
 def test_launcher_rejects_job_scratch_owned_by_someone_else(tmp_path, monkeypatch):
     launcher, rendered, scratch_root, commands = _launcher_batch(
         tmp_path, monkeypatch, mode="pool"
@@ -956,6 +964,7 @@ def test_launcher_rejects_job_scratch_owned_by_someone_else(tmp_path, monkeypatc
     assert commands == []
 
 
+@posix_node_scratch
 def test_launcher_array_index_runs_exactly_one_request(tmp_path, monkeypatch):
     launcher, rendered, _, commands = _launcher_batch(
         tmp_path, monkeypatch, mode="array"
@@ -970,6 +979,7 @@ def test_launcher_array_index_runs_exactly_one_request(tmp_path, monkeypatch):
     assert launcher.main([str(batch), "--array-index", "-1"]) == 2
 
 
+@posix_node_scratch
 def test_launcher_scratch_requires_slurm_job(tmp_path, monkeypatch):
     launcher, rendered, _, commands = _launcher_batch(
         tmp_path, monkeypatch, mode="pool"
@@ -1021,6 +1031,7 @@ def test_slurm_array_status_summarizes_every_task(tmp_path, monkeypatch, sacct, 
     assert RasSlurm.status(submission).allocation_state == expected
 
 
+@posix_node_scratch
 def test_launcher_accepts_a_symlinked_node_scratch_root(tmp_path, monkeypatch):
     launcher, rendered, scratch_root, commands = _launcher_batch(
         tmp_path, monkeypatch, mode="pool"

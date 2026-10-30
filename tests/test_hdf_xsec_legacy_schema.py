@@ -252,6 +252,7 @@ def _convert_fixture_to_modern_schema(path: Path) -> None:
         bank_lines.move("Bank Lines Points", "Polyline Points")
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_reads_hec_ras_5_separated_cross_section_schema(tmp_path, monkeypatch):
     hdf_path = tmp_path / "Legacy.g01.hdf"
     _write_legacy_geometry_hdf(hdf_path)
@@ -290,6 +291,7 @@ def test_reads_hec_ras_5_separated_cross_section_schema(tmp_path, monkeypatch):
     assert cross_sections.iloc[1]["ineffective_blocks"] == []
 
 
+@pytest.mark.synthetic_hdf_layout
 @pytest.mark.parametrize("selector", [1, "01", "p01"])
 def test_get_cross_sections_resolves_selector_with_ras_object(
     tmp_path,
@@ -323,6 +325,7 @@ def test_get_cross_sections_resolves_selector_with_ras_object(
     assert cross_sections["RS"].tolist() == ["200", "100"]
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_get_cross_sections_accepts_path_string_and_open_hdf(tmp_path, monkeypatch):
     hdf_path = tmp_path / "Legacy.g01.hdf"
     _write_legacy_geometry_hdf(hdf_path)
@@ -346,6 +349,7 @@ def test_get_cross_sections_unresolved_input_raises_file_not_found(tmp_path):
         HdfXsec.get_cross_sections(missing)
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_multipart_cross_section_preserves_disjoint_parts(tmp_path, monkeypatch):
     hdf_path = tmp_path / "Legacy.g01.hdf"
     _write_legacy_geometry_hdf(hdf_path)
@@ -418,6 +422,7 @@ def test_legacy_schema_row_mismatch_fails_closed(tmp_path):
     assert HdfXsec.get_cross_sections(hdf_path).empty
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_legacy_schema_out_of_bounds_profile_slice_fails_closed(tmp_path):
     hdf_path = tmp_path / "Legacy.g01.hdf"
     _write_legacy_geometry_hdf(hdf_path)
@@ -427,6 +432,7 @@ def test_legacy_schema_out_of_bounds_profile_slice_fails_closed(tmp_path):
     assert HdfXsec.get_cross_sections(hdf_path).empty
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_legacy_schema_fractional_profile_slice_fails_closed(tmp_path):
     hdf_path = tmp_path / "Legacy.g01.hdf"
     _write_legacy_geometry_hdf(hdf_path)
@@ -441,6 +447,7 @@ def test_legacy_schema_fractional_profile_slice_fails_closed(tmp_path):
     assert HdfXsec.get_cross_sections(hdf_path).empty
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_legacy_schema_out_of_bounds_declared_polyline_fails_closed(tmp_path):
     hdf_path = tmp_path / "Legacy.g01.hdf"
     _write_legacy_geometry_hdf(hdf_path)
@@ -450,6 +457,7 @@ def test_legacy_schema_out_of_bounds_declared_polyline_fails_closed(tmp_path):
     assert HdfXsec.get_cross_sections(hdf_path).empty
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_reads_legacy_centerline_and_bank_line_schemas(tmp_path, monkeypatch):
     hdf_path = tmp_path / "Legacy.g01.hdf"
     _write_legacy_geometry_hdf(hdf_path)
@@ -473,6 +481,7 @@ def test_reads_legacy_centerline_and_bank_line_schemas(tmp_path, monkeypatch):
     assert bank_lines.geometry.apply(lambda geometry: len(geometry.coords)).tolist() == [2, 2]
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_multipart_legacy_centerline_preserves_disjoint_parts(tmp_path, monkeypatch):
     hdf_path = tmp_path / "Legacy.g01.hdf"
     _write_legacy_geometry_hdf(hdf_path)

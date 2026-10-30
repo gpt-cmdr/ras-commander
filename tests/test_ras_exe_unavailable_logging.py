@@ -3,8 +3,10 @@
 from importlib import import_module
 import logging
 import sys
+from pathlib import Path
 
 from ras_commander.RasPrj import RasPrj, get_ras_exe, init_ras_project
+from ras_commander.RasTcu import RasTcu, TcuStatus
 from ras_commander.RasUtils import RasUtils
 
 
@@ -25,6 +27,18 @@ def _stub_environment(monkeypatch, platform, discovered=None):
     monkeypatch.setattr(
         RasUtils, "discover_ras_versions", staticmethod(lambda: dict(discovered or {}))
     )
+    # get_ras_exe also probes C:/Program Files (x86)/HEC/HEC-RAS/<version>/Ras.exe
+    # directly; hide real installs so the host machine cannot change the result.
+    real_is_file = Path.is_file
+    monkeypatch.setattr(
+        Path,
+        "is_file",
+        lambda path: "/HEC/HEC-RAS/" not in path.as_posix() and real_is_file(path),
+    )
+    if platform != "win32":
+        # RasTcu.status follows os.name, not sys.platform: return its off-Windows result.
+        not_windows = TcuStatus(None, None, None, None, "not-windows")
+        monkeypatch.setattr(RasTcu, "status", staticmethod(lambda *a, **k: not_windows))
 
     def fake_initialize(self, project_folder, ras_exe_path, **_kwargs):
         self.project_folder = project_folder

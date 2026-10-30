@@ -972,7 +972,9 @@ def test_forced_timeout_terminates_only_owned_process_tree(tmp_path):
     with pytest.raises(subprocess.TimeoutExpired):
         host.run_owned_process(
             [sys.executable, "-c", child_code, str(child_pid)],
-            timeout=0.75,
+            # Long enough for both interpreters to start on a loaded machine; the
+            # tree still sleeps 60 s, so the forced-timeout path is what runs.
+            timeout=10,
             cwd=tmp_path,
             env=dict(os.environ),
         )

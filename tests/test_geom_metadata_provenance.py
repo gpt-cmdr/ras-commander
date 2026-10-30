@@ -2,6 +2,7 @@ from pathlib import Path
 
 import h5py
 import numpy as np
+import pytest
 
 from ras_commander.RasPrj import RasPrj
 from ras_commander.geom.GeomMetadata import GeomMetadata
@@ -91,6 +92,7 @@ def test_text_parser_pairs_storage_area_name_with_is2d_flag(tmp_path):
     assert metadata["mesh_cell_count"] is None
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_hdf_cell_info_proves_2d_when_attributes_are_absent(tmp_path):
     hdf_path = tmp_path / "Model.g04.hdf"
     with h5py.File(hdf_path, "w") as hdf:

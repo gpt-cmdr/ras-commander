@@ -29,6 +29,7 @@ def _cfile_prepared(path, file_version):
         info.attrs["Simulation End Time"] = np.bytes_("01Jan2020 01:00:00")
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_mesh_property_tables_are_optional_only_when_requested(tmp_path):
     path = tmp_path / "x.hdf"
     _cfile_prepared(path, FILE_VERSIONS["6.1"])
@@ -94,6 +95,7 @@ def _fake_cfile_success(project, engine, plan, timeout, num_cores):
     return True
 
 
+@pytest.mark.synthetic_hdf_layout
 @pytest.mark.parametrize("version", ["5.0.7", "6.1"])
 def test_cfile_release_publishes_without_hdf_property_tables(packet, monkeypatch, version):
     _as_release(packet, version)
@@ -106,6 +108,7 @@ def test_cfile_release_publishes_without_hdf_property_tables(packet, monkeypatch
     assert packet["project"].with_suffix(".p01.hdf").is_file()
 
 
+@pytest.mark.synthetic_hdf_layout
 @pytest.mark.parametrize("problem", ["missing", "empty"])
 def test_cfile_release_requires_computed_geometry(packet, monkeypatch, problem):
     _as_release(packet, "6.1")
@@ -122,6 +125,7 @@ def test_cfile_release_requires_computed_geometry(packet, monkeypatch, problem):
     assert "Example.c01" in payload["error"]["message"]
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_cfile_computed_geometry_change_during_solve_blocks_publication(packet, monkeypatch):
     _as_release(packet, "6.1")
 
@@ -135,6 +139,7 @@ def test_cfile_computed_geometry_change_during_solve_blocks_publication(packet, 
     assert "changed during native compute" in json.loads(receipt.read_text())["error"]["message"]
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_tmphdf_release_still_requires_hdf_property_tables(packet, monkeypatch):
     _as_release(packet, "6.1")
     manifest = json.loads(packet["manifest"].read_text())
