@@ -725,6 +725,90 @@ class RasFim:
 
         return _terrain_scope.top_priority_source(terrain_hdf, rasmap_path)
 
+    #: Engine method ID of the native effective terrain.
+    EFFECTIVE_TERRAIN_METHOD = "rasmapper-effective-terrain/1"
+
+    @staticmethod
+    def supports_effective_terrain(engine_path: Optional[PathLike] = None) -> bool:
+        """Whether the installed engine builds RAS Mapper's effective terrain.
+
+        True when ``ras2fim-batch method`` advertises
+        ``rasmapper-effective-terrain/1``. Never raises for a missing engine.
+
+        Args:
+            engine_path: Engine executable, otherwise environment/PATH.
+
+        Returns:
+            bool: :meth:`build_effective_terrain` is available.
+        """
+        from . import _effective_terrain
+
+        try:
+            engine = _engine.find_engine(engine_path)
+        except Exception:
+            return False
+        return _effective_terrain.engine_supports(engine)
+
+    @staticmethod
+    @log_call
+    def build_effective_terrain(
+        terrain_hdf: PathLike, output_path: PathLike, *,
+        rasmap_path: Optional[PathLike] = None,
+        engine_path: Optional[PathLike] = None,
+        threads: int = 1, max_working_mib: int = 4096,
+        timeout: Optional[float] = None,
+        terrain_crs_fnv1a64: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """Build RAS Mapper's effective terrain of an unmodified terrain in Rust.
+
+        Writes the float32 grid ``RasTerrain.export_rasmapper_terrain(
+        downsample_factor=1, rasterize_modifications=False)`` obtains from
+        RasMapperLib, without HEC-RAS: stitch TIN first, then the sources in
+        proven priority order (``Priority`` attributes or the terrain VRT),
+        each answering where its four surrounding pixel centres are valid and
+        in its level-0 footprint, rounded to binary32 and 1/32 as RAS Mapper
+        stores terrain. Output: 256 x 256 tiled DEFLATE GeoTIFF, nodata
+        -9999, on the finest source's lattice over the union of the source
+        extents, plus ``<output>.json`` (the returned receipt).
+
+        Qualified against HEC-RAS 7.0.1 exports: Bald Eagle Terrain50 (two
+        sources, 197,179,058 valid px) has an identical valid mask and 8
+        values differ, all in stitch-TIN corners where RAS Mapper's own
+        exports are unstable; synthetic one-to-three-source terrains are
+        bit-identical on 4 of 5 (5 stitch-TIN corner px on the fifth).
+
+        Args:
+            terrain_hdf: Registered terrain HDF.
+            output_path: New ``.tif`` path (replaced if it exists).
+            rasmap_path: Optional rasmap; modification layers registered there
+                for this terrain are also refused.
+            engine_path: Engine executable, otherwise environment/PATH.
+            threads: Engine worker threads (1-64).
+            max_working_mib: Engine memory admission; the output is held in
+                memory (4 bytes/px plus a 1-bit TIN map).
+            timeout: Engine timeout in seconds.
+            terrain_crs_fnv1a64: Caller-verified WKT hash when the source CRS
+                has no EPSG identification in the engine.
+
+        Returns:
+            dict: Receipt with ``method_id``, ``sources_in_priority_order``,
+            ``priority_basis``, ``seconds`` and the engine ``engine_report``.
+
+        Raises:
+            FimUnsupportedError: Terrain modifications, unproven priority,
+                missing masks, an engine without the method, or an engine
+                refusal (sources in different CRSs, non-square cells).
+            FimEngineNotFoundError: The optional executable is unavailable.
+            FimEngineError: Engine failure.
+        """
+        from . import _effective_terrain
+
+        return _effective_terrain.build(
+            terrain_hdf, output_path, rasmap_path=rasmap_path, engine_path=engine_path,
+            threads=threads, max_working_mib=max_working_mib, timeout=timeout,
+            terrain_crs_fnv1a64=terrain_crs_fnv1a64,
+        )
+
     @staticmethod
     @log_call
     def map_whole_simulation(
