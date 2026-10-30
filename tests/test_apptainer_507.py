@@ -258,6 +258,12 @@ exec bash "$control/../engine.local.sh"
 '''
 
 
+posix_site_profile = pytest.mark.skipif(
+    os.name == "nt", reason="Apptainer site profiles require absolute POSIX paths (tmp_path is not)"
+)
+
+
+@posix_site_profile
 @pytest.mark.skipif(BASH is None, reason="bash is unavailable")
 def test_rendered_bin_ras_engine_runs_and_promotes_tmp_hdf(project507, profile507, tmp_path):
     engine_dir = _fake_engine_dir(tmp_path)
@@ -287,6 +293,7 @@ def test_rendered_bin_ras_engine_runs_and_promotes_tmp_hdf(project507, profile50
     assert _validate_collected_solve(dest, job, END_TIME) is None
 
 
+@posix_site_profile
 @pytest.mark.skipif(BASH is None, reason="bash is unavailable")
 def test_bin_ras_engine_fails_clearly_without_executable_solver(project507, profile507, tmp_path):
     engine_dir = tmp_path / "empty-engine"
@@ -305,6 +312,7 @@ def test_bin_ras_engine_fails_clearly_without_executable_solver(project507, prof
     assert "rasUnsteady64 is missing or not executable" in done.stderr
 
 
+@posix_site_profile
 @pytest.mark.skipif(BASH is None, reason="bash is unavailable")
 def test_bin_ras_job_end_to_end_with_fake_apptainer_and_collect(project507, profile507, tmp_path):
     from test_apptainer_execution import FakeTransport, SACCT_DONE
