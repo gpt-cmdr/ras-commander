@@ -14,8 +14,9 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
-from shapely import contains_xy
-from shapely.geometry import LineString, Point, Polygon
+
+# shapely is imported inside the functions that need it: GeomMesh imports this
+# module, and ras_commander.geom must import on a core install without shapely.
 
 
 @dataclass(frozen=True)
@@ -78,6 +79,9 @@ def _repair(
     max_area_loss_fraction=0.001,
 ):
     """Bound midpoint/perimeter repairs, including MaxFaces after every cut."""
+    from shapely import contains_xy
+    from shapely.geometry import Polygon
+
     for value in (max_parent_seed_loss_fraction, max_area_loss_fraction):
         if isinstance(value, bool) or not np.isfinite(value) or not 0 <= value <= 1:
             raise ValueError(
@@ -292,6 +296,8 @@ def _native_constraints(coordinates, ns):
 
 
 def _audit_text_features(path, name, polygon, allow_extended_connection_support=False):
+    from shapely.geometry import LineString, Point
+
     from .GeomBcLines import GeomBcLines
     from .GeomLateral import GeomLateral
 
@@ -357,6 +363,8 @@ def _plan(
     max_area_loss_fraction,
     allow_extended_connection_support,
 ):
+    from shapely.geometry import Polygon
+
     from .GeomStorage import GeomStorage
 
     gm = importlib.import_module("ras_commander.geom.GeomMesh")
