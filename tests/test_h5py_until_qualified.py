@@ -19,7 +19,6 @@ from ras_commander import fast_hdf
 # Modules that decorate functions with h5py_until_qualified.
 DECORATING_MODULES = [
     "ras_commander.check._utils",
-    "ras_commander.check.check_floodways",
     "ras_commander.geom.GeomMesh",
     "ras_commander.geom.GeomProjection",
     "ras_commander.hdf.HdfInfiltration",
