@@ -163,6 +163,7 @@ def test_aliases_and_exact_registry_metadata():
     assert asset["extract"] is False
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_organizer_exact_contract_repairs_and_reuse(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, fixture_identity
 ):
@@ -370,6 +371,7 @@ def test_all_28_path_equivalent_hdf_attributes_are_preserved(tmp_path: Path):
         )
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_public_dispatchers_organize_and_download_austin_oyster(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

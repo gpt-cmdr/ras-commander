@@ -4,7 +4,7 @@ import json
 from pathlib import Path
 
 
-NOTEBOOK_PATH = Path("examples/924_mrms_netcdf_rain_on_grid.ipynb")
+NOTEBOOK_PATH = Path(__file__).resolve().parents[1] / "examples/924_mrms_netcdf_rain_on_grid.ipynb"
 
 
 def _code_source() -> str:

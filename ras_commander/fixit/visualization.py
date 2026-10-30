@@ -10,9 +10,12 @@ The visualization shows:
 """
 
 from pathlib import Path
-from typing import List
+from typing import TYPE_CHECKING, List
 
 from ..LoggingConfig import get_logger
+
+if TYPE_CHECKING:
+    from .obstructions import BlockedObstruction
 
 logger = get_logger(__name__)
 

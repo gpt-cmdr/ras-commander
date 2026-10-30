@@ -45,6 +45,7 @@ def _descriptions(assets: pd.DataFrame) -> pd.Series:
     return assets["reason_code"].eq("inline_or_structured_boundary").fillna(False)
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_public_inline_boundary_stage_passes_without_changing_inventory(tmp_path: Path):
     project = _inline_project(tmp_path / "source")
     staged = stage_project(project, tmp_path / "stage")
@@ -65,6 +66,7 @@ def test_public_inline_boundary_stage_passes_without_changing_inventory(tmp_path
     assert staged.copied_fingerprint == staged.source_fingerprint_before
 
 
+@pytest.mark.synthetic_hdf_layout
 @pytest.mark.parametrize(
     ("field", "value"),
     [
@@ -96,6 +98,7 @@ def test_noncanonical_boundary_row_is_not_exempted(tmp_path: Path, field, value)
         )
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_boundary_owner_must_be_a_proved_internal_unsteady_file(tmp_path: Path):
     staged = stage_project(_inline_project(tmp_path / "source"), tmp_path / "stage")
     assets = staged.assets.copy()
@@ -110,6 +113,7 @@ def test_boundary_owner_must_be_a_proved_internal_unsteady_file(tmp_path: Path):
         )
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_boundary_with_unproved_owning_file_inventory_is_not_exempted(tmp_path: Path):
     staged = stage_project(_inline_project(tmp_path / "source"), tmp_path / "stage")
     assets = staged.assets.copy()
@@ -122,6 +126,7 @@ def test_boundary_with_unproved_owning_file_inventory_is_not_exempted(tmp_path: 
         )
 
 
+@pytest.mark.synthetic_hdf_layout
 @pytest.mark.parametrize("dependency", ["external", "missing", "uninspected"])
 def test_inline_description_never_exempts_dss_child_dependency(tmp_path: Path, dependency):
     dss_file = str(tmp_path / "outside.dss") if dependency == "external" else "input.dss"
@@ -148,6 +153,7 @@ def test_inline_description_never_exempts_dss_child_dependency(tmp_path: Path, d
         )
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_unrecognized_use_dss_still_rejects_ambiguous_dependency(tmp_path: Path):
     project = _inline_project(tmp_path / "source", use_dss="Unrecognized")
     staged = stage_project(project, tmp_path / "stage")

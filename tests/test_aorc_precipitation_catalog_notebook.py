@@ -3,7 +3,7 @@ from pathlib import Path
 import nbformat
 
 
-NOTEBOOK = Path("examples/901_aorc_precipitation_catalog.ipynb")
+NOTEBOOK = Path(__file__).resolve().parents[1] / "examples/901_aorc_precipitation_catalog.ipynb"
 
 
 def test_aorc_catalog_notebook_is_executed_serial_batch_precompute():

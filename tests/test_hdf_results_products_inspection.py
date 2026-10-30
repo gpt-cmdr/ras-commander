@@ -133,6 +133,7 @@ def _write_inspection_hdf(
         )
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_inspect_result_reports_current_completion_and_inputs(
     tmp_path,
     caplog,
@@ -181,6 +182,7 @@ def test_inspect_result_reports_current_completion_and_inputs(
     assert "hydraulic QA/QC not evaluated" in caplog.text
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_inspect_result_accepts_legacy_embedded_completion(tmp_path):
     hdf_path = tmp_path / "legacy.p01.hdf"
     _write_inspection_hdf(
@@ -199,6 +201,7 @@ def test_inspect_result_accepts_legacy_embedded_completion(tmp_path):
     assert result["meshes"][0]["depth_source"] == "stored_depth"
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_inspect_result_rejects_conflicting_completion(tmp_path):
     hdf_path = tmp_path / "conflict.p01.hdf"
     _write_inspection_hdf(hdf_path, completion_attribute=False)
@@ -242,6 +245,7 @@ def test_inspect_result_rejects_misleading_completion_substrings(
         HdfResultsProducts.inspect_result(hdf_path)
 
 
+@pytest.mark.synthetic_hdf_layout
 @pytest.mark.parametrize(
     "message_text",
     [
@@ -268,6 +272,7 @@ def test_inspect_result_accepts_exact_legacy_completion_records(
     ] is True
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_inspect_result_rejects_disagreeing_timestamp_datasets(tmp_path):
     hdf_path = tmp_path / "time-conflict.p01.hdf"
     _write_inspection_hdf(hdf_path, plain_time_offset_hours=1)
@@ -276,6 +281,7 @@ def test_inspect_result_rejects_disagreeing_timestamp_datasets(tmp_path):
         HdfResultsProducts.inspect_result(hdf_path)
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_inspect_result_rejects_result_time_axis_mismatch(tmp_path):
     hdf_path = tmp_path / "velocity-conflict.p01.hdf"
     _write_inspection_hdf(hdf_path, velocity_time_count=1)
@@ -284,6 +290,7 @@ def test_inspect_result_rejects_result_time_axis_mismatch(tmp_path):
         HdfResultsProducts.inspect_result(hdf_path)
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_inspect_result_rejects_missing_topology(tmp_path):
     hdf_path = tmp_path / "missing-topology.p01.hdf"
     _write_inspection_hdf(hdf_path)
@@ -296,6 +303,7 @@ def test_inspect_result_rejects_missing_topology(tmp_path):
         HdfResultsProducts.inspect_result(hdf_path)
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_inspect_result_rejects_face_ids_outside_velocity_array(tmp_path):
     hdf_path = tmp_path / "invalid-face-id.p01.hdf"
     _write_inspection_hdf(hdf_path)
@@ -309,6 +317,7 @@ def test_inspect_result_rejects_face_ids_outside_velocity_array(tmp_path):
         HdfResultsProducts.inspect_result(hdf_path)
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_inspect_result_rejects_contradictory_units(tmp_path):
     hdf_path = tmp_path / "unit-conflict.p01.hdf"
     _write_inspection_hdf(hdf_path, contradictory_units=True)

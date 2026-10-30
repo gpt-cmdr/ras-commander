@@ -15,6 +15,7 @@ from typing import Optional, Sequence
 
 from .ExecutionContract import RasExecutionRequest
 from .PortableExecution import execute_request as _execute_portable_request
+from ..fast_hdf import release_native_sessions
 
 _WINE_PREFIX_SEED = "RAS_COMMANDER_WINE_PREFIX_SEED"
 _WINE_PYTHON = "RAS_COMMANDER_WINE_PYTHON"
@@ -366,6 +367,7 @@ def _execute_with_wine(
             if wine_invoked and prefix.is_dir():
                 _shutdown_wineserver(tools["wineserver"], environment)
         finally:
+            release_native_sessions(task_root)
             shutil.rmtree(task_root)
 
 

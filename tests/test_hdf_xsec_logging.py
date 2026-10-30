@@ -240,6 +240,7 @@ def test_river_bank_lines_handles_odd_counts(
     assert banks["bank_side"].tolist() == ["Left", "Right", "Left"]
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_cross_sections_assigns_geometry_crs(tmp_path: Path):
     hdf_path = _write_minimal_xsec_hdf(tmp_path / "xsecs.g01.hdf")
 

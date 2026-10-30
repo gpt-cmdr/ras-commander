@@ -10,6 +10,7 @@ import tempfile
 import time
 
 from ._catalog import _write_json, _check_sources
+from ..fast_hdf import release_native_sessions
 
 
 def _horizontal_cells(job, selectors, budget, threads):
@@ -197,6 +198,7 @@ def _run_unit(unit, config, emit):
                 raise
             finally:
                 if batch.exists():
+                    release_native_sessions(batch)
                     shutil.rmtree(batch)
 
 
