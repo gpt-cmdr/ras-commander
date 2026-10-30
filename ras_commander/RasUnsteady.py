@@ -4662,6 +4662,7 @@ class RasUnsteady:
         current_boundary = None
         current_tables = {}
         current_table = None
+        current_table_name = None
         table_values = []
         
         i = 0
