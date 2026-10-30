@@ -36,6 +36,12 @@ logger = get_logger(__name__)
 #: Releases whose command-line launcher ignores the requested plan.
 SINGLE_PLAN_PROJECT_RELEASES = frozenset({(7, 0, 2)})
 
+# Exact locally patched frontend; no vendor executable or patch is distributed.
+# Unknown or unreadable builds retain the release-specific project guard.
+_SINGLE_PLAN_CLI_SHA256 = frozenset({
+    "039863ff8d31cf9d2ae2aa5fdc1d4024a61a75f46ba49f2448672acc0336a0b6",
+})
+
 CLAIM_SUFFIX = ".single-plan.claim"
 BACKUP_SUFFIX = ".single-plan.orig"
 TEMP_SUFFIX = ".single-plan.tmp"
@@ -121,9 +127,25 @@ def single_plan_project_required(
     ras_exe_path: Any = None,
     ras_version: Any = None,
 ) -> bool:
-    """Return whether the selected engine needs a single-plan declaration."""
+    """Require the guard unless this release has an exact recognized CLI patch."""
     release = ras_release_tuple(ras_exe_path=ras_exe_path, ras_version=ras_version)
-    return release in SINGLE_PLAN_PROJECT_RELEASES
+    if release not in SINGLE_PLAN_PROJECT_RELEASES:
+        return False
+    if ras_exe_path:
+        try:
+            # Recheck bytes on each call; replacing the executable must not
+            # reuse a previous decision for the same path.
+            digest = hashlib.sha256()
+            with Path(ras_exe_path).open("rb") as stream:
+                for block in iter(lambda: stream.read(1024 * 1024), b""):
+                    digest.update(block)
+            if digest.hexdigest() in _SINGLE_PLAN_CLI_SHA256:
+                logger.debug("Recognized single-plan CLI patch; project guard skipped")
+                return False
+        except OSError:
+            # Missing paths and failed reads do not establish patched behavior.
+            pass
+    return True
 
 
 def _normalize_plan_entry(plan_number: Any) -> str:

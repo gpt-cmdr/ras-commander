@@ -51,6 +51,22 @@ it cannot detect every interactive GUI session. The version gate uses the
 executable's versioned parent folder or the recorded version term, so a copied
 executable in an unversioned folder is outside this qualification.
 
+For an explicitly installed local CLI patch, RAS Commander skips the project
+guard only when the executable's SHA-256 is
+`039863ff8d31cf9d2ae2aa5fdc1d4024a61a75f46ba49f2448672acc0336a0b6`.
+It checks the executable bytes on each decision; unknown or unreadable builds
+retain the guard. This recognition does not install or distribute a patched
+HEC-RAS executable.
+
+On Windows, this exact patched frontend completed public BaldEagle plan 03
+through `RasCmdr.compute_plan()` with all project plan declarations retained
+and the `.prj` unchanged throughout the run. The solver reported the requested
+two cores and no other plan ran. HEC-RAS still writes normal plan, geometry,
+and result artifacts during computation. The same patched frontend also
+preprocessed plan 04 through the updated library with the guard bypassed,
+the `.prj` unchanged, and no owned engine processes remaining. These checks do
+not qualify other patched builds, steady plans, or GUI/COM behavior.
+
 Native Windows checks on the public BaldEagle project preprocessed plans 03
 and 04 individually, completed and verified unsteady plan 03 without starting
 another plan, and restored the original project after a bounded timeout.

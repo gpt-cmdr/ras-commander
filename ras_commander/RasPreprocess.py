@@ -172,10 +172,12 @@ class RasPreprocess:
         does not exist. Those releases would otherwise skip the geometry and
         write no 2D mesh.
 
-        HEC-RAS 7.0.2 temporarily receives a project declaration containing only
+        Unpatched HEC-RAS 7.0.2 temporarily receives a project declaration containing only
         this plan. The original project bytes are restored after owned processes
         stop. An unproved stop retains the single-plan file, original backup,
         and claim and fails the result with a recovery diagnostic.
+        An exact recognized local CLI patch skips the project transaction;
+        the single-plan execution guide records its SHA-256 and tested scope.
 
         Args:
             plan_number: Plan number to preprocess (e.g., "01", 1).

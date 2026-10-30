@@ -3236,11 +3236,13 @@ class RasCmdr:
                 after the engine deadline when necessary, so wall-clock return
                 time can exceed ``max_runtime`` while ras-commander proves a
                 safe terminal state.
-            - HEC-RAS 7.0.2 temporarily receives a project declaration containing
+            - Unpatched HEC-RAS 7.0.2 temporarily receives a project declaration containing
                 only this plan because its launcher runs every listed plan.
                 The original project is restored after owned processes stop.
                 An unproved stop retains the single-plan file and original
                 backup; inspect ``execution_details["single_plan_project"]``.
+                An exact recognized local CLI patch bypasses this transaction;
+                see the single-plan execution guide for its SHA-256 and scope.
         """
         if type(disable_omp_affinity) is not bool:
             raise TypeError("disable_omp_affinity must be a bool")

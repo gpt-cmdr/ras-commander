@@ -10,6 +10,7 @@ routes with exact-path fake launchers; they are not hydraulic qualification.
 """
 
 import importlib
+import hashlib
 import json
 import os
 import socket
@@ -156,10 +157,37 @@ def _write_claim(prj: Path, *, owner, original: bytes, filtered: bytes, mode=0o6
         (None, None, False),
     ],
 )
-def test_single_plan_project_gate_is_702_only(ras_exe_path, ras_version, expected):
+def test_single_plan_project_gate_is_702_only(
+    ras_exe_path, ras_version, expected, monkeypatch
+):
+    # This test covers release selection independently of installed local patches.
+    monkeypatch.setattr(single_plan, "_SINGLE_PLAN_CLI_SHA256", frozenset())
     assert single_plan.single_plan_project_required(
         ras_exe_path=ras_exe_path, ras_version=ras_version
     ) is expected
+
+
+def test_exact_cli_patch_skips_guard_and_replacement_is_rechecked(tmp_path, monkeypatch):
+    executable = _make_executable(tmp_path, RELEASE_702)
+    # Synthetic file identity exercises hash gating only, not native behavior.
+    patched_bytes = b"test-only recognized executable bytes"
+    executable.write_bytes(patched_bytes)
+    monkeypatch.setattr(single_plan, "_SINGLE_PLAN_CLI_SHA256", frozenset({
+        hashlib.sha256(patched_bytes).hexdigest(),
+    }))
+    assert not single_plan.single_plan_project_required(ras_exe_path=executable)
+    executable.write_bytes(b"different build at the same path")
+    assert single_plan.single_plan_project_required(ras_exe_path=executable)
+
+
+def test_unknown_and_unreadable_702_builds_keep_guard(tmp_path):
+    executable = _make_executable(tmp_path, RELEASE_702)
+    assert single_plan.single_plan_project_required(ras_exe_path=executable)
+    executable.unlink()
+    assert single_plan.single_plan_project_required(ras_exe_path=executable)
+    # A directory cannot be read as an executable on either platform.
+    executable.mkdir()
+    assert single_plan.single_plan_project_required(ras_exe_path=executable)
 
 
 # ------------------------------------------------------------ pure filtering
