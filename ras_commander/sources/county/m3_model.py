@@ -54,6 +54,7 @@ import logging
 from tqdm.auto import tqdm
 from ras_commander import get_logger
 from ras_commander.LoggingConfig import log_call
+from ras_commander.fast_hdf import release_native_sessions
 
 logger = get_logger(__name__)
 
@@ -424,6 +425,7 @@ class M3Model:
             else:
                 logger.debug(f"Removing existing model '{model_name}'...")
                 try:
+                    release_native_sessions(model_folder)
                     shutil.rmtree(model_folder)
                     logger.debug(f"Existing folder deleted")
                 except Exception as e:
@@ -483,6 +485,7 @@ class M3Model:
         except Exception as e:
             logger.error(f"Failed to extract model '{model_id}': {e}")
             if model_folder.exists():
+                release_native_sessions(model_folder)
                 shutil.rmtree(model_folder)
             raise
         finally:
@@ -679,6 +682,7 @@ class M3Model:
 
         if target_dir.exists():
             try:
+                release_native_sessions(target_dir)
                 shutil.rmtree(target_dir)
                 logger.debug("All models have been removed.")
             except Exception as e:

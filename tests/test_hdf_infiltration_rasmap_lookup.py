@@ -102,6 +102,7 @@ def test_implicit_lookup_has_clear_status_aware_errors(
         _call(method_name, ras_object)
 
 
+@pytest.mark.synthetic_hdf_layout
 @pytest.mark.parametrize(
     "method_name",
     ["get_infiltration_map", "get_infiltration_parameters"],
@@ -130,6 +131,7 @@ def test_implicit_lookup_reads_configured_path(
         }
 
 
+@pytest.mark.synthetic_hdf_layout
 @pytest.mark.parametrize(
     "method_name",
     ["get_infiltration_map", "get_infiltration_parameters"],
@@ -148,6 +150,7 @@ def test_legacy_rasmap_df_without_status_remains_usable(
     assert result is not None
 
 
+@pytest.mark.synthetic_hdf_layout
 @pytest.mark.parametrize(
     "method_name",
     ["get_infiltration_map", "get_infiltration_parameters"],
@@ -170,6 +173,7 @@ def test_explicit_path_bypasses_failed_rasmap_status(
     assert result is not None
 
 
+@pytest.mark.synthetic_hdf_layout
 @pytest.mark.parametrize(
     "method_name",
     ["get_infiltration_map", "get_infiltration_parameters"],
@@ -192,6 +196,7 @@ def test_unrelated_partial_field_error_does_not_block_lookup(
     assert result is not None
 
 
+@pytest.mark.synthetic_hdf_layout
 @pytest.mark.parametrize(
     "method_name",
     ["get_infiltration_map", "get_infiltration_parameters"],

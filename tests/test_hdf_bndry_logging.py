@@ -205,6 +205,7 @@ def test_boundary_parse_errors_include_hdf_path_and_group(
     assert "Geometry/Boundary Condition Lines" in messages[0]
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_reference_line_missing_type_logs_debug_fallback(
     tmp_path: Path,
     caplog: pytest.LogCaptureFixture,
@@ -221,6 +222,7 @@ def test_reference_line_missing_type_logs_debug_fallback(
     assert any("using blank Type values" in message for message in messages)
 
 
+@pytest.mark.synthetic_hdf_layout
 @pytest.mark.parametrize("point_count", [0, 1])
 @pytest.mark.parametrize("valid_line", [False, True])
 def test_degenerate_breaklines_keep_native_diagnostics(tmp_path, point_count, valid_line):
@@ -257,6 +259,7 @@ def test_degenerate_breaklines_keep_native_diagnostics(tmp_path, point_count, va
         assert list(result.geometry.iloc[0].coords) == [(0.0, 0.0), (1.0, 1.0)]
 
 
+@pytest.mark.synthetic_hdf_layout
 @pytest.mark.parametrize("span", [(-1, 1, 0, 1), (0, -1, 0, 1), (3, 0, 0, 1),
                                   (2, 1, 0, 1), (1, 2, 0, 1), (0, 1, -1, 1),
                                   (0, 1, 0, -1), (0, 1, 1, 1)])
@@ -278,6 +281,7 @@ def test_clean_and_missing_breaklines_have_empty_diagnostics(tmp_path):
     assert HdfBndry.get_breaklines(path).attrs["breakline_diagnostics"] == []
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_degenerate_breakline_does_not_renumber_following_native_ids(tmp_path):
     path = tmp_path / "model.g01.hdf"
     _write_valid_breakline_attributes_hdf(path)

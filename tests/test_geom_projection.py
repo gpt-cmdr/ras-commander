@@ -165,6 +165,7 @@ def test_reproject_geometry_transforms_1d_2d_and_line_features(tmp_path):
     assert result["qa"]["breaklines"]["invalid"] == []
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_reproject_model_geometry_copies_project_updates_rasmap_and_reports_terrain(tmp_path):
     project = tmp_path / "project"
     project.mkdir()

@@ -35,6 +35,7 @@ def geometry(tmp_path):
     return path, hdf
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_native_classification_changes_only_type_with_backup(tmp_path, monkeypatch):
     # Python 3.10 does not provide hashlib.file_digest.
     monkeypatch.delattr("hashlib.file_digest", raising=False)
@@ -72,6 +73,7 @@ def test_native_classification_changes_only_type_with_backup(tmp_path, monkeypat
     assert result["before_sha256"] != result["after_sha256"]
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_stale_compiled_bc_coordinates_fail_before_native_work(tmp_path, monkeypatch):
     path, hdf = geometry(tmp_path)
     with h5py.File(hdf, "r+") as handle:
@@ -84,6 +86,7 @@ def test_stale_compiled_bc_coordinates_fail_before_native_work(tmp_path, monkeyp
         GeomBcLines.set_bc_line_types(path, {"Outlet": "External"}, hecras_dir=tmp_path)
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_native_bc_type_truncation_is_rejected(tmp_path, monkeypatch):
     path, _ = geometry(tmp_path)
 
@@ -119,6 +122,7 @@ def test_wrong_geometry_digest_fails_before_native_work(tmp_path):
         )
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_matching_types_preserve_exact_hdf_without_native_writer(tmp_path, monkeypatch):
     path, hdf = geometry(tmp_path)
     original = hdf.read_bytes()
@@ -133,6 +137,9 @@ def test_matching_types_preserve_exact_hdf_without_native_writer(tmp_path, monke
     assert hdf.read_bytes() == original
 
 
+@pytest.mark.synthetic_hdf_layout(
+    "None",
+)
 @pytest.mark.parametrize(
     "defect", [None, "name", "length", "unknown_field", "polyline", "worker_error", "receipt"]
 )
@@ -274,6 +281,7 @@ def native_all_rows(defect=None):
     return native
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_subset_map_changes_requested_line_and_preserves_untouched(tmp_path, monkeypatch):
     path, hdf = two_line_geometry(tmp_path)
     original = hdf.read_bytes()
@@ -296,6 +304,7 @@ def test_subset_map_changes_requested_line_and_preserves_untouched(tmp_path, mon
         assert ds["Length"].tolist() == [1.0, 1.0]
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_subset_no_op_lists_every_line_without_native_writer(tmp_path, monkeypatch):
     path, hdf = two_line_geometry(tmp_path)
     original = hdf.read_bytes()
@@ -310,6 +319,7 @@ def test_subset_no_op_lists_every_line_without_native_writer(tmp_path, monkeypat
     assert hdf.read_bytes() == original
 
 
+@pytest.mark.synthetic_hdf_layout
 @pytest.mark.parametrize(
     ("defect", "message"),
     [

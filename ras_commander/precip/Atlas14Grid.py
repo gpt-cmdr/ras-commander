@@ -41,7 +41,7 @@ References:
 """
 
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple, Union, Literal
+from typing import TYPE_CHECKING, Dict, List, Optional, Tuple, Union, Literal
 
 import numpy as np
 import pandas as pd
@@ -63,6 +63,9 @@ except ImportError:
     h5py = None
 
 from ..LoggingConfig import get_logger, log_call
+
+if TYPE_CHECKING:
+    from ..RasPrj import RasPrj
 
 logger = get_logger(__name__)
 

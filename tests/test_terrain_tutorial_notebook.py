@@ -2,7 +2,7 @@ import json
 from pathlib import Path
 
 
-NOTEBOOK_PATH = Path("examples/920_terrain_creation.ipynb")
+NOTEBOOK_PATH = Path(__file__).resolve().parents[1] / "examples/920_terrain_creation.ipynb"
 OFFICIAL_TUTORIAL_URL = (
     "https://www.hec.usace.army.mil/confluence/rasdocs/hgt/latest/"
     "tutorials/terrain/creating-a-ras-terrain"

@@ -194,6 +194,8 @@ class _FakeRasObject:
 def _write_minimal_plan_hdf(path: Path) -> None:
     with h5py.File(path, "w") as hdf:
         hdf.attrs["Program Version"] = np.bytes_("7.0")
+        hdf.attrs["Units System"] = np.bytes_("US Customary")
+        hdf.require_group("Results")
 
 
 def _write_minimal_geom_hdf(path: Path) -> None:

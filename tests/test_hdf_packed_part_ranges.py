@@ -50,6 +50,7 @@ def test_feature_part_ranges_rejects_other_layouts(parts):
         HdfBase._feature_part_ranges(np.array(parts), 3, 11)
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_polyline_local_parts_with_unused_vertices(tmp_path):
     lead = [[88, 88], [89, 88], [88, 89]]
     feature = [[90, 90], [91, 91], [92, 92], [0, 0], [1, 1], [2, 2], [3, 3],
@@ -62,6 +63,7 @@ def test_polyline_local_parts_with_unused_vertices(tmp_path):
     assert geometry.equals_exact(MultiLineString([feature[3:7], feature[7:]]), 0)
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_mesh_perimeter_local_parts_with_unused_vertices(tmp_path):
     square = [[0, 0], [2, 0], [2, 2], [0, 2], [0, 0]]
     shifted = [[x + 5, y] for x, y in square]
@@ -75,6 +77,7 @@ def test_mesh_perimeter_local_parts_with_unused_vertices(tmp_path):
     assert geometry.equals_exact(MultiPolygon([Polygon(square), Polygon(shifted)]), 0)
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_mesh_perimeter_mixed_conventions_fail_closed(tmp_path):
     square = [[0, 0], [2, 0], [2, 2], [0, 2], [0, 0]]
     points = square + square + [[x + 5, y] for x, y in square]

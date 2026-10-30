@@ -15,4 +15,5 @@ markers = [
     "failure_injection: controlled qualification failure or interruption boundary",
     "slow: long-duration qualification test",
     "packaged_catalog: reads the packaged container image catalog instead of the fixed test catalog",
+    "synthetic_hdf_layout(*ids): writes an HDF layout HEC-RAS does not produce; skipped when RAS_COMMANDER_FAST_HDF requires the native engine (optionally only the listed parametrize ids)",
 ]

@@ -112,7 +112,8 @@ def test_timeout_preserves_both_streams_and_reaps_cli(children):
             "import os, time\n"
             "os.write(1, b'out\\r\\n'); os.write(2, b'err\\n')\n"
             "time.sleep(30)\n"
-        ), timeout=1, on_line=lambda stream, line: seen.append((stream, line)))
+            # Start-up budget for a loaded machine; the child still outlives it.
+        ), timeout=10, on_line=lambda stream, line: seen.append((stream, line)))
     assert caught.value.stdout == "out\r\n"
     assert caught.value.stderr == "err\n"
     assert set(seen) == {("stdout", "out"), ("stderr", "err")}

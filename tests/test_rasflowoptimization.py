@@ -298,6 +298,7 @@ Hydro Flow Optimization Converged Trial # 4 Ratio 0.613
     assert bool(df.loc[3, "converged"]) is True
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_get_trial_results_reads_hdf_dataset(tmp_path):
     hdf_path = tmp_path / "Project.p01.hdf"
     dtype = np.dtype(

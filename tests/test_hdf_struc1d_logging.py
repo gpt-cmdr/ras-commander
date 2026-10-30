@@ -154,6 +154,7 @@ def test_steady_missing_cross_section_attributes_raises_without_warning_log(
     assert [record for record in _records(caplog) if record.levelno >= logging.WARNING] == []
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_steady_flanking_structure_success_has_no_default_log_noise(
     tmp_path,
     caplog,
@@ -177,6 +178,7 @@ def test_steady_flanking_structure_success_has_no_default_log_noise(
     assert _records(caplog) == []
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_steady_flanking_structure_debug_retains_source_detail(tmp_path, caplog):
     hdf_path = _write_steady_flanking_structure_hdf(tmp_path / "bridge.p01.hdf")
 
@@ -196,6 +198,7 @@ def test_steady_flanking_structure_debug_retains_source_detail(tmp_path, caplog)
     assert [record for record in _records(caplog) if record.levelno >= logging.INFO] == []
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_missing_target_structure_raises_without_error_log(tmp_path, caplog):
     hdf_path = _write_steady_flanking_structure_hdf(tmp_path / "bridge.p01.hdf")
 

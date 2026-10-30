@@ -79,6 +79,7 @@ def test_write_stepped_hydrograph_logs_one_concise_info(monkeypatch, caplog):
     assert any("target=project.u01" in message for message in debug_messages)
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_extract_storage_outflow_keeps_one_info_summary(
     tmp_path,
     monkeypatch,

@@ -93,6 +93,7 @@ def test_synthetic_two_stations_multi_group(tmp_path):
     assert "time_units" not in df.attrs
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_synthetic_days_axis_and_no_pump_columns(tmp_path):
     data = [[1.0, 2.0, 3.0], [2.0, 1.0, 3.0]]
     path = _write(tmp_path / "d.p01.hdf", {"P": (data, SIMPLE[:3], None)}, days=[0.0, 0.5])

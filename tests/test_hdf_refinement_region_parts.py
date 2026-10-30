@@ -9,6 +9,7 @@ from shapely.geometry import box
 from ras_commander import HdfBndry
 
 
+@pytest.mark.synthetic_hdf_layout
 @pytest.mark.parametrize("global_offsets", [False, True])
 @pytest.mark.parametrize("ordinate_count", [2, 4])
 def test_refinement_holes_islands_and_disjoint_shells(
@@ -74,6 +75,7 @@ def test_local_parts_with_unused_leading_vertices(tmp_path):
     )
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_legacy_global_parts_covering_the_feature(tmp_path):
     path = tmp_path / "global.g01.hdf"
     points = [[100, 100], [101, 100], [100, 101]] + SQUARES
@@ -84,6 +86,7 @@ def test_legacy_global_parts_covering_the_feature(tmp_path):
     )
 
 
+@pytest.mark.synthetic_hdf_layout
 @pytest.mark.parametrize(
     "parts",
     [
@@ -100,6 +103,12 @@ def test_unresolvable_parts_raise(tmp_path, parts):
         HdfBndry.get_refinement_regions(path)
 
 
+@pytest.mark.synthetic_hdf_layout(
+    "info0-parts0",
+    "info1-parts1",
+    "info2-parts2",
+    "info3-parts3",
+)
 @pytest.mark.parametrize("info, parts", [
     ([0, 8, 0, -1], [[0, 8]]),
     ([0, 8, -1, 1], [[0, 8]]),
@@ -115,6 +124,7 @@ def test_single_refinement_region_validates_parts_metadata(tmp_path, info, parts
         HdfBndry.get_refinement_regions(path)
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_single_refinement_region_without_parts_remains_supported(tmp_path):
     path = tmp_path / "no-parts.g01.hdf"
     _write_regions(path, SQUARES[:4], [[0, 4, 0, 1]], [[0, 4]])
@@ -123,6 +133,7 @@ def test_single_refinement_region_without_parts_remains_supported(tmp_path):
     assert HdfBndry.get_refinement_regions(path).geometry.iloc[0].area == 4
 
 
+@pytest.mark.synthetic_hdf_layout
 @pytest.mark.parametrize("dataset, values", [
     ("Polygon Info", [[0, 4, 0.5, 1]]),
     ("Polygon Parts", [[0.5, 3]]),

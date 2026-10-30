@@ -32,6 +32,14 @@ def _request(tmp_path: Path, *, ras_executable: str = WINDOWS_RAS) -> Path:
     return request.write(bundle / "request.json")
 
 
+# The Linux-host Wine delegate builds POSIX paths into LD_PRELOAD and the prefix
+# (a Windows tmp_path contains ':') and binds abstract AF_UNIX X11 sockets.
+linux_wine_host = pytest.mark.skipif(
+    os.name == "nt", reason="Linux-host Wine delegate: POSIX paths and AF_UNIX X11 sockets"
+)
+
+
+@linux_wine_host
 def test_linux_windows_request_uses_private_wine_prefix(tmp_path, monkeypatch):
     request_path = _request(tmp_path)
     request_bytes = request_path.read_bytes()
@@ -127,6 +135,7 @@ def test_linux_windows_request_fails_closed_without_image_environment(
     assert "requires trusted image variables" in capsys.readouterr().err
 
 
+@linux_wine_host
 def test_linux_wine_delegate_timeout_cleans_prefix_and_wineserver(
     tmp_path, monkeypatch, capsys
 ):
@@ -443,6 +452,7 @@ def _wine_child_environment(tmp_path, monkeypatch):
     return result, child_environment
 
 
+@linux_wine_host
 def test_wine_cpu_shim_is_preloaded_for_delegated_wine(tmp_path, monkeypatch):
     shim = tmp_path / "cpushim.so"
     shim.write_bytes(b"\x7fELF")
@@ -456,6 +466,7 @@ def test_wine_cpu_shim_is_preloaded_for_delegated_wine(tmp_path, monkeypatch):
     assert environment["WINEDLLOVERRIDES"] == "winedbg.exe=d"
 
 
+@linux_wine_host
 @pytest.mark.parametrize("setting", ["", "0"])
 def test_wine_cpu_shim_can_be_disabled(tmp_path, monkeypatch, setting):
     monkeypatch.setenv("RAS_COMMANDER_WINE_CPU_SHIM", setting)
@@ -478,6 +489,7 @@ def test_missing_wine_cpu_shim_fails_before_runtime_state(tmp_path, monkeypatch,
     assert not any((tmp_path / "runtime-temp").iterdir())
 
 
+@linux_wine_host
 def test_existing_wine_debugger_override_is_kept(tmp_path, monkeypatch):
     monkeypatch.delenv("RAS_COMMANDER_WINE_CPU_SHIM", raising=False)
     monkeypatch.setenv("WINEDLLOVERRIDES", "mscoree=n;winedbg=b")
@@ -488,6 +500,7 @@ def test_existing_wine_debugger_override_is_kept(tmp_path, monkeypatch):
     assert environment["WINEDLLOVERRIDES"] == "mscoree=n;winedbg=b"
 
 
+@linux_wine_host
 def test_free_x_display_skips_displays_bound_by_other_steps(monkeypatch):
     import socket
 
@@ -502,6 +515,7 @@ def test_free_x_display_skips_displays_bound_by_other_steps(monkeypatch):
         taken.close()
 
 
+@linux_wine_host
 def test_wine_disables_openmp_affinity_unless_caller_sets_it(tmp_path, monkeypatch):
     monkeypatch.delenv("RAS_COMMANDER_WINE_CPU_SHIM", raising=False)
     monkeypatch.delenv("KMP_AFFINITY", raising=False)
@@ -509,6 +523,7 @@ def test_wine_disables_openmp_affinity_unless_caller_sets_it(tmp_path, monkeypat
     assert result == 0 and environment["KMP_AFFINITY"] == "disabled"
 
 
+@linux_wine_host
 def test_wine_keeps_a_caller_openmp_affinity(tmp_path, monkeypatch):
     monkeypatch.delenv("RAS_COMMANDER_WINE_CPU_SHIM", raising=False)
     monkeypatch.setenv("KMP_AFFINITY", "compact")
@@ -556,6 +571,7 @@ def test_legacy_release_without_opt_in_fails_before_wine(tmp_path, monkeypatch, 
     assert not any(c[0][0].endswith("xvfb-run") for c in calls)
 
 
+@linux_wine_host
 def test_legacy_release_accepts_in_task_prefix_before_compute(tmp_path, monkeypatch):
     monkeypatch.setenv("RAS_COMMANDER_WINE_ACCEPT_TCU", "1")
     result, calls = _legacy_wine_run(tmp_path, monkeypatch)
@@ -567,6 +583,7 @@ def test_legacy_release_accepts_in_task_prefix_before_compute(tmp_path, monkeypa
     assert compute[1]["RAS_COMMANDER_TCU_PROBE"].endswith("tcu-probe.json")
 
 
+@linux_wine_host
 def test_legacy_release_refuses_unverified_task_acceptance(tmp_path, monkeypatch, capsys):
     monkeypatch.setenv("RAS_COMMANDER_WINE_ACCEPT_TCU", "1")
     result, calls = _legacy_wine_run(tmp_path, monkeypatch, verified=False)
@@ -574,6 +591,7 @@ def test_legacy_release_refuses_unverified_task_acceptance(tmp_path, monkeypatch
     assert not any("execute-request" in c[0] for c in calls if c[0][0].endswith("xvfb-run"))
 
 
+@linux_wine_host
 def test_release_61_and_later_never_runs_task_acceptance(tmp_path, monkeypatch):
     monkeypatch.delenv("RAS_COMMANDER_WINE_ACCEPT_TCU", raising=False)
     result, environment = _wine_child_environment(tmp_path, monkeypatch)

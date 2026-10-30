@@ -8,7 +8,7 @@ import json
 from pathlib import Path
 
 
-NOTEBOOK_PATH = Path("examples/316_terrain_modifications.ipynb")
+NOTEBOOK_PATH = Path(__file__).resolve().parents[1] / "examples/316_terrain_modifications.ipynb"
 
 
 def _notebook() -> dict:

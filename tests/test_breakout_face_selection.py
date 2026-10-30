@@ -31,6 +31,7 @@ def mesh_hdf(tmp_path):
     return path
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_partition_preserves_schema_curves_normals_and_active_cells(mesh_hdf, monkeypatch):
     def disallow_full_geometry(*args, **kwargs):
         pytest.fail("Full mesh geometry must not be materialized")
@@ -47,6 +48,7 @@ def test_partition_preserves_schema_curves_normals_and_active_cells(mesh_hdf, mo
     assert result.crs.to_epsg() == 6588
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_reversed_cell_index_and_boundary_center_inclusion(mesh_hdf):
     result = RasBreakout2D.select_parent_boundary_faces(mesh_hdf, "Mesh", box(2, -2, 3, 2))
     assert set(result.face_id) == {0, 1}
@@ -57,6 +59,7 @@ def test_reversed_cell_index_and_boundary_center_inclusion(mesh_hdf):
     assert set(result.inside_cell) == {1}
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_empty_partition_and_unorientable_face_fail(mesh_hdf):
     with pytest.raises(ValueError, match="No parent faces"):
         RasBreakout2D.select_parent_boundary_faces(mesh_hdf, "Mesh", box(10, 10, 11, 11))
@@ -66,6 +69,7 @@ def test_empty_partition_and_unorientable_face_fail(mesh_hdf):
         RasBreakout2D.select_parent_boundary_faces(mesh_hdf, "Mesh", box(-1, -2, 1, 2))
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_geometry_attribute_count_overrides_zero_cell_info(mesh_hdf):
     # Real remeshed geometry HDFs may retain zero Cell Info counts until compute.
     with h5py.File(mesh_hdf, "r+") as hdf:

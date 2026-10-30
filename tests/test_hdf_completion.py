@@ -47,6 +47,7 @@ def _clock(path, *, minutes=(0, 10, 20), milliseconds=True, legacy=False):
     return path
 
 
+@pytest.mark.synthetic_hdf_layout
 @pytest.mark.parametrize("legacy", [True, False])
 @pytest.mark.parametrize("milliseconds", [True, False])
 def test_supported_clocks_and_declared_windows(tmp_path, legacy, milliseconds):
@@ -59,6 +60,7 @@ def test_supported_clocks_and_declared_windows(tmp_path, legacy, milliseconds):
         assert HdfCompletion.inspect_time_coverage(hdf) == result
 
 
+@pytest.mark.synthetic_hdf_layout
 @pytest.mark.parametrize("minutes,reason", [((0, 10), "end_not_observed"), ((10, 20), "start_not_observed")])
 def test_requested_end_and_success_footer_are_not_result_clock(tmp_path, minutes, reason):
     path = _clock(tmp_path / "short.p01.hdf", minutes=minutes)
@@ -69,6 +71,7 @@ def test_requested_end_and_success_footer_are_not_result_clock(tmp_path, minutes
     assert result["reason"] == reason
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_off_cadence_end_has_no_fabricated_tolerance(tmp_path):
     path = _clock(tmp_path / "offcadence.p01.hdf", minutes=(0, 10))
     with h5py.File(path, "r+") as hdf:
@@ -79,6 +82,17 @@ def test_off_cadence_end_has_no_fabricated_tolerance(tmp_path):
     assert HdfCompletion.inspect_time_coverage(path)["status"] == "not_covered"
 
 
+@pytest.mark.synthetic_hdf_layout(
+    "backward-nonmonotonic_timestamp_axis",
+    "bad_stamp-invalid_timestamp_axis",
+    "conflict-conflicting_timestamp_axes",
+    "count-invalid_numeric_time_axis",
+    "empty_clock-invalid_timestamp_axis",
+    "missing_clock-missing_timestamp_axis",
+    "nan-invalid_numeric_time_axis",
+    "numeric_backward-invalid_numeric_time_axis",
+    "window_conflict-conflicting_declared_windows",
+)
 @pytest.mark.parametrize("mutation,reason", [
     ("missing_clock", "missing_timestamp_axis"),
     ("empty_clock", "invalid_timestamp_axis"),
