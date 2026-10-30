@@ -865,7 +865,9 @@ Ras Commander never hand-authors or selectively deletes
 - `get_significant_mukeys(hdf_path, threshold)` - Identify mukeys above percentage threshold
 - `calculate_total_significant_percentage(hdf_path)` - Compute total coverage
 - `get_infiltration_parameters(hdf_path=None, mukey=None, ras_object=None)` - Get
-  parameters for a specific mukey, with the same optional `rasmap_df` lookup
+  the `Variables` row of one infiltration-layer class (a soil class, or
+  `"<land cover> : <soil>"` for combined layers), keyed by the method's HEC-RAS
+  parameter names, with the same optional `rasmap_df` lookup
 - `calculate_weighted_parameters(hdf_path)` - Compute weighted average parameters
 
 **Data Export:**
