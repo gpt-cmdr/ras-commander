@@ -1017,8 +1017,11 @@ class CheckFloodways:
             not in the flow file, or the plan has no encroachment record for
             that profile. Otherwise a dict with ``profile_number``,
             ``methods`` (sorted encroachment methods used), ``target_surcharge``
-            (only when every Method 4/5 node of the profile has the same
-            target), ``encroach_param`` (the raw ``Encroach Param`` header from
+            (only when every Method 4/5 node of the profile has a target and
+            all targets are equal), ``targets_complete`` (False when any
+            Method 4/5 node has a blank target), ``nodes_missing_target``
+            (``river``/``reach``/``node``/``method`` of those nodes),
+            ``encroach_param`` (the raw ``Encroach Param`` header from
             :meth:`RasFloodway.get_encroach_param`) and ``plan_file``.
             ``max_iterations`` and ``tolerance`` are not filled: no documented
             plan-file field holds them.
@@ -1047,8 +1050,16 @@ class CheckFloodways:
                 'encroach_param': RasFloodway.get_encroach_param(inputs["plan"]),
                 'plan_file': inputs["plan"].name,
             }
-            targets = set(records.loc[records['method'].isin([4, 5]), 'target_surcharge'].dropna())
-            if len(targets) == 1:
+            targeted = records[records['method'].isin([4, 5])]
+            missing = targeted[targeted['target_surcharge'].isna()]
+            params['nodes_missing_target'] = [
+                {'river': r['river'], 'reach': r['reach'], 'node': r['node'], 'method': int(r['method'])}
+                for _, r in missing.iterrows()
+            ]
+            params['targets_complete'] = missing.empty
+            targets = set(targeted['target_surcharge'].dropna())
+            # A blank target is unknown, not "the same as the others": no aggregate then.
+            if missing.empty and len(targets) == 1:
                 params['target_surcharge'] = float(targets.pop())
             return params
 

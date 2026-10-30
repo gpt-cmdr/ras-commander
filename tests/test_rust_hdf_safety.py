@@ -168,7 +168,9 @@ def test_batch_fails_closed_on_one_unsupported_dataset():
 
 @pytest.mark.parametrize("dataset", ["encoding/i32_precision24_offset4", "endian/be_f8",
                                      "encoding/f32_exponent_bias100"])
-def test_adapter_required_raises_and_auto_uses_h5py(dataset):
+def test_adapter_required_raises_and_auto_uses_h5py(dataset, monkeypatch):
+    # backend="auto" follows RAS_COMMANDER_FAST_HDF; this test is about auto itself.
+    monkeypatch.delenv("RAS_COMMANDER_FAST_HDF", raising=False)
     path = fixture("numeric_types_v2.h5")
     with h5py.File(path, "r") as f:
         ds = f[dataset]

@@ -9,6 +9,63 @@ alone does not identify a development checkout.
 
 ### Unreleased
 
+- **`HdfLandCover.estimate_final_mannings_raster` and
+  `compute_final_mannings_raster` run natively in `auto` mode, and stored
+  no-data Manning's n is now no data.** A class whose stored Manning's n is a
+  no-data value (NaN, -9999 in current layers, float32 max in legacy layers:
+  the `NoData` class, and every class of a legacy combined layer such as
+  Muncie `LandCoverCombined`) used to be written into the raster as that
+  number (for example 3.4e38). Those pixels are now no data, like unmapped
+  pixels: 0.0 in the returned array and the GeoTIFF's nodata value (-9999).
+  The geometry-extent fallback now reads `Geometry@Extents` through the native
+  reader. Native output (array and written GeoTIFF) is identical to h5py on all
+  32 public geometry/land-cover pairs of the HEC-RAS 6.2-7.0 examples
+  (BaldEagleCrkMulti2D, Muncie, Weise_2D) and their 6.6/7.0.1 re-runs.
+- **`HdfLandCover.get_landcover_raster_map` reads legacy land-cover layers.**
+  Legacy RAS Mapper layers, still shipped in the HEC-RAS 7.0 example projects
+  (Muncie `LandCover/*.hdf`, Weise_2D `LandCover.hdf`, the 6.1 BaldEagle
+  `LandUse.hdf`), store their classes as parallel `IDs`, `Names` and
+  `ManningsN` arrays and no `Raster Map`. The method used to log "No Raster
+  Map" and return `None` for them, so `estimate_final_mannings_raster` and
+  `compute_final_mannings_raster` returned `None` on those projects. It now
+  maps each stored ID (the pixel value) to its name and stored Manning's n;
+  arrays of different lengths are refused. Native output is identical to h5py
+  on all six public legacy layers.
+- **`HdfInfiltration.get_soils_raster_stats` runs natively in `auto` mode.**
+  Its reads were already the real layout (the soils layer's `Raster Map` and
+  its raster); the routed equivalence case used to pass the infiltration layer
+  as `soil_hdf_path`, so no fixture qualified it. The case now passes the
+  project's soils layer, and on the public HEC-RAS 7.0 BaldEagleCrkMulti2D
+  example (geometry g02, `Hydrologic Soil Groups.hdf`) native output is
+  identical to h5py (seven soil groups). Values are unchanged.
+- **`HdfInfiltration.calculate_weighted_parameters()` no longer averages
+  unset values.** HEC-RAS layers store `-9999.0` for a parameter that is not
+  set (for example `Residual Soil Water Content` and `Pore Size Distribution
+  Index` in 7.0.1 Green-Ampt layers), and weighting produced values such as
+  `-4999.475`. A parameter is now left out of the result, with a warning, when
+  any contributing class has it missing, NaN or `-9999.0`. When no class
+  contributes (no parameter sets, no matching mukey, or a total `Percentage`
+  that is not positive) it now returns an empty dict with a warning instead of
+  `0.0` for every key (the legacy keys when `infiltration_params` was empty).
+  `get_infiltration_parameters()` still returns the stored values unchanged.
+
+- **Floodway encroachment parameters no longer hide blank Method 4/5
+  targets.** A blank target at one node was dropped, so the other nodes' value
+  was reported as the profile's `target_surcharge`. It is now omitted when any
+  Method 4/5 node lacks a target, and the result carries `targets_complete`
+  and `nodes_missing_target` (river, reach, node, method).
+- **Unsteady starting method is the initialization; every boundary is
+  screened (behaviour change).** For unsteady plans
+  `HdfPlan.get_starting_wse_method` now sets `method` from the stored
+  `Initial Conditions` `Startup Mode` (`"Computed"`: initial flows plus
+  backwater and warm-up; `"Restart File"`, with `restart_file`; `"Unknown"`
+  when HEC-RAS 5.0.x stored none) instead of from the outlet boundary, and
+  adds `warmup_steps`. Boundaries stay in `boundaries`; unsteady results no
+  longer carry an aggregate `slope`. `CheckProfiles` reports `PF_IC_00` only
+  when the initialization is unknown, and screens each boundary separately
+  (`PF_IC_02` per normal-depth slope, with river, reach, station and
+  location), so differing slopes no longer switch the check off. Steady
+  results are unchanged.
 - **Three internal HDF readers now run natively in `auto` mode, values
   unchanged.** The precipitation-ratio preflight used by the
   `RasUnsteady` gridded-precipitation writers (it reads the `Ratio`

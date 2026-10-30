@@ -291,6 +291,9 @@ def import_native_gdal(
                 if (install / name).is_file()
             },
         )
+        from .fast_hdf import release_native_sessions
+
+        release_native_sessions(staged_hdf, hdf_path)
         os.replace(staged_hdf, hdf_path)
         return result
 

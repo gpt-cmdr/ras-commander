@@ -435,6 +435,7 @@ def test_get_projection_prefers_rasmap_matching_project(tmp_path, examples):
     assert HdfBase.get_projection(hdf_path) == "EPSG:2871"
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_get_projection_does_not_label_conflicting_evidence(tmp_path, examples):
     from ras_commander import HdfBase
 
@@ -480,6 +481,7 @@ def test_multiple_unmatched_rasmaps_do_not_guess(tmp_path):
     assert any(e.source == 'rasmap' and 'Ambiguous' in (e.detail or '') for e in evidence)
 
 
+@pytest.mark.synthetic_hdf_layout
 @pytest.mark.parametrize('suffix', ['.hdf', '.h5', '.hdf5'])
 def test_scalar_array_projection_metadata_is_supported(tmp_path, suffix):
     path = tmp_path / ('projection' + suffix)
@@ -491,6 +493,7 @@ def test_scalar_array_projection_metadata_is_supported(tmp_path, suffix):
     assert HdfUtils.crs_equivalent(evidence.wkt, wkt)
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_multiple_projection_attributes_do_not_choose_first(tmp_path):
     path = tmp_path / 'ambiguous.hdf'
     with h5py.File(path, 'w') as f:

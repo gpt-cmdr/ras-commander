@@ -868,7 +868,7 @@ Ras Commander never hand-authors or selectively deletes
   the `Variables` row of one infiltration-layer class (a soil class, or
   `"<land cover> : <soil>"` for combined layers), keyed by the method's HEC-RAS
   parameter names, with the same optional `rasmap_df` lookup
-- `calculate_weighted_parameters(hdf_path)` - Compute weighted average parameters
+- `calculate_weighted_parameters(soil_stats, infiltration_params)` - Compute weighted average parameters
 
 **Data Export:**
 
