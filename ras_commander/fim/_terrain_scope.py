@@ -160,6 +160,7 @@ def top_priority_source(terrain_hdf, rasmap_path=None) -> dict:
         "modified": bool(modifications),
         "source": top,
         "sources": [files[name] for name in ordered],
+        "source_groups": list(ordered),
         "priority_basis": basis,
         "mask_dataset": f"Terrain/{top}/0/Mask",
         "mask_shape": mask_shape,
