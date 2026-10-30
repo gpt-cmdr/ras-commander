@@ -623,13 +623,17 @@ def test_receipt_rejects_extra_and_missing_fields():
     'controls: \x01\b\v\f\x1b\x1f',
     r'\\server\share\rainfall.dss',
 ])
-def test_receipt_json_escapes_windows_dss_name_and_quotes(source):
+def test_receipt_json_escapes_windows_dss_name_and_quotes(source, tmp_path):
     start = JOB_SCRIPT_TEMPLATE.index("json_string()")
     end = JOB_SCRIPT_TEMPLATE.index("\n}", start) + 2
     function = JOB_SCRIPT_TEMPLATE[start:end]
+    # Run from a file: on Windows, MSYS bash re-parses a `bash -c` script from
+    # the process command line, which drops backslashes inside it.
+    script = tmp_path / "json_string.sh"
+    script.write_bytes((function + '\njson_string "$JSON_ESCAPE_VALUE"\n').encode())
     env = {**os.environ, "JSON_ESCAPE_VALUE": source}
     completed = subprocess.run(
-        [BASH, "-c", function + '\njson_string "$JSON_ESCAPE_VALUE"'],
+        [BASH, str(script)],
         check=True, capture_output=True, text=True, env=env,
     )
     assert json.loads(completed.stdout) == source

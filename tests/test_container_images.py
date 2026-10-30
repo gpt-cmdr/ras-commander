@@ -132,6 +132,12 @@ def test_explicit_local_sif_is_used_without_pulling(tmp_path, apptainer):
         RasContainerImages.resolve_sif("wine-executor", "5.0.6", sif_path=tmp_path / "absent.sif")
 
 
+posix_fake_apptainer = pytest.mark.skipif(
+    os.name == "nt", reason="runs a POSIX shell-script stand-in for apptainer directly"
+)
+
+
+@posix_fake_apptainer
 def test_cache_is_filled_once_then_reused_offline(tmp_path, apptainer):
     fake, log = apptainer
     cache = tmp_path / "cache"
@@ -148,6 +154,7 @@ def test_cache_is_filled_once_then_reused_offline(tmp_path, apptainer):
     assert log.read_text().strip() == f"docker://{image.reference}"
 
 
+@posix_fake_apptainer
 def test_cache_directory_comes_from_environment(tmp_path, apptainer, monkeypatch):
     fake, _ = apptainer
     monkeypatch.setenv("RAS_COMMANDER_IMAGE_CACHE", str(tmp_path / "shared"))
@@ -155,6 +162,7 @@ def test_cache_directory_comes_from_environment(tmp_path, apptainer, monkeypatch
     assert resolved.path.parent == tmp_path / "shared"
 
 
+@posix_fake_apptainer
 def test_tampered_cache_entry_is_replaced(tmp_path, apptainer):
     fake, log = apptainer
     cache = tmp_path / "cache"
@@ -169,6 +177,7 @@ def test_tampered_cache_entry_is_replaced(tmp_path, apptainer):
     assert repaired.source == "pulled" and repaired.sha256 == first.sha256
 
 
+@posix_fake_apptainer
 def test_pull_always_refreshes_and_failures_leave_no_partial_files(tmp_path, apptainer, monkeypatch):
     fake, log = apptainer
     cache = tmp_path / "cache"
@@ -183,6 +192,7 @@ def test_pull_always_refreshes_and_failures_leave_no_partial_files(tmp_path, app
     assert not list(cache.glob("*7.0.1*"))
 
 
+@posix_fake_apptainer
 def test_published_sif_hash_is_enforced(tmp_path, apptainer, monkeypatch):
     fake, _ = apptainer
     oras = "oras://ghcr.io/gpt-cmdr/hec-ras-linux-unsteady-sif@sha256:" + "a" * 64

@@ -95,14 +95,12 @@ def test_probe_only_acceptance_cannot_export_a_registry_value(monkeypatch):
 
 def test_gui_receipt_handles_probe_without_registry_key(monkeypatch, tmp_path):
     import subprocess
-    from pathlib import PosixPath
     from ras_commander import _tcu_gui
 
     executable = tmp_path / "Ras.exe"
     executable.write_bytes(b"unit fixture")
     state = TcuStatus(True, "6.0", str(tmp_path), None, "probe-verified")
     process = types.SimpleNamespace(pid=42, poll=lambda: 0)
-    monkeypatch.setattr(module, "Path", PosixPath)
     monkeypatch.setattr(module.os, "name", "nt")
     monkeypatch.setattr(
         RasTcu, "_resolve_exe", staticmethod(lambda *a: str(executable))

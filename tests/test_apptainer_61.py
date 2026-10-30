@@ -7,6 +7,7 @@ tmp.hdf here is a small synthetic stand-in; the solver is a fake ``RasUnsteady``
 
 import hashlib
 import json
+import os
 import shlex
 import shutil
 import stat
@@ -223,6 +224,12 @@ def _write_executable(path: Path, text: str) -> None:
     path.chmod(path.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
 
 
+posix_site_profile = pytest.mark.skipif(
+    os.name == "nt", reason="Apptainer site profiles require absolute POSIX paths (tmp_path is not)"
+)
+
+
+@posix_site_profile
 @pytest.mark.skipif(BASH is None, reason="bash is unavailable")
 def test_rendered_61_engine_runs_cfile_and_promotes_tmp_hdf(project61, profile61, tmp_path):
     engine_dir = tmp_path / "engine"

@@ -1069,7 +1069,9 @@ def test_stage_project_supports_extended_length_tree_io(tmp_path: Path) -> None:
         r"\\?\UNC\server\share\folder"
     )
 
-    destination = tmp_path / f"published-{'d' * 150}"
+    # Pad from tmp_path's own length (basetemp varies), within one 255-char name.
+    padding = max(150, 280 - len(str(tmp_path)) - len(project_module._TEMP_SENTINEL))
+    destination = tmp_path / f"published-{'d' * padding}"
     assert len(str(destination / project_module._TEMP_SENTINEL)) > 260
     result = stage_project(source_project, destination)
     published_file = destination / relative

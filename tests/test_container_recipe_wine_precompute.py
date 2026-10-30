@@ -9,6 +9,7 @@ runners and stand-in modules; HDF compute messages use real h5py files.
 import hashlib
 import importlib.util
 import json
+import os
 from pathlib import Path
 import re
 import sys
@@ -363,6 +364,12 @@ def test_controller_reads_renamed_scratch_root(tmp_path, monkeypatch):
 
 # --- Wine environment ------------------------------------------------------
 
+posix_preload_paths = pytest.mark.skipif(
+    os.name == "nt", reason="LD_PRELOAD separates POSIX paths with ':' and ' ' (tmp_path has ':')"
+)
+
+
+@posix_preload_paths
 def test_wine_environment_preloads_shim_and_disables_debugger(tmp_path):
     prepare = load_container_script("prepare")
     shim = tmp_path / "cpushim.so"
@@ -422,6 +429,7 @@ def test_wine_environment_rejects_a_missing_explicit_shim(tmp_path):
         prepare.wine_environment(tmp_path, {"RAS_COMMANDER_WINE_CPU_SHIM": str(tmp_path / "missing.so")})
 
 
+@posix_preload_paths
 def test_wine_environment_does_not_confuse_preload_path_prefixes(tmp_path):
     prepare = load_container_script("prepare")
     shim = tmp_path / "cpushim.so"
