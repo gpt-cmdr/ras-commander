@@ -7,7 +7,56 @@ check `ras_commander.__version__` and the documentation's
 [build provenance](https://rascommander.info/ras/version.json). A package version
 alone does not identify a development checkout.
 
-### Unreleased
+### 0.111.0 — 2026-10-30
+
+This minor release includes **20 change PRs** absent from the published
+`v0.110.3` source tag, plus the 0.111.0 release-preparation PR. Seven
+test-only PRs (#769–#774, #781) and the `CITATION.cff` update (#784) are
+excluded from the change count. Several readers now return data where they
+used to return empty or placeholder results, so outputs change; see the
+details below.
+
+- **Readers now read what HEC-RAS stores:**
+  - pump station summaries (#760), reference summaries (#762) and starting
+    WSE boundaries (#763);
+  - infiltration class parameters (#761), with unset (-9999) values no longer
+    averaged (#767);
+  - floodway encroachment, boundary and lateral-weir data (#764), with blank
+    Method 4/5 targets kept visible (#768);
+  - 2D BC-line conflicts (#765) and legacy land-cover layers (#776);
+  - the unsteady initialization as the starting method, with each boundary
+    screened (#775).
+- **Flow optimization works:** `RasFlowOptimization` now writes
+  `Flow Ratio Mode`, so HEC-RAS really runs the trials, and it reads the
+  stored trial table (#785).
+- **Native `auto` mode covers more readers:**
+  - unsteady storage-area time series through the identity-checked reader
+    (#753);
+  - metadata-only readers and the qualified projection check (#754);
+  - soils raster statistics and the final Manning's n rasters, where a stored
+    no-data n is now no data (#766);
+  - three private HDF helpers (#780);
+  - the flow-optimization trial table (#785).
+
+  Native output is identical to h5py on every routed fixture.
+- **Robustness and packaging:**
+  - `ras_commander.geom` imports without Shapely (#777);
+  - `affine>=3` is required with the FIM stack (#778);
+  - native reference-point names may contain commas (#779);
+  - native sessions under a folder are released before the folder is
+    renamed, moved or removed (#782);
+  - names pyflakes reported as undefined are now bound (#783).
+
+The core HDF requirement becomes `ras-commander-fast-hdf>=0.2.5,<0.3`
+(engine API 11, unchanged). Fast-HDF 0.2.5 adds a process-wide in-flight
+decode budget (4 GiB by default; `RAS_FAST_HDF_DECODE_BUDGET_BYTES`). A read
+it refuses is an `UnsupportedError` with `engine_code == "resource_limit"`,
+from which `auto` mode falls back to h5py. The final release gate (all 11
+stages; routed native-vs-h5py stages plus the suite in h5py, `auto` and
+`required` modes) passed with 0 failures. See the
+[complete source comparison](https://github.com/gpt-cmdr/ras-commander/compare/v0.110.3...v0.111.0).
+
+### Implementation notes (0.111.0)
 
 - **`RasFlowOptimization` now really enables HEC-RAS flow optimization and
   reads the stored trial table.** `set_settings` / `enable_plan` /
