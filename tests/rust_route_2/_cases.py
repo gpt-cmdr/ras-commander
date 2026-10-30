@@ -151,11 +151,19 @@ CASES.update({
     "HdfMesh.get_face_ids_in_calibration_region": _calibration_region_faces,
 })
 
-# Multi-file methods: called with a project entry {geom, landcover, infiltration}
+# Multi-file methods: called with a project entry {geom, landcover, infiltration, soils}
 # from the manifest's "projects" section (read-only project folders).
+def _soils_raster_stats(j):
+    """Soil statistics need the soils layer (Hydrologic Soil Groups HDF with its raster),
+    not the infiltration layer; projects without one skip explicitly."""
+    import pytest
+    if "soils" not in j:
+        pytest.skip("project lists no soils layer")
+    return HdfInfiltration.get_soils_raster_stats(j["geom"], soil_hdf_path=j["soils"])
+
+
 PROJECT_CASES = {
-    "HdfInfiltration.get_soils_raster_stats": lambda j: HdfInfiltration.get_soils_raster_stats(
-        j["geom"], soil_hdf_path=j.get("infiltration")),
+    "HdfInfiltration.get_soils_raster_stats": _soils_raster_stats,
     "HdfInfiltration.get_soil_raster_stats": lambda j: HdfInfiltration.get_soil_raster_stats(
         j["geom"], landcover_hdf_path=j["landcover"], soil_hdf_path=j.get("infiltration")),
     "HdfInfiltration.get_infiltration_stats": lambda j: HdfInfiltration.get_infiltration_stats(

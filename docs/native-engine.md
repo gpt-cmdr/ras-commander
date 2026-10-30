@@ -318,7 +318,7 @@ fixture run on h5py in auto mode until a fixture proves them
 | `HdfChannelCapacity` | 4 | 58 | 0 |
 | `HdfCompletion` | 1 | 53 | 0 |
 | `HdfHydraulicTables` | 3 | 66 | 0 |
-| `HdfInfiltration` | 13 | 147 | 1 |
+| `HdfInfiltration` | 14 | 148 | 0 |
 | `HdfLandCover` | 11 | 338 | 2 |
 | `HdfMesh` | 15 | 168 | 1 |
 | `HdfPipe` | 22 | 191 | 0 |
@@ -338,12 +338,11 @@ fixture run on h5py in auto mode until a fixture proves them
 | `HdfStruc1D` | 1 | 10 | 0 |
 | `HdfUtils` | 4 | 248 | 0 |
 | `HdfXsec` | 10 | 181 | 0 |
-| **Total** | **206** | **3904** | **6** |
+| **Total** | **207** | **3905** | **5** |
 
 Public methods running on h5py in auto mode (no corpus fixture made a native read that could prove them:
 their data is absent from every fixture, or they read only metadata):
 
-- `HdfInfiltration.get_soils_raster_stats`
 - `HdfLandCover.compute_final_mannings_raster`
 - `HdfLandCover.estimate_final_mannings_raster`
 - `HdfResultsSediment.get_sediment_mesh_areas`

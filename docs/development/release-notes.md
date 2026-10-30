@@ -9,6 +9,13 @@ alone does not identify a development checkout.
 
 ### Unreleased
 
+- **`HdfInfiltration.get_soils_raster_stats` runs natively in `auto` mode.**
+  Its reads were already the real layout (the soils layer's `Raster Map` and
+  its raster); the routed equivalence case used to pass the infiltration layer
+  as `soil_hdf_path`, so no fixture qualified it. The case now passes the
+  project's soils layer, and on the public HEC-RAS 7.0 BaldEagleCrkMulti2D
+  example (geometry g02, `Hydrologic Soil Groups.hdf`) native output is
+  identical to h5py (seven soil groups). Values are unchanged.
 - **`HdfPump.get_pump_station_summary` now returns real data.** It used to
   read `/Results/Unsteady/Summary/Pump Station`, which HEC-RAS never writes,
   so it always returned an empty DataFrame. It now returns one row per pump
