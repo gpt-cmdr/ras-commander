@@ -38,6 +38,17 @@ alone does not identify a development checkout.
   project's soils layer, and on the public HEC-RAS 7.0 BaldEagleCrkMulti2D
   example (geometry g02, `Hydrologic Soil Groups.hdf`) native output is
   identical to h5py (seven soil groups). Values are unchanged.
+- **`HdfInfiltration.calculate_weighted_parameters()` no longer averages
+  unset values.** HEC-RAS layers store `-9999.0` for a parameter that is not
+  set (for example `Residual Soil Water Content` and `Pore Size Distribution
+  Index` in 7.0.1 Green-Ampt layers), and weighting produced values such as
+  `-4999.475`. A parameter is now left out of the result, with a warning, when
+  any contributing class has it missing, NaN or `-9999.0`. When no class
+  contributes (no parameter sets, no matching mukey, or a total `Percentage`
+  that is not positive) it now returns an empty dict with a warning instead of
+  `0.0` for every key (the legacy keys when `infiltration_params` was empty).
+  `get_infiltration_parameters()` still returns the stored values unchanged.
+
 - **`HdfPump.get_pump_station_summary` now returns real data.** It used to
   read `/Results/Unsteady/Summary/Pump Station`, which HEC-RAS never writes,
   so it always returned an empty DataFrame. It now returns one row per pump
