@@ -86,7 +86,9 @@ def _h5py_unsteady(path):
                 out.append(entry)
         ic = hdf.get("Event Conditions/Unsteady/Initial Conditions")
         mode = ic.attrs["Startup Mode"].decode() if ic is not None and "Startup Mode" in ic.attrs else None
-    return out, mode
+        restart = (ic.attrs["Restart Filename"].decode()
+                   if ic is not None and "Restart Filename" in ic.attrs else None)
+    return out, mode, restart
 
 
 def _call(path, backend):
@@ -178,8 +180,8 @@ def test_unsteady_boundaries_from_event_conditions(tmp_path):
         hdf.require_group("Event Conditions/Unsteady/Initial Conditions").attrs["Startup Mode"] = \
             np.bytes_(b"Computed")
     result = HdfPlan.get_starting_wse_method(path)
-    assert result["method"] == "Normal Depth"
-    assert result["slope"] == float(np.float32(0.0005))
+    assert result["method"] == "Computed"  # initialization, not the outlet boundary
+    assert "slope" not in result
     assert result["startup_mode"] == "Computed"
     assert result["boundaries"] == [{"type": "Normal Depth", "location": "River: R  Reach: A  RS: 1.0",
                                      "river": "R", "reach": "A", "rs": "1.0",
@@ -208,7 +210,7 @@ def test_real_unsteady_plans_match_h5py_and_native(fixture):
     with h5py.File(path, "r") as hdf:
         if BC not in hdf:
             pytest.skip("not a computed unsteady plan")
-    expected, mode = _h5py_unsteady(path)
+    expected, mode, restart = _h5py_unsteady(path)
     with fast_hdf.trace_reads() as trace:
         native = _call(path, "native")
     reference = _call(path, "h5py")
@@ -219,9 +221,9 @@ def test_real_unsteady_plans_match_h5py_and_native(fixture):
     assert reference.get("startup_mode") == mode
     if any(b["type"] == "Normal Depth" for b in expected):
         assert any(r["backend"].startswith("native") for r in trace)
-    types = {b["type"] for b in expected}
-    assert reference["method"] == (types.pop() if len(types) == 1 else
-                                   "Multiple" if types else "Unknown")
+    assert reference["method"] == (mode or "Unknown")
+    assert reference.get("restart_file") == restart
+    assert "slope" not in reference and "wse" not in reference
 
 
 def _flow_name(path):

@@ -85,14 +85,17 @@ class StartingWSEMethodDict(TypedDict, total=False):
     Water-surface boundary conditions that start the computation.
 
     Attributes:
-    - method: "Known WS", "Normal Depth", "Critical Depth", "Rating Curve",
-      "Stage Hydrograph", "Multiple", "Unknown" or "Error"
+    - method: unsteady "Computed"/"Restart File" (stored Startup Mode); steady
+      "Known WS", "Normal Depth", "Critical Depth", "Rating Curve", "Multiple";
+      or "Unknown"/"Error"
     - slope: Normal depth slope (method "Normal Depth", all boundaries agree)
     - wse: Known water surface (method "Known WS", all boundaries agree)
     - regime: Steady flow regime from the plan file
     - boundaries: One dict per boundary that was read
     - source: HDF group or flow file that was read
     - startup_mode: Unsteady initial-condition startup mode
+    - restart_file: Unsteady restart filename (restart-initialized plans)
+    - warmup_steps: Unsteady 1D-2D Number of Warmup Steps
     - note: Additional information (method not found, values differ)
     - error: Error message (if exception occurred)
     """
@@ -103,6 +106,8 @@ class StartingWSEMethodDict(TypedDict, total=False):
     boundaries: List[Dict[str, Any]]
     source: str
     startup_mode: str
+    restart_file: str
+    warmup_steps: int
     note: Optional[str]
     error: Optional[str]
 
@@ -795,17 +800,21 @@ class HdfPlan:
     @standardize_input(file_type='plan_hdf')
     def get_starting_wse_method(hdf_path: Path) -> StartingWSEMethodDict:
         """
-        Report the water-surface boundary conditions that start the computation.
+        Report how the computation's starting water surface is established.
 
         HEC-RAS does not store a single "starting WSE method" attribute. This
-        reads the boundary conditions where HEC-RAS records them:
+        reads where HEC-RAS records it:
 
         - **Unsteady plans** (the plan HDF has
           ``Event Conditions/Unsteady/Boundary Conditions``, written when the
-          plan is computed): the ``Normal Depths`` (friction slope),
-          ``Rating Curves`` and ``Stage Hydrographs`` members, read from the
-          plan HDF. ``startup_mode`` is the ``Startup Mode`` attribute of
-          ``Event Conditions/Unsteady/Initial Conditions`` when stored.
+          plan is computed): the starting water surface comes from the
+          initialization, not from a boundary. HEC-RAS either reads a restart
+          (initial conditions) file or computes water surfaces from the
+          initial flows with a steady backwater pass, followed by the warm-up.
+          ``method`` is the ``Startup Mode`` attribute of
+          ``Event Conditions/Unsteady/Initial Conditions``. The ``Normal
+          Depths`` (friction slope), ``Rating Curves`` and ``Stage
+          Hydrographs`` members are reported in ``boundaries`` only.
         - **Steady plans** (``Event Conditions/Steady``): HEC-RAS writes no
           boundary data to the HDF. The steady flow file named by the plan
           HDF's ``Plan Information`` ``Flow Filename`` attribute is read from
@@ -823,14 +832,21 @@ class HdfPlan:
         Returns
         -------
         StartingWSEMethodDict
-            - ``method``: ``"Known WS"``, ``"Normal Depth"``, ``"Critical
-              Depth"``, ``"Rating Curve"`` or ``"Stage Hydrograph"`` when every
-              selected boundary has that type; ``"Multiple"`` when they differ;
-              ``"Unknown"`` (with ``note``) when no boundary could be read;
-              ``"Error"`` (with ``error``) when reading failed.
-            - ``slope``: the normal-depth friction slope, only when the method is
-              ``"Normal Depth"`` and every selected boundary has the same slope.
-            - ``wse``: the known water surface, only when the method is
+            - ``method``, unsteady plans: the stored ``Startup Mode``,
+              ``"Computed"`` (water surfaces computed from the initial flows,
+              then warm-up; every public corpus plan) or ``"Restart File"``
+              (initial conditions read from ``restart_file``); any other stored
+              value is returned verbatim. ``"Unknown"`` (with ``note``) when no
+              ``Startup Mode`` is stored (HEC-RAS 5.0.x).
+            - ``method``, steady plans: ``"Known WS"``, ``"Normal Depth"``,
+              ``"Critical Depth"`` or ``"Rating Curve"`` when every selected
+              boundary has that type; ``"Multiple"`` when they differ;
+              ``"Unknown"`` (with ``note``) when no boundary could be read.
+            - ``method`` is ``"Error"`` (with ``error``) when reading failed.
+            - ``slope``: steady only; the normal-depth friction slope when the
+              method is ``"Normal Depth"`` and every selected boundary agrees.
+              Per-boundary slopes are always in ``boundaries``.
+            - ``wse``: steady only; the known water surface when the method is
               ``"Known WS"`` and every selected boundary has the same value.
             - ``regime``: steady plans only, ``"Subcritical"``,
               ``"Supercritical"`` or ``"Mixed"`` from the plan file.
@@ -838,6 +854,9 @@ class HdfPlan:
               and its slope / known WS / rating-curve points when stored).
             - ``source``: the HDF group or flow file that was read.
             - ``startup_mode``: unsteady initial-condition startup mode.
+            - ``restart_file``: unsteady ``Restart Filename`` when stored.
+            - ``warmup_steps``: unsteady ``1D-2D Number of Warmup Steps`` from
+              ``Plan Data/Plan Parameters`` when stored.
 
         Notes
         -----
@@ -926,6 +945,12 @@ class HdfPlan:
         ic = hdf_file.get(HdfPlan._UNSTEADY_IC_PATH)
         if ic is not None and 'Startup Mode' in ic.attrs:
             result['startup_mode'] = HdfPlan._text(read_attr(ic, 'Startup Mode'))
+        if ic is not None and 'Restart Filename' in ic.attrs:
+            result['restart_file'] = HdfPlan._text(read_attr(ic, 'Restart Filename'))
+        params = hdf_file.get(HdfPlan._PLAN_PARAMETERS_PATH)
+        if params is not None and '1D-2D Number of Warmup Steps' in params.attrs:
+            result['warmup_steps'] = int(np.asarray(
+                read_attr(params, '1D-2D Number of Warmup Steps')).reshape(-1)[0])
         group = hdf_file[HdfPlan._UNSTEADY_BC_PATH]
         boundaries = []
         for group_name, method in HdfPlan._WS_BOUNDARY_GROUPS.items():
@@ -944,9 +969,15 @@ class HdfPlan:
                 elif group_name == "Rating Curves":
                     entry['points'] = int(dataset.shape[0]) if dataset.shape else 0
                 boundaries.append(entry)
-        return HdfPlan._summarize_boundaries(
-            result, boundaries,
-            f"No Normal Depth, Rating Curve or Stage Hydrograph boundary in {HdfPlan._UNSTEADY_BC_PATH}")
+        # The initialization, not the outlet boundary, is the unsteady starting method.
+        result['boundaries'] = boundaries
+        if result.get('startup_mode'):
+            result['method'] = result['startup_mode']
+        else:
+            result['method'] = 'Unknown'
+            result['note'] = (f"No Startup Mode attribute in {HdfPlan._UNSTEADY_IC_PATH} "
+                              "(not written by HEC-RAS 5.0.x); initialization not determined")
+        return result
 
     @staticmethod
     def _sibling_file(folder: Path, name: Optional[str]) -> Optional[Path]:

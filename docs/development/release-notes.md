@@ -9,6 +9,18 @@ alone does not identify a development checkout.
 
 ### Unreleased
 
+- **Unsteady starting method is the initialization; every boundary is
+  screened (behaviour change).** For unsteady plans
+  `HdfPlan.get_starting_wse_method` now sets `method` from the stored
+  `Initial Conditions` `Startup Mode` (`"Computed"`: initial flows plus
+  backwater and warm-up; `"Restart File"`, with `restart_file`; `"Unknown"`
+  when HEC-RAS 5.0.x stored none) instead of from the outlet boundary, and
+  adds `warmup_steps`. Boundaries stay in `boundaries`; unsteady results no
+  longer carry an aggregate `slope`. `CheckProfiles` reports `PF_IC_00` only
+  when the initialization is unknown, and screens each boundary separately
+  (`PF_IC_02` per normal-depth slope, with river, reach, station and
+  location), so differing slopes no longer switch the check off. Steady
+  results are unchanged.
 - **`HdfPump.get_pump_station_summary` now returns real data.** It used to
   read `/Results/Unsteady/Summary/Pump Station`, which HEC-RAS never writes,
   so it always returned an empty DataFrame. It now returns one row per pump
