@@ -322,7 +322,7 @@ fixture run on h5py in auto mode until a fixture proves them
 | `HdfLandCover` | 11 | 338 | 2 |
 | `HdfMesh` | 15 | 168 | 1 |
 | `HdfPipe` | 22 | 191 | 0 |
-| `HdfPlan` | 11 | 584 | 1 |
+| `HdfPlan` | 12 | 657 | 0 |
 | `HdfProject` | 7 | 175 | 0 |
 | `HdfPump` | 4 | 23 | 1 |
 | `HdfResultsAnalysis` | 2 | 14 | 0 |
@@ -338,7 +338,7 @@ fixture run on h5py in auto mode until a fixture proves them
 | `HdfStruc1D` | 1 | 10 | 0 |
 | `HdfUtils` | 4 | 248 | 0 |
 | `HdfXsec` | 10 | 181 | 0 |
-| **Total** | **201** | **3800** | **11** |
+| **Total** | **202** | **3873** | **10** |
 
 Public methods running on h5py in auto mode (no corpus fixture made a native read that could prove them:
 their data is absent from every fixture, or they read only metadata):
@@ -347,7 +347,6 @@ their data is absent from every fixture, or they read only metadata):
 - `HdfInfiltration.get_soils_raster_stats`
 - `HdfLandCover.compute_final_mannings_raster`
 - `HdfLandCover.estimate_final_mannings_raster`
-- `HdfPlan.get_starting_wse_method`
 - `HdfPump.get_pump_station_summary`
 - `HdfResultsPlan.get_reference_summary[lines]`
 - `HdfResultsPlan.get_reference_summary[points]`

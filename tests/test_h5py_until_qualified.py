@@ -24,7 +24,6 @@ DECORATING_MODULES = [
     "ras_commander.geom.GeomProjection",
     "ras_commander.hdf.HdfInfiltration",
     "ras_commander.hdf.HdfLandCover",
-    "ras_commander.hdf.HdfPlan",
     "ras_commander.hdf.HdfPump",
     "ras_commander.hdf.HdfResultsPlan",
     "ras_commander.hdf.HdfResultsSediment",

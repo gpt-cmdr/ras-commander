@@ -43,7 +43,6 @@ from .HdfUtils import HdfUtils
 from ..Decorators import standardize_input, log_call
 from ..LoggingConfig import setup_logging, get_logger
 from ..fast_hdf import read_attr, read_attrs, read_typed, reraise_required
-from ..fast_hdf import h5py_until_qualified
 
 logger = get_logger(__name__)
 
@@ -83,20 +82,27 @@ class PlanMetPrecipDict(TypedDict, total=False):
 
 class StartingWSEMethodDict(TypedDict, total=False):
     """
-    Initial water surface elevation calculation method.
+    Water-surface boundary conditions that start the computation.
 
     Attributes:
-    - method: Calculation method name (e.g., "Normal Depth", "Known WSE", "Critical Depth")
-    - slope: Normal depth slope (if method is "Normal Depth")
-    - wse: Known water surface elevation (if method is "Known WSE")
-    - regime: Flow regime (if found in Plan Information)
-    - note: Additional information (if method not found)
+    - method: "Known WS", "Normal Depth", "Critical Depth", "Rating Curve",
+      "Stage Hydrograph", "Multiple", "Unknown" or "Error"
+    - slope: Normal depth slope (method "Normal Depth", all boundaries agree)
+    - wse: Known water surface (method "Known WS", all boundaries agree)
+    - regime: Steady flow regime from the plan file
+    - boundaries: One dict per boundary that was read
+    - source: HDF group or flow file that was read
+    - startup_mode: Unsteady initial-condition startup mode
+    - note: Additional information (method not found, values differ)
     - error: Error message (if exception occurred)
     """
     method: str
     slope: Optional[float]
     wse: Optional[float]
     regime: Optional[str]
+    boundaries: List[Dict[str, Any]]
+    source: str
+    startup_mode: str
     note: Optional[str]
     error: Optional[str]
 
@@ -761,13 +767,53 @@ class HdfPlan:
             logger.error(f"Failed to get geometry attributes: {str(e)}")
             raise ValueError(f"Failed to get geometry attributes: {str(e)}")
 
+    # Boundary-condition groups under Event Conditions/Unsteady/Boundary Conditions
+    # that set a water surface, and the method name reported for each.
+    _UNSTEADY_BC_PATH = "Event Conditions/Unsteady/Boundary Conditions"
+    _UNSTEADY_IC_PATH = "Event Conditions/Unsteady/Initial Conditions"
+    _WS_BOUNDARY_GROUPS = {
+        "Normal Depths": "Normal Depth",
+        "Rating Curves": "Rating Curve",
+        "Stage Hydrographs": "Stage Hydrograph",
+    }
+    _BC_LOCATION_ATTRS = {
+        "River": "river",
+        "Reach": "reach",
+        "RS": "rs",
+        "2D Flow Area": "2d_flow_area",
+        "BC Line": "bc_line",
+        "Storage Area": "storage_area",
+    }
+    _PLAN_FLOW_REGIMES = {
+        "Subcritical Flow": "Subcritical",
+        "Supercritical Flow": "Supercritical",
+        "Mixed Flow": "Mixed",
+    }
+
     @staticmethod
     @log_call
     @standardize_input(file_type='plan_hdf')
-    @h5py_until_qualified
     def get_starting_wse_method(hdf_path: Path) -> StartingWSEMethodDict:
         """
-        Extract initial water surface elevation calculation method from plan HDF.
+        Report the water-surface boundary conditions that start the computation.
+
+        HEC-RAS does not store a single "starting WSE method" attribute. This
+        reads the boundary conditions where HEC-RAS records them:
+
+        - **Unsteady plans** (the plan HDF has
+          ``Event Conditions/Unsteady/Boundary Conditions``, written when the
+          plan is computed): the ``Normal Depths`` (friction slope),
+          ``Rating Curves`` and ``Stage Hydrographs`` members, read from the
+          plan HDF. ``startup_mode`` is the ``Startup Mode`` attribute of
+          ``Event Conditions/Unsteady/Initial Conditions`` when stored.
+        - **Steady plans** (``Event Conditions/Steady``): HEC-RAS writes no
+          boundary data to the HDF. The steady flow file named by the plan
+          HDF's ``Plan Information`` ``Flow Filename`` attribute is read from
+          the HDF's folder (file name matched case-insensitively) with
+          :meth:`RasSteady.read_flow_file`. The plan text file
+          (``Plan Filename``) supplies the flow regime: ``Subcritical Flow``
+          selects the downstream (``Dn``) boundaries, ``Supercritical Flow``
+          the upstream (``Up``) boundaries, ``Mixed Flow`` both.
 
         Parameters
         ----------
@@ -777,101 +823,218 @@ class HdfPlan:
         Returns
         -------
         StartingWSEMethodDict
-            Initial condition method with keys:
-            - method: calculation method name (e.g., "Normal Depth", "Known WSE", "Critical Depth", "EGL Slope Line")
-            - slope: normal depth slope (if method is "Normal Depth")
-            - wse: known water surface elevation (if method is "Known WSE")
-            - Additional method-specific parameters
+            - ``method``: ``"Known WS"``, ``"Normal Depth"``, ``"Critical
+              Depth"``, ``"Rating Curve"`` or ``"Stage Hydrograph"`` when every
+              selected boundary has that type; ``"Multiple"`` when they differ;
+              ``"Unknown"`` (with ``note``) when no boundary could be read;
+              ``"Error"`` (with ``error``) when reading failed.
+            - ``slope``: the normal-depth friction slope, only when the method is
+              ``"Normal Depth"`` and every selected boundary has the same slope.
+            - ``wse``: the known water surface, only when the method is
+              ``"Known WS"`` and every selected boundary has the same value.
+            - ``regime``: steady plans only, ``"Subcritical"``,
+              ``"Supercritical"`` or ``"Mixed"`` from the plan file.
+            - ``boundaries``: one dict per selected boundary (type, location,
+              and its slope / known WS / rating-curve points when stored).
+            - ``source``: the HDF group or flow file that was read.
+            - ``startup_mode``: unsteady initial-condition startup mode.
 
         Notes
         -----
-        The method determines how HEC-RAS calculates initial water surface elevations
-        at the start of an unsteady flow simulation or downstream boundary for steady flow.
-        Returns dict with 'method': 'Unknown' if boundary condition data not found.
+        Values are not filled when they cannot be read: ``slope``/``wse`` are
+        omitted when boundaries disagree (see ``boundaries``); ``regime`` is
+        omitted for unsteady plans and when the plan file or its regime line is
+        absent, in which case both boundary sides of a steady flow file are
+        reported. Unsteady boundary positions (upstream/downstream) are not
+        stored in the HDF and are not inferred. Quasi-unsteady (``.q##``) flow
+        files are not read. Earlier releases looked for plan attributes HEC-RAS
+        does not write and returned ``"Unknown"`` for every real plan.
         """
         try:
             with h5py.File(hdf_path, 'r') as hdf_file:
-                result = {}
+                result = None
+                if HdfPlan._UNSTEADY_BC_PATH in hdf_file:
+                    result = HdfPlan._unsteady_starting_wse(hdf_file)
+                elif "Event Conditions/Steady" in hdf_file:
+                    flow_name = HdfPlan._plan_info_text(hdf_file, "Flow Filename")
+                    plan_name = HdfPlan._plan_info_text(hdf_file, "Plan Filename")
+                else:
+                    result = {
+                        'method': 'Unknown',
+                        'note': ("No unsteady boundary conditions "
+                                 f"({HdfPlan._UNSTEADY_BC_PATH}) or steady event "
+                                 "conditions in the plan HDF"),
+                    }
+            if result is None:
+                result = HdfPlan._steady_starting_wse(Path(hdf_path), flow_name, plan_name)
 
-                # Try to get starting WSE method from Plan Parameters
-                plan_params_path = HdfPlan._PLAN_PARAMETERS_PATH
-                if plan_params_path in hdf_file:
-                    # Membership through h5py, values one attribute at a time (as main).
-                    plan_params_group = hdf_file[plan_params_path]
-                    plan_params = plan_params_group.attrs
-
-                    # Extract starting WSE method attributes
-                    # Common attribute names (adjust based on actual HDF structure):
-                    method_attrs = [
-                        'Downstream Reach Boundary Condition',
-                        'Initial Condition Method',
-                        'Starting Water Surface',
-                        'Boundary Condition Type',
-                    ]
-
-                    for attr_name in method_attrs:
-                        if attr_name in plan_params:
-                            value = read_attr(plan_params_group, attr_name)
-                            if isinstance(value, bytes):
-                                value = HdfUtils.convert_ras_string(value)
-                            result['method'] = value
-                            break
-
-                    # If method is Normal Depth, get the slope
-                    if 'method' in result and 'Normal' in str(result['method']):
-                        slope_attrs = [
-                            'Normal Depth Slope',
-                            'Downstream Slope',
-                            'Friction Slope',
-                        ]
-                        for slope_attr in slope_attrs:
-                            if slope_attr in plan_params:
-                                slope_value = read_attr(plan_params_group, slope_attr)
-                                if isinstance(slope_value, (np.number, float, int)):
-                                    result['slope'] = float(slope_value)
-                                    break
-
-                    # If method is Known WSE, get the elevation
-                    if 'method' in result and 'Known' in str(result['method']):
-                        wse_attrs = [
-                            'Known Water Surface',
-                            'Starting WSE',
-                            'Boundary Water Surface',
-                        ]
-                        for wse_attr in wse_attrs:
-                            if wse_attr in plan_params:
-                                wse_value = read_attr(plan_params_group, wse_attr)
-                                if isinstance(wse_value, (np.number, float, int)):
-                                    result['wse'] = float(wse_value)
-                                    break
-
-                # If method not found in Plan Parameters, try Plan Information
-                if 'method' not in result:
-                    plan_info_path = HdfPlan._PLAN_INFORMATION_PATH
-                    if plan_info_path in hdf_file:
-                        plan_info_group = hdf_file[plan_info_path]
-                        for attr_name in ['Flow Regime', 'Simulation Type']:
-                            if attr_name in plan_info_group.attrs:
-                                value = read_attr(plan_info_group, attr_name)
-                                if isinstance(value, bytes):
-                                    value = HdfUtils.convert_ras_string(value)
-                                result['regime'] = value
-
-                # If still no method found, return indication
-                if 'method' not in result:
-                    logger.debug(
-                        "Starting WSE method not found in %s; returning method='Unknown'.",
-                        hdf_path.name,
-                    )
-                    result['method'] = 'Unknown'
-                    result['note'] = 'Boundary condition method not found in HDF file'
-
-                logger.debug(f"Successfully extracted starting WSE method: {result.get('method', 'Unknown')}")
-                return result
+            if result['method'] == 'Unknown':
+                logger.debug(
+                    "Starting WSE method not found in %s; returning method='Unknown'.",
+                    hdf_path.name,
+                )
+            logger.debug(f"Successfully extracted starting WSE method: {result.get('method', 'Unknown')}")
+            return result
 
         except Exception as e:
             reraise_required(e)
             logger.error(f"Error reading starting WSE method from {hdf_path}: {str(e)}")
             return {'method': 'Error', 'error': str(e)}
+
+    @staticmethod
+    def _text(value: Any) -> str:
+        if isinstance(value, np.ndarray) and value.size == 1:
+            value = value.reshape(()).item()
+        if isinstance(value, (bytes, np.bytes_)):
+            value = bytes(value).decode('utf-8', 'replace')
+        return str(value).strip()
+
+    @staticmethod
+    def _plan_info_text(hdf_file: h5py.File, name: str) -> Optional[str]:
+        info = hdf_file.get(HdfPlan._PLAN_INFORMATION_PATH)
+        if info is None or name not in info.attrs:
+            return None
+        return HdfPlan._text(read_attr(info, name)) or None
+
+    @staticmethod
+    def _summarize_boundaries(result: Dict[str, Any], boundaries: List[Dict[str, Any]],
+                              empty_note: str) -> Dict[str, Any]:
+        result['boundaries'] = boundaries
+        types = sorted({b['type'] for b in boundaries})
+        if not types:
+            result['method'] = 'Unknown'
+            result['note'] = empty_note
+            return result
+        if len(types) > 1:
+            result['method'] = 'Multiple'
+            result['note'] = f"Boundary types differ: {', '.join(types)}; see 'boundaries'"
+            return result
+        result['method'] = types[0]
+        for key, method in (('slope', 'Normal Depth'), ('wse', 'Known WS')):
+            if types[0] != method:
+                continue
+            values = {b.get(key) for b in boundaries}
+            if len(values) == 1 and None not in values:
+                result[key] = values.pop()
+            else:
+                result['note'] = f"{method} values differ between boundaries; see 'boundaries'"
+        return result
+
+    @staticmethod
+    def _unsteady_starting_wse(hdf_file: h5py.File) -> Dict[str, Any]:
+        result: Dict[str, Any] = {'source': HdfPlan._UNSTEADY_BC_PATH}
+        ic = hdf_file.get(HdfPlan._UNSTEADY_IC_PATH)
+        if ic is not None and 'Startup Mode' in ic.attrs:
+            result['startup_mode'] = HdfPlan._text(read_attr(ic, 'Startup Mode'))
+        group = hdf_file[HdfPlan._UNSTEADY_BC_PATH]
+        boundaries = []
+        for group_name, method in HdfPlan._WS_BOUNDARY_GROUPS.items():
+            members = group.get(group_name)
+            if not isinstance(members, h5py.Group):
+                continue
+            for location, dataset in members.items():
+                if not isinstance(dataset, h5py.Dataset):
+                    continue
+                entry: Dict[str, Any] = {'type': method, 'location': location}
+                for attr_name, key in HdfPlan._BC_LOCATION_ATTRS.items():
+                    if attr_name in dataset.attrs:
+                        entry[key] = HdfPlan._text(read_attr(dataset, attr_name))
+                if group_name == "Normal Depths" and dataset.size >= 1:
+                    entry['slope'] = float(np.asarray(read_typed(dataset)).reshape(-1)[0])
+                elif group_name == "Rating Curves":
+                    entry['points'] = int(dataset.shape[0]) if dataset.shape else 0
+                boundaries.append(entry)
+        return HdfPlan._summarize_boundaries(
+            result, boundaries,
+            f"No Normal Depth, Rating Curve or Stage Hydrograph boundary in {HdfPlan._UNSTEADY_BC_PATH}")
+
+    @staticmethod
+    def _sibling_file(folder: Path, name: Optional[str]) -> Optional[Path]:
+        """``folder/name``, matching the file name case-insensitively (HEC-RAS mixes case)."""
+        if not name:
+            return None
+        exact = folder / name
+        if exact.is_file():
+            return exact
+        wanted = name.lower()
+        try:
+            for candidate in folder.iterdir():
+                if candidate.name.lower() == wanted and candidate.is_file():
+                    return candidate
+        except OSError:
+            return None
+        return None
+
+    @staticmethod
+    def _plan_flow_regime(plan_path: Optional[Path]) -> Optional[str]:
+        if plan_path is None:
+            return None
+        with open(plan_path, 'r', encoding='utf-8', errors='replace') as plan_file:
+            for line in plan_file:
+                regime = HdfPlan._PLAN_FLOW_REGIMES.get(line.strip())
+                if regime:
+                    return regime
+        return None
+
+    @staticmethod
+    def _steady_starting_wse(hdf_path: Path, flow_name: Optional[str],
+                             plan_name: Optional[str]) -> Dict[str, Any]:
+        from ..RasSteady import RasSteady
+
+        if not flow_name:
+            return {'method': 'Unknown',
+                    'note': "Steady plan HDF has no Plan Information 'Flow Filename' attribute"}
+        if not re.fullmatch(r".+\.f\d\d", flow_name, flags=re.IGNORECASE):
+            return {'method': 'Unknown',
+                    'note': f"Flow file {flow_name} is not a steady flow file (.f##)"}
+        flow_path = HdfPlan._sibling_file(hdf_path.parent, flow_name)
+        if flow_path is None:
+            return {'method': 'Unknown',
+                    'note': f"Steady flow file {flow_name} not found next to {hdf_path.name}"}
+
+        data = RasSteady.read_flow_file(flow_path)
+        result: Dict[str, Any] = {'source': flow_path.name}
+        regime = HdfPlan._plan_flow_regime(HdfPlan._sibling_file(hdf_path.parent, plan_name))
+        if regime:
+            result['regime'] = regime
+        sides = {'Subcritical': ('downstream',), 'Supercritical': ('upstream',)}.get(
+            regime, ('upstream', 'downstream'))
+        names = data.get('profile_names') or []
+
+        boundaries = []
+        for block in data.get('boundaries', []):
+            for side in sides:
+                spec = block.get(side) or {}
+                boundary_type = spec.get('type', RasSteady.NO_BOUNDARY)
+                if boundary_type == RasSteady.NO_BOUNDARY:
+                    continue
+                values = {'wse': spec.get('known_ws'), 'slope': spec.get('slope')}
+                if 'profile' in block:
+                    profiles = [block['profile']]
+                else:
+                    # Legacy "Boundary for River Rch & RM=" blocks hold one value per profile.
+                    count = max((len(v) for v in values.values() if isinstance(v, list)), default=0)
+                    profiles = list(range(1, count + 1)) or [None]
+                for index, profile in enumerate(profiles):
+                    entry: Dict[str, Any] = {
+                        'type': RasSteady.BOUNDARY_TYPE_NAMES[boundary_type],
+                        'side': side,
+                        'river': block.get('river'),
+                        'reach': block.get('reach'),
+                        'profile': profile,
+                    }
+                    if profile is not None and 1 <= profile <= len(names):
+                        entry['profile_name'] = names[profile - 1]
+                    for key, value in values.items():
+                        if isinstance(value, list):
+                            value = value[index] if index < len(value) else None
+                        if value is not None:
+                            entry[key] = float(value)
+                    if spec.get('rating_curve'):
+                        entry['rating_curve'] = [tuple(float(v) for v in pair)
+                                                 for pair in spec['rating_curve']]
+                    boundaries.append(entry)
+        return HdfPlan._summarize_boundaries(
+            result, boundaries, f"No {'/'.join(sides)} boundary defined in {flow_path.name}")
 
 
