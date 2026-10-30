@@ -204,3 +204,20 @@ def test_weighted_parameters_drop_parameter_any_class_lacks(bad):
     stats = pd.DataFrame({"mukey": ["a", "b"], "Percentage": [50.0, 50.0]})
     weighted = HdfInfiltration.calculate_weighted_parameters(stats, params)
     assert weighted == {"Curve Number": pytest.approx(75.0)}
+
+
+@pytest.mark.parametrize("case", ["no_matching_class", "no_params", "zero_weight"])
+def test_weighted_parameters_without_contributing_class_is_empty(case, caplog):
+    """Nothing on disk supports a value, so no 0.0 placeholders are returned."""
+    params = {"a": {"Curve Number": 70.0}}
+    stats = pd.DataFrame({"mukey": ["a"], "Percentage": [100.0]})
+    if case == "no_matching_class":
+        stats = pd.DataFrame({"mukey": ["zz"], "Percentage": [100.0]})
+    elif case == "no_params":
+        params = {}
+    else:
+        stats = pd.DataFrame({"mukey": ["a"], "Percentage": [0.0]})
+    with caplog.at_level("WARNING"):
+        weighted = HdfInfiltration.calculate_weighted_parameters(stats, params)
+    assert weighted == {}
+    assert "no contributing class" in caplog.text

@@ -14,7 +14,10 @@ alone does not identify a development checkout.
   set (for example `Residual Soil Water Content` and `Pore Size Distribution
   Index` in 7.0.1 Green-Ampt layers), and weighting produced values such as
   `-4999.475`. A parameter is now left out of the result, with a warning, when
-  any contributing class has it missing, NaN or `-9999.0`.
+  any contributing class has it missing, NaN or `-9999.0`. When no class
+  contributes (no parameter sets, no matching mukey, or a total `Percentage`
+  that is not positive) it now returns an empty dict with a warning instead of
+  `0.0` for every key (the legacy keys when `infiltration_params` was empty).
   `get_infiltration_parameters()` still returns the stored values unchanged.
 
 - **`HdfPump.get_pump_station_summary` now returns real data.** It used to

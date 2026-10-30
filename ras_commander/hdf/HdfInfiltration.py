@@ -2192,45 +2192,50 @@ class HdfInfiltration:
 
         Returns:
             Dictionary of weighted average infiltration parameters, keyed like
-            the first entry of ``infiltration_params`` (the legacy keys
-            ``Initial Loss (in)``, ``Constant Loss Rate (in/hr)`` and
-            ``Impervious Area (%)``, all 0.0, when it is empty). A parameter
+            the first entry of ``infiltration_params``. A contributing class is
+            a ``soil_stats`` mukey present in ``infiltration_params``; weights
+            are its ``Percentage`` over the total ``Percentage``. A parameter
             is left out of the result (and a warning names it) when any
             contributing class does not have it: the key is missing, the value
             is NaN, or it is ``-9999.0``. HEC-RAS layers mark unset parameters
             with ``-9999.0`` (for example ``Residual Soil Water Content`` and
             ``Pore Size Distribution Index`` in 7.0.1 Green-Ampt layers); no
             attribute declares it, and it is the only negative value they
-            store. A contributing class is a ``soil_stats`` mukey present in
-            ``infiltration_params``.
+            store. When no class contributes (``infiltration_params`` is
+            empty, no mukey matches, or the total ``Percentage`` is not
+            positive) the result is an empty dict and a warning is logged:
+            no value is supplied that the layer does not hold.
         """
-        total_weight = soil_stats['Percentage'].sum()
+        total_weight = float(soil_stats['Percentage'].sum()) if len(soil_stats) else 0.0
+        contributing = [
+            (row['mukey'], row['Percentage'])
+            for _, row in soil_stats.iterrows()
+            if row['mukey'] in infiltration_params
+        ]
+        if not infiltration_params or not contributing or not (
+            np.isfinite(total_weight) and total_weight > 0
+        ):
+            logger.warning(
+                "Weighted infiltration parameters are empty: no contributing class "
+                "(%d parameter set(s), %d soil row(s) matched, total Percentage %s)",
+                len(infiltration_params or {}), len(contributing), total_weight,
+            )
+            return {}
 
-        if infiltration_params:
-            first = next(iter(infiltration_params.values()))
-            weighted_params = {param: 0.0 for param in first}
-        else:
-            weighted_params = {
-                'Initial Loss (in)': 0.0,
-                'Constant Loss Rate (in/hr)': 0.0,
-                'Impervious Area (%)': 0.0
-            }
-
+        first = next(iter(infiltration_params.values()))
+        weighted_params = {param: 0.0 for param in first}
         unavailable = set()
-        for _, row in soil_stats.iterrows():
-            mukey = row['mukey']
-            weight = row['Percentage'] / total_weight
-
-            if mukey in infiltration_params:
-                class_params = infiltration_params[mukey]
-                for param in weighted_params:
-                    if param in unavailable:
-                        continue
-                    value = class_params.get(param)
-                    if not HdfInfiltration._is_available_parameter(value):
-                        unavailable.add(param)
-                        continue
-                    weighted_params[param] += float(value) * weight
+        for mukey, percentage in contributing:
+            weight = percentage / total_weight
+            class_params = infiltration_params[mukey]
+            for param in weighted_params:
+                if param in unavailable:
+                    continue
+                value = class_params.get(param)
+                if not HdfInfiltration._is_available_parameter(value):
+                    unavailable.add(param)
+                    continue
+                weighted_params[param] += float(value) * weight
 
         if unavailable:
             logger.warning(
