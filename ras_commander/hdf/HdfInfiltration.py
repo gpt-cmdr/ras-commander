@@ -2068,6 +2068,31 @@ class HdfInfiltration:
           one row and a ``ValueError`` is raised; pass the combined name (the
           ``Name`` values are listed by :meth:`get_infiltration_layer_data`).
 
+        The returned keys depend on the infiltration method (``LC Type`` of
+        the layer):
+
+        * Deficit and Constant: ``Maximum Deficit``, ``Initial Deficit``,
+          ``Potential Percolation Rate``.
+        * Green-Ampt: ``Wetting Front Suction``,
+          ``Saturated Hydraulic Conductivity``, ``Initial Soil Water Content``,
+          ``Saturated Soil Water Content``, ``Residual Soil Water Content``,
+          ``Pore Size Distribution Index`` (column order as stored).
+        * SCS Curve Number: ``Curve Number``, ``Abstraction Ratio``,
+          ``Minimum Infiltration Rate``.
+
+        Values are returned exactly as stored, in the project's unit system
+        (the layer does not record units), including the ``-9999.0`` that
+        HEC-RAS 7.0.1 Green-Ampt layers store in ``Residual Soil Water
+        Content`` and ``Pore Size Distribution Index``. Layer-wide
+        ``Properties`` (e.g. ``SCS Initial Loss Reset Time``) are not per-class
+        parameters and are not included.
+
+        The keys returned by earlier versions (``Initial Loss (in)``,
+        ``Constant Loss Rate (in/hr)``, ``Impervious Area (%)``) cannot be
+        filled: HEC-RAS infiltration layers do not store them (impervious
+        percentage belongs to the land cover layer's ``Percent Impervious``),
+        so they are not returned.
+
         Args:
             hdf_path: Optional path to the infiltration layer HDF. If not
                 provided, uses the first ``infiltration_hdf_path`` from
@@ -2078,32 +2103,8 @@ class HdfInfiltration:
 
         Returns:
             Optional[Dict[str, float]]: The parameter columns of the matching
-            ``Variables`` row, keyed by their HEC-RAS names, or ``None`` if no
-            row has that name. The keys depend on the infiltration method
-            (``LC Type`` of the layer):
-
-            * Deficit and Constant: ``Maximum Deficit``, ``Initial Deficit``,
-              ``Potential Percolation Rate``.
-            * Green-Ampt: ``Wetting Front Suction``,
-              ``Saturated Hydraulic Conductivity``,
-              ``Initial Soil Water Content``, ``Saturated Soil Water Content``,
-              ``Residual Soil Water Content``, ``Pore Size Distribution Index``
-              (column order as stored).
-            * SCS Curve Number: ``Curve Number``, ``Abstraction Ratio``,
-              ``Minimum Infiltration Rate``.
-
-            Values are returned exactly as stored, in the project's unit
-            system (the layer does not record units), including the
-            ``-9999.0`` that HEC-RAS 7.0.1 Green-Ampt layers store in
-            ``Residual Soil Water Content`` and ``Pore Size Distribution
-            Index``. Layer-wide ``Properties`` (e.g. ``SCS Initial Loss Reset
-            Time``) are not per-class parameters and are not included.
-
-            The keys returned by earlier versions (``Initial Loss (in)``,
-            ``Constant Loss Rate (in/hr)``, ``Impervious Area (%)``) cannot be
-            filled: HEC-RAS infiltration layers do not store them (impervious
-            percentage belongs to the land cover layer's ``Percent
-            Impervious``), so they are not returned.
+            ``Variables`` row keyed by their HEC-RAS names (see above), or
+            ``None`` if no row has that name.
 
         Raises:
             KeyError: If the HDF has no ``Variables`` table.
