@@ -23,7 +23,7 @@ from ras_commander.remote.RasPortableDocker import RasPortableDocker
 
 
 OCI = "registry.example/hecras/steady@sha256:" + "a" * 64
-LAUNCHER_SHA256 = "7dab4a39f5a4b6c8bb2caa96b829f946797e32aa389ba2ab5eaf97aa26e9c8b8"
+LAUNCHER_SHA256 = "cbf49bb1210660ebcb61ceeaee8ba4a854daef57cedaeb14470c7b3e8772c510"
 FIXTURES = Path(__file__).parent / "data" / "portable_execution"
 MAPS = {"terrain_name": "Terrain 1m", "profiles": ["PF 1", 1], "timeout_seconds": 900}
 
