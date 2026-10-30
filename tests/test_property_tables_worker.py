@@ -264,7 +264,9 @@ def test_incompatible_hdf5_metadata_fails_closed(failure):
 
 @pytest.mark.parametrize("mode", ["clean", "foreign", "identity-only"])
 def test_real_native_hdf5_identity_guard(tmp_path, mode):
-    if sys.platform != "win32" or importlib.util.find_spec("clr") is None:
+    if sys.platform != "win32" or (
+        "clr" not in sys.modules and importlib.util.find_spec("clr") is None
+    ):
         pytest.skip("Requires Windows Python, pythonnet and two HEC-RAS installations")
     root = Path(os.environ.get("PROGRAMFILES(X86)", "C:/Program Files (x86)"))
     root = root / "HEC" / "HEC-RAS"

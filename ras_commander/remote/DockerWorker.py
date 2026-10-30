@@ -66,6 +66,7 @@ from ..ExecutionArtifacts import (
 )
 from ..RasUtils import RasUtils
 from .Utils import clear_staged_plan_execution_artifacts
+from ..fast_hdf import release_native_sessions
 
 logger = get_logger(__name__)
 
@@ -802,6 +803,7 @@ def execute_docker_plan(
         logger.info(f"Copying result: {result_file.name}")
         try:
             shutil.copy2(result_file, temp_dest)
+            release_native_sessions(temp_dest, dest_file)
             os.replace(temp_dest, dest_file)
         finally:
             if temp_dest.exists():
@@ -831,6 +833,7 @@ def execute_docker_plan(
     finally:
         if autoclean and local_staging_folder.exists():
             try:
+                release_native_sessions(local_staging_folder)
                 shutil.rmtree(local_staging_folder, ignore_errors=True)
                 logger.debug(f"Cleaned up staging: {local_staging_folder}")
             except BaseException:
@@ -1135,6 +1138,7 @@ def execute_docker_plan_linux(
         )
         try:
             shutil.copy2(downloaded_hdf, temp_dest)
+            release_native_sessions(temp_dest, dest_file)
             os.replace(temp_dest, dest_file)
         finally:
             if temp_dest.exists():
@@ -1169,6 +1173,7 @@ def execute_docker_plan_linux(
             except Exception:
                 pass
             if local_staging_folder.exists():
+                release_native_sessions(local_staging_folder)
                 shutil.rmtree(local_staging_folder, ignore_errors=True)
         else:
             logger.info(

@@ -25,6 +25,9 @@ def _write_result_hdf(
     return path
 
 
+@pytest.mark.synthetic_hdf_layout(
+    "False-US Customary-expected0",
+)
 @pytest.mark.parametrize(
     ("si_units", "unit_system", "expected"),
     [
@@ -97,6 +100,7 @@ def test_result_unit_metadata_reports_unrecognized_value(tmp_path):
     assert metadata["contradictions"]
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_result_unit_metadata_reports_contradictory_evidence(tmp_path):
     hdf_path = _write_result_hdf(
         tmp_path / "contradictory.p01.hdf",
@@ -116,6 +120,7 @@ def test_result_unit_metadata_reports_contradictory_evidence(tmp_path):
     }
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_result_unit_metadata_rejects_geometry_only_hdf(tmp_path):
     hdf_path = _write_result_hdf(
         tmp_path / "Model.g01.hdf",
@@ -132,6 +137,7 @@ def test_result_unit_metadata_rejects_geometry_only_hdf(tmp_path):
     assert metadata["length_units"] is None
 
 
+@pytest.mark.synthetic_hdf_layout
 @pytest.mark.parametrize("dataset_unit", [None, "m", "ft"])
 def test_geometry_default_exception_requires_dataset_evidence(tmp_path, dataset_unit):
     path = _write_result_hdf(

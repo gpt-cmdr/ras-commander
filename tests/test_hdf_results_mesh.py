@@ -173,6 +173,7 @@ def _create_synthetic_depth_results_hdf(path):
         )
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_get_mesh_faces_timeseries_returns_optional_face_outputs(tmp_path):
     hdf_path = tmp_path / "synthetic.p01.hdf"
     _create_synthetic_face_results_hdf(hdf_path)
@@ -193,6 +194,7 @@ def test_get_mesh_faces_timeseries_returns_optional_face_outputs(tmp_path):
     )
 
 
+@pytest.mark.synthetic_hdf_layout
 @pytest.mark.parametrize("year", [2020, 1500, 3000])
 def test_future_dated_mesh_summary_and_timeseries_are_supported(tmp_path, year):
     hdf_path = tmp_path / "year-3000.p01.hdf"
@@ -247,6 +249,7 @@ def test_future_dated_mesh_summary_and_timeseries_are_supported(tmp_path, year):
     assert timestamp_year(cell_timeseries[MESH_NAME].coords["time"].values) == expected_year
 
 
+@pytest.mark.synthetic_hdf_layout
 @pytest.mark.parametrize("year", [2024, 3000])
 @pytest.mark.parametrize("use_stamps", [True, False])
 def test_export_depth_rasters_at_times_computes_depth_from_wse(tmp_path, year, use_stamps):
@@ -290,6 +293,7 @@ def test_export_depth_rasters_at_times_computes_depth_from_wse(tmp_path, year, u
     )
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_get_mesh_faces_timeseries_can_preserve_full_time_axis(tmp_path):
     hdf_path = tmp_path / "synthetic.p01.hdf"
     _create_synthetic_face_results_hdf(hdf_path)
@@ -316,6 +320,7 @@ def test_get_mesh_faces_timeseries_can_preserve_full_time_axis(tmp_path):
     )
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_get_mesh_faces_timeseries_merges_mixed_time_axes_without_future_warning(
     tmp_path,
 ):
@@ -351,6 +356,7 @@ def test_get_mesh_faces_timeseries_merges_mixed_time_axes_without_future_warning
     )
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_get_mesh_cells_timeseries_treats_new_outputs_as_face_indexed(tmp_path):
     hdf_path = tmp_path / "synthetic.p01.hdf"
     _create_synthetic_face_results_hdf(hdf_path)
@@ -365,6 +371,7 @@ def test_get_mesh_cells_timeseries_treats_new_outputs_as_face_indexed(tmp_path):
     assert result[MESH_NAME]["Face Manning's n"].dims == ("time", "face_id")
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_get_mesh_cells_timeseries_aggregate_missing_outputs_are_debug_only(
     tmp_path,
     caplog,
@@ -436,6 +443,7 @@ def test_get_mesh_cells_timeseries_explicit_missing_output_logs_error(
     )
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_get_mesh_cells_timeseries_truncate_uses_time_axis(tmp_path):
     hdf_path = tmp_path / "synthetic.p01.hdf"
     _create_synthetic_face_results_hdf(hdf_path)

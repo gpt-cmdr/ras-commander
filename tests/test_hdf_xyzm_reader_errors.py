@@ -89,6 +89,14 @@ def _write(path, group, prefix, *, z=False, records=1, malformed=None):
     return path
 
 
+@pytest.mark.synthetic_hdf_layout(
+    "finite-z-breaklines",
+    "finite-z-mannings-regions",
+    "finite-z-refinement",
+    "nan-padding-breaklines",
+    "nan-padding-mannings-regions",
+    "nan-padding-refinement",
+)
 @pytest.mark.parametrize("kind,group,prefix", READERS)
 @pytest.mark.parametrize("z", [False, True], ids=["nan-padding", "finite-z"])
 def test_readers_reduce_xyzm_without_losing_layer(tmp_path, kind, group, prefix, z):
@@ -121,6 +129,16 @@ def test_truly_absent_layers_are_empty(tmp_path, kind, group, prefix):
     assert len(_read(kind, path, group)) == 0
 
 
+@pytest.mark.synthetic_hdf_layout(
+    "missing_points-breaklines",
+    "missing_points-refinement",
+    "point_count-breaklines",
+    "point_count-mannings-regions",
+    "point_count-refinement",
+    "point_width-breaklines",
+    "point_width-mannings-regions",
+    "point_width-refinement",
+)
 @pytest.mark.parametrize("kind,group,prefix", READERS)
 @pytest.mark.parametrize("malformed", ["missing_points", "point_width", "point_count"])
 def test_present_corrupt_layers_raise(tmp_path, kind, group, prefix, malformed):
@@ -132,6 +150,11 @@ def test_present_corrupt_layers_raise(tmp_path, kind, group, prefix, malformed):
         _read(kind, path, group)
 
 
+@pytest.mark.synthetic_hdf_layout(
+    "breaklines",
+    "mannings-regions",
+    "refinement",
+)
 @pytest.mark.parametrize("kind,group,prefix", READERS)
 def test_well_formed_zero_record_layers_are_empty(tmp_path, kind, group, prefix):
     path = _write(tmp_path / "empty.hdf", group, prefix, records=0)

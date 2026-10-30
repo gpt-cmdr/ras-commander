@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import List, Optional, Union
 
 from ..LoggingConfig import get_logger
+from ..fast_hdf import release_native_sessions
 
 logger = get_logger(__name__)
 
@@ -110,6 +111,7 @@ def copy_plan_result_back(
     )
     try:
         shutil.copy2(worker_result, temp_dest)
+        release_native_sessions(temp_dest, dest_result)
         os.replace(temp_dest, dest_result)
     finally:
         if temp_dest.exists():

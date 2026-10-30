@@ -31,6 +31,7 @@ def _write_geometry(path, keys, key_dtype="i4"):
     return path
 
 
+@pytest.mark.synthetic_hdf_layout
 @pytest.mark.parametrize("as_string", [False, True])
 def test_native_zero_key_sparse_join_preserves_all_row_alignment(tmp_path, as_string):
     path = _write_geometry(tmp_path / "native.g01.hdf", [2, 0])
@@ -47,6 +48,7 @@ def test_native_zero_key_sparse_join_preserves_all_row_alignment(tmp_path, as_st
     assert result.crs.to_epsg() == 2278
 
 
+@pytest.mark.synthetic_hdf_layout
 @pytest.mark.parametrize("keys,key_dtype", [
     ([0, 0], "i4"),       # duplicate would multiply the native row
     ([0.5], "f8"),       # fractional key

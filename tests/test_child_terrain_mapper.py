@@ -104,6 +104,7 @@ def test_audit_detects_stale_names_missing_paths_and_absolute_paths(tmp_path):
     assert audit_terrain_associations(mapper, [])["status"] == "hold"
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_finalized_bundle_rename_preserves_associations(tmp_path):
     partial = tmp_path / "attempt.partial"
     partial.mkdir()
@@ -126,6 +127,9 @@ def test_finalized_bundle_rename_preserves_associations(tmp_path):
     )
 
 
+@pytest.mark.synthetic_hdf_layout(
+    "other.hdf",
+)
 @pytest.mark.parametrize("association", [None, "other.hdf"])
 def test_audit_holds_missing_or_wrong_existing_geometry_terrain(tmp_path, association):
     (tmp_path / "ChildTerrain.hdf").touch()

@@ -90,6 +90,7 @@ def hdf(tmp_path):
     return _write_hdf(tmp_path / "ghost.p01.hdf")
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_summary_values_exclude_ghost_cells_by_default(hdf):
     physical = HdfResultsMesh.get_mesh_summary_values(hdf, "Maximum Water Surface")
     assert physical["cell_id"].tolist() == list(range(PHYSICAL))
@@ -104,6 +105,7 @@ def test_summary_values_exclude_ghost_cells_by_default(hdf):
     assert full.loc[full["is_ghost_cell"], "maximum_water_surface"].eq(0.0).all()
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_max_ws_geodataframe_excludes_ghost_cells(hdf):
     physical = HdfResultsMesh.get_mesh_max_ws(hdf)
     assert len(physical) == PHYSICAL
@@ -111,6 +113,7 @@ def test_max_ws_geodataframe_excludes_ghost_cells(hdf):
     assert int(full["is_ghost_cell"].sum()) == GHOSTS
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_max_depth_excludes_ghost_cells(hdf):
     physical = HdfResultsMesh.get_mesh_max_depth(hdf)
     assert len(physical) == PHYSICAL
@@ -119,6 +122,7 @@ def test_max_depth_excludes_ghost_cells(hdf):
     assert int(full["is_ghost_cell"].sum()) == GHOSTS
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_timeseries_excludes_ghost_cells_by_default(hdf):
     physical = HdfResultsMesh.get_mesh_timeseries(hdf, MESH, "Water Surface", truncate=False)
     assert physical.sizes["cell_id"] == PHYSICAL
@@ -138,6 +142,7 @@ def test_timeseries_excludes_ghost_cells_by_default(hdf):
     assert all(batch.sizes["cell_id"] == PHYSICAL for batch in batches)
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_timeseries_selection_is_clipped_to_physical_cells(hdf):
     clipped = HdfResultsMesh.get_mesh_timeseries(
         hdf, MESH, "Water Surface", truncate=False, spatial_selection=slice(2, None)
@@ -165,12 +170,14 @@ def test_timeseries_selection_is_clipped_to_physical_cells(hdf):
     assert ghost["is_ghost_cell"].values.tolist() == [True]
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_face_variables_are_unaffected(hdf):
     faces = HdfResultsMesh.get_mesh_timeseries(hdf, MESH, "Face Velocity", truncate=False)
     assert faces.sizes["face_id"] == 5
     assert "is_ghost_cell" not in faces.coords
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_cells_timeseries_dataset(hdf):
     physical = HdfResultsMesh.get_mesh_cells_timeseries(hdf, var="Water Surface")[MESH]
     assert physical.sizes["cell_id"] == PHYSICAL
@@ -180,6 +187,7 @@ def test_cells_timeseries_dataset(hdf):
     assert int(full["is_ghost_cell"].sum()) == GHOSTS
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_missing_cell_count_keeps_all_cells_with_warning(tmp_path, caplog):
     hdf = _write_hdf(tmp_path / "no_count.p01.hdf", with_cell_count=False)
     with caplog.at_level(logging.WARNING):
@@ -191,12 +199,14 @@ def test_missing_cell_count_keeps_all_cells_with_warning(tmp_path, caplog):
     assert "ghost cells cannot be identified" in caplog.text
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_cell_points_can_exclude_ghost_cells(hdf):
     assert len(HdfMesh.get_mesh_cell_points(hdf)) == PHYSICAL + GHOSTS
     physical = HdfMesh.get_mesh_cell_points(hdf, include_ghost_cells=False)
     assert physical["cell_id"].tolist() == list(range(PHYSICAL))
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_point_query_never_snaps_to_a_ghost_cell(hdf):
     """A point beside the last physical cell is nearer a ghost center."""
     point = np.array([[3.9, 0.0]])

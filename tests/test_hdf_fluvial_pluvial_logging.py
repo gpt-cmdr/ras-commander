@@ -18,9 +18,9 @@ REFERENCE = ({"engine": "h5py"} if "engine" in inspect.signature(
 @pytest.fixture(scope="module")
 def bald_eagle_2d_plan_hdf() -> Path:
     candidates = [
-        Path("examples/example_projects/BaldEagleCrkMulti2D_11/BaldEagleDamBrk.p06.hdf"),
-        Path("examples/example_projects/BaldEagleCrkMulti2D_14/BaldEagleDamBrk.p06.hdf"),
-        Path("examples/example_projects/BaldEagleCrkMulti2D_415/BaldEagleDamBrk.p06.hdf"),
+        Path(__file__).resolve().parents[1] / "examples/example_projects/BaldEagleCrkMulti2D_11/BaldEagleDamBrk.p06.hdf",
+        Path(__file__).resolve().parents[1] / "examples/example_projects/BaldEagleCrkMulti2D_14/BaldEagleDamBrk.p06.hdf",
+        Path(__file__).resolve().parents[1] / "examples/example_projects/BaldEagleCrkMulti2D_415/BaldEagleDamBrk.p06.hdf",
     ]
     for candidate in candidates:
         if candidate.exists():

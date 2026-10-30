@@ -135,6 +135,7 @@ def test_get_attrs_missing_path_is_debug_only(tmp_path, caplog):
     assert [record for record in _records(caplog) if record.levelno >= logging.WARNING] == []
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_get_attrs_conversion_failure_raises_without_error_log(
     tmp_path,
     caplog,
@@ -209,6 +210,7 @@ def test_polylines_missing_group_is_quiet_empty_result(tmp_path, caplog):
     assert [record for record in _records(caplog) if record.levelno >= logging.WARNING] == []
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_polylines_success_has_no_default_log_noise(tmp_path, caplog):
     hdf_path = _write_polyline_hdf(tmp_path / "polylines.g01.hdf")
 

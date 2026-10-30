@@ -3,6 +3,7 @@ from pathlib import Path
 
 import h5py
 import numpy as np
+import pytest
 
 from ras_commander.hdf.HdfResultsPlan import HdfResultsPlan
 
@@ -62,6 +63,7 @@ def test_reference_output_absence_is_debug_only(tmp_path, caplog):
     ]
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_reference_timeseries_reads_modern_matrix_schema(tmp_path):
     hdf_path = tmp_path / "reference_lines.p01.hdf"
     base = (

@@ -147,7 +147,9 @@ def test_stderr_progress_arrives_before_process_exit_and_final_json(tmp_path, wr
     reader = threading.Thread(target=read_stderr, daemon=True)
     reader.start()
     try:
-        deadline = time.monotonic() + 20
+        # Child start-up budget, not under test: the release gate below is what
+        # proves the line arrived before exit. 20 s was exceeded on a loaded gate.
+        deadline = time.monotonic() + 120
         while True:
             line = messages.get(timeout=max(0.01, deadline - time.monotonic()))
             assert line is not None
@@ -159,7 +161,7 @@ def test_stderr_progress_arrives_before_process_exit_and_final_json(tmp_path, wr
         with pytest.raises(queue.Empty):
             messages.get(timeout=0.15)
         release.touch()
-        assert process.wait(timeout=20) == (0 if writer_exit == 0 else 1)
+        assert process.wait(timeout=120) == (0 if writer_exit == 0 else 1)
         reader.join(timeout=5)
         assert not reader.is_alive()
         assert messages.get_nowait() == "step 2\n"
@@ -183,6 +185,7 @@ def test_stderr_progress_arrives_before_process_exit_and_final_json(tmp_path, wr
         process.stderr.close()
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_compute_worker_forwards_staged_log_and_preserves_json_contract(packet, monkeypatch, capsys):
     monkeypatch.setattr(worker, "_call_compute", _fake_success)
     success, receipt = _run(packet, prepare_receipt=packet["prep"])
@@ -194,6 +197,7 @@ def test_compute_worker_forwards_staged_log_and_preserves_json_contract(packet, 
     assert not list(packet["scratch"].iterdir())
 
 
+@pytest.mark.synthetic_hdf_layout
 @pytest.mark.parametrize("num_cores", [1, 8])
 def test_worker_accepts_core_policy_boundaries(packet, monkeypatch, num_cores):
     seen = []

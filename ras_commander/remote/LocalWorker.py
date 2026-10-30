@@ -26,6 +26,7 @@ from ..ExecutionArtifacts import (
 from ..LoggingConfig import get_logger
 from ..RasCurrency import RasCurrency
 from ..RasUtils import RasUtils
+from ..fast_hdf import release_native_sessions
 
 logger = get_logger(__name__)
 
@@ -337,6 +338,7 @@ def execute_local_plan(
 
         # Step 5: Cleanup (if autoclean enabled)
         if autoclean:
+            release_native_sessions(worker_temp_folder)
             shutil.rmtree(worker_temp_folder, ignore_errors=True)
             logger.debug(f"Cleaned up worker folder: {worker_temp_folder}")
         else:
@@ -359,6 +361,7 @@ def execute_local_plan(
         if autoclean:
             try:
                 if worker_temp_folder.exists():
+                    release_native_sessions(worker_temp_folder)
                     shutil.rmtree(worker_temp_folder, ignore_errors=True)
             except:
                 pass

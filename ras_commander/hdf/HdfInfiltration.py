@@ -70,7 +70,6 @@ from ..Decorators import standardize_input, log_call
 from ..LoggingConfig import get_logger
 from ..fast_hdf import read_typed, reraise_required
 from .._rasmap_schema import rasmap_dataframe_is_usable
-from ..fast_hdf import h5py_until_qualified
 
 if TYPE_CHECKING:
     import geopandas as gpd
@@ -1163,7 +1162,6 @@ class HdfInfiltration:
     @staticmethod
     @log_call
     @standardize_input(file_type='geom_hdf')
-    @h5py_until_qualified
     def get_soils_raster_stats(
         geom_hdf_path: Path,
         soil_hdf_path: Path = None,
