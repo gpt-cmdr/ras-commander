@@ -9,6 +9,20 @@ alone does not identify a development checkout.
 
 ### Unreleased
 
+- **`GeomMesh.detect_bc_conflicts()` reads real HEC-RAS geometry.** It used to
+  look for per-area `2D Flow Areas/<area>/BC Lines/<name>/Coordinates` groups
+  that HEC-RAS never writes, so it returned an empty list for every real file.
+  It now reads the BC lines from `Geometry/Boundary Condition Lines`
+  (`Attributes` `Name`/`SA-2D`/`Type`, `Polyline Info`/`Parts`/`Points`). It
+  finds perimeter faces by their ghost cell (`Faces Cell Indexes` at or above
+  the area's `Cell Count`, including `Faces Perimeter Values` points), and can
+  now report real conflicts. **`bc_types` now holds the geometry line type as
+  stored (`External`/`Internal`).** `normal_depth_bc` is filled from a plan
+  HDF's `Event Conditions` Normal Depth entries; it is `None` for a geometry
+  HDF, which does not record the hydraulic boundary type. The method is
+  qualified for native reads (identical to h5py on 105 real files).
+  `fix_bc_conflicts()` is unchanged and still reads the per-area layout.
+
 - **DSS shadow mode labels HEC's DSS6 "no data" rule.** When a native read
   raises not-found, `RasDss` shadow mode repeats it with dss-commander's
   opt-in `no_data="refuse"` and logs a refusal as

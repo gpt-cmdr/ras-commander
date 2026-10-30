@@ -20,7 +20,6 @@ from ras_commander import fast_hdf
 DECORATING_MODULES = [
     "ras_commander.check._utils",
     "ras_commander.check.check_floodways",
-    "ras_commander.geom.GeomMesh",
     "ras_commander.geom.GeomProjection",
     "ras_commander.hdf.HdfInfiltration",
     "ras_commander.hdf.HdfLandCover",
