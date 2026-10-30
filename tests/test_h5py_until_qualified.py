@@ -20,7 +20,6 @@ from ras_commander import fast_hdf
 DECORATING_MODULES = [
     "ras_commander.check._utils",
     "ras_commander.geom.GeomProjection",
-    "ras_commander.hdf.HdfLandCover",
     "ras_commander.hdf.HdfResultsSediment",
     "ras_commander.parent_display",
     "ras_commander.RasEncroachments",

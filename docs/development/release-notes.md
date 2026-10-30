@@ -9,6 +9,18 @@ alone does not identify a development checkout.
 
 ### Unreleased
 
+- **`HdfLandCover.estimate_final_mannings_raster` and
+  `compute_final_mannings_raster` run natively in `auto` mode, and stored
+  no-data Manning's n is now no data.** A class whose stored Manning's n is a
+  no-data value (NaN, -9999 in current layers, float32 max in legacy layers:
+  the `NoData` class, and every class of a legacy combined layer such as
+  Muncie `LandCoverCombined`) used to be written into the raster as that
+  number (for example 3.4e38). Those pixels are now no data, like unmapped
+  pixels: 0.0 in the returned array and the GeoTIFF's nodata value (-9999).
+  The geometry-extent fallback now reads `Geometry@Extents` through the native
+  reader. Native output (array and written GeoTIFF) is identical to h5py on all
+  32 public geometry/land-cover pairs of the HEC-RAS 6.2-7.0 examples
+  (BaldEagleCrkMulti2D, Muncie, Weise_2D) and their 6.6/7.0.1 re-runs.
 - **`HdfLandCover.get_landcover_raster_map` reads legacy land-cover layers.**
   Legacy RAS Mapper layers, still shipped in the HEC-RAS 7.0 example projects
   (Muncie `LandCover/*.hdf`, Weise_2D `LandCover.hdf`, the 6.1 BaldEagle

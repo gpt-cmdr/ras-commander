@@ -44,7 +44,6 @@ from ..LoggingConfig import get_logger
 from .HdfBase import HdfBase
 from .HdfUtils import HdfUtils
 from ..fast_hdf import read_attr, read_typed, reraise_required
-from ..fast_hdf import h5py_until_qualified
 
 logger = get_logger(__name__)
 
@@ -718,6 +717,21 @@ class HdfLandCover:
             logger.error(f"Error reading land cover raster map from {landcover_hdf_path}: {e}")
             return None
 
+    # Stored Manning's n values that mean "no roughness": legacy layers write
+    # float32 max (e.g. the NoData class, and every class of a combined layer);
+    # current layers write -9999.
+    _NO_DATA_N_MIN = float(np.finfo(np.float32).max) * 0.5
+    _NO_DATA_N_MAX = -9999.0
+
+    @staticmethod
+    def _base_n_or_no_data(value) -> float:
+        """A class's stored Manning's n, or 0.0 (no data) for NaN and the stored no-data values."""
+        value = float(value)
+        if (not np.isfinite(value) or value >= HdfLandCover._NO_DATA_N_MIN
+                or value <= HdfLandCover._NO_DATA_N_MAX):
+            return 0.0
+        return value
+
     @staticmethod
     def _legacy_raster_map(hdf_file, landcover_hdf_path) -> Optional[pd.DataFrame]:
         """pixel_value/class_name/mannings_n from legacy parallel IDs/Names/ManningsN arrays."""
@@ -1060,7 +1074,6 @@ class HdfLandCover:
     @staticmethod
     @log_call
     @standardize_input(file_type='geom_hdf')
-    @h5py_until_qualified
     def compute_final_mannings_raster(
         hdf_path: Path,
         landcover_hdf_path: Optional[Union[str, Path]] = None,
@@ -1088,7 +1101,6 @@ class HdfLandCover:
     @staticmethod
     @log_call
     @standardize_input(file_type='geom_hdf')
-    @h5py_until_qualified
     def estimate_final_mannings_raster(
         hdf_path: Path,
         landcover_hdf_path: Optional[Union[str, Path]] = None,
@@ -1116,6 +1128,11 @@ class HdfLandCover:
 
         Returns:
             2D numpy array of final Manning's n values (same shape as land cover raster).
+            0.0 marks no data: pixels whose class is not in the raster map, and
+            classes whose stored Manning's n is a no-data value (NaN, -9999 in
+            current layers, float32 max in legacy layers such as the NoData
+            class or every class of a legacy combined layer). The written
+            GeoTIFF stores those pixels as its nodata value, -9999.
             None if inputs cannot be resolved.
 
         Example:
@@ -1174,7 +1191,7 @@ class HdfLandCover:
         pixel_to_class_name = {}
         for _, row in raster_map.iterrows():
             pv = int(row['pixel_value'])
-            pixel_to_base_n[pv] = float(row['mannings_n']) if not np.isnan(row['mannings_n']) else 0.0
+            pixel_to_base_n[pv] = HdfLandCover._base_n_or_no_data(row['mannings_n'])
             pixel_to_class_name[pv] = row['class_name']
 
         # Step 2: Read calibration table
@@ -1226,7 +1243,7 @@ class HdfLandCover:
                     logger.debug(f"Clipping to 2D flow area perimeter (+ {buffer:.0f} ft buffer)")
                 else:
                     # Fall back to full geometry extents
-                    extents = hf['Geometry'].attrs.get('Extents')
+                    extents = read_attr(hf['Geometry'], 'Extents', None)
                     if extents is not None:
                         clip_bounds = (
                             float(extents[0]), float(extents[2]),
