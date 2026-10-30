@@ -145,6 +145,7 @@ def test_add_reference_lines_from_longitudinal_line_round_trips_plain_text(tmp_p
     assert np.allclose(parsed[1]["coordinates"], [(100.0, -40.0), (100.0, 40.0)])
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_generated_reference_lines_match_hdf_reference_line_schema(tmp_path):
     hdf_path = tmp_path / "Model.g01.hdf"
     generated = GeomReferenceFeatures.generate_reference_lines_from_longitudinal_line(

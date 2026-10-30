@@ -3,7 +3,7 @@ from pathlib import Path
 import nbformat
 
 
-NOTEBOOK = Path("examples/900_aorc_precipitation.ipynb")
+NOTEBOOK = Path(__file__).resolve().parents[1] / "examples/900_aorc_precipitation.ipynb"
 
 
 def test_aorc_notebook_is_executed_end_to_end_qualification():

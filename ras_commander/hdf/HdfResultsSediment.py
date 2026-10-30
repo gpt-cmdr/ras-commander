@@ -47,7 +47,6 @@ from .HdfUtils import HdfUtils
 from ..Decorators import log_call, standardize_input
 from ..LoggingConfig import get_logger
 from ..fast_hdf import read_attr, read_typed
-from ..fast_hdf import h5py_until_qualified
 
 logger = get_logger(__name__)
 
@@ -151,7 +150,6 @@ class HdfResultsSediment:
     @staticmethod
     @log_call
     @standardize_input(file_type='plan_hdf')
-    @h5py_until_qualified
     def is_sediment_plan(hdf_path: Path, ras_object: Optional[Any] = None) -> bool:
         """
         Return True if the plan HDF contains 2D mobile-bed (Sediment Bed) results.
@@ -175,7 +173,6 @@ class HdfResultsSediment:
     @staticmethod
     @log_call
     @standardize_input(file_type='plan_hdf')
-    @h5py_until_qualified
     def get_sediment_mesh_areas(hdf_path: Path, ras_object: Optional[Any] = None) -> List[str]:
         """
         Return the 2D flow area names that have Sediment Bed results.

@@ -749,6 +749,7 @@ def test_single_tiff_terrain_must_have_readable_pixel_data(monkeypatch, tmp_path
         RasBenefits.validate_terrain_tif(terrain)
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_registered_terrain_hdf_requires_exactly_the_supplied_single_tiff(tmp_path):
     h5py = pytest.importorskip("h5py")
     from ras_commander import RasBenefits
@@ -771,6 +772,7 @@ def test_registered_terrain_hdf_requires_exactly_the_supplied_single_tiff(tmp_pa
         RasBenefits.validate_registered_terrain_source(hdf_path, other)
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_registered_terrain_hdf_rejects_multiple_source_rasters(tmp_path):
     h5py = pytest.importorskip("h5py")
     from ras_commander import RasBenefits

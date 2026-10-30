@@ -54,6 +54,7 @@ def read(path, name, mode, **kwargs):
     return xr.concat(list(Mesh.iter_mesh_timeseries(path, AREA, name, batch_size=2, **kwargs)), dim="time")
 
 
+@pytest.mark.synthetic_hdf_layout
 @pytest.mark.parametrize("mode", ["eager", "lazy", "stream"])
 @pytest.mark.parametrize("name,domain", [
     ("Depth", "cell_id"), ("Water Surface", "cell_id"),
@@ -78,6 +79,7 @@ def test_missing_location_exact_legacy_schema(source, name, domain, mode, caplog
         assert "is_ghost_cell" not in result.coords
 
 
+@pytest.mark.synthetic_hdf_layout
 @pytest.mark.parametrize("mode", ["eager", "lazy", "stream"])
 def test_time_only_preserves_exact_values_and_coordinates(source, mode):
     result = read(source, "Time Step", mode)
@@ -90,6 +92,7 @@ def test_time_only_preserves_exact_values_and_coordinates(source, mode):
         read(source, "Time Step", mode, spatial_selection=0)
 
 
+@pytest.mark.synthetic_hdf_layout
 @pytest.mark.parametrize("mode", ["eager", "lazy", "stream"])
 @pytest.mark.parametrize("location", [b"", b"Unknown", 1, [b"Cells", b"Cells"], b"\xff"])
 def test_invalid_present_location_never_falls_back(source, mode, location):
@@ -101,6 +104,7 @@ def test_invalid_present_location_never_falls_back(source, mode, location):
         assert "Water Surface" not in Mesh._discover_mesh_series(hdf, AREA)
 
 
+@pytest.mark.synthetic_hdf_layout
 @pytest.mark.parametrize("location,domain", [(b"Faces", "face_id"), ([b"Faces"], "face_id"), (b"Cell", "cell_id"), (b"Cells", "cell_id")])
 def test_present_location_overrides_familiar_name_at_equal_counts(source, location, domain):
     with h5py.File(source, "r+") as hdf:
@@ -109,6 +113,7 @@ def test_present_location_overrides_familiar_name_at_equal_counts(source, locati
     assert result.dims == ("time", domain)
 
 
+@pytest.mark.synthetic_hdf_layout
 @pytest.mark.parametrize("mode", ["eager", "lazy", "stream"])
 def test_conflicting_present_domain_refused_even_when_legacy_count_matches(source, mode):
     with h5py.File(source, "r+") as hdf:
@@ -119,6 +124,7 @@ def test_conflicting_present_domain_refused_even_when_legacy_count_matches(sourc
         read(source, "Water Surface", mode)
 
 
+@pytest.mark.synthetic_hdf_layout
 @pytest.mark.parametrize("mode", ["eager", "lazy", "stream"])
 def test_unknown_missing_location_never_infers_from_shape_or_substring(source, mode):
     # The cell count is unique here; that still cannot qualify an unknown name.
@@ -129,6 +135,16 @@ def test_unknown_missing_location_never_infers_from_shape_or_substring(source, m
         read(source, "Unknown Face Diagnostic", mode)
 
 
+@pytest.mark.synthetic_hdf_layout(
+    "geometry_count-Cells",
+    "geometry_count-None",
+    "missing_geometry-Cells",
+    "missing_geometry-None",
+    "physical_count-Cells",
+    "physical_count-None",
+    "scalar_geometry-Cells",
+    "scalar_geometry-None",
+)
 @pytest.mark.parametrize("location", [None, b"Cells"])
 @pytest.mark.parametrize("mutation", ["missing_geometry", "geometry_count", "scalar_geometry", "physical_count", "time_length", "time_rank", "time_text", "missing_time"])
 def test_malformed_time_and_geometry_refused_on_both_domain_paths(source, location, mutation):
@@ -211,6 +227,7 @@ def test_malformed_time_axis_is_not_an_availability_disposition(source):
     assert not isinstance(caught.value, MeshSeriesAvailabilityError)
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_multi_variable_reads_skip_or_refuse_one_row_series(source, caplog):
     add_one_row_face_series(source)
     with caplog.at_level(logging.WARNING, logger="ras_commander.hdf.HdfResultsMesh"):
@@ -225,6 +242,7 @@ def test_multi_variable_reads_skip_or_refuse_one_row_series(source, caplog):
     assert caught.value.disposition == "unwritten_placeholder"
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_availability_report_matches_reader_qualification(source):
     add_one_row_face_series(source, "Face Wind Term")
     add_one_row_face_series(source, "Face Water Surface", written=True)
@@ -317,6 +335,7 @@ def test_legacy_schema_is_confined_to_canonical_namespace(source):
             Mesh._mesh_series_id_dim(hdf, AREA, dataset)
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_time_only_rejects_contradictory_present_location(source):
     with h5py.File(source, "r+") as hdf:
         hdf[f"{SERIES}/Time Step"].attrs["Location"] = b"Cells"
@@ -324,6 +343,7 @@ def test_time_only_rejects_contradictory_present_location(source):
         read(source, "Time Step", "lazy")
 
 
+@pytest.mark.synthetic_hdf_layout
 @pytest.mark.parametrize("mode", ["eager", "lazy", "stream"])
 @pytest.mark.parametrize("located", [False, True])
 @pytest.mark.parametrize("domain", ["cell", "face"])
@@ -347,6 +367,7 @@ def test_matching_geometry_count_does_not_qualify_bad_axes(source, domain, locat
         assert name not in Mesh._discover_mesh_series(hdf, AREA)
 
 
+@pytest.mark.synthetic_hdf_layout
 @pytest.mark.parametrize("mode", ["eager", "lazy", "stream"])
 def test_face_point_indexes_require_integer_pairs(source, mode):
     with h5py.File(source, "r+") as hdf:

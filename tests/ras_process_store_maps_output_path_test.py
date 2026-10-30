@@ -374,6 +374,9 @@ def test_store_maps_parallel_runs_individual_helpers_and_moves_outputs(
     )
     state_lock = threading.Lock()
     state = {"active": 0, "maximum": 0, "calls": []}
+    # All three helpers must be running at once; a fixed sleep let a loaded
+    # machine serialise them. A serial implementation breaks the barrier.
+    all_running = threading.Barrier(3)
 
     monkeypatch.setattr(
         RasProcess,
@@ -402,7 +405,7 @@ def test_store_maps_parallel_runs_individual_helpers_and_moves_outputs(
             state["maximum"] = max(state["maximum"], state["active"])
             state["calls"].append(kwargs)
         try:
-            time.sleep(0.05)
+            all_running.wait(timeout=30)
             output_base = Path(kwargs["output_base_path"])
             output_base.with_name(output_base.name + ".Terrain.tif").write_text(
                 kwargs["map_type"],

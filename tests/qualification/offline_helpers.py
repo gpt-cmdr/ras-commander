@@ -169,7 +169,9 @@ def make_offline_manifest(
         "defaults": {
             "preflight_timeout_seconds": 1800,
             "postflight_timeout_seconds": 1800,
-            "timeout_seconds": 30,
+            # Lane budget, not under test here (timeouts use their own 0.2 s); the two
+            # stage calls take ~20 s idle and exceed 30 s on a loaded 8-worker run.
+            "timeout_seconds": 300,
             "termination_grace_seconds": 5,
             "hash_files": True,
             "real_engine_jobs": 1,

@@ -160,6 +160,7 @@ def test_soil_layer_path_does_not_write_sediment_soils_attr(tmp_path):
     assert association["sediment_soils_layer_name"] is None
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_get_hdf_geometry_association_reads_plan_hdf_without_mutation(tmp_path):
     project_dir = tmp_path / "PlanProject"
     project_dir.mkdir()
@@ -190,6 +191,7 @@ def test_get_hdf_geometry_association_reads_plan_hdf_without_mutation(tmp_path):
     ]
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_get_hdf_geometry_association_only_reports_two_d_area_groups(tmp_path):
     """Collection-level HEC tables must not masquerade as named flow areas."""
     project_dir = tmp_path / "MixedLayoutProject"

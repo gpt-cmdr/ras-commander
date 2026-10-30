@@ -3,6 +3,7 @@
 import hashlib
 import importlib
 import json
+import os
 from pathlib import Path
 import subprocess
 
@@ -23,7 +24,7 @@ from ras_commander.remote.RasPortableDocker import RasPortableDocker
 
 
 OCI = "registry.example/hecras/steady@sha256:" + "a" * 64
-LAUNCHER_SHA256 = "7dab4a39f5a4b6c8bb2caa96b829f946797e32aa389ba2ab5eaf97aa26e9c8b8"
+LAUNCHER_SHA256 = "cbf49bb1210660ebcb61ceeaee8ba4a854daef57cedaeb14470c7b3e8772c510"
 FIXTURES = Path(__file__).parent / "data" / "portable_execution"
 MAPS = {"terrain_name": "Terrain 1m", "profiles": ["PF 1", 1], "timeout_seconds": 900}
 
@@ -463,7 +464,12 @@ def test_slurm_step_budget_includes_maps_and_launcher_is_unchanged(tmp_path):
     assert submission.launcher_sha256 == LAUNCHER_SHA256
 
 
-@pytest.mark.parametrize("prefix_safe", [True, False])
+@pytest.mark.parametrize("prefix_safe", [
+    # The safe-prefix path delegates to Wine on a Linux host (abstract AF_UNIX X11 socket).
+    pytest.param(True, marks=pytest.mark.skipif(
+        os.name == "nt", reason="Linux-host Wine delegate: AF_UNIX X11 sockets")),
+    False,
+])
 def test_wine_handoff_timeout_includes_stored_maps_budget(tmp_path, monkeypatch, prefix_safe):
     cli = importlib.import_module("ras_commander.remote.execute_request")
     bundle = tmp_path / "bundle"

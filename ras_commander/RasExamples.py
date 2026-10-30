@@ -67,6 +67,7 @@ import logging
 import re
 from ras_commander import get_logger
 from ras_commander.LoggingConfig import log_call
+from ras_commander.fast_hdf import release_native_sessions
 from ras_commander.RasUtils import RasUtils
 
 logger = get_logger(__name__)
@@ -805,6 +806,7 @@ class RasExamples:
         logger.debug(f"Cleaning projects directory: {cls.projects_dir}")
         if cls.projects_dir.exists():
             try:
+                release_native_sessions(cls.projects_dir)
                 shutil.rmtree(cls.projects_dir)
                 logger.debug("All projects have been removed.")
             except Exception as e:
@@ -939,6 +941,7 @@ class RasExamples:
         if project_path.exists():
             logger.debug(f"Folder '{folder_name}' already exists. Deleting existing folder...")
             try:
+                release_native_sessions(project_path)
                 shutil.rmtree(project_path)
                 logger.debug(f"Existing folder '{folder_name}' has been deleted.")
             except Exception as e:
@@ -1023,6 +1026,7 @@ class RasExamples:
                 e,
             )
             if project_path.exists():
+                release_native_sessions(project_path)
                 shutil.rmtree(project_path)
             raise
         finally:

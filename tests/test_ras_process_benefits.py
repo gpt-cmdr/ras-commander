@@ -526,6 +526,7 @@ def test_select_terrain_for_mapping_is_exclusive_and_case_insensitive(tmp_path):
     }
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_benefit_preflight_allows_multiple_registered_terrains_when_both_plans_match(
     tmp_path,
 ):
@@ -561,6 +562,7 @@ def test_benefit_preflight_allows_multiple_registered_terrains_when_both_plans_m
     assert selected == common.resolve()
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_benefit_preflight_rejects_plan_pinned_to_a_different_terrain(tmp_path):
     from ras_commander.RasProcess import RasProcess
 

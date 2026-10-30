@@ -102,6 +102,7 @@ def _project(tmp_path: Path) -> _Project:
     )
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_lists_live_associations_and_referencing_plans(tmp_path):
     project = _project(tmp_path)
 
@@ -122,6 +123,7 @@ def test_lists_live_associations_and_referencing_plans(tmp_path):
     assert not bool(uncompiled["geom_hdf_exists"])
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_inventory_columns_match_documented_schema(tmp_path):
     inventory = RasMap.list_geometry_associations(ras_object=_project(tmp_path))
     documented = [
@@ -132,6 +134,7 @@ def test_inventory_columns_match_documented_schema(tmp_path):
     assert list(inventory.columns) == documented
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_validation_distinguishes_missing_and_broken_associations(tmp_path):
     project = _project(tmp_path)
 
@@ -156,6 +159,7 @@ def test_validation_distinguishes_missing_and_broken_associations(tmp_path):
     assert not bool(broken["passed"])
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_validation_raises_with_geometry_specific_diagnostic(tmp_path):
     project = _project(tmp_path)
 
@@ -169,6 +173,7 @@ def test_validation_raises_with_geometry_specific_diagnostic(tmp_path):
         )
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_validation_accepts_complete_association(tmp_path):
     report = RasMap.validate_geometry_associations(
         geom_number="g01",

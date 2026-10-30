@@ -10,9 +10,9 @@ from pathlib import Path
 import yaml
 
 
-NOTEBOOK_PATH = Path("examples/931_native_rasmapper_terrain_export.ipynb")
-METADATA_PATH = Path("examples/notebooks.yml")
-DOCS_SCRIPTS = Path(".claude/scripts").resolve()
+NOTEBOOK_PATH = Path(__file__).resolve().parents[1] / "examples/931_native_rasmapper_terrain_export.ipynb"
+METADATA_PATH = Path(__file__).resolve().parents[1] / "examples/notebooks.yml"
+DOCS_SCRIPTS = Path(__file__).resolve().parents[1] / ".claude/scripts"
 if str(DOCS_SCRIPTS) not in sys.path:
     sys.path.insert(0, str(DOCS_SCRIPTS))
 

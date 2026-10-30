@@ -145,6 +145,7 @@ def test_missing_optional_landcover_metadata_does_not_warn(
     assert _hdf_landcover_messages(caplog) == []
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_missing_landcover_association_target_warns_concisely(
     tmp_path: Path,
     caplog: pytest.LogCaptureFixture,
@@ -213,6 +214,7 @@ def test_missing_final_raster_dependencies_log_concisely(
     assert str(tmp_path) not in "\n".join(messages)
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_missing_polygon_parts_raises_with_full_context(
     tmp_path: Path,
     caplog: pytest.LogCaptureFixture,
@@ -292,6 +294,7 @@ def test_set_landcover_raster_map_is_working_deprecated_alias(monkeypatch):
     assert result is expected
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_compute_final_mannings_raster_info_is_concise(
     tmp_path: Path,
     caplog: pytest.LogCaptureFixture,
