@@ -9,6 +9,68 @@ alone does not identify a development checkout.
 
 ### Unreleased
 
+- **`HdfPump.get_pump_station_summary` now returns real data.** It used to
+  read `/Results/Unsteady/Summary/Pump Station`, which HEC-RAS never writes,
+  so it always returned an empty DataFrame. It now returns one row per pump
+  station derived from the stored `DSS Hydrograph Output` pump time series
+  (`Pumping Stations/<station>/Structure Variables`): stored max/min flow,
+  headwater and tailwater stage with the time of each, start/end time, sample
+  count, maximum pumps on, and the stored `Highest Elev Pump Line` (NaN where
+  HEC-RAS omits it). Unrecognized layouts raise `ValueError`; files without
+  pump results still return an empty DataFrame. It now runs natively in
+  `auto` mode (native output identical to h5py on 6.6 and 7.0.1 pump plans).
+- **`HdfResultsPlan.get_reference_summary` now returns real data.** It used
+  to read `Base Output/Summary Output/Reference Lines|Points`, which HEC-RAS
+  never writes, so it always returned an empty DataFrame. It now derives the
+  summary from the stored reference time series (the same series
+  `get_reference_timeseries` returns): one row per reference feature,
+  variable and statistic (`Maximum`/`Minimum` of the stored samples) with the
+  stored time of first occurrence. The columns are now `Reference`,
+  `Mesh Name`, `Variable`, `Statistic`, `Value`, `Time` and `Units`. Plans
+  without reference output still return an empty DataFrame. It now runs
+  natively in `auto` mode (native output identical to h5py on 6.3.1, 6.6, 7.0
+  and 7.0.1 plans).
+
+- **`HdfPlan.get_starting_wse_method` returns real boundary conditions
+  (behaviour change).** It looked for plan attributes HEC-RAS never writes and
+  returned `method='Unknown'` for every real plan. It now reads the unsteady
+  water-surface boundaries (normal depth slope, rating curve, stage
+  hydrograph) from `Event Conditions/Unsteady/Boundary Conditions` in the plan
+  HDF, and for steady plans the `.f##` flow file named by the HDF (with the
+  plan file's flow regime choosing downstream/upstream boundaries). The
+  result adds `boundaries`, `source` and `startup_mode`; `slope`/`wse` are set
+  only when all selected boundaries agree, and the old Plan Information
+  `regime` lookup is replaced by the steady plan file's regime line.
+  `CheckProfiles` no longer reports `PF_IC_00` for unsteady plans whose
+  boundaries are readable, and its `PF_IC_02` slope screen now runs. The
+  method is native-qualified (73 native-identical route-2 fixtures).
+- **`HdfInfiltration.get_infiltration_parameters()` reads real infiltration
+  layers.** It used to look for a root `Infiltration Parameters` table that
+  HEC-RAS never writes, so on every real layer it raised `KeyError`. It now
+  returns the matching row of the layer's `Variables` table (keyed by class
+  `Name`). **The returned keys changed** to the HEC-RAS parameter names of the
+  layer's method (for example `Maximum Deficit`, `Initial Deficit`,
+  `Potential Percolation Rate` for Deficit and Constant; `Curve Number`,
+  `Abstraction Ratio`, `Minimum Infiltration Rate` for SCS). The old keys
+  `Initial Loss (in)`, `Constant Loss Rate (in/hr)` and `Impervious Area (%)`
+  are not stored by HEC-RAS and are no longer returned. Layers built from land
+  cover and soils key rows as `"<land cover> : <soil>"`; a bare soil class
+  raises `ValueError` there. `calculate_weighted_parameters()` now averages the
+  keys it is given. The method is qualified for native reads (identical to
+  h5py on the corpus layers).
+
+- **Floodway check reads encroachment, boundary and lateral-weir data where
+  HEC-RAS stores it (behaviour change).** Three `CheckFloodways` helpers read
+  HDF groups HEC-RAS never writes and returned nothing for every real plan.
+  Encroachment parameters now come from the plan file (`RasFloodway`) and
+  `FW_BC_*` from the steady flow file (`RasSteady`), both found next to the
+  plan HDF; `FW_BC_01` (floodway Known WS differs from base, INFO) is now
+  emitted, and `FW_BC_02`/`FW_BC_03` carry river, reach and value.
+  `FW_LW_01` uses the `Geometry/Structures` lateral rows and `FW_LW_02` the
+  steady `Lateral Structures/<name>/Structure Variables` (`Total Flow` versus
+  `Flow HW US`). Missing text files or results produce no message, as before;
+  `FW_EM_08` still cannot run (no known iteration-limit field). The helpers
+  are native-qualified.
 - **`GeomMesh.detect_bc_conflicts()` reads real HEC-RAS geometry.** It used to
   look for per-area `2D Flow Areas/<area>/BC Lines/<name>/Coordinates` groups
   that HEC-RAS never writes, so it returned an empty list for every real file.
