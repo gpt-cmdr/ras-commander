@@ -9,6 +9,18 @@ alone does not identify a development checkout.
 
 ### Unreleased
 
+- **`HdfResultsPlan.get_reference_summary` now returns real data.** It used
+  to read `Base Output/Summary Output/Reference Lines|Points`, which HEC-RAS
+  never writes, so it always returned an empty DataFrame. It now derives the
+  summary from the stored reference time series (the same series
+  `get_reference_timeseries` returns): one row per reference feature,
+  variable and statistic (`Maximum`/`Minimum` of the stored samples) with the
+  stored time of first occurrence. The columns are now `Reference`,
+  `Mesh Name`, `Variable`, `Statistic`, `Value`, `Time` and `Units`. Plans
+  without reference output still return an empty DataFrame. It now runs
+  natively in `auto` mode (native output identical to h5py on 6.3.1, 6.6, 7.0
+  and 7.0.1 plans).
+
 - **DSS shadow mode labels HEC's DSS6 "no data" rule.** When a native read
   raises not-found, `RasDss` shadow mode repeats it with dss-commander's
   opt-in `no_data="refuse"` and logs a refusal as
