@@ -1305,10 +1305,18 @@ first configured infiltration sidecar from an initialized project:
 ```python
 raster_map = HdfInfiltration.get_infiltration_map(ras_object=ras)
 parameters = HdfInfiltration.get_infiltration_parameters(
-    mukey="100",
+    mukey="Mixed Forest : B",  # a Variables Name of the layer
     ras_object=ras,
 )
+# e.g. {'Curve Number': 60.0, 'Abstraction Ratio': 0.2,
+#       'Minimum Infiltration Rate': 0.12} for an SCS layer
 ```
+
+The parameters are the layer's `Variables` row for that class, keyed by the
+HEC-RAS names of the layer's method. Layers built from a soils layer only key
+classes by soil class (for example a mukey); layers built from land cover and
+soils key them as `"<land cover> : <soil>"`, and a bare soil class raises
+`ValueError` there.
 
 The implicit lookup checks `rasmap_status` and `rasmap_field_errors`. It raises
 `ValueError` with map/path context when the map is absent or failed, the target

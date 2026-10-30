@@ -43,7 +43,6 @@ from ..LoggingConfig import get_logger
 from ..fast_hdf import read_attrs, read_typed, reraise_required
 import numpy as np
 from datetime import datetime
-from ..fast_hdf import h5py_until_qualified
 
 logger = get_logger(__name__)
 
@@ -394,10 +393,32 @@ class HdfResultsPlan:
     @staticmethod
     @log_call
     @standardize_input(file_type='plan_hdf')
-    @h5py_until_qualified
     def get_reference_summary(hdf_path: Path, reftype: str) -> pd.DataFrame:
         """
-        Get reference line or point summary output from HDF file.
+        Summarize reference line or point results from their stored time series.
+
+        HEC-RAS writes no reference summary table: ``Base Output/Summary
+        Output`` holds only groups such as ``2D Flow Areas``, ``Cross
+        Sections``, ``Storage Areas`` and ``Pipe Networks``, and no
+        ``Reference Lines``/``Reference Points`` group (checked on 6.3.1, 6.6,
+        7.0 and 7.0.1 plans). Reference results are stored only as time series
+        under ``Base Output/Unsteady Time Series/Reference Lines|Points``
+        (``Name`` = ``"<name>|<2D area>"`` plus one ``(time, feature)`` dataset
+        per variable). The per-area copies under ``2D Flow Areas/<area>/
+        Reference Lines|Points`` hold a subset of the same variables with
+        identical values, so they are not read.
+
+        This method derives the summary from exactly the series
+        :meth:`get_reference_timeseries` returns (the same native-capable
+        reader, Base Output time axis and variable selection: numeric
+        ``(time, feature)`` datasets except names containing ``Unit``,
+        ``Index`` or ``String``, so e.g. ``Depth Unit`` is omitted). For every
+        reference feature and variable it reports the largest stored value
+        (``Statistic='Maximum'``) and the smallest (``'Minimum'``), each with
+        the stored timestamp of its first occurrence. Values are stored
+        samples, never interpolated; a peak between output times is not
+        represented. Non-finite samples are ignored; a series with no finite
+        sample gets NaN and NaT.
 
         Note:
             The input decorator accepts keyword-only ``ras_object`` for
@@ -408,33 +429,84 @@ class HdfResultsPlan:
             reftype (str): Type of reference data ('lines' or 'points')
 
         Returns:
-            pd.DataFrame: DataFrame containing reference summary data
+            pd.DataFrame: One row per feature, variable and statistic, in
+                stored feature order, then stored variable order, then
+                Maximum before Minimum, with columns:
+
+                - Reference: feature name (text before ``|``)
+                - Mesh Name: 2D flow area name (text after ``|``; ``''`` if absent)
+                - Variable: stored dataset name (e.g. Flow, Water Surface)
+                - Statistic: ``'Maximum'`` or ``'Minimum'``
+                - Value: the stored extreme value (float64)
+                - Time: stored timestamp of its first occurrence
+                - Units: the dataset's stored ``Units`` attribute (``''`` if absent)
+
+                Returns an empty DataFrame when the plan has no global
+                reference time-series group of that type, or when an error is
+                caught (including an invalid reftype); inspect log diagnostics.
         """
         try:
-            with h5py.File(hdf_path, 'r') as hdf_file:
-                base_path = "Results/Unsteady/Output/Output Blocks/Base Output/Summary Output"
-                ref_path = f"{base_path}/Reference {reftype.capitalize()}"
-                
-                if ref_path not in hdf_file:
-                    logger.debug(f"Reference {reftype} summary data not found in HDF file")
-                    return pd.DataFrame()
+            from .HdfResultsXsec import HdfResultsXsec
 
-                ref_group = hdf_file[ref_path]
-                dfs = []
-                
-                for ref_name in ref_group.keys():
-                    ref_data = read_typed(ref_group[ref_name], slice(None))
-                    if ref_data.ndim == 2:
-                        df = pd.DataFrame(ref_data.T, columns=['Value', 'Time'])
-                    else:
-                        df = pd.DataFrame({'Value': ref_data})
-                    df['Reference'] = ref_name
-                    dfs.append(df)
+            normalized = str(reftype).strip().lower()
+            if normalized == "lines":
+                dataset = HdfResultsXsec.get_ref_lines_timeseries(hdf_path)
+                prefix = "refln"
+            elif normalized == "points":
+                dataset = HdfResultsXsec.get_ref_points_timeseries(hdf_path)
+                prefix = "refpt"
+            else:
+                raise ValueError("reftype must be 'lines' or 'points'")
 
-                if not dfs:
-                    return pd.DataFrame()
+            if not dataset.data_vars:
+                logger.debug(
+                    "Reference %s summary not derived: no stored reference %s "
+                    "time series in %s",
+                    normalized,
+                    normalized,
+                    Path(hdf_path).name,
+                )
+                return pd.DataFrame()
 
-                return pd.concat(dfs, ignore_index=True)
+            names = [str(v) for v in dataset[f"{prefix}_name"].values]
+            meshes = [str(v) for v in dataset["mesh_name"].values]
+            times = pd.DatetimeIndex(dataset["time"].values)
+            variables = list(dataset.data_vars)
+            stats = {}
+            for var in variables:
+                values = np.asarray(dataset[var].values, dtype=np.float64)
+                finite = np.isfinite(values)
+                has_value = finite.any(axis=0)
+                for label, pick, fill in (
+                    ("Maximum", np.argmax, -np.inf),
+                    ("Minimum", np.argmin, np.inf),
+                ):
+                    idx = pick(np.where(finite, values, fill), axis=0)
+                    picked = values[idx, np.arange(values.shape[1])]
+                    stats[(var, label)] = (
+                        np.where(has_value, picked, np.nan),
+                        times[idx].where(has_value, pd.NaT),
+                    )
+
+            records = []
+            for feature, (name, mesh) in enumerate(zip(names, meshes)):
+                for var in variables:
+                    units = str(dataset[var].attrs.get("units", ""))
+                    for label in ("Maximum", "Minimum"):
+                        values, value_times = stats[(var, label)]
+                        records.append({
+                            "Reference": name,
+                            "Mesh Name": mesh,
+                            "Variable": var,
+                            "Statistic": label,
+                            "Value": values[feature],
+                            "Time": value_times[feature],
+                            "Units": units,
+                        })
+            df = pd.DataFrame(records)
+            df["Value"] = df["Value"].astype("float64")
+            df["Time"] = pd.to_datetime(df["Time"])
+            return df
 
         except Exception as e:
             reraise_required(e)

@@ -1,0 +1,52 @@
+Flow Title=Steady Flows
+Program Version=6.30
+Number of Profiles= 3 
+Profile Names=Big,Bigger,Biggest
+River Rch & RM=Baxter River,Upper Reach     ,84816.  
+   3150067499.99  149400
+River Rch & RM=Baxter River,Lower Reach     ,47694.  
+   3200069999.99  154000
+River Rch & RM=Tule Creek,Tributary       ,10982.  
+499.9999    2500    4600
+Boundary for River Rch & Prof#=Baxter River,Upper Reach     , 1 
+Up Type= 0 
+Dn Type= 0 
+Boundary for River Rch & Prof#=Baxter River,Upper Reach     , 2 
+Up Type= 0 
+Dn Type= 0 
+Boundary for River Rch & Prof#=Baxter River,Upper Reach     , 3 
+Up Type= 0 
+Dn Type= 0 
+Boundary for River Rch & Prof#=Baxter River,Lower Reach     , 1 
+Up Type= 0 
+Dn Type= 3 
+Dn Slope=0.001
+Boundary for River Rch & Prof#=Baxter River,Lower Reach     , 2 
+Up Type= 0 
+Dn Type= 3 
+Dn Slope=0.001
+Boundary for River Rch & Prof#=Baxter River,Lower Reach     , 3 
+Up Type= 0 
+Dn Type= 3 
+Dn Slope=0.001
+Boundary for River Rch & Prof#=Tule Creek,Tributary       , 1 
+Up Type= 0 
+Dn Type= 0 
+Boundary for River Rch & Prof#=Tule Creek,Tributary       , 2 
+Up Type= 0 
+Dn Type= 0 
+Boundary for River Rch & Prof#=Tule Creek,Tributary       , 3 
+Up Type= 0 
+Dn Type= 0 
+DSS Import StartDate=
+DSS Import StartTime=
+DSS Import EndDate=
+DSS Import EndTime=
+DSS Import GetInterval= 0 
+DSS Import Interval=
+DSS Import GetPeak= 0 
+DSS Import FillOption= 0 
+Storage Area Elev=Northside       , 3 
+      65      65      65
+Storage Area Elev=Southside       , 3 
+      65      65      65

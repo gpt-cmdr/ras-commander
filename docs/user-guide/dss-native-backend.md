@@ -182,6 +182,23 @@ whole-dataset frame is cut to the same window first.
   Please report those.
 - The comparison never raises. If native raises, shadow raises the native
   error.
+- All-missing DSS6 data is a known Java/native difference with two causes
+  that raise the same error type. HEC Monolith reports a DSS6 regular request
+  whose values are all -901 or -902 as not found (heclib's DSS6 "no data"
+  rule, `zrrtsi.f` status 4). The native engine finds those blocks and, after
+  its default trim of missing values, raises `DssPathnameNotFoundError` ("no
+  values"), the same type as an absent pathname. When native raises
+  not-found, shadow repeats the native read with dss-commander's opt-in
+  `no_data="refuse"`, which applies HEC's rule and raises `DssNoDataError`
+  (`status == 4`). A refusal is logged as
+  `D4 HEC DSS6 no-data rule (native refusal, status 4)`; other not-found
+  cases keep the D4 labels. The option exists for this parity check and for
+  testing. Shadow still returns the default native result, as `native` does.
+  A dss-commander wheel without `DssNoDataError` skips the re-read.
+- Stored NaN values are values, not missing markers. The native trim and the
+  window cut that shadow applies to the Java frame remove only HEC missing
+  markers (-901, -902, -3.4028235e38) at the ends, as heclib's `ztsTrim`
+  does.
 - Java is not run where it is unsafe or has nothing to compare:
   - native reports a non-time-series record (Java would crash the JVM);
   - the file is missing (Java would create it);

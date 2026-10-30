@@ -1,0 +1,4 @@
+# Official HEC-RAS example text files: keep the exact CRLF bytes and fixed-width padding.
+* -text -diff
+.gitattributes text
+README.md text

@@ -37,6 +37,18 @@ for development on disposable copies, with these known limitations:
 - Missing results, missing profile names, unsupported datasets, and some helper
   failures can return empty or partial results. There is no complete coverage
   receipt. Verify the summary is populated and contains every expected section.
+- HEC-RAS writes no steady encroachment or boundary-condition input to the plan
+  HDF. `FW_BC_*` read the steady flow file (`.f##`) and the encroachment
+  parameters read the plan file (`.p##`) through `RasSteady` and
+  `RasFloodway`. Both files are found next to the plan HDF from its
+  `Plan Information` `Plan Filename`/`Flow Filename` (file names matched
+  case-insensitively); when either is absent these helpers return nothing.
+  Profiles are matched by exact name against the flow file's `Profile Names`.
+  No plan-file field for a Method 5 iteration limit is known, so `FW_EM_08`
+  does not run.
+- `FW_LW_02` reads the steady lateral-structure results
+  (`Steady Profiles/Lateral Structures/<River> <Reach> <RS>/Structure Variables`,
+  checked on HEC-RAS 6.6 and 7.0.1 Baxter output).
 - Starting-WSE checks infer a downstream section by sorting station identifiers;
   they are screening heuristics for compatible subcritical reaches, not a general
   boundary-condition audit. Review station order and hydraulic regime explicitly.
@@ -132,8 +144,9 @@ All length/elevation thresholds in this table are in feet.
 | FW_ST_01 | WARNING | Structure encroachment differs from adjacent section encroachment |
 | FW_ST_02 | ERROR | Encroachment lies inside positive bridge abutment stations |
 | FW_ST_03 | WARNING | Both encroachment stations are missing at a structure |
-| FW_BC_02 | INFO | Slope boundary type detected |
-| FW_BC_03 | INFO | Known-WSE boundary type detected |
+| FW_BC_01 | INFO | Floodway downstream Known WS differs from the base profile's Known WS on the same reach (value = floodway - base); Example 6 differs by design |
+| FW_BC_02 | INFO | Base and floodway downstream boundaries are Normal Depth with the same slope |
+| FW_BC_03 | INFO | Floodway downstream boundary is Known WS (value = that WS) |
 | FW_SW_01 | INFO | Computed WSE reported at the inferred downstream section |
 | FW_SW_02 | WARNING | Absolute base/floodway WSE difference exceeds `starting_wse_diff_threshold_ft` (default 0.5) |
 | FW_SW_02M1 | WARNING | FW_SW_02 with Method 1 detected |
@@ -151,8 +164,8 @@ All length/elevation thresholds in this table are in feet.
 | FW_SW_06 | WARNING | Computed Froude number is at least 1.0 at the inferred downstream section |
 | FW_SW_07 | ERROR | Reported depth or WSE minus channel minimum is negative |
 | FW_SW_08 | WARNING | Difference between base and floodway WSE drops over the first two sorted sections exceeds `starting_wse_computed_diff_ft` (default 1.0); does not compare against a specified boundary value |
-| FW_LW_01 | WARNING | Lateral weir present; activity requires result review |
-| FW_LW_02 | WARNING | Available lateral-weir flow exceeds 5% of main-channel flow |
+| FW_LW_01 | WARNING | Lateral structure present in `Geometry/Structures`; activity requires result review |
+| FW_LW_02 | WARNING | Steady `Total Flow` of a lateral structure exceeds 5% of its upstream river flow (`Flow HW US`) in the floodway profile |
 
 The checker also delegates permanent ineffective-flow screening to the structure
 checker (`ST_IF_05`). Additional `FW_ST_*` templates exist in `messages.py`, but the

@@ -28,7 +28,6 @@ from .HdfBase import HdfBase
 from ..Decorators import standardize_input, log_call
 from ..LoggingConfig import get_logger
 from ..fast_hdf import read_attr, read_typed
-from ..fast_hdf import h5py_until_qualified
 
 gpd = optional_module("geopandas", "Returning GeoDataFrame results from HdfPump")
 xr = optional_module("xarray", "Returning xarray results from HdfPump")
@@ -325,38 +324,178 @@ class HdfPump:
     @staticmethod
     @log_call
     @standardize_input(file_type='plan_hdf')
-    @h5py_until_qualified
     def get_pump_station_summary(hdf_path: Path) -> pd.DataFrame:
         """
-        Extract summary statistics and performance data for all pump stations.
+        Summarize each pump station's stored DSS Hydrograph Output results.
+
+        HEC-RAS (verified 6.6 and 7.0.1) writes no pump station summary table:
+        ``/Results/Unsteady/Summary`` holds only run and volume-accounting data,
+        and ``Base Output/Summary Output`` has no pump station group. Pump
+        results are stored only as time series in each output block under
+        ``Unsteady Time Series/Pumping Stations/<station>/Structure Variables``
+        (columns named by its ``Variable_Unit`` attribute). This method derives
+        the summary from the ``DSS Hydrograph Output`` block, the same block
+        and time axis :meth:`get_pump_station_timeseries` returns.
+
+        Every statistic is derived exactly from the stored samples (no
+        interpolation): the maximum/minimum is the largest/smallest stored
+        finite value, and its time is the stored time of its first
+        occurrence. Only output-interval samples are stored, so a peak
+        between samples is not represented. Non-finite samples are ignored; a
+        variable with no finite sample gets NaN values and times.
 
         Args:
             hdf_path (Path): Path to the HEC-RAS HDF file.
 
         Returns:
-            pd.DataFrame: DataFrame containing pump station summary data including
-                operational statistics and performance metrics. Returns empty DataFrame
-                if no summary data is found.
+            pd.DataFrame: One row per pump station (stored group order) with:
+                - Pump Station: station name (the result group name)
+                - Output Block: always ``'DSS Hydrograph Output'``
+                - Time Steps: number of stored samples
+                - Start Time / End Time: first and last stored times
+                - Max Flow, Max Flow Time, Min Flow, Min Flow Time
+                - Max Stage HW, Max Stage HW Time, Min Stage HW, Min Stage HW Time
+                - Max Stage TW, Max Stage TW Time, Min Stage TW, Min Stage TW Time
+                - Max Pumps On, Max Pumps On Time: largest per-step sum of the
+                  stored pump-group ``Pumps on`` columns (NaN when the station
+                  stores no such column)
+                - Highest Elev Pump Line: the station group's stored attribute,
+                  NaN when HEC-RAS did not write it (e.g. Davis, OrleansEx)
 
-        Notes:
-            Missing pump station summary output returns an empty DataFrame.
+            Times are timestamps parsed from the block's stored
+            ``Time Date Stamp`` text, or elapsed days from its numeric ``Time``
+            dataset when no timestamps are stored (then
+            ``attrs['time_units'] = 'days'``). ``attrs['units']`` maps each
+            summarized variable to its stored unit. HEC-RAS does not store
+            pumped volume, pump run time or energy, so they are not reported.
+            Returns an empty DataFrame (with a debug log) when the file has no
+            DSS Hydrograph Output pump station results.
+
+        Raises:
+            ValueError: If a station's stored layout is not the proven one
+                (2-D float data whose ``Variable_Unit`` labels begin with Flow,
+                Stage HW, Stage TW) or its block time axis is malformed.
+            KeyError: If a station has no Structure Variables dataset or the
+                block stores no time axis.
         """
+        stations_path = (
+            "/Results/Unsteady/Output/Output Blocks/DSS Hydrograph Output/"
+            "Unsteady Time Series/Pumping Stations"
+        )
         with h5py.File(hdf_path, 'r') as hdf:
-            # Extract summary data
-            summary_path = "/Results/Unsteady/Summary/Pump Station"
-            if summary_path not in hdf:
-                logger.debug("Pump station summary data not found in HDF file")
+            group = hdf.get(stations_path)
+            if not isinstance(group, h5py.Group) or len(group) == 0:
+                logger.debug(
+                    "Pump station summary data not found in HDF file: no stations in '%s'",
+                    stations_path,
+                )
                 return pd.DataFrame()
 
-            summary_data = read_typed(hdf[summary_path])
+            rows = []
+            units: Dict[str, str] = {}
+            time_units = None
+            for station in group.keys():
+                data_path = f"{stations_path}/{station}/Structure Variables"
+                dataset = hdf.get(data_path)
+                if not isinstance(dataset, h5py.Dataset):
+                    raise KeyError(_missing_hdf_object_message(
+                        f"Pump station summary for '{station}'",
+                        data_path,
+                        _PUMP_RESULTS_ACTION,
+                    ))
+                if len(dataset.shape) != 2 or dataset.dtype.kind != 'f':
+                    raise ValueError(
+                        f"Pump results at '{data_path}' must be 2-D floating point; "
+                        f"found shape {dataset.shape} dtype {dataset.dtype}"
+                    )
+                labels = HdfPump._summary_labels(
+                    read_attr(dataset, 'Variable_Unit', None),
+                    dataset.shape[1],
+                    data_path,
+                )
+                data = read_typed(dataset)
+                time, time_units = HdfPump._pump_block_time(hdf, data_path, data.shape)
+                time = pd.to_datetime(time) if time_units is None else np.asarray(time)
+                time = np.asarray(time)
 
-            # Create DataFrame and decode byte strings
-            df = pd.DataFrame(summary_data)
-            string_columns = df.select_dtypes([object]).columns
-            for col in string_columns:
-                df[col] = df[col].apply(lambda x: x.decode('utf-8') if isinstance(x, bytes) else x)
+                row: Dict[str, Any] = {
+                    'Pump Station': str(station),
+                    'Output Block': 'DSS Hydrograph Output',
+                    'Time Steps': int(data.shape[0]),
+                    'Start Time': time[0] if len(time) else np.nan,
+                    'End Time': time[-1] if len(time) else np.nan,
+                }
+                for idx, name in enumerate(('Flow', 'Stage HW', 'Stage TW')):
+                    units[name] = labels[idx][1]
+                    HdfPump._add_extremes(row, name, data[:, idx], time)
+                pump_columns = [
+                    idx for idx, (_, unit) in enumerate(labels)
+                    if idx >= 3 and unit.lower() == 'pumps on'
+                ]
+                if pump_columns:
+                    pumps_on = data[:, pump_columns].astype(np.float64).sum(axis=1)
+                    HdfPump._add_extremes(row, 'Pumps On', pumps_on, time, minimum=False)
+                else:
+                    row['Max Pumps On'] = np.nan
+                    row['Max Pumps On Time'] = np.nan
+                units['Pumps On'] = 'Pumps on'
+                highest = read_attr(
+                    hdf[f"{stations_path}/{station}"], 'Highest Elev Pump Line', None
+                )
+                row['Highest Elev Pump Line'] = (
+                    float(np.asarray(highest).reshape(-1)[0]) if highest is not None else np.nan
+                )
+                rows.append(row)
 
-            return df
+        df = pd.DataFrame(rows)
+        df['Time Steps'] = df['Time Steps'].astype('int64')
+        for column in df.columns:
+            if column.startswith(('Max ', 'Min ')) and not column.endswith(' Time'):
+                df[column] = df[column].astype('float64')
+        df['Highest Elev Pump Line'] = df['Highest Elev Pump Line'].astype('float64')
+        df.attrs['units'] = units
+        if time_units:
+            df.attrs['time_units'] = time_units
+        return df
+
+    @staticmethod
+    def _summary_labels(variable_units: Any, column_count: int, data_path: str) -> List[tuple]:
+        """Decode Variable_Unit rows; refuse layouts not starting Flow/Stage HW/Stage TW."""
+        rows = np.asarray(variable_units) if variable_units is not None else None
+        if rows is None or rows.ndim != 2 or rows.shape[1] < 2 or rows.shape[0] != column_count:
+            raise ValueError(
+                f"Pump results at '{data_path}' need a Variable_Unit attribute with one "
+                f"(label, unit) row per column; cannot identify the stored columns"
+            )
+        labels = [
+            (HdfPump._decode_hdf_text(row[0]), HdfPump._decode_hdf_text(row[1]))
+            for row in rows
+        ]
+        first = [label for label, _ in labels[:3]]
+        if first != ['Flow', 'Stage HW', 'Stage TW']:
+            raise ValueError(
+                f"Pump results at '{data_path}' do not begin with Flow, Stage HW, "
+                f"Stage TW (found {first}); layout not recognized"
+            )
+        return labels
+
+    @staticmethod
+    def _add_extremes(row: Dict[str, Any], name: str, values: np.ndarray,
+                      time: np.ndarray, minimum: bool = True) -> None:
+        """Add the stored max (and min) of ``values`` and the time of first occurrence."""
+        values = np.asarray(values, dtype=np.float64)
+        finite = np.isfinite(values)
+        kinds = [('Max', np.argmax, -np.inf)]
+        if minimum:
+            kinds.append(('Min', np.argmin, np.inf))
+        for label, pick, fill in kinds:
+            if not finite.any():
+                row[f'{label} {name}'] = np.nan
+                row[f'{label} {name} Time'] = np.nan
+                continue
+            idx = int(pick(np.where(finite, values, fill)))
+            row[f'{label} {name}'] = values[idx]
+            row[f'{label} {name} Time'] = time[idx]
 
     @staticmethod
     @log_call
