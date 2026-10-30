@@ -143,8 +143,8 @@ def test_starting_wse_method_ignores_unreadable_sibling(tmp_path, monkeypatch, u
             dataset.attrs[name] = np.bytes_(value)
         dataset.attrs[UNREADABLE] = 1
     result = HdfPlan.get_starting_wse_method(path)
-    assert result["method"] == "Normal Depth"
-    assert result["slope"] == pytest.approx(0.001)
+    assert result["method"] == "Unknown"  # no Startup Mode stored
+    assert result["boundaries"][0]["slope"] == pytest.approx(0.001)
     assert result["boundaries"][0]["river"] == "R"
 
 
@@ -156,7 +156,7 @@ def test_starting_wse_startup_mode_ignores_unreadable_sibling(tmp_path, monkeypa
         hdf.require_group("Event Conditions/Unsteady/Boundary Conditions")
     _attrs(path, "Event Conditions/Unsteady/Initial Conditions", **{"Startup Mode": np.bytes_(b"Computed")})
     result = HdfPlan.get_starting_wse_method(path)
-    assert result["startup_mode"] == "Computed" and result["method"] == "Unknown"
+    assert result["startup_mode"] == "Computed" and result["method"] == "Computed"
 
 
 @pytest.mark.parametrize("mode", MODES)
