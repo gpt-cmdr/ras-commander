@@ -10,7 +10,7 @@ import time
 from collections import defaultdict
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
-from typing import Any, Dict, Optional, Tuple, Union
+from typing import Any, Dict, Literal, Optional, Tuple, Union
 
 import psutil
 
