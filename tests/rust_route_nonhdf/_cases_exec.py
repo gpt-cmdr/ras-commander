@@ -131,19 +131,6 @@ def _plan_info(func):
     return call
 
 
-def _flow_frames(path):
-    """``_dataset_to_dataframe`` on fixed real datasets (2-D numeric, 1-D, compound)."""
-    names = ("Results/Unsteady/Output/Output Blocks/Base Output/Unsteady Time Series/Time",
-             "Geometry/Cross Sections/Attributes", "Geometry/2D Flow Areas/Attributes",
-             "Geometry/Cross Sections/Station Elevation Info")
-    out = {}
-    with _open(path) as hdf:
-        for name in names:
-            if name in hdf:
-                out[name] = _flow()._dataset_to_dataframe(hdf[name])
-    return out
-
-
 CASES = {
     "RasCmdr._tmp_hdf_ras_release": Case(
         lambda p: _cmdr()._tmp_hdf_ras_release(p), kinds=ANY_RAS,
@@ -205,13 +192,13 @@ CASES = {
     "RasControl._read_hdf_comp_msgs": Case(
         lambda p: _ctrl()._read_hdf_comp_msgs(Path(p)), kinds=PLAN, helper="RasControl.get_comp_msgs"),
     "RasFlowOptimization._extract_trial_results_from_hdf": Case(
-        lambda p: _flow()._extract_trial_results_from_hdf(Path(p)), kinds=PLAN,
-        helper="RasFlowOptimization.run_flow_optimization"),
+        lambda p: _flow()._extract_trial_results_from_hdf(Path(p)), kinds={"plan", "sidecar"},
+        helper="RasFlowOptimization.get_trial_results",
+        note="trials: Results/Unsteady/Flow Optimization Hydro Scaling/Results; "
+             "sidecar kind admits plan-HDF excerpts such as Muncie.p02.flowopt.hdf"),
     "RasFlowOptimization._read_compute_messages": Case(
         lambda p: _flow()._read_compute_messages(None, Path(p)), kinds=PLAN,
         helper="RasFlowOptimization.run_flow_optimization"),
-    "RasFlowOptimization._dataset_to_dataframe": Case(
-        _flow_frames, kinds=ANY_RAS, helper="RasFlowOptimization.run_flow_optimization"),
     "RasCalibrate._get_reference_dataset[lines]": Case(
         lambda p: _cal()._get_reference_dataset(Path(p), "lines"), kinds=PLAN,
         helper="RasCalibrate.calibrate (reference line targets)"),

@@ -25,7 +25,7 @@ native preprocessing success.
 | Check domain | `audit_domain_containment` | Selected 2D area and cell spacing → `DomainContainmentResult` |
 | Regenerate mesh | `generate`, `generate_all` | Current compiled HDF, domain, breaklines/refinements and spacing -> `MeshResult` records and updated computation points |
 | Build properties | `compute_property_tables` | Mesh and terrain/classification associations → native property tables; Boolean result |
-| Check boundary conflicts | `detect_bc_conflicts`, `fix_bc_conflicts` | Compiled perimeter faces and BC lines → conflicts or `BCFixResult`; repair can modify HDF |
+| Check boundary conflicts | `detect_bc_conflicts`, `fix_bc_conflicts` | Compiled perimeter faces and BC lines → conflicts or `BCFixResult`. `fix_bc_conflicts` reads and writes only the old per-area `Geometry/2D Flow Areas/<area>/BC Lines` layout, so on HEC-RAS 6.x/7.x geometry HDFs (`Geometry/Boundary Condition Lines`) it finds no conflicts and changes nothing; use `detect_bc_conflicts` for detection |
 
 `write_computation_points` preserves UTF-8 or legacy CP1252 encoding, including
 non-ASCII area names. Undecodable text is refused before backup or replacement.
