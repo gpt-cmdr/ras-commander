@@ -9,6 +9,18 @@ alone does not identify a development checkout.
 
 ### Unreleased
 
+- **`HdfLandCover.estimate_final_mannings_raster` and
+  `compute_final_mannings_raster` run natively in `auto` mode, and stored
+  no-data Manning's n is now no data.** A class whose stored Manning's n is a
+  no-data value (NaN, -9999 in current layers, float32 max in legacy layers:
+  the `NoData` class, and every class of a legacy combined layer such as
+  Muncie `LandCoverCombined`) used to be written into the raster as that
+  number (for example 3.4e38). Those pixels are now no data, like unmapped
+  pixels: 0.0 in the returned array and the GeoTIFF's nodata value (-9999).
+  The geometry-extent fallback now reads `Geometry@Extents` through the native
+  reader. Native output (array and written GeoTIFF) is identical to h5py on all
+  32 public geometry/land-cover pairs of the HEC-RAS 6.2-7.0 examples
+  (BaldEagleCrkMulti2D, Muncie, Weise_2D) and their 6.6/7.0.1 re-runs.
 - **`HdfLandCover.get_landcover_raster_map` reads legacy land-cover layers.**
   Legacy RAS Mapper layers, still shipped in the HEC-RAS 7.0 example projects
   (Muncie `LandCover/*.hdf`, Weise_2D `LandCover.hdf`, the 6.1 BaldEagle
@@ -19,6 +31,13 @@ alone does not identify a development checkout.
   maps each stored ID (the pixel value) to its name and stored Manning's n;
   arrays of different lengths are refused. Native output is identical to h5py
   on all six public legacy layers.
+- **`HdfInfiltration.get_soils_raster_stats` runs natively in `auto` mode.**
+  Its reads were already the real layout (the soils layer's `Raster Map` and
+  its raster); the routed equivalence case used to pass the infiltration layer
+  as `soil_hdf_path`, so no fixture qualified it. The case now passes the
+  project's soils layer, and on the public HEC-RAS 7.0 BaldEagleCrkMulti2D
+  example (geometry g02, `Hydrologic Soil Groups.hdf`) native output is
+  identical to h5py (seven soil groups). Values are unchanged.
 - **`HdfPump.get_pump_station_summary` now returns real data.** It used to
   read `/Results/Unsteady/Summary/Pump Station`, which HEC-RAS never writes,
   so it always returned an empty DataFrame. It now returns one row per pump

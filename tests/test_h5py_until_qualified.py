@@ -18,8 +18,6 @@ from ras_commander import fast_hdf
 
 # Modules that decorate functions with h5py_until_qualified.
 DECORATING_MODULES = [
-    "ras_commander.hdf.HdfInfiltration",
-    "ras_commander.hdf.HdfLandCover",
     "ras_commander.RasEncroachments",
     "ras_commander.RasFlowOptimization",
     "ras_commander.RasUnsteady",
