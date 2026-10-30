@@ -1,4 +1,4 @@
-"""RAS Mapper's effective terrain without HEC-RAS (``rasmapper-effective-terrain/1``).
+"""RAS Mapper's effective terrain without HEC-RAS (``rasmapper-effective-terrain/1`` and ``/2``).
 
 The fast-map engine rebuilds the float32 grid that
 ``RasTerrain.export_rasmapper_terrain(downsample_factor=1,
@@ -12,9 +12,12 @@ and 8 differing values, all in stitch-TIN corners where RAS Mapper's own
 exports are not stable; four of five synthetic one-to-three-source terrains are
 bit-identical and the fifth differs on 5 stitch-TIN corner pixels.
 
-Terrain modifications are refused here, before the engine is called: the
-engine does not rasterize them, so a modified terrain still needs the RAS
-Mapper export. Source priority is the one proven by
+Terrain modifications (``rasmapper-effective-terrain/2``): every layer under
+``/Modifications`` is staged by :mod:`._terrain_mods`, which raises
+:class:`FimUnsupportedError` for any form not qualified against HEC-RAS 7.0.1
+``rasterize_modifications=True`` exports, so such terrains still go to the RAS
+Mapper export. An engine that advertises only ``/1`` still refuses every
+modified terrain. Source priority is the one proven by
 :func:`._terrain_scope.top_priority_source` (``Priority`` attributes or the
 terrain VRT order), never inferred.
 """
@@ -31,24 +34,40 @@ from typing import Optional
 
 import numpy as np
 
-from . import _engine, _terrain_scope
+from . import _engine, _terrain_mods, _terrain_scope
 from .errors import FimEngineError, FimUnsupportedError
 
 METHOD_ID = "rasmapper-effective-terrain/1"
+METHOD_ID_V2 = "rasmapper-effective-terrain/2"
 SCHEMA = "ras-commander-effective-terrain-request/1"
+SCHEMA_V2 = "ras-commander-effective-terrain-request/2"
 RECEIPT_SCHEMA = "ras-commander-effective-terrain/1"
 NODATA = -9999.0
 _TILE_PIXELS = 256 * 256
 
 
-def engine_supports(engine: Path) -> bool:
-    """Whether ``engine`` advertises ``rasmapper-effective-terrain/1``."""
+def _record(engine: Path):
     try:
         method = _engine.engine_method(engine)
     except Exception:
-        return False
+        return None
     record = method.get("effective_terrain")
-    return isinstance(record, dict) and record.get("method_id") == METHOD_ID
+    return record if isinstance(record, dict) else None
+
+
+def engine_supports(engine: Path, modifications: bool = False) -> bool:
+    """Whether ``engine`` builds the effective terrain.
+
+    ``modifications=True`` asks for ``rasmapper-effective-terrain/2`` (terrain
+    modifications); otherwise ``/1`` or ``/2`` will do.
+    """
+    record = _record(engine)
+    if record is None:
+        return False
+    ids = {record.get("method_id"), *(record.get("compatible_method_ids") or [])}
+    if modifications:
+        return record.get("method_id") == METHOD_ID_V2 and isinstance(record.get("modifications"), dict)
+    return bool(ids & {METHOD_ID, METHOD_ID_V2})
 
 
 def _write_mask(dataset, path: Path) -> list:
@@ -61,6 +80,32 @@ def _write_mask(dataset, path: Path) -> list:
             block = dataset[start:start + 256]
             out.write(np.ascontiguousarray(block).view(np.uint8).tobytes())
     return shape
+
+
+def _source_identities(engine: Path, sources: list, crs, identity: dict) -> None:
+    """Pin each lower-priority source's own WKT hash when its CRS equals the first's.
+
+    RAS terrain sources often store the same CRS with different WKT text; the
+    engine compares WKT hashes, so each source carries its caller-verified hash.
+    Sources whose CRS differs (by rasterio/PROJ equality) are refused.
+    """
+    import rasterio
+    from pyproj import CRS
+
+    first = CRS.from_user_input(crs)
+    for source in sources[1:]:
+        path = Path(source["path"])
+        with rasterio.open(path) as src:
+            other = CRS.from_user_input(src.crs) if src.crs else None
+        if other is None or other != first:
+            raise FimUnsupportedError(f"terrain source {path.name} is not in the first source's CRS")
+        info = _engine._json_stdout(
+            _engine.run_engine([str(engine), "terrain-info", str(path)], "terrain-info"),
+            "ras2fim-batch terrain-info",
+        )
+        fnv = info.get("crs_wkt_fnv1a64")
+        if identity["crs_identity"].get("kind") == "caller_verified_wkt" and fnv:
+            source["crs_identity"] = {"kind": "caller_verified_wkt", "fnv1a64": fnv}
 
 
 def stage(info: dict, root: Path) -> dict:
@@ -129,11 +174,25 @@ def build(
             "or export the terrain through RAS Mapper"
         )
     info = _terrain_scope.top_priority_source(terrain_hdf, rasmap_path)
+    layers = []
     if info["modified"]:
-        raise FimUnsupportedError(
-            f"terrain {info['terrain_hdf'].name} has modifications {info['modifications']}; "
-            "the native effective terrain does not rasterize them (use the RAS Mapper export)"
+        hdf_names = {name[4:] for name in info["modifications"] if name.startswith("hdf:")}
+        rasmap_only = sorted(
+            name[7:] for name in info["modifications"]
+            if name.startswith("rasmap:") and name[7:] not in hdf_names
         )
+        if rasmap_only:
+            raise FimUnsupportedError(
+                f"rasmap modification layers {rasmap_only} are not stored in {info['terrain_hdf'].name}"
+            )
+        if not engine_supports(engine, modifications=True):
+            raise FimUnsupportedError(
+                f"terrain {info['terrain_hdf'].name} has modifications {info['modifications']}; "
+                f"the engine lacks {METHOD_ID_V2} (use the RAS Mapper export)"
+            )
+        # Raises FimUnsupportedError for any modification form not qualified.
+        layers = _terrain_mods.read_layers(info["terrain_hdf"])
+    v2 = engine_supports(engine, modifications=True)
     with rasterio.open(info["tif"]) as src:
         crs = src.crs
     started = time.perf_counter()
@@ -142,16 +201,20 @@ def build(
     try:
         staged = stage(info, work)
         identity = _engine.terrain_identity(engine, Path(info["tif"]), crs, terrain_crs_fnv1a64)
+        if v2:
+            _source_identities(engine, staged["sources"], crs, identity)
         request = {
-            "schema": SCHEMA,
+            "schema": SCHEMA_V2 if v2 else SCHEMA,
             "sources": staged["sources"],
             "stitch_tin": staged["stitch_tin"],
             "epsg": int(identity["epsg"]),
             "crs_identity": identity["crs_identity"],
-            "modifications": 0,
+            "modifications": len(layers),
             "threads": int(threads),
             "max_working_bytes": int(max_working_mib) << 20,
         }
+        if v2:
+            request["modification_layers"] = layers
         request_path = work / "request.json"
         request_path.write_text(json.dumps(request, indent=1), encoding="utf-8")
         out_dir = work / "out"
@@ -176,7 +239,12 @@ def build(
         os.replace(produced, output_path)
         receipt = {
             "schema": RECEIPT_SCHEMA,
-            "method_id": METHOD_ID,
+            "method_id": METHOD_ID_V2 if v2 else METHOD_ID,
+            "modification_layers": [
+                {"name": layer["name"], "kind": layer["kind"], "priority": layer["priority"],
+                 "features": len(layer["features"])}
+                for layer in layers
+            ],
             "terrain_hdf": str(info["terrain_hdf"]),
             "sources_in_priority_order": info["sources"],
             "priority_basis": info["priority_basis"],

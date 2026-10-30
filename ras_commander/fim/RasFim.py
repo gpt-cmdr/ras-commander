@@ -1058,7 +1058,7 @@ class RasFim:
         timeout: Optional[float] = None,
         terrain_crs_fnv1a64: Optional[str] = None,
     ) -> Dict[str, Any]:
-        """Build RAS Mapper's effective terrain of an unmodified terrain in Rust.
+        """Build RAS Mapper's effective terrain in Rust, with qualified modifications.
 
         Writes the float32 grid ``RasTerrain.export_rasmapper_terrain(
         downsample_factor=1, rasterize_modifications=False)`` obtains from
@@ -1079,8 +1079,9 @@ class RasFim:
         Args:
             terrain_hdf: Registered terrain HDF.
             output_path: New ``.tif`` path (replaced if it exists).
-            rasmap_path: Optional rasmap; modification layers registered there
-                for this terrain are also refused.
+            rasmap_path: Optional rasmap; a modification layer registered there
+                but not stored in the terrain HDF is refused. RAS Mapper's export
+                applies every HDF modification whatever its ``Checked`` state.
             engine_path: Engine executable, otherwise environment/PATH.
             threads: Engine worker threads (1-64).
             max_working_mib: Engine memory admission; the output is held in
@@ -1093,8 +1094,20 @@ class RasFim:
             dict: Receipt with ``method_id``, ``sources_in_priority_order``,
             ``priority_basis``, ``seconds`` and the engine ``engine_report``.
 
+        Terrain modifications (engine ``rasmapper-effective-terrain/2``): ground
+        lines (high ground and channels, ``SetIfHigher``/``SetIfLower``),
+        constant-elevation polygons and unrotated ellipses are rasterized as
+        RAS Mapper's ``rasterize_modifications=True`` export does, layers in
+        descending ``Priority`` (Priority 0 last). Qualified against HEC-RAS
+        7.0.1 on HCFCD Prop_Topo and Kingswood TerrainAlt1-3/existing_1m: no
+        difference outside the stitch TIN except isolated 1/32 ft roundings at
+        exact ties. Any other form (ground-line ``Add``/``SetValue``, control
+        points, ``System Name`` joins, boundary-profile polygons, rotated
+        ellipses, ``Max Reach`` not above ``Top Width``) is refused, so the
+        caller uses the RAS Mapper export.
+
         Raises:
-            FimUnsupportedError: Terrain modifications, unproven priority,
+            FimUnsupportedError: Unqualified terrain modifications, unproven priority,
                 missing masks, an engine without the method, or an engine
                 refusal (sources in different CRSs, non-square cells).
             FimEngineNotFoundError: The optional executable is unavailable.

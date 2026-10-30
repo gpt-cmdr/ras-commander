@@ -377,7 +377,7 @@ def test_add_channel_modification_keeps_take_lower_mode(tmp_path):
 
     with h5py.File(terrain_hdf, "r") as hdf:
         mod = hdf["Modifications/Pilot Channel"]
-        assert _decode(mod.attrs["Type"]) == "Channel"
+        assert _decode(mod.attrs["Type"]) == "Levee"
         assert _decode(mod.attrs["Subtype"]) == "Channel"
         np.testing.assert_allclose(
             mod["Profile Values"][:],
@@ -543,3 +543,43 @@ def test_explicit_elevation_overrides_nonfinite_z_values(tmp_path):
 
     profile = RasTerrainModWriter.get_modification_profile(terrain_hdf, "Constant Crest")
     assert profile["elevation"].tolist() == [601.25, 601.25]
+
+
+def test_provided_level_boundary_is_stored_as_the_constant_elevation(tmp_path):
+    """RAS Mapper sets a polygon with Generate Boundary Elevations off to its
+    Elevation Value; writing 0.0 there flattened provided 700 ft boundaries to
+    0 ft in HEC-RAS 7.0.1's export."""
+    terrain_hdf, rasmap = _write_minimal_terrain(tmp_path)
+    RasTerrainModWriter.add_modification_polygon(
+        terrain_hdf,
+        name="Pad",
+        polygon_coords=[[0.0, 0.0], [10.0, 0.0], [10.0, 10.0], [0.0, 10.0]],
+        elevation_method="provided",
+        boundary_elevations=[700.0] * 5,
+        rasmap_path=rasmap,
+    )
+    with h5py.File(terrain_hdf, "r") as hdf:
+        attrs = hdf["Modifications/Pad/Attributes"][0]
+        assert attrs["Elevation Value"] == pytest.approx(700.0)
+        assert attrs["Generate Boundary Elevations"] == 0
+
+
+def test_layers_get_unique_increasing_priorities(tmp_path):
+    """RAS Mapper numbers modification layers 0..n-1; equal priorities leave
+    the application order undefined."""
+    terrain_hdf, rasmap = _write_minimal_terrain(tmp_path)
+    RasTerrainModWriter.add_channel_modification(
+        terrain_hdf, rasmap, name="A", polyline_points=np.array([[0.0, 0.0], [30.0, 40.0]]),
+        width=15.0, depth=4.0, max_extent=75.0,
+    )
+    RasTerrainModWriter.add_modification_polygon(
+        terrain_hdf, name="B", polygon_coords=[[0.0, 0.0], [10.0, 0.0], [10.0, 10.0]],
+        elevation_method="provided", boundary_elevations=[5.0] * 4, rasmap_path=rasmap,
+    )
+    RasTerrainModWriter.add_channel_modification(
+        terrain_hdf, rasmap, name="A", polyline_points=np.array([[0.0, 0.0], [30.0, 40.0]]),
+        width=15.0, depth=4.0, max_extent=75.0,
+    )
+    with h5py.File(terrain_hdf, "r") as hdf:
+        priorities = {name: int(grp.attrs["Priority"]) for name, grp in hdf["Modifications"].items()}
+    assert priorities == {"B": 1, "A": 2}

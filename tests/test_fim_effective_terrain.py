@@ -1,4 +1,4 @@
-"""Native effective terrain (``rasmapper-effective-terrain/1``) wiring in RasFim.
+"""Native effective terrain (``rasmapper-effective-terrain/1`` and ``/2``) wiring in RasFim.
 
 Unit tests use synthetic terrain HDFs and, where an engine is needed, the
 installed ``ras2fim-batch`` (skipped when it lacks the method). Conformance to
@@ -106,7 +106,8 @@ def test_real_engine_on_a_synthetic_single_source_terrain(tmp_path):
         f["Terrain/T.only/0/Mask"][...] = 1
     out = tmp_path / "out" / "effective.tif"
     receipt = RasFim.build_effective_terrain(hdf, out, threads=1, max_working_mib=256)
-    assert receipt["method_id"] == _effective_terrain.METHOD_ID
+    assert receipt["method_id"] in (_effective_terrain.METHOD_ID, _effective_terrain.METHOD_ID_V2)
+    assert receipt["modification_layers"] == []
     assert json.loads(out.with_suffix(".tif.json").read_text())["output"] == str(out)
     with rasterio.open(out) as a, rasterio.open(tmp_path / "T.only.tif") as b:
         assert a.nodata == -9999 and a.crs == b.crs
