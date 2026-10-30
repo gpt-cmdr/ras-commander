@@ -45,6 +45,20 @@ def _run_core_only(body: str, *args: str) -> dict:
     return json.loads(completed.stdout.strip().splitlines()[-1])
 
 
+def test_geom_package_imports_without_shapely():
+    payload = _run_core_only(r'''
+import json
+import ras_commander.geom
+from ras_commander.geom import GeomMesh
+print(json.dumps({
+    "mesh": GeomMesh.__name__,
+    "loaded": sorted(name for name in ("shapely", "geopandas") if name in sys.modules),
+}))
+''')
+
+    assert payload == {"mesh": "GeomMesh", "loaded": []}
+
+
 def test_rasexamples_imports_and_download_error_names_full_extra(tmp_path):
     payload = _run_core_only(
         r'''

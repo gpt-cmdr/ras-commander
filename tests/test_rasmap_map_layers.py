@@ -629,6 +629,7 @@ def test_terrain_visibility_and_update_legend_with_view(tmp_path):
     )
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_current_view_roundtrip_and_zoom_to_geometry_layer(tmp_path):
     project_dir = _make_geometry_project(tmp_path)
 
@@ -689,6 +690,7 @@ def test_lateral_structure_bounds_filter_lateral_records(tmp_path):
     assert structures["max_x"] == 600.0
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_breakline_and_sa2d_layer_aliases_resolve_hdf_bounds(tmp_path):
     project_dir = _make_geometry_project(tmp_path)
     hdf_path = project_dir / "GeometryLayerProject.g04.hdf"
@@ -856,6 +858,7 @@ def test_create_spatial_review_package_writes_audit_bundle(tmp_path):
     assert not map_layers["checked"].fillna(False).any()
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_create_spatial_review_package_defaults_to_screenshots_folder(tmp_path):
     project_dir = _make_geometry_project(tmp_path)
 

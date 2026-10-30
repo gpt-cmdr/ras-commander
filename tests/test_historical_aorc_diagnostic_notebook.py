@@ -5,7 +5,7 @@ from pathlib import Path
 import nbformat
 
 
-NOTEBOOK = Path("examples/914_historical_event_validation.ipynb")
+NOTEBOOK = Path(__file__).resolve().parents[1] / "examples/914_historical_event_validation.ipynb"
 
 
 def test_historical_aorc_notebook_states_and_implements_qualified_scope():

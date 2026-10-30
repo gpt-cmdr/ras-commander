@@ -10,6 +10,7 @@ from pyproj import CRS
 from ras_commander.hdf.HdfMesh import HdfMesh, MeshCellPolygonError
 
 
+@pytest.mark.synthetic_hdf_layout
 @pytest.mark.parametrize("points", [
     [[0, 0], [1, 1], [0, 1], [1, 0]],
     [[0, 0], [1, 0], [2, 0], [3, 0]],

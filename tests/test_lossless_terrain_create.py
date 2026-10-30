@@ -132,6 +132,9 @@ def test_existing_output_prefix_never_launches_or_overwrites(
     assert retained.read_bytes() == b"keep"
 
 
+@pytest.mark.synthetic_hdf_layout(
+    "none",
+)
 @pytest.mark.parametrize(
     "fault",
     [

@@ -61,6 +61,7 @@ from . import _aoi, _engine, _prepare, _products
 from ._aoi import FimAoi
 from ._prepare import FimPreparedProfile
 from .errors import FimEngineError, FimMappingError, FimUnsupportedError
+from ..fast_hdf import release_native_sessions
 
 logger = get_logger(__name__)
 
@@ -1995,6 +1996,7 @@ class RasFim:
                         continue
                     row.update(RasFim._write_products(folder, result, output_crs, write_floodplain))
                 if not keep_work:
+                    release_native_sessions(batch_dir)
                     shutil.rmtree(batch_dir)
         except Exception as exc:
             fatal = exc
@@ -2008,9 +2010,11 @@ class RasFim:
         finally:
             if keep_work:
                 kept = folder / ".fim_work"
+                release_native_sessions(work, kept)
                 work.rename(kept)
                 work = kept
             else:
+                release_native_sessions(work)
                 shutil.rmtree(work, ignore_errors=True)
 
         after = {k: _file_identity(p) for k, p in watched.items()}

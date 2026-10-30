@@ -19,6 +19,7 @@ from typing import Any, Dict, List, Optional, Sequence, Tuple
 import numpy as np
 
 from ..LoggingConfig import get_logger
+from ..fast_hdf import release_native_sessions
 
 logger = get_logger(__name__)
 
@@ -647,6 +648,7 @@ def apply_breakouts(breakout_plan: SubdomainBreakoutPlan, dest_folder, *, overwr
             raise FileExistsError(f"dest_folder exists: {dest} (pass overwrite_dest=True)")
         import shutil
 
+        release_native_sessions(dest)
         shutil.rmtree(dest)
     working_prj, copy_record = _stage_working_copy(breakout_plan.ras_object, dest)
     working = RasPrj()

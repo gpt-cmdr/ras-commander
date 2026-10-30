@@ -32,6 +32,7 @@ from pathlib import Path, PurePosixPath, PureWindowsPath
 from typing import Any
 
 from ras_commander.LoggingConfig import get_logger, log_call
+from ras_commander.fast_hdf import release_native_sessions
 
 logger = get_logger(__name__)
 
@@ -649,9 +650,11 @@ def organize_salt_draw(
             resolved.stat().st_mtime_ns,
         ):
             raise RuntimeError("Salt Draw source archive changed during organization.")
+        release_native_sessions(working, output)
         os.replace(working, output)
     except Exception:
         if working.exists():
+            release_native_sessions(working)
             shutil.rmtree(working, ignore_errors=True)
         raise
     return output

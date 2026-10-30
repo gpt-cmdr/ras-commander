@@ -51,6 +51,7 @@ def _write_collection_hdf(
     return path
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_collection_perimeter_recovers_extent_and_reports_missing_topology(
     tmp_path: Path,
     caplog: pytest.LogCaptureFixture,
@@ -87,6 +88,7 @@ def test_collection_perimeter_recovers_extent_and_reports_missing_topology(
     assert "omits named-area face topology" in caplog.text
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_collection_multipart_perimeter_preserves_disconnected_parts(tmp_path: Path):
     first = np.array([[0, 0], [4, 0], [4, 4], [0, 4], [0, 0]], dtype=float)
     second = np.array([[10, 0], [12, 0], [12, 2], [10, 2], [10, 0]], dtype=float)
@@ -106,6 +108,7 @@ def test_collection_multipart_perimeter_preserves_disconnected_parts(tmp_path: P
     assert geometry.area == pytest.approx(20.0)
 
 
+@pytest.mark.synthetic_hdf_layout
 @pytest.mark.parametrize(
     "case",
     [
@@ -154,6 +157,7 @@ def test_malformed_collection_layout_fails_safely(tmp_path: Path, case: str):
     assert diagnostic["reason_codes"].str.contains("collection_perimeter").all()
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_collection_cell_points_are_not_promoted_to_faces_or_polygons(
     tmp_path: Path,
     caplog: pytest.LogCaptureFixture,
@@ -169,6 +173,7 @@ def test_collection_cell_points_are_not_promoted_to_faces_or_polygons(
     assert "will not be promoted to polygon topology" in caplog.text
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_standard_named_perimeter_schema_is_preserved(tmp_path: Path):
     geom_hdf = tmp_path / "modern.g01.hdf"
     perimeter = np.array(

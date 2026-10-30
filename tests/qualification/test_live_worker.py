@@ -1428,7 +1428,7 @@ def test_tcu_preflight_uses_real_status_version_label_and_exact_executable(
         return True
 
     monkeypatch.setattr(
-        sys.modules["ras_commander.RasTcu"], "os", SimpleNamespace(name="nt")
+        sys.modules["ras_commander.RasTcu"], "os", SimpleNamespace(name="nt", environ={})
     )
     monkeypatch.setitem(sys.modules, "winreg", SimpleNamespace(HKEY_CURRENT_USER=1))
     monkeypatch.setattr(ras_commander.RasTcu, "_resolve_exe", staticmethod(resolve))

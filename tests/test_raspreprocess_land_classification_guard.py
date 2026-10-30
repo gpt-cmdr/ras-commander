@@ -82,6 +82,7 @@ def test_missing_files_do_not_block_hec_ras_63_and_later(tmp_path, monkeypatch):
     assert result.error == "stop-here"
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_missing_referenced_files_fail_before_launch(tmp_path, monkeypatch):
     ras_obj = _seed_project(tmp_path, _CHIPPEWA_ATTRS)
     _forbid_launch(monkeypatch)
@@ -95,6 +96,7 @@ def test_missing_referenced_files_fail_before_launch(tmp_path, monkeypatch):
     assert result.geometry_number == "03"
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_existing_referenced_files_are_not_reported(tmp_path):
     ras_obj = _seed_project(
         tmp_path,
@@ -113,6 +115,7 @@ def test_existing_referenced_files_are_not_reported(tmp_path):
     ) == []
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_only_the_missing_file_is_reported(tmp_path):
     ras_obj = _seed_project(
         tmp_path,
@@ -131,6 +134,7 @@ def test_only_the_missing_file_is_reported(tmp_path):
     assert missing[0].startswith("infiltration '.\\Infiltration.hdf'")
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_unset_associations_and_missing_or_unreadable_hdf_pass(tmp_path):
     ras_obj = _seed_project(tmp_path, {"Terrain Filename": ".\\Terrain\\missing.hdf"})
     geom_hdf = ras_obj.project_folder / "fixture.g03.hdf"

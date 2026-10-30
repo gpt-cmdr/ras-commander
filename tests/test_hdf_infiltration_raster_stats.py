@@ -227,6 +227,7 @@ class TestRasterAreaHelpers:
 class TestPublicRasterStats:
     """Public API regression tests for raster statistics."""
 
+    @pytest.mark.synthetic_hdf_layout
     def test_get_soils_raster_stats_scales_counts_by_cell_area(
         self,
         tmp_path: Path,
@@ -265,6 +266,7 @@ class TestPublicRasterStats:
             200.0 * HdfInfiltration.SQM_TO_ACRE
         )
 
+    @pytest.mark.synthetic_hdf_layout
     def test_get_landcover_raster_stats_scales_counts_by_cell_area(
         self,
         tmp_path: Path,
@@ -302,6 +304,7 @@ class TestPublicRasterStats:
         assert forest["mannings_n"] == pytest.approx(0.12)
         assert urban["percent_impervious"] == pytest.approx(85.0)
 
+    @pytest.mark.synthetic_hdf_layout
     def test_get_soils_raster_stats_aggregates_empty_mesh_warnings(
         self,
         tmp_path: Path,
@@ -347,6 +350,7 @@ class TestPublicRasterStats:
         assert "Outside A" in warning_messages[0]
         assert "Outside B" in warning_messages[0]
 
+    @pytest.mark.synthetic_hdf_layout
     def test_get_soils_raster_stats_aggregates_nodata_warnings(
         self,
         tmp_path: Path,
@@ -392,6 +396,7 @@ class TestPublicRasterStats:
         assert "Only NoData soil pixels for 1/1 2D flow area(s)" in warning_messages[0]
         assert "Inside" in warning_messages[0]
 
+    @pytest.mark.synthetic_hdf_layout
     def test_get_soils_raster_stats_warning_omits_exception_details(
         self,
         tmp_path: Path,
@@ -439,6 +444,7 @@ class TestPublicRasterStats:
         assert "RuntimeError" not in warning_messages[0]
         assert "C:/tmp/example/soil.tif" not in warning_messages[0]
 
+    @pytest.mark.synthetic_hdf_layout
     def test_get_landcover_raster_stats_aggregates_empty_mesh_warnings(
         self,
         tmp_path: Path,
@@ -484,6 +490,7 @@ class TestPublicRasterStats:
         assert "Outside A" in warning_messages[0]
         assert "Outside B" in warning_messages[0]
 
+    @pytest.mark.synthetic_hdf_layout
     @pytest.mark.parametrize(
         "method_name",
         ["get_soil_raster_stats", "get_infiltration_stats"],

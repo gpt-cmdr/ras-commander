@@ -1319,6 +1319,7 @@ class TestDomainContainmentAudit:
         assert result.ok
         assert result.checked_counts["structure"] == 0
 
+    @pytest.mark.synthetic_hdf_layout
     def test_native_multipart_collection_accepts_absolute_part_indexes(self, tmp_path):
         _geom_text, hdf_path = _write_containment_fixture(tmp_path)
         with h5py.File(hdf_path, "a") as hf:
@@ -1381,6 +1382,7 @@ class TestGeometryAssociation:
         path.write_text("artifact", encoding="utf-8")
         return path
 
+    @pytest.mark.synthetic_hdf_layout
     def test_sets_and_reads_all_association_paths(self, monkeypatch, tmp_path):
         geom_hdf_path = self._make_geometry_hdf(tmp_path)
         terrain = self._make_artifact(tmp_path / "Terrain" / "Terrain50.hdf")
@@ -1435,6 +1437,7 @@ class TestGeometryAssociation:
                 terrain_hdf_path=missing_terrain,
             )
 
+    @pytest.mark.synthetic_hdf_layout
     def test_partial_update_preserves_omitted_association(
         self,
         monkeypatch,
@@ -1476,6 +1479,7 @@ class TestGeometryAssociation:
 class TestDetectBcConflicts:
     """BC conflict detection on HDFs in the layout HEC-RAS writes."""
 
+    @pytest.mark.synthetic_hdf_layout
     def test_detects_shared_perimeter_faces(self, bc_conflict_hdf):
         conflicts = GeomMesh.detect_bc_conflicts(str(bc_conflict_hdf), cell_size=50.0)
         assert [c.face_id for c in conflicts] == [0, 3]
@@ -1484,26 +1488,31 @@ class TestDetectBcConflicts:
             assert conflict.bc_names == ["NormDepth1", "USInflow1"]
             assert conflict.bc_types == ["External", "External"]
 
+    @pytest.mark.synthetic_hdf_layout
     def test_interior_face_is_not_a_perimeter_face(self, bc_conflict_hdf):
         # Face 2 joins physical cells 0 and 1 and lies on both lines.
         conflicts = GeomMesh.detect_bc_conflicts(str(bc_conflict_hdf), cell_size=50.0)
         assert 2 not in [c.face_id for c in conflicts]
 
+    @pytest.mark.synthetic_hdf_layout
     def test_uses_faces_perimeter_values(self, bc_conflict_hdf):
         # Face 3's straight chord is 40 units from both lines; only its
         # Faces Perimeter Values point reaches them.
         conflicts = GeomMesh.detect_bc_conflicts(str(bc_conflict_hdf), cell_size=50.0)
         assert 3 in [c.face_id for c in conflicts]
 
+    @pytest.mark.synthetic_hdf_layout
     def test_identifies_normal_depth_bc_from_plan_event_conditions(self, bc_conflict_hdf):
         conflicts = GeomMesh.detect_bc_conflicts(str(bc_conflict_hdf), cell_size=50.0)
         assert conflicts[0].normal_depth_bc == "NormDepth1"
 
+    @pytest.mark.synthetic_hdf_layout
     def test_geometry_hdf_has_no_hydraulic_bc_type(self, bc_conflict_geom_hdf):
         conflicts = GeomMesh.detect_bc_conflicts(str(bc_conflict_geom_hdf), cell_size=50.0)
         assert [c.face_id for c in conflicts] == [0, 3]
         assert all(c.normal_depth_bc is None for c in conflicts)
 
+    @pytest.mark.synthetic_hdf_layout
     def test_detects_conflicts_in_later_flow_area(self, multi_area_bc_conflict_hdf):
         conflicts = GeomMesh.detect_bc_conflicts(
             str(multi_area_bc_conflict_hdf), cell_size=50.0
@@ -1530,6 +1539,7 @@ class TestFixBcConflicts:
     covered. Its re-checks use its own dry run.
     """
 
+    @pytest.mark.synthetic_hdf_layout
     def test_trims_normal_depth_bc_and_updates_per_area_group(self, legacy_bc_conflict_hdf):
         result = GeomMesh.fix_bc_conflicts(str(legacy_bc_conflict_hdf), cell_size=50.0)
         assert result.conflicts_found == 1
@@ -1545,6 +1555,7 @@ class TestFixBcConflicts:
         )
         assert recheck.conflicts_found == 0
 
+    @pytest.mark.synthetic_hdf_layout
     def test_dry_run_no_modification(self, legacy_bc_conflict_hdf):
         result = GeomMesh.fix_bc_conflicts(
             str(legacy_bc_conflict_hdf), cell_size=50.0, dry_run=True
@@ -1552,6 +1563,7 @@ class TestFixBcConflicts:
         assert result.modified_hdf is False
         assert result.conflicts_found == 1
 
+    @pytest.mark.synthetic_hdf_layout
     def test_repairs_only_conflicted_later_flow_area(self, legacy_multi_area_bc_conflict_hdf):
         path = str(legacy_multi_area_bc_conflict_hdf)
         with h5py.File(path, "r") as hf:
@@ -2496,6 +2508,7 @@ class TestRefinementRegions:
                 region_name="North", region_fid=0,
             )
 
+    @pytest.mark.synthetic_hdf_layout
     def test_utf8_truncation_preserves_valid_bytes(self, refinement_region_hdf):
         geom_text, hdf_path = refinement_region_hdf
         long_name = "\u00e9" * 20

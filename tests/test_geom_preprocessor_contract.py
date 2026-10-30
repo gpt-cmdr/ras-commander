@@ -46,6 +46,7 @@ def test_native_perimeter_requires_exact_fixed_width_serialization(reverse):
     assert not _perimeter_serialization_matches(moved, text)
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_bound_native_perimeter_must_remain_exactly_unchanged(tmp_path):
     text, path, expected = fixture(tmp_path)
     ring = expected["perimeters"]["Synthetic"].copy()
@@ -155,6 +156,7 @@ def products(path):
         area.create_dataset("Infiltration/Properties", data=[1])
 
 
+@pytest.mark.synthetic_hdf_layout
 @pytest.mark.parametrize(
     "dataset,value",
     [
@@ -183,6 +185,7 @@ def test_corrupt_required_topology_fails_completion(tmp_path, dataset, value):
     assert changed == []  # Regenerated products, rather than authored inputs.
 
 
+@pytest.mark.synthetic_hdf_layout
 @pytest.mark.parametrize(
     "dataset,index,value",
     [
@@ -204,6 +207,7 @@ def test_in_domain_but_inconsistent_topology_fails(tmp_path, dataset, index, val
     assert validate(text, path, expected, time.time() - 1)[1]
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_fresh_child_topology_replaces_stale_parent_without_preserving_indexes(
     tmp_path,
 ):
@@ -220,6 +224,7 @@ def test_fresh_child_topology_replaces_stale_parent_without_preserving_indexes(
     assert validate(text, path, expected, time.time() - 1)[:2] == ([], [])
 
 
+@pytest.mark.synthetic_hdf_layout
 @pytest.mark.parametrize(
     "dataset", ["FacePoints Coordinate", "Cells Center Coordinate"]
 )
@@ -233,6 +238,7 @@ def test_coherent_translation_is_not_current_authored_mesh(tmp_path, dataset):
     assert not evidence["products_complete"]
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_centers_require_exact_native_precision_but_ghosts_are_not_seeds(tmp_path):
     text, path, expected = fixture(tmp_path)
     with h5py.File(path, "r+") as hdf:
@@ -248,6 +254,7 @@ def test_centers_require_exact_native_precision_but_ghosts_are_not_seeds(tmp_pat
     )
 
 
+@pytest.mark.synthetic_hdf_layout
 @pytest.mark.parametrize("direction", [-np.inf, np.inf])
 def test_current_native_seed_mirror_allows_one_ulp_decimal_parsing(tmp_path, direction):
     text, path, expected = fixture(tmp_path)
@@ -259,6 +266,10 @@ def test_current_native_seed_mirror_allows_one_ulp_decimal_parsing(tmp_path, dir
     assert validate(text, path, expected, time.time() - 1)[:2] == ([], [])
 
 
+@pytest.mark.synthetic_hdf_layout(
+    "1000000.0",
+    "two_ulps",
+)
 @pytest.mark.parametrize("value", [np.nan, np.inf, 1_000_000.0, "two_ulps"])
 def test_current_native_seed_and_center_displacement_is_not_waived(tmp_path, value):
     text, path, expected = fixture(tmp_path)
@@ -276,6 +287,7 @@ def test_current_native_seed_and_center_displacement_is_not_waived(tmp_path, val
     assert not evidence["inputs_preserved"]
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_regenerated_seed_mirror_replaces_stale_parent_coordinates(tmp_path):
     text, path, expected = fixture(tmp_path)
     with h5py.File(path, "r+") as hdf:
@@ -286,6 +298,7 @@ def test_regenerated_seed_mirror_replaces_stale_parent_coordinates(tmp_path):
     assert validate(text, path, expected, time.time() - 1)[:2] == ([], [])
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_face_perimeter_roundoff_and_concave_ring(tmp_path):
     from ras_commander.geom._preprocess_contract import _mesh_binding_issues
 
@@ -310,6 +323,7 @@ def test_face_perimeter_roundoff_and_concave_ring(tmp_path):
             )
 
 
+@pytest.mark.synthetic_hdf_layout
 @pytest.mark.parametrize("reverse", [False, True])
 @pytest.mark.parametrize("bend", [False, True])
 @pytest.mark.parametrize("offset", [(0.0, 0.0), (1_000_000.0, 10_000_000.0)])
@@ -343,6 +357,7 @@ def test_native_concave_face_uses_intermediates_not_endpoint_chord(
         assert any("face segments outside" in issue for issue in issues)
 
 
+@pytest.mark.synthetic_hdf_layout
 @pytest.mark.parametrize("reverse", [False, True])
 @pytest.mark.parametrize("bend", [False, True])
 @pytest.mark.parametrize("offset", [(0.0, 0.0), (-1_000_000.0, 10_000_000.0)])
@@ -393,6 +408,7 @@ def test_native_faces_honor_keyhole_ring_and_ghosts(tmp_path, reverse, bend, off
     assert bool(issues) is (not bend)
 
 
+@pytest.mark.synthetic_hdf_layout
 @pytest.mark.parametrize("reverse", [False, True])
 @pytest.mark.parametrize("sign", [1, -1])
 def test_slanted_offset_boundary_binding_is_read_only(tmp_path, reverse, sign):
@@ -429,6 +445,7 @@ def test_slanted_offset_boundary_binding_is_read_only(tmp_path, reverse, sign):
     assert hashlib.sha256(path.read_bytes()).hexdigest() == before
 
 
+@pytest.mark.synthetic_hdf_layout
 @pytest.mark.parametrize("offset", [(0.0, 0.0), (1_000_000.0, 10_000_000.0)])
 @pytest.mark.parametrize("ulps", [4, 8, 16])
 @pytest.mark.parametrize("target", ["endpoint", "intermediate", "seed"])
@@ -462,6 +479,7 @@ def test_local_binding_preserves_world_ulp_limit(tmp_path, offset, ulps, target)
         assert any("interior centers differ" in issue for issue in issues)
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_exterior_native_intermediate_vertex_fails_complete_contract(tmp_path):
     text, path, expected = fixture(tmp_path)
     with h5py.File(path, "r+") as hdf:
@@ -506,6 +524,7 @@ def manning_region(text, path, outside=True):
     return snapshot(text, path)
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_disjoint_manning_polygon_preserved_without_inapplicable_mappings(tmp_path):
     text, path, _ = fixture(tmp_path)
     expected = manning_region(text, path)
@@ -516,6 +535,7 @@ def test_disjoint_manning_polygon_preserved_without_inapplicable_mappings(tmp_pa
     ]
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_intersecting_manning_polygon_still_requires_mappings(tmp_path):
     text, path, _ = fixture(tmp_path)
     expected = manning_region(text, path, outside=False)
@@ -527,6 +547,7 @@ def test_intersecting_manning_polygon_still_requires_mappings(tmp_path):
     )
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_disjoint_manning_polygon_change_is_not_waived(tmp_path):
     text, path, _ = fixture(tmp_path)
     expected = manning_region(text, path)
@@ -538,6 +559,7 @@ def test_disjoint_manning_polygon_change_is_not_waived(tmp_path):
     )
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_disjoint_region_does_not_accept_stale_attachment_indexes(tmp_path):
     text, path, _ = fixture(tmp_path)
     expected = manning_region(text, path)
@@ -554,6 +576,7 @@ def test_disjoint_region_does_not_accept_stale_attachment_indexes(tmp_path):
     )
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_table_name_without_polygon_has_no_attachment_requirement(tmp_path):
     text, path, _ = fixture(tmp_path)
     with text.open("a") as stream:
@@ -565,6 +588,7 @@ def test_table_name_without_polygon_has_no_attachment_requirement(tmp_path):
     assert validate(text, path, expected, time.time() - 1)[:2] == ([], [])
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_disjoint_region_rejects_even_in_bounds_stale_attachment(tmp_path):
     text, path, _ = fixture(tmp_path)
     expected = manning_region(text, path)
@@ -596,6 +620,7 @@ def test_disjoint_proof_requires_complete_perimeter_inventory(tmp_path, monkeypa
         snapshot(text, path)
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_polygon_part_topology_is_preserved(tmp_path):
     text, path, _ = fixture(tmp_path)
     expected = manning_region(text, path)
@@ -607,6 +632,7 @@ def test_polygon_part_topology_is_preserved(tmp_path):
     )
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_current_explicit_bc_type_survives_reclassification(tmp_path):
     text, path, _ = fixture(tmp_path)
     points = np.array([[0.0, 0.0], [0.2, 0.2]])
@@ -653,6 +679,7 @@ def test_current_explicit_bc_type_survives_reclassification(tmp_path):
     )
 
 
+@pytest.mark.synthetic_hdf_layout
 @pytest.mark.parametrize(
     "name",
     ["Curve Number", "Abstraction Ratio", "Minimum Infiltration Rate", "Properties"],
@@ -666,6 +693,7 @@ def test_associated_method_requires_every_infiltration_product(tmp_path, name):
     )
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_control_products_include_interior_and_ghost_cells(tmp_path, monkeypatch):
     text, path, expected = fixture(tmp_path)
     changed, missing, evidence = validate(text, path, expected, time.time() - 1)
@@ -703,6 +731,7 @@ def test_authored_structure_unknown_product_schema_fails_before_mutation(
     assert path.read_bytes() == original
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_hdf_only_infiltration_override_loss_is_rejected(tmp_path):
     text, path, _ = fixture(tmp_path)
     with h5py.File(path, "r+") as hdf:
@@ -716,6 +745,7 @@ def test_hdf_only_infiltration_override_loss_is_rejected(tmp_path):
     )
 
 
+@pytest.mark.synthetic_hdf_layout
 @pytest.mark.parametrize("name", [*CELL_PRODUCTS, *FACE_PRODUCTS])
 def test_missing_product_is_rejected_even_with_populated_topology(
     tmp_path, monkeypatch, name
@@ -747,6 +777,7 @@ def test_stale_parent_products_are_invalidated_without_restoring_them(tmp_path):
         assert "Geometry/Land Cover (Manning's n)/Internal Faces" not in hdf
 
 
+@pytest.mark.synthetic_hdf_layout
 @pytest.mark.parametrize("span", [[0, -1], [3, 2], [0, 0]])
 def test_malformed_active_cell_table_ranges_fail(tmp_path, monkeypatch, span):
     text, path, expected = fixture(tmp_path)
@@ -758,6 +789,7 @@ def test_malformed_active_cell_table_ranges_fail(tmp_path, monkeypatch, span):
     )
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_authored_projection_value_change_fails(tmp_path, monkeypatch):
     text, path, expected = fixture(tmp_path)
     with h5py.File(path, "r+") as hdf:
@@ -766,6 +798,7 @@ def test_authored_projection_value_change_fails(tmp_path, monkeypatch):
     assert validate(text, path, expected, time.time() - 1)[0] == ["Projection"]
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_projection_accepts_equivalent_native_wkt_encoding(tmp_path):
     from pyproj import CRS
 
@@ -809,6 +842,7 @@ def test_native_esri_projection_rounding_and_parallel_order_are_equivalent():
     assert _projection_equal(before, after)
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_unchanged_text_does_not_hide_missing_authored_bc(tmp_path, monkeypatch):
     text, path, expected = fixture(tmp_path)
     expected["features"]["Geometry/Boundary Condition Lines"] = 1
@@ -834,6 +868,7 @@ def test_empty_authored_2d_area_is_rejected(tmp_path, monkeypatch):
     )
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_text_modification_is_not_accepted_as_recompiled_input(tmp_path, monkeypatch):
     text, path, expected = fixture(tmp_path)
     text.write_text("Geom Title=changed\n")
@@ -841,6 +876,7 @@ def test_text_modification_is_not_accepted_as_recompiled_input(tmp_path, monkeyp
     assert expected["text_sha256"] != hashlib.sha256(text.read_bytes()).hexdigest()
 
 
+@pytest.mark.synthetic_hdf_layout
 @pytest.mark.parametrize("file_type", ["HEC-RAS Geometry", "HEC-RAS Results"])
 @pytest.mark.parametrize("version", ["HEC-RAS 7.0.1 June 2026", "HEC-RAS 7.1"])
 def test_7x_product_invalidation_preserves_authored_geometry(tmp_path, version, file_type):
