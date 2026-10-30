@@ -68,8 +68,9 @@ def test_add_stored_map_creates_checked_expanded_results_plan_layer(tmp_path):
     assert params.get("StoredFilename") == r".\PipePumpUpgrade\Depth (Max).vrt"
 
 
+@pytest.mark.parametrize("version", ["7.0", "7.0.2", "702", r"C:\HEC\7.0.2\Ras.exe"])
 def test_mapper_compatible_hdf_normalizes_temporary_copy_and_restores_source(
-    tmp_path,
+    tmp_path, version,
 ):
     hdf_path = tmp_path / "Demo.p01.hdf"
     with h5py.File(hdf_path, "w") as hdf:
@@ -84,7 +85,7 @@ def test_mapper_compatible_hdf_normalizes_temporary_copy_and_restores_source(
         pump_stations.create_dataset("Attributes", data=[4.0])
 
     original_bytes = hdf_path.read_bytes()
-    with RasProcess._mapper_compatible_result_hdf(hdf_path, "7.0") as mapped:
+    with RasProcess._mapper_compatible_result_hdf(hdf_path, version) as mapped:
         assert mapped == hdf_path
         assert hdf_path.read_bytes() != original_bytes
         with h5py.File(hdf_path, "r") as hdf:

@@ -124,8 +124,11 @@ internal static class RasMapperTerrainExportHelper
                 { "type", type.ToString() },
                 { "message", message ?? "" }
             });
-        Action<RasMapperLib.SpatialIndex<int>> callback =
-            index => index.Add(requestedExtent, 0);
+        MethodInfo addMethod = ResolveSpatialIndexAddMethod();
+        Action<RasMapperLib.SpatialIndex<int>> callback = index =>
+            addMethod.Invoke(index, addMethod.GetParameters().Length == 2
+                ? new object[] { requestedExtent, 0 }
+                : new object[] { requestedExtent, 0, null });
         var newFiles = new List<string>();
 
         MethodInfo method = ResolveGenerateMethod();
@@ -143,6 +146,7 @@ internal static class RasMapperTerrainExportHelper
         method.Invoke(terrain, invokeArguments);
 
         response["generate_method"] = method.ToString();
+        response["spatial_index_add_method"] = addMethod.ToString();
         response["generate_method_is_public"] = method.IsPublic;
         response["resample_method"] = terrain.ResampleMethod;
         response["resample_to_one_rfi"] = true;
@@ -164,6 +168,28 @@ internal static class RasMapperTerrainExportHelper
                 "Native export did not report exactly the requested single TIFF");
 
         return response;
+    }
+
+    private static MethodInfo ResolveSpatialIndexAddMethod()
+    {
+        // 7.0.2 adds binLocks. Match exact parameter types: binder-based lookup
+        // can otherwise select Add(Feature, int) through Extent's base type.
+        MethodInfo[] methods = typeof(RasMapperLib.SpatialIndex<int>)
+            .GetMethods(BindingFlags.Instance | BindingFlags.Public)
+            .Where(method => method.Name == "Add").ToArray();
+        foreach (Type[] signature in new[] {
+            new[] { typeof(RasMapperLib.Extent), typeof(int) },
+            new[] { typeof(RasMapperLib.Extent), typeof(int), typeof(object[]) }
+        })
+        {
+            MethodInfo match = methods.SingleOrDefault(method =>
+                method.GetParameters().Select(parameter => parameter.ParameterType)
+                    .SequenceEqual(signature));
+            if (match != null)
+                return match;
+        }
+        throw new MissingMethodException(
+            "Expected SpatialIndex<int>.Add(Extent, int) or Add(Extent, int, object[])");
     }
 
     private static MethodInfo ResolveGenerateMethod()

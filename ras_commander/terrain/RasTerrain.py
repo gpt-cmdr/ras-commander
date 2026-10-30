@@ -148,7 +148,7 @@ class RasTerrain:
                 modifications through ``resampleVecMods``.
             overwrite: Replace existing output and receipt when true.
             timeout_seconds: Total bounded runtime, including validation.
-            hecras_version: Accepted HEC-RAS runtime: 6.4.1, 6.5, 6.6, 7.0.1,
+            hecras_version: Accepted HEC-RAS runtime: 6.4.1, 6.5, 6.6, 7.0.1, 7.0.2,
                 or forward-open 7.1. The existing ``6.4`` installation alias resolves to
                 6.4.1. When omitted, use the exact runtime recorded by
                 ``ras_object``.
@@ -173,6 +173,9 @@ class RasTerrain:
             on native Windows and under Wine. HEC-RAS 7.1
             is forward-open for its future official binary, with the helper's
             exact managed-contract check retained as the runtime safety gate.
+            HEC-RAS 7.0.2 is qualified on Windows for bounded two-source export;
+            its changed spatial-index overload is selected at runtime. Vector
+            modifications and Wine have not been qualified on 7.0.2.
             Windows-drive and UNC project/input paths are supported, but direct
             output to a UNC share is not qualified because the task-local GDAL
             junction may not be staged on a remote volume; use a local output

@@ -26,6 +26,54 @@ acceptability. Check the selected result family, model diagnostics, and study
 criteria separately. Completion can verify even when later artifact handling
 fails and the overall result reports failure.
 
+## HEC-RAS 7.0.2 single-plan execution
+
+Use an installed, registered 7.0.2 runtime and initialize the project with its
+exact version or executable path. On this release, the command-line launcher
+was observed to ignore the requested plan and compute the project's listed
+plans in sequence. RAS Commander applies a release-specific workaround in
+`RasCmdr.compute_plan()` and `RasPreprocess.preprocess_plan()`: it temporarily
+exposes only the requested `Plan File=` entry and matching `Current Plan=`.
+Other model files remain in place.
+
+The guard takes an exclusive project claim and retains the original `.prj`
+bytes in `<project>.prj.single-plan.orig`. After owned processes are proved
+stopped, it restores the original bytes and mode and removes the backup and
+claim. `ComputeResult.execution_details["single_plan_project"]` records the
+transaction and restoration outcome. Failed cleanup or restoration fails the
+API result and retains recovery files with an actionable diagnostic. If owned
+processes may still be running, the single-plan declaration stays in place;
+restore the original from backup only after those processes have stopped.
+
+Use a project copy or `dest_folder=` and keep the project closed in the GUI
+during execution. The active-launch check sees command-line project references;
+it cannot detect every interactive GUI session. The version gate uses the
+executable's versioned parent folder or the recorded version term, so a copied
+executable in an unversioned folder is outside this qualification.
+
+For an explicitly installed local CLI patch, RAS Commander skips the project
+guard only when the executable's SHA-256 is
+`039863ff8d31cf9d2ae2aa5fdc1d4024a61a75f46ba49f2448672acc0336a0b6`.
+It checks the executable bytes on each decision; unknown or unreadable builds
+retain the guard. This recognition does not install or distribute a patched
+HEC-RAS executable.
+
+On Windows, this exact patched frontend completed public BaldEagle plan 03
+through `RasCmdr.compute_plan()` with all project plan declarations retained
+and the `.prj` unchanged throughout the run. The solver reported the requested
+two cores and no other plan ran. HEC-RAS still writes normal plan, geometry,
+and result artifacts during computation. The same patched frontend also
+preprocessed plan 04 through the updated library with the guard bypassed,
+the `.prj` unchanged, and no owned engine processes remaining. These checks do
+not qualify other patched builds, steady plans, or GUI/COM behavior.
+
+Native Windows checks on the public BaldEagle project preprocessed plans 03
+and 04 individually, completed and verified unsteady plan 03 without starting
+another plan, and restored the original project after a bounded timeout.
+The 7.0.1 preprocessing control did not engage the guard. These checks do not
+qualify steady plans, COM execution, parallel publication, or Linux/Wine
+execution on 7.0.2.
+
 ## Lean Batch Installation
 
 Batch workers that only need project inventory, plan computation, computation

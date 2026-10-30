@@ -1174,22 +1174,40 @@ Step 5: Configure (optional — auto-detection usually works)
 
     @staticmethod
     @log_call
-    def find_rasprocess(ras_version: str = None) -> Optional[Path]:
+    def find_rasprocess(ras_version: Optional[Union[str, Path]] = None) -> Optional[Path]:
         """
-        Find RasProcess.exe in standard HEC-RAS installation paths.
+        Find RasProcess.exe beside an explicit executable or discovered runtime.
 
-        On Windows, searches standard Program Files paths.
+        On Windows, resolves the requested release before searching Program Files.
         On Linux, searches within the Wine prefix drive_c/ directory.
 
         Args:
-            ras_version: Optional specific version to look for (e.g., "7.0").
+            ras_version: Release (e.g., "7.0.2"), executable path, or install directory.
                         If None, searches all known paths.
 
         Returns:
             Path to RasProcess.exe if found, None otherwise.
             On Linux, returns the Linux filesystem path (under drive_c/).
         """
+        if ras_version:
+            requested = Path(ras_version)
+            if requested.is_dir():
+                candidate = requested / "RasProcess.exe"
+                return candidate if candidate.is_file() else None
+            if requested.is_file():
+                candidate = requested.parent / "RasProcess.exe"
+                return candidate if candidate.is_file() else None
+
         if IS_WINDOWS:
+            if ras_version:
+                from .RasPrj import get_ras_exe
+
+                executable = get_ras_exe(ras_version)
+                if executable != "Ras.exe":
+                    candidate = Path(executable).parent / "RasProcess.exe"
+                    # Never substitute another installation when discovery found
+                    # the requested engine but its companion is missing.
+                    return candidate if candidate.is_file() else None
             # Original Windows behavior
             if ras_version:
                 paths = [
@@ -1814,7 +1832,8 @@ Step 5: Configure (optional — auto-detection usually works)
             RAS project object used to locate the ``.rasmap`` and version-matched
             RasProcess.exe when not supplied.
         ras_version : str, optional
-            Specific HEC-RAS version for the RasProcess.exe lookup.
+            HEC-RAS release, executable path, or installation directory for the
+            RasProcess.exe lookup. An explicit path keeps completion on that runtime.
         timeout : int, optional
             Command timeout in seconds (default 1800).
         semantic_stable_seconds : float, optional
@@ -2763,7 +2782,13 @@ Step 5: Configure (optional — auto-detection usually works)
     ):
         """Temporarily swap in a mapper-compatible HDF copy when required."""
         source = Path(hdf_path)
-        if not str(ras_version or "").startswith("7.0"):
+        version_label = str(ras_version or "")
+        if version_label.lower().endswith(".exe"):
+            version_label = PureWindowsPath(version_label).parent.name
+        version_label = {"70": "7.0", "701": "7.0.1", "702": "7.0.2"}.get(
+            version_label, version_label
+        )
+        if not version_label.startswith("7.0"):
             yield source
             return
 

@@ -381,6 +381,11 @@ class RasGeometryCompute:
         Mutates the geometry HDF in place. No subprocess; Windows only (on Linux,
         use ``RasProcess.compute_geometry()``).
 
+        If h5py has loaded HDF5 2.0 into this process, vendor HDF.PInvoke can
+        fail with a missing ``H5E_LOGFAIL_g`` export (observed on HEC-RAS 7.0.2).
+        Use ``RasProcess.compute_geometry()`` on a separate project copy to
+        isolate the vendor DLLs from Python's native dependencies.
+
         Parameters
         ----------
         geom_hdf_path, rasmap_path, ras_object, hecras_version

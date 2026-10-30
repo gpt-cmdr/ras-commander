@@ -776,6 +776,15 @@ The demonstrated change is earlier runtime sizing. These observations cover
 this fixture and installed HEC-RAS 7.0.1 runtime; the native vendor race remains
 separate from the supported opt-in mitigation.
 
+The same retained Davis fixture was tested with the official HEC-RAS 7.0.2
+Windows runtime. Unrestricted controls failed in two of six aggregate exports;
+`native_cpu_limit=1` completed 24/24 aggregate and 24/24 independent exports.
+The first successful 7.0.2 depth/WSE reference matched the retained 7.0.1
+reference exactly. All 54 calls restored the result HDF, `.rasmap`, and caller
+affinity, with no surviving helpers or staging files. The intermittent failure
+remains observable on 7.0.2; this bounded result supports the opt-in mitigation for
+this fixture, rather than a guarantee for every model.
+
 `scripts/qualification/qualify_native_pipe_maps.py` creates a disposable copy
 of a complete computed project and repeats both routes while recording runtime
 identity and restoration. It does not run a solver. Stage every dependency

@@ -44,9 +44,9 @@ Write API (Face Property Tables) — EXPERIMENTAL / NOT RECOMMENDED:
 These methods are not recommended for production or any other
 non-experimental use. They have been tested with HEC-RAS 7.0 April 2026
 ``*.p##.tmp.hdf`` artifacts in one Windows-preprocess/Linux-solve workflow.
-HEC-RAS 7.0.1 June 2026 is qualified for temporary-HDF schema and
-write/readback only; its Linux solve after mutation is untested. All other
-versions and workflows are untested. They require explicit
+HEC-RAS 7.0.1 June 2026 and 7.0.2 October 2026 are qualified for temporary-HDF
+schema and write/readback only; their Linux solves after mutation are untested.
+All other versions and workflows are untested. They require explicit
 acknowledgement, create a full-file backup, validate the HDF role and schema,
 and verify the write by reopening the file. Windows preprocessing overwrites
 these edits.
@@ -3260,13 +3260,14 @@ class HdfMesh:
     _LINUX_TMP_HDF_FILE_TYPE = "HEC-RAS Results"
     _LINUX_TMP_HDF_FILE_VERSIONS = frozenset({
         "HEC-RAS 7.0 April 2026", "HEC-RAS 7.0.1 June 2026",
+        "HEC-RAS 7.0.2 October 2026",
     })
     _LINUX_TMP_EXPERIMENTAL_NOTICE = (
         "EXPERIMENTAL / NOT RECOMMENDED FOR PRODUCTION OR OTHER "
         "NON-EXPERIMENTAL USE. HEC-RAS 7.0 April 2026 is qualified for "
         "the Windows-preprocess/Linux-solve workflow. HEC-RAS 7.0.1 June "
-        "2026 is qualified for temporary-HDF schema and write/readback only; "
-        "its Linux solve after mutation is untested; "
+        "2026 and 7.0.2 October 2026 are qualified for temporary-HDF schema "
+        "and write/readback only; their Linux solves after mutation are untested; "
         "all other versions and workflows are untested."
     )
     _FACE_PROPERTY_COLUMNS = (
@@ -3511,9 +3512,9 @@ class HdfMesh:
             EXPERIMENTAL. Not recommended for production or any other
             non-experimental use. HEC-RAS 7.0 April 2026 is qualified for the
             Windows-preprocess/Linux-solve workflow. HEC-RAS 7.0.1 June 2026
-            is qualified for temporary-HDF schema and write/readback only;
-            its Linux solve after mutation is untested. All other versions
-            and workflows are untested.
+            and 7.0.2 October 2026 are qualified for temporary-HDF schema and
+            write/readback only; their Linux solves after mutation are untested.
+            All other versions and workflows are untested.
 
         This API is limited to the proven two-phase workflow: preprocess a plan
         into ``*.p##.tmp.hdf``, modify that temporary result, then pass it to
@@ -4480,9 +4481,9 @@ class HdfMesh:
             EXPERIMENTAL. Not recommended for production or any other
             non-experimental use. HEC-RAS 7.0 April 2026 is qualified for the
             Windows-preprocess/Linux-solve workflow. HEC-RAS 7.0.1 June 2026
-            is qualified for temporary-HDF schema and write/readback only;
-            its Linux solve after mutation is untested. All other versions
-            and workflows are untested.
+            and 7.0.2 October 2026 are qualified for temporary-HDF schema and
+            write/readback only; their Linux solves after mutation are untested.
+            All other versions and workflows are untested.
 
         ``Pinned`` is informational metadata that may be recognized by
         RASMapper. It is ignored by Windows HEC-RAS preprocessing and does not

@@ -269,6 +269,23 @@ Use `RasGeometryCompute` for the Windows in-process path; use the documented
 method has a Wine equivalent. `RasProcess.complete_geometry()` is a deprecated
 alias for `compute_geometry()`.
 
+On Windows with HEC-RAS 7.0.2, use `RasProcess.compute_geometry()` when the
+in-process bridge fails with missing `H5E_LOGFAIL_g`. This was reproduced when
+h5py loaded HDF5 2.0 before the vendor bridge. The subprocess isolates the vendor
+DLLs; pass `ras_version=` with the exact executable path or installation
+directory. This route completed the public BaldEagle geometry and matched the
+7.0.1 control's three meshes dataset for dataset. It mutates geometry in place,
+so use a project copy.
+
+`Ras.exe` preprocessing requires a registered installation: an isolated 7.0.2
+administrative image failed with an unregistered per-release RAS Mapper COM
+class. After official installation and API TCU acceptance, Windows preprocessing
+and unsteady plan computation passed with the
+[single-plan launch workaround](../../user-guide/plan-execution.md#hec-ras-702-single-plan-execution).
+The genuine 7.0.2 temporary HDF also passed guarded schema/write-readback checks;
+Linux solve after mutation remains unqualified. Precipitation forcing, corner
+preparation, and Linux/Wine execution were not qualified on 7.0.2 by these checks.
+
 Read native output layers through `HdfXsec.get_river_edge_lines()`,
 `get_xs_interpolation_surface()` and `get_river_flow_paths()` in the
 [HDF API](../hdf.md). [234 — geometry completion](../../notebooks/234_rasmapper_geometry_completion.md)

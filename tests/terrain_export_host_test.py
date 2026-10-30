@@ -226,6 +226,10 @@ def test_windows_path_str_path_unc_and_spaces_remain_lossless(monkeypatch, value
         ("7.0.1", "7.0.1"),
         ("7.01", "7.0.1"),
         ("701", "7.0.1"),
+        ("7.0.2", "7.0.2"),
+        ("7.02", "7.0.2"),
+        ("702", "7.0.2"),
+        (r"C:\Program Files (x86)\HEC\HEC-RAS\7.0.2\Ras.exe", "7.0.2"),
         (r"C:\Program Files (x86)\HEC\HEC-RAS\7.0.1\Ras.exe", "7.0.1"),
         ("7.1", "7.1"),
         ("7.1.0", "7.1"),
@@ -271,7 +275,7 @@ def test_hecras_70_beta_is_rejected_as_prerelease_not_release_defect():
         message
         == "HEC-RAS '7.0 Beta' is unsupported by "
         "RasTerrain.export_rasmapper_terrain(). Supported versions are exactly "
-        "6.4.1, 6.5, 6.6, 7.0.1, and 7.1. Prerelease HEC-RAS builds are not "
+        "6.4.1, 6.5, 6.6, 7.0.1, 7.0.2, and 7.1. Prerelease HEC-RAS builds are not "
         "accepted by this production API; use a qualified official release instead."
     )
     assert "minimum-Y" not in message
@@ -336,7 +340,7 @@ def test_public_api_rejects_unsupported_rasprj_before_filesystem_work(tmp_path):
 
     with pytest.raises(
         ValueError,
-        match="exactly 6\\.4\\.1, 6\\.5, 6\\.6, 7\\.0\\.1, and 7\\.1",
+        match="exactly 6\\.4\\.1, 6\\.5, 6\\.6, 7\\.0\\.1, 7\\.0\\.2, and 7\\.1",
     ):
         RasTerrain.export_rasmapper_terrain(
             tmp_path / "missing.prj",

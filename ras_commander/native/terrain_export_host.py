@@ -34,6 +34,7 @@ SUPPORTED_TERRAIN_EXPORT_VERSIONS = {
     (6, 5, 0): "6.5",
     (6, 6, 0): "6.6",
     (7, 0, 1): "7.0.1",
+    (7, 0, 2): "7.0.2",
     (7, 1, 0): "7.1",
 }
 _HELPER_NAME = "RasMapperTerrainExportHelper.exe"
@@ -74,6 +75,7 @@ def _hecras_version_key(
         "67": (6, 7, 0),
         "70": (7, 0, 0),
         "701": (7, 0, 1),
+        "702": (7, 0, 2),
         "71": (7, 1, 0),
     }
     if text in compact_aliases:
@@ -136,7 +138,7 @@ def _reject_prerelease_hecras_version(version: Any) -> None:
     raise ValueError(
         f"HEC-RAS {version!r} is unsupported by "
         "RasTerrain.export_rasmapper_terrain(). Supported versions are exactly "
-        f"6.4.1, 6.5, 6.6, 7.0.1, and 7.1.{reason}"
+        f"6.4.1, 6.5, 6.6, 7.0.1, 7.0.2, and 7.1.{reason}"
     )
 
 
@@ -175,7 +177,7 @@ def _require_supported_hecras_version(
     raise ValueError(
         f"HEC-RAS {version!r} is unsupported by "
         "RasTerrain.export_rasmapper_terrain(). Supported versions are exactly "
-        f"6.4.1, 6.5, 6.6, 7.0.1, and 7.1.{reason}"
+        f"6.4.1, 6.5, 6.6, 7.0.1, 7.0.2, and 7.1.{reason}"
     )
 
 

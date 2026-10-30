@@ -324,9 +324,11 @@ endpoint ring, or selected repaired component.
 > **EXPERIMENTAL — not recommended for production or any other
 > non-experimental use.** HEC-RAS 7.0 April 2026 has been tested in one
 > Windows-preprocess/Linux-solve `*.p##.tmp.hdf` workflow. The exact
-> `HEC-RAS 7.0.1 June 2026` version is also accepted after native temporary-file
-> schema and write/readback qualification; its Linux solve after mutation
-> remains untested. All other HEC-RAS versions and workflows are untested. They are not general land-cover or geometry-authoring APIs.
+> `HEC-RAS 7.0.1 June 2026` and `HEC-RAS 7.0.2 October 2026` versions are also
+> accepted after native temporary-file schema and write/readback qualification;
+> their Linux solves after mutation remain untested. All other HEC-RAS versions
+> and workflows are untested. These are not general land-cover or
+> geometry-authoring APIs.
 
 The methods require `acknowledge_unsupported=True`, validate the exact
 temporary-result role and schema, retain a unique full-file backup, emit a
