@@ -2184,18 +2184,25 @@ class HdfInfiltration:
     def calculate_weighted_parameters(soil_stats: pd.DataFrame, 
                                    infiltration_params: dict) -> dict:
         """Calculate weighted infiltration parameters based on soil statistics
-        
+
         Args:
             soil_stats: DataFrame with soil statistics
             infiltration_params: Dictionary of infiltration parameters by mukey,
                 e.g. ``{mukey: get_infiltration_parameters(path, mukey)}``.
-                Every entry must have the same keys.
 
         Returns:
             Dictionary of weighted average infiltration parameters, keyed like
-            the entries of ``infiltration_params`` (the legacy keys
+            the first entry of ``infiltration_params`` (the legacy keys
             ``Initial Loss (in)``, ``Constant Loss Rate (in/hr)`` and
-            ``Impervious Area (%)``, all 0.0, when it is empty).
+            ``Impervious Area (%)``, all 0.0, when it is empty). A parameter
+            is left out of the result (and a warning names it) when any
+            contributing class does not have it: the key is missing, the value
+            is NaN, or it is ``-9999.0``. HEC-RAS layers mark unset parameters
+            with ``-9999.0`` (for example ``Residual Soil Water Content`` and
+            ``Pore Size Distribution Index`` in 7.0.1 Green-Ampt layers); no
+            attribute declares it, and it is the only negative value they
+            store. A contributing class is a ``soil_stats`` mukey present in
+            ``infiltration_params``.
         """
         total_weight = soil_stats['Percentage'].sum()
 
@@ -2208,19 +2215,45 @@ class HdfInfiltration:
                 'Constant Loss Rate (in/hr)': 0.0,
                 'Impervious Area (%)': 0.0
             }
-        
+
+        unavailable = set()
         for _, row in soil_stats.iterrows():
             mukey = row['mukey']
             weight = row['Percentage'] / total_weight
-            
+
             if mukey in infiltration_params:
+                class_params = infiltration_params[mukey]
                 for param in weighted_params:
-                    weighted_params[param] += (
-                        infiltration_params[mukey][param] * weight
-                    )
-        
-        return weighted_params
-    
+                    if param in unavailable:
+                        continue
+                    value = class_params.get(param)
+                    if not HdfInfiltration._is_available_parameter(value):
+                        unavailable.add(param)
+                        continue
+                    weighted_params[param] += float(value) * weight
+
+        if unavailable:
+            logger.warning(
+                "Weighted infiltration parameters omit %s: not available "
+                "(missing, NaN or -9999) for at least one contributing class",
+                ", ".join(sorted(unavailable)),
+            )
+        return {k: v for k, v in weighted_params.items() if k not in unavailable}
+
+    # HEC-RAS layer tables store -9999.0 for a parameter that is not set.
+    _UNSET_PARAMETER_VALUE = -9999.0
+
+    @staticmethod
+    def _is_available_parameter(value: Any) -> bool:
+        """True for a finite value other than the HEC-RAS unset marker."""
+        if value is None:
+            return False
+        try:
+            number = float(value)
+        except (TypeError, ValueError):
+            return False
+        return bool(np.isfinite(number)) and number != HdfInfiltration._UNSET_PARAMETER_VALUE
+
 
     @staticmethod
     def _get_table_info(hdf_file: h5py.File, table_path: str) -> Tuple[List[str], List[str], List[str]]:

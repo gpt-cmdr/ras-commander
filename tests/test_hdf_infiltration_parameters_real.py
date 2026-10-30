@@ -163,3 +163,44 @@ def test_weighted_parameters_use_returned_keys():
     for key, value in weighted.items():
         assert value == pytest.approx(
             0.75 * params["167"][key] + 0.25 * params["33"][key])
+
+
+def test_weighted_parameters_skip_unavailable_sentinel():
+    """7.0.1 Green-Ampt stores -9999 for two parameters: never average it."""
+    path = FIXTURE_DIR / "greenampt_701.hdf"
+    classes = ["Mixed Forest : B", "Mixed Forest : A"]
+    params = {c: _call("h5py", path, c) for c in classes}
+    with h5py.File(path, "r") as hdf:
+        table = hdf["Variables"][()]
+    rows = {row["Name"].decode(): row for row in table}
+    sentinel = [k for k in table.dtype.names
+                if k != "Name" and any(float(rows[c][k]) == -9999.0 for c in classes)]
+    assert sentinel == ["Residual Soil Water Content", "Pore Size Distribution Index"]
+    # get_infiltration_parameters still returns exactly what is stored.
+    assert params[classes[0]]["Residual Soil Water Content"] == -9999.0
+
+    stats = pd.DataFrame({"mukey": classes, "Percentage": [60.0, 40.0]})
+    weighted = HdfInfiltration.calculate_weighted_parameters(stats, params)
+
+    for key in sentinel:
+        assert key not in weighted
+    available = [k for k in params[classes[0]] if k not in sentinel]
+    assert list(weighted) == available
+    for key in available:
+        assert weighted[key] == pytest.approx(
+            0.6 * float(rows[classes[0]][key]) + 0.4 * float(rows[classes[1]][key]))
+
+
+@pytest.mark.parametrize("bad", [-9999.0, float("nan"), None])
+def test_weighted_parameters_drop_parameter_any_class_lacks(bad):
+    params = {
+        "a": {"Curve Number": 70.0, "Abstraction Ratio": 0.2},
+        "b": {"Curve Number": 80.0, "Abstraction Ratio": 0.2},
+    }
+    if bad is None:
+        del params["b"]["Abstraction Ratio"]
+    else:
+        params["b"]["Abstraction Ratio"] = bad
+    stats = pd.DataFrame({"mukey": ["a", "b"], "Percentage": [50.0, 50.0]})
+    weighted = HdfInfiltration.calculate_weighted_parameters(stats, params)
+    assert weighted == {"Curve Number": pytest.approx(75.0)}
