@@ -1,0 +1,49 @@
+Flow Title=7 Flow Profiles
+Version=Version 2.2
+Number of Profiles= 7 
+Profile Names=PF#1        ,PF#2        ,PF#3        ,PF#4        ,PF#5        ,PF#6        ,PF#7        
+River Rch & RM=Nittany River,Weir Reach      ,60.1    
+    5000   10000   20000   30000   40000   50000   75000
+Boundary for River Rch & Prof#=Nittany River,Weir Reach      , 1 
+Up Type= 0 
+Dn Type= 4 
+Dn Rating Curve # Pts= 20 
+    5000     -20   10000     -15   20000      -4   33200       5   37600       6
+   42000     7.3   47500     8.6   53000      10   59000    11.3   65000    12.6
+   71500    13.8   79000    14.8   85500    15.4   93000    16.6  101000    17.4
+  108000    18.3  116500    19.2  126000    20.2  135000    21.2  152000    23.2
+Boundary for River Rch & Prof#=Nittany River,Weir Reach      , 2 
+Up Type= 0 
+Dn Type= 0 
+Boundary for River Rch & Prof#=Nittany River,Weir Reach      , 3 
+Up Type= 0 
+Dn Type= 0 
+Boundary for River Rch & Prof#=Nittany River,Weir Reach      , 4 
+Up Type= 0 
+Dn Type= 0 
+Boundary for River Rch & Prof#=Nittany River,Weir Reach      , 5 
+Up Type= 0 
+Dn Type= 0 
+Boundary for River Rch & Prof#=Nittany River,Weir Reach      , 6 
+Up Type= 0 
+Dn Type= 0 
+Boundary for River Rch & Prof#=Nittany River,Weir Reach      , 7 
+Up Type= 0 
+Dn Type= 0 
+Gate Openings=Nittany River   ,Weir Reach      ,41.75   ,Left Group      
+       0       0       3       2       6       3       7       4       9       5
+      10       5      10       5
+Gate Openings=Nittany River   ,Weir Reach      ,41.75   ,Center Group    
+       5       5       5       5       6       5       8       5       9       5
+      10       5      10       5
+Gate Openings=Nittany River   ,Weir Reach      ,41.75   ,Right Group     
+       0       0       3       2       6       3       7       4       9       5
+      10       5      10       5
+DSS Import StartDate=
+DSS Import StartTime=
+DSS Import EndDate=
+DSS Import EndTime=
+DSS Import GetInterval= 0 
+DSS Import Interval=
+DSS Import GetPeak= 0 
+DSS Import FillOption= 0 
