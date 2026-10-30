@@ -15,6 +15,72 @@ from pathlib import Path
 import numpy as np
 
 METHOD_ID = "rasmapper-sloping-velocity/0"
+DERIVED_METHOD_ID = "rasmapper-depth-velocity-products/1"
+#: Derived products in engine stream order.
+DERIVED = ("depth_x_velocity", "depth_x_velocity_squared", "froude")
+#: RAS Mapper's float32 gravity constants (``SharedData.GravityUSC``/``GravitySI``).
+GRAVITY = {"US Customary": 32.174, "SI Units": 9.80665}
+VELOCITY_DEPTHS = ("rendered", "horizontal")
+
+
+def validate_products(derived_products, velocity_depth) -> tuple:
+    """Return derived products as a tuple after checking names and the depth mode."""
+    if velocity_depth not in VELOCITY_DEPTHS:
+        raise ValueError(f"velocity_depth must be one of {VELOCITY_DEPTHS}")
+    if isinstance(derived_products, str):
+        raise ValueError("derived_products must be a sequence of product names")
+    products = tuple(derived_products or ())
+    if len(set(products)) != len(products) or any(p not in DERIVED for p in products):
+        raise ValueError(f"derived_products must be unique names from {DERIVED}")
+    return products
+
+
+def gravity(hdf: Path) -> float:
+    """RAS Mapper's gravity constant for the plan's unit system."""
+    import h5py
+
+    with h5py.File(hdf, "r") as source:
+        units = source.attrs.get("Units System")
+    if isinstance(units, bytes):
+        units = units.decode()
+    if units not in GRAVITY:
+        from .errors import FimUnsupportedError
+
+        raise FimUnsupportedError(f"unknown plan unit system {units!r}; Froude needs gravity")
+    return GRAVITY[units]
+
+
+def require_engine(method: dict, render_mode: str, velocity_depth: str, products) -> None:
+    """Check the engine advertises what a velocity request needs."""
+    from .errors import FimUnsupportedError
+
+    if method.get("velocity") != METHOD_ID:
+        raise FimUnsupportedError(
+            f"engine sloping method lacks {METHOD_ID}; install ras-commander-fast-map "
+            "with velocity support"
+        )
+    if render_mode != "sloping" and render_mode not in (method.get("velocity_render_modes") or ()):
+        raise FimUnsupportedError(
+            f"engine does not advertise velocity for render_mode={render_mode!r} "
+            "(velocity_render_modes); install a newer ras-commander-fast-map"
+        )
+    if velocity_depth != "rendered" and velocity_depth not in (method.get("velocity_depth") or ()):
+        raise FimUnsupportedError("engine does not advertise velocity_depth='horizontal'")
+    if products and (
+        method.get("derived_method_id") != DERIVED_METHOD_ID
+        or not set(products) <= set(method.get("derived_products") or ())
+    ):
+        raise FimUnsupportedError(
+            f"engine does not advertise {DERIVED_METHOD_ID} for {list(products)}"
+        )
+
+
+def derived_path(folder: Path, profile: str, product: str) -> Path:
+    return Path(folder) / f"13_{profile}_{product}.tif"
+
+
+def max_derived_path(folder: Path, product: str) -> Path:
+    return Path(folder) / f"14_max_{product}.tif"
 
 
 def polyline_lengths(normals, facepoints, face_facepoints, perimeter_info, perimeter_values):

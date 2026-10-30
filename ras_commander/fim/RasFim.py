@@ -90,6 +90,9 @@ MANIFEST_COLUMNS = [
     "flooded_pixels",
     "error",
     "velocity_tif",
+    "depth_x_velocity_tif",
+    "depth_x_velocity_squared_tif",
+    "froude_tif",
 ]
 
 PathLike = Union[str, os.PathLike]
@@ -635,6 +638,8 @@ class RasFim:
         invalid_cells: str = "repair",
         terrain_crs_fnv1a64: Optional[str] = None,
         storage_areas: bool = False,
+        velocity_depth: str = "rendered",
+        derived_products: Sequence[str] = (),
     ) -> pd.DataFrame:
         """Map 2D HDF WSE with the experimental Rust sloping engine.
 
@@ -758,12 +763,25 @@ class RasFim:
                 float32, NaN nodata, model velocity units) to each row. Max
                 uses ``Maximum Face Velocity`` with Maximum Water Surface; a
                 timestep index uses ``Face Velocity`` at that output time.
-                Face normals use face polyline lengths. Drawn where rendered
-                depth > 0; native velocity masks can differ from that on a
-                small fraction of edge pixels, while values on common pixels
-                match native Max maps on the qualified models (see
-                ``attrs["velocity"]``). Plain sloping with HDF profiles only; refuses
+                Face normals use face polyline lengths. RAS Mapper's velocity
+                values do not depend on the render mode; it clips them with the
+                active mode's depth. Drawn where the ``velocity_depth`` depth
+                is > 0. Plain ``sloping`` and plain ``slopingPretty`` (no
+                shallow or depth-weighted options) with HDF profiles; refuses
                 ``wsel_profiles``, ``template_raster`` and storage-area plans.
+                ``slopingPretty`` needs an engine advertising it in
+                ``velocity_render_modes``.
+            velocity_depth: ``"rendered"`` (default) clips velocity with this
+                request's rendered depth. ``"horizontal"`` clips it with the
+                horizontal cell-constant depth, reproducing RAS Mapper's
+                horizontal-mode velocity; the WSE/depth products stay sloping.
+            derived_products: Per-profile products from the clipping depth and
+                velocity: ``"depth_x_velocity"``, ``"depth_x_velocity_squared"``
+                and ``"froude"`` (``13_<profile>_<product>.tif``, added to each
+                row as ``<product>_tif``). Requires ``velocity=True`` and an
+                engine advertising ``rasmapper-depth-velocity-products/1``.
+                For Max, use :meth:`map_derived_max`: RAS Mapper's Max of these
+                products is the per-time product's maximum, not Max d x Max v.
             invalid_cells: Pixel ownership for physical cells whose face
                 polylines do not form a valid polygon (for example, a face that
                 crosses back over another face of the same cell). HEC-RAS
@@ -840,7 +858,8 @@ class RasFim:
             max_inflight_profiles=max_inflight_profiles,
             template_raster=template_raster, terrain_hdf=terrain_hdf,
             velocity=velocity, invalid_cells=invalid_cells, product_writer=product_writer,
-            terrain_crs_fnv1a64=terrain_crs_fnv1a64, storage_areas=storage_areas)
+            terrain_crs_fnv1a64=terrain_crs_fnv1a64, storage_areas=storage_areas,
+            velocity_depth=velocity_depth, derived_products=derived_products)
 
     #: Engine method ID of storage-area level-pool surfaces.
     STORAGE_AREA_METHOD = "storage-area-level-pool/1"
@@ -874,6 +893,101 @@ class RasFim:
             and methods[kind].get("storage_area_surfaces") == _storage_areas.METHOD_ID
             for kind in ("sloping", "horizontal", "whole_simulation")
         )
+
+    @staticmethod
+    @log_call
+    def map_derived_max(
+        hdf_path: PathLike, terrain_path: PathLike, output_folder: PathLike, *,
+        products: Sequence[str] = ("depth_x_velocity", "depth_x_velocity_squared", "froude"),
+        render_mode: str = "sloping",
+        velocity_depth: str = "rendered",
+        bbox: Optional[Sequence[float]] = None, polygon: Any = None,
+        polygon_layer: Optional[str] = None, aoi_crs: Any = None,
+        engine_path: Optional[PathLike] = None, threads: int = 1,
+        max_inflight_profiles: int = 1,
+        max_working_mib: int = 2048, timeout: Optional[float] = None,
+        terrain_hdf: Optional[PathLike] = None,
+        invalid_cells: str = "repair",
+        terrain_crs_fnv1a64: Optional[str] = None,
+    ) -> pd.DataFrame:
+        """Map RAS Mapper's Max D x V, D x V^2 and Froude in one time-series pass.
+
+        RAS Mapper computes these Max products per stored output time from that
+        time's rendered depth and velocity, then keeps the pixelwise maximum;
+        the valid area is the union over all times. That is not Max depth
+        times Max velocity. This method stages every stored output time and
+        lets the engine reduce them (``reduce_max/1``) without writing
+        per-time products.
+
+        Args:
+            hdf_path: Computed 2D plan-results HDF.
+            terrain_path: Terrain GeoTIFF, as for :meth:`map_sloping_profiles`.
+            output_folder: New or empty directory.
+            products: Subset of ``depth_x_velocity``,
+                ``depth_x_velocity_squared`` and ``froude``.
+            render_mode: ``"sloping"`` or ``"slopingPretty"`` (plain).
+            velocity_depth: ``"rendered"`` or ``"horizontal"`` (RAS Mapper's
+                horizontal mode: horizontal depth and its velocity clip).
+            bbox: Optional output bounds in ``aoi_crs`` or the model CRS.
+            polygon: Optional polygon geometry, frame or vector-file AOI.
+            polygon_layer: Layer name when the AOI file has multiple layers.
+            aoi_crs: Coordinate reference system of the AOI.
+            engine_path: Matching engine executable.
+            threads: Rust worker count, 1 through 64.
+            max_inflight_profiles: Concurrent output times.
+            max_working_mib: Planned engine memory admission budget.
+            timeout: Engine lifetime in seconds.
+            terrain_hdf: Optional registered terrain HDF for the priority-1
+                source TIFF, as for :meth:`map_sloping_profiles`.
+            invalid_cells: Invalid-cell ownership policy.
+            terrain_crs_fnv1a64: Engine WKT hash, as for :meth:`map_profiles`.
+
+        Returns:
+            DataFrame with one row per product (``product``, ``tif``,
+            ``valid_pixels``); ``attrs["max_derived"]`` and the JSON manifest
+            hold the evidence, ``attrs["velocity"]`` the method.
+
+        Raises:
+            FimUnsupportedError: Unsupported model, engine capability or scope.
+            FimEngineError: Engine failure or inconsistent output.
+            ValueError: Invalid products or options.
+        """
+        _require_dependencies(triangulation=False)
+        import h5py
+        from . import _sloping
+
+        with h5py.File(Path(hdf_path), "r") as source:
+            stamps = source.get(
+                "Results/Unsteady/Output/Output Blocks/Base Output/Unsteady Time Series/Time"
+            )
+            if stamps is None:
+                raise FimUnsupportedError("Max derived products need unsteady time series output")
+            count = int(stamps.shape[0])
+        if count < 1:
+            raise FimUnsupportedError("plan has no stored output times")
+        frame = _sloping.map_profiles(
+            hdf_path, terrain_path, output_folder,
+            profiles={f"t{k}": k for k in range(count)}, render_mode=render_mode,
+            bbox=bbox, polygon=polygon, polygon_layer=polygon_layer, aoi_crs=aoi_crs,
+            engine_path=engine_path, threads=threads,
+            max_working_mib=max_working_mib, timeout=timeout,
+            max_inflight_profiles=max_inflight_profiles, terrain_hdf=terrain_hdf,
+            velocity=True, invalid_cells=invalid_cells,
+            terrain_crs_fnv1a64=terrain_crs_fnv1a64, velocity_depth=velocity_depth,
+            derived_products=tuple(products), _reduce_max=True,
+        )
+        reduced = frame.attrs.get("max_derived", {})
+        valid = reduced.get("valid_pixels", {})
+        result = pd.DataFrame(
+            [
+                {"product": product, "tif": reduced.get("products", {}).get(f"{product}_tif"),
+                 "valid_pixels": valid.get(product)}
+                for product in products
+            ],
+            columns=["product", "tif", "valid_pixels"],
+        )
+        result.attrs.update(frame.attrs)
+        return result
 
     @staticmethod
     @log_call
@@ -937,16 +1051,18 @@ class RasFim:
           simulation start** (``Plan Information/Simulation Start Time``),
           float32;
         - ``percent_inundated``: ``100 * wet output times / all output times``;
-        - ``duration`` (needs ``allow_unqualified=True``): hours from arrival
-          to the first dry output time after the last wet one, or to the last
-          wet time when that dry time is the final output or there is none.
+        - ``duration`` (qualified with an engine advertising ``duration_rule``
+          ``rasmapper-backward-window-recession/1``; older engines need
+          ``allow_unqualified=True``): hours from arrival to RAS Mapper's
+          recession time, found by its backward search over the monotone
+          windows between the cell's water-surface extrema.
 
         Never-wet pixels are NaN. Arrival time and percent inundated are
         qualified against RAS Mapper output: pixel conformance with native
         HEC-RAS 7.0.1 stored maps on Davis p02 and BaldEagleCrkMulti2D bridges
         p05 at a 0.5 ft threshold. RAS Mapper produces the same products in
-        horizontal and sloping render modes on those models. Duration differs
-        on a few recession pixels by one output interval and is unqualified;
+        horizontal and sloping render modes on those models. Duration with
+        the native recession rule matches the same references in every pixel;
         irregular output intervals are refused unless ``allow_unqualified``.
 
         Scope: pure 2D plans. Plans with 1D elements are refused. Plans with
@@ -963,7 +1079,8 @@ class RasFim:
                 ``duration``. Defaults to the two qualified products.
             threshold: Wet depth threshold in model vertical units (RAS Mapper's
                 arrival depth; 0.5 is a half foot only in feet models).
-            allow_unqualified: Required for ``duration`` and irregular intervals.
+            allow_unqualified: Required for irregular intervals, and for
+                ``duration`` on engines without the native recession rule.
             terrain_hdf: Optional registered terrain HDF whose unmodified
                 priority-1 source TIFF is ``terrain_path``. Horizontal
                 rendering refuses any mapped pixel outside that source's

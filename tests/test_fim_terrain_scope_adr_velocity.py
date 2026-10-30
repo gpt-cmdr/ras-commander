@@ -199,7 +199,6 @@ def test_engine_refusals_are_unsupported_errors(tmp_path):
 @pytest.mark.parametrize(
     "kwargs, error",
     [
-        (dict(products=("duration",), threshold=0.5), FimUnsupportedError),
         (dict(products=("arrival_time", "arrival_time"), threshold=0.5), ValueError),
         (dict(products=("velocity",), threshold=0.5), ValueError),
         (dict(products="arrival_time", threshold=0.5), ValueError),
@@ -248,7 +247,8 @@ def test_whole_simulation_refuses_storage_areas_and_missing_capability(model_fil
 @pytest.mark.parametrize(
     "kwargs, message",
     [
-        (dict(velocity=True, render_mode="slopingPretty"), "plain sloping"),
+        (dict(velocity=True, render_mode="slopingPretty", reduce_shallow_to_horizontal=True),
+         "plain sloping"),
         (dict(velocity=True, template_raster="x.tif"), "template_raster"),
         (dict(terrain_hdf="T.hdf", render_mode="slopingPretty"), "plain sloping"),
     ],
@@ -269,6 +269,69 @@ def test_sloping_velocity_rejects_supplied_profiles_and_non_bool(model_files, tm
                                     wsel_profiles=pd.DataFrame())
     with pytest.raises(ValueError, match="boolean"):
         RasFim.map_sloping_profiles(hdf, tif, tmp_path / "b", velocity=1)
+
+
+def test_duration_needs_the_native_recession_rule_or_opt_in(model_files, tmp_path, monkeypatch):
+    hdf, tif, _ = model_files
+    whole = {"method_id": _whole_simulation.METHOD_ID}
+    monkeypatch.setattr(_engine, "engine_method", lambda engine: {
+        "whole_simulation": whole,
+        "horizontal": {"method_id": "horizontal-cell-constant/2", "native_ownership": True},
+    })
+    with pytest.raises(FimUnsupportedError, match="duration_rule"):
+        RasFim.map_whole_simulation(hdf, tif, tmp_path / "a", threshold=0.5,
+                                    products=("duration",))
+    assert not (tmp_path / "a").exists()
+    # With the advertised rule the request proceeds past the gate (and fails later on
+    # this synthetic, empty HDF).
+    whole["duration_rule"] = _whole_simulation.DURATION_RULE
+    with pytest.raises(Exception) as caught:
+        RasFim.map_whole_simulation(hdf, tif, tmp_path / "b", threshold=0.5,
+                                    products=("duration",))
+    assert "duration_rule" not in str(caught.value)
+
+
+def test_velocity_product_controls_and_capabilities(model_files, tmp_path, monkeypatch):
+    from ras_commander.fim import _velocity
+
+    hdf, tif, _ = model_files
+    with pytest.raises(ValueError, match="velocity_depth"):
+        RasFim.map_sloping_profiles(hdf, tif, tmp_path / "a", velocity=True, velocity_depth="max")
+    with pytest.raises(ValueError, match="derived_products"):
+        RasFim.map_sloping_profiles(hdf, tif, tmp_path / "a", velocity=True,
+                                    derived_products=("shear",))
+    with pytest.raises(ValueError, match="require velocity"):
+        RasFim.map_sloping_profiles(hdf, tif, tmp_path / "a", derived_products=("froude",))
+    method = {"sloping": {"method_id": "rasmapper-plain-sloping/1", "stream_outputs": True,
+                          "enhanced_options": True, "native_donation_history": True,
+                          "enhanced_method_id": "rasmapper-sloping-with-faces/1",
+                          "velocity": _velocity.METHOD_ID}}
+    monkeypatch.setattr(_engine, "engine_method", lambda engine: method)
+    with pytest.raises(FimUnsupportedError, match="velocity_render_modes"):
+        RasFim.map_sloping_profiles(hdf, tif, tmp_path / "b", velocity=True,
+                                    render_mode="slopingPretty")
+    with pytest.raises(FimUnsupportedError, match="velocity_depth"):
+        RasFim.map_sloping_profiles(hdf, tif, tmp_path / "c", velocity=True,
+                                    velocity_depth="horizontal")
+    with pytest.raises(FimUnsupportedError, match=_velocity.DERIVED_METHOD_ID):
+        RasFim.map_sloping_profiles(hdf, tif, tmp_path / "d", velocity=True,
+                                    derived_products=("depth_x_velocity",))
+    assert not any((tmp_path / name).exists() for name in "abcd")
+
+
+def test_gravity_follows_the_plan_unit_system(tmp_path):
+    import h5py
+    from ras_commander.fim import _velocity
+
+    for units, expected in (("US Customary", 32.174), ("SI Units", 9.80665)):
+        path = tmp_path / f"{units[:2]}.hdf"
+        with h5py.File(path, "w") as handle:
+            handle.attrs["Units System"] = np.bytes_(units)
+        assert _velocity.gravity(path) == expected
+    with h5py.File(tmp_path / "x.hdf", "w"):
+        pass
+    with pytest.raises(FimUnsupportedError, match="unit system"):
+        _velocity.gravity(tmp_path / "x.hdf")
 
 
 def test_sloping_capability_and_storage_area_refusals(model_files, tmp_path, monkeypatch):
@@ -317,7 +380,12 @@ def test_public_signatures_expose_new_controls():
     assert whole["products"].default == ("arrival_time", "percent_inundated")
     assert whole["threshold"].default is inspect.Parameter.empty
     assert whole["allow_unqualified"].default is False
-    for name in ("top_priority_terrain_source", "map_whole_simulation"):
+    assert sloping["velocity_depth"].default == "rendered"
+    assert tuple(sloping["derived_products"].default) == ()
+    derived = inspect.signature(RasFim.map_derived_max).parameters
+    assert tuple(derived["products"].default) == (
+        "depth_x_velocity", "depth_x_velocity_squared", "froude")
+    for name in ("top_priority_terrain_source", "map_whole_simulation", "map_derived_max"):
         assert isinstance(RasFim.__dict__[name], staticmethod)
 
 

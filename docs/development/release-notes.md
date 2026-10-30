@@ -20,6 +20,19 @@ explicitly distinct from native stored polygons; existing raster methods retain
 their numerical contracts. See the [API](../api/fim.md#deterministic-inundation-boundaries)
 and [qualification](fim-mapping-performance.md#deterministic-vector-boundary-qualification)
 for terrain and engine prerequisites, measured differences and scope.
+**FIM velocity, derived products and duration (needs a Fast-Map engine advertising the new capabilities)**
+
+- `map_sloping_profiles(velocity=True)` accepts plain `slopingPretty`
+  (`velocity_render_modes`), `velocity_depth="horizontal"` (RAS Mapper's
+  horizontal-mode velocity) and `derived_products` (D x V, D x V^2, Froude;
+  `rasmapper-depth-velocity-products/1`). The manifest gains
+  `depth_x_velocity_tif`, `depth_x_velocity_squared_tif` and `froude_tif`.
+- `RasFim.map_derived_max()` maps RAS Mapper's Max of those products in one
+  pass over every stored output time (`reduce_max/1`).
+- `map_whole_simulation` delivers duration without `allow_unqualified` when
+  the engine advertises `duration_rule` `rasmapper-backward-window-recession/1`.
+- Native HEC-RAS 7.0.1 qualification: see the
+  [velocity table](../api/fim.md#sloping-velocity).
 
 - **DSS shadow mode labels HEC's DSS6 "no data" rule.** When a native read
   raises not-found, `RasDss` shadow mode repeats it with dss-commander's
