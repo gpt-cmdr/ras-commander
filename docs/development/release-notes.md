@@ -9,6 +9,16 @@ alone does not identify a development checkout.
 
 ### Unreleased
 
+- **`HdfLandCover.get_landcover_raster_map` reads legacy land-cover layers.**
+  Legacy RAS Mapper layers, still shipped in the HEC-RAS 7.0 example projects
+  (Muncie `LandCover/*.hdf`, Weise_2D `LandCover.hdf`, the 6.1 BaldEagle
+  `LandUse.hdf`), store their classes as parallel `IDs`, `Names` and
+  `ManningsN` arrays and no `Raster Map`. The method used to log "No Raster
+  Map" and return `None` for them, so `estimate_final_mannings_raster` and
+  `compute_final_mannings_raster` returned `None` on those projects. It now
+  maps each stored ID (the pixel value) to its name and stored Manning's n;
+  arrays of different lengths are refused. Native output is identical to h5py
+  on all six public legacy layers.
 - **`HdfInfiltration.get_soils_raster_stats` runs natively in `auto` mode.**
   Its reads were already the real layout (the soils layer's `Raster Map` and
   its raster); the routed equivalence case used to pass the infiltration layer
