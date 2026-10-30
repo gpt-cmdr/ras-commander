@@ -20,9 +20,6 @@ from ras_commander import fast_hdf
 DECORATING_MODULES = [
     "ras_commander.RasEncroachments",
     "ras_commander.RasFlowOptimization",
-    "ras_commander.RasUnsteady",
-    "ras_commander._container_compute",
-    "ras_commander._landcover_native",
 ]
 
 

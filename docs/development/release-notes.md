@@ -66,6 +66,18 @@ alone does not identify a development checkout.
   (`PF_IC_02` per normal-depth slope, with river, reach, station and
   location), so differing slopes no longer switch the check off. Steady
   results are unchanged.
+- **Three internal HDF readers now run natively in `auto` mode, values
+  unchanged.** The precipitation-ratio preflight used by the
+  `RasUnsteady` gridded-precipitation writers (it reads the `Ratio`
+  attribute that HEC-RAS stores on
+  `Event Conditions/Meteorology/Precipitation`), the container worker's
+  prepared-HDF simulation window check, and the RASMapper land-cover
+  postcondition (`IDs` / `Raster Map` class IDs) no longer force h5py.
+  Native output is identical to h5py on land-cover layers from the HEC-RAS
+  6.5, 6.6 and 7.0 example projects and a 7.0.1-authored layer,
+  a HEC-RAS 7.0.1 prepared `.tmp.hdf`, and HEC-RAS 7.0.1 unsteady and plan
+  HDFs carrying a precipitation `Ratio`. No behaviour change.
+
 - **`HdfPump.get_pump_station_summary` now returns real data.** It used to
   read `/Results/Unsteady/Summary/Pump Station`, which HEC-RAS never writes,
   so it always returned an empty DataFrame. It now returns one row per pump

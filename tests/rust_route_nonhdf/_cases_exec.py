@@ -115,6 +115,14 @@ def _validate_result(path):
         return cc._validate_result(path, None, "01", meshes, window, property_tables=False)
 
 
+def _prepared_tmp(path):
+    """``_prepared_window`` on a HEC-RAS-written ``*.p##.tmp.hdf`` (classified ``sidecar``)."""
+    if not Path(path).name.lower().endswith(".tmp.hdf"):
+        import pytest
+        pytest.skip("not a prepared *.tmp.hdf")
+    return _cc()._prepared_window(path)
+
+
 def _plan_info(func):
     def call(path):
         with _open(path) as hdf:
@@ -167,7 +175,10 @@ CASES = {
         lambda p: _cc()._mesh(p, property_tables=False), kinds=PLAN, helper="_container_compute.run_compute"),
     "_container_compute._prepared_window": Case(
         lambda p: _cc()._prepared_window(p), kinds=ANY_RAS, helper="_container_compute.run_compute",
-        note="real fixtures carry /Results or lack Plan Information: error paths only"),
+        note="plan/geom fixtures carry /Results or lack Plan Information: error paths only"),
+    "_container_compute._prepared_window[tmp]": Case(
+        _prepared_tmp, kinds={"sidecar"}, helper="_container_compute.run_compute",
+        note="prepared *.p##.tmp.hdf: reads Simulation Start/End Time"),
     "_container_compute._validate_result": Case(
         _validate_result, kinds=PLAN, helper="_container_compute.run_compute"),
     "ExecutionEvidence._observed_hdf_version": Case(

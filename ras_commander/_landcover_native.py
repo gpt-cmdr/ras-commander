@@ -33,7 +33,6 @@ from .LoggingConfig import get_logger
 from .RasUtils import RasUtils
 from .fast_hdf import read_attr, read_typed
 from ._spatial_extent import _normalize_extent_bounds
-from .fast_hdf import h5py_until_qualified
 
 logger = get_logger(__name__)
 
@@ -760,7 +759,6 @@ def _create_legacy_landcover(
     return RasUtils.safe_resolve(output_hdf_path)
 
 
-@h5py_until_qualified
 def validate_native_landcover(
     output_hdf_path: Union[str, Path],
     *,

@@ -68,6 +68,19 @@ def _validate_native_landcover(path):
     return _lcn().validate_native_landcover(Path(path), expected_class_ids=set(), legacy=legacy)
 
 
+def _validate_native_landcover_classes(path):
+    """Expect the layer's own class IDs (harness read) so the full validation runs."""
+    with h5py.File(path, "r") as f:
+        if "IDs" in f:
+            legacy, ids = True, {int(v) for v in f["IDs"][()]}
+        elif "Raster Map" in f:
+            legacy, ids = False, {int(row["ID"]) for row in f["Raster Map"][()]}
+        else:
+            import pytest
+            pytest.skip("fixture has no IDs or Raster Map")
+    return _lcn().validate_native_landcover(Path(path), expected_class_ids=ids, legacy=legacy)
+
+
 def _validate_registration(path):
     from ras_commander.terrain import _lossless_create
     return _lossless_create.validate_registration(Path(path), Path(path).with_suffix(".tif"))
@@ -130,6 +143,8 @@ CASES = {
         helper="compute_property_tables (.NET worker)"),
     "_landcover_native.validate_native_landcover": Case(
         _validate_native_landcover, kinds=SIDECAR, helper="create_landcover (RASMapper)"),
+    "_landcover_native.validate_native_landcover[classes]": Case(
+        _validate_native_landcover_classes, kinds=SIDECAR, helper="create_landcover (RASMapper)"),
     # _rasmap_control_helper
     "_rasmap_control_helper.geometry_layer_bounds": Case(
         lambda p: _rch().geometry_layer_bounds(Path(p)), kinds=GEOMETRY),
