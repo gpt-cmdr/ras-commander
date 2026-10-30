@@ -26,6 +26,7 @@ Example:
     cal = HdfLandCover.get_mannings_calibration_table("project.g01.hdf")
 """
 
+import os
 import warnings
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Callable, Dict, List, Mapping, Optional, Union
@@ -1348,3 +1349,174 @@ class HdfLandCover:
                 logger.debug(f"Wrote final Manning's n raster to {output_tif_path}")
 
         return final_raster
+
+    # ---- RAS Mapper "Final n Values" raster (native engine) ----
+
+    @staticmethod
+    def rasmapper_final_mannings_available() -> bool:
+        """Whether :meth:`export_final_mannings_raster` can run.
+
+        It needs a compatible ``ras-commander-fast-hdf`` extension that provides
+        ``FinalManningsModel`` (fast-hdf with the land-cover engine). HEC-RAS is
+        not needed.
+        """
+        from .. import fast_hdf
+
+        module, _failure, _exc = fast_hdf._load_native()
+        return module is not None and hasattr(module, "FinalManningsModel")
+
+    @staticmethod
+    @log_call
+    @standardize_input(file_type='geom_hdf')
+    def export_final_mannings_raster(
+        hdf_path: Path,
+        output_tif_path: Union[str, Path],
+        landcover_hdf_path: Optional[Union[str, Path]] = None,
+        ras_object: Any = None,
+        *,
+        rasmapper_tile_corner: bool = True,
+        compress: str = "DEFLATE",
+        writer: str = "auto",
+    ) -> Path:
+        """Write RAS Mapper's "Final n Values" raster without HEC-RAS.
+
+        Reproduces RAS Mapper 7.0.1's *Export Raster* of the geometry's
+        "Final n Values" layer with its default options (original extent = the
+        geometry extent, cell size = the land-cover TIFF cell size): 2D flow
+        area default n, then the land-cover class n (calibration-table base
+        values replace the land-cover values when valid), then calibration
+        region overrides, with RAS Mapper's nearest-pixel class sampling and
+        polygon rules. Pixel-identical to RAS Mapper 7.0.1 on the qualified
+        models; see the fast-hdf documentation for the evidence.
+
+        Pure 2D geometries only: geometries with cross sections, river
+        centerlines or pipe networks, virtual (merged) land-cover layers and
+        multi-part polygons raise ``UnsupportedError`` (from the engine) rather
+        than produce a different raster. ``estimate_final_mannings_raster``
+        remains available as the older estimate.
+
+        Args:
+            hdf_path: Geometry HDF path, plan number or geometry number.
+            output_tif_path: GeoTIFF to write (float32, nodata -9999, 256 x 256
+                tiles, the land-cover TIFF's CRS).
+            landcover_hdf_path: Land-cover HDF; default: the geometry's
+                ``Land Cover Filename`` association.
+            ras_object: Optional RasPrj object for path resolution.
+            rasmapper_tile_corner: ``True`` (default) reproduces RAS Mapper,
+                which leaves the last pixel of every 256 x 256 export tile at
+                its 2D-area default (or no data). ``False`` evaluates it too.
+            compress: GeoTIFF compression (``DEFLATE``, ``LZW``, ``NONE``).
+            writer: ``"auto"`` (terrio when installed, else rasterio),
+                ``"terrio"`` or ``"rasterio"``. Both write the same pixels.
+
+        Returns:
+            The output path.
+        """
+        if not HdfLandCover.rasmapper_final_mannings_available():
+            raise RuntimeError(
+                "export_final_mannings_raster needs ras-commander-fast-hdf with "
+                "FinalManningsModel"
+            )
+        import ras_commander_fast_hdf as fh
+
+        model = fh.FinalManningsModel(
+            str(hdf_path),
+            None if landcover_hdf_path is None else str(landcover_hdf_path),
+        )
+        tif = Path(model.land_cover_tif)
+        if not tif.exists():
+            raise FileNotFoundError(f"Land cover TIFF not found: {tif.name}")
+        if writer not in ("auto", "terrio", "rasterio"):
+            raise ValueError("writer must be 'auto', 'terrio' or 'rasterio'")
+        use_terrio = writer == "terrio"
+        if writer == "auto":
+            try:
+                import terrio  # noqa: F401
+                use_terrio = hasattr(terrio, "GeoTiffWriter")
+            except ImportError:
+                use_terrio = False
+
+        output_tif_path = Path(output_tif_path)
+        output_tif_path.parent.mkdir(parents=True, exist_ok=True)
+        # A failed export must not leave a partial raster or destroy a previous good one.
+        partial = output_tif_path.with_name(f".{output_tif_path.name}.{os.getpid()}.partial.tif")
+        if use_terrio:
+            import terrio
+
+            src = terrio.open_raster(str(tif), lazy=True)
+            gt = src.transform
+            if gt[2] != 0.0 or gt[4] != 0.0 or gt[5] >= 0:
+                raise ValueError("land cover TIFF must be north-up")
+            source = (gt[0], gt[3], min(abs(gt[1]), abs(gt[5])), src.height, src.width)
+            crs = src.crs_wkt
+
+            def read_window(r0, c0, h, w):
+                return np.asarray(src.read(1, window=(c0, r0, w, h)), dtype=np.int32)
+        else:
+            import rasterio
+            from rasterio.windows import Window
+
+            src = rasterio.open(tif)
+            t = src.transform
+            if t.b != 0.0 or t.d != 0.0 or t.e >= 0:
+                raise ValueError("land cover TIFF must be north-up")
+            source = (t.c, t.f, min(abs(t.a), abs(t.e)), src.height, src.width)
+            crs = src.crs
+
+            def read_window(r0, c0, h, w):
+                return src.read(1, window=Window(c0, r0, w, h)).astype(np.int32, copy=False)
+
+        try:
+            grid = model.export_grid(source[2])
+            min_x, max_y, cell, rows, cols = grid
+            transform = (min_x, cell, 0.0, max_y, 0.0, -cell)
+
+            def tiles():
+                for tile_row in range(fh.FinalManningsModel.tile_rows(grid)):
+                    window = fh.FinalManningsModel.class_window(grid, tile_row, source)
+                    if window is None:
+                        yield model.render_tile_row(
+                            grid, tile_row, rasmapper_tile_corner=rasmapper_tile_corner
+                        )
+                        continue
+                    r0, c0, h, w = window
+                    yield model.render_tile_row(
+                        grid, tile_row, read_window(r0, c0, h, w), r0, c0, source,
+                        rasmapper_tile_corner=rasmapper_tile_corner,
+                    )
+
+            if use_terrio:
+                out = terrio.GeoTiffWriter(
+                    str(partial), cols, rows, 1, "float32", transform,
+                    crs=crs, nodata=-9999.0, compress=compress.upper(), tile_size=256,
+                )
+                try:
+                    for block in tiles():
+                        out.write(block)
+                finally:
+                    out.close()
+            else:
+                import rasterio
+                from rasterio.transform import Affine
+                from rasterio.windows import Window
+
+                profile = dict(
+                    driver="GTiff", width=cols, height=rows, count=1,
+                    dtype="float32", nodata=-9999.0, crs=crs,
+                    transform=Affine(cell, 0.0, min_x, 0.0, -cell, max_y),
+                    tiled=True, blockxsize=256, blockysize=256,
+                    compress=compress.lower(),
+                )
+                with rasterio.open(partial, "w", **profile) as dst:
+                    for tile_row, block in enumerate(tiles()):
+                        dst.write(block, 1, window=Window(0, tile_row * 256, cols, block.shape[0]))
+            os.replace(partial, output_tif_path)
+        finally:
+            if not use_terrio:
+                src.close()
+            partial.unlink(missing_ok=True)
+        logger.info(
+            f"Wrote RAS Mapper Final n Values raster: {output_tif_path.name} "
+            f"({cols} x {rows})"
+        )
+        return output_tif_path

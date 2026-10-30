@@ -885,6 +885,7 @@ Land-cover sidecar and final Manning's n extraction.
 - `get_preprocessed_mannings_n(hdf_path)` - Read preprocessed cell-center Manning's n values from geometry HDF
 - `audit_final_mannings_n(hdf_path, ...)` - Strictly audit solver-owned final cell/face Manning arrays
 - `estimate_final_mannings_raster(hdf_path, ...)` - Build a non-authoritative visualization estimate
+- `export_final_mannings_raster(hdf_path, output_tif_path, ...)` - Write RAS Mapper's Final n Values raster without HEC-RAS (fast-hdf engine; pure 2D geometries, other layouts are refused)
 
 Compatibility mappings are retained through v1.1.x and will not be removed
 before v1.2.0:
@@ -1666,6 +1667,7 @@ prerequisites and return contracts take precedence over abbreviated summaries.
         - compare_base_vs_calibrated
         - compute_final_mannings_raster
         - estimate_final_mannings_raster
+        - export_final_mannings_raster
         - get_classification_polygons
         - get_landcover_association
         - get_landcover_raster_map
