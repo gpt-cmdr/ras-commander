@@ -7,6 +7,27 @@ check `ras_commander.__version__` and the documentation's
 [build provenance](https://rascommander.info/ras/version.json). A package version
 alone does not identify a development checkout.
 
+### Unreleased
+
+**Deterministic Rust inundation boundaries**
+
+`RasFim.map_inundation_boundaries()` adds horizontal/plain-sloping zero-depth
+contours, bbox/polygon clipping and bounded tile/timestep concurrency.
+`RasFim.compare_inundation_boundaries()` generates native reference polygons
+through the stored-map API or accepts retained exports, and reports complete
+geometry differences and separate workflow clocks. The vector method is
+explicitly distinct from native stored polygons; existing raster methods retain
+their numerical contracts. See the [API](../api/fim.md#deterministic-inundation-boundaries)
+and [qualification](fim-mapping-performance.md#deterministic-vector-boundary-qualification)
+for terrain and engine prerequisites, measured differences and scope.
+
+- **DSS shadow mode labels HEC's DSS6 "no data" rule.** When a native read
+  raises not-found, `RasDss` shadow mode repeats it with dss-commander's
+  opt-in `no_data="refuse"` and logs a refusal as
+  `D4 HEC DSS6 no-data rule (native refusal, status 4)`. Returned results are
+  unchanged. The Java window cut keeps stored NaN values, as heclib's
+  `ztsTrim` does. Wheels without `DssNoDataError` keep the previous labels.
+
 ### 0.110.3 — 2026-10-29
 
 This patch release includes **20 change PRs** absent from the published

@@ -40,6 +40,7 @@ import ntpath
 import os
 import re
 import socket
+import struct
 import sys
 import subprocess
 import tempfile
@@ -2888,6 +2889,68 @@ Step 5: Configure (optional — auto-detection usually works)
         return f".\\{output_folder}\\{display_name} ({safe_profile}){extension}"
 
     @staticmethod
+    def _stored_boundary_has_features(path: Path) -> bool:
+        """Check the native polygon SHP/SHX/DBF bundle without a GIS dependency.
+
+        This checks file structure and nonempty polygon records, not polygon
+        topology or hydraulic accuracy. Empty or incomplete products remain on
+        disk for inspection but are not returned as generated boundaries.
+        """
+        try:
+            shp_size = path.stat().st_size
+            with path.open("rb") as stream:
+                header = stream.read(100)
+                if (
+                    len(header) != 100
+                    or struct.unpack_from(">i", header)[0] != 9994
+                    or struct.unpack_from(">i", header, 24)[0] * 2 != shp_size
+                    or struct.unpack_from("<ii", header, 28) not in (
+                        (1000, 5), (1000, 15), (1000, 25)
+                    )
+                ):
+                    return False
+                records = 0
+                polygons = 0
+                while stream.tell() < shp_size:
+                    record_header = stream.read(8)
+                    if len(record_header) != 8:
+                        return False
+                    record_bytes = struct.unpack(">ii", record_header)[1] * 2
+                    if record_bytes < 4 or stream.tell() + record_bytes > shp_size:
+                        return False
+                    data = stream.read(min(record_bytes, 44))
+                    shape_type = struct.unpack_from("<i", data)[0]
+                    if shape_type in (5, 15, 25):
+                        if len(data) < 44:
+                            return False
+                        parts, points = struct.unpack_from("<ii", data, 36)
+                        if parts < 1 or points < 4 or record_bytes < 44 + 4 * parts + 16 * points:
+                            return False
+                        polygons += 1
+                    elif shape_type != 0:
+                        return False
+                    stream.seek(record_bytes - len(data), 1)
+                    records += 1
+            with path.with_suffix(".shx").open("rb") as stream:
+                index = stream.read(100)
+            with path.with_suffix(".dbf").open("rb") as stream:
+                table = stream.read(32)
+            return (
+                polygons > 0
+                and len(index) == 100
+                and struct.unpack_from(">i", index)[0] == 9994
+                and path.with_suffix(".shx").stat().st_size == 100 + 8 * records
+                and struct.unpack_from(">i", index, 24)[0] * 2 == 100 + 8 * records
+                and len(table) == 32
+                and struct.unpack_from("<I", table, 4)[0] == records
+                and path.with_suffix(".dbf").stat().st_size
+                >= struct.unpack_from("<H", table, 8)[0]
+                + records * struct.unpack_from("<H", table, 10)[0]
+            )
+        except (OSError, struct.error):
+            return False
+
+    @staticmethod
     def _add_stored_maps_to_rasmap(
         rasmap_path: Path,
         plan_hdf_filename: str,
@@ -3032,6 +3095,7 @@ Step 5: Configure (optional — auto-detection usually works)
         profile_index: int = 2147483647,
         output_mode: str = "Stored Current Terrain",
         extra_attrs: Optional[Dict[str, str]] = None,
+        display_name: Optional[str] = None,
     ) -> bool:
         """
         Add a stored map configuration to the .rasmap file.
@@ -3051,6 +3115,7 @@ Step 5: Configure (optional — auto-detection usually works)
             extra_attrs: Additional attributes set on the MapParameters element
                 (e.g. {"ArrivalDepth": "0.1"} for arrival time / duration /
                 percent-inundated maps).
+            display_name: Optional native layer label and output filename base.
 
         Returns:
             True if successful, False otherwise
@@ -3103,15 +3168,13 @@ Step 5: Configure (optional — auto-detection usually works)
 
             # Determine display name and output filename
             type_info = None
-            for key, (xml_name, display_name, _) in RasProcess.MAP_TYPES.items():
+            for key, (xml_name, candidate_display_name, _) in RasProcess.MAP_TYPES.items():
                 if xml_name == map_type:
-                    type_info = (xml_name, display_name)
+                    type_info = (xml_name, candidate_display_name)
                     break
 
-            if type_info is None:
-                display_name = map_type.title()
-            else:
-                display_name = type_info[1]
+            if display_name is None:
+                display_name = map_type.title() if type_info is None else type_info[1]
 
             # Create output filename
             # Polygon outputs use .shp; raster outputs use .vrt
@@ -3814,7 +3877,13 @@ Step 5: Configure (optional — auto-detection usually works)
             shear_stress: Generate Shear Stress map (default: False)
             depth_x_velocity: Generate D*V hazard map (default: False)
             depth_x_velocity_sq: Generate D*V² impact map (default: False)
-            inundation_boundary: Generate inundation boundary polygon (default: False)
+            inundation_boundary: Generate RAS Mapper's native Inundation Boundary
+                stored polygon at the zero-depth contour (default: False).
+                Uses MapType="depth", OutputMode="Stored Polygon Specified Depth"
+                and ContourPolygonValue=0, not a raster polygonization step.
+                Returned under ``inundation_boundary`` as SHP paths; companion
+                SHX/DBF/PRJ files are moved with them when output_path is given.
+                Missing, empty or incomplete boundaries are omitted with a warning.
             arrival_time: Generate flood Arrival Time map in hours (default: False).
                 Whole-simulation product; ignores the ``profile`` argument.
             duration: Generate inundation Duration map in hours (default: False).
@@ -4037,7 +4106,7 @@ Step 5: Configure (optional — auto-detection usually works)
 
         # Determine profile index
         if profile.upper() in ("MAX", "MIN"):
-            profile_index = 2147483647  # Special value for Max/Min
+            profile_index = 2147483647 if profile.upper() == "MAX" else -2147483648
             profile_name = profile.title()  # "Max" or "Min"
         else:
             # Specific timestamp - need to find index
@@ -4136,7 +4205,7 @@ Step 5: Configure (optional — auto-detection usually works)
 
             # Add inundation boundary if requested (shapefile polygon output)
             if inundation_boundary:
-                RasProcess._add_stored_map_to_rasmap(
+                configured = RasProcess._add_stored_map_to_rasmap(
                     rasmap_path,
                     plan_hdf,
                     "depth",
@@ -4144,7 +4213,11 @@ Step 5: Configure (optional — auto-detection usually works)
                     output_folder,
                     profile_index,
                     output_mode="Stored Polygon Specified Depth",
+                    extra_attrs={"ContourPolygonValue": "0"},
+                    display_name="Inundation Boundary",
                 )
+                if not configured:
+                    raise RuntimeError("Could not configure native inundation boundary")
 
             # Resolve output_path to absolute if provided
             resolved_output_path = None
@@ -4541,11 +4614,27 @@ Step 5: Configure (optional — auto-detection usually works)
             # Collect inundation boundary shapefile if requested
             if inundation_boundary:
                 safe_profile = profile_name.replace(":", " ").replace("/", "_")
-                shp_pattern = f"Inundation Boundary ({safe_profile})*.shp"
-                shp_files = fresh_glob(shp_pattern)
-                if not shp_files:
-                    shp_pattern_alt = f"Inundation_Boundary*({safe_profile})*.shp"
-                    shp_files = fresh_glob(shp_pattern_alt)
+                # Native RAS Mapper inserts the contour value INSIDE the
+                # parentheses: "Inundation Boundary (Max Value_0).shp".
+                # Match the entire profile to avoid accepting a prefix match.
+                boundary_pattern = re.compile(
+                    r"Inundation[ _]Boundary \("
+                    + re.escape(safe_profile)
+                    + r"(?: Value_0(?:\.0+)?)?\)\.shp$",
+                    re.IGNORECASE,
+                )
+                fresh_keys = {
+                    os.path.normcase(os.path.abspath(path)) for path in produced_paths
+                }
+                shp_files = [
+                    path for path in produced_paths
+                    if boundary_pattern.fullmatch(path.name)
+                    and all(
+                        os.path.normcase(os.path.abspath(path.with_suffix(ext))) in fresh_keys
+                        for ext in (".shp", ".shx", ".dbf")
+                    )
+                    and RasProcess._stored_boundary_has_features(path)
+                ]
                 if shp_files:
                     generated_files["inundation_boundary"] = shp_files
                     logger.debug(
@@ -4553,8 +4642,11 @@ Step 5: Configure (optional — auto-detection usually works)
                         len(shp_files),
                     )
                 else:
-                    logger.debug(
-                        f"No inundation boundary shapefiles found with pattern: {shp_pattern}"
+                    logger.warning(
+                        "No fresh nonempty native inundation boundary SHP/SHX/DBF "
+                        "product for plan %s, profile %r; inspect the mapping "
+                        "output in %s",
+                        plan_num, profile_name, search_dir,
                     )
 
             # Fix georeferencing if requested
@@ -4862,7 +4954,7 @@ Step 5: Configure (optional — auto-detection usually works)
                 )
         if inundation_boundary:
             boundary_index, boundary_name = selected_profiles[-1]
-            boundary_attrs = {**extra_attrs, "ArrivalDepth": "0"}
+            boundary_attrs = {**extra_attrs, "ContourPolygonValue": "0"}
             map_specs.append(
                 {
                     "map_key": "inundation_boundary",

@@ -1550,3 +1550,119 @@ See [catalog measurements and reproduction](../development/fim-mapping-performan
       show_root_heading: false
       heading_level: 3
       show_source: false
+
+
+## Deterministic inundation boundaries
+
+`RasFim.map_inundation_boundaries()` generates vector zero-depth contours in
+Rust. It supports horizontal and plain cell-corner sloping surfaces, multiple
+stored timesteps, and bbox or polygon constraints. It adds no depth cutoff.
+
+```python
+boundaries = RasFim.map_inundation_boundaries(
+    "model.p02.hdf", "Terrain/Original.tif", "boundary_catalog",
+    terrain_hdf="Terrain/Terrain.hdf",
+    profiles={"maximum": "Max", "t108": 108},
+    interpolation="sloping",  # or "horizontal"
+    polygon="reach.gpkg", threads=4, max_inflight_profiles=2,
+    max_working_mib=2048,
+)
+print(boundaries[["profile", "polygons", "holes", "boundary_geojson"]])
+print(boundaries.attrs["performance"])
+```
+
+The function returns one manifest row per profile, including empty products.
+GeoJSON stores the projected CRS explicitly. `boundary_manifest.json` records
+the method, source identities, terrain metadata, concurrency and timings.
+
+Use the original, unmodified single-source float32 TIFF with 256-pixel tiles and its
+associated terrain HDF. The HDF supplies sample-coverage masks, perimeter
+values and complete stitch TIN connectivity. A flattened replacement TIFF is
+insufficient evidence for those arrays. Multi-source terrain HDFs, 1D model
+elements, and cell-face/shallow/depth-weighted boundary options are refused.
+An AOI outside the source sample grid is refused. AOIs preserve full source
+tiles plus a sample halo; only final contour polygons are clipped.
+
+Nonempty or linked `/Modifications` objects in the terrain HDF are refused
+before numeric reads. The API cannot infer externally registered modifications
+from a TIFF/HDF pair: supply a terrain with no external modifications. An empty
+modification group is permitted and recorded. A replacement effective TIFF also
+needs matching regenerated terrain metadata and separate qualification.
+
+For a model with multiple terrain sources, first preprocess a dedicated single
+mapping terrain. Preserve source priority, CRS, grid, nodata and effective
+elevations, then generate its matching terrain HDF from that single source.
+Keep the project terrain unchanged and verify the prepared surface against the
+original effective terrain. Record preparation provenance and reuse this
+TIFF/HDF pair across all reach and timestep requests. This is a one-time
+preparation workflow; a flattened TIFF paired with the old multi-source HDF
+does not satisfy the input contract. Newly prepared layouts require qualification
+before numerical equivalence is claimed.
+
+The method ID is `deterministic-zero-depth-contours/1`. It uses a stable
+all-subject NonZero union and a 0.001 projected-coordinate-unit lattice,
+retaining canonical exterior and interior rings. Native RASMapper boundary
+exports can differ in hole topology and coordinates, including between
+identical native Max calls. Products record `native_vector_parity=False`;
+this method does not claim native polygon equality. Existing Depth/WSE raster
+methods and their qualification are unchanged.
+
+The accepted vector behavior is deterministic Rust contour merging with
+disclosed native differences. The observed native variability occurred in
+Commander-driven RASMapper 7.0.1 exports. The order-sensitive merge belongs to
+the native implementation; Commander performs no native polygon union.
+Repeated standalone GUI exports have not been qualified.
+
+The intrinsic cell-wet gate is float32 `WSE > minimum_elevation + 0.001`.
+Signed sample depths remain available to find zero crossings; raster plot
+visibility is not applied to contour samples. Valid negative depths, including
+-9999, are distinct from missing samples. Sample activation from terrain masks
+is distinct from a polygon clipping mask.
+
+This path requires a Fast-Map engine advertising the boundary capability
+(`boundary.method_id` `deterministic-zero-depth-contours/1`): the published
+0.10.1 and 0.11 releases do. The terrain tile `Mask` is an 8-bit HDF5
+bitfield. When the installed fast-HDF reader does not advertise bitfield
+support (published 0.2.4 does not), its raw bytes are staged through h5py as
+uint8, exactly as the terrain-scope staging does; every other array uses the
+required native reader. The library never builds, downloads or installs an
+engine during mapping, and never substitutes h5py arithmetic. Geometry, terrain and ownership are shared across profiles
+inside a call. One Rayon pool bounds tile and timestep work. Budgets are planned
+allocation admission, not hard process RSS limits.
+
+Legacy custom GeoTIFF keys can be described differently by the native reader.
+The default CRS comparison remains strict. After independently verifying the
+original TIFF, model and terrain-HDF CRS, pass `terrain_crs_fnv1a64` from the
+matching engine's `terrain-info` record to pin that reader identity explicitly.
+The pin and effective identity are retained in the manifest. It does not
+reproject coordinates or modify the TIFF.
+
+### Compare native polygons
+
+```python
+comparison = RasFim.compare_inundation_boundaries(
+    "model.p02.hdf", "Terrain/Original.tif", "boundary_comparison",
+    terrain_hdf="Terrain/Terrain.hdf", plan_number="02", ras_object=ras,
+    profiles={"maximum": "Max", "t108": 108},
+    interpolation="sloping", threads=4,
+)
+print(comparison[["profile", "extra_area", "missing_area", "geometry_equal"]])
+print(comparison.attrs["performance"])
+```
+
+Use an initialized copy of the computed project for native generation.
+`RasProcess.store_maps()` generates the references and restores the original
+rasmap bytes; native execution can create other project caches. Alternatively,
+pass `native_boundaries={profile: vector_path}` to compare retained references
+without HEC-RAS, including on Linux. References require their stored matching
+CRS; no reprojection, geometry repair, reference rounding or depth filtering
+is applied.
+
+The comparison reports both directions of area difference, complete topology,
+unrounded topological equality and a separate quantized-coordinate equality metric.
+Native generation, shared Rust batch time and comparison scans have separate
+clocks. Repeated `candidate_batch_seconds` values identify one shared batch
+clock; do not sum them as independent profile times. A speed ratio is withheld
+because the vector methods differ. Discrete Hausdorff distance is omitted with
+an explicit receipt exclusion when the vertex-pair budget exceeds 25 million.
+See the [boundary qualification issue](https://github.com/gpt-cmdr/ras-commander-fast-map/issues/4).
