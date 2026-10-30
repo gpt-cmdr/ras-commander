@@ -85,6 +85,11 @@ STRUCTURE_GROUPS = {
     f"{STEADY_BASE}/Steady Profiles/Lateral Structures": ("lateral_structure", "steady"),
     f"{STEADY_BASE}/Steady Profiles/Storage Areas": ("storage_area", "steady"),
 }
+# Unsteady storage areas are not a one_d structure family in the engine; their
+# identity-checked reader is structure_inventory / read_structure_series.
+UNSTEADY_STRUCTURE_GROUPS = {
+    f"{UNSTEADY_BASE}/Unsteady Time Series/Storage Areas": "storage_area",
+}
 LINE_GROUPS = {
     "Geometry/Cross Sections": ("cross_section_cut_lines", "Polyline"),
     "Geometry/River Centerlines": ("river_centerlines", "Polyline"),
@@ -250,6 +255,12 @@ def route_for(name):
             if relative:
                 return ("structure_series", kind, mode, structure, relative)
             return ("structure_family", kind, mode, None, structure)
+    for group, family in UNSTEADY_STRUCTURE_GROUPS.items():
+        if path.startswith(group + "/"):
+            structure, _, relative = path[len(group) + 1:].partition("/")
+            if relative:
+                return ("unsteady_structure_series", family, structure, relative)
+            return ("unsteady_structure_series", family, None, structure)
     for group, mode in XS_RESULT_GROUPS.items():
         if path.startswith(group + "/"):
             return ("xs_result", mode, path[len(group) + 1:])
@@ -547,6 +558,13 @@ def _full(module, file_path, route, dataset):
         values = _engine(module, file_path, "read_one_d_structure_series",
             skind, mode, structure, relative, (0, int(dataset.shape[0]), 1), max_bytes=budget)
         return _numeric(values, dataset)
+    if kind == "unsteady_structure_series":
+        _, family, structure, relative = route
+        if len(dataset.shape) != 2:
+            raise TypedRouteError(f"{dataset.name}: typed structure series are rank two")
+        values = _engine(module, file_path, "read_structure_series", family, structure, relative,
+                         (0, int(dataset.shape[0]), 1), (0, int(dataset.shape[1]), 1), max_bytes=budget)
+        return _numeric(values, dataset)
     if kind == "mesh_tables":
         data = _cached(file_path, ("meshtables",), lambda: _engine(module, file_path, "mesh_geometry_tables"))
         if route[1] == "Attributes":
@@ -588,6 +606,15 @@ def _member(module, file_path, route):
             if s["name"] == structure:
                 return any(x["relative"] == relative for x in s["series"])
         return False
+    if kind == "unsteady_structure_series":
+        _, family, structure, relative = route
+        inv = _cached(file_path, ("ustructinv", family),
+                      lambda: _engine(module, file_path, "structure_inventory", family))
+        if structure is None:
+            series = inv["family_series"]
+        else:
+            series = next((s["series"] for s in inv["structures"] if s["name"] == structure), [])
+        return any(s["relative"] == relative and s["capability"]["status"] == "supported" for s in series)
     if kind == "geometry_family":
         family = route[1]
         data = _cached(file_path, ("family2d", family), lambda: _engine(module, file_path, "geometry_family", family))
@@ -1197,7 +1224,8 @@ def read(dataset, selection=None, *, backend="auto"):
     metadata = dtype.names is None and (dtype.kind not in "iuf" or h5py.check_vlen_dtype(dtype) is not None)
     route = None if metadata or not hasattr(module, "read_xs_geometry") else route_for(dataset.name)
     if (route is not None and route[0] in {"xs_result", "one_d_summary", "structure_series",
-                                          "structure_family", "geometry_family"}
+                                          "structure_family", "unsteady_structure_series",
+                                          "geometry_family"}
             # An unsafe file (e.g. a writable handle) is never opened by the engine:
             # the route is kept so the read below refuses it with the clear
             # ``file cannot be reopened safely`` error (auto falls back to h5py).
