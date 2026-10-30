@@ -635,6 +635,12 @@ class HdfLandCover:
         and their associated Manning's n values.
 
         Reads ``//Raster Map`` and ``//Variables`` from the land cover HDF.
+        Legacy RAS Mapper layers (still shipped in the HEC-RAS 7.0 example
+        projects, e.g. Muncie and Weise_2D) have no ``Raster Map``; they store
+        the classes as parallel ``IDs``, ``Names`` and ``ManningsN`` arrays,
+        where the stored ID is the class's pixel value. Those are read as
+        stored (Manning's n unconverted, including no-data values); arrays of
+        different lengths are refused (None).
 
         Args:
             landcover_hdf_path: Path to land cover HDF file
@@ -661,6 +667,8 @@ class HdfLandCover:
                         rmap_path = candidate
                         break
                 if rmap_path is None:
+                    if all(name in hdf_file for name in ("IDs", "Names", "ManningsN")):
+                        return HdfLandCover._legacy_raster_map(hdf_file, landcover_hdf_path)
                     logger.warning(
                         "No Raster Map dataset found in land cover sidecar "
                         f"{_path_name(landcover_hdf_path)}"
@@ -709,6 +717,25 @@ class HdfLandCover:
             reraise_required(e)
             logger.error(f"Error reading land cover raster map from {landcover_hdf_path}: {e}")
             return None
+
+    @staticmethod
+    def _legacy_raster_map(hdf_file, landcover_hdf_path) -> Optional[pd.DataFrame]:
+        """pixel_value/class_name/mannings_n from legacy parallel IDs/Names/ManningsN arrays."""
+        ids = read_typed(hdf_file["IDs"])
+        names = read_typed(hdf_file["Names"])
+        mannings_n = read_typed(hdf_file["ManningsN"])
+        if not (np.ndim(ids) == np.ndim(names) == np.ndim(mannings_n) == 1
+                and len(ids) == len(names) == len(mannings_n)):
+            logger.warning(
+                "Legacy land cover arrays IDs/Names/ManningsN differ in shape in "
+                f"{_path_name(landcover_hdf_path)}; raster map not read"
+            )
+            return None
+        return pd.DataFrame({
+            'pixel_value': [int(v) for v in ids],
+            'class_name': [str(HdfUtils.convert_ras_hdf_value(n)).strip() for n in names],
+            'mannings_n': np.asarray(mannings_n, dtype=np.float64),
+        })
 
     @staticmethod
     @log_call
