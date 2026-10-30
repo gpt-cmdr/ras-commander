@@ -263,7 +263,7 @@ def close_sessions(path=None):
     Omit path to close all cached files. Explicit HdfSession objects are owned
     by their caller and must be closed separately.
     """
-    resolved = None if path is None else str(Path(path).resolve())
+    resolved = None if path is None else _comparable(Path(path).resolve())
     # A file closed here may be replaced next (writers call this first): forget
     # the stats remembered for the current adapter read.
     _forget_stats()
@@ -271,7 +271,7 @@ def close_sessions(path=None):
     _fast_hdf_typed.clear_cache(path)
     with _sessions_lock:
         for key in list(_sessions):
-            if resolved is None or key[0] == resolved:
+            if resolved is None or _comparable(key[0]) == resolved:
                 session, _ = _sessions.pop(key)
                 _scoped_keys.discard(key)
                 session.close()
@@ -281,14 +281,46 @@ def release_native_sessions(*paths):
     """Close cached native sessions on ``paths`` before they are replaced, moved or renamed.
 
     A session opened inside a public call stays mapped until the outermost call
-    returns, and Windows refuses to replace or rename a mapped file. Writers call
-    this immediately before ``os.replace``/``shutil.move`` on both source and
-    destination. Their typed-result cache entries are dropped too. Paths without
-    a cached session (including non-HDF files) only clear that cache.
+    returns, and Windows refuses to replace or rename a mapped file - or a folder
+    that contains one. Writers call this immediately before ``os.replace``/
+    ``shutil.move`` on both source and destination; code that renames, moves or
+    removes a project folder passes the folder, which releases every session of a
+    file inside it. Their typed-result cache entries are dropped too. Paths
+    without a cached session (including non-HDF files) only clear that cache.
+    Released files are reopened by the next read; values do not change.
     """
     for path in paths:
-        if path is not None:
+        if path is None:
+            continue
+        if Path(path).is_dir():
+            _release_tree(path)
+        else:
             close_sessions(path)
+
+
+def _comparable(path):
+    """``path`` (a resolved path string) without a Windows extended-length prefix,
+    case-normalised, so ``\\\\?\\D:\\x`` and ``D:\\x`` compare equal."""
+    text = str(path)
+    if text.startswith("\\\\?\\UNC\\"):
+        text = "\\\\" + text[8:]
+    elif text.startswith("\\\\?\\"):
+        text = text[4:]
+    return os.path.normcase(text)
+
+
+def _release_tree(root):
+    """Close the cached sessions and typed results of every file under ``root``."""
+    prefix = _comparable(Path(root).resolve()).rstrip("\\/") + os.sep
+    _forget_stats()
+    from . import _fast_hdf_typed
+    _fast_hdf_typed.clear_cache_under(root)
+    with _sessions_lock:
+        for key in list(_sessions):
+            if _comparable(key[0]).startswith(prefix):
+                session, _ = _sessions.pop(key)
+                _scoped_keys.discard(key)
+                session.close()
 
 
 def _resolved(path):

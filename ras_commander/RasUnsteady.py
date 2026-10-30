@@ -125,6 +125,7 @@ from pathlib import Path
 from ._fixed_width import _format_fixed_width_value
 from .RasPrj import ras
 from .LoggingConfig import get_logger
+from .fast_hdf import release_native_sessions
 from .Decorators import log_call
 from .fast_hdf import read_attr, read_attrs, read_typed
 import pandas as pd
@@ -4406,6 +4407,7 @@ class RasUnsteady:
         import shutil
 
         try:
+            release_native_sessions(directory)
             shutil.rmtree(directory)
         except OSError as exc:
             logger.warning("Meteorology staging retained at %s: %s", directory, exc)

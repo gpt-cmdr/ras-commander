@@ -24,6 +24,7 @@ from pathlib import Path, PurePosixPath
 from typing import Any
 
 from ras_commander.LoggingConfig import get_logger, log_call
+from ras_commander.fast_hdf import release_native_sessions
 
 logger = get_logger(__name__)
 
@@ -525,11 +526,13 @@ def _audit_workspace(organized_root: Path) -> dict[str, Any]:
 
 def _remove_tree(path: Path) -> None:
     if path.exists():
+        release_native_sessions(path)
         shutil.rmtree(_extended_path(path))
 
 
 def _promote_atomically(working: Path, output_folder: Path) -> Path | None:
     backup = None
+    release_native_sessions(working, output_folder)
     if output_folder.exists():
         timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S%f")
         backup = output_folder.parent / f"{output_folder.name}.interrupted-{timestamp}"
