@@ -37,6 +37,7 @@ from ._helpers import GIT_HEAD, HASH_A, valid_table_rows
 
 
 pytestmark = pytest.mark.qualification_harness
+REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
 
 
 def _dialog_observation(details):
@@ -208,7 +209,7 @@ def _context(tmp_path: Path, *, lane_ids: tuple[str, ...] = ("lane-live",)) -> R
         "run_id": "run-1",
         "lane_ids": list(lane_ids),
         "execution_run_root": str(execution_root),
-        "repository_root": str(Path.cwd()),
+        "repository_root": str(REPOSITORY_ROOT),
         "git_head": GIT_HEAD,
         "python_executable": str(Path(sys.executable).resolve()),
         "python_executable_sha256": file_sha256(sys.executable),
@@ -219,7 +220,7 @@ def _context(tmp_path: Path, *, lane_ids: tuple[str, ...] = ("lane-live",)) -> R
         "schema_version": 1,
         "manifest_sha256": HASH_A,
         "repository": {
-            "root": str(Path.cwd()),
+            "root": str(REPOSITORY_ROOT),
             "required_head": GIT_HEAD,
             "require_clean": True,
             "bind_running_code": True,
