@@ -532,6 +532,11 @@ class RasUtils:
         >>> print(f"Removal successful: {success}")
         """
         path = Path(path)
+        # Native HDF sessions opened earlier in the calling public call keep files
+        # under ``path`` mapped; Windows refuses to delete them until released.
+        from .fast_hdf import release_native_sessions
+
+        release_native_sessions(path)
         for attempt in range(1, max_attempts + 1):
             try:
                 if path.exists():

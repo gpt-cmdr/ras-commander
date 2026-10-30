@@ -1309,6 +1309,7 @@ class RasCmdr:
                 )
 
             try:
+                release_native_sessions(transaction_path)
                 shutil.rmtree(transaction_path)
             except OSError as exc:
                 logger.warning(
@@ -1343,6 +1344,7 @@ class RasCmdr:
             rollback_confirmed = rollback_destination()
             if rollback_confirmed and transaction_created:
                 try:
+                    release_native_sessions(transaction_path)
                     shutil.rmtree(transaction_path)
                 except OSError as cleanup_exc:
                     rollback_errors.append(
@@ -5458,6 +5460,7 @@ class RasCmdr:
 
             if compute_folder.exists():
                 if overwrite_dest:
+                    release_native_sessions(compute_folder)
                     shutil.rmtree(compute_folder)
                     logger.info("Compute folder exists; overwriting as requested: %s", compute_folder.name)
                     logger.debug(f"Overwriting compute folder: {compute_folder}")
@@ -5821,6 +5824,7 @@ class RasCmdr:
             # explicit user recovery/review.
             if not retain_test_folder:
                 try:
+                    release_native_sessions(compute_folder)
                     shutil.rmtree(compute_folder)
                     logger.info("Removed test folder: %s", compute_folder.name)
                     logger.debug(f"Removed test folder path: {compute_folder}")

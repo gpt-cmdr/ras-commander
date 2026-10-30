@@ -163,9 +163,145 @@ def dense_perimeter():
     return MockPolygon(coords)
 
 
+def _write_bc_lines_hdf(path, areas, bc_lines, normal_depths=()):
+    """Write a geometry/plan HDF in the layout HEC-RAS writes for 2D BC lines.
+
+    ``areas``: dicts with ``name``, ``cell_count`` (physical cells; higher cell
+    indexes are ghost cells outside the perimeter), ``face_cells``,
+    ``face_points``, ``fp_coords`` and optional ``perim_info``/``perim_values``.
+    ``bc_lines``: ``(name, area, type, coords)`` rows of
+    ``Geometry/Boundary Condition Lines``. ``normal_depths``: ``(area, line)``
+    pairs written as plan ``Event Conditions`` Normal Depth entries.
+    """
+    with h5py.File(str(path), "w") as hf:
+        bc = hf.create_group("Geometry/Boundary Condition Lines")
+        bc.create_dataset(
+            "Attributes",
+            data=np.array(
+                [(n.encode(), a.encode(), t.encode()) for n, a, t, _ in bc_lines],
+                dtype=[("Name", "S32"), ("SA-2D", "S16"), ("Type", "S8")],
+            ),
+        )
+        info, parts, points = [], [], []
+        for _, _, _, coords in bc_lines:
+            info.append([len(points), len(coords), len(parts), 1])
+            parts.append([0, len(coords)])
+            points.extend(coords)
+        bc.create_dataset("Polyline Info", data=np.array(info, dtype=np.int32))
+        bc.create_dataset("Polyline Parts", data=np.array(parts, dtype=np.int32))
+        bc.create_dataset("Polyline Points", data=np.array(points, dtype=np.float64))
+
+        fa = hf.create_group("Geometry/2D Flow Areas")
+        fa.create_dataset(
+            "Attributes",
+            data=np.array(
+                [(a["name"].encode(), a["cell_count"]) for a in areas],
+                dtype=[("Name", "S16"), ("Cell Count", "<i4")],
+            ),
+        )
+        for area in areas:
+            grp = fa.create_group(area["name"])
+            n_faces = len(area["face_points"])
+            grp.create_dataset("Faces Cell Indexes", data=np.array(area["face_cells"], dtype=np.int32))
+            grp.create_dataset("Faces FacePoint Indexes", data=np.array(area["face_points"], dtype=np.int32))
+            grp.create_dataset("FacePoints Coordinate", data=np.array(area["fp_coords"], dtype=np.float64))
+            grp.create_dataset(
+                "Faces Perimeter Info",
+                data=np.array(area.get("perim_info", [[0, 0]] * n_faces), dtype=np.int32),
+            )
+            grp.create_dataset(
+                "Faces Perimeter Values",
+                data=np.array(area.get("perim_values", np.zeros((0, 2))), dtype=np.float64).reshape(-1, 2),
+            )
+
+        if normal_depths:
+            nd = hf.create_group("Event Conditions/Unsteady/Boundary Conditions/Normal Depths")
+            for area, line in normal_depths:
+                entry = nd.create_dataset(f"2D: {area} BCLine: {line}", data=np.zeros(1, dtype=np.float32))
+                entry.attrs["2D Flow Area"] = np.bytes_(area)
+                entry.attrs["BC Line"] = np.bytes_(line)
+    return path
+
+
+_MAIN_AREA = {
+    "name": "MainArea",
+    # Faces 0 and 1 border ghost cells 3 and 4 (Cell Count 3): perimeter faces.
+    # Face 2 lies on both BC lines but joins two physical cells: not perimeter.
+    # Face 3 is a perimeter face whose Faces Perimeter Values point (90, 0)
+    # lies on both lines although its end points do not.
+    "cell_count": 3,
+    "face_cells": [[0, 3], [1, 4], [0, 1], [2, 5]],
+    "face_points": [[0, 1], [2, 3], [4, 5], [6, 7]],
+    "fp_coords": [
+        [90.0, 0.0], [95.0, 0.0],
+        [20.0, 0.0], [25.0, 0.0],
+        [85.0, 0.0], [88.0, 0.0],
+        [60.0, 40.0], [120.0, 40.0],
+    ],
+    "perim_info": [[0, 0], [0, 0], [0, 0], [0, 1]],
+    "perim_values": [[90.0, 0.0]],
+}
+_MAIN_LINES = [
+    ("NormDepth1", "MainArea", "External", [[0.0, 0.0], [50.0, 0.0], [100.0, 0.0]]),
+    ("USInflow1", "MainArea", "External", [[80.0, 0.0], [150.0, 0.0], [200.0, 0.0]]),
+]
+
+
 @pytest.fixture
 def bc_conflict_hdf(tmp_path):
-    """Create a synthetic .g01.hdf with per-area 7.0 BC lines."""
+    """Plan-like HDF: one 2D area, two overlapping BC lines, one Normal Depth."""
+    return _write_bc_lines_hdf(
+        tmp_path / "test.p01.hdf",
+        [_MAIN_AREA],
+        _MAIN_LINES,
+        normal_depths=[("MainArea", "NormDepth1")],
+    )
+
+
+@pytest.fixture
+def bc_conflict_geom_hdf(tmp_path):
+    """Geometry-only HDF with the same lines (no hydraulic boundary types)."""
+    return _write_bc_lines_hdf(tmp_path / "test.g01.hdf", [_MAIN_AREA], _MAIN_LINES)
+
+
+@pytest.fixture
+def multi_area_bc_conflict_hdf(tmp_path):
+    """Two 2D areas; only the second has two BC lines over one perimeter face."""
+    area1 = {
+        "name": "Area1",
+        "cell_count": 1,
+        "face_cells": [[0, 1]],
+        "face_points": [[0, 1]],
+        "fp_coords": [[0.0, 0.0], [5.0, 0.0]],
+    }
+    area2 = {
+        "name": "Area2",
+        "cell_count": 2,
+        "face_cells": [[0, 2], [1, 3]],
+        "face_points": [[0, 1], [2, 3]],
+        "fp_coords": [[90.0, 0.0], [95.0, 0.0], [104.0, 0.0], [108.0, 0.0]],
+    }
+    lines = [
+        ("UpstreamOnly", "Area1", "External", [[0.0, 0.0], [25.0, 0.0], [50.0, 0.0]]),
+        ("NormDepth2", "Area2", "External",
+         [[90.0, 0.0], [95.0, 0.0], [100.0, 0.0], [105.0, 0.0], [110.0, 0.0]]),
+        ("USInflow2", "Area2", "External", [[92.0, 0.0], [96.0, 0.0], [99.0, 0.0]]),
+    ]
+    return _write_bc_lines_hdf(
+        tmp_path / "multi_area.p01.hdf",
+        [area1, area2],
+        lines,
+        normal_depths=[("Area2", "NormDepth2")],
+    )
+
+
+@pytest.fixture
+def legacy_bc_conflict_hdf(tmp_path):
+    """Per-area ``BC Lines`` groups as read and written by ``fix_bc_conflicts``.
+
+    HEC-RAS does not write this layout (it keeps 2D BC lines in
+    ``Geometry/Boundary Condition Lines``); ``detect_bc_conflicts`` reads that.
+    """
     hdf_path = tmp_path / "test.g01.hdf"
     with h5py.File(str(hdf_path), "w") as hf:
         fa_group = hf.create_group("Geometry/2D Flow Areas")
@@ -225,8 +361,8 @@ def bc_conflict_hdf(tmp_path):
 
 
 @pytest.fixture
-def multi_area_bc_conflict_hdf(tmp_path):
-    """Create a synthetic HDF where only the second flow area has a BC conflict."""
+def legacy_multi_area_bc_conflict_hdf(tmp_path):
+    """Per-area ``BC Lines`` layout where only the second area has a conflict."""
     hdf_path = tmp_path / "multi_area.g01.hdf"
     with h5py.File(str(hdf_path), "w") as hf:
         fa_group = hf.create_group("Geometry/2D Flow Areas")
@@ -1183,6 +1319,7 @@ class TestDomainContainmentAudit:
         assert result.ok
         assert result.checked_counts["structure"] == 0
 
+    @pytest.mark.synthetic_hdf_layout
     def test_native_multipart_collection_accepts_absolute_part_indexes(self, tmp_path):
         _geom_text, hdf_path = _write_containment_fixture(tmp_path)
         with h5py.File(hdf_path, "a") as hf:
@@ -1245,6 +1382,7 @@ class TestGeometryAssociation:
         path.write_text("artifact", encoding="utf-8")
         return path
 
+    @pytest.mark.synthetic_hdf_layout
     def test_sets_and_reads_all_association_paths(self, monkeypatch, tmp_path):
         geom_hdf_path = self._make_geometry_hdf(tmp_path)
         terrain = self._make_artifact(tmp_path / "Terrain" / "Terrain50.hdf")
@@ -1299,6 +1437,7 @@ class TestGeometryAssociation:
                 terrain_hdf_path=missing_terrain,
             )
 
+    @pytest.mark.synthetic_hdf_layout
     def test_partial_update_preserves_omitted_association(
         self,
         monkeypatch,
@@ -1338,72 +1477,113 @@ class TestGeometryAssociation:
 
 
 class TestDetectBcConflicts:
-    """Test BC conflict detection using synthetic HDF."""
+    """BC conflict detection on HDFs in the layout HEC-RAS writes."""
 
-    def test_detects_shared_face(self, bc_conflict_hdf):
+    @pytest.mark.synthetic_hdf_layout
+    def test_detects_shared_perimeter_faces(self, bc_conflict_hdf):
         conflicts = GeomMesh.detect_bc_conflicts(str(bc_conflict_hdf), cell_size=50.0)
-        assert len(conflicts) >= 1
-        assert "NormDepth1" in conflicts[0].bc_names
-        assert "USInflow1" in conflicts[0].bc_names
+        assert [c.face_id for c in conflicts] == [0, 3]
+        for conflict in conflicts:
+            assert conflict.flow_area_name == "MainArea"
+            assert conflict.bc_names == ["NormDepth1", "USInflow1"]
+            assert conflict.bc_types == ["External", "External"]
 
-    def test_identifies_normal_depth_bc(self, bc_conflict_hdf):
+    @pytest.mark.synthetic_hdf_layout
+    def test_interior_face_is_not_a_perimeter_face(self, bc_conflict_hdf):
+        # Face 2 joins physical cells 0 and 1 and lies on both lines.
+        conflicts = GeomMesh.detect_bc_conflicts(str(bc_conflict_hdf), cell_size=50.0)
+        assert 2 not in [c.face_id for c in conflicts]
+
+    @pytest.mark.synthetic_hdf_layout
+    def test_uses_faces_perimeter_values(self, bc_conflict_hdf):
+        # Face 3's straight chord is 40 units from both lines; only its
+        # Faces Perimeter Values point reaches them.
+        conflicts = GeomMesh.detect_bc_conflicts(str(bc_conflict_hdf), cell_size=50.0)
+        assert 3 in [c.face_id for c in conflicts]
+
+    @pytest.mark.synthetic_hdf_layout
+    def test_identifies_normal_depth_bc_from_plan_event_conditions(self, bc_conflict_hdf):
         conflicts = GeomMesh.detect_bc_conflicts(str(bc_conflict_hdf), cell_size=50.0)
         assert conflicts[0].normal_depth_bc == "NormDepth1"
 
+    @pytest.mark.synthetic_hdf_layout
+    def test_geometry_hdf_has_no_hydraulic_bc_type(self, bc_conflict_geom_hdf):
+        conflicts = GeomMesh.detect_bc_conflicts(str(bc_conflict_geom_hdf), cell_size=50.0)
+        assert [c.face_id for c in conflicts] == [0, 3]
+        assert all(c.normal_depth_bc is None for c in conflicts)
+
+    @pytest.mark.synthetic_hdf_layout
     def test_detects_conflicts_in_later_flow_area(self, multi_area_bc_conflict_hdf):
         conflicts = GeomMesh.detect_bc_conflicts(
             str(multi_area_bc_conflict_hdf), cell_size=50.0
         )
         assert len(conflicts) == 1
+        assert conflicts[0].face_id == 0
         assert conflicts[0].flow_area_name == "Area2"
         assert conflicts[0].normal_depth_bc == "NormDepth2"
-        assert "USInflow2" in conflicts[0].bc_names
+        assert conflicts[0].bc_names == ["NormDepth2", "USInflow2"]
+
+    def test_hdf_without_bc_lines_has_no_conflicts(self, tmp_path):
+        path = tmp_path / "empty.g01.hdf"
+        with h5py.File(str(path), "w") as hf:
+            hf.create_group("Geometry/2D Flow Areas")
+        assert GeomMesh.detect_bc_conflicts(str(path), cell_size=50.0) == []
 
 
 class TestFixBcConflicts:
-    """Test BC conflict repair using synthetic HDF."""
+    """BC conflict repair.
 
-    def test_trims_normal_depth_bc_and_updates_per_area_group(self, bc_conflict_hdf):
-        result = GeomMesh.fix_bc_conflicts(str(bc_conflict_hdf), cell_size=50.0)
+    ``fix_bc_conflicts`` still reads and writes per-area
+    ``2D Flow Areas/<area>/BC Lines/<name>/Coordinates`` groups, which HEC-RAS
+    does not write; these fixtures keep that layout so its trimming logic stays
+    covered. Its re-checks use its own dry run.
+    """
+
+    @pytest.mark.synthetic_hdf_layout
+    def test_trims_normal_depth_bc_and_updates_per_area_group(self, legacy_bc_conflict_hdf):
+        result = GeomMesh.fix_bc_conflicts(str(legacy_bc_conflict_hdf), cell_size=50.0)
         assert result.conflicts_found == 1
         assert result.conflicts_fixed == 1
         assert result.modified_hdf is True
 
-        with h5py.File(str(bc_conflict_hdf), "r") as hf:
+        with h5py.File(str(legacy_bc_conflict_hdf), "r") as hf:
             coords = hf["Geometry/2D Flow Areas/MainArea/BC Lines/NormDepth1/Coordinates"][:]
             assert len(coords) < 3
 
-        conflicts = GeomMesh.detect_bc_conflicts(str(bc_conflict_hdf), cell_size=50.0)
-        assert conflicts == []
+        recheck = GeomMesh.fix_bc_conflicts(
+            str(legacy_bc_conflict_hdf), cell_size=50.0, dry_run=True
+        )
+        assert recheck.conflicts_found == 0
 
-    def test_dry_run_no_modification(self, bc_conflict_hdf):
+    @pytest.mark.synthetic_hdf_layout
+    def test_dry_run_no_modification(self, legacy_bc_conflict_hdf):
         result = GeomMesh.fix_bc_conflicts(
-            str(bc_conflict_hdf), cell_size=50.0, dry_run=True
+            str(legacy_bc_conflict_hdf), cell_size=50.0, dry_run=True
         )
         assert result.modified_hdf is False
         assert result.conflicts_found == 1
 
-    def test_repairs_only_conflicted_later_flow_area(self, multi_area_bc_conflict_hdf):
-        with h5py.File(str(multi_area_bc_conflict_hdf), "r") as hf:
+    @pytest.mark.synthetic_hdf_layout
+    def test_repairs_only_conflicted_later_flow_area(self, legacy_multi_area_bc_conflict_hdf):
+        path = str(legacy_multi_area_bc_conflict_hdf)
+        with h5py.File(path, "r") as hf:
             before_area1 = hf["Geometry/2D Flow Areas/Area1/BC Lines/UpstreamOnly/Coordinates"][:]
             before_area2 = hf["Geometry/2D Flow Areas/Area2/BC Lines/NormDepth2/Coordinates"][:]
 
-        result = GeomMesh.fix_bc_conflicts(
-            str(multi_area_bc_conflict_hdf), cell_size=50.0
-        )
+        result = GeomMesh.fix_bc_conflicts(path, cell_size=50.0)
 
         assert result.conflicts_found == 1
         assert result.conflicts_fixed == 1
         assert result.modified_hdf is True
         assert result.trims[0][0].startswith("Area2/")
 
-        with h5py.File(str(multi_area_bc_conflict_hdf), "r") as hf:
+        with h5py.File(path, "r") as hf:
             after_area1 = hf["Geometry/2D Flow Areas/Area1/BC Lines/UpstreamOnly/Coordinates"][:]
             after_area2 = hf["Geometry/2D Flow Areas/Area2/BC Lines/NormDepth2/Coordinates"][:]
 
         assert np.array_equal(before_area1, after_area1)
         assert len(after_area2) < len(before_area2)
-        assert GeomMesh.detect_bc_conflicts(str(multi_area_bc_conflict_hdf), cell_size=50.0) == []
+        assert GeomMesh.fix_bc_conflicts(path, cell_size=50.0, dry_run=True).conflicts_found == 0
 
 
 class TestRasMapperLibVersionCompat:
@@ -2328,6 +2508,7 @@ class TestRefinementRegions:
                 region_name="North", region_fid=0,
             )
 
+    @pytest.mark.synthetic_hdf_layout
     def test_utf8_truncation_preserves_valid_bytes(self, refinement_region_hdf):
         geom_text, hdf_path = refinement_region_hdf
         long_name = "\u00e9" * 20

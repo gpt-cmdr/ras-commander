@@ -116,6 +116,7 @@ def _resolve(hdf):
 # Agreement
 # --------------------------------------------------------------------------
 
+@pytest.mark.synthetic_hdf_layout
 def test_all_sources_agree_across_wkt_dialects_returns_epsg(tmp_path):
     hdf = _project(
         tmp_path,
@@ -136,6 +137,7 @@ def test_all_sources_agree_across_wkt_dialects_returns_epsg(tmp_path):
     assert HdfBase.get_projection(hdf) == f"EPSG:{PA_NORTH_FTUS}"
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_main_compatible_epsg_string_for_hdf_attribute_only(tmp_path):
     hdf = _write_hdf(tmp_path / "Model.p01.hdf", _wkt(TX_SC_FTUS))
 
@@ -148,6 +150,7 @@ def test_rasmap_projection_only_esri_wkt_returns_epsg(tmp_path):
     assert HdfBase.get_projection(hdf) == f"EPSG:{PA_NORTH_FTUS}"
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_terrain_only_evidence_resolves(tmp_path):
     hdf = _project(tmp_path, terrain_wkt=_wkt(TX_SC_FTUS))
 
@@ -158,6 +161,7 @@ def test_terrain_only_evidence_resolves(tmp_path):
     assert HdfBase.get_projection(hdf) == f"EPSG:{TX_SC_FTUS}"
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_geometry_group_projection_used_when_root_attribute_absent(tmp_path):
     hdf = _write_hdf(tmp_path / "Model.g01.hdf", geometry_group_wkt=_wkt(TX_SC_FTUS))
 
@@ -171,6 +175,7 @@ def test_geometry_group_projection_used_when_root_attribute_absent(tmp_path):
 # Conflict
 # --------------------------------------------------------------------------
 
+@pytest.mark.synthetic_hdf_layout
 @pytest.mark.parametrize(
     "hdf_epsg, prj_epsg, terrain_epsg",
     [
@@ -217,6 +222,7 @@ def test_no_evidence_returns_none_and_records_checked_locations(tmp_path):
     assert HdfBase.get_projection(hdf) is None
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_missing_projection_file_does_not_vote(tmp_path):
     hdf = _write_hdf(tmp_path / "Model.p01.hdf", _wkt(TX_SC_FTUS))
     _write_rasmap(tmp_path / "Model.rasmap", projection=".\\Projection\\gone.prj")
@@ -228,6 +234,7 @@ def test_missing_projection_file_does_not_vote(tmp_path):
     assert HdfBase.get_projection(hdf) == f"EPSG:{TX_SC_FTUS}"
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_invalid_projection_text_does_not_vote(tmp_path):
     hdf = _project(tmp_path, prj_wkt="not a coordinate system", terrain_wkt=_wkt(TX_SC_FTUS))
 
@@ -257,6 +264,7 @@ def test_resolve_with_no_evidence_items_is_missing():
 # Return form: EPSG vs ESRI-only vs WKT-only
 # --------------------------------------------------------------------------
 
+@pytest.mark.synthetic_hdf_layout
 def test_esri_only_crs_returns_wkt_not_esri_code(tmp_path):
     esri_wkt = CRS.from_user_input("ESRI:102003").to_wkt()
     hdf = _write_hdf(tmp_path / "Model.p01.hdf", esri_wkt)
@@ -271,6 +279,7 @@ def test_esri_only_crs_returns_wkt_not_esri_code(tmp_path):
     assert CRS.from_user_input(value).equals(CRS.from_user_input("ESRI:102003"))
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_wkt_only_crs_returns_source_wkt(tmp_path):
     hdf = _write_hdf(tmp_path / "Model.p01.hdf", CUSTOM_WKT)
 
@@ -385,6 +394,7 @@ def _init(tmp_path):
     return project
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_project_crs_conflict_between_geometry_and_rasmap(tmp_path):
     name = _ras_project(tmp_path)
     _write_hdf(tmp_path / f"{name}.g01.hdf", _wkt(TX_SC_FTUS))
@@ -398,6 +408,7 @@ def test_project_crs_conflict_between_geometry_and_rasmap(tmp_path):
     assert HdfBase.get_projection(tmp_path / f"{name}.g01.hdf") is None
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_project_crs_matches_get_projection_when_sources_agree(tmp_path):
     name = _ras_project(tmp_path)
     geom_hdf = _write_hdf(tmp_path / f"{name}.g01.hdf")
@@ -498,6 +509,7 @@ def test_real_project_conflicting_projection_file_returns_none(tmp_path):
     assert HdfBase.get_projection(hdf) is None
 
 
+@pytest.mark.synthetic_hdf_layout
 @pytest.mark.parametrize("definition", ["ESRI:102003", b"ESRI:102003"])
 def test_non_epsg_authority_is_serialized_to_wkt(tmp_path, definition):
     expected = CRS.from_user_input("ESRI:102003")

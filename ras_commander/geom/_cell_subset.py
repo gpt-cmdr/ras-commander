@@ -907,6 +907,9 @@ def _apply_cell_subset(plan, hecras_version, hecras_dir, ras_object, timeout):
         shutil.copy2(geometry, text_backup)
         shutil.copy2(target, hdf_backup)
         try:
+            from ..fast_hdf import release_native_sessions
+
+            release_native_sessions(staged_hdf, target)
             os.replace(staged_hdf, target)
             os.replace(staged, geometry)
         except BaseException:

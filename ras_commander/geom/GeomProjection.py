@@ -19,7 +19,7 @@ from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple, Union
 from .._ras_text import _write_ras_text, _write_ras_xml
 from ..Decorators import log_call
 from ..LoggingConfig import get_logger
-from ..fast_hdf import read_typed, reraise_required
+from ..fast_hdf import read_typed, release_native_sessions, reraise_required
 from ..RasUtils import RasUtils
 from .GeomParser import GeomParser
 from .GeomStorage import GeomStorage
@@ -241,6 +241,7 @@ class GeomProjection:
                     f"Destination project folder already exists: {dest_project}. "
                     "Pass overwrite=True to replace it."
                 )
+            release_native_sessions(dest_project)
             shutil.rmtree(dest_project)
         shutil.copytree(src_project, dest_project)
 

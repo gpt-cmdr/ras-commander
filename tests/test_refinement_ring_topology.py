@@ -28,6 +28,7 @@ def write_regions(path, rings, parts=None):
         ]
 
 
+@pytest.mark.synthetic_hdf_layout
 @pytest.mark.parametrize("order", [(0,), (0, 1), (2, 0, 3, 1), (3, 1, 0, 2)])
 def test_containment_reader_preserves_shell_hole_island_and_disjoint_shell(tmp_path, order):
     rings = [square(0, 10), square(2, 8), square(4, 6), square(20, 22)]
@@ -50,6 +51,7 @@ def test_containment_reader_preserves_shell_hole_island_and_disjoint_shell(tmp_p
     assert public.geometry.iloc[0].equals(expected)
 
 
+@pytest.mark.synthetic_hdf_layout
 @pytest.mark.parametrize("parts", [
     [(-1, 5), (5, 5)], [(0, 5), (6, 4)], [(0, 6), (5, 5)],
     [(0, 5), (5, 6)], [(0, 5), (5, 4)], [(0, 5), (5.5, 4.5)],

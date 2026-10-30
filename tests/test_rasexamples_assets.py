@@ -26,6 +26,8 @@ def test_hosted_versions_download_their_own_asset(tmp_path, monkeypatch, version
         raise Stop
 
     monkeypatch.setattr(RasExamples, "_user_data_dir", tmp_path)
+    # get_example_projects() points _zip_file_path into the temporary directory.
+    monkeypatch.setattr(RasExamples, "_zip_file_path", None)
     monkeypatch.setattr(examples_module, "_require_requests", lambda: None)
     monkeypatch.setattr(examples_module.requests, "get", get)
     with pytest.raises(Stop):

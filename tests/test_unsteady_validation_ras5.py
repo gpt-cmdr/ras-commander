@@ -43,6 +43,7 @@ def _files(tmp_path: Path, **overrides):
     return _ras5_hdf(tmp_path / "m.p01.hdf", **overrides), flow, plan
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_ras5_accounting_validates_and_reconciles_the_inflow(tmp_path):
     summary = PortableExecution.validate_unsteady_results(*_files(tmp_path))
 
@@ -53,6 +54,7 @@ def test_ras5_accounting_validates_and_reconciles_the_inflow(tmp_path):
     assert summary["inflow_reconciliation"]["status"] == "passed"
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_ras5_lateral_inflow_counts_toward_the_reported_inflow(tmp_path):
     summary = PortableExecution.validate_unsteady_results(*_files(
         tmp_path, **{"Vol Accounting US Inflow": 5.0, "Vol Accounting Lat Hydro": 3.264}))
@@ -61,6 +63,7 @@ def test_ras5_lateral_inflow_counts_toward_the_reported_inflow(tmp_path):
     assert summary["inflow_reconciliation"]["status"] == "passed"
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_ras5_volume_error_limit_applies(tmp_path):
     summary = PortableExecution.validate_unsteady_results(*_files(
         tmp_path, **{"Vol Accounting Error Percentage": 2.5}))
@@ -68,6 +71,7 @@ def test_ras5_volume_error_limit_applies(tmp_path):
     assert summary["reason_codes"] == ["UNSTEADY_VOLUME_ERROR_EXCEEDED"]
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_ras5_net_exchange_terms_leave_the_inflow_undeterminable(tmp_path):
     summary = PortableExecution.validate_unsteady_results(*_files(
         tmp_path, **{"Vol Accounting 2D Bdry": -1.5}))
@@ -78,6 +82,7 @@ def test_ras5_net_exchange_terms_leave_the_inflow_undeterminable(tmp_path):
     assert "UNSTEADY_INFLOW_NET_EXCHANGE_TERMS" in reconciliation["reasons"]
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_ras5_accounting_with_a_missing_attribute_fails_closed(tmp_path):
     summary = PortableExecution.validate_unsteady_results(*_files(
         tmp_path, **{"Vol Accounting Error Percentage": None}))

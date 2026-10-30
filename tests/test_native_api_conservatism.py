@@ -166,6 +166,7 @@ def _write_results_hdf(path, year):
     return path
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_mesh_time_coordinate_keeps_the_dtype_xarray_gives_main(tmp_path):
     path = _write_results_hdf(tmp_path / "y2020.p01.hdf", 2020)
     stamps = HdfBase.get_unsteady_timestamps(path)
@@ -178,6 +179,7 @@ def test_mesh_time_coordinate_keeps_the_dtype_xarray_gives_main(tmp_path):
         assert actual.tobytes() == expected.tobytes()
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_mesh_time_coordinate_beyond_ns_range_is_representable(tmp_path):
     path = _write_results_hdf(tmp_path / "y3000.p01.hdf", 3000)
     dataset = HdfResultsMesh.get_mesh_cells_timeseries(
@@ -480,6 +482,7 @@ def test_required_mesh_results_surface_native_failure(tmp_path, monkeypatch, nat
         MESH_RESULT_CALLS[call](path)
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_auto_datasets_with_a_broken_binding_read_like_h5py(tmp_path, monkeypatch, native_module):
     from ras_commander import fast_hdf
     path = _write_mesh_results_hdf(tmp_path / "results.p01.hdf")
@@ -497,6 +500,7 @@ def test_auto_datasets_with_a_broken_binding_read_like_h5py(tmp_path, monkeypatc
             fast_hdf.read_dataset(hdf[names[0]], backend="rust")
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_auto_attribute_reads_survive_a_malformed_engine_descriptor(tmp_path, monkeypatch, native_module):
     from ras_commander import _fast_hdf_typed, fast_hdf
     path = tmp_path / "attrs.hdf"
@@ -511,6 +515,7 @@ def test_auto_attribute_reads_survive_a_malformed_engine_descriptor(tmp_path, mo
             fast_hdf.read_attrs(hdf, backend="rust")
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_auto_temporal_reduce_ignores_a_malformed_native_result(tmp_path, monkeypatch, native_module):
     from ras_commander import fast_results
     path = _write_mesh_results_hdf(tmp_path / "results.p01.hdf")
@@ -670,6 +675,7 @@ def test_cache_off_opens_per_read_and_holds_nothing(tmp_path, session_spy, monke
 # 7. Unrelated changes ride-alongs stay out
 # ---------------------------------------------------------------------------
 
+@pytest.mark.synthetic_hdf_layout
 def test_get_pipe_nodes_resolves_the_projection_last_like_main(tmp_path, monkeypatch):
     from ras_commander.hdf.HdfPipe import HdfPipe
     calls = []

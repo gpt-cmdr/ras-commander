@@ -5,7 +5,7 @@ from pathlib import Path
 import nbformat
 
 
-NOTEBOOK = Path("examples/926_wpc_qpf_precipitation_forecast.ipynb")
+NOTEBOOK = Path(__file__).resolve().parents[1] / "examples/926_wpc_qpf_precipitation_forecast.ipynb"
 
 
 def test_wpc_notebook_covers_source_dss_precompute_and_final_results():

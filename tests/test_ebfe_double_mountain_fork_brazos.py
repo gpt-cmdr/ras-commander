@@ -747,6 +747,7 @@ def test_serialized_path_relocation_handles_mapped_and_unc_staging_aliases(
     assert str(resolved_staging).casefold() not in serialized.casefold()
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_organizer_assembles_four_projects_and_preserves_source(
     tmp_path,
     monkeypatch,
@@ -1029,6 +1030,7 @@ def test_organizer_assembles_four_projects_and_preserves_source(
     ) is False
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_reference_audit_classifies_stale_named_area_path_as_qualification_gap(
     tmp_path,
     monkeypatch,
@@ -1073,6 +1075,7 @@ def test_reference_audit_classifies_stale_named_area_path_as_qualification_gap(
     )
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_pending_unsteady_start_remains_blocking_with_complete_associations(
     tmp_path,
     monkeypatch,
@@ -1127,6 +1130,7 @@ def test_pending_unsteady_start_remains_blocking_with_complete_associations(
     assert pending_gap["projects"] == ["DMF1", "DMF2", "DMF3", "DMF4"]
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_corrupt_manifest_forces_staged_rebuild_and_preserves_old_output(
     tmp_path,
     monkeypatch,
@@ -1158,6 +1162,7 @@ def test_corrupt_manifest_forces_staged_rebuild_and_preserves_old_output(
     ).read_text(encoding="utf-8") == "{not-json"
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_interrupted_no_manifest_retry_uses_clean_sibling_staging(
     tmp_path,
     monkeypatch,

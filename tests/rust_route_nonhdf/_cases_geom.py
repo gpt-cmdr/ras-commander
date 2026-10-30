@@ -117,9 +117,14 @@ def _features(path, group, polygon=False):
         return gm._hdf_polyline_features(f, group)
 
 
-def _detect_bc(path):
+def _detect_bc(path, cell_size=10.0):
     _first_mesh(path)
-    return _plain(_mesh().detect_bc_conflicts(path, 10.0))
+    return _plain(_mesh().detect_bc_conflicts(path, cell_size))
+
+
+def _normal_depth_bc_lines(path):
+    with h5py.File(path, "r") as f:
+        return sorted(_gm()._read_normal_depth_bc_lines(f))
 
 
 def _preprocessor():
@@ -266,6 +271,11 @@ CASES = {
     "GeomMesh._hdf_polyline_features[structures]": Case(lambda p: _features(p, "Geometry/Structures"), kinds=GEOM),
     "GeomMesh._hdf_polygon_features[refinement]": Case(lambda p: _features(p, "Geometry/2D Flow Area Refinement Regions", True), kinds=GEOM),
     "GeomMesh.detect_bc_conflicts": Case(_detect_bc, kinds=GEOM, max_mb=400, note="per-face shapely distance loop"),
+    # A 1,000 ft buffer, wide enough that real BC lines meet shared perimeter faces.
+    "GeomMesh.detect_bc_conflicts[wide]": Case(lambda p: _detect_bc(p, 100000.0), kinds=GEOM, max_mb=400,
+                                               note="per-face shapely distance loop"),
+    "GeomMesh._read_normal_depth_bc_lines": Case(_normal_depth_bc_lines, kinds=GEOM,
+                                                 helper="GeomMesh.detect_bc_conflicts"),
     "GeomMesh.get_refinement_region_names": Case(_refinement_names, kinds=GEOM),
     "GeomMesh.get_refinement_regions": Case(_refinement_regions, kinds=GEOM),
     "GeomMesh.clip_refinement_regions": Case(_clip_refinement, kinds=GEOM),

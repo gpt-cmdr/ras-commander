@@ -37,6 +37,7 @@ from ..RasPlan import RasPlan
 from ..RasPrj import _matching_copied_prj_file
 from ..RasUtils import RasUtils
 from ..geom import GeomPreprocessor
+from ..fast_hdf import release_native_sessions
 
 logger = get_logger(__name__)
 
@@ -787,6 +788,7 @@ def execute_psexec_plan(
 
         # Step 8: Cleanup (if autoclean enabled)
         if autoclean:
+            release_native_sessions(worker_temp_folder)
             shutil.rmtree(worker_temp_folder, ignore_errors=True)
             logger.debug(f"Cleaned up worker folder: {worker_temp_folder}")
         else:
@@ -806,6 +808,7 @@ def execute_psexec_plan(
         ):
             try:
                 if worker_temp_folder.exists():
+                    release_native_sessions(worker_temp_folder)
                     shutil.rmtree(worker_temp_folder, ignore_errors=True)
             except BaseException:
                 pass

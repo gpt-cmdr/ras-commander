@@ -46,6 +46,7 @@ from .ComputeResults import (
     GeometryCompleteResult,
     GeometryLayerResult,
 )
+from .fast_hdf import release_native_sessions
 
 logger = get_logger(__name__)
 
@@ -721,6 +722,7 @@ class RasGeometryCompute:
             return report
         finally:
             if not keep_working_copy or not audit_completed:
+                release_native_sessions(tmp_root)
                 shutil.rmtree(tmp_root, ignore_errors=True)
 
     @staticmethod
@@ -1459,6 +1461,7 @@ class RasGeometryCompute:
         temp_dir = Path(tempfile.gettempdir()).resolve(strict=False)
         if path.parent != temp_dir or not path.name.startswith("reach_audit_"):
             raise RuntimeError(f"Refusing to remove unverified audit directory: {path}")
+        release_native_sessions(path)
         shutil.rmtree(path, ignore_errors=True)
 
     @staticmethod

@@ -23,6 +23,7 @@ import pandas as pd
 
 from ..ComputeResults import TerrainExportResult
 from ..LoggingConfig import get_logger
+from ..fast_hdf import release_native_sessions
 
 logger = get_logger(__name__)
 
@@ -1109,6 +1110,7 @@ def _cleanup_stage(stage: Path) -> None:
         gdal_view.unlink()
     elif platform.system() == "Windows" and gdal_view.exists():
         os.rmdir(gdal_view)
+    release_native_sessions(stage)
     shutil.rmtree(stage, ignore_errors=False)
 
 

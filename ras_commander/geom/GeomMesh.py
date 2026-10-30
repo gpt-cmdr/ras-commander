@@ -96,7 +96,6 @@ from .._geometry_association import (
 from ..LoggingConfig import get_logger
 from ._breakline_controls import _protection_radius_flag
 from ..fast_hdf import read_attr, read_typed, reraise_required
-from ..fast_hdf import h5py_until_qualified
 from ._seed_repair import ComputationPointRepairPlan
 from .GeomMeshDataclasses import (
     BCConflict,
@@ -1243,7 +1242,13 @@ def _find_error_locations(mesh, cell_size: float, min_ratio: float) -> list:
 
 
 def _iter_bc_flow_area_groups(hf):
-    """Yield 2D flow-area groups that contain the BC conflict datasets."""
+    """Yield 2D flow-area groups with per-area ``BC Lines`` groups.
+
+    Used only by :meth:`GeomMesh.fix_bc_conflicts`. HEC-RAS does not write
+    per-area ``BC Lines`` groups (it keeps 2D BC lines in
+    ``Geometry/Boundary Condition Lines``, read by
+    :meth:`GeomMesh.detect_bc_conflicts`), so real files yield nothing here.
+    """
     root_key = "Geometry/2D Flow Areas"
     if root_key not in hf:
         return
@@ -1306,6 +1311,128 @@ def _read_bc_face_segments(area_group, shapely_line_cls) -> List[tuple]:
         face_segments.append((fid, shapely_line_cls([a, b])))
 
     return face_segments
+
+
+_BC_LINES_GROUP = "Geometry/Boundary Condition Lines"
+_BC_EVENT_GROUP = "Event Conditions/Unsteady/Boundary Conditions"
+
+
+def _read_bc_lines_by_area(hf) -> dict[str, list]:
+    """Read ``Geometry/Boundary Condition Lines`` grouped by their ``SA-2D`` area.
+
+    Each BC line is one row of ``Attributes`` (``Name``, ``SA-2D``, ``Type``)
+    with its polyline in ``Polyline Info``/``Parts``/``Points``. ``Type`` is
+    the geometry's line kind as stored (``External`` or ``Internal``).
+    """
+    by_area: dict[str, list] = {}
+    for feature in _hdf_polyline_features(hf, _BC_LINES_GROUP):
+        associations = feature["associations"]
+        area_name = associations[0] if associations else ""
+        by_area.setdefault(area_name, []).append(
+            {
+                "name": feature["name"],
+                "type": feature["structure_type"],
+                "geom": feature["geometry"],
+            }
+        )
+    return by_area
+
+
+def _read_normal_depth_bc_lines(hf) -> set:
+    """``(2D area, BC line)`` pairs a plan HDF assigns a Normal Depth boundary.
+
+    The hydraulic boundary type is not part of the geometry; a plan HDF records
+    it under ``Event Conditions/Unsteady/Boundary Conditions/Normal Depths``,
+    one entry per line with ``2D Flow Area`` and ``BC Line`` attributes.
+    Geometry-only HDFs have no such group and give an empty set.
+    """
+    group_path = f"{_BC_EVENT_GROUP}/Normal Depths"
+    if group_path not in hf:
+        return set()
+    pairs = set()
+    group = hf[group_path]
+    for key in group.keys():
+        entry = group[key]
+        area = read_attr(entry, "2D Flow Area", None)
+        line = read_attr(entry, "BC Line", None)
+        if area is None or line is None:
+            continue
+        pairs.add((_decode_hdf_text(area), _decode_hdf_text(line)))
+    return pairs
+
+
+def _iter_perimeter_face_areas(hf):
+    """Yield ``(area_name, area_group, physical_cell_count)`` for 2D areas.
+
+    Perimeter faces are identified from ``Faces Cell Indexes``: HEC-RAS
+    numbers a 2D area's physical cells first and the ghost cells outside its
+    perimeter after them (``Attributes`` ``Cell Count`` is the physical
+    count), so a face is on the perimeter exactly when one of its cells is a
+    ghost cell. Areas without ``Cell Count`` or face tables are skipped.
+    """
+    attributes_path = "Geometry/2D Flow Areas/Attributes"
+    if attributes_path not in hf:
+        return
+    attributes = read_typed(hf[attributes_path])
+    fields = attributes.dtype.names or ()
+    if "Name" not in fields or "Cell Count" not in fields:
+        return
+    required = (
+        "Faces Cell Indexes",
+        "Faces FacePoint Indexes",
+        "FacePoints Coordinate",
+    )
+    for row in attributes:
+        area_name = _decode_hdf_text(row["Name"])
+        area_path = f"Geometry/2D Flow Areas/{area_name}"
+        if area_path not in hf:
+            continue
+        area_group = hf[area_path]
+        if not all(name in area_group for name in required):
+            continue
+        yield area_name, area_group, int(row["Cell Count"])
+
+
+def _read_perimeter_face_lines(area_group, cell_count, shapely_line_cls) -> List[tuple]:
+    """Read ``(face_id, LineString)`` for every perimeter face of one 2D area.
+
+    A face's line is its start face point, its ``Faces Perimeter Values``
+    rows when ``Faces Perimeter Info`` gives a positive count, then its end
+    face point, as :meth:`HdfMesh.get_mesh_cell_faces` builds it.
+    """
+    import numpy as np
+
+    face_cells = np.asarray(read_typed(area_group["Faces Cell Indexes"]))
+    perimeter_ids = np.flatnonzero((face_cells >= cell_count).any(axis=1))
+    if not len(perimeter_ids):
+        return []
+    face_points = np.asarray(read_typed(area_group["Faces FacePoint Indexes"]))
+    fp_coords = np.asarray(read_typed(area_group["FacePoints Coordinate"]))
+    has_info = "Faces Perimeter Info" in area_group
+    perimeter_info = (
+        np.asarray(read_typed(area_group["Faces Perimeter Info"])) if has_info else None
+    )
+    perimeter_values = (
+        np.asarray(read_typed(area_group["Faces Perimeter Values"]))
+        if has_info and "Faces Perimeter Values" in area_group
+        else None
+    )
+    face_lines: List[tuple] = []
+    for face_id in perimeter_ids:
+        fp_a, fp_b = int(face_points[face_id][0]), int(face_points[face_id][1])
+        coords = [fp_coords[fp_a][:2]]
+        if perimeter_info is not None:
+            start, count = int(perimeter_info[face_id][0]), int(perimeter_info[face_id][1])
+            if count > 0:
+                if perimeter_values is None or start < 0 or start + count > len(perimeter_values):
+                    raise RuntimeError(
+                        f"{area_group.name}/Faces Perimeter Info row {face_id} "
+                        "points outside Faces Perimeter Values"
+                    )
+                coords.extend(perimeter_values[start:start + count][:, :2])
+        coords.append(fp_coords[fp_b][:2])
+        face_lines.append((int(face_id), shapely_line_cls(coords)))
+    return face_lines
 
 
 def _localized_douglas_peucker(perim, error_midpoints, cell_size, tol, ns, buf_multiplier=3.0):
@@ -6701,7 +6828,6 @@ class GeomMesh:
 
     @staticmethod
     @log_call
-    @h5py_until_qualified
     def detect_bc_conflicts(
         geom_hdf_path: Union[str, Path],
         cell_size: float,
@@ -6709,12 +6835,33 @@ class GeomMesh:
         """
         Detect perimeter faces covered by 2+ BC lines.
 
+        Reads the boundary condition lines HEC-RAS stores in
+        ``Geometry/Boundary Condition Lines`` (``Attributes`` ``Name``,
+        ``SA-2D`` and ``Type`` with ``Polyline Info``/``Parts``/``Points``)
+        and, for each 2D flow area named in ``SA-2D``, its perimeter faces:
+        faces whose ``Faces Cell Indexes`` include a ghost cell (an index at or
+        above the area's ``Attributes`` ``Cell Count``), drawn from
+        ``Faces FacePoint Indexes``, ``FacePoints Coordinate`` and
+        ``Faces Perimeter Info``/``Values``. A face is reported when two or
+        more of the area's BC lines lie within ``0.01 * cell_size`` of it.
+
         Args:
-            geom_hdf_path: Path to compiled .g##.hdf file.
+            geom_hdf_path: Path to a compiled .g##.hdf file (a plan HDF, which
+                carries the same geometry, also works).
             cell_size: Mesh cell size for intersection buffer scaling.
 
         Returns:
-            List of BCConflict (one per conflicting face).
+            List of BCConflict (one per conflicting face), in 2D-area and face
+            order. ``bc_names`` lists the BC lines in ``Attributes`` order.
+            ``bc_types`` holds each line's geometry ``Type`` as stored
+            (``External`` or ``Internal``): the geometry HDF does not record
+            the hydraulic boundary type (Normal Depth, Flow Hydrograph, ...),
+            which belongs to the unsteady flow file. ``normal_depth_bc`` is
+            therefore filled only from a plan HDF, whose
+            ``Event Conditions/Unsteady/Boundary Conditions/Normal Depths``
+            entries name the 2D area and BC line; it is ``None`` for a
+            geometry HDF. Areas without ``Cell Count`` or face tables (for
+            example an uncompiled geometry) yield no conflicts.
         """
         import h5py
         from shapely.geometry import LineString as ShapelyLine
@@ -6723,31 +6870,35 @@ class GeomMesh:
         buf = 0.01 * cell_size
 
         with h5py.File(str(geom_hdf_path), "r") as hf:
-            for area_group in _iter_bc_flow_area_groups(hf):
-                flow_area_name = area_group.name.rsplit("/", 1)[-1]
-                bcs = _read_bc_features(area_group, ShapelyLine)
-                if not bcs:
+            if _BC_LINES_GROUP not in hf:
+                return conflicts
+            bcs_by_area = _read_bc_lines_by_area(hf)
+            if not bcs_by_area:
+                return conflicts
+            normal_depth = _read_normal_depth_bc_lines(hf)
+            for flow_area_name, area_group, cell_count in _iter_perimeter_face_areas(hf):
+                bcs = [
+                    bc for bc in bcs_by_area.get(flow_area_name, [])
+                    if bc["geom"] is not None
+                ]
+                if len(bcs) < 2:
                     continue
 
-                for face_id, face_line in _read_bc_face_segments(area_group, ShapelyLine):
-                    hitting = []
-                    hitting_types = []
-                    for bc in bcs:
-                        if bc["geom"] is not None and face_line.distance(bc["geom"]) < buf:
-                            hitting.append(bc["name"])
-                            hitting_types.append(bc["type"])
-
+                for face_id, face_line in _read_perimeter_face_lines(
+                    area_group, cell_count, ShapelyLine
+                ):
+                    hitting = [bc for bc in bcs if face_line.distance(bc["geom"]) < buf]
                     if len(hitting) >= 2:
                         nd_bc = next(
-                            (n for n, t in zip(hitting, hitting_types)
-                             if "normal" in t.lower()),
+                            (bc["name"] for bc in hitting
+                             if (flow_area_name, bc["name"]) in normal_depth),
                             None,
                         )
                         conflicts.append(BCConflict(
                             face_id=face_id,
                             flow_area_name=flow_area_name,
-                            bc_names=hitting,
-                            bc_types=hitting_types,
+                            bc_names=[bc["name"] for bc in hitting],
+                            bc_types=[bc["type"] for bc in hitting],
                             normal_depth_bc=nd_bc,
                         ))
 

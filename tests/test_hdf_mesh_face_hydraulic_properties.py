@@ -224,6 +224,7 @@ def _write_reference_line_hdf(path: Path) -> Path:
     return path
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_face_hydraulic_properties_scalar_stage(tmp_path):
     hdf_path = _write_face_property_hdf(tmp_path / "mesh.g01.hdf")
 
@@ -241,6 +242,7 @@ def test_face_hydraulic_properties_scalar_stage(tmp_path):
     assert ds["conveyance"].sel(face_id=0).item() == pytest.approx(expected_conveyance)
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_face_hydraulic_properties_1d_per_face_and_metric(tmp_path):
     hdf_path = _write_face_property_hdf(tmp_path / "mesh.g01.hdf")
 
@@ -254,6 +256,7 @@ def test_face_hydraulic_properties_1d_per_face_and_metric(tmp_path):
     assert ds["area"].sel(face_id=1).item() == pytest.approx(8.0)
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_face_hydraulic_properties_2d_dry_and_invalid_n(tmp_path):
     hdf_path = _write_face_property_hdf(tmp_path / "mesh.g01.hdf")
 
@@ -271,6 +274,7 @@ def test_face_hydraulic_properties_2d_dry_and_invalid_n(tmp_path):
     assert np.isnan(ds["conveyance"].sel(time=1, face_id=2).item())
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_face_hydraulic_properties_warns_for_above_table_stage(tmp_path, caplog):
     hdf_path = _write_face_property_hdf(tmp_path / "mesh.g01.hdf")
 
@@ -291,6 +295,7 @@ def test_face_hydraulic_properties_warns_for_above_table_stage(tmp_path, caplog)
     assert "Values above the table are clipped" in caplog.text
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_face_hydraulic_properties_above_table_face_count_is_unique(tmp_path):
     hdf_path = _write_face_property_hdf(tmp_path / "mesh.g01.hdf")
 
@@ -314,6 +319,7 @@ def test_face_hydraulic_properties_rejects_wrong_1d_shape(tmp_path):
         )
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_extend_linux_tmp_face_property_tables_uses_face_length_above_terrain(
     tmp_path,
 ):
@@ -341,6 +347,7 @@ def test_extend_linux_tmp_face_property_tables_uses_face_length_above_terrain(
     assert list(face0["Manning's n"]) == pytest.approx([0.0425, 0.043])
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_extend_linux_tmp_face_property_tables_reaches_partial_final_step(
     tmp_path,
 ):
@@ -368,6 +375,7 @@ def test_extend_linux_tmp_face_property_tables_reaches_partial_final_step(
     assert face0_last["Wetted Perimeter"] == pytest.approx(10.0)
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_transform_linux_tmp_face_mannings_n_surfaces_backup(tmp_path):
     hdf_path = _write_face_property_hdf(tmp_path / "mesh.p01.tmp.hdf")
 
@@ -659,6 +667,7 @@ def test_build_landcover_depth_roughness_curves_reads_v5_sidecar(tmp_path):
     assert list(grass["mannings_n"]) == pytest.approx([0.10, 0.12])
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_sample_linux_tmp_face_mannings_n_from_landcover_curves(tmp_path):
     hdf_path = _write_face_property_hdf(tmp_path / "mesh.p01.tmp.hdf")
     landcover_hdf = _write_landcover_sidecar(tmp_path / "landcover.hdf")
@@ -693,6 +702,7 @@ def test_sample_linux_tmp_face_mannings_n_from_landcover_curves(tmp_path):
     assert list(face0["Wetted Perimeter"]) == pytest.approx([0.0, 10.0])
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_deprecated_landcover_curve_wrapper_preserves_count(tmp_path):
     hdf_path = _write_face_property_hdf(tmp_path / "curve.p01.tmp.hdf")
     landcover_hdf = _write_landcover_sidecar(tmp_path / "landcover.hdf")
@@ -718,6 +728,7 @@ def test_deprecated_landcover_curve_wrapper_preserves_count(tmp_path):
     assert len(list(tmp_path.glob("curve.p01.tmp.pre-write.*.bak.hdf"))) == 1
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_landcover_curve_sampling_empty_faces_preserves_return_contract(
     tmp_path, monkeypatch
 ):
@@ -762,6 +773,7 @@ def test_landcover_curve_sampling_empty_faces_preserves_return_contract(
     assert not list(tmp_path.glob("empty.p01.tmp.pre-write.*.bak.hdf"))
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_reference_line_internal_faces_returns_face_chain(tmp_path):
     hdf_path = _write_reference_line_hdf(tmp_path / "ref.g01.hdf")
 

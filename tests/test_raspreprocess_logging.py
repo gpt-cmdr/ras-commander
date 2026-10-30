@@ -94,6 +94,7 @@ def test_verify_preprocessing_is_debug_only(tmp_path, caplog):
     assert "All preprocessing files verified for plan 01" in debug_messages
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_preprocess_plan_logs_start_and_final_info_only(
     tmp_path,
     monkeypatch,
@@ -160,6 +161,7 @@ def test_preprocess_plan_logs_start_and_final_info_only(
     assert any(str(result.tmp_hdf_path) in message for message in debug_messages)
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_full_simulation_fallback_warning_is_concise(
     tmp_path,
     monkeypatch,
@@ -229,6 +231,7 @@ def test_full_simulation_fallback_warning_is_concise(
     assert "Preprocessing complete; HEC-RAS process already exited" in debug_messages
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_clear_existing_preserves_final_result_families(
     tmp_path,
     monkeypatch,

@@ -39,6 +39,7 @@ from ras_commander.sources.base import (
     ModelType,
     SourceStatus,
 )
+from ...fast_hdf import release_native_sessions
 
 logger = get_logger(__name__)
 
@@ -1636,6 +1637,7 @@ class AlabamaBleModels:
                     "staged-copy",
                 )
                 backup = None
+                release_native_sessions(temporary_root, final_root)
                 if final_root.exists():
                     backup = final_root.with_name(
                         f".{final_root.name}.replaced-{uuid.uuid4().hex}"
@@ -1662,6 +1664,7 @@ class AlabamaBleModels:
                         )
             except Exception:
                 if temporary_root.exists():
+                    release_native_sessions(temporary_root)
                     shutil.rmtree(temporary_root)
                 raise
             return DownloadResult(

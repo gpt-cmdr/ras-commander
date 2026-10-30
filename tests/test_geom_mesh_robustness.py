@@ -102,6 +102,7 @@ def test_older_constructor_rejected(screening):
         run()
 
 
+@pytest.mark.synthetic_hdf_layout
 @pytest.mark.parametrize('units,inset', [('US Customary', .5), ('SI', .1524)])
 def test_inset_units(tmp_path, units, inset):
     path = tmp_path / 'geom.hdf'

@@ -89,6 +89,7 @@ def _write_hydraulic_tables_hdf(
     return hdf_path
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_successful_htab_reads_keep_one_concise_batch_info(
     tmp_path: Path,
     caplog: pytest.LogCaptureFixture,
@@ -162,6 +163,7 @@ def test_missing_htab_tables_batch_read_logs_one_preprocessor_error(
     assert str(tmp_path) not in message
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_partial_htab_batch_failure_keeps_details_at_debug(
     tmp_path: Path,
     caplog: pytest.LogCaptureFixture,

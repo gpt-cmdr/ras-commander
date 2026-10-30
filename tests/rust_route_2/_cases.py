@@ -118,6 +118,15 @@ def _calibration_region_faces(path):
     return HdfMesh.get_face_ids_in_calibration_region(path, mesh, region)
 
 
+def _first_infiltration_class(path):
+    """Parameters of the first class row of a layer's root ``Variables`` table."""
+    with h5py.File(path, "r") as f:
+        table = f["Variables"] if "Variables" in f else None
+        name = (table[0]["Name"].decode() if table is not None and len(table)
+                and "Name" in (table.dtype.names or ()) else "__absent__")
+    return HdfInfiltration.get_infiltration_parameters(path, mukey=name)
+
+
 def _depth_curves(path):
     return HdfLandCover.build_landcover_depth_roughness_curves(
         path, [0.0, 1.0, 5.0], lambda depth, base_n, name: base_n * (1.0 + 0.01 * depth))
@@ -133,7 +142,7 @@ CASES.update({
     "HdfInfiltration.get_infiltration_layer_data": lambda p: HdfInfiltration.get_infiltration_layer_data(p),
     "HdfInfiltration.get_classification_polygons": lambda p: HdfInfiltration.get_classification_polygons(p),
     "HdfInfiltration.get_infiltration_map": lambda p: HdfInfiltration.get_infiltration_map(p),
-    "HdfInfiltration.get_infiltration_parameters": lambda p: HdfInfiltration.get_infiltration_parameters(p, mukey="__first__"),
+    "HdfInfiltration.get_infiltration_parameters": _first_infiltration_class,
     "HdfLandCover.build_landcover_depth_roughness_curves": _depth_curves,
     "HdfLandCover.get_landcover_raster_map": lambda p: HdfLandCover.get_landcover_raster_map(p),
     "HdfLandCover.get_classification_polygons": lambda p: HdfLandCover.get_classification_polygons(p),

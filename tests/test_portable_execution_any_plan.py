@@ -129,6 +129,7 @@ def test_hydrograph_integration_is_linear_and_truncates_at_the_window():
 # --- the unsteady validator --------------------------------------------------
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_unsteady_result_passes_and_reconciles_the_authored_inflow(tmp_path):
     """The Salt Draw firehose probe: 100 cfs x 1 h = 8.2645 acre-ft vs 8.264 reported."""
     summary = PortableExecution.validate_unsteady_results(*_files(tmp_path))
@@ -143,6 +144,7 @@ def test_unsteady_result_passes_and_reconciles_the_authored_inflow(tmp_path):
     assert reconciliation["relative_difference"] < 1e-4
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_excess_volume_error_fails(tmp_path):
     hdf, flow, plan = _files(tmp_path)
     _result_hdf(hdf, **{"Error Percent": 2.5})
@@ -153,6 +155,7 @@ def test_excess_volume_error_fails(tmp_path):
     assert summary["reason_codes"] == ["UNSTEADY_VOLUME_ERROR_EXCEEDED"]
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_negative_volume_error_is_judged_by_magnitude(tmp_path):
     hdf, flow, plan = _files(tmp_path)
     _result_hdf(hdf, **{"Error Percent": -1.5})
@@ -162,6 +165,7 @@ def test_negative_volume_error_is_judged_by_magnitude(tmp_path):
     )
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_injected_volume_that_disagrees_with_the_hydrograph_fails(tmp_path):
     """A boundary that injected the wrong volume must not pass on volume error alone."""
     hdf, flow, plan = _files(tmp_path)
@@ -185,6 +189,7 @@ def test_missing_volume_accounting_fails_closed(tmp_path):
     assert summary["reason_codes"] == ["UNSTEADY_VOLUME_ACCOUNTING_MISSING"]
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_a_partial_volume_accounting_block_names_what_is_missing(tmp_path):
     hdf, flow, plan = _files(tmp_path)
     _result_hdf(hdf, **{"Volume Ending": None})
@@ -195,6 +200,7 @@ def test_a_partial_volume_accounting_block_names_what_is_missing(tmp_path):
     assert summary["missing_attributes"] == ["Volume Ending"]
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_nonfinite_volume_fails_closed(tmp_path):
     hdf, flow, plan = _files(tmp_path)
     _result_hdf(hdf, **{"Error Percent": float("nan")})
@@ -215,6 +221,7 @@ def test_an_unreadable_result_fails_closed(tmp_path):
     assert "error" in summary
 
 
+@pytest.mark.synthetic_hdf_layout
 @pytest.mark.parametrize(
     ("flow", "reason"),
     [
@@ -233,6 +240,7 @@ def test_undeterminable_inflow_is_recorded_never_assumed(tmp_path, flow, reason)
     assert reason in summary["inflow_reconciliation"]["reasons"]
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_a_hydrograph_shorter_than_the_run_is_not_reconciled(tmp_path):
     hdf, flow, plan = _files(tmp_path)
     plan.write_text(_plan_text(end="01JAN2024,0300"))
@@ -245,6 +253,7 @@ def test_a_hydrograph_shorter_than_the_run_is_not_reconciled(tmp_path):
     ]
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_si_volume_units_are_not_reconciled_against_cfs(tmp_path):
     hdf, flow, plan = _files(tmp_path)
     _result_hdf(hdf, **{"Vol Accounting in": b"1000 m3"})
@@ -439,6 +448,7 @@ def _reuse_runtime(tmp_path: Path) -> tuple[Path, Path, Path]:
     return project, plan, geometry
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_reuse_accepts_geometry_hdf_rewritten_without_content_change(tmp_path):
     """HEC-RAS reopens a 2D geometry HDF read-write; only bookkeeping changes."""
     project, plan, geometry = _reuse_runtime(tmp_path)
@@ -456,6 +466,7 @@ def test_reuse_accepts_geometry_hdf_rewritten_without_content_change(tmp_path):
     assert evidence["retained_unchanged"] is True
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_reuse_rejects_geometry_hdf_with_changed_content(tmp_path):
     project, plan, geometry = _reuse_runtime(tmp_path)
     evidence, retained = PortableExecution._prepare_preprocessing(
@@ -467,6 +478,7 @@ def test_reuse_rejects_geometry_hdf_with_changed_content(tmp_path):
     assert evidence["retained_unchanged"] is False
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_hdf_content_digest_ignores_file_layout_but_not_attributes(tmp_path):
     first, second, third = (tmp_path / f"{n}.hdf" for n in "abc")
     _write_geometry_hdf(first, [1.0, 2.0])
@@ -480,6 +492,7 @@ def test_hdf_content_digest_ignores_file_layout_but_not_attributes(tmp_path):
     assert digest(first) != digest(third)
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_reuse_accepts_compiled_file_rewritten_with_identical_bytes(tmp_path):
     """HEC-RAS may rewrite the legacy c## file byte for byte on a 2D run."""
     project, plan, geometry = _reuse_runtime(tmp_path)

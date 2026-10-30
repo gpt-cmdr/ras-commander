@@ -37,6 +37,7 @@ def _sha256(path):
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_clear_geometry_infiltration_is_selective_and_idempotent(tmp_path):
     path = tmp_path / "child.g02.hdf"
     with h5py.File(path, "w") as h:
@@ -234,6 +235,7 @@ def test_clear_geometry_infiltration_validates_every_attribute_before_success(
     assert list(tmp_path.iterdir()) == [path]
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_clear_geometry_infiltration_refuses_hard_linked_files(tmp_path, monkeypatch):
     # A hard-linked geometry shares its bytes with another name; clearing it
     # would edit that other file too, so the call refuses before any write.
@@ -616,6 +618,7 @@ def test_readonly_input_fails_without_backup_leak(tmp_path):
         path.chmod(stat.S_IWRITE | stat.S_IREAD)
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_clear_geometry_infiltration_clears_compiled_area_copies(tmp_path):
     path = tmp_path / "child.g02.hdf"
     with h5py.File(path, "w") as h:

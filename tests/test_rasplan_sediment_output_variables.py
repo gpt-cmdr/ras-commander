@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import pytest
 
-from ras_commander import RasPlan
+from ras_commander import RasPlan, RasPrj
 
 _PLAN_WITH_LEVEL = (
     "Plan Title=Sediment Test\n"
@@ -111,8 +111,10 @@ def test_missing_explicit_path_raises_valueerror(tmp_path):
 def test_numeric_plan_number_does_not_typeerror():
     # int/float plan numbers must route to get_plan_path (which normalizes them),
     # not crash at Path(int). Regression test for the QAQC MAJOR finding.
+    # A fresh, uninitialized project: the global ``ras`` may hold an earlier
+    # test's project that has a plan 01, and then nothing raises.
     for value in (1, 1.0):
         with pytest.raises(Exception) as excinfo:
-            RasPlan.get_sediment_output_variables(value)
+            RasPlan.get_sediment_output_variables(value, ras_object=RasPrj())
         assert not isinstance(excinfo.value, TypeError), (
             f"numeric plan number {value!r} should not raise TypeError")

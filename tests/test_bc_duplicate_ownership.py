@@ -60,6 +60,7 @@ def ownership_hdf(tmp_path):
     return path
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_default_raises_and_legacy_diagnostic_retains_columns(ownership_hdf):
     for reader, args in [
         (HdfBndry.get_bc_external_faces, ()),
@@ -74,6 +75,7 @@ def test_default_raises_and_legacy_diagnostic_retains_columns(ownership_hdf):
     assert legacy.attrs["duplicate_face_row_count"] == 2
 
 
+@pytest.mark.synthetic_hdf_layout
 @pytest.mark.parametrize("include_geometry", [False, True])
 def test_report_preserves_each_association(ownership_hdf, include_geometry):
     before = hashlib.sha256(ownership_hdf.read_bytes()).hexdigest()
@@ -108,6 +110,7 @@ def test_report_preserves_each_association(ownership_hdf, include_geometry):
     assert hashlib.sha256(ownership_hdf.read_bytes()).hexdigest() == before
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_perimeter_report_has_one_row_per_face_and_ambiguous_scalars(ownership_hdf):
     result = HdfMesh.get_mesh_perimeter_faces(
         ownership_hdf, "Mesh", on_duplicate_ownership="report"
@@ -128,6 +131,9 @@ def test_perimeter_report_has_one_row_per_face_and_ambiguous_scalars(ownership_h
     assert result.attrs["duplicate_ownership"][0]["face_id"] == 0
 
 
+@pytest.mark.synthetic_hdf_layout(
+    "empty",
+)
 @pytest.mark.parametrize("status", ["empty", "absent"])
 def test_report_empty_or_absent_has_diagnostic_columns(ownership_hdf, status):
     with h5py.File(ownership_hdf, "r+") as hdf:
@@ -164,6 +170,12 @@ def test_invalid_duplicate_option_fails(ownership_hdf, option):
         )
 
 
+@pytest.mark.synthetic_hdf_layout(
+    "interior",
+    "invalid_bc",
+    "missing",
+    "stale",
+)
 @pytest.mark.parametrize(
     "mutation", ["stale", "interior", "invalid_bc", "invalid_cell", "missing"]
 )
@@ -189,6 +201,7 @@ def test_report_does_not_relax_other_perimeter_checks(ownership_hdf, mutation):
         )
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_unique_default_columns_remain_unchanged(ownership_hdf):
     with h5py.File(ownership_hdf, "r+") as hdf:
         bc = hdf["Geometry/Boundary Condition Lines"]
@@ -205,6 +218,7 @@ def test_unique_default_columns_remain_unchanged(ownership_hdf):
     pd.testing.assert_frame_equal(default, report[default.columns])
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_repeated_same_owner_remains_explicit_and_ambiguous(ownership_hdf):
     with h5py.File(ownership_hdf, "r+") as hdf:
         rows = hdf["Geometry/Boundary Condition Lines/External Faces"]
@@ -256,6 +270,7 @@ def test_delivered_salt_draw_parent_read_only_when_available():
     assert digest() == before
 
 
+@pytest.mark.synthetic_hdf_layout
 @pytest.mark.parametrize("other_duplicate", [False, True])
 def test_mesh_local_face_keys_and_perimeter_summary_scope(
     ownership_hdf, other_duplicate
@@ -324,6 +339,7 @@ def test_mesh_local_face_keys_and_perimeter_summary_scope(
         ]
 
 
+@pytest.mark.synthetic_hdf_layout
 @pytest.mark.parametrize("missing", ["attributes", "bc_id", "both"])
 def test_missing_metadata_reports_unknown_owners_without_losing_associations(
     ownership_hdf, missing

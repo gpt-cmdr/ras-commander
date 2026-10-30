@@ -1,7 +1,8 @@
 """Explicit API11 full-feature native entrypoint contract (80); additions require review."""
 EXPECTED = {
     # Test hook: panics inside the boundary guard (contained as FastHdfPanicError).
-    "_panic_for_test": ("function", None, "src/python/panic_guard.rs"),
+    # Only in builds with the engine's test-hooks feature (after 0.2.4).
+    "_panic_for_test": ("function", "test-hooks", "src/python/mod.rs"),
     "HdfSession": ("class", None, "src/python/session.rs"),
     "mesh_summary_inventory": ("function", None, "src/python/fim.rs"),
     "mesh_series_inventory": ("function", None, "src/python/fim.rs"),

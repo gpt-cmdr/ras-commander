@@ -160,6 +160,7 @@ def test_geometry_hdf_readiness_rejects_empty_placeholder(tmp_path):
     assert "File Type" in reason
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_geometry_hdf_readiness_rejects_2d_area_without_topology(tmp_path):
     hdf_path = tmp_path / "Model.g03.hdf"
     with h5py.File(hdf_path, "w") as hdf:
@@ -180,6 +181,7 @@ def test_geometry_hdf_readiness_rejects_2d_area_without_topology(tmp_path):
     assert "cell/face topology" in reason
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_geometry_hdf_readiness_accepts_populated_2d_mesh(tmp_path):
     hdf_path = _write_ready_2d_geometry_hdf(tmp_path / "Model.g03.hdf")
 
@@ -236,6 +238,7 @@ def test_legacy_geometry_hdf_recovery_requires_explicit_acknowledgement(
         assert "Geometry/GeomPreprocess" in hdf
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_legacy_geometry_hdf_recovery_requires_exact_version_before_backup(
     tmp_path,
 ):
@@ -251,6 +254,7 @@ def test_legacy_geometry_hdf_recovery_requires_exact_version_before_backup(
     assert not list(tmp_path.glob("*.legacy-recovery.bak.hdf"))
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_legacy_geometry_hdf_recovery_rejects_hec_ras_7(tmp_path):
     hdf_path = _write_legacy_geometry_hdf(
         tmp_path / "Model.g01.hdf",
@@ -267,6 +271,7 @@ def test_legacy_geometry_hdf_recovery_rejects_hec_ras_7(tmp_path):
     assert not list(tmp_path.glob("*.legacy-recovery.bak.hdf"))
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_legacy_geometry_hdf_recovery_backs_up_and_preserves_source_data(
     tmp_path,
 ):
@@ -309,6 +314,7 @@ def test_legacy_geometry_hdf_recovery_backs_up_and_preserves_source_data(
         )
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_legacy_geometry_hdf_recovery_refuses_existing_backup(tmp_path):
     hdf_path = _write_legacy_geometry_hdf(tmp_path / "Model.g01.hdf")
     backup_path = tmp_path / "Model.g01.legacy-recovery.bak.hdf"
@@ -326,6 +332,7 @@ def test_legacy_geometry_hdf_recovery_refuses_existing_backup(tmp_path):
         assert "Geometry/GeomPreprocess" in hdf
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_legacy_geometry_hdf_recovery_rejects_malformed_dataset_pair(
     tmp_path,
 ):
@@ -345,6 +352,7 @@ def test_legacy_geometry_hdf_recovery_rejects_malformed_dataset_pair(
     assert not list(tmp_path.glob("*.legacy-recovery.bak.hdf"))
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_legacy_geometry_hdf_recovery_is_idempotent_after_invalidation(
     tmp_path,
 ):
@@ -366,6 +374,7 @@ def test_legacy_geometry_hdf_recovery_is_idempotent_after_invalidation(
     assert len(list(tmp_path.glob("*.legacy-recovery.bak.hdf"))) == 1
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_clear_geompre_hdf_deprecated_wrapper_is_guarded(tmp_path):
     hdf_path = _write_legacy_geometry_hdf(tmp_path / "Model.g01.hdf")
 

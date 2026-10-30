@@ -110,6 +110,7 @@ def test_adapter_disable_and_live_writable_handle(tmp_path, monkeypatch):
     assert not path.exists()
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_adapter_unsupported_preserves_endian(tmp_path):
     from ras_commander import fast_hdf
     path = tmp_path / "fallback.hdf"
@@ -121,6 +122,7 @@ def test_adapter_unsupported_preserves_endian(tmp_path):
             assert_exact(fast_hdf.read_dataset(ds), ds[()])
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_non_deflate_filter_is_exact_or_falls_back(native, tmp_path):
     from ras_commander import fast_hdf
     path = tmp_path / "lzf.hdf"
