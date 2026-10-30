@@ -41,6 +41,7 @@ def test_multipart_centerline_returns_parts_without_connector(tmp_path, point_st
     ]
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_legacy_global_centerline_parts_covering_the_feature(tmp_path):
     path = tmp_path / "global.g01.hdf"
     _write(path, [[2, 6, 0, 2]], [[2, 2], [4, 4]])
@@ -50,6 +51,10 @@ def test_legacy_global_centerline_parts_covering_the_feature(tmp_path):
     ]
 
 
+@pytest.mark.synthetic_hdf_layout(
+    "info0-parts0",
+    "info1-parts1",
+)
 @pytest.mark.parametrize(
     "info, parts",
     [
@@ -65,6 +70,9 @@ def test_invalid_centerline_parts_raise(tmp_path, info, parts):
         HdfStruc.get_structures(path)
 
 
+@pytest.mark.synthetic_hdf_layout(
+    "info2-parts2",
+)
 @pytest.mark.parametrize(
     "info, parts",
     [
@@ -84,6 +92,12 @@ def test_zero_point_centerline_returns_none_geometry(tmp_path, info, parts):
     assert np.asarray(gdf.geometry.iloc[other].coords).tolist() == POINTS
 
 
+@pytest.mark.synthetic_hdf_layout(
+    "info0-parts0-point range",
+    "info1-parts1-point range",
+    "info2-parts2-centerline parts",
+    "info3-parts3-centerline parts",
+)
 @pytest.mark.parametrize(
     "info, parts, match",
     [
@@ -101,6 +115,15 @@ def test_inconsistent_empty_or_short_centerline_raises(tmp_path, info, parts, ma
         HdfStruc.get_structures(path)
 
 
+@pytest.mark.synthetic_hdf_layout(
+    "info0-parts0",
+    "info1-parts1",
+    "info2-parts2",
+    "info3-parts3",
+    "info4-parts4",
+    "info7-parts7",
+    "info8-parts8",
+)
 @pytest.mark.parametrize(
     "info, parts",
     [
@@ -135,6 +158,7 @@ def test_single_centerline_without_parts_retains_legacy_support(tmp_path, empty)
         assert np.asarray(geometry.coords).tolist() == POINTS
 
 
+@pytest.mark.synthetic_hdf_layout
 @pytest.mark.parametrize("dataset, values", [
     ("Centerline Info", [[0, 8, 0.5, 1]]),
     ("Centerline Parts", [[0.5, 7]]),

@@ -96,6 +96,7 @@ def _write_selected_face_geometry(path: Path, *, include_perimeter: bool = True)
         )
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_get_bc_external_faces_reads_native_association(tmp_path):
     geometry_hdf = tmp_path / "project.g01.hdf"
     rows = np.array(
@@ -125,6 +126,7 @@ def test_get_bc_external_faces_reads_native_association(tmp_path):
     np.testing.assert_allclose(result["station_end"], [10.0, 25.5])
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_get_bc_external_faces_builds_only_selected_native_segments(tmp_path):
     geometry_hdf = tmp_path / "project_with_geometry.g01.hdf"
     rows = np.array(
@@ -155,6 +157,7 @@ def test_get_bc_external_faces_builds_only_selected_native_segments(tmp_path):
     )
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_get_bc_external_faces_reverses_full_native_face_geometry(tmp_path):
     geometry_hdf = tmp_path / "reversed_geometry.g01.hdf"
     rows = np.array(
@@ -169,6 +172,7 @@ def test_get_bc_external_faces_reverses_full_native_face_geometry(tmp_path):
     assert result.geometry.iloc[0].wkt == "LINESTRING (2 0, 1.5 0.5, 0.5 0.5, 0 0)"
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_get_bc_external_faces_reports_endpoint_only_fallback(tmp_path):
     geometry_hdf = tmp_path / "endpoint_only_geometry.g01.hdf"
     rows = np.array(
@@ -186,6 +190,7 @@ def test_get_bc_external_faces_reports_endpoint_only_fallback(tmp_path):
     assert result.geometry.iloc[0].wkt == "LINESTRING (0 0, 2 0)"
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_get_bc_external_faces_uses_native_endpoints_for_stale_face_id(
     tmp_path,
     caplog,
@@ -211,6 +216,7 @@ def test_get_bc_external_faces_uses_native_endpoints_for_stale_face_id(
     assert "Using native External Faces endpoints for 1 of 1 BC faces" in caplog.text
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_get_bc_external_faces_distinguishes_absent_from_empty(tmp_path):
     absent_hdf = tmp_path / "absent.g01.hdf"
     empty_hdf = tmp_path / "empty.g01.hdf"
@@ -244,6 +250,7 @@ def test_get_bc_external_faces_distinguishes_absent_from_empty(tmp_path):
     assert empty_geometry.attrs["association_status"] == "empty"
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_get_bc_external_faces_rejects_duplicate_face_ownership(tmp_path):
     geometry_hdf = tmp_path / "duplicates.g01.hdf"
     rows = np.array(
@@ -259,6 +266,7 @@ def test_get_bc_external_faces_rejects_duplicate_face_ownership(tmp_path):
         HdfBndry.get_bc_external_faces(geometry_hdf)
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_get_bc_external_faces_can_report_duplicate_face_ownership(tmp_path):
     geometry_hdf = tmp_path / "duplicate_diagnostics.g01.hdf"
     rows = np.array(
@@ -290,6 +298,7 @@ def test_get_bc_external_faces_can_report_duplicate_face_ownership(tmp_path):
     )
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_get_bc_external_faces_rejects_unknown_bc_id(tmp_path):
     geometry_hdf = tmp_path / "invalid_bc.g01.hdf"
     rows = np.array(
@@ -403,6 +412,7 @@ def test_real_austin_child_reports_native_dataset_state():
         assert result.empty
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_get_bc_external_faces_returns_dataframe_not_geodataframe(tmp_path):
     geometry_hdf = tmp_path / "plain_dataframe.g01.hdf"
     _write_geometry_hdf(geometry_hdf)

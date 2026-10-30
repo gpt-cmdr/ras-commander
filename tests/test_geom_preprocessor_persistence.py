@@ -96,6 +96,7 @@ def test_unrelated_open_hdf_is_allowed(tmp_path):
         GP._require_closed_geometry_hdf(path)
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_inventory_detects_lost_roughness_projection_and_attributes(tmp_path):
     path = geometry(tmp_path / "Synthetic.g01.hdf")
     expected = GP._geometry_hdf_inventory(path)
@@ -308,6 +309,7 @@ def test_unqualified_structures_preserve_geometry_cache_before_launch(
     assert killed == []
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_default_structure_path_runs_without_claiming_qualified_products(
     tmp_path, monkeypatch
 ):
@@ -334,6 +336,7 @@ def test_default_structure_path_runs_without_claiming_qualified_products(
     assert "WRITE ATTR ERROR" in result.stdout
 
 
+@pytest.mark.synthetic_hdf_layout
 @pytest.mark.parametrize(
     "dataset", ["FacePoints Coordinate", "Cells Center Coordinate"]
 )
@@ -388,6 +391,7 @@ def test_public_wrapper_rejects_translated_regenerated_mesh(
     assert result.completion_contract["products_complete"] is False
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_normal_exit_with_complete_inventory_never_kills(tmp_path, monkeypatch):
     result, killed = project_run(tmp_path, monkeypatch)
     assert result.success and result.return_code == 0
@@ -397,6 +401,7 @@ def test_normal_exit_with_complete_inventory_never_kills(tmp_path, monkeypatch):
     assert result.completion_contract["plan_restored"] is True
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_captured_native_error_rejects_complete_products_and_zero_exit(
     tmp_path, monkeypatch
 ):
@@ -412,6 +417,7 @@ def test_captured_native_error_rejects_complete_products_and_zero_exit(
     assert not killed
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_nonspatial_compute_profile_does_not_require_shapely(tmp_path, monkeypatch):
     import sys
 
@@ -481,6 +487,7 @@ def test_real_wrapper_restoration_failure_has_no_successful_lifecycle_proof(
     ).read_bytes() != b"Geom File=g01\nRun UNet=-1\nRun HTab=0\n"
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_native_precipitation_error_with_zero_launcher_exit_fails(
     tmp_path, monkeypatch
 ):
@@ -525,6 +532,7 @@ def test_invalid_native_worker_limit_fails_before_project_setup(workers):
     assert "GEOMETRY_PREPROCESS_INVALID_WORKERS" in result.error
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_missing_geompreprocess_products_with_normal_exit_fails(tmp_path, monkeypatch):
     result, killed = project_run(tmp_path, monkeypatch, write_products=False)
     assert not result.success and result.return_code == 0
@@ -540,6 +548,7 @@ def test_plan_reference_changed_during_setup_fails_before_launch(tmp_path, monke
     assert killed == []
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_nonzero_exit_cannot_be_waived_by_diagnostic_signal(tmp_path, monkeypatch):
     result, killed = project_run(tmp_path, monkeypatch, exit_code=15)
     assert not result.success
@@ -547,6 +556,7 @@ def test_nonzero_exit_cannot_be_waived_by_diagnostic_signal(tmp_path, monkeypatc
     assert killed == []
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_populated_mesh_with_inventory_loss_is_failure(tmp_path, monkeypatch):
     result, killed = project_run(tmp_path, monkeypatch, remove=True)
     assert not result.success

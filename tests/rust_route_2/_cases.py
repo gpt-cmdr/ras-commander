@@ -151,11 +151,48 @@ CASES.update({
     "HdfMesh.get_face_ids_in_calibration_region": _calibration_region_faces,
 })
 
-# Multi-file methods: called with a project entry {geom, landcover, infiltration}
+# Multi-file methods: called with a project entry {geom, landcover, infiltration, soils}
 # from the manifest's "projects" section (read-only project folders).
+def _soils_raster_stats(j):
+    """Soil statistics need the soils layer (Hydrologic Soil Groups HDF with its raster),
+    not the infiltration layer; projects without one skip explicitly."""
+    import pytest
+    if "soils" not in j:
+        pytest.skip("project lists no soils layer")
+    return HdfInfiltration.get_soils_raster_stats(j["geom"], soil_hdf_path=j["soils"])
+
+
+def _final_mannings_tif(method, j):
+    """The returned raster plus the GeoTIFF the method writes, read back exactly.
+
+    Each call writes to its own temporary file; the band values, dtype, nodata,
+    CRS WKT and transform are compared, not the file bytes (GDAL metadata such as
+    creation software is not part of the result).
+    """
+    import tempfile
+    from pathlib import Path as _Path
+
+    import rasterio
+
+    with tempfile.TemporaryDirectory() as tmp:
+        out = _Path(tmp) / "final_mannings_n.tif"
+        array = method(j["geom"], landcover_hdf_path=j["landcover"], output_tif_path=out)
+        if not out.exists():
+            return {"array": array, "tif": None}
+        with rasterio.open(out) as src:
+            return {
+                "array": array,
+                "tif": src.read(),
+                "dtypes": list(src.dtypes),
+                "nodata": src.nodata,
+                "crs": src.crs.to_wkt() if src.crs else None,
+                "transform": tuple(src.transform),
+                "shape": (src.count, src.height, src.width),
+            }
+
+
 PROJECT_CASES = {
-    "HdfInfiltration.get_soils_raster_stats": lambda j: HdfInfiltration.get_soils_raster_stats(
-        j["geom"], soil_hdf_path=j.get("infiltration")),
+    "HdfInfiltration.get_soils_raster_stats": _soils_raster_stats,
     "HdfInfiltration.get_soil_raster_stats": lambda j: HdfInfiltration.get_soil_raster_stats(
         j["geom"], landcover_hdf_path=j["landcover"], soil_hdf_path=j.get("infiltration")),
     "HdfInfiltration.get_infiltration_stats": lambda j: HdfInfiltration.get_infiltration_stats(
@@ -166,6 +203,10 @@ PROJECT_CASES = {
         j["geom"], landcover_hdf_path=j["landcover"]),
     "HdfLandCover.compute_final_mannings_raster": lambda j: HdfLandCover.compute_final_mannings_raster(
         j["geom"], landcover_hdf_path=j["landcover"]),
+    "HdfLandCover.estimate_final_mannings_raster[tif]": lambda j: _final_mannings_tif(
+        HdfLandCover.estimate_final_mannings_raster, j),
+    "HdfLandCover.compute_final_mannings_raster[tif]": lambda j: _final_mannings_tif(
+        HdfLandCover.compute_final_mannings_raster, j),
 }
 
 
@@ -296,3 +337,26 @@ def _corner_elevations(path):
 
 
 CASES["HdfMesh.get_mesh_corner_elevations"] = _corner_elevations
+
+
+# ---------------------------------------------------------------- storage-area summaries
+SA_SUMMARY = "Results/Unsteady/Output/Output Blocks/Base Output/Summary Output/Storage Areas"
+
+
+def _storage_area_summaries(path):
+    """Every Summary Output/Storage Areas dataset through the public typed reader.
+
+    No public Hdf method reads these summaries; ``fast_hdf.read_typed`` is the public
+    reader that routes them (typed 1D-summary family). Beaver_LS_SAConn p01 stores the
+    square (2, 2) Maximum/Minimum Water Surface layout that needs the stored ``Row N``
+    attributes to tell the axes apart.
+    """
+    from ras_commander import fast_hdf
+    with h5py.File(path, "r") as f:
+        if SA_SUMMARY not in f:
+            return {}
+        names = sorted(n for n, d in f[SA_SUMMARY].items() if isinstance(d, h5py.Dataset))
+        return {n: fast_hdf.read_typed(f[f"{SA_SUMMARY}/{n}"]) for n in names}
+
+
+CASES["fast_hdf.read_typed[storage-area summaries]"] = _storage_area_summaries

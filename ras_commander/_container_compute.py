@@ -27,7 +27,7 @@ import h5py
 import numpy as np
 
 from .LoggingConfig import get_logger
-from .fast_hdf import read_attr, read_typed
+from .fast_hdf import read_attr, read_typed, release_native_sessions
 from .fast_hdf import h5py_until_qualified
 
 logger = get_logger(__name__)
@@ -662,6 +662,7 @@ def run_compute(*, project, plan, timeout=14400, num_cores=2, run_id=None,
                             evidence_errors.append(str(exc))
             try:
                 if not evidence_errors:
+                    release_native_sessions(staging)
                     shutil.rmtree(staging)
             except OSError as exc:
                 evidence_errors.append(str(exc))

@@ -2285,8 +2285,21 @@ def _safe_remove_owned_temp(
     if not parent_matches or not (sentinel_matches or manifest_matches):
         logger.error("Refusing cleanup of unverified staging directory: %s", temp_root)
         return False
+    _release_native_tree(temp_root)
     shutil.rmtree(_io_path(temp_root))
     return True
+
+
+def _release_native_tree(*folders: Path) -> None:
+    """Close native HDF sessions under ``folders`` before they are moved or removed.
+
+    Staging initializes and inventories the copy inside this public call, and its
+    native sessions stay mapped until the outermost call returns; Windows refuses
+    to rename or delete a folder that holds a mapped file.
+    """
+    from . import fast_hdf
+
+    fast_hdf.release_native_sessions(*folders)
 
 
 def _safe_remove_owned_lock(
@@ -2389,6 +2402,7 @@ def _path_has_directory_identity(path: Path, identity: tuple[int, int]) -> bool:
 
 def _native_rename_noreplace(source: Path, destination: Path) -> None:
     """Atomically rename one directory without replacing a destination."""
+    _release_native_tree(source)
     if os.name == "nt":
         # Windows directory rename already fails when the destination exists.
         os.rename(_io_path(source), _io_path(destination))

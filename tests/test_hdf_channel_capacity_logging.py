@@ -53,6 +53,7 @@ def test_standardize_hdf_input_resolution_probe_is_debug_only(
     assert not any(record.levelno >= logging.WARNING for record in records)
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_extract_steady_profile_wse_missing_attrs_is_actionable(tmp_path, caplog):
     hdf_path = tmp_path / "steady.p01.hdf"
     with h5py.File(hdf_path, "w") as hdf:

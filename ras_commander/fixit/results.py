@@ -6,9 +6,12 @@ including individual fix messages and aggregate results.
 """
 
 from dataclasses import dataclass, field
-from typing import List, Optional, Dict, Any, Tuple
+from typing import TYPE_CHECKING, List, Optional, Dict, Any, Tuple
 from enum import Enum
 from pathlib import Path
+
+if TYPE_CHECKING:
+    import pandas as pd
 
 
 class FixAction(Enum):

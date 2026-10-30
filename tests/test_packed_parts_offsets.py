@@ -11,6 +11,10 @@ from ras_commander.hdf import HdfBase, HdfMesh
 _read_lines = import_module("ras_commander.geom.GeomMesh")._hdf_polyline_features
 
 
+@pytest.mark.synthetic_hdf_layout(
+    "global-polyline",
+    "local-polyline",
+)
 @pytest.mark.parametrize("consumer", ["collection", "polyline"])
 @pytest.mark.parametrize("convention", ["local", "global"])
 def test_nonzero_feature_start_with_numerically_overlapping_offsets(tmp_path, consumer, convention):
@@ -65,6 +69,9 @@ def test_feature_local_gaps_shared_and_unused_vertices_preserve_exact_ranges(par
     assert HdfBase._feature_part_ranges(np.array(parts), 4, 8) == [tuple(p) for p in parts]
 
 
+@pytest.mark.synthetic_hdf_layout(
+    "polyline",
+)
 @pytest.mark.parametrize("consumer", ["collection", "polyline"])
 def test_consumer_rejects_truncated_parts_table(tmp_path, consumer):
     path = tmp_path / "bad.g01.hdf"

@@ -142,6 +142,7 @@ def test_encroachment_parameters_from_plan_file(tmp_path, backend, plan, flow, p
     else:
         assert "target_surcharge" not in params
     assert "max_iterations" not in params and "tolerance" not in params
+    assert params["targets_complete"] is True and params["nodes_missing_target"] == []
 
 
 def test_encroachment_parameters_without_plan_information(tmp_path):
@@ -302,3 +303,22 @@ def test_real_steady_lateral_weirs(fixture):
         [e[:3] for e in expected]
     assert [(m["river"], m["reach"], m["station"], m["value"]) for m in native
             if m["message_id"] == "FW_LW_02"] == [e for e in expected if e[3] > 5.0]
+
+
+def test_encroachment_target_missing_at_one_node_is_incomplete(tmp_path):
+    """A blank Method 4 target must not be dropped in favour of the other nodes' target."""
+    (tmp_path / "proj.p01").write_text(
+        "Plan Title=t\nFlow File=f01\nEncroach Param=-1 ,10,10, 2 \n"
+        "Encroach River=R\nEncroach Reach=A\n"
+        "Encroach Node=2.0\n       4       1        \n"
+        "Encroach Node=1.0\n       4                \n")
+    (tmp_path / "proj.f01").write_text(
+        "Flow Title=t\nNumber of Profiles= 2 \nProfile Names=Base,Floodway\n"
+        "River Rch & RM=R,A,2.0\n     100     100\n")
+    path = _plan_hdf(tmp_path, "proj.p01.hdf", "proj.p01", "proj.f01", [])
+    params = CheckFloodways._get_encroachment_parameters(path, "Floodway")
+    assert params["methods"] == [4]
+    assert params.get("target_surcharge") is None
+    assert params["targets_complete"] is False
+    assert params["nodes_missing_target"] == [
+        {"river": "R", "reach": "A", "node": "1.0", "method": 4}]

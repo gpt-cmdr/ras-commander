@@ -259,6 +259,9 @@ def _prepare(
                     wine._shutdown_wineserver(tools["wineserver"], environment)
             except Exception as exc:  # cleanup evidence; never masks the result
                 receipt["detail"] = (receipt["detail"] + f"; wineserver: {exc}").lstrip("; ")
+            from ..fast_hdf import release_native_sessions
+
+            release_native_sessions(task_root)
             shutil.rmtree(task_root, ignore_errors=True)
     receipt["finished_at"] = _utc_now()
     receipt["elapsed_seconds"] = round(time.monotonic() - t0, 3)

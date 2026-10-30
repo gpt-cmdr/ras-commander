@@ -43,6 +43,7 @@ def connection_hdf(tmp_path):
     return path
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_native_ids_and_faces_are_verified(connection_hdf):
     row = HdfStruc.get_connection_attachments(str(connection_hdf)).iloc[0]
     assert row.attachment_verified
@@ -51,6 +52,16 @@ def test_native_ids_and_faces_are_verified(connection_hdf):
     assert not row.orientation_verified and not row.flux_sign_verified
 
 
+@pytest.mark.synthetic_hdf_layout(
+    "adjacency_range",
+    "fractional_face",
+    "inactive",
+    "incidence",
+    "missing",
+    "point_range",
+    "range",
+    "schema",
+)
 @pytest.mark.parametrize(
     "mutation",
     [

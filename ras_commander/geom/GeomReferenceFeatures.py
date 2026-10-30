@@ -314,7 +314,11 @@ def _reference_point_records(file_lines: List[str]) -> List[dict]:
     for i, line in enumerate(file_lines):
         if not line.startswith("Reference Point Name="):
             continue
-        name = _validate_reference_line_field(line.split("=", 1)[1].strip(), "point name", 40)
+        # The name is the rest of its own record, so a comma is unambiguous; HEC-RAS
+        # 6.6 computes such points and keeps the names verbatim in the HDF.
+        name = _validate_reference_line_field(
+            line.split("=", 1)[1].strip(), "point name", 40, allow_commas=True
+        )
         if name in names:
             raise ValueError(f"Duplicate native reference point name {name!r}")
         names.add(name)
@@ -1294,7 +1298,7 @@ class GeomReferenceFeatures:
         names = {p["name"] for p in _reference_point_records(file_lines)}
         blocks = []
         for item in points:
-            name = _validate_reference_line_field(item['name'], "point name", 40)
+            name = _validate_reference_line_field(item['name'], "point name", 40, allow_commas=True)
             if name in names:
                 raise ValueError(f"Duplicate native reference point name {name!r}")
             names.add(name)

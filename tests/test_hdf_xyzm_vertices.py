@@ -64,6 +64,7 @@ def test_the_fixture_still_carries_the_shape_that_causes_the_failure():
         Polygon(points)
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_four_ordinate_refinement_regions_are_read_rather_than_lost():
     """The defect this file exists for.
 
@@ -84,6 +85,7 @@ def test_four_ordinate_refinement_regions_are_read_rather_than_lost():
     assert not regions.geometry.has_z.any()
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_a_real_z_ordinate_is_kept_and_only_the_measure_is_dropped(tmp_path):
     """M is a measure, Z is a spatial dimension. Only one of them may be dropped.
 
@@ -109,6 +111,7 @@ def test_a_real_z_ordinate_is_kept_and_only_the_measure_is_dropped(tmp_path):
     np.testing.assert_allclose(kept[:5, :2], points[:5, :2])
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_a_source_that_already_fits_is_returned_untouched(tmp_path):
     """The reduction is conditional, so nothing that reads today changes."""
     datasets = _datasets(FIXTURE)

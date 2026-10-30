@@ -261,6 +261,7 @@ def test_import_validation_does_not_require_computation_cells(tmp_path):
     assert "mesh" not in result
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_geometry_refresh_captures_and_restores_associations(tmp_path, monkeypatch):
     hdf_path = tmp_path / "Model.g03.hdf"
     terrain = tmp_path / "Terrain" / "Terrain.hdf"
@@ -312,6 +313,7 @@ def test_geometry_refresh_captures_and_restores_associations(tmp_path, monkeypat
     assert calls[0][1]["landcover_hdf_path"] == landcover.resolve()
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_geometry_refresh_rejects_missing_association_artifact(tmp_path):
     hdf_path = tmp_path / "Model.g03.hdf"
     with h5py.File(hdf_path, "w") as hdf:

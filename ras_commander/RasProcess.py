@@ -113,7 +113,7 @@ from .RasBenefits import BenefitAreaConfig, RasBenefits
 from .RasUtils import RasUtils
 from .LoggingConfig import get_logger
 from .Decorators import log_call
-from .fast_hdf import read_attr, read_typed, reraise_required
+from .fast_hdf import read_attr, read_typed, release_native_sessions, reraise_required
 from ._native_helper import (
     _is_wine_helper_runtime,
     normalize_store_map_render_mode,
@@ -2791,6 +2791,7 @@ Step 5: Configure (optional — auto-detection usually works)
                 yield source
                 return
 
+            release_native_sessions(source, original_backup, working_copy)
             os.replace(
                 _windows_extended_length_path(source),
                 _windows_extended_length_path(original_backup),
@@ -2817,6 +2818,7 @@ Step 5: Configure (optional — auto-detection usually works)
             yield source
         finally:
             if swapped:
+                release_native_sessions(source, original_backup)
                 source_io = _windows_extended_length_path(source)
                 if os.path.exists(source_io):
                     os.remove(source_io)

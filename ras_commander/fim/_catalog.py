@@ -12,6 +12,7 @@ import sys
 import time
 
 from .errors import FimMappingError, FimUnsupportedError
+from ..fast_hdf import release_native_sessions
 
 _MIB = 1 << 20
 _JOB_FIELDS = {
@@ -641,6 +642,7 @@ def map_catalog(
         # folders. Remaining worker temporaries live under the control tree.
         for job in normal:
             for path in (folder / job["job_id"]).glob(".batch-*"):
+                release_native_sessions(path)
                 shutil.rmtree(path)
         if failure is not None:
             for row in rows.values():
@@ -664,6 +666,7 @@ def map_catalog(
                     if str(path) not in keep:
                         path.unlink()
         persist()
+        release_native_sessions(control)
         shutil.rmtree(control)
     result = pd.DataFrame(list(rows.values()), columns=columns)
     result.attrs.update(

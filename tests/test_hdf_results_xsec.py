@@ -141,6 +141,7 @@ def _assert_source_file_is_filename_only(ds, hdf_path: Path) -> None:
     assert str(hdf_path.parent) not in repr(ds)
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_xsec_timeseries_success_emits_no_default_logs(tmp_path, caplog):
     """Successful direct cross-section extraction should stay quiet by default."""
     from ras_commander.hdf import HdfResultsXsec
@@ -166,6 +167,7 @@ def test_xsec_timeseries_success_emits_no_default_logs(tmp_path, caplog):
     ]
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_xsec_timeseries_string_path_success_emits_no_default_logs(tmp_path, caplog):
     """Notebook-style direct string paths should not emit default logs."""
     from ras_commander.hdf import HdfResultsXsec
@@ -184,6 +186,7 @@ def test_xsec_timeseries_string_path_success_emits_no_default_logs(tmp_path, cap
     ]
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_xsec_timeseries_plan_number_uses_standardize_input(tmp_path, caplog):
     """Plan-number inputs should be resolved by @standardize_input."""
     from ras_commander.hdf import HdfResultsXsec
@@ -211,6 +214,7 @@ def test_xsec_timeseries_plan_number_uses_standardize_input(tmp_path, caplog):
     ]
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_xsec_summary_reads_chunks_and_preserves_join_identity(tmp_path):
     """The summary API should reduce unsteady values without losing XS keys."""
     from ras_commander.hdf import HdfResultsXsec
@@ -249,6 +253,7 @@ def test_xsec_summary_reads_chunks_and_preserves_join_identity(tmp_path):
     assert summary.attrs["native_variables"]["water_surface"] == "Water Surface"
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_xsec_summary_filters_variables_case_insensitively(tmp_path):
     """Callers may request only the raw variables needed for publication."""
     from ras_commander.hdf import HdfResultsXsec
@@ -482,6 +487,7 @@ def test_ref_lines_no_matching_numeric_datasets_is_debug_only(tmp_path, caplog):
     )
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_ref_lines_timeseries_reads_all_numeric_matching_datasets(tmp_path):
     """Reference lines include all numeric time-series datasets dynamically."""
     from ras_commander.hdf import HdfResultsXsec
@@ -512,6 +518,7 @@ def test_ref_lines_timeseries_reads_all_numeric_matching_datasets(tmp_path):
     assert list(ds.coords["mesh_name"].values) == ["Mesh A", "Mesh A"]
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_ref_points_timeseries_reads_all_numeric_matching_datasets(tmp_path):
     """Reference points use the same dynamic native dataset selection."""
     from ras_commander.hdf import HdfResultsXsec
@@ -538,6 +545,7 @@ def test_ref_points_timeseries_reads_all_numeric_matching_datasets(tmp_path):
     assert list(ds.coords["refpt_name"].values) == ["Feature 1", "Feature 2"]
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_ref_lines_timeseries_supports_optional_variable_filter(tmp_path):
     """Existing calls still return all variables, while callers may filter."""
     from ras_commander.hdf import HdfResultsXsec
@@ -553,6 +561,7 @@ def test_ref_lines_timeseries_supports_optional_variable_filter(tmp_path):
     assert set(ds.data_vars) == {"Flow", "Area"}
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_ref_lines_timeseries_allows_names_without_mesh_suffix(tmp_path):
     """Some HDFs may omit the pipe-delimited mesh suffix on reference names."""
     from ras_commander.hdf import HdfResultsXsec

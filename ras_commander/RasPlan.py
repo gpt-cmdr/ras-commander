@@ -93,6 +93,7 @@ from datetime import datetime
 import logging
 import re
 from .LoggingConfig import get_logger
+from .fast_hdf import release_native_sessions
 from .Decorators import log_call
 from ._ras_text import _write_ras_text
 
@@ -5236,6 +5237,7 @@ class RasPlan:
 
         for old_path, new_path in rename_pairs:
             if old_path.exists():
+                release_native_sessions(old_path, new_path)
                 old_path.rename(new_path)
                 logger.debug(f"Renamed {old_path.name} -> {new_path.name}")
 
@@ -5455,6 +5457,7 @@ class RasPlan:
 
         for old_path, new_path in rename_pairs:
             if old_path.exists():
+                release_native_sessions(old_path, new_path)
                 old_path.rename(new_path)
                 logger.debug(f"Renamed {old_path.name} -> {new_path.name}")
 

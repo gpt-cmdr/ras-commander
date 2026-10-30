@@ -5,7 +5,7 @@ from pathlib import Path
 import nbformat
 
 
-NOTEBOOK = Path("examples/728_extend_gridded_dss_forcing_window.ipynb")
+NOTEBOOK = Path(__file__).resolve().parents[1] / "examples/728_extend_gridded_dss_forcing_window.ipynb"
 
 
 def test_dss_window_notebook_covers_derivative_precompute_and_final_results():

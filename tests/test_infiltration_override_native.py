@@ -702,6 +702,7 @@ def test_region_setter_rolls_back_failed_scoped_save(
     assert backups[0].read_bytes() == b"original"
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_geometry_path_requires_exact_geometry_filename_and_role(tmp_path):
     geometry = tmp_path / "project.g01.hdf"
     with h5py.File(geometry, "w") as hdf_file:
@@ -711,6 +712,7 @@ def test_geometry_path_requires_exact_geometry_filename_and_role(tmp_path):
     assert native._geometry_path(geometry) == geometry.resolve()
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_geometry_path_accepts_native_postpreprocessor_role(tmp_path):
     geometry = tmp_path / "project.g01.hdf"
     with h5py.File(geometry, "w") as hdf_file:
@@ -720,6 +722,9 @@ def test_geometry_path_accepts_native_postpreprocessor_role(tmp_path):
     assert native._geometry_path(geometry) == geometry.resolve()
 
 
+@pytest.mark.synthetic_hdf_layout(
+    "project.g01.hdf-HEC-RAS Results-root_groups3-geometry-only",
+)
 @pytest.mark.parametrize(
     ("filename", "file_type", "root_groups", "message"),
     [
