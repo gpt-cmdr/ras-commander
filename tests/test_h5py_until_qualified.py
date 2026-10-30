@@ -25,7 +25,6 @@ DECORATING_MODULES = [
     "ras_commander.hdf.HdfInfiltration",
     "ras_commander.hdf.HdfLandCover",
     "ras_commander.hdf.HdfPlan",
-    "ras_commander.hdf.HdfResultsPlan",
     "ras_commander.hdf.HdfResultsSediment",
     "ras_commander.parent_display",
     "ras_commander.RasEncroachments",
