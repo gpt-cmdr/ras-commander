@@ -4,6 +4,7 @@ CheckFloodways - Floodway encroachment validation.
 Extracted from RasCheck.py for modular organization.
 """
 
+import re
 from pathlib import Path
 from typing import Dict, List, Optional, Union
 
@@ -19,7 +20,6 @@ from .thresholds import ValidationThresholds, get_default_thresholds
 from .messages import get_message_template, get_help_text, format_message
 from . import _utils
 from .check_structures import CheckStructures
-from ..fast_hdf import h5py_until_qualified
 
 logger = get_logger(__name__)
 
@@ -897,58 +897,160 @@ class CheckFloodways:
 
         return messages
 
+    # ------------------------------------------------------------------
+    # Plan (.p##) and steady flow (.f##) text inputs of a plan HDF
+    # ------------------------------------------------------------------
+
+    _PLAN_INFORMATION = "Plan Data/Plan Information"
+
     @staticmethod
-    @h5py_until_qualified
+    def _sibling_file(folder: Path, name: Optional[str]) -> Optional[Path]:
+        """``folder/name`` matched case-insensitively (HEC-RAS mixes ``.F01``/``.f01``)."""
+        if not name:
+            return None
+        exact = folder / name
+        if exact.is_file():
+            return exact
+        wanted = name.lower()
+        try:
+            for candidate in folder.iterdir():
+                if candidate.name.lower() == wanted and candidate.is_file():
+                    return candidate
+        except OSError:
+            return None
+        return None
+
+    @staticmethod
+    def _plan_info_names(plan_hdf: Path) -> Dict[str, Optional[str]]:
+        """``Plan Filename`` and ``Flow Filename`` from the plan HDF's Plan Information."""
+        names: Dict[str, Optional[str]] = {"Plan Filename": None, "Flow Filename": None}
+        with h5py.File(plan_hdf, 'r') as hdf:
+            info = hdf.get(CheckFloodways._PLAN_INFORMATION)
+            if info is None:
+                return names
+            for key in names:
+                if key in info.attrs:
+                    value = read_attr(info, key)
+                    if isinstance(value, (bytes, np.bytes_)):
+                        value = bytes(value).decode('utf-8', 'replace')
+                    names[key] = str(value).strip() or None
+        return names
+
+    @staticmethod
+    def _plan_text_inputs(plan_hdf: Path) -> Dict[str, Optional[Path]]:
+        """Locate the plan and steady flow text files of ``plan_hdf`` in its folder.
+
+        The plan file is ``Plan Information/Plan Filename`` (else the HDF name
+        without ``.hdf``); the flow file is ``Plan Information/Flow Filename``
+        (else the plan file's ``Flow File=f##`` with the plan's project name).
+        A missing or non-steady file is ``None``; nothing is substituted.
+        """
+        plan_hdf = Path(plan_hdf)
+        folder = plan_hdf.parent
+        names = CheckFloodways._plan_info_names(plan_hdf)
+        plan_name = names["Plan Filename"]
+        if plan_name is None and plan_hdf.name.lower().endswith('.hdf'):
+            plan_name = plan_hdf.name[:-4]
+        plan_path = CheckFloodways._sibling_file(folder, plan_name)
+
+        flow_name = names["Flow Filename"]
+        if flow_name is None and plan_path is not None:
+            with open(plan_path, 'r', encoding='utf-8', errors='replace') as plan_file:
+                for line in plan_file:
+                    if line.startswith('Flow File='):
+                        flow_name = f"{plan_path.name.rsplit('.', 1)[0]}.{line.split('=', 1)[1].strip()}"
+                        break
+        flow_path = None
+        if flow_name and re.fullmatch(r'.+\.f\d\d', flow_name, flags=re.IGNORECASE):
+            flow_path = CheckFloodways._sibling_file(folder, flow_name)
+        return {"plan": plan_path, "flow": flow_path}
+
+    @staticmethod
+    def _profile_number(profile_names: List[str], profile: str) -> Optional[int]:
+        """1-based steady profile number of ``profile`` (exact name, surrounding blanks ignored)."""
+        wanted = str(profile).strip()
+        matches = [i + 1 for i, name in enumerate(profile_names) if name.strip() == wanted]
+        return matches[0] if len(matches) == 1 else None
+
+    @staticmethod
+    def _downstream_boundaries(flow_data: Dict, profile_number: int) -> Dict[tuple, Dict]:
+        """``{(river, reach): {"type", "known_ws", "slope"}}`` downstream boundaries of one profile."""
+        out: Dict[tuple, Dict] = {}
+        for block in flow_data.get('boundaries', []):
+            spec = block.get('downstream') or {}
+            key = (block.get('river'), block.get('reach'))
+            if 'profile' in block:
+                if block['profile'] != profile_number:
+                    continue
+                values = {k: spec.get(k) for k in ('known_ws', 'slope')}
+            else:
+                # Legacy "Boundary for River Rch & RM=" blocks list one value per profile.
+                values = {}
+                for k in ('known_ws', 'slope'):
+                    value = spec.get(k)
+                    if isinstance(value, list):
+                        value = value[profile_number - 1] if profile_number <= len(value) else None
+                    values[k] = value
+            out[key] = {"type": spec.get('type', 0), **values}
+        return out
+
+    @staticmethod
     def _get_encroachment_parameters(
         plan_hdf: Path,
         floodway_profile: str
     ) -> Optional[Dict]:
         """
-        Extract encroachment parameters from plan HDF file.
+        Encroachment parameters of the floodway profile from the plan file.
+
+        HEC-RAS writes no encroachment input to the plan HDF. The records are
+        the ``Encroach Param``/``Encroach Node`` lines of the plan (``.p##``)
+        file, read with :meth:`RasFloodway.parse_encroachments`; the floodway
+        profile name is numbered from the steady flow file's ``Profile Names``.
+        Both files are located from the plan HDF (see ``_plan_text_inputs``).
 
         Args:
             plan_hdf: Path to plan HDF file
             floodway_profile: Name of floodway profile
 
         Returns:
-            Dictionary with encroachment parameters (target_surcharge, max_iterations, etc.)
-            or None if not found
+            ``None`` when the plan or flow file is missing, the profile name is
+            not in the flow file, or the plan has no encroachment record for
+            that profile. Otherwise a dict with ``profile_number``,
+            ``methods`` (sorted encroachment methods used), ``target_surcharge``
+            (only when every Method 4/5 node of the profile has the same
+            target), ``encroach_param`` (the raw ``Encroach Param`` header from
+            :meth:`RasFloodway.get_encroach_param`) and ``plan_file``.
+            ``max_iterations`` and ``tolerance`` are not filled: no documented
+            plan-file field holds them.
         """
+        from ..RasFloodway import RasFloodway
+        from ..RasSteady import RasSteady
+
         try:
-            with h5py.File(plan_hdf, 'r') as hdf:
-                # Try multiple possible paths for encroachment parameters
-                param_paths = [
-                    'Plan Data/Encroachment Data',
-                    'Event Conditions/Steady Flow/Encroachment Data',
-                    'Plan Data/Plan Parameters/Encroachment'
-                ]
-
-                for path in param_paths:
-                    if path in hdf:
-                        param_group = hdf[path]
-                        params = {}
-
-                        # Extract target surcharge
-                        if 'Target Surcharge' in param_group.attrs:
-                            params['target_surcharge'] = float(read_attr(param_group, 'Target Surcharge'))
-                        elif 'Target Surcharge' in param_group:
-                            params['target_surcharge'] = float(read_typed(param_group['Target Surcharge']))
-
-                        # Extract max iterations
-                        if 'Max Iterations' in param_group.attrs:
-                            params['max_iterations'] = int(read_attr(param_group, 'Max Iterations'))
-                        elif 'Maximum Iterations' in param_group.attrs:
-                            params['max_iterations'] = int(read_attr(param_group, 'Maximum Iterations'))
-
-                        # Extract tolerance
-                        if 'Tolerance' in param_group.attrs:
-                            params['tolerance'] = float(read_attr(param_group, 'Tolerance'))
-
-                        if params:
-                            return params
-
-                # Missing parameters are unknown, not measured defaults.
+            inputs = CheckFloodways._plan_text_inputs(plan_hdf)
+            if inputs["plan"] is None or inputs["flow"] is None:
+                logger.debug("Encroachment parameters unavailable: plan/flow text file not found for %s",
+                             Path(plan_hdf).name)
                 return None
+            names = RasSteady.read_flow_file(inputs["flow"]).get('profile_names', [])
+            number = CheckFloodways._profile_number(names, floodway_profile)
+            if number is None:
+                return None
+            records = RasFloodway.parse_encroachments(inputs["plan"])
+            records = records[records['profile_number'] == number]
+            methods = sorted({int(m) for m in records['method'].dropna()})
+            if not methods:
+                return None
+            params = {
+                'profile_number': number,
+                'methods': methods,
+                'encroach_param': RasFloodway.get_encroach_param(inputs["plan"]),
+                'plan_file': inputs["plan"].name,
+            }
+            targets = set(records.loc[records['method'].isin([4, 5]), 'target_surcharge'].dropna())
+            if len(targets) == 1:
+                params['target_surcharge'] = float(targets.pop())
+            return params
 
         except Exception as e:
             reraise_required(e)
@@ -956,7 +1058,6 @@ class CheckFloodways:
             return None
 
     @staticmethod
-    @h5py_until_qualified
     def _check_floodway_boundary_conditions(
         plan_hdf: Path,
         base_profile: str,
@@ -966,10 +1067,19 @@ class CheckFloodways:
         """
         Check boundary conditions for floodway analysis.
 
+        HEC-RAS writes no steady boundary conditions to the plan HDF. They are
+        read from the steady flow (``.f##``) file located from the plan HDF
+        (``Plan Information/Flow Filename``) with
+        :meth:`RasSteady.read_flow_file`; profile names are numbered from that
+        file's ``Profile Names``. Downstream (``Dn``) boundaries are compared
+        per river/reach. No message is produced when the flow file or either
+        profile name is missing.
+
         Validates:
-        - FW_BC_01: Different starting WSE between base and floodway
-        - FW_BC_02: Same slope boundary used
-        - FW_BC_03: Known WSE boundary used
+        - FW_BC_01: Floodway Known WS differs from the base profile's Known WS
+          (INFO; value = floodway minus base)
+        - FW_BC_02: Floodway and base use Normal Depth with the same slope
+        - FW_BC_03: Floodway profile uses a Known WS boundary
 
         Args:
             plan_hdf: Path to plan HDF file
@@ -980,60 +1090,66 @@ class CheckFloodways:
         Returns:
             List of CheckMessage objects for boundary condition issues
         """
+        from ..RasSteady import RasSteady
+
         messages = []
 
         try:
-            with h5py.File(plan_hdf, 'r') as hdf:
-                # Try to find boundary condition data
-                bc_paths = [
-                    'Plan Data/Plan Information/Boundary Conditions',
-                    'Event Conditions/Steady Flow/Boundary Conditions',
-                    'Plan Data/Boundary Conditions'
-                ]
+            flow_path = CheckFloodways._plan_text_inputs(plan_hdf)["flow"]
+            if flow_path is None:
+                logger.debug("Floodway boundary check skipped: no steady flow file for %s",
+                             Path(plan_hdf).name)
+                return messages
+            data = RasSteady.read_flow_file(flow_path)
+            names = data.get('profile_names', [])
+            base_number = CheckFloodways._profile_number(names, base_profile)
+            fw_number = CheckFloodways._profile_number(names, floodway_profile)
+            if base_number is None or fw_number is None:
+                return messages
+            base = CheckFloodways._downstream_boundaries(data, base_number)
+            floodway = CheckFloodways._downstream_boundaries(data, fw_number)
 
-                bc_data = None
-                for path in bc_paths:
-                    if path in hdf:
-                        bc_data = hdf[path]
-                        break
-
-                if bc_data is None:
-                    return messages
-
-                # Try to extract boundary condition type
-                bc_type = None
-                if 'Type' in bc_data.attrs:
-                    bc_type = read_attr(bc_data, 'Type')
-                    if isinstance(bc_type, bytes):
-                        bc_type = bc_type.decode('utf-8')
-
-                # FW_BC_02: Same slope boundary
-                if bc_type and 'slope' in str(bc_type).lower():
-                    msg = CheckMessage(
-                        message_id="FW_BC_02",
-                        severity=Severity.INFO,
-                        check_type="FLOODWAY",
-                        river="",
-                        reach="",
-                        station="",
-                        message=get_message_template("FW_BC_02"),
-                        help_text=get_help_text("FW_BC_02")
-                    )
-                    messages.append(msg)
-
-                # FW_BC_03: Known WSE boundary
-                if bc_type and ('wse' in str(bc_type).lower() or 'known' in str(bc_type).lower()):
-                    msg = CheckMessage(
+            for (river, reach), fw_bc in floodway.items():
+                base_bc = base.get((river, reach), {})
+                if fw_bc['type'] == RasSteady.KNOWN_WS and fw_bc['known_ws'] is not None:
+                    if base_bc.get('type') == RasSteady.KNOWN_WS and base_bc.get('known_ws') is not None \
+                            and base_bc['known_ws'] != fw_bc['known_ws']:
+                        messages.append(CheckMessage(
+                            message_id="FW_BC_01",
+                            severity=Severity.INFO,
+                            check_type="FLOODWAY",
+                            river=river,
+                            reach=reach,
+                            station="",
+                            message=get_message_template("FW_BC_01"),
+                            help_text=get_help_text("FW_BC_01"),
+                            value=float(fw_bc['known_ws']) - float(base_bc['known_ws'])
+                        ))
+                    messages.append(CheckMessage(
                         message_id="FW_BC_03",
                         severity=Severity.INFO,
                         check_type="FLOODWAY",
-                        river="",
-                        reach="",
+                        river=river,
+                        reach=reach,
                         station="",
                         message=get_message_template("FW_BC_03"),
-                        help_text=get_help_text("FW_BC_03")
-                    )
-                    messages.append(msg)
+                        help_text=get_help_text("FW_BC_03"),
+                        value=float(fw_bc['known_ws'])
+                    ))
+                elif (fw_bc['type'] == RasSteady.NORMAL_DEPTH and fw_bc['slope'] is not None
+                        and base_bc.get('type') == RasSteady.NORMAL_DEPTH
+                        and base_bc.get('slope') == fw_bc['slope']):
+                    messages.append(CheckMessage(
+                        message_id="FW_BC_02",
+                        severity=Severity.INFO,
+                        check_type="FLOODWAY",
+                        river=river,
+                        reach=reach,
+                        station="",
+                        message=get_message_template("FW_BC_02"),
+                        help_text=get_help_text("FW_BC_02"),
+                        value=float(fw_bc['slope'])
+                    ))
 
         except Exception as e:
             reraise_required(e)
@@ -1637,8 +1753,9 @@ class CheckFloodways:
 
         return messages
 
+    _STEADY_PROFILES = "Results/Steady/Output/Output Blocks/Base Output/Steady Profiles"
+
     @staticmethod
-    @h5py_until_qualified
     def _check_floodway_lateral_weirs(
         plan_hdf: Path,
         geom_hdf: Path,
@@ -1648,9 +1765,22 @@ class CheckFloodways:
         """
         Check lateral weirs for floodway analysis.
 
+        Lateral structures are the ``Type == "Lateral"`` rows of the geometry
+        HDF's ``Geometry/Structures/Attributes``. Their steady results are
+        ``Results/Steady/Output/Output Blocks/Base Output/Steady Profiles/
+        Lateral Structures/<River> <Reach> <RS>/Structure Variables`` in the
+        plan HDF (one row per profile; columns named by its ``Variable_Unit``
+        attribute; written by HEC-RAS 6.6 and 7.0.1).
+
         Validates:
-        - FW_LW_01: Lateral weir active in floodway profile
-        - FW_LW_02: Lateral weir flow exceeds 5% of main channel
+        - FW_LW_01: Lateral weir present (one message per lateral structure)
+        - FW_LW_02: ``Total Flow`` of the lateral structure exceeds 5% of the
+          river flow at its upstream end (``Flow HW US``) in the floodway
+          profile
+
+        FW_LW_02 is not evaluated for a structure whose result group or one of
+        those two columns is absent, when the floodway profile is not in the
+        plan's ``Profile Names``, or when ``Flow HW US`` is not positive.
 
         Args:
             plan_hdf: Path to plan HDF file
@@ -1663,97 +1793,79 @@ class CheckFloodways:
         """
         messages = []
 
+        def text(value):
+            if isinstance(value, (bytes, np.bytes_)):
+                value = bytes(value).decode('utf-8', 'replace')
+            return str(value).strip()
+
         try:
-            # Get lateral structure data from geometry HDF
             with h5py.File(geom_hdf, 'r') as hdf:
-                lat_path = 'Geometry/Lateral Structures/Attributes'
-                if lat_path not in hdf:
+                attrs_path = 'Geometry/Structures/Attributes'
+                if attrs_path not in hdf:
                     return messages
+                rows = read_typed(hdf[attrs_path], slice(None))
+                laterals = [(text(r['River']), text(r['Reach']), text(r['RS']))
+                            for r in rows if text(r['Type']) == 'Lateral']
 
-                lat_attrs = read_typed(hdf[lat_path], slice(None))
+            for river, reach, station in laterals:
+                # FW_LW_01: Lateral weir is present (may be active)
+                messages.append(CheckMessage(
+                    message_id="FW_LW_01",
+                    severity=Severity.WARNING,
+                    check_type="FLOODWAY",
+                    river=river,
+                    reach=reach,
+                    station=station,
+                    message=format_message("FW_LW_01", sta=station),
+                    help_text=get_help_text("FW_LW_01")
+                ))
+            if not laterals:
+                return messages
 
-                for attr in lat_attrs:
-                    river = attr['River'].decode('utf-8').strip() if isinstance(attr['River'], bytes) else str(attr['River']).strip()
-                    reach = attr['Reach'].decode('utf-8').strip() if isinstance(attr['Reach'], bytes) else str(attr['Reach']).strip()
-                    station = attr['RS'].decode('utf-8').strip() if isinstance(attr['RS'], bytes) else str(attr['RS']).strip()
-
-                    # FW_LW_01: Lateral weir is present (may be active)
-                    msg = CheckMessage(
-                        message_id="FW_LW_01",
-                        severity=Severity.WARNING,
-                        check_type="FLOODWAY",
-                        river=river,
-                        reach=reach,
-                        station=station,
-                        message=format_message("FW_LW_01", sta=station),
-                        help_text=get_help_text("FW_LW_01")
-                    )
-                    messages.append(msg)
-
-            # Check for lateral weir flow from plan results
+            base = CheckFloodways._STEADY_PROFILES
             with h5py.File(plan_hdf, 'r') as hdf:
-                # Try to find lateral structure flow data
-                lat_flow_paths = [
-                    'Results/Steady/Output/Output Blocks/Base Output/Steady Profiles/Lateral Structures/Flow',
-                    'Results/Steady/Output/Lateral Structures/Flow'
-                ]
+                names_path = f'{base}/Profile Names'
+                if names_path not in hdf or f'{base}/Lateral Structures' not in hdf:
+                    return messages
+                names = [text(n) for n in read_typed(hdf[names_path], slice(None))]
+                matches = [i for i, name in enumerate(names) if name == str(floodway_profile).strip()]
+                if len(matches) != 1:
+                    return messages
+                profile_idx = matches[0]
 
-                for lat_flow_path in lat_flow_paths:
-                    if lat_flow_path not in hdf:
+                for river, reach, station in laterals:
+                    variables_path = f'{base}/Lateral Structures/{river} {reach} {station}/Structure Variables'
+                    if variables_path not in hdf:
+                        logger.debug("No steady lateral-structure results at %s", variables_path)
                         continue
-
-                    lat_flow = read_typed(hdf[lat_flow_path], slice(None))
-
-                    # Get profile names to find floodway profile index
-                    profile_path = 'Results/Steady/Output/Output Blocks/Base Output/Steady Profiles/Profile Names'
-                    profile_idx = 0
-                    if profile_path in hdf:
-                        profile_names = read_typed(hdf[profile_path], slice(None))
-                        for i, name in enumerate(profile_names):
-                            name_str = name.decode('utf-8').strip() if isinstance(name, bytes) else str(name).strip()
-                            if name_str == floodway_profile:
-                                profile_idx = i
-                                break
-
-                    # Get main channel flow for comparison
-                    xs_flow_path = 'Results/Steady/Output/Output Blocks/Base Output/Steady Profiles/Cross Sections/Flow'
-                    main_channel_flows = None
-                    if xs_flow_path in hdf:
-                        main_channel_flows = read_typed(hdf[xs_flow_path], slice(None))
-
-                    # Check lateral weir flow percentages
-                    for i, lat_f in enumerate(lat_flow):
-                        if lat_flow.ndim == 2:
-                            flow_val = float(lat_f[profile_idx]) if profile_idx < lat_f.shape[0] else 0
-                        else:
-                            flow_val = float(lat_f) if not np.isnan(lat_f) else 0
-
-                        if flow_val > 0 and main_channel_flows is not None:
-                            # Compare to nearby main channel flow
-                            if i < len(main_channel_flows):
-                                if main_channel_flows.ndim == 2:
-                                    mc_flow = float(main_channel_flows[i, profile_idx]) if profile_idx < main_channel_flows.shape[1] else 0
-                                else:
-                                    mc_flow = float(main_channel_flows[i])
-
-                                if mc_flow > 0:
-                                    pct = flow_val / mc_flow * 100
-                                    if pct > 5.0:
-                                        # FW_LW_02: Significant lateral weir flow
-                                        msg = CheckMessage(
-                                            message_id="FW_LW_02",
-                                            severity=Severity.WARNING,
-                                            check_type="FLOODWAY",
-                                            river="",
-                                            reach="",
-                                            station=str(i),
-                                            message=format_message("FW_LW_02", sta=str(i)),
-                                            help_text=get_help_text("FW_LW_02"),
-                                            value=pct,
-                                            threshold=5.0
-                                        )
-                                        messages.append(msg)
-                    break
+                    dataset = hdf[variables_path]
+                    if 'Variable_Unit' not in dataset.attrs:
+                        continue
+                    columns = [text(row[0]) for row in read_attr(dataset, 'Variable_Unit')]
+                    if 'Total Flow' not in columns or 'Flow HW US' not in columns:
+                        continue
+                    values = read_typed(dataset, slice(None))
+                    if values.ndim != 2 or profile_idx >= values.shape[0]:
+                        continue
+                    lateral_flow = float(values[profile_idx, columns.index('Total Flow')])
+                    river_flow = float(values[profile_idx, columns.index('Flow HW US')])
+                    if not (np.isfinite(lateral_flow) and np.isfinite(river_flow)) or river_flow <= 0:
+                        continue
+                    pct = abs(lateral_flow) / river_flow * 100
+                    if pct > 5.0:
+                        # FW_LW_02: Significant lateral weir flow
+                        messages.append(CheckMessage(
+                            message_id="FW_LW_02",
+                            severity=Severity.WARNING,
+                            check_type="FLOODWAY",
+                            river=river,
+                            reach=reach,
+                            station=station,
+                            message=format_message("FW_LW_02", sta=station),
+                            help_text=get_help_text("FW_LW_02"),
+                            value=pct,
+                            threshold=5.0
+                        ))
 
         except Exception as e:
             reraise_required(e)

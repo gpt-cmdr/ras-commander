@@ -59,6 +59,18 @@ alone does not identify a development checkout.
   keys it is given. The method is qualified for native reads (identical to
   h5py on the corpus layers).
 
+- **Floodway check reads encroachment, boundary and lateral-weir data where
+  HEC-RAS stores it (behaviour change).** Three `CheckFloodways` helpers read
+  HDF groups HEC-RAS never writes and returned nothing for every real plan.
+  Encroachment parameters now come from the plan file (`RasFloodway`) and
+  `FW_BC_*` from the steady flow file (`RasSteady`), both found next to the
+  plan HDF; `FW_BC_01` (floodway Known WS differs from base, INFO) is now
+  emitted, and `FW_BC_02`/`FW_BC_03` carry river, reach and value.
+  `FW_LW_01` uses the `Geometry/Structures` lateral rows and `FW_LW_02` the
+  steady `Lateral Structures/<name>/Structure Variables` (`Total Flow` versus
+  `Flow HW US`). Missing text files or results produce no message, as before;
+  `FW_EM_08` still cannot run (no known iteration-limit field). The helpers
+  are native-qualified.
 - **DSS shadow mode labels HEC's DSS6 "no data" rule.** When a native read
   raises not-found, `RasDss` shadow mode repeats it with dss-commander's
   opt-in `no_data="refuse"` and logs a refusal as
