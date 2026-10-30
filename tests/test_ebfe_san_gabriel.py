@@ -5,6 +5,7 @@ import sys
 import types
 
 import h5py
+import pytest
 
 county_module = types.ModuleType("ras_commander.sources.county")
 county_module.M3Model = object
@@ -359,6 +360,7 @@ def test_resolve_model_reference_accepts_windows_separators(tmp_path):
     assert resolved == target.resolve()
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_san_gabriel_association_times_follow_geometry_hdf(tmp_path):
     project_folder = tmp_path / "LBSG_502" / "Input"
     _write(project_folder / "BLE_LBSG_502.prj", "Proj Title=LBSG_502\n")

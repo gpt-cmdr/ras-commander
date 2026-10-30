@@ -134,6 +134,7 @@ print(json.dumps({"loaded": loaded, "names": [
     }
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_geometry_free_results_and_actionable_errors_without_extras(tmp_path):
     hdf_path = _write_results_hdf(tmp_path / "Synthetic.p01.hdf")
 
@@ -188,6 +189,7 @@ print(json.dumps({
         assert f"pip install {package}" in message, message
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_xsec_timeseries_unchanged_with_xarray(tmp_path):
     pytest.importorskip("xarray")
     from ras_commander import HdfResultsXsec
@@ -200,6 +202,7 @@ def test_xsec_timeseries_unchanged_with_xarray(tmp_path):
     assert ds.sizes["time"] == 3
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_mesh_summary_geodataframe_unchanged_with_geopandas(tmp_path):
     pytest.importorskip("geopandas")
     from ras_commander import HdfResultsMesh

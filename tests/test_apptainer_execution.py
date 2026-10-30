@@ -152,6 +152,7 @@ def test_profile_accepts_digest_pinned_oci_source():
 
 # ---- rendering -----------------------------------------------------------
 
+@pytest.mark.synthetic_hdf_layout
 def test_render_job_script(project, profile, tmp_path):
     job = RasApptainer.render_job(project, "TEST", 8, profile, tmp_path / "job")
     script = job.script_path.read_text(encoding="utf-8")
@@ -167,6 +168,7 @@ def test_render_job_script(project, profile, tmp_path):
     assert "#SBATCH --signal=B:TERM@600" in script
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_render_engine_script_invocation(project, profile, tmp_path):
     job = RasApptainer.render_job(project, "TEST", "08", profile, tmp_path / "job")
     engine = (job.job_directory / "engine.sh").read_text(encoding="utf-8")
@@ -182,6 +184,7 @@ def test_render_engine_script_invocation(project, profile, tmp_path):
     assert "RasGeomPreprocess" not in engine
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_stack_settings_are_configurable(project, tmp_path):
     data = _profile_dict()
     data.update({"stack_unlimited": False, "omp_stacksize": "512M", "kmp_stacksize": "1G"})
@@ -203,6 +206,7 @@ def test_canonical_image_defaults_and_pull_command():
     assert cmd.startswith("apptainer pull ") and DEFAULT_OCI_SOURCE in cmd and "sha256sum" in cmd
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_geom_preprocess_is_opt_in(project, tmp_path):
     data = _profile_dict()
     data["geom_preprocess"] = True
@@ -211,6 +215,7 @@ def test_geom_preprocess_is_opt_in(project, tmp_path):
     assert "RasGeomPreprocess" in (job.job_directory / "engine.sh").read_text(encoding="utf-8")
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_staged_inputs_lf_normalized_and_source_untouched(project, profile, tmp_path):
     before = (project / "TEST.b08").read_bytes()
     job = RasApptainer.render_job(project, "TEST", 8, profile, tmp_path / "job")
@@ -223,6 +228,7 @@ def test_staged_inputs_lf_normalized_and_source_untouched(project, profile, tmp_
     assert meta["request"]["gridded_dss_input"] is None
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_render_stages_external_gridded_dss_and_rebinds_only_staged_hdf(
     project,
     profile,
@@ -276,6 +282,7 @@ def test_render_stages_external_gridded_dss_and_rebinds_only_staged_hdf(
         assert precipitation["Timestamp"][...].tolist() == source_timestamps.tolist()
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_render_rebinds_native_nullterm_s25_dss_filename(project, profile, tmp_path):
     """Exercise the fixed-width string storage used by native HEC-RAS HDFs."""
     import h5py
@@ -314,6 +321,7 @@ def test_render_rebinds_native_nullterm_s25_dss_filename(project, profile, tmp_p
         assert len(filename.encode("utf-8")) == 24
 
 
+@pytest.mark.synthetic_hdf_layout
 @pytest.mark.parametrize(
     "reference, create_source, error",
     [
@@ -368,6 +376,7 @@ def test_gridded_dss_dependency_rejects_directory_and_staging_collision(project)
         assert hdf[PRECIP].attrs["DSS Filename"] == source_reference
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_windows_dss_output_path_is_rewritten_only_in_staged_flow(project, profile, tmp_path):
     source = project / "TEST.b08"
     original = ("Write DSS File        =        T\r\n"
@@ -385,6 +394,7 @@ def test_windows_dss_output_path_is_rewritten_only_in_staged_flow(project, profi
     assert 'DSS_OUTPUT_REWRITE=' in job.script_path.read_text(encoding="utf-8")
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_request_hash_is_deterministic_and_input_bound(project, profile, tmp_path):
     a = RasApptainer.render_job(project, "TEST", 8, profile, tmp_path / "a")
     b = RasApptainer.render_job(project, "TEST", 8, profile, tmp_path / "b")
@@ -394,6 +404,7 @@ def test_request_hash_is_deterministic_and_input_bound(project, profile, tmp_pat
     assert c.request_sha256 != a.request_sha256
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_staged_hdf_core_count_matches_allocation(project, profile, tmp_path):
     import h5py
 
@@ -427,11 +438,13 @@ def _edit_hdf(path, fn):
         fn(hdf)
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_check_passes_on_solver_ready_fixture(project):
     assert check_solver_ready(project / "TEST.p08.tmp.hdf") == []
     assert RasApptainer.check_solver_ready(project / "TEST.p08.tmp.hdf") == []
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_check_requires_geompre_unless_the_profile_runs_it(project):
     tmp = project / "TEST.p08.tmp.hdf"
     _edit_hdf(tmp, lambda h: h.__delitem__("Geometry/GeomPreprocess"))
@@ -439,6 +452,7 @@ def test_check_requires_geompre_unless_the_profile_runs_it(project):
     assert check_solver_ready(tmp, geom_preprocess=True) == []
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_check_all_2d_float_property_tables_for_nan(project):
     tmp = project / "TEST.p08.tmp.hdf"
     _edit_hdf(tmp, lambda h: h["Geometry/2D Flow Areas/Area1/Cells Surface Area"].__setitem__(
@@ -447,12 +461,14 @@ def test_check_all_2d_float_property_tables_for_nan(project):
     assert any("Cells Surface Area" in item for item in check_solver_ready(tmp))
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_check_accepts_1d_only_completed_hdf(project):
     tmp = project / "TEST.p08.tmp.hdf"
     _edit_hdf(tmp, lambda h: h.__delitem__("Geometry/2D Flow Areas"))
     assert check_solver_ready(tmp) == []
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_check_flags_missing_precip_interpolation_group(project, profile, tmp_path):
     tmp = project / "TEST.p08.tmp.hdf"
     _edit_hdf(tmp, lambda h: h.__delitem__(f"{PRECIP}/2D Flow Areas"))
@@ -466,6 +482,7 @@ def test_check_flags_missing_precip_interpolation_group(project, profile, tmp_pa
     RasApptainer.render_job(project, "TEST", 8, profile, tmp_path / "skip", check_inputs=False)
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_check_flags_empty_precip_dataset(project):
     tmp = project / "TEST.p08.tmp.hdf"
 
@@ -477,6 +494,7 @@ def test_check_flags_empty_precip_dataset(project):
     assert any("Cell Weights" in p for p in check_solver_ready(tmp))
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_check_without_gridded_precip_does_not_require_group(project):
     tmp = project / "TEST.p08.tmp.hdf"
 
@@ -486,6 +504,7 @@ def test_check_without_gridded_precip_does_not_require_group(project):
     assert check_solver_ready(tmp) == []
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_check_flags_nan_property_table_but_not_cell_min_elevation(project, profile, tmp_path):
     tmp = project / "TEST.p08.tmp.hdf"
 
@@ -504,12 +523,14 @@ def test_check_reports_non_hdf5_file(tmp_path):
     assert "cannot open as HDF5" in check_solver_ready(bad)[0]
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_dry_run_never_touches_transport(project, profile, tmp_path):
     job = RasApptainer.render_job(project, "TEST", 8, profile, tmp_path / "job")
     out = RasApptainer.submit(job, dry_run=True)  # no transport at all
     assert out.dry_run and out.slurm_job_id is None and out.state == "RENDERED"
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_attempts_are_unique_and_retry_reconciles_only_its_attempt(project, profile, tmp_path):
     a = RasApptainer.render_job(project, "TEST", 8, profile, tmp_path / "a")
     b = RasApptainer.render_job(project, "TEST", 8, profile, tmp_path / "b")
@@ -519,6 +540,7 @@ def test_attempts_are_unique_and_retry_reconciles_only_its_attempt(project, prof
     assert a.remote_directory in transport.calls[1][2]
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_submit_rejects_placeholder_image_digest(project, profile, tmp_path):
     data = _profile_dict()
     data["apptainer_image_sha256"] = "0" * 64
@@ -730,6 +752,7 @@ def _submitted(project, profile, tmp_path):
     return RasApptainer.submit(job, transport=FakeTransport(), profile=profile, dry_run=False)
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_mock_submit_and_persisted_handle(project, profile, tmp_path):
     job = RasApptainer.render_job(project, "TEST", 8, profile, tmp_path / "job")
     t = FakeTransport()
@@ -744,6 +767,7 @@ def test_mock_submit_and_persisted_handle(project, profile, tmp_path):
         RasApptainer.submit(reloaded, transport=t, profile=profile, dry_run=False)
 
 
+@pytest.mark.synthetic_hdf_layout
 @pytest.mark.skipif(BASH is None, reason="bash is unavailable")
 def test_submit_executes_remote_input_check_under_bash(project, profile, tmp_path):
     root = _bash_tempdir()
@@ -758,6 +782,7 @@ def test_submit_executes_remote_input_check_under_bash(project, profile, tmp_pat
         subprocess.run([BASH, "-c", f"rm -rf -- {shlex.quote(root)}"], check=False)
 
 
+@pytest.mark.synthetic_hdf_layout
 @pytest.mark.skipif(BASH is None, reason="bash is unavailable")
 def test_pre_stage_failure_retains_scheduler_stdout_and_logs_directory(project, profile, tmp_path):
     root = _bash_tempdir()
@@ -787,6 +812,7 @@ def test_pre_stage_failure_retains_scheduler_stdout_and_logs_directory(project, 
         subprocess.run([BASH, "-c", f"rm -rf -- {shlex.quote(root)}"], check=False)
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_stale_rendered_handle_never_reconciles_or_resubmits(project, profile, tmp_path):
     job = RasApptainer.render_job(project, "TEST", 8, profile, tmp_path / "job")
     transport = FakeTransport()
@@ -799,6 +825,7 @@ def test_stale_rendered_handle_never_reconciles_or_resubmits(project, profile, t
     assert sum(call[:2] == ["bash", "-c"] and "rm -rf" in call[2] for call in transport.calls) == 1
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_ambiguous_sbatch_failure_blocks_resubmission(project, profile, tmp_path):
     job = RasApptainer.render_job(project, "TEST", 8, profile, tmp_path / "job")
     with pytest.raises(RuntimeError, match="SUBMITTING"):
@@ -806,6 +833,7 @@ def test_ambiguous_sbatch_failure_blocks_resubmission(project, profile, tmp_path
     assert RasApptainer.load_job(job.job_directory).state == "SUBMITTING"
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_mock_status_states(project, profile, tmp_path):
     job = _submitted(project, profile, tmp_path)
     st = RasApptainer.status(job, FakeTransport(sacct=SACCT_DONE), profile)
@@ -817,6 +845,7 @@ def test_mock_status_states(project, profile, tmp_path):
     assert RasApptainer.status(job, FakeTransport(), profile).state == "UNKNOWN"
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_status_tolerates_sacct_error_and_cancel_uses_exact_job(project, profile, tmp_path):
     job = _submitted(project, profile, tmp_path)
     broken = FakeTransport()
@@ -865,6 +894,7 @@ def _fake_remote_output(folder, job, *, tamper=False, status="succeeded", end_st
     return out
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_collect_success_and_refuses_existing_destination(project, profile, tmp_path):
     job = _submitted(project, profile, tmp_path)
     t = FakeTransport(sacct=SACCT_DONE)
@@ -875,6 +905,7 @@ def test_collect_success_and_refuses_existing_destination(project, profile, tmp_
         RasApptainer.collect(job, t, profile)
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_collect_detects_tampered_output(project, profile, tmp_path):
     job = _submitted(project, profile, tmp_path)
     t = FakeTransport(sacct=SACCT_DONE)
@@ -883,6 +914,7 @@ def test_collect_detects_tampered_output(project, profile, tmp_path):
     assert not res.success and any("mismatch" in p for p in res.problems)
 
 
+@pytest.mark.synthetic_hdf_layout
 @pytest.mark.parametrize("field", ["apptainer_image_sha256", "input_hashes"])
 def test_collect_detects_request_integrity_mismatch(project, profile, tmp_path, field):
     job = _submitted(project, profile, tmp_path)
@@ -898,6 +930,7 @@ def test_collect_detects_request_integrity_mismatch(project, profile, tmp_path, 
     assert not result.success and any("rendered request" in problem for problem in result.problems)
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_collect_rejects_incomplete_result_hdf(project, profile, tmp_path):
     job = _submitted(project, profile, tmp_path)
     t = FakeTransport(sacct=SACCT_DONE)
@@ -913,6 +946,7 @@ def test_collect_rejects_incomplete_result_hdf(project, profile, tmp_path):
     assert not result.success and any("result validation failed" in problem for problem in result.problems)
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_collect_accepts_hec_ras_2400_end_time(project, profile, tmp_path):
     _edit_hdf(project / "TEST.p08.tmp.hdf", lambda h: h["Plan Data/Plan Information"].attrs.__setitem__(
         "Simulation End Time", "01JAN2020 2400"
@@ -923,6 +957,7 @@ def test_collect_accepts_hec_ras_2400_end_time(project, profile, tmp_path):
     assert RasApptainer.collect(job, transport, profile).success
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_collect_requires_terminal_and_keeps_failure_evidence(project, profile, tmp_path):
     job = _submitted(project, profile, tmp_path)
     with pytest.raises(RuntimeError, match="not terminal"):

@@ -176,6 +176,7 @@ def test_profile_line_feature_name_keeps_commas(tmp_path):
     assert HdfResultsMesh._read_profile_line_geometry(path, NAME).equals(geometry)
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_native_hdf_reference_point_attribute_name_keeps_commas(tmp_path):
     path = tmp_path / "model.g01.hdf"
     with h5py.File(path, "w") as hdf:
@@ -193,6 +194,7 @@ def test_native_hdf_reference_point_attribute_name_keeps_commas(tmp_path):
     ]
 
 
+@pytest.mark.synthetic_hdf_layout
 @pytest.mark.parametrize("line_type", ["Reference Line", "Profile Line"])
 def test_hdf_line_attribute_names_keep_commas(tmp_path, line_type):
     path = tmp_path / "model.g01.hdf"

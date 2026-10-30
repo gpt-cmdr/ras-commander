@@ -128,6 +128,7 @@ def test_profile_rejects_invalid_cfile_combinations(over, fragment):
 
 # ---- input check -------------------------------------------------------------
 
+@pytest.mark.synthetic_hdf_layout
 def test_check_solver_ready_relaxes_c_file_content_for_61(project61):
     assert check_solver_ready(project61 / "TEST.p08.tmp.hdf") == []
 
@@ -140,6 +141,7 @@ def test_check_solver_ready_still_requires_completion_flag_for_61(tmp_path):
     assert not any("GeomPreprocess" in p or "NaN" in p for p in problems)
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_check_solver_ready_stays_strict_for_631(tmp_path):
     path = tmp_path / "x.tmp.hdf"
     _make_61_tmp_hdf(path, file_version=b"HEC-RAS 6.3.1 October 2022")
@@ -151,6 +153,7 @@ def test_check_solver_ready_stays_strict_for_631(tmp_path):
 
 # ---- rendering -----------------------------------------------------------------
 
+@pytest.mark.synthetic_hdf_layout
 def test_render_job_61_stages_c_file_and_canonical_cfile_engine(project61, profile61, tmp_path):
     source_hdf = (project61 / "TEST.p08.tmp.hdf").read_bytes()
     job = RasApptainer.render_job(project61, "TEST", 8, profile61, tmp_path / "job")

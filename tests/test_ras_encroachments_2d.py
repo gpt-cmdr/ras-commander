@@ -85,6 +85,7 @@ def _make_2d_project(tmp_path: Path) -> Path:
     return project_dir
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_2d_encroachment_regions_zones_and_settings_round_trip(tmp_path, caplog):
     project_dir = _make_2d_project(tmp_path)
     base_plan = project_dir / "Floodway2D.p01"
@@ -177,6 +178,7 @@ def test_2d_encroachment_regions_zones_and_settings_round_trip(tmp_path, caplog)
         assert zone_group["Polygon Info"].shape == (1, 4)
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_2d_floodway_workflow_updates_rasmap_layers_and_result_map(tmp_path):
     project_dir = _make_2d_project(tmp_path)
     project = RasPrj()
@@ -236,6 +238,7 @@ def test_2d_floodway_workflow_updates_rasmap_layers_and_result_map(tmp_path):
     assert result_maps[0]["map_parameters"]["Terrain"] == "USGSTerrain"
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_setup_2d_floodway_info_logs_are_concise(tmp_path, caplog):
     project_dir = _make_2d_project(tmp_path)
     project = RasPrj()

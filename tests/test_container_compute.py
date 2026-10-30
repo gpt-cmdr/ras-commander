@@ -115,6 +115,7 @@ def _fake_success(project, engine, plan, timeout, num_cores):
     return True
 
 
+@pytest.mark.synthetic_hdf_layout
 @pytest.mark.parametrize("version", ["6.5", "6.6", "7.0.1"])
 def test_success_preserves_prepared_inputs_and_publishes_validated_result(packet, monkeypatch, version):
     manifest = json.loads(packet["manifest"].read_text())
@@ -165,6 +166,7 @@ def test_rejects_bad_preparation_before_solver(packet, monkeypatch, problem):
     assert not packet["project"].with_suffix(".p01.hdf").exists()
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_failed_solver_preserves_prior_final_and_saves_log(packet, monkeypatch):
     previous = packet["project"].with_suffix(".p01.hdf")
     previous.write_bytes(b"previous result")
@@ -179,6 +181,7 @@ def test_failed_solver_preserves_prior_final_and_saves_log(packet, monkeypatch):
     assert (receipt.parent / "failed-Example.p01.tmp.hdf").is_file()
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_replace_preserves_previous_final_in_receipt_directory(packet, monkeypatch):
     monkeypatch.setattr(worker, "_call_compute", _fake_success)
     previous = packet["project"].with_suffix(".p01.hdf")
@@ -276,6 +279,7 @@ def test_api_invocation_disables_retry(monkeypatch):
     assert recorded["ras_object"] == "project-object"
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_host_input_change_during_solver_prevents_result_publication(packet, monkeypatch):
     def changed(project, *args):
         result = _fake_success(project, *args)
@@ -288,6 +292,7 @@ def test_host_input_change_during_solver_prevents_result_publication(packet, mon
     assert not packet["project"].with_suffix(".p01.hdf").exists()
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_evidence_copy_error_still_writes_receipt_and_releases_lock(packet, monkeypatch):
     def fail(project, *args):
         (project.parent / "compute_linux_01.log").write_text("failed computation")

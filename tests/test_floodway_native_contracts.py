@@ -252,6 +252,7 @@ def test_native_public_checker_does_not_guess_methods_or_station_distances(nativ
     assert all('do not establish' in message.help_text for message in station_messages)
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_result_identifiers_take_precedence_over_reordered_geometry(tmp_path):
     path = _station_hdf(tmp_path / 'stations.hdf')
     frame = CheckFloodways._get_encroachment_stations(path, 'Floodway')
@@ -261,6 +262,11 @@ def test_result_identifiers_take_precedence_over_reordered_geometry(tmp_path):
     assert frame['encr_sta_r'].tolist() == [100., 200.]
 
 
+@pytest.mark.synthetic_hdf_layout(
+    "ambiguous_combined-ambiguous combined station shape",
+    "wrong_id_count-paired station shapes",
+    "wrong_shape-paired station shapes",
+)
 @pytest.mark.parametrize('case, diagnostic', [
     ('unknown_profile', 'must occur exactly once'),
     ('duplicate_profile', 'must occur exactly once'),
@@ -303,6 +309,7 @@ def test_incomplete_or_ambiguous_station_data_is_diagnosed(tmp_path, caplog, cas
     assert diagnostic in caplog.text
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_legacy_combined_explicit_three_dimensional_axes(tmp_path):
     path = _station_hdf(tmp_path / 'combined.hdf')
     with h5py.File(path, 'a') as hdf:
@@ -315,6 +322,7 @@ def test_legacy_combined_explicit_three_dimensional_axes(tmp_path):
     assert frame['encr_sta_r'].tolist() == [100., 200.]
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_combined_two_dimensional_layout_requires_single_profile(tmp_path):
     path = _station_hdf(tmp_path / 'single.hdf', profiles=(b'Floodway',))
     with h5py.File(path, 'a') as hdf:

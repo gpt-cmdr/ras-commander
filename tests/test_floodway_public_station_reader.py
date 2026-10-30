@@ -27,6 +27,7 @@ def station_hdf(tmp_path):
     return path
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_public_station_reader_preserves_identity_and_base_nan(station_hdf):
     frame = HdfResultsPlan.get_steady_encroachment_stations(station_hdf, 'Floodway')
     assert frame.columns.tolist() == ['river', 'reach', 'station', 'encr_sta_l', 'encr_sta_r']
@@ -35,6 +36,7 @@ def test_public_station_reader_preserves_identity_and_base_nan(station_hdf):
     assert base[['encr_sta_l', 'encr_sta_r']].isna().all().all()
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_public_station_schema_matches_reader(station_hdf):
     from ras_commander.schemas import DATAFRAME_SCHEMAS
 
@@ -47,6 +49,7 @@ def test_public_station_schema_matches_reader(station_hdf):
     assert frame['encr_sta_l'].dtype == frame['encr_sta_r'].dtype == np.dtype('float64')
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_public_station_empty_arrays_keep_declared_numeric_dtypes(station_hdf):
     with h5py.File(station_hdf, 'a') as hdf:
         dtype = hdf[IDS].dtype
@@ -61,6 +64,15 @@ def test_public_station_empty_arrays_keep_declared_numeric_dtypes(station_hdf):
     assert frame['encr_sta_l'].dtype == frame['encr_sta_r'].dtype == np.dtype('float64')
 
 
+@pytest.mark.synthetic_hdf_layout(
+    "combined_inf",
+    "right_group",
+    "station_bool",
+    "station_complex",
+    "station_neginf",
+    "station_posinf",
+    "station_string",
+)
 @pytest.mark.parametrize('failure', [
     'station_string', 'station_complex', 'station_bool', 'station_posinf', 'station_neginf',
     'left_group', 'right_group', 'profile_group', 'profile_numeric', 'profile_rank', 'profile_scalar',
@@ -180,6 +192,9 @@ def test_fresh_native_mixed_method_final_preserves_base_and_written_stations(tmp
     assert copied.read_bytes() == first
 
 
+@pytest.mark.synthetic_hdf_layout(
+    "wrong_shape",
+)
 @pytest.mark.parametrize('failure', ['unpaired', 'unknown_profile', 'wrong_shape', 'duplicate_ids'])
 def test_public_station_reader_malformed_raises_checker_retains_diagnostic(station_hdf, failure, caplog):
     profile = 'Floodway'

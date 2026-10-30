@@ -183,6 +183,7 @@ def test_stderr_progress_arrives_before_process_exit_and_final_json(tmp_path, wr
         process.stderr.close()
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_compute_worker_forwards_staged_log_and_preserves_json_contract(packet, monkeypatch, capsys):
     monkeypatch.setattr(worker, "_call_compute", _fake_success)
     success, receipt = _run(packet, prepare_receipt=packet["prep"])
@@ -194,6 +195,7 @@ def test_compute_worker_forwards_staged_log_and_preserves_json_contract(packet, 
     assert not list(packet["scratch"].iterdir())
 
 
+@pytest.mark.synthetic_hdf_layout
 @pytest.mark.parametrize("num_cores", [1, 8])
 def test_worker_accepts_core_policy_boundaries(packet, monkeypatch, num_cores):
     seen = []

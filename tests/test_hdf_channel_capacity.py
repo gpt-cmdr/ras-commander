@@ -3,6 +3,7 @@ from pathlib import Path
 import h5py
 import numpy as np
 import pandas as pd
+import pytest
 
 from ras_commander.hdf.HdfChannelCapacity import HdfChannelCapacity, LEVEL_TO_CATEGORY
 
@@ -47,6 +48,7 @@ def test_extract_max_wse_ras6_summary(tmp_path: Path) -> None:
     assert result["RS"].tolist() == ["1000", "900", "800"]
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_extract_max_wse_unsteady_timeseries_fallback(tmp_path: Path) -> None:
     hdf_path = tmp_path / "timeseries.p01.hdf"
     time_base = (
@@ -71,6 +73,7 @@ def test_extract_max_wse_unsteady_timeseries_fallback(tmp_path: Path) -> None:
     assert result["20P"].tolist() == [8.5, 11.0, 10.5]
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_extract_max_wse_steady_profile_selection_with_geometry_attrs(tmp_path: Path) -> None:
     hdf_path = tmp_path / "steady.p01.hdf"
     steady_base = "Results/Steady/Output/Output Blocks/Base Output/Steady Profiles"
@@ -151,6 +154,7 @@ def test_segment_channel_floor_and_system_summary() -> None:
     assert set(summary["capacity_level"]) == set(range(1, 8))
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_extract_max_wse_steady_unnamed_profile_uses_envelope_max(tmp_path: Path) -> None:
     # Multi-profile steady data with NO profile selected -> per-XS envelope max
     # across profiles (not first-profile). Pins the documented unnamed-profile rule.

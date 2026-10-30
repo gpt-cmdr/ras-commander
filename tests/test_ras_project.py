@@ -147,6 +147,7 @@ def test_inspect_project_assets_returns_stable_arrow_schema(tmp_path: Path) -> N
     assert geometry_hdf["required"] is True
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_dss_dataset_remains_not_inspected_and_container_is_unchanged(
     tmp_path: Path,
 ) -> None:
@@ -175,6 +176,7 @@ def test_dss_dataset_remains_not_inspected_and_container_is_unchanged(
     assert (dss_file.read_bytes(), dss_file.stat().st_mtime_ns) == before
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_stage_project_preserves_uninspected_active_dss_as_unknown(
     tmp_path: Path,
 ) -> None:
@@ -194,6 +196,7 @@ def test_stage_project_preserves_uninspected_active_dss_as_unknown(
     assert (dss_file.read_bytes(), dss_file.stat().st_mtime_ns) == before
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_shared_dss_dependencies_are_scoped_per_plan_and_hashed_once(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -292,6 +295,7 @@ def test_project_depth_initialization_does_not_open_hdf_metadata(
     assert observed_hdf_paths == [None]
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_current_plan_inventory_rejects_undeclared_plan(tmp_path: Path) -> None:
     project = _write_project(tmp_path / "source")
     project.write_text(
@@ -309,6 +313,7 @@ def test_current_plan_inventory_rejects_undeclared_plan(tmp_path: Path) -> None:
         inspect_project_assets(project, depth="current_plan")
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_inventory_emits_rows_for_restart_and_precipitation_parser_failures(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -341,6 +346,7 @@ def test_inventory_emits_rows_for_restart_and_precipitation_parser_failures(
     }
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_gdal_precipitation_fields_are_inventoried_separately(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -399,6 +405,7 @@ def test_gdal_precipitation_fields_are_inventoried_separately(
     assert datasetname["dataset_name"] == "legacy-precipitation"
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_stage_project_preserves_uninspected_gdal_groups_as_unknown(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -449,6 +456,7 @@ def test_stage_project_preserves_uninspected_gdal_groups_as_unknown(
     assert dataset_rows["inspection_state"].eq("not_inspected").all()
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_boundary_diagnostic_asset_ids_remain_unique(
     tmp_path: Path,
 ) -> None:
@@ -534,6 +542,7 @@ def test_absent_single_row_rasmap_summary_does_not_create_phantom_asset(
     ).any()
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_partial_rasmap_inventory_reports_errors_and_keeps_valid_siblings(
     tmp_path: Path,
 ) -> None:
@@ -572,6 +581,7 @@ def test_partial_rasmap_inventory_reports_errors_and_keeps_valid_siblings(
     assert terrain_rows["resolved_path"].tolist() == [str(terrain_path)]
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_stage_project_publishes_verified_copy_without_source_drift(tmp_path: Path) -> None:
     source_project = _write_project(tmp_path / "source")
     source_hash = _tree_hash(source_project.parent)
@@ -620,6 +630,7 @@ def test_stage_project_never_replaces_existing_destination(tmp_path: Path) -> No
     assert marker.read_text(encoding="ascii") == "keep"
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_stage_project_rejects_missing_declared_core_file(tmp_path: Path) -> None:
     source_project = _write_project(tmp_path / "source")
     (source_project.parent / "Model.g01").unlink()
@@ -685,6 +696,7 @@ def test_stage_project_fails_when_physical_path_identity_is_unavailable(
     assert not destination.exists()
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_source_drift_failure_leaves_destination_absent_and_cleans_temp(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -707,6 +719,7 @@ def test_source_drift_failure_leaves_destination_absent_and_cleans_temp(
     assert not (tmp_path / ".published.rascommander-stage.lock").exists()
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_staged_file_drift_after_inventory_fails_before_publication(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -733,6 +746,7 @@ def test_staged_file_drift_after_inventory_fails_before_publication(
     assert not list(tmp_path.glob(".published.ras-stage-*"))
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_staged_file_drift_during_fsync_fails_before_publication(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -758,6 +772,7 @@ def test_staged_file_drift_during_fsync_fails_before_publication(
     assert not list(tmp_path.glob(".published.ras-stage-*"))
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_source_drift_during_fsync_fails_before_publication(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -785,6 +800,7 @@ def test_source_drift_during_fsync_fails_before_publication(
     assert not list(tmp_path.glob(".published.ras-stage-*"))
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_publication_race_leaves_competing_destination_untouched(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -807,6 +823,7 @@ def test_publication_race_leaves_competing_destination_untouched(
     assert not list(tmp_path.glob(".published.ras-stage-*"))
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_publication_fails_closed_when_atomic_noreplace_is_unavailable(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -885,6 +902,7 @@ def test_unprovable_publication_outcome_is_explicit(
     assert not destination.exists()
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_post_publication_drift_reports_committed_and_retains_destination(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -957,6 +975,7 @@ def test_initialization_failure_cleans_only_owned_temporary_tree(
     assert not (tmp_path / ".published.rascommander-stage.lock").exists()
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_stage_project_initializes_ras_only_before_publication(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -979,6 +998,7 @@ def test_stage_project_initializes_ras_only_before_publication(
     assert result.ras_object.prj_file == destination / source_project.name
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_stage_project_rejects_an_undeclared_current_plan(tmp_path: Path) -> None:
     source_project = _write_project(tmp_path / "source")
     source_project.write_text(
@@ -1051,6 +1071,7 @@ def test_tree_snapshot_fails_closed_on_traversal_error(
         project_module._tree_snapshot(root)
 
 
+@pytest.mark.synthetic_hdf_layout
 @pytest.mark.skipif(os.name != "nt", reason="Windows extended-length path behavior")
 def test_stage_project_supports_extended_length_tree_io(tmp_path: Path) -> None:
     source_project = _write_project(tmp_path / "source")
@@ -1083,6 +1104,7 @@ def test_stage_project_supports_extended_length_tree_io(tmp_path: Path) -> None:
     assert not str(result.destination_root).startswith("\\\\?\\")
 
 
+@pytest.mark.synthetic_hdf_layout
 @pytest.mark.skipif(os.name != "nt", reason="Windows short-name alias behavior")
 def test_stage_project_rebases_all_paths_across_short_name_temp_alias() -> None:
     root = Path(tempfile.mkdtemp(prefix="rascommander-rebase-alias-"))

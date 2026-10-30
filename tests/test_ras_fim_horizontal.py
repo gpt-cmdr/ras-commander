@@ -821,6 +821,11 @@ def test_native_geometry_transport_preserves_order_holes_and_multipart(tmp_path)
         assert source.read(1) == b""
 
 
+@pytest.mark.synthetic_hdf_layout(
+    "malformed_reach",
+    "orphan_node",
+    "text_reach",
+)
 @pytest.mark.parametrize("element", ["River Centerlines", "Cross Sections", "text_reach", "malformed_reach", "orphan_node"])
 def test_2d_only_gate_rejects_mixed_models_before_mapping(scene, monkeypatch, element):
     import h5py

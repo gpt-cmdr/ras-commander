@@ -160,6 +160,7 @@ def test_materialized_precipitation_rejects_missing_per_area_mapping(tmp_path):
     assert "Fixture Area/Face Weights" in detail
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_completed_preprocessing_rejects_incomplete_geometry_tables(tmp_path):
     _write_artifacts(tmp_path, materialized=True)
     with h5py.File(tmp_path / "fixture.p01.tmp.hdf", "a") as hdf:
@@ -547,6 +548,7 @@ def test_bco_readiness_does_not_require_short_lived_solver_process(tmp_path):
     )
 
 
+@pytest.mark.synthetic_hdf_layout
 @pytest.mark.parametrize("require_linux", [True, False])
 def test_alternate_handoff_never_opens_hdf_while_writer_or_root_is_active(
     tmp_path,
@@ -624,6 +626,7 @@ def test_alternate_handoff_never_opens_hdf_while_writer_or_root_is_active(
     assert terminated == [process]
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_bco_handoff_never_opens_hdf_before_owned_process_termination(
     tmp_path,
     monkeypatch,
@@ -731,6 +734,7 @@ def test_preprocess_rejects_imported_only_precipitation_payload(
     assert terminated == [process]
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_naturally_exited_launcher_still_cleans_exact_plan_residue(
     tmp_path,
     monkeypatch,
@@ -825,6 +829,7 @@ def test_preprocess_fails_when_exact_plan_residue_survives_cleanup(
     assert "remained active after cleanup: 30220" in result.error
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_bco_handoff_finishes_quiescence_after_launcher_exits(tmp_path, monkeypatch):
     ras = _seed_project(tmp_path, gridded=True)
     process = _RunningProcess()
