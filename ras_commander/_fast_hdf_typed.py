@@ -182,10 +182,23 @@ _CACHE_LIMIT = 16
 
 
 def clear_cache(path=None):
-    resolved = None if path is None else str(Path(path).resolve())
+    from .fast_hdf import _comparable
+
+    resolved = None if path is None else _comparable(Path(path).resolve())
     with _cache_lock:
         for key in list(_cache):
-            if resolved is None or key[0] == resolved:
+            if resolved is None or _comparable(key[0]) == resolved:
+                del _cache[key]
+
+
+def clear_cache_under(root):
+    """Drop the cached results of every file inside the directory ``root``."""
+    from .fast_hdf import _comparable
+
+    prefix = _comparable(Path(root).resolve()).rstrip("\\/") + os.sep
+    with _cache_lock:
+        for key in list(_cache):
+            if _comparable(key[0]).startswith(prefix):
                 del _cache[key]
 
 

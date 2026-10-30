@@ -62,7 +62,7 @@ from ras_commander.sources.base import (
 )
 
 from ..._ras_text import _write_ras_text, _write_ras_xml
-from ...fast_hdf import read_attr, read_attrs, reraise_required
+from ...fast_hdf import read_attr, read_attrs, release_native_sessions, reraise_required
 
 logger = logging.getLogger(__name__)
 
@@ -1467,6 +1467,8 @@ class RasEbfeModels:
             organized_target = Path(output_folder) / str(meta["output_name"])
             if organized_target.exists():
                 if overwrite:
+                    # Close native sessions under the tree first (Windows refuses to move an open HDF).
+                    release_native_sessions(organized_target)
                     shutil.rmtree(organized_target)
                 elif RasEbfeModels._organized_model_is_reusable(
                     organized_target,
@@ -2737,6 +2739,7 @@ class RasEbfeModels:
             )
             extraction = working / ".source-extraction"
             if extraction.exists():
+                release_native_sessions(extraction)
                 shutil.rmtree(extraction)
             if source_files:
                 final_state = {
@@ -2750,6 +2753,7 @@ class RasEbfeModels:
             RasEbfeModels._finalize_austin_oyster_output(working, output_folder)
         except Exception:
             if working.exists():
+                release_native_sessions(working)
                 shutil.rmtree(working)
             raise
         return output_folder
@@ -2930,6 +2934,7 @@ class RasEbfeModels:
             source = project_root / name
             if not source.is_file():
                 raise RuntimeError(f"{project} delivered precipitation asset missing: {name}")
+            release_native_sessions(source, precip_dir / name)
             shutil.move(source, precip_dir / name)
 
         predecessor = None if project == "UPGU1" else f"UPGU{int(project[-1]) - 1}"
@@ -3680,6 +3685,7 @@ class RasEbfeModels:
                 "pending.\n",
                 encoding="utf-8",
             )
+            release_native_sessions(scratch)
             shutil.rmtree(scratch)
 
             final_source_state = {
@@ -3693,6 +3699,7 @@ class RasEbfeModels:
             RasEbfeModels._finalize_austin_oyster_output(working, output_folder)
         except Exception:
             if working.exists():
+                release_native_sessions(working)
                 shutil.rmtree(working)
             raise
         return output_folder
@@ -3780,6 +3787,7 @@ class RasEbfeModels:
                 f"existing asset: {destination}"
             )
         destination.parent.mkdir(parents=True, exist_ok=True)
+        release_native_sessions(source, destination)
         shutil.move(source, destination)
         return 1
 
@@ -3995,6 +4003,8 @@ class RasEbfeModels:
         working: Path, output_folder: Path
     ) -> Optional[Path]:
         """Promote a completed build atomically, preserving an old target."""
+        # Close native sessions under the tree first (Windows refuses to move an open HDF).
+        release_native_sessions(working, output_folder)
         backup = None
         if output_folder.exists():
             timestamp = datetime.now().strftime("%Y%m%dT%H%M%S%f")
@@ -4424,6 +4434,8 @@ class RasEbfeModels:
         """Atomically promote a complete sibling build and preserve interruptions."""
         working_output = Path(working_output)
         output_folder = Path(output_folder)
+        # Close native sessions under the tree first (Windows refuses to move an open HDF).
+        release_native_sessions(working_output, output_folder)
         backup = None
         if output_folder.exists():
             timestamp = datetime.now().strftime("%Y%m%dT%H%M%S%f")
@@ -8542,6 +8554,7 @@ projects point to that single organized target. See
                 RasEbfeModels._write_extraction_receipt(
                     temporary, identity, audit, maximum_path_length
                 )
+                release_native_sessions(temporary, destination)
                 os.replace(
                     RasEbfeModels._windows_extended_path(temporary),
                     RasEbfeModels._windows_extended_path(destination),
@@ -8554,6 +8567,7 @@ projects point to that single organized target. See
                     and temporary.name.startswith(f".{destination.name}.extracting-")
                     and temporary.exists()
                 ):
+                    release_native_sessions(temporary)
                     shutil.rmtree(RasEbfeModels._windows_extended_path(temporary))
                 raise
 
@@ -10138,6 +10152,7 @@ projects point to that single organized target. See
             target.parent.mkdir(parents=True, exist_ok=True)
             if target.exists():
                 continue
+            release_native_sessions(item, target)
             shutil.move(str(item), str(target))
             files_moved += 1
         return files_moved
@@ -10714,6 +10729,7 @@ projects point to that single organized target. See
                 destination = project_folder / source.name
                 if destination.exists():
                     continue
+                release_native_sessions(source, destination)
                 shutil.move(str(source), str(destination))
                 moved += 1
 
