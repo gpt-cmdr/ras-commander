@@ -9,6 +9,16 @@ alone does not identify a development checkout.
 
 ### Unreleased
 
+- **`HdfPump.get_pump_station_summary` now returns real data.** It used to
+  read `/Results/Unsteady/Summary/Pump Station`, which HEC-RAS never writes,
+  so it always returned an empty DataFrame. It now returns one row per pump
+  station derived from the stored `DSS Hydrograph Output` pump time series
+  (`Pumping Stations/<station>/Structure Variables`): stored max/min flow,
+  headwater and tailwater stage with the time of each, start/end time, sample
+  count, maximum pumps on, and the stored `Highest Elev Pump Line` (NaN where
+  HEC-RAS omits it). Unrecognized layouts raise `ValueError`; files without
+  pump results still return an empty DataFrame. It now runs natively in
+  `auto` mode (native output identical to h5py on 6.6 and 7.0.1 pump plans).
 - **`HdfResultsPlan.get_reference_summary` now returns real data.** It used
   to read `Base Output/Summary Output/Reference Lines|Points`, which HEC-RAS
   never writes, so it always returned an empty DataFrame. It now derives the
