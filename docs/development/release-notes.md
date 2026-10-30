@@ -9,6 +9,21 @@ alone does not identify a development checkout.
 
 ### Unreleased
 
+- **`HdfInfiltration.get_infiltration_parameters()` reads real infiltration
+  layers.** It used to look for a root `Infiltration Parameters` table that
+  HEC-RAS never writes, so on every real layer it raised `KeyError`. It now
+  returns the matching row of the layer's `Variables` table (keyed by class
+  `Name`). **The returned keys changed** to the HEC-RAS parameter names of the
+  layer's method (for example `Maximum Deficit`, `Initial Deficit`,
+  `Potential Percolation Rate` for Deficit and Constant; `Curve Number`,
+  `Abstraction Ratio`, `Minimum Infiltration Rate` for SCS). The old keys
+  `Initial Loss (in)`, `Constant Loss Rate (in/hr)` and `Impervious Area (%)`
+  are not stored by HEC-RAS and are no longer returned. Layers built from land
+  cover and soils key rows as `"<land cover> : <soil>"`; a bare soil class
+  raises `ValueError` there. `calculate_weighted_parameters()` now averages the
+  keys it is given. The method is qualified for native reads (identical to
+  h5py on the corpus layers).
+
 - **DSS shadow mode labels HEC's DSS6 "no data" rule.** When a native read
   raises not-found, `RasDss` shadow mode repeats it with dss-commander's
   opt-in `no_data="refuse"` and logs a refusal as
