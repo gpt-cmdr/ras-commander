@@ -15,10 +15,20 @@ import pandas as pd
 import pytest
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
-NATIVE_TEST_HECRAS_VERSION = os.environ.get(
-    "RAS_COMMANDER_TEST_HECRAS_VERSION",
-    "6.6",
-)
+
+
+def _native_test_hecras_version() -> str:
+    """RAS_COMMANDER_TEST_HECRAS_VERSION, else the install this process's CLR
+    already uses (pythonnet cannot rebind, so an earlier test in the same worker
+    decides), else 6.6."""
+    if "RAS_COMMANDER_TEST_HECRAS_VERSION" in os.environ:
+        return os.environ["RAS_COMMANDER_TEST_HECRAS_VERSION"]
+    from ras_commander.dotnet import clr_bootstrap
+
+    loaded = clr_bootstrap._CLR_INSTALL_ROOT
+    return loaded.name if loaded is not None else "6.6"
+
+
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
@@ -437,7 +447,7 @@ class TestLayerCreation:
             cell_size=10.0,
             restrict_to_extent=box(10, 10, 20, 20),
             buffer_distance=10.0,
-            hecras_version=NATIVE_TEST_HECRAS_VERSION,
+            hecras_version=_native_test_hecras_version(),
         )
 
         assert output_hdf.exists()
@@ -477,7 +487,7 @@ class TestLayerCreation:
             output_hdf_path=tmp_path / "legacy_landcover.hdf",
             restrict_to_extent=(10, 10, 30, 30),
             layer_name="Legacy Bounds",
-            hecras_version=NATIVE_TEST_HECRAS_VERSION,
+            hecras_version=_native_test_hecras_version(),
         )
         with rasterio.open(legacy_output.with_suffix(".tif")) as raster:
             assert tuple(raster.bounds) == (10.0, 10.0, 30.0, 30.0)
@@ -523,7 +533,7 @@ class TestLayerCreation:
             cell_size=10.0,
             restrict_to_extent=box(10, 0, 20, 10),
             buffer_distance=10.0,
-            hecras_version=NATIVE_TEST_HECRAS_VERSION,
+            hecras_version=_native_test_hecras_version(),
         )
 
         assert output_hdf.exists()
@@ -550,7 +560,7 @@ class TestLayerCreation:
             cell_size=10.0,
             output_hdf_path=tmp_path / "legacy_soils.hdf",
             restrict_to_extent=[0, 0, 40, 20],
-            hecras_version=NATIVE_TEST_HECRAS_VERSION,
+            hecras_version=_native_test_hecras_version(),
         )
         with rasterio.open(legacy_output.with_suffix(".tif")) as raster:
             assert tuple(raster.bounds) == (0.0, 0.0, 40.0, 20.0)
@@ -617,7 +627,7 @@ class TestLayerCreation:
             landcover_hdf_path=landcover_hdf_path,
             soil_layer_path=soil_layer_path,
             scs_reset_time_hours=24.0,
-            hecras_version=NATIVE_TEST_HECRAS_VERSION,
+            hecras_version=_native_test_hecras_version(),
         )
 
         assert output_hdf.exists()
