@@ -6914,6 +6914,15 @@ class GeomMesh:
         """
         Detect and fix BC conflicts by trimming overlapping BC endpoints.
 
+        .. warning::
+            This method reads and writes the old per-area
+            ``Geometry/2D Flow Areas/<area>/BC Lines`` layout. HEC-RAS 6.x and
+            7.x geometry HDFs store 2D boundary condition lines in
+            ``Geometry/Boundary Condition Lines`` instead, so on those files it
+            finds no conflicts and changes nothing (an empty ``BCFixResult``).
+            Use :meth:`detect_bc_conflicts` to detect conflicts in HEC-RAS
+            6.x/7.x geometry.
+
         Prefers trimming Normal Depth BCs (least sensitive to endpoint placement).
         Falls back to trimming the longer BC when no Normal Depth BC is involved.
 

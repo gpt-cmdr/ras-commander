@@ -95,6 +95,8 @@ def test_set_and_get_native_flow_optimization_settings(tmp_path):
     )
 
     content = plan_path.read_text(encoding="utf-8")
+    # HEC-RAS runs the optimization only when Flow Ratio Mode is set.
+    assert "Flow Ratio Mode=Stage\n" in content
     assert "Flow Ratio Target=3967\n" in content
     assert "Flow Ratio Reference=Ref Point: LowPointOnRoad\n" in content
     assert "Flow Ratio User Selected Hydrographs=-1\n" in content
@@ -298,37 +300,92 @@ Hydro Flow Optimization Converged Trial # 4 Ratio 0.613
     assert bool(df.loc[3, "converged"]) is True
 
 
-@pytest.mark.synthetic_hdf_layout
-def test_get_trial_results_reads_hdf_dataset(tmp_path):
-    hdf_path = tmp_path / "Project.p01.hdf"
-    dtype = np.dtype(
-        [
-            ("Trial", "<i4"),
-            ("Ratio", "<f8"),
-            ("Difference", "<f8"),
-            ("Target", "<f8"),
-            ("Computed", "<f8"),
-        ]
-    )
-    data = np.array(
-        [
-            (1, 1.0, 1.765, 3967.0, 3968.765),
-            (2, 0.833, 1.037, 3967.0, 3968.037),
-        ],
-        dtype=dtype,
-    )
-    with h5py.File(hdf_path, "w") as hdf_file:
-        hdf_file.create_dataset(
-            "Results/Unsteady/Flow Optimization/Trials",
-            data=data,
-        )
+FIXTURE_DIR = Path(__file__).parent / "fixtures" / "flow_optimization"
+TRIAL_HDF = FIXTURE_DIR / "Muncie.p02.flowopt.hdf"
+TRIALS = "Results/Unsteady/Flow Optimization Hydro Scaling/Results"
 
+
+def _independent_trials(hdf_path):
+    """Expected trials from plain h5py reads of the HEC-RAS 7.0.1 output."""
+    import re
+
+    with h5py.File(hdf_path, "r") as hdf:
+        table = hdf[TRIALS][()]
+        units = hdf[TRIALS].attrs["Variable_Unit"].decode().split(", ")
+        setup = hdf["Plan Data/Flow Ratio Optimization"].attrs
+        target = float(setup["Target Value"])
+        reference = setup["Reference Name"].decode()
+        mode = setup["Target Mode"].decode().lower()
+        text = hdf["Results/Summary/Compute Messages (text)"][0].decode()
+    converged = [int(m) for m in re.findall(r"Converged Trial #\s+(\d+)", text)]
+    printed = re.findall(
+        r"Optimization trial #\s+(\d+)\s+Ratio\s+(\S+)\s+Difference\s+(\S+)\s+"
+        r"Target\s+(\S+)\s+Computed\s+(\S+)", text)
+    return table, units, target, reference, mode, converged, printed
+
+
+def test_hec_ras_701_trial_table_layout():
+    table, units, target, reference, mode, converged, printed = _independent_trials(TRIAL_HDF)
+    assert table.dtype == np.float32 and table.shape == (5, 3)
+    assert units == ["Hydro Scale", "dimensionless", "Water Surface", "ft", "Error", "ft"]
+    assert (target, reference, mode, converged) == (946.0, "FlowOptPt", "stage", [5])
+    assert len(printed) == 5
+    # Stored Error is target - computed; the printed Difference is computed - target.
+    for row, (trial, ratio, difference, printed_target, computed) in zip(table, printed):
+        assert float(ratio) == round(float(row[0]), 3)
+        assert float(computed) == round(float(row[1]), 2)
+        assert float(difference) == round(-float(row[2]), 3)
+        assert float(printed_target) == target
+
+
+def test_get_trial_results_reads_hec_ras_trial_table():
+    table, units, target, reference, mode, converged, _ = _independent_trials(TRIAL_HDF)
+
+    df = RasFlowOptimization.get_trial_results(TRIAL_HDF, ras_object=_DummyRas())
+
+    assert list(df.columns) == RasFlowOptimization.TRIAL_RESULT_COLUMNS
+    assert df["trial"].tolist() == [1, 2, 3, 4, 5]
+    assert df["ratio"].tolist() == table[:, 0].astype(float).tolist()
+    assert df["computed"].tolist() == table[:, 1].astype(float).tolist()
+    assert df["difference"].tolist() == (-table[:, 2].astype(float)).tolist()
+    assert df["target"].tolist() == [target] * 5
+    assert set(df["mode"]) == {mode} and set(df["units"]) == {units[3]}
+    assert set(df["reference_location"]) == {reference}
+    assert df["converged"].tolist() == [t in converged for t in range(1, 6)]
+    assert not df["failed"].any()
+    assert set(df["source"]) == {"hdf"} and set(df["source_dataset"]) == {TRIALS}
+    assert df.loc[4, "message"].startswith("Optimization trial #  5  Ratio  1.434")
+
+
+@pytest.mark.parametrize("backend", ["h5py", "native"])
+def test_trial_table_native_matches_h5py(backend):
+    from ras_commander import fast_hdf
+
+    if backend == "native":
+        pytest.importorskip("ras_commander_fast_hdf")
+    fast_hdf.close_sessions()
+    with fast_hdf.backend_scope("h5py"):
+        expected = RasFlowOptimization._extract_trial_results_from_hdf(TRIAL_HDF)
+    with fast_hdf.backend_scope(backend), fast_hdf.trace_reads() as trace:
+        actual = RasFlowOptimization._extract_trial_results_from_hdf(TRIAL_HDF)
+    fast_hdf.close_sessions()
+    pd.testing.assert_frame_equal(actual, expected, check_exact=True)
+    if backend == "native":
+        assert any(r["backend"].startswith("native") and r["path"].endswith("/Results")
+                   for r in trace)
+        assert not [r for r in trace if r["backend"] in {"h5py", "h5py-fallback"}]
+
+
+def test_get_trial_results_without_trial_table_uses_compute_messages(tmp_path):
+    """A plan HDF whose only trial record is the compute-message text."""
+    hdf_path = tmp_path / "Muncie.p02.hdf"
+    with h5py.File(TRIAL_HDF, "r") as src, h5py.File(hdf_path, "w") as dst:
+        dst.require_group("Results/Summary")
+        src.copy(src["Results/Summary/Compute Messages (text)"], dst["Results/Summary"])
     df = RasFlowOptimization.get_trial_results(hdf_path, ras_object=_DummyRas())
-
-    assert df["source"].unique().tolist() == ["hdf"]
-    assert df["trial"].tolist() == [1, 2]
-    assert np.isclose(df.loc[1, "ratio"], 0.833)
-    assert df.loc[0, "source_dataset"] == "Results/Unsteady/Flow Optimization/Trials"
+    assert set(df["source"]) == {"compute_messages"}
+    assert df["ratio"].tolist() == [1.0, 1.15, 2.0, 1.304, 1.434]
+    assert df["converged"].tolist() == [False, False, False, False, True]
 
 
 def test_get_trial_results_falls_back_to_compute_messages(tmp_path):

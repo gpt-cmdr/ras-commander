@@ -9,6 +9,27 @@ alone does not identify a development checkout.
 
 ### Unreleased
 
+- **`RasFlowOptimization` now really enables HEC-RAS flow optimization and
+  reads the stored trial table.** `set_settings` / `enable_plan` /
+  `copy_plan_with_optimization` did not write `Flow Ratio Mode`, so HEC-RAS
+  ran the plan once with no optimization and `get_trial_results` returned an
+  empty table. They now write `Flow Ratio Mode=Stage` (or `Flow` for flow
+  targets; only the stage mode has been run). With it, HEC-RAS 7.0.1 ran and
+  converged the trials. `get_settings()["enabled"]` is
+  now true only when `Flow Ratio Mode` is Stage or Flow (previously any
+  `Flow Ratio` key, which every shipped plan has). `get_trial_results` now
+  reads the table HEC-RAS writes (`Results/Unsteady/Flow Optimization Hydro
+  Scaling/Results` plus `Plan Data/Flow Ratio Optimization`) at full float32
+  precision, with `source="hdf"`; converged/failed flags and `message` still
+  come from the compute messages. It falls back to parsing compute messages
+  when the table is absent. Columns are unchanged. The reader now runs
+  natively in `auto` mode (native output identical to h5py).
+
+- **`GeomMesh.fix_bc_conflicts` documentation now states its limit.** It reads
+  and writes the old per-area `Geometry/2D Flow Areas/<area>/BC Lines`
+  layout, so on HEC-RAS 6.x/7.x geometry HDFs it finds no conflicts and
+  changes nothing; use `detect_bc_conflicts` for detection. No behaviour change.
+
 - **`HdfLandCover.estimate_final_mannings_raster` and
   `compute_final_mannings_raster` run natively in `auto` mode, and stored
   no-data Manning's n is now no data.** A class whose stored Manning's n is a

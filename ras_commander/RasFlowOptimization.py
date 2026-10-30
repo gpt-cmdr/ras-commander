@@ -26,7 +26,6 @@ from .LoggingConfig import get_logger
 from .RasPlan import RasPlan
 from .RasPrj import ras
 from .RasUtils import RasUtils
-from .fast_hdf import h5py_until_qualified
 
 logger = get_logger(__name__)
 
@@ -42,6 +41,8 @@ class RasFlowOptimization:
     """
 
     PLAN_KEYS = {
+        # HEC-RAS runs the optimization only when this is "Stage" or "Flow".
+        "mode": "Flow Ratio Mode",
         "target_value": "Flow Ratio Target",
         "tolerance": "Flow Ratio Tolerance",
         "initial_ratio": "Flow Ratio Initial Ratio",
@@ -64,6 +65,10 @@ class RasFlowOptimization:
         "recompute_each_trial": "Recompute Each Trial",
         "recompute": "Recompute Each Trial",
     }
+
+    # Where HEC-RAS stores the trials and the optimization setup in the plan HDF.
+    TRIAL_DATASET = "Results/Unsteady/Flow Optimization Hydro Scaling/Results"
+    SETUP_GROUP = "Plan Data/Flow Ratio Optimization"
 
     TRIAL_RESULT_COLUMNS = [
         "trial",
@@ -116,7 +121,10 @@ class RasFlowOptimization:
         mode = RasFlowOptimization._infer_mode(reference_type, raw_values)
 
         settings = {
-            "enabled": any(key.startswith("Flow Ratio ") for key in raw_values),
+            "enabled": raw_values.get(RasFlowOptimization.PLAN_KEYS["mode"], "")
+            .strip()
+            .lower()
+            in {"stage", "flow"},
             "mode": mode,
             "reference": reference,
             "reference_type": reference_type,
@@ -248,6 +256,9 @@ class RasFlowOptimization:
             )
 
         requested = {
+            RasFlowOptimization.PLAN_KEYS["mode"]: (
+                "Stage" if mode_key == "stage" else "Flow"
+            ),
             RasFlowOptimization.PLAN_KEYS["target_value"]: target_value,
             RasFlowOptimization.PLAN_KEYS["tolerance"]: tolerance,
             RasFlowOptimization.PLAN_KEYS["initial_ratio"]: initial_ratio,
@@ -470,10 +481,12 @@ class RasFlowOptimization:
         """
         Extract native flow optimization trial results after compute.
 
-        The extractor first looks for flow optimization result datasets in the
-        plan HDF. If HEC-RAS stores the trials only in compute messages, it
-        falls back to parsing ``.computeMsgs.txt`` / ``.comp_msgs.txt`` or the
-        HDF compute-message text dataset.
+        Reads the trial table HEC-RAS writes to the plan HDF
+        (``Results/Unsteady/Flow Optimization Hydro Scaling/Results`` with the
+        setup in ``Plan Data/Flow Ratio Optimization``; full float32 precision).
+        Without it, parses the ``Optimization trial #`` compute messages from the
+        HDF ``Results/Summary/Compute Messages (text)`` dataset or a
+        ``.computeMsgs.txt`` / ``.comp_msgs.txt`` file (values rounded as printed).
 
         Returns:
             DataFrame with one row per parsed trial. Empty when no native flow
@@ -1185,133 +1198,80 @@ class RasFlowOptimization:
         return ""
 
     @staticmethod
-    @h5py_until_qualified
     def _extract_trial_results_from_hdf(hdf_path: Path) -> pd.DataFrame:
-        rows = []
+        """Trial table HEC-RAS stores in the plan HDF, or an empty frame.
+
+        HEC-RAS writes one row per trial to ``TRIAL_DATASET`` (float32 columns
+        ``Hydro Scale``, the computed stage or flow at the reference, and
+        ``Error`` = target - computed, labelled by ``Variable_Unit``) and the
+        setup to ``Plan Data/Flow Ratio Optimization`` attributes. ``difference``
+        is reported as computed - target (the compute-message convention), so it
+        is the negated stored ``Error``. Converged/failed flags come from the
+        compute messages stored in the same file. An unrecognized layout yields
+        an empty frame so the caller falls back to the compute messages.
+        """
+        trial_path = RasFlowOptimization.TRIAL_DATASET
         with h5py.File(hdf_path, "r") as hdf_file:
-            def visitor(name: str, obj: Any) -> None:
-                if not isinstance(obj, h5py.Dataset):
-                    return
-                lowered = name.lower()
-                if not (
-                    ("flow" in lowered and "optimization" in lowered)
-                    or "flow ratio" in lowered
-                ):
-                    return
-                candidate = RasFlowOptimization._dataset_to_dataframe(obj)
-                if candidate.empty:
-                    return
-                normalized = RasFlowOptimization._normalize_hdf_trial_dataframe(
-                    candidate,
-                    hdf_path,
-                    name,
+            dataset = hdf_file.get(trial_path)
+            setup = hdf_file.get(RasFlowOptimization.SETUP_GROUP)
+            if not isinstance(dataset, h5py.Dataset) or setup is None:
+                return pd.DataFrame(columns=RasFlowOptimization.TRIAL_RESULT_COLUMNS)
+            if dataset.ndim != 2 or dataset.shape[1] != 3 or dataset.dtype.kind != "f":
+                return pd.DataFrame(columns=RasFlowOptimization.TRIAL_RESULT_COLUMNS)
+            labels = str(
+                RasFlowOptimization._decode_hdf_value(
+                    read_attr(dataset, "Variable_Unit", b"")
                 )
-                if not normalized.empty:
-                    rows.append(normalized)
-
-            hdf_file.visititems(visitor)
-
-        if not rows:
-            return pd.DataFrame(columns=RasFlowOptimization.TRIAL_RESULT_COLUMNS)
-        return pd.concat(rows, ignore_index=True)
-
-    @staticmethod
-    def _dataset_to_dataframe(dataset: h5py.Dataset) -> pd.DataFrame:
-        data = read_typed(dataset)
-        if isinstance(data, (bytes, str)) or np.isscalar(data):
-            return pd.DataFrame()
-
-        if getattr(data, "dtype", None) is not None and data.dtype.names:
-            df = pd.DataFrame.from_records(data)
-        elif isinstance(data, np.ndarray) and data.ndim == 2:
-            columns = RasFlowOptimization._get_dataset_column_names(
-                dataset,
-                data.shape[1],
+            ).split(",")
+            labels = [label.strip() for label in labels]
+            if (
+                len(labels) != 6
+                or labels[0] != "Hydro Scale"
+                or labels[4] != "Error"
+                or labels[3] != labels[5]
+            ):
+                return pd.DataFrame(columns=RasFlowOptimization.TRIAL_RESULT_COLUMNS)
+            values = np.asarray(read_typed(dataset), dtype=np.float64)
+            target = read_attr(setup, "Target Value", None)
+            mode = RasFlowOptimization._decode_hdf_value(read_attr(setup, "Target Mode", None))
+            reference = RasFlowOptimization._decode_hdf_value(
+                read_attr(setup, "Reference Name", None)
             )
-            df = pd.DataFrame(data, columns=columns)
-        elif isinstance(data, np.ndarray) and data.ndim == 1:
-            df = pd.DataFrame({"value": data})
-        else:
-            return pd.DataFrame()
+        if not len(values):
+            return pd.DataFrame(columns=RasFlowOptimization.TRIAL_RESULT_COLUMNS)
 
-        for column in df.columns:
-            if df[column].dtype == object:
-                df[column] = df[column].map(RasFlowOptimization._decode_hdf_value)
-        return df
+        messages = RasFlowOptimization.parse_compute_messages(
+            RasFlowOptimization._read_compute_messages(None, hdf_path)
+        )
+        converged_trials = set(messages.loc[messages["converged"].astype(bool), "trial"])
+        failed = bool(messages["failed"].astype(bool).any()) if len(messages) else False
+        message_by_trial = dict(zip(messages["trial"], messages["message"]))
 
-    @staticmethod
-    def _get_dataset_column_names(
-        dataset: h5py.Dataset,
-        width: int,
-    ) -> List[str]:
-        for attr_name in (
-            "Column Names",
-            "Column names",
-            "Columns",
-            "Variable Names",
-            "Variables",
-        ):
-            if attr_name not in dataset.attrs:
-                continue
-            raw = read_attr(dataset, attr_name)
-            values = np.atleast_1d(raw).tolist()
-            columns = [
-                str(RasFlowOptimization._decode_hdf_value(value)).strip()
-                for value in values
-            ]
-            if len(columns) == width:
-                return columns
-        return [f"column_{index}" for index in range(width)]
+        trials = range(1, len(values) + 1)
+        return pd.DataFrame(
+            {
+                "trial": list(trials),
+                "ratio": values[:, 0],
+                "difference": -values[:, 2],
+                "target": None if target is None else float(target),
+                "computed": values[:, 1],
+                "mode": None if mode is None else str(mode).strip().lower(),
+                "units": labels[3],
+                "reference_location": None if reference is None else str(reference).strip(),
+                "converged": [trial in converged_trials for trial in trials],
+                "failed": failed,
+                "source": "hdf",
+                "source_path": str(hdf_path),
+                "source_dataset": trial_path,
+                "message": [message_by_trial.get(trial) for trial in trials],
+            }
+        )
 
     @staticmethod
     def _decode_hdf_value(value: Any) -> Any:
         if isinstance(value, bytes):
             return value.decode("utf-8", errors="ignore").strip()
         return value
-
-    @staticmethod
-    def _normalize_hdf_trial_dataframe(
-        df: pd.DataFrame,
-        hdf_path: Path,
-        dataset_name: str,
-    ) -> pd.DataFrame:
-        normalized_columns = {
-            column: RasFlowOptimization._normalize_column_name(str(column))
-            for column in df.columns
-        }
-        rename_map = {}
-        for column, normalized in normalized_columns.items():
-            if normalized in {"trial", "trial_number"}:
-                rename_map[column] = "trial"
-            elif normalized in {"ratio", "flow_ratio", "hydrograph_ratio"}:
-                rename_map[column] = "ratio"
-            elif normalized in {"difference", "diff", "error"}:
-                rename_map[column] = "difference"
-            elif normalized == "target":
-                rename_map[column] = "target"
-            elif normalized in {"computed", "computed_value"}:
-                rename_map[column] = "computed"
-
-        result = df.rename(columns=rename_map)
-        required = {"trial", "ratio"}
-        if not required.issubset(set(result.columns)):
-            return pd.DataFrame(columns=RasFlowOptimization.TRIAL_RESULT_COLUMNS)
-
-        result = result.copy()
-        result["source"] = "hdf"
-        result["source_path"] = str(hdf_path)
-        result["source_dataset"] = dataset_name
-        result["message"] = None
-        result["converged"] = False
-        result["failed"] = False
-        return result
-
-    @staticmethod
-    def _normalize_column_name(name: str) -> str:
-        normalized = name.strip().lower()
-        normalized = normalized.replace("#", "number")
-        normalized = re.sub(r"[^a-z0-9]+", "_", normalized)
-        return normalized.strip("_")
 
     @staticmethod
     def _read_compute_messages(
