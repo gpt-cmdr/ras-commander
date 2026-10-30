@@ -162,6 +162,35 @@ def _soils_raster_stats(j):
     return HdfInfiltration.get_soils_raster_stats(j["geom"], soil_hdf_path=j["soils"])
 
 
+def _final_mannings_tif(method, j):
+    """The returned raster plus the GeoTIFF the method writes, read back exactly.
+
+    Each call writes to its own temporary file; the band values, dtype, nodata,
+    CRS WKT and transform are compared, not the file bytes (GDAL metadata such as
+    creation software is not part of the result).
+    """
+    import tempfile
+    from pathlib import Path as _Path
+
+    import rasterio
+
+    with tempfile.TemporaryDirectory() as tmp:
+        out = _Path(tmp) / "final_mannings_n.tif"
+        array = method(j["geom"], landcover_hdf_path=j["landcover"], output_tif_path=out)
+        if not out.exists():
+            return {"array": array, "tif": None}
+        with rasterio.open(out) as src:
+            return {
+                "array": array,
+                "tif": src.read(),
+                "dtypes": list(src.dtypes),
+                "nodata": src.nodata,
+                "crs": src.crs.to_wkt() if src.crs else None,
+                "transform": tuple(src.transform),
+                "shape": (src.count, src.height, src.width),
+            }
+
+
 PROJECT_CASES = {
     "HdfInfiltration.get_soils_raster_stats": _soils_raster_stats,
     "HdfInfiltration.get_soil_raster_stats": lambda j: HdfInfiltration.get_soil_raster_stats(
@@ -174,6 +203,10 @@ PROJECT_CASES = {
         j["geom"], landcover_hdf_path=j["landcover"]),
     "HdfLandCover.compute_final_mannings_raster": lambda j: HdfLandCover.compute_final_mannings_raster(
         j["geom"], landcover_hdf_path=j["landcover"]),
+    "HdfLandCover.estimate_final_mannings_raster[tif]": lambda j: _final_mannings_tif(
+        HdfLandCover.estimate_final_mannings_raster, j),
+    "HdfLandCover.compute_final_mannings_raster[tif]": lambda j: _final_mannings_tif(
+        HdfLandCover.compute_final_mannings_raster, j),
 }
 
 
