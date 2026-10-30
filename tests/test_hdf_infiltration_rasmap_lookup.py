@@ -21,15 +21,17 @@ def _write_infiltration_hdf(path: Path) -> Path:
                 dtype=[("raster_value", "i4"), ("mukey", "S16")],
             ),
         )
+        # Class parameter table in the layout HEC-RAS writes (root Variables
+        # keyed by Name), with Deficit and Constant parameter columns.
         hdf.create_dataset(
-            "Infiltration Parameters",
+            "Variables",
             data=np.array(
-                [(b"100", 0.25, 0.10, 12.0)],
+                [(b"100", 2.5, 0.25, 0.10), (b"200", 3.0, 0.5, 0.2)],
                 dtype=[
-                    ("mukey", "S16"),
-                    ("initial_loss", "f8"),
-                    ("constant_loss_rate", "f8"),
-                    ("impervious_area", "f8"),
+                    ("Name", "S16"),
+                    ("Maximum Deficit", "f4"),
+                    ("Initial Deficit", "f4"),
+                    ("Potential Percolation Rate", "f4"),
                 ],
             ),
         )
@@ -100,6 +102,7 @@ def test_implicit_lookup_has_clear_status_aware_errors(
         _call(method_name, ras_object)
 
 
+@pytest.mark.synthetic_hdf_layout
 @pytest.mark.parametrize(
     "method_name",
     ["get_infiltration_map", "get_infiltration_parameters"],
@@ -122,12 +125,13 @@ def test_implicit_lookup_reads_configured_path(
         assert result == {1: "100", 2: "200"}
     else:
         assert result == {
-            "Initial Loss (in)": 0.25,
-            "Constant Loss Rate (in/hr)": 0.10,
-            "Impervious Area (%)": 12.0,
+            "Maximum Deficit": 2.5,
+            "Initial Deficit": 0.25,
+            "Potential Percolation Rate": float(np.float32(0.10)),
         }
 
 
+@pytest.mark.synthetic_hdf_layout
 @pytest.mark.parametrize(
     "method_name",
     ["get_infiltration_map", "get_infiltration_parameters"],
@@ -146,6 +150,7 @@ def test_legacy_rasmap_df_without_status_remains_usable(
     assert result is not None
 
 
+@pytest.mark.synthetic_hdf_layout
 @pytest.mark.parametrize(
     "method_name",
     ["get_infiltration_map", "get_infiltration_parameters"],
@@ -168,6 +173,7 @@ def test_explicit_path_bypasses_failed_rasmap_status(
     assert result is not None
 
 
+@pytest.mark.synthetic_hdf_layout
 @pytest.mark.parametrize(
     "method_name",
     ["get_infiltration_map", "get_infiltration_parameters"],
@@ -190,6 +196,7 @@ def test_unrelated_partial_field_error_does_not_block_lookup(
     assert result is not None
 
 
+@pytest.mark.synthetic_hdf_layout
 @pytest.mark.parametrize(
     "method_name",
     ["get_infiltration_map", "get_infiltration_parameters"],

@@ -155,6 +155,7 @@ def test_available_observation_requires_a_value() -> None:
         )
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_modern_hdf_keeps_completion_separate_from_message_errors(
     tmp_path: Path,
 ) -> None:
@@ -197,6 +198,7 @@ def test_modern_hdf_keeps_completion_separate_from_message_errors(
     )
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_conflicting_completion_sources_fail_closed(tmp_path: Path) -> None:
     _, ras_object = _write_project(tmp_path / "conflict", version="6.60")
     _write_hdf(
@@ -215,6 +217,7 @@ def test_conflicting_completion_sources_fail_closed(tmp_path: Path) -> None:
     assert evidence.conflicts == ("completion_sources_disagree",)
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_explicit_false_without_message_marker_remains_false(
     tmp_path: Path,
 ) -> None:
@@ -236,6 +239,7 @@ def test_explicit_false_without_message_marker_remains_false(
     assert evidence.mechanical_completion.value is False
 
 
+@pytest.mark.synthetic_hdf_layout
 @pytest.mark.parametrize(
     "message",
     [
@@ -295,6 +299,7 @@ def test_exact_legacy_completion_record_accepts_decimal_seconds(
     assert evidence.observations["runtime_seconds"].value == 1.44
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_ras_501_uses_message_runtime_and_time_window_fallback(
     tmp_path: Path,
 ) -> None:
@@ -378,6 +383,7 @@ def test_legacy_output_without_messages_is_indeterminate(tmp_path: Path) -> None
     assert evidence.mechanical_completion.value is None
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_modified_after_threshold_is_independent_from_completion(
     tmp_path: Path,
 ) -> None:
@@ -403,6 +409,7 @@ def test_modified_after_threshold_is_independent_from_completion(
     assert evidence.mechanical_completion.value is True
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_bco_without_marker_does_not_contradict_hdf_completion(
     tmp_path: Path,
 ) -> None:
@@ -427,6 +434,7 @@ def test_bco_without_marker_does_not_contradict_hdf_completion(
     assert evidence.conflicts == ()
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_declared_and_observed_version_transition_is_retained(
     tmp_path: Path,
 ) -> None:
@@ -626,6 +634,7 @@ def test_mixed_results_quarantine_sidecar_without_producer_version(
     )
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_mixed_modern_result_quarantines_same_version_multiple_sidecars(
     tmp_path: Path,
 ) -> None:
@@ -683,6 +692,7 @@ def test_mixed_modern_result_quarantines_same_version_multiple_sidecars(
     )
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_mixed_hdf_result_quarantines_different_modern_producer_sidecar(
     tmp_path: Path,
 ) -> None:
@@ -800,6 +810,7 @@ def test_modern_plan_with_newer_legacy_output_raises_ambiguity(
     assert caught.value.reason_code == "legacy_output_timestamp_after_hdf"
 
 
+@pytest.mark.synthetic_hdf_layout
 @pytest.mark.parametrize("hdf_offset_ns", [0, 1_000_000_000])
 def test_modern_plan_selects_hdf_when_legacy_output_is_not_newer(
     tmp_path: Path,
@@ -865,6 +876,7 @@ def test_existing_legacy_output_is_selected_when_hdf_is_absent(
     assert "unexpected_result_format" in evidence.conflicts
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_sole_hdf_is_selected_for_legacy_declared_plan(
     tmp_path: Path,
 ) -> None:
@@ -891,6 +903,7 @@ def test_sole_hdf_is_selected_for_legacy_declared_plan(
     assert "unexpected_result_format" in evidence.conflicts
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_unresolved_program_version_accepts_sole_result_with_conflict(
     tmp_path: Path,
 ) -> None:
@@ -1023,6 +1036,7 @@ def test_public_cleanup_removes_only_requested_plan_artifacts(
     assert not sidecar.exists()
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_hdf_and_stored_producer_version_disagreement_is_retained(
     tmp_path: Path,
 ) -> None:
@@ -1043,6 +1057,7 @@ def test_hdf_and_stored_producer_version_disagreement_is_retained(
     assert "declared_producer_versions_disagree" not in evidence.conflicts
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_empty_hdf_messages_fall_back_to_stored_message_health(
     tmp_path: Path,
 ) -> None:
@@ -1080,6 +1095,7 @@ def test_result_modified_after_rejects_naive_datetime(tmp_path: Path) -> None:
         )
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_malformed_completion_attribute_does_not_erase_message_observation(
     tmp_path: Path,
 ) -> None:
@@ -1112,6 +1128,7 @@ def test_missing_modern_result_is_not_a_failed_computation(tmp_path: Path) -> No
     assert evidence.mechanical_completion.state == "not_inspected"
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_hash_failure_fails_closed_for_hdf_observations(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -1147,6 +1164,7 @@ def test_hash_failure_fails_closed_for_hdf_observations(
     )
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_hdf_change_during_hash_discards_digest(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -1207,6 +1225,7 @@ def test_offline_inspector_does_not_dispatch_com(
     assert evidence.observations["com_completion"].state == "not_inspected"
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_record_is_immutable_and_json_serializable_without_message_text(
     tmp_path: Path,
 ) -> None:

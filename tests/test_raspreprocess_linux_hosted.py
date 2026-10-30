@@ -81,6 +81,7 @@ def test_compute_command_line_rejects_quote_in_path():
         raise AssertionError("a quoted path must be rejected")
 
 
+@pytest.mark.synthetic_hdf_layout
 @pytest.mark.parametrize("require_linux_solver_ready", [True, False])
 def test_preprocess_uses_owned_launcher_and_records_alternate_signal(
     tmp_path,

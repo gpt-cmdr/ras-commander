@@ -2046,41 +2046,138 @@ class HdfInfiltration:
     @staticmethod
     @log_call
     @standardize_input(file_type='geom_hdf')
-    @h5py_until_qualified
     def get_infiltration_parameters(hdf_path: Path = None, mukey: str = None, ras_object: Any = None) -> Optional[Dict[str, float]]:
-        """Get infiltration parameters for a specific mukey from HDF file
+        """Get the infiltration parameters stored for one class of an infiltration layer.
+
+        Reads the ``Variables`` table of a RASMapper infiltration layer HDF
+        (the file referenced by the project's ``.rasmap``; for example
+        ``Soils Data/Infiltration.hdf``). HEC-RAS keys that table by the class
+        ``Name`` column: one row per class with one float column per parameter.
+        The row whose ``Name`` equals ``mukey`` exactly is returned.
+
+        What ``mukey`` must be depends on how the layer was built:
+
+        * Layers that depend on a soils layer only (one column in
+          ``Dependency Classifications``) and legacy layers that carry their
+          own ``Raster Map`` key rows by the soil class name, e.g. ``"167"`` or
+          ``"329910_Docena"`` (the ``Name`` of the soils/infiltration
+          ``Raster Map``).
+        * Layers that depend on a land cover *and* a soils layer key rows by
+          the combined class, e.g. ``"Mixed Forest : B"``. Parameters then vary
+          by land cover, so a bare soil (or land cover) class does not identify
+          one row and a ``ValueError`` is raised; pass the combined name (the
+          ``Name`` values are listed by :meth:`get_infiltration_layer_data`).
+
+        The returned keys depend on the infiltration method (``LC Type`` of
+        the layer):
+
+        * Deficit and Constant: ``Maximum Deficit``, ``Initial Deficit``,
+          ``Potential Percolation Rate``.
+        * Green-Ampt: ``Wetting Front Suction``,
+          ``Saturated Hydraulic Conductivity``, ``Initial Soil Water Content``,
+          ``Saturated Soil Water Content``, ``Residual Soil Water Content``,
+          ``Pore Size Distribution Index`` (column order as stored).
+        * SCS Curve Number: ``Curve Number``, ``Abstraction Ratio``,
+          ``Minimum Infiltration Rate``.
+
+        Values are returned exactly as stored, in the project's unit system
+        (the layer does not record units), including the ``-9999.0`` that
+        HEC-RAS 7.0.1 Green-Ampt layers store in ``Residual Soil Water
+        Content`` and ``Pore Size Distribution Index``. Layer-wide
+        ``Properties`` (e.g. ``SCS Initial Loss Reset Time``) are not per-class
+        parameters and are not included.
+
+        The keys returned by earlier versions (``Initial Loss (in)``,
+        ``Constant Loss Rate (in/hr)``, ``Impervious Area (%)``) cannot be
+        filled: HEC-RAS infiltration layers do not store them (impervious
+        percentage belongs to the land cover layer's ``Percent Impervious``),
+        so they are not returned.
 
         Args:
-            hdf_path: Optional path to the HDF file. If not provided, uses first infiltration_hdf_path from rasmap_df
-            mukey: Mukey identifier
-            ras_object (RasPrj, optional): Optional RAS object. If not provided, uses global ras instance
+            hdf_path: Optional path to the infiltration layer HDF. If not
+                provided, uses the first ``infiltration_hdf_path`` from
+                ``rasmap_df``.
+            mukey: Class name to look up (``Variables`` ``Name`` value).
+            ras_object (RasPrj, optional): Optional RAS object. If not provided,
+                uses global ras instance.
 
         Returns:
-            Optional[Dict[str, float]]: Dictionary of infiltration parameters, or None if mukey not found
+            Optional[Dict[str, float]]: The parameter columns of the matching
+            ``Variables`` row keyed by their HEC-RAS names (see above), or
+            ``None`` if no row has that name.
 
         Raises:
+            KeyError: If the HDF has no ``Variables`` table.
             ValueError: If ``hdf_path`` is omitted and no usable infiltration
-                layer can be resolved from ``rasmap_df``.
+                layer can be resolved from ``rasmap_df``; if ``mukey`` matches
+                more than one row; or if ``mukey`` is a single dependency class
+                of a combined (land cover and soils) layer.
         """
         hdf_path = HdfInfiltration._resolve_rasmap_hdf_path(
             hdf_path,
             "infiltration_hdf_path",
             ras_object,
         )
-            
+
         with h5py.File(hdf_path, 'r') as hdf:
-            if 'Infiltration Parameters' not in hdf:
-                raise KeyError("No infiltration parameters found in HDF file")
-                
-            params = read_typed(hdf['Infiltration Parameters'], slice(None))
-            for row in params:
-                if row[0].decode('utf-8') == mukey:
-                    return {
-                        'Initial Loss (in)': float(row[1]),
-                        'Constant Loss Rate (in/hr)': float(row[2]),
-                        'Impervious Area (%)': float(row[3])
-                    }
+            if 'Variables' not in hdf:
+                raise KeyError(
+                    f"No Variables table found in infiltration layer {hdf_path}"
+                )
+            variables = read_typed(hdf['Variables'], slice(None))
+            dependency_classes = (
+                read_typed(hdf['Dependency Classifications'], slice(None))
+                if 'Dependency Classifications' in hdf
+                else None
+            )
+
+        fields = variables.dtype.names or ()
+        if 'Name' not in fields:
+            raise KeyError(
+                f"Variables table in {hdf_path} has no Name column"
+            )
+        names = [HdfInfiltration._decode_class_name(v) for v in variables['Name']]
+        matches = [i for i, name in enumerate(names) if name == mukey]
+        if len(matches) > 1:
+            raise ValueError(
+                f"Class {mukey!r} occurs {len(matches)} times in the Variables "
+                f"table of {hdf_path}; the parameters are ambiguous."
+            )
+        if matches:
+            row = variables[matches[0]]
+            return {
+                field: float(row[field])
+                for field in fields
+                if field != 'Name' and variables.dtype[field].kind in 'fiu'
+            }
+
+        dependency_columns = (
+            dependency_classes.dtype.names
+            if dependency_classes is not None and dependency_classes.dtype.names
+            else ()
+        )
+        if len(dependency_columns) > 1:
+            for column in dependency_columns:
+                classes = {
+                    HdfInfiltration._decode_class_name(v)
+                    for v in dependency_classes[column]
+                }
+                if mukey in classes:
+                    raise ValueError(
+                        f"{mukey!r} is a {column!r} class, but {hdf_path} keys "
+                        f"its parameters by the combined classes of "
+                        f"{', '.join(repr(c) for c in dependency_columns)} "
+                        "(e.g. 'Land Cover : Soil'). Pass a Variables Name; "
+                        "get_infiltration_layer_data() lists them."
+                    )
         return None
+
+    @staticmethod
+    def _decode_class_name(value: Any) -> str:
+        """Decode one fixed-length class-name cell exactly as stored."""
+        if isinstance(value, (bytes, np.bytes_)):
+            return value.decode('utf-8')
+        return str(value)
 
     @staticmethod
     @log_call
@@ -2090,18 +2187,27 @@ class HdfInfiltration:
         
         Args:
             soil_stats: DataFrame with soil statistics
-            infiltration_params: Dictionary of infiltration parameters by mukey
-            
+            infiltration_params: Dictionary of infiltration parameters by mukey,
+                e.g. ``{mukey: get_infiltration_parameters(path, mukey)}``.
+                Every entry must have the same keys.
+
         Returns:
-            Dictionary of weighted average infiltration parameters
+            Dictionary of weighted average infiltration parameters, keyed like
+            the entries of ``infiltration_params`` (the legacy keys
+            ``Initial Loss (in)``, ``Constant Loss Rate (in/hr)`` and
+            ``Impervious Area (%)``, all 0.0, when it is empty).
         """
         total_weight = soil_stats['Percentage'].sum()
-        
-        weighted_params = {
-            'Initial Loss (in)': 0.0,
-            'Constant Loss Rate (in/hr)': 0.0,
-            'Impervious Area (%)': 0.0
-        }
+
+        if infiltration_params:
+            first = next(iter(infiltration_params.values()))
+            weighted_params = {param: 0.0 for param in first}
+        else:
+            weighted_params = {
+                'Initial Loss (in)': 0.0,
+                'Constant Loss Rate (in/hr)': 0.0,
+                'Impervious Area (%)': 0.0
+            }
         
         for _, row in soil_stats.iterrows():
             mukey = row['mukey']

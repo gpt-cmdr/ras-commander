@@ -32,7 +32,7 @@ References:
 
 import logging
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple, Union, Literal
+from typing import TYPE_CHECKING, Dict, List, Optional, Tuple, Union, Literal
 
 import numpy as np
 import pandas as pd
@@ -54,6 +54,9 @@ except ImportError:
     xr = None
 
 from ..LoggingConfig import get_logger, log_call
+
+if TYPE_CHECKING:
+    from ..RasPrj import RasPrj
 from .Atlas14Grid import Atlas14Grid
 
 logger = get_logger(__name__)

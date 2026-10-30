@@ -114,6 +114,7 @@ FAIL = (False, NO_VALID, 0)
 PASS = (True, "Processing Precipitation data...\nFinished\n", 0)
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_repair_succeeds_on_second_attempt_and_fixes_line_endings(tmp_path, monkeypatch):
     harness = _Harness(tmp_path, monkeypatch, outcomes=[FAIL, PASS])
 
@@ -139,6 +140,7 @@ def test_repair_succeeds_on_second_attempt_and_fixes_line_endings(tmp_path, monk
     assert all(c["tmp_hdf"] == harness.tmp_hdf for c in harness.residue_calls)
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_repair_runs_completepreprocess_from_project_folder(tmp_path, monkeypatch):
     harness = _Harness(tmp_path, monkeypatch, outcomes=[PASS])
 
@@ -155,6 +157,7 @@ def test_repair_runs_completepreprocess_from_project_folder(tmp_path, monkeypatc
     assert cwd == str(tmp_path)
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_all_repair_attempts_fail_with_clear_error(tmp_path, monkeypatch):
     harness = _Harness(tmp_path, monkeypatch, outcomes=[FAIL, FAIL, (False, "", 3)])
 
@@ -172,6 +175,7 @@ def test_all_repair_attempts_fail_with_clear_error(tmp_path, monkeypatch):
     assert harness.x_file.read_bytes() == b"GEOM\r\nLINE\r\n"
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_nonzero_exit_is_not_accepted_even_when_hdf_validates(tmp_path, monkeypatch):
     harness = _Harness(tmp_path, monkeypatch, outcomes=[(True, "", 1), PASS])
 
@@ -181,6 +185,7 @@ def test_nonzero_exit_is_not_accepted_even_when_hdf_validates(tmp_path, monkeypa
     assert [r["return_code"] for r in result.precipitation_repair_attempts] == [1, 0]
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_repair_disabled(tmp_path, monkeypatch):
     harness = _Harness(tmp_path, monkeypatch, outcomes=[PASS])
 
@@ -204,6 +209,9 @@ def test_repair_not_attempted_without_b_and_x_files(tmp_path, monkeypatch, artif
     assert harness.repair_calls == []
 
 
+@pytest.mark.synthetic_hdf_layout(
+    "Uniform",
+)
 @pytest.mark.parametrize("mode", ["Gridded", "Uniform"])
 def test_repair_not_attempted_for_non_point_modes(tmp_path, monkeypatch, mode):
     harness = _Harness(tmp_path, monkeypatch, mode=mode, outcomes=[PASS])
@@ -215,6 +223,7 @@ def test_repair_not_attempted_for_non_point_modes(tmp_path, monkeypatch, mode):
     assert harness.repair_calls == []
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_repair_not_attempted_when_precipitation_disabled(tmp_path, monkeypatch):
     harness = _Harness(tmp_path, monkeypatch, outcomes=[PASS])
     (tmp_path / "fixture.u02").write_text(
@@ -228,6 +237,7 @@ def test_repair_not_attempted_when_precipitation_disabled(tmp_path, monkeypatch)
     assert harness.repair_calls == []
 
 
+@pytest.mark.synthetic_hdf_layout
 @pytest.mark.parametrize(
     "missing,detail",
     [("rasprocess", "RasProcess.exe not found"), ("rasmap", "fixture.rasmap not found")],
@@ -249,6 +259,7 @@ def test_repair_reports_missing_prerequisites(tmp_path, monkeypatch, missing, de
     assert harness.repair_calls == []
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_repair_timeout_terminates_attempt_and_stops(tmp_path, monkeypatch):
     harness = _Harness(tmp_path, monkeypatch)
     terminated = []

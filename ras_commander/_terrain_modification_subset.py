@@ -12,7 +12,7 @@ from pathlib import Path
 import h5py
 import numpy as np
 
-from .fast_hdf import read_typed
+from .fast_hdf import read_typed, release_native_sessions
 
 TABLES = frozenset(
     {
@@ -465,6 +465,7 @@ def copy_features(
         backup = Path(temporary) / "original.hdf"
         shutil.copyfile(destination_hdf, backup)
         try:
+            release_native_sessions(staged_hdf, destination_hdf)
             os.replace(staged_hdf, destination_hdf)
             os.replace(staged_xml, destination_rasmap)
         except Exception:
@@ -504,5 +505,6 @@ def export_features(source_hdf, source_rasmap, output_dir, feature_indexes):
         summaries = copy_features(
             source_hdf, hdf, source_rasmap, mapper, feature_indexes
         )
+        release_native_sessions(staged, output_dir)
         os.replace(staged, output_dir)
     return summaries

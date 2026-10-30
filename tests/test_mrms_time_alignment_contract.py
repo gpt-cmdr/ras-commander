@@ -18,7 +18,7 @@ import xarray as xr
 
 @pytest.fixture(scope="module")
 def helpers():
-    notebook = nbformat.read(Path("examples/917_mrms_precipitation_qpe.ipynb"), as_version=4)
+    notebook = nbformat.read(Path(__file__).resolve().parents[1] / "examples/917_mrms_precipitation_qpe.ipynb", as_version=4)
     source = "\n".join(c.source for c in notebook.cells if c.cell_type == "code")
     wanted = {
         "align_mrms_hyetograph", "compare_native_cumulative", "readback_hyetograph",

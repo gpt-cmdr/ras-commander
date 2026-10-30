@@ -139,6 +139,7 @@ class _SliceOnlyDataset:
         return self.values[key]
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_temporal_maximum_reads_stored_depth_in_bounded_slices():
     values = np.array(
         [
@@ -171,6 +172,7 @@ def test_temporal_maximum_reads_stored_depth_in_bounded_slices():
     ]
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_temporal_maximum_reads_wse_fallback_in_bounded_slices():
     water_surface = np.array(
         [
@@ -411,6 +413,11 @@ def test_max_depth_fails_closed_when_cell_centers_are_missing(tmp_path):
         HdfResultsMesh.get_mesh_max_depth(hdf_path)
 
 
+@pytest.mark.synthetic_hdf_layout(
+    "fixture_kwargs0-Cell-center shape",
+    "fixture_kwargs2-Cells Minimum Elevation shape",
+    "fixture_kwargs3-Water Surface shape",
+)
 @pytest.mark.parametrize(
     ("fixture_kwargs", "message"),
     [

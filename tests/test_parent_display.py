@@ -143,6 +143,7 @@ def _time(hdf, steps, units=None):
         ds.attrs["Units"] = units
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_applied_forcing_lists_series_without_reading_values(make_hdf):
     def writer(hdf):
         _bc(hdf, "Upstream Inflow", 109, units="cfs")
@@ -292,6 +293,9 @@ def test_declared_structures_with_empty_support_table_are_incomplete(make_hdf, t
     assert table in result.detail
 
 
+@pytest.mark.synthetic_hdf_layout(
+    "column_count",
+)
 @pytest.mark.parametrize("defect", ["short_series", "scalar_series", "time_group", "time_matrix", "column_count"])
 def test_applied_forcing_rejects_shape_inconsistency(make_hdf, defect):
     def writer(hdf):

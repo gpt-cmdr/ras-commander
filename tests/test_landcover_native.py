@@ -65,6 +65,7 @@ def test_classification_polygon_interior_ring_is_rejected():
         _normalize_single_polygon(polygon)
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_add_and_update_reject_holes_before_backup_or_native_load(
     tmp_path: Path,
     monkeypatch,
@@ -127,6 +128,7 @@ def test_invalid_classification_polygon_is_rejected():
         _normalize_single_polygon(bowtie)
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_geodataframe_crs_must_match_sidecar(tmp_path: Path):
     geopandas = pytest.importorskip("geopandas")
     shapely = pytest.importorskip("shapely")
@@ -188,6 +190,10 @@ def test_polygon_version_gate_rejects_future_unqualified_families(version: str):
         polygon_native._require_modern_rasmapper(version)
 
 
+@pytest.mark.synthetic_hdf_layout(
+    "InfiltrationSCSCurveNumber",
+    "Soils",
+)
 @pytest.mark.parametrize("layer_type", ["Soils", "InfiltrationSCSCurveNumber", None])
 def test_polygon_mutation_is_narrowed_to_qualified_landcover_sidecars(
     tmp_path: Path,
@@ -202,6 +208,7 @@ def test_polygon_mutation_is_narrowed_to_qualified_landcover_sidecars(
         _require_landcover_sidecar(sidecar)
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_qualified_landcover_sidecar_type_is_accepted(tmp_path: Path):
     sidecar = tmp_path / "LandCover.hdf"
     with h5py.File(sidecar, "w") as hdf:
@@ -274,6 +281,7 @@ def test_polygon_crud_validates_existing_class_id():
         )
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_native_polygon_save_failure_restores_hdf_and_native_backup(
     tmp_path: Path,
     monkeypatch,
@@ -676,6 +684,9 @@ def test_classification_property_reload_mismatch_restores_native_save(
     assert sidecar.read_bytes() == b"original sidecar"
 
 
+@pytest.mark.synthetic_hdf_layout(
+    "False",
+)
 @pytest.mark.parametrize("legacy", [True, False])
 def test_validate_native_landcover_accepts_native_layout(
     tmp_path: Path,
@@ -758,6 +769,7 @@ def _write_result_hdf(
             )
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_final_mannings_audit_rejects_floating_noise(tmp_path: Path):
     result = tmp_path / "noise.p01.hdf"
     _write_result_hdf(result, [0.035000, 0.035003])
@@ -766,6 +778,7 @@ def test_final_mannings_audit_rejects_floating_noise(tmp_path: Path):
         HdfLandCover.audit_final_mannings_n(result, tolerance=1.0e-4)
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_final_mannings_audit_accepts_ras5_face_values(tmp_path: Path):
     result = tmp_path / "legacy.p01.hdf"
     _write_result_hdf(result, [0.03, 0.04, 0.08])
@@ -780,6 +793,7 @@ def test_final_mannings_audit_accepts_ras5_face_values(tmp_path: Path):
     assert report.loc[0, "face_distinct_count"] == 3
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_final_mannings_audit_accepts_ras6_cell_and_face_values(tmp_path: Path):
     result = tmp_path / "modern.p01.hdf"
     _write_result_hdf(
@@ -794,6 +808,7 @@ def test_final_mannings_audit_accepts_ras6_cell_and_face_values(tmp_path: Path):
     assert report.loc[0, "cell_distinct_count"] == 3
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_final_mannings_audit_can_gate_solver_cell_values(tmp_path: Path):
     result = tmp_path / "flat_cells.p01.hdf"
     _write_result_hdf(
@@ -822,6 +837,7 @@ def test_final_mannings_audit_can_gate_solver_cell_values(tmp_path: Path):
     assert report.loc[0, "missing_expected_face_values"] == ()
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_final_mannings_audit_requires_complete_geometry(tmp_path: Path):
     result = tmp_path / "incomplete.p01.hdf"
     _write_result_hdf(result, [0.03, 0.08], complete=False)
@@ -852,6 +868,7 @@ def test_native_sidecar_edit_requires_selected_hecras_version(tmp_path: Path):
         )
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_property_table_postcondition_requires_complete_paired_arrays(
     tmp_path: Path,
 ):
@@ -885,6 +902,7 @@ def test_property_table_postcondition_requires_complete_paired_arrays(
     _validate_property_tables_postcondition(geometry_hdf)
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_property_table_postcondition_rejects_incomplete_geometry(
     tmp_path: Path,
 ):
@@ -897,6 +915,7 @@ def test_property_table_postcondition_rejects_incomplete_geometry(
         _validate_property_tables_postcondition(geometry_hdf)
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_property_table_postcondition_accepts_complete_1d_only_geometry(
     tmp_path: Path,
 ):

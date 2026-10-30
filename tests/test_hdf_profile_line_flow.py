@@ -274,6 +274,7 @@ def test_profile_line_legacy_matches_pre_clb852_validation(validation_paths):
     np.testing.assert_allclose(legacy["flow"], expected["flow"])
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_profile_line_uses_native_reference_faces_when_present(
     tmp_path_factory,
     validation_paths,

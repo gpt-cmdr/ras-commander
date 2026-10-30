@@ -75,6 +75,11 @@ def _write_results_hdf(path: Path) -> Path:
         info = hdf.create_group("Plan Data/Plan Information")
         info.attrs["Simulation Start Time"] = b"01Jan2000 00:00:00"
         hdf.create_dataset("Geometry/2D Flow Areas/Attributes", data=mesh_attrs)
+        # Mesh series readers check the series width against the cell count.
+        hdf.create_dataset(
+            "Geometry/2D Flow Areas/Mesh A/Cells Center Coordinate",
+            data=np.array([[0.0, 0.0], [1.0, 0.0], [2.0, 0.0]]),
+        )
         hdf.create_dataset(
             f"{_SUMMARY}/Mesh A/Maximum Water Surface", data=max_ws
         )
@@ -129,6 +134,7 @@ print(json.dumps({"loaded": loaded, "names": [
     }
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_geometry_free_results_and_actionable_errors_without_extras(tmp_path):
     hdf_path = _write_results_hdf(tmp_path / "Synthetic.p01.hdf")
 
@@ -183,6 +189,7 @@ print(json.dumps({
         assert f"pip install {package}" in message, message
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_xsec_timeseries_unchanged_with_xarray(tmp_path):
     pytest.importorskip("xarray")
     from ras_commander import HdfResultsXsec
@@ -195,6 +202,7 @@ def test_xsec_timeseries_unchanged_with_xarray(tmp_path):
     assert ds.sizes["time"] == 3
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_mesh_summary_geodataframe_unchanged_with_geopandas(tmp_path):
     pytest.importorskip("geopandas")
     from ras_commander import HdfResultsMesh

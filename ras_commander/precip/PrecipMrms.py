@@ -15,11 +15,15 @@ from numbers import Integral
 from pathlib import Path
 import re
 import shutil
-from typing import Any, Dict, Iterable, List, Optional, Tuple, Union
+from typing import TYPE_CHECKING, Any, Dict, Iterable, List, Optional, Tuple, Union
 from urllib.parse import quote
 import xml.etree.ElementTree as ET
 
 from ..LoggingConfig import get_logger, log_call
+
+if TYPE_CHECKING:
+    import pandas as pd
+    import xarray as xr
 
 logger = get_logger(__name__)
 

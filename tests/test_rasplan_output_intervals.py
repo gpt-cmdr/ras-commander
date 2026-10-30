@@ -341,6 +341,7 @@ def test_detailed_smaller_than_hydrograph_is_not_an_error(upgu1):
     assert RasPlan.get_plan_intervals(upgu1, ras_object=_DummyRas())["instantaneous"] == "10MIN"
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_get_hdf_output_settings_small_h5py_fixture(tmp_path):
     import h5py
     import pandas as pd

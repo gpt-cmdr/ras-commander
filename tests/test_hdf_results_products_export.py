@@ -321,6 +321,7 @@ def _write_single_variable_boundary_hdf(
         boundary.attrs["2D Area"] = b"Mesh"
 
 
+@pytest.mark.synthetic_hdf_layout
 @pytest.mark.parametrize(
     ("variable", "values", "units"),
     [
@@ -357,6 +358,7 @@ def test_arrow_hydrograph_writer_omits_unavailable_real_reader_variable(
     assert metadata["empty_reason"] is None
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_arrow_hydrograph_writer_omits_all_nonfinite_variables(tmp_path):
     source = tmp_path / "nonfinite-boundary.p01.hdf"
     output = tmp_path / "nonfinite-boundary.parquet"
@@ -432,6 +434,7 @@ def test_arrow_hydrograph_writer_accepts_one_available_variable(
     assert metadata["empty_reason"] is None
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_export_generates_deterministic_arrow_and_geospatial_package(
     tmp_path,
     caplog,
@@ -532,6 +535,7 @@ def test_export_generates_deterministic_arrow_and_geospatial_package(
     assert "no HEC-RAS model output was created or modified" in caplog.text
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_export_excludes_nonfinite_points_from_all_raster_interpolation(
     tmp_path,
 ):
@@ -568,6 +572,7 @@ def test_export_excludes_nonfinite_points_from_all_raster_interpolation(
             assert np.allclose(values, expected)
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_export_excludes_ghost_cells_from_products(tmp_path):
     """Ghost cells must not publish their 0.0 summary WSE as a valid pixel."""
     source = tmp_path / "ghost-cell.p01.hdf"
@@ -594,6 +599,7 @@ def test_export_excludes_ghost_cells_from_products(tmp_path):
     assert set(np.unique(depth)) <= {3.0, 1.0}
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_export_rejects_negative_stored_depth_without_publishing(tmp_path):
     source = tmp_path / "negative-depth.p01.hdf"
     output = tmp_path / "products"
@@ -612,6 +618,7 @@ def test_export_rejects_negative_stored_depth_without_publishing(tmp_path):
     assert _sha256(source) == source_before
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_export_detects_nodata_collision_after_float32_normalization(tmp_path):
     source = tmp_path / "source.p01.hdf"
     output = tmp_path / "products"
@@ -643,6 +650,7 @@ def test_export_rejects_nodata_outside_float32_range(tmp_path):
         )
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_export_generates_optional_preview_as_derived_artifact(tmp_path):
     source = tmp_path / "source.p01.hdf"
     output = tmp_path / "products"
@@ -760,6 +768,7 @@ def test_publication_failure_removes_only_owned_links(tmp_path, monkeypatch):
     ))
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_concurrent_output_claim_is_preserved(tmp_path, monkeypatch):
     source = tmp_path / "source.p01.hdf"
     output = tmp_path / "products"
@@ -789,6 +798,7 @@ def test_concurrent_output_claim_is_preserved(tmp_path, monkeypatch):
     assert list(output.iterdir()) == [output / "competitor.txt"]
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_post_publication_source_mismatch_removes_generated_package(
     tmp_path,
     monkeypatch,
