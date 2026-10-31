@@ -415,7 +415,8 @@ i7-11700K, 8 logical CPUs) after a quiet-machine check: **ras-commander
 work, installed without the engine (pure h5py), against **ras-commander
 0.112.0 with ras-commander-fast-hdf 0.2.5**, measured as the release
 candidates the release gate qualified (ras-commander `29a2085ef`, engine wheel
-built from `4013987`). All columns ran on the same Python 3.13.9, numpy 2.3.3,
+built from `4013987`); 0.112.0 also contains #750, which changes none of the
+measured methods. All columns ran on the same Python 3.13.9, numpy 2.3.3,
 pandas 2.3.2, h5py 3.14.0 and Shapely 2.1.2, measuring 20 public methods on 9
 HEC-RAS result files. Each measurement used a fresh process, with three timed
 processes per column. Every result was hashed: in 0.112.0 it was identical in
