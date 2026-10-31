@@ -33,6 +33,8 @@ COUPLING = {
 CFG = re.compile(r'#\[cfg\(feature\s*=\s*"([^"]+)"\)\]')
 FUNCTION = re.compile(r"wrap_pyfunction!\(([\w:]+)")
 CLASS = re.compile(r"add_class::<(\w+)>")
+# `#[pyclass(..., name = "X")] ... struct RustName`: Python sees X (0.3.0: PyArrowLayer -> ArrowLayer).
+PYCLASS_NAME = re.compile(r'#\[pyclass\([^)]*\bname\s*=\s*"(\w+)"[^)]*\)\]\s*(?:#\[[^\n]*\n\s*)*(?:pub(?:\(crate\))?\s+)?struct\s+(\w+)')
 DELEGATE = re.compile(r"\b(\w+)::register\(m\)")
 REGISTER_FN = re.compile(r"fn register\([^)]*\)[^{]*\{(.*?)\n\}", re.S)
 SIGNATURE = re.compile(r"#\[pyo3\(signature\s*=\s*\((.*?)\)\)\]", re.S)
@@ -164,8 +166,10 @@ def build(root=None):
         for name, sig in _signatures(text).items():
             signatures.setdefault(name, sig)
     registrations = _registered(texts[ENTRY], texts)
+    python_names = {rust: py for text in texts.values() for py, rust in PYCLASS_NAME.findall(text)}
     for item in registrations:
         if item["kind"] == "class":
+            item["name"] = python_names.get(item["rust_path"], item["name"])
             item["methods"] = _methods(texts.get(item["registered_in"], ""))
             item["signature"] = "<constructor>"
         else:
@@ -187,7 +191,9 @@ def build(root=None):
         "crate": {"name": _value(_section(main_cargo, "package"), "name"),
                   "lib_name": _value(_section(main_cargo, "lib"), "name"),
                   "features": _features(main_cargo), "git_dependencies": _git_deps(main_cargo),
-                  "embedded": _embedded(root)},
+                  "embedded": _embedded(root),
+                  "hdf5_reader": (re.search(r'^hdf5-reader\s*=\s*\{[^}]*version\s*=\s*"([^"]+)"', main_cargo, re.M)
+                                  or [None, None])[1]},
         "python_build": {"manifest_path": _value(maturin, "manifest-path"),
                          "module_name": _value(maturin, "module-name"),
                          "features": re.findall(r'"([^"]+)"', maturin_features.group(1))
