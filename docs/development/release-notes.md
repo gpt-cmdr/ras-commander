@@ -9,6 +9,32 @@ alone does not identify a development checkout.
 
 ### Unreleased
 
+- **`RasDss` writes run on the native backend.** Under `RasDss.backend =
+  "native"`, `write_timeseries`, `write_timeseries_from_dataframe`,
+  `write_grid_timeseries`, `copy_grid_with_zero_tail` and
+  `write_precip_grid_arrays` write through the optional dss-commander engine
+  without a JVM. They need a dss-commander build with writer support
+  (`native_writes_available()`); otherwise they raise `DssCapabilityError` and
+  never fall back to Java. `RasDss.get_capabilities()` reports the writers as `gated` and
+  adds `attrs["native_writes_available"]`. Native writes store what the Java
+  path stores: DSS6 and DSS7, regular and irregular series, the existing file's
+  version (new files DSS7 unless `dss_version=6`), `NaN` as Java stores it.
+  Java reads the native-written RasExamples records (`BaldEagleCrkMulti2D`
+  series, SHG precipitation grids and a zero-tail derivative of the 120-record
+  WPC-QPF family) equal to the Java-written ones. The native writer refuses some
+  input that the Java path truncates or writes as an unreadable record, and
+  DSS6 PRECIP_2_BYTE grids no longer need the swapped base/scale workaround;
+  [DSS Read and Write Backends](../user-guide/dss-native-backend.md) lists
+  every difference. Under `shadow`, writes stay on Java (the caller gets the
+  Java result); the write is repeated natively on a temporary copy and the two
+  files are compared and logged (copy limit 256 MB, configurable with
+  `RasDss.shadow_copy_limit_mb` or `RAS_COMMANDER_DSS_SHADOW_COPY_LIMIT_MB`).
+  `java` remains the default.
+- **Native grid reads pass their gate with the current engine.** dss-commander
+  built from engine `main` advertises `grid_srs_monolith_parity`, so
+  `read_grid` under `native` reads grids natively by default. On 250 records
+  from the ten grid families of the RasExamples precipitation file
+  `precip.2018.09.dss`, the native and Java dictionaries were identical.
 - **`RasFlowOptimization` now really enables HEC-RAS flow optimization and
   reads the stored trial table.** `set_settings` / `enable_plan` /
   `copy_plan_with_optimization` did not write `Flow Ratio Mode`, so HEC-RAS

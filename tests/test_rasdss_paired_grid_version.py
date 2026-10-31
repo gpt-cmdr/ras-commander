@@ -169,8 +169,10 @@ def test_broken_native_wheel_cannot_break_java(monkeypatch, no_jvm):
     assert _backend._maybe_native() is None
     assert _backend.native_available() is False
     assert _backend.native_grid_qualified() is False
+    assert _backend.native_writes_available() is False
     caps = RasDss.get_capabilities()
     assert caps.attrs["native_installed"] is False
+    assert caps.attrs["native_writes_available"] is False
     monkeypatch.setattr(RasDss, "backend", "shadow")
     _backend.reset_fallback_warning()
     assert RasDss.get_backend() == "java"
@@ -187,8 +189,12 @@ def test_capabilities_matrix(no_jvm):
     assert table.loc["read_paired_data", "native"] == "yes"
     assert table.loc["get_file_version", "native"] == "yes"
     assert table.loc["read_grid", "native"] == "gated"
-    assert table.loc["write_timeseries", "native"] == "java"
-    assert set(caps.attrs) == {"requested_backend", "native_installed", "native_grid_qualified"}
+    for op in ("write_timeseries", "write_timeseries_from_dataframe", "write_grid_timeseries",
+               "copy_grid_with_zero_tail", "write_precip_grid_arrays"):
+        assert table.loc[op, "native"] == "gated"
+    assert table.loc["write_timeseries", "shadow"] == "java"
+    assert set(caps.attrs) == {"requested_backend", "native_installed", "native_grid_qualified",
+                               "native_writes_available"}
     assert caps.attrs["requested_backend"] == "java"
 
 

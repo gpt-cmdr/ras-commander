@@ -75,7 +75,8 @@ curve, stored precision by default (`float32` PD, `float64` PDD). `attrs` carry
 Read one exact grid record as a dictionary (`data` float32, row zero south,
 `row_order="south_up"`). Under `backend="native"` it raises
 `DssCapabilityError` unless the installed dss-commander advertises qualified
-grid CRS strings or `allow_unqualified_native=True` is passed.
+grid CRS strings (`grid_srs_monolith_parity`) or
+`allow_unqualified_native=True` is passed.
 
 #### get_capabilities()
 DataFrame of `operation`, `java`, `native`, `shadow` and `note`: which
@@ -103,6 +104,13 @@ For simulations spanning a daylight-saving fallback, choose a fixed-offset or
 otherwise strictly increasing model clock; merely stripping timezone metadata
 from a repeated local hour creates ambiguous duplicate model times.
 
+Backends: `java` writes through HEC Monolith. `native` writes through
+dss-commander (no JVM; `DssCapabilityError` when the wheel has no writers) and
+keeps the same file, version and missing-value rules. `shadow` writes with
+Java and compares a native repeat on a temporary copy. The native writer
+refuses some input that Java truncates (see
+[Writes](../user-guide/dss-native-backend.md#writes)).
+
 #### get_file_version(dss_file)
 Return the HEC-DSS major file version. Uses the selected backend; a non-DSS
 file raises `DssInvalidFileError` (a `ValueError`).
@@ -129,7 +137,9 @@ Write a time-varying spatial grid series to DSS.
   files. The default `None` preserves the bridge's current default. An explicit
   value must match an existing file. Explicit DSS6 writes use the Monolith's
   version-specific safe precipitation-compression base/scale ordering unless
-  those values are supplied in `grid_info`.
+  those values are supplied in `grid_info`. The `native` backend needs no such
+  workaround: it stores `compression_base` and `compression_scale_factor` as
+  named (see [Writes](../user-guide/dss-native-backend.md#writes)).
 
 **Returns:** List of DSS pathnames written.
 
@@ -375,7 +385,7 @@ keyword aliases are not added in this release.
 `read_timeseries()` accepts `start_date` and `end_date`. The Java backend
 returns the complete series without applying those filters; the native and
 shadow backends apply the window (see
-[DSS Read Backends](../user-guide/dss-native-backend.md)). Returned
+[DSS Read and Write Backends](../user-guide/dss-native-backend.md)). Returned
 `attrs` retain pathname, units, type, interval, and source path.
 
 Java DSS handles are write-capable. Check that a source exists before opening it;

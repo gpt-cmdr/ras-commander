@@ -160,6 +160,8 @@ def test_extract_boundary_timeseries_has_one_concise_info_summary(
 def test_write_timeseries_info_is_concise_and_debug_keeps_details(
     monkeypatch, caplog, tmp_path
 ):
+    monkeypatch.delenv("RAS_COMMANDER_DSS_BACKEND", raising=False)
+    monkeypatch.setattr(RasDss, "backend", "java")
     from ras_commander.RasUtils import RasUtils
 
     output_dss = tmp_path / "output.dss"

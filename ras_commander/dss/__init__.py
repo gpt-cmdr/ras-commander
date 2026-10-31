@@ -13,8 +13,8 @@ Lazy Loading Behavior:
 
 Backends:
     RasDss.backend = "java" (default) | "native" | "shadow"; the environment
-    variable RAS_COMMANDER_DSS_BACKEND overrides it. "native" reads catalogs
-    and time series through the optional dss-commander package without Java.
+    variable RAS_COMMANDER_DSS_BACKEND overrides it. "native" reads and writes
+    through the optional dss-commander package without Java.
     See docs/user-guide/dss-native-backend.md.
 
 Dependencies:
