@@ -1995,6 +1995,9 @@ DATAFRAME_SCHEMAS["fim_product_manifest"] = {
             ("flooded_pixels", "int | None", "Pixels with 0 < depth <= 10000, the floodplain polygon support."),
             ("error", "str | None", "Failure diagnostic for failed or not_run rows."),
             ("velocity_tif", "str | None", "Velocity magnitude GeoTIFF (float32, NaN nodata) from map_sloping_profiles(velocity=True); None otherwise."),
+            ("depth_x_velocity_tif", "str | None", "D x V GeoTIFF (float32, NaN nodata) from map_sloping_profiles(derived_products=...); None otherwise."),
+            ("depth_x_velocity_squared_tif", "str | None", "D x V^2 GeoTIFF (float32, NaN nodata) from map_sloping_profiles(derived_products=...); None otherwise."),
+            ("froude_tif", "str | None", "Froude number GeoTIFF (float32, NaN nodata) from map_sloping_profiles(derived_products=...); None otherwise."),
         )
     ],
     "note": "The same rows, engine method record, engine reports, options, AOI and input identities are written to fim_manifest.json. Step05 prepares every wet cell before AOI selection; horizontal mapping prepares ownership and terrain for the constrained window. Sloping, horizontal and whole-simulation manifests (and the comparison report) add invalid_cells (also attrs['invalid_cells']): {schema: 'fim-invalid-cells/1', policy, count, cells: [{mesh, cell_id, reason, action (repaired|convex_hull|omitted|overlap_trimmed|overlap_consumed), original_area, fallback_area, pieces, overlap_with, intersects_aoi}]}; empty for valid meshes.",
