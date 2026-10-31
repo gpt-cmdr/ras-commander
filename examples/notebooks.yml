@@ -4519,28 +4519,6 @@ notebooks:
   excluded: false
   code_cells: 7
   executed_cells: 7
-- id: 954_ebfe_lake_maurepas_validation
-  filename: 954_ebfe_lake_maurepas_validation.ipynb
-  title: 'Using eBFE Models: Lake Maurepas Validation'
-  series: 950
-  series_name: eBFE Delivery Validation
-  summary: 'This notebook validates the organized Lake Maurepas eBFE delivery format. It is intentionally
-    scoped to the delivery-readiness gate: organize the source archive, confirm ras-commander can initialize
-    the local HEC-RAS project, review the...'
-  tags:
-  - ebfe
-  difficulty: advanced
-  est_runtime: null
-  data_project: null
-  functions_used:
-  - RasEbfeModels.organize_model
-  - RasUtils.find_valid_ras_folders
-  - ras.plan_df
-  hec_refs: []
-  learning_paths: []
-  excluded: false
-  code_cells: 11
-  executed_cells: 11
 - id: 955_ebfe_tickfaw_validation
   filename: 955_ebfe_tickfaw_validation.ipynb
   title: 'Using eBFE Models: Tickfaw Results-Ready Validation'
