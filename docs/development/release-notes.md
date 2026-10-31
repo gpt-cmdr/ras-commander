@@ -7,7 +7,7 @@ check `ras_commander.__version__` and the documentation's
 [build provenance](https://rascommander.info/ras/version.json). A package version
 alone does not identify a development checkout.
 
-### 0.113.0 — 2026-11-01
+### 0.113.0 — 2026-10-31
 
 This minor release adds Rust mapping products and RAS Mapper's Final n
 Values raster without HEC-RAS. It includes **7 change PRs** absent from
