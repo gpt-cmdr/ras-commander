@@ -58,7 +58,7 @@ def test_native_hdf_engine_is_a_core_dependency_on_wheel_platforms(monkeypatch):
               if spec.startswith("ras-commander-fast-hdf")]
     assert len(native) == 1
     requirement = native[0]
-    assert str(requirement.specifier) == "<0.3,>=0.2.5"
+    assert str(requirement.specifier) == "<0.4,>=0.3.0"
     assert requirement.marker is not None
 
     def environment(system, machine, implementation="CPython"):
@@ -78,7 +78,7 @@ def test_native_hdf_engine_is_a_core_dependency_on_wheel_platforms(monkeypatch):
     # The former opt-in extras still resolve (no marker: they request a source
     # build on platforms without wheels).
     for extra in ("fast", "fast-hdf"):
-        assert metadata["extras_require"][extra] == ["ras-commander-fast-hdf>=0.2.5,<0.3"]
+        assert metadata["extras_require"][extra] == ["ras-commander-fast-hdf>=0.3.0,<0.4"]
 
 
 def test_compute_facade_imports_without_full_feature_stack():

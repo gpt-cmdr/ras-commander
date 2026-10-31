@@ -1,4 +1,4 @@
-"""Explicit API11 full-feature native entrypoint contract (80); additions require review."""
+"""Explicit API11 full-feature native entrypoint contract (85); additions require review."""
 EXPECTED = {
     # Test hook: panics inside the boundary guard (contained as FastHdfPanicError).
     # Only in builds with the engine's test-hooks feature (after 0.2.4).
@@ -59,9 +59,16 @@ EXPECTED = {
     "write_pmtiles": ("function", None, "src/python/mod.rs"),
     "export_ipc_file": ("function", "exports-arrow", "src/python/mod.rs"),
     "validate_export_wkb": ("function", "exports-arrow", "src/python/mod.rs"),
-    # Additive within API 11 (engine main after 0.2.3, PR #36): GeoParquet archive profile.
-    "export_geoparquet_ipc_files": ("function", "exports-geoparquet", "src/python/mod.rs"),
     "export_pmtiles_ipc_file": ("function", "exports-pmtiles", "src/python/mod.rs"),
+    # Additive within API 11 (engine 0.3.0): Arrow layer stream (release wheels build python-arrow).
+    # Engine 0.3.0 removed export_geoparquet_ipc_files (the GeoParquet archive profile moved to terrio).
+    "arrow_layer": ("function", "python-arrow", "src/python/arrow_stream.rs"),
+    "layer_catalog": ("function", "python-arrow", "src/python/arrow_stream.rs"),
+    "ArrowLayer": ("class", "python-arrow", "src/python/arrow_stream.rs"),
+    # Additive within API 11 (engine 0.3.0): RAS Mapper Final n Values and precipitation grids.
+    "FinalManningsModel": ("class", None, "src/python/land_cover.rs"),
+    "PrecipitationSteps": ("class", None, "src/python/land_cover.rs"),
+    "precipitation_grid_info": ("function", None, "src/python/land_cover.rs"),
     "NativeAnalysis": ("class", None, "src/python/fluvial_bindings.rs"),
     "assemble_rings": ("function", None, "src/python/fluvial_bindings.rs"),
     "face_graph": ("function", None, "src/python/fluvial_bindings.rs"),
