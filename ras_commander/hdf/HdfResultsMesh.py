@@ -57,6 +57,7 @@ Understanding when each return type is used:
 - get_mesh_max_ws_err(): Get maximum water surface error → pd.DataFrame
 - get_mesh_max_iter(): Get maximum iteration count → gpd.GeoDataFrame
 - get_boundary_conditions_timeseries(): Get all BC timeseries → xr.Dataset
+- write_cell_subset(): Write a mapping-only child plan HDF for exact parent cells
 
 ## Private Functions
 - _get_mesh_timeseries_output_path(): Get HDF path for timeseries output
@@ -4553,3 +4554,76 @@ class HdfResultsMesh:
             reraise_required(e)
             logger.error(f"Error getting all boundary conditions timeseries: {str(e)}")
             return xr.Dataset()
+
+    @staticmethod
+    @log_call
+    def write_cell_subset(
+        parent_plan_hdf: Union[str, Path],
+        child_plan_hdf: Union[str, Path],
+        parent_cell_ids,
+        mesh_name: str,
+        *,
+        output_rows=None,
+        overwrite: bool = False,
+    ):
+        """Write a mapping-only child plan HDF that keeps exact parent cells.
+
+        The child holds one 2D area made of the selected physical parent cells
+        with their faces and facepoints unchanged, and one ghost cell per new
+        perimeter face. Topology comes from the builder used by
+        ``GeomMesh.apply_cell_subset``, so child cell and face IDs match an
+        exact-subset child geometry built from the same parent cell IDs.
+
+        Results are optional. When the parent has them, 2D time series are
+        copied for ``output_rows`` and summary maxima/minima are copied whole.
+        Ghost cells take the value of the dropped parent neighbour across the
+        cut. Face results measured along the face normal are negated on faces
+        whose orientation was reversed; unclassified face datasets are left
+        out when any face is reversed. Meteorology, boundary condition lines,
+        1D, storage area and structure elements, other 2D areas,
+        infiltration/land cover tables and solver diagnostics are left out and
+        listed in ``dropped``. Event Conditions other than Meteorology are
+        copied unchanged.
+
+        The child is for stored-map generation and review only; it is not a
+        simulation input and establishes no hydraulic validity. Qualified for
+        HEC-RAS 6.6 plan HDFs.
+
+        Args:
+            parent_plan_hdf: Read-only HEC-RAS 6.6 plan HDF (``.p##.hdf``).
+            child_plan_hdf: New child plan HDF path; its folder must exist.
+            parent_cell_ids: Explicit zero-based physical parent cell IDs. The
+                selection must form one region without holes or pinch points;
+                it is never expanded or repaired.
+            mesh_name: Exact parent 2D area name.
+            output_rows: Zero-based rows of the parent ``Unsteady Time Series``
+                to keep, in the given order. ``None`` keeps every row.
+            overwrite: Replace an existing child file.
+
+        Returns:
+            MeshResultsSubset with parent and child hashes, counts, the
+            child-to-parent cell/face index arrays, reversed faces, the CCW
+            perimeter ring and the dropped HDF paths. ``to_dict()`` gives a
+            ``ras-mesh-results-subset/v1`` record without the index arrays.
+
+        Raises:
+            ValueError: Unsupported parent file, version, area, selection or rows.
+            FileExistsError: The child exists and ``overwrite`` is False.
+            RuntimeError: Readback fails or the parent changes while writing.
+
+        Example:
+            >>> sub = HdfResultsMesh.write_cell_subset(
+            ...     "parent/Model.p02.hdf", "child/Model.p02.hdf",
+            ...     parent_cell_ids=ids, mesh_name="Area", output_rows=[198, 201])
+            >>> sub.to_dict()["physical_cell_count"]
+        """
+        from ._results_subset import _write_cell_subset_results
+
+        return _write_cell_subset_results(
+            parent_plan_hdf,
+            child_plan_hdf,
+            parent_cell_ids,
+            mesh_name,
+            output_rows,
+            overwrite,
+        )

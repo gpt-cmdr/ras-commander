@@ -398,6 +398,10 @@ removed before v1.2.0:
 - `get_mesh_timeseries_availability(hdf_path, mesh_name=None)` - Metadata-only
   report of whether each Base Output mesh dataset is readable as a series
   (`status`, `rows`, `time_rows`, `stored_bytes`, `reason`)
+- `write_cell_subset(parent_plan_hdf, child_plan_hdf, parent_cell_ids, mesh_name,
+  *, output_rows=None, overwrite=False)` - Write a mapping-only child plan HDF
+  that keeps exact parent cells and their results for stored maps; see
+  [Cut a plan HDF to the same cells](meshing.md#cut-a-plan-hdf-to-the-same-cells-for-stored-maps)
 
 The canonical profile-line methods above require pythonnet/RasMapperLib. They
 may return a native-associated precomputed hydrograph of unqualified provenance
