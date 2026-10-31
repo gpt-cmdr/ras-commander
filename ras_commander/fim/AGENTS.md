@@ -93,7 +93,9 @@ Parent `ras_commander/AGENTS.md` and root `AGENTS.md` still apply.
   (`top-priority-source-footprint/1`). Priority comes only from source
   `Priority` attributes (0 highest) or, when none exist, the terrain's own VRT
   order; both must agree when present. Refuse partial, duplicate or conflicting
-  declarations, modified terrains, non-256 tiling and storage-area plans. A
+  declarations, modified terrains, non-256 tiling and storage-area plans
+  unless `storage_areas=True` (then the engine refuses storage-area pixels
+  outside the footprint). A
   `canonicalize_terrain_crs` copy is accepted only through its receipt and a
   fresh pixel-hash match. Engine `unsupported:` refusals surface as
   `FimUnsupportedError` (`_engine.EngineRefusal`) so callers fall back to an
@@ -106,7 +108,15 @@ Parent `ras_commander/AGENTS.md` and root `AGENTS.md` still apply.
   minimum elevations and float64 hours since the plan's simulation start; the
   engine owns the wet gate and accumulation. Arrival time and percent
   inundated are the qualified defaults; duration and irregular intervals need
-  `allow_unqualified`. Storage-area plans are refused.
+  `allow_unqualified`. Storage-area plans are refused unless
+  `storage_areas=True`.
+- `storage_areas` (sloping, horizontal, whole simulation) stages the plan's
+  storage-area polygons and per-profile WSE for the engine's
+  `storage-area-level-pool/1` (`_storage_areas.py`). Never infer the Water
+  Surface column order: prove it per area against its own Stage series. Keep
+  overlap with 2D cells or between storage areas refused; velocity, supplied
+  WSEL and prepared models refuse the option. `RasFim.supports_storage_areas()`
+  is the capability check.
 - Sloping `velocity=True` stages HDF face normals with face polyline lengths and
   per-profile face velocities (Max: `Maximum Face Velocity`). Plain sloping
   with HDF profiles only. Native velocity validity masks can differ from the

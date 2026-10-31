@@ -71,13 +71,24 @@ def run_batch(
     scratch_folder,
     timeout,
     terrain_scope=None,
+    storage=None,
 ):
-    """Stage shared ownership once, run all profiles, validate every committed unit."""
+    """Stage shared ownership once, run all profiles, validate every committed unit.
+
+    ``storage`` is ``(areas, pools)``: storage-area polygons and, per profile
+    name, its float32 storage-area WSE (``storage-area-level-pool/1``).
+    """
     method = _engine.engine_method(engine).get("horizontal")
     if terrain_scope is not None:
         from . import _terrain_scope
 
         _terrain_scope.require_engine(method, "horizontal")
+    if storage is not None:
+        from . import _storage_areas
+
+        _storage_areas.require_engine(method, "horizontal")
+        if grid.owner is not None:
+            raise FimUnsupportedError("storage areas need native terrio ownership")
     if (
         not isinstance(method, dict)
         or method.get("method_id") != "horizontal-cell-constant/2"
@@ -144,7 +155,14 @@ def run_batch(
                         "horizontal WSE must be finite float32-range values or NaN"
                     )
                 _write_array(root / f"values-{i}.bin", values.astype("<f4"))
-                profiles.append({"id": name, "values_file": f"values-{i}.bin"})
+                unit = {"id": name, "values_file": f"values-{i}.bin"}
+                if storage is not None:
+                    from . import _storage_areas
+
+                    unit["storage_area_values_file"] = _storage_areas.stage_values(
+                        root, f"p{i}", storage[1][name]
+                    )
+                profiles.append(unit)
             except Exception as exc:
                 failures[name] = f"{type(exc).__name__}: {exc}"
         if not profiles:
@@ -169,6 +187,10 @@ def run_batch(
             from . import _terrain_scope
 
             request["terrain_scope"] = _terrain_scope.stage(terrain_scope, root)
+        if storage is not None:
+            from . import _storage_areas
+
+            request.update(_storage_areas.stage_polygons(storage[0], root))
         # Transform above belongs to the window; terrain identity is its full source transform.
         import rasterio
 
@@ -252,6 +274,11 @@ def run_batch(
                     )
                     if committed != unit:
                         raise FimEngineError("horizontal unit differs from session report")
+                if storage is not None:
+                    from . import _storage_areas
+
+                    block = _storage_areas.check_report(report, storage[0])
+                    details.setdefault("storage_areas", {})["pixels"] = block["pixels"]
 
             def next_result(name):
                 if name in failures:

@@ -238,6 +238,7 @@ def map_profiles(
     terrain_crs_fnv1a64=None,
     _prepared=None,
     product_writer="rasterio",
+    storage_areas=False,
 ):
     from .. import HdfMesh
     from ..fast_hdf import backend_scope
@@ -299,6 +300,17 @@ def map_profiles(
     terrain = Path(terrain_path).resolve(strict=True)
     if not isinstance(velocity, bool):
         raise ValueError("velocity must be a boolean")
+    if not isinstance(storage_areas, bool):
+        raise ValueError("storage_areas must be a boolean")
+    if storage_areas and _prepared is not None:
+        raise FimUnsupportedError("prepared sloping models do not support storage_areas")
+    if storage_areas and wsel_profiles is not None:
+        raise FimUnsupportedError(
+            "storage_areas reads storage-area WSE from the plan HDF; caller-supplied WSEL "
+            "profiles carry none"
+        )
+    if storage_areas and velocity:
+        raise FimUnsupportedError("velocity is not qualified with storage-area surfaces")
     scope_info = None
     if (terrain_hdf is not None or velocity) and _prepared is not None:
         raise FimUnsupportedError("prepared sloping models do not support terrain_hdf or velocity")
@@ -333,11 +345,24 @@ def map_profiles(
         from copy import deepcopy
 
         model_scope = deepcopy(_prepared._model_scope)
-    if (scope_info is not None or velocity) and model_scope.get("storage_areas"):
+    if velocity and model_scope.get("storage_areas"):
         raise FimUnsupportedError(
-            "terrain_hdf and velocity are not qualified for plans with storage areas "
+            "velocity is not qualified for plans with storage areas "
             f"({model_scope['storage_areas']} found); use RAS Mapper for these plans"
         )
+    if scope_info is not None and model_scope.get("storage_areas") and not storage_areas:
+        raise FimUnsupportedError(
+            "terrain_hdf is not qualified for plans with storage areas unless they are "
+            f"mapped ({model_scope['storage_areas']} found); pass storage_areas=True or use "
+            "RAS Mapper"
+        )
+    storage = None
+    if storage_areas:
+        from . import _storage_areas
+
+        storage = _storage_areas.read(hdf)
+        if storage is None:
+            raise FimUnsupportedError("storage_areas=True but the plan has no storage areas")
     if supplied is not None:
         selected = supplied.selection
     elif _prepared is not None and _prepared._supplied:
@@ -363,6 +388,10 @@ def map_profiles(
         from . import _terrain_scope
 
         _terrain_scope.require_engine(method, "sloping")
+    if storage is not None:
+        from . import _storage_areas
+
+        _storage_areas.require_engine(method, "sloping")
     if velocity:
         from . import _velocity
 
@@ -421,7 +450,10 @@ def map_profiles(
     _invalid_cells.check_scope(invalid_records, invalid_policy, aoi_geometry)
     # Windowing selects output pixels; the complete mesh remains available for
     # face connectivity and corner reconstruction across an AOI boundary.
-    plan = _horizontal.plan_grid(cells, terrain, constraint, budget, native=True)
+    plan = _horizontal.plan_grid(
+        cells, terrain, constraint, budget, native=True,
+        storage_areas=storage.polygons if storage is not None else None,
+    )
     if plan.mask_geometry and method.get("aoi_mask") != "global-terrain-lattice/1":
         raise FimEngineError("Polygon masking requires Fast-Map global-terrain-lattice/1 (0.10.1+)")
     layout = None
@@ -450,7 +482,11 @@ def map_profiles(
         method_id=selected_method_id,
         backend="rust",
         model_scope=model_scope,
-        mapping_scope="physical 2D cells only; standalone storage-area surfaces excluded",
+        mapping_scope=(
+            "physical 2D cells and storage-area level pools"
+            if storage is not None
+            else "physical 2D cells only; standalone storage-area surfaces excluded"
+        ),
         output_grid_reference=(
             str(template_raster) if template_raster is not None else "terrain window"
         ),
@@ -479,6 +515,14 @@ def map_profiles(
         from . import _terrain_scope
 
         details["terrain_scope"] = _terrain_scope.describe(scope_info)
+    if storage is not None:
+        from . import _storage_areas
+
+        details["storage_areas"] = _storage_areas.describe(storage, selected)
+        details["qualification"] = (
+            "experimental native 7.0.1; storage-area level pools qualified on "
+            "BaldEagleCrkMulti2D storage-area plans (see storage_areas)"
+        )
     if velocity:
         from . import _velocity
 
@@ -511,6 +555,8 @@ def map_profiles(
             frame.attrs["terrain_scope"] = details["terrain_scope"]
         if "velocity" in details:
             frame.attrs["velocity"] = details["velocity"]
+        if "storage_areas" in details:
+            frame.attrs["storage_areas"] = details["storage_areas"]
         frame.attrs["invalid_cells"] = details["invalid_cells"]
         return frame
 
@@ -585,6 +631,16 @@ def map_profiles(
                     fields.update(
                         _velocity.stage(hdf, root, meshes, selected, units, threads=threads)
                     )
+                if storage is not None:
+                    from . import _storage_areas
+
+                    pools = _storage_areas.profile_values(hdf, storage, selected)
+                    fields.update(_storage_areas.stage_polygons(storage, root))
+                    units = [
+                        dict(unit, storage_area_values_file=_storage_areas.stage_values(
+                            root, f"p{i}", pools[unit["id"]]))
+                        for i, unit in enumerate(units)
+                    ]
                 import rasterio
 
                 if _prepared is None:
@@ -842,6 +898,11 @@ def map_profiles(
                         if expired.is_set():
                             raise FimEngineError(f"Sloping engine timed out after {timeout} seconds")
                         details["performance"]["engine_report"] = report
+                        if storage is not None:
+                            from . import _storage_areas
+
+                            block = _storage_areas.check_report(report, storage)
+                            details["storage_areas"]["pixels"] = block["pixels"]
                         if _prepared is not None:
                             _prepared._info["native_state_reused"] = bool(report.get("session", {}).get("geometry_reused"))
                             details["performance"]["prepared_context"] = _prepared.info

@@ -130,6 +130,7 @@ def map_whole_simulation(
     timeout=None,
     engine_path=None,
     invalid_cells="repair",
+    storage_areas=False,
 ):
     from .. import HdfMesh, HdfResultsMesh
     from ..fast_hdf import backend_scope, read_datasets
@@ -151,12 +152,22 @@ def map_whole_simulation(
         raise ValueError("timeout must be positive and finite, or None")
     hdf = Path(hdf_path).resolve(strict=True)
     terrain = Path(terrain_path).resolve(strict=True)
+    if not isinstance(storage_areas, bool):
+        raise ValueError("storage_areas must be a boolean")
     model_scope = RasFim.validate_2d_model(hdf)
-    if model_scope.get("storage_areas"):
+    if model_scope.get("storage_areas") and not storage_areas:
         raise FimUnsupportedError(
-            "whole-simulation products render physical 2D cells only; plans with storage areas "
-            f"({model_scope['storage_areas']} found) are refused. Use RAS Mapper for these plans"
+            "whole-simulation products render physical 2D cells unless storage_areas=True; "
+            f"plans with storage areas ({model_scope['storage_areas']} found) are refused. "
+            "Pass storage_areas=True or use RAS Mapper for these plans"
         )
+    storage = None
+    if storage_areas:
+        from . import _storage_areas
+
+        storage = _storage_areas.read(hdf)
+        if storage is None:
+            raise FimUnsupportedError("storage_areas=True but the plan has no storage areas")
     scope_info = None
     if terrain_hdf is not None:
         from . import _terrain_scope
@@ -167,6 +178,9 @@ def map_whole_simulation(
     whole_method, horizontal_method = _require_methods(method)
     if scope_info is not None:
         _terrain_scope.require_engine(horizontal_method, "horizontal")
+    if storage is not None:
+        _storage_areas.require_engine(whole_method, "whole_simulation")
+        _storage_areas.require_engine(horizontal_method, "horizontal")
     watched = {"hdf": hdf, "terrain": terrain, "engine": engine}
     if scope_info is not None:
         watched["terrain_hdf"] = scope_info["terrain_hdf"]
@@ -185,7 +199,10 @@ def map_whole_simulation(
     _invalid_cells.require_cells(cells, invalid_records, invalid_cells, "whole-simulation mapping")
     # No AOI: "raise" refuses any affected cell.
     _invalid_cells.check_scope(invalid_records, invalid_cells, None)
-    plan = _horizontal.plan_grid(cells, terrain, None, budget, native=True)
+    plan = _horizontal.plan_grid(
+        cells, terrain, None, budget, native=True,
+        storage_areas=storage.polygons if storage is not None else None,
+    )
     _horizontal.prepare_grid(cells, terrain, plan, False)  # validates polygons and overlap
     timings["cell_and_grid_seconds"] = time.perf_counter() - tick
     folder = _prepare_output_folder(output_folder)
@@ -203,7 +220,11 @@ def map_whole_simulation(
         "method_id": METHOD_ID,
         "backend": "rust",
         "model_scope": model_scope,
-        "mapping_scope": "physical 2D cells only; plans with storage areas are refused",
+        "mapping_scope": (
+            "physical 2D cells and storage-area level pools"
+            if storage is not None
+            else "physical 2D cells only; plans with storage areas are refused"
+        ),
         "options": {
             "products": list(products),
             "threshold": threshold,
@@ -228,6 +249,11 @@ def map_whole_simulation(
     }
     if scope_info is not None:
         details["terrain_scope"] = _terrain_scope.describe(scope_info)
+    if storage is not None:
+        details["storage_areas"] = _storage_areas.describe(storage)
+        details["storage_areas"]["wet"] = (
+            "rendered pool depth > threshold (float32, strict); no cell gate"
+        )
 
     def manifest():
         frame = pd.DataFrame([rows[product] for product in products], columns=MANIFEST_COLUMNS)
@@ -236,7 +262,7 @@ def map_whole_simulation(
         frame.attrs["model_scope"] = model_scope
         frame.attrs["time_reference"] = details["time_reference"]
         frame.attrs["invalid_cells"] = details["invalid_cells"]
-        for key in ("terrain_scope", "unqualified"):
+        for key in ("terrain_scope", "unqualified", "storage_areas"):
             if key in details:
                 frame.attrs[key] = details[key]
         return frame
@@ -251,7 +277,7 @@ def map_whole_simulation(
                 engine, hdf, terrain, cells, plan, hours, products, threshold,
                 allow_unqualified, scope_info, threads, writer_threads, budget,
                 timeout, folder, rows, details, timings, crs,
-                HdfResultsMesh, backend_scope, read_datasets,
+                HdfResultsMesh, backend_scope, read_datasets, storage,
             )
         changed = [key for key, path in watched.items() if _file_identity(path) != before[key]]
         if changed:
@@ -273,7 +299,7 @@ def map_whole_simulation(
 def _run(
     engine, hdf, terrain, cells, plan, hours, products, threshold, allow_unqualified,
     scope_info, threads, writer_threads, budget, timeout, folder, rows, details, timings,
-    crs, HdfResultsMesh, backend_scope, read_datasets,
+    crs, HdfResultsMesh, backend_scope, read_datasets, storage=None,
 ):
     import h5py
     import rasterio
@@ -281,6 +307,8 @@ def _run(
     selected = cells.iloc[plan.cell_positions]
     count = len(selected)
     required = count * 4 * (len(hours) + 1) + (64 << 20)
+    if storage is not None:
+        required += len(storage) * 4 * len(hours)
     if shutil.disk_usage(folder).free < required:
         raise FimEngineError(
             f"whole-simulation staging needs at least {required} free bytes on the output volume"
@@ -341,6 +369,16 @@ def _run(
                 filename = f"wse/t{k}.bin"
                 _write_array(root / filename, vector)
                 profiles.append({"id": f"t{k}", "values_file": filename})
+        storage_fields = {}
+        if storage is not None:
+            from . import _storage_areas
+
+            pools = _storage_areas.time_series(hdf, storage, len(hours))
+            storage_fields = _storage_areas.stage_polygons(storage, root)
+            for k, profile in enumerate(profiles):
+                profile["storage_area_values_file"] = _storage_areas.stage_values(
+                    root, f"t{k}", pools[k]
+                )
         with rasterio.open(terrain) as src:
             full_transform = list(src.transform.to_gdal())
         horizontal = {
@@ -357,6 +395,7 @@ def _run(
             "threads": threads,
             "max_working_bytes": budget * (1 << 20),
             "stream_outputs": False,
+            **storage_fields,
         }
         if scope_info is not None:
             from . import _terrain_scope
@@ -417,6 +456,11 @@ def _run(
         ):
             raise FimEngineError("inconsistent whole-simulation engine report")
         details["unqualified"] = ws.get("unqualified")
+        if storage is not None:
+            from . import _storage_areas
+
+            block = _storage_areas.check_report(report, storage)
+            details["storage_areas"]["pixels"] = block["pixels"]
         wet_pixels = ws.get("wet_pixels")
         tick = time.perf_counter()
         shape = plan.shape
