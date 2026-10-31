@@ -1,8 +1,12 @@
 ---
 title: Native Rust Mapping Engine
 description: Map computed HEC-RAS 2D results with Rust horizontal and sloping interpolation, bounded timestep concurrency, bbox or polygon masks, and RAS Mapper comparisons.
+social_image: assets/ras-commander-fast-map_social.png
+social_image_alt: "RAS Commander Fast-Map: Native Rust Mapping Engine"
 ---
 # Native Rust Mapping Engine
+
+<p align="center"><img src="../assets/ras-commander-fast-map_logo.svg" alt="RAS Commander Fast-Map: Native Rust Mapping Engine" width="450"></p>
 
 Use `RasFim` to map computed HEC-RAS 2D cell results to depth and water surface
 elevation (WSE) rasters. The Rust Mapping Engine reads terrain blocks and
