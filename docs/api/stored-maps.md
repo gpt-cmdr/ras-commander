@@ -1,6 +1,6 @@
 # Stored Maps
 
-Stored maps turn **existing computed results** into raster products. They do not
+Stored maps turn **existing computed results** into raster or polygon products. They do not
 run a hydraulic simulation. Supply a valid result HDF, the intended terrain
 association, map types and a profile or output timestep supported by the method.
 
@@ -42,6 +42,69 @@ The opt-in `tests/test_stored_maps_native_contract.py` checks these contracts
 against hash-pinned external fixtures. This evidence does not execute notebook
 125 or qualify sloping rendering, irregular intervals, initially wet conditions,
 multiple wet periods, threshold equality or general recession semantics.
+
+## Native inundation boundary
+
+Pass `inundation_boundary=True` to request RAS Mapper's **Inundation Boundary**
+stored layer. Disable the three default raster products for a boundary-only export:
+
+```python
+from ras_commander import RasProcess
+
+products = RasProcess.store_maps(
+    "02", profile="Max", render_mode="sloping",
+    wse=False, depth=False, velocity=False,
+    inundation_boundary=True,
+    output_path="stored-boundary",
+)
+boundaries = products.get("inundation_boundary", [])  # list[Path] of .shp files
+```
+
+This uses native `RASResultsMap` storage through the packaged helper:
+`MapType="depth"`, `OutputMode="Stored Polygon Specified Depth"`, and
+`ContourPolygonValue="0"`. In HEC-RAS 7.0.1, this combination is recognized
+by the native `IsIndundationBoundaryMap` property. There is no separate
+`MapTypes.InundationBoundary` member in that runtime. It does not polygonize
+an exported depth raster in Python.
+
+HEC's [RAS Mapper User's Manual 6.6, Managing Results Maps — Inundation Boundary](https://www.hec.usace.army.mil/confluence/rasdocs/rmum/6.6/mapping-results/managing-results-maps)
+describes this as a stored polygon at the zero-depth contour for the selected
+water-surface profile and associated terrain. Depth contours at other values
+are a separate Depth map configuration; this flag selects the zero contour.
+
+The result dictionary contains primary SHP paths. Native names can include
+the contour value, for example `Inundation Boundary (Max Value_0).shp`.
+`output_path` moves the freshly generated companion files, including SHX, DBF,
+and PRJ when present. The call restores the original `.rasmap` on success or
+failure. Existing raster defaults and return types are unchanged.
+
+The collector requires a fresh SHP/SHX/DBF bundle with nonempty polygon records.
+Missing, empty, truncated, incomplete, or unchanged products are omitted with
+a warning; any files written remain available for inspection. A helper failure
+raises `RuntimeError`. These structure checks do not assess polygon topology
+or hydraulic accuracy. Inspect the returned paths before using the product.
+
+Use `profile="Max"`, `"Min"`, or an available output timestamp. Boundary
+generation uses the ordered serial helper path; explicit parallel workers
+are unsupported. `RasMap.store_all_maps(mode="selected",
+map_types=["inundation_boundary"])` routes to the same implementation.
+The steady-profile entry point retains its existing final-selected-profile
+boundary behavior and DataFrame return. Other depth contours, contour bands,
+and the Mapper wet/dry editing layers are outside this flag's scope.
+
+The opt-in `tests/test_native_inundation_boundary.py` copies a computed public
+project, exports maximum and middle-timestep boundaries, checks readable,
+valid, nonempty polygons and CRS, and verifies source-file hashes and `.rasmap`
+restoration. Set `RAS_NATIVE_BOUNDARY_PROJECT` to the source `.prj`,
+`RAS_NATIVE_BOUNDARY_PLAN` to its plan number (default `02`), and
+`RAS_NATIVE_BOUNDARY_VERSION` to an installed runtime (default `7.0.1`).
+Use a short scratch directory with pytest's `--basetemp` option. Runtime
+qualification for this change covers sloping rendering with Windows HEC-RAS
+7.0.1 on the public Davis Storm System. Both profiles produced valid,
+nonempty multipart polygon features in EPSG:2871. A horizontal-rendering
+attempt on that copy reported a native `Store-Map` fatal error; its cause is
+unresolved. This evidence does not qualify horizontal boundary exports,
+other runtime versions, or Linux/Wine boundary exports.
 
 ## Orchestration, result registration and calculated layers
 
