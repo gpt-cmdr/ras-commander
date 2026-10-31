@@ -1,6 +1,6 @@
-"""Backend selection and shadow comparison for ``RasDss`` read methods.
+"""Backend selection and shadow comparison for ``RasDss`` read and write methods.
 
-``RasDss`` reads DSS catalogs and time series through one of three backends:
+``RasDss`` reads and writes DSS files through one of three backends:
 
 - ``"java"`` (default in this release): HEC Monolith through pyjnius.
 - ``"native"``: the optional ``dss_commander`` package (pure-Rust engine). It never
@@ -13,8 +13,10 @@
 The environment variable ``RAS_COMMANDER_DSS_BACKEND``, when set, overrides
 ``RasDss.backend``. Catalog, time-series, paired-data and file-version reads switch.
 Native grid reads are gated until the wheel advertises qualified CRS (``native_grid_qualified()``).
-Writes stay on Java under every backend in this release. ``CAPABILITIES`` lists the
-support matrix that ``RasDss.get_capabilities()`` reports.
+Writes switch as well: ``native`` needs the engine writers (``native_writes_available()``);
+``shadow`` writes run on Java and are repeated natively on a temporary copy for comparison
+(see "Shadow writes" below). ``CAPABILITIES`` lists the support matrix that
+``RasDss.get_capabilities()`` reports.
 
 This module is private. Its time-series comparison rules mirror the native-vs-Java
 parity harness used to qualify the native backend on the public RasExamples corpus.
@@ -614,8 +616,61 @@ NATIVE_GRID_GATE_MESSAGE = (
     "unqualified CRS (metadata['crs_qualified'] is False)."
 )
 
-#: Backend support per public DSS operation. Values: "yes"; "gated" (explicit
-#: opt-in required); "java" (runs on Java whatever the backend); "no".
+#: dss_commander attributes that make up the native writer API (engine packets P20-P24:
+#: DSS7 and DSS6 regular and irregular time series, and grids). ``native_writes_available``
+#: requires all of them; a wheel from before the writers has none.
+NATIVE_WRITE_API = ("create", "write_timeseries", "write_grid", "HEC_MISSING_DSS6", "GRID_NODATA")
+
+
+def native_writes_available() -> bool:
+    """True when the installed dss-commander provides the native writers.
+
+    A capability check, not a version pin: ``dss_commander`` must import and expose
+    every name in ``NATIVE_WRITE_API`` (``create``, ``write_timeseries`` and
+    ``write_grid`` callable). ``HEC_MISSING_DSS6`` marks the DSS6 time-series writer
+    (P22) and ``GRID_NODATA`` the grid writer (P24). Never raises.
+    """
+    dc = _maybe_native()
+    if dc is None:
+        return False
+    try:
+        for name in NATIVE_WRITE_API:
+            value = getattr(dc, name, None)
+            if value is None:
+                return False
+            if name in ("create", "write_timeseries", "write_grid") and not callable(value):
+                return False
+    except Exception:
+        return False
+    return True
+
+
+NATIVE_WRITES_GATE_MESSAGE = (
+    "The installed dss-commander does not provide the native DSS writers "
+    "(dss_commander.create, write_timeseries and write_grid with DSS6 support). "
+    "RasDss does not fall back to Java. Install a dss-commander wheel built from engine "
+    "main 2d9f982 or later, or use RasDss.backend = 'java'."
+)
+
+
+def require_native_writes():
+    """``dss_commander`` with its writers, or ``DssCapabilityError`` (never Java)."""
+    from . import _errors
+
+    dc = import_native()
+    if not native_writes_available():
+        raise _errors.get("DssCapabilityError")(NATIVE_WRITES_GATE_MESSAGE)
+    return dc
+
+
+#: Shadow writes copy an existing target file to a temporary directory before the Java
+#: write, so that the native writer can repeat the write on the copy. Larger files are
+#: not copied and the comparison is skipped.
+SHADOW_WRITE_COPY_LIMIT_BYTES = 256 * 1024 * 1024
+
+#: Backend support per public DSS operation. Values: "yes"; "gated" (needs a qualified
+#: or writer-capable engine, or an explicit opt-in); "java" (runs on Java whatever the
+#: backend); "no".
 CAPABILITIES = (
     # operation, java, native, shadow, note
     ("get_catalog", "yes", "yes", "yes", ""),
@@ -627,9 +682,18 @@ CAPABILITIES = (
      "or allow_unqualified_native=True; shadow returns Java's grid and only compares "
      "the native result"),
     ("get_file_version", "yes", "yes", "yes", ""),
-    ("write_timeseries", "yes", "java", "java", "writes stay on Java"),
-    ("write_grid_timeseries", "yes", "java", "java", "writes stay on Java"),
-    ("copy_grid_with_zero_tail", "yes", "java", "java", "writes stay on Java"),
+    ("write_timeseries", "yes", "gated", "java",
+     "native requires the dss-commander writers (native_writes_available); shadow "
+     "writes with Java, repeats the write natively on a temporary copy and compares "
+     "the read-back"),
+    ("write_timeseries_from_dataframe", "yes", "gated", "java", "as write_timeseries"),
+    ("write_grid_timeseries", "yes", "gated", "java", "as write_timeseries"),
+    ("copy_grid_with_zero_tail", "yes", "gated", "java",
+     "native reads the source and writes the derivative without Java; shadow builds "
+     "a second derivative natively in a temporary directory and compares it"),
+    ("write_precip_grid_arrays", "yes", "gated", "yes",
+     "java column: pydsstools, not Java; native writes through dss-commander; shadow "
+     "writes with pydsstools and compares a native copy"),
     ("write_paired_data", "no", "no", "no", "not provided by RasDss yet"),
 )
 
@@ -910,3 +974,130 @@ def classify_file_version(
     if isinstance(java_exc, invalid) and isinstance(native_exc, invalid):
         return "expected", "invalid file on both backends", []
     return "unexpected", "error difference", []
+
+
+# ---------------------------------------------------------------------------
+# Shadow writes
+# ---------------------------------------------------------------------------
+#
+# Under ``shadow`` every write runs on Java (its result and errors are what the caller
+# gets). The native writer then repeats the write on a temporary copy of the target
+# (or into a temporary new file), and both files are read back through the native
+# reader and compared. Both read-backs use the same reader, so any difference comes
+# from the writers. The comparison never raises.
+
+_write_state = threading.local()
+
+
+def java_writes_forced() -> bool:
+    """True inside ``forced_java_writes()`` (on this thread)."""
+    return bool(getattr(_write_state, "depth", 0))
+
+
+class forced_java_writes:
+    """Context manager: public writers called inside it use Java under ``shadow``.
+
+    A shadow ``copy_grid_with_zero_tail`` writes its records through the public
+    ``write_grid_timeseries``; this keeps those nested writes from running their own
+    shadow comparison on the temporary derivative.
+    """
+
+    def __enter__(self):
+        _write_state.depth = getattr(_write_state, "depth", 0) + 1
+        return self
+
+    def __exit__(self, *exc):
+        _write_state.depth -= 1
+        return False
+
+
+#: Known differences between a Java-written and a native-written file, both read back
+#: natively. Labels are logged as ``expected``.
+WRITE_REFUSAL_LABEL = "W1 native writer refuses input the Java path accepts"
+GRID_NULL_LABEL = "W2 DSS7 HRAP/Albers grid null value (Monolith 0.0, native -FLT_MAX)"
+GRID_ZLIB_WORDS_LABEL = "W3 ZLIB grid scale/base words (unused by ZLIB)"
+
+
+def compare_written_timeseries(java_df: pd.DataFrame, native_df: pd.DataFrame) -> List[str]:
+    """Differences between the native read-backs of a Java- and a native-written series.
+
+    The ``read_timeseries`` rules (``compare_frames``) without the ``dss_file``
+    attribute, which names the two different files.
+    """
+    return [d for d in compare_frames(java_df, native_df)
+            if d not in ("attr:dss_file", "attr_ws:dss_file")]
+
+
+#: PRECIP_2_BYTE: the scale factor and base decode the cells, so they must agree.
+_PRECIP_2_BYTE = 101001
+
+
+def compare_written_grids(
+    java: Dict[str, Any], native: Dict[str, Any]
+) -> Tuple[List[str], List[str]]:
+    """Differences between the native read-backs of a Java- and a native-written grid.
+
+    Returns ``(diffs, labels)``. ``diffs`` are unexpected: cell bits or missing
+    positions, the ``read_grid`` metadata, the compression method, and for
+    PRECIP_2_BYTE its scale factor and base. ``labels`` name the known differences
+    found (``W2`` null value, ``W3`` ZLIB scale/base words). The compressed size and
+    bytes are not compared (a different deflate library writes other bytes for the
+    same cells).
+    """
+    cell_diffs, _ = _grid_cell_diffs(java, native)
+    diffs = [f"cells:{d}" for d in cell_diffs]
+    meta = [d for d in _grid_meta_diffs(java, native) if d != "metadata.compression"]
+    diffs += [f"meta:{d}" for d in meta]
+    labels: List[str] = []
+    jm, nm = java.get("metadata") or {}, native.get("metadata") or {}
+    jc, nc = jm.get("compression") or {}, nm.get("compression") or {}
+    if jc.get("method") != nc.get("method"):
+        diffs.append("meta:compression.method")
+    else:
+        for key in ("scale_factor", "base"):
+            if not _same(jc.get(key), nc.get(key)):
+                if jc.get("method") == _PRECIP_2_BYTE:
+                    diffs.append(f"meta:compression.{key}")
+                elif GRID_ZLIB_WORDS_LABEL not in labels:
+                    labels.append(GRID_ZLIB_WORDS_LABEL)
+    jn, nn = jm.get("native") or {}, nm.get("native") or {}
+    if not _same(jn.get("null_value"), nn.get("null_value")):
+        if (java.get("grid_type") in ("albers", "hrap") and int(jn.get("dss_version") or 0) == 7
+                and float(jn.get("null_value")) == 0.0):
+            labels.append(GRID_NULL_LABEL)
+        else:
+            diffs.append("meta:native.null_value")
+    for key in ("time_zone_id", "time_zone_raw_offset", "is_interval", "srs_name",
+                "data_source"):
+        if not _same(jn.get(key), nn.get(key)):
+            diffs.append(f"meta:native.{key}")
+    return diffs, labels
+
+
+def classify_write(
+    native_exc: Optional[BaseException], diffs: List[str], labels: List[str]
+) -> Tuple[str, str, List[str]]:
+    """Classify one shadow write comparison.
+
+    - The native writer refused the input (``ValueError``, or
+      ``DssUnsupportedRecordError``): ``expected`` ``W1``. These are the documented
+      refusals where the Java path truncates, reinterprets or writes an unreadable
+      record.
+    - ``DssLockedError`` on the temporary copy: ``skipped``.
+    - Any other native error, or any unexpected difference: ``unexpected``.
+    """
+    from . import _errors
+
+    if native_exc is not None:
+        if isinstance(native_exc, (ValueError, _errors.get("DssUnsupportedRecordError"))):
+            return "expected", WRITE_REFUSAL_LABEL, list(diffs)
+        dc = _maybe_native()
+        locked = getattr(dc, "DssLockedError", None) if dc is not None else None
+        if locked is not None and isinstance(native_exc, locked):
+            return "skipped", "native write: temporary copy locked", list(diffs)
+        return "unexpected", "native write error", list(diffs)
+    if diffs:
+        return "unexpected", "write difference", list(diffs)
+    if labels:
+        return "expected", "; ".join(labels), []
+    return "identical", "identical", []
