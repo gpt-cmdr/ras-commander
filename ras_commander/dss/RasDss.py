@@ -48,7 +48,7 @@ Backends:
     Read methods (``get_catalog``, ``read_timeseries``,
     ``read_multiple_timeseries``, ``read_paired_data``, ``get_file_version``
     and everything built on them) use ``RasDss.backend``: ``"java"``
-    (default), ``"native"`` (optional dss-commander package, no JVM) or
+    (default), ``"native"`` (optional ras-commander-fast-dss package, no JVM) or
     ``"shadow"`` (native result, Java cross-check, differences logged). The
     environment variable ``RAS_COMMANDER_DSS_BACKEND`` overrides the
     attribute when set. ``read_grid`` under ``"native"`` requires a wheel
@@ -56,7 +56,7 @@ Backends:
     ``allow_unqualified_native=True``. The writers (``write_timeseries``,
     ``write_timeseries_from_dataframe``, ``write_grid_timeseries``,
     ``copy_grid_with_zero_tail``, ``write_precip_grid_arrays``) switch too:
-    ``"native"`` writes through dss-commander when the wheel has its writers
+    ``"native"`` writes through ras-commander-fast-dss when the wheel has its writers
     (else ``DssCapabilityError``); ``"shadow"`` writes with Java and compares a
     native repeat on a temporary copy.
 
@@ -117,7 +117,7 @@ class RasDss:
     Backends:
         ``RasDss.backend`` selects how read and write methods access DSS files:
         ``"java"`` (default; HEC Monolith via pyjnius), ``"native"``
-        (dss-commander, no JVM) or ``"shadow"`` (reads: native result plus a
+        (ras-commander-fast-dss, no JVM) or ``"shadow"`` (reads: native result plus a
         logged Java cross-check; writes: Java result plus a logged native
         repeat on a temporary copy). ``RAS_COMMANDER_DSS_BACKEND`` overrides it
         when set.
@@ -141,11 +141,11 @@ class RasDss:
 
         Resolution order: ``RAS_COMMANDER_DSS_BACKEND`` (when set), then
         ``RasDss.backend``. ``"shadow"`` resolves to ``"java"`` when
-        dss-commander is not installed (one warning is logged).
+        ras-commander-fast-dss is not installed (one warning is logged).
 
         Raises:
             ValueError: If the configured name is not java, native or shadow.
-            ImportError: If ``"native"`` is selected and dss-commander is not
+            ImportError: If ``"native"`` is selected and ras-commander-fast-dss is not
                 installed.
         """
         return _backend.effective_backend(RasDss.backend)
@@ -228,7 +228,7 @@ class RasDss:
     def get_capabilities() -> pd.DataFrame:
         """Return what each backend supports for every public DSS operation.
 
-        Does not start a JVM or import dss-commander's engine beyond an import
+        Does not start a JVM or import the ras_commander_fast_dss engine beyond an import
         check.
 
         Returns:
@@ -376,7 +376,7 @@ class RasDss:
             Under ``"native"`` and ``"shadow"`` a missing file raises
             ``FileNotFoundError`` (the Java path also refuses missing files)
             and a file that is not DSS raises
-            ``dss_commander.DssFormatError`` (a ``RuntimeError``; Java
+            ``ras_commander_fast_dss.DssFormatError`` (a ``RuntimeError``; Java
             returns zero rows).
         """
         backend = RasDss.get_backend()
@@ -388,7 +388,7 @@ class RasDss:
 
     @staticmethod
     def _get_catalog_native(dss_file: Union[str, Path]) -> pd.DataFrame:
-        """Catalog through dss-commander (no JVM). Same frame as the Java path."""
+        """Catalog through ras-commander-fast-dss (no JVM). Same frame as the Java path."""
         from ras_commander.RasUtils import RasUtils
 
         dc = _backend.import_native()
@@ -502,10 +502,10 @@ class RasDss:
         Backends:
             ``"native"`` and ``"shadow"`` return NaN for HEC missing values
             (the Java path returns the raw -3.4028235e38 marker). A pathname
-            without data raises ``dss_commander.DssPathnameNotFoundError``
+            without data raises ``ras_commander_fast_dss.DssPathnameNotFoundError``
             (a ``ValueError`` and ``RuntimeError``); paired data, grids and
             other non-time-series records raise
-            ``dss_commander.DssUnsupportedRecordError`` (a ``RuntimeError``).
+            ``ras_commander_fast_dss.DssUnsupportedRecordError`` (a ``RuntimeError``).
 
             All-missing DSS6 data differs between the paths. HEC Monolith
             reports a DSS6 regular request whose values are all -901/-902 as
@@ -513,7 +513,7 @@ class RasDss:
             the blocks and, after trimming the missing values, raises the same
             ``DssPathnameNotFoundError``; a window that also contains valid
             values is returned. ``"shadow"`` re-reads such a not-found case
-            with dss-commander's opt-in ``no_data="refuse"`` (HEC's rule) only
+            with the engine's opt-in ``no_data="refuse"`` (HEC's rule) only
             to label the comparison; that option is provided for Java/native
             parity checks and testing and never changes the returned result.
             Stored NaN values are values: the leading/trailing trim removes
@@ -538,9 +538,9 @@ class RasDss:
         end_date: Optional[str] = None,
         dss_handle: Any = None,
     ) -> pd.DataFrame:
-        """Time series through dss-commander (no JVM).
+        """Time series through ras-commander-fast-dss (no JVM).
 
-        ``dss_handle`` is an open ``dss_commander.DssFile`` to reuse; when it is
+        ``dss_handle`` is an open ``ras_commander_fast_dss.DssFile`` to reuse; when it is
         None the file is opened and closed for this call.
         """
         from ras_commander.RasUtils import RasUtils
@@ -575,7 +575,7 @@ class RasDss:
         blocks by default and, after its default trim, reports "no values" with the
         same ``DssPathnameNotFoundError`` type that an absent pathname raises. When
         the native read raises not-found, shadow mode repeats it with
-        dss-commander's opt-in ``no_data="refuse"`` (HEC's rule; it raises
+        the engine's opt-in ``no_data="refuse"`` (HEC's rule; it raises
         ``DssNoDataError`` with ``status == 4``) to label the case as the HEC
         no-data rule rather than a missing record. The option exists for this
         parity check and for testing: the returned frame or error is always the
@@ -876,7 +876,7 @@ class RasDss:
 
         Backends:
             ``"java"`` reads ``hec.io.PairedDataContainer`` through HEC
-            Monolith; ``"native"`` reads through dss-commander without a JVM;
+            Monolith; ``"native"`` reads through ras-commander-fast-dss without a JVM;
             ``"shadow"`` returns the native frame, also reads through Java,
             and logs differences (see ``docs/user-guide/dss-native-backend.md``).
             Both backends return the same schema and raise the same classes.
@@ -892,7 +892,7 @@ class RasDss:
             DssReadError: The record exists but the backend failed to read it
                 (a ``DssFormatError``; the cause is chained).
             ImportError: The selected backend's optional dependency (pyjnius or
-                dss-commander) is not installed.
+                ras-commander-fast-dss) is not installed.
 
         Example:
             rating = RasDss.read_paired_data("model.dss", "/BASIN/LOC/STAGE-FLOW///RATING/")
@@ -919,7 +919,7 @@ class RasDss:
     @staticmethod
     def _paired_data_column_names(labels: List[str], n_curves: int) -> List[str]:
         """Labels when every curve has a distinct non-blank label, else curve_1..n
-        (the rule of ``dss_commander.PairedData.column_names``)."""
+        (the rule of ``ras_commander_fast_dss.PairedData.column_names``)."""
         if (len(labels) == n_curves and all(s.strip() for s in labels)
                 and len(set(labels)) == n_curves):
             return list(labels)
@@ -1005,7 +1005,7 @@ class RasDss:
         ignore_d_part: bool = True,
         dtype: str = "stored",
     ) -> pd.DataFrame:
-        """Paired data through dss-commander (no JVM)."""
+        """Paired data through ras-commander-fast-dss (no JVM)."""
         from ras_commander.RasUtils import RasUtils
 
         dc = _backend.import_native()
@@ -1239,7 +1239,7 @@ class RasDss:
 
     @staticmethod
     def _read_grid_native(dss_file: Union[str, Path], pathname: str) -> Dict[str, Any]:
-        """One grid record through dss-commander, in the ``read_grid`` schema.
+        """One grid record through ras-commander-fast-dss, in the ``read_grid`` schema.
 
         Cells, geometry, units and times are native. ``metadata["crs_qualified"]``
         reports whether the installed wheel advertises qualified grid CRS strings.
@@ -1270,7 +1270,7 @@ class RasDss:
     def _grid_dict_from_native(
         grid: Any, pathname: str, dss_file_str: str, path_parts: List[str]
     ) -> Dict[str, Any]:
-        """Map a ``dss_commander.Grid`` onto the ``read_grid`` dictionary."""
+        """Map a ``ras_commander_fast_dss.Grid`` onto the ``read_grid`` dictionary."""
         n_rows, n_cols = int(grid.ny), int(grid.nx)
         values = np.ascontiguousarray(grid.data, dtype=np.float32)
         grid_type = grid.grid_type if grid.grid_type != "undefined" else "GridInfo"
@@ -1439,9 +1439,9 @@ class RasDss:
 
         Args (keyword-only):
             allow_unqualified_native: Opt in to the native grid reader under
-                ``backend="native"`` when the installed dss-commander does not
+                ``backend="native"`` when the installed ras-commander-fast-dss does not
                 advertise qualified grid CRS strings (feature
-                ``"grid_srs_monolith_parity"`` in ``dss_commander.FEATURES``).
+                ``"grid_srs_monolith_parity"`` in ``ras_commander_fast_dss.FEATURES``).
                 Cells, geometry, units and times are native; ``crs`` may be
                 wrong or empty for legacy Albers grids, and
                 ``metadata["crs_qualified"]`` is ``False``. Ignored, with a
@@ -1467,7 +1467,7 @@ class RasDss:
                 record (a ``TypeError`` and ``DssUnsupportedRecordError``).
             DssCapabilityError: Native backend, unqualified wheel and no
                 ``allow_unqualified_native`` (a ``NotImplementedError``).
-            ImportError: If pyjnius (Java) or dss-commander (native) is not
+            ImportError: If pyjnius (Java) or ras-commander-fast-dss (native) is not
                 installed.
             RuntimeError: If the grid read fails or returns invalid data.
         """
@@ -1731,7 +1731,7 @@ class RasDss:
         pathnames: List[str],
         shadow: bool = False,
     ) -> Dict[str, pd.DataFrame]:
-        """Read several pathnames with one open dss-commander file.
+        """Read several pathnames with one open ras-commander-fast-dss file.
 
         Keeps the Java contract: a pathname that fails maps to None and logs a
         warning.
@@ -2565,7 +2565,7 @@ class RasDss:
 
         Backends:
             ``"java"`` (default) writes through pydsstools (this method never
-            uses Java). ``"native"`` writes through dss-commander and does not
+            uses Java). ``"native"`` writes through ras-commander-fast-dss and does not
             need pydsstools (it still needs ``affine`` and ``pyproj``). It
             stores the records pydsstools stores: DSS7 specified grids,
             PER-CUM, ZLIB, the WKT1_GDAL CRS and its name, no time zone.
@@ -2705,7 +2705,7 @@ class RasDss:
 
         Backends:
             ``"java"`` (default) writes through HEC Monolith. ``"native"``
-            writes through dss-commander without a JVM and never falls back to
+            writes through ras-commander-fast-dss without a JVM and never falls back to
             Java. It stores what Monolith stores: DSS7 grids are always ZLIB
             compressed (Monolith ignores the requested method on DSS7); DSS6
             grids use the requested ZLIB or PRECIP_2_BYTE. Differences:
@@ -2917,7 +2917,7 @@ class RasDss:
                 finally:
                     RasDss._release_dss_file(dss_file_str)
 
-    #: ``grid_info["compression"]`` names and HEC method codes -> dss-commander names.
+    #: ``grid_info["compression"]`` names and HEC method codes -> ras-commander-fast-dss names.
     _NATIVE_GRID_COMPRESSION_NAMES = {
         "PRECIP": "precip_2_byte", "PRECIP2BYTE": "precip_2_byte",
         "PRECIP_2_BYTE": "precip_2_byte", "ZLIB": "zlib", "ZLIB_DEFLATE": "zlib",
@@ -2927,7 +2927,7 @@ class RasDss:
 
     @staticmethod
     def _native_grid_compression(compression: Any, version: int) -> str:
-        """dss-commander compression for a ``grid_info["compression"]`` value.
+        """ras-commander-fast-dss compression for a ``grid_info["compression"]`` value.
 
         DSS7: always ``"zlib"``. HEC Monolith stores every DSS7 grid ZLIB compressed
         whatever method it is given (verified with Monolith 3.3.27 for PRECIP_2_BYTE,
@@ -2950,7 +2950,7 @@ class RasDss:
     def _native_grid_kwargs(
         grid_info: Dict[str, Any], data_type: str, version: int
     ) -> Dict[str, Any]:
-        """``dss_commander.write_grid`` keyword arguments for a RasDss ``grid_info``.
+        """``ras_commander_fast_dss.write_grid`` keyword arguments for a RasDss ``grid_info``.
 
         Follows ``_create_java_grid_info``: the same keys and defaults, the same
         lower-left cell (explicit indexes, else ``origin`` rounded to whole cells from
@@ -3052,10 +3052,10 @@ class RasDss:
         *,
         dss_version: Optional[int] = None,
     ) -> List[str]:
-        """``write_grid_timeseries`` through dss-commander (no JVM).
+        """``write_grid_timeseries`` through ras-commander-fast-dss (no JVM).
 
         Same argument checks, time windows and pathnames as the Java path; one
-        ``dss_commander.write_grid`` call per record. Returns the stored pathnames.
+        ``ras_commander_fast_dss.write_grid`` call per record. Returns the stored pathnames.
         """
         dss_version = RasDss._validate_dss_version(dss_version)
         if grid_info is None:
@@ -3281,7 +3281,7 @@ class RasDss:
 
         Backends:
             ``"java"`` (default) reads, writes and verifies through HEC
-            Monolith. ``"native"`` does all three through dss-commander with
+            Monolith. ``"native"`` does all three through ras-commander-fast-dss with
             the same checks and no JVM; it keeps the source's PRECIP_2_BYTE
             scale and base (DSS6) and the source's DSS version. ZLIB scale and
             base words, which ZLIB does not use, are not compared. ``"shadow"``
@@ -3318,7 +3318,7 @@ class RasDss:
         """``copy_grid_with_zero_tail`` on one backend.
 
         ``native=False`` is the Java path, unchanged. ``native=True`` reads the source,
-        writes the temporary derivative and verifies it through dss-commander, with the
+        writes the temporary derivative and verifies it through ras-commander-fast-dss, with the
         same checks; no JVM is started.
         """
         from ras_commander.RasUtils import RasUtils
@@ -3673,7 +3673,7 @@ class RasDss:
         """File operations of ``copy_grid_with_zero_tail`` for one backend.
 
         Java: the historical calls (looked up now, so test doubles apply). Native:
-        dss-commander reads and writes; there are no JVM handles to close.
+        ras-commander-fast-dss reads and writes; there are no JVM handles to close.
         """
         if not native:
             return {
@@ -3717,7 +3717,7 @@ class RasDss:
         """Blank the scale and base words of a ZLIB grid (native ``copy_grid``).
 
         ZLIB does not use them, and writers fill them differently (Monolith writes
-        0 and 100 to DSS6, dss-commander -FLT_MAX), so the native derivative compares
+        0 and 100 to DSS6, ras-commander-fast-dss -FLT_MAX), so the native derivative compares
         the compression method only. PRECIP_2_BYTE keeps both: they decode the cells.
         """
         metadata = grid.get("metadata") or {}
@@ -3817,7 +3817,7 @@ class RasDss:
 
         Backends:
             ``"java"`` asks HEC Monolith (``HecDataManager.getDssFileVersion``).
-            ``"native"`` reads the file header through dss-commander without a
+            ``"native"`` reads the file header through ras-commander-fast-dss without a
             JVM. ``"shadow"`` returns the native answer and logs any
             disagreement with Java.
 
@@ -3846,7 +3846,7 @@ class RasDss:
 
     @staticmethod
     def _get_file_version_native(dss_file: Union[str, Path]) -> int:
-        """Header version through dss-commander (no JVM)."""
+        """Header version through ras-commander-fast-dss (no JVM)."""
         from ras_commander.RasUtils import RasUtils
 
         dss_path = RasDss._check_existing_file(dss_file)
@@ -3981,9 +3981,9 @@ class RasDss:
                 an existing file does not match the requested version. Under
                 ``native``, also when the engine refuses the input (see
                 Backends).
-            ImportError: If pyjnius (``java``) or dss-commander (``native``) is
+            ImportError: If pyjnius (``java``) or ras-commander-fast-dss (``native``) is
                 not installed
-            DssCapabilityError: ``native`` with a dss-commander wheel that
+            DssCapabilityError: ``native`` with a ras-commander-fast-dss wheel that
                 has no writers (a ``NotImplementedError``)
             RuntimeError: If Java write operation fails. Native engine errors
                 (``DssLockedError`` when HEC software has the file open, other
@@ -3991,7 +3991,7 @@ class RasDss:
 
         Backends:
             ``"java"`` (default) writes through HEC Monolith. ``"native"``
-            writes through dss-commander without a JVM and never falls back to
+            writes through ras-commander-fast-dss without a JVM and never falls back to
             Java: an existing file keeps its DSS version, a new file is DSS7
             unless ``dss_version=6`` (the Java default). The E part decides
             regular or irregular (``IR-DAY`` .. ``IR-CENTURY``) storage on both
@@ -4154,7 +4154,7 @@ class RasDss:
                     RasDss._release_dss_file(dss_file_str)
 
     # ------------------------------------------------------------------
-    # Native writers (dss-commander) and shadow write comparison
+    # Native writers (ras-commander-fast-dss) and shadow write comparison
     # ------------------------------------------------------------------
 
     #: DSS version a native writer gives a new file when ``dss_version`` is omitted.
@@ -4241,7 +4241,7 @@ class RasDss:
         *,
         dss_version: Optional[int] = None,
     ) -> None:
-        """``write_timeseries`` through dss-commander (no JVM).
+        """``write_timeseries`` through ras-commander-fast-dss (no JVM).
 
         Same argument checks as the Java path. Values are stored as doubles (Java
         stores doubles too). DSS7 files keep ``NaN`` as stored bits (``raw=True``),

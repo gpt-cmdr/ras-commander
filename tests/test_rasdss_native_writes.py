@@ -15,7 +15,7 @@ ZLIB, DSS7), an instantaneous and a specified grid, and ``copy_grid_with_zero_ta
 on the real DSS6 precipitation family and on a DSS7 family. Source data:
 RasExamples ``BaldEagleCrkMulti2D``.
 
-Skips without dss_commander, without its writers, when the project cannot be extracted,
+Skips without ras_commander_fast_dss, without its writers, when the project cannot be extracted,
 or when the Java bridge is unavailable.
 """
 
@@ -33,13 +33,13 @@ import numpy as np
 import pandas as pd
 import pytest
 
-dc = pytest.importorskip("dss_commander")
+dc = pytest.importorskip("ras_commander_fast_dss")
 
 from ras_commander import RasDss, RasExamples  # noqa: E402
 from ras_commander.dss import _backend, _errors  # noqa: E402
 
 pytestmark = pytest.mark.skipif(
-    not _backend.native_writes_available(), reason="dss-commander has no native writers"
+    not _backend.native_writes_available(), reason="ras-commander-fast-dss has no native writers"
 )
 
 WORKER = Path(__file__).with_name("_rasdss_native_writes_java_worker.py")
@@ -678,7 +678,7 @@ def test_shadow_writes_never_raise_for_the_comparison(shadow_no_jvm, monkeypatch
 
 
 def test_locked_file_is_refused_and_shadow_skips(native, monkeypatch, tmp_path):
-    """W8: dss-commander refuses files HEC software holds (simulated lock refusal)."""
+    """W8: ras-commander-fast-dss refuses files HEC software holds (simulated lock refusal)."""
     def locked(*args, **kwargs):
         raise dc.DssLockedError("held by HEC software (simulated)")
 

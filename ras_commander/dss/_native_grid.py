@@ -5,7 +5,7 @@ Two writers share one validation step (``_prepare``):
 - ``write_precip_grid_arrays``: gyanz/pydsstools (MIT), the ``java`` and ``shadow``
   backends. Calls upstream's public API; no upstream implementation is vendored.
   https://github.com/gyanz/pydsstools
-- ``write_precip_grid_arrays_native``: dss-commander, the ``native`` backend. It
+- ``write_precip_grid_arrays_native``: ras-commander-fast-dss, the ``native`` backend. It
   stores the record that pydsstools stores (specified grid, PER-CUM, ZLIB, no time
   zone, interval data).
 
@@ -178,7 +178,7 @@ def write_precip_grid_arrays(dss_file, pathname, data, interval_bounds, *,
 def write_precip_grid_arrays_native(dss_file, pathname, data, interval_bounds, *,
                                     transform, crs, units, nodata=None, overwrite=False,
                                     grid_reference_origin=None):
-    """dss-commander implementation for RasDss.write_precip_grid_arrays (no pydsstools).
+    """ras-commander-fast-dss implementation for RasDss.write_precip_grid_arrays (no pydsstools).
 
     Stores the records pydsstools stores: DSS7 specified grids (type 430), PER-CUM,
     ZLIB, the WKT1_GDAL CRS and its name, no time zone, interval data, null value

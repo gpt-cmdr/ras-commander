@@ -2,7 +2,7 @@
 
 - Classification, capability and error-class tests need no optional dependency.
 - Native tests use the synthetic public fixtures in ``tests/fixtures/dss_native_public``
-  and skip without ``dss_commander``.
+  and skip without ``ras_commander_fast_dss``.
 - Shadow tests run in-process with the Java variants replaced by recorded results.
 - Java tests run HEC Monolith in ``_rasdss_pd_grid_java_worker.py`` (one JVM per
   process; HEC software can modify files it opens) on temporary copies, and skip when
@@ -79,7 +79,7 @@ def fixtures(tmp_path):
 
 @pytest.fixture
 def native(monkeypatch, no_jvm):
-    pytest.importorskip("dss_commander")
+    pytest.importorskip("ras_commander_fast_dss")
     monkeypatch.setattr(RasDss, "backend", "native")
 
 
@@ -105,8 +105,8 @@ def test_error_classes_keep_builtin_bases():
         dss_pkg.NoSuchError  # noqa: B018
 
 
-def test_error_classes_are_dss_commander_classes_when_installed():
-    dc = pytest.importorskip("dss_commander")
+def test_error_classes_are_ras_commander_fast_dss_classes_when_installed():
+    dc = pytest.importorskip("ras_commander_fast_dss")
     assert dss_pkg.DssPathnameNotFoundError is dc.DssPathnameNotFoundError
     assert dss_pkg.DssUnsupportedRecordError is dc.DssUnsupportedRecordError
     assert issubclass(dss_pkg.DssRecordTypeError, dc.DssUnsupportedRecordError)
@@ -127,7 +127,7 @@ def test_local_fallback_classes_have_the_same_contract():
         assert local.DssRecordTypeError.__qualname__ == "DssRecordTypeError"
 
 
-def test_java_path_never_imports_dss_commander(tmp_path):
+def test_java_path_never_imports_ras_commander_fast_dss(tmp_path):
     """Resolving errors and running the Java dispatch must not load the native engine."""
     script = tmp_path / "probe.py"
     script.write_text(
@@ -143,7 +143,7 @@ def test_java_path_never_imports_dss_commander(tmp_path):
         "    RasDss.read_paired_data(sys.argv[1], '/A/B/C///F/')\n"
         "except FileNotFoundError:\n"
         "    pass\n"
-        "print('IMPORTED' if 'dss_commander' in sys.modules else 'NOT_IMPORTED')\n",
+        "print('IMPORTED' if 'ras_commander_fast_dss' in sys.modules else 'NOT_IMPORTED')\n",
         encoding="utf-8",
     )
     completed = subprocess.run(
@@ -161,7 +161,7 @@ def test_broken_native_wheel_cannot_break_java(monkeypatch, no_jvm):
     real = importlib.import_module
 
     def broken(name, *a, **k):
-        if name == "dss_commander":
+        if name == "ras_commander_fast_dss":
             raise OSError("simulated DLL load failure")
         return real(name, *a, **k)
 
@@ -199,7 +199,7 @@ def test_capabilities_matrix(no_jvm):
 
 
 def test_native_grid_qualification_is_an_advertised_feature(monkeypatch):
-    dc = pytest.importorskip("dss_commander")
+    dc = pytest.importorskip("ras_commander_fast_dss")
     monkeypatch.setattr(dc, "FEATURES", frozenset(), raising=False)
     assert not _backend.native_grid_qualified()
     monkeypatch.setattr(dc, "FEATURES", frozenset({_backend.NATIVE_GRID_FEATURE}), raising=False)
@@ -353,7 +353,7 @@ def test_midnight_end_time_text_matches_monolith():
 
 @pytest.fixture
 def shadow(monkeypatch):
-    pytest.importorskip("dss_commander")
+    pytest.importorskip("ras_commander_fast_dss")
     monkeypatch.setattr(RasDss, "backend", "shadow")
 
 
@@ -580,7 +580,7 @@ def _result(java_results, op, dss_name, pathname=None):
 
 @pytest.mark.parametrize("version", [6, 7])
 def test_java_and_native_paired_data_agree(java_results, version, monkeypatch, no_jvm):
-    pytest.importorskip("dss_commander")
+    pytest.importorskip("ras_commander_fast_dss")
     monkeypatch.setattr(RasDss, "backend", "native")
     name = f"java_pd{version}.dss"
     f = java_results["work"] / name
@@ -621,7 +621,7 @@ def test_java_read_failure_on_existing_record_is_not_not_found(java_results):
 
 
 def test_java_reads_synthetic_dss7_paired_data_like_native(java_results, monkeypatch, no_jvm):
-    pytest.importorskip("dss_commander")
+    pytest.importorskip("ras_commander_fast_dss")
     java = _result(java_results, "pd", "synthetic_pd7.dss", PD7_PATH)
     nat = RasDss._read_paired_data_native(FIXTURES / "synthetic_pd7.dss", PD7_PATH)
     java.attrs["dss_file"] = nat.attrs["dss_file"]
@@ -631,7 +631,7 @@ def test_java_reads_synthetic_dss7_paired_data_like_native(java_results, monkeyp
 
 @pytest.mark.parametrize("pathname", [MODERN_GRID, ALBERS_GRID, UNTIMED_GRID])
 def test_java_and_native_grids_agree_on_cells(java_results, pathname):
-    pytest.importorskip("dss_commander")
+    pytest.importorskip("ras_commander_fast_dss")
     java = _result(java_results, "grid", "synthetic_grid7.dss", pathname)
     assert isinstance(java, dict) and java["row_order"] == "south_up"
     nat = RasDss._read_grid_native(java["dss_file"], pathname)
@@ -641,7 +641,7 @@ def test_java_and_native_grids_agree_on_cells(java_results, pathname):
 
 
 def test_worker_shadow_runs(java_results):
-    pytest.importorskip("dss_commander")
+    pytest.importorskip("ras_commander_fast_dss")
     shadow_pd = _result(java_results, "shadow_pd", "java_pd7.dss", JAVA_PD_RECORDS[0]["pathname"])
     assert isinstance(shadow_pd["value"], pd.DataFrame)
     assert [r["outcome"] for r in shadow_pd["records"]] == ["identical"]
@@ -655,7 +655,7 @@ def test_worker_shadow_runs(java_results):
 
 def test_shadow_sweep_rasexamples_paired_data(tmp_path):
     """Shadow every 20th paired-data record of a public RasExamples DSS file."""
-    dc = pytest.importorskip("dss_commander")
+    dc = pytest.importorskip("ras_commander_fast_dss")
     from ras_commander import RasExamples
 
     try:

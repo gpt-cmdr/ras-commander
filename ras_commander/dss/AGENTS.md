@@ -6,7 +6,7 @@ This file is the canonical local instruction file for `ras_commander/dss/`.
 
 - Parent guidance from `ras_commander/AGENTS.md` and the repo root still applies.
 - This directory handles HEC-DSS access through the Java-based monolith bridge,
-  the optional native backend (dss-commander: reads and writes), and optional
+  the optional native backend (ras-commander-fast-dss: reads and writes), and optional
   precipitation-grid writing through pydsstools.
 
 ## Architecture
@@ -17,7 +17,7 @@ This file is the canonical local instruction file for `ras_commander/dss/`.
   release) | `"native"` | `"shadow"`; the environment variable
   `RAS_COMMANDER_DSS_BACKEND` overrides it when set. `RasDss.get_backend()`
   returns the effective backend.
-  - `native` reads through the optional `dss_commander` package. It never calls
+  - `native` reads through the optional `ras_commander_fast_dss` package. It never calls
     `_configure_jvm()` or `_ensure_monolith()`.
   - `shadow` returns the native result, also runs the Java path, and logs
     every difference without raising.
@@ -27,14 +27,14 @@ This file is the canonical local instruction file for `ras_commander/dss/`.
     `is_pathname_available` validators) switch.
   - `read_grid` is gated: under `native` it raises `DssCapabilityError`
     unless `_backend.native_grid_qualified()` (the wheel lists
-    `"grid_srs_monolith_parity"` in `dss_commander.FEATURES`) or the caller
+    `"grid_srs_monolith_parity"` in `ras_commander_fast_dss.FEATURES`) or the caller
     passes `allow_unqualified_native=True`. Shadow always returns Java's grid
     (and Java's error) and only compares the native grid. Never fall back to
-    Java from `native`. Current dss-commander development builds advertise
+    Java from `native`. Current ras-commander-fast-dss development builds advertise
     the feature, so the gate is open with them.
   - Writes switch too: `write_timeseries` (and `write_timeseries_from_dataframe`
     through it), `write_grid_timeseries`, `copy_grid_with_zero_tail` and
-    `write_precip_grid_arrays`. `native` writes through dss-commander and
+    `write_precip_grid_arrays`. `native` writes through ras-commander-fast-dss and
     requires `_backend.native_writes_available()` (the wheel exposes
     `NATIVE_WRITE_API`); otherwise `require_native_writes()` raises
     `DssCapabilityError`. Never fall back to Java. Native writes must store
@@ -57,7 +57,7 @@ This file is the canonical local instruction file for `ras_commander/dss/`.
     `_copy_grid_ops(native)`; the Java ops are looked up at call time so test
     doubles of `get_catalog`, `_read_grid_java`, `write_grid_timeseries` etc.
     still apply.
-  - The Java backend must never import `dss_commander`. `_errors` resolves
+  - The Java backend must never import `ras_commander_fast_dss`. `_errors` resolves
     classes from `sys.modules` only, and every native import is guarded with
     `except Exception`, so a broken wheel cannot break Java.
   - Each switched method dispatches to `_<method>_java`, `_<method>_native` or
@@ -71,20 +71,20 @@ This file is the canonical local instruction file for `ras_commander/dss/`.
     table in step with the dispatch code.
 - Direct arrays: `RasDss.write_precip_grid_arrays()` and private
   `_native_grid.py` (`_prepare` validation shared by the pydsstools writer,
-  used under `java`/`shadow`, and the dss-commander writer, used under
+  used under `java`/`shadow`, and the ras-commander-fast-dss writer, used under
   `native`). Both write DSS7 PER-CUM specified-time grids with explicit units,
   projected square-cell geometry, and interval boundaries, without Java/Vortex.
 - Loading is intentionally staged:
   1. parent package lazy-import
   2. lightweight subpackage import
-  3. JVM and pyjnius initialization (java/shadow) or `dss_commander` import
+  3. JVM and pyjnius initialization (java/shadow) or `ras_commander_fast_dss` import
      (native/shadow) on first real DSS call
 
 ## Critical Rules
 
 - Configure the JVM before importing Java classes with `jnius`.
 - Resolve DSS paths to absolute paths before opening files.
-- Close DSS handles in `finally` blocks (native: `with dss_commander.open(...)`).
+- Close DSS handles in `finally` blocks (native: `with ras_commander_fast_dss.open(...)`).
   On the Java path, `HecDss.done()` and `GriddedData.done()` do not close the
   native file; follow each with
   `RasDss._release_dss_file(<exact path string used to open>)`. Never call
@@ -92,7 +92,7 @@ This file is the canonical local instruction file for `ras_commander/dss/`.
 - Remember that the JVM can only be started once per process.
 - Keep Part D blank when writing standard DSS pathnames unless the method explicitly requires otherwise.
 - Typed errors live in `_errors.py` and are exported lazily from
-  `ras_commander.dss`. The four base classes are the `dss_commander` classes
+  `ras_commander.dss`. The four base classes are the `ras_commander_fast_dss` classes
   when installed (local stand-ins otherwise). Do not wrap native exceptions in
   unrelated types. The only additions are subclasses that keep a historical
   builtin (D32): `DssRecordTypeError` (`TypeError`), `DssInvalidFileError`
@@ -112,9 +112,11 @@ This file is the canonical local instruction file for `ras_commander/dss/`.
 ## Dependency Rules
 
 - `pyjnius` and Java are optional runtime prerequisites and should fail with clear installation guidance when missing.
-- `dss_commander` is optional. It joins the `dss-native` extra in `setup.py`
-  only when the wheel is published on PyPI (adding an unpublished name to a
-  public extra breaks that extra and invites name squatting). `native` without it raises `ImportError`. `shadow` without it
+- `ras_commander_fast_dss` (distribution `ras-commander-fast-dss`) is optional and
+  unpublished. Do not add it to `setup.py` or `pyproject` dependencies or extras
+  until publication is approved: an unpublished name in a public extra breaks that
+  extra and invites dependency confusion (decision D36). The existing `dss-native`
+  extra is pydsstools for `write_precip_grid_arrays` on the `java` backend. `native` without it raises `ImportError`. `shadow` without it
   falls back to Java and logs one warning.
 - Keep the monolith download flow lazy and on-demand.
 
@@ -136,14 +138,14 @@ RasDss.get_file_version("file.dss")   # 6 or 7, selected backend
 g = RasDss.read_grid("file.dss", grid_path)   # Java; native gated (allow_unqualified_native=True)
 RasDss.get_capabilities()             # support matrix
 RasDss.check_pathname("file.dss", path); RasDss.is_pathname_available("file.dss", path)
-RasDss.write_timeseries(...)          # selected backend (native: dss-commander writers)
+RasDss.write_timeseries(...)          # selected backend (native: ras-commander-fast-dss writers)
 RasDss.get_capabilities().attrs["native_writes_available"]
 ```
 
 Under native/shadow:
 
 - Missing values are NaN (Java returns `-3.4028235e38`).
-- Not-found raises `dss_commander.DssPathnameNotFoundError`.
+- Not-found raises `ras_commander_fast_dss.DssPathnameNotFoundError`.
 - Paired data and grids in `read_timeseries` raise `DssUnsupportedRecordError`.
 - A missing file raises `FileNotFoundError` and nothing is created.
 - `shutdown_jvm()` is a deprecated no-op.
@@ -158,7 +160,7 @@ The full migration note, with the canonical consumer (HMS conformance) API, is
 - Backend tests: `tests/test_rasdss_backend.py` (selection, fallback, native
   errors, shadow) and `tests/test_rasdss_native_parity.py` (native vs Java on
   RasExamples projects; Java runs in `tests/_rasdss_parity_java_worker.py`).
-  Both skip cleanly without `dss_commander`; the parity tests also skip
+  Both skip cleanly without `ras_commander_fast_dss`; the parity tests also skip
   without Java.
 - Paired data, grids, file version and typed errors:
   `tests/test_rasdss_paired_grid_version.py` (synthetic public fixtures in

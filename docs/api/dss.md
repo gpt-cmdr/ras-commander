@@ -74,7 +74,7 @@ curve, stored precision by default (`float32` PD, `float64` PDD). `attrs` carry
 #### read_grid(dss_file, pathname, *, allow_unqualified_native=False)
 Read one exact grid record as a dictionary (`data` float32, row zero south,
 `row_order="south_up"`). Under `backend="native"` it raises
-`DssCapabilityError` unless the installed dss-commander advertises qualified
+`DssCapabilityError` unless the installed ras-commander-fast-dss advertises qualified
 grid CRS strings (`grid_srs_monolith_parity`) or
 `allow_unqualified_native=True` is passed.
 
@@ -105,7 +105,7 @@ otherwise strictly increasing model clock; merely stripping timezone metadata
 from a repeated local hour creates ambiguous duplicate model times.
 
 Backends: `java` writes through HEC Monolith. `native` writes through
-dss-commander (no JVM; `DssCapabilityError` when the wheel has no writers) and
+ras-commander-fast-dss (no JVM; `DssCapabilityError` when the wheel has no writers) and
 keeps the same file, version and missing-value rules. `shadow` writes with
 Java and compares a native repeat on a temporary copy. The native writer
 refuses some input that Java truncates (see

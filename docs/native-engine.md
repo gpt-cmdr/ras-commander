@@ -1,6 +1,6 @@
 ---
 title: Native Rust Engines
-description: RAS Commander's native Rust engines for HDF extraction and 2D flood inundation mapping, their installation, API controls, and measured performance. DSS Engine coming soon.
+description: RAS Commander's native Rust engines for HDF extraction, 2D flood inundation mapping and HEC-DSS reads and writes, their installation, API controls, and measured performance.
 social_image: assets/ras-commander-rust-engines-dss_social.png
 social_image_alt: "RAS Commander Native Rust Engines: FAST-HDF, FAST-MAP and FAST-DSS"
 ---
@@ -8,17 +8,18 @@ social_image_alt: "RAS Commander Native Rust Engines: FAST-HDF, FAST-MAP and FAS
 
 <p align="center"><img src="../assets/ras-commander-rust-engines-dss_logo.svg" alt="RAS Commander Native Rust Engines: FAST-HDF, FAST-MAP and FAST-DSS" width="450"></p>
 
-RAS Commander uses native Rust engines for two different operations: reading
-HEC-RAS HDF data and mapping computed 2D results to depth and water surface
-elevation (WSE) rasters. The HDF engine accelerates existing `Hdf*` calls. The
-optional Mapping Engine runs through `RasFim` and uses the HDF engine to read
-its numeric model inputs. The DSS Engine is coming soon.
+RAS Commander uses native Rust engines for three different operations: reading
+HEC-RAS HDF data, mapping computed 2D results to depth and water surface
+elevation (WSE) rasters, and reading and writing HEC-DSS files. The HDF engine
+accelerates existing `Hdf*` calls. The optional Mapping Engine runs through
+`RasFim` and uses the HDF engine to read its numeric model inputs. The optional
+DSS Engine (FAST-DSS) is a backend of the existing `RasDss` methods.
 
 | Engine | Operation | Python entry points | Installation and status |
 |---|---|---|---|
 | **HDF Engine** | Read stored results, geometry, text and attributes; assemble mesh geometry | `Hdf*`, `fast_hdf` | `ras-commander-fast-hdf`; installed with RAS Commander on supported wheel platforms. Default `auto` mode retains h5py fallback. |
 | **Mapping Engine** | Map computed physical 2D cells to Depth/WSE rasters using horizontal or sloping interpolation | `RasFim.map_horizontal_profiles`, `RasFim.map_sloping_profiles` | External `ras-commander-fast-map` crate and wheel; the optional Python `fim` extra installs the wheel on supported platforms. Explicit native mapping; no automatic Python fallback. |
-| **DSS Engine** | Coming soon | To be documented | No installation command, API contract or benchmark is published here yet. |
+| **DSS Engine** (FAST-DSS) | Read and write DSS6 and DSS7 catalogs, time series, paired data and grids without Java | `RasDss` with `RasDss.backend = "native"` or `"shadow"` | `ras-commander-fast-dss`; not yet published. Opt-in; `java` remains the default backend. |
 
 ## Choose an engine workflow
 
@@ -57,14 +58,98 @@ Depth/WSE values, without an added depth cutoff.
     current installations should use 0.2.3 or newer; ras-commander 0.112.0
     requires 0.2.5.
 
-## DSS engine (coming soon)
+<a id="dss-engine-coming-soon"></a>
 
-DSS is the next engine planned for this documentation area. Its package,
-supported operations, Python API and performance evidence will be documented
-when available. The HDF and Mapping Engine measurements below do not establish
-DSS performance or compatibility. Existing [DSS operations](user-guide/dss-operations.md)
-remain available through their documented backends; those APIs are separate
-from the planned Rust engine.
+## DSS engine
+
+FAST-DSS is RAS Commander's native HEC-DSS engine, written in Rust. It reads and
+writes DSS6 and DSS7 files without Java: no JVM is started and HEC Monolith is
+not downloaded. It is not a separate API. It is a backend of the existing
+`RasDss` methods, which keep their signatures and return types.
+
+!!! info "Short version"
+    - The engine package is `ras-commander-fast-dss` (import name
+      `ras_commander_fast_dss`). It is optional and **not yet published**: no
+      `pip install ras-commander` command or extra installs it. Install the
+      `ras-commander-fast-dss` wheel you were given.
+    - `java` (HEC Monolith through pyjnius) remains the default backend.
+      `native` uses FAST-DSS only. `shadow` runs both and logs every
+      difference.
+    - Native data matches the Java path. The differences are intended
+      changes and corrections of Java-path defects, listed in
+      [DSS Read and Write Backends](user-guide/dss-native-backend.md).
+
+### Backends and how to choose one
+
+| Backend | Reads and writes through | Returns | Use it to |
+|---|---|---|---|
+| `java` (default) | HEC Monolith via pyjnius; needs Java 8+ | Java result, unchanged behavior | Keep the current behavior |
+| `native` | FAST-DSS; no JVM | Native result | Work without Java |
+| `shadow` | Both | Reads: the native result (grids: Java's). Writes: the Java write, repeated natively on a temporary copy for comparison | Check `native` against your own files before switching |
+
+Set `RasDss.backend`, or the environment variable `RAS_COMMANDER_DSS_BACKEND`,
+which overrides the attribute:
+
+```python
+from ras_commander import RasDss
+
+RasDss.backend = "native"            # "java" (default) | "native" | "shadow"
+print(RasDss.get_backend())          # backend the next call will use
+caps = RasDss.get_capabilities()     # support matrix per operation
+print(caps.attrs)                    # native_installed, native_grid_qualified, native_writes_available
+```
+
+```powershell
+$env:RAS_COMMANDER_DSS_BACKEND = "native"
+```
+
+Under `native`, a missing engine raises `ImportError`, and an operation the
+installed engine does not support raises `DssCapabilityError`. `native` never
+falls back to Java. Under `shadow` without the engine, `RasDss` uses Java and
+logs one warning. The Java backend never imports the engine, so a missing or
+broken wheel cannot affect it.
+
+### Reads and writes
+
+| Area | `RasDss` methods | Native coverage |
+|---|---|---|
+| Catalog and file version | `get_catalog`, `get_info`, `get_file_version` | DSS6 and DSS7 |
+| Time series | `read_timeseries`, `read_multiple_timeseries`, `extract_boundary_timeseries` | Regular and irregular series, `start_date`/`end_date` windows, base dates and sub-minute intervals |
+| Paired data | `read_paired_data` | Every curve, labels, units, types and stored precision |
+| Grids | `read_grid` | HRAP, Albers (SHG) and specified grids; native once the engine advertises the `grid_srs_monolith_parity` feature (current builds do) |
+| Validation | `check_pathname_exists`, `check_data_availability`, `check_pathname`, `is_pathname_available` | Through the catalog and time-series reads above |
+| Writes | `write_timeseries`, `write_timeseries_from_dataframe`, `write_grid_timeseries`, `copy_grid_with_zero_tail`, `write_precip_grid_arrays` | DSS6 and DSS7, regular and irregular series, and grids; needs an engine build with writers (`attrs["native_writes_available"]`) |
+
+`RasDss` does not write paired data on any backend yet.
+
+### Intended differences
+
+Under `native`, missing values are `NaN` instead of HEC's numeric marker,
+`start_date` and `end_date` are honored, errors are typed, and several
+datasets that the Java path misreads are read correctly. The native writer
+refuses some input that the Java path truncates or stores as an unreadable
+record. Each difference, with its evidence, is listed in
+[DSS Read and Write Backends](user-guide/dss-native-backend.md#differences-from-the-java-backend)
+(reads) and in its [Writes section](user-guide/dss-native-backend.md#intended-differences)
+(writes).
+
+### Performance
+
+To be measured. DSS performance has not been benchmarked for this page, and
+the HDF and Mapping Engine measurements below do not establish DSS
+performance.
+
+### Availability
+
+FAST-DSS wheels are not yet published. Until they are, the `native` and
+`shadow` backends need the `ras-commander-fast-dss` wheel you were given:
+
+```bash
+uv pip install ras_commander_fast_dss-<version>-cp310-abi3-win_amd64.whl
+```
+
+Existing [DSS operations](user-guide/dss-operations.md) work unchanged on the
+default `java` backend.
 
 <a id="native-rust-hdf-engine"></a>
 

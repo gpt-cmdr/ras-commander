@@ -12,7 +12,7 @@ native DSS record workflows, see [using pydsstools directly](../about/related-li
 ## Read and write backends
 
 `RasDss.backend` selects how DSS files are read and written: `java` (default,
-HEC Monolith), `native` (optional dss-commander package, no Java) or `shadow`
+HEC Monolith), `native` (optional ras-commander-fast-dss package, no Java) or `shadow`
 (reads return the native result with a logged Java cross-check; writes run on
 Java and are repeated natively on a temporary copy for comparison). Native
 grid reads and native writes are gated on the installed engine

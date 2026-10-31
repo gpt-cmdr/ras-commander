@@ -1,8 +1,8 @@
 """RasDss backend selection, native error behaviour and shadow mode (P09b).
 
-Selection, ImportError and fallback tests need neither Java nor dss_commander.
+Selection, ImportError and fallback tests need neither Java nor ras_commander_fast_dss.
 Native and shadow tests read a real RasExamples project (Muncie) and skip when
-dss_commander (a private wheel) is not installed. No test here starts a JVM: the Java
+ras_commander_fast_dss (a private wheel) is not installed. No test here starts a JVM: the Java
 read paths are replaced where shadow mode needs a Java result.
 """
 
@@ -49,9 +49,9 @@ def no_jvm(monkeypatch):
 
 
 @pytest.fixture
-def without_dss_commander(monkeypatch):
-    """Simulate an environment where dss_commander is not installed."""
-    monkeypatch.setitem(sys.modules, "dss_commander", None)
+def without_ras_commander_fast_dss(monkeypatch):
+    """Simulate an environment where ras_commander_fast_dss is not installed."""
+    monkeypatch.setitem(sys.modules, "ras_commander_fast_dss", None)
 
 
 # ---------------------------------------------------------------------------
@@ -66,7 +66,7 @@ def test_default_backend_is_java():
 
 @pytest.mark.parametrize("value", ["native", "NATIVE", " shadow ", "java"])
 def test_attribute_selects_backend(monkeypatch, value):
-    pytest.importorskip("dss_commander")
+    pytest.importorskip("ras_commander_fast_dss")
     monkeypatch.setattr(RasDss, "backend", value)
     assert RasDss.get_backend() == value.strip().lower()
 
@@ -102,12 +102,12 @@ def test_java_backend_still_uses_the_jvm(no_jvm, tmp_path):
 
 
 # ---------------------------------------------------------------------------
-# dss_commander missing
+# ras_commander_fast_dss missing
 # ---------------------------------------------------------------------------
 
 
-def test_native_without_dss_commander_raises_import_error(
-    monkeypatch, without_dss_commander, no_jvm, tmp_path
+def test_native_without_ras_commander_fast_dss_raises_import_error(
+    monkeypatch, without_ras_commander_fast_dss, no_jvm, tmp_path
 ):
     monkeypatch.setattr(RasDss, "backend", "native")
     for call in (
@@ -116,20 +116,40 @@ def test_native_without_dss_commander_raises_import_error(
         lambda: RasDss.read_timeseries(tmp_path / "x.dss", "/A/B/C//1HOUR/F/"),
         lambda: RasDss.read_multiple_timeseries(tmp_path / "x.dss", ["/A/B/C//1HOUR/F/"]),
     ):
-        with pytest.raises(ImportError, match=r"ras-commander\[dss-native\]"):
+        with pytest.raises(ImportError, match=r"ras-commander-fast-dss wheel you were given"):
             call()
 
 
-def test_native_env_without_dss_commander_raises_import_error(
-    monkeypatch, without_dss_commander
+def test_install_hint_names_the_unpublished_fast_dss_wheel():
+    hint = _backend._NATIVE_INSTALL_HINT
+    assert "ras-commander-fast-dss" in hint
+    assert "ras_commander_fast_dss-<version>-<tag>.whl" in hint
+    # No extra installs the unpublished wheel, and the old name is gone (no alias).
+    assert "[dss-native]" not in hint
+    assert "dss_commander" not in hint.replace("ras_commander_fast_dss", "")
+    assert "dss-commander" not in hint.replace("ras-commander-fast-dss", "")
+
+
+def test_old_engine_name_is_not_imported(monkeypatch):
+    """The pre-rename ``dss_commander`` module is never used, even if importable."""
+    import types
+
+    monkeypatch.setitem(sys.modules, "dss_commander", types.ModuleType("dss_commander"))
+    monkeypatch.setitem(sys.modules, "ras_commander_fast_dss", None)
+    assert _backend._maybe_native() is None
+    assert not _backend.native_available()
+
+
+def test_native_env_without_ras_commander_fast_dss_raises_import_error(
+    monkeypatch, without_ras_commander_fast_dss
 ):
     monkeypatch.setenv(_backend.ENV_VAR, "native")
-    with pytest.raises(ImportError, match="dss-commander"):
+    with pytest.raises(ImportError, match="ras-commander-fast-dss"):
         RasDss.get_backend()
 
 
-def test_shadow_without_dss_commander_falls_back_to_java_with_one_warning(
-    monkeypatch, without_dss_commander, no_jvm, caplog, tmp_path
+def test_shadow_without_ras_commander_fast_dss_falls_back_to_java_with_one_warning(
+    monkeypatch, without_ras_commander_fast_dss, no_jvm, caplog, tmp_path
 ):
     monkeypatch.setattr(RasDss, "backend", "shadow")
     caplog.set_level(logging.WARNING, logger=LOGGER)
@@ -139,7 +159,7 @@ def test_shadow_without_dss_commander_falls_back_to_java_with_one_warning(
     assert RasDss.get_backend() == "java"
     warnings_logged = [r for r in caplog.records if "shadow" in r.getMessage()]
     assert len(warnings_logged) == 1
-    assert "dss-commander is not installed" in warnings_logged[0].getMessage()
+    assert "ras-commander-fast-dss is not installed" in warnings_logged[0].getMessage()
 
 
 # ---------------------------------------------------------------------------
@@ -149,14 +169,14 @@ def test_shadow_without_dss_commander_falls_back_to_java_with_one_warning(
 
 @pytest.fixture(scope="module")
 def muncie_dss(tmp_path_factory):
-    pytest.importorskip("dss_commander")
+    pytest.importorskip("ras_commander_fast_dss")
     root = tmp_path_factory.mktemp("p09b_backend")
     try:
         project = Path(RasExamples.extract_project("Muncie", output_path=root))
     except Exception as exc:  # noqa: BLE001
         pytest.skip(f"RasExamples project 'Muncie' unavailable: {type(exc).__name__}: {exc}")
     dss_file = next(project.rglob("Muncie.dss"))
-    import dss_commander as dc
+    import ras_commander_fast_dss as dc
 
     with dc.open(dss_file) as handle:
         catalog = handle.catalog()
@@ -167,7 +187,7 @@ def muncie_dss(tmp_path_factory):
 
 @pytest.fixture
 def native(monkeypatch, no_jvm):
-    pytest.importorskip("dss_commander")
+    pytest.importorskip("ras_commander_fast_dss")
     monkeypatch.setattr(RasDss, "backend", "native")
 
 
@@ -200,7 +220,7 @@ def test_native_honors_start_and_end(native, muncie_dss):
 
 
 def test_native_errors_are_typed_and_compatible(native, muncie_dss, tmp_path):
-    import dss_commander as dc
+    import ras_commander_fast_dss as dc
 
     with pytest.raises(dc.DssPathnameNotFoundError) as info:
         RasDss.read_timeseries(muncie_dss["file"], "/NOT/IN/THIS/FILE//1HOUR/P09B/")
@@ -266,7 +286,7 @@ def test_shutdown_jvm_is_silent_under_java():
 
 @pytest.fixture
 def shadow(monkeypatch, no_jvm):
-    pytest.importorskip("dss_commander")
+    pytest.importorskip("ras_commander_fast_dss")
     monkeypatch.setattr(RasDss, "backend", "shadow")
 
 
@@ -347,7 +367,7 @@ def test_shadow_java_failure_is_recorded_not_raised(shadow, monkeypatch, muncie_
 
 
 def test_shadow_skips_java_where_java_is_unsafe(shadow, monkeypatch, muncie_dss, tmp_path):
-    import dss_commander as dc
+    import ras_commander_fast_dss as dc
 
     def java_must_not_run(*_args):
         raise AssertionError("Java must not run for this request")
@@ -379,7 +399,7 @@ def test_shadow_window_compares_against_cut_java_frame(shadow, monkeypatch, munc
 
 
 def test_historical_java_errors_stay_visible_but_whitespace_is_expected(muncie_dss):
-    pytest.importorskip("dss_commander")
+    pytest.importorskip("ras_commander_fast_dss")
     pathname = muncie_dss["ts"][0]
     native_df = _native_frame(muncie_dss["file"], pathname)
 
@@ -434,7 +454,7 @@ def test_shadow_verifies_java_window_after_whole_read_failure(
 
 
 # ---------------------------------------------------------------------------
-# HEC DSS6 "no data" rule (dss-commander no_data="refuse", parity labelling only)
+# HEC DSS6 "no data" rule (ras-commander-fast-dss no_data="refuse", parity labelling only)
 # ---------------------------------------------------------------------------
 
 
@@ -446,10 +466,10 @@ def _java_no_data(dss_file, path, **_kwargs):
 def test_shadow_labels_hec_no_data_rule_without_changing_result(
     shadow, monkeypatch, muncie_dss, route
 ):
-    import dss_commander as dc
+    import ras_commander_fast_dss as dc
 
     if not hasattr(dc, "DssNoDataError"):
-        pytest.skip("installed dss-commander has no DssNoDataError")
+        pytest.skip("installed ras-commander-fast-dss has no DssNoDataError")
     pathname = "/NO/SUCH/FLOW//1HOUR/RECORD/"
     calls = []
     original = dc.DssFile.read_timeseries
@@ -475,7 +495,7 @@ def test_shadow_labels_hec_no_data_rule_without_changing_result(
 
 
 def test_shadow_absent_pathname_keeps_d4_label(shadow, monkeypatch, muncie_dss):
-    import dss_commander as dc
+    import ras_commander_fast_dss as dc
 
     monkeypatch.setattr(RasDss, "_read_timeseries_java", staticmethod(_java_no_data))
     with pytest.raises(dc.DssPathnameNotFoundError):
@@ -523,7 +543,7 @@ def test_native_refuses_no_data_rules(monkeypatch):
 
 
 def test_classify_hec_no_data_label(muncie_dss):
-    import dss_commander as dc
+    import ras_commander_fast_dss as dc
 
     pathname = muncie_dss["ts"][0]
     err = dc.DssPathnameNotFoundError("no values")
@@ -547,8 +567,8 @@ def test_classify_hec_no_data_label(muncie_dss):
 
 
 def test_cut_window_keeps_stored_nan_like_ztstrim():
-    pytest.importorskip("dss_commander")
-    import dss_commander as dc
+    pytest.importorskip("ras_commander_fast_dss")
+    import ras_commander_fast_dss as dc
 
     flt_max = float(-np.finfo(np.float32).max)
     index = pd.date_range("2000-01-01", periods=6, freq="D", name="datetime")
