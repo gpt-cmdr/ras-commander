@@ -7,7 +7,70 @@ check `ras_commander.__version__` and the documentation's
 [build provenance](https://rascommander.info/ras/version.json). A package version
 alone does not identify a development checkout.
 
-### Unreleased
+### 0.113.0 — 2026-10-31
+
+This minor release adds Rust mapping products and RAS Mapper's Final n
+Values raster without HEC-RAS. It includes **7 change PRs** absent from
+`v0.112.0`, plus the release-preparation PR; the CI runner change (#796) is
+excluded from the count. Every new mapping path is opt-in through `RasFim`
+and checks the engine's advertised capabilities at run time; existing
+methods keep their numerical contracts.
+
+- **Deterministic Rust inundation boundaries (#755):**
+  `RasFim.map_inundation_boundaries()` and
+  `RasFim.compare_inundation_boundaries()`. They are a deterministic contour
+  method, close to RAS Mapper's polygons but not identical to them. This
+  supersedes #709.
+- **Storage areas as level pools (#757):** `storage_areas=True` on sloping,
+  horizontal and whole-simulation mapping (Fast-Map
+  `storage-area-level-pool/1`).
+- **Velocity, derived products and duration (#758):**
+  - velocity in every render mode;
+  - D x V, D x V² and Froude, including `RasFim.map_derived_max()` (one pass
+    over all output times);
+  - duration by RAS Mapper's backward-window rule, without
+    `allow_unqualified`.
+- **Effective terrain without HEC-RAS (#788):**
+  `RasFim.build_effective_terrain()` rebuilds RAS Mapper's multi-source
+  terrain mosaic in Rust. Terrains with modifications are refused.
+- **Final n Values without HEC-RAS (#786):**
+  `HdfLandCover.export_final_mannings_raster()` writes the raster that RAS
+  Mapper 7.0.1 *Export Raster* produces for "Final n Values", for pure 2D
+  geometries. `estimate_final_mannings_raster` remains as the older
+  estimate.
+- **Engine floors (#795, #797):**
+  - mapping extras: `ras-commander-fast-map>=0.12.0,<0.13`;
+  - core HDF requirement: `ras-commander-fast-hdf>=0.3.0,<0.4`. Bridge API 11
+    and engine API 10 are unchanged. 0.3.0 removes
+    `export_geoparquet_ipc_files`, which ras-commander never called.
+- **CI (#796):** the native HDF job runs on macos-15, because GitHub retires
+  the macOS 14 image on 2026-11-02.
+
+See the
+[complete source comparison](https://github.com/gpt-cmdr/ras-commander/compare/v0.112.0...v0.113.0).
+
+### Implementation notes (0.113.0)
+
+**Qualification against native HEC-RAS 7.0.1** (pixel counts are valid
+pixels; "0 / 0" is mask / float32 bit differences):
+
+- Storage areas, Bald Eagle p07 and p04:
+  - Max sloping, slopingPretty and horizontal: 0 / 0, for example 1,345,691 px
+    on p07 sloping;
+  - arrival and percent time at 0.5 ft: 0 / 0.
+- Bald Eagle bridges p05:
+  - WSE, Depth, Velocity, D x V, D x V², Froude (Max over 433 output times),
+    arrival, duration and percent, in sloping and horizontal mode: 0 / 0.
+- Davis p02:
+  - masks are identical;
+  - at most 5 velocity pixels differ, each within 2 ulp.
+- Effective terrain, Bald Eagle Terrain50:
+  - 197,179,058 px with 0 mask differences;
+  - 8 values differ, at stitch-TIN corners where RAS Mapper's own exports
+    disagree.
+- Final n Values, Bald Eagle g01: 0 of 96,626,208 px differ.
+
+Fast-Map 0.12 refuses `duration` together with `storage_areas=True`.
 
 **Deterministic Rust inundation boundaries**
 
