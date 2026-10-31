@@ -7,6 +7,17 @@ check `ras_commander.__version__` and the documentation's
 [build provenance](https://rascommander.info/ras/version.json). A package version
 alone does not identify a development checkout.
 
+### Unreleased
+
+**Fast-Map 0.12 is the minimum mapping engine**
+
+The `fim`, `fast-map`, `full` and `all` extras now require
+`ras-commander-fast-map>=0.12.0,<0.13` (was `>=0.10.1,<0.12`). Fast-Map 0.12.0
+adds storage-area level pools, the native effective terrain, RAS Mapper's
+backward-window duration rule, velocity in every render mode and the Max
+derived pass; Commander features that use them still check the engine's
+advertised capabilities at run time. Existing user pins are not updated.
+
 ### 0.112.0 — 2026-10-31
 
 This minor release includes **21 change PRs** absent from the published
