@@ -7,7 +7,77 @@ check `ras_commander.__version__` and the documentation's
 [build provenance](https://rascommander.info/ras/version.json). A package version
 alone does not identify a development checkout.
 
-### Unreleased
+### 0.112.0 — 2026-10-31
+
+This minor release includes **21 change PRs** absent from the published
+`v0.110.3` source tag, plus the 0.112.0 release-preparation PR. Seven
+test-only PRs (#769–#774, #781) and the `CITATION.cff` update (#784) are
+excluded from the change count. Several readers now return data where they
+used to return empty or placeholder results, so outputs change; see the
+details below.
+
+- **Readers now read what HEC-RAS stores:**
+  - pump station summaries (#760), reference summaries (#762) and starting
+    WSE boundaries (#763);
+  - infiltration class parameters (#761), with unset (-9999) values no longer
+    averaged (#767);
+  - floodway encroachment, boundary and lateral-weir data (#764), with blank
+    Method 4/5 targets kept visible (#768);
+  - 2D BC-line conflicts (#765) and legacy land-cover layers (#776);
+  - the unsteady initialization as the starting method, with each boundary
+    screened (#775).
+- **HEC-RAS 7.0.2:** `RasCmdr.compute_plan` and `RasPreprocess.preprocess_plan`
+  run only the requested plan on 7.0.2, which otherwise computes every
+  listed plan from a single-plan command line (the project's plan list is
+  narrowed for the launch and restored afterwards). `702` versions and their
+  `RasProcess.exe` resolve, and the terrain-export helper is rebuilt for the
+  7.0.2 RAS Mapper API (#750).
+- **Flow optimization works:** `RasFlowOptimization` now writes
+  `Flow Ratio Mode`, so HEC-RAS really runs the trials, and it reads the
+  stored trial table (#785).
+- **Native `auto` mode covers more readers:**
+  - unsteady storage-area time series through the identity-checked reader
+    (#753);
+  - metadata-only readers and the qualified projection check (#754);
+  - soils raster statistics and the final Manning's n rasters, where a stored
+    no-data n is now no data (#766);
+  - three private HDF helpers (#780);
+  - the flow-optimization trial table (#785).
+
+  Native output is identical to h5py on every routed fixture.
+- **Robustness and packaging:**
+  - `ras_commander.geom` imports without Shapely (#777);
+  - `affine>=3` is required with the FIM stack (#778);
+  - native reference-point names may contain commas (#779);
+  - native sessions under a folder are released before the folder is
+    renamed, moved or removed (#782);
+  - names pyflakes reported as undefined are now bound (#783).
+
+The core HDF requirement becomes `ras-commander-fast-hdf>=0.2.5,<0.3`
+(engine API 11, unchanged). Fast-HDF 0.2.5 adds a process-wide in-flight
+decode budget (4 GiB by default; `RAS_FAST_HDF_DECODE_BUDGET_BYTES`). A read
+it refuses is an `UnsupportedError` with `engine_code == "resource_limit"`,
+from which `auto` mode falls back to h5py. The final release gate (all 11
+stages; routed native-vs-h5py stages plus the suite in h5py, `auto` and
+`required` modes) passed with 0 failures. See the
+[complete source comparison](https://github.com/gpt-cmdr/ras-commander/compare/v0.110.3...v0.112.0).
+
+### Implementation notes (0.112.0)
+
+- **HEC-RAS 7.0.2 single-plan execution and terrain export (#750).** HEC-RAS
+  7.0.2 ignores the selected plan in single-plan command-line launches and
+  computes the project's listed plans in sequence. On an unpatched 7.0.2
+  runtime, `compute_plan` and `preprocess_plan` temporarily expose only the
+  requested plan for the launch and restore the original project file after
+  the processes stop; a failed restore fails the call with the recovery
+  paths. A locally installed patched frontend, recognized by its exact
+  SHA-256, bypasses the guard; the library installs no vendor patch. `702`
+  aliases and the version-matched `RasProcess.exe` resolve, and the genuine
+  `HEC-RAS 7.0.2` temporary-HDF label is accepted after the native
+  schema/readback checks. The packaged terrain-export helper selects the
+  7.0.2 `SpatialIndex<int>.Add` overload at runtime; bounded exports on 6.6,
+  7.0.1 and 7.0.2 are byte-identical. Steady plans, COM execution and
+  Linux/Wine execution remain unqualified on 7.0.2.
 
 - **`RasFlowOptimization` now really enables HEC-RAS flow optimization and
   reads the stored trial table.** `set_settings` / `enable_plan` /
