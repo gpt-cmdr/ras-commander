@@ -54,7 +54,7 @@ Depth/WSE values, without an added depth cutoff.
     `ras2fim-batch` executable and 0.8 mapping contracts. Weighted mapping needs
     the corner-reader capability included in fast-HDF 0.2.3. Historical 0.2.2
     development wheels and the published 0.2.2 release differ in that capability;
-    current installations should use 0.2.3 or newer; ras-commander 0.111.0
+    current installations should use 0.2.3 or newer; ras-commander 0.112.0
     requires 0.2.5.
 
 ## DSS engine (coming soon)
@@ -94,7 +94,7 @@ its existing section links.
       before the engine. On the largest test models, against ras-commander
       0.106.1: cell polygons 42×, per-cell and per-face summaries 10–16×,
       mesh time series 7–8×, and the fluvial-pluvial boundary 690× on an
-      18,066-cell mesh (ras-commander 0.111.0, October 2026). Small calls stay
+      18,066-cell mesh (ras-commander 0.112.0, October 2026). Small calls stay
       within a few milliseconds (see [Performance](#performance)).
     - Set `RAS_COMMANDER_FAST_HDF=h5py` to switch the engine off. On
       platforms without a wheel the engine is not installed, and every read
@@ -154,7 +154,7 @@ repository,
 [gpt-cmdr/ras-commander-fast-hdf](https://github.com/gpt-cmdr/ras-commander-fast-hdf),
 and published on PyPI as `ras-commander-fast-hdf` (and, from 0.2.0, on
 crates.io as a Rust crate of the same name). ras-commander 0.107.1 and later
-list it as a core dependency (0.108.0 and later: `>=0.2,<0.3`; 0.109.0 and later: `>=0.2.3,<0.3`; 0.111.0 and later: `>=0.2.5,<0.3`), limited by an environment marker to the
+list it as a core dependency (0.108.0 and later: `>=0.2,<0.3`; 0.109.0 and later: `>=0.2.3,<0.3`; 0.112.0 and later: `>=0.2.5,<0.3`), limited by an environment marker to the
 platforms that have wheels, so the normal install is enough:
 
 ```bash
@@ -413,12 +413,12 @@ Measured on October 30, 2026 on a Windows workstation (CLB01, Intel Core
 i7-11700K, 8 logical CPUs) after a quiet-machine check: **ras-commander
 0.106.1**, the last release before the native engine and the vectorization
 work, installed without the engine (pure h5py), against **ras-commander
-0.111.0 with ras-commander-fast-hdf 0.2.5**, measured as the release
+0.112.0 with ras-commander-fast-hdf 0.2.5**, measured as the release
 candidates the release gate qualified (ras-commander `29a2085ef`, engine wheel
 built from `4013987`). All columns ran on the same Python 3.13.9, numpy 2.3.3,
 pandas 2.3.2, h5py 3.14.0 and Shapely 2.1.2, measuring 20 public methods on 9
 HEC-RAS result files. Each measurement used a fresh process, with three timed
-processes per column. Every result was hashed: in 0.111.0 it was identical in
+processes per column. Every result was hashed: in 0.112.0 it was identical in
 `h5py`, `auto` and `native` mode, and identical to ras-commander-fast-hdf
 0.2.4. The full tables, charts, the load during the run and the method are on
 the extension's [Performance](https://rascommander.info/fasthdf/performance/)
@@ -427,7 +427,7 @@ page.
 **Calls that take 100 ms or more with 0.106.1 on the largest test model**,
 repeat calls on that model, ranked by the 0.106.1 time:
 
-| Method | Largest test model | 0.106.1 | 0.111.0 `auto` | Speed-up vs 0.106.1 | Native vs h5py (0.111.0) |
+| Method | Largest test model | 0.106.1 | 0.112.0 `auto` | Speed-up vs 0.106.1 | Native vs h5py (0.112.0) |
 |---|---|---:|---:|---:|---:|
 | `HdfFluvialPluvial.calculate_fluvial_pluvial_boundary` | BaldEagleDamBrk.p03 (18,066 cells) | 164,253 ms | 238 ms | **690×** | 7.4× |
 | `HdfMesh.get_mesh_cell_polygons` | Glaise Creek (582,931 cells) | 37,853 ms | 906 ms | **41.8×** | 25.9× |
@@ -445,10 +445,10 @@ Glaise Creek is the Glaise Creek–White River model (1101001306.p01) from
 FEMA's estimated Base Flood Elevation (eBFE) program; BaldEagleDamBrk.p03 is
 the single 2D area plan of HEC's BaldEagleCrkMulti2D example. On
 BaldEagleDamBrk.p07 (87,039 cells) the fluvial-pluvial boundary did not finish
-with 0.106.1 within 30 minutes; 0.111.0 takes 927 ms in `auto` mode.
+with 0.106.1 within 30 minutes; 0.112.0 takes 927 ms in `auto` mode.
 
 - **Speed-up vs 0.106.1** is what you notice after upgrading. **Native vs
-  h5py** (0.111.0 in h5py mode ÷ `auto` mode) is the Rust engine's share. Where
+  h5py** (0.112.0 in h5py mode ÷ `auto` mode) is the Rust engine's share. Where
   it is about 1.0× but the speed-up is large, the gain is from vectorizing
   ras-commander itself (face lines and points built in one Shapely call,
   geometry joined by position, summary times converted once per distinct
@@ -736,7 +736,7 @@ first.
 |---|---|
 | Engine | `ras-commander-fast-hdf` crate 0.2.0 ([crates.io](https://crates.io/crates/ras-commander-fast-hdf); source in [gpt-cmdr/ras-commander-fast-hdf](https://github.com/gpt-cmdr/ras-commander-fast-hdf)), engine API 10 |
 | Bridge | Python package `ras-commander-fast-hdf` 0.2.0 (module `ras_commander_fast_hdf`), `API_VERSION` 11, text API 1, features `catalog, hdf, mesh, results`, `ENGINE_COMMIT` = the commit of tag `v0.2.0` |
-| ras-commander | 0.108.0 and later require `ras-commander-fast-hdf>=0.2,<0.3` and bridge API 11; 0.109.0 and later require `>=0.2.3,<0.3`; 0.111.0 and later require `>=0.2.5,<0.3` |
+| ras-commander | 0.108.0 and later require `ras-commander-fast-hdf>=0.2,<0.3` and bridge API 11; 0.109.0 and later require `>=0.2.3,<0.3`; 0.112.0 and later require `>=0.2.5,<0.3` |
 | Wheels | On PyPI: Windows `cp310-abi3-win_amd64`, Linux `cp310-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64` and `cp310-abi3-musllinux_1_2_x86_64`, macOS `cp310-abi3-macosx_11_0_arm64` (not yet qualified); source distribution |
 
 `ENGINE_COMMIT` is the commit of the ras-commander-fast-hdf repository the
