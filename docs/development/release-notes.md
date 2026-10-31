@@ -7,10 +7,10 @@ check `ras_commander.__version__` and the documentation's
 [build provenance](https://rascommander.info/ras/version.json). A package version
 alone does not identify a development checkout.
 
-### 0.111.0 — 2026-10-31
+### 0.112.0 — 2026-10-31
 
 This minor release includes **21 change PRs** absent from the published
-`v0.110.3` source tag, plus the 0.111.0 release-preparation PR. Seven
+`v0.110.3` source tag, plus the 0.112.0 release-preparation PR. Seven
 test-only PRs (#769–#774, #781) and the `CITATION.cff` update (#784) are
 excluded from the change count. Several readers now return data where they
 used to return empty or placeholder results, so outputs change; see the
@@ -60,9 +60,9 @@ it refuses is an `UnsupportedError` with `engine_code == "resource_limit"`,
 from which `auto` mode falls back to h5py. The final release gate (all 11
 stages; routed native-vs-h5py stages plus the suite in h5py, `auto` and
 `required` modes) passed with 0 failures. See the
-[complete source comparison](https://github.com/gpt-cmdr/ras-commander/compare/v0.110.3...v0.111.0).
+[complete source comparison](https://github.com/gpt-cmdr/ras-commander/compare/v0.110.3...v0.112.0).
 
-### Implementation notes (0.111.0)
+### Implementation notes (0.112.0)
 
 - **HEC-RAS 7.0.2 single-plan execution and terrain export (#750).** HEC-RAS
   7.0.2 ignores the selected plan in single-plan command-line launches and
