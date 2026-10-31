@@ -190,3 +190,33 @@ def test_monitor_stops_on_blocking_condition(tmp_path):
     assert not monitor.monitor_until_signal(_FakeProcess(returncode=None))
     assert monitor.blocked_reason == "legal dialog requires review"
     assert monitor.signal_source is None
+
+
+
+def test_blocking_probe_failure_does_not_hide_fresh_bco_signal(tmp_path, caplog):
+    import os
+    import time
+
+    path = tmp_path / "TestProject.bco07"
+    path.write_text("Starting Unsteady Flow Computations\n", encoding="utf-8")
+    future = time.time() + 5
+    os.utime(path, (future, future))
+
+    def failed_probe():
+        raise RuntimeError("probe unavailable")
+
+    monitor = BcoMonitor(
+        project_path=tmp_path,
+        plan_number="07",
+        project_name="TestProject",
+        blocking_condition=failed_probe,
+        check_interval=0.01,
+        max_wait_seconds=1,
+    )
+    with caplog.at_level(logging.WARNING, logger="ras_commander.RasBco"):
+        assert monitor.monitor_until_signal(_FakeProcess(returncode=None))
+    assert monitor.signal_source == "bco"
+    assert monitor.blocked_reason is None
+    assert _messages(caplog, logging.WARNING) == [
+        "Blocking-condition probe failed: probe unavailable"
+    ]
