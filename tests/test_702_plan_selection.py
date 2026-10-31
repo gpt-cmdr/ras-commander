@@ -848,6 +848,7 @@ def _patch_preprocess_route(monkeypatch, tmp_path, *, signal=True, raise_error=N
     return process, launches, terminated
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_preprocess_plan_exposes_only_requested_plan_on_702(tmp_path, monkeypatch):
     prj = _write_project(tmp_path)
     executable = _make_executable(tmp_path, RELEASE_702)
@@ -940,6 +941,7 @@ def test_preprocess_plan_invalid_declaration_fails_before_launch(tmp_path, monke
     _assert_pristine(prj, data=data)
 
 
+@pytest.mark.synthetic_hdf_layout
 def test_preprocess_plan_prior_release_leaves_project_untouched(tmp_path, monkeypatch):
     prj = _write_project(tmp_path)
     executable = _make_executable(tmp_path, RELEASE_701)
