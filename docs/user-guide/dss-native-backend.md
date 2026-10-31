@@ -318,15 +318,14 @@ The native and Java backends were compared on every grid record of the public
 RasExamples DSS files and on synthetic grid fixtures. Cells matched bit for bit,
 and the remaining differences were limited to the classified labels above.
 
-dss-commander built from engine `main` (`2d9f982` and later, after packet P34
-fixed the Monolith null-value and DSS7 Albers-parameter parity) advertises
-`grid_srs_monolith_parity`, so the gate is open with that wheel: `backend =
-"native"` reads grids natively by default and `metadata["crs_qualified"]` is
-`True`. With it, 250 records sampled from the ten grid families of the
+A dss-commander build whose grid CRS strings, null values and DSS7 Albers
+parameters follow HEC Monolith advertises `grid_srs_monolith_parity`. With
+such a build the gate is open: `backend = "native"` reads grids natively by
+default and `metadata["crs_qualified"]` is `True`. With it, 250 records sampled from the ten grid families of the
 RasExamples file `BaldEagleCrkMulti2D/Precipitation/precip.2018.09.dss`
 (DSS6, SHG Albers, PRECIP_2_BYTE) read identical on both backends (cells,
-CRS and every metadata key; no G-label difference). Older wheels keep the
-gate closed. Shadow behavior does not change.
+CRS and every metadata key; no G-label difference). Builds without the
+feature keep the gate closed. Shadow behavior does not change.
 
 ## Writes
 
@@ -338,15 +337,15 @@ dss-commander. They start no JVM and never fall back to Java.
 ```python
 RasDss.backend = "native"
 caps = RasDss.get_capabilities()
-assert caps.attrs["native_writes_available"]   # wheel has the engine writers
+assert caps.attrs["native_writes_available"]   # build has writer support
 RasDss.write_timeseries("bc.dss", "/BASIN/LOC/FLOW//1HOUR/RUN/", times, values)
 ```
 
-The writers need a dss-commander wheel built from engine `main` `2d9f982` or
-later (packets P20 to P24: DSS7 and DSS6, regular and irregular time series,
-grids). `native_writes_available()` checks the wheel's API (`create`,
-`write_timeseries`, `write_grid`, `HEC_MISSING_DSS6`, `GRID_NODATA`), not a
-version number. Without the writers, a native write raises
+The writers need a dss-commander build with writer support (DSS7 and DSS6,
+regular and irregular time series, grids). `native_writes_available()`
+checks the installed package's API (`create`, `write_timeseries`,
+`write_grid`, `HEC_MISSING_DSS6`, `GRID_NODATA`), not a version number;
+`get_capabilities().attrs["native_writes_available"]` reports it. Without the writers, a native write raises
 `DssCapabilityError` and creates no file.
 
 ### Contract kept from the Java path
@@ -426,7 +425,7 @@ equal to the Java-written one: values bitwise, missing positions, stamps,
 attributes, catalogs, grid cells and metadata, apart from the compressed size.
 The native reader reads both files equal, apart from W2 and W3. The
 `copy_grid_with_zero_tail` results are equal. The run used HEC Monolith
-3.3.27, Java 17 and dss-commander built from engine `main` `2d9f982`.
+3.3.27, Java 17 and a development build of dss-commander with writer support.
 
 ### Shadow writes
 
@@ -442,8 +441,17 @@ The comparison never raises and logs like the read comparisons:
 - `expected` at INFO, labelled `W1` (native refusal), `W2` or `W3`;
 - anything else at WARNING as `UNEXPECTED`.
 
-Targets larger than 256 MB are not copied, and their comparison is logged as
-`skipped`. Shadow writes cost a file copy and a second write. On the test
+A comparison that cannot run is logged as `skipped`: an installed
+dss-commander without writer support, a temporary copy that HEC software has
+locked, or a target above the copy limit.
+
+Each shadow write into an existing file first copies the whole file, so N
+writes into one file cost N copies plus N native writes. Targets larger than
+the copy limit are not copied and not compared. The limit is 256 MB by
+default. Set `RasDss.shadow_copy_limit_mb`, or the environment variable
+`RAS_COMMANDER_DSS_SHADOW_COPY_LIMIT_MB` (which takes precedence), to change
+it; `0` skips the comparison for every existing file. An invalid value is
+logged as `skipped` and never breaks the write. On the test
 corpus, 18 time-series writes compared `identical`. Of 5 grid writes, 2 were
 `identical` and 3 `expected` (W2, W3). Of 2 zero-tail copies, 1 was
 `identical` and 1 `expected` (W2).

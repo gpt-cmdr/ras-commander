@@ -204,8 +204,9 @@ def write_precip_grid_arrays_native(dss_file, pathname, data, interval_bounds, *
         north_up=True, time_zone="", time_zone_offset_ms=0, is_interval=True,
         compression="zlib", version=7,
     )
-    target.parent.mkdir(parents=True, exist_ok=True)
+    created_dirs = _backend.make_parents(target)
     temporary = target.with_name(f'.{target.stem}.{uuid4().hex}.dss')
+    published = False
     try:
         dc.create(str(temporary), 7)
         for path, frame in zip(paths, values):
@@ -223,6 +224,9 @@ def write_precip_grid_arrays_native(dss_file, pathname, data, interval_bounds, *
                             expected_zero)):
                     raise RuntimeError(f"DSS grid reference verification failed: {path}")
         _publish(temporary, target, overwrite)
+        published = True
     finally:
         temporary.unlink(missing_ok=True)
+        if not published:
+            _backend.remove_created_dirs(created_dirs)
     return paths

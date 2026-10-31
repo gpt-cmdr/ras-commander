@@ -30,8 +30,8 @@ This file is the canonical local instruction file for `ras_commander/dss/`.
     `"grid_srs_monolith_parity"` in `dss_commander.FEATURES`) or the caller
     passes `allow_unqualified_native=True`. Shadow always returns Java's grid
     (and Java's error) and only compares the native grid. Never fall back to
-    Java from `native`. The engine on `main` (`2d9f982`+) advertises the
-    feature, so the gate is open with current wheels.
+    Java from `native`. Current dss-commander development builds advertise
+    the feature, so the gate is open with them.
   - Writes switch too: `write_timeseries` (and `write_timeseries_from_dataframe`
     through it), `write_grid_timeseries`, `copy_grid_with_zero_tail` and
     `write_precip_grid_arrays`. `native` writes through dss-commander and
@@ -45,9 +45,12 @@ This file is the canonical local instruction file for `ras_commander/dss/`.
     created the file removes it.
   - `shadow` writes return Java's result: the write runs on Java, then is
     repeated natively on a temporary copy (`_shadow_write_snapshot`; targets
-    above `SHADOW_WRITE_COPY_LIMIT_BYTES` are skipped) and both files are read
+    above `shadow_copy_limit_bytes()` are skipped: `RasDss.shadow_copy_limit_mb`,
+    default 256, overridden by `RAS_COMMANDER_DSS_SHADOW_COPY_LIMIT_MB`) and both files are read
     back natively and compared (`compare_written_timeseries`,
-    `compare_written_grids`, `classify_write`; labels W1-W3). Public writers
+    `compare_written_grids`, `classify_write`; labels W1-W3; a
+    `DssCapabilityError` or `DssLockedError` from the native repeat is
+    `skipped`). Public writers
     called inside `_backend.forced_java_writes()` use Java under shadow (the
     shadow `copy_grid_with_zero_tail` writes through the public grid writer).
   - `copy_grid_with_zero_tail` takes its file operations from

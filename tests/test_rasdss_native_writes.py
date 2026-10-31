@@ -582,3 +582,130 @@ def test_shadow_precip_arrays_write_pydsstools_and_compare_native(monkeypatch, t
                if r["operation"] == "write_precip_grid_arrays"]
     assert [(r["outcome"], r["label"]) for r in records] == [("identical", "identical")]
     assert list(tmp_path.iterdir()) == [target]
+
+
+# ---------------------------------------------------------------------------
+# Shadow-write robustness (no JVM: the Java writer is replaced by the native one,
+# which is enough to exercise the snapshot, comparison, classification and cleanup)
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture
+def shadow_no_jvm(monkeypatch, tmp_path):
+    import tempfile
+
+    monkeypatch.delenv(_backend.ENV_VAR, raising=False)
+    monkeypatch.delenv(_backend.SHADOW_COPY_LIMIT_ENV, raising=False)
+    monkeypatch.setattr(RasDss, "backend", "shadow")
+    monkeypatch.setattr(RasDss, "_write_timeseries_java",
+                        staticmethod(RasDss._write_timeseries_native))
+    scratch = tmp_path / "tempdir"
+    scratch.mkdir()
+    monkeypatch.setattr(tempfile, "tempdir", str(scratch))
+    _backend.reset_shadow_stats()
+    return scratch
+
+
+def _shadow_ts_records():
+    return [r for r in _backend.SHADOW_RECORDS if r["operation"] == "write_timeseries"]
+
+
+def test_shadow_write_compares_and_cleans_up(shadow_no_jvm, tmp_path):
+    target = tmp_path / "out" / "bc.dss"
+    RasDss.write_timeseries(target, "/A/B/FLOW//1HOUR/F/", TIMES, np.arange(6.0))
+    RasDss.write_timeseries(target, "/A/B/FLOW//1HOUR/F/", TIMES[:2], [10.0, 11.0])
+    assert [(r["outcome"], r["label"]) for r in _shadow_ts_records()] == [
+        ("identical", "identical"), ("identical", "identical")]
+    assert list(shadow_no_jvm.iterdir()) == []  # temporary copies removed
+
+
+def test_shadow_copy_limit_skips_large_targets(shadow_no_jvm, monkeypatch, tmp_path):
+    target = tmp_path / "bc.dss"
+    RasDss.write_timeseries(target, "/A/B/FLOW//1HOUR/F/", TIMES, np.arange(6.0))
+    monkeypatch.setattr(RasDss, "shadow_copy_limit_mb", 0)
+    RasDss.write_timeseries(target, "/A/B/STAGE//1HOUR/F/", TIMES, np.arange(6.0))
+    monkeypatch.setattr(RasDss, "shadow_copy_limit_mb", 256)
+    monkeypatch.setenv(_backend.SHADOW_COPY_LIMIT_ENV, "0.000001")  # the variable wins
+    RasDss.write_timeseries(target, "/A/B/ELEV//1HOUR/F/", TIMES, np.arange(6.0))
+    monkeypatch.setenv(_backend.SHADOW_COPY_LIMIT_ENV, "not-a-number")
+    RasDss.write_timeseries(target, "/A/B/TEMP//1HOUR/F/", TIMES, np.arange(6.0))
+    outcomes = [(r["outcome"], r["label"]) for r in _shadow_ts_records()]
+    assert outcomes[0] == ("identical", "identical")
+    assert [o for o, _ in outcomes[1:]] == ["skipped"] * 3
+    assert "shadow copy limit" in outcomes[1][1] and "shadow copy limit" in outcomes[2][1]
+    assert "invalid shadow copy limit" in outcomes[3][1]
+    assert len(RasDss._get_catalog_native(target)) == 4  # every Java write happened
+    assert list(shadow_no_jvm.iterdir()) == []
+    monkeypatch.delenv(_backend.SHADOW_COPY_LIMIT_ENV)
+    assert _backend.shadow_copy_limit_bytes(1) == 1024 * 1024
+
+
+def test_shadow_without_writers_is_skipped(shadow_no_jvm, monkeypatch, tmp_path):
+    target = tmp_path / "bc.dss"
+    RasDss.write_timeseries(target, "/A/B/FLOW//1HOUR/F/", TIMES, np.arange(6.0))
+    monkeypatch.setattr(_backend, "native_writes_available", lambda: False)
+    monkeypatch.setattr(RasDss, "_write_timeseries_java", staticmethod(
+        lambda *a, **k: None))  # the Java write itself still succeeds
+    RasDss.write_timeseries(target, "/A/B/STAGE//1HOUR/F/", TIMES, np.arange(6.0))
+    last = _shadow_ts_records()[-1]
+    assert (last["outcome"], last["label"]) == ("skipped", _backend.NATIVE_WRITERS_MISSING_LABEL)
+    assert "DssCapabilityError" in last["native_error"]
+    assert list(shadow_no_jvm.iterdir()) == []
+
+
+def test_shadow_writes_never_raise_for_the_comparison(shadow_no_jvm, monkeypatch, tmp_path,
+                                                       caplog):
+    target = tmp_path / "bc.dss"
+
+    def broken(*args, **kwargs):
+        raise RuntimeError("comparison exploded")
+
+    monkeypatch.setattr(_backend, "compare_written_timeseries", broken)
+    RasDss.write_timeseries(target, "/A/B/FLOW//1HOUR/F/", TIMES, np.arange(6.0))
+    assert "comparison failed" in caplog.text
+    assert target.is_file()
+
+    def native_crash(*args, **kwargs):
+        raise RuntimeError("native writer crashed")
+
+    real_java = RasDss._write_timeseries_java
+    monkeypatch.setattr(RasDss, "_write_timeseries_native", staticmethod(native_crash))
+    monkeypatch.setattr(RasDss, "_write_timeseries_java", staticmethod(real_java))
+    RasDss.write_timeseries(target, "/A/B/STAGE//1HOUR/F/", TIMES, np.arange(6.0))
+    last = _shadow_ts_records()[-1]
+    assert (last["outcome"], last["label"]) == ("unexpected", "native write error")
+    assert list(shadow_no_jvm.iterdir()) == []
+
+
+def test_locked_file_is_refused_and_shadow_skips(native, monkeypatch, tmp_path):
+    """W8: dss-commander refuses files HEC software holds (simulated lock refusal)."""
+    def locked(*args, **kwargs):
+        raise dc.DssLockedError("held by HEC software (simulated)")
+
+    monkeypatch.setattr(dc, "write_timeseries", locked)
+    target = tmp_path / "new" / "locked.dss"
+    with pytest.raises(dc.DssLockedError):
+        RasDss.write_timeseries(target, "/A/B/FLOW//1HOUR/F/", TIMES, np.arange(6.0))
+    assert not target.exists() and not target.parent.exists()
+    outcome, label, _ = _backend.classify_write(dc.DssLockedError("x"), [], [])
+    assert (outcome, label) == ("skipped", "native write: temporary copy locked")
+
+
+def test_refused_write_leaves_no_new_directories(native, tmp_path):
+    target = tmp_path / "a" / "b" / "refused.dss"
+    with pytest.raises(ValueError):
+        RasDss.write_timeseries(target, "/A/B/FLOW//1HOUR/F/", TIMES, [1, 2, np.inf, 4, 5, 6])
+    with pytest.raises(ValueError):
+        RasDss.write_timeseries(target, "/A/B/FLOW//1HOUR/F/X/", TIMES, np.arange(6.0))
+    with pytest.raises(ValueError):
+        RasDss.write_grid_timeseries(
+            target, "/SHG/B/PRECIP///F/", np.ones((1, 2, 2), dtype=np.float32),
+            pd.date_range("2020-01-01", periods=2, freq="h"),
+            {"cellsize": 2000, "crs": "SHG", "data_type": "PER-MAX"})
+    assert list(tmp_path.iterdir()) == []
+    existing = tmp_path / "keep"
+    existing.mkdir()
+    with pytest.raises(ValueError):
+        RasDss.write_timeseries(existing / "x.dss", "/A/B/FLOW//1HOUR/F/X/", TIMES,
+                                np.arange(6.0))
+    assert existing.is_dir()  # directories that existed before are never removed

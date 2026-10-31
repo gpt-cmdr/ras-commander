@@ -13,9 +13,9 @@ alone does not identify a development checkout.
   "native"`, `write_timeseries`, `write_timeseries_from_dataframe`,
   `write_grid_timeseries`, `copy_grid_with_zero_tail` and
   `write_precip_grid_arrays` write through the optional dss-commander engine
-  without a JVM. They need a wheel with the engine writers (engine `main`
-  `2d9f982` or later); otherwise they raise `DssCapabilityError` and never fall
-  back to Java. `RasDss.get_capabilities()` reports the writers as `gated` and
+  without a JVM. They need a dss-commander build with writer support
+  (`native_writes_available()`); otherwise they raise `DssCapabilityError` and
+  never fall back to Java. `RasDss.get_capabilities()` reports the writers as `gated` and
   adds `attrs["native_writes_available"]`. Native writes store what the Java
   path stores: DSS6 and DSS7, regular and irregular series, the existing file's
   version (new files DSS7 unless `dss_version=6`), `NaN` as Java stores it.
@@ -27,7 +27,9 @@ alone does not identify a development checkout.
   [DSS Read and Write Backends](../user-guide/dss-native-backend.md) lists
   every difference. Under `shadow`, writes stay on Java (the caller gets the
   Java result); the write is repeated natively on a temporary copy and the two
-  files are compared and logged. `java` remains the default.
+  files are compared and logged (copy limit 256 MB, configurable with
+  `RasDss.shadow_copy_limit_mb` or `RAS_COMMANDER_DSS_SHADOW_COPY_LIMIT_MB`).
+  `java` remains the default.
 - **Native grid reads pass their gate with the current engine.** dss-commander
   built from engine `main` advertises `grid_srs_monolith_parity`, so
   `read_grid` under `native` reads grids natively by default. On 250 records

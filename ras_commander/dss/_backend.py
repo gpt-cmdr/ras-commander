@@ -616,9 +616,9 @@ NATIVE_GRID_GATE_MESSAGE = (
     "unqualified CRS (metadata['crs_qualified'] is False)."
 )
 
-#: dss_commander attributes that make up the native writer API (engine packets P20-P24:
-#: DSS7 and DSS6 regular and irregular time series, and grids). ``native_writes_available``
-#: requires all of them; a wheel from before the writers has none.
+#: dss_commander attributes that make up the native writer API (DSS7 and DSS6, regular
+#: and irregular time series, and grids). ``native_writes_available`` requires all of
+#: them; a build without writer support has none.
 NATIVE_WRITE_API = ("create", "write_timeseries", "write_grid", "HEC_MISSING_DSS6", "GRID_NODATA")
 
 
@@ -628,7 +628,7 @@ def native_writes_available() -> bool:
     A capability check, not a version pin: ``dss_commander`` must import and expose
     every name in ``NATIVE_WRITE_API`` (``create``, ``write_timeseries`` and
     ``write_grid`` callable). ``HEC_MISSING_DSS6`` marks the DSS6 time-series writer
-    (P22) and ``GRID_NODATA`` the grid writer (P24). Never raises.
+    and ``GRID_NODATA`` the grid writer. Never raises.
     """
     dc = _maybe_native()
     if dc is None:
@@ -648,8 +648,9 @@ def native_writes_available() -> bool:
 NATIVE_WRITES_GATE_MESSAGE = (
     "The installed dss-commander does not provide the native DSS writers "
     "(dss_commander.create, write_timeseries and write_grid with DSS6 support). "
-    "RasDss does not fall back to Java. Install a dss-commander wheel built from engine "
-    "main 2d9f982 or later, or use RasDss.backend = 'java'."
+    "RasDss does not fall back to Java. Use a dss-commander build with writer support "
+    "(RasDss.get_capabilities().attrs['native_writes_available']), or use "
+    "RasDss.backend = 'java'."
 )
 
 
@@ -665,8 +666,55 @@ def require_native_writes():
 
 #: Shadow writes copy an existing target file to a temporary directory before the Java
 #: write, so that the native writer can repeat the write on the copy. Larger files are
-#: not copied and the comparison is skipped.
-SHADOW_WRITE_COPY_LIMIT_BYTES = 256 * 1024 * 1024
+#: not copied and the comparison is skipped. Default limit in MB; override it with
+#: ``RasDss.shadow_copy_limit_mb`` or the environment variable ``SHADOW_COPY_LIMIT_ENV``.
+SHADOW_COPY_LIMIT_MB_DEFAULT = 256.0
+SHADOW_COPY_LIMIT_ENV = "RAS_COMMANDER_DSS_SHADOW_COPY_LIMIT_MB"
+
+
+def shadow_copy_limit_bytes(attribute_mb: Any) -> int:
+    """Byte limit for shadow-write copies.
+
+    The environment variable ``RAS_COMMANDER_DSS_SHADOW_COPY_LIMIT_MB``, when set,
+    overrides ``RasDss.shadow_copy_limit_mb`` (default 256). The value is megabytes
+    (2**20 bytes) and must be a finite number >= 0; 0 skips every comparison on an
+    existing file. Raises ``ValueError`` for anything else (the shadow write then logs
+    the comparison as skipped).
+    """
+    env_value = os.environ.get(SHADOW_COPY_LIMIT_ENV, "").strip()
+    raw, source = (env_value, f"environment variable {SHADOW_COPY_LIMIT_ENV}") if env_value \
+        else (attribute_mb, "RasDss.shadow_copy_limit_mb")
+    try:
+        mb = float(raw)
+    except (TypeError, ValueError):
+        mb = float("nan")
+    if not np.isfinite(mb) or mb < 0:
+        raise ValueError(f"invalid shadow copy limit {raw!r} from {source}: expected MB >= 0")
+    return int(mb * 1024 * 1024)
+
+
+def make_parents(path: Any) -> List[Any]:
+    """Create the missing parent directories of ``path``; return them, deepest first."""
+    from pathlib import Path
+
+    created = []
+    parent = Path(path).parent
+    while not parent.exists():
+        created.append(parent)
+        if parent.parent == parent:
+            break
+        parent = parent.parent
+    Path(path).parent.mkdir(parents=True, exist_ok=True)
+    return created
+
+
+def remove_created_dirs(created: List[Any]) -> None:
+    """Remove directories made by ``make_parents`` if they are still empty. Never raises."""
+    for directory in created:
+        try:
+            directory.rmdir()
+        except OSError:
+            break
 
 #: Backend support per public DSS operation. Values: "yes"; "gated" (needs a qualified
 #: or writer-capable engine, or an explicit opt-in); "java" (runs on Java whatever the
@@ -1016,6 +1064,7 @@ class forced_java_writes:
 WRITE_REFUSAL_LABEL = "W1 native writer refuses input the Java path accepts"
 GRID_NULL_LABEL = "W2 DSS7 HRAP/Albers grid null value (Monolith 0.0, native -FLT_MAX)"
 GRID_ZLIB_WORDS_LABEL = "W3 ZLIB grid scale/base words (unused by ZLIB)"
+NATIVE_WRITERS_MISSING_LABEL = "native writers not available"
 
 
 def compare_written_timeseries(java_df: pd.DataFrame, native_df: pd.DataFrame) -> List[str]:
@@ -1083,12 +1132,16 @@ def classify_write(
       ``DssUnsupportedRecordError``): ``expected`` ``W1``. These are the documented
       refusals where the Java path truncates, reinterprets or writes an unreadable
       record.
+    - ``DssCapabilityError`` (the installed dss-commander has no writers):
+      ``skipped``.
     - ``DssLockedError`` on the temporary copy: ``skipped``.
     - Any other native error, or any unexpected difference: ``unexpected``.
     """
     from . import _errors
 
     if native_exc is not None:
+        if isinstance(native_exc, _errors.get("DssCapabilityError")):
+            return "skipped", NATIVE_WRITERS_MISSING_LABEL, list(diffs)
         if isinstance(native_exc, (ValueError, _errors.get("DssUnsupportedRecordError"))):
             return "expected", WRITE_REFUSAL_LABEL, list(diffs)
         dc = _maybe_native()

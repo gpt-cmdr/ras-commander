@@ -75,7 +75,7 @@ curve, stored precision by default (`float32` PD, `float64` PDD). `attrs` carry
 Read one exact grid record as a dictionary (`data` float32, row zero south,
 `row_order="south_up"`). Under `backend="native"` it raises
 `DssCapabilityError` unless the installed dss-commander advertises qualified
-grid CRS strings (engine `main` `2d9f982` and later do) or
+grid CRS strings (`grid_srs_monolith_parity`) or
 `allow_unqualified_native=True` is passed.
 
 #### get_capabilities()

@@ -130,10 +130,14 @@ class RasDss:
     #: The environment variable RAS_COMMANDER_DSS_BACKEND overrides it when set.
     backend = _backend.DEFAULT_BACKEND
 
+    #: Shadow writes copy an existing target up to this size (MB) before the Java write;
+    #: larger targets are not compared. RAS_COMMANDER_DSS_SHADOW_COPY_LIMIT_MB overrides it.
+    shadow_copy_limit_mb = _backend.SHADOW_COPY_LIMIT_MB_DEFAULT
+
     @staticmethod
     @log_call
     def get_backend() -> str:
-        """Return the backend the next read call will use.
+        """Return the backend the next read or write call will use.
 
         Resolution order: ``RAS_COMMANDER_DSS_BACKEND`` (when set), then
         ``RasDss.backend``. ``"shadow"`` resolves to ``"java"`` when
@@ -2611,7 +2615,7 @@ class RasDss:
                 if native_paths != paths:
                     diffs.append("returned_pathnames")
                 record_diffs, labels = RasDss._compare_written_grid_files(
-                    dss_file, native_file, paths, 7)
+                    dss_file, native_file, paths, RasDss._get_file_version_native(dss_file))
                 diffs += record_diffs
             RasDss._shadow_write_record(
                 "write_precip_grid_arrays", dss_file, args[1], native_exc, diffs, labels,
@@ -3077,13 +3081,13 @@ class RasDss:
             grid_info=grid_info, pathname_parts=path_parts,
         )
         dc = _backend.require_native_writes()
-        target, version, existed = RasDss._native_write_target(
+        target, version, existed, created_dirs = RasDss._native_write_target(
             dss_file, dss_version, create_if_missing
         )
-        kwargs = RasDss._native_grid_kwargs(grid_info, data_type, version)
-        source_nodata = grid_info.get("nodata_value", None)
         written: List[str] = []
-        with RasDss._native_new_file(dc, target, version, existed):
+        with RasDss._native_new_file(dc, target, version, existed, created_dirs):
+            kwargs = RasDss._native_grid_kwargs(grid_info, data_type, version)
+            source_nodata = grid_info.get("nodata_value", None)
             for index, (start_time, end_time) in enumerate(time_windows):
                 record_parts = list(path_parts)
                 if data_type_code in (2, 3):
@@ -3783,7 +3787,8 @@ class RasDss:
                     diffs.append("catalog")
                 else:
                     record_diffs, labels = RasDss._compare_written_grid_files(
-                        result["output_dss"], native_output, java_paths, 7)
+                        result["output_dss"], native_output, java_paths,
+                        int(result["dss_version"]))
                     diffs += record_diffs
             RasDss._shadow_write_record(
                 "copy_grid_with_zero_tail", result["output_dss"], pathname, native_exc,
@@ -4170,8 +4175,9 @@ class RasDss:
         dss_file: Union[str, Path],
         dss_version: Optional[int],
         create_if_missing: bool,
-    ) -> Tuple[Path, int, bool]:
-        """Resolved target, its DSS version and whether it existed, for a native write.
+    ) -> Tuple[Path, int, bool, List[Path]]:
+        """Resolved target, its DSS version, whether it existed, and the parent
+        directories created for it (deepest first), for a native write.
 
         Mirrors the Java writers' file checks: a directory raises
         ``IsADirectoryError``; an existing file must match an explicit
@@ -4181,6 +4187,7 @@ class RasDss:
 
         dss_path = Path(dss_file)
         existed = dss_path.exists()
+        created_dirs: List[Path] = []
         if existed and not dss_path.is_file():
             raise IsADirectoryError(f"DSS path is not a file: {dss_path}")
         if existed:
@@ -4193,30 +4200,33 @@ class RasDss:
         else:
             if not create_if_missing:
                 raise FileNotFoundError(f"DSS file not found: {dss_path}")
-            dss_path.parent.mkdir(parents=True, exist_ok=True)
+            created_dirs = _backend.make_parents(dss_path)
             version = dss_version if dss_version is not None else RasDss._NATIVE_NEW_FILE_VERSION
             logger.info(f"DSS file will be created: {dss_path.name}")
             logger.debug(f"DSS file creation path: {dss_path}")
-        return RasUtils.safe_resolve(dss_path), int(version), existed
+        return RasUtils.safe_resolve(dss_path), int(version), existed, created_dirs
 
     @staticmethod
     @contextmanager
-    def _native_new_file(dc: Any, target: Path, version: int, existed: bool):
-        """Create ``target`` when it did not exist, and remove it again if the write
-        inside the block fails, so a refused native write leaves no new file."""
-        created = False
-        if not existed:
-            dc.create(str(target), version)
-            created = True
+    def _native_new_file(
+        dc: Any, target: Path, version: int, existed: bool,
+        created_dirs: Optional[List[Path]] = None,
+    ):
+        """Create ``target`` when it did not exist, and remove it (and the empty
+        parent directories made for it) again if the write inside the block fails,
+        so a refused native write leaves no new file or directory."""
         try:
+            if not existed:
+                dc.create(str(target), version)
             yield
         except BaseException:
-            if created:
+            if not existed and target.exists():
                 try:
                     target.unlink()
                 except OSError as exc:
                     logger.warning("Could not remove DSS file after a failed native write: %s (%s)",
                                    target, exc)
+            _backend.remove_created_dirs(created_dirs or [])
             raise
 
     @staticmethod
@@ -4254,14 +4264,14 @@ class RasDss:
                 "(the native writer refuses it; the Java path stores the bits)"
             )
         dc = _backend.require_native_writes()
-        target, version, existed = RasDss._native_write_target(
+        target, version, existed, created_dirs = RasDss._native_write_target(
             dss_file, dss_version, create_if_missing
         )
         stamps = (
             np.datetime64("1899-12-31T00:00", "m")
             + hec_times.astype(np.int64).astype("timedelta64[m]")
         ).astype("datetime64[s]")
-        with RasDss._native_new_file(dc, target, version, existed):
+        with RasDss._native_new_file(dc, target, version, existed, created_dirs):
             report = dc.write_timeseries(
                 str(target), pathname, values, times=stamps, units=units,
                 data_type=data_type, version=version, value_type="double",
@@ -4289,10 +4299,12 @@ class RasDss:
             ctx["copy"] = tmpdir / (target.name or "shadow.dss")
             if ctx["existed"]:
                 size = target.stat().st_size
-                if size > _backend.SHADOW_WRITE_COPY_LIMIT_BYTES:
+                limit = _backend.shadow_copy_limit_bytes(RasDss.shadow_copy_limit_mb)
+                if size > limit:
                     ctx["skip"] = (
                         f"target is {size} bytes, above the shadow copy limit "
-                        f"({_backend.SHADOW_WRITE_COPY_LIMIT_BYTES})"
+                        f"({limit} bytes; RasDss.shadow_copy_limit_mb or "
+                        f"{_backend.SHADOW_COPY_LIMIT_ENV})"
                     )
                 else:
                     shutil.copy2(target, ctx["copy"])
