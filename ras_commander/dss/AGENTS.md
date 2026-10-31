@@ -6,14 +6,14 @@ This file is the canonical local instruction file for `ras_commander/dss/`.
 
 - Parent guidance from `ras_commander/AGENTS.md` and the repo root still applies.
 - This directory handles HEC-DSS access through the Java-based monolith bridge,
-  the optional native read backend (dss-commander), and optional native
+  the optional native backend (dss-commander: reads and writes), and optional
   precipitation-grid writing through pydsstools.
 
 ## Architecture
 
 - Public API: `RasDss`
 - Private support: `_hec_monolith.py`, `_backend.py`, `_errors.py`, `_native_grid.py`
-- Read backends (`_backend.py`): `RasDss.backend` = `"java"` (default this
+- Backends (`_backend.py`): `RasDss.backend` = `"java"` (default this
   release) | `"native"` | `"shadow"`; the environment variable
   `RAS_COMMANDER_DSS_BACKEND` overrides it when set. `RasDss.get_backend()`
   returns the effective backend.
@@ -24,26 +24,52 @@ This file is the canonical local instruction file for `ras_commander/dss/`.
   - `get_catalog`, `read_timeseries`, `read_multiple_timeseries`,
     `read_paired_data`, `get_file_version` and the methods built on them
     (`get_info`, `extract_boundary_timeseries`, the `check_*` /
-    `is_pathname_available` validators) switch. Writes stay on Java.
+    `is_pathname_available` validators) switch.
   - `read_grid` is gated: under `native` it raises `DssCapabilityError`
     unless `_backend.native_grid_qualified()` (the wheel lists
     `"grid_srs_monolith_parity"` in `dss_commander.FEATURES`) or the caller
     passes `allow_unqualified_native=True`. Shadow always returns Java's grid
     (and Java's error) and only compares the native grid. Never fall back to
-    Java from `native`.
+    Java from `native`. The engine on `main` (`2d9f982`+) advertises the
+    feature, so the gate is open with current wheels.
+  - Writes switch too: `write_timeseries` (and `write_timeseries_from_dataframe`
+    through it), `write_grid_timeseries`, `copy_grid_with_zero_tail` and
+    `write_precip_grid_arrays`. `native` writes through dss-commander and
+    requires `_backend.native_writes_available()` (the wheel exposes
+    `NATIVE_WRITE_API`); otherwise `require_native_writes()` raises
+    `DssCapabilityError`. Never fall back to Java. Native writes must store
+    what Java stores (version rules, NaN as NaN in DSS7 and -901 in DSS6,
+    doubles, DSS7 grids ZLIB, Monolith's specified-grid defaults, INST grid
+    time in D); every intended difference (W1-W9) is listed in
+    `docs/user-guide/dss-native-backend.md#writes`. A failed native write that
+    created the file removes it.
+  - `shadow` writes return Java's result: the write runs on Java, then is
+    repeated natively on a temporary copy (`_shadow_write_snapshot`; targets
+    above `SHADOW_WRITE_COPY_LIMIT_BYTES` are skipped) and both files are read
+    back natively and compared (`compare_written_timeseries`,
+    `compare_written_grids`, `classify_write`; labels W1-W3). Public writers
+    called inside `_backend.forced_java_writes()` use Java under shadow (the
+    shadow `copy_grid_with_zero_tail` writes through the public grid writer).
+  - `copy_grid_with_zero_tail` takes its file operations from
+    `_copy_grid_ops(native)`; the Java ops are looked up at call time so test
+    doubles of `get_catalog`, `_read_grid_java`, `write_grid_timeseries` etc.
+    still apply.
   - The Java backend must never import `dss_commander`. `_errors` resolves
     classes from `sys.modules` only, and every native import is guarded with
     `except Exception`, so a broken wheel cannot break Java.
   - Each switched method dispatches to `_<method>_java`, `_<method>_native` or
-    `_<method>_shadow`. Internal Java-only code (the grid and time-series
-    writers) must call the `_java` variant directly
+    `_<method>_shadow`. Internal Java-only code (the Java grid and
+    time-series writers) must call the `_java` variant directly
     (`_read_grid_java`, `_get_file_version_java`), and tests that stub those
-    paths must patch the `_java` names.
+    paths must patch the `_java` names and pin `RasDss.backend = "java"`
+    (unset `RAS_COMMANDER_DSS_BACKEND`). Native write code calls the
+    `_native` variants.
   - `RasDss.get_capabilities()` reports `_backend.CAPABILITIES`; keep that
     table in step with the dispatch code.
-- Native direct arrays: `RasDss.write_precip_grid_arrays()` and private
-  `_native_grid.py`, using optional `dss-native` dependencies loaded on call.
-  This API writes DSS7 PER-CUM specified-time grids with explicit units,
+- Direct arrays: `RasDss.write_precip_grid_arrays()` and private
+  `_native_grid.py` (`_prepare` validation shared by the pydsstools writer,
+  used under `java`/`shadow`, and the dss-commander writer, used under
+  `native`). Both write DSS7 PER-CUM specified-time grids with explicit units,
   projected square-cell geometry, and interval boundaries, without Java/Vortex.
 - Loading is intentionally staged:
   1. parent package lazy-import
@@ -107,7 +133,8 @@ RasDss.get_file_version("file.dss")   # 6 or 7, selected backend
 g = RasDss.read_grid("file.dss", grid_path)   # Java; native gated (allow_unqualified_native=True)
 RasDss.get_capabilities()             # support matrix
 RasDss.check_pathname("file.dss", path); RasDss.is_pathname_available("file.dss", path)
-RasDss.write_timeseries(...)          # Java under every backend
+RasDss.write_timeseries(...)          # selected backend (native: dss-commander writers)
+RasDss.get_capabilities().attrs["native_writes_available"]
 ```
 
 Under native/shadow:
@@ -136,5 +163,9 @@ The full migration note, with the canonical consumer (HMS conformance) API, is
   `tests/_rasdss_pd_grid_java_worker.py`, which also authors Java-written PD
   fixtures at test time). Java bridge workers drop
   `RAS_COMMANDER_DSS_BACKEND`, because they test the Java path.
+- Native writes: `tests/test_rasdss_native_writes.py` (RasExamples
+  `BaldEagleCrkMulti2D` series, grids and zero-tail copies written natively
+  and through Java in `tests/_rasdss_native_writes_java_worker.py`, read back
+  on both backends; shadow write records; native refusals and the gate).
 - Run the existing DSS tests under each backend with
   `RAS_COMMANDER_DSS_BACKEND=native` (or `shadow`).

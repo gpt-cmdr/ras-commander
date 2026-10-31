@@ -1,10 +1,10 @@
-# DSS Read Backends (Java, Native, Shadow)
+# DSS Read and Write Backends (Java, Native, Shadow)
 
-`RasDss` reads DSS catalogs and time series through one of three backends. The
-default in this release is still `java`. The `native` backend reads DSS6 and
-DSS7 files through the optional `dss-commander` package (a pure-Rust engine)
-and never starts a JVM or downloads HEC Monolith. `shadow` runs both and logs
-every difference.
+`RasDss` reads and writes DSS files through one of three backends. The
+default in this release is still `java`. The `native` backend reads and writes
+DSS6 and DSS7 files through the optional `dss-commander` package (a pure-Rust
+engine) and never starts a JVM or downloads HEC Monolith. `shadow` runs both
+and logs every difference.
 
 This page is the migration note for the native backend: it lists every
 intended difference from the Java path.
@@ -60,16 +60,17 @@ If `dss-commander` is not installed:
 | `get_info`, `extract_boundary_timeseries` | Selected backend (built on the methods above) |
 | `check_pathname_exists`, `check_data_availability`, `check_pathname`, `is_pathname_available` | Selected backend (built on the methods above) |
 | `check_pathname_format`, `is_valid_pathname`, `check_file_exists` | No DSS access |
-| `write_timeseries`, `write_timeseries_from_dataframe`, `write_grid_timeseries`, `copy_grid_with_zero_tail` | Java under every backend (their internal grid reads and version checks also stay on Java) |
-| `write_precip_grid_arrays` | pydsstools (unchanged) |
+| `write_timeseries`, `write_timeseries_from_dataframe`, `write_grid_timeseries`, `copy_grid_with_zero_tail` | `java`: Java. `native`: dss-commander writers (see [Writes](#writes)). `shadow`: Java; the write is repeated natively on a temporary copy and compared |
+| `write_precip_grid_arrays` | `java`: pydsstools (unchanged). `native`: dss-commander. `shadow`: pydsstools, compared with a native copy |
 
 `RasDss.get_capabilities()` returns this matrix as a DataFrame (`operation`,
 `java`, `native`, `shadow`, `note`; values `yes`, `gated`, `java`, `no`).
+`attrs["native_writes_available"]` tells whether the installed wheel has the
+writers.
 
-Writes stay on Java until the native writers are released. A workflow that
-writes still needs Java under `native`. Under `native`, an operation the
-backend does not support raises `DssCapabilityError`; it never falls back to
-Java.
+Under `native`, an operation the backend does not support raises
+`DssCapabilityError`; it never falls back to Java. A `native` workflow that
+reads and writes DSS needs no Java at all.
 
 Under `native`, `read_multiple_timeseries` opens the file once for all
 pathnames. On the RasExamples shadow run this made reads 9.6 times faster than
@@ -283,8 +284,9 @@ classified labels above; ordinates and curve values matched bit for bit.
 `read_grid()` keeps the Java dictionary schema on every backend. Row zero is
 the southern row on both. The result carries the key `row_order="south_up"`,
 which is new in this release; it is additive and existing keys are unchanged.
-The native route does not run by default because the native CRS string is not
-yet qualified against HEC Monolith for every legacy Albers grid.
+The native route runs only with an engine whose grid CRS strings are
+qualified against HEC Monolith (current engine builds are; see the end of
+this section).
 
 - `backend="native"` raises `DssCapabilityError` (a `NotImplementedError`)
   unless one of two conditions holds. Either the installed dss-commander
@@ -314,9 +316,137 @@ Shadow judges cells and metadata separately; diffs are prefixed `cells:` or
 
 The native and Java backends were compared on every grid record of the public
 RasExamples DSS files and on synthetic grid fixtures. Cells matched bit for bit,
-and the remaining differences were limited to the classified labels above. No
-released engine advertises the qualification feature yet, so the gate stays
-closed.
+and the remaining differences were limited to the classified labels above.
+
+dss-commander built from engine `main` (`2d9f982` and later, after packet P34
+fixed the Monolith null-value and DSS7 Albers-parameter parity) advertises
+`grid_srs_monolith_parity`, so the gate is open with that wheel: `backend =
+"native"` reads grids natively by default and `metadata["crs_qualified"]` is
+`True`. With it, 250 records sampled from the ten grid families of the
+RasExamples file `BaldEagleCrkMulti2D/Precipitation/precip.2018.09.dss`
+(DSS6, SHG Albers, PRECIP_2_BYTE) read identical on both backends (cells,
+CRS and every metadata key; no G-label difference). Older wheels keep the
+gate closed. Shadow behavior does not change.
+
+## Writes
+
+Under `backend = "native"`, `write_timeseries`,
+`write_timeseries_from_dataframe`, `write_grid_timeseries`,
+`copy_grid_with_zero_tail` and `write_precip_grid_arrays` write through
+dss-commander. They start no JVM and never fall back to Java.
+
+```python
+RasDss.backend = "native"
+caps = RasDss.get_capabilities()
+assert caps.attrs["native_writes_available"]   # wheel has the engine writers
+RasDss.write_timeseries("bc.dss", "/BASIN/LOC/FLOW//1HOUR/RUN/", times, values)
+```
+
+The writers need a dss-commander wheel built from engine `main` `2d9f982` or
+later (packets P20 to P24: DSS7 and DSS6, regular and irregular time series,
+grids). `native_writes_available()` checks the wheel's API (`create`,
+`write_timeseries`, `write_grid`, `HEC_MISSING_DSS6`, `GRID_NODATA`), not a
+version number. Without the writers, a native write raises
+`DssCapabilityError` and creates no file.
+
+### Contract kept from the Java path
+
+- **Files.** An existing file keeps its DSS version, and an explicit
+  `dss_version` must match it. A new file is DSS7 unless `dss_version=6`, the
+  Java default (HEC Monolith 3.3.27 creates DSS7). `create_if_missing`,
+  `FileNotFoundError` and `IsADirectoryError` behave as before.
+- **Time series.** The arguments are checked as before: timezone-naive,
+  whole-minute stamps and equal lengths. Values are stored as doubles (record
+  types 105 and 115). The E part decides regular or irregular storage
+  (`IR-DAY` to `IR-CENTURY`). The D part is replaced by each block's start
+  date. Values replace the stored values at the same times, and the rest of
+  the block is kept (HEC's default). `NaN` is stored as Monolith stores it:
+  as `NaN` in DSS7 files and as -901 in DSS6 files. DSS6 pathnames are stored
+  in upper case.
+- **Grids.** Pathnames, time windows, row order (row zero south), the lower-left
+  cell (explicit indexes, or `origin` rounded to whole cells from cell zero) and
+  the grid type inferred from `crs` all follow the Java path. `NaN`, infinite
+  cells and `grid_info["nodata_value"]` are stored as no data.
+  - Compression: DSS7 grids are always ZLIB compressed, because Monolith ignores
+    the requested method on DSS7 (verified for PRECIP_2_BYTE, ZLIB, NONE and
+    `None`). DSS6 grids use PRECIP_2_BYTE (the default) or ZLIB.
+  - Specified grids keep Monolith's defaults: name `Specified Grid`, time zone
+    UTC, interval flag set.
+  - Instantaneous grids store their time in part D and leave E blank, as
+    Monolith does.
+- **`copy_grid_with_zero_tail`.** The source is read, and the derivative written
+  and verified, through dss-commander, with the same family, timing,
+  metadata, NoData and SHA-256 checks and the same atomic publication. The
+  source's DSS version and its PRECIP_2_BYTE scale and base are kept. The
+  unused scale and base words of ZLIB grids are not compared.
+- **`write_precip_grid_arrays`.** The method stores the records pydsstools
+  stores: DSS7 specified grids, PER-CUM, ZLIB, the WKT1_GDAL CRS and its name,
+  and no time zone. It needs `affine` and `pyproj` but not pydsstools.
+
+### Intended differences
+
+| # | Case | Java backend | Native backend |
+|---|---|---|---|
+| W1 | Regular E part with times that are not exactly regular | Stores the values with a time offset, shifted onto the interval | `ValueError` |
+| W1 | DSS6 time-series units or type longer than 8 characters; DSS6 grid units longer than 12 | Truncated | `ValueError` |
+| W1 | Pathname without exactly 7 slashes, or with non-ASCII characters | Stores a truncated pathname or drops the characters, or raises a Java error | `ValueError` |
+| W1 | Infinite time-series values | Stored | `ValueError` |
+| W1 | Grid data type `FREQ`, `PER-MIN` or `PER-MAX` | Stored with a code the readers do not name | `ValueError` |
+| W1 | DSS6 grid with `compression="NONE"` | Writes a record that dss-commander cannot decode (invalid PRECIP_2_BYTE scale/base) | `DssUnsupportedRecordError` |
+| W1 | DSS6 PRECIP_2_BYTE cells that the given scale and base would store as missing | Stored as missing | `ValueError` |
+| W4 | DSS6 PRECIP_2_BYTE scale and base | `compression_base` and `compression_scale_factor` reach Monolith's setter in swapped positions. `dss_version=6` therefore supplies swapped defaults; a write into an existing DSS6 file without `dss_version` stores scale 0 and base 100, which dss-commander cannot decode | Stored as named. Without them, scale and base are chosen as Monolith chooses them (100 and 0, adjusted for negative minima and wide ranges). No workaround is needed |
+| W5 | Negative DSS6 PRECIP_2_BYTE cells with the default scale and base | Stored as missing | Stored |
+| W2 | Null value of DSS7 HRAP and Albers grids | 0.0 | -FLT_MAX. Neither reader treats it as data |
+| W3 | DSS6 ZLIB scale and base header words (unused) | 0 and 100 | -FLT_MAX |
+| W6 | Return value of instantaneous grid writes | D/E-filled names that are not in the catalog | The stored names (time in D, E blank) |
+| W7 | A failed write that created the file | The file stays | The file is removed |
+| W8 | File held open by HEC software (HEC-RAS, HEC-DSSVue, ...) | Written | `DssLockedError` (a `RuntimeError`), file unchanged |
+| W9 | Write errors | `RuntimeError` wrapping the Java exception | `ValueError` for refused input; typed `DssError` subclasses (all `RuntimeError`) otherwise |
+
+Compressed grid bytes differ, because a different deflate library writes the
+same cells, and new DSS7 files carry HEC's `7-JA` version string (Monolith
+writes `7-IU`). Neither affects the stored values.
+
+### Evidence
+
+`tests/test_rasdss_native_writes.py` writes the same records natively and
+through Java (in a worker process), from RasExamples `BaldEagleCrkMulti2D`:
+
+- six regular series (DSS6 `Bald_Eagle_Creek.dss` and DSS7
+  `BaldEagleDamBrk.dss`, 15-minute, hourly and 1-minute data), a merge into an
+  existing block, and two irregular series (`IR-DAY`, `IR-MONTH`), each into a
+  DSS6 and a DSS7 file;
+- six real SHG precipitation grids into DSS6 (PRECIP_2_BYTE and ZLIB) and DSS7,
+  plus an instantaneous and a specified grid;
+- `copy_grid_with_zero_tail` on the 120-record WPC-QPF family of
+  `precip.2018.09.dss` (DSS6) and on a DSS7 family.
+
+Java reads every native-written record (16 time-series datasets and 162 grids)
+equal to the Java-written one: values bitwise, missing positions, stamps,
+attributes, catalogs, grid cells and metadata, apart from the compressed size.
+The native reader reads both files equal, apart from W2 and W3. The
+`copy_grid_with_zero_tail` results are equal. The run used HEC Monolith
+3.3.27, Java 17 and dss-commander built from engine `main` `2d9f982`.
+
+### Shadow writes
+
+Under `shadow`, writes run on Java and the caller gets Java's result and
+errors. The write is then repeated natively on a temporary copy of the target
+(a temporary new file when the target did not exist), and both files are read
+back through the native reader and compared. `copy_grid_with_zero_tail`
+builds a second derivative natively in a temporary directory.
+`write_precip_grid_arrays` writes with pydsstools and compares a native copy.
+The comparison never raises and logs like the read comparisons:
+
+- `identical` at DEBUG;
+- `expected` at INFO, labelled `W1` (native refusal), `W2` or `W3`;
+- anything else at WARNING as `UNEXPECTED`.
+
+Targets larger than 256 MB are not copied, and their comparison is logged as
+`skipped`. Shadow writes cost a file copy and a second write. On the test
+corpus, 18 time-series writes compared `identical`. Of 5 grid writes, 2 were
+`identical` and 3 `expected` (W2, W3). Of 2 zero-tail copies, 1 was
+`identical` and 1 `expected` (W2).
 
 ## File version
 
@@ -405,9 +535,10 @@ A missing file raises `FileNotFoundError` and a directory raises
 `IsADirectoryError`. Invalid arguments raise `ValueError`. A missing optional
 engine (pyjnius for `java`, dss-commander for `native`) raises `ImportError`.
 
-Not yet in the contract: paired-data, profile and location writes, a native
-grid route without the gate, and `read_timeseries` errors under Java (Java
-still raises its historical untyped errors; see the table above).
+Not yet in the contract: paired-data, profile and location writes (`RasDss`
+has no paired-data writer; dss-commander's `write_paired_data` is not wrapped),
+and `read_timeseries` errors under Java (Java still raises its historical
+untyped errors; see the table above).
 
 ## Related
 
