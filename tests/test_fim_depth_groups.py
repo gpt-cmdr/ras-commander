@@ -477,7 +477,10 @@ def test_public_supervisor_preserves_order_partial_receipts_and_owned_cleanup(
     assert receipt["status"] == ("complete" if state == "complete" else "aborted")
     saved = json.loads((tmp_path / "output/depth_groups_receipt.json").read_text())
     assert saved["status"] == receipt["status"]
-    assert saved["sources"] == {job["job_id"]: source_binding for job in normal}
+    expected_sources = json.loads(
+        json.dumps({job["job_id"]: source_binding for job in normal})
+    )
+    assert saved["sources"] == expected_sources
     if state == "complete":
         assert list(receipt["by_job"]) == ["b", "a"]
         assert [j["job_id"] for j in receipt["jobs"]] == ["b", "a"]
