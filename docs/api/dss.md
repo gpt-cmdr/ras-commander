@@ -82,6 +82,28 @@ grid CRS strings (`grid_srs_monolith_parity`) or
 DataFrame of `operation`, `java`, `native`, `shadow` and `note`: which
 backend supports each public DSS operation.
 
+#### write_paired_data(dss_file, pathname, x_values, y_values=None, x_units=None, y_units=None, x_type=None, y_type=None, labels=None, create_if_missing=True, *, x_precision=None, y_precision=None, value_type="auto", dss_version=None)
+Write one paired-data record with one or more curves, as a new record or a whole
+replacement.
+
+**Parameters:**
+- `dss_file` (str|Path): Path to DSS file
+- `pathname` (str): DSS pathname with exactly six parts
+- `x_values` (array|DataFrame|Series): The ordinates, or the frame from
+  `read_paired_data` (then omit `y_values`; its `attrs` supply metadata left as `None`)
+- `y_values` (array): The curves: 1-D, or 2-D with shape `(len(x_values), n_curves)`
+- `x_units`, `y_units`, `x_type`, `y_type` (str): Units and axis types. Blank if `None`
+  and not in `attrs`
+- `labels` (list): Curve names, one per curve. Default: a frame's string column names
+- `create_if_missing` (bool): Create a missing file, default `True`
+- `x_precision`, `y_precision` (int): Display precision, both -1 or both 0-9
+- `value_type` (str): `"auto"` (float32 input stores PD, type 200; anything else PDD,
+  type 205), `"float"` or `"double"`
+- `dss_version` (int): 6 or 7 for a new file; an existing file must match
+
+**Returns:** `None`. A failed write raises. See
+[Writes](../user-guide/dss-native-backend.md#writes) for what the native writer refuses.
+
 #### write_timeseries(dss_file, pathname, times, values, ..., dss_version=None)
 Write a single time series to DSS.
 
@@ -425,5 +447,6 @@ source immutability is required. These APIs do not guarantee read-only file acce
         - read_timeseries
         - shutdown_jvm
         - write_grid_timeseries
+        - write_paired_data
         - write_timeseries
         - write_timeseries_from_dataframe

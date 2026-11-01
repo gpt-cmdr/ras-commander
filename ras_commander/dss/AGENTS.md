@@ -33,14 +33,14 @@ This file is the canonical local instruction file for `ras_commander/dss/`.
     Java from `native`. Current ras-commander-fast-dss development builds advertise
     the feature, so the gate is open with them.
   - Writes switch too: `write_timeseries` (and `write_timeseries_from_dataframe`
-    through it), `write_grid_timeseries`, `copy_grid_with_zero_tail` and
-    `write_precip_grid_arrays`. `native` writes through ras-commander-fast-dss and
+    through it), `write_paired_data`, `write_grid_timeseries`,
+    `copy_grid_with_zero_tail` and `write_precip_grid_arrays`. `native` writes through ras-commander-fast-dss and
     requires `_backend.native_writes_available()` (the wheel exposes
     `NATIVE_WRITE_API`); otherwise `require_native_writes()` raises
     `DssCapabilityError`. Never fall back to Java. Native writes must store
     what Java stores (version rules, NaN as NaN in DSS7 and -901 in DSS6,
     doubles, DSS7 grids ZLIB, Monolith's specified-grid defaults, INST grid
-    time in D); every intended difference (W1-W9) is listed in
+    time in D); every intended difference (W1-W10) is listed in
     `docs/user-guide/dss-native-backend.md#writes`. A failed native write that
     created the file removes it.
   - `shadow` writes return Java's result: the write runs on Java, then is
@@ -48,7 +48,8 @@ This file is the canonical local instruction file for `ras_commander/dss/`.
     above `shadow_copy_limit_bytes()` are skipped: `RasDss.shadow_copy_limit_mb`,
     default 256, overridden by `RAS_COMMANDER_DSS_SHADOW_COPY_LIMIT_MB`) and both files are read
     back natively and compared (`compare_written_timeseries`,
-    `compare_written_grids`, `classify_write`; labels W1-W3; a
+    `compare_written_grids`, `compare_written_paired_data`, `classify_write`;
+    labels W1-W3, W10; a
     `DssCapabilityError` or `DssLockedError` from the native repeat is
     `skipped`). Public writers
     called inside `_backend.forced_java_writes()` use Java under shadow (the
@@ -90,6 +91,15 @@ This file is the canonical local instruction file for `ras_commander/dss/`.
   `RasDss._release_dss_file(<exact path string used to open>)`. Never call
   `HecDSSFileAccess.closeAllFiles()`, which closes every DSS file in the JVM.
 - Remember that the JVM can only be started once per process.
+- Keep `RasDss.hec_message_level` at 0 by default. `_configure_jvm` sets it through
+  `zset("MLEVEL")` before any file opens (so it starts the JVM once the classpath is
+  set). HEC Monolith caches a stdout handle at its first message, and after a redirect
+  of fd 1 Windows can reuse that handle for a DSS file, which then receives the messages
+  (`tests/test_rasdss_hec_messages.py`). Tests with a fake `jnius_config` must stub
+  `_silence_hec_messages`.
+- Paired-data arguments go through `_paired_data_spec` on every backend, so invalid
+  arguments raise the same classes before any JVM start or file change. Backend
+  refusals beyond it are W1.
 - Keep Part D blank when writing standard DSS pathnames unless the method explicitly requires otherwise.
 - Typed errors live in `_errors.py` and are exported lazily from
   `ras_commander.dss`. The four base classes are the `ras_commander_fast_dss` classes
@@ -139,6 +149,7 @@ g = RasDss.read_grid("file.dss", grid_path)   # Java; native gated (allow_unqual
 RasDss.get_capabilities()             # support matrix
 RasDss.check_pathname("file.dss", path); RasDss.is_pathname_available("file.dss", path)
 RasDss.write_timeseries(...)          # selected backend (native: ras-commander-fast-dss writers)
+RasDss.write_paired_data("out.dss", "/A/B/STAGE-FLOW///F/", pdf)    # frame from read_paired_data, or x, y arrays
 RasDss.get_capabilities().attrs["native_writes_available"]
 ```
 
@@ -172,5 +183,7 @@ The full migration note, with the canonical consumer (HMS conformance) API, is
   `BaldEagleCrkMulti2D` series, grids and zero-tail copies written natively
   and through Java in `tests/_rasdss_native_writes_java_worker.py`, read back
   on both backends; shadow write records; native refusals and the gate).
+- Paired-data writes: `tests/test_rasdss_paired_data_write.py` (same worker; curves
+  derived from RasExamples series and the public fixtures, on DSS6 and DSS7).
 - Run the existing DSS tests under each backend with
   `RAS_COMMANDER_DSS_BACKEND=native` (or `shadow`).

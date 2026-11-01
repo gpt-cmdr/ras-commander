@@ -118,9 +118,7 @@ broken wheel cannot affect it.
 | Paired data | `read_paired_data` | Every curve, labels, units, types and stored precision |
 | Grids | `read_grid` | HRAP, Albers (SHG) and specified grids; native once the engine advertises the `grid_srs_monolith_parity` feature (current builds do) |
 | Validation | `check_pathname_exists`, `check_data_availability`, `check_pathname`, `is_pathname_available` | Through the catalog and time-series reads above |
-| Writes | `write_timeseries`, `write_timeseries_from_dataframe`, `write_grid_timeseries`, `copy_grid_with_zero_tail`, `write_precip_grid_arrays` | DSS6 and DSS7, regular and irregular series, and grids; needs an engine build with writers (`attrs["native_writes_available"]`) |
-
-`RasDss` does not write paired data on any backend yet.
+| Writes | `write_timeseries`, `write_timeseries_from_dataframe`, `write_paired_data`, `write_grid_timeseries`, `copy_grid_with_zero_tail`, `write_precip_grid_arrays` | DSS6 and DSS7, regular and irregular series, paired data and grids; needs an engine build with writers (`attrs["native_writes_available"]`) |
 
 ### Intended differences
 

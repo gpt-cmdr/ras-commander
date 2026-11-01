@@ -9,6 +9,24 @@ alone does not identify a development checkout.
 
 ### Unreleased
 
+- **`RasDss.write_paired_data` adds a paired-data writer.** It writes one
+  record with any number of curves on the `java`, `native` and `shadow`
+  backends, from arrays or from the DataFrame that `read_paired_data` returns.
+  Java and native write the same records, and both read them back equal, on
+  DSS6 and DSS7. The native writer refuses some input the Java path truncates
+  or replaces, such as DSS6 units over 8 characters; see
+  [DSS Read and Write Backends](../user-guide/dss-native-backend.md#intended-differences).
+- **HEC Monolith messages can no longer corrupt DSS files.** Monolith prints
+  through a stdout handle that it caches at its first message. If the process
+  then redirects file descriptor 1, as pytest's output capture does, Windows
+  can give that handle to the next DSS file opened, and later messages are
+  written into the file. On DSS6 this returned wrong values (5 of 30 reads in a
+  reproducer). `RasDss` now sets the library's message level to 0 before the
+  first Java DSS call, so the library's console messages stop on the Java
+  backend. Set `RasDss.hec_message_level` before the first DSS call to bring
+  them back, with that risk.
+- **`RasDss.read_paired_data` releases the file under `java`.** It left the DSS
+  file open after reading.
 - **The native DSS engine is renamed `ras-commander-fast-dss`.** `RasDss`
   imports `ras_commander_fast_dss` (FAST-DSS) for the `native` and `shadow`
   backends; the earlier development name `dss_commander` is no longer
@@ -19,7 +37,7 @@ alone does not identify a development checkout.
   DSS engine.
 - **`RasDss` writes run on the native backend.** Under `RasDss.backend =
   "native"`, `write_timeseries`, `write_timeseries_from_dataframe`,
-  `write_grid_timeseries`, `copy_grid_with_zero_tail` and
+  `write_paired_data`, `write_grid_timeseries`, `copy_grid_with_zero_tail` and
   `write_precip_grid_arrays` write through the optional ras-commander-fast-dss engine
   without a JVM. They need a ras-commander-fast-dss build with writer support
   (`native_writes_available()`); otherwise they raise `DssCapabilityError` and
