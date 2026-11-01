@@ -229,7 +229,9 @@ nav:
       - Performance and Qualification: https://rascommander.info/ras/development/fim-mapping-performance/
       - Source (GitHub): https://github.com/gpt-cmdr/ras-commander-fast-map
       - Rust API (docs.rs): https://docs.rs/ras-commander-fast-map
-    - DSS Engine (Coming Soon): https://rascommander.info/ras/native-engine/#dss-engine-coming-soon
+    - DSS Engine:
+      - Guide: https://rascommander.info/ras/native-engine/#dss-engine
+      - Read and Write Backends: https://rascommander.info/ras/user-guide/dss-native-backend/
   - User Guide:
     - Running Plans:
       - Plan Execution: user-guide/plan-execution.md
@@ -260,7 +262,7 @@ nav:
       - Steady Flow Analysis: user-guide/steady-flow-analysis.md
       - Dam Breach Analysis: user-guide/dam-breach-analysis.md
       - DSS Operations: user-guide/dss-operations.md
-      - DSS Read Backends: user-guide/dss-native-backend.md
+      - DSS Read and Write Backends: user-guide/dss-native-backend.md
     - External Data Sources:
       - USGS Gauge Data Retrieval: user-guide/usgs-gauge-data.md
       - Gridded Historic Precipitation: user-guide/gridded-precipitation.md

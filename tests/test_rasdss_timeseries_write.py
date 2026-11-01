@@ -99,6 +99,8 @@ def test_setter_failure_occurs_before_dss_file_is_opened(
     monkeypatch,
     tmp_path,
 ) -> None:
+    monkeypatch.delenv("RAS_COMMANDER_DSS_BACKEND", raising=False)
+    monkeypatch.setattr(RasDss, "backend", "java")
     opened = []
 
     class FakeHecTimeArray:
