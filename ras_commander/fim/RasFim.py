@@ -300,7 +300,7 @@ class RasFim:
         """Map every selected saved time and return native depth maxima by group.
 
         Jobs use the catalog model/terrain and AOI fields, replacing timesteps
-        with groups=[{"group_id": "band-000", "timesteps": [0, 1]}]. Saved indices
+        with `groups=[{"group_id": "band-000", "timesteps": [0, 1]}]`. Saved indices
         must be unique within a group; sharing between groups/jobs is supported.
         Every source is rendered through the unchanged plain-sloping mapper.
         The native reducer retains finite depths at or above the physical feet
@@ -317,13 +317,13 @@ class RasFim:
         max_memory_mib admits working + prepared + headroom and guards sampled
         parent/worker/native RSS. timeout covers the supervised catalog lifetime.
 
-        products defaults to ["depth_max"]. compression accepts NONE or LZW.
+        products defaults to `["depth_max"]`. compression accepts NONE or LZW.
         sink initially supports grouped-geotiff; the Rust engine separately
         supports direct grouped buffers. Each job/group receives one Float32 TIFF
         on its native lattice, including full-window nodata for all-dry groups.
         No per-frame rasters, profile manifests or polygons are written.
 
-        Returns an ordered dictionary receipt with jobs, by_job[job_id][group_id],
+        Returns an ordered dictionary receipt with jobs, `by_job[job_id][group_id]`,
         complete sample accounting, source/unit/software identities, preparation
         waves, native timers and sampled RSS. Aborted receipts retain partial
         native evidence and raise FimMappingError unless raise_on_failure=False.
