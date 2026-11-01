@@ -47,6 +47,7 @@ from ..Decorators import standardize_input, log_call
 from . import _HdfXsecSchema
 from .HdfBase import HdfBase
 from .HdfUtils import HdfUtils
+from ._stored_data import _stored_label
 from ..fast_hdf import read_attrs, read_typed, reraise_required
 from ..LoggingConfig import get_logger
 
@@ -92,6 +93,131 @@ class HdfXsec:
         f"{CROSS_SECTION_GROUP}/Polyline Parts",
         f"{CROSS_SECTION_GROUP}/Polyline Points",
     )
+
+    @staticmethod
+    @log_call
+    @standardize_input(file_type="geom_hdf")
+    def get_blocked_obstructions(
+        hdf_path: Union[str, Path], *, ras_object=None
+    ) -> pd.DataFrame:
+        """Read raw XS obstruction intervals without deriving map footprints.
+
+        Args:
+            hdf_path: Geometry HDF path or supported geometry selector.
+            ras_object: Optional project context for geometry selectors.
+
+        Returns:
+            DataFrame with xs_id, block_id, River, Reach, RS, Left Sta, Right Sta
+            and Elevation. Additional stored compound members remain columns.
+            block_id is the absolute stored Blocks row. No geometry, permanent
+            flag, unit conversion or elevation is fabricated. An absent pair
+            returns an empty frame; malformed partial pairs raise.
+
+        Raises:
+            ValueError: Info/Blocks or XS identities are incomplete or inconsistent.
+            FileNotFoundError: The input file is absent.
+        """
+        columns = [
+            "xs_id",
+            "block_id",
+            "River",
+            "Reach",
+            "RS",
+            "Left Sta",
+            "Right Sta",
+            "Elevation",
+        ]
+        empty = pd.DataFrame(
+            {
+                name: pd.Series(
+                    dtype=(
+                        "int64"
+                        if name in ["xs_id", "block_id"]
+                        else "float64"
+                        if name in ["Left Sta", "Right Sta", "Elevation"]
+                        else "str"
+                    )
+                )
+                for name in columns
+            }
+        )
+        with h5py.File(hdf_path, "r") as hdf:
+            group = hdf.get("Geometry/Cross Sections")
+            if group is None:
+                return empty
+            if not isinstance(group, h5py.Group):
+                raise ValueError("Cross Sections must be a group")
+            if not ({"Obstruction Info", "Obstruction Blocks"} & set(group)):
+                return empty
+            if not isinstance(group, h5py.Group) or not {
+                "Obstruction Info",
+                "Obstruction Blocks",
+                "Attributes",
+            } <= set(group):
+                raise ValueError("Obstructions require Info, Blocks and XS Attributes")
+            if not all(
+                isinstance(group[name], h5py.Dataset)
+                for name in ["Obstruction Info", "Obstruction Blocks", "Attributes"]
+            ):
+                raise ValueError(
+                    "Obstruction tables and XS Attributes must be datasets"
+                )
+            info = read_typed(group["Obstruction Info"])
+            blocks = read_typed(group["Obstruction Blocks"])
+            attributes = read_typed(group["Attributes"])
+            fields = blocks.dtype.names or ()
+            if (
+                attributes.ndim != 1
+                or info.shape != (len(attributes), 2)
+                or info.dtype.kind not in "iu"
+            ):
+                raise ValueError(
+                    "Obstruction Info must have one integer start/count row per XS"
+                )
+            if blocks.ndim != 1 or not {"Left Sta", "Right Sta", "Elevation"} <= set(
+                fields
+            ):
+                raise ValueError(
+                    "Obstruction Blocks requires stored interval/elevation fields"
+                )
+            if any(
+                blocks.dtype[name].kind not in "iuf"
+                for name in ["Left Sta", "Right Sta", "Elevation"]
+            ):
+                raise ValueError("Obstruction stations and elevations must be numeric")
+            if attributes.ndim != 1 or not {"River", "Reach", "RS"} <= set(
+                attributes.dtype.names or ()
+            ):
+                raise ValueError("XS Attributes requires River, Reach and RS")
+            if set(fields) & set(columns[:5]):
+                raise ValueError(
+                    "Obstruction fields collide with source identity columns"
+                )
+            frames = []
+            for xs_id, (start, count) in enumerate(info):
+                start, count = int(start), int(count)
+                if start < 0 or count < 0 or start + count > len(blocks):
+                    raise ValueError("Obstruction range outside stored Blocks")
+                frame = pd.DataFrame.from_records(blocks[start : start + count])
+                for name in ["River", "Reach", "RS"]:
+                    frame[name] = _stored_label(attributes[xs_id][name])
+                frame["xs_id"] = xs_id
+                frame["block_id"] = np.arange(start, start + count, dtype=np.int64)
+                frames.append(frame)
+            if frames:
+                result = pd.concat(frames, ignore_index=True)
+            else:
+                result = empty.copy()
+                for field in fields:
+                    result[field] = pd.Series(dtype=blocks.dtype[field])
+            result = result[
+                columns + [field for field in fields if field not in columns]
+            ]
+            result.attrs.update(
+                hdf_path=group["Obstruction Blocks"].name,
+                dataset_attributes=read_attrs(group["Obstruction Blocks"]),
+            )
+            return result
 
     @staticmethod
     def _cross_section_group(hdf: h5py.File) -> h5py.Group:
