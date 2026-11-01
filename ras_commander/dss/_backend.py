@@ -617,17 +617,20 @@ NATIVE_GRID_GATE_MESSAGE = (
 )
 
 #: ras_commander_fast_dss attributes that make up the native writer API (DSS7 and DSS6, regular
-#: and irregular time series, and grids). ``native_writes_available`` requires all of
-#: them; a build without writer support has none.
-NATIVE_WRITE_API = ("create", "write_timeseries", "write_grid", "HEC_MISSING_DSS6", "GRID_NODATA")
+#: and irregular time series, paired data and grids). ``native_writes_available`` requires
+#: all of them; a build without writer support has none.
+NATIVE_WRITE_API = (
+    "create", "write_timeseries", "write_paired_data", "write_grid",
+    "HEC_MISSING_DSS6", "GRID_NODATA",
+)
 
 
 def native_writes_available() -> bool:
     """True when the installed ras-commander-fast-dss provides the native writers.
 
     A capability check, not a version pin: ``ras_commander_fast_dss`` must import and expose
-    every name in ``NATIVE_WRITE_API`` (``create``, ``write_timeseries`` and
-    ``write_grid`` callable). ``HEC_MISSING_DSS6`` marks the DSS6 time-series writer
+    every name in ``NATIVE_WRITE_API`` (``create``, ``write_timeseries``,
+    ``write_paired_data`` and ``write_grid`` callable). ``HEC_MISSING_DSS6`` marks the DSS6 time-series writer
     and ``GRID_NODATA`` the grid writer. Never raises.
     """
     dc = _maybe_native()
@@ -638,7 +641,7 @@ def native_writes_available() -> bool:
             value = getattr(dc, name, None)
             if value is None:
                 return False
-            if name in ("create", "write_timeseries", "write_grid") and not callable(value):
+            if name in ("create", "write_timeseries", "write_paired_data", "write_grid") and not callable(value):
                 return False
     except Exception:
         return False
@@ -647,7 +650,8 @@ def native_writes_available() -> bool:
 
 NATIVE_WRITES_GATE_MESSAGE = (
     "The installed ras-commander-fast-dss does not provide the native DSS writers "
-    "(ras_commander_fast_dss.create, write_timeseries and write_grid with DSS6 support). "
+    "(ras_commander_fast_dss.create, write_timeseries, write_paired_data and write_grid "
+    "with DSS6 support). "
     "RasDss does not fall back to Java. Use a ras-commander-fast-dss build with writer support "
     "(RasDss.get_capabilities().attrs['native_writes_available']), or use "
     "RasDss.backend = 'java'."
@@ -742,7 +746,7 @@ CAPABILITIES = (
     ("write_precip_grid_arrays", "yes", "gated", "yes",
      "java column: pydsstools, not Java; native writes through ras-commander-fast-dss; shadow "
      "writes with pydsstools and compares a native copy"),
-    ("write_paired_data", "no", "no", "no", "not provided by RasDss yet"),
+    ("write_paired_data", "yes", "gated", "java", "as write_timeseries"),
 )
 
 
@@ -1065,6 +1069,7 @@ WRITE_REFUSAL_LABEL = "W1 native writer refuses input the Java path accepts"
 GRID_NULL_LABEL = "W2 DSS7 HRAP/Albers grid null value (Monolith 0.0, native -FLT_MAX)"
 GRID_ZLIB_WORDS_LABEL = "W3 ZLIB grid scale/base words (unused by ZLIB)"
 NATIVE_WRITERS_MISSING_LABEL = "native writers not available"
+PAIRED_PRECISION_LABEL = "W10 DSS6 paired-data display precision (Monolith keeps an earlier write's)"
 
 
 def compare_written_timeseries(java_df: pd.DataFrame, native_df: pd.DataFrame) -> List[str]:
@@ -1120,6 +1125,25 @@ def compare_written_grids(
                 "data_source"):
         if not _same(jn.get(key), nn.get(key)):
             diffs.append(f"meta:native.{key}")
+    return diffs, labels
+
+
+def compare_written_paired_data(
+    java_df: pd.DataFrame, native_df: pd.DataFrame
+) -> Tuple[List[str], List[str]]:
+    """Differences between the native read-backs of a Java-written and a native-written
+    paired-data record, and the labels of the known ones found.
+
+    Same rules as ``compare_paired_data``, without the file path. ``W10``: on DSS6,
+    Monolith keeps the display precision of an earlier write in the same process.
+    """
+    diffs = [d for d in compare_paired_data(java_df, native_df) if d != "attr:dss_file"]
+    labels: List[str] = []
+    if native_df.attrs.get("dss_version") == 6:
+        precision = [d for d in diffs if d in ("attr:x_precision", "attr:y_precision")]
+        if precision:
+            diffs = [d for d in diffs if d not in precision]
+            labels.append(PAIRED_PRECISION_LABEL)
     return diffs, labels
 
 

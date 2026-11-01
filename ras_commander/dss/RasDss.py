@@ -22,6 +22,8 @@ Functions:
     read_paired_data(dss_file, pathname, *, ignore_d_part=True, dtype="stored"):
         Reads one paired-data record (every curve, labels, units, types,
         stored precision) as a DataFrame.
+    write_paired_data(dss_file, pathname, x_values, y_values=None, ...):
+        Writes one paired-data record; accepts the DataFrame read_paired_data returns.
     get_file_version(dss_file):
         Returns the major DSS version (6 or 7).
     get_capabilities():
@@ -82,7 +84,7 @@ from hashlib import sha256
 from math import isfinite
 from numbers import Real
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any, Dict, List, Optional, Sequence, Tuple, Union
 from uuid import uuid4
 
 # Lazy imports - these are always needed for type hints and basic operations
@@ -4476,6 +4478,472 @@ class RasDss:
             data_type=data_type,
             create_if_missing=create_if_missing,
             dss_version=dss_version,
+        )
+
+    # ------------------------------------------------------------------
+    # Paired-data writer
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    @log_call
+    def write_paired_data(
+        dss_file: Union[str, Path],
+        pathname: str,
+        x_values: Any,
+        y_values: Any = None,
+        x_units: Optional[str] = None,
+        y_units: Optional[str] = None,
+        x_type: Optional[str] = None,
+        y_type: Optional[str] = None,
+        labels: Optional[Sequence[str]] = None,
+        create_if_missing: bool = True,
+        *,
+        x_precision: Optional[int] = None,
+        y_precision: Optional[int] = None,
+        value_type: str = "auto",
+        dss_version: Optional[int] = None,
+    ) -> None:
+        """
+        Write one paired-data record (rating curve, damage curve, temporal pattern,
+        elevation-storage table, ...) with one or more curves.
+
+        A new record is added; a record already at ``pathname`` is replaced whole.
+        Passing the DataFrame from ``read_paired_data`` as ``x_values`` writes the same
+        ordinates, curves, stored precision, labels, units, types and display precision
+        (the record time zone is not written; see Backends).
+
+        Args:
+            dss_file: Path to DSS file (created if missing and create_if_missing=True)
+            pathname: DSS pathname with exactly six parts, for example
+                ``"/BASIN/LOC/STAGE-FLOW///RATING/"``. The C part usually names the
+                two parameters. D, E and F are free text and kept as given.
+            x_values: The ordinates (1-D array-like), or a DataFrame or Series indexed
+                by the ordinates with one column per curve. With a DataFrame or Series,
+                omit ``y_values``. ``attrs`` from ``read_paired_data`` supply any
+                metadata argument left as ``None``.
+            y_values: The curves: 1-D for one curve, or 2-D with shape
+                ``(len(x_values), n_curves)``.
+            x_units: Units of the ordinates (for example ``"FEET"``). ``None``: from
+                ``attrs``, otherwise blank.
+            y_units: Units of the curves. ``None``: as ``x_units``.
+            x_type: Axis type of the ordinates (for example ``"LINEAR"``, ``"LOG"``,
+                ``"PROB"``). ``None``: as ``x_units``.
+            y_type: Axis type of the curves. ``None``: as ``x_units``.
+            labels: Curve names, one per curve. ``None``: a DataFrame's string column
+                names (the default ``curve_1`` .. ``curve_n`` names are not labels; then
+                ``attrs["labels"]`` when it has one entry per curve), a Series' name,
+                otherwise no labels.
+            create_if_missing: Create the DSS file if it doesn't exist (default True).
+            x_precision: Decimal places to display for the ordinates, 0-9, or -1 for
+                unset. Give both precisions or neither; they must be both -1 or both
+                0-9. ``None``: from ``attrs`` when usable in the target file, otherwise
+                -1. Inherited precision that DSS6 cannot store is dropped: see Backends.
+            y_precision: Decimal places to display for the curves, as ``x_precision``.
+            value_type: ``"auto"`` (default) stores float32 (record type 200, PD) when
+                both the ordinates and the curves are float32 and float64 (type 205,
+                PDD) otherwise, so a frame read with ``dtype="stored"`` keeps its type.
+                ``"float"`` or ``"double"`` choose.
+            dss_version: Major DSS version (6 or 7) for a new file. Omit it for DSS7.
+                An existing file must match an explicit value.
+
+        Returns:
+            None. As with ``write_timeseries``, a failed write raises.
+
+        Raises:
+            FileNotFoundError: If the DSS file doesn't exist and create_if_missing=False
+            IsADirectoryError: If ``dss_file`` is a directory
+            TypeError: If ``pathname`` or a unit, type or label is not a string
+            ValueError: If ``pathname`` does not have exactly six parts; the arrays are
+                not numeric, empty, or have mismatched shapes; ``labels`` does not have
+                one entry per curve; a precision or ``value_type`` is invalid;
+                ``dss_version`` is invalid or does not match an existing file. Under
+                ``native``, also when the engine refuses the input (see Backends).
+            ImportError: If pyjnius (``java``) or ras-commander-fast-dss (``native``) is
+                not installed
+            DssCapabilityError: ``native`` with a ras-commander-fast-dss wheel that has
+                no writers (a ``NotImplementedError``)
+            DssUnsupportedRecordError: ``native``, when the pathname holds a record of
+                another kind, or for the ELEV cases below
+            RuntimeError: If the Java write fails, or returns without the record being
+                in the file. Native engine errors (``DssLockedError`` when HEC software
+                has the file open, other ``DssError`` subclasses) are ``RuntimeError``
+                subclasses too.
+
+        Backends:
+            ``"java"`` (default) writes ``hec.io.PairedDataContainer`` through HEC
+            Monolith. ``"native"`` writes through ras-commander-fast-dss without a JVM
+            and never falls back to Java: an existing file keeps its DSS version, a new
+            file is DSS7 unless ``dss_version=6``. Both store ``NaN`` as stored bits, and
+            DSS6 pathnames in upper case. The native writer refuses input the Java path
+            accepts; the user guide lists each case: DSS6 units or types longer than 8
+            characters (Java truncates them), some DSS6 labels and precisions, non-ASCII
+            pathnames, infinite values, a record of another kind at the pathname, and
+            two ELEV cases (a ``|`` in an elevation-side unit and, for DSS7, a location
+            record holding vertical-datum information). A failed native write that
+            created the file removes it. ``"shadow"`` writes with Java, repeats the write
+            natively on a temporary copy and logs any difference between the native
+            read-back of the two files; the comparison never raises. The ``time_zone``
+            that ``read_paired_data`` reports is not written on any backend, because
+            ``PairedDataContainer`` does not store it. DSS6 cannot store
+            ``x_precision=0``; a value inherited from ``attrs`` becomes -1 there (the
+            native reader reports 0 for some DSS6 records written without precision).
+            See ``docs/user-guide/dss-native-backend.md``.
+
+        Example:
+            >>> from ras_commander import RasDss
+            >>> RasDss.write_paired_data(
+            ...     "rating.dss", "/BASIN/LOC/STAGE-FLOW///RATING/",
+            ...     [1.0, 2.0, 3.0], [10.0, 25.0, 60.0],
+            ...     x_units="FEET", y_units="CFS", x_type="LINEAR", y_type="LINEAR",
+            ... )
+            >>> rating = RasDss.read_paired_data("rating.dss", "/BASIN/LOC/STAGE-FLOW///RATING/")
+            >>> RasDss.write_paired_data("copy.dss", "/BASIN/LOC/STAGE-FLOW///COPY/", rating)
+        """
+        spec = RasDss._paired_data_spec(
+            pathname, x_values, y_values, x_units, y_units, x_type, y_type, labels,
+            x_precision, y_precision, value_type,
+        )
+        dss_version = RasDss._validate_dss_version(dss_version)
+        backend = RasDss._write_backend()
+        if backend == "native":
+            return RasDss._write_paired_data_native(
+                dss_file, pathname, spec, create_if_missing, dss_version=dss_version
+            )
+        if backend == "shadow":
+            return RasDss._write_paired_data_shadow(
+                dss_file, pathname, spec, create_if_missing, dss_version=dss_version
+            )
+        return RasDss._write_paired_data_java(
+            dss_file, pathname, spec, create_if_missing, dss_version=dss_version
+        )
+
+    @staticmethod
+    def _paired_data_numeric(values: Any, what: str) -> np.ndarray:
+        array = np.asarray(values)
+        if array.dtype.kind not in "fiu":
+            raise ValueError(f"{what} must be numeric, not {array.dtype}")
+        return array
+
+    @staticmethod
+    def _paired_data_labels_from_frame(frame: pd.DataFrame) -> Optional[List[str]]:
+        """Labels of a frame: its string column names, unless they are the reader's
+        default ``curve_n`` names; then ``attrs["labels"]`` when it has one per curve
+        (the reader falls back to default names when labels are blank or repeated)."""
+        columns = list(frame.columns)
+        default = [f"curve_{i + 1}" for i in range(len(columns))]
+        if columns == default:
+            stored = frame.attrs.get("labels")
+            if isinstance(stored, (list, tuple)) and len(stored) == len(columns):
+                return [str(label) for label in stored]
+            return None
+        if all(isinstance(column, str) for column in columns):
+            return columns
+        return None
+
+    @staticmethod
+    def _paired_data_spec(
+        pathname, x_values, y_values, x_units, y_units, x_type, y_type, labels,
+        x_precision, y_precision, value_type,
+    ) -> Dict[str, Any]:
+        """Check and normalize the writer's arguments, the same way for every backend.
+        Runs before any JVM start or file change."""
+        if not isinstance(pathname, str):
+            raise TypeError(f"DSS pathname must be a string, got {type(pathname).__name__}")
+        if pathname.count("/") != 7 or not pathname.startswith("/") or not pathname.endswith("/"):
+            raise ValueError(f"DSS pathname must have exactly six parts: {pathname!r}")
+        if value_type not in ("auto", "float", "double"):
+            raise ValueError('value_type must be "auto", "float" or "double"')
+
+        attrs: Dict[str, Any] = {}
+        frame_labels = None
+        if isinstance(x_values, pd.Series):
+            x_values = x_values.to_frame()
+        if isinstance(x_values, pd.DataFrame):
+            if y_values is not None:
+                raise ValueError("y_values must be omitted when x_values is a DataFrame or Series")
+            attrs = dict(x_values.attrs)
+            frame_labels = RasDss._paired_data_labels_from_frame(x_values)
+            x = RasDss._paired_data_numeric(x_values.index.to_numpy(), "the ordinates")
+            y = RasDss._paired_data_numeric(x_values.to_numpy(), "the curves")
+        else:
+            if y_values is None:
+                raise ValueError("y_values is required unless x_values is a DataFrame or Series")
+            x = RasDss._paired_data_numeric(x_values, "x_values")
+            y = RasDss._paired_data_numeric(y_values, "y_values")
+        if x.ndim != 1:
+            raise ValueError("x_values must be one-dimensional")
+        if y.ndim == 1:
+            y = y.reshape(-1, 1)
+        elif y.ndim != 2:
+            raise ValueError("y_values must be 1-D (one curve) or 2-D (one column per curve)")
+        if x.shape[0] == 0:
+            raise ValueError("x_values must not be empty")
+        if y.shape[0] != x.shape[0]:
+            raise ValueError(
+                f"y_values has {y.shape[0]} rows for {x.shape[0]} ordinates "
+                "(shape must be (len(x_values), n_curves))"
+            )
+        n_curves = int(y.shape[1])
+        if n_curves == 0:
+            raise ValueError("y_values has no curves")
+
+        if labels is None:
+            labels = frame_labels
+        elif isinstance(labels, (str, bytes)):
+            raise ValueError("labels must be a sequence of strings, one per curve")
+        if labels is not None:
+            labels = list(labels)
+            for index, label in enumerate(labels):
+                if not isinstance(label, str):
+                    raise TypeError(f"labels[{index}] must be a string, not {type(label).__name__}")
+            if len(labels) != n_curves:
+                raise ValueError(f"{len(labels)} labels for {n_curves} curves (give one per curve)")
+            if not any(label.strip() for label in labels):
+                labels = None
+
+        text: Dict[str, str] = {}
+        for key, value in (("x_units", x_units), ("y_units", y_units),
+                           ("x_type", x_type), ("y_type", y_type)):
+            if value is None:
+                value = attrs.get(key) or ""
+            if not isinstance(value, str):
+                raise TypeError(f"{key} must be a string, not {type(value).__name__}")
+            text[key] = value
+
+        explicit = x_precision is not None or y_precision is not None
+        if explicit and (x_precision is None or y_precision is None):
+            raise ValueError("give both x_precision and y_precision, or neither")
+        if explicit:
+            for name, value in (("x_precision", x_precision), ("y_precision", y_precision)):
+                if type(value) is not int or not -1 <= value <= 9:
+                    raise ValueError(f"{name} must be an integer from -1 to 9, not {value!r}")
+            if (x_precision == -1) != (y_precision == -1):
+                raise ValueError("x_precision and y_precision must be both -1 or both 0-9")
+
+        if value_type == "auto":
+            single = x.dtype == np.float32 and y.dtype == np.float32
+            value_type = "float" if single else "double"
+
+        return {
+            "x": x,
+            "y": y,
+            "n_curves": n_curves,
+            "labels": labels,
+            "precision": (x_precision, y_precision) if explicit else None,
+            "attr_precision": (attrs.get("x_precision"), attrs.get("y_precision")),
+            "value_type": value_type,
+            **text,
+        }
+
+    @staticmethod
+    def _paired_data_precision(spec: Dict[str, Any], version: int) -> Tuple[int, int]:
+        """Display precision for a target file: explicit values as given; inherited
+        ``attrs`` values when the target can store them, otherwise unset. DSS6 cannot
+        store an x precision of 0, and the native reader reports 0 for some DSS6 records
+        written without precision, so that value must not block copying a frame to DSS6."""
+        if spec["precision"] is not None:
+            return spec["precision"]
+        x_precision, y_precision = spec["attr_precision"]
+        usable = (
+            isinstance(x_precision, (int, np.integer))
+            and isinstance(y_precision, (int, np.integer))
+            and 0 <= x_precision <= 9 and 0 <= y_precision <= 9
+            and not (version == 6 and x_precision == 0)
+        )
+        return (int(x_precision), int(y_precision)) if usable else (-1, -1)
+
+    @staticmethod
+    def _write_paired_data_java(
+        dss_file: Union[str, Path],
+        pathname: str,
+        spec: Dict[str, Any],
+        create_if_missing: bool = True,
+        *,
+        dss_version: Optional[int] = None,
+    ) -> None:
+        """``write_paired_data`` through HEC Monolith (``hec.io.PairedDataContainer``)."""
+        from ras_commander.RasUtils import RasUtils
+
+        dss_path = Path(dss_file)
+        file_existed = dss_path.exists()
+        if file_existed and not dss_path.is_file():
+            raise IsADirectoryError(f"DSS path is not a file: {dss_path}")
+        if file_existed:
+            version = RasDss._get_file_version_java(dss_path)
+            if dss_version is not None and version != dss_version:
+                raise ValueError(
+                    f"Existing DSS file is version {version}, not "
+                    f"requested version {dss_version}: {dss_path}"
+                )
+        else:
+            if not create_if_missing:
+                raise FileNotFoundError(f"DSS file not found: {dss_path}")
+            dss_path.parent.mkdir(parents=True, exist_ok=True)
+            logger.info(f"DSS file will be created: {dss_path.name}")
+            logger.debug(f"DSS file creation path: {dss_path}")
+            version = dss_version if dss_version is not None else RasDss._NATIVE_NEW_FILE_VERSION
+
+        dss_file_str = str(RasUtils.safe_resolve(dss_path))
+        x_precision, y_precision = RasDss._paired_data_precision(spec, version)
+
+        RasDss._configure_jvm()
+
+        from jnius import autoclass, cast
+
+        HecDss = autoclass('hec.heclib.dss.HecDss')
+        PairedDataContainer = autoclass('hec.io.PairedDataContainer')
+
+        container = PairedDataContainer()
+        container.setFullName(pathname)
+        container.setXUnits(spec["x_units"])
+        container.setYUnits(spec["y_units"])
+        container.setXType(spec["x_type"])
+        container.setYType(spec["y_type"])
+        container.setXOrdinates(spec["x"].astype(np.float64).tolist())
+        # Java holds the curves curve-major: yOrdinates[curve][ordinate].
+        container.setYOrdinates(spec["y"].astype(np.float64).T.tolist())
+        container.setNumberOrdinates(int(spec["x"].shape[0]))
+        container.setNumberCurves(spec["n_curves"])
+        container.setStoreAsDoubles(spec["value_type"] == "double")
+        # -1 does not clear a precision that an earlier DSS6 write in this process set:
+        # Monolith keeps it (shadow label W10).
+        container.xprecision = x_precision
+        container.yprecision = y_precision
+        if spec["labels"] is not None:
+            container.setLabels(spec["labels"])
+            container.labelsUsed = True
+
+        dss = None
+        try:
+            dss = (
+                HecDss.open(dss_file_str, dss_version)
+                if dss_version is not None and not file_existed
+                else HecDss.open(dss_file_str)
+            )
+            # HecDss.put has DataContainer and DataContainerTransformer overloads; without
+            # the cast pyjnius can select the wrong one and nothing is written.
+            dss.put(cast('hec.io.DataContainer', container))
+            stored = bool(dss.recordExists(pathname))
+        except Exception as e:
+            raise RuntimeError(
+                f"Failed to write paired data to DSS: {e}\n"
+                f"  File: {dss_file_str}\n"
+                f"  Pathname: {pathname}"
+            ) from e
+        finally:
+            if dss is not None:
+                try:
+                    dss.done()
+                finally:
+                    RasDss._release_dss_file(dss_file_str)
+        if not stored:
+            raise RuntimeError(
+                f"Paired data write reported no error, but {pathname} is not in {dss_file_str}"
+            )
+        logger.info(
+            f"Wrote {spec['n_curves']} curve(s) of {spec['x'].shape[0]} ordinates "
+            f"to {Path(dss_file_str).name}"
+        )
+
+    @staticmethod
+    def _write_paired_data_native(
+        dss_file: Union[str, Path],
+        pathname: str,
+        spec: Dict[str, Any],
+        create_if_missing: bool = True,
+        *,
+        dss_version: Optional[int] = None,
+    ) -> None:
+        """``write_paired_data`` through ras-commander-fast-dss (no JVM).
+
+        Same argument checks as the Java path. ``NaN`` keeps its stored bits on both DSS
+        versions (``raw=True``), as Monolith stores it; infinite values are refused.
+        """
+        for name, values in (("x_values", spec["x"]), ("y_values", spec["y"])):
+            if values.dtype.kind == "f" and np.isinf(values).any():
+                raise ValueError(
+                    f"{name} contain infinity; HEC-DSS has no infinity convention "
+                    "(the native writer refuses it; the Java path stores the bits)"
+                )
+        dc = _backend.require_native_writes()
+        target, version, existed, created_dirs = RasDss._native_write_target(
+            dss_file, dss_version, create_if_missing
+        )
+        x_precision, y_precision = RasDss._paired_data_precision(spec, version)
+        with RasDss._native_new_file(dc, target, version, existed, created_dirs):
+            report = dc.write_paired_data(
+                str(target), pathname, spec["x"], spec["y"],
+                x_units=spec["x_units"], x_type=spec["x_type"],
+                y_units=spec["y_units"], y_type=spec["y_type"],
+                labels=spec["labels"], value_type=spec["value_type"], raw=True,
+                x_precision=x_precision, y_precision=y_precision, version=version,
+            )
+        logger.info(
+            f"Wrote {spec['n_curves']} curve(s) of {spec['x'].shape[0]} ordinates to {target.name}"
+        )
+        logger.debug(
+            f"DSS native write details: file={target}, pathname={pathname}, version={version}, "
+            f"blocks={report.get('blocks')}"
+        )
+
+    @staticmethod
+    def _write_paired_data_shadow(
+        dss_file: Union[str, Path],
+        pathname: str,
+        spec: Dict[str, Any],
+        create_if_missing: bool = True,
+        *,
+        dss_version: Optional[int] = None,
+    ) -> None:
+        """Java write (its result and errors are returned); the native writer repeats
+        the write on a temporary copy and the native read-backs of both files are
+        compared and logged. The comparison never raises."""
+        import time
+
+        ctx = RasDss._shadow_write_snapshot(dss_file)
+        try:
+            t0 = time.perf_counter()
+            RasDss._write_paired_data_java(
+                dss_file, pathname, spec, create_if_missing, dss_version=dss_version
+            )
+            java_s = time.perf_counter() - t0
+            try:
+                RasDss._shadow_compare_paired_data_write(ctx, dss_file, pathname, spec, java_s)
+            except Exception as exc:  # the comparison must never break the write
+                logger.warning("DSS shadow write_paired_data comparison failed for %s: %s",
+                               dss_file, exc)
+        finally:
+            RasDss._shadow_write_cleanup(ctx)
+
+    @staticmethod
+    def _shadow_compare_paired_data_write(
+        ctx: Dict[str, Any], dss_file, pathname, spec, java_s
+    ) -> None:
+        import time
+
+        if ctx.get("skip"):
+            _backend.record("write_paired_data", "skipped", ctx["skip"], dss_file=dss_file,
+                            pathname=pathname, java_seconds=java_s)
+            return
+        version = RasDss._get_file_version_native(dss_file)
+        native_exc, diffs, labels = None, [], []
+        t1 = time.perf_counter()
+        try:
+            RasDss._write_paired_data_native(
+                ctx["copy"], pathname, spec, True,
+                dss_version=None if ctx["existed"] else version,
+            )
+        except Exception as exc:
+            native_exc = exc
+        native_s = time.perf_counter() - t1
+        if native_exc is None:
+            readback = pathname.upper() if version == 6 else pathname
+            java_df = RasDss._read_paired_data_native(dss_file, readback, False)
+            native_df = RasDss._read_paired_data_native(ctx["copy"], readback, False)
+            diffs, labels = _backend.compare_written_paired_data(java_df, native_df)
+        RasDss._shadow_write_record(
+            "write_paired_data", dss_file, pathname, native_exc, diffs, labels, java_s, native_s,
+            detail={"dss_version": version},
         )
 
     @staticmethod
