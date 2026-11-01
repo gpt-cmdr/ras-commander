@@ -65,6 +65,7 @@ def test_configure_jvm_success_is_debug_only(monkeypatch, caplog, capsys, tmp_pa
         add_classpath=add_classpath,
     )
     monkeypatch.setitem(sys.modules, "jnius_config", fake_jnius_config)
+    monkeypatch.setattr(RasDss, "_silence_hec_messages", staticmethod(lambda: None))
 
     class FakeMonolith:
         def get_classpath(self):

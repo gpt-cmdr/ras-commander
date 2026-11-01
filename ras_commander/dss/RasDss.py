@@ -127,6 +127,12 @@ class RasDss:
 
     _jvm_configured = False
     _monolith = None
+    _messages_silenced = False
+
+    #: HEC-DSS library message level set (``zset("MLEVEL")``) before the first Java DSS
+    #: call. 0 silences the library's console messages. Set it before the first DSS call;
+    #: see ``_silence_hec_messages`` for why a higher level can corrupt DSS files.
+    hec_message_level = 0
 
     #: Backend: "java" (default in this release), "native" or "shadow".
     #: The environment variable RAS_COMMANDER_DSS_BACKEND overrides it when set.
@@ -312,6 +318,7 @@ class RasDss:
         # an empty classpath before we can call jnius_config.add_classpath()
         if getattr(jnius_config, 'vm_running', False):
             RasDss._jvm_configured = True
+            RasDss._silence_hec_messages()
             return
 
         # Get classpath and library path
@@ -355,6 +362,38 @@ class RasDss:
 
         RasDss._jvm_configured = True
         logger.debug("Java VM configured for DSS operations")
+        RasDss._silence_hec_messages()
+
+    @staticmethod
+    def _silence_hec_messages() -> None:
+        """Set the HEC-DSS library message level before any DSS file is opened.
+
+        HEC Monolith's DSS library prints its open, close, read and write messages
+        through a stdout handle that its Fortran runtime looks up at its first message
+        and then keeps. When the process later redirects or restores file descriptor 1
+        (pytest's output capture does this around every test, and any tool that captures
+        fd-level output can), that handle is closed and Windows can give its value to the
+        next file the library opens. Later messages are then written into that DSS file:
+        reads return console text as values and later writes fail. With level 0, set
+        here before the first open, the library prints nothing and never caches the
+        handle. The class attribute ``hec_message_level`` sets the level; a higher level
+        brings the console messages back and the risk with them. Never raises.
+
+        Called from ``_configure_jvm`` after the classpath is set, so this is the point
+        where the JVM starts. pydsstools (``write_precip_grid_arrays``) is a separate
+        library and is not affected by this setting.
+        """
+        if RasDss._messages_silenced:
+            return
+        try:
+            from jnius import autoclass
+
+            autoclass('hec.heclib.util.Heclib').Hec_zset(
+                "MLEVEL", "", int(RasDss.hec_message_level)
+            )
+            RasDss._messages_silenced = True
+        except Exception as exc:  # never block DSS I/O on a logging setting
+            logger.debug("Could not set the HEC-DSS message level: %s", exc)
 
     @staticmethod
     @log_call
@@ -1136,7 +1175,10 @@ class RasDss:
             )
         finally:
             if dss is not None:
-                dss.done()
+                try:
+                    dss.done()
+                finally:
+                    RasDss._release_dss_file(dss_file_str)
 
     @staticmethod
     def _java_matching_record(dss: Any, pathname: str, ignore_d_part: bool) -> Optional[str]:

@@ -168,6 +168,7 @@ def configuration_without_java(monkeypatch):
     monkeypatch.setattr(RasDss, "_ensure_monolith", lambda: monolith)
     monkeypatch.setattr(RasDss, "_jvm_configured", False)
     monkeypatch.setitem(sys.modules, "jnius_config", config)
+    monkeypatch.setattr(RasDss, "_silence_hec_messages", staticmethod(lambda: None))
     monkeypatch.delenv("JAVA_HOME", raising=False)
     # Ensure configuration changes remain local to this test.
     monkeypatch.setenv("LD_LIBRARY_PATH", "original-native-path")
