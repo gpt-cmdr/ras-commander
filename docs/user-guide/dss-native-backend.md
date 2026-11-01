@@ -455,6 +455,42 @@ curve of the public fixtures. `BaldEagleCrkMulti2D` holds no paired-data record,
 the curves are derived from its series. Both readers read the native-written and
 Java-written records equal, apart from the known reader differences PD1 to PD4.
 
+### Failed Java writes
+
+A Java write that fails raises `RuntimeError` and never reports success. HEC
+Monolith does not always say so itself, so the Java path adds three checks on
+DSS6 and DSS7:
+
+- **Read-only targets are refused before any Java call.** Monolith returned
+  normally from a DSS6 time-series write to a read-only file, with nothing
+  written.
+- **Library failure messages raise.** `RasDss` connects the HEC-DSS library's
+  message unit to a private temporary file before the first DSS file opens, at
+  level `RasDss.hec_message_level` (default 1; lower values are treated as 1).
+  Messages no longer reach the console, so they cannot land in a DSS file after
+  a stdout redirect. Failure lines are logged at WARNING as `HEC-DSS library
+  reported: ...`, including those from reads, and a writer raises on them.
+- **Time-series and paired-data writes confirm the record.** The file is
+  reopened and the record must be in its catalog. Monolith returned normally
+  from some DSS7 writes to a damaged file, leaving a record that could not be
+  read. This adds a catalog read to each Java write.
+
+Limits:
+
+- Writing to a damaged DSS6 file can crash the JVM inside HEC's native library,
+  which no Python check can catch. It happened for paired-data and grid writes
+  over an existing record in a truncated file. Keep backups, and test a suspect
+  file with a read first.
+- A few library lines bypass the message file. They follow a failed read of a
+  damaged DSS6 file.
+- The check reads library messages for the whole process, so a failure in
+  another thread's Java DSS call at the same moment can fail a healthy write.
+- A second library in the process that takes the message file (hms-commander
+  does) leaves `RasDss` with no messages. The read-only and catalog checks
+  still apply.
+- `write_precip_grid_arrays` does not use Java. A failed overwrite raises
+  `OSError` and leaves the target unchanged.
+
 ### Shadow writes
 
 Under `shadow`, writes run on Java and the caller gets Java's result and

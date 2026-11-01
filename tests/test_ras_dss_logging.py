@@ -65,7 +65,7 @@ def test_configure_jvm_success_is_debug_only(monkeypatch, caplog, capsys, tmp_pa
         add_classpath=add_classpath,
     )
     monkeypatch.setitem(sys.modules, "jnius_config", fake_jnius_config)
-    monkeypatch.setattr(RasDss, "_silence_hec_messages", staticmethod(lambda: None))
+    monkeypatch.setattr(RasDss, "_route_hec_messages", staticmethod(lambda: None))
 
     class FakeMonolith:
         def get_classpath(self):
@@ -163,6 +163,8 @@ def test_write_timeseries_info_is_concise_and_debug_keeps_details(
 ):
     monkeypatch.delenv("RAS_COMMANDER_DSS_BACKEND", raising=False)
     monkeypatch.setattr(RasDss, "backend", "java")
+    # The fake file has no catalog; the check itself is tested in test_rasdss_hec_messages.
+    monkeypatch.setattr(RasDss, "_require_java_record_stored", staticmethod(lambda f, p: None))
     from ras_commander.RasUtils import RasUtils
 
     output_dss = tmp_path / "output.dss"

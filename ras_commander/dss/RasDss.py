@@ -73,10 +73,14 @@ Lazy Loading:
     use DSS functionality don't pay the cost of loading Java/pyjnius.
 """
 
+import atexit
 import logging
 import os
 import re
+import shutil
 import sys
+import tempfile
+import threading
 from contextlib import contextmanager
 from datetime import datetime, timedelta
 from decimal import Decimal, InvalidOperation
@@ -96,6 +100,15 @@ from ..Decorators import log_call
 from . import _backend, _errors
 
 logger = logging.getLogger(__name__)
+
+# Lines of the HEC-DSS library's message file that report a failure. Open and close
+# messages name the file, so they are excluded: a path can contain any of these words.
+_HEC_FAILURE_LINE = re.compile(
+    r"ERROR;|ERROR DURING|Error:|Error Code|Error code|Damaged|Read Access Only|Cannot |Unable to"
+)
+_HEC_ROUTINE_LINE = re.compile(r"ZOPEN|zopen|ZCLOSE|zclose|\(Read Access Only\)|Read access")
+# The message file restarts once it passes this size (a long run opens many files).
+_HEC_MESSAGE_FILE_LIMIT = 4 * 1024 * 1024
 
 
 class RasDss:
@@ -127,12 +140,17 @@ class RasDss:
 
     _jvm_configured = False
     _monolith = None
-    _messages_silenced = False
+    _messages_routed = False
+    _message_file: Optional[Path] = None
+    _message_offset = 0
+    _message_lock = threading.Lock()
 
-    #: HEC-DSS library message level set (``zset("MLEVEL")``) before the first Java DSS
-    #: call. 0 silences the library's console messages. Set it before the first DSS call;
-    #: see ``_silence_hec_messages`` for why a higher level can corrupt DSS files.
-    hec_message_level = 0
+    #: HEC-DSS library message level (``zset("MLEVEL")``) set before the first Java DSS
+    #: call. The messages go to a private file (see ``_route_hec_messages``), never to
+    #: the console. Level 1 keeps the library's failure messages, which are logged, and
+    #: refused writes raise. Values below 1 are treated as 1, because level 0 hides
+    #: refused writes. Set it before the first DSS call.
+    hec_message_level = 1
 
     #: Backend: "java" (default in this release), "native" or "shadow".
     #: The environment variable RAS_COMMANDER_DSS_BACKEND overrides it when set.
@@ -318,7 +336,7 @@ class RasDss:
         # an empty classpath before we can call jnius_config.add_classpath()
         if getattr(jnius_config, 'vm_running', False):
             RasDss._jvm_configured = True
-            RasDss._silence_hec_messages()
+            RasDss._route_hec_messages()
             return
 
         # Get classpath and library path
@@ -362,38 +380,180 @@ class RasDss:
 
         RasDss._jvm_configured = True
         logger.debug("Java VM configured for DSS operations")
-        RasDss._silence_hec_messages()
+        RasDss._route_hec_messages()
 
     @staticmethod
-    def _silence_hec_messages() -> None:
-        """Set the HEC-DSS library message level before any DSS file is opened.
+    def _route_hec_messages() -> None:
+        """Send the HEC-DSS library's messages to a private file before any DSS file opens.
 
-        HEC Monolith's DSS library prints its open, close, read and write messages
-        through a stdout handle that its Fortran runtime looks up at its first message
-        and then keeps. When the process later redirects or restores file descriptor 1
-        (pytest's output capture does this around every test, and any tool that captures
-        fd-level output can), that handle is closed and Windows can give its value to the
-        next file the library opens. Later messages are then written into that DSS file:
-        reads return console text as values and later writes fail. With level 0, set
-        here before the first open, the library prints nothing and never caches the
-        handle. The class attribute ``hec_message_level`` sets the level; a higher level
-        brings the console messages back and the risk with them. Never raises.
+        The library writes its messages to Fortran unit ``MUNIT``, which its Fortran
+        runtime connects to the process's stdout handle at the first write and then
+        keeps. When the process later redirects file descriptor 1 (pytest's output capture
+        does this around every test, and any tool that captures fd-level output can), that
+        handle is closed and Windows can give its value to the next file the library
+        opens. Later messages are then written into that DSS file: reads return console
+        text as values and later writes fail.
+
+        ``HecDataManager.setMessageFile`` connects ``MUNIT`` to a file instead, so no
+        library message depends on the stdout handle. Silencing the library is not an
+        option: at level 0 a DSS6 time-series write to a read-only file returns normally
+        with nothing written, and nothing reports it. ``_drain_hec_messages`` reads the
+        failure lines back. If the file cannot be set up, the level drops to 0 and a
+        warning is logged; writers still refuse read-only files, through
+        ``_require_writable_dss_file``. Never raises.
 
         Called from ``_configure_jvm`` after the classpath is set, so this is the point
         where the JVM starts. pydsstools (``write_precip_grid_arrays``) is a separate
-        library and is not affected by this setting.
+        library and is not affected.
+
+        A few Fortran ``WRITE(*,*)`` statements (``zrrec6``, ``zabort6``) bypass ``MUNIT``
+        and can still reach a stale handle. They run only after a failed read of a damaged
+        DSS6 file.
         """
-        if RasDss._messages_silenced:
+        if RasDss._messages_routed:
+            return
+        RasDss._messages_routed = True
+        directory = None
+        try:
+            from jnius import autoclass
+
+            heclib = autoclass('hec.heclib.util.Heclib')
+            manager = autoclass('hec.heclib.dss.HecDataManager')
+            directory = Path(tempfile.mkdtemp(prefix="rasdss_messages_"))
+            message_file = directory / "hec_messages.txt"
+            status = int(manager.setMessageFile(str(message_file)))
+            if status != 0:
+                raise RuntimeError(f"setMessageFile returned {status}")
+            heclib.Hec_zset("MLEVEL", "", max(1, int(RasDss.hec_message_level)))
+            RasDss._message_file = message_file
+            RasDss._message_offset = 0
+            atexit.register(RasDss._close_message_file)
+        except Exception as exc:  # never block DSS I/O on message routing
+            logger.warning(
+                "Could not route HEC-DSS library messages to a file (%s). Their level is "
+                "set to 0, so library failures are not reported and a redirected stdout "
+                "can still receive library messages.", exc)
+            if directory is not None:
+                shutil.rmtree(directory, ignore_errors=True)
+            RasDss._message_file = None
+            try:
+                from jnius import autoclass
+
+                autoclass('hec.heclib.util.Heclib').Hec_zset("MLEVEL", "", 0)
+            except Exception as level_exc:
+                logger.warning("Could not set the HEC-DSS message level: %s", level_exc)
+
+    @staticmethod
+    def _close_message_file() -> None:
+        """Close and remove the private message file at interpreter exit. Never raises."""
+        message_file, RasDss._message_file = RasDss._message_file, None
+        if message_file is None:
             return
         try:
             from jnius import autoclass
 
-            autoclass('hec.heclib.util.Heclib').Hec_zset(
-                "MLEVEL", "", int(RasDss.hec_message_level)
+            autoclass('hec.heclib.dss.HecDataManager').closeMessageFile()
+        except Exception as exc:
+            logger.debug("Could not close the HEC-DSS message file: %s", exc)
+        shutil.rmtree(message_file.parent, ignore_errors=True)
+
+    @staticmethod
+    def _drain_hec_messages() -> List[str]:
+        """Log and return the failure lines the HEC-DSS library wrote since the last call.
+
+        Some failures reach the caller only here: HEC Monolith returns normally from a
+        DSS6 time-series write to a read-only file, and a read of a damaged file looks
+        like a record with no data. Never raises.
+        """
+        message_file = RasDss._message_file
+        if message_file is None:
+            return []
+        try:
+            from jnius import autoclass
+
+            manager = autoclass('hec.heclib.dss.HecDataManager')
+            with RasDss._message_lock:
+                manager.flushMessageFile()
+                with open(message_file, 'rb') as handle:
+                    handle.seek(RasDss._message_offset)
+                    text = handle.read()
+                RasDss._message_offset += len(text)
+                if RasDss._message_offset > _HEC_MESSAGE_FILE_LIMIT:
+                    manager.windMessageFile()
+                    RasDss._message_offset = 0
+        except Exception as exc:
+            logger.debug("Could not read the HEC-DSS message file: %s", exc)
+            return []
+        failures = []
+        for line in text.decode('latin-1').splitlines():
+            line = line.strip()
+            if _HEC_FAILURE_LINE.search(line) and not _HEC_ROUTINE_LINE.search(line):
+                failures.append(line)
+        if failures:
+            logger.warning("HEC-DSS library reported: %s", " | ".join(failures[:8]))
+        return failures
+
+    @staticmethod
+    def _raise_hec_write_failures(failures: List[str], context: str = "") -> None:
+        """Raise when the HEC-DSS library reported failures during a Java write.
+
+        HEC Monolith can return normally from a write it refused, so a writer must not
+        report success while such a line is outstanding.
+        """
+        if failures:
+            suffix = f" ({context})" if context else ""
+            raise RuntimeError(
+                f"HEC-DSS library refused the write{suffix}: " + "; ".join(failures[:3])
             )
-            RasDss._messages_silenced = True
-        except Exception as exc:  # never block DSS I/O on a logging setting
-            logger.debug("Could not set the HEC-DSS message level: %s", exc)
+
+    @staticmethod
+    def _require_java_record_stored(dss_file: str, pathname: str) -> None:
+        """Reopen the file and raise unless ``pathname`` is in its catalog.
+
+        HEC Monolith can return normally, with no message, from a DSS7 write to a damaged
+        file: the file grows, but the catalog stays empty and the record cannot be read.
+        Compares parts A, B, C and F without case or blanks, which DSS6 changes; the
+        library sets the D part per block and can respell the E part. A non-ASCII pathname is not compared: Monolith
+        stores replacement characters. Call it after the writing handle is released.
+        """
+        if not pathname.isascii():
+            return
+
+        def key(path: Any) -> Tuple[str, ...]:
+            parts = re.sub(r"\s", "", str(path)).upper().split('/')
+            return tuple(parts[i] for i in (1, 2, 3, 6)) if len(parts) == 8 else ()
+
+        from jnius import autoclass
+
+        dss = autoclass('hec.heclib.dss.HecDss').open(dss_file)
+        try:
+            catalog = dss.getCatalogedPathnames()
+            stored = {key(catalog.get(i)) for i in range(catalog.size())}
+        finally:
+            try:
+                dss.done()
+            finally:
+                RasDss._release_dss_file(dss_file)
+        if key(pathname) not in stored:
+            raise RuntimeError(
+                f"DSS write reported no error, but {pathname} is not in the catalog of "
+                f"{dss_file}. The file may be damaged."
+            )
+
+    @staticmethod
+    def _require_writable_dss_file(dss_file: Union[str, Path]) -> None:
+        """Refuse a read-only target before any Java call.
+
+        The library's only report of a refused DSS6 time-series write is a message, which
+        is unavailable if routing failed or another library in the process took the
+        message unit. This check does not depend on either. Other refusals (access
+        control lists, locks) still reach the caller through the Java calls.
+        """
+        if not os.access(dss_file, os.W_OK):
+            raise RuntimeError(
+                f"Cannot write to DSS file, it is read-only: {dss_file}. "
+                "Nothing was written."
+            )
 
     @staticmethod
     @log_call
@@ -806,7 +966,7 @@ class RasDss:
                     RasDss._release_dss_file(dss_file)
 
     @staticmethod
-    def _release_dss_file(dss_file: str) -> None:
+    def _release_dss_file(dss_file: str) -> List[str]:
         """Release the bridge's native handle on one DSS file.
 
         ``HecDss.done()`` and ``GriddedData.done()`` only drop the bridge's
@@ -816,6 +976,10 @@ class RasDss:
         objects on the same file reopen it on their next access. Failures
         are logged at DEBUG and never raised, so a primary error is not
         masked.
+
+        Returns the failure lines the HEC-DSS library reported since the last
+        drain, already logged; writers raise on them (see
+        ``_raise_hec_write_failures``).
         """
         try:
             from jnius import autoclass
@@ -824,6 +988,7 @@ class RasDss:
             HecDSSFileAccess.close(dss_file, True)
         except Exception as exc:
             logger.debug("Could not release DSS file %s (%s)", dss_file, exc)
+        return RasDss._drain_hec_messages()
 
     @staticmethod
     def _require_existing_dss_file(dss_file: Union[str, Path]) -> None:
@@ -2836,6 +3001,8 @@ class RasDss:
         file_existed = dss_path.exists()
         if file_existed and not dss_path.is_file():
             raise IsADirectoryError(f"DSS path is not a file: {dss_path}")
+        if file_existed:
+            RasDss._require_writable_dss_file(dss_path)
         if file_existed and dss_version is not None:
             existing_version = RasDss._get_file_version_java(dss_path)
             if existing_version != dss_version:
@@ -2875,6 +3042,8 @@ class RasDss:
         source_nodata = grid_info.get("nodata_value", None)
         written_pathnames: List[str] = []
 
+        RasDss._drain_hec_messages()  # earlier calls' lines are not this write's
+        closing_failures: List[str] = []
         writer = None
         try:
             writer = GriddedData()
@@ -2939,12 +3108,7 @@ class RasDss:
 
                 written_pathnames.append(record_pathname)
 
-            logger.info(
-                f"Wrote {len(written_pathnames)} grid records to {Path(dss_file_str).name} "
-                f"(shape={n_rows}x{n_cols}, units={grid_info.get('units', 'mm')}, "
-                f"type={data_type})"
-            )
-            return written_pathnames
+            RasDss._raise_hec_write_failures(RasDss._drain_hec_messages())
         except ValueError:
             raise
         except Exception as e:
@@ -2959,7 +3123,14 @@ class RasDss:
                 try:
                     writer.done()
                 finally:
-                    RasDss._release_dss_file(dss_file_str)
+                    closing_failures = RasDss._release_dss_file(dss_file_str)
+        RasDss._raise_hec_write_failures(closing_failures, dss_file_str)
+        logger.info(
+            f"Wrote {len(written_pathnames)} grid records to {Path(dss_file_str).name} "
+            f"(shape={n_rows}x{n_cols}, units={grid_info.get('units', 'mm')}, "
+            f"type={data_type})"
+        )
+        return written_pathnames
 
     #: ``grid_info["compression"]`` names and HEC method codes -> ras-commander-fast-dss names.
     _NATIVE_GRID_COMPRESSION_NAMES = {
@@ -4029,7 +4200,9 @@ class RasDss:
                 not installed
             DssCapabilityError: ``native`` with a ras-commander-fast-dss wheel that
                 has no writers (a ``NotImplementedError``)
-            RuntimeError: If Java write operation fails. Native engine errors
+            RuntimeError: If Java write operation fails, including a read-only target,
+                a refusal the HEC-DSS library only reports as a message, and a record
+                missing from the file's catalog afterwards. Native engine errors
                 (``DssLockedError`` when HEC software has the file open, other
                 ``DssError`` subclasses) are ``RuntimeError`` subclasses too.
 
@@ -4116,6 +4289,8 @@ class RasDss:
         file_existed = dss_path.exists()
         if file_existed and not dss_path.is_file():
             raise IsADirectoryError(f"DSS path is not a file: {dss_path}")
+        if file_existed:
+            RasDss._require_writable_dss_file(dss_path)
         if file_existed and dss_version is not None:
             existing_version = RasDss._get_file_version_java(dss_path)
             if existing_version != dss_version:
@@ -4170,6 +4345,8 @@ class RasDss:
         tsc.numberValues = n
 
         # Open DSS file and write
+        RasDss._drain_hec_messages()  # earlier calls' lines are not this write's
+        closing_failures: List[str] = []
         dss = None
         try:
             dss = (
@@ -4178,11 +4355,8 @@ class RasDss:
                 else HecDss.open(dss_file_str)
             )
             dss.put(cast('hec.io.DataContainer', tsc))
-            logger.info(f"Wrote {n} values to {Path(dss_file_str).name}")
-            logger.debug(
-                f"DSS write details: file={dss_file_str}, pathname={pathname}, "
-                f"units={units}, type={data_type}, interval={interval_minutes}min"
-            )
+            # HEC Monolith returns normally from a DSS6 write it refused.
+            RasDss._raise_hec_write_failures(RasDss._drain_hec_messages())
         except Exception as e:
             raise RuntimeError(
                 f"Failed to write time series to DSS: {e}\n"
@@ -4195,7 +4369,14 @@ class RasDss:
                 try:
                     dss.done()
                 finally:
-                    RasDss._release_dss_file(dss_file_str)
+                    closing_failures = RasDss._release_dss_file(dss_file_str)
+        RasDss._raise_hec_write_failures(closing_failures, dss_file_str)
+        RasDss._require_java_record_stored(dss_file_str, pathname)
+        logger.info(f"Wrote {n} values to {Path(dss_file_str).name}")
+        logger.debug(
+            f"DSS write details: file={dss_file_str}, pathname={pathname}, "
+            f"units={units}, type={data_type}, interval={interval_minutes}min"
+        )
 
     # ------------------------------------------------------------------
     # Native writers (ras-commander-fast-dss) and shadow write comparison
@@ -4351,7 +4532,8 @@ class RasDss:
                         f"{_backend.SHADOW_COPY_LIMIT_ENV})"
                     )
                 else:
-                    shutil.copy2(target, ctx["copy"])
+                    # copyfile, not copy2: a read-only attribute would survive on the copy.
+                    shutil.copyfile(target, ctx["copy"])
         except Exception as exc:
             ctx["skip"] = f"snapshot failed: {type(exc).__name__}: {exc}"
         return ctx
@@ -4811,6 +4993,7 @@ class RasDss:
         if file_existed and not dss_path.is_file():
             raise IsADirectoryError(f"DSS path is not a file: {dss_path}")
         if file_existed:
+            RasDss._require_writable_dss_file(dss_path)
             version = RasDss._get_file_version_java(dss_path)
             if dss_version is not None and version != dss_version:
                 raise ValueError(
@@ -4855,6 +5038,8 @@ class RasDss:
             container.setLabels(spec["labels"])
             container.labelsUsed = True
 
+        RasDss._drain_hec_messages()  # earlier calls' lines are not this write's
+        closing_failures: List[str] = []
         dss = None
         try:
             dss = (
@@ -4865,7 +5050,7 @@ class RasDss:
             # HecDss.put has DataContainer and DataContainerTransformer overloads; without
             # the cast pyjnius can select the wrong one and nothing is written.
             dss.put(cast('hec.io.DataContainer', container))
-            stored = bool(dss.recordExists(pathname))
+            RasDss._raise_hec_write_failures(RasDss._drain_hec_messages())
         except Exception as e:
             raise RuntimeError(
                 f"Failed to write paired data to DSS: {e}\n"
@@ -4877,11 +5062,9 @@ class RasDss:
                 try:
                     dss.done()
                 finally:
-                    RasDss._release_dss_file(dss_file_str)
-        if not stored:
-            raise RuntimeError(
-                f"Paired data write reported no error, but {pathname} is not in {dss_file_str}"
-            )
+                    closing_failures = RasDss._release_dss_file(dss_file_str)
+        RasDss._raise_hec_write_failures(closing_failures, dss_file_str)
+        RasDss._require_java_record_stored(dss_file_str, pathname)
         logger.info(
             f"Wrote {spec['n_curves']} curve(s) of {spec['x'].shape[0]} ordinates "
             f"to {Path(dss_file_str).name}"
@@ -5560,6 +5743,12 @@ class RasDss:
                 raise RuntimeError(
                     f"HEC-DSS did not create version {dss_version}: {dss_file}"
                 )
+        except RuntimeError:
+            raise
+        except Exception as e:
+            raise RuntimeError(
+                f"HEC-DSS could not create version {dss_version} file {dss_file}: {e}"
+            ) from e
         finally:
             if dss is not None:
                 try:

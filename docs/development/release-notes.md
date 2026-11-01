@@ -21,10 +21,22 @@ alone does not identify a development checkout.
   then redirects file descriptor 1, as pytest's output capture does, Windows
   can give that handle to the next DSS file opened, and later messages are
   written into the file. On DSS6 this returned wrong values (5 of 30 reads in a
-  reproducer). `RasDss` now sets the library's message level to 0 before the
-  first Java DSS call, so the library's console messages stop on the Java
-  backend. Set `RasDss.hec_message_level` before the first DSS call to bring
-  them back, with that risk.
+  reproducer). `RasDss` now connects the library's messages to a private
+  temporary file before the first Java DSS call, so they no longer reach the
+  console. `RasDss.hec_message_level` sets their level (default 1). Failure
+  lines are logged at WARNING as `HEC-DSS library reported: ...`.
+- **Failed Java DSS writes now raise.** `write_timeseries` and
+  `write_timeseries_from_dataframe` returned normally from a DSS6 write to a
+  read-only file, with nothing written. On DSS7, time-series writes to a damaged
+  file could return normally and leave a record that could not be read. Java
+  writers now refuse read-only files with `RuntimeError` before any Java call,
+  raise on library failure messages, and confirm time-series and paired-data
+  records in the file's catalog, which adds a catalog read to each of those
+  writes. `write_grid_timeseries` raises `RuntimeError`, not a bare Java
+  exception, when it cannot create a new file. Under `shadow`, these errors
+  reach the caller as other Java write errors do. Writing to a damaged DSS6 file
+  can still crash the JVM inside HEC's library; see
+  [Failed Java writes](../user-guide/dss-native-backend.md#failed-java-writes).
 - **`RasDss.read_paired_data` releases the file under `java`.** It left the DSS
   file open after reading.
 - **The native DSS engine is renamed `ras-commander-fast-dss`.** `RasDss`

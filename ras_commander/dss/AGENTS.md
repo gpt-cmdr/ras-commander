@@ -91,12 +91,18 @@ This file is the canonical local instruction file for `ras_commander/dss/`.
   `RasDss._release_dss_file(<exact path string used to open>)`. Never call
   `HecDSSFileAccess.closeAllFiles()`, which closes every DSS file in the JVM.
 - Remember that the JVM can only be started once per process.
-- Keep `RasDss.hec_message_level` at 0 by default. `_configure_jvm` sets it through
-  `zset("MLEVEL")` before any file opens (so it starts the JVM once the classpath is
-  set). HEC Monolith caches a stdout handle at its first message, and after a redirect
-  of fd 1 Windows can reuse that handle for a DSS file, which then receives the messages
-  (`tests/test_rasdss_hec_messages.py`). Tests with a fake `jnius_config` must stub
-  `_silence_hec_messages`.
+- `_configure_jvm` calls `_route_hec_messages`, which connects the library's message
+  unit to a private file before any file opens (so it starts the JVM once the classpath
+  is set). Do not silence the library instead: HEC Monolith caches a stdout handle at its
+  first message, and after a redirect of fd 1 Windows can reuse that handle for a DSS file,
+  while level 0 hides refused writes (`tests/test_rasdss_hec_messages.py`). Tests with a
+  fake `jnius_config` must stub `_route_hec_messages`.
+- A new Java writer must not report success because `put` returned: call
+  `_require_writable_dss_file` first, `_drain_hec_messages` before opening,
+  `_raise_hec_write_failures` after the write and on what `_release_dss_file` returns,
+  and `_require_java_record_stored` where HEC gives no status.
+- Java readers check the container class before any cast, so `read_timeseries` on a
+  paired-data record raises `TypeError`. Keep that check.
 - Paired-data arguments go through `_paired_data_spec` on every backend, so invalid
   arguments raise the same classes before any JVM start or file change. Backend
   refusals beyond it are W1.
