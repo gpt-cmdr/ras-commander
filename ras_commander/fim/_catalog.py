@@ -296,6 +296,7 @@ def map_catalog(
     max_inflight_profiles=1,
     window_cache_mib=64, hydraulic_cache_mib=64, validation_cache_mib=8,
     product_writer="rasterio",
+    products=None, compression=None,
     engine_path=None,
     timeout=None,
     cancel_event=None,
@@ -327,7 +328,10 @@ def map_catalog(
         controls[key] = value
     if product_writer not in ("rasterio", "native"):
         raise ValueError("product_writer must be rasterio or native")
+    from ._native_products import validate_controls
+    validate_controls(products, compression, writer=product_writer)
     controls["product_writer"] = product_writer
+    controls.update(products=products, compression=compression)
     if strategy not in ("reuse", "parallel"):
         raise ValueError("strategy must be reuse or parallel")
     controls["strategy"] = strategy
@@ -380,6 +384,8 @@ def map_catalog(
         )
     if product_writer == "native" and not engine["method"].get("sloping", {}).get("native_geotiff_outputs"):
         raise FimUnsupportedError("Native products require native_geotiff_outputs capability")
+    validate_controls(products, compression, writer=product_writer,
+                      method=engine["method"].get("sloping", {}))
     for job in normal:
         method = engine["method"].get(job["interpolation"], {})
         if (

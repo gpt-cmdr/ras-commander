@@ -242,6 +242,7 @@ def map_profiles(
     velocity_depth="rendered",
     derived_products=(),
     _reduce_max=False,
+    products=None, compression=None,
 ):
     from .. import HdfMesh
     from ..fast_hdf import backend_scope
@@ -256,6 +257,8 @@ def map_profiles(
 
     if product_writer not in ("rasterio", "native"):
         raise ValueError("product_writer must be rasterio or native")
+    from ._native_products import validate_controls
+    selected_products, selected_compression, explicit_output = validate_controls(products, compression, writer=product_writer)
     native_products = product_writer == "native"
     if native_products and (write_floodplain or template_raster is not None or velocity):
         raise FimUnsupportedError("Native products do not support templates, floodplain or velocity")
@@ -388,6 +391,7 @@ def map_profiles(
         if _prepared is None
         else _prepared._method
     )
+    validate_controls(products, compression, writer=product_writer, method=method)
     if native_products and not method.get("native_geotiff_outputs"):
         raise FimUnsupportedError("Native products require native_geotiff_outputs capability")
     concurrency_supported, selected_method_id = _validate_method(
@@ -696,6 +700,7 @@ def map_profiles(
                     max_working_bytes=budget * (1 << 20) - buffer_bytes,
                     stream_outputs=not _reduce_max,
                     **({"geotiff_outputs": True} if native_products else {}),
+                    **({"products":selected_products,"compression":selected_compression} if explicit_output else {}),
                     **fields,
                 )
                 if velocity_depth != "rendered":
@@ -799,7 +804,9 @@ def map_profiles(
                             if native_products:
                                 from ._native_products import deliver
                                 write_tick = time.perf_counter() - unit["write_seconds"]
-                                products = deliver(root / "out" / name, folder, name, unit, plan)
+                                products = deliver(root / "out" / name, folder, name, unit, plan,
+                                    products=selected_products if explicit_output else None,
+                                    compression=selected_compression if explicit_output else None)
                             else:
                                 depth = _read_f32(
                                     process.stdout, plan.shape, expired, timeout, "depth"

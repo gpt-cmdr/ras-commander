@@ -15,6 +15,7 @@ Main class:
         - map_horizontal_profiles(): Rust cell-constant mapping,
           with terrain and ownership reused across profiles
         - map_catalog(): bounded scheduling of reach/timestep groups
+        - map_depth_groups(): native per-reach depth maxima over saved-time groups
         - compare_with_rasmapper(): native horizontal stored-map qualification
         - map_inundation_boundaries(): deterministic 2D zero-depth vector contours
         - compare_inundation_boundaries(): full native polygon differences/timings

@@ -359,6 +359,8 @@ class FimPreparedSlopingModel:
         template_raster=None,
         invalid_cells=None,
         product_writer="rasterio",
+        products=None,
+        compression=None,
     ):
         """Map all prepared names or an ordered subset into a new/empty folder.
 
@@ -424,7 +426,7 @@ class FimPreparedSlopingModel:
                     template_raster=template_raster,
                     invalid_cells=invalid_cells,
                     _prepared=self,
-                    product_writer=product_writer,
+                    product_writer=product_writer, products=products, compression=compression,
                 )
             except BaseException:
                 self._check_sources()

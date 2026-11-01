@@ -271,6 +271,94 @@ class RasFim:
 
     @staticmethod
     @log_call
+    def map_depth_groups(
+        jobs: Sequence[Dict[str, Any]],
+        output_folder: PathLike,
+        *,
+        strategy: str = "reuse",
+        threads: int = 4,
+        max_workers: int = 1,
+        max_memory_mib: int = 8192,
+        max_working_mib: int = 2048,
+        max_prepared_mib: int = 1024,
+        memory_headroom_mib: int = 256,
+        max_inflight_profiles: int = 1,
+        max_profiles_per_batch: int = 64,
+        depth_cutoff_ft: float = 0.5,
+        products: Optional[Sequence[str]] = None,
+        compression: str = "NONE",
+        sink: str = "grouped-geotiff",
+        max_accumulator_mib: int = 64,
+        window_cache_mib: int = 64,
+        scratch_folder: Optional[PathLike] = None,
+        max_scratch_bytes: int = 64 << 30,
+        engine_path: Optional[PathLike] = None,
+        timeout: Optional[float] = None,
+        cancel_event: Any = None,
+        raise_on_failure: bool = True,
+    ) -> Dict[str, Any]:
+        """Map every selected saved time and return native depth maxima by group.
+
+        Jobs use the catalog model/terrain and AOI fields, replacing timesteps
+        with groups=[{"group_id": "band-000", "timesteps": [0, 1]}]. Saved indices
+        must be unique within a group; sharing between groups/jobs is supported.
+        Every source is rendered through the unchanged plain-sloping mapper.
+        The native reducer retains finite depths at or above the physical feet
+        cutoff, including equality. Strict HDF depth-unit metadata determines
+        feet/metres conversion.
+
+        The initial policy is strategy="reuse", one worker and one in-flight
+        profile. Parent mesh preparation is shared across compatible reaches;
+        max_profiles_per_batch bounds HDF staging waves. Staged files remain
+        inside max_prepared_mib until the cohort completes. max_accumulator_mib
+        bounds resident group payloads; remaining groups spill to explicit local
+        scratch. scratch_folder defaults to the platform temporary directory;
+        it must be node-local. max_scratch_bytes bounds native spill payloads.
+        max_memory_mib admits working + prepared + headroom and guards sampled
+        parent/worker/native RSS. timeout covers the supervised catalog lifetime.
+
+        products defaults to ["depth_max"]. compression accepts NONE or LZW.
+        sink initially supports grouped-geotiff; the Rust engine separately
+        supports direct grouped buffers. Each job/group receives one Float32 TIFF
+        on its native lattice, including full-window nodata for all-dry groups.
+        No per-frame rasters, profile manifests or polygons are written.
+
+        Returns an ordered dictionary receipt with jobs, by_job[job_id][group_id],
+        complete sample accounting, source/unit/software identities, preparation
+        waves, native timers and sampled RSS. Aborted receipts retain partial
+        native evidence and raise FimMappingError unless raise_on_failure=False.
+        Grouped real-model hydraulic and performance qualification is pending.
+        """
+        from ._depth_groups import map_depth_groups
+
+        return map_depth_groups(
+            jobs,
+            output_folder,
+            strategy=strategy,
+            threads=threads,
+            max_workers=max_workers,
+            max_memory_mib=max_memory_mib,
+            max_working_mib=max_working_mib,
+            max_prepared_mib=max_prepared_mib,
+            memory_headroom_mib=memory_headroom_mib,
+            max_inflight_profiles=max_inflight_profiles,
+            max_profiles_per_batch=max_profiles_per_batch,
+            depth_cutoff_ft=depth_cutoff_ft,
+            products=products,
+            compression=compression,
+            sink=sink,
+            max_accumulator_mib=max_accumulator_mib,
+            window_cache_mib=window_cache_mib,
+            scratch_folder=scratch_folder,
+            max_scratch_bytes=max_scratch_bytes,
+            engine_path=engine_path,
+            timeout=timeout,
+            cancel_event=cancel_event,
+            raise_on_failure=raise_on_failure,
+        )
+
+    @staticmethod
+    @log_call
     def map_catalog(
         jobs: Sequence[Dict[str, Any]], output_folder: PathLike, *,
         threads: int = 4, max_workers: int = 1, strategy: str = "reuse",
@@ -280,6 +368,7 @@ class RasFim:
         max_inflight_profiles: int = 1,
         window_cache_mib: int = 64, hydraulic_cache_mib: int = 64,
         validation_cache_mib: int = 8, product_writer: str = "rasterio",
+        products: Optional[Sequence[str]] = None, compression: Optional[str] = None,
         engine_path: Optional[PathLike] = None,
         timeout: Optional[float] = None, cancel_event: Any = None,
         raise_on_failure: bool = True,
@@ -299,8 +388,11 @@ class RasFim:
         within each actor's prepared model. ``product_writer="native"`` opts
         into terrio LZW output on engines advertising native_geotiff_outputs;
         it currently requires sloping jobs. The default is ``"rasterio"``.
-        Native compression uses one worker. Output masks and float32 values
-        are unchanged by the writer.
+        Native compression uses the bounded engine pool. Optional
+        products=["depth"] and compression="NONE" request uncompressed depth-only
+        scratch on capable engines. Omission retains both products and LZW.
+        Explicit controls require product_writer="native". Output masks and
+        float32 values are unchanged by the writer.
 
         Batch known timesteps per reach. Compatible jobs share prepared inputs
         and a serialized native session within each bounded selector union.
@@ -383,6 +475,7 @@ class RasFim:
             max_inflight_profiles=max_inflight_profiles,
             window_cache_mib=window_cache_mib, hydraulic_cache_mib=hydraulic_cache_mib,
             validation_cache_mib=validation_cache_mib, product_writer=product_writer,
+            products=products, compression=compression,
             engine_path=engine_path, timeout=timeout,
             cancel_event=cancel_event, raise_on_failure=raise_on_failure,
         )
@@ -630,6 +723,7 @@ class RasFim:
         engine_path: Optional[PathLike] = None, threads: int = 1,
         writer_threads: int = 1,
         product_writer: str = "rasterio",
+        products: Optional[Sequence[str]] = None, compression: Optional[str] = None,
         max_working_mib: int = 1024, timeout: Optional[float] = None,
         max_inflight_profiles: int = 1,
         write_floodplain: bool = False,
@@ -738,6 +832,10 @@ class RasFim:
                 greater than one require engine concurrency support. All maps
                 share the same Rust worker pool, terrain and geometry.
             timeout: Engine stream lifetime in seconds, including output writes.
+            products: Optional unique native output names (depth/wse).
+                Omission retains both; requires product_writer="native".
+            compression: Optional native NONE or LZW compression. Omission
+                retains LZW; requires product_writer="native".
             product_writer: ``"rasterio"`` (default), or ``"native"`` for
                 direct terrio LZW GeoTIFF output on a capable engine. Native
                 output preserves the requested CRS/grid and float32 results,
@@ -859,6 +957,7 @@ class RasFim:
             max_inflight_profiles=max_inflight_profiles,
             template_raster=template_raster, terrain_hdf=terrain_hdf,
             velocity=velocity, invalid_cells=invalid_cells, product_writer=product_writer,
+            products=products, compression=compression,
             terrain_crs_fnv1a64=terrain_crs_fnv1a64, storage_areas=storage_areas,
             velocity_depth=velocity_depth, derived_products=derived_products)
 
