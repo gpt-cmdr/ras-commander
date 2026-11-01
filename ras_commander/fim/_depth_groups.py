@@ -597,6 +597,7 @@ def map_depth_groups(
         status="in_progress",
         engine=engine,
         controls=controls,
+        sources={job["job_id"]: job["sources"] for job in normal},
         cpu_partition=cpus,
         effective_workers=1,
         peak_process_tree_rss_bytes=0,

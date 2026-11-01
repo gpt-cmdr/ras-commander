@@ -392,11 +392,16 @@ def test_public_supervisor_preserves_order_partial_receipts_and_owned_cleanup(
     import psutil
     from ras_commander import RasFim
 
+    from ras_commander.fim.RasFim import _file_identity
+
+    source = tmp_path / "source.hdf"
+    source.write_bytes(b"immutable source identity")
+    source_binding = {"hdf": {"path": str(source), "identity": _file_identity(source)}}
     normal = [
         dict(
             job_id=name,
             reach_id=name,
-            sources={},
+            sources=source_binding,
             groups=[dict(group_id="g", timesteps=[0])],
         )
         for name in ("b", "a")
@@ -472,6 +477,7 @@ def test_public_supervisor_preserves_order_partial_receipts_and_owned_cleanup(
     assert receipt["status"] == ("complete" if state == "complete" else "aborted")
     saved = json.loads((tmp_path / "output/depth_groups_receipt.json").read_text())
     assert saved["status"] == receipt["status"]
+    assert saved["sources"] == {job["job_id"]: source_binding for job in normal}
     if state == "complete":
         assert list(receipt["by_job"]) == ["b", "a"]
         assert [j["job_id"] for j in receipt["jobs"]] == ["b", "a"]
