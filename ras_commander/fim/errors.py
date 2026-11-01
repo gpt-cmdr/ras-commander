@@ -32,6 +32,9 @@ class FimMappingError(FimError):
 
     The product manifest is still written. ``manifest`` holds the returned
     product DataFrame, so callers can inspect the profiles that completed.
+    For ``map_depth_groups``, ``manifest`` contains the structured group receipt
+    instead of a DataFrame; its status and partial native receipts describe the
+    failed catalog.
     """
 
     def __init__(self, message: str, manifest=None):

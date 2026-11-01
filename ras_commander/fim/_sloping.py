@@ -511,6 +511,7 @@ def map_profiles(
             "threads": threads,
             "writer_threads": writer_threads,
             "product_writer": product_writer,
+            **({"products": selected_products, "compression": selected_compression} if explicit_output else {}),
             "max_inflight_profiles": max_inflight_profiles,
             "max_working_mib": budget,
             "write_floodplain": bool(write_floodplain),
