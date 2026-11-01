@@ -50,14 +50,14 @@ ras2fim-batch method
 ```
 
 From a Commander checkout, use `uv pip install -e ".[fim]"`. To install only
-the engine, use `uv pip install "ras-commander-fast-map>=0.10.1,<0.12"` or the
-`fast-map` extra. Commander's `fim` and `fast-map` extras accept the 0.10.1 and
-0.11 release lines. Version 0.10.1 introduced the
-`global-terrain-lattice/1` polygon AOI mask; retained hydraulic/window state
-and native TIFF delivery require 0.11.0 capabilities. After that release is
-published, select it explicitly with
-`uv pip install "ras-commander-fast-map>=0.11.0,<0.12"` when these features
-are required. Existing user pins remain in effect unless explicitly updated.
+the engine, use `uv pip install "ras-commander-fast-map>=0.12.0,<0.13"` or the
+`fast-map` extra. Commander's `fim` and `fast-map` extras require the 0.12
+release line. Version 0.10.1 introduced the `global-terrain-lattice/1`
+polygon AOI mask; 0.11.0 added retained hydraulic/window state and native
+TIFF delivery; 0.12.0 adds storage-area level pools, the native effective
+terrain, the qualified duration rule, velocity in every render mode and the
+Max derived pass (`reduce_max/1`). Capabilities are still checked at run
+time. Existing user pins remain in effect unless explicitly updated.
 Uninstall the former `ras2fim-engine` package first when migrating from its
 retained test wheels, because it owns the same compatible executable.
 
@@ -324,3 +324,32 @@ and the [FIM API](api/fim.md) for input contracts and result interpretation.
 These comparisons establish the stated numerical agreement on the listed
 models and runtime. They do not establish hydraulic accuracy or parity for
 every HEC-RAS version, terrain source layout or model feature.
+
+
+## Deterministic vector boundaries
+
+The engine also exposes `deterministic-zero-depth-contours/1` for horizontal
+and plain cell-corner sloping zero-depth polygons. Use
+`RasFim.map_inundation_boundaries()` with the original unmodified single-source TIFF and
+associated terrain HDF. Bbox/polygon constraints clip final contours while
+full hydraulic connectivity and contour sample halos remain available.
+Multiple timesteps share terrain, geometry and ownership in one bounded worker
+pool. See the [boundary API and comparison workflow](api/fim.md#deterministic-inundation-boundaries).
+
+This is a separately identified vector method. Its stable NonZero union
+preserves holes consistently; native stored boundary exports can have different
+hole topology and quantized vertices. It does not change raster mapping or
+claim native vector equality. Cell-face boundary options and multi-source
+terrain HDFs and terrain modifications are outside the initial qualification.
+
+The accepted boundary method prioritizes deterministic output and discloses
+native vector differences. Native variability was observed through
+Commander-driven RASMapper 7.0.1 exports; repeated standalone GUI exports
+have not been qualified. The order-sensitive native merge is executed inside
+RASMapper, while Commander supplies the invocation and comparison workflow.
+
+For multi-source models, preprocess one dedicated mapping terrain and generate
+matching terrain-HDF metadata from that source before mapping. Preserve and
+verify the effective elevations, grid, CRS, nodata and source priority. Retain
+the original terrain, record provenance, and reuse the prepared pair across
+timesteps and reaches. See the [input preparation workflow](api/fim.md#deterministic-inundation-boundaries).

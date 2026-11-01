@@ -1995,6 +1995,9 @@ DATAFRAME_SCHEMAS["fim_product_manifest"] = {
             ("flooded_pixels", "int | None", "Pixels with 0 < depth <= 10000, the floodplain polygon support."),
             ("error", "str | None", "Failure diagnostic for failed or not_run rows."),
             ("velocity_tif", "str | None", "Velocity magnitude GeoTIFF (float32, NaN nodata) from map_sloping_profiles(velocity=True); None otherwise."),
+            ("depth_x_velocity_tif", "str | None", "D x V GeoTIFF (float32, NaN nodata) from map_sloping_profiles(derived_products=...); None otherwise."),
+            ("depth_x_velocity_squared_tif", "str | None", "D x V^2 GeoTIFF (float32, NaN nodata) from map_sloping_profiles(derived_products=...); None otherwise."),
+            ("froude_tif", "str | None", "Froude number GeoTIFF (float32, NaN nodata) from map_sloping_profiles(derived_products=...); None otherwise."),
         )
     ],
     "note": "The same rows, engine method record, engine reports, options, AOI and input identities are written to fim_manifest.json. Step05 prepares every wet cell before AOI selection; horizontal mapping prepares ownership and terrain for the constrained window. Sloping, horizontal and whole-simulation manifests (and the comparison report) add invalid_cells (also attrs['invalid_cells']): {schema: 'fim-invalid-cells/1', policy, count, cells: [{mesh, cell_id, reason, action (repaired|convex_hull|omitted|overlap_trimmed|overlap_consumed), original_area, fallback_area, pieces, overlap_with, intersects_aoi}]}; empty for valid meshes.",
@@ -2094,4 +2097,69 @@ DATAFRAME_SCHEMAS["fim_comparison"] = {
         )
     ],
     "note": "2D-only model gate; same-lattice comparison inside selected cells/AOI, independently thresholded. Additional performance dictionary is in DataFrame attrs and comparison.json; ratios withheld for unmatched scopes. No per-profile allocation of shared Rust setup.",
+}
+
+
+DATAFRAME_SCHEMAS["fim_boundary_manifest"] = {
+    "description": "One row per deterministic Rust 2D zero-depth contour product.",
+    "accessor": "RasFim.map_inundation_boundaries(...)",
+    "source": "RasFim.map_inundation_boundaries()",
+    "extra_columns": False,
+    "dynamic": False,
+    "columns": [
+        {"name": name, "dtype": dtype, "description": description}
+        for name, dtype, description in (
+            ("profile", "str", "Caller-defined safe profile name."),
+            ("selector", "str | int", "Max or source stored timestep index."),
+            ("status", "str", "complete, empty, or failed."),
+            ("boundary_geojson", "str | None", "Deterministic contour MultiPolygon with stored CRS."),
+            ("interpolation", "str", "horizontal or plain cell-corner sloping."),
+            ("polygons", "int", "Polygon part count."),
+            ("holes", "int", "Interior ring count."),
+            ("vertices", "int", "Closed-ring coordinate count."),
+            ("area", "float", "Polygon area in squared projected CRS units."),
+            ("crs", "str", "Stored terrain/model projected CRS."),
+            ("error", "str | None", "Failure diagnostic, if any."),
+        )
+    ],
+    "note": "Deterministic zero-depth contours are not claimed identical to native stored boundaries. Timings, method and source identities are retained in attrs and boundary_manifest.json.",
+}
+
+
+DATAFRAME_SCHEMAS["fim_boundary_comparison"] = {
+    "description": "Complete vector differences between deterministic contours and native stored polygons.",
+    "accessor": "RasFim.compare_inundation_boundaries(...)",
+    "source": "RasFim.compare_inundation_boundaries()",
+    "extra_columns": False,
+    "dynamic": False,
+    "columns": [
+        {"name": name, "dtype": dtype, "description": description}
+        for name, dtype, description in (
+            ("profile", "str", "Caller-defined candidate profile name."),
+            ("native_profile", "str | int", "Native profile/timestamp or retained-reference selector."),
+            ("status", "str", "Comparison completion status."),
+            ("interpolation", "str", "horizontal or plain corner sloping."),
+            ("candidate_polygons", "int", "Candidate polygon part count in comparison scope."),
+            ("reference_polygons", "int", "Reference polygon part count in comparison scope."),
+            ("candidate_holes", "int", "Candidate interior rings."),
+            ("reference_holes", "int", "Reference interior rings."),
+            ("candidate_vertices", "int", "Candidate closed-ring coordinate count."),
+            ("reference_vertices", "int", "Reference closed-ring coordinate count."),
+            ("candidate_area", "float", "Candidate area in squared projected CRS units."),
+            ("reference_area", "float", "Reference area in squared projected CRS units."),
+            ("extra_area", "float", "Candidate area outside the reference."),
+            ("missing_area", "float", "Reference area outside the candidate."),
+            ("symmetric_difference_area", "float", "Sum of extra and missing areas."),
+            ("intersection_over_union", "float", "Area intersection divided by area union."),
+            ("hausdorff_distance", "float | None", "Bounded discrete Hausdorff distance; null when excluded."),
+            ("geometry_equal", "bool", "Topological equality without coordinate rounding or tolerance."),
+            ("quantized_coordinates_equal", "bool", "Canonical ring-coordinate equality on the declared 0.001-unit lattice."),
+            ("candidate_path", "str", "Candidate contour GeoJSON."),
+            ("reference_path", "str", "Native stored polygon vector source."),
+            ("native_seconds", "float | None", "Native generation call time; null for retained references."),
+            ("candidate_batch_seconds", "float", "Shared Rust batch clock, repeated per row and counted once."),
+            ("comparison_seconds", "float", "Geometry scanning/metrics time for this row."),
+        )
+    ],
+    "note": "Difference metrics retain complete polygons and holes. Native vector parity is not presumed. Shared timing/provenance and exclusions are recorded in attrs and boundary_comparison.json.",
 }

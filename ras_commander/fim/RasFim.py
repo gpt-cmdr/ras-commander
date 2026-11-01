@@ -91,6 +91,9 @@ MANIFEST_COLUMNS = [
     "flooded_pixels",
     "error",
     "velocity_tif",
+    "depth_x_velocity_tif",
+    "depth_x_velocity_squared_tif",
+    "froude_tif",
 ]
 
 PathLike = Union[str, os.PathLike]
@@ -442,6 +445,9 @@ class RasFim:
         decoder and preparation allocations are outside retained admission.
         Numeric profile staging uses native-HDF slabs of at most 8 MiB source
         values, with a bounded float32 conversion buffer.
+        ``terrain_crs_fnv1a64`` explicitly pins the native reader's WKT identity
+        after independent verification of the original terrain/model CRS. It
+        never reprojects coordinates; the default retains strict CRS matching.
 
         Returns:
             FimPreparedSlopingModel: Owned inputs with ``map_profiles``,
@@ -478,6 +484,138 @@ class RasFim:
 
     @staticmethod
     @log_call
+    def compare_inundation_boundaries(
+        hdf_path: PathLike, terrain_path: PathLike, output_folder: PathLike, *,
+        terrain_hdf: PathLike,
+        profiles: Optional[Dict[str, Union[str, int]]] = None,
+        interpolation: str = "sloping", native_boundaries: Optional[Dict[str, PathLike]] = None,
+        plan_number: Optional[str] = None, terrain_name: Optional[str] = None,
+        ras_object: Any = None, ras_version: Optional[str] = None,
+        bbox: Optional[Sequence[float]] = None, polygon: Any = None, polygon_layer: Optional[str] = None,
+        aoi_crs: Any = None, engine_path: Optional[PathLike] = None,
+        threads: int = 1, max_inflight_profiles: int = 1,
+        max_working_mib: int = 1024, max_prepared_mib: int = 1024,
+        timeout: Optional[float] = None,
+        terrain_crs_fnv1a64: Optional[str] = None,
+    ) -> "pd.DataFrame":
+        """Compare deterministic Rust boundaries with native stored polygons.
+
+        Args:
+            hdf_path: Computed 2D-only plan HDF.
+            terrain_path: Original single-source terrain TIFF.
+            output_folder: New or empty comparison/evidence folder.
+            terrain_hdf: Original terrain masks, perimeters and stitch TIN.
+            profiles: Output names mapped to Max or stored timestep indices.
+            interpolation: horizontal or plain cell-corner sloping.
+            native_boundaries: Optional profile-to-vector-file references.
+                When absent, generate references through RasProcess.store_maps.
+            plan_number: Plan for native reference generation.
+            terrain_name: Native terrain registration, if selection is needed.
+            ras_object: Initialized RasPrj for native generation.
+            ras_version: Native HEC-RAS version for reference generation.
+            bbox: Optional AOI bounds, applied to both comparison geometries.
+            polygon: Optional polygon AOI or vector source.
+            polygon_layer: Polygon file layer.
+            aoi_crs: AOI CRS. Bounds default to model CRS; a Shapely
+                geometry requires an explicit CRS.
+            engine_path: Explicit Fast-Map executable, if needed.
+            threads: Shared Rust worker count.
+            max_inflight_profiles: Bounded Rust timestep concurrency.
+            max_working_mib: Planned working-array budget.
+            max_prepared_mib: Geometry and staging budget.
+            timeout: Per-engine/native-call timeout in seconds.
+            terrain_crs_fnv1a64: Optional caller-verified terrain WKT identity.
+
+        Returns:
+            Full geometry/topology difference metrics and timing receipt.
+            Native generation, Rust batch mapping and comparison scans have
+            separate clocks in attrs["performance"]. No post-depth filter is
+            applied. Native Max polygons may vary between identical exports.
+
+        Raises:
+            FimUnsupportedError: Unsupported CRS, geometry or input scope.
+            FimEngineError: Failed native or Rust execution.
+            ValueError: Invalid controls or reference selection.
+        """
+        from ._boundary_comparison import run
+        return run(
+            hdf_path, terrain_path, output_folder, terrain_hdf=terrain_hdf,
+            profiles=profiles, interpolation=interpolation,
+            native_boundaries=native_boundaries, plan_number=plan_number,
+            terrain_name=terrain_name, ras_object=ras_object,
+            ras_version=ras_version, bbox=bbox, polygon=polygon,
+            polygon_layer=polygon_layer, aoi_crs=aoi_crs,
+            engine_path=engine_path, threads=threads,
+            max_inflight_profiles=max_inflight_profiles,
+            max_working_mib=max_working_mib, max_prepared_mib=max_prepared_mib,
+            timeout=timeout, terrain_crs_fnv1a64=terrain_crs_fnv1a64,
+        )
+
+    @staticmethod
+    @log_call
+    def map_inundation_boundaries(
+        hdf_path: PathLike, terrain_path: PathLike, output_folder: PathLike, *,
+        terrain_hdf: PathLike,
+        profiles: Optional[Dict[str, Union[str, int]]] = None,
+        interpolation: str = "sloping", bbox: Optional[Sequence[float]] = None, polygon: Any = None,
+        polygon_layer: Optional[str] = None, aoi_crs: Any = None,
+        engine_path: Optional[PathLike] = None, threads: int = 1,
+        max_inflight_profiles: int = 1, max_working_mib: int = 1024,
+        max_prepared_mib: int = 1024, timeout: Optional[float] = None,
+        terrain_crs_fnv1a64: Optional[str] = None,
+    ) -> "pd.DataFrame":
+        """Generate deterministic 2D zero-depth contour polygons in Rust.
+
+        The method preserves holes with a deterministic NonZero union. It is
+        distinct from RASMapper's order-dependent stored boundary polygons;
+        compare full topology and coordinates rather than assuming equality.
+        Existing Depth/WSE raster methods are unchanged.
+
+        Args:
+            hdf_path: Computed 2D-only plan HDF; 1D elements are rejected.
+            terrain_path: Original unmodified single-source float32 terrain TIFF.
+            output_folder: New or empty product folder.
+            terrain_hdf: Original associated terrain HDF containing level-zero
+                masks, perimeters and optional stitch TIN. No substitute masks
+                are constructed from a flattened terrain raster.
+            profiles: Output names mapped to Max or stored timestep indices.
+            interpolation: horizontal or plain cell-corner sloping.
+            bbox: Optional bounds in aoi_crs.
+            polygon: Optional Polygon/MultiPolygon, GeoDataFrame or file path.
+            polygon_layer: Layer name for a polygon file.
+            aoi_crs: AOI CRS. Bounds default to model CRS; a Shapely
+                geometry requires an explicit CRS.
+            engine_path: Explicit matching Fast-Map executable, if needed.
+            threads: Shared native worker count, 1 through 64.
+            max_inflight_profiles: Bounded timestep concurrency.
+            max_working_mib: Planned engine allocation budget; not hard RSS.
+            max_prepared_mib: Retained geometry/staged-input budget.
+            timeout: Engine execution timeout in seconds.
+            terrain_crs_fnv1a64: Optional caller-verified native-reader WKT
+                identity, after checking the original terrain CRS independently.
+
+        Returns:
+            Product manifest with GeoJSON paths and polygon statistics.
+            Timing and provenance are in attrs and boundary_manifest.json.
+
+        Raises:
+            FimUnsupportedError: Unsupported terrain/model or resource limits.
+            FimEngineError: Missing capability or unsuccessful mapping.
+            ValueError: Invalid controls or incompatible AOIs.
+        """
+        from ._boundary import map_inundation_boundaries
+        return map_inundation_boundaries(
+            hdf_path, terrain_path, output_folder, terrain_hdf=terrain_hdf,
+            profiles=profiles, interpolation=interpolation, bbox=bbox,
+            polygon=polygon, polygon_layer=polygon_layer, aoi_crs=aoi_crs,
+            engine_path=engine_path, threads=threads,
+            max_inflight_profiles=max_inflight_profiles,
+            max_working_mib=max_working_mib, max_prepared_mib=max_prepared_mib,
+            timeout=timeout, terrain_crs_fnv1a64=terrain_crs_fnv1a64,
+        )
+
+    @staticmethod
+    @log_call
     def map_sloping_profiles(
         hdf_path: PathLike, terrain_path: PathLike, output_folder: PathLike, *,
         profiles: Optional[Dict[str, Union[str, int]]] = None,
@@ -500,6 +638,9 @@ class RasFim:
         velocity: bool = False,
         invalid_cells: str = "repair",
         terrain_crs_fnv1a64: Optional[str] = None,
+        storage_areas: bool = False,
+        velocity_depth: str = "rendered",
+        derived_products: Sequence[str] = (),
     ) -> pd.DataFrame:
         """Map 2D HDF WSE with the experimental Rust sloping engine.
 
@@ -537,7 +678,8 @@ class RasFim:
         timesteps. Bounded Spring River/Spring Creek comparisons retain the
         complete mesh. Models containing 1D river or cross-section elements
         are rejected before mapping.
-        Standalone storage-area surfaces outside the 2D mesh are not mapped.
+        Standalone storage-area surfaces outside the 2D mesh are not mapped
+        unless ``storage_areas=True``.
 
         ``terrain_path`` must be a same-CRS float32 square-pixel GeoTIFF with
         declared nodata. ``bbox`` or ``polygon`` constrains output pixels;
@@ -622,12 +764,25 @@ class RasFim:
                 float32, NaN nodata, model velocity units) to each row. Max
                 uses ``Maximum Face Velocity`` with Maximum Water Surface; a
                 timestep index uses ``Face Velocity`` at that output time.
-                Face normals use face polyline lengths. Drawn where rendered
-                depth > 0; native velocity masks can differ from that on a
-                small fraction of edge pixels, while values on common pixels
-                match native Max maps on the qualified models (see
-                ``attrs["velocity"]``). Plain sloping with HDF profiles only; refuses
+                Face normals use face polyline lengths. RAS Mapper's velocity
+                values do not depend on the render mode; it clips them with the
+                active mode's depth. Drawn where the ``velocity_depth`` depth
+                is > 0. Plain ``sloping`` and plain ``slopingPretty`` (no
+                shallow or depth-weighted options) with HDF profiles; refuses
                 ``wsel_profiles``, ``template_raster`` and storage-area plans.
+                ``slopingPretty`` needs an engine advertising it in
+                ``velocity_render_modes``.
+            velocity_depth: ``"rendered"`` (default) clips velocity with this
+                request's rendered depth. ``"horizontal"`` clips it with the
+                horizontal cell-constant depth, reproducing RAS Mapper's
+                horizontal-mode velocity; the WSE/depth products stay sloping.
+            derived_products: Per-profile products from the clipping depth and
+                velocity: ``"depth_x_velocity"``, ``"depth_x_velocity_squared"``
+                and ``"froude"`` (``13_<profile>_<product>.tif``, added to each
+                row as ``<product>_tif``). Requires ``velocity=True`` and an
+                engine advertising ``rasmapper-depth-velocity-products/1``.
+                For Max, use :meth:`map_derived_max`: RAS Mapper's Max of these
+                products is the per-time product's maximum, not Max d x Max v.
             invalid_cells: Pixel ownership for physical cells whose face
                 polylines do not form a valid polygon (for example, a face that
                 crosses back over another face of the same cell). HEC-RAS
@@ -654,6 +809,22 @@ class RasFim:
                 still agree under rasterio and resolve to an EPSG code. Ignored
                 when the engine reports an EPSG code. The manifest records the
                 accepted identity as ``terrain_crs_identity``.
+            storage_areas: Also draw the plan's standalone storage areas as
+                RAS Mapper level pools (``storage-area-level-pool/1``): every
+                pixel whose centre is inside a storage-area polygon gets that
+                area's WSE (``Maximum Water Surface`` for Max, the stored
+                ``Water Surface`` for a timestep), visible where float32
+                ``wse >= terrain + 0.001``, depth ``wse - terrain``. The
+                window grows to cover the storage areas. The same in every
+                render mode; qualified against native HEC-RAS 7.0.1 stored
+                maps on BaldEagleCrkMulti2D storage-area plans. Storage areas
+                overlapping 2D cells or each other, and with ``terrain_hdf``
+                any storage-area pixel outside the priority-1 source footprint,
+                are refused (FimUnsupportedError). Not available with
+                ``wsel_profiles``, ``velocity`` or prepared models. Requires an
+                engine advertising ``storage_area_surfaces``; see
+                :meth:`supports_storage_areas`. ``attrs["storage_areas"]``
+                records the areas and their mapped pixel count.
 
         Returns:
             DataFrame: ``fim_product_manifest`` rows with timing evidence in
@@ -688,7 +859,136 @@ class RasFim:
             max_inflight_profiles=max_inflight_profiles,
             template_raster=template_raster, terrain_hdf=terrain_hdf,
             velocity=velocity, invalid_cells=invalid_cells, product_writer=product_writer,
-            terrain_crs_fnv1a64=terrain_crs_fnv1a64)
+            terrain_crs_fnv1a64=terrain_crs_fnv1a64, storage_areas=storage_areas,
+            velocity_depth=velocity_depth, derived_products=derived_products)
+
+    #: Engine method ID of storage-area level-pool surfaces.
+    STORAGE_AREA_METHOD = "storage-area-level-pool/1"
+
+    @staticmethod
+    @log_call
+    def supports_storage_areas(engine_path: Optional[PathLike] = None) -> bool:
+        """Whether the installed engine draws storage-area level pools.
+
+        True when the engine's ``sloping``, ``horizontal`` and
+        ``whole_simulation`` methods all advertise
+        ``storage-area-level-pool/1``, so ``storage_areas`` can be passed to
+        :meth:`map_sloping_profiles`, :meth:`map_horizontal_profiles` and
+        :meth:`map_whole_simulation`. False when the engine is older or
+        missing; never raises for a missing engine.
+
+        Args:
+            engine_path: Engine executable, otherwise environment/PATH.
+
+        Returns:
+            bool: Storage-area surfaces are available.
+        """
+        from . import _storage_areas
+
+        try:
+            methods = _engine.engine_method(_engine.find_engine(engine_path))
+        except Exception:
+            return False
+        return all(
+            isinstance(methods.get(kind), dict)
+            and methods[kind].get("storage_area_surfaces") == _storage_areas.METHOD_ID
+            for kind in ("sloping", "horizontal", "whole_simulation")
+        )
+
+    @staticmethod
+    @log_call
+    def map_derived_max(
+        hdf_path: PathLike, terrain_path: PathLike, output_folder: PathLike, *,
+        products: Sequence[str] = ("depth_x_velocity", "depth_x_velocity_squared", "froude"),
+        render_mode: str = "sloping",
+        velocity_depth: str = "rendered",
+        bbox: Optional[Sequence[float]] = None, polygon: Any = None,
+        polygon_layer: Optional[str] = None, aoi_crs: Any = None,
+        engine_path: Optional[PathLike] = None, threads: int = 1,
+        max_inflight_profiles: int = 1,
+        max_working_mib: int = 2048, timeout: Optional[float] = None,
+        terrain_hdf: Optional[PathLike] = None,
+        invalid_cells: str = "repair",
+        terrain_crs_fnv1a64: Optional[str] = None,
+    ) -> pd.DataFrame:
+        """Map RAS Mapper's Max D x V, D x V^2 and Froude in one time-series pass.
+
+        RAS Mapper computes these Max products per stored output time from that
+        time's rendered depth and velocity, then keeps the pixelwise maximum;
+        the valid area is the union over all times. That is not Max depth
+        times Max velocity. This method stages every stored output time and
+        lets the engine reduce them (``reduce_max/1``) without writing
+        per-time products.
+
+        Args:
+            hdf_path: Computed 2D plan-results HDF.
+            terrain_path: Terrain GeoTIFF, as for :meth:`map_sloping_profiles`.
+            output_folder: New or empty directory.
+            products: Subset of ``depth_x_velocity``,
+                ``depth_x_velocity_squared`` and ``froude``.
+            render_mode: ``"sloping"`` or ``"slopingPretty"`` (plain).
+            velocity_depth: ``"rendered"`` or ``"horizontal"`` (RAS Mapper's
+                horizontal mode: horizontal depth and its velocity clip).
+            bbox: Optional output bounds in ``aoi_crs`` or the model CRS.
+            polygon: Optional polygon geometry, frame or vector-file AOI.
+            polygon_layer: Layer name when the AOI file has multiple layers.
+            aoi_crs: Coordinate reference system of the AOI.
+            engine_path: Matching engine executable.
+            threads: Rust worker count, 1 through 64.
+            max_inflight_profiles: Concurrent output times.
+            max_working_mib: Planned engine memory admission budget.
+            timeout: Engine lifetime in seconds.
+            terrain_hdf: Optional registered terrain HDF for the priority-1
+                source TIFF, as for :meth:`map_sloping_profiles`.
+            invalid_cells: Invalid-cell ownership policy.
+            terrain_crs_fnv1a64: Engine WKT hash, as for :meth:`map_profiles`.
+
+        Returns:
+            DataFrame with one row per product (``product``, ``tif``,
+            ``valid_pixels``); ``attrs["max_derived"]`` and the JSON manifest
+            hold the evidence, ``attrs["velocity"]`` the method.
+
+        Raises:
+            FimUnsupportedError: Unsupported model, engine capability or scope.
+            FimEngineError: Engine failure or inconsistent output.
+            ValueError: Invalid products or options.
+        """
+        _require_dependencies(triangulation=False)
+        import h5py
+        from . import _sloping
+
+        with h5py.File(Path(hdf_path), "r") as source:
+            stamps = source.get(
+                "Results/Unsteady/Output/Output Blocks/Base Output/Unsteady Time Series/Time"
+            )
+            if stamps is None:
+                raise FimUnsupportedError("Max derived products need unsteady time series output")
+            count = int(stamps.shape[0])
+        if count < 1:
+            raise FimUnsupportedError("plan has no stored output times")
+        frame = _sloping.map_profiles(
+            hdf_path, terrain_path, output_folder,
+            profiles={f"t{k}": k for k in range(count)}, render_mode=render_mode,
+            bbox=bbox, polygon=polygon, polygon_layer=polygon_layer, aoi_crs=aoi_crs,
+            engine_path=engine_path, threads=threads,
+            max_working_mib=max_working_mib, timeout=timeout,
+            max_inflight_profiles=max_inflight_profiles, terrain_hdf=terrain_hdf,
+            velocity=True, invalid_cells=invalid_cells,
+            terrain_crs_fnv1a64=terrain_crs_fnv1a64, velocity_depth=velocity_depth,
+            derived_products=tuple(products), _reduce_max=True,
+        )
+        reduced = frame.attrs.get("max_derived", {})
+        valid = reduced.get("valid_pixels", {})
+        result = pd.DataFrame(
+            [
+                {"product": product, "tif": reduced.get("products", {}).get(f"{product}_tif"),
+                 "valid_pixels": valid.get(product)}
+                for product in products
+            ],
+            columns=["product", "tif", "valid_pixels"],
+        )
+        result.attrs.update(frame.attrs)
+        return result
 
     @staticmethod
     @log_call
@@ -725,6 +1025,90 @@ class RasFim:
 
         return _terrain_scope.top_priority_source(terrain_hdf, rasmap_path)
 
+    #: Engine method ID of the native effective terrain.
+    EFFECTIVE_TERRAIN_METHOD = "rasmapper-effective-terrain/1"
+
+    @staticmethod
+    def supports_effective_terrain(engine_path: Optional[PathLike] = None) -> bool:
+        """Whether the installed engine builds RAS Mapper's effective terrain.
+
+        True when ``ras2fim-batch method`` advertises
+        ``rasmapper-effective-terrain/1``. Never raises for a missing engine.
+
+        Args:
+            engine_path: Engine executable, otherwise environment/PATH.
+
+        Returns:
+            bool: :meth:`build_effective_terrain` is available.
+        """
+        from . import _effective_terrain
+
+        try:
+            engine = _engine.find_engine(engine_path)
+        except Exception:
+            return False
+        return _effective_terrain.engine_supports(engine)
+
+    @staticmethod
+    @log_call
+    def build_effective_terrain(
+        terrain_hdf: PathLike, output_path: PathLike, *,
+        rasmap_path: Optional[PathLike] = None,
+        engine_path: Optional[PathLike] = None,
+        threads: int = 1, max_working_mib: int = 4096,
+        timeout: Optional[float] = None,
+        terrain_crs_fnv1a64: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """Build RAS Mapper's effective terrain of an unmodified terrain in Rust.
+
+        Writes the float32 grid ``RasTerrain.export_rasmapper_terrain(
+        downsample_factor=1, rasterize_modifications=False)`` obtains from
+        RasMapperLib, without HEC-RAS: stitch TIN first, then the sources in
+        proven priority order (``Priority`` attributes or the terrain VRT),
+        each answering where its four surrounding pixel centres are valid and
+        in its level-0 footprint, rounded to binary32 and 1/32 as RAS Mapper
+        stores terrain. Output: 256 x 256 tiled DEFLATE GeoTIFF, nodata
+        -9999, on the finest source's lattice over the union of the source
+        extents, plus ``<output>.json`` (the returned receipt).
+
+        Qualified against HEC-RAS 7.0.1 exports: Bald Eagle Terrain50 (two
+        sources, 197,179,058 valid px) has an identical valid mask and 8
+        values differ, all in stitch-TIN corners where RAS Mapper's own
+        exports are unstable; synthetic one-to-three-source terrains are
+        bit-identical on 4 of 5 (5 stitch-TIN corner px on the fifth).
+
+        Args:
+            terrain_hdf: Registered terrain HDF.
+            output_path: New ``.tif`` path (replaced if it exists).
+            rasmap_path: Optional rasmap; modification layers registered there
+                for this terrain are also refused.
+            engine_path: Engine executable, otherwise environment/PATH.
+            threads: Engine worker threads (1-64).
+            max_working_mib: Engine memory admission; the output is held in
+                memory (4 bytes/px plus a 1-bit TIN map).
+            timeout: Engine timeout in seconds.
+            terrain_crs_fnv1a64: Caller-verified WKT hash when the source CRS
+                has no EPSG identification in the engine.
+
+        Returns:
+            dict: Receipt with ``method_id``, ``sources_in_priority_order``,
+            ``priority_basis``, ``seconds`` and the engine ``engine_report``.
+
+        Raises:
+            FimUnsupportedError: Terrain modifications, unproven priority,
+                missing masks, an engine without the method, or an engine
+                refusal (sources in different CRSs, non-square cells).
+            FimEngineNotFoundError: The optional executable is unavailable.
+            FimEngineError: Engine failure.
+        """
+        from . import _effective_terrain
+
+        return _effective_terrain.build(
+            terrain_hdf, output_path, rasmap_path=rasmap_path, engine_path=engine_path,
+            threads=threads, max_working_mib=max_working_mib, timeout=timeout,
+            terrain_crs_fnv1a64=terrain_crs_fnv1a64,
+        )
+
     @staticmethod
     @log_call
     def map_whole_simulation(
@@ -737,6 +1121,7 @@ class RasFim:
         max_working_mib: int = 1024, timeout: Optional[float] = None,
         engine_path: Optional[PathLike] = None,
         invalid_cells: str = "repair",
+        storage_areas: bool = False,
     ) -> pd.DataFrame:
         """Map arrival time, percent time inundated and (opt-in) duration.
 
@@ -751,20 +1136,23 @@ class RasFim:
           simulation start** (``Plan Information/Simulation Start Time``),
           float32;
         - ``percent_inundated``: ``100 * wet output times / all output times``;
-        - ``duration`` (needs ``allow_unqualified=True``): hours from arrival
-          to the first dry output time after the last wet one, or to the last
-          wet time when that dry time is the final output or there is none.
+        - ``duration`` (qualified with an engine advertising ``duration_rule``
+          ``rasmapper-backward-window-recession/1``; older engines need
+          ``allow_unqualified=True``): hours from arrival to RAS Mapper's
+          recession time, found by its backward search over the monotone
+          windows between the cell's water-surface extrema.
 
         Never-wet pixels are NaN. Arrival time and percent inundated are
         qualified against RAS Mapper output: pixel conformance with native
         HEC-RAS 7.0.1 stored maps on Davis p02 and BaldEagleCrkMulti2D bridges
         p05 at a 0.5 ft threshold. RAS Mapper produces the same products in
-        horizontal and sloping render modes on those models. Duration differs
-        on a few recession pixels by one output interval and is unqualified;
+        horizontal and sloping render modes on those models. Duration with
+        the native recession rule matches the same references in every pixel;
         irregular output intervals are refused unless ``allow_unqualified``.
 
-        Scope: pure 2D plans. Plans with 1D elements or storage areas are
-        refused (use RAS Mapper for them).
+        Scope: pure 2D plans. Plans with 1D elements are refused. Plans with
+        storage areas are refused unless ``storage_areas=True`` (use RAS
+        Mapper for them otherwise).
 
         Args:
             hdf_path: Computed 2D plan-results HDF.
@@ -776,7 +1164,8 @@ class RasFim:
                 ``duration``. Defaults to the two qualified products.
             threshold: Wet depth threshold in model vertical units (RAS Mapper's
                 arrival depth; 0.5 is a half foot only in feet models).
-            allow_unqualified: Required for ``duration`` and irregular intervals.
+            allow_unqualified: Required for irregular intervals, and for
+                ``duration`` on engines without the native recession rule.
             terrain_hdf: Optional registered terrain HDF whose unmodified
                 priority-1 source TIFF is ``terrain_path``. Horizontal
                 rendering refuses any mapped pixel outside that source's
@@ -791,6 +1180,16 @@ class RasFim:
                 (default ``"repair"``). Applied only when strict assembly
                 refuses the mesh; valid meshes are unchanged. There is no AOI,
                 so ``"raise"`` refuses whenever the plan has such a cell.
+            storage_areas: Also accumulate the plan's standalone storage areas
+                as level pools (``storage-area-level-pool/1``): at each output
+                time a storage-area pixel is wet when the stored storage-area
+                ``Water Surface`` minus terrain is strictly greater than
+                ``threshold`` (native float32 plot test first); a level pool
+                has no cell gate. Overlaps with 2D cells or other storage
+                areas, and with ``terrain_hdf`` any storage-area pixel outside
+                the priority-1 source footprint, are refused. Requires an
+                engine advertising ``storage_area_surfaces`` on its
+                whole-simulation method (:meth:`supports_storage_areas`).
 
         Returns:
             DataFrame: ``fim_whole_simulation_manifest`` rows (one per product)
@@ -818,7 +1217,7 @@ class RasFim:
             threshold=threshold, allow_unqualified=allow_unqualified,
             terrain_hdf=terrain_hdf, threads=threads, writer_threads=writer_threads,
             max_working_mib=max_working_mib, timeout=timeout, engine_path=engine_path,
-            invalid_cells=invalid_cells,
+            invalid_cells=invalid_cells, storage_areas=storage_areas,
         )
 
     @staticmethod
@@ -846,6 +1245,7 @@ class RasFim:
         hdf_path: Optional[PathLike] = None,
         terrain_hdf: Optional[PathLike] = None,
         invalid_cells: str = "repair",
+        storage_areas: Optional[Dict[str, Union[str, int]]] = None,
     ) -> pd.DataFrame:
         """Map cell-constant horizontal WSE using a shared terrain-lattice grid.
 
@@ -916,6 +1316,22 @@ class RasFim:
                 mapped strictly. ``fim_manifest.json`` and
                 ``attrs["invalid_cells"]`` hold the ``fim-invalid-cells/1``
                 record.
+            storage_areas: Optional mapping of every mapped profile column
+                to ``"Max"`` or a zero-based stored timestep index of the
+                source plan HDF. The plan's standalone storage areas are then
+                drawn as RAS Mapper level pools (``storage-area-level-pool/1``):
+                each pixel whose centre is inside a storage-area polygon gets
+                that area's WSE (``Maximum Water Surface`` for Max, the stored
+                ``Water Surface`` otherwise), visible where float32
+                ``wse >= terrain + 0.001``, with the same ``min_depth`` cutoff.
+                The window grows to cover the storage areas. Needs model
+                provenance (``hdf_path`` or a table from
+                :meth:`get_cells_from_plan_hdf`), the Rust backend and an
+                engine advertising ``storage_area_surfaces``. Storage areas
+                overlapping 2D cells or each other are refused
+                (FimUnsupportedError). Use :meth:`supports_storage_areas` to
+                detect the capability. ``attrs["storage_areas"]`` records the
+                areas and their mapped pixel count.
 
         Returns:
             DataFrame: ``fim_product_manifest`` rows. Offsets refer to the
@@ -953,6 +1369,32 @@ class RasFim:
                 raise ValueError("hdf_path differs from the cells' source model")
         if hdf_path is not None or source_hdf is not None:
             RasFim.validate_2d_model(hdf_path if hdf_path is not None else source_hdf)
+        storage = None
+        if storage_areas is not None:
+            from . import _storage_areas
+
+            model_hdf = hdf_path if hdf_path is not None else source_hdf
+            if model_hdf is None:
+                raise ValueError("storage_areas needs the source plan HDF (hdf_path)")
+            if backend != "rust":
+                raise FimUnsupportedError("storage_areas requires the Rust backend")
+            if not isinstance(storage_areas, dict) or set(storage_areas) != set(names):
+                raise ValueError(
+                    "storage_areas must map every mapped profile column to 'Max' or a timestep index"
+                )
+            selection = {}
+            for name in names:
+                selector = storage_areas[name]
+                if selector != "Max" and (
+                    isinstance(selector, bool) or not isinstance(selector, (int, np.integer))
+                    or selector < 0
+                ):
+                    raise ValueError("storage_areas selectors must be 'Max' or nonnegative ints")
+                selection[name] = selector if selector == "Max" else int(selector)
+            areas = _storage_areas.read(model_hdf)
+            if areas is None:
+                raise FimUnsupportedError("storage_areas given but the plan has no storage areas")
+            storage = (areas, _storage_areas.profile_values(model_hdf, areas, selection))
         if len(cells) == 0:
             raise ValueError("horizontal cells must not be empty")
         if (
@@ -1003,7 +1445,10 @@ class RasFim:
         ordered = cells.sort_values("cell_idx", kind="stable").reset_index(drop=True)
         # One ownership row per piece of a split cell, each with the cell's WSE.
         ordered = _invalid_cells.explode_split(ordered, split_cells)
-        plan = _horizontal.plan_grid(ordered, terrain, constraint, budget, native=backend == "rust")
+        plan = _horizontal.plan_grid(
+            ordered, terrain, constraint, budget, native=backend == "rust",
+            storage_areas=storage[0].polygons if storage is not None else None,
+        )
         folder = _prepare_output_folder(output_folder)
         rows = {name: _empty_row(name, "not_run") for name in names}
         details = {
@@ -1038,11 +1483,17 @@ class RasFim:
             from . import _terrain_scope
 
             details["terrain_scope"] = _terrain_scope.describe(scope_info)
+        if storage is not None:
+            from . import _storage_areas
+
+            details["storage_areas"] = _storage_areas.describe(storage[0], selection)
 
         def manifest():
             frame = pd.DataFrame([rows[name] for name in names], columns=MANIFEST_COLUMNS)
             if scope_info is not None:
                 frame.attrs["terrain_scope"] = details["terrain_scope"]
+            if storage is not None:
+                frame.attrs["storage_areas"] = details["storage_areas"]
             frame.attrs["invalid_cells"] = details["invalid_cells"]
             return frame
 
@@ -1075,6 +1526,7 @@ class RasFim:
                     folder,
                     timeout,
                     scope_info,
+                    storage,
                 )
                 if backend == "rust" and all(plan.shape)
                 else nullcontext(None)

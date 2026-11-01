@@ -43,7 +43,7 @@ def test_registrations_kinds_gates_and_delegation(inventory):
     found = {e["name"]: (e["kind"], e["feature"], e["registered_in"])
              for e in inventory["python_entry_points"]}
     assert found == EXPECTED
-    assert len(inventory["python_entry_points"]) == 80 == len(EXPECTED)  # explicit full-feature set, no duplicates
+    assert len(inventory["python_entry_points"]) == 85 == len(EXPECTED)  # explicit full-feature set, no duplicates
 
 
 def test_module_constants(inventory):
@@ -78,12 +78,14 @@ def test_source_matches_accepted_runtime_abi(inventory):
 def test_dependency_pins_and_features(inventory):
     crate = inventory["crate"]
     # One crate (0.2+): the engine, bindings and export writers are features of
-    # ras-commander-fast-hdf, with no git or path dependencies. The HDF5 reader
-    # and freestiler-core are embedded sources pinned in vendor/PROVENANCE.json.
+    # ras-commander-fast-hdf, with no git or path dependencies. freestiler-core
+    # is an embedded source pinned in vendor/PROVENANCE.json; the HDF5 reader is
+    # the exact-pinned crates.io crate hdf5-reader (no longer vendored, 0.2.5+).
     assert (crate["name"], crate["lib_name"]) == ("ras-commander-fast-hdf", "ras_commander_fast_hdf")
     assert crate["git_dependencies"] == {}
     assert crate["embedded"]["freestiler-core"]["commit"] == "beb64b0d4414da895ec67d02b2f91db6ab6acc37"
-    assert {"hdf5-reader", "hdf5-core"} <= set(crate["embedded"])
+    assert not {"hdf5-reader", "hdf5-core"} & set(crate["embedded"])
+    assert crate["hdf5_reader"] and crate["hdf5_reader"].startswith("=")
     build = inventory["python_build"]
     assert build["manifest_path"] == "../Cargo.toml" and build["module_name"] == "ras_commander_fast_hdf"
     assert {"python", "extension-module"} <= set(build["features"])

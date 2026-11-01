@@ -17,7 +17,10 @@ def capabilities(value):
 def test_engine_contract_and_evidence(native):
     c=native.capabilities();assert c['api_version']==11
     assert c['engine_api_version']==c['engine_capabilities']['api_version']==10
-    assert c['engine_capabilities']['features']==c['engine_features']
+    # engine_features is the documented four; engine 0.3.0 release wheels (python-arrow)
+    # also report 'arrow' in engine_capabilities.features (fast-hdf extension contract).
+    f,base=list(c['engine_capabilities']['features']),list(c['engine_features'])
+    assert f[:len(base)]==base and set(f[len(base):])<={'arrow'}
     assert any(e['owner']=='ReadOnlyHdfSession' and e['name']=='read_structure_series' for e in c['engine_capabilities']['entrypoints'])
     assert c['default_max_bytes']==64<<20
     p=ROOT/'structures/good.h5';inv=native.structure_inventory(p,'lateral_structure');capabilities(inv)

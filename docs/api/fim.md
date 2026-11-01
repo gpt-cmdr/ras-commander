@@ -84,9 +84,10 @@ its own hydraulic connectivity and corner reconstruction. Worker count controls
 the bounded Rayon pool. An AOI reduces the terrain/output window while retaining
 the complete mesh needed to reconstruct boundary values. Models containing 1D
 river or cross-section elements are rejected before mapping.
-Standalone storage-area surfaces outside the 2D mesh are excluded. The return
-attributes `mapping_scope` and `model_scope`, and the JSON manifest, record
-this boundary. The Bald Eagle dam-break reference also renders a storage area;
+Standalone storage-area surfaces outside the 2D mesh are excluded unless
+`storage_areas=True` (see [Storage-area level pools](#storage-area-level-pools)).
+The return attributes `mapping_scope` and `model_scope`, and the JSON manifest,
+record this boundary. The Bald Eagle dam-break reference also renders a storage area;
 its exact sloping comparison is restricted to physical 2D cells, not the whole
 native model image.
 
@@ -328,7 +329,7 @@ the terrain is modified. No terrain healer is bundled or invoked by this API.
 Mapping-time bbox/polygon masks retain global hydraulic inputs.
 
 Fast-Map accepts these vectors from 0.8.0 onward; no new engine build is
-required. Commander's `fim` extra requires Fast-Map **0.10.1** or later. The
+required. Commander's `fim` extra requires Fast-Map **0.12.0** or later. The
 new Commander keyword requires a version or source commit containing this
 feature. On Linux x64 with glibc 2.28+, including
 a Python 3.11 container with a Commander checkout copied to `/app`, install:
@@ -337,7 +338,7 @@ a Python 3.11 container with a Commander checkout copied to `/app`, install:
 FROM python:3.11-slim
 WORKDIR /app
 COPY . /app
-RUN python -m pip install --no-cache-dir '.[fim]' 'ras-commander-fast-map==0.10.1'
+RUN python -m pip install --no-cache-dir '.[fim]' 'ras-commander-fast-map==0.12.0'
 ENTRYPOINT ["python", "scripts/examples/map_supplied_wsel.py"]
 ```
 
@@ -755,22 +756,52 @@ TIFF because 28 mapped 2D pixels lie outside its footprint.
 manifest row, rendered by the engine's `rasmapper-sloping-velocity/0` method.
 Max uses `Maximum Face Velocity` with the Max WSE; a timestep index uses
 `Face Velocity` at that output time. Face normals carry face polyline lengths.
-Velocity is drawn where the rendered depth is greater than zero. It requires
-plain sloping with HDF profiles; `wsel_profiles`, `template_raster` and
+RAS Mapper's velocity values do not depend on the render mode; it clips them
+with the active mode's depth. `velocity_depth="rendered"` (default) clips with
+this request's depth (`sloping`, or plain `slopingPretty` on an engine that
+advertises it in `velocity_render_modes`). `velocity_depth="horizontal"`
+clips with the horizontal cell-constant depth, reproducing RAS Mapper's
+horizontal-mode velocity; the WSE/depth products stay sloping. HDF profiles
+only; `wsel_profiles`, `template_raster`, shallow/depth-weighted options and
 storage-area plans are refused.
 
-| Model (native 7.0.1, Max) | Common pixels | Bit differences | Mask differences |
-|---|---|---|---|
-| BaldEagleCrkMulti2D bridges p05 | 972,706 | 0 | 826 native-only, 1,196 extra |
-| Davis p02 | 22,041 | 3 (at most 3e-8) | 0 |
+`derived_products=("depth_x_velocity", "depth_x_velocity_squared", "froude")`
+adds `<product>_tif` (`13_<profile>_<product>.tif`) from the same clipping
+depth and velocity, in RAS Mapper's operation order (Froude uses the plan's
+float32 gravity, 32.174 or 9.80665). For Max use `map_derived_max`:
 
-The native velocity validity mask is not always the depth mask; the bridges
-differences are edge pixels.
+```python
+products = RasFim.map_derived_max(
+    "model.p05.hdf", "terrain.tif", "max_derived",
+    render_mode="sloping",  # or velocity_depth="horizontal"
+)
+products[["product", "tif", "valid_pixels"]]
+```
+
+RAS Mapper's Max D x V, D x V^2 and Froude are the per-output-time products'
+pixelwise maximum (the valid area is the union over times), not Max depth
+times Max velocity. The engine reduces every stored output time
+(`reduce_max/1`) without writing per-time rasters.
+
+| Native 7.0.1 reference | Product | Valid pixels | Bit / mask differences |
+|---|---|---|---|
+| bridges p05 Max, sloping | velocity | 973,902 | 0 / 0 |
+| bridges p05 Max, horizontal clip | velocity | 973,532 | 0 / 0 |
+| bridges p05 Max, slopingPretty | velocity | 974,142 | 0 on 974,067 common; mask follows the rendered slopingPretty depth (75 / 28 edge pixels where that depth differs) |
+| bridges p05 03JAN1999 00:00, sloping | velocity, D x V, D x V^2, Froude | 402,616 | 0 / 0 |
+| bridges p05 03JAN1999 00:00, horizontal | velocity, D x V, D x V^2, Froude | 402,500 | 0 / 0 |
+| bridges p05 Max over 433 times, sloping | D x V, D x V^2, Froude | 973,956 | 0 / 0 |
+| bridges p05 Max over 433 times, horizontal | D x V, D x V^2, Froude | 973,531 | 0 / 0 |
+| Davis p02 (Max, 11JAN2000 06:00, Max over 217 times) | all | 8,586-20,560 | at most 5 pixels within 2 ulp / 0 |
+
+An earlier table reported 826/1,196 bridges mask differences; that reference
+was RAS Mapper's horizontal-mode velocity compared with the sloping depth.
+Shear stress is not rendered (see the Fast-Map research notes).
 
 ## Whole-simulation products
 
-`map_whole_simulation` produces arrival time and percent time inundated (and,
-opt-in, duration) from every stored output time, through the engine's
+`map_whole_simulation` produces arrival time, percent time inundated and
+duration from every stored output time, through the engine's
 `native-whole-simulation-horizontal/1` method:
 
 ```python
@@ -785,19 +816,58 @@ manifest[["product", "tif", "units", "wet_pixels"]]
 - `arrival_time` is the first wet output time in hours since the plan's
   simulation start; `percent_inundated` is `100 * wet times / all times`.
   Never-wet pixels are NaN.
-- `duration` requires `allow_unqualified=True`: some native recession
-  durations are one output interval shorter. Irregular output intervals are
-  also refused without it.
-- Plans with storage areas or 1D elements are refused.
+- Plans with 1D elements are refused. Plans with storage areas are refused
+  unless `storage_areas=True`; a storage-area pixel is then wet when its depth
+  is greater than `threshold` (a level pool has no cell gate).
+- `duration` runs to RAS Mapper's recession time on an engine advertising
+  `duration_rule` `rasmapper-backward-window-recession/1` (qualified below);
+  older engines use the first dry time and need `allow_unqualified=True`.
+  Irregular output intervals are refused without `allow_unqualified`.
+  Fast-Map 0.12 refuses `duration` together with `storage_areas=True`.
 
-| Model (native 7.0.1, 0.5 ft) | Output times | Valid pixels | Arrival / percent differences |
+| Model (native 7.0.1, 0.5 ft) | Output times | Valid pixels | Arrival / percent / duration differences |
 |---|---|---|---|
-| Davis p02 | 217 | 4,879 | 0 / 0 |
-| BaldEagleCrkMulti2D bridges p05 | 433 | 959,043 | 0 / 0 |
+| Davis p02 | 217 | 4,879 | 0 / 0 / 0 |
+| BaldEagleCrkMulti2D bridges p05 | 433 | 959,043 | 0 / 0 / 0 |
 
 Both match RAS Mapper's horizontal and sloping stored maps, which are identical
 on these models. These methods target pure 2D models for FIM library creation;
-1D models, storage areas and other products remain with RAS Mapper.
+1D models and other products remain with RAS Mapper.
+
+## Storage-area level pools
+
+RAS Mapper draws a standalone storage area as a horizontal pool. With
+`storage_areas=True` (`map_sloping_profiles`, `map_whole_simulation`) or
+`storage_areas={profile: "Max" | index}` (`map_horizontal_profiles`, with the
+source plan HDF), the engine's `storage-area-level-pool/1` method does the same:
+every pixel whose centre is inside a storage-area polygon
+(`Geometry/Storage Areas`) gets that area's WSE (`Maximum Water Surface` for
+Max, the stored `Water Surface` for a timestep), visible where float32
+`wse >= terrain + 0.001`, depth `wse - terrain`, in every render mode. The
+output window grows to cover the storage areas.
+
+```python
+if RasFim.supports_storage_areas():
+    manifest = RasFim.map_sloping_profiles(
+        "BaldEagleDamBrk.p07.hdf", "terrain.tif", "out", storage_areas=True,
+    )
+    manifest.attrs["storage_areas"]  # names, method and mapped pixel count
+```
+
+Refused (`FimUnsupportedError`) rather than guessed: storage areas overlapping
+2D cells or each other, velocity, caller-supplied `wsel_profiles`, prepared
+models and, with `terrain_hdf`, any storage-area pixel outside the priority-1
+source footprint (BaldEagleCrkMulti2D has 28; map on an export instead).
+
+| Native 7.0.1 comparison | Products | Storage-area pixels | Differences |
+|---|---|---|---|
+| BaldEagleCrkMulti2D p07 | Max Depth/WSE horizontal, sloping, slopingPretty (with/without shallow reduction); 02JAN1999 13:00 horizontal and sloping | 466,912 (Max) | 0 mask, 0 bits |
+| BaldEagleCrkMulti2D p04 (2D levee structures) | Max Depth/WSE in the same four modes; 13:00 sloping | 461,639 (Max) | 0 mask, 0 bits |
+| p07 and p04 | Arrival time and percent inundated at 0.5 ft | 464,106 / 458,764 | 0 mask, 0 bits |
+
+Duration differences (8 and 46 pixels, one output interval) are all 2D pixels.
+Both models have one storage area connected to the 2D area; multiple storage
+areas and storage-area-to-storage-area connections are not covered.
 
 ## Horizontal cell mapping
 
@@ -1512,3 +1582,119 @@ See [catalog measurements and reproduction](../development/fim-mapping-performan
       show_root_heading: false
       heading_level: 3
       show_source: false
+
+
+## Deterministic inundation boundaries
+
+`RasFim.map_inundation_boundaries()` generates vector zero-depth contours in
+Rust. It supports horizontal and plain cell-corner sloping surfaces, multiple
+stored timesteps, and bbox or polygon constraints. It adds no depth cutoff.
+
+```python
+boundaries = RasFim.map_inundation_boundaries(
+    "model.p02.hdf", "Terrain/Original.tif", "boundary_catalog",
+    terrain_hdf="Terrain/Terrain.hdf",
+    profiles={"maximum": "Max", "t108": 108},
+    interpolation="sloping",  # or "horizontal"
+    polygon="reach.gpkg", threads=4, max_inflight_profiles=2,
+    max_working_mib=2048,
+)
+print(boundaries[["profile", "polygons", "holes", "boundary_geojson"]])
+print(boundaries.attrs["performance"])
+```
+
+The function returns one manifest row per profile, including empty products.
+GeoJSON stores the projected CRS explicitly. `boundary_manifest.json` records
+the method, source identities, terrain metadata, concurrency and timings.
+
+Use the original, unmodified single-source float32 TIFF with 256-pixel tiles and its
+associated terrain HDF. The HDF supplies sample-coverage masks, perimeter
+values and complete stitch TIN connectivity. A flattened replacement TIFF is
+insufficient evidence for those arrays. Multi-source terrain HDFs, 1D model
+elements, and cell-face/shallow/depth-weighted boundary options are refused.
+An AOI outside the source sample grid is refused. AOIs preserve full source
+tiles plus a sample halo; only final contour polygons are clipped.
+
+Nonempty or linked `/Modifications` objects in the terrain HDF are refused
+before numeric reads. The API cannot infer externally registered modifications
+from a TIFF/HDF pair: supply a terrain with no external modifications. An empty
+modification group is permitted and recorded. A replacement effective TIFF also
+needs matching regenerated terrain metadata and separate qualification.
+
+For a model with multiple terrain sources, first preprocess a dedicated single
+mapping terrain. Preserve source priority, CRS, grid, nodata and effective
+elevations, then generate its matching terrain HDF from that single source.
+Keep the project terrain unchanged and verify the prepared surface against the
+original effective terrain. Record preparation provenance and reuse this
+TIFF/HDF pair across all reach and timestep requests. This is a one-time
+preparation workflow; a flattened TIFF paired with the old multi-source HDF
+does not satisfy the input contract. Newly prepared layouts require qualification
+before numerical equivalence is claimed.
+
+The method ID is `deterministic-zero-depth-contours/1`. It uses a stable
+all-subject NonZero union and a 0.001 projected-coordinate-unit lattice,
+retaining canonical exterior and interior rings. Native RASMapper boundary
+exports can differ in hole topology and coordinates, including between
+identical native Max calls. Products record `native_vector_parity=False`;
+this method does not claim native polygon equality. Existing Depth/WSE raster
+methods and their qualification are unchanged.
+
+The accepted vector behavior is deterministic Rust contour merging with
+disclosed native differences. The observed native variability occurred in
+Commander-driven RASMapper 7.0.1 exports. The order-sensitive merge belongs to
+the native implementation; Commander performs no native polygon union.
+Repeated standalone GUI exports have not been qualified.
+
+The intrinsic cell-wet gate is float32 `WSE > minimum_elevation + 0.001`.
+Signed sample depths remain available to find zero crossings; raster plot
+visibility is not applied to contour samples. Valid negative depths, including
+-9999, are distinct from missing samples. Sample activation from terrain masks
+is distinct from a polygon clipping mask.
+
+This path requires a Fast-Map engine advertising the boundary capability
+(`boundary.method_id` `deterministic-zero-depth-contours/1`): the published
+0.10.1 and 0.11 releases do. The terrain tile `Mask` is an 8-bit HDF5
+bitfield. When the installed fast-HDF reader does not advertise bitfield
+support (published 0.2.4 does not), its raw bytes are staged through h5py as
+uint8, exactly as the terrain-scope staging does; every other array uses the
+required native reader. The library never builds, downloads or installs an
+engine during mapping, and never substitutes h5py arithmetic. Geometry, terrain and ownership are shared across profiles
+inside a call. One Rayon pool bounds tile and timestep work. Budgets are planned
+allocation admission, not hard process RSS limits.
+
+Legacy custom GeoTIFF keys can be described differently by the native reader.
+The default CRS comparison remains strict. After independently verifying the
+original TIFF, model and terrain-HDF CRS, pass `terrain_crs_fnv1a64` from the
+matching engine's `terrain-info` record to pin that reader identity explicitly.
+The pin and effective identity are retained in the manifest. It does not
+reproject coordinates or modify the TIFF.
+
+### Compare native polygons
+
+```python
+comparison = RasFim.compare_inundation_boundaries(
+    "model.p02.hdf", "Terrain/Original.tif", "boundary_comparison",
+    terrain_hdf="Terrain/Terrain.hdf", plan_number="02", ras_object=ras,
+    profiles={"maximum": "Max", "t108": 108},
+    interpolation="sloping", threads=4,
+)
+print(comparison[["profile", "extra_area", "missing_area", "geometry_equal"]])
+print(comparison.attrs["performance"])
+```
+
+Use an initialized copy of the computed project for native generation.
+`RasProcess.store_maps()` generates the references and restores the original
+rasmap bytes; native execution can create other project caches. Alternatively,
+pass `native_boundaries={profile: vector_path}` to compare retained references
+without HEC-RAS, including on Linux. References require their stored matching
+CRS; no reprojection, geometry repair, reference rounding or depth filtering
+is applied.
+
+The comparison reports both directions of area difference, complete topology,
+unrounded topological equality and a separate quantized-coordinate equality metric.
+Native generation, shared Rust batch time and comparison scans have separate
+clocks. Repeated `candidate_batch_seconds` values identify one shared batch
+clock; do not sum them as independent profile times. A speed ratio is withheld
+because the vector methods differ. Discrete Hausdorff distance is omitted with
+an explicit receipt exclusion when the vertex-pair budget exceeds 25 million.
+See the [boundary qualification issue](https://github.com/gpt-cmdr/ras-commander-fast-map/issues/4).

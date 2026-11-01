@@ -801,6 +801,13 @@ before using the harness; retain failed exports as failures.
 | `shear_stress` | Bed Shear Stress | False |
 | `depth_x_velocity` | D×V Hazard Index | False |
 | `depth_x_velocity_sq` | D×V² Impact Index | False |
+| `inundation_boundary` | Native zero-depth Inundation Boundary stored polygon | False |
+
+For a boundary-only export, set `wse=False`, `depth=False`, `velocity=False`,
+and `inundation_boundary=True`. Returned `inundation_boundary` paths point to
+SHP files; their companion files move with them when `output_path` is supplied.
+See the [native inundation boundary contract](../api/stored-maps.md#native-inundation-boundary)
+for native layer parameters, missing-product behavior, and qualification limits.
 
 #### Profile Selection
 

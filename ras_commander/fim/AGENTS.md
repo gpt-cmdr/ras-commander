@@ -93,7 +93,9 @@ Parent `ras_commander/AGENTS.md` and root `AGENTS.md` still apply.
   (`top-priority-source-footprint/1`). Priority comes only from source
   `Priority` attributes (0 highest) or, when none exist, the terrain's own VRT
   order; both must agree when present. Refuse partial, duplicate or conflicting
-  declarations, modified terrains, non-256 tiling and storage-area plans. A
+  declarations, modified terrains, non-256 tiling and storage-area plans
+  unless `storage_areas=True` (then the engine refuses storage-area pixels
+  outside the footprint). A
   `canonicalize_terrain_crs` copy is accepted only through its receipt and a
   fresh pixel-hash match. Engine `unsupported:` refusals surface as
   `FimUnsupportedError` (`_engine.EngineRefusal`) so callers fall back to an
@@ -106,7 +108,15 @@ Parent `ras_commander/AGENTS.md` and root `AGENTS.md` still apply.
   minimum elevations and float64 hours since the plan's simulation start; the
   engine owns the wet gate and accumulation. Arrival time and percent
   inundated are the qualified defaults; duration and irregular intervals need
-  `allow_unqualified`. Storage-area plans are refused.
+  `allow_unqualified`. Storage-area plans are refused unless
+  `storage_areas=True`.
+- `storage_areas` (sloping, horizontal, whole simulation) stages the plan's
+  storage-area polygons and per-profile WSE for the engine's
+  `storage-area-level-pool/1` (`_storage_areas.py`). Never infer the Water
+  Surface column order: prove it per area against its own Stage series. Keep
+  overlap with 2D cells or between storage areas refused; velocity, supplied
+  WSEL and prepared models refuse the option. `RasFim.supports_storage_areas()`
+  is the capability check.
 - Sloping `velocity=True` stages HDF face normals with face polyline lengths and
   per-profile face velocities (Max: `Maximum Face Velocity`). Plain sloping
   with HDF profiles only. Native velocity validity masks can differ from the
@@ -202,3 +212,28 @@ Parent `ras_commander/AGENTS.md` and root `AGENTS.md` still apply.
   Separate native stored-map generation, independent optional filtered delivery writes, Rust
   batch time and comparison scanning. Do not multiply shared batch preparation by profile count
   or promote a speed ratio for unmatched AOI, mesh or storage-area scope.
+
+## Deterministic boundaries
+
+`map_inundation_boundaries` is `deterministic-zero-depth-contours/1`, not native
+vector parity. Preserve signed sample depths and sample-coverage activation;
+never derive this layer by polygonizing the plotted depth raster. Original
+single-source terrain HDF perimeters/stitch TIN use required native numeric
+reads; the bitfield tile Mask is copied as raw uint8 bytes through h5py when
+the native reader lacks bitfield support (published fast-HDF 0.2.4). Global hydraulics remain complete across
+AOIs, and final contours use stable all-subject NonZero union and clipping.
+Keep canonical holes, explicit projected CRS, bounded tile/profile workers,
+source identities and complete geometry comparison metrics. Preserve existing
+raster arithmetic. Explicit CRS identity pins belong in persisted provenance;
+never apply an automatic CRS override or silently repair reference polygons.
+
+When a model uses multiple terrain sources, the agent must preprocess them into
+one dedicated mapping terrain before invoking this boundary mapper. Preserve
+source priority, CRS, grid, nodata and effective elevations; retain the original
+project terrain unchanged. Generate matching terrain-HDF masks, perimeters and
+stitch connectivity from the prepared single source. A flattened TIFF paired
+with the original multi-source HDF is not a valid input. Record preparation
+provenance and check the prepared surface against the original effective terrain
+before reuse. Cache this prepared terrain across reach and timestep requests;
+do not repeat preprocessing for every map. Additional terrain layouts remain
+subject to qualification; preprocessing alone does not establish native parity.
