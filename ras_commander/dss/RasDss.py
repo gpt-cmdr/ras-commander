@@ -2076,9 +2076,9 @@ class RasDss:
                 continue
 
             # Resolve DSS file path (may be relative to project directory)
-            dss_file_path = Path(dss_file)
-            if not dss_file_path.is_absolute():
-                dss_file_path = project_dir / dss_file
+            dss_file_path = RasDss._resolve_boundary_dss_file(
+                dss_file, project_dir, ras_object
+            )
 
             if not dss_file_path.exists():
                 logger.warning(f"Row {idx}: DSS file not found: {dss_file_path}")
@@ -2108,6 +2108,30 @@ class RasDss:
         )
 
         return result_df
+
+    @staticmethod
+    def _resolve_boundary_dss_file(dss_file, project_dir: Path, ras_object=None) -> Path:
+        """Resolve a ``DSS File=`` value from a boundary block to a path.
+
+        Some unsteady files store the bare value ``dss``, which HEC-RAS 7.0 opens
+        as the project's ``<project name>.dss`` (seen in its compute log for
+        RasExamples ``UngagedAreaInflows``). A real file named ``dss`` wins.
+        Without ``ras_object`` the name comes from a single ``*.prj`` that has a
+        same-named ``.dss``; otherwise the unresolved path is returned.
+        """
+        path = Path(dss_file)
+        if not path.is_absolute():
+            path = project_dir / path
+        if path.exists() or str(dss_file).strip().lower() != "dss":
+            return path
+        if ras_object is not None:
+            return project_dir / f"{ras_object.project_name}.dss"
+        candidates = [
+            prj.with_suffix(".dss")
+            for prj in project_dir.glob("*.prj")
+            if prj.with_suffix(".dss").is_file()
+        ]
+        return candidates[0] if len(candidates) == 1 else path
 
     @staticmethod
     def shutdown_jvm():

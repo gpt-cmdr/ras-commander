@@ -9,6 +9,13 @@ alone does not identify a development checkout.
 
 ### Unreleased
 
+- **HEC-RAS acceptance tests for `RasDss`-written DSS files.**
+  `tests/test_rasdss_hecras_acceptance.py` runs real example plans through
+  `RasCmdr.compute_plan` on grids and boundary time series written by the Java
+  and native backends. It skips without the local HEC-RAS version.
+- **`RasDss.extract_boundary_timeseries` resolves `DSS File=dss`.** HEC-RAS opens
+  that bare value as the project's `.dss` file. It previously returned no data
+  for those boundaries and logged a warning, on every backend.
 - **`RasDss.write_paired_data` adds a paired-data writer.** It writes one
   record with any number of curves on the `java`, `native` and `shadow`
   backends, from arrays or from the DataFrame that `read_paired_data` returns.

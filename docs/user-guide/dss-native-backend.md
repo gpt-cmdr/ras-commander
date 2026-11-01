@@ -280,6 +280,21 @@ public RasExamples DSS files, using HEC Monolith 3.3.27 on Java 17.0.11 and a
 development build of the ras-commander-fast-dss engine. Differences were limited to the
 classified labels above; ordinates and curve values matched bit for bit.
 
+## HEC-RAS acceptance of written files
+
+`tests/test_rasdss_hecras_acceptance.py` runs public example plans through
+`RasCmdr.compute_plan` on files written by each backend. It needs a local HEC-RAS
+and skips without one. Set `RAS_DSS_ACCEPTANCE_VERSION` to choose the version.
+
+- **Period grids.** HEC-RAS applies a `PER-CUM` record's depth evenly across the
+  period ending at part E. Moving the period one hour moves the results one hour.
+- **Zero-length grids (D = E).** The Java path can write them; the native writer
+  refuses them. HEC-RAS gave the same results for them as for real one-hour
+  periods, in the tested runs of hourly records. Prefer real periods:
+  HEC-HMS has been reported to lose the rain from such records.
+- **Boundary time series.** Files rewritten by either backend, as DSS6 or DSS7, gave
+  results identical to the original example file.
+
 ## Grids: gated native route
 
 `read_grid()` keeps the Java dictionary schema on every backend. Row zero is
