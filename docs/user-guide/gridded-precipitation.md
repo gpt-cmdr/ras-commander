@@ -31,6 +31,16 @@ uv pip install -e ".[precip]"
 
 DSS product conversion may additionally need HEC-Vortex, HEC-MetVue, or the optional dependencies listed in the product notebook.
 
+`PrecipMrms.to_dss` runs HEC-Vortex by default. The `backend` argument selects the optional `ras-commander-fast-dss` importer, which needs no Java or HEC-Vortex install. Install the wheel you were given first, as the package is not yet on PyPI (`uv pip install ras_commander_fast_dss-<version>-<tag>.whl`):
+
+```python
+from ras_commander.precip import PrecipMrms
+
+PrecipMrms.to_dss(grib_files, "storm.dss", clip_shp="basin.shp", backend="native")
+```
+
+The native route writes one-hour QPE only, each record PER-CUM with a one-hour period in its D and E parts. Other durations raise `DssUnsupportedRecordError` and write nothing. MRMS GRIB2 states an instant, so the file gives no period for them. `backend="shadow"` returns HEC-Vortex's output and compares it with the native result on a temporary copy, logging any difference. The native backend also refuses a target projection its warper does not support; a UTM WKT was refused. See the [version matrix](../development/gridded-precipitation-version-matrix.md#format-matrix).
+
 ## Check version and route qualification
 
 ```python

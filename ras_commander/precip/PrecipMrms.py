@@ -103,6 +103,8 @@ class PrecipMrms:
 
     PRODUCT_HOURS = (1, 3, 6, 12, 24, 48, 72)
     DEFAULT_PRODUCT = "GaugeCorr_QPE_01H"
+    #: Backend for :meth:`to_dss`: "java" (default in this release), "native" or "shadow".
+    backend = "java"
     DEFAULT_S3_PASS = "Pass2"
 
     @staticmethod
@@ -272,16 +274,72 @@ class PrecipMrms:
         vortex_path: Optional[Union[str, Path]] = None,
         jython_jar: Optional[Union[str, Path]] = None,
         timeout: int = 1800,
+        backend: Optional[str] = None,
+        align: str = "refuse",
     ) -> Path:
         """
-        Convert MRMS GRIB2 files to HEC-DSS using HEC-Vortex.
+        Convert MRMS GRIB2 files to HEC-DSS.
 
-        This is the MRMS-specific wrapper around :meth:`VortexCli.import_gridded`.
-        It supplies the Vortex variable name for the requested MRMS QPE product
-        and preserves the standard SHG output defaults expected by HEC-RAS/HMS
-        gridded precipitation workflows.
+        The default backend is the MRMS-specific wrapper around
+        :meth:`VortexCli.import_gridded`. It supplies the Vortex variable name for
+        the requested MRMS QPE product and preserves the standard SHG output
+        defaults expected by HEC-RAS/HMS gridded precipitation workflows.
+
+        Args:
+            grib2_files: One GRIB2 path or several.
+            output_dss: Output DSS file. An existing file keeps its other records.
+            clip_shp: Optional shapefile whose bounding box clips the grid. The
+                native backend requires its ``.prj``.
+            product: MRMS product, which sets the default F part.
+            variables: Variable names. The default follows the file names on the
+                Java route and selects the file's QPE on the native route.
+            target_wkt: "SHG" or a WKT. The native backend refuses a projection its
+                warper does not support; a UTM WKT (transverse Mercator) was refused.
+            target_cell_size: Cell size in the target's units.
+            resampling_method: "Bilinear", "Nearest Neighbor" or "Average".
+            dss_parts: Pathname parts. The native backend takes A, B, C and F; D
+                and E always come from each record's time window.
+            vortex_path: HEC-Vortex install. Java route only.
+            jython_jar: Jython standalone jar. Java route only.
+            timeout: Maximum seconds. The native backend checks it after each
+                record, and records already written remain.
+            backend: "java", "native" or "shadow". ``None`` uses the environment
+                variable ``RAS_COMMANDER_MRMS_BACKEND``, then ``PrecipMrms.backend``.
+            align: Native backend only. ``"refuse"`` refuses a warped extent whose
+                origin is not on whole cells, which an unclipped grid can have.
+                ``"vortex"`` rounds the origin when stored, as HEC-Vortex was
+                observed to do, which moves the grid by part of a cell. Observed
+                behaviour we did not implement by default.
+
+        Backends:
+            - ``"java"``: HEC-Vortex. Observed output for MRMS durations other than
+              one hour is INST-VAL with a D part only, and a warning is logged.
+            - ``"native"``: the optional ``ras-commander-fast-dss`` importer, with no
+              JVM. A new file is DSS7. It writes one-hour QPE only, each as a
+              PER-CUM record with a one-hour period. Other durations raise
+              ``DssUnsupportedRecordError`` and write nothing: MRMS GRIB2 states an
+              instant, and precipitation stored without a period has been read by
+              HEC-HMS as no rain. Several stated variables are checked first, then
+              imported in turn, and a failure on a later one leaves the earlier
+              records; the error states the total. Raises ``ImportError`` if the
+              wheel is missing.
+            - ``"shadow"``: Java writes ``output_dss`` and the result returned is
+              Java's. The importer writes a temporary copy of what the output held
+              before, in the DSS version of Java's output, and the decoded content
+              of both results is compared: every pathname, stamp, unit, data type,
+              geometry, statistic and cell. A DSS6 file allows for PRECIP_2_BYTE
+              rounding of cells. A record Java rewrites with the same content and
+              the importer omits shows only in DSS7. Differences log a warning and
+              do not raise. Java's exceptions are raised as themselves. Without
+              the wheel this runs Java alone, with one warning per process.
+
+        Returns:
+            Path: The DSS file.
         """
+        from . import _native_vortex
         from .VortexCli import VortexCli
+
+        selected = _native_vortex.effective_backend(backend, PrecipMrms.backend)
 
         grib_paths = PrecipMrms._normalize_paths(grib2_files)
         if not grib_paths:
@@ -302,24 +360,55 @@ class PrecipMrms:
         if dss_parts:
             write_parts.update(dss_parts)
 
-        logger.info(
-            "Converting %d MRMS GRIB2 file(s) to DSS via HEC-Vortex: %s",
-            len(grib_paths),
-            output_path,
-        )
-        return VortexCli.import_gridded(
-            input_files=grib_paths,
-            output_dss=output_path,
-            variables=import_variables,
+        native_arguments = dict(
+            product=product,
+            variables=variables,
             clip_shp=clip_shp,
             target_wkt=target_wkt,
             target_cell_size=target_cell_size,
             resampling_method=resampling_method,
             dss_parts=write_parts,
-            vortex_path=vortex_path,
-            jython_jar=jython_jar,
             timeout=timeout,
+            align=align,
         )
+        if selected == "native":
+            logger.info(
+                "Converting %d MRMS GRIB2 file(s) to DSS via the native importer: %s",
+                len(grib_paths),
+                output_path,
+            )
+            return _native_vortex.to_dss_native(
+                grib_paths, output_path, **native_arguments
+            )
+
+        def run_java() -> Path:
+            logger.info(
+                "Converting %d MRMS GRIB2 file(s) to DSS via HEC-Vortex: %s",
+                len(grib_paths),
+                output_path,
+            )
+            _native_vortex.warn_java_instant_precipitation(
+                product, grib_paths, import_variables
+            )
+            return VortexCli.import_gridded(
+                input_files=grib_paths,
+                output_dss=output_path,
+                variables=import_variables,
+                clip_shp=clip_shp,
+                target_wkt=target_wkt,
+                target_cell_size=target_cell_size,
+                resampling_method=resampling_method,
+                dss_parts=write_parts,
+                vortex_path=vortex_path,
+                jython_jar=jython_jar,
+                timeout=timeout,
+            )
+
+        if selected == "shadow":
+            return _native_vortex.to_dss_shadow(
+                run_java, grib_paths, output_path, **native_arguments
+            )
+        return run_java()
 
     @staticmethod
     @log_call
