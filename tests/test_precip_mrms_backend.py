@@ -291,7 +291,8 @@ def test_unknown_resampling_is_refused(engine, grib, tmp_path):
 def test_each_stated_variable_is_imported(engine, grib, tmp_path):
     names = ["MultiSensor_QPE_01H_Pass1_altitude_above_msl", "MultiSensor_QPE_01H_Pass2_altitude_above_msl"]
     engine.variables = names
-    pathnames = iter([PATHNAME, PATHNAME.replace("/GAUGECORR_QPE_01H/", "/OTHER/")])
+    other = PATHNAME.replace("/GAUGECORR_QPE_01H/", "/OTHER/")
+    pathnames = iter([PATHNAME, other, PATHNAME, other])  # The rehearsal, then the import.
     real_import = sys.modules["ras_commander_fast_dss.gridded"].import_gridded
 
     def distinct(inputs, output, **kwargs):
@@ -301,7 +302,7 @@ def test_each_stated_variable_is_imported(engine, grib, tmp_path):
 
     sys.modules["ras_commander_fast_dss.gridded"].import_gridded = distinct
     PrecipMrms.to_dss(grib, tmp_path / "o.dss", variables=names, backend="native")
-    assert [call["variable"] for call in engine.calls] == names
+    assert [call["variable"] for call in engine.calls] == names * 2
 
 
 def test_a_later_stated_variable_that_is_absent_is_refused_before_any_write(engine, grib, tmp_path):
@@ -331,13 +332,29 @@ def test_a_variable_stated_twice_is_refused(engine, grib, tmp_path):
     assert engine.calls == []
 
 
+def distinct_pathnames(engine):
+    """Give the stand-in importer's two selections their own pathnames, in the rehearsal and the import."""
+    other = PATHNAME.replace("/GAUGECORR_QPE_01H/", "/OTHER/")
+    pathnames = iter([PATHNAME, other, PATHNAME, other])
+    module = sys.modules["ras_commander_fast_dss.gridded"]
+    real_import = module.import_gridded
+
+    def distinct(inputs, output, **kwargs):
+        result = real_import(inputs, output, **kwargs)
+        result.records = [hourly_record(next(pathnames))]
+        return result
+
+    module.import_gridded = distinct
+
+
 def test_a_later_failure_reports_the_total_written_across_calls(engine, grib, tmp_path):
     """A refusal only the importer can know: the earlier call's records remain, and the error says so."""
     names = ["MultiSensor_QPE_01H_Pass1_altitude_above_msl", "MultiSensor_QPE_01H_Pass2_altitude_above_msl"]
     engine.variables = names
     failure = engine.exceptions.DssUnsupportedRecordError("0 record(s) already written remain")
     failure.completed = [hourly_record("/SHG/B/PRECIPITATION/26SEP2024:2200/26SEP2024:2300/F/")]
-    engine.error, engine.fail_after = failure, 1
+    engine.error, engine.fail_after = failure, 3  # Past the two rehearsal calls and the first import.
+    distinct_pathnames(engine)
     with pytest.raises(engine.exceptions.DssUnsupportedRecordError, match=r"wrote 2 record\(s\)") as info:
         PrecipMrms.to_dss(grib, tmp_path / "o.dss", variables=names, backend="native")
     assert info.value is failure
@@ -347,17 +364,83 @@ def test_a_later_failure_reports_the_total_written_across_calls(engine, grib, tm
 def test_a_later_os_error_still_states_the_total(engine, grib, tmp_path):
     names = ["MultiSensor_QPE_01H_Pass1_altitude_above_msl", "MultiSensor_QPE_01H_Pass2_altitude_above_msl"]
     engine.variables = names
-    engine.error, engine.fail_after = OSError(28, "No space left"), 1
+    engine.error, engine.fail_after = OSError(28, "No space left"), 3
+    distinct_pathnames(engine)
     with pytest.raises(engine.exceptions.DssError, match=r"wrote 1 record\(s\)") as info:
         PrecipMrms.to_dss(grib, tmp_path / "o.dss", variables=names, backend="native")
     assert isinstance(info.value.__context__, OSError)
 
 
-def test_two_selections_writing_one_pathname_raises(engine, grib, tmp_path):
+def recording_destinations(engine):
+    """Note every file the stand-in importer is asked to write."""
+    module = sys.modules["ras_commander_fast_dss.gridded"]
+    real_import, destinations = module.import_gridded, []
+
+    def recording(inputs, output, **kwargs):
+        destinations.append(Path(output))
+        return real_import(inputs, output, **kwargs)
+
+    module.import_gridded = recording
+    return destinations
+
+
+def test_two_selections_writing_one_pathname_are_refused_before_the_callers_file(engine, grib, tmp_path):
     names = ["MultiSensor_QPE_01H_Pass1_altitude_above_msl", "MultiSensor_QPE_01H_Pass2_altitude_above_msl"]
     engine.variables = names
+    destinations = recording_destinations(engine)
+    out = tmp_path / "o.dss"
+    with pytest.raises(engine.exceptions.DssUnsupportedRecordError, match="Nothing was written") as info:
+        PrecipMrms.to_dss(grib, out, variables=names, backend="native")
+    assert "one pathname" in str(info.value)
+    assert len(destinations) == 2 and out not in destinations
+    assert not list(tmp_path.glob("mrms_rehearsal_*"))
+
+
+def test_a_later_selection_refused_in_rehearsal_leaves_the_callers_file_alone(engine, grib, tmp_path):
+    names = ["MultiSensor_QPE_01H_Pass1_altitude_above_msl", "MultiSensor_QPE_01H_Pass2_altitude_above_msl"]
+    engine.variables = names
+    engine.error, engine.fail_after = engine.exceptions.DssUnsupportedRecordError("refused while planning"), 1
+    destinations = recording_destinations(engine)
+    out = tmp_path / "o.dss"
+    with pytest.raises(engine.exceptions.DssUnsupportedRecordError, match="refused while planning"):
+        PrecipMrms.to_dss(grib, out, variables=names, backend="native")
+    assert out not in destinations
+    assert not list(tmp_path.glob("mrms_rehearsal_*"))
+
+
+def test_one_selection_is_not_rehearsed(engine, grib, tmp_path):
+    destinations = recording_destinations(engine)
+    out = tmp_path / "o.dss"
+    PrecipMrms.to_dss(grib, out, backend="native")
+    assert destinations == [out]
+
+
+def test_a_source_that_changes_after_the_rehearsal_is_still_caught(engine, grib, tmp_path):
+    names = ["MultiSensor_QPE_01H_Pass1_altitude_above_msl", "MultiSensor_QPE_01H_Pass2_altitude_above_msl"]
+    engine.variables = names
+    other = PATHNAME.replace("/GAUGECORR_QPE_01H/", "/OTHER/")
+    pathnames = iter([PATHNAME, other, PATHNAME, PATHNAME])
+    module = sys.modules["ras_commander_fast_dss.gridded"]
+    real_import = module.import_gridded
+
+    def changing(inputs, output, **kwargs):
+        result = real_import(inputs, output, **kwargs)
+        result.records = [hourly_record(next(pathnames))]
+        return result
+
+    module.import_gridded = changing
     with pytest.raises(engine.exceptions.DssError, match="the last stays"):
         PrecipMrms.to_dss(grib, tmp_path / "o.dss", variables=names, backend="native")
+
+
+def test_a_scratch_folder_that_cannot_be_removed_is_reported(monkeypatch, tmp_path, caplog):
+    def refuse(path):
+        raise PermissionError(32, "in use", str(path))
+
+    monkeypatch.setattr(nv.shutil, "rmtree", refuse)
+    with caplog.at_level(logging.WARNING, logger=nv.logger.name):
+        nv._remove_scratch(tmp_path / "scratch", pause=0.0)
+    assert any("remains" in r.getMessage() and "scratch" in r.getMessage() for r in caplog.records)
 
 
 def test_missing_input_and_clip_raise_as_java_does(engine, grib, tmp_path):

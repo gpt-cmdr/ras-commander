@@ -409,22 +409,31 @@ def import_native(
                 "or reducing input data. Records already written remain."
             )
 
+    def run(destination: Path, chosen: Dict[str, Optional[str]]) -> Any:
+        return gridded.import_gridded(
+            [str(path) for path in paths],
+            str(destination),
+            shapefile=None if clip is None else str(clip),
+            target_crs=_native_target(target_wkt),
+            cell_size=float(target_cell_size),
+            method=method,
+            parts=parts,
+            version=version,
+            align=align,
+            progress=progress,
+            **chosen,
+        )
+
+    # The importer plans one selection at a time, and nothing plans them together. Two selections could
+    # write one pathname, or a later one could be refused, so several are first run into a scratch file:
+    # the caller's file is not touched until the whole request has worked.
+    if len(selection) > 1:
+        _rehearse(selection, run, output_path, errors)
+
     records: List[Dict[str, Any]] = []
     for chosen in selection:
         try:
-            result = gridded.import_gridded(
-                [str(path) for path in paths],
-                str(output_path),
-                shapefile=None if clip is None else str(clip),
-                target_crs=_native_target(target_wkt),
-                cell_size=float(target_cell_size),
-                method=method,
-                parts=parts,
-                version=version,
-                align=align,
-                progress=progress,
-                **chosen,
-            )
+            result = run(output_path, chosen)
         except Exception as exc:
             if not records:
                 raise
@@ -447,6 +456,41 @@ def import_native(
             + "; ".join(bad[:5])
         )
     return records
+
+
+def _rehearse(
+    selection: List[Dict[str, Optional[str]]], run: Callable[..., Any], output_path: Path, errors: Any
+) -> None:
+    """Run every selection into a scratch file, and refuse what would collide. Costs a second import."""
+    parent = Path(output_path).parent
+    scratch = Path(tempfile.mkdtemp(prefix="mrms_rehearsal_", dir=parent if parent.is_dir() else None))
+    try:
+        planned: List[Any] = []
+        for chosen in selection:
+            planned.extend(r.get("pathname") for r in run(scratch / "rehearsal.dss", chosen).records)
+    finally:
+        _remove_scratch(scratch)
+    twice = sorted(name for name, count in Counter(planned).items() if count > 1)
+    if twice:
+        raise errors.DssUnsupportedRecordError(
+            f"Nothing was written to {output_path}: two selections would write one pathname, and only "
+            "the last would stay: " + "; ".join(map(str, twice[:5]))
+        )
+
+
+def _remove_scratch(path: Path, attempts: int = 3, pause: float = 0.2) -> None:
+    """Remove a scratch folder, or say that it stays. It cannot change a result already returned."""
+    for attempt in range(attempts):
+        try:
+            shutil.rmtree(path)
+            return
+        except FileNotFoundError:
+            return
+        except OSError as exc:
+            if attempt + 1 == attempts:
+                logger.warning(f"Could not remove the scratch folder {path}, which remains: {exc}")
+            else:
+                time.sleep(pause)
 
 
 def _with_total_written(
@@ -945,7 +989,7 @@ def to_dss_shadow(
         return result
     finally:
         if workspace is not None:
-            shutil.rmtree(workspace, ignore_errors=True)
+            _remove_scratch(workspace)
 
 
 __all__ = [
