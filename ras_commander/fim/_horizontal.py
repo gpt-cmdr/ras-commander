@@ -225,10 +225,10 @@ def _numerical_overlap_without_sample(intersection, plan):
         return False
     t = plan.transform
     xmin, ymin, xmax, ymax = bounds
-    c0 = max(0, math.ceil((xmin - t.c) / t.a - 0.5))
-    c1 = min(plan.shape[1] - 1, math.floor((xmax - t.c) / t.a - 0.5))
-    r0 = max(0, math.ceil((ymax - t.f) / t.e - 0.5))
-    r1 = min(plan.shape[0] - 1, math.floor((ymin - t.f) / t.e - 0.5))
+    c0 = max(0, math.ceil((xmin - t.c) / t.a - 0.5) - 1)
+    c1 = min(plan.shape[1] - 1, math.floor((xmax - t.c) / t.a - 0.5) + 1)
+    r0 = max(0, math.ceil((ymax - t.f) / t.e - 0.5) - 1)
+    r1 = min(plan.shape[0] - 1, math.floor((ymin - t.f) / t.e - 0.5) + 1)
     if c1 < c0 or r1 < r0:
         return True
     if (c1 - c0 + 1) * (r1 - r0 + 1) > 4096:
@@ -236,7 +236,20 @@ def _numerical_overlap_without_sample(intersection, plan):
     cols, rows = np.meshgrid(np.arange(c0, c1 + 1), np.arange(r0, r1 + 1))
     points = shapely.points(t.c + (cols.ravel() + 0.5) * t.a,
                             t.f + (rows.ravel() + 0.5) * t.e)
-    return not bool(shapely.contains(intersection, points).any())
+    if shapely.contains(intersection, points).any():
+        return False
+    # Native sloping uses the global terrain lattice, whereas the Python
+    # horizontal writer evaluates the cropped transform. Check both arithmetic
+    # orders: their last bits can differ at the scale of the residue itself.
+    source = getattr(plan, "source_transform", None)
+    if source is not None:
+        points = shapely.points(
+            source.c + (cols.ravel() + plan.window.col_off + 0.5) * source.a,
+            source.f + (rows.ravel() + plan.window.row_off + 0.5) * source.e,
+        )
+        if shapely.contains(intersection, points).any():
+            return False
+    return True
 
 
 def prepare_grid(
