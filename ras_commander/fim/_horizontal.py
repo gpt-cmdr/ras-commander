@@ -208,6 +208,37 @@ def plan_grid(
     )
 
 
+def _numerical_overlap_without_sample(intersection, plan):
+    """Recognize coordinate-roundoff residue that owns no output pixel centre.
+
+    The area must fit an eight-ULP boundary-error envelope at the coordinates'
+    scale. Even then, an interior terrain pixel centre keeps the rejection.
+    This changes neither ownership polygons nor the native hydraulic topology.
+    """
+    import math
+    import shapely
+
+    bounds = shapely.bounds(intersection)
+    scale = max(1.0, float(np.max(np.abs(bounds))))
+    envelope = 8 * abs(float(np.spacing(scale))) * max(1.0, float(intersection.length))
+    if not np.isfinite(envelope) or intersection.area > envelope:
+        return False
+    t = plan.transform
+    xmin, ymin, xmax, ymax = bounds
+    c0 = max(0, math.ceil((xmin - t.c) / t.a - 0.5))
+    c1 = min(plan.shape[1] - 1, math.floor((xmax - t.c) / t.a - 0.5))
+    r0 = max(0, math.ceil((ymax - t.f) / t.e - 0.5))
+    r1 = min(plan.shape[0] - 1, math.floor((ymin - t.f) / t.e - 0.5))
+    if c1 < c0 or r1 < r0:
+        return True
+    if (c1 - c0 + 1) * (r1 - r0 + 1) > 4096:
+        return False  # Conservative bound; never allocate an unbounded check.
+    cols, rows = np.meshgrid(np.arange(c0, c1 + 1), np.arange(r0, r1 + 1))
+    points = shapely.points(t.c + (cols.ravel() + 0.5) * t.a,
+                            t.f + (rows.ravel() + 0.5) * t.e)
+    return not bool(shapely.contains(intersection, points).any())
+
+
 def prepare_grid(
     cells, terrain_path: Path, plan: GridPlan, read_terrain: bool = True
 ) -> HorizontalGrid:
@@ -234,7 +265,8 @@ def prepare_grid(
             "horizontal mapping requires valid, non-empty cell Polygons"
         )
     # Reject positive-area overlaps: choosing a cell silently would replace
-    # one hydraulic value with another. Shared edges are permitted.
+    # one hydraulic value with another. Shared edges and coordinate-roundoff
+    # residue with no interior output pixel centre are permitted.
     # Query one cell at a time: coincident geometries must not allocate an
     # N-by-N candidate-pair array before the first overlap is rejected.
     index = cells.sindex
@@ -249,8 +281,16 @@ def prepare_grid(
         interiors = shapely.relate_pattern(first, second, "T********")
         if interiors.any():
             intersections = shapely.intersection(first[interiors], second[interiors])
-            if (shapely.area(intersections) > 0).any():
-                raise FimUnsupportedError("horizontal cells have overlapping interiors")
+            for intersection in intersections[shapely.area(intersections) > 0]:
+                if not _numerical_overlap_without_sample(intersection, plan):
+                    raise FimUnsupportedError("horizontal cells have overlapping interiors")
+                import warnings
+
+                warnings.warn(
+                    "Numerical cell-overlap residue has no interior terrain pixel centre; "
+                    "ownership polygons and hydraulic topology are unchanged",
+                    RuntimeWarning, stacklevel=2,
+                )
 
     for i, geometry in enumerate(geometries):
         others = index.query(geometry)
