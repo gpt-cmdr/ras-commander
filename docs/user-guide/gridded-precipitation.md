@@ -39,7 +39,19 @@ from ras_commander.precip import PrecipMrms
 PrecipMrms.to_dss(grib_files, "storm.dss", clip_shp="basin.shp", backend="native")
 ```
 
-The native route writes one-hour QPE only, each record PER-CUM with a one-hour period in its D and E parts. Other durations raise `DssUnsupportedRecordError` and write nothing. MRMS GRIB2 states an instant, so the file gives no period for them. `backend="shadow"` returns HEC-Vortex's output and compares it with the native result on a temporary copy, logging any difference. The native backend also refuses a target projection its warper does not support; a UTM WKT was refused. See the [version matrix](../development/gridded-precipitation-version-matrix.md#format-matrix).
+The native route writes one-hour QPE only, each record PER-CUM with a one-hour period in its D and E parts. Other durations raise `DssUnsupportedRecordError` and write nothing. MRMS GRIB2 states an instant, so the file gives no period for them. `backend="shadow"` returns HEC-Vortex's output and compares it with the native result on a temporary copy, logging any difference.
+
+The HEC-Vortex route refuses the same durations (15M and 03H to 72H) by default, with a `ValueError` and nothing written. HEC-Vortex 0.13.3 stored them as PRECIPITATION, MM, INST-VAL with a D part only, and HEC-HMS has read this shape as no rain. To write that shape anyway, on the `java` and `shadow` backends only:
+
+```python
+PrecipMrms.to_dss(grib_files, "storm.dss", product="MultiSensor_QPE_24H_Pass2_00.00", allow_instantaneous_precip=True)
+```
+
+The call logs a warning. Three further points apply to this route:
+
+- **File names.** HEC-Vortex gives a one-hour period by file name: `gaugecorr`, `radaronly` or `multisensor`, then `qpe`, then `01h`, ending in `grib2`. A one-hour file named `storm.grib2` was stored as INST-VAL, so it is refused too. Keep the archive names.
+- **Renamed files.** With the `ras-commander-fast-dss` wheel, each file's own variables are read before Vortex starts, so a 24H file renamed `01H` is refused. Without the wheel, the check reads only the product, the file names and any stated variable, and that file passes it, unless it is RadarOnly. Vortex 0.13.3 then found no matching variable and raised `RuntimeError` with no file written. With the override and the file's own variable stated, Vortex stamped its 24-hour total with a one-hour period, so do not combine the two.
+- **RadarOnly variable name.** With no variable stated, the name is read through HEC-Vortex, which starts Java to list the first and last files, then through the wheel. If neither can list the file, `RadarOnlyQPE<hours>H_altitude_above_msl` is used, with a warning. The native backend also refuses a target projection its warper does not support; a UTM WKT was refused. See the [version matrix](../development/gridded-precipitation-version-matrix.md#format-matrix).
 
 ## Check version and route qualification
 

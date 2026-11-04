@@ -757,6 +757,7 @@ print("VORTEX_IMPORT_COMPLETE")
         grib_file: Union[str, Path],
         vortex_path: Optional[Union[str, Path]] = None,
         timeout: int = 120,
+        jython_jar: Optional[Union[str, Path]] = None,
     ) -> List[str]:
         """
         List available variables in a GRIB2 file using HEC-Vortex.
@@ -769,6 +770,7 @@ print("VORTEX_IMPORT_COMPLETE")
             grib_file: Path to GRIB2 file to inspect.
             vortex_path: Optional HEC-Vortex installation path.
             timeout: Maximum execution time in seconds.
+            jython_jar: Optional Jython standalone jar.
 
         Returns:
             List[str]: Available variable names in the GRIB2 file.
@@ -817,6 +819,7 @@ print("VORTEX_IMPORT_COMPLETE")
             cmd = VortexCli._build_jython_command(
                 vortex_path=vortex_dir,
                 script_file=script_file,
+                jython_jar=jython_jar,
                 include_add_opens=True,
             )
             result = subprocess.run(
@@ -834,6 +837,7 @@ print("VORTEX_IMPORT_COMPLETE")
                 cmd = VortexCli._build_jython_command(
                     vortex_path=vortex_dir,
                     script_file=script_file,
+                jython_jar=jython_jar,
                     include_add_opens=False,
                 )
                 result = subprocess.run(

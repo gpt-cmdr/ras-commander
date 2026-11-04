@@ -7,6 +7,24 @@ check `ras_commander.__version__` and the documentation's
 [build provenance](https://rascommander.info/ras/version.json). A package version
 alone does not identify a development checkout.
 
+### Unreleased
+
+- **`PrecipMrms.to_dss` behaviour change (#801):** the default HEC-Vortex route,
+  and `backend="shadow"`, now refuse MRMS durations other than one hour (15M,
+  03H to 72H) with a `ValueError`, before the import starts and with nothing
+  written. They also refuse a file name HEC-Vortex gives no period, such as
+  `storm.grib2`. Both were written as PRECIPITATION, INST-VAL, with a D part
+  only, and HEC-HMS has read this shape as no rain. Pass
+  `allow_instantaneous_precip=True` to keep the previous output, with a warning.
+- **`PrecipMrms.to_dss` backends (#801):** `backend="native"` and
+  `backend="shadow"` use the optional `ras-commander-fast-dss` importer, which
+  writes one-hour QPE only. The default stays `java`.
+- **RadarOnly default variable (#801):** with no variable stated, the Java route
+  reads the name from the file, so `RadarOnly_QPE_01H_altitude_above_msl` now
+  works where the old default name failed. File names without the `MRMS_` prefix
+  are recognized as RadarOnly.
+- **`VortexCli.get_grib2_variables`:** adds an optional `jython_jar`.
+
 ### 0.113.0 — 2026-10-31
 
 This minor release adds Rust mapping products and RAS Mapper's Final n

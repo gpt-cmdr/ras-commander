@@ -21,7 +21,9 @@ window to file names matching their 01H rules. Observed behaviour we did not imp
 with a D part only. The native importer refuses precipitation at an instant unless a data type is
 stated, and takes no window for a GRIB2 input. This adapter never states that type. The native
 backend refuses every duration other than one hour before the importer runs, and checks each written
-record's period. The Java route still writes those durations and logs a warning.
+record's period. The Java and shadow routes refuse those durations too, before writing anything,
+unless the caller passes ``allow_instantaneous_precip=True``: Java then writes them as above, and
+logs a warning. The override does not change the native backend.
 
 This module is private. It imports the engine only inside functions, so ``import ras_commander``
 works without the wheel.
@@ -71,6 +73,9 @@ _RESAMPLING = {
 }
 
 _DURATION_RE = re.compile(r"(?:^|[_.\-]|QPE)(\d{1,2})([HM])(?=[_.\-]|$)", re.IGNORECASE)
+#: HEC-Vortex 0.13.3 gives a one-hour period only to names matching its three rules for these
+#: products (``GridDatasetReader.SpecialFileType``). Other names get an instant, even for a 01H file.
+_VORTEX_ONE_HOUR_NAME_RE = re.compile(r"(gaugecorr|radaronly|multisensor).*qpe.*01h.*grib2", re.IGNORECASE)
 _TIME_PART_RE = re.compile(r"^(\d{2})([A-Za-z]{3})(\d{4}):(\d{4})$")
 _MONTHS = ("JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC")
 
@@ -226,21 +231,103 @@ def period_problems(
         seconds = _duration_seconds(str(name))
         if seconds is not None and seconds != 3600:
             problems.append(f"{kind} {name!r} states {seconds // 60} minutes")
-    return problems
+    return list(dict.fromkeys(problems))
 
 
-def warn_java_instant_precipitation(
-    product: str, grib_paths: Sequence[Path], variables: Optional[Sequence[str]]
-) -> None:
-    """Log that HEC-Vortex stores this product without a period. Java's result is unchanged."""
+def find_period_problems(
+    product: str,
+    grib_paths: Sequence[Path],
+    variables: Optional[Sequence[str]],
+    list_variables: Callable[[Path], Optional[Sequence[str]]],
+) -> Tuple[List[str], Dict[Path, List[str]]]:
+    """Duration check shared by every backend. Returns the problems and the variables listed.
+
+    Names come first, and need no decoding. Then, when the caller stated no variable, the file's own
+    variables: a file's name can be changed, and they are its statement of its accumulation.
+    ``list_variables`` returns ``None`` for a file it cannot list, whose name is then all there is.
+    """
     problems = period_problems(product, grib_paths, variables)
+    held: Dict[Path, List[str]] = {}
     if problems:
+        return problems, held
+    for path in grib_paths:
+        names = list_variables(path)
+        if names is not None:
+            held[path] = [str(name) for name in names]
+    if not variables:
+        listed = [name for names in held.values() for name in names if "qpe" in name.lower()]
+        problems = period_problems(product, grib_paths, listed)
+    return problems, held
+
+
+def _vortex_name_problems(grib_paths: Sequence[Path]) -> List[str]:
+    """Each file whose name HEC-Vortex gives no period, whatever its accumulation."""
+    return [
+        f"file {Path(path).name!r} has a name HEC-Vortex gives no one-hour period: it needs "
+        "gaugecorr, radaronly or multisensor, then qpe, then 01h, and to end in grib2"
+        for path in grib_paths
+        if not _VORTEX_ONE_HOUR_NAME_RE.search(Path(path).name)
+    ]
+
+
+def _engine_listing(path: Path) -> Optional[List[str]]:
+    """The engine's variable names for the Java route, or ``None`` if it cannot read this file."""
+    try:
+        return list(import_gridded_module().list_variables(str(path)))
+    except Exception as exc:
+        if Path(path).exists():
+            logger.warning(
+                "Could not list the variables of %s (%s); checking its name only.", Path(path).name, exc
+            )
+        return None
+
+
+def _shortened(items: Sequence[str], limit: int = 5) -> str:
+    shown = "; ".join(items[:limit])
+    return shown if len(items) <= limit else f"{shown}; and {len(items) - limit} more"
+
+
+def settle_java_periods(
+    problems: Sequence[str], grib_paths: Sequence[Path], allow_instantaneous_precip: bool
+) -> None:
+    """Refuse a duration Java cannot state a period for, or warn when the caller overrides that."""
+    if not problems:
+        return
+    if allow_instantaneous_precip:
         logger.warning(
-            "MRMS durations other than one hour have been observed in HEC-Vortex output as "
-            "PRECIPITATION, INST-VAL, with a D part only. HEC-HMS has read precipitation stored "
-            "without a period as no rain; check the records before use. (%s)",
-            "; ".join(problems),
+            "allow_instantaneous_precip=True: writing MRMS precipitation with no period. HEC-Vortex "
+            "has been observed to store these durations as PRECIPITATION, INST-VAL, with a D part "
+            "only, and HEC-HMS has read this shape as no rain. Check the records before use. (%s)",
+            _shortened(list(problems)),
         )
+        return
+    files = _shortened([Path(path).name for path in grib_paths])
+    raise ValueError(
+        f"PrecipMrms.to_dss refused {files}: {_shortened(list(problems))}. Nothing was written. MRMS "
+        "GRIB2 states an instant, and the HEC-Vortex route can state a period for one-hour QPE only. "
+        "HEC-Vortex has been observed to store other durations as PRECIPITATION, INST-VAL, with a D "
+        "part only, and HEC-HMS has read this shape as no rain. Use a 01H product, or pass "
+        "allow_instantaneous_precip=True to write this shape anyway."
+    )
+
+
+def check_java_periods(
+    product: str,
+    grib_paths: Sequence[Path],
+    variables: Optional[Sequence[str]],
+    allow_instantaneous_precip: bool,
+) -> Tuple[List[str], Dict[Path, List[str]]]:
+    """Check the Java and shadow routes before HEC-Vortex starts, with the engine if it is present.
+
+    Without the wheel, only the names of the product, the files and any stated variable are read.
+    Returns the problems found, which were overridden if it returns at all with any, and the variables
+    the engine listed.
+    """
+    lister = _engine_listing if native_available() else (lambda _path: None)
+    problems, held = find_period_problems(product, grib_paths, variables, lister)
+    problems = problems or _vortex_name_problems(grib_paths)
+    settle_java_periods(problems, grib_paths, allow_instantaneous_precip)
+    return problems, held
 
 
 def _part_time(text: str) -> datetime:
@@ -363,16 +450,11 @@ def import_native(
     method = _native_method(resampling_method)
     parts = _native_parts(dss_parts)
 
-    # Names first, which need no decoding. Then the importer's window rule reads the file name, while
-    # the variable is the file's own statement of its accumulation: a 24H file renamed 01H is caught
-    # here, before one-hour stamps go on it.
-    problems = period_problems(product, paths, variables)
-    held: Dict[Path, List[str]] = {}
-    if not problems:
-        held = {path: list(gridded.list_variables(str(path))) for path in paths}
-    if not problems and not variables:
-        listed = [name for names in held.values() for name in names if "qpe" in name.lower()]
-        problems = period_problems(product, paths, listed)
+    # The importer's window rule reads the file name, so a 24H file renamed 01H is caught here,
+    # before one-hour stamps go on it.
+    problems, held = find_period_problems(
+        product, paths, variables, lambda path: gridded.list_variables(str(path))
+    )
     if problems:
         raise errors.DssUnsupportedRecordError(
             "The native MRMS backend writes one-hour QPE only: "
@@ -381,7 +463,7 @@ def import_native(
             "accumulation's period cannot be stated. It is not written without one, as HEC-HMS has "
             "read precipitation stored without a period as no rain. Use a 01H product. Observed "
             "behaviour we did not implement: HEC-Vortex stores such files as INST-VAL with a D "
-            "part only."
+            "part only. allow_instantaneous_precip applies to the Java route only."
         )
     absent = [
         f"{path.name} does not hold {name!r}"
@@ -430,6 +512,7 @@ def import_native(
     if len(selection) > 1:
         _rehearse(selection, run, output_path, errors)
 
+    Path(output_path).parent.mkdir(parents=True, exist_ok=True)
     records: List[Dict[str, Any]] = []
     for chosen in selection:
         try:
@@ -950,9 +1033,11 @@ def to_dss_shadow(
                 records = import_native(grib_paths, sidecar, version=version, **native_kwargs)
             except Exception as exc:
                 native_seconds = time.monotonic() - started
-                refused = period_problems(
-                    native_kwargs.get("product", ""), grib_paths, native_kwargs.get("variables")
+                refused, _ = find_period_problems(
+                    native_kwargs.get("product", ""), grib_paths, native_kwargs.get("variables"),
+                    _engine_listing,
                 )
+                refused = refused or _vortex_name_problems(grib_paths)
                 is_refusal = isinstance(exc, _engine_errors().DssUnsupportedRecordError)
                 if refused and is_refusal:
                     record_shadow(
@@ -1006,6 +1091,8 @@ __all__ = [
     "import_native",
     "native_available",
     "normalize_backend",
+    "check_java_periods",
+    "find_period_problems",
     "period_problems",
     "record_period_problem",
     "record_shadow",
@@ -1013,6 +1100,6 @@ __all__ = [
     "reset_fallback_warning",
     "reset_shadow_stats",
     "to_dss_native",
+    "settle_java_periods",
     "to_dss_shadow",
-    "warn_java_instant_precipitation",
 ]

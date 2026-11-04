@@ -536,19 +536,156 @@ def test_no_records_is_an_error(engine, grib, tmp_path):
         PrecipMrms.to_dss(grib, tmp_path / "o.dss", backend="native")
 
 
-def test_java_warns_on_other_durations_and_still_runs(java_calls, tmp_path, caplog):
-    path = tmp_path / DAILY_NAME
+RADAR_15M = "MRMS_RadarOnly_QPE_15M_00.00_20250115-060000.grib2"
+
+
+@pytest.mark.parametrize("backend", ["java", "shadow"])
+@pytest.mark.parametrize(
+    "file_name,product,variables,stated",
+    [
+        (DAILY_NAME, "GaugeCorr_QPE_01H", None, "1440 minutes"),
+        (RADAR_15M, "GaugeCorr_QPE_01H", None, "15 minutes"),
+        (HOURLY_NAME, "RadarOnly_QPE_03H", None, "180 minutes"),
+        (HOURLY_NAME, "GaugeCorr_QPE_01H", ["MultiSensor_QPE_72H_Pass2_altitude_above_msl"], "4320 minutes"),
+        (HOURLY_NAME, "GaugeCorr_QPE_01H", ["RadarOnly_QPE_15M_altitude_above_msl"], "15 minutes"),
+        ("storm.grib2", "GaugeCorr_QPE_01H", None, "gives no one-hour period"),
+        ("storm_01H.grib2", "GaugeCorr_QPE_01H", ["RadarOnly_QPE_01H_altitude_above_msl"], "gives no one-hour period"),
+    ],
+)
+def test_java_and_shadow_refuse_with_nothing_written(
+    backend, file_name, product, variables, stated, no_wheel, java_calls, tmp_path
+):
+    """The names alone must be enough: this runs with no wheel, so no listing is available."""
+    path = tmp_path / file_name
+    path.write_bytes(b"GRIB")
+    output = tmp_path / "new_folder" / "o.dss"
+    with pytest.raises(ValueError, match=stated) as info:
+        PrecipMrms.to_dss(path, output, product=product, variables=variables, backend=backend)
+    message = str(info.value)
+    assert file_name in message
+    assert "no rain" in message
+    assert "allow_instantaneous_precip=True" in message
+    assert java_calls == []
+    assert not output.parent.exists()
+
+
+def test_refusal_on_many_files_stays_readable(no_wheel, java_calls, tmp_path):
+    paths = []
+    for hour in range(12):
+        paths.append(tmp_path / f"MRMS_MultiSensor_QPE_24H_Pass2_00.00_20240926-{hour:02d}0000.grib2")
+        paths[-1].write_bytes(b"GRIB")
+    with pytest.raises(ValueError, match="and 7 more") as info:
+        PrecipMrms.to_dss(paths, tmp_path / "o.dss")
+    assert paths[0].name in str(info.value)
+    assert len(str(info.value)) < 2000
+
+
+@pytest.mark.parametrize("backend", ["java", "shadow"])
+def test_java_and_shadow_refuse_a_file_whose_variable_states_another_duration(
+    backend, engine, java_calls, grib, tmp_path
+):
+    """The same detection as native: the file name says 01H, and the file's own variable says 24H."""
+    engine.variables = ["MultiSensor_QPE_24H_Pass2_altitude_above_msl"]
+    output = tmp_path / "o.dss"
+    with pytest.raises(ValueError, match="1440 minutes") as info:
+        PrecipMrms.to_dss(grib, output, backend=backend)
+    assert grib.name in str(info.value)
+    assert java_calls == []
+    assert engine.calls == []
+    assert not output.exists()
+
+
+def test_without_the_wheel_a_renamed_file_passes_the_check(no_wheel, java_calls, grib, tmp_path):
+    """The stated limit. No listing exists here, and the file's name says 01H."""
+    PrecipMrms.to_dss(grib, tmp_path / "o.dss")
+    assert len(java_calls) == 1
+
+
+def test_without_the_wheel_a_renamed_radaronly_file_is_refused_by_the_vortex_listing(
+    no_wheel, java_calls, monkeypatch, tmp_path
+):
+    path = tmp_path / "MRMS_RadarOnly_QPE_01H_00.00_20250115-060000.grib2"
+    path.write_bytes(b"GRIB")
+    monkeypatch.setattr(
+        VortexCli, "get_grib2_variables",
+        staticmethod(lambda p, **kwargs: ["RadarOnly_QPE_24H_altitude_above_msl"]),
+    )
+    with pytest.raises(ValueError, match="1440 minutes"):
+        PrecipMrms.to_dss(path, tmp_path / "o.dss")
+    assert java_calls == []
+
+
+def test_a_file_the_engine_cannot_list_falls_back_to_its_name(engine, java_calls, grib, tmp_path, caplog):
+    def unreadable(path):
+        raise engine.exceptions.DssError("not a GRIB2 file")
+
+    sys.modules["ras_commander_fast_dss.gridded"].list_variables = unreadable
+    with caplog.at_level(logging.WARNING, logger=nv.logger.name):
+        PrecipMrms.to_dss(grib, tmp_path / "o.dss")
+    assert len(java_calls) == 1
+    assert "checking its name only" in caplog.text
+
+
+def test_radaronly_spelling_comes_from_the_engine_if_vortex_cannot_list(
+    engine, java_calls, monkeypatch, tmp_path
+):
+    def no_listing(path, **kwargs):
+        raise RuntimeError("no Vortex")
+
+    monkeypatch.setattr(VortexCli, "get_grib2_variables", staticmethod(no_listing))
+    path = tmp_path / "MRMS_RadarOnly_QPE_01H_00.00_20250115-060000.grib2"
+    path.write_bytes(b"GRIB")
+    engine.variables = ["RadarOnly_QPE_01H_altitude_above_msl"]
+    PrecipMrms.to_dss(path, tmp_path / "o.dss")
+    assert java_calls[0]["variables"] == ["RadarOnly_QPE_01H_altitude_above_msl"]
+
+
+def test_vortex_listing_takes_the_spelling_over_the_engine(engine, java_calls, monkeypatch, tmp_path):
+    """The reader that imports decides: an older table spells this name differently."""
+    old = "RadarOnlyQPE01H_altitude_above_msl"
+    monkeypatch.setattr(VortexCli, "get_grib2_variables", staticmethod(lambda p, **kwargs: [old]))
+    path = tmp_path / "MRMS_RadarOnly_QPE_01H_00.00_20250115-060000.grib2"
+    path.write_bytes(b"GRIB")
+    engine.variables = ["RadarOnly_QPE_01H_altitude_above_msl"]
+    PrecipMrms.to_dss(path, tmp_path / "o.dss")
+    assert java_calls[0]["variables"] == [old]
+
+
+@pytest.mark.parametrize("file_name", [DAILY_NAME, "storm.grib2"])
+def test_override_runs_java_and_warns_about_no_rain(file_name, no_wheel, java_calls, tmp_path, caplog):
+    path = tmp_path / file_name
     path.write_bytes(b"GRIB")
     with caplog.at_level(logging.WARNING, logger=nv.logger.name):
-        PrecipMrms.to_dss(path, tmp_path / "o.dss", product="MultiSensor_QPE_24H_Pass2_00.00")
+        PrecipMrms.to_dss(path, tmp_path / "o.dss", allow_instantaneous_precip=True)
     assert len(java_calls) == 1
-    assert any("INST-VAL" in r.getMessage() for r in caplog.records)
+    warned = [r.getMessage() for r in caplog.records if "allow_instantaneous_precip" in r.getMessage()]
+    assert len(warned) == 1
+    assert "no rain" in warned[0]
+    assert "INST-VAL" in warned[0]
+
+
+def test_override_on_one_hour_changes_nothing(no_wheel, java_calls, grib, tmp_path, caplog):
+    with caplog.at_level(logging.WARNING, logger=nv.logger.name):
+        PrecipMrms.to_dss(grib, tmp_path / "o.dss", allow_instantaneous_precip=True)
+    assert len(java_calls) == 1
+    assert "no rain" not in caplog.text
+
+
+def test_native_refuses_despite_the_override(engine, java_calls, tmp_path):
+    path = tmp_path / DAILY_NAME
+    path.write_bytes(b"GRIB")
+    output = tmp_path / "new_folder" / "o.dss"
+    with pytest.raises(engine.exceptions.DssUnsupportedRecordError, match="Java route only"):
+        PrecipMrms.to_dss(path, output, backend="native", allow_instantaneous_precip=True)
+    assert engine.calls == []
+    assert java_calls == []
+    assert not output.parent.exists()
 
 
 def test_java_does_not_warn_on_one_hour(java_calls, grib, tmp_path, caplog):
     with caplog.at_level(logging.WARNING, logger=nv.logger.name):
         PrecipMrms.to_dss(grib, tmp_path / "o.dss")
-    assert not any("INST-VAL" in r.getMessage() for r in caplog.records)
+    assert not any("no rain" in r.getMessage() for r in caplog.records)
 
 
 # ---------------------------------------------------------------------------
@@ -926,7 +1063,21 @@ def test_shadow_refusal_of_other_durations_is_expected(real, monkeypatch, tmp_pa
     output = tmp_path / "o.dss"
     instant = "/SHG/MRMS_QPE/PRECIPITATION/26SEP2024:2200//GAUGECORR_QPE_24H/"
     _java_writes(monkeypatch, lambda p: write(p, real, pathname=instant, data_type="INST-VAL"))
-    assert PrecipMrms.to_dss(path, output, product="MultiSensor_QPE_24H_Pass2_00.00", backend="shadow") == output
+    result = PrecipMrms.to_dss(
+        path, output, product="MultiSensor_QPE_24H_Pass2_00.00", backend="shadow", allow_instantaneous_precip=True
+    )
+    assert result == output
+    assert nv.SHADOW_STATS[("expected", "native_refuses_instant_precipitation")] == 1
+
+
+def test_shadow_refusal_of_a_name_with_no_period_is_expected(real, monkeypatch, tmp_path):
+    source = _sample(tmp_path, "*RadarOnly_QPE_01H*.grib2")
+    renamed = tmp_path / "storm.grib2"
+    source.rename(renamed)
+    output = tmp_path / "o.dss"
+    instant = "/SHG/MRMS_QPE/PRECIPITATION/15JAN2025:0600//GAUGECORR_QPE_01H/"
+    _java_writes(monkeypatch, lambda p: write(p, real, pathname=instant, data_type="INST-VAL"))
+    PrecipMrms.to_dss(renamed, output, backend="shadow", allow_instantaneous_precip=True, align="vortex")
     assert nv.SHADOW_STATS[("expected", "native_refuses_instant_precipitation")] == 1
 
 
@@ -1124,3 +1275,24 @@ def test_renamed_one_hour_file_is_refused_by_the_importer(real, tmp_path):
     with pytest.raises(DssUnsupportedRecordError):
         PrecipMrms.to_dss(renamed, output, backend="native", align="vortex")
     assert not output.exists()
+
+
+def test_real_daily_file_renamed_hourly_is_refused_on_java(real, java_calls, tmp_path):
+    source = _sample(tmp_path, "*MultiSensor_QPE_24H*.grib2")
+    renamed = tmp_path / HOURLY_NAME
+    source.rename(renamed)
+    output = tmp_path / "o.dss"
+    with pytest.raises(ValueError, match="1440 minutes"):
+        PrecipMrms.to_dss(renamed, output)
+    assert java_calls == []
+    assert not output.exists()
+
+
+def test_real_radaronly_spelling_is_read_by_the_engine(real, java_calls, monkeypatch, tmp_path):
+    def no_listing(path, **kwargs):
+        raise RuntimeError("no Vortex")
+
+    monkeypatch.setattr(VortexCli, "get_grib2_variables", staticmethod(no_listing))
+    source = _sample(tmp_path, "*RadarOnly_QPE_01H*.grib2")
+    PrecipMrms.to_dss(source, tmp_path / "o.dss")
+    assert java_calls[0]["variables"] == ["RadarOnly_QPE_01H_altitude_above_msl"]

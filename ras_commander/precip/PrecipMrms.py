@@ -276,6 +276,7 @@ class PrecipMrms:
         timeout: int = 1800,
         backend: Optional[str] = None,
         align: str = "refuse",
+        allow_instantaneous_precip: bool = False,
     ) -> Path:
         """
         Convert MRMS GRIB2 files to HEC-DSS.
@@ -292,7 +293,10 @@ class PrecipMrms:
                 native backend requires its ``.prj``.
             product: MRMS product, which sets the default F part.
             variables: Variable names. The default follows the file names on the
-                Java route and selects the file's QPE on the native route.
+                Java route and selects the file's QPE on the native route. For
+                RadarOnly on the Java route, the spelling is read through HEC-Vortex,
+                then the engine. If neither can list the file, the name
+                ``RadarOnlyQPE<hours>H_altitude_above_msl`` is used, with a warning.
             target_wkt: "SHG" or a WKT. The native backend refuses a projection its
                 warper does not support; a UTM WKT (transverse Mercator) was refused.
             target_cell_size: Cell size in the target's units.
@@ -310,10 +314,25 @@ class PrecipMrms:
                 ``"vortex"`` rounds the origin when stored, as HEC-Vortex was
                 observed to do, which moves the grid by part of a cell. Observed
                 behaviour we did not implement by default.
+            allow_instantaneous_precip: Java and shadow routes only. Write durations
+                other than one hour as HEC-Vortex stores them, with a warning, rather
+                than refuse them. The native backend refuses them either way.
 
         Backends:
-            - ``"java"``: HEC-Vortex. Observed output for MRMS durations other than
-              one hour is INST-VAL with a D part only, and a warning is logged.
+            - ``"java"``: HEC-Vortex. Refuses MRMS durations other than one hour (15M,
+              03H to 72H) unless ``allow_instantaneous_precip=True``, as observed
+              output for them is INST-VAL with a D part only, and HEC-HMS has read this
+              shape as no rain. The refusal is a ``ValueError`` and nothing is written.
+              It reads the product, each file name and any stated variable, before
+              Vortex starts. A file name HEC-Vortex gives no period, such as
+              ``storm.grib2``, is refused too, as a 01H file so named was stored as
+              INST-VAL. With the ``ras-commander-fast-dss`` wheel it also reads each
+              file's own variables when none is stated, so a 24H file renamed 01H is
+              refused. Without the wheel such a file passes this check, unless it is
+              RadarOnly, whose variables are listed through Vortex with no import. On
+              0.13.3 Vortex then found no such variable and ``RuntimeError`` was raised
+              with no file written. With the override and that file's own variable
+              stated, Vortex stamped 24-hour totals with a one-hour period.
             - ``"native"``: the optional ``ras-commander-fast-dss`` importer, with no
               JVM. A new file is DSS7. It writes one-hour QPE only, each as a
               PER-CUM record with a one-hour period. Other durations raise
@@ -331,10 +350,17 @@ class PrecipMrms:
               rounding of cells. A record Java rewrites with the same content and
               the importer omits shows only in DSS7. Differences log a warning and
               do not raise. Java's exceptions are raised as themselves. Without
-              the wheel this runs Java alone, with one warning per process.
+              the wheel this runs Java alone, with one warning per process. Durations
+              other than one hour are refused as for ``"java"``, so neither writer
+              runs. With the override, Java writes them and the importer's refusal is
+              recorded as expected.
 
         Returns:
             Path: The DSS file.
+
+        Raises:
+            ValueError: On the Java and shadow routes, a duration other than one hour
+                without ``allow_instantaneous_precip=True``.
         """
         from . import _native_vortex
         from .VortexCli import VortexCli
@@ -346,12 +372,30 @@ class PrecipMrms:
             raise ValueError("grib2_files must contain at least one file")
 
         output_path = Path(output_dss)
-        output_path.parent.mkdir(parents=True, exist_ok=True)
+
+        period_problems: List[str] = []
+        held: Dict[Path, List[str]] = {}
+        if selected != "native":
+            period_problems, held = _native_vortex.check_java_periods(
+                product, grib_paths, variables, allow_instantaneous_precip
+            )
 
         product_info = PrecipMrms._product_info(product)
         import_variables = variables or PrecipMrms._vortex_variables_for_files(
             product, grib_paths
         )
+        if selected != "native" and not variables:
+            import_variables = PrecipMrms._radaronly_held_spelling(
+                import_variables,
+                grib_paths,
+                held,
+                product=product,
+                period_problems=period_problems,
+                allow_instantaneous_precip=allow_instantaneous_precip,
+                vortex_path=vortex_path,
+                jython_jar=jython_jar,
+                timeout=timeout,
+            )
         write_parts = {
             "A": "SHG",
             "B": "MRMS_QPE",
@@ -387,9 +431,7 @@ class PrecipMrms:
                 len(grib_paths),
                 output_path,
             )
-            _native_vortex.warn_java_instant_precipitation(
-                product, grib_paths, import_variables
-            )
+            output_path.parent.mkdir(parents=True, exist_ok=True)
             return VortexCli.import_gridded(
                 input_files=grib_paths,
                 output_dss=output_path,
@@ -1776,7 +1818,7 @@ class PrecipMrms:
                 ]
 
             radaronly_match = re.search(
-                r"MRMS_(RadarOnly_QPE_(\d{1,2})H)_",
+                r"(?:^|_)(RadarOnly_QPE_(\d{1,2})H)_",
                 filename,
                 flags=re.IGNORECASE,
             )
@@ -1785,6 +1827,71 @@ class PrecipMrms:
                 return [f"RadarOnlyQPE{hours:02d}H_altitude_above_msl"]
 
         return PrecipMrms._vortex_variables(product)
+
+    @staticmethod
+    def _radaronly_held_spelling(
+        default: List[str],
+        grib_paths: List[Path],
+        held: Dict[Path, List[str]],
+        *,
+        product: str,
+        period_problems: List[str],
+        allow_instantaneous_precip: bool,
+        vortex_path: Optional[Union[str, Path]],
+        jython_jar: Optional[Union[str, Path]],
+        timeout: int,
+    ) -> List[str]:
+        """The RadarOnly name as the file's reader spells it, for a caller who named no variable.
+
+        The reader's GRIB2 table sets the spelling, so HEC-Vortex, which will do the import, is asked
+        first. It lists the first and last files, each a JVM start, and runs no import. The engine's
+        listing is next, then the default name. A Vortex listing also serves the duration check when
+        there is no wheel.
+        """
+        if not default or not default[0].startswith("RadarOnlyQPE"):
+            return default
+        from . import _native_vortex
+        from .VortexCli import VortexCli
+
+        def squeezed(name: str) -> str:
+            return name.replace("_", "").lower()
+
+        listed: Dict[Path, List[str]] = {}
+        try:
+            for path in dict.fromkeys([grib_paths[0], grib_paths[-1]]):
+                listed[path] = list(
+                    VortexCli.get_grib2_variables(
+                        path, vortex_path=vortex_path, timeout=timeout, jython_jar=jython_jar
+                    )
+                )
+        except Exception as exc:
+            logger.debug("HEC-Vortex could not list the variables: %s", exc)
+            listed = {}
+
+        if listed and not period_problems:
+            qpe = [n for names in listed.values() for n in names if "qpe" in n.lower()]
+            _native_vortex.settle_java_periods(
+                _native_vortex.period_problems(product, grib_paths, qpe),
+                grib_paths,
+                allow_instantaneous_precip,
+            )
+
+        wanted = squeezed(default[0])
+        for source in (listed, held):
+            spellings = list(
+                dict.fromkeys(
+                    n for names in source.values() for n in names if squeezed(n) == wanted
+                )
+            )
+            if spellings:
+                return spellings
+        logger.warning(
+            "Could not read the RadarOnly variable name from %s; using %s. If HEC-Vortex finds "
+            "no such variable, state it with variables=.",
+            grib_paths[0].name,
+            default[0],
+        )
+        return default
 
     @staticmethod
     def _product_hours(product: str) -> int:
