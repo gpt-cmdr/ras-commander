@@ -545,9 +545,8 @@ RADAR_15M = "MRMS_RadarOnly_QPE_15M_00.00_20250115-060000.grib2"
     [
         (DAILY_NAME, "GaugeCorr_QPE_01H", None, "1440 minutes"),
         (RADAR_15M, "GaugeCorr_QPE_01H", None, "15 minutes"),
-        (HOURLY_NAME, "RadarOnly_QPE_03H", None, "180 minutes"),
-        (HOURLY_NAME, "GaugeCorr_QPE_01H", ["MultiSensor_QPE_72H_Pass2_altitude_above_msl"], "4320 minutes"),
-        (HOURLY_NAME, "GaugeCorr_QPE_01H", ["RadarOnly_QPE_15M_altitude_above_msl"], "15 minutes"),
+        (DAILY_NAME, "GaugeCorr_QPE_01H", ["MultiSensor_QPE_24H_Pass2_altitude_above_msl"], "1440 minutes"),
+        ("storm.grib2", "GaugeCorr_QPE_24H", None, "1440 minutes"),
         ("storm.grib2", "GaugeCorr_QPE_01H", None, "gives no one-hour period"),
         ("storm_01H.grib2", "GaugeCorr_QPE_01H", ["RadarOnly_QPE_01H_altitude_above_msl"], "gives no one-hour period"),
     ],
@@ -567,6 +566,192 @@ def test_java_and_shadow_refuse_with_nothing_written(
     assert "allow_instantaneous_precip=True" in message
     assert java_calls == []
     assert not output.parent.exists()
+
+
+@pytest.mark.parametrize(
+    "name,expected",
+    [
+        ("24H_RadarOnly_QPE_01H_legitimate.grib2", [3600]),
+        ("MRMS_MultiSensor_QPE_24H_Pass2_00.00_20240920-120000.grib2", [86400]),
+        ("RadarOnly_QPE_15M_altitude_above_msl", [900]),
+        ("GaugeCorrQPE03H_altitude_above_msl", [10800]),
+        ("GaugeCorr-QPE-06H", [21600]),
+        ("radaronly_qpe_12h", [43200]),
+        ("QPE_24H_RadarOnly_QPE_01H.grib2", [3600]),
+        ("QPE_72H_label.grib2", [259200]),
+        ("hrrr_24H.t12z.wrfsfcf01.grib2", []),
+        ("FLASH_QPE_ARI01H_00.00.grib2", []),
+    ],
+)
+def test_accumulation_is_tied_to_the_qpe_stem(name, expected):
+    assert nv._stem_seconds(name) == expected
+
+
+@pytest.mark.parametrize("backend", ["java", "shadow"])
+@pytest.mark.parametrize("variables", [None, ["RadarOnly_QPE_01H_altitude_above_msl"]])
+def test_an_incidental_duration_label_does_not_refuse_a_one_hour_product(
+    backend, variables, no_wheel, java_calls, monkeypatch, tmp_path
+):
+    monkeypatch.setattr(
+        VortexCli, "get_grib2_variables",
+        staticmethod(lambda p, **kwargs: ["RadarOnly_QPE_01H_altitude_above_msl"]),
+    )
+    path = tmp_path / "24H_RadarOnly_QPE_01H_legitimate.grib2"
+    path.write_bytes(b"GRIB")
+    PrecipMrms.to_dss(path, tmp_path / "o.dss", variables=variables, backend=backend)
+    assert len(java_calls) == 1
+
+
+@pytest.mark.parametrize(
+    "file_name,variables",
+    [
+        ("hrrr.t12z.wrfsfcf01.grib2", ["Total_precipitation_surface_1_Hour_Accumulation"]),
+        ("hrrr_24H_label.grib2", ["Total_precipitation_surface_1_Hour_Accumulation"]),
+        ("anything.grb2", ["Total_precipitation_surface_24_Hour_Accumulation"]),
+        ("MRMS_PrecipFlag_00.00_20250115-060000.grib2", ["PrecipFlag_altitude_above_msl"]),
+    ],
+)
+def test_a_non_mrms_grib_with_its_variable_goes_to_vortex_as_before(
+    file_name, variables, no_wheel, java_calls, tmp_path, caplog
+):
+    path = tmp_path / file_name
+    path.write_bytes(b"GRIB")
+    with caplog.at_level(logging.WARNING, logger=nv.logger.name):
+        PrecipMrms.to_dss(path, tmp_path / "o.dss", variables=variables)
+    assert java_calls[0]["variables"] == variables
+    assert "allow_instantaneous_precip" not in caplog.text
+
+
+def test_a_non_mrms_grib_listed_by_the_engine_goes_to_vortex_as_before(engine, java_calls, tmp_path):
+    path = tmp_path / "hrrr.t12z.wrfsfcf01.grib2"
+    path.write_bytes(b"GRIB")
+    engine.variables = ["Total_precipitation_surface_1_Hour_Accumulation"]
+    PrecipMrms.to_dss(path, tmp_path / "o.dss")
+    assert len(java_calls) == 1
+
+
+def test_an_unlistable_grib_with_no_variable_counts_as_the_default_mrms_selection(
+    no_wheel, java_calls, tmp_path
+):
+    """The narrow case: nothing can say it is not MRMS, and the selection is an MRMS variable."""
+    path = tmp_path / "hrrr.t12z.wrfsfcf01.grib2"
+    path.write_bytes(b"GRIB")
+    with pytest.raises(ValueError, match="If this file is not MRMS, state its variable"):
+        PrecipMrms.to_dss(path, tmp_path / "o.dss")
+    assert java_calls == []
+
+
+def test_an_explicit_mrms_product_makes_the_rule_apply(no_wheel, java_calls, tmp_path):
+    path = tmp_path / "hrrr.t12z.wrfsfcf01.grib2"
+    path.write_bytes(b"GRIB")
+    with pytest.raises(ValueError, match="gives no one-hour period"):
+        PrecipMrms.to_dss(
+            path, tmp_path / "o.dss", product="RadarOnly_QPE_01H",
+            variables=["Total_precipitation_surface_1_Hour_Accumulation"],
+        )
+    assert java_calls == []
+
+
+@pytest.mark.parametrize(
+    "file_name",
+    [
+        "x_gaugecorr_y_qpe_z_01h_w.grib2",
+        "x_radaronly_y_qpe_z_01h_w.grib2",
+        "x_multisensor_y_qpe_z_01h_w.grib2",
+        "RadarOnly_QPE_01H_00.00_20190520-120000.GRIB2",
+        "GaugeCorr QPE 01H odd name.grib2",
+    ],
+)
+def test_each_vortex_one_hour_rule_accepts(file_name, no_wheel, java_calls, tmp_path):
+    path = tmp_path / file_name
+    path.write_bytes(b"GRIB")
+    PrecipMrms.to_dss(path, tmp_path / "o.dss", variables=["RadarOnly_QPE_01H_altitude_above_msl"])
+    assert len(java_calls) == 1
+
+
+@pytest.mark.parametrize(
+    "file_name",
+    [
+        "GaugeCorr_QPE_01H.grib2.backup",
+        "RadarOnly_QPE_01H.grib2.backup",
+        "MultiSensor_QPE_01H_Pass2.grib2.backup",
+        "RadarOnly_QPE_01H.grib",
+        "RadarOnly_QPE_01H.grb2",
+        "QPE_01H_x.grib2",
+        "qpe_radaronly_01h.grib2",
+        "RadarOnly_01H_QPE.grib2",
+    ],
+)
+def test_names_outside_the_vortex_rules_are_refused(file_name, no_wheel, java_calls, tmp_path):
+    path = tmp_path / file_name
+    path.write_bytes(b"GRIB")
+    with pytest.raises(ValueError, match="gives no one-hour period"):
+        PrecipMrms.to_dss(path, tmp_path / "o.dss", variables=["RadarOnly_QPE_01H_altitude_above_msl"])
+    assert java_calls == []
+
+
+@pytest.mark.parametrize("backend", ["java", "shadow"])
+@pytest.mark.parametrize("override", [False, True])
+@pytest.mark.parametrize(
+    "file_name,product,variables,stated",
+    [
+        (HOURLY_NAME, "GaugeCorr_QPE_01H", ["MultiSensor_QPE_24H_Pass2_altitude_above_msl"], "1440 minutes"),
+        (HOURLY_NAME, "GaugeCorr_QPE_01H", ["MultiSensor_QPE_72H_Pass2_altitude_above_msl"], "4320 minutes"),
+        (HOURLY_NAME, "GaugeCorr_QPE_01H", ["RadarOnly_QPE_15M_altitude_above_msl"], "15 minutes"),
+        (HOURLY_NAME, "RadarOnly_QPE_03H", None, "180 minutes"),
+        ("MultiSensor_QPE_24H_then_01H.grib2", "GaugeCorr_QPE_01H", None, "1440 minutes"),
+    ],
+)
+def test_a_detected_conflict_is_refused_even_with_the_override(
+    backend, override, file_name, product, variables, stated, no_wheel, java_calls, tmp_path
+):
+    """Detectable with no wheel: only names are read here."""
+    path = tmp_path / file_name
+    path.write_bytes(b"GRIB")
+    output = tmp_path / "new_folder" / "o.dss"
+    with pytest.raises(ValueError, match=stated) as info:
+        PrecipMrms.to_dss(
+            path, output, product=product, variables=variables, backend=backend,
+            allow_instantaneous_precip=override,
+        )
+    message = str(info.value)
+    assert "one-hour period (60 minutes)" in message
+    assert file_name in message
+    assert "does not allow" in message
+    assert java_calls == []
+    assert not output.parent.exists()
+
+
+@pytest.mark.parametrize("backend", ["java", "shadow"])
+def test_a_conflict_the_engine_lists_is_refused_even_with_the_override(
+    backend, engine, java_calls, grib, tmp_path
+):
+    engine.variables = ["MultiSensor_QPE_24H_Pass2_altitude_above_msl"]
+    with pytest.raises(ValueError, match="1440 minutes"):
+        PrecipMrms.to_dss(grib, tmp_path / "o.dss", backend=backend, allow_instantaneous_precip=True)
+    assert java_calls == []
+
+
+def test_a_conflict_the_vortex_listing_finds_is_refused_even_with_the_override(
+    no_wheel, java_calls, monkeypatch, tmp_path
+):
+    path = tmp_path / "MRMS_RadarOnly_QPE_01H_00.00_20250115-060000.grib2"
+    path.write_bytes(b"GRIB")
+    monkeypatch.setattr(
+        VortexCli, "get_grib2_variables",
+        staticmethod(lambda p, **kwargs: ["RadarOnly_QPE_24H_altitude_above_msl"]),
+    )
+    with pytest.raises(ValueError, match="1440 minutes"):
+        PrecipMrms.to_dss(path, tmp_path / "o.dss", allow_instantaneous_precip=True)
+    assert java_calls == []
+
+
+def test_the_override_warning_does_not_claim_there_is_no_period(no_wheel, java_calls, tmp_path, caplog):
+    path = tmp_path / DAILY_NAME
+    path.write_bytes(b"GRIB")
+    with caplog.at_level(logging.WARNING, logger=nv.logger.name):
+        PrecipMrms.to_dss(path, tmp_path / "o.dss", allow_instantaneous_precip=True)
+    assert "with no period" not in caplog.text
 
 
 def test_refusal_on_many_files_stays_readable(no_wheel, java_calls, tmp_path):
@@ -1296,3 +1481,44 @@ def test_real_radaronly_spelling_is_read_by_the_engine(real, java_calls, monkeyp
     source = _sample(tmp_path, "*RadarOnly_QPE_01H*.grib2")
     PrecipMrms.to_dss(source, tmp_path / "o.dss")
     assert java_calls[0]["variables"] == ["RadarOnly_QPE_01H_altitude_above_msl"]
+
+
+def test_real_incidental_label_is_not_refused_and_gets_a_period_from_native(real, java_calls, tmp_path):
+    source = _sample(tmp_path, "*RadarOnly_QPE_01H*.grib2")
+    renamed = tmp_path / "24H_RadarOnly_QPE_01H_legitimate.grib2"
+    source.rename(renamed)
+    PrecipMrms.to_dss(renamed, tmp_path / "j.dss", variables=["RadarOnly_QPE_01H_altitude_above_msl"])
+    assert len(java_calls) == 1
+    result = PrecipMrms.to_dss(renamed, tmp_path / "n.dss", backend="native", align="vortex")
+    with real.open(str(result)) as handle:
+        name = list(handle.catalog()["pathname"].astype(str))[0]
+        grid = handle.read_grid(name, max_cells=2**28)
+    assert (grid.end_time - grid.start_time) == np.timedelta64(3600, "s")
+
+
+def test_real_hrrr_is_not_held_to_the_mrms_rules(real, java_calls, tmp_path):
+    source = _sample(tmp_path, "hrrr*wrfsfcf01*.grib2")
+    stated = ["Total_precipitation_surface_1_Hour_Accumulation"]
+    PrecipMrms.to_dss(source, tmp_path / "a.dss", variables=stated)
+    PrecipMrms.to_dss(source, tmp_path / "b.dss")
+    assert [call["variables"][0] for call in java_calls][0] == stated[0]
+    assert len(java_calls) == 2
+
+
+def test_real_backup_suffix_is_refused(real, java_calls, tmp_path):
+    source = _sample(tmp_path, "*RadarOnly_QPE_01H*.grib2")
+    renamed = tmp_path / "RadarOnly_QPE_01H.grib2.backup"
+    source.rename(renamed)
+    with pytest.raises(ValueError, match="gives no one-hour period"):
+        PrecipMrms.to_dss(renamed, tmp_path / "o.dss", variables=["RadarOnly_QPE_01H_altitude_above_msl"])
+    assert java_calls == []
+
+
+@pytest.mark.parametrize("stated", [None, ["MultiSensor_QPE_24H_Pass2_altitude_above_msl"]])
+def test_real_daily_file_renamed_hourly_is_refused_with_the_override(stated, real, java_calls, tmp_path):
+    source = _sample(tmp_path, "*MultiSensor_QPE_24H*.grib2")
+    renamed = tmp_path / HOURLY_NAME
+    source.rename(renamed)
+    with pytest.raises(ValueError, match="1440 minutes"):
+        PrecipMrms.to_dss(renamed, tmp_path / "o.dss", variables=stated, allow_instantaneous_precip=True)
+    assert java_calls == []

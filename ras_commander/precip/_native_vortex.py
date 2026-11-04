@@ -23,7 +23,9 @@ stated, and takes no window for a GRIB2 input. This adapter never states that ty
 backend refuses every duration other than one hour before the importer runs, and checks each written
 record's period. The Java and shadow routes refuse those durations too, before writing anything,
 unless the caller passes ``allow_instantaneous_precip=True``: Java then writes them as above, and
-logs a warning. The override does not change the native backend.
+logs a warning. The override does not change the native backend, and does not allow a file whose
+name would get a one-hour period to hold another accumulation. These rules apply to MRMS QPE only:
+a GRIB2 that no name or variable identifies as MRMS QPE goes to HEC-Vortex as before.
 
 This module is private. It imports the engine only inside functions, so ``import ras_commander``
 works without the wheel.
@@ -72,10 +74,25 @@ _RESAMPLING = {
     "average": "average",
 }
 
+#: A duration anywhere in a name. Read for the ``product`` argument only, whose whole meaning is an
+#: MRMS product. In file and variable names a duration counts only when tied to a QPE stem.
 _DURATION_RE = re.compile(r"(?:^|[_.\-]|QPE)(\d{1,2})([HM])(?=[_.\-]|$)", re.IGNORECASE)
-#: HEC-Vortex 0.13.3 gives a one-hour period only to names matching its three rules for these
-#: products (``GridDatasetReader.SpecialFileType``). Other names get an instant, even for a 01H file.
-_VORTEX_ONE_HOUR_NAME_RE = re.compile(r"(gaugecorr|radaronly|multisensor).*qpe.*01h.*grib2", re.IGNORECASE)
+_QPE_STEM_END = r"[_\-]?QPE[_\-]?(\d{1,2})([HM])(?![A-Za-z0-9])"
+_QPE_FAMILY_RE = re.compile(
+    r"(?:RadarOnly|GaugeCorr|GaugeOnly|MultiSensor|MountainMapper)" + _QPE_STEM_END, re.IGNORECASE
+)
+_QPE_BARE_RE = re.compile(r"(?<![A-Za-z0-9])QPE[_\-]?(\d{1,2})([HM])(?![A-Za-z0-9])", re.IGNORECASE)
+#: HEC-Vortex gives a one-hour period only to names these match whole, lower-cased
+#: (``GridDatasetReader.SpecialFileType``, ``matcher.matches()``; read in the 0.13.3 and 1.1.0 jars).
+#: Other MRMS names get an instant, even for a 01H file.
+_VORTEX_ONE_HOUR_NAME_RES = tuple(
+    re.compile(pattern)
+    for pattern in (
+        r".*gaugecorr.*qpe.*01h.*grib2",
+        r".*radaronly.*qpe.*01h.*grib2",
+        r".*multisensor.*qpe.*01h.*grib2",
+    )
+)
 _TIME_PART_RE = re.compile(r"^(\d{2})([A-Za-z]{3})(\d{4}):(\d{4})$")
 _MONTHS = ("JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC")
 
@@ -211,27 +228,62 @@ def reset_fallback_warning() -> None:
 # ---------------------------------------------------------------------------
 
 
-def _duration_seconds(name: str) -> Optional[int]:
-    """Accumulation stated in an MRMS file, product or variable name, in seconds."""
-    match = _DURATION_RE.search(name)
-    if not match:
-        return None
+def _seconds(match: "re.Match[str]") -> int:
     return int(match.group(1)) * (3600 if match.group(2).upper() == "H" else 60)
+
+
+def _stem_seconds(name: str) -> List[int]:
+    """Each accumulation tied to an MRMS QPE stem in a file or variable name, in seconds.
+
+    A stem naming its family outranks a bare ``QPE_24H``. Any other duration in the name is a label:
+    ``24H_RadarOnly_QPE_01H.grib2`` states one hour.
+    """
+    return [_seconds(m) for m in _QPE_FAMILY_RE.finditer(name)] or [
+        _seconds(m) for m in _QPE_BARE_RE.finditer(name)
+    ]
+
+
+def _product_seconds(product: str) -> List[int]:
+    """The accumulation of the ``product`` argument, in seconds."""
+    stems = _stem_seconds(str(product))
+    if stems:
+        return stems
+    match = _DURATION_RE.search(str(product))
+    return [_seconds(match)] if match else []
 
 
 def period_problems(
     product: str, grib_paths: Sequence[Path], variables: Optional[Sequence[str]]
 ) -> List[str]:
-    """Each name that states an MRMS accumulation other than one hour."""
-    named = [("product", product)]
-    named += [("file", path.name) for path in grib_paths]
-    named += [("variable", name) for name in variables or ()]
-    problems = []
-    for kind, name in named:
-        seconds = _duration_seconds(str(name))
-        if seconds is not None and seconds != 3600:
-            problems.append(f"{kind} {name!r} states {seconds // 60} minutes")
+    """Each name that states an MRMS accumulation other than one hour.
+
+    With variables known, a file name holding a 01H stem is not read against them, as the variable
+    is the file's own statement. Without them, every stem in the name counts.
+    """
+    problems = [
+        f"product {product!r} states {seconds // 60} minutes"
+        for seconds in _product_seconds(product)
+        if seconds != 3600
+    ]
+    for path in grib_paths:
+        stems = _stem_seconds(Path(path).name)
+        if variables and 3600 in stems:
+            continue
+        problems += [
+            f"file {Path(path).name!r} states {seconds // 60} minutes" for seconds in stems if seconds != 3600
+        ]
+    for name in variables or ():
+        problems += [
+            f"variable {name!r} states {seconds // 60} minutes"
+            for seconds in _stem_seconds(str(name))
+            if seconds != 3600
+        ]
     return list(dict.fromkeys(problems))
+
+
+def _listed_qpe(held: Dict[Path, List[str]]) -> List[str]:
+    """Listed variables that name an MRMS QPE accumulation."""
+    return list(dict.fromkeys(name for names in held.values() for name in names if _stem_seconds(name)))
 
 
 def find_period_problems(
@@ -255,19 +307,66 @@ def find_period_problems(
         if names is not None:
             held[path] = [str(name) for name in names]
     if not variables:
-        listed = [name for names in held.values() for name in names if "qpe" in name.lower()]
-        problems = period_problems(product, grib_paths, listed)
+        problems = period_problems(product, grib_paths, _listed_qpe(held))
     return problems, held
+
+
+def _vortex_gives_one_hour(path: Path) -> bool:
+    name = Path(path).name.lower()
+    return any(rule.fullmatch(name) for rule in _VORTEX_ONE_HOUR_NAME_RES)
 
 
 def _vortex_name_problems(grib_paths: Sequence[Path]) -> List[str]:
     """Each file whose name HEC-Vortex gives no period, whatever its accumulation."""
     return [
         f"file {Path(path).name!r} has a name HEC-Vortex gives no one-hour period: it needs "
-        "gaugecorr, radaronly or multisensor, then qpe, then 01h, and to end in grib2"
+        "gaugecorr, radaronly or multisensor, then qpe, then 01h, and to end in grib2. If this file "
+        "is not MRMS, state its variable"
         for path in grib_paths
-        if not _VORTEX_ONE_HOUR_NAME_RE.search(Path(path).name)
+        if not _vortex_gives_one_hour(path)
     ]
+
+
+def _is_mrms_qpe(
+    product: str,
+    product_is_explicit: bool,
+    grib_paths: Sequence[Path],
+    variables: Optional[Sequence[str]],
+    held: Dict[Path, List[str]],
+) -> bool:
+    """Whether a name, product or variable says this is MRMS QPE.
+
+    The default ``product`` says nothing, as every call has it. With no variable stated and a file
+    nothing can list, the selection is ``to_dss``'s default MRMS variable, which counts.
+    """
+    if product_is_explicit and _product_seconds(product):
+        return True
+    if any(_stem_seconds(Path(path).name) for path in grib_paths):
+        return True
+    if variables:
+        return any(_stem_seconds(str(name)) for name in variables)
+    return bool(_listed_qpe(held)) or any(path not in held for path in grib_paths)
+
+
+def _relabelled_durations(
+    product: str, grib_paths: Sequence[Path], selected: Sequence[str]
+) -> List[str]:
+    """Each file HEC-Vortex would stamp with one hour, whose accumulation is stated to be other."""
+    claims = [("product", str(product), s) for s in _product_seconds(product)]
+    claims += [("variable", str(name), s) for name in selected for s in _stem_seconds(str(name))]
+    conflicts = []
+    for path in grib_paths:
+        if not _vortex_gives_one_hour(path):
+            continue
+        name = Path(path).name
+        own = [] if selected else [("file", name, s) for s in _stem_seconds(name)]
+        conflicts += [
+            f"{name!r} would get a one-hour period (60 minutes) from HEC-Vortex's name rule, while "
+            f"{kind} {claim!r} states {seconds // 60} minutes"
+            for kind, claim, seconds in claims + own
+            if seconds != 3600
+        ]
+    return list(dict.fromkeys(conflicts))
 
 
 def _engine_listing(path: Path) -> Optional[List[str]]:
@@ -288,22 +387,41 @@ def _shortened(items: Sequence[str], limit: int = 5) -> str:
 
 
 def settle_java_periods(
-    problems: Sequence[str], grib_paths: Sequence[Path], allow_instantaneous_precip: bool
-) -> None:
-    """Refuse a duration Java cannot state a period for, or warn when the caller overrides that."""
-    if not problems:
-        return
-    if allow_instantaneous_precip:
-        logger.warning(
-            "allow_instantaneous_precip=True: writing MRMS precipitation with no period. HEC-Vortex "
-            "has been observed to store these durations as PRECIPITATION, INST-VAL, with a D part "
-            "only, and HEC-HMS has read this shape as no rain. Check the records before use. (%s)",
-            _shortened(list(problems)),
+    product: str,
+    product_is_explicit: bool,
+    grib_paths: Sequence[Path],
+    variables: Optional[Sequence[str]],
+    held: Dict[Path, List[str]],
+    allow_instantaneous_precip: bool,
+    warned: bool = False,
+) -> bool:
+    """Refuse what Java cannot state a period for, or warn on the override. Returns if it warned."""
+    selected = list(variables or _listed_qpe(held))
+    relabelled = _relabelled_durations(product, grib_paths, selected)
+    if relabelled:
+        raise ValueError(
+            f"PrecipMrms.to_dss refused: {_shortened(relabelled)}. Nothing was written. That would "
+            "store one accumulation under the period of another, and "
+            "allow_instantaneous_precip=True does not allow it. Use a file name and variable that "
+            "agree."
         )
-        return
+    problems = period_problems(product, grib_paths, selected)
+    if _is_mrms_qpe(product, product_is_explicit, grib_paths, variables, held):
+        problems = problems or _vortex_name_problems(grib_paths)
+    if not problems:
+        return warned
+    if allow_instantaneous_precip:
+        if not warned:
+            logger.warning(
+                "allow_instantaneous_precip=True: HEC-Vortex 0.13.3 stored MRMS files outside its "
+                "one-hour name rules as PRECIPITATION, INST-VAL, with a D part only, and HEC-HMS has "
+                "read this shape as no rain. Check the records before use. (%s)",
+                _shortened(problems),
+            )
+        return True
     files = _shortened([Path(path).name for path in grib_paths])
     raise ValueError(
-        f"PrecipMrms.to_dss refused {files}: {_shortened(list(problems))}. Nothing was written. MRMS "
+        f"PrecipMrms.to_dss refused {files}: {_shortened(problems)}. Nothing was written. MRMS "
         "GRIB2 states an instant, and the HEC-Vortex route can state a period for one-hour QPE only. "
         "HEC-Vortex has been observed to store other durations as PRECIPITATION, INST-VAL, with a D "
         "part only, and HEC-HMS has read this shape as no rain. Use a 01H product, or pass "
@@ -313,21 +431,22 @@ def settle_java_periods(
 
 def check_java_periods(
     product: str,
+    product_is_explicit: bool,
     grib_paths: Sequence[Path],
     variables: Optional[Sequence[str]],
     allow_instantaneous_precip: bool,
-) -> Tuple[List[str], Dict[Path, List[str]]]:
+) -> Tuple[bool, Dict[Path, List[str]]]:
     """Check the Java and shadow routes before HEC-Vortex starts, with the engine if it is present.
 
     Without the wheel, only the names of the product, the files and any stated variable are read.
-    Returns the problems found, which were overridden if it returns at all with any, and the variables
-    the engine listed.
+    Returns whether the override's warning was logged, and the variables the engine listed.
     """
     lister = _engine_listing if native_available() else (lambda _path: None)
-    problems, held = find_period_problems(product, grib_paths, variables, lister)
-    problems = problems or _vortex_name_problems(grib_paths)
-    settle_java_periods(problems, grib_paths, allow_instantaneous_precip)
-    return problems, held
+    _, held = find_period_problems(product, grib_paths, variables, lister)
+    warned = settle_java_periods(
+        product, product_is_explicit, grib_paths, variables, held, allow_instantaneous_precip
+    )
+    return warned, held
 
 
 def _part_time(text: str) -> datetime:

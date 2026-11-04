@@ -837,7 +837,7 @@ print("VORTEX_IMPORT_COMPLETE")
                 cmd = VortexCli._build_jython_command(
                     vortex_path=vortex_dir,
                     script_file=script_file,
-                jython_jar=jython_jar,
+                    jython_jar=jython_jar,
                     include_add_opens=False,
                 )
                 result = subprocess.run(
