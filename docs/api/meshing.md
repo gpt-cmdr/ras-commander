@@ -166,6 +166,62 @@ the explicitly configured `RAS_EXACT_SUBSET_NATIVE_CASE` fixture.
     options:
       heading_level: 3
 
+## Cut a plan HDF to the same cells for stored maps
+
+`HdfResultsMesh.write_cell_subset()` writes the plan-HDF counterpart of an
+exact cell subset: a mapping-only child plan HDF holding one 2D area made of
+the selected parent cells, and, when the parent has results, those results.
+RAS Mapper then renders stored maps for the child footprint only, against a
+terrain that need only cover that footprint. Nothing is computed or re-meshed.
+
+The topology comes from the same builder as `GeomMesh.apply_cell_subset()`, so
+child cell and face IDs equal those of an exact-subset child geometry built
+from the same parent IDs. The selection rules are the same: explicit zero-based
+physical IDs forming one region without holes or pinch points, never expanded.
+
+```python
+from ras_commander.hdf import HdfResultsMesh
+
+sub = HdfResultsMesh.write_cell_subset(
+    "parent/Model.p02.hdf", "child/Model.p02.hdf",
+    parent_cell_ids=selected_ids, mesh_name="Area",
+    output_rows=[198, 201],  # rows of Base Output; None keeps all
+)
+record = sub.to_dict()  # ras-mesh-results-subset/v1
+```
+
+How results are carried over:
+
+- Cell time series and summary values are copied for the kept cells. Each new
+  perimeter ghost cell takes the value of the dropped parent neighbour across
+  the cut, so water surfaces at the edge interpolate as in the parent.
+- A perimeter face whose kept cell was the parent's `c1` is reversed so the
+  kept cell becomes `c0`. Face results measured along the normal (`Face
+  Velocity`, `Face Flow`, `Face Cumulative Volume` and the other momentum
+  terms) are negated on those faces; for `Maximum/Minimum Face Velocity` only
+  the value row is negated, not the time row. Face datasets of unknown sign are
+  left out when any face is reversed.
+- Time series keep only `output_rows`, in the order given. Summary maxima and
+  minima cover the whole parent simulation, whatever rows are kept.
+- A parent plan HDF without results gives a child with Geometry, Plan Data and
+  Event Conditions only.
+
+Left out, and listed in `sub.dropped`: meteorology, boundary condition lines
+and their results, 1D, storage-area and structure elements, other 2D areas,
+breaklines and refinement regions, infiltration and land-cover tables, reference
+lines, DSS and computation output blocks, and solver diagnostics. The child is
+not a simulation input and establishes no hydraulic validity. The writer is
+qualified for HEC-RAS 6.6 plan HDFs and refuses other versions and geometry-only
+HDFs. It stages to `<child>.partial`, reads the child back, refuses to finish if
+the parent changed meanwhile, and never modifies the parent.
+
+To map the child, put it beside minimal `.prj`, `.p##`, `.g##`, `.u##` text
+files (titles and file references only) and a `.rasmap` that registers the
+clipped terrain, then call `RasProcess.store_maps()` with a timestamp profile
+or `"Max"`. The opt-in `tests/test_mesh_results_subset_native.py` test builds
+exactly that project and generates timestep and `Max` maps with HEC-RAS 6.6.
+It skips cleanly unless `RAS_RESULTS_SUBSET_NATIVE_CASE` names a local case.
+
 ## Diagnose before repairing
 
 | Symptom or question | Inspection | Supported next step |
