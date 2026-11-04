@@ -327,25 +327,33 @@ def _vortex_name_problems(grib_paths: Sequence[Path]) -> List[str]:
     ]
 
 
-def _is_mrms_qpe(
+def _mrms_files(
     product: str,
     product_is_explicit: bool,
     grib_paths: Sequence[Path],
     variables: Optional[Sequence[str]],
     held: Dict[Path, List[str]],
-) -> bool:
-    """Whether a name, product or variable says this is MRMS QPE.
+) -> List[Path]:
+    """The files a name, product or variable says are MRMS QPE, one by one, as a list can mix sources.
 
-    The default ``product`` says nothing, as every call has it. With no variable stated and a file
-    nothing can list, the selection is ``to_dss``'s default MRMS variable, which counts.
+    The default ``product`` says nothing, as every call has it. For a file nothing can list, the
+    selection decides: stated variables that are all MRMS QPE, or none stated, as ``to_dss``'s default
+    variable is MRMS. So a stated non-MRMS variable leaves such a file to HEC-Vortex's own time bounds.
     """
     if product_is_explicit and _product_seconds(product):
-        return True
-    if any(_stem_seconds(Path(path).name) for path in grib_paths):
-        return True
-    if variables:
-        return any(_stem_seconds(str(name)) for name in variables)
-    return bool(_listed_qpe(held)) or any(path not in held for path in grib_paths)
+        return list(grib_paths)
+    stated = [str(name) for name in variables or ()]
+    every_stated_is_mrms = all(_stem_seconds(name) for name in stated)
+
+    def says_mrms(path: Path) -> bool:
+        if _stem_seconds(Path(path).name):
+            return True
+        names = held.get(path)
+        if names:
+            return any(_stem_seconds(name) for name in names)
+        return every_stated_is_mrms
+
+    return [path for path in grib_paths if says_mrms(path)]
 
 
 def _relabelled_durations(
@@ -406,8 +414,9 @@ def settle_java_periods(
             "agree."
         )
     problems = period_problems(product, grib_paths, selected)
-    if _is_mrms_qpe(product, product_is_explicit, grib_paths, variables, held):
-        problems = problems or _vortex_name_problems(grib_paths)
+    problems = problems or _vortex_name_problems(
+        _mrms_files(product, product_is_explicit, grib_paths, variables, held)
+    )
     if not problems:
         return warned
     if allow_instantaneous_precip:

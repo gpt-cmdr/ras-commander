@@ -1505,6 +1505,29 @@ def test_real_hrrr_is_not_held_to_the_mrms_rules(real, java_calls, tmp_path):
     assert len(java_calls) == 2
 
 
+def test_real_mixed_mrms_and_hrrr_list_is_judged_file_by_file(real, java_calls, tmp_path):
+    radar = _sample(tmp_path, "*RadarOnly_QPE_01H*.grib2")
+    hrrr = _sample(tmp_path, "hrrr*wrfsfcf01*.grib2")
+    stated = ["RadarOnly_QPE_01H_altitude_above_msl", "Total_precipitation_surface_1_Hour_Accumulation"]
+    PrecipMrms.to_dss([radar, hrrr], tmp_path / "ok.dss", variables=stated)
+    assert len(java_calls) == 1
+    # The MRMS file in the same list is still held to Vortex's name rule.
+    backup = tmp_path / "RadarOnly_QPE_01H.grib2.backup"
+    radar.rename(backup)
+    with pytest.raises(ValueError, match="gives no one-hour period") as info:
+        PrecipMrms.to_dss([backup, hrrr], tmp_path / "no.dss", variables=stated)
+    assert "hrrr" not in str(info.value).split("refused", 1)[1].split(":", 1)[1].split(". Nothing")[0]
+    assert len(java_calls) == 1
+
+
+def test_a_stated_mrms_variable_still_holds_an_unnamed_file_to_the_rule(java_calls, tmp_path):
+    plain = tmp_path / "storm.grib2"
+    plain.write_bytes(b"GRIB")
+    with pytest.raises(ValueError, match="gives no one-hour period"):
+        PrecipMrms.to_dss(plain, tmp_path / "o.dss", variables=["RadarOnly_QPE_01H_altitude_above_msl"], backend="java")
+    assert java_calls == []
+
+
 def test_real_backup_suffix_is_refused(real, java_calls, tmp_path):
     source = _sample(tmp_path, "*RadarOnly_QPE_01H*.grib2")
     renamed = tmp_path / "RadarOnly_QPE_01H.grib2.backup"
