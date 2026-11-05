@@ -1,0 +1,36 @@
+name: Stored HDF data qualification
+on:
+  pull_request:
+    paths:
+      - 'ras_commander/hdf/**'
+      - 'ras_commander/_fast_hdf_typed.py'
+      - 'ras_commander/schemas.py'
+      - 'tests/test_hdf_stored_data*.py'
+      - '.github/workflows/hdf-stored-data.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  corpus:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Install readers and test dependencies
+        env:
+          CI: '1'
+        run: python -m pip install . pytest geopandas xarray
+      - name: Acquire pinned public HDF corpus
+        run: |
+          mkdir -p .corpus
+          curl --fail --location https://raw.githubusercontent.com/gpt-cmdr/ras-hdf-test-corpus/6be647713da1abc9af72a56fc42c630a6a54f1e2/scripts/fetch_corpus.py --output .corpus/fetch.py
+          echo '2ffd5f820e10631d95af39e6bfc8f6f56ed72d3c9214bc44d8e1d29310d7d197  .corpus/fetch.py' | sha256sum --check
+          python .corpus/fetch.py --tag v1.0.1 --profile core --dest .corpus
+          python .corpus/fetch.py --tag v1.0.1 --profile legacy --dest .corpus
+      - name: Require synthetic contracts and real corpus values
+        env:
+          RAS_HDF_DATA_CORPUS: ${{ github.workspace }}/.corpus
+        run: python -m pytest tests/test_hdf_stored_data_readers.py tests/test_hdf_stored_data_corpus.py -q

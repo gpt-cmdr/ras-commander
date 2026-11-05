@@ -41,6 +41,7 @@ from ..fast_hdf import read_typed, reraise_required
 from ..LoggingConfig import get_logger
 from .HdfBase import HdfBase
 from .HdfUtils import HdfUtils
+from ._stored_data import _stored_label
 from ._packed_parts import _nonnegative_index, resolve_feature_part_ranges
 
 # GeoPandas/Shapely load on first use, so the tabular readers work on the core
@@ -103,6 +104,101 @@ class HdfBndry:
         "station_start",
         "station_end",
     ]
+
+    @staticmethod
+    @log_call
+    @standardize_input(file_type="geom_hdf")
+    def get_initial_condition_points(
+        hdf_path: Union[str, Path], *, ras_object=None
+    ) -> "gpd.GeoDataFrame":
+        """Read stored 2D initial-condition point geometry and cell assignments.
+
+        Args:
+            hdf_path: Geometry HDF path or supported geometry selector.
+            ras_object: Optional project context for geometry selectors.
+
+        Returns:
+            GeoDataFrame with zero-based point_id, Name, SA/2D, Cell Index and
+            stored XY geometry. Repeated names retain distinct point IDs. CRS
+            comes from HdfBase.get_projection; unknown CRS stays unset. Absent
+            optional layers return an empty frame. No water surface is inferred.
+
+        Raises:
+            ValueError: Present tables, finite coordinates or cell assignments disagree.
+            FileNotFoundError: The input file is absent.
+        """
+        crs = HdfBase.get_projection(hdf_path)
+        with h5py.File(hdf_path, "r") as hdf:
+            group = hdf.get("Geometry/IC Points")
+            if group is None:
+                return gpd.GeoDataFrame(
+                    {
+                        "point_id": pd.Series(dtype="int64"),
+                        "Name": pd.Series(dtype="str"),
+                        "SA/2D": pd.Series(dtype="str"),
+                        "Cell Index": pd.Series(dtype="int32"),
+                    },
+                    geometry=[],
+                    crs=crs,
+                )
+            if (
+                not isinstance(group, h5py.Group)
+                or "Attributes" not in group
+                or "Points" not in group
+            ):
+                raise ValueError("IC Points requires Attributes and Points")
+            if not all(
+                isinstance(group[name], h5py.Dataset)
+                for name in ["Attributes", "Points"]
+            ):
+                raise ValueError("IC Attributes and Points must be datasets")
+            attributes, points = (
+                read_typed(group["Attributes"]),
+                read_typed(group["Points"]),
+            )
+            if attributes.ndim != 1 or not {"Name", "SA/2D", "Cell Index"} <= set(
+                attributes.dtype.names or ()
+            ):
+                raise ValueError(
+                    "IC Points Attributes requires Name, SA/2D and Cell Index"
+                )
+            if points.shape != (len(attributes), 2) or points.dtype.kind != "f":
+                raise ValueError("IC Points requires one floating XY row per attribute")
+            if not np.isfinite(points).all():
+                raise ValueError("IC Point coordinates must be finite")
+            if attributes.dtype["Cell Index"].kind not in "iu":
+                raise ValueError("IC Point cell indexes must be integers")
+            names = [_stored_label(value) for value in attributes["Name"]]
+            areas = [_stored_label(value) for value in attributes["SA/2D"]]
+            if any(not name for name in names):
+                raise ValueError("IC Point names must be nonempty stored text")
+            for area, cell in zip(areas, attributes["Cell Index"]):
+                if not isinstance(area, str) or "/" in area or "\\" in area or not area:
+                    raise ValueError(
+                        "IC Point area must be an exact nonempty mesh name"
+                    )
+                centers = hdf.get(
+                    f"Geometry/2D Flow Areas/{area}/Cells Center Coordinate"
+                )
+                if (
+                    not isinstance(centers, h5py.Dataset)
+                    or centers.ndim != 2
+                    or centers.shape[1] != 2
+                    or not 0 <= cell < len(centers)
+                ):
+                    raise ValueError(
+                        "IC Point cell index outside its stored mesh geometry"
+                    )
+            return gpd.GeoDataFrame(
+                {
+                    "point_id": np.arange(len(attributes), dtype=np.int64),
+                    "Name": names,
+                    "SA/2D": areas,
+                    "Cell Index": attributes["Cell Index"],
+                },
+                geometry=[shapely_geometry.Point(row) for row in points],
+                crs=crs,
+            )
 
     @staticmethod
     def _empty_bc_external_faces(

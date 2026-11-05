@@ -29,7 +29,7 @@ Each entry of :data:`DATAFRAME_SCHEMAS`:
 """
 
 # Schema contract version -- bump when the documented column surface changes meaningfully.
-SCHEMA_VERSION = "1.32"
+SCHEMA_VERSION = "1.33"
 
 _GEOMETRY_ASSOCIATION_COLUMNS = [
     {"name": "geom_number", "dtype": "str", "description": "Normalized geometry identifier."},
@@ -2163,3 +2163,106 @@ DATAFRAME_SCHEMAS["fim_boundary_comparison"] = {
     ],
     "note": "Difference metrics retain complete polygons and holes. Native vector parity is not presumed. Shared timing/provenance and exclusions are recorded in attrs and boundary_comparison.json.",
 }
+
+# Stored HDF samples and interval records. These readers do not change project metadata.
+for _name, _accessor, _description, _columns, _dynamic in (
+    (
+        "hdf_observed_timeseries",
+        "HdfResultsPlan.get_observed_timeseries()",
+        "Stored observation samples in source dataset order, including duplicate dates.",
+        (
+            ("variable", "str", "Flow or Stage source group."),
+            (
+                "site_name",
+                "str",
+                "Exact source dataset name including feature type prefix.",
+            ),
+            (
+                "sample_index",
+                "int64",
+                "Zero-based stored sample row within that dataset.",
+            ),
+            ("date_text", "str", "Stored date text with NUL padding removed."),
+            (
+                "time",
+                "datetime64[us] | datetime64[ns]",
+                "Parsed civil observation date; no inferred timezone.",
+            ),
+            (
+                "simulation_time",
+                "float32 | float64",
+                "Literal stored elapsed value, or NaN when absent; metadata retains units evidence.",
+            ),
+            (
+                "value",
+                "float32 | float64",
+                "Stored observation value without conversion or deduplication.",
+            ),
+        ),
+        False,
+    ),
+    (
+        "hdf_initial_condition_points",
+        "HdfBndry.get_initial_condition_points()",
+        "Stored 2D initial-condition points and exact cell assignments.",
+        (
+            ("point_id", "int64", "Zero-based stored Attributes row."),
+            ("Name", "str", "Stored point name."),
+            ("SA/2D", "str", "Stored mesh name."),
+            ("Cell Index", "integer", "Stored cell index within that mesh."),
+            (
+                "geometry",
+                "geometry",
+                "Stored XY Point; CRS from source evidence or unset.",
+            ),
+        ),
+        False,
+    ),
+    (
+        "hdf_steady_cross_section_results",
+        "HdfResultsPlan.get_steady_cross_section_results()",
+        "One named steady XS dataset in profile-major and stored-section order.",
+        (
+            ("river", "str", "Stored river identity."),
+            ("reach", "str", "Stored reach identity."),
+            ("node_id", "str", "Stored river station identity."),
+            ("xs_id", "int64", "Zero-based stored XS ordinal."),
+            ("profile", "str", "Stored profile label."),
+            ("profile_index", "int64", "Zero-based stored profile ordinal."),
+            ("variable", "str", "Literal dataset path relative to Cross Sections."),
+            (
+                "value",
+                "integer | float32 | float64",
+                "Exact stored numeric values, without rounding or substitution.",
+            ),
+        ),
+        False,
+    ),
+    (
+        "hdf_blocked_obstructions",
+        "HdfXsec.get_blocked_obstructions()",
+        "Raw stored XS obstruction intervals; no inferred geometry or permanent flag.",
+        (
+            ("xs_id", "int64", "Zero-based stored XS Attributes row."),
+            ("block_id", "int64", "Absolute stored Obstruction Blocks row."),
+            ("River", "str", "Stored river identity."),
+            ("Reach", "str", "Stored reach identity."),
+            ("RS", "str", "Stored station identity."),
+            ("Left Sta", "numeric", "Stored left station."),
+            ("Right Sta", "numeric", "Stored right station."),
+            ("Elevation", "numeric", "Stored obstruction elevation."),
+        ),
+        True,
+    ),
+):
+    DATAFRAME_SCHEMAS[_name] = {
+        "description": _description,
+        "accessor": _accessor,
+        "source": _accessor,
+        "extra_columns": _dynamic,
+        "dynamic": _dynamic,
+        "columns": [
+            {"name": name, "dtype": dtype, "description": description}
+            for name, dtype, description in _columns
+        ],
+    }

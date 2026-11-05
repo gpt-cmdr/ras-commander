@@ -636,3 +636,60 @@ except ValueError as e:
     print(f"Dataset not found in HDF: {e}")
     # Check if plan was fully computed
 ```
+
+## Stored observations, initial-condition points and steady cross-section data
+
+Use these readers for data retained in an existing HDF. They are read-only and
+accept paths or project selectors with `ras_object=`. Missing optional observation,
+IC-point or obstruction groups return empty frames. Present incomplete tables
+raise; an explicitly selected unknown observation site or steady variable raises
+`KeyError`.
+
+```python
+from ras_commander import HdfResultsPlan, HdfBndry, HdfXsec
+
+observed = HdfResultsPlan.get_observed_timeseries("model.p01.hdf", variable="Flow")
+initial_points = HdfBndry.get_initial_condition_points("model.g01.hdf")
+blocks = HdfXsec.get_blocked_obstructions("model.g01.hdf")
+velocity = HdfResultsPlan.get_steady_cross_section_results(
+    "model.p01.hdf", "Additional Variables/Velocity Total", profile_index=0
+)
+area = HdfResultsPlan.get_steady_cross_section_results(
+    "model.p01.hdf", "Additional Variables/Area including Ineffective Total"
+)
+```
+
+`get_observed_timeseries()` returns one row per stored site sample. `variable`
+and the full stored `site_name` identify the source dataset; `sample_index` keeps
+its stored row order. `date_text` retains the source date text and `time` parses
+that sample's own date, including end-of-day `24:00`. Duplicate and nonmonotonic
+times remain separate samples. No timezone, output time axis, interpolation or
+cross-site alignment is inferred. `simulation_time` and `value` retain stored
+values. The `sites` entry in `DataFrame.attrs` maps source dataset paths to their
+raw attribute evidence, including available `Data Units` and source metadata.
+An exact `site_name=` filter includes the stored prefix, such as `Ref Line: Gauge`.
+
+`get_initial_condition_points()` returns stored finite XY points, names, mesh names and
+cell indexes, with the source CRS or an unset CRS. `point_id` is the zero-based
+Attributes row; repeated names do not merge features. These points do not supply
+an inferred starting water surface or replace startup/restart metadata.
+
+`get_blocked_obstructions()` returns raw station intervals keyed by `xs_id` and
+absolute stored `block_id`. The columns `River`, `Reach`, `RS`, `Left Sta`,
+`Right Sta` and `Elevation` retain their source meaning. Extra compound members
+remain columns; no `Permanent` flag or map footprint is fabricated.
+
+`get_steady_cross_section_results()` accepts a literal dataset path relative to
+the steady Cross Sections group. It returns profile-major rows with stored cross-section (XS)
+identities, profile labels, `xs_id`, `profile_index`, `variable` and unrounded
+`value`. `profile_name=` selects an exact unique label; if both selectors are
+supplied they must agree. `Velocity Total` is separate from `Velocity Channel`;
+`Area including Ineffective Total` is separate from `Area Flow Total`. The reader
+never substitutes one for another. Dataset path and raw attributes are retained
+in `DataFrame.attrs`.
+
+The existing `h5py`, `auto` and `native` backend policies apply. Observation and
+steady reads reuse existing typed readers. Native IC-point and obstruction reads
+need the additive engine capabilities; older wheels retain reference fallback in
+`auto` mode and refuse unsupported value reads in required-native mode. No runtime
+package upgrade or download is performed by these methods.

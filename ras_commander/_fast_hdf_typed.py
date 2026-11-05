@@ -118,6 +118,8 @@ XS_FIELDS = {
     "Station Elevation Values": ("station_elevation", "values"),
     "Manning's n Info": ("mannings_n", "info"),
     "Manning's n Values": ("mannings_n", "values"),
+    "Obstruction Info": ("blocked_obstructions", "info"),
+    "Obstruction Blocks": ("blocked_obstructions", "values"),
     "Ineffective Info": ("ineffective_areas", "info"),
     "Ineffective Blocks": ("ineffective_areas", "values"),
     "Deck High Info": ("deck_high", "info"),
@@ -290,6 +292,8 @@ def route_for(name):
         return ("geometry_family", family, leaf)
     if parent == "Geometry/Junctions" and leaf in {"Attributes", "Points"}:
         return ("junctions", leaf)
+    if parent == "Geometry/IC Points" and leaf in {"Attributes", "Points"}:
+        return ("initial_condition_point_geometry", leaf)
     if parent == "Geometry/Reference Points" and leaf in {"Attributes", "Points"}:
         return ("reference_point_geometry", leaf)
     if parent == "Geometry/Cross Section Interpolation Surfaces":
@@ -525,6 +529,12 @@ def _full(module, file_path, route, dataset):
         raise TypedRouteError(f"{dataset.name}: not returned by the typed group reader ({reason})")
     if kind == "junctions":
         data = _cached(file_path, ("junctions",), lambda: _engine(module, file_path, "river_junctions"))
+        value = _value(data, dataset)
+        return _compound(value["attributes"], dataset) if route[1] == "Attributes" else _numeric(value["points"], dataset)
+    if kind == "initial_condition_point_geometry":
+        if not hasattr(module, kind):
+            raise TypedRouteError(f"{dataset.name}: extension lacks {kind}")
+        data = _cached(file_path, ("icpoints",), lambda: _engine(module, file_path, kind))
         value = _value(data, dataset)
         return _compound(value["attributes"], dataset) if route[1] == "Attributes" else _numeric(value["points"], dataset)
     if kind == "reference_point_geometry":

@@ -39,6 +39,7 @@ import h5py
 import pandas as pd
 from ..Decorators import standardize_input, log_call
 from .HdfUtils import HdfUtils
+from ._stored_data import _stored_label, _observation_datetime
 from ..LoggingConfig import get_logger
 from ..fast_hdf import read_attrs, read_typed, reraise_required
 import numpy as np
@@ -65,6 +66,283 @@ class HdfResultsPlan:
     Note:
         No instantiation required - all methods are static.
     """
+
+    @staticmethod
+    @log_call
+    @standardize_input(file_type="plan_hdf")
+    def get_observed_timeseries(
+        hdf_path: Union[str, Path],
+        variable: Optional[str] = None,
+        site_name: Optional[str] = None,
+        *,
+        ras_object=None,
+    ) -> pd.DataFrame:
+        """Read stored observation samples without aligning or deduplicating sites.
+
+        Args:
+            hdf_path: Plan HDF path or supported plan selector.
+            variable: Exact ``Flow`` or ``Stage``; None reads both when present.
+            site_name: Exact stored site dataset name, including its type prefix.
+            ras_object: Optional project context for plan selectors.
+
+        Returns:
+            Long DataFrame with variable, site_name, sample_index, date_text,
+            time, simulation_time and value. Sample ordinals are zero-based per
+            dataset. Stored order and duplicate dates remain unchanged. Parsed
+            times have no inferred timezone; simulation_time is the literal stored
+            value, not a clock borrowed from simulation output. Per-dataset HDF
+            paths and unmodified attribute evidence are in attrs['sites'].
+            Missing optional groups return an empty frame with the same columns.
+
+        Raises:
+            KeyError: An explicitly selected site is absent.
+            ValueError: Variable or a present observation schema is invalid.
+            FileNotFoundError: The input file is absent.
+        """
+        if variable not in (None, "Flow", "Stage"):
+            raise ValueError("variable must be 'Flow', 'Stage', or None")
+        frames, metadata = [], {}
+        columns = [
+            "variable",
+            "site_name",
+            "sample_index",
+            "date_text",
+            "time",
+            "simulation_time",
+            "value",
+        ]
+        found = False
+        with h5py.File(hdf_path, "r") as hdf:
+            for kind in [variable] if variable is not None else ["Flow", "Stage"]:
+                group = hdf.get(f"Event Conditions/Observed Data/{kind}")
+                if group is None:
+                    continue
+                if not isinstance(group, h5py.Group):
+                    raise ValueError(f"{group.name}: expected observation group")
+                for name in group:
+                    if name == "Attributes" or (
+                        site_name is not None and name != site_name
+                    ):
+                        continue
+                    dataset = group[name]
+                    if not isinstance(dataset, h5py.Dataset) or dataset.ndim != 1:
+                        raise ValueError(
+                            f"{dataset.name}: expected rank-one observation table"
+                        )
+                    fields = dataset.dtype.fields or {}
+                    if not {"Date", "Value"} <= fields.keys():
+                        raise ValueError(
+                            f"{dataset.name}: Date and Value fields required"
+                        )
+                    if fields["Date"][0].kind != "S" or fields["Value"][0].kind != "f":
+                        raise ValueError(
+                            f"{dataset.name}: fixed Date text and floating Value required"
+                        )
+                    if (
+                        "Simulation Time" in fields
+                        and fields["Simulation Time"][0].kind != "f"
+                    ):
+                        raise ValueError(
+                            f"{dataset.name}: Simulation Time must be floating"
+                        )
+                    data = read_typed(dataset)
+                    dates = [
+                        value.decode("utf-8").rstrip("\x00") for value in data["Date"]
+                    ]
+                    times = [_observation_datetime(value) for value in dates]
+                    if any(not isinstance(value, datetime) for value in times):
+                        raise ValueError(
+                            f"{dataset.name}: invalid stored observation date"
+                        )
+                    frame = pd.DataFrame(
+                        {
+                            "variable": kind,
+                            "site_name": name,
+                            "sample_index": np.arange(len(data), dtype=np.int64),
+                            "date_text": dates,
+                            "time": HdfUtils._datetime_index(times),
+                            "simulation_time": data["Simulation Time"]
+                            if "Simulation Time" in fields
+                            else np.full(len(data), np.nan),
+                            "value": data["Value"],
+                        }
+                    )
+                    frames.append(frame)
+                    metadata[dataset.name] = read_attrs(dataset)
+                    found = True
+        if site_name is not None and not found:
+            raise KeyError(f"Observed site {site_name!r} not found")
+        result = (
+            pd.concat(frames, ignore_index=True)
+            if frames
+            else pd.DataFrame(
+                {
+                    "variable": pd.Series(dtype="str"),
+                    "site_name": pd.Series(dtype="str"),
+                    "sample_index": pd.Series(dtype="int64"),
+                    "date_text": pd.Series(dtype="str"),
+                    "time": pd.Series(dtype="datetime64[us]"),
+                    "simulation_time": pd.Series(dtype="float64"),
+                    "value": pd.Series(dtype="float64"),
+                }
+            )
+        )
+        result = result[columns]
+        result.attrs["sites"] = metadata
+        return result
+
+    @staticmethod
+    @log_call
+    @standardize_input(file_type="plan_hdf")
+    def get_steady_cross_section_results(
+        hdf_path: Union[str, Path],
+        variable: str,
+        profile_index: Optional[int] = None,
+        profile_name: Optional[str] = None,
+        *,
+        ras_object=None,
+    ) -> pd.DataFrame:
+        """Read one literal steady XS variable with profile and section identities.
+
+        Args:
+            hdf_path: Plan HDF path or supported plan selector.
+            variable: Dataset name relative to Cross Sections, for example
+                ``Water Surface`` or ``Additional Variables/Velocity Total``.
+                Exact paths avoid ambiguity between primary and additional data.
+            profile_index: Optional zero-based stored profile ordinal.
+            profile_name: Optional exact profile name; must uniquely match and
+                agree with profile_index when both are supplied.
+            ras_object: Optional project context for plan selectors.
+
+        Returns:
+            DataFrame with river, reach, node_id, xs_id, profile, profile_index,
+            variable and value. Values retain stored numeric dtype and precision.
+            Dataset path and stored attribute evidence are in attrs. No quantity
+            substitution, rounding, unit conversion or geometry is performed.
+
+        Raises:
+            KeyError: The named dataset or profile is absent.
+            ValueError: A selector, stored identity or array axis is invalid.
+            FileNotFoundError: The input file is absent.
+        """
+        if (
+            not isinstance(variable, str)
+            or not variable
+            or any(
+                part in ("", ".", "..") or "\\" in part for part in variable.split("/")
+            )
+        ):
+            raise ValueError("variable must be an exact relative dataset path")
+        if profile_index is not None and (
+            isinstance(profile_index, (bool, np.bool_))
+            or not isinstance(profile_index, (int, np.integer))
+        ):
+            raise ValueError("profile_index must be an integer")
+        base = "Results/Steady/Output/Output Blocks/Base Output/Steady Profiles"
+        with h5py.File(hdf_path, "r") as hdf:
+            profile_dataset = hdf[f"{base}/Profile Names"]
+            if (
+                not isinstance(profile_dataset, h5py.Dataset)
+                or profile_dataset.ndim != 1
+                or profile_dataset.dtype.kind not in "SO"
+            ):
+                raise ValueError("Profile Names must be a rank-one string array")
+            profiles = [_stored_label(value) for value in read_typed(profile_dataset)]
+            if profile_name is not None:
+                matches = [i for i, name in enumerate(profiles) if name == profile_name]
+                if not matches:
+                    raise KeyError(f"Profile {profile_name!r} not found")
+                if len(matches) != 1 or (
+                    profile_index is not None and profile_index != matches[0]
+                ):
+                    raise ValueError("Profile selectors are ambiguous or disagree")
+                profile_index = matches[0]
+            if profile_index is not None and not 0 <= profile_index < len(profiles):
+                raise ValueError("profile_index outside stored profile axis")
+            dataset = hdf[f"{base}/Cross Sections/{variable}"]
+            if (
+                not isinstance(dataset, h5py.Dataset)
+                or dataset.ndim != 2
+                or dataset.dtype.kind not in "iuf"
+            ):
+                raise ValueError(
+                    f"{dataset.name}: expected numeric profile-by-XS array"
+                )
+            for attribute_path in [
+                "Results/Steady/Output/Geometry Info/Cross Section Attributes",
+                "Geometry/Cross Sections/Attributes",
+            ]:
+                if attribute_path in hdf:
+                    table = hdf[attribute_path]
+                    if not isinstance(table, h5py.Dataset) or table.ndim != 1:
+                        raise ValueError(
+                            f"{attribute_path}: expected rank-one XS identity table"
+                        )
+            attributes, fields = HdfResultsPlan._get_steady_cross_section_attributes(
+                hdf, dataset.shape[1]
+            )
+            if dataset.shape[0] != len(profiles):
+                raise ValueError(f"{dataset.name}: profile count mismatch")
+            indices = range(len(profiles)) if profile_index is None else [profile_index]
+            frames = []
+            # Keep the profile dimension during selection for typed result readers.
+            for index in indices:
+                values = read_typed(dataset, (slice(index, index + 1), slice(None)))[0]
+                frame = pd.DataFrame(
+                    {
+                        "river": [
+                            _stored_label(value)
+                            for value in attributes[fields["river"]]
+                        ],
+                        "reach": [
+                            _stored_label(value)
+                            for value in attributes[fields["reach"]]
+                        ],
+                        "node_id": [
+                            _stored_label(value)
+                            for value in attributes[fields["station"]]
+                        ],
+                        "xs_id": np.arange(dataset.shape[1], dtype=np.int64),
+                        "profile": profiles[index],
+                        "profile_index": index,
+                        "variable": variable,
+                        "value": values,
+                    }
+                )
+                frames.append(frame)
+            result = (
+                pd.concat(frames, ignore_index=True)
+                if frames
+                else pd.DataFrame(
+                    columns=[
+                        "river",
+                        "reach",
+                        "node_id",
+                        "xs_id",
+                        "profile",
+                        "profile_index",
+                        "variable",
+                        "value",
+                    ]
+                )
+            )
+            if not frames:
+                result = result.astype(
+                    {
+                        "river": "str",
+                        "reach": "str",
+                        "node_id": "str",
+                        "xs_id": "int64",
+                        "profile": "str",
+                        "profile_index": "int64",
+                        "variable": "str",
+                        "value": dataset.dtype,
+                    }
+                )
+            result.attrs.update(
+                hdf_path=dataset.name, dataset_attributes=read_attrs(dataset)
+            )
+            return result
 
     @staticmethod
     @log_call
