@@ -45,7 +45,7 @@ def test_log_call_does_not_format_arguments(caplog):
 
 def test_capability_exports(native):
     c = native.capabilities()
-    assert c['engine_commit'] in accepted_engine_commits() and c['api_version'] == 11
+    assert c['engine_commit'] in accepted_engine_commits() and c['api_version'] == 12
     assert c['engine_features'] == list(ENGINE_FEATURES)
     assert 'mesh_inventory' in c['bindings']
 

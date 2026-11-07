@@ -199,7 +199,7 @@ automatically, use `pip install "ras-commander[fast]"` or
 
 ```python
 import ras_commander_fast_hdf as native
-print(native.API_VERSION)      # 11
+print(native.API_VERSION)      # 12 (legacy mesh metadata compatibility build)
 print(native.ENGINE_COMMIT)    # b2ab8280617383519d38aad9bd47b88b654009b1
 print(native.ENGINE_FEATURES)  # ('catalog', 'hdf', 'mesh', 'results')
 
@@ -208,11 +208,19 @@ print(fast_hdf.available())    # True
 ```
 
 ras-commander only uses an extension whose `API_VERSION` is exactly the one it
-was built against (11 for this release). An older or newer wheel is ignored
+was built against (12 for the legacy mesh metadata compatibility build). An older or newer wheel is ignored
 with one logged warning, and every read uses h5py; in `native` mode it raises
 `FastHdfError` instead. `fast_hdf.available()` returns `False` in both cases.
 If the extension is not installed at all, `available()` returns `False` and
 every read uses h5py without a warning.
+
+The legacy metadata compatibility build reads 2D area names from
+`Geometry/2D Flow Areas/Names` when `Attributes` is absent. It qualifies the
+physical-cell count from contiguous cell-face ranges: polygon cells must
+precede the one-face boundary ghosts, with one range per stored cell center.
+Ambiguous layouts raise instead of using a stale `Cell Maximum Index` or a
+result width to infer the boundary. Both the Python fallback and native engine
+apply this rule; a present `Attributes` table continues to take precedence.
 
 ## Engine modes
 

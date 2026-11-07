@@ -1,4 +1,4 @@
-"""Full immutable 5/6/7 geometry qualification (bridge API_VERSION 11).
+"""Full immutable 5/6/7 geometry qualification (bridge API_VERSION 12).
 
 Run as a script; it is not collected by pytest. For each pinned fixture it
 checks, against the Python reference (``engine="h5py"``):
@@ -44,7 +44,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from native_engine_provenance import accepted_engine_commits  # noqa: E402
 import mesh_invalid_cells  # noqa: E402
 
-API_VERSION = 11
+API_VERSION = 12
 # (case, file name, polygon count, SHA256 of the immutable copy, invalid source cells).
 # AustinOyster.p03 is the public FEMA eBFE HEC-RAS 5.0.7 plan (Source: FEMA estimated
 # Base Flood Elevation (eBFE) program). The 'invalid' file is derived at run time.

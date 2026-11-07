@@ -23,7 +23,7 @@ def native():
     module = pytest.importorskip("ras_commander_fast_hdf")
     assert module.ENGINE_COMMIT in accepted_engine_commits(), module.ENGINE_COMMIT
     assert tuple(module.ENGINE_FEATURES) == ENGINE_FEATURES
-    assert module.API_VERSION == 11
+    assert module.API_VERSION == 12
     assert module.TEXT_API_VERSION == 1
     return module
 

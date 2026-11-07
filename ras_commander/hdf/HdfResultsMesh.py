@@ -2731,14 +2731,13 @@ class HdfResultsMesh:
             dfs = []
             with h5py.File(hdf_path, 'r') as hdf_file:
                 crs = HdfBase.get_projection(hdf_file) if include_geometry else None
-                d2_flow_areas = hdf_file.get("Geometry/2D Flow Areas/Attributes")
-                if d2_flow_areas is None or len(d2_flow_areas) == 0:
+                mesh_names = HdfMesh._mesh_area_names(hdf_file)
+                if not mesh_names:
                     logger.debug("No 2D Flow Areas found in HDF file")
                     return empty_result(crs)
                 cell_counts = HdfResultsMesh._physical_cell_counts(hdf_file)
 
-                for d2_flow_area in read_typed(d2_flow_areas, slice(None)):
-                    mesh_name = HdfUtils.convert_ras_string(d2_flow_area[0])
+                for mesh_name in mesh_names:
 
                     # Read cell centers
                     cc_path = f"Geometry/2D Flow Areas/{mesh_name}/Cells Center Coordinate"
@@ -3925,16 +3924,15 @@ class HdfResultsMesh:
         in both layouts.
         """
         start_time = HdfBase.get_simulation_start_time(hdf_file)
-        d2_flow_areas = hdf_file.get("Geometry/2D Flow Areas/Attributes")
-        if d2_flow_areas is None:
+        mesh_names = HdfMesh._mesh_area_names(hdf_file)
+        if not mesh_names:
             logger.debug("No 2D Flow Areas found in HDF file")
             return pd.DataFrame()
         cell_counts = HdfResultsMesh._physical_cell_counts(hdf_file)
 
         frames = []
         combined_attrs = {}
-        for d2_flow_area in read_typed(d2_flow_areas, slice(None)):
-            mesh_name = HdfUtils.convert_ras_string(d2_flow_area[0])
+        for mesh_name in mesh_names:
             try:
                 group = HdfResultsMesh.get_mesh_summary_output_group(
                     hdf_file,

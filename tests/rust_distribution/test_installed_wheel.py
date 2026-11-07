@@ -35,7 +35,7 @@ import pytest
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from native_engine_provenance import accepted_engine_commits  # noqa: E402
 
-API_VERSION = 11
+API_VERSION = 12
 DIST = "ras-commander-fast-hdf"
 LICENCE_HOLDER = "CLB Engineering Corporation"
 SOURCE_ROOT = Path(__file__).resolve().parents[2]
