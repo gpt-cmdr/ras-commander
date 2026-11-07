@@ -505,7 +505,8 @@ class HdfMesh:
         return pd.DataFrame(rows, columns=["dataset_path", "dtype", "shape", "bytes", "sha256"])
 
     @staticmethod
-    @standardize_input(file_type='geom_hdf')
+    @log_call
+    @standardize_input(file_type="geom_hdf")
     def get_mesh_area_names(hdf_path: Path) -> List[str]:
         """
         Return a list of the 2D mesh area names from the RAS geometry.
@@ -519,16 +520,80 @@ class HdfMesh:
         -------
         List[str]
             A list of the 2D mesh area names within the RAS geometry.
-            Returns an empty list if no 2D areas exist or if there's an error.
+            Returns an empty list for absent/unsupported schemas or ordinary
+            read errors. Required native-backend errors propagate.
+
+        Notes
+        -----
+        Legacy files may use a UTF-8 ``Names`` vector instead of ``Attributes``.
+        Declared names must identify matching cell-coordinate and area arrays.
+        Malformed modern attributes never trigger the legacy fallback.
+        Name discovery does not infer physical cell counts.
         """
         try:
-            with h5py.File(hdf_path, 'r') as hdf_file:
+            with h5py.File(hdf_path, "r") as hdf_file:
                 if "Geometry/2D Flow Areas" not in hdf_file:
                     return list()
+                group = hdf_file["Geometry/2D Flow Areas"]
+                if "Attributes" not in group:
+                    names_dataset = group.get("Names")
+                    if (
+                        not isinstance(names_dataset, h5py.Dataset)
+                        or names_dataset.ndim != 1
+                        or h5py.check_string_dtype(names_dataset.dtype) is None
+                    ):
+                        raise ValueError(
+                            "No supported modern or legacy mesh-name schema"
+                        )
+                    names = []
+                    for raw in read_typed(names_dataset):
+                        if isinstance(raw, (bytes, np.bytes_)):
+                            name = (
+                                bytes(raw)
+                                .decode("utf-8", errors="strict")
+                                .rstrip("\x00")
+                                .strip()
+                            )
+                        elif isinstance(raw, (str, np.str_)):
+                            name = str(raw).rstrip("\x00").strip()
+                        else:
+                            raise ValueError("Legacy mesh names must be UTF-8 strings")
+                        if (
+                            not name
+                            or name in names
+                            or name in {".", ".."}
+                            or any(token in name for token in ("/", "\\", "\x00"))
+                        ):
+                            raise ValueError(
+                                "Legacy mesh names are empty, duplicate, or unsafe"
+                            )
+                        mesh = group.get(name)
+                        if not isinstance(mesh, h5py.Group):
+                            raise ValueError(f"Legacy mesh group missing for {name!r}")
+                        centres = mesh.get("Cells Center Coordinate")
+                        areas = mesh.get("Cells Surface Area")
+                        if (
+                            not isinstance(centres, h5py.Dataset)
+                            or centres.ndim != 2
+                            or centres.shape[1] != 2
+                            or centres.shape[0] < 1
+                            or centres.dtype.kind not in "fiu"
+                            or not isinstance(areas, h5py.Dataset)
+                            or areas.ndim != 1
+                            or len(areas) != len(centres)
+                            or areas.dtype.kind not in "fiu"
+                        ):
+                            raise ValueError(
+                                f"Legacy mesh cell arrays are malformed for {name!r}"
+                            )
+                        names.append(name)
+                    return names
                 return list(
                     [
-                        HdfUtils.convert_ras_string(n.decode('utf-8'))
-                        for n in read_typed(hdf_file["Geometry/2D Flow Areas/Attributes"])["Name"]
+                        HdfUtils.convert_ras_string(n.decode("utf-8"))
+                        for n in read_typed(
+                            hdf_file["Geometry/2D Flow Areas/Attributes"]
+                        )["Name"]
                     ]
                 )
         except Exception as e:
