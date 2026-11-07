@@ -2126,6 +2126,7 @@ def _reseed_after_perimeter_fix(
     *,
     ras_object=None,
     require_complete_products: bool = False,
+    preprocess_timeout: int = 600,
 ) -> dict[str, Any]:
     """Persist a repaired perimeter and refresh its compiled HDF via Ras.exe.
 
@@ -2193,7 +2194,11 @@ def _reseed_after_perimeter_fix(
         raise RuntimeError(
             f"Repaired perimeter seed generation failed: {seeds.error_message}"
         )
-    _recompile_geometry_hdf_via_rasexe(text_path, hdf_path, ras_object=ras_object, require_complete_products=require_complete_products)
+    _recompile_geometry_hdf_via_rasexe(
+        text_path, hdf_path, ras_object=ras_object,
+        require_complete_products=require_complete_products,
+        preprocess_timeout=preprocess_timeout,
+    )
     _ensure_hdf(text_path, require_current=True, mesh_name=mesh_name, require_complete_products=require_complete_products)
     return evidence
 
@@ -2526,6 +2531,7 @@ def _recompile_geometry_hdf_via_rasexe(
     *,
     ras_object=None,
     require_complete_products: bool = False,
+    preprocess_timeout: int = 600,
 ) -> Path:
     """Refresh a compiled geometry HDF from text through HEC-RAS/Ras.exe."""
     plan_number = _find_plan_for_geometry(geom_text_path, ras_object=ras_object)
@@ -2544,6 +2550,7 @@ def _recompile_geometry_hdf_via_rasexe(
     )
     preprocess_result = GeomPreprocessor.run_geometry_preprocessor(
         plan_number,
+        max_wait=preprocess_timeout,
         ras_object=ras_object,
         clear_geompre=True,
         force=True,
@@ -3181,6 +3188,7 @@ def _ensure_hdf(
     recompile_via_rasexe: bool = False,
     ignore_seed_count: bool = False,
     require_complete_products: bool = False,
+    preprocess_timeout: int = 600,
 ) -> Path:
     """Return an existing compiled HDF for *geom_text_path*.
 
@@ -3196,6 +3204,7 @@ def _ensure_hdf(
                 hdf_path,
                 ras_object=ras_object,
                 require_complete_products=require_complete_products,
+                preprocess_timeout=preprocess_timeout,
             )
             if hdf_path.exists():
                 return hdf_path
@@ -3221,6 +3230,7 @@ def _ensure_hdf(
                 hdf_path,
                 ras_object=ras_object,
                 require_complete_products=require_complete_products,
+                preprocess_timeout=preprocess_timeout,
             )
             consistency_issues = _mesh_hdf_consistency_issues(
                 geom_text_path,
@@ -5945,6 +5955,7 @@ class GeomMesh:
         robustness_screening: bool = False,
         require_complete_products: bool = False,
         grid_anchor: Optional[Union[GridAnchor, Tuple[float, float]]] = None,
+        preprocess_timeout: int = 600,
     ) -> MeshResult:
         """
         Generate or regenerate a 2D mesh headlessly via text-first workflow.
@@ -5996,6 +6007,11 @@ class GeomMesh:
                 ratio is written to geometry text and the Mapper workspace.
                 Native geometry preprocessing remains the validation step.
             max_iterations: Maximum fix-and-retry attempts.
+            preprocess_timeout: Positive integer time budget in seconds for each
+                native geometry preprocessing invocation, including initial
+                refresh and perimeter-repair refresh. Defaults to 600. This is
+                not an overall mesh-generation deadline or a limit on in-process
+                mesh construction.
             hecras_dir: HEC-RAS installation whose RasMapperLib to load
                 (6.0 or later). Defaults to the newest installed release
                 found, regardless of the project's version.
@@ -6051,6 +6067,8 @@ class GeomMesh:
             supply an initialized project with a referencing plan.
 
         Raises:
+            ValueError: ``preprocess_timeout`` is not a positive integer, or is
+                a boolean. Rejected before geometry changes or native loading.
             ValueError: The face-length ratio is not positive and finite.
             TypeError: ``grid_anchor`` is not a GridAnchor or ``(x, y)`` pair.
                 (A grid anchor whose spacing differs from the cell size
@@ -6059,6 +6077,12 @@ class GeomMesh:
                 fails, chained to the original mesh repair reason. Retries
                 share the existing ``max_iterations`` bound.
         """
+        if (
+            isinstance(preprocess_timeout, bool)
+            or not isinstance(preprocess_timeout, int)
+            or preprocess_timeout <= 0
+        ):
+            raise ValueError("preprocess_timeout must be a positive integer number of seconds")
         geom_path = _resolve_geom_text_path(geom_number, ras_object)
 
         result = MeshResult(
@@ -6109,6 +6133,7 @@ class GeomMesh:
                     text_path, text_path.with_suffix(text_path.suffix + ".hdf"),
                     ras_object=ras_object,
                     require_complete_products=require_complete_products,
+                    preprocess_timeout=preprocess_timeout,
                 )
 
             # ── Step 1: Validate existing compiled HDF workspace ─────
@@ -6127,6 +6152,7 @@ class GeomMesh:
                 # mandatory content-current gates.
                 ignore_seed_count=True,
                 require_complete_products=require_complete_products,
+                preprocess_timeout=preprocess_timeout,
             )
 
             # ── Step 1a: Auto-detect cell size from text if not provided ──
@@ -6338,6 +6364,7 @@ class GeomMesh:
                     hecras_dir,
                     ras_object=ras_object,
                     require_complete_products=require_complete_products,
+                    preprocess_timeout=preprocess_timeout,
                 )
                 evidence["reason"] = reason
                 result.perimeter_repairs.append(evidence)
@@ -6751,6 +6778,7 @@ class GeomMesh:
         strict_refinement_containment: bool = False,
         robustness_screening: bool = False,
         require_complete_products: bool = False,
+        preprocess_timeout: int = 600,
     ) -> List[MeshResult]:
         """Generate/repair all 2D mesh areas in a geometry file.
 
@@ -6770,6 +6798,10 @@ class GeomMesh:
             protection_radius: Enable 1-cell protection radius (0 or 1).
             min_face_length_ratio: Minimum face-length ratio for mesh quality.
             max_iterations: Maximum fix-loop iterations per mesh area.
+            preprocess_timeout: Positive integer seconds for each native
+                preprocessing invocation, including initial refresh and each
+                area's repair refresh. Defaults to 600; not an overall deadline
+                or a limit on in-process mesh construction. Booleans are rejected.
             hecras_dir: Override path to the HEC-RAS installation directory.
             ras_object (RasPrj, optional): Optional RasPrj instance for multi-project support.
             recompile_via_rasexe: If True, refresh a missing or content-stale
@@ -6785,7 +6817,17 @@ class GeomMesh:
 
         Returns:
             List of MeshResult, one per 2D flow area.
+
+        Raises:
+            ValueError: ``preprocess_timeout`` is not a positive integer, or is
+                a boolean. Rejected before geometry changes or native loading.
         """
+        if (
+            isinstance(preprocess_timeout, bool)
+            or not isinstance(preprocess_timeout, int)
+            or preprocess_timeout <= 0
+        ):
+            raise ValueError("preprocess_timeout must be a positive integer number of seconds")
         text_path = _resolve_geom_text_path(geom_number, ras_object=ras_object)
         _load_dlls(hecras_dir)
         ns = _imports()
@@ -6796,6 +6838,7 @@ class GeomMesh:
             ras_object=ras_object,
             recompile_via_rasexe=recompile_via_rasexe,
             require_complete_products=require_complete_products,
+            preprocess_timeout=preprocess_timeout,
         )
         geom = ns["RASGeometry"](str(hdf_path))
         d2fa = geom.D2FlowArea
@@ -6822,6 +6865,7 @@ class GeomMesh:
                 robustness_screening=robustness_screening,
                 _require_current_hdf=False,
                 require_complete_products=require_complete_products,
+                preprocess_timeout=preprocess_timeout,
             )
             results.append(r)
         return results
