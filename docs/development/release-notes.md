@@ -9,12 +9,24 @@ alone does not identify a development checkout.
 
 ### Unreleased
 
+- **`ras-commander-fast-dss` 0.1.0 is published, and the DSS extras install it.**
+  FAST-DSS is on PyPI
+  ([pypi.org/project/ras-commander-fast-dss](https://pypi.org/project/ras-commander-fast-dss/);
+  source: [gpt-cmdr/ras-commander-fast-dss](https://github.com/gpt-cmdr/ras-commander-fast-dss)).
+  The `dss`, `dss-native` and `all` extras now request
+  `ras-commander-fast-dss>=0.1.0,<0.2` on CPython for the published wheel
+  platforms (Windows x64, Linux x86_64 and aarch64, macOS arm64 and x86_64). It
+  is not a core dependency, `dss-native` keeps pydsstools, and `java` remains
+  the default backend. The `native` backend's `ImportError` and the MRMS
+  importer's install hint now say `pip install ras-commander-fast-dss` or
+  `pip install "ras-commander[dss]"`. [Native Rust Engines](../native-engine.md#dss-attributions)
+  adds a DSS attributions and acknowledgments section.
 - **FAST-DSS documented as a released engine.** The DSS section of
   [Native Rust Engines](../native-engine.md#dss-engine) now covers reads and
   writes, the [gridded importer and tools](../native-engine.md#gridded-import-and-tools)
   that replace HEC-Vortex, the backends and how to choose one, the intended
   differences, the notebook qualification and the HEC-RAS acceptance results.
-  Install with `pip install ras-commander-fast-dss` (available from release X).
+  Install with `pip install ras-commander-fast-dss` (published on PyPI from 0.1.0).
   The DSS performance section is reserved for measured timings.
 - **WPC QPF through the FAST-DSS importer.** The gridded precipitation guide adds
   [WPC QPF to DSS with FAST-DSS](../user-guide/gridded-precipitation.md#wpc-qpf-to-dss-with-fast-dss),
@@ -76,9 +88,9 @@ alone does not identify a development checkout.
 - **The native DSS engine is renamed `ras-commander-fast-dss`.** `RasDss`
   imports `ras_commander_fast_dss` (FAST-DSS) for the `native` and `shadow`
   backends; the earlier development name `dss_commander` is no longer
-  recognized and has no compatibility alias. No ras-commander extra installs
-  it; install it with `pip install ras-commander-fast-dss` (available from
-  release X). `java` remains the default. The
+  recognized and has no compatibility alias. Install it with
+  `pip install ras-commander-fast-dss` (published on PyPI from 0.1.0; the DSS
+  extras install it, see above). `java` remains the default. The
   [Native Rust Engines](../native-engine.md#dss-engine) page now describes the
   DSS engine.
 - **`RasDss` writes run on the native backend.** Under `RasDss.backend =

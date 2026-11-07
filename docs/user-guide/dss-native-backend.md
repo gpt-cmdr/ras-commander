@@ -37,16 +37,20 @@ An unknown name raises `ValueError`.
 ## Installing ras-commander-fast-dss
 
 `ras-commander-fast-dss` (import name `ras_commander_fast_dss`) is the optional
-dependency for the native backend. No ras-commander extra installs it.
-
-<!-- RELEASE-PLACEHOLDER: replace X with the first published ras-commander-fast-dss release. -->
-!!! note "Available from release X"
-    `ras-commander-fast-dss` is published from release **X** (placeholder; the
-    release number is filled in when the package is published).
+dependency for the native backend. It is published on PyPI from release 0.1.0
+([pypi.org/project/ras-commander-fast-dss](https://pypi.org/project/ras-commander-fast-dss/);
+source: [gpt-cmdr/ras-commander-fast-dss](https://github.com/gpt-cmdr/ras-commander-fast-dss)).
 
 ```bash
 pip install ras-commander-fast-dss
+# or, with the rest of the DSS stack:
+pip install "ras-commander[dss]"
 ```
+
+The `dss`, `dss-native` and `all` extras request `ras-commander-fast-dss>=0.1.0,<0.2`
+on the platforms with published wheels (see
+[Installation](../native-engine.md#dss-installation)). Installing it does not
+change the default backend, which stays `java`.
 
 If `ras-commander-fast-dss` is not installed:
 
@@ -250,7 +254,7 @@ and all non-missing value bits.
 
 This is sampled read-contract qualification for these artifacts and runtimes,
 not a claim that every possible DSS record or native-engine version is covered.
-The optional native wheel remains unpublished; Java remains the default.
+Java remains the default backend.
 Future engine or comparison changes require a fresh corpus run.
 
 ## Paired data on each backend

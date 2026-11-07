@@ -31,7 +31,7 @@ uv pip install -e ".[precip]"
 
 DSS product conversion may additionally need HEC-Vortex, HEC-MetVue, or the optional dependencies listed in the product notebook.
 
-`PrecipMrms.to_dss` runs HEC-Vortex by default. The `backend` argument selects the optional `ras-commander-fast-dss` importer (FAST-DSS), which needs no Java or HEC-Vortex install. Install it first with `pip install ras-commander-fast-dss` (available from release X; see [Installation](../native-engine.md#dss-installation)):
+`PrecipMrms.to_dss` runs HEC-Vortex by default. The `backend` argument selects the optional `ras-commander-fast-dss` importer (FAST-DSS), which needs no Java or HEC-Vortex install. Install it first with `pip install ras-commander-fast-dss` (published on PyPI from 0.1.0; see [Installation](../native-engine.md#dss-installation)):
 
 ```python
 from ras_commander.precip import PrecipMrms

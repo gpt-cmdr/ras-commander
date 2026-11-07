@@ -233,14 +233,30 @@ HEC-RAS is run only through RAS Commander's APIs.
 
 ### Installation {#dss-installation}
 
-<!-- RELEASE-PLACEHOLDER: replace X with the first published ras-commander-fast-dss release. -->
-!!! note "Available from release X"
-    `ras-commander-fast-dss` is published from release **X** (placeholder; the
-    release number is filled in when the package is published).
+!!! note "Published on PyPI"
+    `ras-commander-fast-dss` is published on PyPI from release **0.1.0**:
+    [pypi.org/project/ras-commander-fast-dss](https://pypi.org/project/ras-commander-fast-dss/).
+    The source is the public repository
+    [gpt-cmdr/ras-commander-fast-dss](https://github.com/gpt-cmdr/ras-commander-fast-dss)
+    (licence MIT AND BSD-3-Clause).
 
 ```bash
 pip install ras-commander-fast-dss
 ```
+
+or install it with the DSS extras, which request
+`ras-commander-fast-dss>=0.1.0,<0.2`:
+
+```bash
+pip install "ras-commander[dss]"          # pyjnius (java backend) + FAST-DSS
+pip install "ras-commander[dss-native]"   # pydsstools + FAST-DSS
+```
+
+Wheels (abi3, CPython 3.10 and later) are published for Windows x64, Linux
+x86_64 and aarch64 (manylinux) and x86_64 (musllinux), and macOS arm64 and
+x86_64. The extras request the engine only on those platforms; elsewhere,
+`pip install ras-commander-fast-dss` builds it from the source distribution,
+which needs a Rust toolchain.
 
 Then select the backend as shown above. `ras-commander` itself does not require
 the package; `import ras_commander` and the `java` backend work without it. Check
@@ -261,6 +277,36 @@ default `java` backend.
     This section is reserved for measured FAST-DSS timings. No DSS benchmark is
     reported on this page yet, and the HDF and Mapping Engine measurements below do
     not establish DSS performance.
+
+### Attributions and acknowledgments {#dss-attributions}
+
+FAST-DSS is an independent, pure-Rust implementation of the HEC-DSS file format,
+versions 6 and 7. It was written from HEC's published, MIT-licensed `hec-dss` C
+and Fortran source; each format rule in the engine cites the HEC source file and
+routine it follows. No HEC code is copied into the engine, and no HEC library is
+linked or bundled.
+
+HEC's software was the reference throughout development: the HEC-DSS C library
+(through HEC's `hecdss` Python package) for DSS7, HEC Monolith for DSS6, paired
+data, grids and Java-path parity, HEC-Vortex 1.1.0 and 0.13.3 (with their bundled
+PROJ and GDAL) for the gridded importer, and public HEC-DSSVue, HEC-RAS and
+HEC-HMS example data for the test fixtures. HEC-RAS runs through RAS Commander
+confirmed that HEC-RAS reads the files the engine writes.
+
+As a final independent check, the engine's output was compared with
+[pydsstools](https://github.com/gyanz/pydsstools) 3.1.0 (MIT), a widely used
+third-party Python library for HEC-DSS. The comparison covered 4,727 records
+(21.6 million values) in 122 DSS6 and DSS7 files: 4,080 records were identical
+bit for bit, 182 more were identical under a documented rule, and 183 of the 196
+records that differed differed only in metadata. pydsstools could not read 209
+of the records. HEC Monolith was used to break ties.
+
+Thanks to the HEC developers for publishing `hec-dss`, HEC-Vortex and their
+example data as open source, and to the pydsstools maintainers. The full
+statement is in the engine README's
+[Attributions and acknowledgments](https://github.com/gpt-cmdr/ras-commander-fast-dss#attributions-and-acknowledgments).
+FAST-DSS is an independent open-source project, not affiliated with, endorsed by
+or supported by HEC or USACE.
 
 <a id="native-rust-hdf-engine"></a>
 
