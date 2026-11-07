@@ -103,6 +103,8 @@ class PrecipMrms:
 
     PRODUCT_HOURS = (1, 3, 6, 12, 24, 48, 72)
     DEFAULT_PRODUCT = "GaugeCorr_QPE_01H"
+    #: Backend for :meth:`to_dss`: "java" (default in this release), "native" or "shadow".
+    backend = "java"
     DEFAULT_S3_PASS = "Pass2"
 
     @staticmethod
@@ -272,28 +274,142 @@ class PrecipMrms:
         vortex_path: Optional[Union[str, Path]] = None,
         jython_jar: Optional[Union[str, Path]] = None,
         timeout: int = 1800,
+        backend: Optional[str] = None,
+        align: str = "refuse",
+        allow_instantaneous_precip: bool = False,
     ) -> Path:
         """
-        Convert MRMS GRIB2 files to HEC-DSS using HEC-Vortex.
+        Convert MRMS GRIB2 files to HEC-DSS.
 
-        This is the MRMS-specific wrapper around :meth:`VortexCli.import_gridded`.
-        It supplies the Vortex variable name for the requested MRMS QPE product
-        and preserves the standard SHG output defaults expected by HEC-RAS/HMS
-        gridded precipitation workflows.
+        The default backend is the MRMS-specific wrapper around
+        :meth:`VortexCli.import_gridded`. It supplies the Vortex variable name for
+        the requested MRMS QPE product and preserves the standard SHG output
+        defaults expected by HEC-RAS/HMS gridded precipitation workflows.
+
+        Args:
+            grib2_files: One GRIB2 path or several.
+            output_dss: Output DSS file. An existing file keeps its other records.
+            clip_shp: Optional shapefile whose bounding box clips the grid. The
+                native backend requires its ``.prj``.
+            product: MRMS product, which sets the default F part.
+            variables: Variable names. The default follows the file names on the
+                Java route and selects the file's QPE on the native route. For
+                RadarOnly on the Java route, the spelling is read through HEC-Vortex,
+                then the engine. If neither can list the file, the modern spelling
+                ``RadarOnly_QPE_<hours>H_altitude_above_msl`` is used, and the warning
+                gives the reader's reason. An import that then fails says so too.
+            target_wkt: "SHG" or a WKT. The native backend refuses a projection its
+                warper does not support; a UTM WKT (transverse Mercator) was refused.
+            target_cell_size: Cell size in the target's units.
+            resampling_method: "Bilinear", "Nearest Neighbor" or "Average".
+            dss_parts: Pathname parts. The native backend takes A, B, C and F; D
+                and E always come from each record's time window.
+            vortex_path: HEC-Vortex install. Java route only.
+            jython_jar: Jython standalone jar. Java route only.
+            timeout: Maximum seconds. The native backend checks it after each
+                record, and records already written remain.
+            backend: "java", "native" or "shadow". ``None`` uses the environment
+                variable ``RAS_COMMANDER_MRMS_BACKEND``, then ``PrecipMrms.backend``.
+            align: Native backend only. ``"refuse"`` refuses a warped extent whose
+                origin is not on whole cells, which an unclipped grid can have.
+                ``"vortex"`` rounds the origin when stored, as HEC-Vortex was
+                observed to do, which moves the grid by part of a cell. Observed
+                behaviour we did not implement by default.
+            allow_instantaneous_precip: Java and shadow routes only. Write durations
+                other than one hour as HEC-Vortex stores them, with a warning, rather
+                than refuse them. The native backend refuses them either way. It never
+                allows a detected conflict: a file whose name would get a one-hour
+                period, with a stated accumulation other than one hour.
+
+        Backends:
+            - ``"java"``: HEC-Vortex. Refuses MRMS durations other than one hour (15M,
+              03H to 72H) unless ``allow_instantaneous_precip=True``, as observed
+              output for them is INST-VAL with a D part only, and HEC-HMS has read this
+              shape as no rain. The refusal is a ``ValueError`` and nothing is written.
+              It reads the accumulation tied to the QPE stem in the product, each file
+              name and any stated variable, before Vortex starts, so a label such as
+              ``24H_RadarOnly_QPE_01H.grib2`` does not count. An MRMS QPE file whose
+              whole lower-cased name matches none of HEC-Vortex's one-hour rules, such
+              as ``storm.grib2`` or ``RadarOnly_QPE_01H.grib2.backup``, is refused too,
+              as a 01H file so named was stored as INST-VAL. With the
+              ``ras-commander-fast-dss`` wheel it also reads each file's own variables
+              when none is stated. A file whose name would get a one-hour period, with
+              another accumulation stated, is refused even with the override. Without
+              the wheel and with no variable stated, a 24H file renamed 01H cannot be
+              detected, unless it is RadarOnly, whose variables are listed through
+              Vortex. A GRIB2 that no name or variable identifies as MRMS QPE goes to
+              Vortex as before, and without the wheel it needs its variable stated.
+              :meth:`VortexCli.import_gridded` called directly is not guarded.
+            - ``"native"``: the optional ``ras-commander-fast-dss`` importer, with no
+              JVM. A new file is DSS7. It writes one-hour QPE only, each as a
+              PER-CUM record with a one-hour period. Other durations raise
+              ``DssUnsupportedRecordError`` and write nothing: MRMS GRIB2 states an
+              instant, and precipitation stored without a period has been read by
+              HEC-HMS as no rain. Several stated variables are checked first, then
+              imported in turn, and a failure on a later one leaves the earlier
+              records; the error states the total. Raises ``ImportError`` if the
+              wheel is missing.
+            - ``"shadow"``: Java writes ``output_dss`` and the result returned is
+              Java's. The importer writes a temporary copy of what the output held
+              before, in the DSS version of Java's output, and the decoded content
+              of both results is compared: every pathname, stamp, unit, data type,
+              geometry, statistic and cell. A DSS6 file allows for PRECIP_2_BYTE
+              rounding of cells. A record Java rewrites with the same content and
+              the importer omits shows only in DSS7. Differences log a warning and
+              do not raise. Java's exceptions are raised as themselves. Without
+              the wheel this runs Java alone, with one warning per process. Durations
+              other than one hour are refused as for ``"java"``, so neither writer
+              runs. With the override, Java writes them and the importer's refusal is
+              recorded as expected.
+
+        Returns:
+            Path: The DSS file.
+
+        Raises:
+            ValueError: On the Java and shadow routes, a duration other than one hour
+                without ``allow_instantaneous_precip=True``.
         """
+        from . import _native_vortex
         from .VortexCli import VortexCli
+
+        selected = _native_vortex.effective_backend(backend, PrecipMrms.backend)
 
         grib_paths = PrecipMrms._normalize_paths(grib2_files)
         if not grib_paths:
             raise ValueError("grib2_files must contain at least one file")
 
         output_path = Path(output_dss)
-        output_path.parent.mkdir(parents=True, exist_ok=True)
+
+        product_is_explicit = product != PrecipMrms.DEFAULT_PRODUCT
+        warned = False
+        held: Dict[Path, List[str]] = {}
+        if selected != "native":
+            warned, held = _native_vortex.check_java_periods(
+                product,
+                product_is_explicit,
+                grib_paths,
+                variables,
+                allow_instantaneous_precip,
+            )
 
         product_info = PrecipMrms._product_info(product)
         import_variables = variables or PrecipMrms._vortex_variables_for_files(
             product, grib_paths
         )
+        listing_failure: Optional[str] = None
+        if selected != "native" and not variables:
+            import_variables, listing_failure = PrecipMrms._radaronly_held_spelling(
+                import_variables,
+                grib_paths,
+                held,
+                product=product,
+                product_is_explicit=product_is_explicit,
+                warned=warned,
+                allow_instantaneous_precip=allow_instantaneous_precip,
+                vortex_path=vortex_path,
+                jython_jar=jython_jar,
+                timeout=timeout,
+            )
         write_parts = {
             "A": "SHG",
             "B": "MRMS_QPE",
@@ -302,24 +418,67 @@ class PrecipMrms:
         if dss_parts:
             write_parts.update(dss_parts)
 
-        logger.info(
-            "Converting %d MRMS GRIB2 file(s) to DSS via HEC-Vortex: %s",
-            len(grib_paths),
-            output_path,
-        )
-        return VortexCli.import_gridded(
-            input_files=grib_paths,
-            output_dss=output_path,
-            variables=import_variables,
+        native_arguments = dict(
+            product=product,
+            variables=variables,
             clip_shp=clip_shp,
             target_wkt=target_wkt,
             target_cell_size=target_cell_size,
             resampling_method=resampling_method,
             dss_parts=write_parts,
-            vortex_path=vortex_path,
-            jython_jar=jython_jar,
             timeout=timeout,
+            align=align,
         )
+        if selected == "native":
+            logger.info(
+                "Converting %d MRMS GRIB2 file(s) to DSS via the native importer: %s",
+                len(grib_paths),
+                output_path,
+            )
+            return _native_vortex.to_dss_native(
+                grib_paths, output_path, **native_arguments
+            )
+
+        def run_java() -> Path:
+            logger.info(
+                "Converting %d MRMS GRIB2 file(s) to DSS via HEC-Vortex: %s",
+                len(grib_paths),
+                output_path,
+            )
+            output_path.parent.mkdir(parents=True, exist_ok=True)
+            try:
+                return VortexCli.import_gridded(
+                    input_files=grib_paths,
+                    output_dss=output_path,
+                    variables=import_variables,
+                    clip_shp=clip_shp,
+                    target_wkt=target_wkt,
+                    target_cell_size=target_cell_size,
+                    resampling_method=resampling_method,
+                    dss_parts=write_parts,
+                    vortex_path=vortex_path,
+                    jython_jar=jython_jar,
+                    timeout=timeout,
+                )
+            except Exception as exc:
+                if listing_failure is not None:
+                    note = (
+                        f"HEC-Vortex could not list the variables earlier "
+                        f"({listing_failure}), so {import_variables[0]} was not read from "
+                        "the file."
+                    )
+                    if isinstance(exc, OSError) and exc.strerror:
+                        # An OSError shows its errno fields, not args.
+                        exc.strerror = f"{exc.strerror}. {note}"
+                    else:
+                        exc.args = (f"{exc} {note}",)
+                raise
+
+        if selected == "shadow":
+            return _native_vortex.to_dss_shadow(
+                run_java, grib_paths, output_path, **native_arguments
+            )
+        return run_java()
 
     @staticmethod
     @log_call
@@ -1665,7 +1824,7 @@ class PrecipMrms:
         product_info = PrecipMrms._product_info(product)
         hours_text = f"{product_info['hours']:02d}H"
         if product_info["family"] == "RadarOnly":
-            stem = "RadarOnlyQPE"
+            stem = "RadarOnly_QPE_"
         else:
             stem = "GaugeCorrQPE"
         return [f"{stem}{hours_text}_altitude_above_msl"]
@@ -1687,15 +1846,95 @@ class PrecipMrms:
                 ]
 
             radaronly_match = re.search(
-                r"MRMS_(RadarOnly_QPE_(\d{1,2})H)_",
+                r"(?:^|_)(RadarOnly_QPE_(\d{1,2})H)_",
                 filename,
                 flags=re.IGNORECASE,
             )
             if radaronly_match:
                 hours = int(radaronly_match.group(2))
-                return [f"RadarOnlyQPE{hours:02d}H_altitude_above_msl"]
+                return [f"RadarOnly_QPE_{hours:02d}H_altitude_above_msl"]
 
         return PrecipMrms._vortex_variables(product)
+
+    @staticmethod
+    def _radaronly_held_spelling(
+        default: List[str],
+        grib_paths: List[Path],
+        held: Dict[Path, List[str]],
+        *,
+        product: str,
+        product_is_explicit: bool,
+        warned: bool,
+        allow_instantaneous_precip: bool,
+        vortex_path: Optional[Union[str, Path]],
+        jython_jar: Optional[Union[str, Path]],
+        timeout: int,
+    ) -> Tuple[List[str], Optional[str]]:
+        """The RadarOnly name as the file's reader spells it, for a caller who named no variable.
+
+        The reader's GRIB2 table sets the spelling, so HEC-Vortex, which will do the import, is asked
+        first. It lists the first and last files, each a JVM start, and runs no import. The engine's
+        listing is next, then ``default``, the modern spelling, which every public file inspected
+        holds under both readers. A Vortex listing also serves the duration check when there is no
+        wheel. Returns the names, and why Vortex could not list, if it could not.
+        """
+        if not default or not default[0].startswith("RadarOnly_QPE_"):
+            return default, None
+        from . import _native_vortex
+        from .VortexCli import VortexCli
+
+        def squeezed(name: str) -> str:
+            return name.replace("_", "").lower()
+
+        listed: Dict[Path, List[str]] = {}
+        failure: Optional[str] = None
+        try:
+            for path in dict.fromkeys([grib_paths[0], grib_paths[-1]]):
+                listed[path] = list(
+                    VortexCli.get_grib2_variables(
+                        path, vortex_path=vortex_path, timeout=timeout, jython_jar=jython_jar
+                    )
+                )
+        except Exception as exc:
+            failure = f"{type(exc).__name__}: {exc}"
+            listed = {}
+
+        if listed:
+            _native_vortex.settle_java_periods(
+                product,
+                product_is_explicit,
+                grib_paths,
+                None,
+                listed,
+                allow_instantaneous_precip,
+                warned=warned,
+            )
+
+        wanted = squeezed(default[0])
+        for source in (listed, held):
+            spellings = list(
+                dict.fromkeys(
+                    n for names in source.values() for n in names if squeezed(n) == wanted
+                )
+            )
+            if spellings:
+                if failure is not None:
+                    logger.warning(
+                        "HEC-Vortex could not list the variables of %s (%s); using %s, listed by "
+                        "the engine.",
+                        grib_paths[0].name,
+                        failure,
+                        spellings[0],
+                    )
+                return spellings, failure
+        logger.warning(
+            "Could not read the RadarOnly variable name from %s (%s); using %s, which every public "
+            "file inspected holds. If HEC-Vortex finds no such variable, state it with variables=.",
+            grib_paths[0].name,
+            failure or "listed, but it holds no such variable",
+            default[0],
+        )
+        return default, failure
 
     @staticmethod
     def _product_hours(product: str) -> int:

@@ -5,9 +5,9 @@
     {
       "file": "tolerant.h5",
       "source_kind": "engine_owned_fixture",
-      "engine_commit": "62fb45d97245d2634f23334b7669e744702575b5",
-      "engine_relative_path": "crates/ras-commander-rust/tests/fixtures/attribute-isolation/tolerant.h5",
-      "sha256": "2404f5cb8578ac5f7abbeeae42d0a0b722d52df339819fc1421864faffda1fe5"
+      "engine_commit": "1444e63a5d501333f196e322617d3d0e2178a45c",
+      "engine_relative_path": "tests/fixtures/attribute-isolation/tolerant.h5",
+      "sha256": "dd9c8d0a128e6a3b6e84e8a4aa7f187542be4ceee805e15f45efc4b8ebd1a421"
     },
     {
       "file": "corrupt-projection.h5",

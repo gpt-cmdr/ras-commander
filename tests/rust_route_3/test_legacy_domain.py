@@ -186,7 +186,7 @@ def _compare(path, label, oracle):
 @pytest.fixture(autouse=True)
 def _native():
     module = pytest.importorskip("ras_commander_fast_hdf")
-    assert module.API_VERSION == 11
+    assert module.API_VERSION == 12
 
 
 CASES = [(f["path"], f["name"]) for f in FIXTURES] + [(p, f"excerpt:{Path(p).name}") for p in EXCERPT_FILES]

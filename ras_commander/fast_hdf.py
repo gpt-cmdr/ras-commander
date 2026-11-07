@@ -198,9 +198,9 @@ def _load_native():
         except (ImportError, OSError) as exc:
             _native_state = (None, "The ras-commander-fast-hdf extension is unavailable", exc)
         else:
-            if getattr(module, "API_VERSION", None) != 11:
+            if getattr(module, "API_VERSION", None) != 12:
                 logger.warning("Ignoring incompatible ras-commander-fast-hdf extension")
-                _native_state = (None, "Incompatible ras-commander-fast-hdf API; version 11 is required", None)
+                _native_state = (None, "Incompatible ras-commander-fast-hdf API; version 12 is required", None)
             else:
                 _native_state = (module, None, None)
     return _native_state

@@ -43,7 +43,7 @@ MODES = ("0", "auto", "required")
 @pytest.fixture
 def native():
     module = pytest.importorskip("ras_commander_fast_hdf")
-    assert module.API_VERSION == 11
+    assert module.API_VERSION == 12
     return module
 
 

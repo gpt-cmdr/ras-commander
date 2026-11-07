@@ -15,7 +15,7 @@ def capabilities(value):
         for v in value:capabilities(v)
 
 def test_engine_contract_and_evidence(native):
-    c=native.capabilities();assert c['api_version']==11
+    c=native.capabilities();assert c['api_version']==12
     assert c['engine_api_version']==c['engine_capabilities']['api_version']==10
     # engine_features is the documented four; engine 0.3.0 release wheels (python-arrow)
     # also report 'arrow' in engine_capabilities.features (fast-hdf extension contract).
