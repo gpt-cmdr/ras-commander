@@ -725,10 +725,11 @@ class HdfPlan:
     @standardize_input(file_type='geom_hdf')
     def get_geometry_information(hdf_path: Path) -> pd.DataFrame:
         """
-        Get root level geometry attributes from the HDF plan file.
+        Get attributes stored on the Geometry group of a geometry HDF file.
 
         Args:
-            hdf_path (Path): Path to the HEC-RAS plan HDF file.
+            hdf_path (Path): Path to the HEC-RAS geometry HDF file. String paths
+                are also accepted.
 
         Returns:
             pd.DataFrame: DataFrame with geometry attributes including Creation Date/Time,
