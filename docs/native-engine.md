@@ -28,7 +28,7 @@ For result extraction, keep using the existing `Hdf*` API. The
 below describe the default native reader and its h5py reference path.
 
 For inundation catalogs, use the [Mapping Engine guide](native-mapping-engine.md).
-Development mapping builds add bounded shared-timestep/window caches and
+Mapping supports bounded shared-timestep/window caches and
 optional native terrio GeoTIFF delivery. The
 [retained-state measurements](development/fim-mapping-performance.md#retained-state-and-native-output-optimization)
 separate complete catalog calls from repeated warm-context requests.
@@ -36,13 +36,13 @@ It covers horizontal, cell-corner sloping and depth-weighted cell-face mapping,
 bbox/polygon masks, shared terrain, bounded timestep concurrency, and reusable
 prepared inputs. `RasFim.map_catalog()` schedules known reach/timestep groups
 with shared model state, bounded staging and optional CPU-partitioned workers;
-see the [catalog API](api/fim.md#schedule-reachtimestep-catalogs).
+see [reach/timestep catalogs](native-mapping-engine.md#schedule-reachtimestep-catalogs).
 These methods map already-computed hydraulics; they do not
 run the HEC-RAS hydraulic solver. Models containing 1D river or cross-section
 elements are rejected, and standalone storage-area surfaces are outside the
 physical-2D mapping scope.
 
-The [mapping comparison tables](native-mapping-engine.md#mapping-time-comparisons)
+The [mapping comparison report](development/fim-mapping-performance.md)
 measure complete mapping calls against native RAS Mapper, separately from HDF
 read timings. Matching requires the same interpolation options and effective
 terrain. Raw qualification compares complete valid/nodata masks and float32
@@ -104,9 +104,8 @@ its existing section links.
 
 For native 2D inundation mapping, the optional FIM engine uses this HDF reader
 to stage model inputs, then reconstructs horizontal or sloping surfaces in Rust.
-Depth-weighted sloping additionally requires the stored-corner reader capability
-added after published fast-HDF 0.2.2. See the
-[FIM API](api/fim.md#depth-weighted-sloping-faces-engine-08) and
+Depth-weighted sloping additionally requires the stored-corner reader capability.
+See [depth-weighted mapping](native-mapping-engine.md#depth-weighted-sloping-faces) and
 [five-model RASMapper comparison](development/fim-mapping-performance.md#depth-weighted-sloping-faces-engine-08)
 for setup, retained Windows/Linux wheels, exact mask/value qualification, and
 mapping times. Those mapping measurements are separate from the HDF-read

@@ -32,6 +32,8 @@ Primary classes for project management and execution:
 - [RASMapper](rasmapper/index.md) — screenshots, map/geometry layers, display, associations, and geometry completion
 - [Results Queries](results-queries.md) — offline sampling, native profiles, and recorded reference hydrographs
 - [Stored Maps](stored-maps.md) — export existing results to raster products
+- <a id="ras2fim-2d-flood-inundation-mapping-optional"></a>[Mapping computed results](../native-mapping-engine.md) — depth, WSE, velocity,
+  derived and temporal products, storage-area level pools and inundation boundaries
 
 ## Benefits Analysis
 
@@ -41,10 +43,6 @@ Rasterized depth-comparison benefits and mesh-based WSE comparison:
 - [`BenefitAreaConfig`](benefits.md#generate-prepost-maps-and-benefitarea) - Pair-aware configuration for `RasProcess.store_maps()`
 - [`BenefitAreaResult`](benefits.md#calculate-from-existing-depth-rasters) - Raster paths, thresholds, and class-area statistics
 - [`HdfBenefitAreas`](benefits.md#raster-benefitarea-versus-hdfbenefitareas) - Separate 2D mesh/WSE benefit and rise analysis
-
-## ras2fim-2D Flood Inundation Mapping (Optional)
-
-- [`RasFim`](fim.md) - Batch depth/WSE rasters and floodplain polygons from 2D cell WSE profiles with the ras2fim-2D Step 05 method and the separate `ras2fim-batch` engine; bounding-box or polygon AOI; product manifest
 
 ## Hydrofabric Conflation
 

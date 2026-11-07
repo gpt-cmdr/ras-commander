@@ -14,7 +14,7 @@ Use `RasFim.map_inundation_boundaries()` for
 `deterministic-zero-depth-contours/1`, with no additional depth filtering.
 This is a distinct vector method with stable union order and canonical rings;
 the raster parity tables below do not establish native polygon equality.
-See the [boundary API](../api/fim.md#deterministic-inundation-boundaries)
+See the [boundary API](../native-mapping-engine.md#deterministic-inundation-boundaries)
 for original-terrain requirements and unsupported options.
 
 Development qualification on 27 October 2026 used Fast-Map 0.10.0, required-native
@@ -327,7 +327,7 @@ Run `scripts/benchmarks/fim_supplied_wsel_compare.py case.json new_output` with
 indices; `engine` is optional. The receipt records canonical input-vector hashes,
 source/engine hashes, timings and complete-mask/bit metrics. Opt-in pytest uses
 `RAS_COMMANDER_SUPPLIED_WSEL_CASE` with the same case file. See the
-[input contract and CSV example](../api/fim.md#supply-cell-wsel-profiles).
+[input contract and CSV example](../native-mapping-engine.md#supply-cell-wsel-profiles).
 
 ## Global-lattice AOI qualification (engine 0.10.1)
 
@@ -365,7 +365,7 @@ combinations were not run for this change.
 The original GDAL full-grid versus cropped-grid mask fails six Davis
 pixel-center edge cases. The new rule intentionally replaces that ambiguous
 coverage; these results are **not** a claim of equality to legacy GDAL masks at
-boundary ties. See the [explicit coverage contract](../api/fim.md#global-terrain-lattice-aoi-coverage-engine-0101).
+boundary ties. See the [explicit coverage contract](../native-mapping-engine.md#global-terrain-lattice-aoi-coverage).
 
 A synthetic 2048 × 2048 rectangular-mask observation with four workers and
 20 warm iterations took 19.8 ms per mask through terrio and 24.7 ms through the
@@ -557,7 +557,7 @@ windows can disable weight caching without changing results.
 
 Run `scripts/benchmarks/fim_catalog_compare.py jobs.json NEW_OUTPUT` from an
 installed source checkout. The JSON contains `jobs` in the
-[catalog API format](../api/fim.md#schedule-reachtimestep-catalogs), optional
+[catalog API format](../native-mapping-engine.md#schedule-reachtimestep-catalogs), optional
 `threads`, `max_working_mib`, `max_memory_mib`, and `repetitions` (default three).
 The direct-reference harness currently targets sloping jobs. It rotates all
 four arms, records identities/time/memory and checks every emitted band outside
