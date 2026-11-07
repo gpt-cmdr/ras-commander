@@ -12,7 +12,24 @@ files, and the HEC-RAS results.
 - Every HEC-RAS physical-cell result is bit-identical across the backends.
 - The notebooks that fail, fail at the same cell with the same error on all three backends.
   Those failures do not involve DSS (see "Pre-existing failures").
+- With that failure bypassed in a scratch copy, 916 and 917 run to completion on all three
+  backends, with the same results.
 - No integration defect was found, so this branch makes no library change.
+
+**Counts.** These are the unmodified notebooks run on each backend: 9 run in full, plus a
+partial DSS check of 952.
+
+| Backend | Pass | Fail (pre-existing, identical on all backends) | Partial | Skip |
+|---|---|---|---|---|
+| java | 6 (310, 312, 313, 318, 728, 918) | 3 (916, 917, 926) | 1 (952 DSS calls) | 12 (731, 237, 430, 950, 951, 953, 954, 955, 956, 957, 958, 959) |
+| native | 6 | 3 | 1 | same |
+| shadow | 6 | 3 | 1 | same |
+
+In the patched reruns, 916 and 917 pass on all three backends; the 926 rerun is inconclusive.
+Shadow totals over all runs: no `unexpected` outcomes.
+- `expected`: 2 in the notebooks' own summaries (312 D3, 728 W2), plus 1 W2 in the 728 writer
+  re-run in a separate process (note 3).
+- `identical`: every other comparison.
 
 ## Environment
 
@@ -77,7 +94,32 @@ Wall times are single incidental observations, not benchmarks.
 | 926 WPC QPF | fail @15 | fail @15 | fail @15 | `qpkit` writes WPC grids; `RasDss.get_catalog`, `read_grid`; HEC-RAS runs | catalog 1, read_grid 28: all identical | DSS: 28 grid records equal. HDF: every physical cell bit-equal (note 4). Same failure on all backends (note 5) | 343 / 313 / 381 |
 | 952 eBFE Upper Guadalupe, partial | partial | partial | partial | `get_catalog`, `check_pathname` (first 10 per file), `RasEbfeModels._validate_dss_files` on the 3 unique delivery DSS files (504, 532 and 1,680 records, including the gridded precipitation file), copied to D: | catalog 36: all identical | Identical catalogs, checks and validation. The copies were unchanged after Java reads. | 1.1 / 0.3 / 1.5 |
 
-PATCHED_RERUN_PLACEHOLDER
+### Supplementary reruns past the pre-existing failure (916, 917, 926)
+
+916, 917 and 926 stop at a pre-existing failure (note 5) before their final DSS-versus-HDF checks. To
+cover those checks, we ran them again from a scratch copy, with one edit:
+`truncate=False` became `truncate=False, include_ghost_cells=True` in every
+`get_mesh_timeseries` call. This restores the cell support the notebooks were written for.
+The edit is not committed.
+
+| NB | java | native | shadow | Shadow summary | Differences | Wall time j / n / s (s) |
+|---|---|---|---|---|---|---|
+| 917 MRMS QPE (Davis and NewOrleansMetro) | pass | pass | pass | catalog 4, read_grid 122: all identical | DSS: Davis 37 and NOLA 24 grid records, equal. Text: only Vortex catalog row order, run timestamps, and file sizes that carry write times. Images: identical. HDF: all float result datasets bit-equal except `Minimum Link DS Velocity` (Davis) and `Main Gates` (NOLA). Both also differ in the no-rain baseline runs, which use no DSS, so they are HEC-RAS run-to-run variation. | 2011 / 1888 / 2052 |
+| 916 HRRR forecast | pass | pass | pass | catalog 1, read_grid 18: all identical | No text or image differences | 346 / 334 / 304 |
+| 926 WPC QPF | fail @15 | fail @7 | fail @15 | Inconclusive (see below) | | 347 / 8 / 315 |
+
+**Why the 926 rerun is inconclusive.** 926 downloads the *current-day* WPC QPF cycle. The rerun
+started after the UTC date changed, so each backend saw a different set of published cycles:
+- the native run rejected the 06Z cycle, which had an unexpected forecast hour (174), and
+  stopped at cell 7;
+- the shadow run computed on different forcing and failed the notebook's WSEL-error tolerance
+  (1.04 ft in 3 cells);
+- the java run overlapped a HEC-RAS process left behind by an earlier rerun that was stopped at
+  its time limit, and failed the `.bco` existence check.
+
+None of these failures involves the DSS backend. The valid 926 comparison is the unmodified run
+in the main table: all three backends used the same cycle there, and the records, shadow reads
+and physical-cell HDF results were equal.
 
 ### Notes
 
@@ -151,7 +193,10 @@ change.
    writes DSS in a child process, as 728 does, the notebook's shadow summary does not include
    those writes. An `unexpected` outcome would still be logged at WARNING in the child's
    stderr. 728 checks that stderr only for access violations.
-4. **Host environment (not repository issues).**
+4. **926 cannot be reproduced across days.** It downloads the current-day WPC cycle, so its
+   forcing, and its pass/fail against the notebook's WSEL tolerance, depend on when it runs.
+   A fixed-cycle mode would make this notebook usable as a regression test.
+5. **Host environment (not repository issues).**
    - `%LOCALAPPDATA%\ras-commander\examples` on CLB01 is a junction to a missing
      `D:\Archive` folder. The runs used a scratch `LOCALAPPDATA` that held the HEC-RAS 7.0
      example archive.
