@@ -54,6 +54,11 @@ def test_legacy_names_and_ghost_filtering(tmp_path, monkeypatch, mode):
         pytest.skip("requires the matching native extension")
     path = _write_legacy_hdf(tmp_path / "legacy.p01.hdf")
     assert HdfMesh.get_mesh_area_names(path) == [MESH]
+    if mode == "required" and fast_hdf._native("rust").API_VERSION == 11:
+        with h5py.File(path) as f:
+            with pytest.raises(fast_hdf.FastHdfError, match="legacy Names.*API 12"):
+                HdfMesh._physical_cell_counts(f)
+        return
     with h5py.File(path) as f:
         assert HdfMesh._physical_cell_counts(f) == {MESH: PHYSICAL}
     points = HdfMesh.get_mesh_cell_points(path, include_ghost_cells=False, include_geometry=False)

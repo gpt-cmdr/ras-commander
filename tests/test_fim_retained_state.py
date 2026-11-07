@@ -86,8 +86,39 @@ def test_one_shot_forwards_native_writer(monkeypatch):
     monkeypatch.setattr(_sloping, "map_profiles", capture)
     assert (
         RasFim.map_sloping_profiles(
-            "model.hdf", "terrain.tif", "new-output", product_writer="native"
+            "model.hdf", "terrain.tif", "new-output", product_writer="native",
+            row_stream_rows=7,
         )
         == "mapped"
     )
     assert seen["product_writer"] == "native"
+    assert seen["row_stream_rows"] == 7
+
+
+@pytest.mark.parametrize("value", [True, False, -1, 4097, 1.5, "256", None])
+def test_row_stream_control_refuses_invalid_values_before_inputs(value, tmp_path):
+    from ras_commander import RasFim
+
+    with pytest.raises(ValueError, match="row_stream_rows"):
+        RasFim.map_sloping_profiles(
+            tmp_path / "missing.hdf", tmp_path / "missing.tif", tmp_path / "out",
+            row_stream_rows=value,
+        )
+    assert not (tmp_path / "out").exists()
+
+
+@pytest.mark.parametrize("options", [
+    {}, {"render_mode": "slopingPretty", "product_writer": "native"},
+    {"velocity": True, "product_writer": "native"},
+    {"storage_areas": True, "product_writer": "native"},
+])
+def test_row_stream_combinations_refuse_before_inputs(options, tmp_path):
+    from ras_commander import RasFim
+    from ras_commander.fim.errors import FimUnsupportedError
+
+    with pytest.raises(FimUnsupportedError, match="row_stream_rows"):
+        RasFim.map_sloping_profiles(
+            tmp_path / "missing.hdf", tmp_path / "missing.tif", tmp_path / "out",
+            row_stream_rows=7, **options,
+        )
+    assert not (tmp_path / "out").exists()

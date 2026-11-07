@@ -50,13 +50,15 @@ ras2fim-batch method
 ```
 
 From a Commander checkout, use `uv pip install -e ".[fim]"`. To install only
-the engine, use `uv pip install "ras-commander-fast-map>=0.12.0,<0.13"` or the
-`fast-map` extra. Commander's `fim` and `fast-map` extras require the 0.12
+the engine, use `uv pip install "ras-commander-fast-map>=0.13.0,<0.14"` or the
+`fast-map` extra. Commander's `fim` and `fast-map` extras require the 0.13
 release line. Version 0.10.1 introduced the `global-terrain-lattice/1`
 polygon AOI mask; 0.11.0 added retained hydraulic/window state and native
 TIFF delivery; 0.12.0 adds storage-area level pools, the native effective
 terrain, the qualified duration rule, velocity in every render mode and the
-Max derived pass (`reduce_max/1`). Capabilities are still checked at run
+Max derived pass (`reduce_max/1`). Version 0.13 adds bounded native row
+delivery for plain sloping through the opt-in `row_stream_rows` control.
+Capabilities are still checked at run
 time. Existing user pins remain in effect unless explicitly updated.
 Uninstall the former `ras2fim-engine` package first when migrating from its
 retained test wheels, because it owns the same compatible executable.

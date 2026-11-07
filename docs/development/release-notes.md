@@ -7,7 +7,26 @@ check `ras_commander.__version__` and the documentation's
 [build provenance](https://rascommander.info/ras/version.json). A package version
 alone does not identify a development checkout.
 
-### Unreleased
+### 0.114.0 — 2026-11-07
+
+- **Published HDF wheel compatibility:** accepts native bridge API 11 and the
+  compatible API 12 legacy-layout extension. Current public `main` had required
+  API 12 globally, rejecting the published API 11 wheel even for supported
+  layouts. The core dependency stays `>=0.3.0,<0.4`; required-native reads
+  continue to refuse layouts the installed engine cannot read.
+
+- **Optional native row delivery:** `RasFim.map_sloping_profiles()` and the
+  prepared sloping context accept `row_stream_rows=1..4096` with
+  `product_writer="native"`. Zero preserves the existing path. The engine
+  must advertise the matching capability; cell-face, velocity, storage-area
+  and reduction combinations are refused. Ownership and terrain remain
+  resident, and Commander retains conservative memory admission.
+- **Mapping engine floor:** mapping extras require
+  `ras-commander-fast-map>=0.13.0,<0.14`. The engine release adds bounded
+  TIFF writing and other measured performance paths without changing the
+  ordinary 1D/mixed support guards. Historical benchmark results belong to
+  their recorded builds and options. The Creek repeat-export difference
+  remains unresolved; this release does not claim exactness on every model.
 
 - **`PrecipMrms.to_dss` behaviour change (#801):** for MRMS QPE, the default
   HEC-Vortex route and `backend="shadow"` now refuse durations other than one

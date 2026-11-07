@@ -359,6 +359,7 @@ class FimPreparedSlopingModel:
         template_raster=None,
         invalid_cells=None,
         product_writer="rasterio",
+        row_stream_rows=0,
     ):
         """Map all prepared names or an ordered subset into a new/empty folder.
 
@@ -377,6 +378,8 @@ class FimPreparedSlopingModel:
         It excludes templates, floodplain polygonization and velocity. The
         default ``"rasterio"`` preserves the existing delivery path. Native
         compression uses one worker; ``writer_threads`` controls Rasterio only.
+        ``row_stream_rows`` has the same opt-in native plain-sloping contract
+        as ``RasFim.map_sloping_profiles``; zero keeps full-array rendering.
         """
         with self._lock:
             if self._closed:
@@ -425,6 +428,7 @@ class FimPreparedSlopingModel:
                     invalid_cells=invalid_cells,
                     _prepared=self,
                     product_writer=product_writer,
+                    row_stream_rows=row_stream_rows,
                 )
             except BaseException:
                 self._check_sources()

@@ -379,7 +379,7 @@ def test_incompatible_extension_warns_once(monkeypatch, caplog):
         for _ in range(50):
             assert fast_hdf._native("auto") is None
     assert len([r for r in caplog.records if "incompatible" in r.getMessage()]) == 1
-    with pytest.raises(fast_hdf.FastHdfError, match="version 11"):
+    with pytest.raises(fast_hdf.FastHdfError, match="version 11 or 12"):
         fast_hdf._native("rust")
 
 

@@ -42,7 +42,8 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python }}
-      - run: python -m pip install -e '.[fim,compute]' pytest
+      - name: Install from the current public package index
+        run: python -m pip install --no-cache-dir --index-url https://pypi.org/simple -e '.[fim,compute]' pytest
       - name: Inspect installed external engine
         run: ras2fim-batch method
       - name: Invalid 2D cell polygon policies
