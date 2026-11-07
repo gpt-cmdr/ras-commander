@@ -163,7 +163,7 @@ for experimental API status and the evidence required before restoring them.
 
 `950_ebfe_spring_creek.ipynb`, `951_ebfe_north_galveston_bay.ipynb`,
 `952_ebfe_upper_guadalupe_cascade.ipynb`, `953_ebfe_rio_hondo_steady_collection.ipynb`,
-`954_ebfe_lake_maurepas_validation.ipynb`, `955_ebfe_tickfaw_validation.ipynb`,
+`955_ebfe_tickfaw_validation.ipynb`,
 `956_hydrofabric_conflation_visual_qa.ipynb`,
 `957_ebfe_spring_river_validation.ipynb`, `958_model_sources_showcase.ipynb`
 
