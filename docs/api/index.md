@@ -32,7 +32,7 @@ Primary classes for project management and execution:
 - [RASMapper](rasmapper/index.md) — screenshots, map/geometry layers, display, associations, and geometry completion
 - [Results Queries](results-queries.md) — offline sampling, native profiles, and recorded reference hydrographs
 - [Stored Maps](stored-maps.md) — export existing results to raster products
-- [Mapping computed results](../native-mapping-engine.md) — depth, WSE, velocity,
+- <a id="ras2fim-2d-flood-inundation-mapping-optional"></a>[Mapping computed results](../native-mapping-engine.md) — depth, WSE, velocity,
   derived and temporal products, storage-area level pools and inundation boundaries
 
 ## Benefits Analysis

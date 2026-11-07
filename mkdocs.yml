@@ -51,6 +51,7 @@ theme:
 # Link-preview (Open Graph) tags for pages with social_image front matter.
 hooks:
   - scripts/mkdocs_social_meta.py
+  - scripts/mkdocs_mapping_redirect.py
 
 plugins:
   - search
