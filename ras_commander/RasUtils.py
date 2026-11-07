@@ -951,6 +951,196 @@ class RasUtils:
 
         if update_function:
             RasUtils.update_file(new_path, update_function, *args)
+
+    @staticmethod
+    @log_call
+    def relocate_project_reference(
+        prj_file: str | Path,
+        entry_type: str,
+        old_reference: str,
+        new_reference: str,
+        *,
+        expected_target_sha256: str,
+    ) -> dict:
+        """Relocate exactly one Plan reference on a caller-owned new project copy.
+
+        Call only on a versioned writable clone; the caller owns that isolation.
+        No initialized RasPrj or HEC-RAS engine is required. Inputs are explicit:
+        this primitive never searches for candidate files. Initially only Plan
+        references are supported, preserving the same pNN plan identity.
+
+        The target is the regular, nonsymlink ``<project stem>.pNN`` file beside
+        the project and must match ``expected_target_sha256``. Only the matching
+        project record changes; plan bytes, every other project byte, encoding,
+        BOM and all original record terminators remain unchanged. The existing
+        RAS writer serializes the replacement record; its canonical newline is
+        replaced with that record's original terminator before atomic publish.
+
+        Returns a JSON-compatible hash/readback receipt. Refuses missing or
+        ambiguous old references, duplicate destinations, unsafe paths, symlinks,
+        unexpected hashes and detected concurrent changes before publication.
+        No coordinates, CRS, vertical units, dates or hydraulic settings change.
+        """
+        import hashlib
+        import stat
+        import tempfile
+        from pathlib import PureWindowsPath
+
+        from ._ras_text import _split_ras_records
+        from .RasPrj import read_file_with_fallback_encoding
+
+        if entry_type != "Plan":
+            raise ValueError("Only explicit Plan reference relocation is supported")
+        if (
+            not isinstance(new_reference, str)
+            or re.fullmatch(r"p[0-9]{2}", new_reference) is None
+        ):
+            raise ValueError("New plan reference must be canonical pNN")
+        if (
+            not isinstance(old_reference, str)
+            or not old_reference
+            or any(char in old_reference for char in ("\r", "\n", "\x00"))
+        ):
+            raise ValueError("Old reference must be one explicit record value")
+        old_path = PureWindowsPath(old_reference)
+        if (
+            old_path.is_absolute()
+            or old_path.drive
+            or old_path.root
+            or ".." in old_path.parts
+        ):
+            raise ValueError("Old reference escapes the project directory")
+        old_token = old_path.name.lower()
+        if old_token != new_reference and not old_token.endswith("." + new_reference):
+            raise ValueError("Relocation must preserve the pNN plan identity")
+        if (
+            not isinstance(expected_target_sha256, str)
+            or re.fullmatch(r"[0-9a-fA-F]{64}", expected_target_sha256) is None
+        ):
+            raise ValueError(
+                "Expected target SHA-256 must contain 64 hexadecimal digits"
+            )
+        supplied = Path(prj_file)
+        if supplied.is_symlink() or not stat.S_ISREG(supplied.stat().st_mode):
+            raise ValueError("Project must be a regular nonsymlink file")
+        project = supplied.resolve(strict=True)
+        if project.suffix.lower() != ".prj":
+            raise ValueError("Expected a project .prj file")
+        old_candidate = (project.parent / old_path.as_posix()).resolve(strict=False)
+        if not old_candidate.is_relative_to(project.parent):
+            raise ValueError("Old reference resolves outside the project directory")
+        target = project.with_suffix("." + new_reference)
+        if target.is_symlink() or not stat.S_ISREG(target.stat().st_mode):
+            raise ValueError("Target plan must be a regular nonsymlink file")
+        if target.resolve(strict=True).parent != project.parent:
+            raise ValueError("Target plan escapes the project directory")
+
+        def digest(path):
+            result = hashlib.sha256()
+            with path.open("rb") as stream:
+                for block in iter(lambda: stream.read(4 * 1024 * 1024), b""):
+                    result.update(block)
+            return result.hexdigest()
+
+        expected_hash = expected_target_sha256.lower()
+        if digest(target) != expected_hash:
+            raise ValueError(
+                "Target plan SHA-256 differs from the explicit expected identity"
+            )
+        original = project.read_bytes()
+        _, encoding = read_file_with_fallback_encoding(project)
+        if encoding is None:
+            raise ValueError("Project encoding could not be read without loss")
+        text = original.decode(encoding, errors="strict")
+        if text.encode(encoding, errors="strict") != original:
+            raise ValueError("Project encoding does not preserve original bytes")
+        records = _split_ras_records(text)
+        prefix = entry_type + " File="
+        matches = [
+            index
+            for index, record in enumerate(records)
+            if record.rstrip("\r\n") == prefix + old_reference
+        ]
+        if len(matches) != 1:
+            raise ValueError(
+                "Old project reference must match exactly one complete record"
+            )
+        for other_index, record in enumerate(records):
+            if other_index == matches[0] or not record.rstrip("\r\n").startswith(
+                prefix
+            ):
+                continue
+            value = record.rstrip("\r\n")[len(prefix) :].strip()
+            leaf = PureWindowsPath(value).name.lower()
+            if leaf == new_reference or leaf.endswith("." + new_reference):
+                raise ValueError(
+                    "New project reference is already registered or ambiguous"
+                )
+        index = matches[0]
+        content = records[index].rstrip("\r\n")
+        terminator = records[index][len(content) :]
+        replacement = prefix + new_reference
+        expected_records = list(records)
+        expected_records[index] = replacement + terminator
+        expected = "".join(expected_records).encode(encoding, errors="strict")
+        descriptor, temporary_name = tempfile.mkstemp(
+            prefix="." + project.name + ".relocation-",
+            suffix=".tmp",
+            dir=project.parent,
+        )
+        os.close(descriptor)
+        temporary = Path(temporary_name)
+        try:
+            _write_ras_text(
+                temporary, replacement + "\n", encoding=encoding, errors="strict"
+            )
+            serialized = temporary.read_bytes().decode(encoding, errors="strict")
+            if serialized.rstrip("\r\n") != replacement:
+                raise RuntimeError("Replacement record serialization readback failed")
+            # Keep every untouched byte and original terminator; the legacy writer
+            # intentionally normalizes newlines, which this narrow edit must not do.
+            expected_records[index] = serialized.rstrip("\r\n") + terminator
+            payload = "".join(expected_records).encode(encoding, errors="strict")
+            if payload != expected:
+                raise RuntimeError(
+                    "Serialized replacement changed project bytes unexpectedly"
+                )
+            with temporary.open("wb") as stream:
+                stream.write(payload)
+                stream.flush()
+                os.fsync(stream.fileno())
+            if temporary.read_bytes() != expected:
+                raise RuntimeError(
+                    "Staged project readback differs from expected bytes"
+                )
+            shutil.copymode(project, temporary)
+            if project.read_bytes() != original or digest(target) != expected_hash:
+                raise RuntimeError(
+                    "Project or target plan changed before relocation publication"
+                )
+            os.replace(temporary, project)
+        finally:
+            temporary.unlink(missing_ok=True)
+        readback = project.read_bytes()
+        if readback != expected or digest(target) != expected_hash:
+            raise RuntimeError("Published relocation or target plan readback failed")
+        return {
+            "schema": "ras-commander-project-reference-relocation/v1",
+            "project_file": str(project),
+            "entry_type": entry_type,
+            "old_reference": old_reference,
+            "new_reference": new_reference,
+            "target_file": str(target),
+            "target_sha256": expected_hash,
+            "project_before_sha256": hashlib.sha256(original).hexdigest(),
+            "project_after_sha256": hashlib.sha256(readback).hexdigest(),
+            "encoding": encoding,
+            "record_terminators_preserved": True,
+            "other_project_bytes_preserved": True,
+            "plan_bytes_unchanged": True,
+            "atomic_replace": True,
+        }
+
     @staticmethod
     @log_call
     def update_project_file(prj_file: Path, file_type: str, new_num: str, ras_object=None) -> None:
