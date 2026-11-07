@@ -1068,8 +1068,9 @@ class TestGeometryHdfAvailability:
         hdf_path = breakline_geom_text.with_suffix(breakline_geom_text.suffix + ".hdf")
         calls = []
 
-        def fake_recompile(geom_text_path, compiled_hdf_path, *, ras_object=None, require_complete_products=False):
+        def fake_recompile(geom_text_path, compiled_hdf_path, *, ras_object=None, require_complete_products=False, preprocess_timeout=600):
             assert require_complete_products is False
+            assert preprocess_timeout == 600
             calls.append((geom_text_path, compiled_hdf_path, ras_object))
             _write_mesh_hdf(
                 compiled_hdf_path,
