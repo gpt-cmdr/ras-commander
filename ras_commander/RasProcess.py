@@ -1354,6 +1354,17 @@ Step 5: Configure (optional — auto-detection usually works)
             )
 
     @staticmethod
+    def _geometry_completion_failures(*streams: str) -> List[str]:
+        """Return explicit native geometry-failure lines from captured output."""
+        pattern = re.compile(
+            r"^(?:Error\s*:.*|LAYER\s*=\s*Error|"
+            r"PROGRESS\s*=\s*-100(?:\.0*)?|Geometry Writer Failed)$",
+            re.IGNORECASE,
+        )
+        return [line.strip() for stream in streams for line in stream.splitlines()
+                if pattern.fullmatch(line.strip())]
+
+    @staticmethod
     def _geometry_completion_semantics(geom_hdf_path: Path) -> Dict[str, Any]:
         """Inspect 1D completion layers and 2D property-table readiness."""
         evidence: Dict[str, Any] = {
@@ -1363,6 +1374,8 @@ Step 5: Configure (optional — auto-detection usually works)
             "edge_lines_written": False,
             "interpolation_surface_written": False,
             "two_d_flow_areas": {},
+            "complete_geometry_attribute_present": False,
+            "complete_geometry": None,
             "success": False,
             "error": None,
         }
@@ -1371,6 +1384,23 @@ Step 5: Configure (optional — auto-detection usually works)
 
             with h5py.File(geom_hdf_path, "r") as hdf:
                 evidence["readable"] = True
+                geometry = hdf.get("Geometry")
+                if geometry is not None and "Complete Geometry" in geometry.attrs:
+                    evidence["complete_geometry_attribute_present"] = True
+                    raw = np.asarray(geometry.attrs["Complete Geometry"])
+                    if raw.ndim != 0:
+                        raise ValueError("Complete Geometry must be a scalar boolean value")
+                    value = raw.item()
+                    if isinstance(value, bytes):
+                        value = value.decode("ascii")
+                    if isinstance(value, str):
+                        value = value.strip().casefold()
+                    if value in (True, 1, "true", "1"):
+                        evidence["complete_geometry"] = True
+                    elif value in (False, 0, "false", "0"):
+                        evidence["complete_geometry"] = False
+                    else:
+                        raise ValueError("Unrecognized Complete Geometry attribute value")
                 evidence["edge_lines_written"] = (
                     "Geometry/River Edge Lines" in hdf
                 )
@@ -1457,6 +1487,7 @@ Step 5: Configure (optional — auto-detection usually works)
                     (evidence["has_1d_geometry"] or evidence["has_2d_geometry"])
                     and one_d_ready
                     and two_d_ready
+                    and evidence["complete_geometry"] is not False
                 )
         except Exception as exc:
             evidence["error"] = f"{type(exc).__name__}: {exc}"
@@ -1593,7 +1624,16 @@ Step 5: Configure (optional — auto-detection usually works)
                 except OSError:
                     signature = None
                 fresh_geometry = signature is not None and signature != initial_signature
-                if semantics["success"] and terminal_message and fresh_geometry:
+                # A tail-only check can miss a failure earlier in a large log.
+                # Read independent handles so the native writer offset is unchanged.
+                failure_lines = []
+                if terminal_message:
+                    failure_lines = RasProcess._geometry_completion_failures(*(
+                        (Path(log_directory) / filename).read_text(
+                            encoding="utf-8", errors="replace"
+                        ) for filename in ("stdout.log", "stderr.log")
+                    ))
+                if semantics["success"] and terminal_message and fresh_geometry and not failure_lines:
                     if signature == ready_signature:
                         ready_since = ready_since or time.monotonic()
                     else:
@@ -1819,7 +1859,10 @@ Step 5: Configure (optional — auto-detection usually works)
         ``CompleteGeometry`` is the working command. Its CLI key is
         ``GeomFilename`` (not the .NET property name ``GeometryFilename``).
         RasProcess.exe can report argument errors on stderr while returning zero,
-        so this wrapper treats a leading ``Error:`` there as unsuccessful.
+        so explicit error, failed-writer and negative failure-progress lines in
+        either output stream veto success. An explicit false or unrecognized
+        ``Complete Geometry`` attribute also fails validation; when that attribute
+        is absent, the existing 1D/2D product checks remain authoritative.
 
         Parameters
         ----------
@@ -1849,8 +1892,10 @@ Step 5: Configure (optional — auto-detection usually works)
         dict
             ``rasprocess_path``, ``command_args``, ``return_code``, ``stdout``,
             ``stderr``, ``edge_lines_written`` (bool), ``interpolation_surface_written``
-            (bool), and ``success`` (return code 0, no ``Error:`` in stdout, and the
-            River Edge Lines group present afterward).
+            (bool), ``failure_lines`` (explicit native failure diagnostics), and
+            ``success`` (normal or supervised completion, no failure diagnostics,
+            and valid geometry completion semantics). A true completion attribute
+            does not replace the required 1D layers or 2D property tables.
 
         Raises
         ------
@@ -1934,10 +1979,11 @@ Step 5: Configure (optional — auto-detection usually works)
         process_completed = (
             result.returncode == 0 or completion_mode == "semantic_hdf_stable"
         )
+        failure_lines = RasProcess._geometry_completion_failures(stdout, stderr)
         success = (
             process_completed
             and "Error:" not in stdout
-            and not stderr.lstrip().startswith("Error:")
+            and not failure_lines
             and semantic_validation["success"]
         )
         if not success:
@@ -1957,6 +2003,7 @@ Step 5: Configure (optional — auto-detection usually works)
             "interpolation_surface_written": interp_surface_written,
             "completion_mode": completion_mode,
             "semantic_validation": semantic_validation,
+            "failure_lines": failure_lines,
             "owned_process_cleanup": owned_process_cleanup,
             "success": success,
         }
