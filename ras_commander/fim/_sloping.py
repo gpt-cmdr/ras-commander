@@ -238,6 +238,7 @@ def map_profiles(
     terrain_crs_fnv1a64=None,
     _prepared=None,
     product_writer="rasterio",
+    row_stream_rows=0,
     storage_areas=False,
     velocity_depth="rendered",
     derived_products=(),
@@ -257,6 +258,17 @@ def map_profiles(
     if product_writer not in ("rasterio", "native"):
         raise ValueError("product_writer must be rasterio or native")
     native_products = product_writer == "native"
+    if (isinstance(row_stream_rows, bool) or not isinstance(row_stream_rows, int)
+            or not 0 <= row_stream_rows <= 4096):
+        raise ValueError("row_stream_rows must be an integer from 0 through 4096")
+    if row_stream_rows and (
+        not native_products or render_mode != "sloping" or velocity or storage_areas
+        or _reduce_max or reduce_shallow_to_horizontal or use_depth_weighted_faces
+    ):
+        raise FimUnsupportedError(
+            "row_stream_rows requires plain sloping with native products and "
+            "no velocity, storage areas or reduction"
+        )
     if native_products and (write_floodplain or template_raster is not None or velocity):
         raise FimUnsupportedError("Native products do not support templates, floodplain or velocity")
     selected_options = _validate_options(
@@ -390,6 +402,22 @@ def map_profiles(
     )
     if native_products and not method.get("native_geotiff_outputs"):
         raise FimUnsupportedError("Native products require native_geotiff_outputs capability")
+    if row_stream_rows:
+        capability = method.get("native_row_streaming")
+        if (
+            not isinstance(capability, dict)
+            or capability.get("control") != "row_stream_rows"
+            or capability.get("render_mode") != "sloping"
+            or isinstance(capability.get("max"), bool)
+            or not isinstance(capability.get("max"), int)
+            or row_stream_rows > capability["max"]
+            or not isinstance(capability.get("products"), list)
+            or not all(isinstance(p, str) for p in capability["products"])
+            or not {"depth", "wse"}.issubset(capability["products"])
+        ):
+            raise FimUnsupportedError(
+                "row_stream_rows requires a compatible native_row_streaming capability"
+            )
     concurrency_supported, selected_method_id = _validate_method(
         method, render_mode, max_inflight_profiles
     )
@@ -507,6 +535,7 @@ def map_profiles(
             "threads": threads,
             "writer_threads": writer_threads,
             "product_writer": product_writer,
+            "row_stream_rows": row_stream_rows,
             "max_inflight_profiles": max_inflight_profiles,
             "max_working_mib": budget,
             "write_floodplain": bool(write_floodplain),
@@ -696,6 +725,7 @@ def map_profiles(
                     max_working_bytes=budget * (1 << 20) - buffer_bytes,
                     stream_outputs=not _reduce_max,
                     **({"geotiff_outputs": True} if native_products else {}),
+                    **({"row_stream_rows": row_stream_rows} if row_stream_rows else {}),
                     **fields,
                 )
                 if velocity_depth != "rendered":

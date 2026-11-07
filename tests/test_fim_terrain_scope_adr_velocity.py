@@ -227,6 +227,53 @@ def model_files(tmp_path, monkeypatch):
     return hdf, tif, scope
 
 
+@pytest.mark.parametrize("capability", [
+    None, True, {},
+    {"control": "rows", "max": 4096, "render_mode": "sloping", "products": ["depth", "wse"]},
+    {"control": "row_stream_rows", "max": True, "render_mode": "sloping", "products": ["depth", "wse"]},
+    {"control": "row_stream_rows", "max": 6, "render_mode": "sloping", "products": ["depth", "wse"]},
+    {"control": "row_stream_rows", "max": 4096, "render_mode": "slopingPretty", "products": ["depth", "wse"]},
+    {"control": "row_stream_rows", "max": 4096, "render_mode": "sloping", "products": ["depth", {}]},
+    {"control": "row_stream_rows", "max": 4096, "render_mode": "sloping", "products": ["depth"]},
+])
+def test_row_stream_capability_refuses_before_staging(model_files, tmp_path, monkeypatch, capability):
+    hdf, tif, _ = model_files
+    method = {"native_geotiff_outputs": True, "native_row_streaming": capability}
+    monkeypatch.setattr(_engine, "engine_method", lambda engine: {"sloping": method})
+    with pytest.raises(FimUnsupportedError, match="native_row_streaming"):
+        RasFim.map_sloping_profiles(
+            hdf, tif, tmp_path / "out", product_writer="native", row_stream_rows=7,
+        )
+    assert not (tmp_path / "out").exists()
+
+
+@pytest.mark.parametrize("rows", [0, 7, 4096])
+def test_row_stream_gate_accepts_compatible_capability(model_files, tmp_path, monkeypatch, rows):
+    from ras_commander.fim import _sloping
+
+    hdf, tif, _ = model_files
+    capability = {"control": "row_stream_rows", "max": 4096,
+                  "render_mode": "sloping", "products": ["depth", "wse"]}
+    # Zero must remain compatible with an engine that predates this capability.
+    method = {"native_geotiff_outputs": True}
+    if rows:
+        method["native_row_streaming"] = capability
+    monkeypatch.setattr(_engine, "engine_method", lambda engine: {"sloping": method})
+
+    class AfterCapability(Exception):
+        pass
+
+    def stop(*args):
+        raise AfterCapability
+
+    monkeypatch.setattr(_sloping, "_validate_method", stop)
+    with pytest.raises(AfterCapability):
+        RasFim.map_sloping_profiles(
+            hdf, tif, tmp_path / "out", product_writer="native", row_stream_rows=rows,
+        )
+    assert not (tmp_path / "out").exists()
+
+
 def test_whole_simulation_refuses_storage_areas_and_missing_capability(model_files, tmp_path, monkeypatch):
     hdf, tif, scope = model_files
     scope["storage_areas"] = 1

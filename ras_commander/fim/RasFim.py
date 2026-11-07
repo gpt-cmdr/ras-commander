@@ -630,6 +630,7 @@ class RasFim:
         engine_path: Optional[PathLike] = None, threads: int = 1,
         writer_threads: int = 1,
         product_writer: str = "rasterio",
+        row_stream_rows: int = 0,
         max_working_mib: int = 1024, timeout: Optional[float] = None,
         max_inflight_profiles: int = 1,
         write_floodplain: bool = False,
@@ -743,6 +744,11 @@ class RasFim:
                 output preserves the requested CRS/grid and float32 results,
                 uses one compression worker, and excludes templates,
                 floodplain polygonization and velocity.
+            row_stream_rows: Zero (default) keeps full-array rendering. An
+                integer from 1 through 4096 opts into bounded raster row
+                batches with a capable engine and ``product_writer="native"``.
+                Requires plain sloping without velocity or storage areas.
+                Ownership and terrain remain resident for the full window.
             write_floodplain: Also polygonize positive retained depth pixels.
             template_raster: Optional float32 GeoTIFF defining the delivered
                 grid, nodata and storage profile. Must share the terrain pixel
@@ -859,6 +865,7 @@ class RasFim:
             max_inflight_profiles=max_inflight_profiles,
             template_raster=template_raster, terrain_hdf=terrain_hdf,
             velocity=velocity, invalid_cells=invalid_cells, product_writer=product_writer,
+            row_stream_rows=row_stream_rows,
             terrain_crs_fnv1a64=terrain_crs_fnv1a64, storage_areas=storage_areas,
             velocity_depth=velocity_depth, derived_products=derived_products)
 

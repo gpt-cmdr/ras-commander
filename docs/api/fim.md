@@ -329,7 +329,7 @@ the terrain is modified. No terrain healer is bundled or invoked by this API.
 Mapping-time bbox/polygon masks retain global hydraulic inputs.
 
 Fast-Map accepts these vectors from 0.8.0 onward; no new engine build is
-required. Commander's `fim` extra requires Fast-Map **0.12.0** or later. The
+required. Commander's `fim` extra requires Fast-Map **0.13.0** or later. The
 new Commander keyword requires a version or source commit containing this
 feature. On Linux x64 with glibc 2.28+, including
 a Python 3.11 container with a Commander checkout copied to `/app`, install:
@@ -338,7 +338,7 @@ a Python 3.11 container with a Commander checkout copied to `/app`, install:
 FROM python:3.11-slim
 WORKDIR /app
 COPY . /app
-RUN python -m pip install --no-cache-dir '.[fim]' 'ras-commander-fast-map==0.12.0'
+RUN python -m pip install --no-cache-dir '.[fim]' 'ras-commander-fast-map==0.13.0'
 ENTRYPOINT ["python", "scripts/examples/map_supplied_wsel.py"]
 ```
 
@@ -636,6 +636,24 @@ The same cache and writer controls are available on `RasFim.map_catalog()`;
 native catalog delivery currently requires sloping jobs. These capabilities
 are part of the 0.11.0 release line; use an explicit qualified engine build
 until that release is published.
+
+Fast-Map 0.13 adds opt-in row batches for plain sloping:
+
+```python
+manifest = RasFim.map_sloping_profiles(
+    plan_hdf, terrain_tif, "row_maps",
+    profiles={"Max": "Max"}, product_writer="native", row_stream_rows=256,
+)
+```
+
+The prepared context's `map_profiles()` accepts the same control. Zero keeps
+the existing full-array path; integers from 1 through 4096 require the engine's
+`native_row_streaming` capability. Requests with cell-face sloping, velocity,
+storage areas or a Max reduction are refused. The engine writes raster row
+batches within the requested Rust worker pool; full ownership and terrain
+arrays remain resident. Commander still uses conservative full-window memory
+admission. This option does not establish lower total memory requirements or
+a speedup for a model.
 
 See the [prepared-context evidence](../development/fim-mapping-performance.md#prepared-model-contexts-across-reach-requests)
 for reuse behavior and numerical comparison scope.

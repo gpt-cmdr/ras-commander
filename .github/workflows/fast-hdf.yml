@@ -59,6 +59,9 @@ jobs:
             echo "::notice title=Native tests skipped::ras-commander-fast-hdf >=0.3.0,<0.4 could not be installed from PyPI for this platform."
             echo "available=false" >> "$GITHUB_OUTPUT"
           fi
+      - name: Published API 11 compatibility before paired build
+        if: steps.native.outputs.available == 'true'
+        run: python -m pytest tests/test_hdf_mesh_ghost_cells.py tests/test_fast_hdf.py tests/test_fim_catalog.py -k "legacy_names_and_ghost_filtering or adapter_accepts_only_compatible_native_contracts or bounded_multitime_hdf_read" -q
       - name: Check out paired API 12 engine
         if: steps.native.outputs.available == 'true'
         uses: actions/checkout@v4

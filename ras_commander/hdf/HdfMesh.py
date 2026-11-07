@@ -1232,6 +1232,13 @@ class HdfMesh:
 
     @staticmethod
     def _legacy_physical_cell_count(hdf_file: h5py.File, name: str) -> int:
+        from .. import fast_hdf
+
+        if (fast_hdf.native_required()
+                and fast_hdf._native("rust").API_VERSION == 11):
+            raise fast_hdf.FastHdfError(
+                "Native legacy Names physical-cell qualification requires API 12"
+            )
         group = hdf_file[f"Geometry/2D Flow Areas/{name}"]
         centers = group["Cells Center Coordinate"]
         faces = group["Cells Face and Orientation Values"]
