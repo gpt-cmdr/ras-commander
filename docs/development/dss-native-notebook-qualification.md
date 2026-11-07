@@ -65,7 +65,7 @@ Shadow totals over all runs: no `unexpected` outcomes.
     cells and extent. File bytes are not compared, because a DSS header carries write times.
   - Every numeric dataset under `Results/` in each HEC-RAS plan HDF.
 - **Evidence.** The harness scripts and raw evidence (executed notebooks and comparison JSON)
-  are kept on the qualification host under `D:\dss-commander-oracle\work\R-NB\`.
+  are kept on the qualification host, outside the repository.
 
 ## Inventory
 
@@ -196,9 +196,5 @@ change.
 4. **926 cannot be reproduced across days.** It downloads the current-day WPC cycle, so its
    forcing, and its pass/fail against the notebook's WSEL tolerance, depend on when it runs.
    A fixed-cycle mode would make this notebook usable as a regression test.
-5. **Host environment (not repository issues).**
-   - `%LOCALAPPDATA%\ras-commander\examples` on CLB01 is a junction to a missing
-     `D:\Archive` folder. The runs used a scratch `LOCALAPPDATA` that held the HEC-RAS 7.0
-     example archive.
-   - The user-level `SSL_CERT_FILE` points to a missing Anaconda bundle, which broke the
-     HTTPS downloads in 916 and 926 until the runner pointed it at certifi.
+5. **Host environment (not repository issues).** Two settings specific to the qualification host
+   (a stale examples cache link and a stale `SSL_CERT_FILE`) were worked around in the runner.
