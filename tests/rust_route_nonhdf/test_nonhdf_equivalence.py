@@ -54,7 +54,7 @@ def _params():
 @pytest.mark.parametrize("case,target,label", _params())
 def test_nonhdf_function(case, target, label, monkeypatch):
     native = pytest.importorskip("ras_commander_fast_hdf")
-    assert native.API_VERSION == 11
+    assert native.API_VERSION == 12
     from ras_commander import fast_hdf
     spec = CASES[case]
     if spec.max_mb is not None and isinstance(target, str) and Path(target).stat().st_size > spec.max_mb * 1e6:

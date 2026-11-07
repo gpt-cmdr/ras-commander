@@ -29,7 +29,7 @@ pytestmark = pytest.mark.skipif(
 @pytest.fixture
 def virtual_sidecar(tmp_path):
     native = pytest.importorskip("ras_commander_fast_hdf")
-    assert native.API_VERSION == 11
+    assert native.API_VERSION == 12
     source = FIXTURES.get("00-LandCover")
     if source is None:
         pytest.skip("00-LandCover not in manifest")

@@ -49,7 +49,7 @@ def _text_via_h5py(records):
 @pytest.mark.parametrize("case", sorted(CASES), ids=sorted(CASES))
 def test_public_method(case, fixture, monkeypatch):
     native = pytest.importorskip("ras_commander_fast_hdf")
-    assert native.API_VERSION == 11
+    assert native.API_VERSION == 12
     from ras_commander import fast_hdf
     call, path = CASES[case], fixture["path"]
     py, py_trace, _ = _run(monkeypatch, "0", call, path)  # pytest.skip propagates

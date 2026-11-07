@@ -1,4 +1,4 @@
-"""Native mesh quarantine regressions (bridge API_VERSION 11).
+"""Native mesh quarantine regressions (bridge API_VERSION 12).
 
 Two layers are covered:
 
@@ -20,7 +20,7 @@ from functools import wraps
 import numpy as np
 import pytest
 
-API_VERSION = 11
+API_VERSION = 12
 MESH = "Native Quarantine"
 REFERENCE_KEYS = {"mesh_name", "cell_id", "face_count", "polygon_count", "status",
                   "reason_code", "face_ids", "missing_face_ids"}

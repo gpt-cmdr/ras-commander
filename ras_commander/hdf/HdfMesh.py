@@ -525,16 +525,37 @@ class HdfMesh:
             with h5py.File(hdf_path, 'r') as hdf_file:
                 if "Geometry/2D Flow Areas" not in hdf_file:
                     return list()
-                return list(
-                    [
-                        HdfUtils.convert_ras_string(n.decode('utf-8'))
-                        for n in read_typed(hdf_file["Geometry/2D Flow Areas/Attributes"])["Name"]
-                    ]
-                )
+                return HdfMesh._mesh_area_names(hdf_file)
         except Exception as e:
             reraise_required(e)
             logger.error(f"Error reading mesh area names from {hdf_path}: {str(e)}")
             return list()
+
+    @staticmethod
+    def _mesh_area_names(hdf_file: h5py.File) -> List[str]:
+        """Read stored inventory order; a present Attributes table takes precedence."""
+        group = hdf_file.get("Geometry/2D Flow Areas")
+        if group is None:
+            return []
+        if "Attributes" in group:
+            values = read_typed(group["Attributes"])
+            if values.ndim != 1 or "Name" not in (values.dtype.names or ()):
+                raise _MeshLayoutError("2D Flow Areas/Attributes has no rank-one Name field")
+            values = values["Name"]
+        else:
+            if "Names" not in group:
+                raise _MeshLayoutError("2D Flow Areas inventory is missing")
+            values = read_typed(group["Names"])
+            if values.ndim != 1 or values.dtype.kind not in ("S", "U", "O"):
+                raise _MeshLayoutError("2D Flow Areas/Names must be rank-one strings")
+            # RAS 5.0.x blank-pads these values, including NULLPAD datasets.
+            values = [_decode_hdf_scalar(n).rstrip(" ") for n in values]
+        names = [_decode_hdf_scalar(n) for n in values]
+        if any(not isinstance(n, str) or not n or "/" in n or "\\" in n for n in names):
+            raise _MeshLayoutError("Invalid 2D flow area name")
+        if len(set(names)) != len(names):
+            raise _MeshLayoutError("2D flow area inventory has duplicate names")
+        return names
 
     @staticmethod
     @log_call
@@ -614,19 +635,8 @@ class HdfMesh:
                     )
 
                 group = hdf_file[base]
-                attributes_path = f"{base}/Attributes"
-                if "Attributes" not in group:
-                    raise _MeshLayoutError("2D Flow Areas/Attributes is missing")
-                attributes = read_typed(group["Attributes"])
-                if (
-                    attributes.dtype.names is None
-                    or "Name" not in attributes.dtype.names
-                ):
-                    raise _MeshLayoutError("2D Flow Areas/Attributes has no Name field")
-                mesh_names = [
-                    HdfUtils.convert_ras_string(_decode_hdf_scalar(value))
-                    for value in attributes["Name"]
-                ]
+                attributes_path = f"{base}/" + ("Attributes" if "Attributes" in group else "Names")
+                mesh_names = HdfMesh._mesh_area_names(hdf_file)
 
                 collection_paths = [
                     f"{base}/Polygon Info",
@@ -1202,9 +1212,15 @@ class HdfMesh:
         HEC-RAS lists a 2D area's physical cells first in ``Cells Center
         Coordinate`` and in cell result arrays, followed by ghost cells outside
         the perimeter. ``Geometry/2D Flow Areas/Attributes`` ``Cell Count`` is
-        the physical count. Meshes without a recorded count are omitted.
+        the physical count. With legacy ``Names`` metadata, qualify the count
+        from contiguous cell-face ranges: polygon cells followed by one-face
+        boundary ghosts. Ambiguous topology raises; stale maximum-index
+        attributes and result widths are never used to infer this boundary.
         """
         attributes = hdf_file.get("Geometry/2D Flow Areas/Attributes")
+        if attributes is None and "Geometry/2D Flow Areas/Names" in hdf_file:
+            return {name: HdfMesh._legacy_physical_cell_count(hdf_file, name)
+                    for name in HdfMesh._mesh_area_names(hdf_file)}
         if attributes is None or "Cell Count" not in (attributes.dtype.names or ()):
             return {}
         counts = {}
@@ -1213,6 +1229,32 @@ class HdfMesh:
             if np.isfinite(count) and count > 0:
                 counts[str(HdfUtils.convert_ras_string(row["Name"]))] = int(count)
         return counts
+
+    @staticmethod
+    def _legacy_physical_cell_count(hdf_file: h5py.File, name: str) -> int:
+        group = hdf_file[f"Geometry/2D Flow Areas/{name}"]
+        centers = group["Cells Center Coordinate"]
+        faces = group["Cells Face and Orientation Values"]
+        info = read_typed(group["Cells Face and Orientation Info"])
+        if (len(centers.shape) != 2 or centers.shape[1] != 2
+                or info.shape != centers.shape or info.dtype.kind not in "iu"
+                or len(faces.shape) != 2 or faces.shape[1] != 2):
+            raise _MeshLayoutError("Legacy cell-face tables must align with N by 2 centers")
+        end, physical, ghosts = 0, 0, False
+        for start, count in info:
+            start, count = int(start), int(count)
+            if start != end or count < 1 or start + count > faces.shape[0]:
+                raise _MeshLayoutError("Invalid legacy cell-face range")
+            if count == 1:
+                ghosts = True
+            elif count < 3 or ghosts:
+                raise _MeshLayoutError("Legacy physical/ghost cell boundary is unqualified")
+            else:
+                physical += 1
+            end = start + count
+        if end != faces.shape[0] or physical == 0:
+            raise _MeshLayoutError("Legacy cell-face ranges do not cover stored values")
+        return physical
 
     @staticmethod
     @standardize_input(file_type='geom_hdf')

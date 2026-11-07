@@ -41,7 +41,7 @@ def _native_available():
         import ras_commander_fast_hdf as native
     except ImportError:
         return False
-    return native.API_VERSION == 11 and hasattr(native, "mesh_corner_elevations")
+    return native.API_VERSION == 12 and hasattr(native, "mesh_corner_elevations")
 
 
 ENGINES = ["h5py", "auto", pytest.param("native", marks=pytest.mark.skipif(

@@ -26,6 +26,110 @@ from ras_commander.hdf.HdfMesh import HdfMesh
 from ras_commander.hdf.HdfResultsMesh import HdfResultsMesh
 from ras_commander.hdf.HdfResultsQuery import HdfResultsQuery
 
+
+def _write_legacy_hdf(path):
+    _write_hdf(path)
+    with h5py.File(path, "r+") as f:
+        plan = f["Plan Data/Plan Information"]
+        del plan.attrs["Simulation Start Time"]
+        plan.attrs["Simulation Start Time"] = np.bytes_("01Jan2024 00:00:00")
+        base = f["Geometry/2D Flow Areas"]
+        del base["Attributes"]
+        base.create_dataset("Names", data=np.array([b"Area            "], dtype="S16"))
+        g = base[MESH]
+        g.attrs["Cell Maximum Index"] = np.int32(1)
+        counts = np.array([3] * PHYSICAL + [1] * GHOSTS, dtype="i4")
+        starts = np.r_[0, np.cumsum(counts[:-1])]
+        g.create_dataset("Cells Face and Orientation Info", data=np.column_stack([starts, counts]).astype("i4"))
+        g.create_dataset("Cells Face and Orientation Values", data=np.zeros((sum(counts), 2), dtype="i4"))
+    return path
+
+
+@pytest.mark.parametrize("mode", ["python", "auto", "required"])
+def test_legacy_names_and_ghost_filtering(tmp_path, monkeypatch, mode):
+    from ras_commander import fast_hdf
+
+    monkeypatch.setenv("RAS_COMMANDER_FAST_HDF", mode)
+    if mode == "required" and not fast_hdf.available():
+        pytest.skip("requires the matching native extension")
+    path = _write_legacy_hdf(tmp_path / "legacy.p01.hdf")
+    assert HdfMesh.get_mesh_area_names(path) == [MESH]
+    with h5py.File(path) as f:
+        assert HdfMesh._physical_cell_counts(f) == {MESH: PHYSICAL}
+    points = HdfMesh.get_mesh_cell_points(path, include_ghost_cells=False, include_geometry=False)
+    assert points.cell_id.tolist() == list(range(PHYSICAL))
+    physical = HdfResultsMesh.get_mesh_summary_values(path, "Maximum Water Surface")
+    assert physical.cell_id.tolist() == list(range(PHYSICAL))
+    full = HdfResultsMesh.get_mesh_summary_values(path, "Maximum Water Surface", include_ghost_cells=True)
+    assert full.is_ghost_cell.tolist() == [False] * PHYSICAL + [True] * GHOSTS
+    layout = HdfMesh.diagnose_mesh_layout(path)
+    assert layout.area_names_paths.tolist() == ["Geometry/2D Flow Areas/Names"]
+
+
+@pytest.mark.parametrize("mutation", ["interleaved", "two_faces", "gap", "missing_values"])
+def test_legacy_count_refuses_ambiguous_topology(tmp_path, monkeypatch, mutation):
+    monkeypatch.setenv("RAS_COMMANDER_FAST_HDF", "python")
+    path = _write_legacy_hdf(tmp_path / "legacy.p01.hdf")
+    with h5py.File(path, "r+") as f:
+        g = f[f"Geometry/2D Flow Areas/{MESH}"]
+        if mutation == "missing_values":
+            del g["Cells Face and Orientation Values"]
+        else:
+            info = g["Cells Face and Orientation Info"][:]
+            if mutation == "interleaved":
+                info[0, 1] = 1
+                info[1:, 0] -= 2
+            elif mutation == "two_faces":
+                info[0, 1] = 2
+                info[1:, 0] -= 1
+            else:
+                info[-1, 0] += 1
+            g["Cells Face and Orientation Info"][:] = info
+        with pytest.raises((ValueError, KeyError)):
+            HdfMesh._physical_cell_counts(f)
+
+
+def test_legacy_names_do_not_override_present_modern_metadata(tmp_path, monkeypatch):
+    monkeypatch.setenv("RAS_COMMANDER_FAST_HDF", "python")
+    path = _write_legacy_hdf(tmp_path / "legacy.p01.hdf")
+    with h5py.File(path, "r+") as f:
+        base = f["Geometry/2D Flow Areas"]
+        base.create_dataset("Attributes", data=np.array([(b"Area", 3)], dtype=[("Name", "S16"), ("Cell Count", "i4")]))
+        assert HdfMesh._mesh_area_names(f) == [MESH]
+        assert HdfMesh._physical_cell_counts(f) == {MESH: 3}
+        del base["Attributes"]
+        base.create_dataset("Attributes", data=np.zeros(1, dtype=[("Cell Count", "i4")]))
+        with pytest.raises(ValueError, match="Name"):
+            HdfMesh._mesh_area_names(f)
+
+
+@pytest.mark.parametrize("mode", ["python", "auto", "required"])
+def test_real_legacy_mesh_metadata(monkeypatch, mode):
+    import hashlib
+    import os
+
+    path = os.environ.get("RAS_LEGACY_MESH_HDF")
+    if not path:
+        pytest.skip("set RAS_LEGACY_MESH_HDF to the immutable local geometry copy")
+    from ras_commander import fast_hdf
+
+    monkeypatch.setenv("RAS_COMMANDER_FAST_HDF", mode)
+    if mode == "required" and not fast_hdf.available():
+        pytest.skip("requires the matching native extension")
+    def digest():
+        sha = hashlib.sha256()
+        with open(path, "rb") as stream:
+            for block in iter(lambda: stream.read(1 << 20), b""):
+                sha.update(block)
+        return sha.hexdigest()
+
+    before = digest()
+    assert HdfMesh.get_mesh_area_names(Path(path)) == ["WA2"]
+    with h5py.File(path) as f:
+        assert HdfMesh._physical_cell_counts(f) == {"WA2": 138005}
+    after = digest()
+    assert before == after
+
 MESH = "Area"
 PHYSICAL = 4
 GHOSTS = 2
