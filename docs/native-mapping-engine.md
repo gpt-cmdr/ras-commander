@@ -84,8 +84,9 @@ Corners)** method from computed 2D HDF results. Inspect installed capabilities
 with `RasFim.get_capabilities()` and check the qualification scope below.
 Request-contract stability and numerical qualification are separate: a stable
 transport does not establish parity for every model or option combination.
-The engine's 1D and coupled diagnostic transports still require caller-prepared
-inputs and are outside the ordinary Commander model-mapping workflow.
+Commander provides explicit, qualification-gated 1D preparation through
+`prepare_one_d_model()`. Coupled diagnostic transports still require external
+component preparation. The 2D entry points continue to refuse 1D/mixed inputs.
 
 ```python
 from ras_commander import RasFim
@@ -1759,3 +1760,70 @@ clock; do not sum them as independent profile times. A speed ratio is withheld
 because the vector methods differ. Discrete Hausdorff distance is omitted with
 an explicit receipt exclusion when the vertex-pair budget exceeds 25 million.
 See the [boundary qualification issue](https://github.com/gpt-cmdr/ras-commander-fast-map/issues/4).
+
+## Prepare and map stored 1D surfaces
+
+Use `RasFim.prepare_one_d_model()` to stage native stored interpolation TINs,
+normalized strip M, render ranks and per-cross-section levee/end-obstruction
+records. `RasFim.map_one_d_profiles()` runs the staged inputs through Rust and
+writes Depth/WSE GeoTIFFs and `fim_manifest.json`. Neither operation loads HEC-RAS.
+Missing stored geometry must be prepared separately through Commander geometry
+APIs on an isolated model copy.
+
+```python
+prepared = RasFim.prepare_one_d_model(
+    plan_hdf, original_source_tif, preparation_folder,
+    profiles={"maximum": "Max", "initial": 0, "later": 12},
+    allow_unqualified=True, max_working_mib=512,
+)
+products = prepared.map_profiles(
+    output_folder, profiles=["maximum", "later"], bbox=selected_bounds,
+    allow_unqualified=True, engine_path=engine,
+    threads=4, max_working_mib=512, timeout=120,
+)
+assert products.attrs["qualified"] is False
+```
+
+This diagnostic path uses `one-d-xs-surface-diagnostic/5` and its existing
+`fast-map-one-d-diagnostic/3` transport. The default `allow_unqualified=False`
+refuses execution. The preparation receipt identifies the version-specific
+normalization and endpoint-selection rules. Full-corpus and broader raster
+qualification remain gates. Transport availability
+does not establish numerical qualification. The transport executes sequentially;
+`threads` is an upper budget and the manifest records an effective count of one.
+
+The supported scope is computed unsteady XS-only geometry, including junction
+render ordering, levees and endpoint obstruction blocks. Storage areas, mixed
+2D/pipe geometry, blocked polygons, steady
+results/encroachments and degenerate triangles refuse. No triangle is dropped.
+Middle/repeated XS obstruction blocks are retained in receipts and ignored by
+the endpoint-only selector. Broader model/profile behavior remains unqualified.
+Strict normalization requires exact upstream/downstream Z and M anchors. Named
+profile mappings follow the other model-mapping APIs: each name selects a saved
+time index or `"Max"`. Ordered selector sequences remain accepted with generated
+profile names, preserving duplicate selectors. Prepared reuse selects an ordered
+subset of prepared names. Global result
+identities must match XS feature order. Units must resolve to US Customary, with
+model and terrain in the same projected US survey foot CRS. Different NAD83
+realizations require explicit preparation, never a CRS label replacement.
+
+Supply the original single-band Float32, north-up square-pixel terrain with
+256-pixel tiles. An AOI windows output while preserving complete XS/TIN geometry,
+original grid origin and tile scan history. This path does not consolidate
+multi-source terrain or reconstruct source-priority/stitch masks; those layouts
+require separate validated terrain preparation and remain unqualified here.
+
+The preparation receipt binds source and payload SHA-256 hashes, global source
+grid, units, per-XS station bounds/polyline lengths, ordered obstruction blocks,
+selected sides, Float32 clip/WSE bits and normalization offsets. Its binary
+`point-m-evidence.f64` contains raw and normalized M for every global TIN point.
+Prepared-model reuse checks these hashes before and after mapping. Inputs remain
+read-only; destination folders must be new or empty. A prepared instance also
+binds the preparation receipt's fingerprint and rejects receipt edits. A batch
+publishes its TIFFs only after complete rendering and source/payload/engine
+verification. A failed batch removes its products and writes a failed manifest;
+`FimMappingError.manifest` contains the failed profile rows.
+Use `raise_on_failure=False` to return that failed manifest instead.
+Manifests record selected profiles, AOI and mask policy, resource options,
+engine identity and source/payload hashes. Polygon edge qualification remains
+outstanding; the recorded mask policy identifies the pixel-center mask used.

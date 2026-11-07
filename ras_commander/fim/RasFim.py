@@ -49,6 +49,7 @@ from typing import TYPE_CHECKING, Any, Dict, Iterable, List, Optional, Sequence,
 if TYPE_CHECKING:
     import geopandas as gpd
     from ._capabilities import FimCapabilities
+    from ._one_d import FimPreparedOneDModel
     from ..RasPrj import RasPrj
     from ._sloping_context import FimPreparedSlopingModel
     from .._execution_types import StoreMapPerformanceOptions
@@ -232,6 +233,50 @@ class RasFim:
     ENGINE_NAME = _engine.ENGINE_NAME
     ENGINE_ENV_VAR = _engine.ENGINE_ENV_VAR
     MANIFEST_COLUMNS = tuple(MANIFEST_COLUMNS)
+
+    @staticmethod
+    @log_call
+    def prepare_one_d_model(
+        hdf_path: PathLike, terrain_path: PathLike, output_folder: PathLike, *,
+        profiles: Optional[Union[Dict[str, Union[str, int]], Sequence[Union[str, int]]]] = None,
+        allow_unqualified: bool = False, max_working_mib: int = 1024,
+    ) -> "FimPreparedOneDModel":
+        """Stage lossless global 1D TIN/normalized M and obstruction receipts.
+
+        Diagnostic scope: unsteady XS-only models in projected US survey feet;
+        no storage, mixed geometry, blocked polygons or encroachments. Native
+        7.0.1 preparation semantics remain unqualified for general use.
+        """
+        from ._one_d import prepare_one_d_model
+        return prepare_one_d_model(hdf_path, terrain_path, output_folder,
+                                   profiles=profiles, allow_unqualified=allow_unqualified,
+                                   max_working_mib=max_working_mib)
+
+    @staticmethod
+    @log_call
+    def map_one_d_profiles(
+        hdf_path: PathLike, terrain_path: PathLike, output_folder: PathLike, *,
+        profiles: Optional[Union[Dict[str, Union[str, int]], Sequence[Union[str, int]]]] = None,
+        allow_unqualified: bool = False, bbox: Optional[Sequence[float]] = None,
+        polygon: Any = None, aoi_crs: Any = None, polygon_layer: Optional[str] = None,
+        engine_path: Optional[PathLike] = None, threads: int = 1,
+        max_working_mib: int = 1024, timeout: Optional[float] = None,
+        raise_on_failure: bool = True,
+    ) -> pd.DataFrame:
+        """Map canonical stored 1D surfaces with the clipped diagnostic Rust method.
+
+        Use allow_unqualified=True explicitly. Call the prepared model's
+        map_profiles method to reuse preparation. AOIs retain all
+        global geometry and original terrain tile history. The transport is
+        sequential; threads caps the budget without promising parallelism.
+        """
+        from ._one_d import map_one_d_profiles
+        return map_one_d_profiles(hdf_path, terrain_path, output_folder,
+                                  profiles=profiles, allow_unqualified=allow_unqualified,
+                                  bbox=bbox, polygon=polygon, aoi_crs=aoi_crs,
+                                  polygon_layer=polygon_layer, engine_path=engine_path,
+                                  threads=threads, max_working_mib=max_working_mib, timeout=timeout,
+                                  raise_on_failure=raise_on_failure)
 
     @staticmethod
     @log_call

@@ -1593,6 +1593,90 @@ class HdfXsec:
             logger.error(f"Error reading XS interpolation surface: {str(e)}")
             return gpd.GeoDataFrame()
 
+    @staticmethod
+    @log_call
+    @standardize_input(file_type='plan_hdf')
+    def get_one_d_mapping_inputs(
+        hdf_path: Union[str, Path], *,
+        profiles: Optional[List[Union[str, int]]] = None,
+        max_bytes: int = 268435456,
+    ) -> Dict[str, Any]:
+        """Read lossless stored 1D TIN, XS tables and selected unsteady WSE rows.
+
+        Returns a dict of native typed arrays, without dissolving, sorting or
+        dropping triangles. ``profiles`` contains ``"Max"`` or saved-time row
+        indices, preserving duplicates/order. An empty sequence reads geometry only. Geometry and selected result bytes
+        are admitted before reads. Unsupported mapping features are listed in
+        ``unsupported_features`` for caller scope admission.
+        No HEC runtime is loaded and no input is modified.
+        """
+        profiles = tuple(["Max"] if profiles is None else profiles)
+        if any(isinstance(v, bool) or not
+                (v == "Max" or isinstance(v, (int, np.integer)) and v >= 0)
+                for v in profiles):
+            raise ValueError('profiles must contain "Max" or nonnegative saved-time indices')
+        if isinstance(max_bytes, bool) or not isinstance(max_bytes, int) or max_bytes <= 0:
+            raise ValueError("max_bytes must be a positive integer")
+        xs = "Geometry/Cross Sections/"
+        tin = "Geometry/Cross Section Interpolation Surfaces/"
+        paths = {name: xs + name for name in (
+            "Attributes", "Station Elevation Info", "Station Elevation Values",
+            "Polyline Info", "Polyline Parts", "Polyline Points")}
+        paths.update({name: tin + name for name in
+                      ("TIN Info", "TIN Points", "TIN Triangles", "XSIDs")})
+        base = "Results/Unsteady/Output/Output Blocks/Base Output/"
+        with h5py.File(Path(hdf_path), "r") as source:
+            forbidden = ["Geometry/Blocked Obstructions", "Plan Data/Fixed Encroachments",
+                         "Results/Unsteady/Unsteady Encroachment",
+                         "Results/Steady"]
+            unsupported = [key for key in forbidden if key in source]
+            for group in ("Geometry/2D Flow Areas", "Geometry/Storage Areas", "Geometry/Pipe Networks"):
+                if group in source and len(source[group]):
+                    unsupported.append(group)
+            for name in ("Obstruction Info", "Obstruction Blocks"):
+                if xs + name in source:
+                    paths[name] = xs + name
+            if ("Obstruction Info" in paths) != ("Obstruction Blocks" in paths):
+                raise ValueError("partial obstruction tables")
+            if profiles:
+                paths["Result Attributes"] = base + "Unsteady Time Series/Cross Sections/Cross Section Attributes"
+            missing = [v for v in paths.values() if v not in source]
+            if missing:
+                raise ValueError("missing stored 1D mapping input: " + repr(missing))
+            count = source[paths["Attributes"]].shape[0]
+            result_reads = []
+            for profile in profiles:
+                key = (base + "Summary Output/Cross Sections/Maximum Water Surface"
+                       if profile == "Max" else base + "Unsteady Time Series/Cross Sections/Water Surface")
+                ds = source[key]
+                if ds.ndim not in (1, 2) or ds.shape[-1] != count:
+                    raise ValueError("WSE columns do not match global XS feature count")
+                row = 0 if profile == "Max" else int(profile)
+                if ds.ndim == 2 and row >= ds.shape[0]:
+                    raise ValueError("profile index outside stored WSE rows")
+                if ds.ndim == 1 and profile != "Max":
+                    raise ValueError("saved WSE requires a time axis")
+                result_reads.append((key, row if ds.ndim == 2 else None))
+            planned = sum(source[v].size * source[v].dtype.itemsize for v in paths.values())
+            planned += len(profiles) * count * 8
+            if planned > max_bytes:
+                raise ValueError(f"1D input bytes {planned} exceed admission {max_bytes}")
+            result = {k: read_typed(source[v]) for k, v in paths.items()}
+            if profiles:
+                geom_attrs, result_attrs = result["Attributes"], result["Result Attributes"]
+                def label(value):
+                    return (value.decode() if isinstance(value, bytes) else str(value)).strip("\0 ")
+                for field, result_field in (("River", "River"), ("Reach", "Reach"), ("RS", "Station")):
+                    if field not in geom_attrs.dtype.names or result_field not in result_attrs.dtype.names:
+                        raise ValueError("missing global XS/result identity fields")
+                    if [label(v) for v in geom_attrs[field]] != [label(v) for v in result_attrs[result_field]]:
+                        raise ValueError("WSE result identity/order differs from global XS features")
+            result["levels"] = [read_typed(source[k], r) if r is not None
+                                else read_typed(source[k]) for k, r in result_reads]
+            result["unsupported_features"] = unsupported
+            result["profiles"] = profiles
+            return result
+
     # ------------------------------------------------------------------
     # Edge-line generation and 1D footprint polygonization
     # ------------------------------------------------------------------
