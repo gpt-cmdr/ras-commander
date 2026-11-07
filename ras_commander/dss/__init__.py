@@ -13,8 +13,8 @@ Lazy Loading Behavior:
 
 Backends:
     RasDss.backend = "java" (default) | "native" | "shadow"; the environment
-    variable RAS_COMMANDER_DSS_BACKEND overrides it. "native" reads catalogs
-    and time series through the optional dss-commander package without Java.
+    variable RAS_COMMANDER_DSS_BACKEND overrides it. "native" reads and writes
+    through the optional ras-commander-fast-dss package without Java.
     See docs/user-guide/dss-native-backend.md.
 
 Dependencies:
@@ -23,7 +23,7 @@ Dependencies:
         - Java JRE/JDK 8+: Must be installed and JAVA_HOME set
 
     Optional for the native backend:
-        - dss-commander (ras-commander[dss-native] extra)
+        - ras-commander-fast-dss (not yet published; install the wheel you were given)
 
     Auto-downloaded:
         - HEC Monolith libraries (~20 MB, cached in ~/.ras-commander/dss/)
@@ -66,7 +66,7 @@ __all__ = ['RasDss', *_errors.ERROR_NAMES]
 def __getattr__(name):
     """Typed DSS exceptions (``DssPathnameNotFoundError`` and others).
 
-    Resolved on first access: they are the dss-commander classes when that optional
+    Resolved on first access: they are the ras-commander-fast-dss classes when that optional
     package is installed, otherwise local classes with the same names and bases.
     """
     if name in _errors.ERROR_NAMES:

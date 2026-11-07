@@ -7,7 +7,7 @@ mapping Java's missing markers to NaN, index stamps, dtypes and attrs. Differenc
 the migration note lists as intended (D15, Java-path bugs) are allowed; anything else
 fails.
 
-Skips cleanly when dss_commander is not installed (it is a private wheel), when the
+Skips cleanly when ras_commander_fast_dss is not installed (it is a private wheel), when the
 example projects cannot be extracted, or when the Java bridge is unavailable.
 """
 
@@ -23,7 +23,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-dc = pytest.importorskip("dss_commander")
+dc = pytest.importorskip("ras_commander_fast_dss")
 
 from ras_commander import RasDss, RasExamples, init_ras_project  # noqa: E402
 from ras_commander.dss import _backend  # noqa: E402

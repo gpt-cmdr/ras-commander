@@ -220,6 +220,8 @@ def test_existing_version_mismatch_fails_before_writer_open(
     monkeypatch,
     tmp_path,
 ) -> None:
+    monkeypatch.delenv("RAS_COMMANDER_DSS_BACKEND", raising=False)
+    monkeypatch.setattr(RasDss, "backend", "java")
     dss_file = tmp_path / "existing-v6.dss"
     original = b"existing DSS content"
     dss_file.write_bytes(original)
@@ -250,6 +252,8 @@ def test_existing_grid_version_mismatch_fails_before_writer_open(
     monkeypatch,
     tmp_path,
 ) -> None:
+    monkeypatch.delenv("RAS_COMMANDER_DSS_BACKEND", raising=False)
+    monkeypatch.setattr(RasDss, "backend", "java")
     dss_file = tmp_path / "existing-grid-v6.dss"
     original = b"existing DSS content"
     dss_file.write_bytes(original)

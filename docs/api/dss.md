@@ -74,12 +74,35 @@ curve, stored precision by default (`float32` PD, `float64` PDD). `attrs` carry
 #### read_grid(dss_file, pathname, *, allow_unqualified_native=False)
 Read one exact grid record as a dictionary (`data` float32, row zero south,
 `row_order="south_up"`). Under `backend="native"` it raises
-`DssCapabilityError` unless the installed dss-commander advertises qualified
-grid CRS strings or `allow_unqualified_native=True` is passed.
+`DssCapabilityError` unless the installed ras-commander-fast-dss advertises qualified
+grid CRS strings (`grid_srs_monolith_parity`) or
+`allow_unqualified_native=True` is passed.
 
 #### get_capabilities()
 DataFrame of `operation`, `java`, `native`, `shadow` and `note`: which
 backend supports each public DSS operation.
+
+#### write_paired_data(dss_file, pathname, x_values, y_values=None, x_units=None, y_units=None, x_type=None, y_type=None, labels=None, create_if_missing=True, *, x_precision=None, y_precision=None, value_type="auto", dss_version=None)
+Write one paired-data record with one or more curves, as a new record or a whole
+replacement.
+
+**Parameters:**
+- `dss_file` (str|Path): Path to DSS file
+- `pathname` (str): DSS pathname with exactly six parts
+- `x_values` (array|DataFrame|Series): The ordinates, or the frame from
+  `read_paired_data` (then omit `y_values`; its `attrs` supply metadata left as `None`)
+- `y_values` (array): The curves: 1-D, or 2-D with shape `(len(x_values), n_curves)`
+- `x_units`, `y_units`, `x_type`, `y_type` (str): Units and axis types. Blank if `None`
+  and not in `attrs`
+- `labels` (list): Curve names, one per curve. Default: a frame's string column names
+- `create_if_missing` (bool): Create a missing file, default `True`
+- `x_precision`, `y_precision` (int): Display precision, both -1 or both 0-9
+- `value_type` (str): `"auto"` (float32 input stores PD, type 200; anything else PDD,
+  type 205), `"float"` or `"double"`
+- `dss_version` (int): 6 or 7 for a new file; an existing file must match
+
+**Returns:** `None`. A failed write raises. See
+[Writes](../user-guide/dss-native-backend.md#writes) for what the native writer refuses.
 
 #### write_timeseries(dss_file, pathname, times, values, ..., dss_version=None)
 Write a single time series to DSS.
@@ -102,6 +125,13 @@ HEC-RAS model clock and remove timezone metadata before writing.
 For simulations spanning a daylight-saving fallback, choose a fixed-offset or
 otherwise strictly increasing model clock; merely stripping timezone metadata
 from a repeated local hour creates ambiguous duplicate model times.
+
+Backends: `java` writes through HEC Monolith. `native` writes through
+ras-commander-fast-dss (no JVM; `DssCapabilityError` when the wheel has no writers) and
+keeps the same file, version and missing-value rules. `shadow` writes with
+Java and compares a native repeat on a temporary copy. The native writer
+refuses some input that Java truncates (see
+[Writes](../user-guide/dss-native-backend.md#writes)).
 
 #### get_file_version(dss_file)
 Return the HEC-DSS major file version. Uses the selected backend; a non-DSS
@@ -129,7 +159,9 @@ Write a time-varying spatial grid series to DSS.
   files. The default `None` preserves the bridge's current default. An explicit
   value must match an existing file. Explicit DSS6 writes use the Monolith's
   version-specific safe precipitation-compression base/scale ordering unless
-  those values are supplied in `grid_info`.
+  those values are supplied in `grid_info`. The `native` backend needs no such
+  workaround: it stores `compression_base` and `compression_scale_factor` as
+  named (see [Writes](../user-guide/dss-native-backend.md#writes)).
 
 **Returns:** List of DSS pathnames written.
 
@@ -375,7 +407,7 @@ keyword aliases are not added in this release.
 `read_timeseries()` accepts `start_date` and `end_date`. The Java backend
 returns the complete series without applying those filters; the native and
 shadow backends apply the window (see
-[DSS Read Backends](../user-guide/dss-native-backend.md)). Returned
+[DSS Read and Write Backends](../user-guide/dss-native-backend.md)). Returned
 `attrs` retain pathname, units, type, interval, and source path.
 
 Java DSS handles are write-capable. Check that a source exists before opening it;
@@ -415,5 +447,6 @@ source immutability is required. These APIs do not guarantee read-only file acce
         - read_timeseries
         - shutdown_jvm
         - write_grid_timeseries
+        - write_paired_data
         - write_timeseries
         - write_timeseries_from_dataframe

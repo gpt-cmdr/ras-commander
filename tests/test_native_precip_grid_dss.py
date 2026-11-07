@@ -142,6 +142,8 @@ def test_invalid_overwrite_preserves_original(inputs):
 
 
 def test_missing_optional_backend_has_installation_guidance(inputs, monkeypatch):
+    monkeypatch.delenv("RAS_COMMANDER_DSS_BACKEND", raising=False)
+    monkeypatch.setattr(RasDss, "backend", "java")
     import builtins
     original = builtins.__import__
 
@@ -157,6 +159,8 @@ def test_missing_optional_backend_has_installation_guidance(inputs, monkeypatch)
 
 
 def test_native_failure_does_not_publish_partial_file(inputs, monkeypatch):
+    monkeypatch.delenv("RAS_COMMANDER_DSS_BACKEND", raising=False)
+    monkeypatch.setattr(RasDss, "backend", "java")
     RasDss.write_precip_grid_arrays(**inputs)
     before = inputs['dss_file'].read_bytes()
 

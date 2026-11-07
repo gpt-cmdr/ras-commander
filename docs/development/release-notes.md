@@ -7,6 +7,80 @@ check `ras_commander.__version__` and the documentation's
 [build provenance](https://rascommander.info/ras/version.json). A package version
 alone does not identify a development checkout.
 
+### Unreleased
+
+- **HEC-RAS acceptance tests for `RasDss`-written DSS files.**
+  `tests/test_rasdss_hecras_acceptance.py` runs real example plans through
+  `RasCmdr.compute_plan` on grids and boundary time series written by the Java
+  and native backends. It skips without the local HEC-RAS version.
+- **`RasDss.extract_boundary_timeseries` resolves `DSS File=dss`.** HEC-RAS opens
+  that bare value as the project's `.dss` file. It previously returned no data
+  for those boundaries and logged a warning, on every backend.
+- **`RasDss.write_paired_data` adds a paired-data writer.** It writes one
+  record with any number of curves on the `java`, `native` and `shadow`
+  backends, from arrays or from the DataFrame that `read_paired_data` returns.
+  Java and native write the same records, and both read them back equal, on
+  DSS6 and DSS7. The native writer refuses some input the Java path truncates
+  or replaces, such as DSS6 units over 8 characters; see
+  [DSS Read and Write Backends](../user-guide/dss-native-backend.md#intended-differences).
+- **HEC Monolith messages can no longer corrupt DSS files.** Monolith prints
+  through a stdout handle that it caches at its first message. If the process
+  then redirects file descriptor 1, as pytest's output capture does, Windows
+  can give that handle to the next DSS file opened, and later messages are
+  written into the file. On DSS6 this returned wrong values (5 of 30 reads in a
+  reproducer). `RasDss` now connects the library's messages to a private
+  temporary file before the first Java DSS call, so they no longer reach the
+  console. `RasDss.hec_message_level` sets their level (default 1). Failure
+  lines are logged at WARNING as `HEC-DSS library reported: ...`.
+- **Failed Java DSS writes now raise.** `write_timeseries` and
+  `write_timeseries_from_dataframe` returned normally from a DSS6 write to a
+  read-only file, with nothing written. On DSS7, time-series writes to a damaged
+  file could return normally and leave a record that could not be read. Java
+  writers now refuse read-only files with `RuntimeError` before any Java call,
+  raise on library failure messages, and confirm time-series and paired-data
+  records in the file's catalog, which adds a catalog read to each of those
+  writes. `write_grid_timeseries` raises `RuntimeError`, not a bare Java
+  exception, when it cannot create a new file. Under `shadow`, these errors
+  reach the caller as other Java write errors do. Writing to a damaged DSS6 file
+  can still crash the JVM inside HEC's library; see
+  [Failed Java writes](../user-guide/dss-native-backend.md#failed-java-writes).
+- **`RasDss.read_paired_data` releases the file under `java`.** It left the DSS
+  file open after reading.
+- **The native DSS engine is renamed `ras-commander-fast-dss`.** `RasDss`
+  imports `ras_commander_fast_dss` (FAST-DSS) for the `native` and `shadow`
+  backends; the earlier development name `dss_commander` is no longer
+  recognized and has no compatibility alias. The wheel is not yet published,
+  and no ras-commander extra installs it; install the `ras-commander-fast-dss`
+  wheel you were given. `java` remains the default. The
+  [Native Rust Engines](../native-engine.md#dss-engine) page now describes the
+  DSS engine.
+- **`RasDss` writes run on the native backend.** Under `RasDss.backend =
+  "native"`, `write_timeseries`, `write_timeseries_from_dataframe`,
+  `write_paired_data`, `write_grid_timeseries`, `copy_grid_with_zero_tail` and
+  `write_precip_grid_arrays` write through the optional ras-commander-fast-dss engine
+  without a JVM. They need a ras-commander-fast-dss build with writer support
+  (`native_writes_available()`); otherwise they raise `DssCapabilityError` and
+  never fall back to Java. `RasDss.get_capabilities()` reports the writers as `gated` and
+  adds `attrs["native_writes_available"]`. Native writes store what the Java
+  path stores: DSS6 and DSS7, regular and irregular series, the existing file's
+  version (new files DSS7 unless `dss_version=6`), `NaN` as Java stores it.
+  Java reads the native-written RasExamples records (`BaldEagleCrkMulti2D`
+  series, SHG precipitation grids and a zero-tail derivative of the 120-record
+  WPC-QPF family) equal to the Java-written ones. The native writer refuses some
+  input that the Java path truncates or writes as an unreadable record, and
+  DSS6 PRECIP_2_BYTE grids no longer need the swapped base/scale workaround;
+  [DSS Read and Write Backends](../user-guide/dss-native-backend.md) lists
+  every difference. Under `shadow`, writes stay on Java (the caller gets the
+  Java result); the write is repeated natively on a temporary copy and the two
+  files are compared and logged (copy limit 256 MB, configurable with
+  `RasDss.shadow_copy_limit_mb` or `RAS_COMMANDER_DSS_SHADOW_COPY_LIMIT_MB`).
+  `java` remains the default.
+- **Native grid reads pass their gate with the current engine.** ras-commander-fast-dss
+  built from engine `main` advertises `grid_srs_monolith_parity`, so
+  `read_grid` under `native` reads grids natively by default. On 250 records
+  from the ten grid families of the RasExamples precipitation file
+  `precip.2018.09.dss`, the native and Java dictionaries were identical.
+
 ### 0.113.0 — 2026-10-31
 
 This minor release adds Rust mapping products and RAS Mapper's Final n

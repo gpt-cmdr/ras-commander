@@ -22,6 +22,8 @@ Functions:
     read_paired_data(dss_file, pathname, *, ignore_d_part=True, dtype="stored"):
         Reads one paired-data record (every curve, labels, units, types,
         stored precision) as a DataFrame.
+    write_paired_data(dss_file, pathname, x_values, y_values=None, ...):
+        Writes one paired-data record; accepts the DataFrame read_paired_data returns.
     get_file_version(dss_file):
         Returns the major DSS version (6 or 7).
     get_capabilities():
@@ -48,12 +50,17 @@ Backends:
     Read methods (``get_catalog``, ``read_timeseries``,
     ``read_multiple_timeseries``, ``read_paired_data``, ``get_file_version``
     and everything built on them) use ``RasDss.backend``: ``"java"``
-    (default), ``"native"`` (optional dss-commander package, no JVM) or
+    (default), ``"native"`` (optional ras-commander-fast-dss package, no JVM) or
     ``"shadow"`` (native result, Java cross-check, differences logged). The
     environment variable ``RAS_COMMANDER_DSS_BACKEND`` overrides the
-    attribute when set. ``read_grid`` under ``"native"`` requires
-    ``allow_unqualified_native=True`` until the native grid CRS is qualified.
-    Writes stay on Java under every backend.
+    attribute when set. ``read_grid`` under ``"native"`` requires a wheel
+    advertising qualified grid CRS (``grid_srs_monolith_parity``) or
+    ``allow_unqualified_native=True``. The writers (``write_timeseries``,
+    ``write_timeseries_from_dataframe``, ``write_grid_timeseries``,
+    ``copy_grid_with_zero_tail``, ``write_precip_grid_arrays``) switch too:
+    ``"native"`` writes through ras-commander-fast-dss when the wheel has its writers
+    (else ``DssCapabilityError``); ``"shadow"`` writes with Java and compares a
+    native repeat on a temporary copy.
 
 Lazy Loading:
     This module implements lazy loading for all heavy dependencies:
@@ -66,17 +73,22 @@ Lazy Loading:
     use DSS functionality don't pay the cost of loading Java/pyjnius.
 """
 
+import atexit
 import logging
 import os
 import re
+import shutil
 import sys
+import tempfile
+import threading
+from contextlib import contextmanager
 from datetime import datetime, timedelta
 from decimal import Decimal, InvalidOperation
 from hashlib import sha256
 from math import isfinite
 from numbers import Real
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any, Dict, List, Optional, Sequence, Tuple, Union
 from uuid import uuid4
 
 # Lazy imports - these are always needed for type hints and basic operations
@@ -88,6 +100,15 @@ from ..Decorators import log_call
 from . import _backend, _errors
 
 logger = logging.getLogger(__name__)
+
+# Lines of the HEC-DSS library's message file that report a failure. Open and close
+# messages name the file, so they are excluded: a path can contain any of these words.
+_HEC_FAILURE_LINE = re.compile(
+    r"ERROR;|ERROR DURING|Error:|Error Code|Error code|Damaged|Read Access Only|Cannot |Unable to"
+)
+_HEC_ROUTINE_LINE = re.compile(r"ZOPEN|zopen|ZCLOSE|zclose|\(Read Access Only\)|Read access")
+# The message file restarts once it passes this size (a long run opens many files).
+_HEC_MESSAGE_FILE_LIMIT = 4 * 1024 * 1024
 
 
 class RasDss:
@@ -109,31 +130,48 @@ class RasDss:
         paths = RasDss.get_catalog("file.dss")
 
     Backends:
-        ``RasDss.backend`` selects how read methods access DSS files:
+        ``RasDss.backend`` selects how read and write methods access DSS files:
         ``"java"`` (default; HEC Monolith via pyjnius), ``"native"``
-        (dss-commander, no JVM) or ``"shadow"`` (native result plus a logged
-        Java cross-check). ``RAS_COMMANDER_DSS_BACKEND`` overrides it when set.
+        (ras-commander-fast-dss, no JVM) or ``"shadow"`` (reads: native result plus a
+        logged Java cross-check; writes: Java result plus a logged native
+        repeat on a temporary copy). ``RAS_COMMANDER_DSS_BACKEND`` overrides it
+        when set.
     """
 
     _jvm_configured = False
     _monolith = None
+    _messages_routed = False
+    _message_file: Optional[Path] = None
+    _message_offset = 0
+    _message_lock = threading.Lock()
 
-    #: Read backend: "java" (default in this release), "native" or "shadow".
+    #: HEC-DSS library message level (``zset("MLEVEL")``) set before the first Java DSS
+    #: call. The messages go to a private file (see ``_route_hec_messages``), never to
+    #: the console. Level 1 keeps the library's failure messages, which are logged, and
+    #: refused writes raise. Values below 1 are treated as 1, because level 0 hides
+    #: refused writes. Set it before the first DSS call.
+    hec_message_level = 1
+
+    #: Backend: "java" (default in this release), "native" or "shadow".
     #: The environment variable RAS_COMMANDER_DSS_BACKEND overrides it when set.
     backend = _backend.DEFAULT_BACKEND
+
+    #: Shadow writes copy an existing target up to this size (MB) before the Java write;
+    #: larger targets are not compared. RAS_COMMANDER_DSS_SHADOW_COPY_LIMIT_MB overrides it.
+    shadow_copy_limit_mb = _backend.SHADOW_COPY_LIMIT_MB_DEFAULT
 
     @staticmethod
     @log_call
     def get_backend() -> str:
-        """Return the backend the next read call will use.
+        """Return the backend the next read or write call will use.
 
         Resolution order: ``RAS_COMMANDER_DSS_BACKEND`` (when set), then
         ``RasDss.backend``. ``"shadow"`` resolves to ``"java"`` when
-        dss-commander is not installed (one warning is logged).
+        ras-commander-fast-dss is not installed (one warning is logged).
 
         Raises:
             ValueError: If the configured name is not java, native or shadow.
-            ImportError: If ``"native"`` is selected and dss-commander is not
+            ImportError: If ``"native"`` is selected and ras-commander-fast-dss is not
                 installed.
         """
         return _backend.effective_backend(RasDss.backend)
@@ -216,7 +254,7 @@ class RasDss:
     def get_capabilities() -> pd.DataFrame:
         """Return what each backend supports for every public DSS operation.
 
-        Does not start a JVM or import dss-commander's engine beyond an import
+        Does not start a JVM or import the ras_commander_fast_dss engine beyond an import
         check.
 
         Returns:
@@ -224,16 +262,19 @@ class RasDss:
             ``java``, ``native``, ``shadow`` and ``note``. Cell values:
 
             - ``"yes"``: supported on that backend;
-            - ``"gated"``: needs a qualified engine or an explicit opt-in
-              (``read_grid`` under ``native``) and otherwise raises
-              ``DssCapabilityError``. ``attrs["native_grid_qualified"]``
-              tells whether the installed wheel already qualifies;
-            - ``"java"``: always runs on Java, whatever the backend;
+            - ``"gated"``: needs a qualified or writer-capable engine, or an
+              explicit opt-in, and otherwise raises ``DssCapabilityError``:
+              ``read_grid`` under ``native`` (``attrs["native_grid_qualified"]``)
+              and the writers under ``native``
+              (``attrs["native_writes_available"]``);
+            - ``"java"``: runs on Java, whatever the backend (shadow writes
+              also repeat the write natively on a temporary copy);
             - ``"no"``: not provided.
 
             ``attrs``: ``requested_backend`` (``RasDss.backend`` or the
-            environment override), ``native_installed`` (bool) and
-            ``native_grid_qualified`` (bool).
+            environment override), ``native_installed`` (bool),
+            ``native_grid_qualified`` (bool) and ``native_writes_available``
+            (bool).
 
         Example:
             caps = RasDss.get_capabilities().set_index("operation")
@@ -248,6 +289,7 @@ class RasDss:
             "requested_backend": _backend.requested_backend(RasDss.backend),
             "native_installed": _backend.native_available(),
             "native_grid_qualified": _backend.native_grid_qualified(),
+            "native_writes_available": _backend.native_writes_available(),
         }
         return df
 
@@ -294,6 +336,7 @@ class RasDss:
         # an empty classpath before we can call jnius_config.add_classpath()
         if getattr(jnius_config, 'vm_running', False):
             RasDss._jvm_configured = True
+            RasDss._route_hec_messages()
             return
 
         # Get classpath and library path
@@ -337,6 +380,180 @@ class RasDss:
 
         RasDss._jvm_configured = True
         logger.debug("Java VM configured for DSS operations")
+        RasDss._route_hec_messages()
+
+    @staticmethod
+    def _route_hec_messages() -> None:
+        """Send the HEC-DSS library's messages to a private file before any DSS file opens.
+
+        The library writes its messages to Fortran unit ``MUNIT``, which its Fortran
+        runtime connects to the process's stdout handle at the first write and then
+        keeps. When the process later redirects file descriptor 1 (pytest's output capture
+        does this around every test, and any tool that captures fd-level output can), that
+        handle is closed and Windows can give its value to the next file the library
+        opens. Later messages are then written into that DSS file: reads return console
+        text as values and later writes fail.
+
+        ``HecDataManager.setMessageFile`` connects ``MUNIT`` to a file instead, so no
+        library message depends on the stdout handle. Silencing the library is not an
+        option: at level 0 a DSS6 time-series write to a read-only file returns normally
+        with nothing written, and nothing reports it. ``_drain_hec_messages`` reads the
+        failure lines back. If the file cannot be set up, the level drops to 0 and a
+        warning is logged; writers still refuse read-only files, through
+        ``_require_writable_dss_file``. Never raises.
+
+        Called from ``_configure_jvm`` after the classpath is set, so this is the point
+        where the JVM starts. pydsstools (``write_precip_grid_arrays``) is a separate
+        library and is not affected.
+
+        A few Fortran ``WRITE(*,*)`` statements (``zrrec6``, ``zabort6``) bypass ``MUNIT``
+        and can still reach a stale handle. They run only after a failed read of a damaged
+        DSS6 file.
+        """
+        if RasDss._messages_routed:
+            return
+        RasDss._messages_routed = True
+        directory = None
+        try:
+            from jnius import autoclass
+
+            heclib = autoclass('hec.heclib.util.Heclib')
+            manager = autoclass('hec.heclib.dss.HecDataManager')
+            directory = Path(tempfile.mkdtemp(prefix="rasdss_messages_"))
+            message_file = directory / "hec_messages.txt"
+            status = int(manager.setMessageFile(str(message_file)))
+            if status != 0:
+                raise RuntimeError(f"setMessageFile returned {status}")
+            heclib.Hec_zset("MLEVEL", "", max(1, int(RasDss.hec_message_level)))
+            RasDss._message_file = message_file
+            RasDss._message_offset = 0
+            atexit.register(RasDss._close_message_file)
+        except Exception as exc:  # never block DSS I/O on message routing
+            logger.warning(
+                "Could not route HEC-DSS library messages to a file (%s). Their level is "
+                "set to 0, so library failures are not reported and a redirected stdout "
+                "can still receive library messages.", exc)
+            if directory is not None:
+                shutil.rmtree(directory, ignore_errors=True)
+            RasDss._message_file = None
+            try:
+                from jnius import autoclass
+
+                autoclass('hec.heclib.util.Heclib').Hec_zset("MLEVEL", "", 0)
+            except Exception as level_exc:
+                logger.warning("Could not set the HEC-DSS message level: %s", level_exc)
+
+    @staticmethod
+    def _close_message_file() -> None:
+        """Close and remove the private message file at interpreter exit. Never raises."""
+        message_file, RasDss._message_file = RasDss._message_file, None
+        if message_file is None:
+            return
+        try:
+            from jnius import autoclass
+
+            autoclass('hec.heclib.dss.HecDataManager').closeMessageFile()
+        except Exception as exc:
+            logger.debug("Could not close the HEC-DSS message file: %s", exc)
+        shutil.rmtree(message_file.parent, ignore_errors=True)
+
+    @staticmethod
+    def _drain_hec_messages() -> List[str]:
+        """Log and return the failure lines the HEC-DSS library wrote since the last call.
+
+        Some failures reach the caller only here: HEC Monolith returns normally from a
+        DSS6 time-series write to a read-only file, and a read of a damaged file looks
+        like a record with no data. Never raises.
+        """
+        message_file = RasDss._message_file
+        if message_file is None:
+            return []
+        try:
+            from jnius import autoclass
+
+            manager = autoclass('hec.heclib.dss.HecDataManager')
+            with RasDss._message_lock:
+                manager.flushMessageFile()
+                with open(message_file, 'rb') as handle:
+                    handle.seek(RasDss._message_offset)
+                    text = handle.read()
+                RasDss._message_offset += len(text)
+                if RasDss._message_offset > _HEC_MESSAGE_FILE_LIMIT:
+                    manager.windMessageFile()
+                    RasDss._message_offset = 0
+        except Exception as exc:
+            logger.debug("Could not read the HEC-DSS message file: %s", exc)
+            return []
+        failures = []
+        for line in text.decode('latin-1').splitlines():
+            line = line.strip()
+            if _HEC_FAILURE_LINE.search(line) and not _HEC_ROUTINE_LINE.search(line):
+                failures.append(line)
+        if failures:
+            logger.warning("HEC-DSS library reported: %s", " | ".join(failures[:8]))
+        return failures
+
+    @staticmethod
+    def _raise_hec_write_failures(failures: List[str], context: str = "") -> None:
+        """Raise when the HEC-DSS library reported failures during a Java write.
+
+        HEC Monolith can return normally from a write it refused, so a writer must not
+        report success while such a line is outstanding.
+        """
+        if failures:
+            suffix = f" ({context})" if context else ""
+            raise RuntimeError(
+                f"HEC-DSS library refused the write{suffix}: " + "; ".join(failures[:3])
+            )
+
+    @staticmethod
+    def _require_java_record_stored(dss_file: str, pathname: str) -> None:
+        """Reopen the file and raise unless ``pathname`` is in its catalog.
+
+        HEC Monolith can return normally, with no message, from a DSS7 write to a damaged
+        file: the file grows, but the catalog stays empty and the record cannot be read.
+        Compares parts A, B, C and F without case or blanks, which DSS6 changes; the
+        library sets the D part per block and can respell the E part. A non-ASCII pathname is not compared: Monolith
+        stores replacement characters. Call it after the writing handle is released.
+        """
+        if not pathname.isascii():
+            return
+
+        def key(path: Any) -> Tuple[str, ...]:
+            parts = re.sub(r"\s", "", str(path)).upper().split('/')
+            return tuple(parts[i] for i in (1, 2, 3, 6)) if len(parts) == 8 else ()
+
+        from jnius import autoclass
+
+        dss = autoclass('hec.heclib.dss.HecDss').open(dss_file)
+        try:
+            catalog = dss.getCatalogedPathnames()
+            stored = {key(catalog.get(i)) for i in range(catalog.size())}
+        finally:
+            try:
+                dss.done()
+            finally:
+                RasDss._release_dss_file(dss_file)
+        if key(pathname) not in stored:
+            raise RuntimeError(
+                f"DSS write reported no error, but {pathname} is not in the catalog of "
+                f"{dss_file}. The file may be damaged."
+            )
+
+    @staticmethod
+    def _require_writable_dss_file(dss_file: Union[str, Path]) -> None:
+        """Refuse a read-only target before any Java call.
+
+        The library's only report of a refused DSS6 time-series write is a message, which
+        is unavailable if routing failed or another library in the process took the
+        message unit. This check does not depend on either. Other refusals (access
+        control lists, locks) still reach the caller through the Java calls.
+        """
+        if not os.access(dss_file, os.W_OK):
+            raise RuntimeError(
+                f"Cannot write to DSS file, it is read-only: {dss_file}. "
+                "Nothing was written."
+            )
 
     @staticmethod
     @log_call
@@ -360,7 +577,7 @@ class RasDss:
             Under ``"native"`` and ``"shadow"`` a missing file raises
             ``FileNotFoundError`` (the Java path also refuses missing files)
             and a file that is not DSS raises
-            ``dss_commander.DssFormatError`` (a ``RuntimeError``; Java
+            ``ras_commander_fast_dss.DssFormatError`` (a ``RuntimeError``; Java
             returns zero rows).
         """
         backend = RasDss.get_backend()
@@ -372,7 +589,7 @@ class RasDss:
 
     @staticmethod
     def _get_catalog_native(dss_file: Union[str, Path]) -> pd.DataFrame:
-        """Catalog through dss-commander (no JVM). Same frame as the Java path."""
+        """Catalog through ras-commander-fast-dss (no JVM). Same frame as the Java path."""
         from ras_commander.RasUtils import RasUtils
 
         dc = _backend.import_native()
@@ -486,10 +703,10 @@ class RasDss:
         Backends:
             ``"native"`` and ``"shadow"`` return NaN for HEC missing values
             (the Java path returns the raw -3.4028235e38 marker). A pathname
-            without data raises ``dss_commander.DssPathnameNotFoundError``
+            without data raises ``ras_commander_fast_dss.DssPathnameNotFoundError``
             (a ``ValueError`` and ``RuntimeError``); paired data, grids and
             other non-time-series records raise
-            ``dss_commander.DssUnsupportedRecordError`` (a ``RuntimeError``).
+            ``ras_commander_fast_dss.DssUnsupportedRecordError`` (a ``RuntimeError``).
 
             All-missing DSS6 data differs between the paths. HEC Monolith
             reports a DSS6 regular request whose values are all -901/-902 as
@@ -497,7 +714,7 @@ class RasDss:
             the blocks and, after trimming the missing values, raises the same
             ``DssPathnameNotFoundError``; a window that also contains valid
             values is returned. ``"shadow"`` re-reads such a not-found case
-            with dss-commander's opt-in ``no_data="refuse"`` (HEC's rule) only
+            with the engine's opt-in ``no_data="refuse"`` (HEC's rule) only
             to label the comparison; that option is provided for Java/native
             parity checks and testing and never changes the returned result.
             Stored NaN values are values: the leading/trailing trim removes
@@ -522,9 +739,9 @@ class RasDss:
         end_date: Optional[str] = None,
         dss_handle: Any = None,
     ) -> pd.DataFrame:
-        """Time series through dss-commander (no JVM).
+        """Time series through ras-commander-fast-dss (no JVM).
 
-        ``dss_handle`` is an open ``dss_commander.DssFile`` to reuse; when it is
+        ``dss_handle`` is an open ``ras_commander_fast_dss.DssFile`` to reuse; when it is
         None the file is opened and closed for this call.
         """
         from ras_commander.RasUtils import RasUtils
@@ -559,7 +776,7 @@ class RasDss:
         blocks by default and, after its default trim, reports "no values" with the
         same ``DssPathnameNotFoundError`` type that an absent pathname raises. When
         the native read raises not-found, shadow mode repeats it with
-        dss-commander's opt-in ``no_data="refuse"`` (HEC's rule; it raises
+        the engine's opt-in ``no_data="refuse"`` (HEC's rule; it raises
         ``DssNoDataError`` with ``status == 4``) to label the case as the HEC
         no-data rule rather than a missing record. The option exists for this
         parity check and for testing: the returned frame or error is always the
@@ -749,7 +966,7 @@ class RasDss:
                     RasDss._release_dss_file(dss_file)
 
     @staticmethod
-    def _release_dss_file(dss_file: str) -> None:
+    def _release_dss_file(dss_file: str) -> List[str]:
         """Release the bridge's native handle on one DSS file.
 
         ``HecDss.done()`` and ``GriddedData.done()`` only drop the bridge's
@@ -759,6 +976,10 @@ class RasDss:
         objects on the same file reopen it on their next access. Failures
         are logged at DEBUG and never raised, so a primary error is not
         masked.
+
+        Returns the failure lines the HEC-DSS library reported since the last
+        drain, already logged; writers raise on them (see
+        ``_raise_hec_write_failures``).
         """
         try:
             from jnius import autoclass
@@ -767,6 +988,7 @@ class RasDss:
             HecDSSFileAccess.close(dss_file, True)
         except Exception as exc:
             logger.debug("Could not release DSS file %s (%s)", dss_file, exc)
+        return RasDss._drain_hec_messages()
 
     @staticmethod
     def _require_existing_dss_file(dss_file: Union[str, Path]) -> None:
@@ -860,7 +1082,7 @@ class RasDss:
 
         Backends:
             ``"java"`` reads ``hec.io.PairedDataContainer`` through HEC
-            Monolith; ``"native"`` reads through dss-commander without a JVM;
+            Monolith; ``"native"`` reads through ras-commander-fast-dss without a JVM;
             ``"shadow"`` returns the native frame, also reads through Java,
             and logs differences (see ``docs/user-guide/dss-native-backend.md``).
             Both backends return the same schema and raise the same classes.
@@ -876,7 +1098,7 @@ class RasDss:
             DssReadError: The record exists but the backend failed to read it
                 (a ``DssFormatError``; the cause is chained).
             ImportError: The selected backend's optional dependency (pyjnius or
-                dss-commander) is not installed.
+                ras-commander-fast-dss) is not installed.
 
         Example:
             rating = RasDss.read_paired_data("model.dss", "/BASIN/LOC/STAGE-FLOW///RATING/")
@@ -903,7 +1125,7 @@ class RasDss:
     @staticmethod
     def _paired_data_column_names(labels: List[str], n_curves: int) -> List[str]:
         """Labels when every curve has a distinct non-blank label, else curve_1..n
-        (the rule of ``dss_commander.PairedData.column_names``)."""
+        (the rule of ``ras_commander_fast_dss.PairedData.column_names``)."""
         if (len(labels) == n_curves and all(s.strip() for s in labels)
                 and len(set(labels)) == n_curves):
             return list(labels)
@@ -989,7 +1211,7 @@ class RasDss:
         ignore_d_part: bool = True,
         dtype: str = "stored",
     ) -> pd.DataFrame:
-        """Paired data through dss-commander (no JVM)."""
+        """Paired data through ras-commander-fast-dss (no JVM)."""
         from ras_commander.RasUtils import RasUtils
 
         dc = _backend.import_native()
@@ -1118,7 +1340,10 @@ class RasDss:
             )
         finally:
             if dss is not None:
-                dss.done()
+                try:
+                    dss.done()
+                finally:
+                    RasDss._release_dss_file(dss_file_str)
 
     @staticmethod
     def _java_matching_record(dss: Any, pathname: str, ignore_d_part: bool) -> Optional[str]:
@@ -1223,7 +1448,7 @@ class RasDss:
 
     @staticmethod
     def _read_grid_native(dss_file: Union[str, Path], pathname: str) -> Dict[str, Any]:
-        """One grid record through dss-commander, in the ``read_grid`` schema.
+        """One grid record through ras-commander-fast-dss, in the ``read_grid`` schema.
 
         Cells, geometry, units and times are native. ``metadata["crs_qualified"]``
         reports whether the installed wheel advertises qualified grid CRS strings.
@@ -1254,7 +1479,7 @@ class RasDss:
     def _grid_dict_from_native(
         grid: Any, pathname: str, dss_file_str: str, path_parts: List[str]
     ) -> Dict[str, Any]:
-        """Map a ``dss_commander.Grid`` onto the ``read_grid`` dictionary."""
+        """Map a ``ras_commander_fast_dss.Grid`` onto the ``read_grid`` dictionary."""
         n_rows, n_cols = int(grid.ny), int(grid.nx)
         values = np.ascontiguousarray(grid.data, dtype=np.float32)
         grid_type = grid.grid_type if grid.grid_type != "undefined" else "GridInfo"
@@ -1423,9 +1648,9 @@ class RasDss:
 
         Args (keyword-only):
             allow_unqualified_native: Opt in to the native grid reader under
-                ``backend="native"`` when the installed dss-commander does not
+                ``backend="native"`` when the installed ras-commander-fast-dss does not
                 advertise qualified grid CRS strings (feature
-                ``"grid_srs_monolith_parity"`` in ``dss_commander.FEATURES``).
+                ``"grid_srs_monolith_parity"`` in ``ras_commander_fast_dss.FEATURES``).
                 Cells, geometry, units and times are native; ``crs`` may be
                 wrong or empty for legacy Albers grids, and
                 ``metadata["crs_qualified"]`` is ``False``. Ignored, with a
@@ -1451,7 +1676,7 @@ class RasDss:
                 record (a ``TypeError`` and ``DssUnsupportedRecordError``).
             DssCapabilityError: Native backend, unqualified wheel and no
                 ``allow_unqualified_native`` (a ``NotImplementedError``).
-            ImportError: If pyjnius (Java) or dss-commander (native) is not
+            ImportError: If pyjnius (Java) or ras-commander-fast-dss (native) is not
                 installed.
             RuntimeError: If the grid read fails or returns invalid data.
         """
@@ -1715,7 +1940,7 @@ class RasDss:
         pathnames: List[str],
         shadow: bool = False,
     ) -> Dict[str, pd.DataFrame]:
-        """Read several pathnames with one open dss-commander file.
+        """Read several pathnames with one open ras-commander-fast-dss file.
 
         Keeps the Java contract: a pathname that fails maps to None and logs a
         warning.
@@ -1851,9 +2076,9 @@ class RasDss:
                 continue
 
             # Resolve DSS file path (may be relative to project directory)
-            dss_file_path = Path(dss_file)
-            if not dss_file_path.is_absolute():
-                dss_file_path = project_dir / dss_file
+            dss_file_path = RasDss._resolve_boundary_dss_file(
+                dss_file, project_dir, ras_object
+            )
 
             if not dss_file_path.exists():
                 logger.warning(f"Row {idx}: DSS file not found: {dss_file_path}")
@@ -1883,6 +2108,30 @@ class RasDss:
         )
 
         return result_df
+
+    @staticmethod
+    def _resolve_boundary_dss_file(dss_file, project_dir: Path, ras_object=None) -> Path:
+        """Resolve a ``DSS File=`` value from a boundary block to a path.
+
+        Some unsteady files store the bare value ``dss``, which HEC-RAS 7.0 opens
+        as the project's ``<project name>.dss`` (seen in its compute log for
+        RasExamples ``UngagedAreaInflows``). A real file named ``dss`` wins.
+        Without ``ras_object`` the name comes from a single ``*.prj`` that has a
+        same-named ``.dss``; otherwise the unresolved path is returned.
+        """
+        path = Path(dss_file)
+        if not path.is_absolute():
+            path = project_dir / path
+        if path.exists() or str(dss_file).strip().lower() != "dss":
+            return path
+        if ras_object is not None:
+            return project_dir / f"{ras_object.project_name}.dss"
+        candidates = [
+            prj.with_suffix(".dss")
+            for prj in project_dir.glob("*.prj")
+            if prj.with_suffix(".dss").is_file()
+        ]
+        return candidates[0] if len(candidates) == 1 else path
 
     @staticmethod
     def shutdown_jvm():
@@ -2546,15 +2795,71 @@ class RasDss:
             New output publication requires filesystem hard-link support to
             refuse a concurrently created target atomically.
             See https://github.com/gyanz/pydsstools for the upstream library.
-        """
-        from ._native_grid import write_precip_grid_arrays
 
-        return write_precip_grid_arrays(
-            dss_file, pathname, data, interval_bounds,
-            transform=transform, crs=crs, units=units,
-            nodata=nodata, overwrite=overwrite,
-            grid_reference_origin=grid_reference_origin,
+        Backends:
+            ``"java"`` (default) writes through pydsstools (this method never
+            uses Java). ``"native"`` writes through ras-commander-fast-dss and does not
+            need pydsstools (it still needs ``affine`` and ``pyproj``). It
+            stores the records pydsstools stores: DSS7 specified grids,
+            PER-CUM, ZLIB, the WKT1_GDAL CRS and its name, no time zone.
+            ``"shadow"`` writes through pydsstools, repeats the write
+            natively into a temporary file and logs any difference between
+            the two read back natively.
+        """
+        from . import _native_grid
+
+        backend = RasDss._write_backend()
+        args = (dss_file, pathname, data, interval_bounds)
+        kwargs = dict(
+            transform=transform, crs=crs, units=units, nodata=nodata,
+            overwrite=overwrite, grid_reference_origin=grid_reference_origin,
         )
+        if backend == "native":
+            return _native_grid.write_precip_grid_arrays_native(*args, **kwargs)
+        paths = _native_grid.write_precip_grid_arrays(*args, **kwargs)
+        if backend == "shadow":
+            RasDss._write_precip_grid_arrays_shadow(paths, args, kwargs)
+        return paths
+
+    @staticmethod
+    def _write_precip_grid_arrays_shadow(paths: List[str], args: tuple, kwargs: Dict) -> None:
+        """Repeat a pydsstools precipitation write natively in a temporary directory
+        and compare the native read-backs. Never raises."""
+        import shutil
+        import tempfile
+        import time
+
+        from . import _native_grid
+
+        dss_file = Path(args[0])
+        tmpdir = None
+        try:
+            tmpdir = Path(tempfile.mkdtemp(prefix="rasdss_shadow_precip_"))
+            native_file = tmpdir / dss_file.name
+            native_exc, diffs, labels = None, [], []
+            t1 = time.perf_counter()
+            try:
+                native_paths = _native_grid.write_precip_grid_arrays_native(
+                    native_file, *args[1:], **dict(kwargs, overwrite=False))
+            except Exception as exc:
+                native_exc, native_paths = exc, []
+            native_s = time.perf_counter() - t1
+            if native_exc is None:
+                if native_paths != paths:
+                    diffs.append("returned_pathnames")
+                record_diffs, labels = RasDss._compare_written_grid_files(
+                    dss_file, native_file, paths, RasDss._get_file_version_native(dss_file))
+                diffs += record_diffs
+            RasDss._shadow_write_record(
+                "write_precip_grid_arrays", dss_file, args[1], native_exc, diffs, labels,
+                None, native_s, detail={"records": len(paths)},
+            )
+        except Exception as exc:  # the comparison must never break the write
+            logger.warning("DSS shadow write_precip_grid_arrays comparison failed for %s: %s",
+                           dss_file, exc)
+        finally:
+            if tmpdir is not None:
+                shutil.rmtree(tmpdir, ignore_errors=True)
 
     @staticmethod
     @log_call
@@ -2630,7 +2935,52 @@ class RasDss:
             ``hec.heclib.grid.GridData/GridInfo`` for grid records. This method
             writes through ``hec.heclib.grid.GriddedData.storeGriddedData()``
             because it is the stable Java API path from pyjnius for grid data.
+
+        Backends:
+            ``"java"`` (default) writes through HEC Monolith. ``"native"``
+            writes through ras-commander-fast-dss without a JVM and never falls back to
+            Java. It stores what Monolith stores: DSS7 grids are always ZLIB
+            compressed (Monolith ignores the requested method on DSS7); DSS6
+            grids use the requested ZLIB or PRECIP_2_BYTE. Differences:
+            ``compression_base`` and ``compression_scale_factor`` are stored
+            as named (the Java path passes them to Monolith's setter in
+            swapped positions, hence its DSS6 default workaround); without
+            them DSS6 PRECIP_2_BYTE scale and base are chosen as Monolith
+            chooses them, adjusted for negative minima, where the Java path
+            stores cells below base 0 as missing. The native writer refuses,
+            where the Java path writes an unreadable or lossy record:
+            uncompressed DSS6 grids, PRECIP_2_BYTE cells that the given scale
+            and base would turn into missing, data types other than
+            PER-AVER, PER-CUM, INST-VAL and INST-CUM, and DSS6 unit strings
+            longer than 12 characters. DSS7 HRAP and Albers grids store a null
+            value of -FLT_MAX (Monolith stores 0.0; neither reader treats it as
+            data). Instantaneous grids are stored with the time in part D and
+            part E blank, as Monolith stores them; the native writer returns
+            those stored pathnames, the Java path returns D/E-filled names.
+            ``"shadow"`` writes with Java, repeats the write natively on a
+            temporary copy and logs any difference between the native
+            read-backs; the comparison never raises.
         """
+        backend = RasDss._write_backend()
+        args = (dss_file, pathname, data, times, grid_info, create_if_missing)
+        if backend == "native":
+            return RasDss._write_grid_timeseries_native(*args, dss_version=dss_version)
+        if backend == "shadow":
+            return RasDss._write_grid_timeseries_shadow(*args, dss_version=dss_version)
+        return RasDss._write_grid_timeseries_java(*args, dss_version=dss_version)
+
+    @staticmethod
+    def _write_grid_timeseries_java(
+        dss_file: Union[str, Path],
+        pathname: str,
+        data: np.ndarray,
+        times: Union[List, np.ndarray, pd.DatetimeIndex],
+        grid_info: Dict[str, Any],
+        create_if_missing: bool = True,
+        *,
+        dss_version: Optional[int] = None,
+    ) -> List[str]:
+        """``write_grid_timeseries`` through HEC Monolith (unchanged Java path)."""
         dss_version = RasDss._validate_dss_version(dss_version)
         if grid_info is None:
             raise ValueError("grid_info is required")
@@ -2675,6 +3025,8 @@ class RasDss:
         file_existed = dss_path.exists()
         if file_existed and not dss_path.is_file():
             raise IsADirectoryError(f"DSS path is not a file: {dss_path}")
+        if file_existed:
+            RasDss._require_writable_dss_file(dss_path)
         if file_existed and dss_version is not None:
             existing_version = RasDss._get_file_version_java(dss_path)
             if existing_version != dss_version:
@@ -2714,6 +3066,8 @@ class RasDss:
         source_nodata = grid_info.get("nodata_value", None)
         written_pathnames: List[str] = []
 
+        RasDss._drain_hec_messages()  # earlier calls' lines are not this write's
+        closing_failures: List[str] = []
         writer = None
         try:
             writer = GriddedData()
@@ -2778,12 +3132,7 @@ class RasDss:
 
                 written_pathnames.append(record_pathname)
 
-            logger.info(
-                f"Wrote {len(written_pathnames)} grid records to {Path(dss_file_str).name} "
-                f"(shape={n_rows}x{n_cols}, units={grid_info.get('units', 'mm')}, "
-                f"type={data_type})"
-            )
-            return written_pathnames
+            RasDss._raise_hec_write_failures(RasDss._drain_hec_messages())
         except ValueError:
             raise
         except Exception as e:
@@ -2798,7 +3147,287 @@ class RasDss:
                 try:
                     writer.done()
                 finally:
-                    RasDss._release_dss_file(dss_file_str)
+                    closing_failures = RasDss._release_dss_file(dss_file_str)
+        RasDss._raise_hec_write_failures(closing_failures, dss_file_str)
+        logger.info(
+            f"Wrote {len(written_pathnames)} grid records to {Path(dss_file_str).name} "
+            f"(shape={n_rows}x{n_cols}, units={grid_info.get('units', 'mm')}, "
+            f"type={data_type})"
+        )
+        return written_pathnames
+
+    #: ``grid_info["compression"]`` names and HEC method codes -> ras-commander-fast-dss names.
+    _NATIVE_GRID_COMPRESSION_NAMES = {
+        "PRECIP": "precip_2_byte", "PRECIP2BYTE": "precip_2_byte",
+        "PRECIP_2_BYTE": "precip_2_byte", "ZLIB": "zlib", "ZLIB_DEFLATE": "zlib",
+        "NONE": "none", "UNDEFINED": "none",
+    }
+    _NATIVE_GRID_COMPRESSION_CODES = {101001: "precip_2_byte", 26: "zlib", 0: "none"}
+
+    @staticmethod
+    def _native_grid_compression(compression: Any, version: int) -> str:
+        """ras-commander-fast-dss compression for a ``grid_info["compression"]`` value.
+
+        DSS7: always ``"zlib"``. HEC Monolith stores every DSS7 grid ZLIB compressed
+        whatever method it is given (verified with Monolith 3.3.27 for PRECIP_2_BYTE,
+        ZLIB, NONE and ``None``). DSS6: the requested method; ``None`` (Monolith's
+        default) is ZLIB.
+        """
+        if compression is None:
+            name = "zlib"
+        elif isinstance(compression, (int, np.integer)) and not isinstance(compression, bool):
+            name = RasDss._NATIVE_GRID_COMPRESSION_CODES.get(int(compression))
+        else:
+            name = RasDss._NATIVE_GRID_COMPRESSION_NAMES.get(
+                str(compression).upper().replace("-", "_")
+            )
+        if name is None:
+            raise ValueError(f"Unsupported grid compression: {compression}")
+        return "zlib" if version == 7 else name
+
+    @staticmethod
+    def _native_grid_kwargs(
+        grid_info: Dict[str, Any], data_type: str, version: int
+    ) -> Dict[str, Any]:
+        """``ras_commander_fast_dss.write_grid`` keyword arguments for a RasDss ``grid_info``.
+
+        Follows ``_create_java_grid_info``: the same keys and defaults, the same
+        lower-left cell (explicit indexes, else ``origin`` rounded to whole cells from
+        cell zero), and the same grid-type inference from ``crs``.
+        """
+        cell_size = RasDss._grid_info_number(
+            grid_info, ["cellsize", "cell_size", "cell_size_m", "dx", "resolution"],
+        )
+        if cell_size is None:
+            raise ValueError("grid_info must include cellsize or cell_size")
+        cell_size = float(cell_size)
+        if cell_size <= 0:
+            raise ValueError(f"cellsize must be positive, got {cell_size}")
+        x_cell_zero = float(RasDss._grid_info_number(
+            grid_info, ["x_coord_cell_zero", "x_coord_of_grid_cell_zero", "x_cell_zero"], 0.0))
+        y_cell_zero = float(RasDss._grid_info_number(
+            grid_info, ["y_coord_cell_zero", "y_coord_of_grid_cell_zero", "y_cell_zero"], 0.0))
+        origin_x, origin_y = RasDss._grid_origin_xy(grid_info)
+        lower_left_cell_x = RasDss._grid_info_number(
+            grid_info, ["lower_left_cell_x", "lowerLeftCellX", "ll_cell_x"])
+        lower_left_cell_y = RasDss._grid_info_number(
+            grid_info, ["lower_left_cell_y", "lowerLeftCellY", "ll_cell_y"])
+        if lower_left_cell_x is None:
+            lower_left_cell_x = (0 if origin_x is None
+                                 else int(round((float(origin_x) - x_cell_zero) / cell_size)))
+        if lower_left_cell_y is None:
+            lower_left_cell_y = (0 if origin_y is None
+                                 else int(round((float(origin_y) - y_cell_zero) / cell_size)))
+
+        crs = str(grid_info.get("crs", "SHG"))
+        grid_type = str(grid_info.get("grid_type", "")).lower()
+        crs_upper = crs.upper()
+        if not grid_type:
+            if crs_upper in {"SHG", "EPSG:5070", "5070"} or "ALBERS" in crs_upper:
+                grid_type = "albers"
+            else:
+                grid_type = "specified"
+
+        kwargs: Dict[str, Any] = {
+            "cell_size": cell_size,
+            "lower_left_cell": (int(lower_left_cell_x), int(lower_left_cell_y)),
+            "units": str(grid_info.get("units", "mm")),
+            "data_type": data_type,
+            "version": int(version),
+        }
+        if grid_type == "hrap":
+            kwargs.update(grid_type="hrap", data_source=str(grid_info.get("data_source") or ""))
+        elif grid_type == "specified":
+            # Monolith's SpecifiedGridInfo defaults: time zone UTC, offset 0, interval.
+            kwargs.update(
+                grid_type="specified", srs_definition=crs,
+                srs_name=str(grid_info.get("crs_name", "Specified Grid")),
+                cell_zero=(x_cell_zero, y_cell_zero),
+                time_zone="UTC", time_zone_offset_ms=0, is_interval=True,
+            )
+        else:
+            datum = grid_info.get("projection_datum", "NAD83")
+            if not (isinstance(datum, (int, np.integer)) and not isinstance(datum, bool)):
+                datum = {"NAD27": 1, "UNDEFINED": 0}.get(
+                    str(datum or "NAD83").upper().replace("_", ""), 2)
+            kwargs.update(
+                grid_type="albers", cell_zero=(x_cell_zero, y_cell_zero),
+                albers={
+                    "datum": int(datum),
+                    "units": str(grid_info.get("projection_units", "METERS")),
+                    "first_standard_parallel": float(grid_info.get("standard_parallel_1", 29.5)),
+                    "second_standard_parallel": float(grid_info.get("standard_parallel_2", 45.5)),
+                    "central_meridian": float(grid_info.get("central_meridian", -96.0)),
+                    "latitude_of_origin": float(grid_info.get("latitude_of_origin", 23.0)),
+                    "false_easting": float(grid_info.get("false_easting", 0.0)),
+                    "false_northing": float(grid_info.get("false_northing", 0.0)),
+                },
+            )
+
+        compression = RasDss._native_grid_compression(
+            grid_info.get("compression", "PRECIP_2_BYTE"), version
+        )
+        kwargs["compression"] = compression
+        if compression == "precip_2_byte":
+            base = grid_info.get("compression_base")
+            scale = grid_info.get("compression_scale_factor")
+            if (base is None) != (scale is None):
+                raise ValueError(
+                    "give both compression_base and compression_scale_factor, or neither "
+                    "(the native writer then chooses them as HEC Monolith does)"
+                )
+            if base is not None:
+                kwargs.update(base=float(base), scale_factor=float(scale))
+        return kwargs
+
+    @staticmethod
+    def _write_grid_timeseries_native(
+        dss_file: Union[str, Path],
+        pathname: str,
+        data: np.ndarray,
+        times: Union[List, np.ndarray, pd.DatetimeIndex],
+        grid_info: Dict[str, Any],
+        create_if_missing: bool = True,
+        *,
+        dss_version: Optional[int] = None,
+    ) -> List[str]:
+        """``write_grid_timeseries`` through ras-commander-fast-dss (no JVM).
+
+        Same argument checks, time windows and pathnames as the Java path; one
+        ``ras_commander_fast_dss.write_grid`` call per record. Returns the stored pathnames.
+        """
+        dss_version = RasDss._validate_dss_version(dss_version)
+        if grid_info is None:
+            raise ValueError("grid_info is required")
+        grid_info = dict(grid_info)
+        grid_array = np.asarray(data, dtype=np.float32)
+        if grid_array.ndim != 3:
+            raise ValueError(
+                "data must have shape (n_times, n_rows, n_cols); "
+                f"got {grid_array.shape}"
+            )
+        n_times, n_rows, n_cols = grid_array.shape
+        if n_times == 0 or n_rows == 0 or n_cols == 0:
+            raise ValueError(
+                "data dimensions must be non-empty; "
+                f"got {grid_array.shape}"
+            )
+        prefix, path_parts = RasDss._split_dss_pathname(pathname)
+        data_type = str(grid_info.get("data_type", "PER-CUM")).upper().replace("_", "-")
+        data_type_code = RasDss._grid_data_type_code(data_type)
+        time_windows = RasDss._grid_time_windows(
+            times=times, n_times=n_times, data_type_code=data_type_code,
+            grid_info=grid_info, pathname_parts=path_parts,
+        )
+        dc = _backend.require_native_writes()
+        target, version, existed, created_dirs = RasDss._native_write_target(
+            dss_file, dss_version, create_if_missing
+        )
+        written: List[str] = []
+        with RasDss._native_new_file(dc, target, version, existed, created_dirs):
+            kwargs = RasDss._native_grid_kwargs(grid_info, data_type, version)
+            source_nodata = grid_info.get("nodata_value", None)
+            for index, (start_time, end_time) in enumerate(time_windows):
+                record_parts = list(path_parts)
+                if data_type_code in (2, 3):
+                    # Instantaneous: Monolith stores the time in D and leaves E blank.
+                    record_parts[3] = RasDss._format_native_grid_end_datetime(end_time)
+                    record_parts[4] = ""
+                else:
+                    record_parts[3] = RasDss._format_grid_dss_datetime(start_time)
+                    record_parts[4] = RasDss._format_native_grid_end_datetime(end_time)
+                record_pathname = RasDss._build_dss_pathname(prefix, record_parts)
+                frame = np.array(grid_array[index], dtype=np.float32, copy=True)
+                nodata_mask = ~np.isfinite(frame)
+                if source_nodata is not None:
+                    nodata_mask |= frame == np.float32(source_nodata)
+                frame[nodata_mask] = np.nan
+                dc.write_grid(str(target), record_pathname, frame, **kwargs)
+                written.append(record_pathname)
+        logger.info(
+            f"Wrote {len(written)} grid records to {target.name} "
+            f"(shape={n_rows}x{n_cols}, units={kwargs['units']}, type={data_type}, "
+            f"DSS{version}, {kwargs['compression']})"
+        )
+        return written
+
+    @staticmethod
+    def _write_grid_timeseries_shadow(
+        dss_file: Union[str, Path],
+        pathname: str,
+        data: np.ndarray,
+        times: Union[List, np.ndarray, pd.DatetimeIndex],
+        grid_info: Dict[str, Any],
+        create_if_missing: bool = True,
+        *,
+        dss_version: Optional[int] = None,
+    ) -> List[str]:
+        """Java write (returned); the native writer repeats it on a temporary copy and
+        each written record is read back natively from both files and compared."""
+        import time
+
+        ctx = RasDss._shadow_write_snapshot(dss_file)
+        try:
+            t0 = time.perf_counter()
+            written = RasDss._write_grid_timeseries_java(
+                dss_file, pathname, data, times, grid_info, create_if_missing,
+                dss_version=dss_version,
+            )
+            java_s = time.perf_counter() - t0
+            try:
+                if ctx.get("skip"):
+                    _backend.record("write_grid_timeseries", "skipped", ctx["skip"],
+                                    dss_file=dss_file, pathname=pathname, java_seconds=java_s)
+                else:
+                    version = RasDss._get_file_version_native(dss_file)
+                    native_exc, native_paths = None, []
+                    t1 = time.perf_counter()
+                    try:
+                        native_paths = RasDss._write_grid_timeseries_native(
+                            ctx["copy"], pathname, data, times, grid_info, True,
+                            dss_version=None if ctx["existed"] else version,
+                        )
+                    except Exception as exc:
+                        native_exc = exc
+                    native_s = time.perf_counter() - t1
+                    diffs, labels = RasDss._compare_written_grid_files(
+                        dss_file, ctx["copy"], native_paths, version
+                    ) if native_exc is None else ([], [])
+                    RasDss._shadow_write_record(
+                        "write_grid_timeseries", dss_file, pathname, native_exc, diffs,
+                        labels, java_s, native_s,
+                        detail={"dss_version": version, "records": len(native_paths)},
+                    )
+            except Exception as exc:  # the comparison must never break the write
+                logger.warning("DSS shadow write_grid_timeseries comparison failed for %s: %s",
+                               dss_file, exc)
+            return written
+        finally:
+            RasDss._shadow_write_cleanup(ctx)
+
+    @staticmethod
+    def _compare_written_grid_files(
+        java_file: Union[str, Path],
+        native_file: Union[str, Path],
+        pathnames: List[str],
+        version: int,
+    ) -> Tuple[List[str], List[str]]:
+        """Read each pathname natively from both files and compare (shadow writes)."""
+        diffs: List[str] = []
+        labels: List[str] = []
+        for record_pathname in pathnames:
+            readback = record_pathname.upper() if version == 6 else record_pathname
+            try:
+                java_grid = RasDss._read_grid_native(java_file, readback)
+            except Exception as exc:
+                diffs.append(f"{readback}: java-written record unreadable "
+                             f"({type(exc).__name__})")
+                continue
+            native_grid = RasDss._read_grid_native(native_file, readback)
+            record_diffs, record_labels = _backend.compare_written_grids(java_grid, native_grid)
+            diffs += [f"{readback}: {d}" for d in record_diffs]
+            labels += [label for label in record_labels if label not in labels]
+        return diffs, labels
 
     @staticmethod
     @log_call
@@ -2888,6 +3517,48 @@ class RasDss:
             the streaming write pass. Any detected mismatch aborts before
             publication. Every temporary record is reopened and compared
             exactly before publish.
+
+        Backends:
+            ``"java"`` (default) reads, writes and verifies through HEC
+            Monolith. ``"native"`` does all three through ras-commander-fast-dss with
+            the same checks and no JVM; it keeps the source's PRECIP_2_BYTE
+            scale and base (DSS6) and the source's DSS version. ZLIB scale and
+            base words, which ZLIB does not use, are not compared. ``"shadow"``
+            returns the Java derivative, builds a native derivative in a
+            temporary directory, and logs any difference between the two
+            read back natively.
+        """
+        backend = RasDss.get_backend()
+        args = (source_dss, output_dss, pathname, tail_intervals)
+        kwargs = dict(
+            time_shift_minutes=time_shift_minutes, output_pathname=output_pathname,
+            x_shift=x_shift, y_shift=y_shift, overwrite=overwrite,
+        )
+        if backend == "native":
+            return RasDss._copy_grid_with_zero_tail_impl(*args, native=True, **kwargs)
+        if backend == "shadow":
+            return RasDss._copy_grid_with_zero_tail_shadow(*args, **kwargs)
+        return RasDss._copy_grid_with_zero_tail_impl(*args, native=False, **kwargs)
+
+    @staticmethod
+    def _copy_grid_with_zero_tail_impl(
+        source_dss: Union[str, Path],
+        output_dss: Union[str, Path],
+        pathname: str,
+        tail_intervals: int,
+        *,
+        time_shift_minutes: int = 0,
+        output_pathname: Optional[str] = None,
+        x_shift: float = 0.0,
+        y_shift: float = 0.0,
+        overwrite: bool = False,
+        native: bool = False,
+    ) -> Dict[str, Any]:
+        """``copy_grid_with_zero_tail`` on one backend.
+
+        ``native=False`` is the Java path, unchanged. ``native=True`` reads the source,
+        writes the temporary derivative and verifies it through ras-commander-fast-dss, with the
+        same checks; no JVM is started.
         """
         from ras_commander.RasUtils import RasUtils
 
@@ -2943,20 +3614,21 @@ class RasDss:
         if output.exists() and not overwrite:
             raise FileExistsError(f"Output DSS already exists: {output}")
 
-        RasDss._best_effort_close_dss_file(source, "before initial source hash")
+        ops = RasDss._copy_grid_ops(native)
+        ops["best_effort_close"](source, "before initial source hash")
         source_sha256 = RasDss._sha256_file(source)
         reference: Optional[Dict[str, Any]] = None
         reference_signature: Optional[Dict[str, Any]] = None
         nodata_mask: Optional[np.ndarray] = None
         try:
-            catalog = RasDss.get_catalog(source)
+            catalog = ops["catalog"](source)
             records = RasDss._select_grid_family_records(
                 catalog,
                 pathname,
                 selector_parts,
             )
             for record in records:
-                grid = RasDss._read_grid_java(source, record[2])
+                grid = ops["read_grid"](source, record[2])
                 signature, mask = RasDss._validate_grid_record_metadata(
                     grid,
                     record,
@@ -2967,9 +3639,9 @@ class RasDss:
                     reference = grid
                     reference_signature = signature
                     nodata_mask = mask
-            source_version = RasDss._get_file_version_java(source)
+            source_version = ops["file_version"](source)
         finally:
-            RasDss._best_effort_close_dss_file(
+            ops["best_effort_close"](
                 source,
                 "after source catalog/prevalidation",
             )
@@ -3026,6 +3698,8 @@ class RasDss:
             reference,
             output_lower_left,
         )
+        if native:
+            grid_info = RasDss._native_write_info_from_record(reference, grid_info)
         expected_output_signature = dict(reference_signature)
         expected_output_signature["lower_left_cell"] = output_lower_left
         projection = reference_signature["projection"]
@@ -3049,10 +3723,10 @@ class RasDss:
         written_count = 0
         source_value_digests: List[str] = []
         try:
-            RasDss._create_empty_dss(temporary, source_version)
+            ops["create_empty"](temporary, source_version)
             try:
                 for index, record in enumerate(records):
-                    grid = RasDss._read_grid_java(source, record[2])
+                    grid = ops["read_grid"](source, record[2])
                     RasDss._validate_grid_record_metadata(
                         grid,
                         record,
@@ -3061,7 +3735,7 @@ class RasDss:
                     )
                     frame = np.asarray(grid["data"], dtype=np.float32)
                     source_value_digests.append(RasDss._grid_value_digest(frame))
-                    returned = RasDss.write_grid_timeseries(
+                    returned = ops["write_grid"](
                         dss_file=temporary,
                         pathname=canonical_derivative_pathname,
                         data=frame[np.newaxis, :, :],
@@ -3080,7 +3754,7 @@ class RasDss:
                     )
                     written_count += 1
             finally:
-                RasDss._best_effort_close_dss_file(
+                ops["best_effort_close"](
                     source,
                     "after source reread/write",
                 )
@@ -3092,7 +3766,7 @@ class RasDss:
             source_count = len(records)
             for tail_index in range(tail_intervals):
                 index = source_count + tail_index
-                returned = RasDss.write_grid_timeseries(
+                returned = ops["write_grid"](
                     dss_file=temporary,
                     pathname=canonical_derivative_pathname,
                     data=zero_frame[np.newaxis, :, :],
@@ -3117,14 +3791,14 @@ class RasDss:
                     "independently expected record count"
                 )
 
-            temporary_version = RasDss._get_file_version_java(temporary)
+            temporary_version = ops["file_version"](temporary)
             if temporary_version != source_version:
                 raise RuntimeError(
                     "Grid derivative changed DSS major version: "
                     f"source={source_version}, output={temporary_version}"
                 )
             temporary_paths = list(
-                RasDss.get_catalog(temporary)["pathname"].astype(str)
+                ops["catalog"](temporary)["pathname"].astype(str)
             )
             if (
                 len(temporary_paths) != len(expected_catalog_pathnames)
@@ -3136,7 +3810,7 @@ class RasDss:
                 )
 
             for index, expected_pathname in enumerate(expected_catalog_pathnames):
-                output_grid = RasDss._read_grid_java(temporary, expected_pathname)
+                output_grid = ops["read_grid"](temporary, expected_pathname)
                 RasDss._validate_grid_record_metadata(
                     output_grid,
                     (
@@ -3170,7 +3844,7 @@ class RasDss:
                             f"data: {expected_pathname}"
                         )
 
-            RasDss._close_dss_file(temporary)
+            ops["close"](temporary)
             if overwrite:
                 os.replace(temporary, output)
             else:
@@ -3196,7 +3870,7 @@ class RasDss:
                         exc,
                     )
         finally:
-            RasDss._cleanup_temporary_dss(temporary)
+            ops["cleanup"](temporary)
 
         rewritten_count = len(records)
         rewritten_pathnames = expected_catalog_pathnames[:rewritten_count]
@@ -3234,6 +3908,141 @@ class RasDss:
         }
 
     @staticmethod
+    def _copy_grid_ops(native: bool) -> Dict[str, Any]:
+        """File operations of ``copy_grid_with_zero_tail`` for one backend.
+
+        Java: the historical calls (looked up now, so test doubles apply). Native:
+        ras-commander-fast-dss reads and writes; there are no JVM handles to close.
+        """
+        if not native:
+            return {
+                "catalog": RasDss.get_catalog,
+                "read_grid": RasDss._read_grid_java,
+                "file_version": RasDss._get_file_version_java,
+                "create_empty": RasDss._create_empty_dss,
+                "close": RasDss._close_dss_file,
+                "best_effort_close": RasDss._best_effort_close_dss_file,
+                "cleanup": RasDss._cleanup_temporary_dss,
+                "write_grid": RasDss.write_grid_timeseries,
+            }
+        dc = _backend.require_native_writes()
+
+        def create_empty(dss_file: Path, dss_version: int) -> None:
+            if dss_file.exists():
+                raise FileExistsError(f"Temporary DSS path already exists: {dss_file}")
+            dc.create(str(dss_file), int(dss_version))
+
+        def cleanup(dss_file: Path) -> None:
+            try:
+                dss_file.unlink(missing_ok=True)
+            except Exception as exc:
+                logger.warning("Could not remove temporary DSS during cleanup: %s (%s)",
+                               dss_file, exc)
+
+        return {
+            "catalog": RasDss._get_catalog_native,
+            "read_grid": lambda dss_file, path: RasDss._zlib_neutral_grid(
+                RasDss._read_grid_native(dss_file, path)),
+            "file_version": RasDss._get_file_version_native,
+            "create_empty": create_empty,
+            "close": lambda dss_file: None,
+            "best_effort_close": lambda dss_file, phase: None,
+            "cleanup": cleanup,
+            "write_grid": RasDss._write_grid_timeseries_native,
+        }
+
+    @staticmethod
+    def _zlib_neutral_grid(grid: Dict[str, Any]) -> Dict[str, Any]:
+        """Blank the scale and base words of a ZLIB grid (native ``copy_grid``).
+
+        ZLIB does not use them, and writers fill them differently (Monolith writes
+        0 and 100 to DSS6, ras-commander-fast-dss -FLT_MAX), so the native derivative compares
+        the compression method only. PRECIP_2_BYTE keeps both: they decode the cells.
+        """
+        metadata = grid.get("metadata") or {}
+        compression = metadata.get("compression") or {}
+        if compression.get("method") == 26:
+            metadata["compression"] = dict(compression, base=None, scale_factor=None)
+        return grid
+
+    @staticmethod
+    def _native_write_info_from_record(
+        reference: Dict[str, Any], grid_info: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        """Writer metadata for the native ``copy_grid`` derivative.
+
+        ``_grid_write_info_from_record`` swaps scale and base for the Java setter;
+        the native writer takes them as named, so the source's own values are used.
+        """
+        compression = reference["metadata"].get("compression") or {}
+        return dict(
+            grid_info,
+            compression_base=compression.get("base"),
+            compression_scale_factor=compression.get("scale_factor"),
+        )
+
+    @staticmethod
+    def _copy_grid_with_zero_tail_shadow(
+        source_dss: Union[str, Path],
+        output_dss: Union[str, Path],
+        pathname: str,
+        tail_intervals: int,
+        **kwargs: Any,
+    ) -> Dict[str, Any]:
+        """Java derivative (returned); a native derivative is built in a temporary
+        directory and both are read back natively and compared. Never raises for the
+        comparison."""
+        import shutil
+        import tempfile
+        import time
+
+        t0 = time.perf_counter()
+        with _backend.forced_java_writes():
+            result = RasDss._copy_grid_with_zero_tail_impl(
+                source_dss, output_dss, pathname, tail_intervals, native=False, **kwargs
+            )
+        java_s = time.perf_counter() - t0
+        tmpdir = None
+        try:
+            tmpdir = Path(tempfile.mkdtemp(prefix="rasdss_shadow_copy_"))
+            native_output = tmpdir / Path(result["output_dss"]).name
+            native_exc, native_result, diffs, labels = None, None, [], []
+            t1 = time.perf_counter()
+            try:
+                native_result = RasDss._copy_grid_with_zero_tail_impl(
+                    source_dss, native_output, pathname, tail_intervals, native=True,
+                    **dict(kwargs, overwrite=False),
+                )
+            except Exception as exc:
+                native_exc = exc
+            native_s = time.perf_counter() - t1
+            if native_result is not None:
+                for key in sorted(set(result) | set(native_result)):
+                    if key != "output_dss" and result.get(key) != native_result.get(key):
+                        diffs.append(f"result:{key}")
+                java_paths = list(RasDss._get_catalog_native(result["output_dss"])["pathname"])
+                native_paths = list(RasDss._get_catalog_native(native_output)["pathname"])
+                if sorted(java_paths) != sorted(native_paths):
+                    diffs.append("catalog")
+                else:
+                    record_diffs, labels = RasDss._compare_written_grid_files(
+                        result["output_dss"], native_output, java_paths,
+                        int(result["dss_version"]))
+                    diffs += record_diffs
+            RasDss._shadow_write_record(
+                "copy_grid_with_zero_tail", result["output_dss"], pathname, native_exc,
+                diffs, labels, java_s, native_s,
+                detail={"dss_version": result.get("dss_version")},
+            )
+        except Exception as exc:  # the comparison must never break the copy
+            logger.warning("DSS shadow copy_grid_with_zero_tail comparison failed for %s: %s",
+                           output_dss, exc)
+        finally:
+            if tmpdir is not None:
+                shutil.rmtree(tmpdir, ignore_errors=True)
+        return result
+
+    @staticmethod
     @log_call
     def get_file_version(dss_file: Union[str, Path]) -> int:
         """Return the major HEC-DSS file version (6 or 7).
@@ -3247,7 +4056,7 @@ class RasDss:
 
         Backends:
             ``"java"`` asks HEC Monolith (``HecDataManager.getDssFileVersion``).
-            ``"native"`` reads the file header through dss-commander without a
+            ``"native"`` reads the file header through ras-commander-fast-dss without a
             JVM. ``"shadow"`` returns the native answer and logs any
             disagreement with Java.
 
@@ -3276,7 +4085,7 @@ class RasDss:
 
     @staticmethod
     def _get_file_version_native(dss_file: Union[str, Path]) -> int:
-        """Header version through dss-commander (no JVM)."""
+        """Header version through ras-commander-fast-dss (no JVM)."""
         from ras_commander.RasUtils import RasUtils
 
         dss_path = RasDss._check_existing_file(dss_file)
@@ -3408,9 +4217,35 @@ class RasDss:
             ValueError: If times and values have different lengths, are empty,
                 or contain timestamps that cannot be represented exactly as
                 HEC int32 epoch minutes; if ``dss_version`` is invalid; or if
-                an existing file does not match the requested version.
-            ImportError: If pyjnius is not installed
-            RuntimeError: If Java write operation fails
+                an existing file does not match the requested version. Under
+                ``native``, also when the engine refuses the input (see
+                Backends).
+            ImportError: If pyjnius (``java``) or ras-commander-fast-dss (``native``) is
+                not installed
+            DssCapabilityError: ``native`` with a ras-commander-fast-dss wheel that
+                has no writers (a ``NotImplementedError``)
+            RuntimeError: If Java write operation fails, including a read-only target,
+                a refusal the HEC-DSS library only reports as a message, and a record
+                missing from the file's catalog afterwards. Native engine errors
+                (``DssLockedError`` when HEC software has the file open, other
+                ``DssError`` subclasses) are ``RuntimeError`` subclasses too.
+
+        Backends:
+            ``"java"`` (default) writes through HEC Monolith. ``"native"``
+            writes through ras-commander-fast-dss without a JVM and never falls back to
+            Java: an existing file keeps its DSS version, a new file is DSS7
+            unless ``dss_version=6`` (the Java default). The E part decides
+            regular or irregular (``IR-DAY`` .. ``IR-CENTURY``) storage on both
+            backends. The native writer refuses, where Java truncates or
+            reinterprets: times that are not exactly regular for a regular E
+            part, DSS6 units or types longer than 8 characters, malformed
+            pathnames, and infinite values. ``NaN`` is stored as Java stores
+            it: as ``NaN`` in DSS7 files and as -901 in DSS6 files. A failed
+            native write that created the file removes it. ``"shadow"``
+            writes with Java, repeats the write natively on a temporary copy
+            and logs any difference between the native read-back of the two
+            files; the comparison never raises. See
+            ``docs/user-guide/dss-native-backend.md``.
 
         Example:
             >>> import pandas as pd
@@ -3435,6 +4270,27 @@ class RasDss:
             on first use. The HEC epoch is 1899-12-31 00:00:00; times are stored
             as integer minutes since that epoch.
         """
+        backend = RasDss._write_backend()
+        args = (dss_file, pathname, times, values, units, data_type, create_if_missing)
+        if backend == "native":
+            return RasDss._write_timeseries_native(*args, dss_version=dss_version)
+        if backend == "shadow":
+            return RasDss._write_timeseries_shadow(*args, dss_version=dss_version)
+        return RasDss._write_timeseries_java(*args, dss_version=dss_version)
+
+    @staticmethod
+    def _write_timeseries_java(
+        dss_file: Union[str, Path],
+        pathname: str,
+        times: Union[List, np.ndarray, pd.DatetimeIndex],
+        values: Union[List, np.ndarray],
+        units: str = "CFS",
+        data_type: str = "INST-VAL",
+        create_if_missing: bool = True,
+        *,
+        dss_version: Optional[int] = None,
+    ) -> None:
+        """``write_timeseries`` through HEC Monolith (unchanged Java path)."""
         from ras_commander.RasUtils import RasUtils
 
         dss_version = RasDss._validate_dss_version(dss_version)
@@ -3457,6 +4313,8 @@ class RasDss:
         file_existed = dss_path.exists()
         if file_existed and not dss_path.is_file():
             raise IsADirectoryError(f"DSS path is not a file: {dss_path}")
+        if file_existed:
+            RasDss._require_writable_dss_file(dss_path)
         if file_existed and dss_version is not None:
             existing_version = RasDss._get_file_version_java(dss_path)
             if existing_version != dss_version:
@@ -3511,6 +4369,8 @@ class RasDss:
         tsc.numberValues = n
 
         # Open DSS file and write
+        RasDss._drain_hec_messages()  # earlier calls' lines are not this write's
+        closing_failures: List[str] = []
         dss = None
         try:
             dss = (
@@ -3519,11 +4379,8 @@ class RasDss:
                 else HecDss.open(dss_file_str)
             )
             dss.put(cast('hec.io.DataContainer', tsc))
-            logger.info(f"Wrote {n} values to {Path(dss_file_str).name}")
-            logger.debug(
-                f"DSS write details: file={dss_file_str}, pathname={pathname}, "
-                f"units={units}, type={data_type}, interval={interval_minutes}min"
-            )
+            # HEC Monolith returns normally from a DSS6 write it refused.
+            RasDss._raise_hec_write_failures(RasDss._drain_hec_messages())
         except Exception as e:
             raise RuntimeError(
                 f"Failed to write time series to DSS: {e}\n"
@@ -3536,7 +4393,282 @@ class RasDss:
                 try:
                     dss.done()
                 finally:
-                    RasDss._release_dss_file(dss_file_str)
+                    closing_failures = RasDss._release_dss_file(dss_file_str)
+        RasDss._raise_hec_write_failures(closing_failures, dss_file_str)
+        RasDss._require_java_record_stored(dss_file_str, pathname)
+        logger.info(f"Wrote {n} values to {Path(dss_file_str).name}")
+        logger.debug(
+            f"DSS write details: file={dss_file_str}, pathname={pathname}, "
+            f"units={units}, type={data_type}, interval={interval_minutes}min"
+        )
+
+    # ------------------------------------------------------------------
+    # Native writers (ras-commander-fast-dss) and shadow write comparison
+    # ------------------------------------------------------------------
+
+    #: DSS version a native writer gives a new file when ``dss_version`` is omitted.
+    #: It is the Java path's default: HEC Monolith 3.3.27 creates DSS7 files.
+    _NATIVE_NEW_FILE_VERSION = 7
+
+    @staticmethod
+    def _write_backend() -> str:
+        """Backend for a write call. Java when a shadow comparison is already running
+        (``copy_grid_with_zero_tail`` writes its records through the public writer)."""
+        backend = RasDss.get_backend()
+        if backend == "shadow" and _backend.java_writes_forced():
+            return "java"
+        return backend
+
+    @staticmethod
+    def _native_write_target(
+        dss_file: Union[str, Path],
+        dss_version: Optional[int],
+        create_if_missing: bool,
+    ) -> Tuple[Path, int, bool, List[Path]]:
+        """Resolved target, its DSS version, whether it existed, and the parent
+        directories created for it (deepest first), for a native write.
+
+        Mirrors the Java writers' file checks: a directory raises
+        ``IsADirectoryError``; an existing file must match an explicit
+        ``dss_version``; a missing file needs ``create_if_missing``.
+        """
+        from ras_commander.RasUtils import RasUtils
+
+        dss_path = Path(dss_file)
+        existed = dss_path.exists()
+        created_dirs: List[Path] = []
+        if existed and not dss_path.is_file():
+            raise IsADirectoryError(f"DSS path is not a file: {dss_path}")
+        if existed:
+            version = RasDss._get_file_version_native(dss_path)
+            if dss_version is not None and version != dss_version:
+                raise ValueError(
+                    f"Existing DSS file is version {version}, not "
+                    f"requested version {dss_version}: {dss_path}"
+                )
+        else:
+            if not create_if_missing:
+                raise FileNotFoundError(f"DSS file not found: {dss_path}")
+            created_dirs = _backend.make_parents(dss_path)
+            version = dss_version if dss_version is not None else RasDss._NATIVE_NEW_FILE_VERSION
+            logger.info(f"DSS file will be created: {dss_path.name}")
+            logger.debug(f"DSS file creation path: {dss_path}")
+        return RasUtils.safe_resolve(dss_path), int(version), existed, created_dirs
+
+    @staticmethod
+    @contextmanager
+    def _native_new_file(
+        dc: Any, target: Path, version: int, existed: bool,
+        created_dirs: Optional[List[Path]] = None,
+    ):
+        """Create ``target`` when it did not exist, and remove it (and the empty
+        parent directories made for it) again if the write inside the block fails,
+        so a refused native write leaves no new file or directory."""
+        try:
+            if not existed:
+                dc.create(str(target), version)
+            yield
+        except BaseException:
+            if not existed and target.exists():
+                try:
+                    target.unlink()
+                except OSError as exc:
+                    logger.warning("Could not remove DSS file after a failed native write: %s (%s)",
+                                   target, exc)
+            _backend.remove_created_dirs(created_dirs or [])
+            raise
+
+    @staticmethod
+    def _write_timeseries_native(
+        dss_file: Union[str, Path],
+        pathname: str,
+        times: Union[List, np.ndarray, pd.DatetimeIndex],
+        values: Union[List, np.ndarray],
+        units: str = "CFS",
+        data_type: str = "INST-VAL",
+        create_if_missing: bool = True,
+        *,
+        dss_version: Optional[int] = None,
+    ) -> None:
+        """``write_timeseries`` through ras-commander-fast-dss (no JVM).
+
+        Same argument checks as the Java path. Values are stored as doubles (Java
+        stores doubles too). DSS7 files keep ``NaN`` as stored bits (``raw=True``),
+        as Monolith stores them; DSS6 files store ``NaN`` as -901, as Monolith
+        does. Infinite values are refused.
+        """
+        dss_version = RasDss._validate_dss_version(dss_version)
+        values = np.asarray(values, dtype=np.float64)
+        if len(times) != len(values):
+            raise ValueError(
+                f"times ({len(times)}) and values ({len(values)}) must have same length"
+            )
+        if len(times) == 0:
+            raise ValueError("times and values must not be empty")
+        hec_times = RasDss._datetimes_to_hec_times(times)
+        if np.isinf(values).any():
+            index = int(np.flatnonzero(np.isinf(values))[0])
+            raise ValueError(
+                f"value {index} is infinite; HEC-DSS has no infinity convention "
+                "(the native writer refuses it; the Java path stores the bits)"
+            )
+        dc = _backend.require_native_writes()
+        target, version, existed, created_dirs = RasDss._native_write_target(
+            dss_file, dss_version, create_if_missing
+        )
+        stamps = (
+            np.datetime64("1899-12-31T00:00", "m")
+            + hec_times.astype(np.int64).astype("timedelta64[m]")
+        ).astype("datetime64[s]")
+        with RasDss._native_new_file(dc, target, version, existed, created_dirs):
+            report = dc.write_timeseries(
+                str(target), pathname, values, times=stamps, units=units,
+                data_type=data_type, version=version, value_type="double",
+                raw=(version == 7),
+            )
+        logger.info(f"Wrote {len(values)} values to {target.name}")
+        logger.debug(
+            f"DSS native write details: file={target}, pathname={pathname}, units={units}, "
+            f"type={data_type}, version={version}, blocks={report.get('blocks')}"
+        )
+
+    @staticmethod
+    def _shadow_write_snapshot(dss_file: Union[str, Path]) -> Dict[str, Any]:
+        """Prepare a shadow write: copy an existing target to a temporary directory
+        (before the Java write changes it). Never raises."""
+        import shutil
+        import tempfile
+
+        ctx: Dict[str, Any] = {"tmpdir": None, "copy": None, "existed": False, "skip": None}
+        try:
+            target = Path(dss_file)
+            ctx["existed"] = target.is_file()
+            tmpdir = Path(tempfile.mkdtemp(prefix="rasdss_shadow_write_"))
+            ctx["tmpdir"] = tmpdir
+            ctx["copy"] = tmpdir / (target.name or "shadow.dss")
+            if ctx["existed"]:
+                size = target.stat().st_size
+                limit = _backend.shadow_copy_limit_bytes(RasDss.shadow_copy_limit_mb)
+                if size > limit:
+                    ctx["skip"] = (
+                        f"target is {size} bytes, above the shadow copy limit "
+                        f"({limit} bytes; RasDss.shadow_copy_limit_mb or "
+                        f"{_backend.SHADOW_COPY_LIMIT_ENV})"
+                    )
+                else:
+                    # copyfile, not copy2: a read-only attribute would survive on the copy.
+                    shutil.copyfile(target, ctx["copy"])
+        except Exception as exc:
+            ctx["skip"] = f"snapshot failed: {type(exc).__name__}: {exc}"
+        return ctx
+
+    @staticmethod
+    def _shadow_write_cleanup(ctx: Dict[str, Any]) -> None:
+        import shutil
+
+        if ctx.get("tmpdir") is not None:
+            shutil.rmtree(ctx["tmpdir"], ignore_errors=True)
+
+    @staticmethod
+    def _shadow_write_record(
+        operation: str,
+        dss_file: Any,
+        pathname: Optional[str],
+        native_exc: Optional[BaseException],
+        diffs: List[str],
+        labels: List[str],
+        java_seconds: Optional[float],
+        native_seconds: Optional[float],
+        detail: Optional[Dict[str, Any]] = None,
+    ) -> None:
+        outcome, label, diffs = _backend.classify_write(native_exc, diffs, labels)
+        _backend.record(
+            operation, outcome, label, dss_file=dss_file, pathname=pathname, diffs=diffs,
+            java_seconds=java_seconds, native_seconds=native_seconds,
+            native_error=native_exc, detail=detail,
+        )
+
+    @staticmethod
+    def _readback_pathname(pathname: str, version: int) -> str:
+        """Dataset pathname for a native read-back: D part blank; on DSS6 upper case
+        with the DSS6 interval names (``1Minute`` -> ``1MIN``, ``1Month`` -> ``1MON``),
+        as DSS6 stores them."""
+        parts = pathname.split("/")
+        if len(parts) == 8:
+            parts[4] = ""
+        if version != 6:
+            return "/".join(parts)
+        parts = [part.upper() for part in parts]
+        if len(parts) == 8:
+            parts[5] = re.sub(r"^(\d+)MINUTES?$", r"\1MIN", parts[5])
+            parts[5] = re.sub(r"^(\d+)MONTHS?$", r"\1MON", parts[5])
+        return "/".join(parts)
+
+    @staticmethod
+    def _write_timeseries_shadow(
+        dss_file: Union[str, Path],
+        pathname: str,
+        times: Union[List, np.ndarray, pd.DatetimeIndex],
+        values: Union[List, np.ndarray],
+        units: str = "CFS",
+        data_type: str = "INST-VAL",
+        create_if_missing: bool = True,
+        *,
+        dss_version: Optional[int] = None,
+    ) -> None:
+        """Java write (its result and errors are returned); the native writer repeats
+        the write on a temporary copy and the native read-backs of both files are
+        compared and logged. The comparison never raises."""
+        import time
+
+        ctx = RasDss._shadow_write_snapshot(dss_file)
+        try:
+            t0 = time.perf_counter()
+            RasDss._write_timeseries_java(
+                dss_file, pathname, times, values, units, data_type, create_if_missing,
+                dss_version=dss_version,
+            )
+            java_s = time.perf_counter() - t0
+            try:
+                RasDss._shadow_compare_timeseries_write(
+                    ctx, dss_file, pathname, times, values, units, data_type, java_s
+                )
+            except Exception as exc:  # the comparison must never break the write
+                logger.warning("DSS shadow write_timeseries comparison failed for %s: %s",
+                               dss_file, exc)
+        finally:
+            RasDss._shadow_write_cleanup(ctx)
+
+    @staticmethod
+    def _shadow_compare_timeseries_write(
+        ctx: Dict[str, Any], dss_file, pathname, times, values, units, data_type, java_s
+    ) -> None:
+        import time
+
+        if ctx.get("skip"):
+            _backend.record("write_timeseries", "skipped", ctx["skip"], dss_file=dss_file,
+                            pathname=pathname, java_seconds=java_s)
+            return
+        version = RasDss._get_file_version_native(dss_file)
+        native_exc, diffs = None, []
+        t1 = time.perf_counter()
+        try:
+            RasDss._write_timeseries_native(
+                ctx["copy"], pathname, times, values, units, data_type, True,
+                dss_version=None if ctx["existed"] else version,
+            )
+        except Exception as exc:
+            native_exc = exc
+        native_s = time.perf_counter() - t1
+        if native_exc is None:
+            readback = RasDss._readback_pathname(pathname, version)
+            java_df = RasDss._read_timeseries_native(dss_file, readback)
+            native_df = RasDss._read_timeseries_native(ctx["copy"], readback)
+            diffs = _backend.compare_written_timeseries(java_df, native_df)
+        RasDss._shadow_write_record(
+            "write_timeseries", dss_file, pathname, native_exc, diffs, [], java_s, native_s,
+            detail={"dss_version": version},
+        )
 
     @staticmethod
     @log_call
@@ -3594,6 +4726,473 @@ class RasDss:
             data_type=data_type,
             create_if_missing=create_if_missing,
             dss_version=dss_version,
+        )
+
+    # ------------------------------------------------------------------
+    # Paired-data writer
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    @log_call
+    def write_paired_data(
+        dss_file: Union[str, Path],
+        pathname: str,
+        x_values: Any,
+        y_values: Any = None,
+        x_units: Optional[str] = None,
+        y_units: Optional[str] = None,
+        x_type: Optional[str] = None,
+        y_type: Optional[str] = None,
+        labels: Optional[Sequence[str]] = None,
+        create_if_missing: bool = True,
+        *,
+        x_precision: Optional[int] = None,
+        y_precision: Optional[int] = None,
+        value_type: str = "auto",
+        dss_version: Optional[int] = None,
+    ) -> None:
+        """
+        Write one paired-data record (rating curve, damage curve, temporal pattern,
+        elevation-storage table, ...) with one or more curves.
+
+        A new record is added; a record already at ``pathname`` is replaced whole.
+        Passing the DataFrame from ``read_paired_data`` as ``x_values`` writes the same
+        ordinates, curves, stored precision, labels, units, types and display precision
+        (the record time zone is not written; see Backends).
+
+        Args:
+            dss_file: Path to DSS file (created if missing and create_if_missing=True)
+            pathname: DSS pathname with exactly six parts, for example
+                ``"/BASIN/LOC/STAGE-FLOW///RATING/"``. The C part usually names the
+                two parameters. D, E and F are free text and kept as given.
+            x_values: The ordinates (1-D array-like), or a DataFrame or Series indexed
+                by the ordinates with one column per curve. With a DataFrame or Series,
+                omit ``y_values``. ``attrs`` from ``read_paired_data`` supply any
+                metadata argument left as ``None``.
+            y_values: The curves: 1-D for one curve, or 2-D with shape
+                ``(len(x_values), n_curves)``.
+            x_units: Units of the ordinates (for example ``"FEET"``). ``None``: from
+                ``attrs``, otherwise blank.
+            y_units: Units of the curves. ``None``: as ``x_units``.
+            x_type: Axis type of the ordinates (for example ``"LINEAR"``, ``"LOG"``,
+                ``"PROB"``). ``None``: as ``x_units``.
+            y_type: Axis type of the curves. ``None``: as ``x_units``.
+            labels: Curve names, one per curve. ``None``: a DataFrame's string column
+                names (the default ``curve_1`` .. ``curve_n`` names are not labels; then
+                ``attrs["labels"]`` when it has one entry per curve), a Series' name,
+                otherwise no labels.
+            create_if_missing: Create the DSS file if it doesn't exist (default True).
+            x_precision: Decimal places to display for the ordinates, 0-9, or -1 for
+                unset. Give both precisions or neither; they must be both -1 or both
+                0-9. ``None``: from ``attrs`` when usable in the target file, otherwise
+                -1. Inherited precision that DSS6 cannot store is dropped: see Backends.
+            y_precision: Decimal places to display for the curves, as ``x_precision``.
+            value_type: ``"auto"`` (default) stores float32 (record type 200, PD) when
+                both the ordinates and the curves are float32 and float64 (type 205,
+                PDD) otherwise, so a frame read with ``dtype="stored"`` keeps its type.
+                ``"float"`` or ``"double"`` choose.
+            dss_version: Major DSS version (6 or 7) for a new file. Omit it for DSS7.
+                An existing file must match an explicit value.
+
+        Returns:
+            None. As with ``write_timeseries``, a failed write raises.
+
+        Raises:
+            FileNotFoundError: If the DSS file doesn't exist and create_if_missing=False
+            IsADirectoryError: If ``dss_file`` is a directory
+            TypeError: If ``pathname`` or a unit, type or label is not a string
+            ValueError: If ``pathname`` does not have exactly six parts; the arrays are
+                not numeric, empty, or have mismatched shapes; ``labels`` does not have
+                one entry per curve; a precision or ``value_type`` is invalid;
+                ``dss_version`` is invalid or does not match an existing file. Under
+                ``native``, also when the engine refuses the input (see Backends).
+            ImportError: If pyjnius (``java``) or ras-commander-fast-dss (``native``) is
+                not installed
+            DssCapabilityError: ``native`` with a ras-commander-fast-dss wheel that has
+                no writers (a ``NotImplementedError``)
+            DssUnsupportedRecordError: ``native``, when the pathname holds a record of
+                another kind, or for the ELEV cases below
+            RuntimeError: If the Java write fails, or returns without the record being
+                in the file. Native engine errors (``DssLockedError`` when HEC software
+                has the file open, other ``DssError`` subclasses) are ``RuntimeError``
+                subclasses too.
+
+        Backends:
+            ``"java"`` (default) writes ``hec.io.PairedDataContainer`` through HEC
+            Monolith. ``"native"`` writes through ras-commander-fast-dss without a JVM
+            and never falls back to Java: an existing file keeps its DSS version, a new
+            file is DSS7 unless ``dss_version=6``. Both store ``NaN`` as stored bits, and
+            DSS6 pathnames in upper case. The native writer refuses input the Java path
+            accepts; the user guide lists each case: DSS6 units or types longer than 8
+            characters (Java truncates them), some DSS6 labels and precisions, non-ASCII
+            pathnames, infinite values, a record of another kind at the pathname, and
+            two ELEV cases (a ``|`` in an elevation-side unit and, for DSS7, a location
+            record holding vertical-datum information). A failed native write that
+            created the file removes it. ``"shadow"`` writes with Java, repeats the write
+            natively on a temporary copy and logs any difference between the native
+            read-back of the two files; the comparison never raises. The ``time_zone``
+            that ``read_paired_data`` reports is not written on any backend, because
+            ``PairedDataContainer`` does not store it. DSS6 cannot store
+            ``x_precision=0``; a value inherited from ``attrs`` becomes -1 there (the
+            native reader reports 0 for some DSS6 records written without precision).
+            See ``docs/user-guide/dss-native-backend.md``.
+
+        Example:
+            >>> from ras_commander import RasDss
+            >>> RasDss.write_paired_data(
+            ...     "rating.dss", "/BASIN/LOC/STAGE-FLOW///RATING/",
+            ...     [1.0, 2.0, 3.0], [10.0, 25.0, 60.0],
+            ...     x_units="FEET", y_units="CFS", x_type="LINEAR", y_type="LINEAR",
+            ... )
+            >>> rating = RasDss.read_paired_data("rating.dss", "/BASIN/LOC/STAGE-FLOW///RATING/")
+            >>> RasDss.write_paired_data("copy.dss", "/BASIN/LOC/STAGE-FLOW///COPY/", rating)
+        """
+        spec = RasDss._paired_data_spec(
+            pathname, x_values, y_values, x_units, y_units, x_type, y_type, labels,
+            x_precision, y_precision, value_type,
+        )
+        dss_version = RasDss._validate_dss_version(dss_version)
+        backend = RasDss._write_backend()
+        if backend == "native":
+            return RasDss._write_paired_data_native(
+                dss_file, pathname, spec, create_if_missing, dss_version=dss_version
+            )
+        if backend == "shadow":
+            return RasDss._write_paired_data_shadow(
+                dss_file, pathname, spec, create_if_missing, dss_version=dss_version
+            )
+        return RasDss._write_paired_data_java(
+            dss_file, pathname, spec, create_if_missing, dss_version=dss_version
+        )
+
+    @staticmethod
+    def _paired_data_numeric(values: Any, what: str) -> np.ndarray:
+        array = np.asarray(values)
+        if array.dtype.kind not in "fiu":
+            raise ValueError(f"{what} must be numeric, not {array.dtype}")
+        return array
+
+    @staticmethod
+    def _paired_data_labels_from_frame(frame: pd.DataFrame) -> Optional[List[str]]:
+        """Labels of a frame: its string column names, unless they are the reader's
+        default ``curve_n`` names; then ``attrs["labels"]`` when it has one per curve
+        (the reader falls back to default names when labels are blank or repeated)."""
+        columns = list(frame.columns)
+        default = [f"curve_{i + 1}" for i in range(len(columns))]
+        if columns == default:
+            stored = frame.attrs.get("labels")
+            if isinstance(stored, (list, tuple)) and len(stored) == len(columns):
+                return [str(label) for label in stored]
+            return None
+        if all(isinstance(column, str) for column in columns):
+            return columns
+        return None
+
+    @staticmethod
+    def _paired_data_spec(
+        pathname, x_values, y_values, x_units, y_units, x_type, y_type, labels,
+        x_precision, y_precision, value_type,
+    ) -> Dict[str, Any]:
+        """Check and normalize the writer's arguments, the same way for every backend.
+        Runs before any JVM start or file change."""
+        if not isinstance(pathname, str):
+            raise TypeError(f"DSS pathname must be a string, got {type(pathname).__name__}")
+        if pathname.count("/") != 7 or not pathname.startswith("/") or not pathname.endswith("/"):
+            raise ValueError(f"DSS pathname must have exactly six parts: {pathname!r}")
+        if value_type not in ("auto", "float", "double"):
+            raise ValueError('value_type must be "auto", "float" or "double"')
+
+        attrs: Dict[str, Any] = {}
+        frame_labels = None
+        if isinstance(x_values, pd.Series):
+            x_values = x_values.to_frame()
+        if isinstance(x_values, pd.DataFrame):
+            if y_values is not None:
+                raise ValueError("y_values must be omitted when x_values is a DataFrame or Series")
+            attrs = dict(x_values.attrs)
+            frame_labels = RasDss._paired_data_labels_from_frame(x_values)
+            x = RasDss._paired_data_numeric(x_values.index.to_numpy(), "the ordinates")
+            y = RasDss._paired_data_numeric(x_values.to_numpy(), "the curves")
+        else:
+            if y_values is None:
+                raise ValueError("y_values is required unless x_values is a DataFrame or Series")
+            x = RasDss._paired_data_numeric(x_values, "x_values")
+            y = RasDss._paired_data_numeric(y_values, "y_values")
+        if x.ndim != 1:
+            raise ValueError("x_values must be one-dimensional")
+        if y.ndim == 1:
+            y = y.reshape(-1, 1)
+        elif y.ndim != 2:
+            raise ValueError("y_values must be 1-D (one curve) or 2-D (one column per curve)")
+        if x.shape[0] == 0:
+            raise ValueError("x_values must not be empty")
+        if y.shape[0] != x.shape[0]:
+            raise ValueError(
+                f"y_values has {y.shape[0]} rows for {x.shape[0]} ordinates "
+                "(shape must be (len(x_values), n_curves))"
+            )
+        n_curves = int(y.shape[1])
+        if n_curves == 0:
+            raise ValueError("y_values has no curves")
+
+        if labels is None:
+            labels = frame_labels
+        elif isinstance(labels, (str, bytes)):
+            raise ValueError("labels must be a sequence of strings, one per curve")
+        if labels is not None:
+            labels = list(labels)
+            for index, label in enumerate(labels):
+                if not isinstance(label, str):
+                    raise TypeError(f"labels[{index}] must be a string, not {type(label).__name__}")
+            if len(labels) != n_curves:
+                raise ValueError(f"{len(labels)} labels for {n_curves} curves (give one per curve)")
+            if not any(label.strip() for label in labels):
+                labels = None
+
+        text: Dict[str, str] = {}
+        for key, value in (("x_units", x_units), ("y_units", y_units),
+                           ("x_type", x_type), ("y_type", y_type)):
+            if value is None:
+                value = attrs.get(key) or ""
+            if not isinstance(value, str):
+                raise TypeError(f"{key} must be a string, not {type(value).__name__}")
+            text[key] = value
+
+        explicit = x_precision is not None or y_precision is not None
+        if explicit and (x_precision is None or y_precision is None):
+            raise ValueError("give both x_precision and y_precision, or neither")
+        if explicit:
+            for name, value in (("x_precision", x_precision), ("y_precision", y_precision)):
+                if type(value) is not int or not -1 <= value <= 9:
+                    raise ValueError(f"{name} must be an integer from -1 to 9, not {value!r}")
+            if (x_precision == -1) != (y_precision == -1):
+                raise ValueError("x_precision and y_precision must be both -1 or both 0-9")
+
+        if value_type == "auto":
+            single = x.dtype == np.float32 and y.dtype == np.float32
+            value_type = "float" if single else "double"
+
+        return {
+            "x": x,
+            "y": y,
+            "n_curves": n_curves,
+            "labels": labels,
+            "precision": (x_precision, y_precision) if explicit else None,
+            "attr_precision": (attrs.get("x_precision"), attrs.get("y_precision")),
+            "value_type": value_type,
+            **text,
+        }
+
+    @staticmethod
+    def _paired_data_precision(spec: Dict[str, Any], version: int) -> Tuple[int, int]:
+        """Display precision for a target file: explicit values as given; inherited
+        ``attrs`` values when the target can store them, otherwise unset. DSS6 cannot
+        store an x precision of 0, and the native reader reports 0 for some DSS6 records
+        written without precision, so that value must not block copying a frame to DSS6."""
+        if spec["precision"] is not None:
+            return spec["precision"]
+        x_precision, y_precision = spec["attr_precision"]
+        usable = (
+            isinstance(x_precision, (int, np.integer))
+            and isinstance(y_precision, (int, np.integer))
+            and 0 <= x_precision <= 9 and 0 <= y_precision <= 9
+            and not (version == 6 and x_precision == 0)
+        )
+        return (int(x_precision), int(y_precision)) if usable else (-1, -1)
+
+    @staticmethod
+    def _write_paired_data_java(
+        dss_file: Union[str, Path],
+        pathname: str,
+        spec: Dict[str, Any],
+        create_if_missing: bool = True,
+        *,
+        dss_version: Optional[int] = None,
+    ) -> None:
+        """``write_paired_data`` through HEC Monolith (``hec.io.PairedDataContainer``)."""
+        from ras_commander.RasUtils import RasUtils
+
+        dss_path = Path(dss_file)
+        file_existed = dss_path.exists()
+        if file_existed and not dss_path.is_file():
+            raise IsADirectoryError(f"DSS path is not a file: {dss_path}")
+        if file_existed:
+            RasDss._require_writable_dss_file(dss_path)
+            version = RasDss._get_file_version_java(dss_path)
+            if dss_version is not None and version != dss_version:
+                raise ValueError(
+                    f"Existing DSS file is version {version}, not "
+                    f"requested version {dss_version}: {dss_path}"
+                )
+        else:
+            if not create_if_missing:
+                raise FileNotFoundError(f"DSS file not found: {dss_path}")
+            dss_path.parent.mkdir(parents=True, exist_ok=True)
+            logger.info(f"DSS file will be created: {dss_path.name}")
+            logger.debug(f"DSS file creation path: {dss_path}")
+            version = dss_version if dss_version is not None else RasDss._NATIVE_NEW_FILE_VERSION
+
+        dss_file_str = str(RasUtils.safe_resolve(dss_path))
+        x_precision, y_precision = RasDss._paired_data_precision(spec, version)
+
+        RasDss._configure_jvm()
+
+        from jnius import autoclass, cast
+
+        HecDss = autoclass('hec.heclib.dss.HecDss')
+        PairedDataContainer = autoclass('hec.io.PairedDataContainer')
+
+        container = PairedDataContainer()
+        container.setFullName(pathname)
+        container.setXUnits(spec["x_units"])
+        container.setYUnits(spec["y_units"])
+        container.setXType(spec["x_type"])
+        container.setYType(spec["y_type"])
+        container.setXOrdinates(spec["x"].astype(np.float64).tolist())
+        # Java holds the curves curve-major: yOrdinates[curve][ordinate].
+        container.setYOrdinates(spec["y"].astype(np.float64).T.tolist())
+        container.setNumberOrdinates(int(spec["x"].shape[0]))
+        container.setNumberCurves(spec["n_curves"])
+        container.setStoreAsDoubles(spec["value_type"] == "double")
+        # -1 does not clear a precision that an earlier DSS6 write in this process set:
+        # Monolith keeps it (shadow label W10).
+        container.xprecision = x_precision
+        container.yprecision = y_precision
+        if spec["labels"] is not None:
+            container.setLabels(spec["labels"])
+            container.labelsUsed = True
+
+        RasDss._drain_hec_messages()  # earlier calls' lines are not this write's
+        closing_failures: List[str] = []
+        dss = None
+        try:
+            dss = (
+                HecDss.open(dss_file_str, dss_version)
+                if dss_version is not None and not file_existed
+                else HecDss.open(dss_file_str)
+            )
+            # HecDss.put has DataContainer and DataContainerTransformer overloads; without
+            # the cast pyjnius can select the wrong one and nothing is written.
+            dss.put(cast('hec.io.DataContainer', container))
+            RasDss._raise_hec_write_failures(RasDss._drain_hec_messages())
+        except Exception as e:
+            raise RuntimeError(
+                f"Failed to write paired data to DSS: {e}\n"
+                f"  File: {dss_file_str}\n"
+                f"  Pathname: {pathname}"
+            ) from e
+        finally:
+            if dss is not None:
+                try:
+                    dss.done()
+                finally:
+                    closing_failures = RasDss._release_dss_file(dss_file_str)
+        RasDss._raise_hec_write_failures(closing_failures, dss_file_str)
+        RasDss._require_java_record_stored(dss_file_str, pathname)
+        logger.info(
+            f"Wrote {spec['n_curves']} curve(s) of {spec['x'].shape[0]} ordinates "
+            f"to {Path(dss_file_str).name}"
+        )
+
+    @staticmethod
+    def _write_paired_data_native(
+        dss_file: Union[str, Path],
+        pathname: str,
+        spec: Dict[str, Any],
+        create_if_missing: bool = True,
+        *,
+        dss_version: Optional[int] = None,
+    ) -> None:
+        """``write_paired_data`` through ras-commander-fast-dss (no JVM).
+
+        Same argument checks as the Java path. ``NaN`` keeps its stored bits on both DSS
+        versions (``raw=True``), as Monolith stores it; infinite values are refused.
+        """
+        for name, values in (("x_values", spec["x"]), ("y_values", spec["y"])):
+            if values.dtype.kind == "f" and np.isinf(values).any():
+                raise ValueError(
+                    f"{name} contain infinity; HEC-DSS has no infinity convention "
+                    "(the native writer refuses it; the Java path stores the bits)"
+                )
+        dc = _backend.require_native_writes()
+        target, version, existed, created_dirs = RasDss._native_write_target(
+            dss_file, dss_version, create_if_missing
+        )
+        x_precision, y_precision = RasDss._paired_data_precision(spec, version)
+        with RasDss._native_new_file(dc, target, version, existed, created_dirs):
+            report = dc.write_paired_data(
+                str(target), pathname, spec["x"], spec["y"],
+                x_units=spec["x_units"], x_type=spec["x_type"],
+                y_units=spec["y_units"], y_type=spec["y_type"],
+                labels=spec["labels"], value_type=spec["value_type"], raw=True,
+                x_precision=x_precision, y_precision=y_precision, version=version,
+            )
+        logger.info(
+            f"Wrote {spec['n_curves']} curve(s) of {spec['x'].shape[0]} ordinates to {target.name}"
+        )
+        logger.debug(
+            f"DSS native write details: file={target}, pathname={pathname}, version={version}, "
+            f"blocks={report.get('blocks')}"
+        )
+
+    @staticmethod
+    def _write_paired_data_shadow(
+        dss_file: Union[str, Path],
+        pathname: str,
+        spec: Dict[str, Any],
+        create_if_missing: bool = True,
+        *,
+        dss_version: Optional[int] = None,
+    ) -> None:
+        """Java write (its result and errors are returned); the native writer repeats
+        the write on a temporary copy and the native read-backs of both files are
+        compared and logged. The comparison never raises."""
+        import time
+
+        ctx = RasDss._shadow_write_snapshot(dss_file)
+        try:
+            t0 = time.perf_counter()
+            RasDss._write_paired_data_java(
+                dss_file, pathname, spec, create_if_missing, dss_version=dss_version
+            )
+            java_s = time.perf_counter() - t0
+            try:
+                RasDss._shadow_compare_paired_data_write(ctx, dss_file, pathname, spec, java_s)
+            except Exception as exc:  # the comparison must never break the write
+                logger.warning("DSS shadow write_paired_data comparison failed for %s: %s",
+                               dss_file, exc)
+        finally:
+            RasDss._shadow_write_cleanup(ctx)
+
+    @staticmethod
+    def _shadow_compare_paired_data_write(
+        ctx: Dict[str, Any], dss_file, pathname, spec, java_s
+    ) -> None:
+        import time
+
+        if ctx.get("skip"):
+            _backend.record("write_paired_data", "skipped", ctx["skip"], dss_file=dss_file,
+                            pathname=pathname, java_seconds=java_s)
+            return
+        version = RasDss._get_file_version_native(dss_file)
+        native_exc, diffs, labels = None, [], []
+        t1 = time.perf_counter()
+        try:
+            RasDss._write_paired_data_native(
+                ctx["copy"], pathname, spec, True,
+                dss_version=None if ctx["existed"] else version,
+            )
+        except Exception as exc:
+            native_exc = exc
+        native_s = time.perf_counter() - t1
+        if native_exc is None:
+            readback = pathname.upper() if version == 6 else pathname
+            java_df = RasDss._read_paired_data_native(dss_file, readback, False)
+            native_df = RasDss._read_paired_data_native(ctx["copy"], readback, False)
+            diffs, labels = _backend.compare_written_paired_data(java_df, native_df)
+        RasDss._shadow_write_record(
+            "write_paired_data", dss_file, pathname, native_exc, diffs, labels, java_s, native_s,
+            detail={"dss_version": version},
         )
 
     @staticmethod
@@ -4168,6 +5767,12 @@ class RasDss:
                 raise RuntimeError(
                     f"HEC-DSS did not create version {dss_version}: {dss_file}"
                 )
+        except RuntimeError:
+            raise
+        except Exception as e:
+            raise RuntimeError(
+                f"HEC-DSS could not create version {dss_version} file {dss_file}: {e}"
+            ) from e
         finally:
             if dss is not None:
                 try:
