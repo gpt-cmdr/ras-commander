@@ -209,3 +209,36 @@ assert HdfMesh.__name__ == "HdfMesh"
         text=True,
         check=True,
     )
+
+
+def test_native_dss_engine_is_optional_in_the_dss_extras(monkeypatch):
+    from packaging.requirements import Requirement
+
+    metadata = _setup_metadata(monkeypatch)
+    assert not any(spec.startswith("ras-commander-fast-dss")
+                   for spec in metadata["install_requires"])
+    extras = metadata["extras_require"]
+    for extra in ("dss", "dss-native", "all"):
+        native = [Requirement(spec) for spec in extras[extra]
+                  if spec.startswith("ras-commander-fast-dss")]
+        assert len(native) == 1, extra
+        requirement = native[0]
+        assert str(requirement.specifier) == "<0.2,>=0.1.0"
+        for system, machine in (("Windows", "AMD64"), ("Linux", "x86_64"),
+                                ("Linux", "aarch64"), ("Darwin", "arm64"),
+                                ("Darwin", "x86_64")):
+            assert requirement.marker.evaluate({
+                "platform_python_implementation": "CPython",
+                "platform_system": system,
+                "platform_machine": machine,
+            }), (extra, system, machine)
+        for env in ({"platform_python_implementation": "PyPy",
+                     "platform_system": "Linux", "platform_machine": "x86_64"},
+                    {"platform_python_implementation": "CPython",
+                     "platform_system": "Windows", "platform_machine": "ARM64"},
+                    {"platform_python_implementation": "CPython",
+                     "platform_system": "Linux", "platform_machine": "ppc64le"}):
+            assert not requirement.marker.evaluate(env), (extra, env)
+    # pydsstools stays in dss-native for write_precip_grid_arrays on "java".
+    assert "pydsstools>=3.1.0,<4" in extras["dss-native"]
+    assert "pyjnius" in extras["dss"]

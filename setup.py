@@ -21,6 +21,20 @@ FAST_HDF_WHEEL_MARKER = (
     ' or (platform_system == "Linux" and platform_machine == "x86_64")'
     ' or (platform_system == "Darwin" and platform_machine == "arm64"))'
 )
+# The native DSS engine (FAST-DSS) is optional: the default DSS backend is
+# "java". It is published as abi3 wheels for CPython 3.10+ on Windows x64,
+# Linux x86_64/aarch64 (manylinux and musllinux) and macOS arm64/x86_64, so the
+# marker keeps pip from compiling the Rust source distribution elsewhere.
+FAST_DSS_REQUIREMENT = 'ras-commander-fast-dss>=0.1.0,<0.2'
+FAST_DSS_WHEEL_MARKER = (
+    'platform_python_implementation == "CPython" and ('
+    '(platform_system == "Windows" and platform_machine == "AMD64")'
+    ' or (platform_system == "Linux" and platform_machine == "x86_64")'
+    ' or (platform_system == "Linux" and platform_machine == "aarch64")'
+    ' or (platform_system == "Darwin" and platform_machine == "arm64")'
+    ' or (platform_system == "Darwin" and platform_machine == "x86_64"))'
+)
+FAST_DSS_DEPENDENCY = f'{FAST_DSS_REQUIREMENT}; {FAST_DSS_WHEEL_MARKER}'
 
 # Keep the default installation import-safe and suitable for inventory/HDF work.
 # Feature groups are additive so batch runners can install only what they use.
@@ -207,10 +221,15 @@ setup(
         # polyline profile queries for velocity, WSE, flow, time-series,
         # pipe-network, and plan-difference renderers (Windows HEC-RAS install required)
         'mesh': ['pythonnet>=3.0.5'],
-        # DSS file operations (requires Java JRE/JDK 8+)
-        'dss': ['pyjnius'],
-        # Native direct NumPy -> DSS7 grids, without Java/Vortex (optional wheels).
-        'dss-native': ['pydsstools>=3.1.0,<4', 'pyproj', 'affine'],
+        # DSS file operations. The default "java" backend needs pyjnius and a
+        # Java JRE/JDK 8+; the optional native engine (FAST-DSS) serves the
+        # "native" and "shadow" backends without Java.
+        'dss': ['pyjnius', FAST_DSS_DEPENDENCY],
+        # pydsstools writes NumPy grids directly to DSS7 for
+        # write_precip_grid_arrays on the "java" backend; FAST-DSS serves the
+        # "native" backend.
+        'dss-native': ['pydsstools>=3.1.0,<4', 'pyproj', 'affine',
+                       FAST_DSS_DEPENDENCY],
         # Everything (all optional dependencies)
         'all': FULL_FEATURE_DEPENDENCIES + COMPUTE_DEPENDENCIES + [
             'paramiko>=3.0',
@@ -230,6 +249,7 @@ setup(
             'aiohttp',
             'pythonnet>=3.0.5',
             'pyjnius',
+            FAST_DSS_DEPENDENCY,
         ],
     })
 
