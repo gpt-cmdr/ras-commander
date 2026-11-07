@@ -2,7 +2,7 @@
 
 Selection, ImportError and fallback tests need neither Java nor ras_commander_fast_dss.
 Native and shadow tests read a real RasExamples project (Muncie) and skip when
-ras_commander_fast_dss (a private wheel) is not installed. No test here starts a JVM: the Java
+ras_commander_fast_dss (optional; on PyPI) is not installed. No test here starts a JVM: the Java
 read paths are replaced where shadow mode needs a Java result.
 """
 
@@ -116,16 +116,17 @@ def test_native_without_ras_commander_fast_dss_raises_import_error(
         lambda: RasDss.read_timeseries(tmp_path / "x.dss", "/A/B/C//1HOUR/F/"),
         lambda: RasDss.read_multiple_timeseries(tmp_path / "x.dss", ["/A/B/C//1HOUR/F/"]),
     ):
-        with pytest.raises(ImportError, match=r"ras-commander-fast-dss wheel you were given"):
+        with pytest.raises(ImportError, match=r"pip install ras-commander-fast-dss"):
             call()
 
 
-def test_install_hint_names_the_unpublished_fast_dss_wheel():
+def test_install_hint_names_the_published_fast_dss_package():
     hint = _backend._NATIVE_INSTALL_HINT
-    assert "ras-commander-fast-dss" in hint
-    assert "ras_commander_fast_dss-<version>-<tag>.whl" in hint
-    # No extra installs the unpublished wheel, and the old name is gone (no alias).
-    assert "[dss-native]" not in hint
+    assert "pip install ras-commander-fast-dss" in hint
+    assert "ras-commander[dss]" in hint
+    for stale in ("wheel you were given", "not yet published", ".whl"):
+        assert stale not in hint
+    # The old name is gone (no alias).
     assert "dss_commander" not in hint.replace("ras_commander_fast_dss", "")
     assert "dss-commander" not in hint.replace("ras-commander-fast-dss", "")
 

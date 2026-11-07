@@ -23,7 +23,8 @@ Dependencies:
         - Java JRE/JDK 8+: Must be installed and JAVA_HOME set
 
     Optional for the native backend:
-        - ras-commander-fast-dss (not yet published; install the wheel you were given)
+        - ras-commander-fast-dss: pip install ras-commander-fast-dss
+          (also installed by the dss, dss-native and all extras)
 
     Auto-downloaded:
         - HEC Monolith libraries (~20 MB, cached in ~/.ras-commander/dss/)

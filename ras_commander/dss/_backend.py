@@ -54,10 +54,9 @@ JAVA_MISSING_MARKERS = np.array([-901.0, -902.0, float(-np.finfo(np.float32).max
 
 _NATIVE_INSTALL_HINT = (
     "The 'native' DSS backend requires the optional ras-commander-fast-dss package "
-    "(import name ras_commander_fast_dss). It is not yet published; install the "
-    "ras-commander-fast-dss wheel you were given with "
-    "'uv pip install ras_commander_fast_dss-<version>-<tag>.whl', or use "
-    "RasDss.backend = 'java'."
+    "(import name ras_commander_fast_dss). Install it with "
+    "'pip install ras-commander-fast-dss' or 'pip install \"ras-commander[dss]\"', "
+    "or use RasDss.backend = 'java'."
 )
 
 _lock = threading.Lock()
@@ -652,8 +651,9 @@ NATIVE_WRITES_GATE_MESSAGE = (
     "The installed ras-commander-fast-dss does not provide the native DSS writers "
     "(ras_commander_fast_dss.create, write_timeseries, write_paired_data and write_grid "
     "with DSS6 support). "
-    "RasDss does not fall back to Java. Use a ras-commander-fast-dss build with writer support "
-    "(RasDss.get_capabilities().attrs['native_writes_available']), or use "
+    "RasDss does not fall back to Java. Upgrade with 'pip install -U ras-commander-fast-dss' "
+    "(0.1.0 and later include the writers; check "
+    "RasDss.get_capabilities().attrs['native_writes_available']), or use "
     "RasDss.backend = 'java'."
 )
 
