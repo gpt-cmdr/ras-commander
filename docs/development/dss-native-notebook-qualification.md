@@ -15,6 +15,9 @@ files, and the HEC-RAS results.
 - With that failure bypassed in a scratch copy, 916 and 917 run to completion on all three
   backends, with the same results.
 - No integration defect was found, so this branch makes no library change.
+- **Final round (2026-11-07):** 916, 917 and 926 are fixed for #534, 926 gains a fixed-cycle
+  mode, 318 no longer deletes the shared example-project folder, and 731 has a native export route.
+  All five fixed notebooks pass on all three backends; see "Final round" below.
 
 **Counts.** These are the unmodified notebooks run on each backend: 9 run in full, plus a
 partial DSS check of 952.
@@ -162,6 +165,62 @@ and physical-cell HDF results were equal.
    All DSS operations finish before the failing cells, and their shadow comparisons are all
    identical. This branch does not change these notebooks; see "Open items".
 
+## Final round: fixed notebooks (2026-11-07)
+
+The notebooks that failed above, and 318's clean-up, were fixed on `dss-native-writes`, then
+each was run again on `java`, `native` and `shadow` with the same harness and method.
+
+| Item | Value |
+|---|---|
+| Branch | `dss-native-writes`, after merging `origin/main` (with #801) |
+| Engine | `ras-commander-fast-dss` 0.0.1, the same wheel as above (engine `5af800d`; engine `main` `088668c` differs only in `docs/project/OPEN_QUESTIONS.md`) |
+| HEC-RAS | 7.0, through `RasCmdr.compute_plan` only |
+| Other | HEC-Vortex 0.13.3 (917's MRMS import, and 731's `vortex` route); `qpkit` 0.1.0 (916, 926) |
+
+| NB | Change | java | native | shadow | Differences | Wall time j / n / s (s) |
+|---|---|---|---|---|---|---|
+| 318 | Clean-up removes only `BaldEagleCrkMulti2D_311`, not the shared `example_projects` folder | pass | pass | pass | None | 6 / 4 / 4 |
+| 916 | `get_mesh_cell_points(..., include_ghost_cells=False)` to match the ghost-free result rows | pass | pass | pass | No text or image differences. DSS: every record of the 4 DSS files equal, including the 18 HRRR grids. HDF: every physical-cell and face dataset bit-equal (note 4 classes only) | 350 / 350 / 428 |
+| 917 | `include_ghost_cells=True` in every `get_mesh_timeseries(..., truncate=False)` call, because the notebook checks that boundary cells receive no rain | pass | pass (note A) | pass (note A) | Shadow: catalog 4, read_grid 122, all identical. DSS: 37 Davis and 24 NOLA grids equal. Text: run-folder timestamps, Vortex catalog row order, file sizes and the NOLA volume-accounting value only | 1886 / 2323 / 2052 |
+| 926 | Fixed-cycle mode (`RAS_COMMANDER_WPC_QPF_CYCLE`, `RAS_COMMANDER_WPC_QPF_GRIB_DIR`); physical cell centers as 916 | pass | pass | pass | Cycle 2026-11-05 00Z. No text or image differences. DSS: every record equal, including the 28 WPC grids. HDF: every physical-cell and face dataset bit-equal (note 4 classes only) | 437 / 775 / 552 |
+| 731 | `DSS_EXPORT_ROUTE = "native"` beside the default `"vortex"`; `SOURCE_BUFFER_PERCENT` | — | — | — | See note B | — |
+
+**Note A.** The first native and shadow runs of 917 stopped in cell 11, before any DSS step, when
+the NOLA no-rain baseline reached the notebook's `max_runtime` of 2,400 s. Another HEC-RAS
+notebook was running at the same time on this host. Each was run again alone, and passed.
+
+**Note B, 731.** The notebook is a template for a user's model, so its committed state has no
+outputs. Its export cells were run with the configuration cell set to the public
+`NewOrleansMetro` example (plan 01, 72 hours, `PAD_DRY_TAIL=True`), NOAA Atlas 14 Volume 9
+100-year 24-hour depths (`se100yr24ha`, NAD83) and Volume 9 temporal region 1 (a mechanics choice,
+not checked against NOAA's region map), with `SOURCE_BUFFER_PERCENT = 50`:
+
+- the `vortex` route (HEC-Vortex 0.13.3, `java` reads) and the `native` route (`native` reads, no
+  JVM loaded) both passed the notebook's read-back checks;
+- they wrote the same 144 records, with identical cell values, extents, units (`IN`) and type
+  (`PER-CUM`); the stored null value differs (0.0 against -FLT_MAX, label W2);
+- with the template's 10% buffer, both routes failed the notebook's "no missing rainfall over
+  model cells" check in the same way: the crop was too small for 2,000 m bilinear cells on this
+  10 km model, which is why the buffer became a setting;
+- the optional attachment step stopped in `RasUnsteady.inspect_boundary_blocks` with
+  `ambiguous_location_kind` for block 4 of `NewOrleansMetro.u01`, a limit of that API unrelated
+  to DSS, so the precompute qualification was not reached.
+
+`tests/test_atlas14_native_dss_export.py` runs the notebook's native call on a NetCDF built
+from NOAA's committed Texas region 3 curve and reads every record back on the native backend.
+
+**926 cycles.** WPC keeps about a week of cycles online. On java, cycle 2026-11-07 00Z (0.02 in
+over the selected day) failed the notebook's 1.0 ft maximum-WSEL-error gate at cell 15 with
+1.0375 ft in 3 cells, identically on all three backends; 2026-11-06 12Z (0.86 ft) and
+2026-11-05 00Z (0.85 ft) passed; 2026-11-03 12Z stopped at cell 9, where one `qpkit` DSS grid's
+regional mean differed from its source GRIB by more than the notebook's 0.30 mm. 2026-11-05 00Z,
+the wettest passing cycle, is the committed run. Its 28 GRIB files are kept with their SHA-256
+sums on the qualification host.
+
+**Committed outputs.** 916, 917 and 926 carry the outputs of their `java` (default backend)
+runs. 318 keeps its earlier outputs, except the changed clean-up cell, whose output comes from
+the `java` run.
+
 ## Skipped notebooks
 
 A skip is not a pass. Each reason below was checked on this host.
@@ -181,11 +240,11 @@ change.
 
 ## Open items
 
-1. **Notebooks 916, 917, 926 need a refresh** after upstream #534. Their
+1. **Resolved 2026-11-07: notebooks 916, 917, 926 needed a refresh** after upstream #534. Their
    `get_mesh_timeseries(..., truncate=False)` calls need `include_ghost_cells=True`, or their
    `get_mesh_cell_points()` calls need `include_ghost_cells=False`, to match the cell support
    they assert. This is notebook maintenance, separate from the DSS backend.
-2. **Notebook 318 deletes the shared example-project folder.** Its last cell runs
+2. **Resolved 2026-11-07: notebook 318 deleted the shared example-project folder.** Its last cell runs
    `shutil.rmtree(project_path.parent)`, which removes the whole `example_projects` folder,
    including other notebooks' projects. `examples/AGENTS.md` forbids this cleanup pattern.
    It should remove only `project_path`.
@@ -193,7 +252,7 @@ change.
    writes DSS in a child process, as 728 does, the notebook's shadow summary does not include
    those writes. An `unexpected` outcome would still be logged at WARNING in the child's
    stderr. 728 checks that stderr only for access violations.
-4. **926 cannot be reproduced across days.** It downloads the current-day WPC cycle, so its
+4. **Resolved 2026-11-07 (fixed-cycle mode): 926 could not be reproduced across days.** It downloads the current-day WPC cycle, so its
    forcing, and its pass/fail against the notebook's WSEL tolerance, depend on when it runs.
    A fixed-cycle mode would make this notebook usable as a regression test.
 5. **Host environment (not repository issues).** Two settings specific to the qualification host
