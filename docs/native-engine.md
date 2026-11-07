@@ -730,7 +730,7 @@ print({r["backend"] for r in records})
 ```
 
 **The extension is installed but not used.** Check
-`ras_commander_fast_hdf.API_VERSION` (must be 11) and the log for "Ignoring
+`ras_commander_fast_hdf.API_VERSION` (must be 12) and the log for "Ignoring
 incompatible ras-commander-fast-hdf extension". Also check that
 `RAS_COMMANDER_FAST_HDF` is not set to `h5py`/`0`.
 
