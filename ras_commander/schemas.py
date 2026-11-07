@@ -29,7 +29,7 @@ Each entry of :data:`DATAFRAME_SCHEMAS`:
 """
 
 # Schema contract version -- bump when the documented column surface changes meaningfully.
-SCHEMA_VERSION = "1.32"
+SCHEMA_VERSION = "1.33"
 
 _GEOMETRY_ASSOCIATION_COLUMNS = [
     {"name": "geom_number", "dtype": "str", "description": "Normalized geometry identifier."},
@@ -2162,4 +2162,40 @@ DATAFRAME_SCHEMAS["fim_boundary_comparison"] = {
         )
     ],
     "note": "Difference metrics retain complete polygons and holes. Native vector parity is not presumed. Shared timing/provenance and exclusions are recorded in attrs and boundary_comparison.json.",
+}
+
+
+DATAFRAME_SCHEMAS["geometry_bc_line_blocks"] = {
+    "description": "Authored boundary lines in source coordinates/units; blank area associations remain unassigned.",
+    "accessor": "GeomBcLines.inspect_bc_line_blocks(geom_file)",
+    "source": "ras_commander.geom.GeomBcLines.GeomBcLines.inspect_bc_line_blocks()",
+    "extra_columns": False,
+    "dynamic": False,
+    "columns": [
+        {
+            "name": "name",
+            "dtype": "str",
+            "description": "Exact unpadded boundary name; unique in the file.",
+        },
+        {
+            "name": "area_2d",
+            "dtype": "str",
+            "description": "Authored flow-area association; empty means unassigned.",
+        },
+        {
+            "name": "coordinates",
+            "dtype": "list[list[float]]",
+            "description": "Ordered source X/Y pairs; no CRS or unit conversion.",
+        },
+        {
+            "name": "authored_type",
+            "dtype": "str | None",
+            "description": "Stored type text when present; never inferred from HDF.",
+        },
+        {
+            "name": "area_association_status",
+            "dtype": "str",
+            "description": "assigned or unassigned, from the authored area field.",
+        },
+    ],
 }

@@ -679,6 +679,187 @@ def _legacy_volume_accounting(legacy: dict) -> tuple[Union[dict, None], list[str
     return attributes, net_terms
 
 
+_LEGACY_PRECIPITATION_VOLUME_ATTRIBUTE = "Precipitation Excess (acre feet)"
+
+
+def _legacy_rain_source_blocks(flow_path: Path) -> dict[int, dict[str, str]]:
+    """Inventory legacy rain declarations so inline/unknown sources cannot hide.
+
+    This owning execution validator reads only declaration keys, never modifies
+    flow data, and does not interpret hydraulic ordinates or fabricate values.
+    """
+    blocks: list[list[str]] = []
+    for line in flow_path.read_text(encoding="utf-8", errors="replace").splitlines():
+        if line.startswith("Boundary Location="):
+            blocks.append([])
+        elif blocks:
+            blocks[-1].append(line.strip())
+    result = {}
+    for index, block in enumerate(blocks):
+        rain_lines = [line for line in block if line.startswith("Precipitation Hydrograph=")]
+        if not rain_lines:
+            continue
+        if len(rain_lines) != 1:
+            raise ValueError("Duplicate legacy precipitation declaration")
+        keys = {}
+        for key in ("Precipitation Hydrograph", "DSS Path", "Use DSS"):
+            values = [line.split("=", 1)[1].strip() for line in block if line.startswith(key + "=")]
+            if len(values) != 1:
+                raise ValueError("Incomplete or duplicate legacy precipitation source declaration")
+            keys[key] = values[0]
+        if keys["Precipitation Hydrograph"] != "0" or keys["Use DSS"].lower() != "true":
+            raise ValueError("Inline or unsupported legacy precipitation is not reconciled")
+        # A precip parameter attached to a flow/stage boundary must not qualify.
+        if any(line.startswith((*_INFLOW_HYDROGRAPH_KEYS, *_STAGE_DRIVEN_KEYS)) for line in block):
+            raise ValueError("Conflicting hydraulic boundary type in precipitation block")
+        result[index] = keys
+    return result
+
+
+def _legacy_precipitation_accounting(
+    flow_path: Path,
+    attributes: dict,
+    volume_units: str | None,
+) -> tuple[float, dict[str, Any], list[str]]:
+    """Qualify the reported legacy 2D rain term for like-for-like inflow accounting.
+
+    Legacy PRECIP-EXCESS boundary rain is included in the observed HEC-RAS 6.6 total
+    boundary inflow. The public unsteady readers must prove this exact source
+    schema, with no simultaneous modern meteorological input. Adding the
+    explicitly acre-foot reported rain term reconciles the remaining authored
+    inline inflow; it does not independently validate rainfall depth or area.
+    No coordinates, source inputs or HDF bytes are changed.
+    """
+    evidence: dict[str, Any] = {
+        "status": "not_applicable",
+        "reported_volume_acre_feet": None,
+        "source_schema": None,
+        "precipitation_independently_validated": False,
+        "hydraulic_approval": False,
+    }
+    failure = "UNSTEADY_INFLOW_LEGACY_PRECIPITATION_UNVERIFIED"
+    try:
+        from ..RasUnsteady import RasUnsteady
+
+        declared = _legacy_rain_source_blocks(flow_path)
+        links = RasUnsteady.get_dss_boundaries(flow_path)
+        met = RasUnsteady.get_met_precipitation_config(flow_path)
+        if not isinstance(met, dict) or not isinstance(met.get("enabled"), bool):
+            raise TypeError("Public meteorological precipitation schema is unavailable")
+        if "dss_part_c" not in links.columns:
+            raise ValueError("Public DSS boundary parameter schema is unavailable")
+        rain = links.loc[links["dss_part_c"].astype(str).str.upper().str.startswith("PRECIP")]
+        evidence["legacy_boundary_count"] = len(rain)
+        if met["enabled"]:
+            if declared or not rain.empty:
+                raise ValueError("Mixed legacy and modern precipitation inputs are ambiguous")
+            evidence["status"] = "modern-precipitation-not-added"
+            return 0.0, evidence, []
+        if declared:
+            if "boundary_index" not in rain.columns or len(rain) != len(declared):
+                raise ValueError(
+                    "Legacy precipitation declarations do not match public DSS inventory"
+                )
+            for row in rain.itertuples(index=False):
+                if (
+                    row.boundary_index not in declared
+                    or str(row.dss_path) != declared[row.boundary_index]["DSS Path"]
+                ):
+                    raise ValueError(
+                        "Public DSS identity does not match legacy precipitation declaration"
+                    )
+        elif not rain.empty:
+            raise ValueError("DSS precipitation parameter lacks an authored precipitation boundary")
+        raw_reported = attributes.get(_LEGACY_PRECIPITATION_VOLUME_ATTRIBUTE)
+        if rain.empty:
+            if raw_reported is not None and float(raw_reported) != 0.0:
+                raise ValueError("Reported precipitation lacks a recognized source schema")
+            return 0.0, evidence, []
+        required = {"dss_part_c", "area_2d", "bc_line_name", "dss_path", "use_dss"}
+        if not required.issubset(rain.columns):
+            raise ValueError("Legacy precipitation boundary schema is incomplete")
+        areas = []
+        for row in rain.itertuples(index=False):
+            area = str(row.area_2d).strip()
+            if (
+                str(row.dss_part_c).upper() != "PRECIP-EXCESS"
+                or not area
+                or str(row.bc_line_name).strip()
+                or str(row.use_dss).lower() != "true"
+            ):
+                raise ValueError("Unsupported or ambiguous legacy precipitation boundary")
+            areas.append(area)
+        if len(set(areas)) != len(areas):
+            raise ValueError("Multiple legacy precipitation links target the same 2D area")
+        if (volume_units or "").lower() != "acre feet":
+            raise ValueError("Legacy precipitation accounting requires acre-foot volume units")
+        if raw_reported is None:
+            raise ValueError("Explicit reported legacy precipitation acre-foot term is missing")
+        reported = float(raw_reported)
+        if not _finite(reported) or reported < 0:
+            raise ValueError("Reported legacy precipitation must be finite and nonnegative")
+        total = float(attributes[_VOLUME_ACCOUNTING_FIELDS["boundary_inflow_volume"]])
+        if reported > total:
+            raise ValueError("Reported precipitation exceeds total boundary inflow")
+        evidence.update(
+            status="reported-legacy-component-qualified",
+            source_schema="legacy-2d-dss-PRECIP-EXCESS",
+            source_areas=sorted(areas),
+            source_pathnames=sorted(rain["dss_path"].astype(str)),
+            reported_volume_acre_feet=reported,
+            accounting_attribute=_LEGACY_PRECIPITATION_VOLUME_ATTRIBUTE,
+            reconciliation_scope="inline-boundary-inflow-plus-reported-legacy-rain",
+        )
+        return reported, evidence, []
+    except Exception as exc:  # noqa: BLE001 - source/API failures must fail the QA gate
+        evidence.update(status="failed", error=f"{type(exc).__name__}: {exc}")
+        return 0.0, evidence, [failure]
+
+
+def _native_geometry_adjustment_diagnostics(messages: str, diagnostics: dict) -> dict:
+    """Expose automatic native weir raises without granting engineering acceptance.
+
+    Amounts and stations retain model units; this parser never assumes feet or
+    changes existing process-error/solver/validation decisions.
+    """
+    result = dict(diagnostics)
+    connection = None
+    adjustments = []
+    number = r"[-+]?(?:\d+(?:\.\d*)?|\.\d+)(?:[Ee][-+]?\d+)?"
+    for line_number, line in enumerate(messages.splitlines(), 1):
+        heading = re.search(r"The SA 2D Connection at\s+(.+?)\s*$", line, re.IGNORECASE)
+        if heading:
+            connection = heading.group(1).strip()
+        raised = re.search(
+            r"The weir was raised a maximum of:\s*("
+            + number
+            + r")\s+at station:\s*("
+            + number
+            + r")",
+            line,
+            re.IGNORECASE,
+        )
+        if raised:
+            amount, station = map(float, raised.groups())
+            adjustments.append(
+                {
+                    "reason_code": "NATIVE_STRUCTURE_ELEVATION_AUTOMATICALLY_RAISED",
+                    "connection_context": connection,
+                    "maximum_raise_model_units": amount,
+                    "station_model_units": station,
+                    "line_number": line_number,
+                    "native_message": line.strip(),
+                    "engineering_review_required": True,
+                }
+            )
+    if adjustments:
+        result["native_geometry_adjustments"] = adjustments
+        result["engineering_review_required"] = True
+        result["has_warnings"] = True
+        result["warning_count"] = max(int(result.get("warning_count", 0)), len(adjustments))
+    return result
+
+
 def validate_unsteady_results(
     hdf_path: Union[str, Path],
     flow_path: Union[str, Path],
@@ -695,12 +876,15 @@ def validate_unsteady_results(
     finite, and the absolute volume error is within
     ``volume_error_percent_limit``.
 
-    When every inflow is an inline hydrograph -- no DSS-sourced inflow, no
-    stage-driven boundary, no fixed start time, and precipitation disabled --
+    When every boundary inflow is an inline hydrograph -- no DSS-sourced flow,
+    stage-driven boundary or fixed start time --
     the authored inflow volume is integrated over the simulation window and
     must match HEC-RAS's ``Total Boundary Flux of Water In`` within
     ``inflow_relative_tolerance``. Otherwise that reconciliation is recorded as
-    ``not_applicable`` with its reasons; it is never assumed to pass.
+    ``not_applicable`` with its reasons; it is never assumed to pass. Legacy
+    2D DSS PRECIP-EXCESS input may be reconciled using the explicitly reported
+    acre-foot rain term after its source schema is qualified. The component
+    evidence states that this does not independently validate rainfall inputs.
 
     The function never raises for unreadable or inconsistent inputs; it fails
     closed with ``passed=False`` and one or more reason codes.
@@ -719,10 +903,16 @@ def validate_unsteady_results(
     Returns:
         dict[str, Any]: ``passed``, ``reason_codes``, ``flow_type``,
         ``volume_units``, the volume-accounting values, the limit, and an
-        ``inflow_reconciliation`` section. Reason codes:
+        ``inflow_reconciliation`` section. In a qualified legacy rain case,
+        ``authored_inline_inflow_volume`` is integrated from authored inline
+        discharges, ``reported_legacy_precipitation_volume`` is the HDF rain
+        component, and ``comparison_inflow_volume`` is their sum (acre-feet).
+        The compatibility key ``authored_inflow_volume`` holds that same sum;
+        it does not imply independent rain-volume validation. Reason codes:
         ``UNSTEADY_RESULTS_UNREADABLE``, ``UNSTEADY_VOLUME_ACCOUNTING_MISSING``,
         ``UNSTEADY_NONFINITE_VOLUME``, ``UNSTEADY_VOLUME_ERROR_EXCEEDED``,
-        ``UNSTEADY_INFLOW_MISMATCH``.
+        ``UNSTEADY_INFLOW_MISMATCH``,
+        ``UNSTEADY_INFLOW_LEGACY_PRECIPITATION_UNVERIFIED``.
 
     Examples:
         >>> from ras_commander import validate_unsteady_results
@@ -735,6 +925,7 @@ def validate_unsteady_results(
         "status": "not_applicable",
         "reasons": [],
         "authored_inflow_volume": None,
+        "comparison_inflow_volume": None,
         "reported_inflow_volume": None,
         "relative_difference": None,
         "tolerance": inflow_relative_tolerance,
@@ -808,6 +999,15 @@ def validate_unsteady_results(
     if window is None:
         not_determinable.append("UNSTEADY_INFLOW_SIMULATION_WINDOW_UNREADABLE")
 
+    rain_volume, rain_evidence, rain_failures = _legacy_precipitation_accounting(
+        Path(flow_path), attributes, summary["volume_units"]
+    )
+    summary["legacy_precipitation_accounting"] = rain_evidence
+    if rain_evidence["status"] == "modern-precipitation-not-added":
+        not_determinable.append("UNSTEADY_INFLOW_PRECIPITATION_ENABLED")
+    if rain_failures:
+        reason_codes.extend(rain_failures)
+        not_determinable.extend(rain_failures)
     authored_cubic_feet = 0.0
     if not not_determinable:
         from ..RasUnsteady import RasUnsteady
@@ -843,12 +1043,16 @@ def validate_unsteady_results(
     if not_determinable:
         reconciliation["reasons"] = sorted(set(not_determinable))
     else:
-        authored = authored_cubic_feet / _CUBIC_FEET_PER_ACRE_FOOT
+        inline_authored = authored_cubic_feet / _CUBIC_FEET_PER_ACRE_FOOT
+        authored = inline_authored + rain_volume
         reported = values["boundary_inflow_volume"]
         scale = max(abs(authored), abs(reported))
         difference = 0.0 if scale == 0 else abs(reported - authored) / scale
         reconciliation.update(
             authored_inflow_volume=authored,
+            comparison_inflow_volume=authored,
+            authored_inline_inflow_volume=inline_authored,
+            reported_legacy_precipitation_volume=rain_volume,
             reported_inflow_volume=reported,
             relative_difference=difference,
         )
@@ -1023,7 +1227,9 @@ def execute_request(request_path: Union[str, Path]) -> RasExecutionReceipt:
         )
         if hdf_path.is_file() and hdf_path.stat().st_size > 0:
             messages = HdfResultsPlan.get_compute_messages_hdf_only(hdf_path) or ""
-            diagnostics = ResultsParser.parse_compute_messages(messages)
+            diagnostics = _native_geometry_adjustment_diagnostics(
+                messages, ResultsParser.parse_compute_messages(messages)
+            )
             result_hdf_digest = sha256_file(hdf_path)
             fresh_result_evidence = {
                 "passed": True,
