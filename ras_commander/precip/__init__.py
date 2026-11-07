@@ -13,7 +13,7 @@ from various sources for use in HEC-RAS rain-on-grid 2D models:
 - FrequencyStormDdf - Balanced depth-duration storms with optional bounded TP-40 reduction
 - Tp40Reduction - Explicit duration-dependent point-to-area factors
 - VortexCli - HEC-Vortex CLI wrapper for converting GRIB2/NetCDF to HEC-DSS
-- PrecipMrms - MRMS QPE catalog, download, HEC-Vortex DSS conversion, direct hyetograph/NetCDF, and MP4 animation helpers
+- PrecipMrms - MRMS QPE catalog, download, DSS conversion (HEC-Vortex, or the optional native importer), direct hyetograph/NetCDF, and MP4 animation helpers
 - RasPrecipGrid - Explicit GeoTIFF/GRIB normalization to durable HEC-RAS NetCDF
 - QPF (Quantitative Precipitation Forecast) - NWS forecasts (future)
 

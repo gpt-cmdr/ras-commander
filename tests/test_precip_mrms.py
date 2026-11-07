@@ -166,7 +166,11 @@ def test_download_decompresses_gzip_to_grib2(monkeypatch, tmp_path):
     assert files[0].read_bytes() == payload
 
 
-def test_to_dss_wraps_vortex_with_mrms_defaults(monkeypatch, tmp_path):
+@pytest.mark.parametrize(
+    "held_spelling",
+    ["RadarOnly_QPE_01H_altitude_above_msl", "RadarOnlyQPE01H_altitude_above_msl"],
+)
+def test_to_dss_wraps_vortex_with_mrms_defaults(monkeypatch, tmp_path, held_spelling):
     grib_path = tmp_path / "MRMS_RadarOnly_QPE_01H_00.00_20240708-120000.grib2"
     grib_path.write_bytes(b"GRIB")
     output_dss = tmp_path / "mrms.dss"
@@ -181,6 +185,9 @@ def test_to_dss_wraps_vortex_with_mrms_defaults(monkeypatch, tmp_path):
         return output
 
     monkeypatch.setattr(VortexCli, "import_gridded", staticmethod(fake_import_gridded))
+    monkeypatch.setattr(
+        VortexCli, "get_grib2_variables", staticmethod(lambda path, **kwargs: [held_spelling])
+    )
 
     result = PrecipMrms.to_dss(
         [grib_path],
@@ -194,13 +201,126 @@ def test_to_dss_wraps_vortex_with_mrms_defaults(monkeypatch, tmp_path):
     assert output_dss.exists()
     assert len(calls) == 1
     assert calls[0]["input_files"] == [grib_path]
-    assert calls[0]["variables"] == ["RadarOnlyQPE01H_altitude_above_msl"]
+    assert calls[0]["variables"] == [held_spelling]
     assert calls[0]["clip_shp"] == clip_shp
     assert calls[0]["target_wkt"] == "SHG"
     assert calls[0]["dss_parts"]["A"] == "SHG"
     assert calls[0]["dss_parts"]["B"] == "MRMS_QPE"
     assert calls[0]["dss_parts"]["F"] == "RADARONLY_QPE_01H"
     assert calls[0]["timeout"] == 123
+
+
+def _radaronly_stand_ins(monkeypatch):
+    calls = []
+
+    def fake_import_gridded(**kwargs):
+        calls.append(kwargs)
+        Path(kwargs["output_dss"]).write_bytes(b"DSS")
+        return Path(kwargs["output_dss"])
+
+    monkeypatch.setattr(VortexCli, "import_gridded", staticmethod(fake_import_gridded))
+    return calls
+
+
+def test_radaronly_failed_listing_uses_the_modern_spelling_and_says_why(monkeypatch, tmp_path, caplog):
+    calls = _radaronly_stand_ins(monkeypatch)
+
+    def no_listing(path, **kwargs):
+        raise FileNotFoundError("HEC-Vortex not found")
+
+    monkeypatch.setattr(VortexCli, "get_grib2_variables", staticmethod(no_listing))
+    grib_path = tmp_path / "MRMS_RadarOnly_QPE_01H_00.00_20240708-120000.grib2"
+    grib_path.write_bytes(b"GRIB")
+    PrecipMrms.to_dss(grib_path, tmp_path / "o.dss", product="RadarOnly_QPE_01H")
+    assert calls[0]["variables"] == ["RadarOnly_QPE_01H_altitude_above_msl"]
+    assert "Could not read the RadarOnly variable name" in caplog.text
+    assert "HEC-Vortex not found" in caplog.text
+
+
+def test_radaronly_import_failure_says_a_listing_failed_earlier(monkeypatch, tmp_path):
+    failure = RuntimeError("Vortex execution completed but DSS file not created")
+
+    def failing_import(**kwargs):
+        raise failure
+
+    def no_listing(path, **kwargs):
+        raise OSError("java.exe not found")
+
+    monkeypatch.setattr(VortexCli, "import_gridded", staticmethod(failing_import))
+    monkeypatch.setattr(VortexCli, "get_grib2_variables", staticmethod(no_listing))
+    grib_path = tmp_path / "MRMS_RadarOnly_QPE_01H_00.00_20240708-120000.grib2"
+    grib_path.write_bytes(b"GRIB")
+    with pytest.raises(RuntimeError) as info:
+        PrecipMrms.to_dss(grib_path, tmp_path / "o.dss")
+    assert info.value is failure
+    assert "DSS file not created" in str(info.value)
+    assert "could not list the variables earlier" in str(info.value)
+    assert "java.exe not found" in str(info.value)
+
+
+def test_radaronly_import_oserror_says_a_listing_failed_earlier(monkeypatch, tmp_path):
+    """An OSError shows its errno fields, so a note in its args would not be seen."""
+    failure = FileNotFoundError(2, "The system cannot find the file specified")
+
+    def failing_import(**kwargs):
+        raise failure
+
+    def no_listing(path, **kwargs):
+        raise OSError("java.exe not found")
+
+    monkeypatch.setattr(VortexCli, "import_gridded", staticmethod(failing_import))
+    monkeypatch.setattr(VortexCli, "get_grib2_variables", staticmethod(no_listing))
+    grib_path = tmp_path / "MRMS_RadarOnly_QPE_01H_00.00_20240708-120000.grib2"
+    grib_path.write_bytes(b"GRIB")
+    with pytest.raises(FileNotFoundError) as info:
+        PrecipMrms.to_dss(grib_path, tmp_path / "o.dss")
+    assert info.value is failure
+    assert "could not list the variables earlier" in str(info.value)
+    assert "java.exe not found" in str(info.value)
+
+
+def test_import_failure_after_a_good_listing_is_unchanged(monkeypatch, tmp_path):
+    def failing_import(**kwargs):
+        raise RuntimeError("exit code 1")
+
+    monkeypatch.setattr(VortexCli, "import_gridded", staticmethod(failing_import))
+    monkeypatch.setattr(
+        VortexCli,
+        "get_grib2_variables",
+        staticmethod(lambda path, **kwargs: ["RadarOnly_QPE_01H_altitude_above_msl"]),
+    )
+    grib_path = tmp_path / "MRMS_RadarOnly_QPE_01H_00.00_20240708-120000.grib2"
+    grib_path.write_bytes(b"GRIB")
+    with pytest.raises(RuntimeError, match="^exit code 1$"):
+        PrecipMrms.to_dss(grib_path, tmp_path / "o.dss")
+
+
+def test_radaronly_archive_name_without_the_mrms_prefix_is_listed(monkeypatch, tmp_path):
+    """The Iowa archive drops the MRMS_ prefix. The default product must not win over the file."""
+    calls = _radaronly_stand_ins(monkeypatch)
+    monkeypatch.setattr(
+        VortexCli,
+        "get_grib2_variables",
+        staticmethod(lambda path, **kwargs: ["RadarOnly_QPE_01H_altitude_above_msl"]),
+    )
+    grib_path = tmp_path / "RadarOnly_QPE_01H_00.00_20190520-120000.grib2"
+    grib_path.write_bytes(b"GRIB")
+    PrecipMrms.to_dss(grib_path, tmp_path / "o.dss")
+    assert calls[0]["variables"] == ["RadarOnly_QPE_01H_altitude_above_msl"]
+
+
+def test_stated_radaronly_variable_needs_no_listing(monkeypatch, tmp_path):
+    calls = _radaronly_stand_ins(monkeypatch)
+
+    def must_not_run(path, **kwargs):
+        raise AssertionError("listed a variable the caller stated")
+
+    monkeypatch.setattr(VortexCli, "get_grib2_variables", staticmethod(must_not_run))
+    grib_path = tmp_path / "MRMS_RadarOnly_QPE_01H_00.00_20240708-120000.grib2"
+    grib_path.write_bytes(b"GRIB")
+    stated = ["RadarOnlyQPE01H_altitude_above_msl"]
+    PrecipMrms.to_dss(grib_path, tmp_path / "o.dss", variables=stated)
+    assert calls[0]["variables"] == stated
 
 
 def test_vortex_variables_respect_mrms_product_family():
@@ -211,7 +331,7 @@ def test_vortex_variables_respect_mrms_product_family():
         "GaugeCorrQPE03H_altitude_above_msl"
     ]
     assert PrecipMrms._vortex_variables("RadarOnly_QPE_06H") == [
-        "RadarOnlyQPE06H_altitude_above_msl"
+        "RadarOnly_QPE_06H_altitude_above_msl"
     ]
     assert PrecipMrms._vortex_variables("MultiSensor_QPE_01H_Pass2_00.00") == [
         "MultiSensor_QPE_01H_Pass2_altitude_above_msl"

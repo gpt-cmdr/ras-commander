@@ -31,6 +31,31 @@ uv pip install -e ".[precip]"
 
 DSS product conversion may additionally need HEC-Vortex, HEC-MetVue, or the optional dependencies listed in the product notebook.
 
+`PrecipMrms.to_dss` runs HEC-Vortex by default. The `backend` argument selects the optional `ras-commander-fast-dss` importer, which needs no Java or HEC-Vortex install. Install the wheel you were given first, as the package is not yet on PyPI (`uv pip install ras_commander_fast_dss-<version>-<tag>.whl`):
+
+```python
+from ras_commander.precip import PrecipMrms
+
+PrecipMrms.to_dss(grib_files, "storm.dss", clip_shp="basin.shp", backend="native")
+```
+
+The native route writes one-hour QPE only, each record PER-CUM with a one-hour period in its D and E parts. Other durations raise `DssUnsupportedRecordError` and write nothing. MRMS GRIB2 states an instant, so the file gives no period for them. `backend="shadow"` returns HEC-Vortex's output and compares it with the native result on a temporary copy, logging any difference.
+
+The HEC-Vortex route refuses the same durations (15M and 03H to 72H) by default, with a `ValueError` and nothing written. HEC-Vortex 0.13.3 stored them as PRECIPITATION, MM, INST-VAL with a D part only, and HEC-HMS has read this shape as no rain. To write that shape anyway, on the `java` and `shadow` backends only:
+
+```python
+PrecipMrms.to_dss(grib_files, "storm.dss", product="MultiSensor_QPE_24H_Pass2_00.00", allow_instantaneous_precip=True)
+```
+
+The call logs a warning. These rules apply to MRMS QPE: a file name, a stated variable or a non-default `product` that names one. Another GRIB2 with its variable stated, such as HRRR, goes to HEC-Vortex as before. `VortexCli.import_gridded` called directly is not guarded by any of this, as it is a general converter.
+
+Further points on this route:
+
+- **File names.** HEC-Vortex gives a one-hour period when the whole lower-cased file name matches `.*gaugecorr.*qpe.*01h.*grib2`, or the same with `radaronly` or `multisensor`. A one-hour MRMS file named `storm.grib2` or `RadarOnly_QPE_01H.grib2.backup` was stored as INST-VAL, so it is refused too. Keep the archive names. A duration elsewhere in a name is a label: `24H_RadarOnly_QPE_01H.grib2` is a one-hour file.
+- **Conflicting durations.** If a file's name would get a one-hour period while its accumulation is stated to be otherwise, the call is refused, and `allow_instantaneous_precip=True` does not change that. HEC-Vortex stamped a real 24H file renamed `01H`, with its own variable stated, with a one-hour period on the 24-hour total. The override allows instantaneous output, not relabelling a depth.
+- **What cannot be detected without the wheel.** With the `ras-commander-fast-dss` wheel, each file's own variables are read before Vortex starts. Without it, a conflict shows only through the product, the file name or a stated variable. So a 24H file renamed `01H`, with no variable stated, passes the check, unless it is RadarOnly. HEC-Vortex 0.13.3 then found no matching variable and raised `RuntimeError` with no file written. Without the wheel, a non-MRMS file with no variable stated counts as the default MRMS selection and is refused, so state its variable.
+- **RadarOnly variable name.** With no variable stated, the name is read through HEC-Vortex, which starts Java to list the first and last files, then through the wheel. If neither can list the file, `RadarOnly_QPE_<hours>H_altitude_above_msl` is used, which every public file inspected holds, and the warning gives the reader's reason. An import that then fails says that the listing failed earlier.
+
 ## Check version and route qualification
 
 ```python
