@@ -12,6 +12,8 @@ on:
       - 'ras_commander/**'
       - '.claude/**'
       - 'mkdocs.yml'
+      - 'scripts/mkdocs_mapping_redirect.py'
+      - 'tests/test_mapping_docs_redirects.py'
       - '.github/workflows/docs-validate.yml'
   workflow_dispatch:
 
