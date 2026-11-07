@@ -343,6 +343,7 @@ nav:
       - HDF Results Query Architecture: development/hdf-results-query-architecture.md
       - HEC-RAS 6.3.0.2 Wine Compute Qualification: development/hec-ras-6302-wine-compute-plan-qualification.md
       - Gridded Precipitation Version Matrix: development/gridded-precipitation-version-matrix.md
+      - DSS Native Backend Notebook Qualification: development/dss-native-notebook-qualification.md
   - About:
     - Cite and Support RAS Commander: cite.md
     - Command Line is All You Need: about/command-line-is-all-you-need.md
