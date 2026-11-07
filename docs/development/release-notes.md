@@ -9,6 +9,33 @@ alone does not identify a development checkout.
 
 ### Unreleased
 
+- **FAST-DSS documented as a released engine.** The DSS section of
+  [Native Rust Engines](../native-engine.md#dss-engine) now covers reads and
+  writes, the [gridded importer and tools](../native-engine.md#gridded-import-and-tools)
+  that replace HEC-Vortex, the backends and how to choose one, the intended
+  differences, the notebook qualification and the HEC-RAS acceptance results.
+  Install with `pip install ras-commander-fast-dss` (available from release X).
+  The DSS performance section is reserved for measured timings.
+- **WPC QPF through the FAST-DSS importer.** The gridded precipitation guide adds
+  [WPC QPF to DSS with FAST-DSS](../user-guide/gridded-precipitation.md#wpc-qpf-to-dss-with-fast-dss),
+  which reads WPC's published GRIB2 without `qpkit`, HEC-Vortex, Java or GDAL.
+  Notebook 926's `qpkit` route is unchanged.
+- **Notebook 731 has a native DSS export route.** `DSS_EXPORT_ROUTE = "native"`
+  projects the Float32 interval NetCDF to SHG DSS with the FAST-DSS importer;
+  `"vortex"` stays the default. `SOURCE_BUFFER_PERCENT` (default 10) sets the
+  crop buffer, which small models need to raise for bilinear edges.
+  `tests/test_atlas14_native_dss_export.py` covers the route.
+- **Notebook 926 can re-run a fixed WPC cycle.** Set
+  `RAS_COMMANDER_WPC_QPF_CYCLE=YYYYMMDDHH` to use that cycle's GRIB files,
+  downloading only missing ones; `RAS_COMMANDER_WPC_QPF_GRIB_DIR` shares one GRIB
+  folder between runs. Live current-day mode stays the default.
+- **Notebooks 916, 917 and 926 run again after #534.** With ghost cells excluded
+  from results by default, 916 and 926 match them with
+  `get_mesh_cell_points(..., include_ghost_cells=False)`, and 917, which checks
+  that boundary cells receive no rain, reads results with
+  `include_ghost_cells=True`.
+- **Notebook 318 no longer deletes the shared example-projects folder.** Its
+  clean-up removes only the project it extracted.
 - **HEC-RAS acceptance tests for `RasDss`-written DSS files.**
   `tests/test_rasdss_hecras_acceptance.py` runs real example plans through
   `RasCmdr.compute_plan` on grids and boundary time series written by the Java
@@ -49,9 +76,9 @@ alone does not identify a development checkout.
 - **The native DSS engine is renamed `ras-commander-fast-dss`.** `RasDss`
   imports `ras_commander_fast_dss` (FAST-DSS) for the `native` and `shadow`
   backends; the earlier development name `dss_commander` is no longer
-  recognized and has no compatibility alias. The wheel is not yet published,
-  and no ras-commander extra installs it; install the `ras-commander-fast-dss`
-  wheel you were given. `java` remains the default. The
+  recognized and has no compatibility alias. No ras-commander extra installs
+  it; install it with `pip install ras-commander-fast-dss` (available from
+  release X). `java` remains the default. The
   [Native Rust Engines](../native-engine.md#dss-engine) page now describes the
   DSS engine.
 - **`RasDss` writes run on the native backend.** Under `RasDss.backend =
