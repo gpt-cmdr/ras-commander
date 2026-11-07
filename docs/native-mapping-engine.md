@@ -10,7 +10,7 @@ description: Map computed HEC-RAS results to rasters and inundation boundaries.
 
 `RasFim` maps water-surface elevation (WSE) profiles defined on HEC-RAS 2D
 cells to depth and WSE rasters with either the ras2fim-2D Step 05 method or
-the horizontal or experimental plain-sloping methods below. It maps a
+the horizontal or plain-sloping methods below. It maps a
 batch of profiles against one shared terrain, accepts a bounding box or a
 polygon area of interest (AOI), and returns a product manifest DataFrame.
 
@@ -40,6 +40,24 @@ Rust consumers can use the crate directly or install the CLI with
 `cargo install ras-commander-fast-map --locked`. Model/HDF preparation remains
 in Commander. Runtime mapping does not download, build or install packages.
 
+Use typed discovery to distinguish an advertised feature from a numerical
+qualification claim:
+
+```python
+from ras_commander import RasFim
+
+capabilities = RasFim.get_capabilities()
+sloping = capabilities.methods["sloping"]
+print(sloping.api_contract, sloping.intended_use)
+print(sloping.numerical_qualification)
+```
+
+An absent qualification declaration remains unknown. Diagnostic methods retain
+their published request schemas for reproducibility; discovery does not make
+them supported model-preparation workflows. `supports_storage_areas()` and
+`supports_effective_terrain()` return `False` for a missing engine or feature;
+engine failures and malformed metadata raise instead.
+
 <a id="select-the-surface-method"></a>
 
 ## Select a mapping method
@@ -62,9 +80,12 @@ in Commander. Runtime mapping does not download, build or install packages.
 ## Plain sloping mapping
 
 Use `map_sloping_profiles` to reconstruct RAS Mapper's plain **Sloping (Cell
-Corners)** method from computed 2D HDF results. Sloping mapping is experimental;
-inspect installed capabilities with `ras2fim-batch method` and check the
-qualification scope below.
+Corners)** method from computed 2D HDF results. Inspect installed capabilities
+with `RasFim.get_capabilities()` and check the qualification scope below.
+Request-contract stability and numerical qualification are separate: a stable
+transport does not establish parity for every model or option combination.
+The engine's 1D and coupled diagnostic transports still require caller-prepared
+inputs and are outside the ordinary Commander model-mapping workflow.
 
 ```python
 from ras_commander import RasFim

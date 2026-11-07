@@ -1,4 +1,4 @@
-"""Explicit experimental sloping API adapter; no arithmetic fallback."""
+"""Explicit sloping API adapter; no arithmetic fallback."""
 
 from pathlib import Path
 import json
@@ -547,7 +547,7 @@ def map_profiles(
             k: {"path": str(p), "size": before[k][0], "mtime_ns": before[k][1]}
             for k, p in watched.items()
         },
-        qualification="experimental native 7.0.1; plain five-model physical-2D corpus (bounded eBFE); enhanced combinations on Bald Eagle bridges Max and Davis timesteps",
+        qualification="scoped native 7.0.1; plain five-model physical-2D corpus (bounded eBFE); enhanced combinations on Bald Eagle bridges Max and Davis timesteps",
         invalid_cells=_invalid_cells.describe(invalid_records, invalid_policy, aoi_geometry),
     )
     if scope_info is not None:
@@ -559,7 +559,7 @@ def map_profiles(
 
         details["storage_areas"] = _storage_areas.describe(storage, selected)
         details["qualification"] = (
-            "experimental native 7.0.1; storage-area level pools qualified on "
+            "scoped native 7.0.1; storage-area level pools qualified on "
             "BaldEagleCrkMulti2D storage-area plans (see storage_areas)"
         )
     if velocity:

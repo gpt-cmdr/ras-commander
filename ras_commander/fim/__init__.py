@@ -34,6 +34,7 @@ from .errors import (
 )
 from ._aoi import FimAoi
 from ._prepare import FimPreparedProfile
+from ._capabilities import FimCapabilities, FimMethodSupport
 from .RasFim import RasFim
 from ._sloping_context import FimPreparedSlopingModel
 
@@ -42,6 +43,8 @@ __all__ = [
     "FimAoi",
     "FimPreparedProfile",
     "FimPreparedSlopingModel",
+    "FimCapabilities",
+    "FimMethodSupport",
     "FimError",
     "FimEngineNotFoundError",
     "FimEngineError",

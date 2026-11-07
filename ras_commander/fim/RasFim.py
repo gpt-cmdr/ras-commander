@@ -30,7 +30,7 @@ horizontal WSE, with an explicit NumPy qualification reference. It reuses
 terrain-lattice ownership across profiles and never substitutes for a failed
 Step05 run.
 
-``map_sloping_profiles`` is a separate experimental plain cell-corner sloping
+``map_sloping_profiles`` is a separate plain cell-corner sloping
 method reconstructed against native RAS Mapper 7.0.1. It reads complete mesh
 topology from HDF, uses terrio terrain/ownership and has no extra depth cutoff.
 """
@@ -48,6 +48,7 @@ from typing import TYPE_CHECKING, Any, Dict, Iterable, List, Optional, Sequence,
 
 if TYPE_CHECKING:
     import geopandas as gpd
+    from ._capabilities import FimCapabilities
     from ..RasPrj import RasPrj
     from ._sloping_context import FimPreparedSlopingModel
     from .._execution_types import StoreMapPerformanceOptions
@@ -643,7 +644,7 @@ class RasFim:
         velocity_depth: str = "rendered",
         derived_products: Sequence[str] = (),
     ) -> pd.DataFrame:
-        """Map 2D HDF WSE with the experimental Rust sloping engine.
+        """Map 2D HDF WSE with the Rust sloping engine.
 
         ``profiles`` maps output names to ``"Max"`` or zero-based stored
         timestep indices; omitted selects ``{"Max": "Max"}``. Geometry,
@@ -882,7 +883,8 @@ class RasFim:
         ``storage-area-level-pool/1``, so ``storage_areas`` can be passed to
         :meth:`map_sloping_profiles`, :meth:`map_horizontal_profiles` and
         :meth:`map_whole_simulation`. False when the engine is older or
-        missing; never raises for a missing engine.
+        missing; never raises for a missing engine. Engine execution or
+        metadata errors propagate instead of being reported as absent support.
 
         Args:
             engine_path: Engine executable, otherwise environment/PATH.
@@ -893,12 +895,12 @@ class RasFim:
         from . import _storage_areas
 
         try:
-            methods = _engine.engine_method(_engine.find_engine(engine_path))
-        except Exception:
+            capabilities = RasFim.get_capabilities(engine_path)
+        except FileNotFoundError:
             return False
         return all(
-            isinstance(methods.get(kind), dict)
-            and methods[kind].get("storage_area_surfaces") == _storage_areas.METHOD_ID
+            kind in capabilities.methods
+            and capabilities.methods[kind].flags.get("storage_area_surfaces") == _storage_areas.METHOD_ID
             for kind in ("sloping", "horizontal", "whole_simulation")
         )
 
@@ -1036,11 +1038,13 @@ class RasFim:
     EFFECTIVE_TERRAIN_METHOD = "rasmapper-effective-terrain/1"
 
     @staticmethod
+    @log_call
     def supports_effective_terrain(engine_path: Optional[PathLike] = None) -> bool:
         """Whether the installed engine builds RAS Mapper's effective terrain.
 
         True when ``ras2fim-batch method`` advertises
         ``rasmapper-effective-terrain/1``. Never raises for a missing engine.
+        Engine execution or metadata errors propagate.
 
         Args:
             engine_path: Engine executable, otherwise environment/PATH.
@@ -1051,10 +1055,11 @@ class RasFim:
         from . import _effective_terrain
 
         try:
-            engine = _engine.find_engine(engine_path)
-        except Exception:
+            capabilities = RasFim.get_capabilities(engine_path)
+        except FileNotFoundError:
             return False
-        return _effective_terrain.engine_supports(engine)
+        method = capabilities.methods.get("effective_terrain")
+        return method is not None and method.method_id == _effective_terrain.METHOD_ID
 
     @staticmethod
     @log_call
@@ -1858,6 +1863,22 @@ class RasFim:
                 never built or installed by a runtime mapping call.
         """
         return _engine.find_engine(engine_path)
+
+    @staticmethod
+    @log_call
+    def get_capabilities(engine_path: Optional[PathLike] = None) -> "FimCapabilities":
+        """Return an immutable view of advertised methods and qualification.
+
+        A stable API contract describes versioned request semantics; it does
+        not establish native parity or production model preparation. Inspect
+        each method's intended use and numerical qualification separately.
+        Metadata absent from an older engine remains undeclared. Missing or
+        broken engines and malformed capability records raise the existing
+        FIM engine exceptions; no engine is installed or substituted.
+        """
+        from ._capabilities import get_capabilities
+
+        return get_capabilities(engine_path)
 
     @staticmethod
     @log_call
