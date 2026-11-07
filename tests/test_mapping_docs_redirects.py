@@ -1,6 +1,7 @@
 """Execute the retired URL's routing script and check the normal build hook."""
 import importlib.util
 import json
+import os
 from pathlib import Path
 import re
 import shutil
@@ -89,3 +90,25 @@ def test_build_routes_only_the_retired_mapping_page(tmp_path):
     build(load_config(config_file=str(config_file)))
     assert (tmp_path / "site/api/fim/index.html").read_text() == hook.REDIRECT_HTML
     assert "ras_commander.fim." not in (tmp_path / "site/other/index.html").read_text()
+
+
+@pytest.mark.parametrize("page, anchors", [
+    ("native-mapping-engine/index.html", [
+        "global-terrain-lattice-aoi-coverage-engine-0101",
+        "depth-weighted-sloping-faces-engine-08",
+        "bounded-timestep-concurrency-engine-06",
+    ]),
+    ("api/core/index.html", [
+        "ras_commander.fim.RasFim.RasFim.map_sloping_profiles",
+        "ras_commander.fim.FimPreparedSlopingModel",
+    ]),
+    ("api/index.html", ["ras2fim-2d-flood-inundation-mapping-optional"]),
+])
+def test_real_mapping_bookmark_destinations(page, anchors):
+    """Keep legacy feature and symbol bookmarks bound to real rendered IDs."""
+    site = os.environ.get("RAS_COMMANDER_DOCS_SITE")
+    if site is None:
+        pytest.skip("set RAS_COMMANDER_DOCS_SITE after building the full documentation")
+    html = (Path(site) / page).read_text(encoding="utf-8")
+    ids = set(re.findall(r'(?<![\w-])id="([^"]+)"', html))
+    assert set(anchors) <= ids, f"{page}: missing {set(anchors) - ids}"

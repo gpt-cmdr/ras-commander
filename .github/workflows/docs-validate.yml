@@ -77,3 +77,8 @@ jobs:
 
       - name: Verify rendered API members and unique HTML IDs
         run: python .claude/scripts/validate_rasmapper_api_rendering.py
+
+      - name: Verify rendered mapping bookmark destinations
+        env:
+          RAS_COMMANDER_DOCS_SITE: site
+        run: python -m pytest tests/test_mapping_docs_redirects.py -k real_mapping_bookmark_destinations -q
