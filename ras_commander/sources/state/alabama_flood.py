@@ -122,7 +122,7 @@ class AlabamaFloodModels(AlabamaBleModels):
         return cls._query_layer(
             cls._MODEL_LAYER_ID,
             " AND ".join(clauses),
-            "OBJECTID,Type,Zone,Name,HUC8_Name,Basin,County,FIPS,ModelID,GlobalID",
+            cls._MODEL_FIELDS,
         )
 
     @classmethod
@@ -195,7 +195,7 @@ class AlabamaFloodModels(AlabamaBleModels):
                 "county": county,
                 "fips": row.get("FIPS"),
                 "model_id": model_id,
-                "global_id": row.get("GlobalID"),
+                "global_id": row.get("GUID"),
                 "model_object_id": row.get("OBJECTID"),
                 "link_object_id": link.get("OBJECTID"),
                 "archive_name": archive_name,

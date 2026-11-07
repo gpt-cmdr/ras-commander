@@ -11,6 +11,7 @@ from collections import Counter
 import io
 import importlib
 import json
+import os
 from pathlib import Path
 import stat
 from typing import Any
@@ -63,7 +64,7 @@ def _model_feature(
             # This is intentionally an unusable publisher-local staging path.
             "URL": rf"F:\\AL_Website\\PDS_Data\\Models\\{name}.zip",
             "ModelID": model_id,
-            "GlobalID": f"{{00000000-0000-0000-0000-{ordinal:012d}}}",
+            "GUID": f"{{00000000-0000-0000-0000-{ordinal:012d}}}",
         }
     }
 
@@ -253,8 +254,18 @@ def test_source_contract_is_available_state_source(monkeypatch):
         "_request_json",
         staticmethod(
             lambda url, params: {
-                "layers": [{"id": AlabamaBleModels._MODEL_LAYER_ID}],
-                "tables": [{"id": AlabamaBleModels._LINK_LAYER_ID}],
+                "layers": [
+                    {
+                        "id": AlabamaBleModels._MODEL_LAYER_ID,
+                        "name": AlabamaBleModels._MODEL_LAYER_NAME,
+                    }
+                ],
+                "tables": [
+                    {
+                        "id": AlabamaBleModels._LINK_LAYER_ID,
+                        "name": AlabamaBleModels._LINK_TABLE_NAME,
+                    }
+                ],
             }
         ),
     )
@@ -2021,3 +2032,126 @@ def test_download_watershed_deduplicates_shared_webpaths_and_uses_one_folder(
     assert Path(result.model_path) == tmp_path / STUDY_KEY
     assert [url for url, _ in downloads] == [shared_url]
     assert (tmp_path / STUDY_KEY / "RAS Models" / "Town_Creek").is_dir()
+
+
+# Layout and field names recorded from the public service on 2026-10-26, after
+# the publisher renumbered the layers and renamed GlobalID to GUID.
+LIVE_SERVICE_LAYOUT = {
+    "layers": [{"id": 0, "name": "Hydraulic Models"}],
+    "tables": [{"id": 1, "name": "Model_Links"}],
+}
+LIVE_MODEL_FIELDS = {
+    "OBJECTID", "Type", "Zone", "Name", "HUC8_Name", "Basin", "County", "FIPS",
+    "URL", "HasAttachment", "GUID", "ModelID", "Model_Method",
+    "Shape__Area", "Shape__Length",
+}
+LIVE_LINK_FIELDS = {
+    "OBJECTID", "ModelID", "FileName", "FileType", "RelativePath", "LocalPath",
+    "WebPath",
+}
+
+
+def test_source_status_accepts_current_service_layout(monkeypatch):
+    monkeypatch.setattr(
+        AlabamaBleModels,
+        "_request_json",
+        staticmethod(lambda url, params: LIVE_SERVICE_LAYOUT),
+    )
+
+    assert AlabamaBleModels.get_source_status() == SourceStatus.AVAILABLE
+
+
+def test_source_status_reports_renumbered_service_as_unavailable(monkeypatch, caplog):
+    renumbered = {
+        "layers": [{"id": 2, "name": "Hydraulic Models"}],
+        "tables": [{"id": 0, "name": "Model_Links"}],
+    }
+    monkeypatch.setattr(
+        AlabamaBleModels,
+        "_request_json",
+        staticmethod(lambda url, params: renumbered),
+    )
+
+    with caplog.at_level("WARNING"):
+        assert AlabamaBleModels.get_source_status() == SourceStatus.UNAVAILABLE
+    assert "service layout changed" in caplog.text
+
+
+def test_queries_request_only_fields_the_service_publishes(monkeypatch):
+    requested = {}
+
+    def fake_query_layer(layer_id, where, out_fields, *args, **kwargs):
+        requested[layer_id] = set(out_fields.split(","))
+        if layer_id == AlabamaBleModels._MODEL_LAYER_ID:
+            return [_model_feature(1, basin="Halawakee Creek")]
+        return [_model_link(1, basin="Halawakee Creek")]
+
+    monkeypatch.setattr(
+        AlabamaBleModels, "_query_layer", staticmethod(fake_query_layer)
+    )
+
+    models = AlabamaBleModels.build_watershed_manifest(HUC8)
+
+    assert requested[0] <= LIVE_MODEL_FIELDS
+    assert requested[1] <= LIVE_LINK_FIELDS
+    assert models[0].extra["global_id"] == "{00000000-0000-0000-0000-000000000001}"
+
+
+def test_upper_alabama_is_in_the_watershed_crosswalk(monkeypatch):
+    where_clauses = []
+
+    def fake_query_layer(layer_id, where, *args, **kwargs):
+        where_clauses.append(where)
+        return []
+
+    monkeypatch.setattr(
+        AlabamaBleModels, "_query_layer", staticmethod(fake_query_layer)
+    )
+
+    assert AlabamaBleModels.list_watershed_models("AL03150201") == []
+    assert "HUC8_Name = 'Upper Alabama'" in where_clauses[0]
+
+
+def test_inventory_accepts_manifests_written_before_service_renumbering(tmp_path):
+    root = tmp_path / STUDY_KEY
+    documentation = root / "Documentation"
+    documentation.mkdir(parents=True)
+    manifest = _source_manifest_header([{"basin": "Halawakee Creek"}])
+    manifest["source_policy"] = (
+        "ArcGIS layer 2 metadata joined to layer 3 WebPath only"
+    )
+    (documentation / AlabamaBleModels._MANIFEST_NAME).write_text(
+        json.dumps(manifest),
+        encoding="utf-8",
+    )
+
+    # The identity check passes; validation stops at the qualified count gate.
+    with pytest.raises(RuntimeError, match="expected 197"):
+        AlabamaBleModels.build_watershed_delivery_inventory(root)
+
+
+@pytest.mark.integration
+def test_live_service_matches_layer_and_field_contract():
+    if os.environ.get("RUN_ALABAMA_BLE_LIVE") != "1":
+        pytest.skip("set RUN_ALABAMA_BLE_LIVE=1 to query the public service")
+    import requests
+
+    service = requests.get(
+        AlabamaBleModels._SERVICE_URL, params={"f": "json"}, timeout=60
+    ).json()
+    layers = {item["id"]: item["name"] for item in service["layers"]}
+    tables = {item["id"]: item["name"] for item in service["tables"]}
+    assert layers[AlabamaBleModels._MODEL_LAYER_ID] == AlabamaBleModels._MODEL_LAYER_NAME
+    assert tables[AlabamaBleModels._LINK_LAYER_ID] == AlabamaBleModels._LINK_TABLE_NAME
+
+    for layer_id, fields in (
+        (AlabamaBleModels._MODEL_LAYER_ID, AlabamaBleModels._MODEL_FIELDS),
+        (AlabamaBleModels._LINK_LAYER_ID, AlabamaBleModels._LINK_FIELDS),
+    ):
+        layer = requests.get(
+            f"{AlabamaBleModels._SERVICE_URL}/{layer_id}",
+            params={"f": "json"},
+            timeout=60,
+        ).json()
+        published = {field["name"] for field in layer["fields"]}
+        assert set(fields.split(",")) <= published

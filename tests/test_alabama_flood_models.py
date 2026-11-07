@@ -25,7 +25,7 @@ def _model(model_id: str, classification: str, county: str) -> dict[str, Any]:
             "County": county,
             "FIPS": "01001",
             "ModelID": model_id,
-            "GlobalID": f"global-{model_id}",
+            "GUID": f"global-{model_id}",
         }
     }
 
