@@ -13,13 +13,14 @@ HEC-RAS HDF data, mapping computed 2D results to depth and water surface
 elevation (WSE) rasters, and reading and writing HEC-DSS files. The HDF engine
 accelerates existing `Hdf*` calls. The optional Mapping Engine runs through
 `RasFim` and uses the HDF engine to read its numeric model inputs. The optional
-DSS Engine (FAST-DSS) is a backend of the existing `RasDss` methods.
+DSS Engine (FAST-DSS) is a backend of the existing `RasDss` methods, and its
+gridded importer replaces HEC-Vortex for gridded data.
 
 | Engine | Operation | Python entry points | Installation and status |
 |---|---|---|---|
 | **HDF Engine** | Read stored results, geometry, text and attributes; assemble mesh geometry | `Hdf*`, `fast_hdf` | `ras-commander-fast-hdf`; installed with RAS Commander on supported wheel platforms. Default `auto` mode retains h5py fallback. |
 | **Mapping Engine** | Map computed physical 2D cells to Depth/WSE rasters using horizontal or sloping interpolation | `RasFim.map_horizontal_profiles`, `RasFim.map_sloping_profiles` | External `ras-commander-fast-map` crate and wheel; the optional Python `fim` extra installs the wheel on supported platforms. Explicit native mapping; no automatic Python fallback. |
-| **DSS Engine** (FAST-DSS) | Read and write DSS6 and DSS7 catalogs, time series, paired data and grids without Java | `RasDss` with `RasDss.backend = "native"` or `"shadow"` | `ras-commander-fast-dss`; not yet published. Opt-in; `java` remains the default backend. |
+| **DSS Engine** (FAST-DSS) | Read and write DSS6 and DSS7 catalogs, time series, paired data and grids without Java; import gridded data to DSS without HEC-Vortex | `RasDss` with `RasDss.backend = "native"` or `"shadow"` | `ras-commander-fast-dss` ([install](#dss-installation)); optional. Opt-in; `java` remains the default backend. |
 
 ## Choose an engine workflow
 
@@ -58,25 +59,24 @@ Depth/WSE values, without an added depth cutoff.
     current installations should use 0.2.3 or newer; ras-commander 0.112.0
     requires 0.2.5, and 0.113.0 requires 0.3.0.
 
-<a id="dss-engine-coming-soon"></a>
-
 ## DSS engine
 
 FAST-DSS is RAS Commander's native HEC-DSS engine, written in Rust. It reads and
 writes DSS6 and DSS7 files without Java: no JVM is started and HEC Monolith is
-not downloaded. It is not a separate API. It is a backend of the existing
-`RasDss` methods, which keep their signatures and return types.
+not downloaded. For DSS files it is not a separate API. It is a backend of the
+existing `RasDss` methods, which keep their signatures and return types. The same
+package also carries a gridded importer and grid tools that replace HEC-Vortex
+for precipitation and other gridded data, with no Java, Jython or GDAL.
 
 !!! info "Short version"
     - The engine package is `ras-commander-fast-dss` (import name
-      `ras_commander_fast_dss`). It is optional and **not yet published**: no
-      `pip install ras-commander` command or extra installs it. Install the
-      `ras-commander-fast-dss` wheel you were given.
-    - `java` (HEC Monolith through pyjnius) remains the default backend.
-      `native` uses FAST-DSS only. `shadow` runs both and logs every
-      difference.
-    - Native data matches the Java path. The differences are intended
-      changes and corrections of Java-path defects, listed in
+      `ras_commander_fast_dss`). It is optional; see [Installation](#dss-installation).
+    - `java` (HEC Monolith through pyjnius) remains the default `RasDss` backend,
+      and HEC-Vortex remains the default gridded-import route. Nothing switches
+      until you choose `native` or `shadow`.
+    - `native` uses FAST-DSS only. `shadow` runs both and logs every difference.
+    - Native data matches the Java path. The differences are intended changes and
+      corrections of Java-path defects, each listed with its evidence in
       [DSS Read and Write Backends](user-guide/dss-native-backend.md).
 
 ### Backends and how to choose one
@@ -109,6 +109,13 @@ falls back to Java. Under `shadow` without the engine, `RasDss` uses Java and
 logs one warning. The Java backend never imports the engine, so a missing or
 broken wheel cannot affect it.
 
+**Choosing.** Start with `shadow` on your own files: it returns the Java result
+for writes and grids, and logs each comparison as `identical`, `expected` (an
+intended difference, named) or `unexpected`. Move to `native` when the shadow log
+shows no `unexpected` outcome for your workflow, or when Java is not available.
+Stay on `java` where a workflow depends on a Java-path behavior listed under
+[intended differences](#dss-intended-differences).
+
 ### Reads and writes
 
 | Area | `RasDss` methods | Native coverage |
@@ -120,34 +127,140 @@ broken wheel cannot affect it.
 | Validation | `check_pathname_exists`, `check_data_availability`, `check_pathname`, `is_pathname_available` | Through the catalog and time-series reads above |
 | Writes | `write_timeseries`, `write_timeseries_from_dataframe`, `write_paired_data`, `write_grid_timeseries`, `copy_grid_with_zero_tail`, `write_precip_grid_arrays` | DSS6 and DSS7, regular and irregular series, paired data and grids; needs an engine build with writers (`attrs["native_writes_available"]`) |
 
-### Intended differences
+Native writes keep the existing file's DSS version (new files are DSS7 unless
+`dss_version=6`). Java reads native-written records equal to Java-written ones.
 
-Under `native`, missing values are `NaN` instead of HEC's numeric marker,
-`start_date` and `end_date` are honored, errors are typed, and several
-datasets that the Java path misreads are read correctly. The native writer
-refuses some input that the Java path truncates or stores as an unreadable
-record. Each difference, with its evidence, is listed in
+### Gridded import and tools (HEC-Vortex replacement) {#gridded-import-and-tools}
+
+`ras_commander_fast_dss.gridded` imports gridded data to DSS grids in the calling
+process. It reads GRIB2, NetCDF (classic and NetCDF-4), HDF5, GeoTIFF and ASCII
+grids, local Zarr v2 stores, and NumPy arrays; reprojects to SHG, HRAP or a WKT
+target with `near`, `bilinear` or `average` resampling; and writes DSS6 or DSS7
+through the same writer as `RasDss`. Each run is planned before a cell is read:
+every pathname, window and unit is decided first, so a refusal leaves the output
+file untouched. It follows HEC-Vortex's importer rules for products, C parts,
+units and time windows.
+
+| Task | Function | HEC-Vortex tool it replaces |
+|---|---|---|
+| Import files or arrays to DSS grids | `import_gridded`, `import_arrays`, `import_zarr`, `list_variables` | Importer |
+| Grid to point or basin time series; zone masks and statistics | `grid_to_point`, `zonal_statistics`, `zone_masks` | Grid-to-point converter |
+| Shift times; resample to another time step | `shift_times`, `resample_times` | Time shifter, time-step resampler |
+| Arithmetic with a constant or another raster; clean, rescale and clip grids | `calculate`, `calculate_raster`, `sanitize`, `normalize`, `clip` | Calculator, sanitizer, normalizer, clipper |
+| Read a window, the nearest grid, or min/max over a grid series | `read_window`, `read_nearest`, `read_min_max`, `series_info` | (inspection) |
+
+RAS Commander routes that use the importer:
+
+- **MRMS QPE.** `PrecipMrms.to_dss(..., backend="native")` (or `"shadow"`, or the
+  `RAS_COMMANDER_MRMS_BACKEND` environment variable). The default stays HEC-Vortex.
+  See [MRMS hourly QPE](user-guide/gridded-precipitation.md#mrms-hourly-qpe).
+- **Atlas 14 design storms.** Notebook 731 sets `DSS_EXPORT_ROUTE = "native"` to
+  project its Float32 interval NetCDF to SHG DSS without Vortex.
+- **WPC QPF.** The importer reads WPC's published GRIB2 directly; see
+  [WPC QPF](user-guide/gridded-precipitation.md#wpc-qpf-to-dss-with-fast-dss).
+
+```python
+from ras_commander_fast_dss import gridded
+
+result = gridded.import_gridded(
+    grib_files, "forcing.dss",
+    product="total_precipitation",              # or variable="..." from list_variables()
+    envelope=(1494000, 2120000, 1564000, 2188000),  # SHG metres: west, south, east, north
+    target_crs="SHG", cell_size=2000, method="bilinear",
+    parts={"A": "SHG", "B": "MY_BASIN", "F": "WPC-QPF"},
+)
+print(len(result.records), result.records[0]["pathname"])
+```
+
+**Agreement with HEC-Vortex.** The engine was qualified against HEC-Vortex 0.13.3
+and 1.1.0 on 115 GRIB2, GeoTIFF and ASCII grid cases (including MRMS, Stage IV and
+AORC) and 252 NetCDF cases. In DSS7, every case that both sides wrote has identical
+cell bits, masks and record metadata, with no tolerance, apart from the listed
+differences below; the remaining cases are the refusals in that list. The warp
+kernels matched both Vortex versions on MRMS, HRRR, Stage IV and WPC samples. These
+are measurements on those inputs, not a proof over all inputs. In a run of notebook
+731 on the public NewOrleansMetro example with NOAA's Volume 9 100-year 24-hour
+grid, the native and HEC-Vortex 0.13.3 routes wrote the same 144 records, equal
+cell for cell; the stored null value was the only difference (label W2 below).
+
+### Intended differences {#dss-intended-differences}
+
+**`RasDss` reads and writes.** Under `native`, missing values are `NaN` instead of
+HEC's numeric marker, `start_date` and `end_date` are honored, errors are typed,
+and several datasets that the Java path misreads are read correctly. The native
+writer refuses some input that the Java path truncates or stores as an unreadable
+record, and DSS7 SHG grids store a null value of -FLT_MAX where Monolith stores
+0.0 (label W2; cells are equal). Each difference, with its evidence, is listed in
 [DSS Read and Write Backends](user-guide/dss-native-backend.md#differences-from-the-java-backend)
 (reads) and in its [Writes section](user-guide/dss-native-backend.md#intended-differences)
 (writes).
 
-### Performance
+**Gridded import.** HEC-Vortex behaviors that move or relabel data are refused by
+default, each with an opt-in argument that reproduces Vortex where one exists:
 
-To be measured. DSS performance has not been benchmarked for this page, and
-the HDF and Mapping Engine measurements below do not establish DSS
-performance.
+| HEC-Vortex behavior | Native default | Opt-in for Vortex's result |
+|---|---|---|
+| Rounds an origin that is not on whole cells, moving the grid | Refused, naming the corner | `align="vortex"`, or state an `envelope` and `cell_size` |
+| Stores precipitation at an instant as `INST-VAL` with a D part only (HEC-HMS has read this as no rain) | Refused | `data_type="INST-VAL"` |
+| Gives a file name's window to a record that states another (e.g. a 24-hour file renamed `01H`) | Refused, naming both windows | `window_rule="vortex"` |
+| Writes one pathname twice in a run, keeping the last | Refused | `duplicates="last"` |
+| Stores PER-CUM DSS6 grids as PRECIP_2_BYTE, rounding cells to 0.01 (Vortex 0.13.3) | ZLIB, keeping each cell's bits | none |
 
-### Availability
+### Notebook qualification
 
-FAST-DSS wheels are not yet published. Until they are, the `native` and
-`shadow` backends need the `ras-commander-fast-dss` wheel you were given:
+Every example notebook that reads or writes DSS was run on the `java`, `native`
+and `shadow` backends, and its outputs, DSS files and HEC-RAS results were compared.
+No notebook behaves differently on `native`; every shadow comparison was
+`identical` or `expected`; every HEC-RAS physical-cell result was bit-identical
+across backends. Results per notebook are in the
+[DSS native backend notebook qualification](development/dss-native-notebook-qualification.md).
+
+### HEC-RAS acceptance
+
+`tests/test_rasdss_hecras_acceptance.py` runs public example plans through
+`RasCmdr.compute_plan` on grids and boundary series written by each backend:
+
+- boundary time series rewritten by either backend, as DSS6 or DSS7, gave results
+  identical to the original example file;
+- period grids (`PER-CUM`) are applied evenly over the period ending at part E;
+  moving the period one hour moved the results one hour;
+- zero-length grids (D = E), which the Java path can write and the native writer
+  refuses, gave the same HEC-RAS results as one-hour periods in the tested runs.
+
+Details are under
+[HEC-RAS acceptance of written files](user-guide/dss-native-backend.md#hec-ras-acceptance-of-written-files).
+HEC-RAS is run only through RAS Commander's APIs.
+
+### Installation {#dss-installation}
+
+<!-- RELEASE-PLACEHOLDER: replace X with the first published ras-commander-fast-dss release. -->
+!!! note "Available from release X"
+    `ras-commander-fast-dss` is published from release **X** (placeholder; the
+    release number is filled in when the package is published).
 
 ```bash
-uv pip install ras_commander_fast_dss-<version>-cp310-abi3-win_amd64.whl
+pip install ras-commander-fast-dss
+```
+
+Then select the backend as shown above. `ras-commander` itself does not require
+the package; `import ras_commander` and the `java` backend work without it. Check
+the installed engine with:
+
+```python
+import ras_commander_fast_dss as fast_dss
+print(sorted(fast_dss.FEATURES))   # e.g. grid_srs_monolith_parity, gridded_import
 ```
 
 Existing [DSS operations](user-guide/dss-operations.md) work unchanged on the
 default `java` backend.
+
+### Performance
+
+<!-- PERFORMANCE-PLACEHOLDER: measured FAST-DSS timings are added here after the release benchmark. -->
+!!! warning "Placeholder: DSS performance measurements"
+    This section is reserved for measured FAST-DSS timings. No DSS benchmark is
+    reported on this page yet, and the HDF and Mapping Engine measurements below do
+    not establish DSS performance.
 
 <a id="native-rust-hdf-engine"></a>
 

@@ -37,12 +37,15 @@ An unknown name raises `ValueError`.
 ## Installing ras-commander-fast-dss
 
 `ras-commander-fast-dss` (import name `ras_commander_fast_dss`) is the optional
-dependency for the native backend. It is not yet published, and no
-ras-commander extra installs it. Install the `ras-commander-fast-dss` wheel you
-were given:
+dependency for the native backend. No ras-commander extra installs it.
+
+<!-- RELEASE-PLACEHOLDER: replace X with the first published ras-commander-fast-dss release. -->
+!!! note "Available from release X"
+    `ras-commander-fast-dss` is published from release **X** (placeholder; the
+    release number is filled in when the package is published).
 
 ```bash
-uv pip install ras_commander_fast_dss-<version>-cp310-abi3-win_amd64.whl
+pip install ras-commander-fast-dss
 ```
 
 If `ras-commander-fast-dss` is not installed:

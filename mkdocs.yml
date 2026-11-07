@@ -231,7 +231,9 @@ nav:
       - Rust API (docs.rs): https://docs.rs/ras-commander-fast-map
     - DSS Engine:
       - Guide: https://rascommander.info/ras/native-engine/#dss-engine
+      - Gridded Import and Tools: https://rascommander.info/ras/native-engine/#gridded-import-and-tools
       - Read and Write Backends: https://rascommander.info/ras/user-guide/dss-native-backend/
+      - Notebook Qualification: https://rascommander.info/ras/development/dss-native-notebook-qualification/
   - User Guide:
     - Running Plans:
       - Plan Execution: user-guide/plan-execution.md

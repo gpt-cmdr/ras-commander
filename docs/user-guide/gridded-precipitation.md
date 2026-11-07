@@ -31,7 +31,7 @@ uv pip install -e ".[precip]"
 
 DSS product conversion may additionally need HEC-Vortex, HEC-MetVue, or the optional dependencies listed in the product notebook.
 
-`PrecipMrms.to_dss` runs HEC-Vortex by default. The `backend` argument selects the optional `ras-commander-fast-dss` importer, which needs no Java or HEC-Vortex install. Install the wheel you were given first, as the package is not yet on PyPI (`uv pip install ras_commander_fast_dss-<version>-<tag>.whl`):
+`PrecipMrms.to_dss` runs HEC-Vortex by default. The `backend` argument selects the optional `ras-commander-fast-dss` importer (FAST-DSS), which needs no Java or HEC-Vortex install. Install it first with `pip install ras-commander-fast-dss` (available from release X; see [Installation](../native-engine.md#dss-installation)):
 
 ```python
 from ras_commander.precip import PrecipMrms
@@ -101,6 +101,23 @@ receipt can mean either a blocked qualification run or an unresolved version;
 inspect `hec_ras_version` and the accompanying warnings.
 
 WPC QPF GRIB2 compression is not accepted by native HEC-RAS import through 7.0.1. Use DSS translation as demonstrated in notebook 926. `qpkit 0.1.0`'s `QPFGridOptions.extents` path produced an undersized 2-by-2 grid during qualification, so the notebook crops each source GRIB in its native projection, reopens and verifies it, and calls `kit.qpf_dss.write()` without `extents`. Generic GRIB ingestion requires an installed GDAL reader capable of decoding the selected bands and a grid meeting the requirements below.
+
+### WPC QPF to DSS with FAST-DSS
+
+The FAST-DSS gridded importer decodes WPC's published GRIB2 itself, so the DSS translation needs neither `qpkit` nor HEC-Vortex, Java or GDAL. Pass the downloaded `p06m_<cycle>f<hour>.grb` files with the `total_precipitation` product (or the variable `list_variables()` reports, `Total_precipitation_surface_layer_6_Hour_Accumulation`) and an SHG envelope around the model:
+
+```python
+from ras_commander_fast_dss import gridded
+
+result = gridded.import_gridded(
+    wpc_files, "wpc_qpf.dss", product="total_precipitation",
+    envelope=(1494000, 2120000, 1564000, 2188000),   # SHG metres: west, south, east, north
+    target_crs="SHG", cell_size=2000, method="bilinear",
+    parts={"A": "SHG", "B": "BALD_EAGLE", "F": "WPC-QPF"},
+)
+```
+
+Each forecast file becomes one `PER-CUM` record in millimetres whose D and E parts state its six-hour window. On the 2026-11-07 00Z cycle (f006 to f168), this wrote the 28 records with consecutive six-hour windows. `envelope_crs` takes WKT, not an EPSG code, so state the envelope in the target CRS, as above. Then attach the DSS with `RasUnsteady.configure_gridded_dss_precipitation()` and review the precomputed forcing as notebook 926 does for the `qpkit` route; this importer route has not been run through HEC-RAS by that notebook. See [Gridded import and tools](../native-engine.md#gridded-import-and-tools) for the importer's agreement with HEC-Vortex and its refusals.
 
 ## Direct GeoTIFF and GRIB ingestion
 
