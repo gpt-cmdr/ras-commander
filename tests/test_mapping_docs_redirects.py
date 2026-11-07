@@ -26,6 +26,7 @@ spec.loader.exec_module(hook)
     ("#invalid%encoding", "/ras/native-mapping-engine/"),
 ])
 def test_browser_fragment_routing(fragment, target):
+    """Route each bookmark form to its rendered destination with its query intact."""
     node = shutil.which("node")
     if node is None:
         pytest.skip("Node is required to execute the redirect JavaScript")
@@ -47,6 +48,7 @@ console.log(new URL(result, 'https://rascommander.info/ras/api/fim/').href);
 
 
 def test_only_retired_stub_is_replaced(tmp_path):
+    """Keep the compatibility hook from changing unrelated built pages."""
     retired = tmp_path / "api/fim/index.html"
     retired.parent.mkdir(parents=True)
     retired.write_text("generated redirect")
@@ -58,11 +60,13 @@ def test_only_retired_stub_is_replaced(tmp_path):
 
 
 def test_original_api_index_bookmark_is_preserved():
+    """Retain one invisible target for bookmarks to the removed index heading."""
     page = (ROOT / "docs/api/index.md").read_text(encoding="utf-8")
     assert page.count('id="ras2fim-2d-flood-inundation-mapping-optional"') == 1
 
 
 def test_build_routes_only_the_retired_mapping_page(tmp_path):
+    """Verify actual plugin ordering and isolation in a strict MkDocs build."""
     pytest.importorskip("mkdocs_redirects")
     from mkdocs.commands.build import build
     from mkdocs.config import load_config
