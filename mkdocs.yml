@@ -88,6 +88,7 @@ plugins:
           - user-guide/plan-output-intervals-hdf-compression.md
           - user-guide/workflows-and-patterns.md
           - user-guide/hdf-data-extraction.md
+          - native-mapping-engine.md
           - user-guide/2d-profile-and-reference-workflows.md
           - user-guide/geometry-operations.md
           - user-guide/boundary-conditions.md
@@ -103,7 +104,6 @@ plugins:
           - api/breakout-2d.md
           - api/hydraulic-subdomains.md
           - api/benefits.md
-          - api/fim.md
           - api/hdf.md
           - api/geometry.md
           - api/terrain.md
@@ -150,6 +150,7 @@ plugins:
       type: date
   - redirects:
       redirect_maps:
+        api/fim.md: native-mapping-engine.md
         notebooks/223_steady_floodway_encroachment.md: user-guide/quality-assurance/floodway-check.md
         notebooks/311_2d_floodway_encroachment.md: user-guide/quality-assurance/floodway-check.md
         notebooks/610_fluvial_pluvial_delineation.md: notebooks/610_generate_fluvial_pluvial_delineations_max_wse_arrival_time.md
@@ -225,7 +226,6 @@ nav:
       - Source (GitHub): https://github.com/gpt-cmdr/ras-commander-fast-hdf
     - Mapping Engine:
       - Guide: native-mapping-engine.md
-      - API: https://rascommander.info/ras/api/fim/
       - Performance and Qualification: https://rascommander.info/ras/development/fim-mapping-performance/
       - Source (GitHub): https://github.com/gpt-cmdr/ras-commander-fast-map
       - Rust API (docs.rs): https://docs.rs/ras-commander-fast-map
@@ -311,8 +311,6 @@ nav:
       - Remote Modules: api/remote.md
       - Model Source Utilities: api/model-sources.md
     - Benefits Analysis: api/benefits.md
-    - ras2fim-2D FIM Mapping (Optional): api/fim.md
-    - FIM Engine Comparison: development/fim-mapping-performance.md
     - DataFrame Reference: reference/dataframe-reference.md
   - RAS Data Formats:
     - Overview: reference/file-formats.md

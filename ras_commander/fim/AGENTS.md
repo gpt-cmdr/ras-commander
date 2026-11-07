@@ -165,7 +165,7 @@ Parent `ras_commander/AGENTS.md` and root `AGENTS.md` still apply.
 ## Catalog workflow for agents
 
 - Use `RasFim.map_catalog` for multiple area/timestep groups. Read
-  `docs/api/fim.md` sections "Build jobs from a watershed layer" and
+  `docs/native-mapping-engine.md` sections "Build jobs from a watershed layer" and
   "Choose a throughput policy" before planning a large catalog.
 - Each job supplies one selected watershed polygon (or an intentional bbox),
   complete source HDF/qualified terrain paths, a safe unique `job_id`, and an

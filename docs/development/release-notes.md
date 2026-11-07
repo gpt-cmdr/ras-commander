@@ -121,7 +121,7 @@ contours, bbox/polygon clipping and bounded tile/timestep concurrency.
 through the stored-map API or accepts retained exports, and reports complete
 geometry differences and separate workflow clocks. The vector method is
 explicitly distinct from native stored polygons; existing raster methods retain
-their numerical contracts. See the [API](../api/fim.md#deterministic-inundation-boundaries)
+their numerical contracts. See the [API](../native-mapping-engine.md#deterministic-inundation-boundaries)
 and [qualification](fim-mapping-performance.md#deterministic-vector-boundary-qualification)
 for terrain and engine prerequisites, measured differences and scope.
 
@@ -137,7 +137,7 @@ for terrain and engine prerequisites, measured differences and scope.
 - `map_whole_simulation` delivers duration without `allow_unqualified` when
   the engine advertises `duration_rule` `rasmapper-backward-window-recession/1`.
 - Native HEC-RAS 7.0.1 qualification: see the
-  [velocity table](../api/fim.md#sloping-velocity).
+  [velocity table](../native-mapping-engine.md#sloping-velocity).
 
 **Fast-Map 0.12 is the minimum mapping engine**
 
@@ -422,7 +422,7 @@ The mapping extras accept `ras-commander-fast-map>=0.10.1,<0.12`; install
 0.11.0 for retained hydraulic/window caches and native TIFF delivery. The
 core HDF requirement is `ras-commander-fast-hdf>=0.2.4,<0.3`. Capabilities
 remain checked at runtime, and existing user pins are not silently updated.
-See the [catalog recipe](../api/fim.md#build-jobs-from-a-watershed-layer) and
+See the [catalog recipe](../native-mapping-engine.md#build-jobs-from-a-watershed-layer) and
 [complete source comparison](https://github.com/gpt-cmdr/ras-commander/compare/v0.110.2...v0.110.3).
 
 ### Implementation notes
@@ -435,7 +435,7 @@ parallel workers, budget per-worker memory and inspect partial results.
 The `fim` and `fast-map` extras accept Fast-Map 0.11 alongside 0.10.1. Version
 0.11 adds the retained-state and native-writer capabilities; inspect advertised
 flags before selecting them.
-See the [catalog recipe](../api/fim.md#build-jobs-from-a-watershed-layer).
+See the [catalog recipe](../native-mapping-engine.md#build-jobs-from-a-watershed-layer).
 
 **Retained reach mapping state and optional native raster delivery**
 
@@ -466,7 +466,7 @@ Prepared sloping contexts now support `native_session=True` (default on capable
 engines). HDF staging uses bounded contiguous-timestep reads; horizontal catalog
 tables assign columns directly instead of repeatedly merging profile tables.
 Mapping arithmetic, AOI inclusion and depth thresholds are unchanged.
-See the [catalog API](../api/fim.md#schedule-reachtimestep-catalogs) and
+See the [catalog API](../native-mapping-engine.md#schedule-reachtimestep-catalogs) and
 [measured scope](fim-mapping-performance.md#reach-timestep-catalog-throughput).
 
 **Fast-HDF 0.2.4 is the minimum HDF engine**
@@ -495,7 +495,7 @@ and geometry are unchanged, and pandas 2 results are unchanged.
 whose WKT the engine cannot map to an EPSG code, such as Davis 7.0.1's
 `PROJCS["unknown", ...]`, can now be mapped directly, without an EPSG copy.
 The manifest records the accepted identity as `terrain_crs_identity`. See
-[FIM](../api/fim.md).
+[FIM](../native-mapping-engine.md).
 
 **Invalid-cell policy for horizontal, whole-simulation and comparison mapping**
 
@@ -520,7 +520,7 @@ when the AOI (or the whole mesh, without one) intersects an affected cell.
 On Glaise Creek p01, `repair` reproduced native HEC-RAS 7.0.1 horizontal depth,
 and whole-simulation arrival time and percent inundated, on every pixel of
 three windows around the cells. See
-[Invalid cell polygons](../api/fim.md#horizontal-whole-simulation-and-comparison-mapping).
+[Invalid cell polygons](../native-mapping-engine.md#horizontal-whole-simulation-and-comparison-mapping).
 
 **Native fluvial-pluvial polygons on meshes with invalid cells**
 
@@ -624,7 +624,7 @@ silently use the old coverage. Unbounded/same-CRS bbox compatibility remains.
 The NumPy reference and bbox planning use the same normalized convention.
 This intentionally changes legacy edge inclusion, while leaving hydraulic
 cell ownership and surface arithmetic unchanged. See the
-[AOI contract](../api/fim.md#global-terrain-lattice-aoi-coverage-engine-0101).
+[AOI contract](../native-mapping-engine.md#global-terrain-lattice-aoi-coverage).
 
 **Sloping maps no longer fail a whole mesh for one invalid cell** (#733)
 
@@ -643,7 +643,7 @@ sloping Max pixels and `"omit"` left 22 holes. That is limited evidence, not
 general equivalence. Horizontal, whole-simulation and comparison mapping remain
 strict. Published fast-hdf 0.2.3 already provides the non-strict assembly; no
 engine release is needed. See
-[Invalid cell polygons](../api/fim.md#invalid-cell-polygons).
+[Invalid cell polygons](../native-mapping-engine.md#invalid-cell-polygons).
 
 **FIM: priority-1 terrain source, whole-simulation products and velocity** (#724)
 
@@ -657,7 +657,7 @@ adds a `velocity_tif` manifest column. All need a Fast-Map engine that
 advertises the matching methods; engine refusals raise `FimUnsupportedError`,
 and storage-area plans are refused. Products are qualified against RAS Mapper
 output on Davis p02 and BaldEagleCrkMulti2D bridges p05 for pure 2D FIM
-library creation. See [the FIM guide](../api/fim.md#map-on-the-priority-1-terrain-source-no-terrain-export).
+library creation. See [the FIM guide](../native-mapping-engine.md#map-on-the-priority-1-terrain-source-no-terrain-export).
 
 **Columnar PMTiles properties** (#715)
 
@@ -679,7 +679,7 @@ of HDF Max/timestep selectors. Complete physical/ghost coverage is required;
 NaN explicitly means dry. The original HDF still supplies geometry and
 hydraulic properties, and the caller independently selects one mapping TIFF.
 Existing defaults are unchanged, and Fast-Map 0.8.0 needs no rebuild. See the
-[input and installation contract](../api/fim.md#supply-cell-wsel-profiles) and
+[input and installation contract](../native-mapping-engine.md#supply-cell-wsel-profiles) and
 [selector-equivalence evidence](fim-mapping-performance.md#caller-supplied-wsel-qualification).
 
 **Native fluvial-pluvial boundary on meshes with invalid cells** (#708)
@@ -847,7 +847,7 @@ requests. The horizontal method now applies native binary32
 `WSE >= float32(terrain + 0.001)` before depth subtraction, fixing pixel
 visibility at the plotting tolerance. Mapping is physical-2D only and needs no
 HEC-RAS installation. The optional FIM engine wheels are not published to PyPI.
-See [FIM API](../api/fim.md).
+See [FIM API](../native-mapping-engine.md).
 
 **`RasProcess.store_maps` accepts sloping render-mode flags**
 
