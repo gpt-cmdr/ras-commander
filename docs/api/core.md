@@ -1393,5 +1393,3 @@ results = RasProcess.store_maps(
       show_root_heading: false
       heading_level: 3
       show_source: false
-
-
