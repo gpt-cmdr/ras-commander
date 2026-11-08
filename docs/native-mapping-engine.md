@@ -884,6 +884,12 @@ Shear stress is not rendered (see the Fast-Map research notes).
 
 ## Whole-simulation products
 
+`terrain_crs_fnv1a64` accepts an explicitly verified engine WKT fingerprint when
+the engine cannot identify the source terrain EPSG code. Model and terrain must
+still share a CRS and resolve to an EPSG code through Rasterio. It never relabels
+coordinates or overrides an identified engine EPSG code. The manifest records
+the requested fingerprint and accepted terrain identity.
+
 `map_whole_simulation` produces arrival time, percent time inundated and
 duration from every stored output time, through the engine's
 `native-whole-simulation-horizontal/1` method:

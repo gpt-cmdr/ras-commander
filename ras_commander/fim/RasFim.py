@@ -1224,6 +1224,7 @@ class RasFim:
         engine_path: Optional[PathLike] = None,
         invalid_cells: str = "repair",
         storage_areas: bool = False,
+        terrain_crs_fnv1a64: Optional[str] = None,
     ) -> pd.DataFrame:
         """Map arrival time, percent time inundated and (opt-in) duration.
 
@@ -1277,6 +1278,9 @@ class RasFim:
             max_working_mib: Planned engine admission budget in MiB.
             timeout: Engine lifetime in seconds, or None.
             engine_path: Engine executable, otherwise environment/PATH.
+            terrain_crs_fnv1a64: Explicitly verified engine terrain WKT hash,
+                as for :meth:`map_sloping_profiles`. Model and terrain CRS
+                must still agree; this never relabels or transforms coordinates.
             invalid_cells: Pixel ownership for cells whose face polylines do
                 not form a valid polygon, as in :meth:`map_sloping_profiles`
                 (default ``"repair"``). Applied only when strict assembly
@@ -1320,6 +1324,7 @@ class RasFim:
             terrain_hdf=terrain_hdf, threads=threads, writer_threads=writer_threads,
             max_working_mib=max_working_mib, timeout=timeout, engine_path=engine_path,
             invalid_cells=invalid_cells, storage_areas=storage_areas,
+            terrain_crs_fnv1a64=terrain_crs_fnv1a64,
         )
 
     @staticmethod
