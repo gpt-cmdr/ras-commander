@@ -64,7 +64,9 @@ def test_polygon_mask_policy_and_shape_are_recorded(files, tmp_path, monkeypatch
     result = RasFim.map_one_d_profiles(*files, output, polygon=polygon,
                                       aoi_crs="EPSG:6588", allow_unqualified=True)
     document = json.loads((output / "fim_manifest.json").read_text())
-    assert document["aoi_mask"] == "rasterio-center-mask/1"
+    assert document["aoi_mask"] == "global-terrain-lattice/1"
     assert document["aoi"]["geometry_wkb_hex"] == polygon.wkb_hex
+    assert document["aoi"]["projected_geometry_wkb_hex"] == polygon.wkb_hex
+    assert document["aoi"]["projected_crs_wkt"] == result.attrs["preparation"]["grid"]["crs"]
     with rasterio.open(result.iloc[0].depth_tif) as src:
         assert 0 < np.isfinite(src.read(1)).sum() < src.width * src.height

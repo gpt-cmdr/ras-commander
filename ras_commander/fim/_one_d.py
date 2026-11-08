@@ -550,6 +550,45 @@ def prepare_one_d_model(hdf_path, terrain_path, output_folder, *, profiles=None,
         raise
 
 
+def _plan_delivery_aoi(constraint, transform, grid, budget):
+    """Plan global pixel indices without allocating lattice coordinates or masks.
+
+    Geometry normalization is explicit delivery work, not hydraulic rendering.
+    Reserve conservatively for coordinate copies, Python edge tuples, scanline
+    intersections and ring/part bookkeeping before materializing those arrays.
+    """
+    import shapely
+    from rasterio.windows import Window
+    from . import _aoi, _aoi_lattice
+
+    if constraint is None:
+        return Window(0, 0, grid["width"], grid["height"]), None, 0
+    same_crs = constraint.crs == _aoi.to_crs(grid["crs"])
+    masked = constraint.kind != "bbox" or not same_crs
+    geometry = constraint.geometry
+    coordinates = int(shapely.get_num_coordinates(geometry))
+    if not same_crs:
+        # segmentize emits at most ceil(length / step) + original vertices
+        # across all edges; include another vertex allowance for closed rings.
+        bounds = geometry.bounds
+        step = max(bounds[2] - bounds[0], bounds[3] - bounds[1]) / _aoi.DENSIFY_SEGMENTS
+        coordinates = 2 * coordinates + math.ceil(geometry.length / step)
+    if masked and coordinates * 1024 > budget:
+        raise FimUnsupportedError("planned 1D AOI geometry exceeds max_working_mib")
+    geometry = _aoi.geometry_in_crs(constraint, grid["crs"])
+    scratch = int(shapely.get_num_coordinates(geometry)) * 1024 if masked else 0
+    xmin, ymin, xmax, ymax = geometry.bounds
+    # Keep existing same-CRS bbox selection (no polygon mask). Polygon ties
+    # must use the exact lattice arithmetic shared with horizontal/sloping.
+    indices = _aoi_lattice.index_range if masked else _aoi.center_index_range
+    c0, c1 = indices(xmin, xmax, transform.c, transform.a, grid["width"])
+    r0, r1 = indices(ymin, ymax, transform.f, transform.e, grid["height"])
+    window = Window(c0, r0, max(0, c1 - c0), max(0, r1 - r0))
+    if not window.width or not window.height:
+        raise FimUnsupportedError("AOI contains no source-grid pixels")
+    return window, geometry if masked else None, scratch
+
+
 def map_one_d_profiles(hdf_path, terrain_path, output_folder, *, profiles=None,
                        allow_unqualified=False, bbox=None, polygon=None, aoi_crs=None,
                        polygon_layer=None, engine_path=None, threads=1,
@@ -565,8 +604,7 @@ def map_one_d_profiles(hdf_path, terrain_path, output_folder, *, profiles=None,
     import pandas as pd
     import rasterio
     from affine import Affine
-    from rasterio.windows import Window
-    from . import _aoi, _engine, _products
+    from . import _aoi, _aoi_lattice, _engine, _products
     from .errors import FimEngineError, FimMappingError
     from .RasFim import MANIFEST_COLUMNS, MANIFEST_SCHEMA, RasFim, _positive_int, _prepare_output_folder
 
@@ -644,20 +682,20 @@ def map_one_d_profiles(hdf_path, terrain_path, output_folder, *, profiles=None,
         transform = Affine.from_gdal(*grid["geo_transform"])
         constraint = _aoi.resolve_aoi(bbox=bbox, polygon=polygon, aoi_crs=aoi_crs,
                                       polygon_layer=polygon_layer, default_crs=grid["crs"])
-        if constraint is None:
-            window = Window(0, 0, grid["width"], grid["height"])
-            mask = None
-        else:
-            selected = _aoi.aoi_window(constraint, transform, grid["width"], grid["height"], grid["crs"])
-            if selected.is_empty:
-                raise FimUnsupportedError("AOI contains no source-grid pixels")
-            window = Window(*selected.window)
-            mask = selected.mask
+        window, mask_geometry, aoi_scratch = _plan_delivery_aoi(constraint, transform, grid, budget)
         pixels = int(window.width * window.height)
         pool_overhead = (Path(storage["polygons"]).stat().st_size * 32 + storage["count"] * 4096 + 1024**2) if storage else 0
-        if (pixels * (160 if storage else 32) + pool_overhead +
+        if (pixels * (160 if storage else 32) + pool_overhead + aoi_scratch +
+                (pixels if mask_geometry is not None else 0) +
                 receipt["point_count"] * 128 + receipt["triangle_count"] * 256 > budget):
             raise FimUnsupportedError("planned 1D delivery/geometry exceeds max_working_mib")
+        mask = None
+        if mask_geometry is not None:
+            # Use complete projected geometry and ORIGINAL source transform;
+            # never clip geometry or normalize against a cropped transform.
+            mask = _aoi_lattice.mask(mask_geometry, transform, window)
+            if not mask.any():
+                raise FimUnsupportedError("AOI contains no source-grid pixels")
         with rasterio.open(receipt["terrain"]) as source:
             terrain = source.read(1, window=window, masked=True).astype("<f4").filled(np.nan)
         terrain_file = scratch / "terrain.bin"
@@ -667,9 +705,12 @@ def map_one_d_profiles(hdf_path, terrain_path, output_folder, *, profiles=None,
         aoi_description = constraint.describe() if constraint else None
         if aoi_description is not None:
             aoi_description["geometry_wkb_hex"] = constraint.geometry.wkb_hex
+            if mask_geometry is not None:
+                aoi_description["projected_geometry_wkb_hex"] = mask_geometry.wkb_hex
+                aoi_description["projected_crs_wkt"] = grid["crs"]
         details = {
             "aoi": aoi_description,
-            "aoi_mask": ("rasterio-center-mask/1" if mask is not None else
+            "aoi_mask": (_aoi_lattice.METHOD if mask is not None else
                          "pixel-center-bounds/1") if constraint else None,
             "options": {"profiles": selected_profiles, "allow_unqualified": allow_unqualified,
                         "threads": threads, "max_working_mib": budget // (1024**2),

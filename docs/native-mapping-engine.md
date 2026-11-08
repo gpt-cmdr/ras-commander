@@ -1848,5 +1848,14 @@ verification. A failed batch removes its products and writes a failed manifest;
 `FimMappingError.manifest` contains the failed profile rows.
 Use `raise_on_failure=False` to return that failed manifest instead.
 Manifests record selected profiles, AOI and mask policy, resource options,
-engine identity and source/payload hashes. Polygon edge qualification remains
-outstanding; the recorded mask policy identifies the pixel-center mask used.
+engine identity and source/payload hashes. Canonical 1D polygon delivery uses
+`global-terrain-lattice/1`, consistent with horizontal/sloping: complete projected
+AOI geometry is normalized against the original full terrain transform, with
+lower-y/left pixel-center ties included and upper-y/right ties excluded. Holes,
+multiparts and reversed rings retain that rule. Reprojected bboxes use the same
+polygon rule; same-CRS bboxes remain unmasked pixel-center windows. Coordinate,
+edge/intersection scratch and mask allocations are admitted before mask creation
+or terrain reads. The mask is applied once to final composed Depth/WSE, preserving
+physical storage ownership and all retained hydraulic values. Manifests retain
+original AOI WKB/CRS and projected WKB/CRS identity. This is Commander delivery
+geometry, not a new Rust engine capability or broader 1D qualification.
