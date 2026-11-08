@@ -50,6 +50,7 @@ if TYPE_CHECKING:
     import geopandas as gpd
     from ._capabilities import FimCapabilities
     from ._one_d import FimPreparedOneDModel
+    from ._scope import FimModelScope
     from ..RasPrj import RasPrj
     from ._sloping_context import FimPreparedSlopingModel
     from .._execution_types import StoreMapPerformanceOptions
@@ -1877,6 +1878,21 @@ class RasFim:
         from . import _terrain
 
         return _terrain.canonicalize(terrain_path, output_path)
+
+    @staticmethod
+    @log_call
+    def inspect_model_scope(hdf_path: PathLike, *, geom_path: Optional[PathLike] = None) -> "FimModelScope":
+        """Inspect compiled geometry and source reach declarations without mapping.
+
+        Returns immutable dimensional metadata for 1D, 2D, mixed 1D/2D or
+        storage-only models. Candidate method keys describe dimensional
+        applicability, not installed capabilities or numerical qualification.
+        No engine or HEC-RAS runtime is loaded. Missing or malformed inputs
+        raise instead of implying a supported mapping route.
+        """
+        from . import _scope
+
+        return _scope.inspect_model_scope(hdf_path, geom_path)
 
     @staticmethod
     @log_call

@@ -88,6 +88,13 @@ Commander provides explicit, qualification-gated 1D preparation through
 `prepare_one_d_model()`. Coupled diagnostic transports still require external
 component preparation. The 2D entry points continue to refuse 1D/mixed inputs.
 
+Use `RasFim.inspect_model_scope(hdf_path)` to inspect dimensional metadata before
+choosing a mapping route. The immutable result distinguishes 1D, 2D, mixed
+1D/2D and storage-only geometry, including source reach declarations when
+available. Its candidate method keys describe dimensional applicability;
+check installed capabilities and qualification separately. Inspection does not
+load an engine, run HEC-RAS or bypass `validate_2d_model()`.
+
 ```python
 from ras_commander import RasFim
 

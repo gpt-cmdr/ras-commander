@@ -23,6 +23,7 @@ from .errors import (
 from ._aoi import FimAoi
 from ._prepare import FimPreparedProfile
 from ._capabilities import FimCapabilities, FimMethodSupport
+from ._scope import FimModelScope
 from .RasFim import RasFim
 from ._sloping_context import FimPreparedSlopingModel
 from ._one_d import FimPreparedOneDModel
@@ -35,6 +36,7 @@ __all__ = [
     "FimPreparedOneDModel",
     "FimCapabilities",
     "FimMethodSupport",
+    "FimModelScope",
     "FimError",
     "FimEngineNotFoundError",
     "FimEngineError",

@@ -1388,6 +1388,12 @@ results = RasProcess.store_maps(
         heading_level: 3
         show_source: false
 
+::: ras_commander.fim._scope.FimModelScope
+    options:
+        show_root_heading: true
+        heading_level: 3
+        show_source: false
+
 ::: ras_commander.fim._aoi.FimAoi
     options:
       show_root_heading: false
