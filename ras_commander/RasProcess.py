@@ -5297,7 +5297,10 @@ Step 5: Configure (optional — auto-detection usually works)
                 "helper_count": 1,
                 "gdal_num_threads_per_helper": performance_options.gdal_num_threads_per_helper,
                 "gdal_cachemax_mb": performance_options.gdal_cachemax_mb,
-                "native_cpu_limit": performance_options.native_cpu_limit,
+                "native_cpu_limit": (
+                    1 if _is_wine_helper_runtime()
+                    else performance_options.native_cpu_limit
+                ),
             }
             frame.attrs["missing_product_count"] = len(missing_messages)
             if missing_messages:

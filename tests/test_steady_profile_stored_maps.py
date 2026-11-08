@@ -135,11 +135,14 @@ def _write_configured_outputs(
 @pytest.mark.parametrize("performance", [None, StoreMapPerformanceOptions(
     gdal_cachemax_mb=128, gdal_num_threads_per_helper=2, native_cpu_limit=1,
 )])
+@pytest.mark.parametrize("wine_runtime", [False, True])
 def test_steady_profile_engine_bulk_configures_and_launches_once(
     monkeypatch,
     tmp_path,
     performance,
+    wine_runtime,
 ):
+    monkeypatch.setattr(ras_process_module, "_is_wine_helper_runtime", lambda: wine_runtime)
     ras_obj, rasmap_path, hdf_path = _configure_engine(monkeypatch, tmp_path)
     original_rasmap = rasmap_path.read_bytes()
     output_dir = tmp_path / "PlanShort"
@@ -186,6 +189,10 @@ def test_steady_profile_engine_bulk_configures_and_launches_once(
     assert helper_calls[0]["gdal_cachemax_mb"] == expected.gdal_cachemax_mb
     assert helper_calls[0]["native_cpu_limit"] == expected.native_cpu_limit
     assert frame.attrs["performance_effective"]["gdal_cachemax_mb"] == expected.gdal_cachemax_mb
+    assert frame.attrs["performance_requested"]["native_cpu_limit"] == expected.native_cpu_limit
+    assert frame.attrs["performance_effective"]["native_cpu_limit"] == (
+        1 if wine_runtime else expected.native_cpu_limit
+    )
     assert len(xml_writes) == 1
     assert rasmap_path.read_bytes() == original_rasmap
     assert frame[["profile_index", "profile_name", "map_type"]].to_records(
