@@ -85,8 +85,9 @@ with `RasFim.get_capabilities()` and check the qualification scope below.
 Request-contract stability and numerical qualification are separate: a stable
 transport does not establish parity for every model or option combination.
 Commander provides explicit, qualification-gated 1D preparation through
-`prepare_one_d_model()`. Coupled diagnostic transports still require external
-component preparation. The 2D entry points continue to refuse 1D/mixed inputs.
+`prepare_one_d_model()` and mixed-model preparation through
+`prepare_coupled_model()`. Both require explicit unqualified execution opt-in.
+The 2D entry points continue to refuse 1D/mixed inputs.
 
 Use `RasFim.inspect_model_scope(hdf_path)` to inspect dimensional metadata before
 choosing a mapping route. The immutable result distinguishes 1D, 2D, mixed
@@ -1866,3 +1867,62 @@ or terrain reads. The mask is applied once to final composed Depth/WSE, preservi
 physical storage ownership and all retained hydraulic values. Manifests retain
 original AOI WKB/CRS and projected WKB/CRS identity. This is Commander delivery
 geometry, not a new Rust engine capability or broader 1D qualification.
+
+## Prepare and map mixed 1D/2D surfaces
+
+Use `RasFim.prepare_coupled_model()` for a computed unsteady model containing
+actual cross-section interpolation surfaces and physical 2D cells. It stages
+complete global XS/TIN and mesh dependencies, including ghost cells, and proves
+that selected profiles bind the same stored output timestamp axis in every
+component. Model and original terrain must use the same projected US survey foot
+CRS and US Customary hydraulics. The terrain retains its full grid and 256-pixel
+tile history.
+
+```python
+prepared = RasFim.prepare_coupled_model(
+    plan_hdf, original_source_tif, preparation_folder,
+    profiles={"initial": 0, "later": 12},
+    allow_unqualified=True, engine_path=engine,
+)
+products = prepared.map_profiles(
+    output_folder, profiles=["later", "initial"], bbox=selected_bounds,
+    allow_unqualified=True, engine_path=engine,
+    threads=4, max_working_mib=1024,
+)
+assert products.attrs["qualified"] is False
+```
+
+`RasFim.map_coupled_profiles()` provides the source-path convenience route.
+Preparation and mapping refuse by default before engine lookup or output writes.
+Only plain corner-sloping Depth/WSE is admitted. Mixed steady results, storage
+areas, pipes, blocked polygons, encroachments and degenerate geometry remain
+unsupported. Existing 1D-only and strict 2D admission are unchanged.
+
+The engine must advertise `export_physical_ownership`. The sloping pass exports
+UInt32 labels from the same physical polygon burn used by its products, including
+dry and terrain-nodata coverage. Coupled schema `/1` composes the existing clipped
+XS and plain sloping products; physical 2D coverage suppresses XS before visibility
+filtering. No ownership is inferred from water levels. Any polygon delivery mask
+is applied only to final composition using `global-terrain-lattice/1`.
+
+Supply a self-contained terrain TIFF with a declared nodata value. Dataset and
+alpha masks, external mask files and auxiliary sidecar dependencies are refused
+so both components use the same bound terrain validity.
+
+`FimPreparedCoupledModel` binds its immutable preparation receipt, sources,
+payloads, engine, profiles and original grid. Reconstructed, edited or incomplete
+receipts refuse. Prepared reuse selects an ordered subset of prepared names.
+Preparation and mapping require new or empty destinations. Source and payload
+hashes are checked around mapping and whole-batch publication; failures roll
+back products and retain a failed manifest. `FimMappingError.manifest` and
+`raise_on_failure=False` follow the canonical 1D lifecycle. Manifests identify
+the coupled method/schema and component contracts, with `qualified=False`.
+This API does not promote mixed-model numerical qualification.
+
+Stored `"Max"` summaries are accepted when the XS and complete mesh summaries
+are present; the retained mixed-model comparisons cover saved-output profiles.
+Manifests record thread counts separately for serial XS/composition and the
+2D pool. Source-path convenience runs mark their temporary preparation paths
+as ephemeral; use `prepare_coupled_model()` for retained, reusable inputs.
+Preparation binds the engine artifact, so changing it requires re-preparation.
+Input hashing is repeated around profiles and publication to verify provenance.

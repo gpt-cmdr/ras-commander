@@ -1971,7 +1971,7 @@ DATAFRAME_SCHEMAS["fim_cell_wsel_profiles"] = {
 
 DATAFRAME_SCHEMAS["fim_product_manifest"] = {
     "description": "One row per mapped WSE profile; the file manifest identifies the selected RasFim method.",
-    "accessor": "RasFim.map_profiles(...), RasFim.map_ras2fim_results(...), RasFim.map_horizontal_profiles(...), RasFim.map_sloping_profiles(...), or RasFim.map_one_d_profiles(...)",
+    "accessor": "RasFim.map_profiles(...), RasFim.map_ras2fim_results(...), RasFim.map_horizontal_profiles(...), RasFim.map_sloping_profiles(...), RasFim.map_one_d_profiles(...), or RasFim.map_coupled_profiles(...)",
     "source": "ras_commander.fim.RasFim.RasFim.map_profiles()",
     "extra_columns": False,
     "dynamic": False,

@@ -160,12 +160,15 @@ def _find_wkt(obj):
     return None
 
 
-def terrain_identity(engine: Path, terrain_path: Path, results_crs, terrain_crs_fnv1a64: Optional[str] = None) -> dict:
+def terrain_identity(engine: Path, terrain_path: Path, results_crs, terrain_crs_fnv1a64: Optional[str] = None, *, timeout: Optional[float] = None) -> dict:
     """Build the request ``terrain`` block after cross-checking engine and rasterio views."""
     import rasterio
     from pyproj import CRS
 
-    info = _json_stdout(run_engine([str(engine), "terrain-info", str(terrain_path)], "terrain-info"),
+    command = [str(engine), "terrain-info", str(terrain_path)]
+    probe = (run_engine(command, "terrain-info") if timeout is None else
+             run_engine(command, "terrain-info", timeout))
+    info = _json_stdout(probe,
                         "ras2fim-batch terrain-info")
     with rasterio.open(terrain_path) as src:
         gt = tuple(src.transform.to_gdal())

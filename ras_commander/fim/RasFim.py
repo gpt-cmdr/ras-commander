@@ -50,6 +50,7 @@ if TYPE_CHECKING:
     import geopandas as gpd
     from ._capabilities import FimCapabilities
     from ._one_d import FimPreparedOneDModel
+    from ._coupled import FimPreparedCoupledModel
     from ._scope import FimModelScope
     from ..RasPrj import RasPrj
     from ._sloping_context import FimPreparedSlopingModel
@@ -274,6 +275,48 @@ class RasFim:
         """
         from ._one_d import map_one_d_profiles
         return map_one_d_profiles(hdf_path, terrain_path, output_folder,
+                                  profiles=profiles, allow_unqualified=allow_unqualified,
+                                  bbox=bbox, polygon=polygon, aoi_crs=aoi_crs,
+                                  polygon_layer=polygon_layer, engine_path=engine_path,
+                                  threads=threads, max_working_mib=max_working_mib, timeout=timeout,
+                                  raise_on_failure=raise_on_failure)
+
+    @staticmethod
+    @log_call
+    def prepare_coupled_model(
+        hdf_path: PathLike, terrain_path: PathLike, output_folder: PathLike, *,
+        profiles: Optional[Union[Dict[str, Union[str, int]], Sequence[Union[str, int]]]] = None,
+        allow_unqualified: bool = False, max_working_mib: int = 1024,
+        engine_path: Optional[PathLike] = None, threads: int = 1,
+    ) -> "FimPreparedCoupledModel":
+        """Prepare receipt-bound global mixed XS/2D inputs for diagnostic mapping.
+
+        Explicit allow_unqualified=True is required. Initial scope is unsteady
+        plain corner sloping Depth/WSE without storage or pipe geometry.
+        """
+        from ._coupled import prepare_coupled_model
+        return prepare_coupled_model(hdf_path, terrain_path, output_folder,
+                                   profiles=profiles, allow_unqualified=allow_unqualified,
+                                   max_working_mib=max_working_mib, engine_path=engine_path, threads=threads)
+
+    @staticmethod
+    @log_call
+    def map_coupled_profiles(
+        hdf_path: PathLike, terrain_path: PathLike, output_folder: PathLike, *,
+        profiles: Optional[Union[Dict[str, Union[str, int]], Sequence[Union[str, int]]]] = None,
+        allow_unqualified: bool = False, bbox: Optional[Sequence[float]] = None,
+        polygon: Any = None, aoi_crs: Any = None, polygon_layer: Optional[str] = None,
+        engine_path: Optional[PathLike] = None, threads: int = 1,
+        max_working_mib: int = 1024, timeout: Optional[float] = None,
+        raise_on_failure: bool = True,
+    ) -> pd.DataFrame:
+        """Compose actual physical 2D coverage over global stored XS surfaces.
+
+        The default qualification gate refuses. AOIs mask final composition;
+        dry and terrain-nodata 2D cells still suppress the XS component.
+        """
+        from ._coupled import map_coupled_profiles
+        return map_coupled_profiles(hdf_path, terrain_path, output_folder,
                                   profiles=profiles, allow_unqualified=allow_unqualified,
                                   bbox=bbox, polygon=polygon, aoi_crs=aoi_crs,
                                   polygon_layer=polygon_layer, engine_path=engine_path,

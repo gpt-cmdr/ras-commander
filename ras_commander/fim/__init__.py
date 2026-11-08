@@ -5,7 +5,9 @@ Step05 mapping, temporal/velocity products, catalogs and boundary comparisons.
 The explicit qualification-gated 1D path stages stored cross-section surfaces
 with ``prepare_one_d_model`` and maps them with ``map_one_d_profiles`` or the
 prepared model's ``map_profiles`` method. The 2D entry points retain their
-dimensional guards; mixed-model component preparation remains unsupported.
+dimensional guards. Canonical mixed preparation and coverage-first composition
+use ``prepare_coupled_model``/``map_coupled_profiles`` behind the same explicit
+qualification gate.
 
 Install ``ras-commander[fim]`` for the external ``ras2fim-batch`` engine.
 Numerical qualification is independent of transport availability and API
@@ -27,6 +29,7 @@ from ._scope import FimModelScope
 from .RasFim import RasFim
 from ._sloping_context import FimPreparedSlopingModel
 from ._one_d import FimPreparedOneDModel
+from ._coupled import FimPreparedCoupledModel
 
 __all__ = [
     "RasFim",
@@ -34,6 +37,7 @@ __all__ = [
     "FimPreparedProfile",
     "FimPreparedSlopingModel",
     "FimPreparedOneDModel",
+    "FimPreparedCoupledModel",
     "FimCapabilities",
     "FimMethodSupport",
     "FimModelScope",

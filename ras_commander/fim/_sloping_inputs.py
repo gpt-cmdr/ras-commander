@@ -38,6 +38,22 @@ def write_binary_mesh_inputs(
     max_staged_bytes=None,
 ):
     """Stage typed HDF arrays without constructing per-cell Python objects."""
+    from .RasFim import RasFim
+    RasFim.validate_2d_model(hdf_path)
+    return _write_binary_mesh_payloads(
+        hdf_path, output_folder, threads=threads, include_max=include_max,
+        include_vertex_elevations=include_vertex_elevations,
+        postprocessing_hdf=postprocessing_hdf,
+        corner_elevation_source=corner_elevation_source,
+        max_staged_bytes=max_staged_bytes)
+
+
+def _write_binary_mesh_payloads(
+    hdf_path, output_folder, *, threads=4, include_max=True,
+    include_vertex_elevations=False, postprocessing_hdf=None,
+    corner_elevation_source="auto", max_staged_bytes=None,
+):
+    """Write complete mesh payloads after the caller's dimensional admission."""
     import json
     import h5py
     import numpy as np
@@ -50,7 +66,6 @@ def write_binary_mesh_inputs(
     if corner_elevation_source not in ("auto", "geometry", "mapping_cache"):
         raise ValueError("corner_elevation_source must be auto, geometry or mapping_cache")
     root = Path(output_folder)
-    RasFim.validate_2d_model(path)
     with backend_scope("rust"):
         centers = HdfMesh.get_mesh_cell_points(
             path, include_ghost_cells=True, include_geometry=False
