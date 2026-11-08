@@ -126,10 +126,12 @@ Parent `ras_commander/AGENTS.md` and root `AGENTS.md` still apply.
   must not import it or depend on installed HEC-RAS DLLs. Never commit decompiled
   vendor source, captured project geometry, or generated raster evidence.
 
-- Model-backed mapping rejects any 1D river centerline/reach or cross-section geometry before
+- Model-backed 2D mapping entry points reject any 1D river centerline/reach or cross-section geometry before
   mesh selection or engine execution. Coupled pipe hydraulic tables alone are permitted.
   Preserve source-HDF provenance on extracted cell tables; standalone polygon tables cannot
   establish the dimensional scope of an unseen source model.
+  Explicit qualification-gated 1D and coupled APIs perform their own dimensional
+  admission; they do not route mixed inputs through the 2D-only entry points.
 - Step05 preparation is global. Wet samples, triangulation, query axes, and the wet mask use every wet
   cell before any AOI. An AOI selects output pixels on the final grid only. Never subset or
   retriangulate for an AOI.

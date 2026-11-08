@@ -547,7 +547,8 @@ def run(
             "scope": "Complete mapping calls; input extraction, terrain export, hashing and comparison excluded. Native includes independently filtered LZW delivery products when enabled. Rust-first order; uncontrolled host load/cache. Shared Rust preparation is not charged to each profile again.",
         }
         state["status"] = "complete"
-        state["rows"] = json.loads(result.to_json(orient="records"))
+        from ._manifest_json import records
+        state["rows"] = records(result)
         result.attrs.update(
             comparison_report=str(report),
             candidate_batch_seconds=state["candidate_batch_seconds"],

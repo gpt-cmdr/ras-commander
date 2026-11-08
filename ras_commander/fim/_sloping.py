@@ -1,4 +1,4 @@
-"""Explicit experimental sloping API adapter; no arithmetic fallback."""
+"""Explicit sloping API adapter; no arithmetic fallback."""
 
 from pathlib import Path
 import json
@@ -15,7 +15,64 @@ import pandas as pd
 from . import _aoi, _engine, _horizontal, _products
 from ._horizontal_engine import _read_f32, _write_geometry
 from ._sloping_inputs import write_binary_mesh_inputs
-from .errors import FimEngineError, FimUnsupportedError
+from .errors import FimEngineError, FimEngineNotFoundError, FimUnsupportedError
+
+
+class _StreamProtocolError(FimEngineError):
+    """The sloping process did not deliver a complete transport frame."""
+
+
+def _read_stream_f32(*args):
+    try:
+        return _read_f32(*args)
+    except FimEngineError as exc:
+        raise _StreamProtocolError(str(exc)) from exc
+
+
+def _read_stderr_tail(errors):
+    """Read at most 16,000 bytes and retain the last 4,000 decoded characters."""
+    errors.seek(0, os.SEEK_END)
+    errors.seek(max(0, errors.tell() - 16000), os.SEEK_SET)
+    return errors.read(16000).decode("utf-8", errors="replace")[-4000:]
+
+
+def _capture_process_failure(process, errors, details, *, expired=None, wait_for_exit=False):
+    """Capture a natural exit separately from supervisory termination."""
+    timed_out = expired is not None and expired.is_set()
+    observed_code = None if timed_out or process is None else process.poll()
+    if observed_code is None and process is not None and wait_for_exit and not timed_out:
+        try:
+            observed_code = process.wait(timeout=0.1)
+        except subprocess.TimeoutExpired:
+            pass
+    cleanup_termination = process is not None and process.poll() is None
+    if cleanup_termination:
+        process.kill()
+    cleanup_code = process.wait() if process is not None else None
+    if expired is not None and expired.is_set():
+        observed_code = None
+    details["engine_returncode"] = observed_code
+    details["engine_cleanup_termination_requested"] = cleanup_termination
+    if observed_code is None and cleanup_code is not None:
+        details["engine_cleanup_returncode"] = cleanup_code
+    details["engine_stderr"] = _read_stderr_tail(errors)
+    return observed_code
+
+
+def _read_report(path, returncode, stderr):
+    """Retain early engine failures even when admission produced no report."""
+    if returncode is not None and returncode != 0:
+        refusal = _engine.read_refusal(path.parent, stderr)
+        if refusal is not None:
+            raise refusal
+        raise FimEngineError(
+            f"Sloping engine failed with exit {returncode}: "
+            f"{stderr.strip()[-4000:] or 'no diagnostic on stderr'}"
+        )
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError, UnicodeError) as exc:
+        raise FimEngineError("Missing or invalid sloping engine report") from exc
 
 
 def _validate_options(
@@ -547,7 +604,7 @@ def map_profiles(
             k: {"path": str(p), "size": before[k][0], "mtime_ns": before[k][1]}
             for k, p in watched.items()
         },
-        qualification="experimental native 7.0.1; plain five-model physical-2D corpus (bounded eBFE); enhanced combinations on Bald Eagle bridges Max and Davis timesteps",
+        qualification="scoped native 7.0.1; plain five-model physical-2D corpus (bounded eBFE); enhanced combinations on Bald Eagle bridges Max and Davis timesteps",
         invalid_cells=_invalid_cells.describe(invalid_records, invalid_policy, aoi_geometry),
     )
     if scope_info is not None:
@@ -559,7 +616,7 @@ def map_profiles(
 
         details["storage_areas"] = _storage_areas.describe(storage, selected)
         details["qualification"] = (
-            "experimental native 7.0.1; storage-area level pools qualified on "
+            "scoped native 7.0.1; storage-area level pools qualified on "
             "BaldEagleCrkMulti2D storage-area plans (see storage_areas)"
         )
     if velocity:
@@ -771,23 +828,49 @@ def map_profiles(
                 persistent = _prepared is not None and _prepared._reuse_native
                 if persistent and _prepared._native_session is None:
                     from ._native_session import NativeSlopingSession
-                    _prepared._native_session = NativeSlopingSession(engine)
+                    try:
+                        _prepared._native_session = NativeSlopingSession(engine)
+                    except OSError as exc:
+                        details["engine_returncode"] = None
+                        raise FimEngineNotFoundError(
+                            f"Cannot start persistent sloping process {engine}: {exc}"
+                        ) from exc
                 from contextlib import nullcontext
                 # Delete-on-close stderr avoids a Windows cleanup race when a
                 # terminated child briefly retains its inherited file handle.
                 with (nullcontext(_prepared._native_session.errors) if persistent else tempfile.TemporaryFile(mode="w+b")) as errors:
-                    errors.seek(0)
-                    errors.truncate()
-                    process = (_prepared._native_session.submit(root / "request.json", root / "out") if persistent else subprocess.Popen(
-                        [
-                            str(engine),
-                            "sloping",
-                            str(root / "request.json"),
-                            str(root / "out"),
-                        ],
-                        stdout=subprocess.PIPE,
-                        stderr=errors,
-                    ))
+                    process = _prepared._native_session.process if persistent else None
+                    try:
+                        # Preserve startup stderr if a retained session is already dead.
+                        if process is None or process.poll() is None:
+                            errors.seek(0)
+                            errors.truncate()
+                        process = (_prepared._native_session.submit(root / "request.json", root / "out") if persistent else subprocess.Popen(
+                            [str(engine), "sloping", str(root / "request.json"), str(root / "out")],
+                            stdout=subprocess.PIPE, stderr=errors,
+                        ))
+                    except BaseException as failure:
+                        observed_code = _capture_process_failure(process, errors, details)
+                        if persistent:
+                            _prepared._native_session.close()
+                            _prepared._native_session = None
+                        if isinstance(failure, OSError):
+                            raise FimEngineNotFoundError(
+                                f"Cannot execute sloping engine {engine}: {failure}"
+                            ) from failure
+                        if isinstance(failure, FimEngineError):
+                            refusal = _engine.read_refusal(root / "out", details["engine_stderr"])
+                            if refusal is not None:
+                                context = (f"Sloping engine failed with exit {observed_code}: "
+                                           if observed_code is not None else
+                                           "Sloping command refused without an observed process exit: ")
+                                raise _engine.EngineRefusal(context + str(refusal)) from failure
+                            if observed_code not in (None, 0):
+                                diagnostic = details["engine_stderr"].strip() or "no diagnostic on stderr"
+                                raise FimEngineError(
+                                    f"Sloping engine failed with exit {observed_code}: {diagnostic}; {failure}"
+                                ) from failure
+                        raise
 
                     def expire():
                         if process.poll() is None:
@@ -806,13 +889,13 @@ def map_profiles(
                         for name in ([] if _reduce_max else selected):
                             header = process.stdout.readline(65537)
                             if len(header) > 65536 or not header.endswith(b"\n"):
-                                raise FimEngineError(
+                                raise _StreamProtocolError(
                                     "Missing or invalid sloping stream header"
                                 )
                             try:
                                 unit = json.loads(header)
                             except (ValueError, UnicodeError) as exc:
-                                raise FimEngineError(
+                                raise _StreamProtocolError(
                                     "Invalid sloping stream header JSON"
                                 ) from exc
                             if (
@@ -823,7 +906,7 @@ def map_profiles(
                                 or (unit.get("velocity") is True) != velocity
                                 or unit.get("derived", []) != list(derived_products)
                             ):
-                                raise FimEngineError(
+                                raise _StreamProtocolError(
                                     "Sloping stream profile or dimensions mismatch"
                                 )
                             if native_products:
@@ -831,19 +914,19 @@ def map_profiles(
                                 write_tick = time.perf_counter() - unit["write_seconds"]
                                 products = deliver(root / "out" / name, folder, name, unit, plan)
                             else:
-                                depth = _read_f32(
+                                depth = _read_stream_f32(
                                     process.stdout, plan.shape, expired, timeout, "depth"
                                 )
-                                wse = _read_f32(
+                                wse = _read_stream_f32(
                                     process.stdout, plan.shape, expired, timeout, "wse"
                                 )
                                 speed = (
-                                    _read_f32(process.stdout, plan.shape, expired, timeout, "velocity")
+                                    _read_stream_f32(process.stdout, plan.shape, expired, timeout, "velocity")
                                     if velocity
                                     else None
                                 )
                                 derived_arrays = [
-                                    _read_f32(process.stdout, plan.shape, expired, timeout, product)
+                                    _read_stream_f32(process.stdout, plan.shape, expired, timeout, product)
                                     for product in derived_products
                                 ]
                                 result = SimpleNamespace(
@@ -890,31 +973,33 @@ def map_profiles(
                                 del depth, wse, result, speed
                         if persistent:
                             terminal = process.stdout.readline(65537)
-                            if len(terminal) > 65536 or not terminal.endswith(b"\n") or json.loads(terminal) != {"command_status": "complete"}:
-                                raise FimEngineError("Invalid native session completion frame")
+                            try:
+                                terminal_valid = (len(terminal) <= 65536 and terminal.endswith(b"\n")
+                                                  and json.loads(terminal) == {"command_status": "complete"})
+                            except (ValueError, UnicodeError):
+                                terminal_valid = False
+                            if not terminal_valid:
+                                raise _StreamProtocolError("Invalid native session completion frame")
                             if process.poll() is not None:
-                                raise FimEngineError("Native session exited unexpectedly")
-                            code = 0
+                                raise _StreamProtocolError("Native session exited unexpectedly")
+                            # This command completed; the persistent process did not exit.
+                            code = None
+                            details["engine_command_status"] = "complete"
                         else:
                             if _reduce_max:
                                 # File-output requests print the engine report; the
                                 # report file below is authoritative.
                                 process.stdout.read()
                             elif process.stdout.read(1):
-                                raise FimEngineError("Unexpected trailing sloping stream bytes")
+                                raise _StreamProtocolError("Unexpected trailing sloping stream bytes")
                             code = process.wait()
                         if expired.is_set():
                             raise FimEngineError(
                                 f"Sloping engine timed out after {timeout} seconds"
                             )
-                        try:
-                            report = json.loads(
-                                (root / "out/report.json").read_text(encoding="utf-8")
-                            )
-                        except (OSError, ValueError, UnicodeError) as exc:
-                            raise FimEngineError(
-                                "Missing or invalid sloping engine report"
-                            ) from exc
+                        details["engine_returncode"] = code
+                        diagnostic = _read_stderr_tail(errors)
+                        report = _read_report(root / "out/report.json", code, diagnostic)
                         expected = list(selected)
                         units = (
                             report.get("profiles") if isinstance(report, dict) else None
@@ -946,7 +1031,7 @@ def map_profiles(
                                     "Invalid sloping concurrency report"
                                 )
                         if (
-                            code != 0
+                            code not in (None, 0)
                             or report.get("status") != "complete"
                             or not isinstance(reported_method, dict)
                             or reported_method.get("method_id") != selected_method_id
@@ -971,7 +1056,9 @@ def map_profiles(
                             or any(p.get("status") != "complete" for p in units)
                         ):
                             raise FimEngineError(
-                                f"Sloping engine failed with exit {code}: {report.get('error', 'invalid report')}"
+                                ("Sloping command failed: " if code is None else
+                                 f"Sloping engine failed with exit {code}: ")
+                                + str(report.get("error", "invalid report"))
                             )
                         if timer:
                             timer.cancel()
@@ -1020,20 +1107,34 @@ def map_profiles(
                             _prepared._info["native_state_reused"] = bool(report.get("session", {}).get("geometry_reused"))
                             details["performance"]["prepared_context"] = _prepared.info
                     except BaseException as failure:
-                        if process.poll() is None:
-                            process.kill()
-                        process.wait()
-                        errors.seek(0)
-                        details["engine_stderr"] = errors.read().decode(
-                            "utf-8", errors="replace"
-                        )[-4000:]
+                        # EOF can precede the process-signalled exit; wait only
+                        # briefly for transport failures, never for unrelated errors.
+                        observed_code = _capture_process_failure(
+                            process, errors, details, expired=expired,
+                            wait_for_exit=isinstance(failure, _StreamProtocolError),
+                        )
+                        if isinstance(failure, FimEngineError) and expired.is_set():
+                            raise FimEngineError(
+                                f"Sloping engine timed out after {timeout} seconds"
+                            ) from failure
                         refusal = (
                             _engine.read_refusal(root / "out", details["engine_stderr"])
-                            if isinstance(failure, FimEngineError) and not expired.is_set()
+                            if isinstance(failure, FimEngineError)
                             else None
                         )
                         if refusal is not None:
+                            if observed_code is not None:
+                                raise _engine.EngineRefusal(
+                                    f"Sloping engine failed with exit {observed_code}: {refusal}"
+                                ) from failure
                             raise refusal from failure
+                        if isinstance(failure, _StreamProtocolError) and observed_code not in (None, 0):
+                            diagnostic = details["engine_stderr"].strip() or "no diagnostic on stderr"
+                            raise FimEngineError(
+                                f"Sloping engine failed with exit {observed_code}: {diagnostic}; {failure}"
+                            ) from failure
+                        if isinstance(failure, _StreamProtocolError):
+                            raise FimEngineError(str(failure)) from failure
                         raise
                     finally:
                         if timer:

@@ -1593,6 +1593,134 @@ class HdfXsec:
             logger.error(f"Error reading XS interpolation surface: {str(e)}")
             return gpd.GeoDataFrame()
 
+    @staticmethod
+    @log_call
+    @standardize_input(file_type='plan_hdf')
+    def get_one_d_mapping_inputs(
+        hdf_path: Union[str, Path], *,
+        profiles: Optional[List[Union[str, int]]] = None,
+        max_bytes: int = 268435456,
+    ) -> Dict[str, Any]:
+        """Read lossless stored 1D TIN, XS tables and selected unsteady or explicit steady WSE rows.
+
+        Returns a dict of native typed arrays, without dissolving, sorting or
+        dropping triangles. ``profiles`` contains ``"Max"`` or saved-time row
+        indices for unsteady output. Steady output requires a stored profile name
+        or index; no Max aggregation is inferred. Selection preserves duplicates/order. An empty sequence reads geometry only. Geometry and selected result bytes
+        are admitted before reads. Unsupported mapping features are listed in
+        ``unsupported_features`` for caller scope admission.
+        No HEC runtime is loaded and no input is modified.
+        """
+        profiles = tuple(["Max"] if profiles is None else profiles)
+        if any(isinstance(v, bool) or not
+                (isinstance(v, str) and bool(v) or isinstance(v, (int, np.integer)) and v >= 0)
+                for v in profiles):
+            raise ValueError('profiles must contain "Max" or nonnegative saved-time indices')
+        if isinstance(max_bytes, bool) or not isinstance(max_bytes, int) or max_bytes <= 0:
+            raise ValueError("max_bytes must be a positive integer")
+        xs = "Geometry/Cross Sections/"
+        tin = "Geometry/Cross Section Interpolation Surfaces/"
+        paths = {name: xs + name for name in (
+            "Attributes", "Station Elevation Info", "Station Elevation Values",
+            "Polyline Info", "Polyline Parts", "Polyline Points")}
+        paths.update({name: tin + name for name in
+                      ("TIN Info", "TIN Points", "TIN Triangles", "XSIDs")})
+        base = "Results/Unsteady/Output/Output Blocks/Base Output/"
+        with h5py.File(Path(hdf_path), "r") as source:
+            forbidden = ["Geometry/Blocked Obstructions", "Plan Data/Fixed Encroachments",
+                         "Results/Unsteady/Unsteady Encroachment",
+                         "Geometry/Cross Sections/Encroachment Stations",
+                         "Results/Steady/Output/Cross Sections/Encroachment Stations"]
+            unsupported = [key for key in forbidden if key in source]
+            for group in ("Geometry/2D Flow Areas", "Geometry/Pipe Networks"):
+                if group in source and len(source[group]):
+                    unsupported.append(group)
+            for name in ("Obstruction Info", "Obstruction Blocks"):
+                if xs + name in source:
+                    paths[name] = xs + name
+            if ("Obstruction Info" in paths) != ("Obstruction Blocks" in paths):
+                raise ValueError("partial obstruction tables")
+            has_steady, has_unsteady = "Results/Steady" in source, "Results/Unsteady" in source
+            if profiles and has_steady and has_unsteady:
+                raise ValueError("ambiguous steady and unsteady result groups")
+            steady = has_steady and not has_unsteady
+            profile_names = None
+            if steady:
+                base = "Results/Steady/Output/Output Blocks/Base Output/Steady Profiles/"
+                for key in (base + "Cross Sections/Encroachment Stations",
+                            base + "Cross Sections/Additional Variables/Encroachment Station Left",
+                            base + "Cross Sections/Additional Variables/Encroachment Station Right"):
+                    if key in source:
+                        unsupported.append(key)
+            if profiles and not steady:
+                paths["Result Attributes"] = base + "Unsteady Time Series/Cross Sections/Cross Section Attributes"
+            if profiles and steady:
+                paths["Result Attributes"] = "Results/Steady/Output/Geometry Info/Cross Section Attributes"
+                paths["Profile Names"] = base + "Profile Names"
+            missing = [v for v in paths.values() if v not in source]
+            if missing:
+                raise ValueError("missing stored 1D mapping input: " + repr(missing))
+            metadata_bytes = sum(source[v].size * source[v].dtype.itemsize for v in paths.values())
+            if metadata_bytes > max_bytes:
+                raise ValueError("1D geometry/metadata exceed admission")
+            if profiles and steady:
+                name_axis = source[paths["Profile Names"]]
+                if name_axis.ndim != 1 or name_axis.dtype.kind not in "SU":
+                    raise ValueError("steady profile names must be a one-dimensional string axis")
+                names = read_typed(name_axis)
+                profile_names = [v.decode().strip("\0 ") if isinstance(v, bytes) else str(v).strip("\0 ") for v in names]
+                if not all(profile_names) or len(set(profile_names)) != len(profile_names):
+                    raise ValueError("steady profile names must be unique and nonempty")
+            count = source[paths["Attributes"]].shape[0]
+            result_reads = []
+            for profile in profiles:
+                key = (base + "Summary Output/Cross Sections/Maximum Water Surface"
+                       if profile == "Max" else base + "Unsteady Time Series/Cross Sections/Water Surface")
+                if steady:
+                    key = base + "Cross Sections/Water Surface"
+                ds = source[key]
+                if ds.ndim not in (1, 2) or ds.shape[-1] != count:
+                    raise ValueError("WSE columns do not match global XS feature count")
+                if steady:
+                    if ds.shape != (len(profile_names), count):
+                        raise ValueError("steady WSE must match stored profile and global XS axes")
+                    if isinstance(profile, str):
+                        if profile not in profile_names:
+                            raise ValueError("select an explicit stored steady profile; Max aggregation is not defined")
+                        row = profile_names.index(profile)
+                    else:
+                        row = int(profile)
+                else:
+                    if isinstance(profile, str) and profile != "Max":
+                        raise ValueError("unsteady profiles require Max or saved-time indices")
+                    row = 0 if profile == "Max" else int(profile)
+                if ds.ndim == 2 and row >= ds.shape[0]:
+                    raise ValueError("profile index outside stored WSE rows")
+                if ds.ndim == 1 and profile != "Max":
+                    raise ValueError("saved WSE requires a time axis")
+                result_reads.append((key, row if ds.ndim == 2 else None))
+            planned = sum(source[v].size * source[v].dtype.itemsize for v in paths.values())
+            planned += len(profiles) * count * 8
+            if planned > max_bytes:
+                raise ValueError(f"1D input bytes {planned} exceed admission {max_bytes}")
+            result = {k: read_typed(source[v]) for k, v in paths.items()}
+            if profiles:
+                geom_attrs, result_attrs = result["Attributes"], result["Result Attributes"]
+                def label(value):
+                    return (value.decode() if isinstance(value, bytes) else str(value)).strip("\0 ")
+                for field, result_field in (("River", "River"), ("Reach", "Reach"), ("RS", "Station")):
+                    if field not in geom_attrs.dtype.names or result_field not in result_attrs.dtype.names:
+                        raise ValueError("missing global XS/result identity fields")
+                    if [label(v) for v in geom_attrs[field]] != [label(v) for v in result_attrs[result_field]]:
+                        raise ValueError("WSE result identity/order differs from global XS features")
+            result["levels"] = [read_typed(source[k], r) if r is not None
+                                else read_typed(source[k]) for k, r in result_reads]
+            result["unsupported_features"] = unsupported
+            result["profiles"] = profiles
+            result["result_kind"] = "steady" if steady else "unsteady"
+            result["stored_profile_names"] = profile_names
+            return result
+
     # ------------------------------------------------------------------
     # Edge-line generation and 1D footprint polygonization
     # ------------------------------------------------------------------

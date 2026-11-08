@@ -1376,6 +1376,24 @@ results = RasProcess.store_maps(
       heading_level: 3
       show_source: false
 
+::: ras_commander.fim._capabilities.FimCapabilities
+    options:
+        show_root_heading: true
+        heading_level: 3
+        show_source: false
+
+::: ras_commander.fim._capabilities.FimMethodSupport
+    options:
+        show_root_heading: true
+        heading_level: 3
+        show_source: false
+
+::: ras_commander.fim._scope.FimModelScope
+    options:
+        show_root_heading: true
+        heading_level: 3
+        show_source: false
+
 ::: ras_commander.fim._aoi.FimAoi
     options:
       show_root_heading: false
@@ -1391,5 +1409,17 @@ results = RasProcess.store_maps(
 ::: ras_commander.fim.FimPreparedSlopingModel
     options:
       show_root_heading: false
+      heading_level: 3
+      show_source: false
+
+::: ras_commander.fim._one_d.FimPreparedOneDModel
+    options:
+      show_root_heading: true
+      heading_level: 3
+      show_source: false
+
+::: ras_commander.fim._coupled.FimPreparedCoupledModel
+    options:
+      show_root_heading: true
       heading_level: 3
       show_source: false

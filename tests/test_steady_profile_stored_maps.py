@@ -13,6 +13,7 @@ import pytest
 
 from ras_commander import RasMap, RasProcess, StoredMapProductsIncompleteError
 from ras_commander.schemas import DATAFRAME_SCHEMAS
+from ras_commander.RasterPerformance import StoreMapPerformanceOptions
 
 
 ras_process_module = import_module("ras_commander.RasProcess")
@@ -131,10 +132,25 @@ def _write_configured_outputs(
             )
 
 
+@pytest.mark.parametrize(
+    ("performance", "wine_runtime"),
+    [
+        (None, False),
+        (None, True),
+        (StoreMapPerformanceOptions(gdal_cachemax_mb=128,
+            gdal_num_threads_per_helper=2, native_cpu_limit=1), False),
+        (StoreMapPerformanceOptions(gdal_cachemax_mb=128,
+            gdal_num_threads_per_helper=2, native_cpu_limit=1), True),
+        (StoreMapPerformanceOptions(native_cpu_limit=4), False),
+    ],
+)
 def test_steady_profile_engine_bulk_configures_and_launches_once(
     monkeypatch,
     tmp_path,
+    performance,
+    wine_runtime,
 ):
+    monkeypatch.setattr(ras_process_module, "_is_wine_helper_runtime", lambda: wine_runtime)
     ras_obj, rasmap_path, hdf_path = _configure_engine(monkeypatch, tmp_path)
     original_rasmap = rasmap_path.read_bytes()
     output_dir = tmp_path / "PlanShort"
@@ -172,9 +188,19 @@ def test_steady_profile_engine_bulk_configures_and_launches_once(
         map_types=("depth", "velocity"),
         fix_georef=False,
         ras_object=ras_obj,
+        performance=performance,
     )
 
     assert len(helper_calls) == 1
+    expected = performance or StoreMapPerformanceOptions()
+    assert helper_calls[0]["gdal_num_threads"] == expected.gdal_num_threads_per_helper
+    assert helper_calls[0]["gdal_cachemax_mb"] == expected.gdal_cachemax_mb
+    assert helper_calls[0]["native_cpu_limit"] == expected.native_cpu_limit
+    assert frame.attrs["performance_effective"]["gdal_cachemax_mb"] == expected.gdal_cachemax_mb
+    assert frame.attrs["performance_requested"]["native_cpu_limit"] == expected.native_cpu_limit
+    assert frame.attrs["performance_effective"]["native_cpu_limit"] == (
+        1 if wine_runtime else expected.native_cpu_limit
+    )
     assert len(xml_writes) == 1
     assert rasmap_path.read_bytes() == original_rasmap
     assert frame[["profile_index", "profile_name", "map_type"]].to_records(
@@ -323,7 +349,8 @@ def test_steady_profile_engine_rejects_ambiguous_names_and_filename_collisions(
     assert rasmap_path.read_bytes() == original
 
 
-def test_rasmap_steady_profiles_mode_serializes_dataframe(monkeypatch, tmp_path):
+@pytest.mark.parametrize("performance", [None, StoreMapPerformanceOptions(gdal_cachemax_mb=128)])
+def test_rasmap_steady_profiles_mode_serializes_dataframe(monkeypatch, tmp_path, performance):
     ras_obj, _, hdf_path = _write_steady_project(tmp_path)
     calls = []
     frame = pd.DataFrame(
@@ -374,12 +401,14 @@ def test_rasmap_steady_profiles_mode_serializes_dataframe(monkeypatch, tmp_path)
         profiles=[0],
         map_types=("depth", "inundation_boundary"),
         ras_object=ras_obj,
+        performance=performance,
     )
 
     assert len(calls) == 1
     assert calls[0]["profiles"] == [0]
     assert calls[0]["map_types"] == ["depth"]
     assert calls[0]["inundation_boundary"] is True
+    assert calls[0]["performance"] is performance
     assert summary["success"] is True
     assert summary["mode"] == "steady_profiles"
     assert summary["plans"]["01"]["profiles"][0]["profile_name"] == "P1"

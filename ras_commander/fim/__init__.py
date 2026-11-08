@@ -1,27 +1,17 @@
-"""Optional ras2fim-2D flood inundation mapping (FIM) for HEC-RAS 2D results.
+"""Prepare computed HEC-RAS results and supervise the optional Rust mapper.
 
-Main class:
-    RasFim: static namespace for the ras2fim-2D Step 05 method run by the
-        external ``ras2fim-batch`` engine.
+``RasFim`` provides typed capability discovery, 2D horizontal/sloping and
+Step05 mapping, temporal/velocity products, catalogs and boundary comparisons.
+The explicit qualification-gated 1D path stages stored cross-section surfaces
+with ``prepare_one_d_model`` and maps them with ``map_one_d_profiles`` or the
+prepared model's ``map_profiles`` method. The 2D entry points retain their
+dimensional guards. Canonical mixed preparation and coverage-first composition
+use ``prepare_coupled_model``/``map_coupled_profiles`` behind the same explicit
+qualification gate.
 
-        - find_engine(), get_engine_info(): explicit engine resolution
-        - get_cells_from_results_gpkg(): ras2fim-2D catalog cell layer
-        - get_cells_from_plan_hdf(): cell maximum WSE from a plan HDF
-        - get_cell_centers(): computational cell centres through HdfMesh
-        - resolve_aoi(): bounding box or polygon area of interest
-        - prepare_profile(): global sample preparation for one profile
-        - map_profiles(), map_ras2fim_results(): batch mapping with a
-          product manifest
-        - map_horizontal_profiles(): Rust cell-constant mapping,
-          with terrain and ownership reused across profiles
-        - map_catalog(): bounded scheduling of reach/timestep groups
-        - compare_with_rasmapper(): native horizontal stored-map qualification
-        - map_inundation_boundaries(): deterministic 2D zero-depth vector contours
-        - compare_inundation_boundaries(): full native polygon differences/timings
-
-Requires ``pip install "ras-commander[fim]"``. Rust mapping requires the matching engine
-executable. Horizontal mapping does not implement native
-sloping, 1D or structure-specific stored maps.
+Install ``ras-commander[fim]`` for the external ``ras2fim-batch`` engine.
+Numerical qualification is independent of transport availability and API
+stability. Ordinary mapping never installs an engine or falls back to HEC-RAS.
 """
 
 from .errors import (
@@ -34,14 +24,23 @@ from .errors import (
 )
 from ._aoi import FimAoi
 from ._prepare import FimPreparedProfile
+from ._capabilities import FimCapabilities, FimMethodSupport
+from ._scope import FimModelScope
 from .RasFim import RasFim
 from ._sloping_context import FimPreparedSlopingModel
+from ._one_d import FimPreparedOneDModel
+from ._coupled import FimPreparedCoupledModel
 
 __all__ = [
     "RasFim",
     "FimAoi",
     "FimPreparedProfile",
     "FimPreparedSlopingModel",
+    "FimPreparedOneDModel",
+    "FimPreparedCoupledModel",
+    "FimCapabilities",
+    "FimMethodSupport",
+    "FimModelScope",
     "FimError",
     "FimEngineNotFoundError",
     "FimEngineError",

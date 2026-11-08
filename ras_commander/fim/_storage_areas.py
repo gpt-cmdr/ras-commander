@@ -21,6 +21,7 @@ Sources (plan HDF):
 """
 
 from dataclasses import dataclass
+import hashlib
 from pathlib import Path
 
 import numpy as np
@@ -32,6 +33,8 @@ _BASE = "Results/Unsteady/Output/Output Blocks/Base Output"
 SUMMARY = f"{_BASE}/Summary Output/Storage Areas/Maximum Water Surface"
 SERIES = f"{_BASE}/Unsteady Time Series/Storage Areas/Water Surface"
 _GROUP = f"{_BASE}/Unsteady Time Series/Storage Areas"
+STRICT = "strict"
+NATIVE_EVEN_ODD = "native_even_odd"
 
 
 @dataclass(frozen=True)
@@ -40,6 +43,8 @@ class StorageAreas:
 
     names: tuple
     polygons: np.ndarray
+    geometry_policy: str = STRICT
+    geometry_records: tuple = ()
 
     def __len__(self):
         return len(self.names)
@@ -51,26 +56,67 @@ def _text(value):
     return str(value).strip()
 
 
-def read(hdf_path):
-    """Read storage-area polygons; ``None`` when the plan has none."""
+def _native_signed_area(rings):
+    """Native binary64 trapezoid accumulation; positive means clockwise."""
+    min_y = min(float(point[1]) for ring in rings for point in ring)
+    total = 0.0
+    for ring in rings:
+        part = 0.0
+        for a, b in zip(ring, ring[1:]):
+            dx = float(b[0]) - float(a[0])
+            ya = float(a[1]) - min_y
+            yb = float(b[1]) - min_y
+            part += (ya + yb) * dx
+        total += part * 0.5
+    return total
+
+
+def geometry_metadata(areas):
+    """Receipt of geometry admission without changing source ring topology."""
+    return {
+        "policy": areas.geometry_policy,
+        "fill_rule": "even-odd" if areas.geometry_policy == NATIVE_EVEN_ODD else None,
+        "preserved_invalid": [dict(row) for row in areas.geometry_records if not row["valid"]],
+        "polygons": [dict(row) for row in areas.geometry_records],
+    }
+
+
+def read(hdf_path, *, max_bytes=None, geometry_policy=STRICT):
+    """Read polygons, retaining strict validation unless explicitly requested.
+
+    ``native_even_odd`` additionally admits finite single-ring self-crossings
+    with nonnegative native signed area. It preserves WKB and feature order;
+    negative invalid rings and invalid multipart topology remain unsupported.
+    """
     import h5py
     import shapely
+    from ..fast_hdf import read_typed
+
+    if geometry_policy not in (STRICT, NATIVE_EVEN_ODD):
+        raise ValueError("unknown storage geometry policy")
 
     with h5py.File(Path(hdf_path), "r") as source:
         group = source.get("Geometry/Storage Areas")
         attributes = group.get("Attributes") if group is not None else None
+        if group is not None and len(group) and attributes is None:
+            raise FimUnsupportedError("storage areas lack geometry Attributes")
         if attributes is None or attributes.shape[0] == 0:
             return None
-        names = tuple(_text(row["Name"]) for row in attributes[()])
+        if not attributes.dtype.names or "Name" not in attributes.dtype.names:
+            raise FimUnsupportedError("unsupported storage-area attributes: missing Name")
+        planned = sum(ds.size * ds.dtype.itemsize for ds in group.values() if isinstance(ds, h5py.Dataset))
+        if max_bytes is not None and planned * 8 > max_bytes:
+            raise FimUnsupportedError("storage geometry exceeds input admission")
+        names = tuple(_text(row["Name"]) for row in read_typed(attributes))
         if any(not name for name in names) or len(set(names)) != len(names):
             raise FimUnsupportedError("storage-area names must be unique and non-empty")
         for name in ("Polygon Info", "Polygon Points"):
             if name not in group:
                 raise FimUnsupportedError(f"storage areas lack Geometry/Storage Areas/{name}")
-        info = np.asarray(group["Polygon Info"][()], dtype=np.int64)
-        points = np.asarray(group["Polygon Points"][()], dtype=np.float64)
+        info = np.asarray(read_typed(group["Polygon Info"]), dtype=np.int64)
+        points = np.asarray(read_typed(group["Polygon Points"]), dtype=np.float64)
         parts = (
-            np.asarray(group["Polygon Parts"][()], dtype=np.int64)
+            np.asarray(read_typed(group["Polygon Parts"]), dtype=np.int64)
             if "Polygon Parts" in group
             else None
         )
@@ -80,6 +126,7 @@ def read(hdf_path):
     if not np.isfinite(points).all():
         raise FimUnsupportedError("storage-area polygon coordinates must be finite")
     polygons = []
+    records = []
     for name, (start, length, part_start, part_count) in zip(names, info):
         if start < 0 or length < 3 or start + length > len(points):
             raise FimUnsupportedError(f"storage area {name!r} has an invalid point range")
@@ -96,15 +143,36 @@ def read(hdf_path):
                     raise FimUnsupportedError(f"storage area {name!r} has an invalid ring")
                 rings.append(points[start + offset:start + offset + size])
         polygon = shapely.Polygon(rings[0], rings[1:])
-        if polygon.is_empty or not polygon.is_valid or polygon.area <= 0:
+        closed_rings = [list(polygon.exterior.coords),
+                        *[list(ring.coords) for ring in polygon.interiors]]
+        area = _native_signed_area(closed_rings)
+        reason = str(shapely.is_valid_reason(polygon))
+        preserved_crossing = (
+            geometry_policy == NATIVE_EVEN_ODD
+            and not polygon.is_valid
+            and len(rings) == 1
+            and len(closed_rings[0]) >= 4
+            and reason.startswith(("Self-intersection[", "Ring Self-intersection["))
+            and area >= 0.0
+        )
+        if (polygon.is_empty or not np.isfinite(area)
+                or (not preserved_crossing and (not polygon.is_valid or polygon.area <= 0))):
             raise FimUnsupportedError(
                 f"storage area {name!r} is not a valid polygon; RAS Mapper's drawing of it is unqualified"
             )
         polygons.append(polygon)
+        wkb_hash = hashlib.sha256(polygon.wkb).hexdigest()
+        records.append({
+            "id": len(polygons) - 1, "name": name, "valid": bool(polygon.is_valid),
+            "validity_reason": reason, "native_signed_area": area,
+            "winding": "clockwise" if area > 0 else "counterclockwise" if area < 0 else "zero",
+            "raw_wkb_sha256": wkb_hash, "staged_wkb_sha256": wkb_hash,
+            "coordinates_preserved": True, "part_count": len(rings),
+        })
     array = np.empty(count, dtype=object)
     array[:] = polygons
     array.setflags(write=False)
-    return StorageAreas(names, array)
+    return StorageAreas(names, array, geometry_policy, tuple(records))
 
 
 def _checked(values, names, what):
@@ -116,16 +184,17 @@ def _checked(values, names, what):
     return values.astype("<f4")
 
 
-def _series_columns(source, areas):
+def _series_columns(source, areas, *, series_path=SERIES, group_path=_GROUP):
     """Water Surface series with its column order proven per storage-area name."""
-    series = source.get(SERIES)
+    from ..fast_hdf import read_typed
+    series = source.get(series_path)
     if series is None or series.ndim != 2 or series.shape[1] != len(areas):
         raise FimUnsupportedError(
             "plan HDF lacks a storage-area Water Surface series matching the storage areas"
         )
     stages = []
     for name in areas.names:
-        variables = source.get(f"{_GROUP}/{name}/Storage Area Variables")
+        variables = source.get(f"{group_path}/{name}/Storage Area Variables")
         if variables is None:
             raise FimUnsupportedError(f"storage area {name!r} has no Storage Area Variables")
         labels = variables.attrs.get("Variable_Unit")
@@ -133,12 +202,12 @@ def _series_columns(source, areas):
             raise FimUnsupportedError(f"storage area {name!r}: first variable is not Stage")
         if variables.shape[0] != series.shape[0]:
             raise FimUnsupportedError(f"storage area {name!r}: series length mismatch")
-        stages.append(np.asarray(variables[:, 0], dtype=np.float64))
+        stages.append(np.asarray(read_typed(variables, (slice(None), 0)), dtype=np.float64))
     if len(areas) > 1:
         # The named Stage variable is not bit-identical to the Water Surface
         # column (HEC-RAS stores them separately; p07 differs by up to 0.0013
         # ft), so each column must be strictly closest to its own area's Stage.
-        values = np.asarray(series[()], dtype=np.float64)
+        values = np.asarray(read_typed(series), dtype=np.float64)
         distance = np.array([
             [np.nanmean(np.abs(values[:, column] - stage)) for stage in stages]
             for column in range(len(areas))
@@ -146,34 +215,74 @@ def _series_columns(source, areas):
         for column, name in enumerate(areas.names):
             row = distance[column]
             others = np.delete(row, column)
-            if not np.isfinite(row[column]) or not (row[column] < others).all():
+            # Steady named Stage may prove the value exactly even when two
+            # pools have identical histories; there is no inferred permutation.
+            exact_named = (group_path != _GROUP and
+                           np.array_equal(values[:, column], stages[column]))
+            if not exact_named and (not np.isfinite(row[column]) or not (row[column] < others).all()):
                 raise FimUnsupportedError(
                     f"storage-area Water Surface column {column} is not {name!r}; column order unproven"
                 )
     return series
 
 
-def profile_values(hdf_path, areas, selection):
+def profile_values(hdf_path, areas, selection, *, max_bytes=None):
     """Float32 storage-area WSE per output name for ``Max`` or a stored index."""
     import h5py
 
+    from ..fast_hdf import read_typed
     out = {}
     with h5py.File(Path(hdf_path), "r") as source:
         # The series proves the column order the summary shares.
-        series = _series_columns(source, areas)
+        has_steady, has_unsteady = "Results/Steady" in source, "Results/Unsteady" in source
+        if has_steady and has_unsteady:
+            raise FimUnsupportedError("ambiguous steady and unsteady storage result groups")
+        steady = has_steady and not has_unsteady
+        base = "Results/Steady/Output/Output Blocks/Base Output/Steady Profiles"
+        group_path = base + "/Storage Areas" if steady else _GROUP
+        series_path = group_path + "/Water Surface"
+        if group_path not in source:
+            raise FimUnsupportedError("plan HDF lacks storage-area Water Surface series")
+        datasets = [obj for obj in source[group_path].values() if isinstance(obj, h5py.Dataset)]
+        for name in areas.names:
+            path = f"{group_path}/{name}/Storage Area Variables"
+            if path in source:
+                datasets.append(source[path])
+        planned = sum(ds.size * ds.dtype.itemsize for ds in datasets) * (len(areas) + 4)
+        if max_bytes is not None and planned > max_bytes:
+            raise FimUnsupportedError("storage result proof exceeds input admission")
+        series = _series_columns(source, areas, series_path=series_path, group_path=group_path)
+        names = None
+        if steady:
+            ds = source[base + "/Profile Names"]
+            if ds.size * ds.dtype.itemsize > (max_bytes or 268435456):
+                raise FimUnsupportedError("steady profile axis exceeds admission")
+            names = [_text(v) for v in read_typed(ds)]
+            if len(names) != series.shape[0] or len(set(names)) != len(names):
+                raise FimUnsupportedError("storage steady profile axis mismatch")
         for output, selector in selection.items():
-            if selector == "Max":
+            if steady:
+                if isinstance(selector, str):
+                    if selector not in names:
+                        raise FimUnsupportedError("select an explicit stored steady profile")
+                    index = names.index(selector)
+                else:
+                    index = int(selector)
+                if not 0 <= index < len(names):
+                    raise ValueError("storage steady profile index out of bounds")
+                out[output] = _checked(read_typed(series, index), areas.names, "steady storage Water Surface")
+            elif selector == "Max":
                 summary = source.get(SUMMARY)
                 if summary is None or summary.ndim != 2 or summary.shape[1] != len(areas):
                     raise FimUnsupportedError("plan HDF lacks storage-area Maximum Water Surface")
-                out[output] = _checked(summary[0, :], areas.names, "Maximum Water Surface")
+                out[output] = _checked(read_typed(summary, 0), areas.names, "Maximum Water Surface")
             else:
                 index = int(selector)
                 if not 0 <= index < series.shape[0]:
                     raise ValueError(
                         f"storage-area timestep {index} outside 0..{series.shape[0] - 1}"
                     )
-                out[output] = _checked(series[index, :], areas.names, f"Water Surface at {index}")
+                out[output] = _checked(read_typed(series, index), areas.names, f"Water Surface at {index}")
     return out
 
 
@@ -181,13 +290,14 @@ def time_series(hdf_path, areas, times):
     """All stored storage-area WSE, shape ``(times, areas)`` float32."""
     import h5py
 
+    from ..fast_hdf import read_typed
     with h5py.File(Path(hdf_path), "r") as source:
         series = _series_columns(source, areas)
         if series.shape[0] != times:
             raise FimUnsupportedError(
                 f"storage-area Water Surface has {series.shape[0]} rows, not the {times} output times"
             )
-        values = np.asarray(series[()], dtype=np.float32)
+        values = np.asarray(read_typed(series), dtype=np.float32)
     if not np.isfinite(values).all():
         raise FimUnsupportedError("storage-area Water Surface contains non-finite values")
     return values.astype("<f4")

@@ -45,7 +45,7 @@ def engine_supports(engine: Path) -> bool:
     """Whether ``engine`` advertises ``rasmapper-effective-terrain/1``."""
     try:
         method = _engine.engine_method(engine)
-    except Exception:
+    except FileNotFoundError:
         return False
     record = method.get("effective_terrain")
     return isinstance(record, dict) and record.get("method_id") == METHOD_ID

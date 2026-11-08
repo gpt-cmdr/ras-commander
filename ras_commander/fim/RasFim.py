@@ -30,7 +30,7 @@ horizontal WSE, with an explicit NumPy qualification reference. It reuses
 terrain-lattice ownership across profiles and never substitutes for a failed
 Step05 run.
 
-``map_sloping_profiles`` is a separate experimental plain cell-corner sloping
+``map_sloping_profiles`` is a separate plain cell-corner sloping
 method reconstructed against native RAS Mapper 7.0.1. It reads complete mesh
 topology from HDF, uses terrio terrain/ownership and has no extra depth cutoff.
 """
@@ -48,6 +48,10 @@ from typing import TYPE_CHECKING, Any, Dict, Iterable, List, Optional, Sequence,
 
 if TYPE_CHECKING:
     import geopandas as gpd
+    from ._capabilities import FimCapabilities
+    from ._one_d import FimPreparedOneDModel
+    from ._coupled import FimPreparedCoupledModel
+    from ._scope import FimModelScope
     from ..RasPrj import RasPrj
     from ._sloping_context import FimPreparedSlopingModel
     from .._execution_types import StoreMapPerformanceOptions
@@ -231,6 +235,101 @@ class RasFim:
     ENGINE_NAME = _engine.ENGINE_NAME
     ENGINE_ENV_VAR = _engine.ENGINE_ENV_VAR
     MANIFEST_COLUMNS = tuple(MANIFEST_COLUMNS)
+
+    @staticmethod
+    @log_call
+    def prepare_one_d_model(
+        hdf_path: PathLike, terrain_path: PathLike, output_folder: PathLike, *,
+        profiles: Optional[Union[Dict[str, Union[str, int]], Sequence[Union[str, int]]]] = None,
+        allow_unqualified: bool = False, max_working_mib: int = 1024,
+    ) -> "FimPreparedOneDModel":
+        """Stage lossless global 1D TIN/normalized M and obstruction receipts.
+
+        Diagnostic scope: stored unsteady/explicit steady XS profiles and disjoint
+        storage pools in projected US survey feet. Mixed 2D/pipe geometry,
+        blocked polygons and actual encroachment features remain refused. Native
+        7.0.1 preparation semantics remain unqualified for general use.
+        """
+        from ._one_d import prepare_one_d_model
+        return prepare_one_d_model(hdf_path, terrain_path, output_folder,
+                                   profiles=profiles, allow_unqualified=allow_unqualified,
+                                   max_working_mib=max_working_mib)
+
+    @staticmethod
+    @log_call
+    def map_one_d_profiles(
+        hdf_path: PathLike, terrain_path: PathLike, output_folder: PathLike, *,
+        profiles: Optional[Union[Dict[str, Union[str, int]], Sequence[Union[str, int]]]] = None,
+        allow_unqualified: bool = False, bbox: Optional[Sequence[float]] = None,
+        polygon: Any = None, aoi_crs: Any = None, polygon_layer: Optional[str] = None,
+        engine_path: Optional[PathLike] = None, threads: int = 1,
+        max_working_mib: int = 1024, timeout: Optional[float] = None,
+        raise_on_failure: bool = True,
+    ) -> pd.DataFrame:
+        """Map canonical stored 1D surfaces with the clipped diagnostic Rust method.
+
+        Use allow_unqualified=True explicitly. Call the prepared model's
+        map_profiles method to reuse preparation. AOIs retain all
+        global geometry and original terrain tile history. The transport is
+        sequential; threads caps the budget without promising parallelism.
+        """
+        from ._one_d import map_one_d_profiles
+        return map_one_d_profiles(hdf_path, terrain_path, output_folder,
+                                  profiles=profiles, allow_unqualified=allow_unqualified,
+                                  bbox=bbox, polygon=polygon, aoi_crs=aoi_crs,
+                                  polygon_layer=polygon_layer, engine_path=engine_path,
+                                  threads=threads, max_working_mib=max_working_mib, timeout=timeout,
+                                  raise_on_failure=raise_on_failure)
+
+    @staticmethod
+    @log_call
+    def prepare_coupled_model(
+        hdf_path: PathLike, terrain_path: PathLike, output_folder: PathLike, *,
+        profiles: Optional[Union[Dict[str, Union[str, int]], Sequence[Union[str, int]]]] = None,
+        allow_unqualified: bool = False, max_working_mib: int = 1024,
+        engine_path: Optional[PathLike] = None, threads: int = 1,
+        grid_contract: Optional[str] = None,
+    ) -> "FimPreparedCoupledModel":
+        """Prepare receipt-bound global mixed XS/2D inputs for diagnostic mapping.
+
+        Explicit allow_unqualified=True is required. Initial scope is unsteady
+        plain corner sloping Depth/WSE without storage or pipe geometry.
+        ``grid_contract="rasmapper-stored-tile-grid/1"`` explicitly selects
+        native stored tile sampling and derived delivery framing while retaining
+        the original terrain identity. None retains source-grid delivery.
+        """
+        from ._coupled import prepare_coupled_model
+        return prepare_coupled_model(hdf_path, terrain_path, output_folder,
+                                   profiles=profiles, allow_unqualified=allow_unqualified,
+                                   max_working_mib=max_working_mib, engine_path=engine_path, threads=threads,
+                                   grid_contract=grid_contract)
+
+    @staticmethod
+    @log_call
+    def map_coupled_profiles(
+        hdf_path: PathLike, terrain_path: PathLike, output_folder: PathLike, *,
+        profiles: Optional[Union[Dict[str, Union[str, int]], Sequence[Union[str, int]]]] = None,
+        allow_unqualified: bool = False, bbox: Optional[Sequence[float]] = None,
+        polygon: Any = None, aoi_crs: Any = None, polygon_layer: Optional[str] = None,
+        engine_path: Optional[PathLike] = None, threads: int = 1,
+        max_working_mib: int = 1024, timeout: Optional[float] = None,
+        raise_on_failure: bool = True, grid_contract: Optional[str] = None,
+    ) -> pd.DataFrame:
+        """Compose actual physical 2D coverage over global stored XS surfaces.
+
+        The default qualification gate refuses. AOIs mask final composition;
+        dry and terrain-nodata 2D cells still suppress the XS component.
+        ``grid_contract`` selects the explicit native stored tile layout during
+        path-based preparation. Prepared models inherit their sealed layout
+        and refuse overrides.
+        """
+        from ._coupled import map_coupled_profiles
+        return map_coupled_profiles(hdf_path, terrain_path, output_folder,
+                                  profiles=profiles, allow_unqualified=allow_unqualified,
+                                  bbox=bbox, polygon=polygon, aoi_crs=aoi_crs,
+                                  polygon_layer=polygon_layer, engine_path=engine_path,
+                                  threads=threads, max_working_mib=max_working_mib, timeout=timeout,
+                                  raise_on_failure=raise_on_failure, grid_contract=grid_contract)
 
     @staticmethod
     @log_call
@@ -643,7 +742,7 @@ class RasFim:
         velocity_depth: str = "rendered",
         derived_products: Sequence[str] = (),
     ) -> pd.DataFrame:
-        """Map 2D HDF WSE with the experimental Rust sloping engine.
+        """Map 2D HDF WSE with the Rust sloping engine.
 
         ``profiles`` maps output names to ``"Max"`` or zero-based stored
         timestep indices; omitted selects ``{"Max": "Max"}``. Geometry,
@@ -882,7 +981,8 @@ class RasFim:
         ``storage-area-level-pool/1``, so ``storage_areas`` can be passed to
         :meth:`map_sloping_profiles`, :meth:`map_horizontal_profiles` and
         :meth:`map_whole_simulation`. False when the engine is older or
-        missing; never raises for a missing engine.
+        missing; never raises for a missing engine. Engine execution or
+        metadata errors propagate instead of being reported as absent support.
 
         Args:
             engine_path: Engine executable, otherwise environment/PATH.
@@ -893,12 +993,12 @@ class RasFim:
         from . import _storage_areas
 
         try:
-            methods = _engine.engine_method(_engine.find_engine(engine_path))
-        except Exception:
+            capabilities = RasFim.get_capabilities(engine_path)
+        except FileNotFoundError:
             return False
         return all(
-            isinstance(methods.get(kind), dict)
-            and methods[kind].get("storage_area_surfaces") == _storage_areas.METHOD_ID
+            kind in capabilities.methods
+            and capabilities.methods[kind].flags.get("storage_area_surfaces") == _storage_areas.METHOD_ID
             for kind in ("sloping", "horizontal", "whole_simulation")
         )
 
@@ -1036,11 +1136,13 @@ class RasFim:
     EFFECTIVE_TERRAIN_METHOD = "rasmapper-effective-terrain/1"
 
     @staticmethod
+    @log_call
     def supports_effective_terrain(engine_path: Optional[PathLike] = None) -> bool:
         """Whether the installed engine builds RAS Mapper's effective terrain.
 
         True when ``ras2fim-batch method`` advertises
         ``rasmapper-effective-terrain/1``. Never raises for a missing engine.
+        Engine execution or metadata errors propagate.
 
         Args:
             engine_path: Engine executable, otherwise environment/PATH.
@@ -1051,10 +1153,11 @@ class RasFim:
         from . import _effective_terrain
 
         try:
-            engine = _engine.find_engine(engine_path)
-        except Exception:
+            capabilities = RasFim.get_capabilities(engine_path)
+        except FileNotFoundError:
             return False
-        return _effective_terrain.engine_supports(engine)
+        method = capabilities.methods.get("effective_terrain")
+        return method is not None and method.method_id == _effective_terrain.METHOD_ID
 
     @staticmethod
     @log_call
@@ -1129,6 +1232,7 @@ class RasFim:
         engine_path: Optional[PathLike] = None,
         invalid_cells: str = "repair",
         storage_areas: bool = False,
+        terrain_crs_fnv1a64: Optional[str] = None,
     ) -> pd.DataFrame:
         """Map arrival time, percent time inundated and (opt-in) duration.
 
@@ -1182,6 +1286,9 @@ class RasFim:
             max_working_mib: Planned engine admission budget in MiB.
             timeout: Engine lifetime in seconds, or None.
             engine_path: Engine executable, otherwise environment/PATH.
+            terrain_crs_fnv1a64: Explicitly verified engine terrain WKT hash,
+                as for :meth:`map_sloping_profiles`. Model and terrain CRS
+                must still agree; this never relabels or transforms coordinates.
             invalid_cells: Pixel ownership for cells whose face polylines do
                 not form a valid polygon, as in :meth:`map_sloping_profiles`
                 (default ``"repair"``). Applied only when strict assembly
@@ -1225,6 +1332,7 @@ class RasFim:
             terrain_hdf=terrain_hdf, threads=threads, writer_threads=writer_threads,
             max_working_mib=max_working_mib, timeout=timeout, engine_path=engine_path,
             invalid_cells=invalid_cells, storage_areas=storage_areas,
+            terrain_crs_fnv1a64=terrain_crs_fnv1a64,
         )
 
     @staticmethod
@@ -1829,6 +1937,21 @@ class RasFim:
 
     @staticmethod
     @log_call
+    def inspect_model_scope(hdf_path: PathLike, *, geom_path: Optional[PathLike] = None) -> "FimModelScope":
+        """Inspect compiled geometry and source reach declarations without mapping.
+
+        Returns immutable dimensional metadata for 1D, 2D, mixed 1D/2D or
+        storage-only models. Candidate method keys describe dimensional
+        applicability, not installed capabilities or numerical qualification.
+        No engine or HEC-RAS runtime is loaded. Missing or malformed inputs
+        raise instead of implying a supported mapping route.
+        """
+        from . import _scope
+
+        return _scope.inspect_model_scope(hdf_path, geom_path)
+
+    @staticmethod
+    @log_call
     def validate_2d_model(hdf_path: PathLike, *, geom_path: Optional[PathLike] = None) -> Dict[str, Any]:
         """Require compiled 2D cells and reject any 1D river/reach or cross section.
 
@@ -1858,6 +1981,22 @@ class RasFim:
                 never built or installed by a runtime mapping call.
         """
         return _engine.find_engine(engine_path)
+
+    @staticmethod
+    @log_call
+    def get_capabilities(engine_path: Optional[PathLike] = None) -> "FimCapabilities":
+        """Return an immutable view of advertised methods and qualification.
+
+        A stable API contract describes versioned request semantics; it does
+        not establish native parity or production model preparation. Inspect
+        each method's intended use and numerical qualification separately.
+        Metadata absent from an older engine remains undeclared. Missing or
+        broken engines and malformed capability records raise the existing
+        FIM engine exceptions; no engine is installed or substituted.
+        """
+        from ._capabilities import get_capabilities
+
+        return get_capabilities(engine_path)
 
     @staticmethod
     @log_call
@@ -2571,18 +2710,18 @@ class RasFim:
 
     @staticmethod
     def _write_manifest(folder: Path, manifest: pd.DataFrame, details: dict) -> Path:
-        records = json.loads(manifest.to_json(orient="records"))
+        from ._manifest_json import json_value, records
         document = {
             "schema": MANIFEST_SCHEMA,
             "created_utc": datetime.now(timezone.utc).isoformat(),
             "method": "ras2fim-2D Step 05 (ras2fim-batch engine)",
             **details,
-            "profiles": records,
+            "profiles": records(manifest),
         }
         path = folder / MANIFEST_NAME
         partial = path.with_suffix(".json.partial")
         with partial.open("w", encoding="utf-8") as stream:
-            json.dump(document, stream, indent=1, default=str)
+            json.dump(json_value(document), stream, indent=1, default=str, allow_nan=False)
             stream.flush()
             os.fsync(stream.fileno())
         os.replace(partial, path)

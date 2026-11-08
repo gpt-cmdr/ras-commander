@@ -1971,7 +1971,7 @@ DATAFRAME_SCHEMAS["fim_cell_wsel_profiles"] = {
 
 DATAFRAME_SCHEMAS["fim_product_manifest"] = {
     "description": "One row per mapped WSE profile; the file manifest identifies the selected RasFim method.",
-    "accessor": "RasFim.map_profiles(...), RasFim.map_ras2fim_results(...), or RasFim.map_horizontal_profiles(...)",
+    "accessor": "RasFim.map_profiles(...), RasFim.map_ras2fim_results(...), RasFim.map_horizontal_profiles(...), RasFim.map_sloping_profiles(...), RasFim.map_one_d_profiles(...), or RasFim.map_coupled_profiles(...)",
     "source": "ras_commander.fim.RasFim.RasFim.map_profiles()",
     "extra_columns": False,
     "dynamic": False,
@@ -1985,8 +1985,8 @@ DATAFRAME_SCHEMAS["fim_product_manifest"] = {
             ("depth_tif", "str | None", "Product 09 depth GeoTIFF path (float32, NaN nodata)."),
             ("wse_tif", "str | None", "Product 10 WSE GeoTIFF path (float32, NaN nodata)."),
             ("floodplain_gpkg", "str | None", "Product 11 floodplain GeoPackage path; None when not written."),
-            ("col_off", "int | None", "Column offset of the written window on the full output grid."),
-            ("row_off", "int | None", "Row offset of the written window on the full output grid."),
+            ("col_off", "int | None", "Column offset on the full output grid; the derived delivery lattice for native-grid coupled mapping."),
+            ("row_off", "int | None", "Row offset on the full output grid; the derived delivery lattice for native-grid coupled mapping."),
             ("width", "int | None", "Written raster width in pixels."),
             ("height", "int | None", "Written raster height in pixels."),
             ("transform", "tuple[float, ...] | None", "Affine (a, b, c, d, e, f) of the written raster."),
@@ -2000,7 +2000,7 @@ DATAFRAME_SCHEMAS["fim_product_manifest"] = {
             ("froude_tif", "str | None", "Froude number GeoTIFF (float32, NaN nodata) from map_sloping_profiles(derived_products=...); None otherwise."),
         )
     ],
-    "note": "The same rows, engine method record, engine reports, options, AOI and input identities are written to fim_manifest.json. Step05 prepares every wet cell before AOI selection; horizontal mapping prepares ownership and terrain for the constrained window. Sloping, horizontal and whole-simulation manifests (and the comparison report) add invalid_cells (also attrs['invalid_cells']): {schema: 'fim-invalid-cells/1', policy, count, cells: [{mesh, cell_id, reason, action (repaired|convex_hull|omitted|overlap_trimmed|overlap_consumed), original_area, fallback_area, pieces, overlap_with, intersects_aoi}]}; empty for valid meshes.",
+    "note": "The same rows, engine method record, engine reports, options, AOI and input identities are written to fim_manifest.json. Native-grid coupled mapping additionally records grid_contract, source_geo_transform, output_geo_transform and options.grid_contract in JSON/attrs; its preparation receipt is ras-commander-coupled-preparation/2. Source/output geotransforms use GDAL order; row transform uses Affine order and col_off/row_off locate the delivered window on the full derived lattice. The option is limited to mixed preparation/path mapping; prepared mixed models inherit it without override. Standalone 1D/sloping and catalogs do not expose it. Sloping engine_returncode is the observed natural exit or null; live persistent success records engine_command_status=complete. engine_cleanup_termination_requested/engine_cleanup_returncode describe supervisory cleanup. Coupled reports include kind=engine_execution, component/profile_id, engine_returncode, bounded engine_stderr and execution status; final profile status also validates the products. Step05 prepares every wet cell before AOI selection; horizontal mapping prepares ownership and terrain for the constrained window. Sloping, horizontal and whole-simulation manifests (and the comparison report) add invalid_cells (also attrs['invalid_cells']): {schema: 'fim-invalid-cells/1', policy, count, cells: [{mesh, cell_id, reason, action (repaired|convex_hull|omitted|overlap_trimmed|overlap_consumed), original_area, fallback_area, pieces, overlap_with, intersects_aoi}]}; empty for valid meshes.",
 }
 
 
