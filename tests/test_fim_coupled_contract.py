@@ -91,7 +91,7 @@ def prepare(files, tmp_path, monkeypatch):
     engine = _prep_environment(tmp_path, monkeypatch)
     model = RasFim.prepare_coupled_model(*files, tmp_path/'prepared',
         profiles={'first': 0, 'second': 1}, allow_unqualified=True, max_working_mib=64)
-    monkeypatch.setattr(_coupled, '_require_engine', lambda _: (engine.resolve(), capabilities()))
+    monkeypatch.setattr(_coupled, '_require_engine', lambda _, grid_contract=None: (engine.resolve(), capabilities()))
     monkeypatch.setattr(_engine, 'terrain_identity', lambda *a, **k:
         {'epsg': 6588, 'crs_identity': {'kind': 'epsg'}})
     monkeypatch.setattr(_engine, 'run_engine', lambda *a, **k: pytest.fail('contract refusal executed a process'))
@@ -132,7 +132,7 @@ def test_prepared_mapping_rejects_different_engine_path_even_with_same_bytes(fil
     prepared, engine = prepare(files, tmp_path, monkeypatch)
     alternate = tmp_path/'other-engine.exe'
     alternate.write_bytes(engine.read_bytes())
-    monkeypatch.setattr(_coupled, '_require_engine', lambda _: (alternate.resolve(), capabilities()))
+    monkeypatch.setattr(_coupled, '_require_engine', lambda _, grid_contract=None: (alternate.resolve(), capabilities()))
     with pytest.raises(FimUnsupportedError, match='differs from the prepared engine'):
         prepared.map_profiles(tmp_path/'products', allow_unqualified=True)
     assert not (tmp_path/'products').exists()

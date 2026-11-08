@@ -7,6 +7,27 @@ check `ras_commander.__version__` and the documentation's
 [build provenance](https://rascommander.info/ras/version.json). A package version
 alone does not identify a development checkout.
 
+### 0.115.0 — 2026-11-08
+
+- **Prepared 1D and mixed mapping:** canonical receipt-bound preparation and
+  Depth/WSE mapping, with explicit diagnostic opt-in, global-lattice AOI
+  delivery and atomic failure manifests. Supported 1D inputs include stored
+  steady/unsteady profiles and disjoint storage pools.
+- **Native stored-tile grid:** mixed preparation can bind the advertised
+  source-preserving grid contract. Unsupported layouts and combinations
+  refuse; capability discovery separates API stability from numerical scope.
+- **Exactness evidence:** the pinned 7.0.1 matrix passes all 32 mandatory
+  products. Pinned 6.6 controls and the distinct 1D stripe-pilot limits are
+  recorded in the [mapping guide](../native-mapping-engine.md#native-runtime-comparison-scope).
+  Davis original-source raw framing and terrain modifications remain outside
+  this qualification.
+- **Native steady export controls:** one aggregate helper accepts the typed
+  GDAL thread/cache and native CPU settings. Unsupported scheduler controls
+  refuse before project mutation. Product manifests preserve binary64
+  transforms through JSON serialization.
+- **Mapping engine dependency:** mapping extras select
+  `ras-commander-fast-map>=0.14.0,<0.15`.
+
 ### 0.114.0 — 2026-11-07
 
 - **Published HDF wheel compatibility:** accepts native bridge API 11 and the

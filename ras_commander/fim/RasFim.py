@@ -288,16 +288,21 @@ class RasFim:
         profiles: Optional[Union[Dict[str, Union[str, int]], Sequence[Union[str, int]]]] = None,
         allow_unqualified: bool = False, max_working_mib: int = 1024,
         engine_path: Optional[PathLike] = None, threads: int = 1,
+        grid_contract: Optional[str] = None,
     ) -> "FimPreparedCoupledModel":
         """Prepare receipt-bound global mixed XS/2D inputs for diagnostic mapping.
 
         Explicit allow_unqualified=True is required. Initial scope is unsteady
         plain corner sloping Depth/WSE without storage or pipe geometry.
+        ``grid_contract="rasmapper-stored-tile-grid/1"`` explicitly selects
+        native stored tile sampling and derived delivery framing while retaining
+        the original terrain identity. None retains source-grid delivery.
         """
         from ._coupled import prepare_coupled_model
         return prepare_coupled_model(hdf_path, terrain_path, output_folder,
                                    profiles=profiles, allow_unqualified=allow_unqualified,
-                                   max_working_mib=max_working_mib, engine_path=engine_path, threads=threads)
+                                   max_working_mib=max_working_mib, engine_path=engine_path, threads=threads,
+                                   grid_contract=grid_contract)
 
     @staticmethod
     @log_call
@@ -308,12 +313,15 @@ class RasFim:
         polygon: Any = None, aoi_crs: Any = None, polygon_layer: Optional[str] = None,
         engine_path: Optional[PathLike] = None, threads: int = 1,
         max_working_mib: int = 1024, timeout: Optional[float] = None,
-        raise_on_failure: bool = True,
+        raise_on_failure: bool = True, grid_contract: Optional[str] = None,
     ) -> pd.DataFrame:
         """Compose actual physical 2D coverage over global stored XS surfaces.
 
         The default qualification gate refuses. AOIs mask final composition;
         dry and terrain-nodata 2D cells still suppress the XS component.
+        ``grid_contract`` selects the explicit native stored tile layout during
+        path-based preparation. Prepared models inherit their sealed layout
+        and refuse overrides.
         """
         from ._coupled import map_coupled_profiles
         return map_coupled_profiles(hdf_path, terrain_path, output_folder,
@@ -321,7 +329,7 @@ class RasFim:
                                   bbox=bbox, polygon=polygon, aoi_crs=aoi_crs,
                                   polygon_layer=polygon_layer, engine_path=engine_path,
                                   threads=threads, max_working_mib=max_working_mib, timeout=timeout,
-                                  raise_on_failure=raise_on_failure)
+                                  raise_on_failure=raise_on_failure, grid_contract=grid_contract)
 
     @staticmethod
     @log_call
@@ -2702,18 +2710,18 @@ class RasFim:
 
     @staticmethod
     def _write_manifest(folder: Path, manifest: pd.DataFrame, details: dict) -> Path:
-        records = json.loads(manifest.to_json(orient="records"))
+        from ._manifest_json import json_value, records
         document = {
             "schema": MANIFEST_SCHEMA,
             "created_utc": datetime.now(timezone.utc).isoformat(),
             "method": "ras2fim-2D Step 05 (ras2fim-batch engine)",
             **details,
-            "profiles": records,
+            "profiles": records(manifest),
         }
         path = folder / MANIFEST_NAME
         partial = path.with_suffix(".json.partial")
         with partial.open("w", encoding="utf-8") as stream:
-            json.dump(document, stream, indent=1, default=str)
+            json.dump(json_value(document), stream, indent=1, default=str, allow_nan=False)
             stream.flush()
             os.fsync(stream.fileno())
         os.replace(partial, path)

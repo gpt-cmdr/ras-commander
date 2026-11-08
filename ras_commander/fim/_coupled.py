@@ -12,6 +12,7 @@ import numpy as np
 
 from ..Decorators import log_call
 from .errors import FimUnsupportedError, FimEngineError
+from . import _native_grid
 from ._one_d import (digest, write_json, _profile_selection, canonical_arrays,
                      _plan_delivery_aoi, METHOD_ID as XS_METHOD_ID,
                      REQUEST_SCHEMA as XS_SCHEMA)
@@ -21,6 +22,42 @@ REQUEST_SCHEMA = "fast-map-coupled-diagnostic/1"
 TWO_D_METHOD = "rasmapper-plain-sloping/1"
 TWO_D_SCHEMA = "ras-commander-sloping-request/1"
 _PREPARATION_SEAL = object()
+
+
+def _contracts(grid_contract=None):
+    """Select explicit versioned transports without modifying legacy defaults."""
+    native = _native_grid.select(grid_contract) is not None
+    return {
+        "preparation": "ras-commander-coupled-preparation/2" if native else "ras-commander-coupled-preparation/1",
+        "method": "one-d-two-d-native-grid-coverage-first-diagnostic/1" if native else METHOD_ID,
+        "schema": "fast-map-coupled-diagnostic/3" if native else REQUEST_SCHEMA,
+        "key": "coupled_native_grid_diagnostic" if native else "coupled_diagnostic",
+        "xs_key": "one_d_clipped_native_grid_diagnostic" if native else "one_d_clipped_diagnostic",
+        "xs_schema": "fast-map-one-d-diagnostic/4" if native else XS_SCHEMA,
+        "two_key": "sloping_native_grid" if native else "sloping",
+        "two_method": "rasmapper-plain-sloping/2" if native else TWO_D_METHOD,
+        "two_schema": "ras-commander-sloping-request/2" if native else TWO_D_SCHEMA,
+        "two_report": "ras-commander-sloping-report/2" if native else "ras-commander-sloping-report/1",
+    }
+
+
+def _component_contracts(contracts):
+    return {"xs": {"method_id": XS_METHOD_ID, "request_schema": contracts["xs_schema"]},
+            "two_d": {"method_id": contracts["two_method"], "request_schema": contracts["two_schema"]}}
+
+
+def _receipt_contract(receipt):
+    native = receipt.get("grid_contract")
+    if native is not None and (not isinstance(native, dict)
+                               or native.get("id") != _native_grid.CONTRACT):
+        raise FimUnsupportedError("invalid prepared native grid descriptor")
+    return _contracts(native.get("id") if native is not None else None)
+
+
+def _source_identity(path):
+    """Bind metadata inspection and content hashing to an unchanged source."""
+    stat = Path(path).stat()
+    return (stat.st_dev, stat.st_ino, stat.st_size, stat.st_mtime_ns, stat.st_ctime_ns)
 
 
 def _resources(threads, max_working_mib):
@@ -56,7 +93,7 @@ def _require_mixed(hdf):
     return scope
 
 
-def _require_engine(engine_path):
+def _require_engine(engine_path, grid_contract=None):
     from . import _engine
     from .RasFim import RasFim
     engine = _engine.find_engine(engine_path)
@@ -64,13 +101,19 @@ def _require_engine(engine_path):
     caps = RasFim.get_capabilities(engine)
     if digest(engine) != before:
         raise FimEngineError("engine changed during capability discovery")
-    for key, method, schema in (("one_d_clipped_diagnostic", XS_METHOD_ID, XS_SCHEMA),
-                                 ("sloping", TWO_D_METHOD, TWO_D_SCHEMA),
-                                 ("coupled_diagnostic", METHOD_ID, REQUEST_SCHEMA)):
+    contracts = _contracts(grid_contract)
+    for key, method, schema in ((contracts["xs_key"], XS_METHOD_ID, contracts["xs_schema"]),
+                                 (contracts["two_key"], contracts["two_method"], contracts["two_schema"]),
+                                 (contracts["key"], contracts["method"], contracts["schema"])):
         support = caps.methods.get(key)
         if support is None or support.method_id != method or schema not in support.request_schemas:
             raise FimUnsupportedError("engine lacks coupled component contract: " + key)
-    if caps.methods["sloping"].flags.get("export_physical_ownership") is not True:
+        if grid_contract is not None:
+            advertised = support.flags.get("grid_contracts")
+            if (not isinstance(advertised, (tuple, list)) or grid_contract not in advertised
+                    or support.flags.get("native_parity_qualified") is not False):
+                raise FimUnsupportedError("engine lacks native stored grid capability: " + key)
+    if caps.methods[contracts["two_key"]].flags.get("export_physical_ownership") is not True:
         raise FimUnsupportedError("engine lacks export_physical_ownership capability")
     return engine, caps
 
@@ -253,13 +296,14 @@ class FimPreparedCoupledModel:
     def validate(self):
         from pyproj.exceptions import CRSError
         receipt = self.receipt
-        if (receipt.get("schema") != "ras-commander-coupled-preparation/1"
-                or receipt.get("method_id") != METHOD_ID
-                or receipt.get("request_schema") != REQUEST_SCHEMA
-                or receipt.get("component_contracts") != {
-                    "xs": {"method_id": XS_METHOD_ID, "request_schema": XS_SCHEMA},
-                    "two_d": {"method_id": TWO_D_METHOD, "request_schema": TWO_D_SCHEMA}}):
+        contracts = _receipt_contract(receipt)
+        if (receipt.get("schema") != contracts["preparation"]
+                or receipt.get("method_id") != contracts["method"]
+                or receipt.get("request_schema") != contracts["schema"]
+                or receipt.get("component_contracts") != _component_contracts(contracts)):
             raise FimUnsupportedError("invalid prepared coupled receipt identity")
+        if receipt.get("grid_contract") is not None:
+            _native_grid.validate(receipt["grid_contract"], receipt.get("grid", {}))
         try:
             counts = {key: receipt[key] for key in
                       ("point_count", "triangle_count", "segment_count", "cross_section_count")}
@@ -348,7 +392,8 @@ class FimPreparedCoupledModel:
             raise_on_failure=raise_on_failure)
 
 def prepare_coupled_model(hdf_path, terrain_path, output_folder, *, profiles=None,
-                        allow_unqualified=False, max_working_mib=1024, engine_path=None, threads=1):
+                        allow_unqualified=False, max_working_mib=1024, engine_path=None, threads=1,
+                        grid_contract=None):
     import rasterio
     from pyproj import CRS
     from pyproj.exceptions import CRSError
@@ -361,11 +406,15 @@ def prepare_coupled_model(hdf_path, terrain_path, output_folder, *, profiles=Non
     if not allow_unqualified:
         raise FimUnsupportedError("canonical coupled is unqualified; diagnostic use requires allow_unqualified=True")
     threads, budget = _resources(threads, max_working_mib)
-    engine, capabilities = _require_engine(engine_path)
+    contracts = _contracts(grid_contract)
+    engine, capabilities = _require_engine(engine_path, grid_contract)
     profile_ids, profiles = _profile_selection(profiles)
     budget = _positive_int(max_working_mib, "max_working_mib") * 1024**2
     hdf, terrain = Path(hdf_path).resolve(strict=True), Path(terrain_path).resolve(strict=True)
-    before = {str(p): digest(p) for p in (hdf, terrain, engine)}
+    # Metadata admission precedes bulk hashing. Bind its observations to the
+    # same stable files that are subsequently hashed and staged.
+    metadata_sources = {str(p): _source_identity(p) for p in (hdf, terrain, engine)}
+    before = {}
     folder = None
     output_existed = Path(output_folder).exists()
     created_paths = []
@@ -373,18 +422,7 @@ def prepare_coupled_model(hdf_path, terrain_path, output_folder, *, profiles=Non
         scope = _require_mixed(hdf)
         geometry_path = getattr(scope, "geometry_path", None)
         if geometry_path is not None:
-            before[str(geometry_path)] = digest(geometry_path)
-        alignment = _alignment(hdf, profiles)
-        try:
-            data = HdfXsec.get_one_d_mapping_inputs(hdf, profiles=profiles, max_bytes=budget//4)
-        except (ValueError, KeyError) as exc:
-            raise FimUnsupportedError(f"stored 1D inputs cannot be staged: {exc}") from exc
-        if data["result_kind"] != "unsteady":
-            raise FimUnsupportedError("mixed steady results are unsupported")
-        if set(data["unsupported_features"]) - {"Geometry/2D Flow Areas"}:
-            raise FimUnsupportedError("unsupported 1D features: " + repr(data["unsupported_features"]))
-        storage = None
-        arrays, xs_receipts, offsets = canonical_arrays(data)
+            metadata_sources[str(geometry_path)] = _source_identity(geometry_path)
         try:
             crs = CRS.from_user_input(HdfBase.get_projection(hdf))
         except CRSError as exc:
@@ -401,6 +439,22 @@ def prepare_coupled_model(hdf_path, terrain_path, output_folder, *, profiles=Non
             if src.count != 1 or src.dtypes[0] != "float32" or not src.is_tiled or src.block_shapes != [(256, 256)] or gt[1] != -gt[5] or gt[2] or gt[4] or gt[1] <= 0:
                 raise FimUnsupportedError("requires original single-band Float32 square-pixel 256-tiled north-up terrain")
             grid = {"width": src.width, "height": src.height, "geo_transform": list(gt), "tile_size": 256, "crs": crs.to_wkt()}
+        native_grid = (_native_grid.derive(grid) if grid_contract is not None else None)
+        if any(_source_identity(path) != identity for path, identity in metadata_sources.items()):
+            raise FimUnsupportedError("coupled input changed during metadata admission")
+        before = {path: digest(path) for path in metadata_sources}
+        if any(_source_identity(path) != identity for path, identity in metadata_sources.items()):
+            raise FimUnsupportedError("coupled input changed during source hashing")
+        alignment = _alignment(hdf, profiles)
+        try:
+            data = HdfXsec.get_one_d_mapping_inputs(hdf, profiles=profiles, max_bytes=budget//4)
+        except (ValueError, KeyError) as exc:
+            raise FimUnsupportedError(f"stored 1D inputs cannot be staged: {exc}") from exc
+        if data["result_kind"] != "unsteady":
+            raise FimUnsupportedError("mixed steady results are unsupported")
+        if set(data["unsupported_features"]) - {"Geometry/2D Flow Areas"}:
+            raise FimUnsupportedError("unsupported 1D features: " + repr(data["unsupported_features"]))
+        arrays, xs_receipts, offsets = canonical_arrays(data)
         # Units metadata is retained, never inferred by assigning a CRS.
         units = HdfBase.get_result_unit_metadata(hdf)
         if units.get("unit_system") != "US Customary" or units.get("warnings") or units.get("contradictions"):
@@ -436,11 +490,9 @@ def prepare_coupled_model(hdf_path, terrain_path, output_folder, *, profiles=Non
         evidence_path = folder / "point-m-evidence.f64"
         created_paths.append(evidence_path)
         evidence.astype("<f8").tofile(evidence_path)
-        receipt = {"schema": "ras-commander-coupled-preparation/1", "qualified": False,
-                   "method_id": METHOD_ID, "request_schema": REQUEST_SCHEMA,
-                   "component_contracts": {
-                       "xs": {"method_id": XS_METHOD_ID, "request_schema": XS_SCHEMA},
-                       "two_d": {"method_id": TWO_D_METHOD, "request_schema": TWO_D_SCHEMA}},
+        receipt = {"schema": contracts["preparation"], "qualified": False,
+                   "method_id": contracts["method"], "request_schema": contracts["schema"],
+                   "component_contracts": _component_contracts(contracts),
                    "semantics_reference": "7.0.1 preparation; 6.6 normalization/endpoint selection source-verified; full-corpus parity unqualified",
                    "scope": "global stored XS TIN and physical 2D plain corner-sloping coverage",
                    "storage": storage_receipt, "result_kind": data["result_kind"],
@@ -461,6 +513,8 @@ def prepare_coupled_model(hdf_path, terrain_path, output_folder, *, profiles=Non
                    "point_m_evidence_columns": ["raw_m", "normalized_strip_m"],
                    "normalized_changed_points": int(np.count_nonzero(evidence[:, 0] != evidence[:, 1])),
                    "sha256": before | {str(p): digest(p) for p in folder.iterdir()}}
+        if native_grid is not None:
+            receipt["grid_contract"] = native_grid
         mesh_folder = folder / "two_d"
         mesh_folder.mkdir()
         created_paths.append(mesh_folder)
@@ -479,7 +533,8 @@ def prepare_coupled_model(hdf_path, terrain_path, output_folder, *, profiles=Non
         receipt_path = folder / "coupled_preparation.json"
         created_paths.extend((receipt_path, receipt_path.with_name(receipt_path.name + ".partial")))
         write_json(receipt_path, receipt)
-        if any(digest(p) != sha for p, sha in before.items()):
+        if (any(digest(p) != sha for p, sha in before.items())
+                or any(_source_identity(path) != identity for path, identity in metadata_sources.items())):
             raise FimUnsupportedError("coupled input changed during preparation")
         return FimPreparedCoupledModel._from_preparation(folder, digest(receipt_path))
     except BaseException as exc:
@@ -506,12 +561,38 @@ def prepare_coupled_model(hdf_path, terrain_path, output_folder, *, profiles=Non
 
 
 
-def _run(engine, command, request, out, timeout):
+def _run(engine, command, request, out, timeout, *, reports=None, component=None, profile_id=None):
     from . import _engine
-    proc = _engine.run_engine([str(engine), command, str(request), str(out)], "coupled " + command, timeout)
-    if proc.returncode:
-        raise _engine.read_refusal(out, proc.stderr) or FimEngineError(proc.stderr[-4000:])
-    return json.loads((out / "report.json").read_text())
+    component = component or {"one-d-diagnostic": "xs", "sloping": "two_d",
+                              "coupled-diagnostic": "composition"}.get(command, command)
+    label = "Coupled " + component
+    execution = {"kind": "engine_execution", "component": component,
+                 "profile_id": profile_id, "engine_returncode": None, "status": "in_progress"}
+    if reports is not None:
+        reports.append(execution)
+    try:
+        proc = _engine.run_engine([str(engine), command, str(request), str(out)], label, timeout)
+        stderr = (proc.stderr or "")[-4000:]
+        execution.update(engine_returncode=proc.returncode, engine_stderr=stderr)
+        if proc.returncode:
+            refusal = _engine.read_refusal(out, stderr)
+            message = (f"{label} engine failed with exit {proc.returncode}: "
+                       + (str(refusal) if refusal is not None else
+                          stderr.strip() or "no diagnostic on stderr"))
+            if refusal is not None:
+                raise _engine.EngineRefusal(message) from refusal
+            raise FimEngineError(message)
+        try:
+            report = json.loads((out / "report.json").read_text(encoding="utf-8"))
+        except (OSError, ValueError, UnicodeError) as exc:
+            raise FimEngineError(f"{label} engine exited with 0 but its report is missing or invalid") from exc
+        if not isinstance(report, dict):
+            raise FimEngineError(f"{label} engine exited with 0 but its report is not an object")
+        execution["status"] = "complete"
+        return report
+    except BaseException as exc:
+        execution.update(status="failed", error=f"{type(exc).__name__}: {exc}")
+        raise
 
 
 def _verify_products(out, pixels):
@@ -539,14 +620,24 @@ def _validate_xs_report(report, receipt, window):
     from affine import Affine
     import rasterio
     grid = receipt["grid"]
-    expected = {"schema": XS_SCHEMA, "status": "complete", "width": int(window.width),
+    contracts = _receipt_contract(receipt)
+    descriptor = receipt.get("grid_contract")
+    output_gt = descriptor["output_geo_transform"] if descriptor is not None else grid["geo_transform"]
+    expected = {"schema": contracts["xs_schema"], "status": "complete", "width": int(window.width),
                 "height": int(window.height), "source_width": grid["width"],
                 "source_height": grid["height"], "source_geo_transform": grid["geo_transform"],
                 "source_col": int(window.col_off), "source_row": int(window.row_off),
-                "geo_transform": list(rasterio.windows.transform(window, Affine.from_gdal(*grid["geo_transform"])).to_gdal()),
+                "geo_transform": list(rasterio.windows.transform(window, Affine.from_gdal(*output_gt)).to_gdal()),
                 "tile_size": 256, "scope": "xs-surface-only",
                 "clipping_scope": "levees-and-xs-end-obstructions-only",
                 "depth_file": "depth.bin", "wse_file": "wse.bin", "dtype": "little-endian float32", "nodata": "NaN"}
+    if descriptor is not None:
+        expected["grid_contract"] = descriptor
+        expected["output_geo_transform"] = descriptor["output_geo_transform"]
+        if (not _native_grid.matches(report.get("grid_contract"), descriptor)
+                or any(not _native_grid._same_transform(report.get(k), expected[k])
+                       for k in ("source_geo_transform", "output_geo_transform", "geo_transform"))):
+            raise FimEngineError("mismatched XS native grid framing report")
     if any(report.get(k) != v for k, v in expected.items()) or report.get("method", {}).get("method_id") != XS_METHOD_ID:
         raise FimEngineError("mismatched XS component report")
     valid = report.get("valid_pixels")
@@ -562,8 +653,16 @@ def _validate_two_d_report(report, request, gt, out):
                 "bytes": count*4, "width": window[2], "height": window[3], "window": window,
                 "geo_transform": gt, "epsg": request["epsg"], "crs_identity": request["crs_identity"],
                 "owner_cell_count": len(request["owner_cells"])}
-    if (report.get("schema") != "ras-commander-sloping-report/1" or report.get("status") != "complete"
-            or report.get("method", {}).get("method_id") != TWO_D_METHOD or report.get("window") != window
+    descriptor = request.get("grid_contract")
+    contracts = _contracts(descriptor["id"] if descriptor is not None else None)
+    if descriptor is not None and (not _native_grid.matches(report.get("grid_contract"), descriptor)
+            or not _native_grid._same_transform(report.get("source_geo_transform"), request["terrain_transform"])
+            or not _native_grid._same_transform(report.get("output_geo_transform"), descriptor["output_geo_transform"])
+            or not _native_grid._same_transform(report.get("geo_transform"), gt)
+            or not _native_grid._same_transform(owners.get("geo_transform"), gt)):
+        raise FimEngineError("mismatched native grid sampling/output framing report")
+    if (report.get("schema") != contracts["two_report"] or report.get("status") != "complete"
+            or report.get("method", {}).get("method_id") != contracts["two_method"] or report.get("window") != window
             or any(owners.get(k) != v for k, v in expected.items())
             or report.get("profiles") is None
             or [(p.get("id"), p.get("status")) for p in report["profiles"]] != [(request["profiles"][0]["id"], "complete")]
@@ -584,7 +683,8 @@ def _validate_two_d_report(report, request, gt, out):
 def map_coupled_profiles(hdf_path, terrain_path, output_folder, *, profiles=None,
                        allow_unqualified=False, bbox=None, polygon=None, aoi_crs=None,
                        polygon_layer=None, engine_path=None, threads=1,
-                       max_working_mib=1024, timeout=None, raise_on_failure=True):
+                       max_working_mib=1024, timeout=None, raise_on_failure=True,
+                       grid_contract=None):
     """Compose globally prepared XS and physical 2D surfaces through Rust.
 
     A prepared model may replace hdf_path; terrain_path must then be None.
@@ -613,8 +713,21 @@ def map_coupled_profiles(hdf_path, terrain_path, output_folder, *, profiles=None
     if not allow_unqualified:
         raise FimUnsupportedError("canonical coupled is unqualified; pass allow_unqualified=True for diagnostics")
     threads, budget = _resources(threads, max_working_mib)
-    engine, capabilities = _require_engine(engine_path)
-    support = capabilities.methods["coupled_diagnostic"]
+    _native_grid.select(grid_contract)
+    if isinstance(hdf_path, FimPreparedCoupledModel):
+        if terrain_path is not None:
+            raise ValueError("prepared models already bind terrain")
+        if grid_contract is not None:
+            raise ValueError("prepared models already bind grid_contract; no override is allowed")
+        prepared_receipt = hdf_path.receipt
+        contracts = _receipt_contract(prepared_receipt)
+        descriptor = prepared_receipt.get("grid_contract")
+        selected_grid_contract = descriptor["id"] if descriptor is not None else None
+    else:
+        selected_grid_contract = grid_contract
+        contracts = _contracts(grid_contract)
+    engine, capabilities = _require_engine(engine_path, selected_grid_contract)
+    support = capabilities.methods[contracts["key"]]
     def plain(value):
         if isinstance(value, Mapping):
             return {key: plain(item) for key, item in value.items()}
@@ -632,7 +745,8 @@ def map_coupled_profiles(hdf_path, terrain_path, output_folder, *, profiles=None
         else:
             prepared = prepare_coupled_model(hdf_path, terrain_path, scratch / "prepared",
                                            profiles=profiles, allow_unqualified=True,
-                                           max_working_mib=max_working_mib, engine_path=engine, threads=threads)
+                                           max_working_mib=max_working_mib, engine_path=engine, threads=threads,
+                                           grid_contract=selected_grid_contract)
         receipt = prepared.validate()
         names = receipt.get("profile_ids", [f"profile_{i:04d}" for i in range(len(receipt["profiles"]))])
         if isinstance(hdf_path, FimPreparedCoupledModel) and profiles is not None:
@@ -655,11 +769,14 @@ def map_coupled_profiles(hdf_path, terrain_path, output_folder, *, profiles=None
             raise FimUnsupportedError("mapping engine differs from the prepared engine")
         identity = _engine.terrain_identity(engine, Path(receipt["terrain"]), receipt["grid"]["crs"], timeout=timeout)
         final_support = support
-        final_method_id, final_schema = METHOD_ID, REQUEST_SCHEMA
-        component_contracts = {"xs": {"method_id": XS_METHOD_ID, "request_schema": XS_SCHEMA},
-                               "two_d": {"method_id": TWO_D_METHOD, "request_schema": TWO_D_SCHEMA}}
+        final_method_id, final_schema = contracts["method"], contracts["schema"]
+        component_contracts = _component_contracts(contracts)
         grid = receipt["grid"]
-        transform = Affine.from_gdal(*grid["geo_transform"])
+        descriptor = receipt.get("grid_contract")
+        if descriptor is not None:
+            _native_grid.validate(descriptor, grid)
+        output_gt = descriptor["output_geo_transform"] if descriptor is not None else grid["geo_transform"]
+        transform = Affine.from_gdal(*output_gt)
         constraint = _aoi.resolve_aoi(bbox=bbox, polygon=polygon, aoi_crs=aoi_crs,
                                       polygon_layer=polygon_layer, default_crs=grid["crs"])
         window, mask_geometry, aoi_scratch = _plan_delivery_aoi(constraint, transform, grid, budget)
@@ -697,7 +814,8 @@ def map_coupled_profiles(hdf_path, terrain_path, output_folder, *, profiles=None
                          "pixel-center-bounds/1") if constraint else None,
             "options": {"profiles": selected_profiles, "allow_unqualified": allow_unqualified,
                         "threads": threads, "max_working_mib": budget // (1024**2),
-                        "timeout": None if timeout is None else float(timeout)},
+                        "timeout": None if timeout is None else float(timeout),
+                        **({"grid_contract": selected_grid_contract} if descriptor is not None else {})},
             "engine_path": str(engine), "inputs": inputs,
             "preparation_receipt": {"path": str(prepared.folder / "coupled_preparation.json"),
                                     "sha256": prepared._receipt_sha256,
@@ -705,6 +823,9 @@ def map_coupled_profiles(hdf_path, terrain_path, output_folder, *, profiles=None
             "engine": engine_identity, "method_record": plain(final_support.flags),
             "component_contracts": component_contracts,
         }
+        if descriptor is not None:
+            details.update(grid_contract=descriptor, source_geo_transform=grid["geo_transform"],
+                           output_geo_transform=output_gt)
         folder = _prepare_output_folder(output_folder)
         rows, reports = [], []
         staged_products = []
@@ -746,7 +867,7 @@ def map_coupled_profiles(hdf_path, terrain_path, output_folder, *, profiles=None
         try:
             persist("in_progress")
             for i, (profile, levels) in enumerate(zip(selected_names, selected_levels)):
-                request = {"schema": XS_SCHEMA, "scope": "xs-surface-only",
+                request = {"schema": contracts["xs_schema"], "scope": "xs-surface-only",
                            "point_count": receipt["point_count"], "triangle_count": receipt["triangle_count"],
                            "segment_count": receipt["segment_count"], "cross_section_count": receipt["cross_section_count"],
                            "levels_file": levels, "terrain_file": str(terrain_file),
@@ -755,13 +876,13 @@ def map_coupled_profiles(hdf_path, terrain_path, output_folder, *, profiles=None
                            "window": dict(zip(("col", "row", "width", "height"), map(int, (window.col_off, window.row_off, window.width, window.height)))),
                            "max_working_bytes": budget-component_overhead-pixels*24-aoi_scratch, "clipping_scope": "levees-and-xs-end-obstructions-only"}
                 request.update({name + "_file": path for name, path in receipt["files"].items()})
+                if descriptor is not None:
+                    request["grid_contract"] = descriptor
                 request_file = scratch / f"request-{i}.json"
                 write_json(request_file, request)
                 out = scratch / f"engine-{i}"
-                proc = _engine.run_engine([str(engine), "one-d-diagnostic", str(request_file), str(out)], "1D mapping", timeout)
-                if proc.returncode != 0:
-                    raise _engine.read_refusal(out, proc.stderr) or FimEngineError(proc.stderr[-4000:])
-                report = json.loads((out / "report.json").read_text())
+                report = _run(engine, "one-d-diagnostic", request_file, out, timeout,
+                              reports=reports, component="xs", profile_id=profile)
                 if report.get("status") != "complete" or report.get("method", {}).get("method_id") != XS_METHOD_ID:
                     raise FimEngineError("incomplete or mismatched 1D engine report")
                 reports.append(report)
@@ -772,7 +893,7 @@ def map_coupled_profiles(hdf_path, terrain_path, output_folder, *, profiles=None
                 _validate_xs_report(report, receipt, window)
                 mesh = receipt["mesh"]
                 unit = mesh["profiles"][positions[i]]
-                two_request = {"schema": TWO_D_SCHEMA, "terrain": receipt["terrain"],
+                two_request = {"schema": contracts["two_schema"], "terrain": receipt["terrain"],
                     "epsg": identity["epsg"], "crs_identity": identity["crs_identity"],
                     "terrain_transform": grid["geo_transform"],
                     "window": [int(window.col_off), int(window.row_off), int(window.width), int(window.height)],
@@ -782,10 +903,13 @@ def map_coupled_profiles(hdf_path, terrain_path, output_folder, *, profiles=None
                     "profiles": [dict(id=profile, values_files=[str(prepared.folder / f) for f in unit["values_files"]])],
                     "threads": threads, "max_working_bytes": budget-component_overhead-pixels*24-aoi_scratch,
                     "stream_outputs": False, "export_physical_ownership": True}
+                if descriptor is not None:
+                    two_request["grid_contract"] = descriptor
                 two_file = scratch / f"two-d-request-{i}.json"
                 write_json(two_file, two_request)
                 two_out = scratch / f"two-d-{i}"
-                two_report = _run(engine, "sloping", two_file, two_out, timeout)
+                two_report = _run(engine, "sloping", two_file, two_out, timeout,
+                                  reports=reports, component="two_d", profile_id=profile)
                 gt = list(rasterio.windows.transform(window, transform).to_gdal())
                 _validate_two_d_report(two_report, two_request, gt, two_out)
                 reports.append(two_report)
@@ -795,15 +919,18 @@ def map_coupled_profiles(hdf_path, terrain_path, output_folder, *, profiles=None
                 def component(depth, wse):
                     return {"profile_id": profile, "crs": grid["crs"], "width": int(window.width),
                             "height": int(window.height), "geo_transform": gt,
-                            "depth_file": str(depth), "wse_file": str(wse)}
+                            "depth_file": str(depth), "wse_file": str(wse),
+                            **({"grid_contract": descriptor} if descriptor is not None else {})}
                 if _verify_products(out, pixels) != report["valid_pixels"]:
                     raise FimEngineError("XS product validity count differs from report")
                 _verify_products(two_out / profile, pixels)
-                composition = {"schema": REQUEST_SCHEMA,
+                composition = {"schema": contracts["schema"],
                     "xs": component(out / "depth.bin", out / "wse.bin"),
                     "two_d": component(two_out / profile / "depth.bin", two_out / profile / "wse.bin"),
                     "two_d_owners_file": str(two_out / "owners.bin"),
                     "two_d_cell_count": mesh["physical_cell_count"], "max_working_bytes": budget-component_overhead-pixels*24-aoi_scratch}
+                if descriptor is not None:
+                    composition.update(grid_contract=descriptor, window=two_request["window"])
                 component_paths = [out / "depth.bin", out / "wse.bin", two_out / profile / "depth.bin",
                                    two_out / profile / "wse.bin", two_out / "owners.bin"]
                 raw_hashes.update({path: digest(path) for path in component_paths})
@@ -811,12 +938,18 @@ def map_coupled_profiles(hdf_path, terrain_path, output_folder, *, profiles=None
                 composition_file = scratch / f"composition-{i}.json"
                 write_json(composition_file, composition)
                 composed = scratch / f"composed-{i}"
-                composition_report = _run(engine, "coupled-diagnostic", composition_file, composed, timeout)
-                expected = {"schema": REQUEST_SCHEMA, "status": "complete", "profile_id": profile,
+                composition_report = _run(engine, "coupled-diagnostic", composition_file, composed, timeout,
+                                          reports=reports, component="composition", profile_id=profile)
+                expected = {"schema": contracts["schema"], "status": "complete", "profile_id": profile,
                             "crs": grid["crs"], "width": int(window.width), "height": int(window.height),
                             "geo_transform": gt}
+                if descriptor is not None:
+                    expected["grid_contract"] = descriptor
+                    if (not _native_grid.matches(composition_report.get("grid_contract"), descriptor)
+                            or not _native_grid._same_transform(composition_report.get("geo_transform"), gt)):
+                        raise FimEngineError("mismatched coupled native grid framing report")
                 if (any(composition_report.get(k) != v for k, v in expected.items()) or
-                        composition_report.get("method", {}).get("method_id") != METHOD_ID):
+                        composition_report.get("method", {}).get("method_id") != final_method_id):
                     raise FimEngineError("mismatched coupled composition report")
                 reports.append(composition_report)
                 raw_hashes[composition_file] = digest(composition_file)

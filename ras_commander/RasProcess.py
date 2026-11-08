@@ -72,7 +72,8 @@ class StoredMapProductsIncompleteError(RuntimeError):
     def __init__(self, message: str, frame: pd.DataFrame):
         super().__init__(message)
         self.frame = frame
-        self.missing = frame[frame["status"] != "generated"].to_dict(orient="records")
+        missing = frame[frame["status"] != "generated"].astype(object)
+        self.missing = missing.where(pd.notna(missing), None).to_dict(orient="records")
 
 
 @dataclass
@@ -4859,6 +4860,7 @@ Step 5: Configure (optional — auto-detection usually works)
         terrain_name: Optional[str] = None,
         inundation_boundary: bool = True,
         raise_on_missing: bool = True,
+        performance: Optional[StoreMapPerformanceOptions] = None,
     ) -> pd.DataFrame:
         """Generate all selected steady-profile maps with one helper launch.
 
@@ -4899,6 +4901,10 @@ Step 5: Configure (optional — auto-detection usually works)
                 generated is moved to ``output_path`` and kept on disk first;
                 the exception's ``frame`` carries the per-product status.
                 When False, return the frame with ``status="missing"`` rows.
+            performance: Per-helper GDAL threads, GDAL cache and native CPU
+                controls. Aggregate steady export uses one helper; scheduler
+                and memory-admission fields must retain their defaults and
+                are not applied by this aggregate route.
 
         Returns:
             DataFrame with one row per logical profile/product and stable
@@ -4921,6 +4927,21 @@ Step 5: Configure (optional — auto-detection usually works)
         """
         from .hdf.HdfResultsPlan import HdfResultsPlan
 
+        performance_options = (
+            StoreMapPerformanceOptions() if performance is None else performance
+        )
+        if not isinstance(performance_options, StoreMapPerformanceOptions):
+            raise TypeError("performance must be a StoreMapPerformanceOptions")
+        if replace(
+            performance_options,
+            gdal_num_threads_per_helper=1,
+            gdal_cachemax_mb=None,
+            native_cpu_limit=None,
+        ) != StoreMapPerformanceOptions():
+            raise ValueError(
+                "steady aggregate performance supports only GDAL threads/cache "
+                "and native_cpu_limit; scheduler fields must retain defaults"
+            )
         started = time.perf_counter()
         ras_obj = ras_object or ras
         ras_obj.check_initialized()
@@ -5095,6 +5116,9 @@ Step 5: Configure (optional — auto-detection usually works)
                     result_hdf_path=mapper_hdf_path,
                     timeout=timeout,
                     working_dir=ras_obj.project_folder,
+                    gdal_num_threads=performance_options.gdal_num_threads_per_helper,
+                    gdal_cachemax_mb=performance_options.gdal_cachemax_mb,
+                    native_cpu_limit=performance_options.native_cpu_limit,
                 )
                 helper_elapsed = time.perf_counter() - helper_started
 
@@ -5268,6 +5292,13 @@ Step 5: Configure (optional — auto-detection usually works)
             frame.attrs["configured_map_count"] = len(configured_specs)
             frame.attrs["generated_file_count"] = len(produced_paths)
             frame.attrs["runtime_provenance"] = runtime_provenance
+            frame.attrs["performance_requested"] = performance_options.to_dict()
+            frame.attrs["performance_effective"] = {
+                "helper_count": 1,
+                "gdal_num_threads_per_helper": performance_options.gdal_num_threads_per_helper,
+                "gdal_cachemax_mb": performance_options.gdal_cachemax_mb,
+                "native_cpu_limit": performance_options.native_cpu_limit,
+            }
             frame.attrs["missing_product_count"] = len(missing_messages)
             if missing_messages:
                 message = (

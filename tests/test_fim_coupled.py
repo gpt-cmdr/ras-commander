@@ -141,7 +141,7 @@ def _prep_environment(tmp_path, monkeypatch):
     from ras_commander.fim import _engine
     engine = tmp_path / "engine.exe"
     engine.write_bytes(b"engine identity")
-    monkeypatch.setattr(_coupled, "_require_engine", lambda _: (engine.resolve(), None))
+    monkeypatch.setattr(_coupled, "_require_engine", lambda *args: (engine.resolve(), None))
     monkeypatch.setattr(_coupled, "_require_mixed", lambda _: SimpleNamespace(to_dict=lambda: {"dimension": "mixed_1d_2d"}))
     monkeypatch.setattr(_coupled, "_alignment", lambda hdf, profiles: {"profiles": list(profiles)})
     monkeypatch.setattr(_engine, "terrain_identity", lambda *args, **kwargs: {"epsg": 6588, "crs_identity": {"kind": "epsg"}})
@@ -222,8 +222,9 @@ def test_map_failure_manifest_and_interrupt_preservation(files, tmp_path, monkey
     engine = _prep_environment(tmp_path, monkeypatch)
     prepared = RasFim.prepare_coupled_model(*files, tmp_path / "prep", profiles={"p": 0},
                                            allow_unqualified=True, max_working_mib=64)
-    caps = SimpleNamespace(methods={"coupled_diagnostic": SimpleNamespace(flags={})}, raw_record={})
-    monkeypatch.setattr(_coupled, "_require_engine", lambda _: (engine.resolve(), caps))
+    caps = SimpleNamespace(methods={key: SimpleNamespace(flags={}) for key in
+                                   ("coupled_diagnostic", "coupled_native_grid_diagnostic")}, raw_record={})
+    monkeypatch.setattr(_coupled, "_require_engine", lambda *args: (engine.resolve(), caps))
     def fail(*args):
         raise failure
     monkeypatch.setattr(_engine, "run_engine", fail)
@@ -249,18 +250,22 @@ def _complete_engine(monkeypatch, tmp_path, engine, fail_profile=None):
     from ras_commander.fim import _engine
     from affine import Affine
     from subprocess import CompletedProcess
-    caps = SimpleNamespace(methods={"coupled_diagnostic": SimpleNamespace(flags={})}, raw_record={})
-    monkeypatch.setattr(_coupled, "_require_engine", lambda _: (engine.resolve(), caps))
+    caps = SimpleNamespace(methods={key: SimpleNamespace(flags={}) for key in
+                                   ("coupled_diagnostic", "coupled_native_grid_diagnostic")}, raw_record={})
+    monkeypatch.setattr(_coupled, "_require_engine", lambda *args: (engine.resolve(), caps))
     monkeypatch.setattr(_engine, "terrain_identity", lambda *args, **kwargs: {"epsg": 6588, "crs_identity": {"kind": "epsg"}})
     calls = []
     def run(args, what, timeout=None):
         request = json.loads(Path(args[2]).read_text())
         command, out = args[1], Path(args[3])
         calls.append((command, request))
+        descriptor = request.get("grid_contract")
+        contracts = _coupled._contracts(descriptor["id"] if descriptor else None)
         if command == "one-d-diagnostic":
             w = request["window"]
-            gt = list((Affine.from_gdal(*request["geo_transform"]) * Affine.translation(w["col"], w["row"])).to_gdal())
-            report = {"schema": _coupled.XS_SCHEMA, "status": "complete", "method": {"method_id": _coupled.XS_METHOD_ID},
+            full = descriptor["output_geo_transform"] if descriptor else request["geo_transform"]
+            gt = list((Affine.from_gdal(*full) @ Affine.translation(w["col"], w["row"])).to_gdal())
+            report = {"schema": contracts["xs_schema"], "status": "complete", "method": {"method_id": _coupled.XS_METHOD_ID},
                 "width": w["width"], "height": w["height"], "source_width": request["width"], "source_height": request["height"],
                 "source_geo_transform": request["geo_transform"], "source_col": w["col"], "source_row": w["row"],
                 "geo_transform": gt, "tile_size": 256, "scope": request["scope"], "clipping_scope": request["clipping_scope"],
@@ -272,26 +277,33 @@ def _complete_engine(monkeypatch, tmp_path, engine, fail_profile=None):
             name = request["profiles"][0]["id"]
             if name == fail_profile:
                 raise OSError("second profile failed")
-            full = request["terrain_transform"]
-            gt = list((Affine.from_gdal(*full) * Affine.translation(window[0], window[1])).to_gdal())
+            full = descriptor["output_geo_transform"] if descriptor else request["terrain_transform"]
+            gt = list((Affine.from_gdal(*full) @ Affine.translation(window[0], window[1])).to_gdal())
             width, height = window[2:]
-            report = {"schema": "ras-commander-sloping-report/1", "status": "complete", "method": {"method_id": _coupled.TWO_D_METHOD},
+            report = {"schema": contracts["two_report"], "status": "complete", "method": {"method_id": contracts["two_method"]},
                       "window": window, "profiles": [{"id": name, "status": "complete"}],
                       "physical_ownership": {"kind": "physical_2d", "dtype": "<u4", "count": width*height,
                         "path": "owners.bin", "bytes": width*height*4, "width": width, "height": height,
                         "window": window, "geo_transform": gt, "epsg": 6588, "crs_identity": {"kind": "epsg"},
                         "owner_cell_count": 1, "owned_pixels": width*height}}
+            if descriptor:
+                report.update(source_geo_transform=request["terrain_transform"],
+                              output_geo_transform=full, geo_transform=gt)
             out.mkdir()
             np.ones(width*height, dtype="<u4").tofile(out / "owners.bin")
             product_out = out / name
         else:
             component = request["xs"]
             width, height = component["width"], component["height"]
-            report = {"schema": _coupled.REQUEST_SCHEMA, "status": "complete", "method": {"method_id": _coupled.METHOD_ID},
+            report = {"schema": contracts["schema"], "status": "complete", "method": {"method_id": contracts["method"]},
                       **{key: component[key] for key in ("profile_id", "crs", "width", "height", "geo_transform")},
                       "counts": {"valid_pixels": width*height, "two_d_owned_pixels": width*height,
                                  "dry_two_d_suppressed_wet_xs": 0}}
             product_out = out
+        if descriptor:
+            report["grid_contract"] = descriptor
+            if command == "one-d-diagnostic":
+                report["output_geo_transform"] = descriptor["output_geo_transform"]
         product_out.mkdir(parents=True, exist_ok=True)
         for product in ("depth", "wse"):
             np.ones(width*height, dtype="<f4").tofile(product_out / (product+".bin"))

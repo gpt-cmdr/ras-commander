@@ -8,11 +8,11 @@ description: Map computed HEC-RAS results to rasters and inundation boundaries.
 
 # Native Rust Mapping Engine
 
-`RasFim` maps water-surface elevation (WSE) profiles defined on HEC-RAS 2D
-cells to depth and WSE rasters with either the ras2fim-2D Step 05 method or
-the horizontal or plain-sloping methods below. It maps a
-batch of profiles against one shared terrain, accepts a bounding box or a
-polygon area of interest (AOI), and returns a product manifest DataFrame.
+`RasFim` maps computed HEC-RAS profiles to depth and water-surface elevation
+(WSE) rasters. The 2D routes provide ras2fim-2D Step 05, horizontal and sloping
+surfaces; canonical 1D and mixed routes provide explicitly gated prepared
+Depth/WSE workflows. Mapping shares terrain across profiles, accepts a bounding
+box or polygon area of interest (AOI), and returns a product manifest DataFrame.
 
 ## Install and inspect capabilities
 
@@ -53,8 +53,9 @@ print(sloping.numerical_qualification)
 ```
 
 An absent qualification declaration remains unknown. Diagnostic methods retain
-their published request schemas for reproducibility; discovery does not make
-them supported model-preparation workflows. `supports_storage_areas()` and
+their published request schemas for reproducibility. Canonical 1D/mixed
+preparation is available through the explicit opt-in APIs below; discovery does
+not establish general numerical qualification or support for refused variants. `supports_storage_areas()` and
 `supports_effective_terrain()` return `False` for a missing engine or feature;
 engine failures and malformed metadata raise instead.
 
@@ -72,6 +73,8 @@ engine failures and malformed metadata raise instead.
 | Repeated reach/timestep jobs | `RasFim.map_catalog()` |
 | Zero-depth vector boundaries | `RasFim.map_inundation_boundaries()` |
 | Triangulated ras2fim-2D catalogs | `RasFim.map_profiles()` |
+| Stored 1D Depth/WSE with diagnostic opt-in | `RasFim.prepare_one_d_model()`, `RasFim.map_one_d_profiles()` |
+| Mixed 1D/2D Depth/WSE with diagnostic opt-in | `RasFim.prepare_coupled_model()`, `RasFim.map_coupled_profiles()` |
 
 <a id="experimental-plain-sloping-mapping"></a>
 
@@ -153,7 +156,7 @@ rounding; it does not replace this behavior with a 0.5 ft filter. The default di
 cell-face stencil enrichment. HEC documents these distinct controls in
 [Mapping Options, HEC-RAS Mapper User's Manual 6.6](https://www.hec.usace.army.mil/confluence/rasdocs/rmum/6.6/mapping-results/mapping-options).
 
-Native 7.0.1 comparisons currently match raw valid/nodata masks and every
+Retained 7.0.1 comparisons report matching valid/nodata masks and every
 float32 depth/WSE value within the physical 2D footprint for Davis pipes and
 conduits (Max and two timesteps), Bald Eagle dam break (Max), and Bald Eagle
 bridges (Max). Bounded Max comparisons also match exactly on Spring River
@@ -181,6 +184,43 @@ enforced process RSS limit; HDF/Python preparation and polygonization also use
 memory. A missing or incompatible engine raises without fallback. Mapping itself
 does not load HEC-RAS assemblies; the private native component oracle is used
 only during development qualification.
+
+### Native runtime comparison scope
+
+Within the stated coverage, the native-runtime checks below compare complete
+valid/nodata masks and every valid Float32 bit, with exact CRS and integer-window
+framing. They use the
+frozen Windows engine artifact, original terrain layouts and complete global
+hydraulic geometry. The criterion is numerical equality to the named native
+renderer, not calibration or general model qualification.
+Runtime versions identify the loaded Mapper, independently of the stored
+results' producer. These checks do not rerun the hydraulic solver or establish
+solver-version equivalence.
+
+| Fixture and options | Native runtime | Products and coverage | Result |
+|---|---|---|---|
+| Mixed XS/2D fixture; plain corners, original single source, explicit stored-tile-grid `/1`; saved 57/69/81 and Max | 6.6 and 7.0.1 | Depth/WSE, eight complete products per runtime | Exact |
+| Bald Eagle; original two-source terrain and priority-mask history; Max, saved 72 and all 145 saved times | 6.6 and 7.0.1 | Twelve complete spatial/velocity/derived-Max products per runtime | Exact; temporal products are outside this result |
+| Baxter; Big/Bigger/Biggest steady profiles and prepared storage/XS composition; GDAL one thread, 128 MiB cache, native CPU one | 6.6 and 7.0.1 | Six complete Depth/WSE products per runtime, 4,838,744 pixels each | Exact; fresh exports and actual loaded renderer hashes verified |
+| Lawson and White Oak; selected canonical 1D profiles, native-normalized M and obstruction records | 6.6 | Four stripe-pilot Depth/WSE products | Exact only within the recorded stripes |
+| Lawson and White Oak p19/p15; selected canonical 1D profiles | 7.0.1 | Six complete Depth/WSE products, contiguous stripes plus zero-valid exterior scans | Exact |
+
+The 7.0.1 mandatory matrix has **32 of 32 products exact**. These cases do not enable diagnostic defaults or
+qualify other profiles, terrain configurations, geometry variants or platforms.
+The 6.6 stripe pilots are not full-raster canonical 1D qualification.
+
+These frozen checks preserve raw native georeferencing (`fix_georef=False`),
+source terrain identity and complete physical geometry. A matching subset must
+also account for native-valid pixels outside the delivered window. Runtime
+version, source preparation and artifact identity are separate evidence; a
+package version alone does not identify a qualification artifact.
+
+Davis entries elsewhere on this page describe retained comparison preparations.
+They do not establish original-source raw-native-grid equality. Fresh 7.0.1
+Davis checks stop at grid framing before mask/value comparisons, and the
+explicit stored-tile-grid `/1` contract rejects its differing logical-tile and
+output-affine centers. No source-tag replacement, coordinate fitting or
+resampling is used to bypass that refusal.
 
 ## Invalid cell polygons
 
@@ -819,14 +859,23 @@ model fixes the value at preparation.
 
 On Davis 7.0.1 p02 (Max), mapping the original terrain with the hash gives
 depth and WSE bit-identical to mapping its EPSG:2871 copy: 22,041 valid pixels,
-directly, through a prepared model and with `terrain_hdf`.
+directly, through a prepared model and with `terrain_hdf`. This is
+candidate-to-candidate CRS-binding equivalence, not a comparison to the raw
+native stored-map grid.
 
-Conformance against native HEC-RAS 7.0.1 stored maps (plain sloping, Max):
+Retained comparisons against HEC-RAS 7.0.1 stored maps (plain sloping, Max):
 
 | Model | Terrain | Valid pixels | Depth/WSE mask and bit differences |
 |---|---|---|---|
 | BaldEagleCrkMulti2D bridges p05 | `dtm_20ft` (priority 1 of 2) | 973,902 | 0 / 0 |
 | Davis p02 | canonical copy of the single source | 22,041 | 0 / 0 |
+
+The Davis row retains the canonical-terrain comparison result; its reference
+framing policy is not established by this table. It is not a raw original-source
+native-grid qualification. Fresh raw 7.0.1 output uses a different derived
+pixel spacing and fails strict framing before numerical comparison. The
+stored-tile-grid `/1` mixed-only option does not admit the Davis layout or
+provide an ordinary 2D workaround.
 
 On bridges p05 the mapping itself takes about as long on the source TIFF as on
 an export (7.3 s against 4.9 to 6.8 s end to end, six threads); the saving is
@@ -878,6 +927,12 @@ times Max velocity. The engine reduces every stored output time
 | bridges p05 Max over 433 times, horizontal | D x V, D x V^2, Froude | 973,531 | 0 / 0 |
 | Davis p02 (Max, 11JAN2000 06:00, Max over 217 times) | all | 8,586-20,560 | at most 5 pixels within 2 ulp / 0 |
 
+The Davis row records the stated prepared comparison scope and residuals; it
+does not establish exact raw-native-grid velocity or derived products. Fresh
+original-source 7.0.1 checks stop at framing before pixels. Velocity and derived
+products are outside the stored-tile-grid `/1` contract, and no compatible
+ordinary 2D grid extension is exposed.
+
 Velocity comparisons require matching render modes: horizontal-mode velocity
 must not be compared with sloping-mode depth.
 Shear stress is not rendered (see the Fast-Map research notes).
@@ -920,9 +975,14 @@ manifest[["product", "tif", "units", "wet_pixels"]]
 | Davis p02 | 217 | 4,879 | 0 / 0 / 0 |
 | BaldEagleCrkMulti2D bridges p05 | 433 | 959,043 | 0 / 0 / 0 |
 
-Both match RAS Mapper's horizontal and sloping stored maps, which are identical
-on these models. These methods target pure 2D models for FIM library creation;
-1D models and other products remain with RAS Mapper.
+These retained comparisons reported equal horizontal and sloping stored-map
+products on the stated prepared terrains. The table does not establish the
+Davis reference's raw framing policy. Fresh original-source raw 7.0.1 Davis
+arrival, duration and percent-inundated references remain uncompared after a
+grid-framing refusal. The original-source Bald Eagle temporal route separately
+refuses 28 wet pixels requiring lower-priority sources/stitches. The existing
+temporal API targets 2D models; the canonical 1D/mixed APIs provide Depth/WSE,
+not temporal products.
 
 ## Storage-area level pools
 
@@ -1416,6 +1476,19 @@ published machine-readable DataFrame surface:
 | `col_off`, `row_off`, `width`, `height`, `transform`, `crs` | Written window on the full output grid |
 | `depth_finite_pixels`, `flooded_pixels` | Finite depth pixels and floodplain pixels |
 | `error` | Diagnostic for `failed` or `not_run` rows |
+
+JSON manifest transforms retain binary64 round-trip precision. Missing and
+nonfinite metadata values are written as JSON null.
+
+Sloping diagnostics separate command completion from process exit.
+`engine_returncode` is the observed natural exit code, or null when none was
+observed. A successful command on a live persistent process records
+`engine_command_status="complete"`. `engine_cleanup_termination_requested` and
+`engine_cleanup_returncode` describe supervisory cleanup separately.
+Coupled manifest `reports` include entries with `kind="engine_execution"`,
+component and profile identities, observed return code, bounded stderr and
+execution status. Final profile status also incorporates product and report
+validation.
 
 ## Errors and inputs
 
@@ -1932,3 +2005,50 @@ Manifests record thread counts separately for serial XS/composition and the
 as ephemeral; use `prepare_coupled_model()` for retained, reusable inputs.
 Preparation binds the engine artifact, so changing it requires re-preparation.
 Input hashing is repeated around profiles and publication to verify provenance.
+
+For native stored tile sampling, pass
+`grid_contract="rasmapper-stored-tile-grid/1"` to mixed preparation or the
+source-path mapping call. The prepared model seals that choice and its mapping
+method inherits it. The terrain TIFF and original source transform stay intact;
+the engine derives logical tile sampling and the delivery transform separately.
+Commander independently derives the same layout and compares binary64 values
+bit for bit before accepting component reports.
+The receipt, reports and manifest retain both transforms and the selected
+component contracts. `grid_contract=None` uses source-grid delivery.
+
+The native-grid preparation receipt is
+`ras-commander-coupled-preparation/2`. Its `grid` retains the source terrain
+transform; `grid_contract` binds source dimensions, original tile size and the
+full derived output transform. The manifest and DataFrame attrs include
+`grid_contract`, `source_geo_transform`, `output_geo_transform` and
+`options.grid_contract`. These geotransforms use GDAL coefficient order
+`(x_origin, x_step, x_rotation, y_origin, y_rotation, y_step)`.
+Row `transform` uses Affine order `(a, b, c, d, e, f)` for the delivered window;
+`col_off` and `row_off` locate that window on the full **derived delivery
+lattice**. The original source pixel addresses and terrain bytes remain bound
+separately.
+
+The option is exposed by `prepare_coupled_model()` and
+`map_coupled_profiles()`. The prepared model inherits its sealed choice;
+`prepared.map_profiles()` accepts no grid override. Supplying an override
+through `map_coupled_profiles()` with a prepared object raises `ValueError`.
+Unknown grid-contract values raise `FimUnsupportedError`.
+Standalone `map_one_d_profiles()`, `map_sloping_profiles()`, prepared sloping
+models and catalogs do not expose this option.
+
+This opt-in accepts self-contained, north-up, square-pixel, single-source
+Float32 terrain with original 256-pixel tiles. It checks every actual source
+row and column to require bit-identical logical-tile and full delivery-grid
+centers before payload staging. Commander and Rust apply the same fixed
+layout limits: positive source dimensions up to 2,147,483,647 and at most
+32,768 logical 256-pixel tiles. Layout verification uses constant scratch;
+`max_working_mib` governs admitted preparation and rendering allocations.
+Unsupported layouts refuse before bulk source hashing and staging.
+Bboxes and polygon masks
+use the full selected delivery lattice; terrain reads retain original integer
+pixel addresses. Physical ownership remains independent of wet/dry filtering.
+Storage, pipe geometry, terrain-scope mosaics, velocity and temporal products
+are outside this mixed contract. An engine must advertise all three component
+contracts; an older or incompatible engine refuses before preparation writes.
+This option still requires `allow_unqualified=True` and records
+`qualified=False`; it does not establish numerical qualification.

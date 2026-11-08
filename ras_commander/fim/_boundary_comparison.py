@@ -289,7 +289,8 @@ def run(hdf_path, terrain_path, output_folder, *, terrain_hdf, profiles=None,
             scope="Candidate batch includes all shared preparation once; repeated batch columns are not per-profile timings. Native clocks cover full stored-map calls. Hashing and comparison are excluded.",
             hausdorff_policy="GEOS discrete Hausdorff; null for empty-versus-nonempty or vertex products above 25 million. No densification.")
         result.attrs.update(performance=performance, comparison_report=str(report), native_vector_parity=False)
-        state.update(status="complete", performance=performance, rows=json.loads(result.to_json(orient="records")))
+        from ._manifest_json import records
+        state.update(status="complete", performance=performance, rows=records(result))
         result.to_csv(folder / "boundary_comparison.csv", index=False)
         return result
     except BaseException as exc:

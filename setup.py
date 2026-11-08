@@ -10,7 +10,7 @@ from pathlib import Path
 # platforms and pip never tries to compile the Rust source distribution
 # elsewhere. Where the extension is not installed, every read uses h5py.
 FAST_HDF_REQUIREMENT = 'ras-commander-fast-hdf>=0.3.0,<0.4'
-FAST_MAP_REQUIREMENT = 'ras-commander-fast-map>=0.13.0,<0.14'
+FAST_MAP_REQUIREMENT = 'ras-commander-fast-map>=0.14.0,<0.15'
 FAST_MAP_WHEEL_MARKER = (
     '(platform_system == "Windows" and platform_machine == "AMD64")'
     ' or (platform_system == "Linux" and platform_machine == "x86_64")'
@@ -90,7 +90,7 @@ class CustomBuildPy(build_py):
 
 setup(
     name="ras-commander",
-    version="0.114.0",
+    version="0.115.0",
     packages=find_packages(include=['ras_commander', 'ras_commander.*']),
     include_package_data=True,
     package_data={
