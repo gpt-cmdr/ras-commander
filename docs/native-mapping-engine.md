@@ -1789,19 +1789,42 @@ This diagnostic path uses `one-d-xs-surface-diagnostic/5` and its existing
 refuses execution. The preparation receipt identifies the version-specific
 normalization and endpoint-selection rules. Full-corpus and broader raster
 qualification remain gates. Transport availability
-does not establish numerical qualification. The transport executes sequentially;
-`threads` is an upper budget and the manifest records an effective count of one.
+does not establish numerical qualification. The XS pass executes sequentially;
+storage rendering uses up to four workers within the requested thread budget.
+Manifests record requested and effective counts.
 
-The supported scope is computed unsteady XS-only geometry, including junction
-render ordering, levees and endpoint obstruction blocks. Storage areas, mixed
-2D/pipe geometry, blocked polygons, steady
-results/encroachments and degenerate triangles refuse. No triangle is dropped.
-Middle/repeated XS obstruction blocks are retained in receipts and ignored by
-the endpoint-only selector. Broader model/profile behavior remains unqualified.
-Strict normalization requires exact upstream/downstream Z and M anchors. Named
-profile mappings follow the other model-mapping APIs: each name selects a saved
-time index or `"Max"`. Ordered selector sequences remain accepted with generated
-profile names, preserving duplicate selectors. Prepared reuse selects an ordered
+The diagnostic scope includes stored unsteady or explicit steady XS profiles,
+including junction ordering, levees, endpoint obstruction blocks and disjoint
+storage level pools. Mixed 2D/pipe geometry, blocked polygons, actual
+encroachment datasets and degenerate triangles refuse. No triangle is dropped.
+Storage polygons take precedence over XS coverage even when their pools are
+dry; overlapping pools and storage/2D overlap remain refused. Rust renders
+pools through `fast-map-storage/1`, using `storage-area-level-pool/1`, then
+composes products through existing coupled schema `/2` with zero 2D cells.
+These transports require advertised capabilities and retain `qualified=False`.
+Final composed products identify the coupled-storage method and request schema,
+with separate XS and storage component contracts in the manifest.
+
+This 1D preparation path preserves finite, single-ring self-crossing storage
+polygons with nonnegative native signed area and renders their raw rings using
+even-odd filling. It does not repair or reorder the coordinates. Receipts record
+the geometry policy, validity reason, winding and WKB hashes. Invalid multipart
+polygons and negative-area invalid rings remain refused. Other mapping paths
+retain strict storage-polygon validation.
+
+Preparation applies native zero-based cross-section stationing before selecting
+and evaluating levees and endpoint obstructions. Receipts retain stored and
+translated Float32 stations. Finite reversed obstruction records retain their
+stored order and endpoints; they are not swapped or removed.
+
+Normalization uses exact upstream/downstream endpoint Z and the first stored
+point nearest each M target (0, -1, +1), including first-point tie precedence,
+as source-verified for 6.6 and 7.0.1. Selected point indices are receipted.
+Named output mappings select unsteady saved indices or `"Max"`. For steady
+results, explicitly select a stored profile index or its stored name; there is
+no inferred Max aggregation. For example, `profiles={"design": "Biggest"}`.
+Ordered selector sequences remain accepted with generated profile names,
+preserving duplicate selectors. Prepared reuse selects an ordered
 subset of prepared names. Global result
 identities must match XS feature order. Units must resolve to US Customary, with
 model and terrain in the same projected US survey foot CRS. Different NAD83

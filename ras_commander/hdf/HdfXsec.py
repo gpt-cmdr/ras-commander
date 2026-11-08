@@ -1601,18 +1601,19 @@ class HdfXsec:
         profiles: Optional[List[Union[str, int]]] = None,
         max_bytes: int = 268435456,
     ) -> Dict[str, Any]:
-        """Read lossless stored 1D TIN, XS tables and selected unsteady WSE rows.
+        """Read lossless stored 1D TIN, XS tables and selected unsteady or explicit steady WSE rows.
 
         Returns a dict of native typed arrays, without dissolving, sorting or
         dropping triangles. ``profiles`` contains ``"Max"`` or saved-time row
-        indices, preserving duplicates/order. An empty sequence reads geometry only. Geometry and selected result bytes
+        indices for unsteady output. Steady output requires a stored profile name
+        or index; no Max aggregation is inferred. Selection preserves duplicates/order. An empty sequence reads geometry only. Geometry and selected result bytes
         are admitted before reads. Unsupported mapping features are listed in
         ``unsupported_features`` for caller scope admission.
         No HEC runtime is loaded and no input is modified.
         """
         profiles = tuple(["Max"] if profiles is None else profiles)
         if any(isinstance(v, bool) or not
-                (v == "Max" or isinstance(v, (int, np.integer)) and v >= 0)
+                (isinstance(v, str) and bool(v) or isinstance(v, (int, np.integer)) and v >= 0)
                 for v in profiles):
             raise ValueError('profiles must contain "Max" or nonnegative saved-time indices')
         if isinstance(max_bytes, bool) or not isinstance(max_bytes, int) or max_bytes <= 0:
@@ -1628,9 +1629,10 @@ class HdfXsec:
         with h5py.File(Path(hdf_path), "r") as source:
             forbidden = ["Geometry/Blocked Obstructions", "Plan Data/Fixed Encroachments",
                          "Results/Unsteady/Unsteady Encroachment",
-                         "Results/Steady"]
+                         "Geometry/Cross Sections/Encroachment Stations",
+                         "Results/Steady/Output/Cross Sections/Encroachment Stations"]
             unsupported = [key for key in forbidden if key in source]
-            for group in ("Geometry/2D Flow Areas", "Geometry/Storage Areas", "Geometry/Pipe Networks"):
+            for group in ("Geometry/2D Flow Areas", "Geometry/Pipe Networks"):
                 if group in source and len(source[group]):
                     unsupported.append(group)
             for name in ("Obstruction Info", "Obstruction Blocks"):
@@ -1638,20 +1640,60 @@ class HdfXsec:
                     paths[name] = xs + name
             if ("Obstruction Info" in paths) != ("Obstruction Blocks" in paths):
                 raise ValueError("partial obstruction tables")
-            if profiles:
+            has_steady, has_unsteady = "Results/Steady" in source, "Results/Unsteady" in source
+            if profiles and has_steady and has_unsteady:
+                raise ValueError("ambiguous steady and unsteady result groups")
+            steady = has_steady and not has_unsteady
+            profile_names = None
+            if steady:
+                base = "Results/Steady/Output/Output Blocks/Base Output/Steady Profiles/"
+                for key in (base + "Cross Sections/Encroachment Stations",
+                            base + "Cross Sections/Additional Variables/Encroachment Station Left",
+                            base + "Cross Sections/Additional Variables/Encroachment Station Right"):
+                    if key in source:
+                        unsupported.append(key)
+            if profiles and not steady:
                 paths["Result Attributes"] = base + "Unsteady Time Series/Cross Sections/Cross Section Attributes"
+            if profiles and steady:
+                paths["Result Attributes"] = "Results/Steady/Output/Geometry Info/Cross Section Attributes"
+                paths["Profile Names"] = base + "Profile Names"
             missing = [v for v in paths.values() if v not in source]
             if missing:
                 raise ValueError("missing stored 1D mapping input: " + repr(missing))
+            metadata_bytes = sum(source[v].size * source[v].dtype.itemsize for v in paths.values())
+            if metadata_bytes > max_bytes:
+                raise ValueError("1D geometry/metadata exceed admission")
+            if profiles and steady:
+                name_axis = source[paths["Profile Names"]]
+                if name_axis.ndim != 1 or name_axis.dtype.kind not in "SU":
+                    raise ValueError("steady profile names must be a one-dimensional string axis")
+                names = read_typed(name_axis)
+                profile_names = [v.decode().strip("\0 ") if isinstance(v, bytes) else str(v).strip("\0 ") for v in names]
+                if not all(profile_names) or len(set(profile_names)) != len(profile_names):
+                    raise ValueError("steady profile names must be unique and nonempty")
             count = source[paths["Attributes"]].shape[0]
             result_reads = []
             for profile in profiles:
                 key = (base + "Summary Output/Cross Sections/Maximum Water Surface"
                        if profile == "Max" else base + "Unsteady Time Series/Cross Sections/Water Surface")
+                if steady:
+                    key = base + "Cross Sections/Water Surface"
                 ds = source[key]
                 if ds.ndim not in (1, 2) or ds.shape[-1] != count:
                     raise ValueError("WSE columns do not match global XS feature count")
-                row = 0 if profile == "Max" else int(profile)
+                if steady:
+                    if ds.shape != (len(profile_names), count):
+                        raise ValueError("steady WSE must match stored profile and global XS axes")
+                    if isinstance(profile, str):
+                        if profile not in profile_names:
+                            raise ValueError("select an explicit stored steady profile; Max aggregation is not defined")
+                        row = profile_names.index(profile)
+                    else:
+                        row = int(profile)
+                else:
+                    if isinstance(profile, str) and profile != "Max":
+                        raise ValueError("unsteady profiles require Max or saved-time indices")
+                    row = 0 if profile == "Max" else int(profile)
                 if ds.ndim == 2 and row >= ds.shape[0]:
                     raise ValueError("profile index outside stored WSE rows")
                 if ds.ndim == 1 and profile != "Max":
@@ -1675,6 +1717,8 @@ class HdfXsec:
                                 else read_typed(source[k]) for k, r in result_reads]
             result["unsupported_features"] = unsupported
             result["profiles"] = profiles
+            result["result_kind"] = "steady" if steady else "unsteady"
+            result["stored_profile_names"] = profile_names
             return result
 
     # ------------------------------------------------------------------

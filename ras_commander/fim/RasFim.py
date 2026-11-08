@@ -243,8 +243,9 @@ class RasFim:
     ) -> "FimPreparedOneDModel":
         """Stage lossless global 1D TIN/normalized M and obstruction receipts.
 
-        Diagnostic scope: unsteady XS-only models in projected US survey feet;
-        no storage, mixed geometry, blocked polygons or encroachments. Native
+        Diagnostic scope: stored unsteady/explicit steady XS profiles and disjoint
+        storage pools in projected US survey feet. Mixed 2D/pipe geometry,
+        blocked polygons and actual encroachment features remain refused. Native
         7.0.1 preparation semantics remain unqualified for general use.
         """
         from ._one_d import prepare_one_d_model

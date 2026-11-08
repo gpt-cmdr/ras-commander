@@ -20,6 +20,10 @@ from ..Decorators import log_call
 
 METHOD_ID = "one-d-xs-surface-diagnostic/5"
 REQUEST_SCHEMA = "fast-map-one-d-diagnostic/3"
+STORAGE_METHOD_ID = "storage-area-level-pool/1"
+STORAGE_SCHEMA = "fast-map-storage/1"
+COMPOSITION_METHOD_ID = "one-d-two-d-storage-coverage-first-diagnostic/1"
+COMPOSITION_SCHEMA = "fast-map-coupled-diagnostic/2"
 
 
 def digest(path):
@@ -55,9 +59,9 @@ def _profile_selection(profiles):
             or len({name.casefold() for name in names}) != len(names)):
         raise ValueError("profiles must have unique safe output names")
     if any(isinstance(value, (bool, np.bool_)) or not (
-            isinstance(value, str) and value == "Max" or
+            isinstance(value, str) and bool(value) or
             isinstance(value, (int, np.integer)) and value >= 0) for value in selectors):
-        raise ValueError('profile selectors must be "Max" or nonnegative saved-time indices')
+        raise ValueError('profile selectors must be nonempty stored names, Max, or nonnegative indices')
     return names, tuple(int(value) if isinstance(value, np.integer) else value for value in selectors)
 
 
@@ -82,15 +86,10 @@ def normalize_segment(points):
         ids = np.flatnonzero(points[:, 2] == z)
         if not len(ids):
             raise FimUnsupportedError("TIN lacks exact endpoint Z anchors")
-        # Require exact M anchors, rather than guessing from nearest points.
-        anchors = []
-        for m in (0., -1., 1.):
-            matches = ids[points[ids, 3] == m]
-            if not len(matches):
-                raise FimUnsupportedError("TIN lacks exact M normalization anchors")
-            if not np.all(points[matches, :2] == points[matches[0], :2]):
-                raise FimUnsupportedError("ambiguous TIN normalization anchors")
-            anchors.append(points[matches[0]])
+        # Native 6.6/7.0.1 chooses the first nearest M in stored point order.
+        # argmin retains the first tie, matching the strict-less-than scan.
+        anchors = [points[ids[int(np.argmin(np.abs(points[ids, 3] - m)))]]
+                   for m in (0., -1., 1.)]
         center, left, right = anchors
         def distance(a, b):
             return math.pow(math.pow(float(a[0]-b[0]), 2.) +
@@ -199,12 +198,24 @@ def canonical_arrays(data):
             part = xy[int(start):int(start+count)]
             for a, b in zip(part[:-1], part[1:]):
                 length += math.pow(math.pow(float(a[0]-b[0]), 2.)+math.pow(float(a[1]-b[1]), 2.), .5)
-        first, last = se[0, 0], se[-1, 0]
-        lb, rb = ar["Left Bank"], ar["Right Bank"]
-        if not first <= lb < rb <= last or not np.isfinite(length) or length <= 0:
+        raw_first, raw_last = se[0, 0], se[-1, 0]
+        raw_lb, raw_rb = ar["Left Bank"], ar["Right Bank"]
+        if not raw_first <= raw_lb < raw_rb <= raw_last or not np.isfinite(length) or length <= 0:
             raise FimUnsupportedError("invalid XS banks/endpoints")
+        # The native modern HDF loader translates stationing before building
+        # banks/levees or selecting end obstructions. Each addition is Float32;
+        # translating only a final ComputeM quotient is not bit-equivalent.
+        f = np.float32
+        station_offset = f(f(-1) * f(raw_first))
+        def zero_station(value):
+            value = f(value)
+            return f(value + station_offset) if station_offset != 0 else value
+        first, last, lb, rb = map(zero_station, (raw_first, raw_last, raw_lb, raw_rb))
+        if not np.isfinite([station_offset, first, last, lb, rb]).all():
+            raise FimUnsupportedError("XS stationing exceeds native Float32 range")
         def m(sta):
             return station_m(sta, first, last, lb, rb)
+        levee_receipts = {}
         for side, offset in (("Left", 0), ("Right", 2)):
             fields = (side+" Levee Sta", side+" Levee Elev")
             if not any(field in attrs.dtype.names for field in fields):
@@ -216,23 +227,34 @@ def canonical_arrays(data):
                 continue
             if not np.isfinite([sta, elev]).all():
                 raise FimUnsupportedError("partial or infinite levee")
-            clips[k, offset:offset+2] = m(sta), elev
+            native_sta, native_elev = zero_station(sta), f(elev)
+            if not np.isfinite([native_sta, native_elev]).all():
+                raise FimUnsupportedError("levee exceeds native Float32 range")
+            clips[k, offset:offset+2] = m(native_sta), native_elev
+            levee_receipts[side.lower()] = {
+                "station": float(sta), "elevation": float(elev),
+                "zero_based_station": float(native_sta), "native_elevation": float(native_elev),
+                "native_f32_bits": np.asarray([native_sta, native_elev], dtype="<f4").view("<u4").tolist(),
+            }
         blocks = []
         selected = [None, None]
         if "Obstruction Info" in data:
             obs = _slice(data["Obstruction Info"], data["Obstruction Blocks"], k, 2)
             for order, block in enumerate(obs):
                 raw = [float(block[v]) for v in ("Left Sta", "Right Sta", "Elevation")]
-                if not np.isfinite(raw).all() or raw[0] > raw[1]:
+                if not np.isfinite(raw).all():
                     raise FimUnsupportedError("invalid obstruction block")
                 # Native Obstruction fields are Float32. The right-end test
                 # promotes that rounded station before subtracting the double
                 # polyline length; its 0.01 tolerance is also double precision.
-                l, r, e = [float(np.float32(value)) for value in raw]
+                l, r = [float(zero_station(value)) for value in raw[:2]]
+                e = float(f(raw[2]))
                 if not np.isfinite([l, r, e]).all():
                     raise FimUnsupportedError("obstruction exceeds native Float32 range")
                 blocks.append({"order": order, "left": raw[0], "right": raw[1], "elevation": raw[2],
-                               "native_left": l, "native_right": r, "native_elevation": e})
+                               "reversed_interval": raw[0] > raw[1],
+                               "native_left": l, "native_right": r, "native_elevation": e,
+                               "native_f32_bits": np.asarray([l, r, e], dtype="<f4").view("<u4").tolist()})
                 if selected[0] is None and abs(l) < .01:
                     selected[0] = order
                     clips[k, 4:6] = m(r), e
@@ -243,8 +265,16 @@ def canonical_arrays(data):
                     blocks[-1]["selection"] = "ignored by 7.0.1 endpoint-only selector"
         identity = {name: (ar[name].decode().rstrip("\0 ") if isinstance(ar[name], bytes) else str(ar[name]))
                     for name in ("River", "Reach", "RS") if name in attrs.dtype.names}
-        receipts.append({"xs": k, "identity": identity, "first_station": float(first), "last_station": float(last),
-                         "polyline_length": length, "banks": [float(lb), float(rb)],
+        receipts.append({"xs": k, "identity": identity, "first_station": float(raw_first), "last_station": float(raw_last),
+                         "polyline_length": length, "banks": [float(raw_lb), float(raw_rb)],
+                         "native_stationing": {
+                             "offset": float(station_offset),
+                             "offset_f32_bits": int(np.asarray(station_offset, dtype="<f4").view("<u4")),
+                             "first_station": float(first), "last_station": float(last),
+                             "banks": [float(lb), float(rb)],
+                             "stored_f32_bits": np.asarray([raw_first, raw_last, raw_lb, raw_rb], dtype="<f4").view("<u4").tolist(),
+                             "zero_based_f32_bits": np.asarray([first, last, lb, rb], dtype="<f4").view("<u4").tolist(),
+                         }, "levees": levee_receipts,
                          "ordered_blocks": blocks, "selected_left": selected[0], "selected_right": selected[1],
                          "clip_values": [float(v) if np.isfinite(v) else None for v in clips[k]],
                          "clip_f32_bits": clips[k].view("<u4").tolist()})
@@ -304,6 +334,18 @@ class FimPreparedOneDModel:
             if not isinstance(files, dict) or set(files) != set(sizes) or not isinstance(hashes, dict):
                 raise ValueError("required payloads")
             required = [receipt["source_hdf"], receipt["terrain"], receipt["point_m_evidence"], *files.values(), *levels]
+            storage = receipt.get("storage")
+            if storage is not None:
+                count = storage["count"]
+                if (isinstance(count, bool) or not isinstance(count, int) or count <= 0
+                        or len(storage["names"]) != count or len(set(storage["names"])) != count
+                        or len(storage["levels"]) != len(levels)
+                        or storage["method_id"] != "storage-area-level-pool/1"
+                        or storage["request_schema"] != "fast-map-storage/1"):
+                    raise ValueError("storage receipt identity/cardinality")
+                required.extend([storage["polygons"], *storage["levels"]])
+                if any(Path(path).stat().st_size != count*4 for path in storage["levels"]):
+                    raise ValueError("storage profile byte count")
             if any(not isinstance(path, str) or path not in hashes for path in required):
                 raise ValueError("missing source/payload hash coverage")
             for name, size in sizes.items():
@@ -393,6 +435,11 @@ def prepare_one_d_model(hdf_path, terrain_path, output_folder, *, profiles=None,
             raise FimUnsupportedError(f"stored 1D inputs cannot be staged: {exc}") from exc
         if data["unsupported_features"]:
             raise FimUnsupportedError("unsupported 1D features: " + repr(data["unsupported_features"]))
+        from . import _storage_areas
+        storage = _storage_areas.read(hdf, max_bytes=budget//4,
+                                     geometry_policy=_storage_areas.NATIVE_EVEN_ODD)
+        storage_values = (_storage_areas.profile_values(hdf, storage, dict(zip(profile_ids, profiles)),
+                                                      max_bytes=budget//4) if storage else {})
         arrays, xs_receipts, offsets = canonical_arrays(data)
         try:
             crs = CRS.from_user_input(HdfBase.get_projection(hdf))
@@ -436,6 +483,21 @@ def prepare_one_d_model(hdf_path, terrain_path, output_folder, *, profiles=None,
             created_paths.append(path)
             values.tofile(path)
             levels.append(str(path))
+        storage_receipt = None
+        if storage:
+            storage_file = folder / "storage_areas.wkb"
+            created_paths.append(storage_file)
+            _storage_areas.stage_polygons(storage, folder)
+            pool_levels = []
+            for i, name in enumerate(profile_ids):
+                path = folder / f"storage-profile-{i:04d}.f32"
+                created_paths.append(path)
+                storage_values[name].tofile(path)
+                pool_levels.append(str(path))
+            storage_receipt = {"names": list(storage.names), "count": len(storage),
+                               "polygons": str(storage_file), "levels": pool_levels,
+                               "method_id": _storage_areas.METHOD_ID, "request_schema": "fast-map-storage/1",
+                               "geometry": _storage_areas.geometry_metadata(storage)}
         # Per-point raw/normalized evidence preserves Float64 bits including unchanged points.
         evidence = np.column_stack((arrays["points"][:, 3], arrays["normalized_m"]))
         evidence_path = folder / "point-m-evidence.f64"
@@ -444,14 +506,22 @@ def prepare_one_d_model(hdf_path, terrain_path, output_folder, *, profiles=None,
         receipt = {"schema": "ras-commander-one-d-preparation/1", "qualified": False,
                    "method_id": METHOD_ID, "request_schema": REQUEST_SCHEMA,
                    "semantics_reference": "7.0.1 preparation; 6.6 normalization/endpoint selection source-verified; full-corpus parity unqualified",
-                   "scope": "stored XS TIN, levees and XS end obstructions only; no storage composition",
+                   "scope": "stored XS TIN, levees, XS end obstructions and disjoint storage level pools",
+                   "storage": storage_receipt, "result_kind": data["result_kind"],
+                   "stored_profile_names": data["stored_profile_names"],
                    "source_hdf": str(hdf), "terrain": str(terrain), "grid": grid,
                    "units": units, "files": files, "levels": levels,
                    "profiles": list(data["profiles"]), "profile_ids": profile_ids,
                    "cross_section_count": len(data["Attributes"]),
                    "point_count": len(arrays["points"]), "triangle_count": len(arrays["triangles"]),
                    "segment_count": len(arrays["tin_info"]), "obstruction_selection": xs_receipts,
-                   "normalization_offsets": offsets, "point_m_evidence": str(evidence_path),
+                   "normalization_offsets": offsets,
+                   "normalization_anchor_rule": "endpoint-Z-first-nearest-M/1; source-verified 6.6 and 7.0.1",
+                   "normalization_anchor_indices": [
+                       [[int(np.flatnonzero(arrays["points"][start:start+count, 2] == z)[
+                           int(np.argmin(np.abs(arrays["points"][start:start+count][arrays["points"][start:start+count, 2] == z, 3] - m)))])
+                         for m in (0., -1., 1.)] for z in (1., 0.)]
+                       for start, count, _, _ in arrays["tin_info"]], "point_m_evidence": str(evidence_path),
                    "point_m_evidence_columns": ["raw_m", "normalized_strip_m"],
                    "normalized_changed_points": int(np.count_nonzero(evidence[:, 0] != evidence[:, 1])),
                    "sha256": before | {str(p): digest(p) for p in folder.iterdir()}}
@@ -554,6 +624,22 @@ def map_one_d_profiles(hdf_path, terrain_path, output_folder, *, profiles=None,
         selected_levels = [receipt["levels"][i] for i in positions]
         selected_profiles = {name: receipt["profiles"][i]
                              for name, i in zip(selected_names, positions)}
+        storage = receipt.get("storage")
+        final_support = support
+        final_method_id, final_schema = METHOD_ID, REQUEST_SCHEMA
+        component_contracts = {"xs": {"method_id": METHOD_ID, "request_schema": REQUEST_SCHEMA}}
+        if storage:
+            pool_support = capabilities.methods.get("storage")
+            coupled = capabilities.methods.get("coupled_storage_diagnostic")
+            if (pool_support is None or pool_support.method_id != STORAGE_METHOD_ID or
+                    STORAGE_SCHEMA not in pool_support.request_schemas):
+                raise FimUnsupportedError("engine lacks storage-only transport fast-map-storage/1")
+            if (coupled is None or coupled.method_id != COMPOSITION_METHOD_ID or
+                    COMPOSITION_SCHEMA not in coupled.request_schemas):
+                raise FimUnsupportedError("engine lacks coupled storage composition /2")
+            final_support = coupled
+            final_method_id, final_schema = COMPOSITION_METHOD_ID, COMPOSITION_SCHEMA
+            component_contracts["storage"] = {"method_id": STORAGE_METHOD_ID, "request_schema": STORAGE_SCHEMA}
         grid = receipt["grid"]
         transform = Affine.from_gdal(*grid["geo_transform"])
         constraint = _aoi.resolve_aoi(bbox=bbox, polygon=polygon, aoi_crs=aoi_crs,
@@ -568,7 +654,9 @@ def map_one_d_profiles(hdf_path, terrain_path, output_folder, *, profiles=None,
             window = Window(*selected.window)
             mask = selected.mask
         pixels = int(window.width * window.height)
-        if pixels * 32 + receipt["point_count"] * 128 + receipt["triangle_count"] * 256 > budget:
+        pool_overhead = (Path(storage["polygons"]).stat().st_size * 32 + storage["count"] * 4096 + 1024**2) if storage else 0
+        if (pixels * (160 if storage else 32) + pool_overhead +
+                receipt["point_count"] * 128 + receipt["triangle_count"] * 256 > budget):
             raise FimUnsupportedError("planned 1D delivery/geometry exceeds max_working_mib")
         with rasterio.open(receipt["terrain"]) as source:
             terrain = source.read(1, window=window, masked=True).astype("<f4").filled(np.nan)
@@ -587,7 +675,8 @@ def map_one_d_profiles(hdf_path, terrain_path, output_folder, *, profiles=None,
                         "threads": threads, "max_working_mib": budget // (1024**2),
                         "timeout": None if timeout is None else float(timeout)},
             "engine_path": str(engine), "inputs": inputs,
-            "engine": engine_identity, "method_record": plain(support.flags),
+            "engine": engine_identity, "method_record": plain(final_support.flags),
+            "component_contracts": component_contracts,
         }
         folder = _prepare_output_folder(output_folder)
         rows, reports = [], []
@@ -602,20 +691,20 @@ def map_one_d_profiles(hdf_path, terrain_path, output_folder, *, profiles=None,
 
         def manifest_frame():
             result = pd.DataFrame(rows, columns=MANIFEST_COLUMNS)
-            result.attrs.update(schema=MANIFEST_SCHEMA, method_id=METHOD_ID,
-                                request_schema=REQUEST_SCHEMA, **details,
+            result.attrs.update(schema=MANIFEST_SCHEMA, method_id=final_method_id,
+                                request_schema=final_schema, **details,
                                 qualified=False, preparation=receipt,
-                                threads_requested=threads, threads_effective=1, engine_sha256=engine_hash)
+                                threads_requested=threads, threads_effective=min(threads, 4) if storage else 1, engine_sha256=engine_hash)
             return result
 
         def persist(status, error=None):
             RasFim._write_manifest(folder, manifest_frame(), {
-                       "method": METHOD_ID, "method_id": METHOD_ID,
-                       "request_schema": REQUEST_SCHEMA, **details,
+                       "method": final_method_id, "method_id": final_method_id,
+                       "request_schema": final_schema, **details,
                        "qualified": False,
                        "preparation": receipt, "engine_sha256": engine_hash, "reports": reports,
                        "status": status, "error": error,
-                       "threads_requested": threads, "threads_effective": 1})
+                       "threads_requested": threads, "threads_effective": min(threads, 4) if storage else 1})
 
         def verify_inputs():
             prepared.validate()
@@ -644,6 +733,60 @@ def map_one_d_profiles(hdf_path, terrain_path, output_folder, *, profiles=None,
                 if report.get("status") != "complete" or report.get("method", {}).get("method_id") != METHOD_ID:
                     raise FimEngineError("incomplete or mismatched 1D engine report")
                 reports.append(report)
+                if storage:
+                    pool_out = scratch / f"storage-{i}"
+                    pool_request = {"schema": "fast-map-storage/1", "storage_areas_file": storage["polygons"],
+                                    "storage_area_count": storage["count"],
+                                    "levels_file": storage["levels"][positions[i]],
+                                    "terrain_file": str(terrain_file), "width": int(window.width),
+                                    "height": int(window.height),
+                                    "geo_transform": list(rasterio.windows.transform(window, transform).to_gdal()),
+                                    "max_working_bytes": budget, "threads": min(threads, 4)}
+                    pool_file = scratch / f"storage-request-{i}.json"
+                    write_json(pool_file, pool_request)
+                    proc = _engine.run_engine([str(engine), "storage", str(pool_file), str(pool_out)], "storage mapping", timeout)
+                    if proc.returncode:
+                        raise _engine.read_refusal(pool_out, proc.stderr) or FimEngineError(proc.stderr[-4000:])
+                    pool_report = json.loads((pool_out / "report.json").read_text())
+                    if pool_report.get("status") != "complete" or pool_report.get("method", {}).get("method_id") != "storage-area-level-pool/1":
+                        raise FimEngineError("incomplete or mismatched storage report")
+                    reports.append(pool_report)
+                    # Empty 2D component is explicitly supported by coupled schema /2.
+                    # These are transport placeholders, never fabricated cells.
+                    zero = scratch / "zero-owners.u32"
+                    dry = scratch / "dry.f32"
+                    if not zero.exists():
+                        np.zeros(pixels, dtype="<u4").tofile(zero)
+                        np.full(pixels, np.nan, dtype="<f4").tofile(dry)
+                    def component(depth, wse):
+                        return {"profile_id": profile, "crs": grid["crs"], "width": int(window.width),
+                                "height": int(window.height), "geo_transform": pool_request["geo_transform"],
+                                "depth_file": str(depth), "wse_file": str(wse)}
+                    composition = {"schema": "fast-map-coupled-diagnostic/2",
+                                   "xs": component(out / "depth.bin", out / "wse.bin"),
+                                   "two_d": component(dry, dry), "two_d_owners_file": str(zero),
+                                   "two_d_cell_count": 0,
+                                   "storage": {"component": component(pool_out / "depth.bin", pool_out / "wse.bin"),
+                                               "owners_file": str(pool_out / "owners.bin"), "area_count": storage["count"]},
+                                   "max_working_bytes": budget}
+                    composed = scratch / f"composed-{i}"
+                    composition_file = scratch / f"composition-{i}.json"
+                    write_json(composition_file, composition)
+                    proc = _engine.run_engine([str(engine), "coupled-diagnostic", str(composition_file), str(composed)], "XS/storage composition", timeout)
+                    if proc.returncode:
+                        raise _engine.read_refusal(composed, proc.stderr) or FimEngineError(proc.stderr[-4000:])
+                    composition_report = json.loads((composed / "report.json").read_text())
+                    if (composition_report.get("status") != "complete" or
+                            composition_report.get("schema") != COMPOSITION_SCHEMA or
+                            composition_report.get("method", {}).get("method_id") != COMPOSITION_METHOD_ID or
+                            composition_report.get("profile_id") != profile or
+                            composition_report.get("crs") != grid["crs"] or
+                            composition_report.get("width") != int(window.width) or
+                            composition_report.get("height") != int(window.height) or
+                            composition_report.get("geo_transform") != pool_request["geo_transform"]):
+                        raise FimEngineError("incomplete or mismatched composition report")
+                    reports.append(composition_report)
+                    out = composed
                 row = rows[i]
                 for product in ("depth", "wse"):
                     raw = out / (product + ".bin")
