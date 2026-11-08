@@ -4,6 +4,7 @@ using System.Reflection;
 using System.Xml;
 using System.Linq.Expressions;
 using System.Threading;
+using System.Runtime.ExceptionServices;
 
 /// <summary>
 /// Headless stored map generator that respects rendering mode.
@@ -24,6 +25,46 @@ class RasStoreMapHelper
 {
     static string _hecrasDir;
     static Assembly _asm;
+    static bool _diagnosticsEnabled;
+    static int _diagnosticCount;
+    [ThreadStatic] static bool _writingDiagnostic;
+    [ThreadStatic] static bool _handlingDiagnosticException;
+    const int DiagnosticLimit = 64;
+    const int DiagnosticLengthLimit = 16384;
+
+    static void WriteDiagnostic(string label, string text)
+    {
+        if (!_diagnosticsEnabled || _writingDiagnostic) return;
+        _writingDiagnostic = true;
+        try
+        {
+            int count = Interlocked.Increment(ref _diagnosticCount);
+            if (count > DiagnosticLimit) return;
+            if (text.Length > DiagnosticLengthLimit)
+                text = text.Substring(0, DiagnosticLengthLimit) + " [truncated]";
+            Console.Error.WriteLine("NATIVE_DIAGNOSTIC_" + label + ": " + text);
+            if (count == DiagnosticLimit)
+                Console.Error.WriteLine("NATIVE_DIAGNOSTIC_LIMIT: further diagnostics suppressed");
+        }
+        catch { /* Diagnostics must not change command success or failure. */ }
+        finally { _writingDiagnostic = false; }
+    }
+
+    static void OnFirstChanceException(object sender, FirstChanceExceptionEventArgs args)
+    {
+        if (_writingDiagnostic || _handlingDiagnosticException ||
+            Interlocked.CompareExchange(ref _diagnosticCount, 0, 0) >= DiagnosticLimit) return;
+        Exception error = args.Exception;
+        AggregateException aggregate = error as AggregateException;
+        if (aggregate == null && error.InnerException == null) return;
+        _handlingDiagnosticException = true;
+        try
+        {
+            WriteDiagnostic("EXCEPTION", (aggregate != null ? aggregate.Flatten() : error).ToString());
+        }
+        catch { /* A diagnostic formatting failure must not escape the handler. */ }
+        finally { _handlingDiagnosticException = false; }
+    }
 
     static Assembly ResolveAssembly(object sender, ResolveEventArgs e)
     {
@@ -74,6 +115,21 @@ class RasStoreMapHelper
     }
 
     static int Main(string[] args)
+    {
+        string diagnosticSetting = Environment.GetEnvironmentVariable("RAS_COMMANDER_STORE_MAP_DIAGNOSTICS");
+        _diagnosticsEnabled = diagnosticSetting == "1" ||
+            String.Equals(diagnosticSetting, "true", StringComparison.OrdinalIgnoreCase);
+        if (_diagnosticsEnabled)
+            AppDomain.CurrentDomain.FirstChanceException += OnFirstChanceException;
+        try { return Run(args); }
+        finally
+        {
+            if (_diagnosticsEnabled)
+                AppDomain.CurrentDomain.FirstChanceException -= OnFirstChanceException;
+        }
+    }
+
+    static int Run(string[] args)
     {
         if (args.Length < 3)
         {
@@ -865,6 +921,7 @@ class RasStoreMapHelper
     static void OnNativeMessage(string message, object kind)
     {
         string label = kind.ToString();
+        if (label == "Debug") WriteDiagnostic("DEBUG", message);
         if (label.IndexOf("Error", StringComparison.OrdinalIgnoreCase) >= 0)
         {
             Interlocked.Increment(ref _reportedErrors);
