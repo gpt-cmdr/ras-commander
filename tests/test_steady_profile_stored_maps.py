@@ -132,10 +132,18 @@ def _write_configured_outputs(
             )
 
 
-@pytest.mark.parametrize("performance", [None, StoreMapPerformanceOptions(
-    gdal_cachemax_mb=128, gdal_num_threads_per_helper=2, native_cpu_limit=1,
-)])
-@pytest.mark.parametrize("wine_runtime", [False, True])
+@pytest.mark.parametrize(
+    ("performance", "wine_runtime"),
+    [
+        (None, False),
+        (None, True),
+        (StoreMapPerformanceOptions(gdal_cachemax_mb=128,
+            gdal_num_threads_per_helper=2, native_cpu_limit=1), False),
+        (StoreMapPerformanceOptions(gdal_cachemax_mb=128,
+            gdal_num_threads_per_helper=2, native_cpu_limit=1), True),
+        (StoreMapPerformanceOptions(native_cpu_limit=4), False),
+    ],
+)
 def test_steady_profile_engine_bulk_configures_and_launches_once(
     monkeypatch,
     tmp_path,

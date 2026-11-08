@@ -4904,7 +4904,8 @@ Step 5: Configure (optional — auto-detection usually works)
             performance: Per-helper GDAL threads, GDAL cache and native CPU
                 controls. Aggregate steady export uses one helper; scheduler
                 and memory-admission fields must retain their defaults and
-                are not applied by this aggregate route.
+                are not applied by this aggregate route. Wine helpers inherit
+                one CPU and accept ``native_cpu_limit`` of 1 or None.
 
         Returns:
             DataFrame with one row per logical profile/product and stable
@@ -4941,6 +4942,15 @@ Step 5: Configure (optional — auto-detection usually works)
             raise ValueError(
                 "steady aggregate performance supports only GDAL threads/cache "
                 "and native_cpu_limit; scheduler fields must retain defaults"
+            )
+        if (
+            _is_wine_helper_runtime()
+            and performance_options.native_cpu_limit is not None
+            and performance_options.native_cpu_limit > 1
+        ):
+            raise ValueError(
+                "Wine stored-map helpers inherit one CPU; "
+                "native_cpu_limit must be 1 or None"
             )
         started = time.perf_counter()
         ras_obj = ras_object or ras
