@@ -1857,6 +1857,12 @@ writes Depth/WSE GeoTIFFs and `fim_manifest.json`. Neither operation loads HEC-R
 Missing stored geometry must be prepared separately through Commander geometry
 APIs on an isolated model copy.
 
+Preparation follows the HDF backend policy (`auto` by default). Compound XS
+obstruction tables can use h5py reads under that policy; required-native mode
+refuses when the installed HDF engine cannot read their datatype. Preserve the
+project's projection and terrain metadata when staging a plan HDF that does
+not store its CRS.
+
 ```python
 prepared = RasFim.prepare_one_d_model(
     plan_hdf, original_source_tif, preparation_folder,
