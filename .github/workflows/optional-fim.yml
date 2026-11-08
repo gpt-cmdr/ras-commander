@@ -6,6 +6,14 @@ on:
       - 'ras_commander/fim/**'
       - 'ras_commander/schemas.py'
       - 'ras_commander/__init__.py'
+      - 'ras_commander/RasMap.py'
+      - 'ras_commander/RasProcess.py'
+      - 'ras_commander/hdf/HdfXsec.py'
+      - 'ras_commander/native/RasStoreMapHelper.*'
+      - 'tests/test_fim*.py'
+      - 'tests/test_one_d*.py'
+      - 'tests/test_native_storage_rings.py'
+      - 'tests/test_steady*.py'
       - 'tests/test_ras_fim.py'
       - 'tests/test_ras_fim_horizontal.py'
       - 'tests/test_ras_fim_prepared_sloping.py'
@@ -43,9 +51,34 @@ jobs:
         with:
           python-version: ${{ matrix.python }}
       - name: Install from the current public package index
-        run: python -m pip install --no-cache-dir --index-url https://pypi.org/simple -e '.[fim,compute]' pytest
+        run: python -m pip install --no-cache-dir --index-url https://pypi.org/simple -e '.[fim,compute]' pytest setuptools
       - name: Inspect installed external engine
         run: ras2fim-batch method
+      - name: Canonical preparation, mapping contracts and failure handling
+        run: >-
+          python -m pytest
+          tests/test_fim_affine_requirement.py
+          tests/test_fim_capabilities.py
+          tests/test_fim_model_scope.py
+          tests/test_fim_one_d.py
+          tests/test_fim_one_d_steady_storage.py
+          tests/test_fim_coupled.py
+          tests/test_fim_coupled_contract.py
+          tests/test_fim_coupled_native_grid.py
+          tests/test_fim_grid_admission.py
+          tests/test_fim_manifest_precision.py
+          tests/test_fim_engine_failures.py
+          tests/test_fim_sloping_failure_report.py
+          tests/test_fim_temporal_crs_identity.py
+          tests/test_native_storage_rings.py
+          tests/test_one_d_aoi_lattice.py
+          tests/test_one_d_api_contract.py
+          tests/test_one_d_hdf_contract.py
+          tests/test_one_d_lifecycle.py
+          tests/test_one_d_zero_stationing.py
+          tests/test_steady_map_resource_admission.py
+          tests/test_steady_profile_stored_maps.py
+          -q
       - name: Invalid 2D cell polygon policies
         run: python -m pytest tests/test_fim_invalid_cells.py -q
       - name: Catalog admission and bounded native HDF staging
