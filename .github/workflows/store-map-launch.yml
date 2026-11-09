@@ -1,5 +1,7 @@
 name: Windows stored-map helper launch
 
+# Linux and Windows run on CLB's self-hosted Slurm runners (clb-ci-linux,
+# clb-ci-windows). Pull requests from forks always use GitHub-hosted runners.
 on:
   pull_request:
     paths:
@@ -27,7 +29,7 @@ permissions:
 
 jobs:
   windows-launch:
-    runs-on: windows-latest
+    runs-on: ${{ fromJSON(github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository && '["windows-latest"]' || '["self-hosted", "Windows", "X64", "clb-ci-windows"]') }}
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4

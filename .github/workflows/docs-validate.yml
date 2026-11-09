@@ -4,6 +4,8 @@ name: Validate Documentation
 # failures) on PRs BEFORE they merge to main and trigger the self-hosted CT 210 rebuild
 # (rascommander.info). Build-only; does not deploy. Strictness also lives in mkdocs.yml.
 
+# Linux and Windows run on CLB's self-hosted Slurm runners (clb-ci-linux,
+# clb-ci-windows). Pull requests from forks always use GitHub-hosted runners.
 on:
   pull_request:
     paths:
@@ -26,7 +28,7 @@ concurrency:
 
 jobs:
   validate:
-    runs-on: ubuntu-latest
+    runs-on: ${{ fromJSON(github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository && '["ubuntu-latest"]' || '["self-hosted", "Linux", "X64", "clb-ci-linux"]') }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -45,6 +47,12 @@ jobs:
           key: ${{ runner.os }}-pip-docs-${{ hashFiles('docs/requirements-docs.txt') }}
           restore-keys: |
             ${{ runner.os }}-pip-docs-
+
+      # On the self-hosted Linux runner the seeded interpreter's site-packages is
+      # read-only, so pip installs to the user site; put its scripts (jupyter-nbconvert,
+      # mkdocs) on PATH. A no-op where pip can write site-packages.
+      - name: User-site scripts on PATH
+        run: echo "$(python -m site --user-base)/bin" >> "$GITHUB_PATH"
 
       - name: Install documentation dependencies
         run: |
