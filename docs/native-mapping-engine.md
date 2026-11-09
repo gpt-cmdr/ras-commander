@@ -891,12 +891,22 @@ Max uses `Maximum Face Velocity` with the Max WSE; a timestep index uses
 `Face Velocity` at that output time. Face normals carry face polyline lengths.
 RAS Mapper's velocity values do not depend on the render mode; it clips them
 with the active mode's depth. `velocity_depth="rendered"` (default) clips with
-this request's depth (`sloping`, or plain `slopingPretty` on an engine that
+this request's depth (`sloping`, or `slopingPretty` on an engine that
 advertises it in `velocity_render_modes`). `velocity_depth="horizontal"`
 clips with the horizontal cell-constant depth, reproducing RAS Mapper's
 horizontal-mode velocity; the WSE/depth products stay sloping. HDF profiles
-only; `wsel_profiles`, `template_raster`, shallow/depth-weighted options and
-storage-area plans are refused.
+only; `wsel_profiles`, `template_raster` and storage-area plans are refused.
+
+**slopingPretty options.** `reduce_shallow_to_horizontal` and
+`use_depth_weighted_faces` are accepted with velocity, per-time derived
+products and `map_derived_max` when the engine's sloping record advertises
+`velocity_with_faces` (`rasmapper-with-faces-velocity-derived/1`) and lists the
+option in `velocity_with_faces_options`; older engines refuse them. RAS Mapper
+clips every velocity-based product with the depth rendered with the *same*
+options, so the options change the mask, never the velocity values. Pass the
+options the project's RAS Mapper uses: `RasProcess.store_maps(render_mode=
+"slopingPretty")` turns shallow reduction **on**; use
+`"slopingPretty:false:false"` for the plain mode.
 
 `derived_products=("depth_x_velocity", "depth_x_velocity_squared", "froude")`
 adds `<product>_tif` (`13_<profile>_<product>.tif`) from the same clipping
@@ -920,12 +930,21 @@ times Max velocity. The engine reduces every stored output time
 |---|---|---|---|
 | bridges p05 Max, sloping | velocity | 973,902 | 0 / 0 |
 | bridges p05 Max, horizontal clip | velocity | 973,532 | 0 / 0 |
-| bridges p05 Max, slopingPretty | velocity | 974,142 | 0 on 974,067 common; mask follows the rendered slopingPretty depth (75 / 28 edge pixels where that depth differs) |
+| bridges p05 Max, slopingPretty plain / shallow reduction / depth-weighted / both | WSE, Depth, velocity | 974,095 / 974,142 / 974,216 / 974,256 | 0 / 0 |
+| bridges p05 Max over 433 times, slopingPretty (same four) | D x V, D x V^2, Froude | 974,110 / 974,191 / 974,231 / 974,291 | 0 / 0 |
+| Davis p02 Max, slopingPretty (same four) | WSE, Depth, velocity | 21,402 / 21,591 / 20,703 / 21,114 | 0 / 0 |
+| Davis p02 Max over 217 times, slopingPretty (same four) | D x V, D x V^2, Froude | 21,315 / 21,862 / 20,880 / 21,287 | 0 / 0 |
 | bridges p05 03JAN1999 00:00, sloping | velocity, D x V, D x V^2, Froude | 402,616 | 0 / 0 |
 | bridges p05 03JAN1999 00:00, horizontal | velocity, D x V, D x V^2, Froude | 402,500 | 0 / 0 |
 | bridges p05 Max over 433 times, sloping | D x V, D x V^2, Froude | 973,956 | 0 / 0 |
 | bridges p05 Max over 433 times, horizontal | D x V, D x V^2, Froude | 973,531 | 0 / 0 |
 | Davis p02 (Max, 11JAN2000 06:00, Max over 217 times) | all | 8,586-20,560 | at most 5 pixels within 2 ulp / 0 |
+
+The earlier bridges slopingPretty row (75 / 28 mask pixels) compared a plain
+slopingPretty run with a reference made with shallow reduction on (the
+`store_maps` default above). With matching options the slopingPretty rows are
+identical; they used Fast-Map 0.14.0, the Terrain50 1x export (bridges) and the
+canonical Davis terrain copy.
 
 The Davis row records the stated prepared comparison scope and residuals; it
 does not establish exact raw-native-grid velocity or derived products. Fresh

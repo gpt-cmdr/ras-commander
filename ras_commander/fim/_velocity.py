@@ -16,6 +16,9 @@ import numpy as np
 
 METHOD_ID = "rasmapper-sloping-velocity/0"
 DERIVED_METHOD_ID = "rasmapper-depth-velocity-products/1"
+#: slopingPretty velocity, per-time derived products and their Max, qualified with
+#: the slopingPretty options listed in ``velocity_with_faces_options``.
+WITH_FACES_METHOD_ID = "rasmapper-with-faces-velocity-derived/1"
 #: Derived products in engine stream order.
 DERIVED = ("depth_x_velocity", "depth_x_velocity_squared", "froude")
 #: RAS Mapper's float32 gravity constants (``SharedData.GravityUSC``/``GravitySI``).
@@ -50,9 +53,38 @@ def gravity(hdf: Path) -> float:
     return GRAVITY[units]
 
 
-def require_engine(method: dict, render_mode: str, velocity_depth: str, products) -> None:
+def with_faces_options(method: dict) -> tuple:
+    """slopingPretty options the engine qualifies velocity and derived products with.
+
+    Empty unless the sloping method advertises ``velocity_with_faces``
+    (``rasmapper-with-faces-velocity-derived/1``); then the names in
+    ``velocity_with_faces_options`` (``reduce_shallow_to_horizontal``,
+    ``use_depth_weighted_faces``).
+    """
+    if method.get("velocity_with_faces") != WITH_FACES_METHOD_ID:
+        return ()
+    return tuple(method.get("velocity_with_faces_options") or ())
+
+
+def require_engine(
+    method: dict, render_mode: str, velocity_depth: str, products, *,
+    reduce_shallow_to_horizontal: bool = False, use_depth_weighted_faces: bool = False,
+) -> None:
     """Check the engine advertises what a velocity request needs."""
     from .errors import FimUnsupportedError
+
+    requested = tuple(
+        name for name, on in (
+            ("reduce_shallow_to_horizontal", reduce_shallow_to_horizontal),
+            ("use_depth_weighted_faces", use_depth_weighted_faces),
+        ) if on
+    )
+    missing = [name for name in requested if name not in with_faces_options(method)]
+    if missing:
+        raise FimUnsupportedError(
+            f"engine does not advertise {WITH_FACES_METHOD_ID} with {missing}; velocity "
+            "with slopingPretty options needs a newer ras-commander-fast-map"
+        )
 
     if method.get("velocity") != METHOD_ID:
         raise FimUnsupportedError(
