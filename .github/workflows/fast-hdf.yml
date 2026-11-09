@@ -6,7 +6,8 @@ name: Native HDF extension
 # ras-commander-fast-hdf 0.5.0 is the first published API 12 build, so no engine
 # is built from source here.
 # macOS is GitHub-hosted, slow and expensive: it runs only when requested with
-# include_macos, never on pull requests.
+# include_macos, never on pull requests. Linux and Windows run on CLB's
+# self-hosted Slurm runners; pull requests from forks use GitHub-hosted runners.
 on:
   workflow_dispatch:
     inputs:
@@ -44,7 +45,13 @@ jobs:
       fail-fast: false
       matrix:
         os: ${{ fromJSON(inputs.include_macos && '["windows-latest", "ubuntu-latest", "macos-15"]' || '["windows-latest", "ubuntu-latest"]') }}
-    runs-on: ${{ matrix.os }}
+        include:
+          - os: ubuntu-latest
+            self_hosted: '["self-hosted", "Linux", "X64", "clb-ci-linux"]'
+          - os: windows-latest
+            self_hosted: '["self-hosted", "Windows", "X64", "clb-ci-windows"]'
+    # Fork pull requests -> GitHub-hosted matrix.os; otherwise the self-hosted labels (macOS stays hosted).
+    runs-on: ${{ fromJSON(github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository && format('["{0}"]', matrix.os) || matrix.self_hosted || format('["{0}"]', matrix.os)) }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
