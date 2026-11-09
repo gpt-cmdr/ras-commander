@@ -23,6 +23,7 @@ CALIBRATION_DTYPE = [("Land Cover Name", "S32"), ("Base Manning's n Value", "f4"
 
 
 def calibration_case(tmp_path, before, after, dtype=CALIBRATION_DTYPE):
+    """Snapshot an authored calibration fixture and validate its native replacement."""
     text, path, expected = fixture(tmp_path)
     with h5py.File(path, "r+") as hdf:
         hdf.create_dataset(CALIBRATION, data=np.array(before, dtype=dtype))
@@ -40,6 +41,7 @@ def calibration_case(tmp_path, before, after, dtype=CALIBRATION_DTYPE):
 @pytest.mark.synthetic_hdf_layout
 @pytest.mark.parametrize("before", [[(b"", np.nan)], []])
 def test_empty_calibration_skeleton_can_expand_without_overrides(tmp_path, before):
+    """Accept native class-name expansion of a blank or zero-row skeleton."""
     changed, missing, evidence = calibration_case(
         tmp_path, before, [(b"Water", np.nan), (b"Forest", np.nan)]
     )
@@ -50,6 +52,7 @@ def test_empty_calibration_skeleton_can_expand_without_overrides(tmp_path, befor
 @pytest.mark.synthetic_hdf_layout
 @pytest.mark.parametrize("value", [0.04, np.inf, -np.inf])
 def test_empty_calibration_skeleton_cannot_gain_numeric_override(tmp_path, value):
+    """Reject finite or infinite values introduced during skeleton expansion."""
     changed, _, _ = calibration_case(tmp_path, [(b"", np.nan)], [(b"Forest", value)])
     assert CALIBRATION in changed
 
@@ -60,6 +63,7 @@ def test_empty_calibration_skeleton_cannot_gain_numeric_override(tmp_path, value
     [None, [(b"Forest", np.nan)], [(b"Forest", 0.05)], [(b"Water", 0.04)]],
 )
 def test_authored_calibration_override_is_preserved_exactly(tmp_path, after):
+    """Reject deletion, value changes and class reassociation of a base override."""
     changed, _, _ = calibration_case(tmp_path, [(b"Forest", 0.04)], after)
     assert CALIBRATION in changed
 
@@ -67,6 +71,7 @@ def test_authored_calibration_override_is_preserved_exactly(tmp_path, after):
 @pytest.mark.synthetic_hdf_layout
 @pytest.mark.parametrize("after", [None, [(b"Forest", np.nan, np.nan)], [(b"Forest", np.nan, 0.06)]])
 def test_regional_calibration_override_is_preserved_exactly(tmp_path, after):
+    """Reject deletion or modification of a regional override."""
     dtype = [*CALIBRATION_DTYPE, ("Region", "f4")]
     changed, _, _ = calibration_case(tmp_path, [(b"Forest", np.nan, 0.05)], after, dtype)
     assert CALIBRATION in changed
@@ -74,6 +79,7 @@ def test_regional_calibration_override_is_preserved_exactly(tmp_path, after):
 
 @pytest.mark.synthetic_hdf_layout
 def test_authored_calibration_row_order_stays_strict(tmp_path):
+    """Keep exact row-order protection for authored calibration tables."""
     before = [(b"Water", 0.03), (b"Forest", 0.08)]
     changed, _, _ = calibration_case(tmp_path, before, before[::-1])
     assert CALIBRATION in changed
@@ -81,6 +87,7 @@ def test_authored_calibration_row_order_stays_strict(tmp_path):
 
 @pytest.mark.synthetic_hdf_layout
 def test_empty_calibration_skeleton_rejects_duplicate_class_names(tmp_path):
+    """Reject ambiguous duplicate native class names."""
     changed, _, _ = calibration_case(
         tmp_path, [(b"", np.nan)], [(b"Forest", np.nan), (b"Forest", np.nan)]
     )
@@ -90,18 +97,21 @@ def test_empty_calibration_skeleton_rejects_duplicate_class_names(tmp_path):
 @pytest.mark.synthetic_hdf_layout
 @pytest.mark.parametrize("before", [[(b"", np.nan)], [(b"", np.nan), (b"", np.nan)]])
 def test_unchanged_blank_calibration_table_passes(tmp_path, before):
+    """Preserve unchanged blank tables through narrow or strict validation."""
     changed, missing, _ = calibration_case(tmp_path, before, before)
     assert not changed and not missing
 
 
 @pytest.mark.synthetic_hdf_layout
 def test_deleted_blank_calibration_table_is_rejected(tmp_path):
+    """Require a captured blank table to remain present."""
     changed, _, _ = calibration_case(tmp_path, [(b"", np.nan)], None)
     assert CALIBRATION in changed
 
 
 @pytest.mark.synthetic_hdf_layout
 def test_named_all_nan_calibration_source_remains_strict(tmp_path):
+    """Keep named all-NaN source tables on exact input hashing."""
     changed, _, _ = calibration_case(tmp_path, [(b"Forest", np.nan)], [(b"Water", np.nan)])
     assert CALIBRATION in changed
 
@@ -115,6 +125,7 @@ def test_named_all_nan_calibration_source_remains_strict(tmp_path):
     ],
 )
 def test_empty_calibration_skeleton_cannot_change_schema(tmp_path, dtype, row):
+    """Reject dtype changes or new region columns during skeleton expansion."""
     text, path, expected = fixture(tmp_path)
     with h5py.File(path, "r+") as hdf:
         hdf.create_dataset(CALIBRATION, data=np.array([(b"", np.nan)], dtype=CALIBRATION_DTYPE))
