@@ -9,6 +9,7 @@ import pytest
 
 from ras_commander.geom._preprocess_contract import (
     AREA,
+    CALIBRATION,
     CELL_PRODUCTS,
     FACE_PRODUCTS,
     _projection_equal,
@@ -16,6 +17,114 @@ from ras_commander.geom._preprocess_contract import (
     snapshot,
     validate,
 )
+
+
+CALIBRATION_DTYPE = [("Land Cover Name", "S32"), ("Base Manning's n Value", "f4")]
+
+
+def calibration_case(tmp_path, before, after, dtype=CALIBRATION_DTYPE):
+    text, path, expected = fixture(tmp_path)
+    with h5py.File(path, "r+") as hdf:
+        hdf.create_dataset(CALIBRATION, data=np.array(before, dtype=dtype))
+    captured = snapshot(text, path)
+    expected["inputs"] = captured["inputs"]
+    if "calibration_skeleton_dtype" in captured:
+        expected["calibration_skeleton_dtype"] = captured["calibration_skeleton_dtype"]
+    with h5py.File(path, "r+") as hdf:
+        del hdf[CALIBRATION]
+        if after is not None:
+            hdf.create_dataset(CALIBRATION, data=np.array(after, dtype=dtype))
+    return validate(text, path, expected, time.time() - 1)
+
+
+@pytest.mark.synthetic_hdf_layout
+@pytest.mark.parametrize("before", [[(b"", np.nan)], []])
+def test_empty_calibration_skeleton_can_expand_without_overrides(tmp_path, before):
+    changed, missing, evidence = calibration_case(
+        tmp_path, before, [(b"Water", np.nan), (b"Forest", np.nan)]
+    )
+    assert not changed and not missing
+    assert evidence["inputs_preserved"]
+
+
+@pytest.mark.synthetic_hdf_layout
+@pytest.mark.parametrize("value", [0.04, np.inf, -np.inf])
+def test_empty_calibration_skeleton_cannot_gain_numeric_override(tmp_path, value):
+    changed, _, _ = calibration_case(tmp_path, [(b"", np.nan)], [(b"Forest", value)])
+    assert CALIBRATION in changed
+
+
+@pytest.mark.synthetic_hdf_layout
+@pytest.mark.parametrize(
+    "after",
+    [None, [(b"Forest", np.nan)], [(b"Forest", 0.05)], [(b"Water", 0.04)]],
+)
+def test_authored_calibration_override_is_preserved_exactly(tmp_path, after):
+    changed, _, _ = calibration_case(tmp_path, [(b"Forest", 0.04)], after)
+    assert CALIBRATION in changed
+
+
+@pytest.mark.synthetic_hdf_layout
+@pytest.mark.parametrize("after", [None, [(b"Forest", np.nan, np.nan)], [(b"Forest", np.nan, 0.06)]])
+def test_regional_calibration_override_is_preserved_exactly(tmp_path, after):
+    dtype = [*CALIBRATION_DTYPE, ("Region", "f4")]
+    changed, _, _ = calibration_case(tmp_path, [(b"Forest", np.nan, 0.05)], after, dtype)
+    assert CALIBRATION in changed
+
+
+@pytest.mark.synthetic_hdf_layout
+def test_authored_calibration_row_order_stays_strict(tmp_path):
+    before = [(b"Water", 0.03), (b"Forest", 0.08)]
+    changed, _, _ = calibration_case(tmp_path, before, before[::-1])
+    assert CALIBRATION in changed
+
+
+@pytest.mark.synthetic_hdf_layout
+def test_empty_calibration_skeleton_rejects_duplicate_class_names(tmp_path):
+    changed, _, _ = calibration_case(
+        tmp_path, [(b"", np.nan)], [(b"Forest", np.nan), (b"Forest", np.nan)]
+    )
+    assert CALIBRATION in changed
+
+
+@pytest.mark.synthetic_hdf_layout
+@pytest.mark.parametrize("before", [[(b"", np.nan)], [(b"", np.nan), (b"", np.nan)]])
+def test_unchanged_blank_calibration_table_passes(tmp_path, before):
+    changed, missing, _ = calibration_case(tmp_path, before, before)
+    assert not changed and not missing
+
+
+@pytest.mark.synthetic_hdf_layout
+def test_deleted_blank_calibration_table_is_rejected(tmp_path):
+    changed, _, _ = calibration_case(tmp_path, [(b"", np.nan)], None)
+    assert CALIBRATION in changed
+
+
+@pytest.mark.synthetic_hdf_layout
+def test_named_all_nan_calibration_source_remains_strict(tmp_path):
+    changed, _, _ = calibration_case(tmp_path, [(b"Forest", np.nan)], [(b"Water", np.nan)])
+    assert CALIBRATION in changed
+
+
+@pytest.mark.synthetic_hdf_layout
+@pytest.mark.parametrize(
+    "dtype,row",
+    [
+        ([("Land Cover Name", "S32"), ("Base Manning's n Value", "f8")], (b"Forest", np.nan)),
+        ([*CALIBRATION_DTYPE, ("Region", "f4")], (b"Forest", np.nan, np.nan)),
+    ],
+)
+def test_empty_calibration_skeleton_cannot_change_schema(tmp_path, dtype, row):
+    text, path, expected = fixture(tmp_path)
+    with h5py.File(path, "r+") as hdf:
+        hdf.create_dataset(CALIBRATION, data=np.array([(b"", np.nan)], dtype=CALIBRATION_DTYPE))
+    captured = snapshot(text, path)
+    expected["calibration_skeleton_dtype"] = captured["calibration_skeleton_dtype"]
+    with h5py.File(path, "r+") as hdf:
+        del hdf[CALIBRATION]
+        hdf.create_dataset(CALIBRATION, data=np.array([row], dtype=dtype))
+    changed, _, _ = validate(text, path, expected, time.time() - 1)
+    assert CALIBRATION in changed
 
 
 @pytest.mark.parametrize("reverse", [False, True])

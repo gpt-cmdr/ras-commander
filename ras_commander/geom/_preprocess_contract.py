@@ -97,6 +97,24 @@ def _digest(value) -> str:
     return hashlib.sha256(repr(_semantic(value)).encode("utf-8")).hexdigest()
 
 
+def _calibration_skeleton(value, *, blank_names=False) -> bool:
+    """Recognize a base-only table with no numeric Manning overrides."""
+    names = ("Land Cover Name", "Base Manning's n Value")
+    if (
+        value.ndim != 1
+        or value.dtype.names != names
+        or value.dtype[names[0]].kind != "S"
+        or value.dtype[names[1]].kind != "f"
+        or not np.isnan(value[names[1]]).all()
+    ):
+        return False
+    classes = [bytes(name).rstrip(b"\x00") for name in value[names[0]]]
+    if blank_names:
+        return len(classes) <= 1 and not any(classes)
+    # Duplicate class names do not establish an unambiguous native skeleton.
+    return len(classes) == len(set(classes))
+
+
 def _projection_equal(before, after) -> bool:
     """Compare CRS definitions, including native equivalent WKT serialization."""
     from .GeomPreprocessor import GeomPreprocessor
@@ -454,7 +472,13 @@ def snapshot(
                     )
         for path in ("Projection", CALIBRATION):
             if path in hdf:
-                result["inputs"][path] = _digest(read_typed(hdf[path]))
+                value = read_typed(hdf[path])
+                if path == CALIBRATION and _calibration_skeleton(value, blank_names=True):
+                    # Native preprocessing can populate class names in an empty
+                    # base-only skeleton. Keep authored/region tables exact.
+                    result["calibration_skeleton_dtype"] = value.dtype
+                else:
+                    result["inputs"][path] = _digest(value)
                 if path == "Projection":
                     result["projections"][path] = read_typed(hdf[path])
         # Refinement regions are HDF-only authored input, including when the
@@ -897,6 +921,14 @@ def validate(
     if hdf_path.stat().st_mtime < started - 2:
         missing.append("geometry HDF not freshly written")
     with h5py.File(hdf_path, "r") as hdf:
+        if "calibration_skeleton_dtype" in expected:
+            if (
+                CALIBRATION not in hdf
+                or not isinstance(hdf[CALIBRATION], h5py.Dataset)
+                or hdf[CALIBRATION].dtype != expected["calibration_skeleton_dtype"]
+                or not _calibration_skeleton(read_typed(hdf[CALIBRATION]))
+            ):
+                changed.append(CALIBRATION)
         for path, digest in expected["inputs"].items():
             same = path in hdf and (
                 _projection_equal(expected["projections"][path], read_typed(hdf[path]))
