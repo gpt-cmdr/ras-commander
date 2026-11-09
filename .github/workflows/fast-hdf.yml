@@ -4,8 +4,15 @@ name: Native HDF extension
 # https://github.com/gpt-cmdr/ras-commander-fast-hdf. This workflow installs the
 # published wheel from PyPI and runs ras-commander's binding and fallback tests.
 # Until API 12 is released, qualify the paired engine commit below from source.
+# macOS is GitHub-hosted, slow and expensive: it runs only when requested with
+# include_macos, never on pull requests.
 on:
   workflow_dispatch:
+    inputs:
+      include_macos:
+        description: "Also run on macOS"
+        type: boolean
+        default: false
   pull_request:
     paths:
       - 'ras_commander/fast_hdf.py'
@@ -35,7 +42,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [windows-latest, ubuntu-latest, macos-15]
+        os: ${{ fromJSON(inputs.include_macos && '["windows-latest", "ubuntu-latest", "macos-15"]' || '["windows-latest", "ubuntu-latest"]') }}
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
