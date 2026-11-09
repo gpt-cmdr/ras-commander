@@ -48,6 +48,12 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-pip-docs-
 
+      # On the self-hosted Linux runner the seeded interpreter's site-packages is
+      # read-only, so pip installs to the user site; put its scripts (jupyter-nbconvert,
+      # mkdocs) on PATH. A no-op where pip can write site-packages.
+      - name: User-site scripts on PATH
+        run: echo "$(python -m site --user-base)/bin" >> "$GITHUB_PATH"
+
       - name: Install documentation dependencies
         run: |
           pip install --upgrade pip
