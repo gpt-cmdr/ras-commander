@@ -46,6 +46,17 @@ class StoreMapPerformanceOptions:
     before helper code runs; setup failures terminate the owned child.
     ``None`` preserves inherited affinity. A one-CPU limit is an opt-in
     mitigation for native pipe-map concurrency failures, with lower throughput.
+
+    ``native_polygon_serial`` requests and verifies RAS Mapper's serial polygon
+    tile loop, independently of CPU affinity. It is opt-in for boundary-only
+    ``store_maps`` calls on Windows with ``max_workers=1``. It does not assert
+    native repeatability or Fast-Map polygon equality.
+
+    ``native_job_memory_limit_mb`` optionally caps combined private committed
+    memory of a Windows serial-boundary helper and its merge descendants. It
+    requires enforce policy and never substitutes an RSS measurement or an
+    unbounded retry. Only the verified 6.6/7.0.1 native launch chains are admitted.
+    None preserves ordinary memory planning and execution.
     """
 
     max_workers: Optional[int] = 1
@@ -59,8 +70,19 @@ class StoreMapPerformanceOptions:
     admission_wait_timeout_seconds: float = 300.0
     admission_poll_interval_seconds: float = 1.0
     native_cpu_limit: Optional[int] = None
+    native_polygon_serial: bool = False
+    native_job_memory_limit_mb: Optional[int] = None
 
     def __post_init__(self) -> None:
+        if self.native_job_memory_limit_mb is not None:
+            if (not _is_strict_int(self.native_job_memory_limit_mb)
+                    or not 1 <= self.native_job_memory_limit_mb <= 1048576):
+                raise ValueError("native_job_memory_limit_mb must be an integer from 1 to 1048576 MiB or None")
+            if (self.native_polygon_serial is not True or self.max_workers != 1
+                    or self.memory_policy != "enforce" or self.worker_memory_override_mb is not None):
+                raise ValueError("native_job_memory_limit_mb requires native_polygon_serial=True, max_workers=1, memory_policy='enforce', and no worker_memory_override_mb")
+        if not isinstance(self.native_polygon_serial, bool):
+            raise ValueError("native_polygon_serial must be boolean")
         if self.native_cpu_limit is not None and (
             not _is_strict_int(self.native_cpu_limit) or not 1 <= self.native_cpu_limit <= 64
         ):
@@ -108,7 +130,10 @@ class StoreMapPerformanceOptions:
         )
 
     def to_dict(self) -> Dict[str, Any]:
-        return asdict(self)
+        result = asdict(self)
+        if self.native_job_memory_limit_mb is None:
+            result.pop("native_job_memory_limit_mb")
+        return result
 
 
 @dataclass(frozen=True)

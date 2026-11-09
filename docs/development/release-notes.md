@@ -7,6 +7,21 @@ check `ras_commander.__version__` and the documentation's
 [build provenance](https://rascommander.info/ras/version.json). A package version
 alone does not identify a development checkout.
 
+### 0.116.0 — 2026-11-09
+
+- **Native serial boundaries:** the existing boundary map and comparison APIs
+  accept supported canonical cross-section, storage, mixed and original-source
+  terrain inputs with complete source/tile/stitch history and explicit
+  qualification opt-in. See the [mapping guide](../native-mapping-engine.md#compare-native-polygons)
+  for fixture, runtime and platform limits.
+- **Raw geometry diagnostics:** `preserve_raw_geometry=True` retains completed
+  invalid vectors with verified aborted receipts and raises `FimGeometryError`.
+  Complete raw ring-bit comparisons remain distinct from valid-polygon delivery.
+- **Native execution controls:** serial polygon-loop verification, helper/runtime
+  provenance and optional aggregate private-commit limits cover merge children.
+- **Mapping engine dependency:** mapping extras select
+  `ras-commander-fast-map>=0.15.0,<0.16`.
+
 ### 0.115.0 — 2026-11-08
 
 - **Prepared 1D and mixed mapping:** canonical receipt-bound preparation and

@@ -1518,6 +1518,141 @@ def _write_boundary_bundle(path, *, empty=False):
     frame.to_file(path)
 
 
+@pytest.mark.parametrize("verified", [True, False])
+@pytest.mark.parametrize("profile", ["Max", "Big"])
+def test_native_serial_boundary_uses_selected_terrain_and_verified_helper(
+    monkeypatch, tmp_path, verified, profile,
+):
+    import pandas as pd
+    from ras_commander import StoreMapPerformanceOptions
+    from ras_commander.hdf.HdfResultsPlan import HdfResultsPlan
+    monkeypatch.setattr(HdfResultsPlan, "is_steady_plan", lambda _: profile == "Big")
+    monkeypatch.setattr(HdfResultsPlan, "get_steady_profile_names", lambda _: ["Big", "Bigger", "Biggest"])
+
+    ras_obj, output_dir, destination = _configure_store_maps_test(monkeypatch, tmp_path)
+    terrain = tmp_path / "terrain.hdf"
+    terrain.write_bytes(b"selected terrain")
+    monkeypatch.setattr(ras_process_module.RasMap, "list_terrain_layers",
+        lambda *a, **k: pd.DataFrame([dict(name="selected", resolved_path=str(terrain))]))
+    monkeypatch.setattr(RasProcess, "_select_terrain_for_mapping", lambda *a, **k: None)
+    monkeypatch.setattr(RasProcess, "estimate_store_map_resources", lambda *a, **k: None)
+    monkeypatch.setattr(ras_process_module, "run_store_all_maps_helper",
+        lambda **k: pytest.fail("Serial polygon control must reach the individual result map"))
+    rasmap = tmp_path / "Demo.rasmap"
+    original = rasmap.read_bytes()
+    filename = f"Inundation Boundary ({profile}).shp"
+
+    def helper(**kwargs):
+        assert kwargs["native_polygon_serial"] is True
+        assert kwargs["terrain_hdf_path"] == terrain.resolve()
+        assert kwargs["map_type"] == "ProfileMap:depth"
+        assert kwargs["output_base_path"] == output_dir / f"Inundation Boundary ({profile})"
+        assert kwargs["profile_name"] == profile
+        _write_boundary_bundle(output_dir / filename)
+        return subprocess.CompletedProcess([], 0,
+            "NATIVE_POLYGON_SERIAL_EFFECTIVE=True\n" if verified else "", "")
+
+    monkeypatch.setattr(ras_process_module, "run_store_map_helper", helper)
+    kwargs = dict(profile=profile, wse=False, depth=False, velocity=False, inundation_boundary=True,
+        terrain_name="selected", output_path=destination, fix_georef=False,
+        ras_object=ras_obj, performance=StoreMapPerformanceOptions(native_polygon_serial=True))
+    if verified:
+        assert RasProcess.store_maps("01", **kwargs) == {"inundation_boundary": [destination / filename]}
+    else:
+        with pytest.raises(RuntimeError, match="did not verify"):
+            RasProcess.store_maps("01", **kwargs)
+    assert rasmap.read_bytes() == original
+
+
+@pytest.mark.parametrize("outcome", ["success", "wrong-marker", "no-marker", "exit-failure", "probe-failure", "runtime-failure"])
+def test_capped_native_boundary_forwards_cap_and_restores_project(monkeypatch, tmp_path, outcome):
+    import pandas as pd
+    from ras_commander import StoreMapPerformanceOptions
+    from ras_commander.hdf.HdfResultsPlan import HdfResultsPlan
+    from ras_commander.RasterPerformance import SystemMemorySnapshot
+    helper_module = import_module("ras_commander._native_helper")
+
+    ras_obj, output_dir, destination = _configure_store_maps_test(monkeypatch, tmp_path)
+    terrain = tmp_path / "terrain.hdf"
+    terrain.write_bytes(b"selected terrain")
+    monkeypatch.setattr(ras_process_module.platform, "system", lambda: "Windows")
+    monkeypatch.setattr(HdfResultsPlan, "is_steady_plan", lambda _: False)
+    monkeypatch.setattr(ras_process_module.RasMap, "list_terrain_layers", lambda *a, **k:
+        pd.DataFrame([dict(name="selected", resolved_path=str(terrain))]))
+    monkeypatch.setattr(RasProcess, "_select_terrain_for_mapping", lambda *a, **k: None)
+    monkeypatch.setattr(RasProcess, "_get_projection_info", lambda _: ras_process_module.ProjectionInfo(None, None))
+    monkeypatch.setattr(ras_process_module, "_terrain_resource_estimates", lambda _: ((), ()))
+    monkeypatch.setattr(ras_process_module, "get_system_memory_snapshot",
+        lambda: SystemMemorySnapshot(32768, 30000, 2000, 40000))
+    calls = []
+
+    def runtime(_):
+        calls.append("runtime")
+        if outcome == "runtime-failure":
+            raise ValueError("unqualified runtime")
+        return {"runtime_id": "6.6"}
+
+    def probe(limit, *, timeout):
+        calls.append("probe")
+        assert (limit, timeout) == (8192, 15)
+        if outcome == "probe-failure":
+            raise RuntimeError("probe refused")
+        return dict(limit_mib=limit, helper_sha256="a" * 64,
+                    stdout=f"NATIVE_JOB_MEMORY_LIMIT_EFFECTIVE_MIB={limit}\n")
+
+    monkeypatch.setattr(helper_module, "validate_native_job_memory_runtime", runtime)
+    monkeypatch.setattr(helper_module, "probe_native_job_memory_limit", probe)
+
+    def helper(**kwargs):
+        calls.append("helper")
+        assert kwargs["native_job_memory_limit_mb"] == 8192
+        assert kwargs["native_polygon_serial"] is True
+        assert kwargs["terrain_hdf_path"] == terrain.resolve()
+        if outcome != "exit-failure":
+            _write_boundary_bundle(output_dir / "Inundation Boundary (Max).shp")
+        cap_marker = {"success": "NATIVE_JOB_MEMORY_LIMIT_EFFECTIVE_MIB=8192\n",
+                      "wrong-marker": "NATIVE_JOB_MEMORY_LIMIT_EFFECTIVE_MIB=81920\n"}.get(outcome, "")
+        return subprocess.CompletedProcess([], 99 if outcome == "exit-failure" else 0,
+            "NATIVE_POLYGON_SERIAL_EFFECTIVE=True\n" + cap_marker, "cap exceeded" if outcome == "exit-failure" else "")
+
+    monkeypatch.setattr(ras_process_module, "run_store_map_helper", helper)
+    monkeypatch.setattr(ras_process_module, "run_store_all_maps_helper", lambda **k: pytest.fail("unbounded fallback"))
+    original = (tmp_path / "Demo.rasmap").read_bytes()
+    original_plan = (tmp_path / "Demo.p01.hdf").read_bytes()
+    before_names = set(tmp_path.rglob("*"))
+    kwargs = dict(wse=False, depth=False, velocity=False, inundation_boundary=True,
+        terrain_name="selected", output_path=destination, fix_georef=False, ras_object=ras_obj,
+        performance=StoreMapPerformanceOptions(native_polygon_serial=True, native_job_memory_limit_mb=8192))
+    if outcome == "success":
+        assert RasProcess.store_maps("01", **kwargs)["inundation_boundary"] == [destination / "Inundation Boundary (Max).shp"]
+    else:
+        with pytest.raises((RuntimeError, ValueError)):
+            RasProcess.store_maps("01", **kwargs)
+    assert (tmp_path / "Demo.rasmap").read_bytes() == original
+    assert (tmp_path / "Demo.p01.hdf").read_bytes() == original_plan
+    assert terrain.read_bytes() == b"selected terrain"
+    assert calls.count("helper") == (0 if outcome in {"probe-failure", "runtime-failure"} else 1)
+    if outcome in {"probe-failure", "runtime-failure"}:
+        assert set(tmp_path.rglob("*")) == before_names
+
+
+@pytest.mark.parametrize("overrides", [dict(wse=True), dict(depth=True),
+    dict(inundation_boundary=False), dict(arrival_time=True)])
+def test_native_serial_polygon_rejects_incompatible_products_before_project_access(overrides):
+    from ras_commander import StoreMapPerformanceOptions
+    options = dict(wse=False, depth=False, velocity=False, inundation_boundary=True)
+    options.update(overrides)
+    with pytest.raises(ValueError, match="boundary-only"):
+        RasProcess.store_maps("01", performance=StoreMapPerformanceOptions(native_polygon_serial=True), **options)
+
+
+@pytest.mark.parametrize("invalid", [None, 0, 1, "true"])
+def test_native_polygon_serial_requires_boolean(invalid):
+    from ras_commander import StoreMapPerformanceOptions
+    with pytest.raises(ValueError, match="native_polygon_serial"):
+        StoreMapPerformanceOptions(native_polygon_serial=invalid)
+
+
 @pytest.mark.parametrize("profile", ["Max", "Min", "10JAN2000 21:00:00"])
 def test_store_maps_native_boundary_collects_value_suffix_and_restores(
     monkeypatch, tmp_path, profile

@@ -2101,7 +2101,7 @@ DATAFRAME_SCHEMAS["fim_comparison"] = {
 
 
 DATAFRAME_SCHEMAS["fim_boundary_manifest"] = {
-    "description": "One row per deterministic Rust 2D zero-depth contour product.",
+    "description": "One row per zero-depth contour product from the selected deterministic 2D or explicit native-order method.",
     "accessor": "RasFim.map_inundation_boundaries(...)",
     "source": "RasFim.map_inundation_boundaries()",
     "extra_columns": False,
@@ -2110,10 +2110,10 @@ DATAFRAME_SCHEMAS["fim_boundary_manifest"] = {
         {"name": name, "dtype": dtype, "description": description}
         for name, dtype, description in (
             ("profile", "str", "Caller-defined safe profile name."),
-            ("selector", "str | int", "Max or source stored timestep index."),
-            ("status", "str", "complete, empty, or failed."),
-            ("boundary_geojson", "str | None", "Deterministic contour MultiPolygon with stored CRS."),
-            ("interpolation", "str", "horizontal or plain cell-corner sloping."),
+            ("selector", "str | int", "Max or source profile index admitted by canonical model preparation."),
+            ("status", "str", "complete or empty; failures write an aborted manifest and raise."),
+            ("boundary_geojson", "str | None", "Selected-method contour MultiPolygon with stored projected CRS."),
+            ("interpolation", "str", "horizontal or plain corner sloping for 2D; cross-section surfaces require sloping."),
             ("polygons", "int", "Polygon part count."),
             ("holes", "int", "Interior ring count."),
             ("vertices", "int", "Closed-ring coordinate count."),
@@ -2122,12 +2122,12 @@ DATAFRAME_SCHEMAS["fim_boundary_manifest"] = {
             ("error", "str | None", "Failure diagnostic, if any."),
         )
     ],
-    "note": "Deterministic zero-depth contours are not claimed identical to native stored boundaries. Timings, method and source identities are retained in attrs and boundary_manifest.json.",
+    "note": "Deterministic contours use the 2D single-source contract. Native_serial requires explicit unqualified opt-in and admits supported canonical cross-section, storage-area, mixed and original-source mosaic inputs. It preserves native source/tile/global-stitch ordering with bounded Rust workers. Full engine vectors are validated before native_serial applies any final unrounded GIS AOI intersection. Method, ordered original-source SHA256 identities, preparation/source receipts, exact AOI clipping receipt and timings are retained in attrs and boundary_manifest.json; support does not establish native vector parity. Explicit preserve_raw_geometry=True requires native_serial, allow_unqualified=True and full extent. A completed vector that fails topology validation may be retained with an aborted diagnostic receipt and FimGeometryError; it never becomes a complete product row. A kernel refusal before a complete vector exists supplies no raw vector.",
 }
 
 
 DATAFRAME_SCHEMAS["fim_boundary_comparison"] = {
-    "description": "Complete vector differences between deterministic contours and native stored polygons.",
+    "description": "Complete vector differences between selected-method Rust contours and native stored polygons.",
     "accessor": "RasFim.compare_inundation_boundaries(...)",
     "source": "RasFim.compare_inundation_boundaries()",
     "extra_columns": False,
@@ -2153,7 +2153,8 @@ DATAFRAME_SCHEMAS["fim_boundary_comparison"] = {
             ("intersection_over_union", "float", "Area intersection divided by area union."),
             ("hausdorff_distance", "float | None", "Bounded discrete Hausdorff distance; null when excluded."),
             ("geometry_equal", "bool", "Topological equality without coordinate rounding or tolerance."),
-            ("quantized_coordinates_equal", "bool", "Canonical ring-coordinate equality on the declared 0.001-unit lattice."),
+            ("coordinates_equal", "bool", "Unrounded stored vertex equality, independent of ring start, orientation and part order; preserves collinear vertices."),
+            ("quantized_coordinates_equal", "bool", "Canonical ring-coordinate equality on the 0.001-unit lattice; diagnostic distinct from exact unrounded equality."),
             ("candidate_path", "str", "Candidate contour GeoJSON."),
             ("reference_path", "str", "Native stored polygon vector source."),
             ("native_seconds", "float | None", "Native generation call time; null for retained references."),
@@ -2161,5 +2162,5 @@ DATAFRAME_SCHEMAS["fim_boundary_comparison"] = {
             ("comparison_seconds", "float", "Geometry scanning/metrics time for this row."),
         )
     ],
-    "note": "Difference metrics retain complete polygons and holes. Native vector parity is not presumed. Shared timing/provenance and exclusions are recorded in attrs and boundary_comparison.json.",
+    "note": "Difference metrics retain complete polygons, holes and collinear vertices. Coordinates_equal uses unrounded stored XY; topology and quantized equality are separate metrics. Native_serial requires explicit unqualified opt-in and serial native polygon generation when references are generated; retained references need matching source/profile/runtime/policy provenance. Generated serial references bind requested runtime labels and helper/library content identities before and after export. Native geometry admission reserves both complete inputs and comparison scratch together. Any AOI uses the same unrounded final GIS intersection, with exact candidate clipping identity verified before avoiding a second clip. Every original mosaic TIFF remains hash-bound through comparison. Shared timing/provenance and exclusions are recorded in attrs and boundary_comparison.json; no blanket native vector parity is implied. Explicit full-extent preserve_raw_geometry=True can record raw Float64 point/ring comparisons for completed topology-invalid inputs. Such diagnostics carry false qualification/parity flags and profile-coverage accounting in an aborted receipt, then raise FimGeometryError instead of returning this DataFrame. Invalid inputs receive no overlay, area, IoU or Hausdorff metrics.",
 }

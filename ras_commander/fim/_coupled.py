@@ -13,6 +13,7 @@ import numpy as np
 from ..Decorators import log_call
 from .errors import FimUnsupportedError, FimEngineError
 from . import _native_grid
+from ._source_crs import source_crs, describe_crs
 from ._one_d import (digest, write_json, _profile_selection, canonical_arrays,
                      _plan_delivery_aoi, METHOD_ID as XS_METHOD_ID,
                      REQUEST_SCHEMA as XS_SCHEMA)
@@ -342,7 +343,6 @@ class FimPreparedCoupledModel:
             # Validate grid and datum labels against the hashed source files
             # in addition to checking the bound preparation fingerprint.
             import rasterio
-            from pyproj import CRS
             from ..hdf.HdfBase import HdfBase
             grid = receipt["grid"]
             transform = grid["geo_transform"]
@@ -350,7 +350,7 @@ class FimPreparedCoupledModel:
                     or any(isinstance(v, bool) or not isinstance(v, (int, float)) or not math.isfinite(v) for v in transform)
                     or any(isinstance(grid[k], bool) or not isinstance(grid[k], int) or grid[k] <= 0 for k in ("width", "height"))):
                 raise ValueError("invalid source grid")
-            declared_crs = CRS.from_user_input(grid["crs"])
+            declared_crs = source_crs(grid["crs"])
             if declared_crs.to_epsg() is None:
                 raise FimUnsupportedError("coupled terrain CRS must have an EPSG code; no CRS relabelling is performed")
             with rasterio.open(receipt["terrain"]) as terrain:
@@ -359,12 +359,18 @@ class FimPreparedCoupledModel:
                         or tuple(transform) != terrain.transform.to_gdal()
                         or grid["tile_size"] != 256 or terrain.block_shapes != [(256, 256)]
                         or terrain.count != 1 or terrain.dtypes != ("float32",)
-                        or CRS.from_user_input(terrain.crs) != declared_crs):
+                        or source_crs(terrain.crs) != declared_crs):
                     raise ValueError("grid or CRS differs from bound terrain")
+                terrain_definition = describe_crs(terrain.crs)
+            model_definition = HdfBase.get_projection(receipt["source_hdf"])
             if (not declared_crs.is_projected
                     or any(abs(axis.unit_conversion_factor - 1200/3937) > 1e-12 for axis in declared_crs.axis_info[:2])
-                    or declared_crs != CRS.from_user_input(HdfBase.get_projection(receipt["source_hdf"]))):
+                    or declared_crs != source_crs(model_definition)):
                 raise ValueError("CRS differs from bound source model")
+            if "crs_provenance" in receipt and receipt["crs_provenance"] != {
+                    "policy": "bound-source-identity/1", "model": describe_crs(model_definition),
+                    "terrain": terrain_definition}:
+                raise ValueError("CRS binding provenance differs from original inputs")
             units = HdfBase.get_result_unit_metadata(receipt["source_hdf"])
             if receipt["units"] != units or units.get("unit_system") != "US Customary" or units.get("warnings") or units.get("contradictions"):
                 raise ValueError("units differ from bound source model")
@@ -395,7 +401,6 @@ def prepare_coupled_model(hdf_path, terrain_path, output_folder, *, profiles=Non
                         allow_unqualified=False, max_working_mib=1024, engine_path=None, threads=1,
                         grid_contract=None):
     import rasterio
-    from pyproj import CRS
     from pyproj.exceptions import CRSError
     from ..hdf.HdfBase import HdfBase
     from ..hdf.HdfXsec import HdfXsec
@@ -424,7 +429,8 @@ def prepare_coupled_model(hdf_path, terrain_path, output_folder, *, profiles=Non
         if geometry_path is not None:
             metadata_sources[str(geometry_path)] = _source_identity(geometry_path)
         try:
-            crs = CRS.from_user_input(HdfBase.get_projection(hdf))
+            model_definition = HdfBase.get_projection(hdf)
+            crs = source_crs(model_definition)
         except CRSError as exc:
             raise FimUnsupportedError("model has no valid projected CRS") from exc
         if not crs.is_projected or any(abs(a.unit_conversion_factor-1200/3937) > 1e-12 for a in crs.axis_info[:2]):
@@ -433,12 +439,14 @@ def prepare_coupled_model(hdf_path, terrain_path, output_folder, *, profiles=Non
             raise FimUnsupportedError("coupled terrain CRS must have an EPSG code; no CRS relabelling is performed")
         with rasterio.open(terrain) as src:
             _terrain_validity(src)
-            if CRS.from_user_input(src.crs) != crs:
+            if source_crs(src.crs) != crs:
                 raise FimUnsupportedError("terrain and model CRS differ; no datum relabelling or automatic reprojection")
             gt = src.transform.to_gdal()
             if src.count != 1 or src.dtypes[0] != "float32" or not src.is_tiled or src.block_shapes != [(256, 256)] or gt[1] != -gt[5] or gt[2] or gt[4] or gt[1] <= 0:
                 raise FimUnsupportedError("requires original single-band Float32 square-pixel 256-tiled north-up terrain")
             grid = {"width": src.width, "height": src.height, "geo_transform": list(gt), "tile_size": 256, "crs": crs.to_wkt()}
+            crs_provenance = {"policy": "bound-source-identity/1",
+                              "model": describe_crs(model_definition), "terrain": describe_crs(src.crs)}
         native_grid = (_native_grid.derive(grid) if grid_contract is not None else None)
         if any(_source_identity(path) != identity for path, identity in metadata_sources.items()):
             raise FimUnsupportedError("coupled input changed during metadata admission")
@@ -498,6 +506,7 @@ def prepare_coupled_model(hdf_path, terrain_path, output_folder, *, profiles=Non
                    "storage": storage_receipt, "result_kind": data["result_kind"],
                    "stored_profile_names": data["stored_profile_names"],
                    "source_hdf": str(hdf), "terrain": str(terrain), "grid": grid,
+                   "crs_provenance": crs_provenance,
                    "units": units, "files": files, "levels": levels,
                    "profiles": list(data["profiles"]), "profile_ids": profile_ids,
                    "cross_section_count": len(data["Attributes"]),
@@ -767,7 +776,8 @@ def map_coupled_profiles(hdf_path, terrain_path, output_folder, *, profiles=None
                              for name, i in zip(selected_names, positions)}
         if receipt["engine_path"] != str(engine) or receipt["engine_sha256"] != engine_hash:
             raise FimUnsupportedError("mapping engine differs from the prepared engine")
-        identity = _engine.terrain_identity(engine, Path(receipt["terrain"]), receipt["grid"]["crs"], timeout=timeout)
+        identity = _engine.terrain_identity(engine, Path(receipt["terrain"]), receipt["grid"]["crs"],
+                                            timeout=timeout, source_crs_identity=True)
         final_support = support
         final_method_id, final_schema = contracts["method"], contracts["schema"]
         component_contracts = _component_contracts(contracts)

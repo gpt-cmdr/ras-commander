@@ -588,6 +588,7 @@ class RasFim:
         terrain_hdf: PathLike,
         profiles: Optional[Dict[str, Union[str, int]]] = None,
         interpolation: str = "sloping", native_boundaries: Optional[Dict[str, PathLike]] = None,
+        native_performance: Optional["StoreMapPerformanceOptions"] = None,
         plan_number: Optional[str] = None, terrain_name: Optional[str] = None,
         ras_object: Any = None, ras_version: Optional[str] = None,
         bbox: Optional[Sequence[float]] = None, polygon: Any = None, polygon_layer: Optional[str] = None,
@@ -596,23 +597,42 @@ class RasFim:
         max_working_mib: int = 1024, max_prepared_mib: int = 1024,
         timeout: Optional[float] = None,
         terrain_crs_fnv1a64: Optional[str] = None,
+        method: str = "deterministic", allow_unqualified: bool = False,
+        preserve_raw_geometry: bool = False,
     ) -> "pd.DataFrame":
-        """Compare deterministic Rust boundaries with native stored polygons.
+        """Compare selected Rust boundary polygons with native stored polygons.
+
+        ``deterministic`` compares the 2D contour method. ``native_serial``
+        compares native source/tile/stitch ordering and admitted canonical
+        2D, cross-section, storage-area or mixed model inputs; it requires
+        ``allow_unqualified=True``. Support does not establish native parity.
 
         Args:
-            hdf_path: Computed 2D-only plan HDF.
-            terrain_path: Original single-source terrain TIFF.
+            hdf_path: Computed plan HDF admitted by the selected method.
+            terrain_path: Original single-source TIFF for ``deterministic``;
+                first original TIFF in native terrain order for ``native_serial``.
             output_folder: New or empty comparison/evidence folder.
-            terrain_hdf: Original terrain masks, perimeters and stitch TIN.
-            profiles: Output names mapped to Max or stored timestep indices.
-            interpolation: horizontal or plain cell-corner sloping.
+            terrain_hdf: Associated original terrain HDF. Native ordering uses
+                every original source's masks/perimeters and one global stitch
+                TIN; no flattening or terrain modifications are applied.
+            profiles: Output names mapped to Max or source profile indices,
+                interpreted by canonical model preparation.
+            interpolation: horizontal or plain corner sloping for 2D.
+                Cross-section surfaces require sloping.
             native_boundaries: Optional profile-to-vector-file references.
-                When absent, generate references through RasProcess.store_maps.
+                Retain their runtime, profile, terrain and rendering-policy
+                provenance. When absent, generate references through
+                RasProcess.store_maps.
+            native_performance: Optional native execution policy, including
+                ``native_polygon_serial=True``, required when generating
+                ``native_serial`` references. Omit with retained references.
             plan_number: Plan for native reference generation.
             terrain_name: Native terrain registration, if selection is needed.
             ras_object: Initialized RasPrj for native generation.
             ras_version: Native HEC-RAS version for reference generation.
-            bbox: Optional AOI bounds, applied to both comparison geometries.
+            bbox: Optional AOI bounds. Both geometries use the same unrounded
+                final GIS intersection; verified native candidate delivery is
+                not clipped a second time.
             polygon: Optional polygon AOI or vector source.
             polygon_layer: Polygon file layer.
             aoi_crs: AOI CRS. Bounds default to model CRS; a Shapely
@@ -624,15 +644,32 @@ class RasFim:
             max_prepared_mib: Geometry and staging budget.
             timeout: Per-engine/native-call timeout in seconds.
             terrain_crs_fnv1a64: Optional caller-verified terrain WKT identity.
+            method: ``deterministic`` or explicitly selected ``native_serial``.
+                Native serial describes reference ordering; Rust workers may
+                still run concurrently while preserving that order.
+            allow_unqualified: Required for ``native_serial`` until its
+                declared model/terrain scope is qualified. Defaults to False.
+
+            preserve_raw_geometry: Explicit full-extent native_serial diagnostic opt-in.
+                Finite, closed topology-invalid artifacts are retained unchanged;
+                FimGeometryError carries an aborted diagnostic receipt. No repair
+                or ordinary completed product/comparison is returned on refusal.
 
         Returns:
             Full geometry/topology difference metrics and timing receipt.
+            ``coordinates_equal`` compares unrounded stored vertices while
+            ignoring ring start, orientation and part order; collinear vertices
+            remain significant. ``geometry_equal`` checks topology, while
+            ``quantized_coordinates_equal`` is a separate 0.001-unit diagnostic.
+            Ordered original-source identities and hashes remain bound through
+            comparison and are recorded in the candidate manifest and receipt.
             Native generation, Rust batch mapping and comparison scans have
             separate clocks in attrs["performance"]. No post-depth filter is
             applied. Native Max polygons may vary between identical exports.
 
         Raises:
             FimUnsupportedError: Unsupported CRS, geometry or input scope.
+            FimGeometryError: Invalid topology; optional raw evidence is diagnostic only.
             FimEngineError: Failed native or Rust execution.
             ValueError: Invalid controls or reference selection.
         """
@@ -640,7 +677,8 @@ class RasFim:
         return run(
             hdf_path, terrain_path, output_folder, terrain_hdf=terrain_hdf,
             profiles=profiles, interpolation=interpolation,
-            native_boundaries=native_boundaries, plan_number=plan_number,
+            native_boundaries=native_boundaries, native_performance=native_performance,
+            plan_number=plan_number,
             terrain_name=terrain_name, ras_object=ras_object,
             ras_version=ras_version, bbox=bbox, polygon=polygon,
             polygon_layer=polygon_layer, aoi_crs=aoi_crs,
@@ -648,6 +686,8 @@ class RasFim:
             max_inflight_profiles=max_inflight_profiles,
             max_working_mib=max_working_mib, max_prepared_mib=max_prepared_mib,
             timeout=timeout, terrain_crs_fnv1a64=terrain_crs_fnv1a64,
+            method=method, allow_unqualified=allow_unqualified,
+            preserve_raw_geometry=preserve_raw_geometry,
         )
 
     @staticmethod
@@ -662,24 +702,40 @@ class RasFim:
         max_inflight_profiles: int = 1, max_working_mib: int = 1024,
         max_prepared_mib: int = 1024, timeout: Optional[float] = None,
         terrain_crs_fnv1a64: Optional[str] = None,
+        method: str = "deterministic", allow_unqualified: bool = False,
+        preserve_raw_geometry: bool = False,
     ) -> "pd.DataFrame":
-        """Generate deterministic 2D zero-depth contour polygons in Rust.
+        """Generate zero-depth contour polygons using a selected Rust method.
 
-        The method preserves holes with a deterministic NonZero union. It is
-        distinct from RASMapper's order-dependent stored boundary polygons;
-        compare full topology and coordinates rather than assuming equality.
-        Existing Depth/WSE raster methods are unchanged.
+        The default 2D method preserves holes with a deterministic NonZero union.
+        ``native_serial`` targets native source/tile/stitch ordering for admitted
+        canonical 2D, cross-section, storage-area and mixed model inputs. It
+        requires explicit unqualified opt-in. Compare complete topology and
+        unrounded coordinates before making a native parity claim.
 
         Args:
-            hdf_path: Computed 2D-only plan HDF; 1D elements are rejected.
-            terrain_path: Original unmodified single-source float32 terrain TIFF.
+            hdf_path: Computed plan HDF. The deterministic method requires 2D;
+                ``native_serial`` admits canonical cross-section/storage/mixed
+                preparation where supported and refuses unsupported variants.
+            terrain_path: Original unmodified Float32 terrain TIFF. The
+                deterministic method requires a single source. For native
+                ordering, supply the first original source in native terrain order;
+                every source must retain its original 256-pixel tiles and the
+                actual projected model CRS in US survey feet.
             output_folder: New or empty product folder.
             terrain_hdf: Original associated terrain HDF containing level-zero
-                masks, perimeters and optional stitch TIN. No substitute masks
-                are constructed from a flattened terrain raster.
-            profiles: Output names mapped to Max or stored timestep indices.
-            interpolation: horizontal or plain cell-corner sloping.
-            bbox: Optional bounds in aoi_crs.
+                masks, perimeters and optional global stitch TIN. Native
+                ordering retains every original mosaic source and stages the
+                global TIN once. Complete source priorities determine stable
+                ascending order; otherwise native group order is retained.
+                Unsupported ambiguous ordering and terrain modifications refuse.
+            profiles: Output names mapped to Max or source profile indices,
+                interpreted by canonical model preparation.
+            interpolation: horizontal or plain corner sloping for 2D.
+                Cross-section surfaces require sloping.
+            bbox: Optional bounds in aoi_crs. Native ordering retains all source
+                tiles and hydraulic geometry, then clips validated full vectors
+                by an unrounded final GIS intersection.
             polygon: Optional Polygon/MultiPolygon, GeoDataFrame or file path.
             polygon_layer: Layer name for a polygon file.
             aoi_crs: AOI CRS. Bounds default to model CRS; a Shapely
@@ -692,16 +748,52 @@ class RasFim:
             timeout: Engine execution timeout in seconds.
             terrain_crs_fnv1a64: Optional caller-verified native-reader WKT
                 identity, after checking the original terrain CRS independently.
+            method: ``deterministic`` retains the established 2D contour
+                method. ``native_serial`` selects native ordering and supported
+                canonical cross-section/storage composition. Its serial ordering
+                does not require a single Rust worker.
+            allow_unqualified: Explicit opt-in while native-order model
+                qualification is in progress. Defaults to False.
+
+            preserve_raw_geometry: Explicit full-extent native_serial diagnostic opt-in.
+                Finite, closed topology-invalid artifacts are retained unchanged;
+                FimGeometryError carries an aborted diagnostic receipt. No repair
+                or ordinary completed product/comparison is returned on refusal.
 
         Returns:
             Product manifest with GeoJSON paths and polygon statistics.
             Timing and provenance are in attrs and boundary_manifest.json.
+            Native delivery records ordered original-source SHA256 identities,
+            terrain-source and model preparation receipts, and any exact AOI
+            clipping receipt. Native vector parity remains unqualified until
+            scoped reference comparisons establish it.
 
         Raises:
             FimUnsupportedError: Unsupported terrain/model or resource limits.
+            FimGeometryError: Invalid topology; optional raw evidence is diagnostic only.
             FimEngineError: Missing capability or unsuccessful mapping.
             ValueError: Invalid controls or incompatible AOIs.
         """
+        from ._boundary_raw import validate_options
+        validate_options(preserve_raw_geometry, method=method, allow_unqualified=allow_unqualified,
+            bbox=bbox, polygon=polygon, polygon_layer=polygon_layer, aoi_crs=aoi_crs)
+        if method not in ("deterministic", "native_serial"):
+            raise ValueError("boundary method must be deterministic or native_serial")
+        if not isinstance(allow_unqualified, bool):
+            raise ValueError("allow_unqualified must be boolean")
+        if method == "native_serial":
+            from ._boundary_native import map_native_boundaries
+            return map_native_boundaries(
+                hdf_path, terrain_path, output_folder, terrain_hdf=terrain_hdf,
+                profiles=profiles, interpolation=interpolation, bbox=bbox,
+                polygon=polygon, polygon_layer=polygon_layer, aoi_crs=aoi_crs,
+                engine_path=engine_path, threads=threads,
+                max_inflight_profiles=max_inflight_profiles,
+                max_working_mib=max_working_mib, max_prepared_mib=max_prepared_mib,
+                timeout=timeout, terrain_crs_fnv1a64=terrain_crs_fnv1a64,
+                allow_unqualified=allow_unqualified,
+                preserve_raw_geometry=preserve_raw_geometry,
+            )
         from ._boundary import map_inundation_boundaries
         return map_inundation_boundaries(
             hdf_path, terrain_path, output_folder, terrain_hdf=terrain_hdf,

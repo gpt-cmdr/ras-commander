@@ -193,3 +193,15 @@ def test_optional_real_boundary_engine(tmp_path):
     result = _boundary.map_inundation_boundaries(hdf, tif, tmp_path / "products",
                                                terrain_hdf=terrain_hdf, engine_path=engine)
     assert len(result) == 1 and result.status.iloc[0] in ("complete", "empty")
+
+
+@pytest.mark.parametrize("method,allow,extra", [("deterministic", True, {}),
+    ("native_serial", False, {}), ("native_serial", True, {"polygon_layer": "layer"}),
+    ("native_serial", True, {"bbox": [0, 0, 1, 1]})])
+@pytest.mark.parametrize("api", ["map_inundation_boundaries", "compare_inundation_boundaries"])
+def test_public_raw_guard_is_before_paths_engine_or_outputs(tmp_path, method, allow, extra, api):
+    from ras_commander.fim.RasFim import RasFim
+    with pytest.raises(FimUnsupportedError):
+        getattr(RasFim, api)("missing.hdf", "missing.tif", tmp_path / "out", terrain_hdf="missing.hdf",
+            method=method, allow_unqualified=allow, preserve_raw_geometry=True, **extra)
+    assert not (tmp_path / "out").exists()

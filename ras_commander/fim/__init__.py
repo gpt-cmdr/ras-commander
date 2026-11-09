@@ -19,6 +19,7 @@ from .errors import (
     FimEngineError,
     FimEngineNotFoundError,
     FimError,
+    FimGeometryError,
     FimMappingError,
     FimUnsupportedError,
 )
@@ -44,6 +45,7 @@ __all__ = [
     "FimError",
     "FimEngineNotFoundError",
     "FimEngineError",
+    "FimGeometryError",
     "FimUnsupportedError",
     "FimAoiError",
     "FimMappingError",
