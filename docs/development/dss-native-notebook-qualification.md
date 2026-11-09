@@ -38,14 +38,14 @@ Shadow totals over all runs: no `unexpected` outcomes.
 
 | Item | Value |
 |---|---|
-| Branch | `dss-native-notebooks`, from `dss-native-writes` at `a3b6fa897` |
-| Engine | `CLB-Engineering-Corporation/dss-commander-rust` `main` at `5af800d` |
+| Branch | `dss-native-writes` at `a3b6fa897` |
+| Engine | Pre-release build of the engine that became `ras-commander-fast-dss` 0.1.0 |
 | Wheel | `ras_commander_fast_dss-0.0.1-cp310-abi3-win_amd64.whl`, SHA-256 `30523d158e3b1b6aef18c113fa4e76e34f7da7b46e9cef90f0ad4781c6dededb`. `FEATURES` includes `grid_srs_monolith_parity`, so native grid reads are enabled. |
 | Python | CPython 3.12.11 (numpy 2.5.4, pandas 3.0.6, h5py 3.16.0) for every notebook except 916 and 926. Those two need `qpkit` 0.1.0, which imports `pydsstools`; pydsstools needs numpy<2 on 3.12, so they ran on CPython 3.13.9 (numpy 2.5.4). |
 | Java backend | HEC Monolith 3.3.27 through pyjnius 1.9.0, JDK 17.0.20.1+1 |
 | HEC-RAS | 7.0, run only through `RasCmdr.compute_plan` |
 | Other HEC tools | HEC-Vortex 0.13.3, used by 917 (`PrecipMrms.to_dss`) |
-| Host | CLB01, Windows 11 |
+| Host | One Windows 11 workstation |
 
 ## Method
 
@@ -95,7 +95,7 @@ Wall times are single incidental observations, not benchmarks.
 | 917 MRMS QPE | fail @10 | fail @10 | fail @10 | Vortex writes 37 MRMS grids; `RasDss.get_catalog`, `read_grid`; HEC-RAS run | catalog 1, read_grid 37: all identical | DSS: 37 grid records equal; catalog row order follows each Vortex run. Same failure on all backends (note 5) | 160 / 141 / 121 |
 | 918 HMS-RAS coupled forecast | pass | pass | pass | None executed. The DSS calls appear only in printed patterns. | none | None | 2 / 2 / 2 |
 | 926 WPC QPF | fail @15 | fail @15 | fail @15 | `qpkit` writes WPC grids; `RasDss.get_catalog`, `read_grid`; HEC-RAS runs | catalog 1, read_grid 28: all identical | DSS: 28 grid records equal. HDF: every physical cell bit-equal (note 4). Same failure on all backends (note 5) | 343 / 313 / 381 |
-| 952 eBFE Upper Guadalupe, partial | partial | partial | partial | `get_catalog`, `check_pathname` (first 10 per file), `RasEbfeModels._validate_dss_files` on the 3 unique delivery DSS files (504, 532 and 1,680 records, including the gridded precipitation file), copied to D: | catalog 36: all identical | Identical catalogs, checks and validation. The copies were unchanged after Java reads. | 1.1 / 0.3 / 1.5 |
+| 952 eBFE Upper Guadalupe, partial | partial | partial | partial | `get_catalog`, `check_pathname` (first 10 per file), `RasEbfeModels._validate_dss_files` on the 3 unique delivery DSS files (504, 532 and 1,680 records, including the gridded precipitation file), copied to a private workspace | catalog 36: all identical | Identical catalogs, checks and validation. The copies were unchanged after Java reads. | 1.1 / 0.3 / 1.5 |
 
 ### Supplementary reruns past the pre-existing failure (916, 917, 926)
 
@@ -219,7 +219,11 @@ sums on the qualification host.
 
 **Committed outputs.** 916, 917 and 926 carry the outputs of their `java` (default backend)
 runs. 318 keeps its earlier outputs, except the changed clean-up cell, whose output comes from
-the `java` run.
+the `java` run. 917's committed outputs come from a full `java` rerun on 2026-11-09 (ras-commander
+0.113.0 with `ras-commander-fast-dss` 0.1.1 installed; 2,107 s; every cell passed). Before that rerun,
+its diagnostic cell was changed to print the interpreter name and repository-relative source paths, the
+`matplotlib.animation` logger was set to WARNING, and the `PrecipMrms` and `RasUnsteady` INFO messages
+were changed to give file names (full paths moved to DEBUG), so the outputs carry no host paths.
 
 ## Skipped notebooks
 
@@ -228,9 +232,9 @@ A skip is not a pass. Each reason below was checked on this host.
 | Notebook | Reason |
 |---|---|
 | 731 Atlas 14 shared temporal, existing model | This is a template for a user's model. It needs `SOURCE_PROJECT = C:/Models/MyModel` and a NOAA Atlas 14 ASC grid, neither of which exists here. All three backends stop at cell 5 with `FileNotFoundError`. Its DSS export runs only when `RUN_DSS_EXPORT = True`; the default is False. |
-| 950, 951, 953, 954, 955, 957 eBFE deliveries | These notebooks organize into `RAS_COMMANDER_EBFE_ROOT`, which defaults to the shared workspace `H:\Testing\eBFE Model Organization`, and the rules forbid writing to H:. Their organized deliveries on H: contain no DSS files (checked: Spring Creek, North Galveston Bay, Rio Hondo, Lake Maurepas, Tickfaw, Spring River), so `_validate_dss_files` and the notebooks' `RasDss` calls have nothing to read. Moving them to D: would mean downloading the FEMA archives again. |
-| 952 eBFE Upper Guadalupe, full notebook | The organized delivery is 56 GB on H:. Only its DSS operations were run, on the 3 unique DSS files copied to D: (table row "952 partial"). |
-| 956 hydrofabric conflation, 959 2D breakout geometry, 430 channel capacity, 237 subdomain breakout | These call eBFE organizers only to stage geometry. The deliveries are on H: or need an external `EBFE_SOURCE` download, and the notebooks perform no `RasDss` read or write of their own. |
+| 950, 951, 953, 954, 955, 957 eBFE deliveries | These notebooks organize into `RAS_COMMANDER_EBFE_ROOT`, a shared workspace that this qualification was not permitted to write to. The organized deliveries already present there contain no DSS files (checked: Spring Creek, North Galveston Bay, Rio Hondo, Lake Maurepas, Tickfaw, Spring River), so `_validate_dss_files` and the notebooks' `RasDss` calls have nothing to read. Running them in a private workspace would mean downloading the FEMA archives again. |
+| 952 eBFE Upper Guadalupe, full notebook | The organized delivery is 56 GB in the shared workspace. Only its DSS operations were run, on copies of its 3 unique DSS files in a private workspace (table row "952 partial"). |
+| 956 hydrofabric conflation, 959 2D breakout geometry, 430 channel capacity, 237 subdomain breakout | These call eBFE organizers only to stage geometry. The deliveries are in the shared workspace or need an external `EBFE_SOURCE` download, and the notebooks perform no `RasDss` read or write of their own. |
 | 958 model sources showcase | Its DSS path is `UsgsScienceBase` model repair, which needs the Kalamazoo ScienceBase download (about 3 GB). Not run. |
 
 ## Fixes made
