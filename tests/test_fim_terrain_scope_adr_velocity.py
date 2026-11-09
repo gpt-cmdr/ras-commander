@@ -294,8 +294,6 @@ def test_whole_simulation_refuses_storage_areas_and_missing_capability(model_fil
 @pytest.mark.parametrize(
     "kwargs, message",
     [
-        (dict(velocity=True, render_mode="slopingPretty", reduce_shallow_to_horizontal=True),
-         "plain sloping"),
         (dict(velocity=True, template_raster="x.tif"), "template_raster"),
         (dict(terrain_hdf="T.hdf", render_mode="slopingPretty"), "plain sloping"),
     ],
@@ -366,6 +364,63 @@ def test_velocity_product_controls_and_capabilities(model_files, tmp_path, monke
     assert not any((tmp_path / name).exists() for name in "abcd")
 
 
+@pytest.mark.parametrize(
+    "options",
+    [
+        dict(reduce_shallow_to_horizontal=True),
+        dict(use_depth_weighted_faces=True),
+        dict(reduce_shallow_to_horizontal=True, use_depth_weighted_faces=True),
+    ],
+)
+def test_sloping_pretty_options_need_the_with_faces_velocity_record(
+    model_files, tmp_path, monkeypatch, options
+):
+    from ras_commander.fim import _velocity
+
+    hdf, tif, _ = model_files
+    sloping = {"method_id": "rasmapper-plain-sloping/1", "stream_outputs": True,
+               "enhanced_options": True, "native_donation_history": True,
+               "enhanced_method_id": "rasmapper-sloping-with-faces/1",
+               "depth_weighted_faces": True,
+               "velocity": _velocity.METHOD_ID,
+               "velocity_render_modes": ["horizontal", "sloping", "slopingPretty"]}
+    monkeypatch.setattr(_engine, "engine_method", lambda engine: {"sloping": sloping})
+    # Older engines: velocity with slopingPretty options is refused before any output.
+    with pytest.raises(FimUnsupportedError, match=_velocity.WITH_FACES_METHOD_ID):
+        RasFim.map_sloping_profiles(hdf, tif, tmp_path / "a", velocity=True,
+                                    render_mode="slopingPretty", **options)
+    assert not (tmp_path / "a").exists()
+    # A record listing only one option still refuses the other.
+    sloping["velocity_with_faces"] = _velocity.WITH_FACES_METHOD_ID
+    sloping["velocity_with_faces_options"] = ["reduce_shallow_to_horizontal"]
+    if options.get("use_depth_weighted_faces"):
+        with pytest.raises(FimUnsupportedError, match="use_depth_weighted_faces"):
+            RasFim.map_sloping_profiles(hdf, tif, tmp_path / "b", velocity=True,
+                                        render_mode="slopingPretty", **options)
+    # With the record the request passes the gate (and fails later on this
+    # synthetic, empty HDF).
+    sloping["velocity_with_faces_options"] = [
+        "reduce_shallow_to_horizontal", "use_depth_weighted_faces"]
+    with pytest.raises(Exception) as caught:
+        RasFim.map_sloping_profiles(hdf, tif, tmp_path / "c", velocity=True,
+                                    render_mode="slopingPretty", **options)
+    assert _velocity.WITH_FACES_METHOD_ID not in str(caught.value)
+    assert "plain sloping" not in str(caught.value)
+
+
+def test_with_faces_options_follow_the_engine_record():
+    from ras_commander.fim import _velocity
+
+    assert _velocity.with_faces_options({}) == ()
+    assert _velocity.with_faces_options(
+        {"velocity_with_faces": "other/1", "velocity_with_faces_options": ["x"]}) == ()
+    assert _velocity.with_faces_options({
+        "velocity_with_faces": _velocity.WITH_FACES_METHOD_ID,
+        "velocity_with_faces_options": ["reduce_shallow_to_horizontal",
+                                        "use_depth_weighted_faces"],
+    }) == ("reduce_shallow_to_horizontal", "use_depth_weighted_faces")
+
+
 def test_gravity_follows_the_plan_unit_system(tmp_path):
     import h5py
     from ras_commander.fim import _velocity
@@ -432,6 +487,9 @@ def test_public_signatures_expose_new_controls():
     derived = inspect.signature(RasFim.map_derived_max).parameters
     assert tuple(derived["products"].default) == (
         "depth_x_velocity", "depth_x_velocity_squared", "froude")
+    assert derived["reduce_shallow_to_horizontal"].default is False
+    assert derived["use_depth_weighted_faces"].default is False
+    assert derived["postprocessing_hdf"].default is None
     for name in ("top_priority_terrain_source", "map_whole_simulation", "map_derived_max"):
         assert isinstance(RasFim.__dict__[name], staticmethod)
 

@@ -964,11 +964,14 @@ class RasFim:
                 Face normals use face polyline lengths. RAS Mapper's velocity
                 values do not depend on the render mode; it clips them with the
                 active mode's depth. Drawn where the ``velocity_depth`` depth
-                is > 0. Plain ``sloping`` and plain ``slopingPretty`` (no
-                shallow or depth-weighted options) with HDF profiles; refuses
-                ``wsel_profiles``, ``template_raster`` and storage-area plans.
-                ``slopingPretty`` needs an engine advertising it in
-                ``velocity_render_modes``.
+                is > 0. ``sloping`` and ``slopingPretty`` with HDF profiles;
+                refuses ``wsel_profiles``, ``template_raster`` and storage-area
+                plans. ``slopingPretty`` needs an engine advertising it in
+                ``velocity_render_modes``; with ``reduce_shallow_to_horizontal``
+                or ``use_depth_weighted_faces`` the engine must also advertise
+                ``velocity_with_faces`` (``rasmapper-with-faces-velocity-derived/1``)
+                listing that option, and the mask is the depth rendered with
+                the same options.
             velocity_depth: ``"rendered"`` (default) clips velocity with this
                 request's rendered depth. ``"horizontal"`` clips it with the
                 horizontal cell-constant depth, reproducing RAS Mapper's
@@ -1105,6 +1108,9 @@ class RasFim:
         polygon_layer: Optional[str] = None, aoi_crs: Any = None,
         engine_path: Optional[PathLike] = None, threads: int = 1,
         max_inflight_profiles: int = 1,
+        reduce_shallow_to_horizontal: bool = False,
+        use_depth_weighted_faces: bool = False,
+        postprocessing_hdf: Optional[PathLike] = None,
         max_working_mib: int = 2048, timeout: Optional[float] = None,
         terrain_hdf: Optional[PathLike] = None,
         invalid_cells: str = "repair",
@@ -1125,9 +1131,19 @@ class RasFim:
             output_folder: New or empty directory.
             products: Subset of ``depth_x_velocity``,
                 ``depth_x_velocity_squared`` and ``froude``.
-            render_mode: ``"sloping"`` or ``"slopingPretty"`` (plain).
+            render_mode: ``"sloping"`` or ``"slopingPretty"``.
             velocity_depth: ``"rendered"`` or ``"horizontal"`` (RAS Mapper's
                 horizontal mode: horizontal depth and its velocity clip).
+            reduce_shallow_to_horizontal: slopingPretty shallow reduction, as in
+                :meth:`map_sloping_profiles`. Use the project's RAS Mapper
+                setting: ``RasProcess.store_maps(render_mode="slopingPretty")``
+                turns it on. Needs an engine advertising
+                ``velocity_with_faces`` with this option.
+            use_depth_weighted_faces: slopingPretty depth-weighted faces, as in
+                :meth:`map_sloping_profiles`; needs stored corner elevations and
+                an engine advertising ``velocity_with_faces`` with this option.
+            postprocessing_hdf: Optional ``PostProcessing.hdf`` with native
+                corner elevations, as in :meth:`map_sloping_profiles`.
             bbox: Optional output bounds in ``aoi_crs`` or the model CRS.
             polygon: Optional polygon geometry, frame or vector-file AOI.
             polygon_layer: Layer name when the AOI file has multiple layers.
@@ -1168,6 +1184,9 @@ class RasFim:
         frame = _sloping.map_profiles(
             hdf_path, terrain_path, output_folder,
             profiles={f"t{k}": k for k in range(count)}, render_mode=render_mode,
+            reduce_shallow_to_horizontal=reduce_shallow_to_horizontal,
+            use_depth_weighted_faces=use_depth_weighted_faces,
+            postprocessing_hdf=postprocessing_hdf,
             bbox=bbox, polygon=polygon, polygon_layer=polygon_layer, aoi_crs=aoi_crs,
             engine_path=engine_path, threads=threads,
             max_working_mib=max_working_mib, timeout=timeout,

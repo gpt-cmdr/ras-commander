@@ -394,11 +394,8 @@ def map_profiles(
     if (terrain_hdf is not None or velocity) and _prepared is not None:
         raise FimUnsupportedError("prepared sloping models do not support terrain_hdf or velocity")
     if velocity:
-        if reduce_shallow_to_horizontal or use_depth_weighted_faces:
-            raise FimUnsupportedError(
-                "velocity is qualified for plain sloping and plain slopingPretty only "
-                "(no shallow-to-horizontal or depth-weighted faces)"
-            )
+        # slopingPretty options are checked against the engine's
+        # velocity_with_faces record in _velocity.require_engine.
         if wsel_profiles is not None:
             raise FimUnsupportedError(
                 "velocity needs stored face velocities; caller-supplied WSEL profiles have none"
@@ -489,7 +486,11 @@ def map_profiles(
 
         _storage_areas.require_engine(method, "sloping")
     if velocity:
-        _velocity_inputs.require_engine(method, render_mode, velocity_depth, derived_products)
+        _velocity_inputs.require_engine(
+            method, render_mode, velocity_depth, derived_products,
+            reduce_shallow_to_horizontal=reduce_shallow_to_horizontal,
+            use_depth_weighted_faces=use_depth_weighted_faces,
+        )
         if _reduce_max and method.get("derived_max") != "reduce_max/1":
             raise FimUnsupportedError("engine does not advertise derived_max reduce_max/1")
     gravity = (
@@ -639,6 +640,12 @@ def map_profiles(
                 "(973,902 px), slopingPretty and horizontal match in values and mask"
             ),
         }
+        if render_mode == "slopingPretty":
+            details["velocity"]["with_faces"] = {
+                "method_id": method.get("velocity_with_faces"),
+                "reduce_shallow_to_horizontal": bool(reduce_shallow_to_horizontal),
+                "use_depth_weighted_faces": bool(use_depth_weighted_faces),
+            }
         if derived_products:
             details["velocity"]["derived"] = {
                 "method_id": _velocity.DERIVED_METHOD_ID,

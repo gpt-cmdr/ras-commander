@@ -7,6 +7,19 @@ check `ras_commander.__version__` and the documentation's
 [build provenance](https://rascommander.info/ras/version.json). A package version
 alone does not identify a development checkout.
 
+### Unreleased
+
+- **slopingPretty velocity and derived Max:** `map_sloping_profiles(velocity=True)`
+  and `map_derived_max` accept `reduce_shallow_to_horizontal` and
+  `use_depth_weighted_faces` when the engine advertises
+  `velocity_with_faces` (`rasmapper-with-faces-velocity-derived/1`);
+  `map_derived_max` also takes `postprocessing_hdf`. Native 7.0.1 Max on
+  bridges p05 and Davis p02 in all four slopingPretty option combinations:
+  velocity, D x V, D x V^2 and Froude have 0 mask and 0 bit differences. The
+  earlier bridges slopingPretty mask gap was a reference made with shallow
+  reduction (the `store_maps` default for `"slopingPretty"`) compared with a
+  plain run. Engines without the record keep refusing those options.
+
 ### 0.116.0 — 2026-11-09
 
 - **Native serial boundaries:** the existing boundary map and comparison APIs
