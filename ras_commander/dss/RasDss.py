@@ -4528,13 +4528,22 @@ class RasDss:
     ):
         """Create ``target`` when it did not exist, and remove it (and the empty
         parent directories made for it) again if the write inside the block fails,
-        so a refused native write leaves no new file or directory."""
+        so a refused native write leaves no new file or directory.
+
+        Only a file this call created is removed. ``existed`` comes from a preflight
+        check, so another process can create ``target`` before ``dc.create`` runs;
+        the engine's exclusive create then raises ``FileExistsError`` and that file
+        is left untouched. If ``dc.create`` fails for another reason, the file is
+        not known to be ours either and is also left in place.
+        """
+        owned = False
         try:
             if not existed:
                 dc.create(str(target), version)
+                owned = True
             yield
         except BaseException:
-            if not existed and target.exists():
+            if owned and target.exists():
                 try:
                     target.unlink()
                 except OSError as exc:
