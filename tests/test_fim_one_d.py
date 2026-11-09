@@ -153,6 +153,51 @@ def test_crs_identity_refused_before_writes(files, tmp_path):
     assert not (tmp_path / 'out').exists()
 
 
+@pytest.mark.parametrize("shift", [0, 1.25])
+def test_bound_source_crs_prepares_and_preserves_unapplied_binding(files, tmp_path, shift):
+    from ras_commander.fim._one_d import digest
+    from pyproj import CRS
+    from pyproj.crs import BoundCRS
+    from pyproj.crs.coordinate_operation import ToWGS84Transformation
+    projected = CRS.from_epsg(6588)
+    bound = BoundCRS(source_crs=projected, target_crs=CRS.from_epsg(4326),
+        transformation=ToWGS84Transformation(projected.geodetic_crs,
+            x_axis_translation=shift, y_axis_translation=2 * shift, z_axis_translation=3 * shift))
+    with h5py.File(files[0], "a") as hdf:
+        hdf.attrs["Projection"] = bound.to_wkt()
+    source_sha = digest(files[0])
+    terrain_sha = digest(files[1])
+    prepared = RasFim.prepare_one_d_model(*files, tmp_path / "prepared", profiles={"max": "Max"},
+        allow_unqualified=True, max_working_mib=64)
+    receipt = prepared.validate()
+    assert receipt["schema"] == "ras-commander-one-d-preparation/1" and receipt["qualified"] is False
+    assert CRS.from_wkt(receipt["grid"]["crs"]) == projected
+    provenance = receipt["crs_provenance"]
+    assert provenance["policy"] == "bound-source-identity/1"
+    assert CRS.from_wkt(provenance["model"]["original_wkt"]) == bound
+    assert provenance["model"]["binding_operation"] == CRS.from_wkt(bound.to_wkt()).coordinate_operation.to_json_dict()
+    assert provenance["terrain"]["is_bound"] is False
+    assert receipt["sha256"][str(files[0])] == source_sha
+    assert receipt["sha256"][str(files[1])] == terrain_sha
+
+
+@pytest.mark.parametrize("datum", [2278, 6587])
+def test_bound_model_still_refuses_different_terrain_datum_or_units(files, tmp_path, datum):
+    from pyproj import CRS
+    from pyproj.crs import BoundCRS
+    from pyproj.crs.coordinate_operation import ToWGS84Transformation
+    projected = CRS.from_epsg(6588)
+    bound = BoundCRS(source_crs=projected, target_crs=CRS.from_epsg(4326),
+        transformation=ToWGS84Transformation(projected.geodetic_crs, x_axis_translation=1))
+    with h5py.File(files[0], "a") as hdf:
+        hdf.attrs["Projection"] = bound.to_wkt()
+    with rasterio.open(files[1], "r+") as terrain:
+        terrain.crs = CRS.from_epsg(datum)
+    with pytest.raises(FimUnsupportedError, match="CRS differ"):
+        RasFim.prepare_one_d_model(*files, tmp_path / "prepared", allow_unqualified=True)
+    assert not (tmp_path / "prepared").exists()
+
+
 def test_bad_result_order_before_writes(files, tmp_path):
     hdf, terrain = files
     with h5py.File(hdf, 'a') as f:
@@ -222,6 +267,7 @@ def test_native_float32_station_threshold_and_full_width_left_precedence():
     lambda r: r.update(point_count=r["point_count"] + 1),
     lambda r: r["sha256"].pop(r["files"]["points"]),
     lambda r: r["levels"].pop(),
+    lambda r: r["crs_provenance"]["model"].update(binding_operation={"changed": True}),
 ])
 def test_prepared_receipt_tampering_refused(files, tmp_path, mutate):
     prepared = RasFim.prepare_one_d_model(*files, tmp_path / "prepared", allow_unqualified=True)
@@ -251,6 +297,14 @@ def test_reconstructed_receipt_requires_complete_hash_and_shape_bindings(files, 
     reconstructed = FimPreparedOneDModel(prepared.folder)
     with pytest.raises(FimUnsupportedError):
         reconstructed.validate()
+
+
+def test_legacy_receipt_without_optional_crs_provenance_still_validates(files, tmp_path):
+    prepared = RasFim.prepare_one_d_model(*files, tmp_path / "prepared", allow_unqualified=True)
+    receipt = prepared.receipt
+    receipt.pop("crs_provenance")
+    (prepared.folder / "one_d_preparation.json").write_text(json.dumps(receipt))
+    assert FimPreparedOneDModel(prepared.folder).validate()["qualified"] is False
 
 
 def _fake_engine(monkeypatch, tmp_path, mutation=None):

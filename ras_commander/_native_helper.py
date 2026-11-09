@@ -3,12 +3,15 @@
 from __future__ import annotations
 
 import hashlib
+import math
 import os
 import platform
 import shutil
 import subprocess
+import struct
 import tempfile
 import threading
+import xml.etree.ElementTree as ET
 from contextlib import contextmanager
 from importlib import resources
 from importlib.metadata import PackageNotFoundError, version
@@ -19,6 +22,152 @@ from ._gdal_runtime import resolve_hecras_gdal_paths
 from .LoggingConfig import get_logger
 
 logger = get_logger(__name__)
+
+
+def run_boundary_primitive_helper(
+    hecras_dir: Union[str, Path], request: dict, output_folder: Union[str, Path],
+    *, timeout: int = 60, max_rings: int = 10000,
+) -> subprocess.CompletedProcess:
+    """Run bounded synthetic boundary primitives through a pinned native DLL.
+
+    This internal diagnostic accepts ``kind='rings'`` with ordered integer
+    ``rings`` (default 10000, explicit ``max_rings`` up to 50000; always at most
+    500000 vertices) or ``kind='grids'`` with at most four
+    signed sample grids. Each grid has rows/cols (2..33), left/top/dx/dy and
+    row-major ``values``; native nodata is the explicit -9999 sample sentinel.
+    ``kind='terrain_rfi'`` instead reads explicit existing terrain HDF/TIFF and
+    reports up to eight native tile/perimeter bounds and binary64 cell sizes.
+    It runs no hydraulic model and writes only a new output directory. Exact ordered
+    native unit/final integer rings, raw binary streams and loaded DLL identity
+    are retained in primitive-report.xml. This is not full-map qualification.
+    """
+    if _IS_LINUX or platform.system() != "Windows" or _is_wine_helper_runtime():
+        raise ValueError("Boundary primitives currently require native Windows")
+    if _env_flag("RAS_COMMANDER_MAP_HELPER_DISABLE"):
+        raise RuntimeError("RasStoreMapHelper execution is disabled")
+    if isinstance(timeout, bool) or not isinstance(timeout, (int, float)) or not math.isfinite(timeout) or timeout <= 0:
+        raise ValueError("timeout must be finite and positive")
+    if not isinstance(request, dict):
+        raise ValueError("Boundary primitive request must be a dictionary")
+    if isinstance(max_rings, bool) or not isinstance(max_rings, int) or not 1 <= max_rings <= 50000:
+        raise ValueError("max_rings must be an integer from 1 through 50000")
+    kind = request.get("kind")
+    if max_rings != 10000 and kind != "rings":
+        raise ValueError("An explicit nondefault max_rings requires kind=rings")
+    root = ET.Element("boundary-primitives", schema="ras-commander-boundary-primitives/1", kind=str(kind))
+    if kind == "rings":
+        if max_rings != 10000:
+            root.set("max_rings", str(max_rings))
+        if set(request) != {"kind", "rings"}:
+            raise ValueError("Ordered-ring request requires only kind and rings")
+        rings = request["rings"]
+        if not isinstance(rings, (list, tuple)) or len(rings) > max_rings:
+            raise ValueError(f"At most {max_rings} rings are admitted")
+        vertices = 0
+        for points in rings:
+            if not isinstance(points, (list, tuple)) or len(points) < 3:
+                raise ValueError("Each ring requires at least three integer points")
+            vertices += len(points)
+            if vertices > 500000:
+                raise ValueError("At most 500000 ring vertices are admitted")
+            ring = ET.SubElement(root, "ring")
+            for point in points:
+                if not isinstance(point, (list, tuple)) or len(point) != 2 or any(
+                    isinstance(v, bool) or not isinstance(v, int) or abs(v) > 2**50 for v in point
+                ):
+                    raise ValueError("Ring points require bounded Int64 XY coordinates")
+                ET.SubElement(ring, "p", x=str(point[0]), y=str(point[1]))
+    elif kind == "grids":
+        grids = request.get("grids")
+        if set(request) != {"kind", "grids"} or not isinstance(grids, (list, tuple)) or not 1 <= len(grids) <= 4:
+            raise ValueError("Grid requests require one through four grids")
+        for value in grids:
+            if not isinstance(value, dict) or set(value) != {"rows", "cols", "left", "top", "dx", "dy", "values"}:
+                raise ValueError("Grid fields must be rows, cols, left, top, dx, dy, values")
+            rows, cols = value["rows"], value["cols"]
+            if any(isinstance(n, bool) or not isinstance(n, int) or not 2 <= n <= 33 for n in (rows, cols)):
+                raise ValueError("Grid rows and cols must be 2 through 33")
+            for name in ("left", "top", "dx", "dy"):
+                v = value[name]
+                if isinstance(v, bool) or not isinstance(v, (int, float)) or not math.isfinite(v) or abs(v) > 2**40:
+                    raise ValueError("Grid coordinates and steps must be finite and bounded")
+            if value["dx"] <= 0 or value["dy"] >= 0:
+                raise ValueError("Grid requires north-up dx > 0 and dy < 0")
+            values = value["values"]
+            if not isinstance(values, (list, tuple)) or len(values) != rows * cols:
+                raise ValueError("Grid sample count differs from rows*cols")
+            grid = ET.SubElement(root, "grid", **{name: str(value[name]) for name in ("rows", "cols", "left", "top", "dx", "dy")})
+            for sample in values:
+                if isinstance(sample, bool) or not isinstance(sample, (int, float)) or not math.isfinite(sample):
+                    raise ValueError("Grid samples must be finite Float32 values")
+                try:
+                    bits = struct.unpack("<I", struct.pack("<f", sample))[0]
+                except (OverflowError, struct.error) as exc:
+                    raise ValueError("Grid sample exceeds Float32") from exc
+                ET.SubElement(grid, "v", bits=f"{bits:08X}")
+    elif kind == "terrain_rfi":
+        if set(request) != {"kind", "terrain_hdf_path", "terrain_tiff_path", "tile_ids"}:
+            raise ValueError("Terrain RFI requires explicit HDF, TIFF and tile_ids")
+        ids = request["tile_ids"]
+        if (not isinstance(ids, (list, tuple)) or not 1 <= len(ids) <= 8
+                or any(isinstance(v, bool) or not isinstance(v, int) or not 0 <= v < 2**31 for v in ids)
+                or len(set(ids)) != len(ids)):
+            raise ValueError("Terrain RFI requires one through eight unique nonnegative tile IDs")
+        for key in ("terrain_hdf_path", "terrain_tiff_path"):
+            source = Path(request[key]).resolve(strict=True)
+            if not source.is_file():
+                raise ValueError("Terrain RFI inputs must be existing files")
+            root.set(key, str(source))
+        for tile_id in ids:
+            ET.SubElement(root, "tile", id=str(tile_id))
+    else:
+        raise ValueError("Boundary primitive kind must be rings, grids or terrain_rfi")
+    payload = ET.tostring(root, encoding="utf-8", xml_declaration=True)
+    if len(payload) > 32 * 1024**2:
+        raise ValueError("Boundary primitive request exceeds 32 MiB")
+    runtime = Path(hecras_dir).resolve(strict=True)
+    mapper = runtime / "RasMapperLib.dll"
+    def digest(path):
+        hashed = hashlib.sha256()
+        with path.open("rb") as stream:
+            for block in iter(lambda: stream.read(1024 * 1024), b""):
+                hashed.update(block)
+        return hashed.hexdigest()
+    mapper_hash = digest(mapper)
+    output = Path(output_folder).resolve()
+    output.mkdir(parents=True, exist_ok=False)
+    request_path = output / "primitive-request.xml"
+    request_path.write_bytes(payload)
+    temp = output / "native-temp"
+    temp.mkdir()
+    with packaged_helper_executable_path() as packaged:
+        executable = packaged
+        if not _helper_has_sibling_gdal(packaged) and (runtime / "GDAL").is_dir():
+            executable = stage_helper_executable(packaged, stage_dir=os.environ.get("RAS_COMMANDER_MAP_HELPER_STAGE_DIR"), hecras_dir=runtime)
+        env = _hecras_gdal_subprocess_env(runtime)
+        _apply_gdal_performance_env(env, 1, 64)
+        env.update(TEMP=str(temp), TMP=str(temp))
+        result = _run_store_map_process([str(executable), str(runtime), "horizontal", "BoundaryPrimitives", str(request_path), str(output)],
+                                        capture_output=True, text=True, timeout=timeout, cwd=str(output), env=env)
+    (output / "helper.stdout.log").write_text(result.stdout or "", encoding="utf-8")
+    (output / "helper.stderr.log").write_text(result.stderr or "", encoding="utf-8")
+    if digest(mapper) != mapper_hash:
+        raise RuntimeError("Native primitive runtime changed")
+    if result.returncode == 0:
+        report_path = output / "primitive-report.xml"
+        if not report_path.is_file() or report_path.stat().st_size > 32 * 1024**2:
+            raise RuntimeError("Native primitive report missing or exceeds admission")
+        report = ET.parse(report_path).getroot()
+        if (report.tag != "boundary-primitives-report" or report.get("schema") != "ras-commander-boundary-primitives-report/1"
+                or report.get("status") != "completed" or report.get("kind") != kind
+                or report.get("mapper_sha256") != mapper_hash
+                or Path(report.get("mapper_path", "")).resolve() != mapper):
+            raise RuntimeError("Native primitive report identity differs from request")
+        if max_rings != 10000 and report.get("max_rings_effective") != str(max_rings):
+            raise RuntimeError("Native primitive report max_rings readback differs from request")
+        if max_rings != 10000 and report.get("max_report_vertices_effective") != "500000":
+            raise RuntimeError("Native primitive report vertex cap readback differs from request")
+    return result
 
 _NATIVE_PACKAGE = "ras_commander.native"
 _HELPER_EXE_NAME = "RasStoreMapHelper.exe"
@@ -467,6 +616,11 @@ def _apply_gdal_performance_env(
     native_cpu_limit: Optional[int] = None,
 ) -> None:
     """Apply scoped GDAL and native CPU settings to a child environment."""
+    # Polygon controls must never leak from the parent into ordinary raster or
+    # aggregate helper calls. The explicit individual boundary route adds them.
+    env.pop("RAS_COMMANDER_STORE_MAP_POLYGON_SERIAL", None)
+    env.pop("RAS_COMMANDER_STORE_MAP_TERRAIN_HDF", None)
+    env.pop("RAS_COMMANDER_STORE_MAP_JOB_MEMORY_LIMIT_MIB", None)
     if native_cpu_limit is not None and (
         isinstance(native_cpu_limit, bool) or not isinstance(native_cpu_limit, int)
         or not 1 <= native_cpu_limit <= 64
@@ -926,6 +1080,9 @@ def _run_store_map_once(
     gdal_num_threads: Optional[Union[int, str]] = 1,
     gdal_cachemax_mb: Optional[int] = None,
     native_cpu_limit: Optional[int] = None,
+    native_polygon_serial: bool = False,
+    terrain_hdf_path: Optional[Path] = None,
+    native_job_memory_limit_mb: Optional[int] = None,
 ) -> subprocess.CompletedProcess:
     """Run one isolated StoreMap helper process."""
     if _IS_LINUX:
@@ -977,6 +1134,13 @@ def _run_store_map_once(
         native_cpu_limit,
     )
 
+    if native_polygon_serial:
+        env["RAS_COMMANDER_STORE_MAP_POLYGON_SERIAL"] = "1"
+        env["RAS_COMMANDER_STORE_MAP_TERRAIN_HDF"] = str(terrain_hdf_path)
+    if native_job_memory_limit_mb is not None:
+        env["RAS_COMMANDER_STORE_MAP_JOB_MEMORY_LIMIT_MIB"] = str(native_job_memory_limit_mb)
+        _probe_helper_job_memory_limit(helper_path, native_job_memory_limit_mb)
+
     with _wine_helper_single_cpu_affinity():
         result = _run_store_map_process(
             cmd,
@@ -987,6 +1151,14 @@ def _run_store_map_once(
             cwd=str(working_dir) if working_dir else None,
             env=env,
         )
+    if native_job_memory_limit_mb is not None and result.returncode == 0:
+        lines = result.stdout.splitlines()
+        runtime = validate_native_job_memory_runtime(hecras_dir)
+        if (f"NATIVE_JOB_MEMORY_LIMIT_EFFECTIVE_MIB={native_job_memory_limit_mb}" not in lines or
+                "NATIVE_JOB_MEMORY_CHILDREN_EXITED=True" not in lines or
+                f"NATIVE_JOB_MEMORY_UTILITY_CORE_SHA256={runtime['sha256']['Utility.Core.dll']}" not in lines or
+                "NATIVE_JOB_MEMORY_CONTAINMENT_POLICY=direct_create_process_no_shell_no_breakaway" not in lines):
+            raise RuntimeError("Native helper did not verify the requested job memory cap and cleanup")
     return _filter_helper_stderr(result)
 
 
@@ -1085,6 +1257,92 @@ def run_store_all_maps_helper(
             )
 
 
+def _normalize_native_job_memory_limit(value: Optional[int]) -> Optional[int]:
+    if value is not None and (type(value) is not int or not 1 <= value <= 1_048_576):
+        raise ValueError("native_job_memory_limit_mb must be an integer from 1 to 1048576 MiB")
+    return value
+
+
+def validate_native_job_memory_runtime(hecras_dir: Union[str, Path]) -> dict:
+    """Admit only the native launch chains independently reviewed for job inheritance."""
+    expected = {
+        "6.6": {
+            "RasMapperLib.dll": "ffb8eb7ec518f6bfd0f4c5d0e9f889381477270a869d801b02103d7aad18f023",
+            "Utility.Core.dll": "ac5a1aed50c2f3bd52a7ffee62c0b87849d71a7883197908e92b4d2b479f8745",
+            "RasProcess.exe": "dbfcbe0289bcfc80f95efe4a6b6105dee4413d9fbc5bef46fcec339cdb9b3cf0",
+        },
+        "7.0.1": {
+            "RasMapperLib.dll": "8f246aae48a5833288d12568203919693cc15992d750514058467916a203fd7e",
+            "Utility.Core.dll": "a4267f07ca18fef84f5ac6b1c82f5d62ee6f46dd95033e281b61af96d0c0f327",
+            "RasProcess.exe": "accab6ee51e8617f81f0b2ca7a488011d3f3d1eb31a58ab50a9e825c9be3292e",
+        },
+    }
+    root = Path(hecras_dir).resolve(strict=True)
+    actual = {}
+    for name in next(iter(expected.values())):
+        digest = hashlib.sha256()
+        with (root / name).open("rb") as stream:
+            for block in iter(lambda: stream.read(1024 * 1024), b""):
+                digest.update(block)
+        actual[name] = digest.hexdigest()
+    for version, hashes in expected.items():
+        if actual == hashes:
+            return {"version": version, "runtime_path": str(root), "sha256": actual,
+                    "launch_contract": "direct_create_process_no_shell_no_breakaway"}
+    raise ValueError("Job memory cap requires an independently verified HEC-RAS 6.6 or 7.0.1 native launch chain")
+
+
+def _probe_helper_job_memory_limit(helper_path: Path, limit_mib: int, *, timeout: int = 15) -> dict:
+    """Verify this exact binary can enforce an aggregate Windows job commit cap."""
+    if platform.system() != "Windows" or _is_wine_helper_runtime():
+        raise ValueError("native_job_memory_limit_mb requires native Windows")
+    _normalize_native_job_memory_limit(limit_mib)
+    before = hashlib.sha256(helper_path.read_bytes()).hexdigest()
+    env = dict(os.environ)
+    _apply_gdal_performance_env(env, 1, None, None)
+    result = subprocess.run(
+        [str(helper_path), "--Mode", "JobMemoryLimitProbe", "--MemoryLimitMiB", str(limit_mib)],
+        capture_output=True, text=True, timeout=timeout, env=env,
+    )
+    lines = result.stdout.splitlines()
+    expected = (
+        f"NATIVE_JOB_MEMORY_LIMIT_EFFECTIVE_MIB={limit_mib}",
+        "NATIVE_JOB_MEMORY_FLAGS=8704",
+        "NATIVE_JOB_MEMORY_SELF_MEMBER=True",
+        "NATIVE_JOB_MEMORY_CHILDREN_EXITED=True",
+    )
+    after = hashlib.sha256(helper_path.read_bytes()).hexdigest()
+    if result.returncode != 0 or before != after or any(line not in lines for line in expected):
+        raise RuntimeError(
+            "Native helper job memory probe failed before model execution: "
+            f"exit={result.returncode}; stderr={result.stderr[:2000]}; stdout={result.stdout[:2000]}"
+        )
+    return {"helper_sha256": before, "limit_mib": limit_mib,
+            "job_memory_bytes": limit_mib * 1024**2,
+            "limit_kind": "aggregate_private_commit", "stdout": result.stdout}
+
+
+def probe_native_job_memory_limit(native_job_memory_limit_mb: int, *, timeout: int = 15) -> dict:
+    """Preflight the packaged helper without loading HEC-RAS or a model.
+
+    This cap applies to committed memory across the helper and descendants,
+    including native polygon merges. It is not an RSS or file-cache limit.
+    Unsupported binaries, platforms and nested-job configurations fail closed.
+    """
+    limit = _normalize_native_job_memory_limit(native_job_memory_limit_mb)
+    if limit is None:
+        raise ValueError("A job memory limit is required for the probe")
+    with packaged_helper_executable_path() as helper_path:
+        try:
+            return _probe_helper_job_memory_limit(helper_path, limit, timeout=timeout)
+        except OSError:
+            staged = stage_helper_executable(helper_path,
+                stage_dir=os.environ.get("RAS_COMMANDER_MAP_HELPER_STAGE_DIR"))
+            if staged == helper_path:
+                raise
+            return _probe_helper_job_memory_limit(staged, limit, timeout=timeout)
+
+
 def run_store_map_helper(
     hecras_dir: Union[str, Path],
     render_mode: Optional[Union[str, dict]],
@@ -1097,6 +1355,9 @@ def run_store_map_helper(
     gdal_num_threads: Optional[Union[int, str]] = 1,
     gdal_cachemax_mb: Optional[int] = None,
     native_cpu_limit: Optional[int] = None,
+    native_polygon_serial: bool = False,
+    terrain_hdf_path: Optional[Union[str, Path]] = None,
+    native_job_memory_limit_mb: Optional[int] = None,
 ) -> subprocess.CompletedProcess:
     """Generate one stored map in an isolated helper process.
 
@@ -1105,6 +1366,11 @@ def run_store_map_helper(
     bundles GDAL 3.0.2 and nested GDAL threading did not improve StoreMap
     throughput in validation; process-level map parallelism supplies the useful
     concurrency while keeping memory use predictable.
+
+    ``native_polygon_serial=True`` selects a native zero-depth boundary rather
+    than a raster. It requires a Depth map and an explicit existing terrain HDF;
+    the helper verifies the native polygon serialization field before StoreMap.
+    CPU affinity alone does not serialize the native polygon tile loop.
     """
     if _env_flag("RAS_COMMANDER_MAP_HELPER_DISABLE"):
         raise RuntimeError(
@@ -1116,9 +1382,28 @@ def run_store_map_helper(
         raise ValueError("map_type must not be empty")
     if not str(profile_name).strip():
         raise ValueError("profile_name must not be empty")
+    if not isinstance(native_polygon_serial, bool):
+        raise ValueError("native_polygon_serial must be a boolean")
+    native_job_memory_limit_mb = _normalize_native_job_memory_limit(native_job_memory_limit_mb)
+    if native_job_memory_limit_mb is not None and not native_polygon_serial:
+        raise ValueError("native_job_memory_limit_mb requires native_polygon_serial=True")
+    if native_polygon_serial:
+        if str(map_type).lower() not in ("depth", "profilemap:depth"):
+            raise ValueError("native_polygon_serial requires a Depth map")
+        if _IS_LINUX or _is_wine_helper_runtime():
+            raise ValueError("native_polygon_serial currently requires native Windows")
+        if terrain_hdf_path is None:
+            raise ValueError("native_polygon_serial requires terrain_hdf_path")
+        terrain_hdf_path = Path(terrain_hdf_path).resolve(strict=True)
+        if not terrain_hdf_path.is_file():
+            raise ValueError("terrain_hdf_path must be a file")
+    elif terrain_hdf_path is not None:
+        raise ValueError("terrain_hdf_path requires native_polygon_serial=True")
     gdal_num_threads = _normalize_gdal_num_threads(gdal_num_threads)
     gdal_cachemax_mb = _normalize_gdal_cachemax_mb(gdal_cachemax_mb)
     hecras_dir = Path(hecras_dir)
+    if native_job_memory_limit_mb is not None:
+        validate_native_job_memory_runtime(hecras_dir)
     result_hdf_path = Path(result_hdf_path)
     output_base_path = Path(output_base_path) if output_base_path is not None else None
     working_dir = Path(working_dir) if working_dir is not None else None
@@ -1151,7 +1436,11 @@ def run_store_map_helper(
             "gdal_num_threads": gdal_num_threads,
             "gdal_cachemax_mb": gdal_cachemax_mb,
             "native_cpu_limit": native_cpu_limit,
+            "native_polygon_serial": native_polygon_serial,
+            "terrain_hdf_path": terrain_hdf_path,
         }
+        if native_job_memory_limit_mb is not None:
+            run_kwargs["native_job_memory_limit_mb"] = native_job_memory_limit_mb
         try:
             return _run_store_map_once(
                 helper_path=helper_to_run,

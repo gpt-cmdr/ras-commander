@@ -143,7 +143,7 @@ class StoreMapResourceEstimate:
     job_count: int
     terrain: Tuple[TerrainResourceEstimate, ...]
     formula_version: str
-    estimate_source: Literal["heuristic", "override", "floor"]
+    estimate_source: Literal["heuristic", "override", "floor", "native_job_cap"]
     surface_multiplier: float
     fixed_overhead_mb: int
     estimated_gdal_cache_mb: int
@@ -162,10 +162,20 @@ class StoreMapResourceEstimate:
     parallel_eligible: bool
     fallback_reasons: Tuple[str, ...] = ()
     warnings: Tuple[str, ...] = ()
+    estimate_method: Optional[str] = None
+    native_job_memory_limit_mb: Optional[int] = None
+    native_job_memory_limit_bytes: Optional[int] = None
+    memory_measure: Optional[str] = None
+    source_scope: Optional[Dict[str, Any]] = None
+    native_job_preflight: Optional[Dict[str, Any]] = None
 
     def to_dict(self) -> Dict[str, Any]:
         result = asdict(self)
         result["terrain"] = [item.to_dict() for item in self.terrain]
+        for key in ("estimate_method", "native_job_memory_limit_mb", "native_job_memory_limit_bytes",
+                    "memory_measure", "source_scope", "native_job_preflight"):
+            if result[key] is None:
+                result.pop(key)
         return result
 
 

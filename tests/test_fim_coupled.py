@@ -62,6 +62,29 @@ def test_non_epsg_crs_refuses_at_preparation(files, tmp_path, monkeypatch):
     assert not (tmp_path / "prep").exists()
 
 
+@pytest.mark.parametrize("shift", [0, 1.25])
+def test_bound_model_source_infers_projected_epsg_and_retains_binding(files, tmp_path, monkeypatch, shift):
+    import h5py
+    from pyproj import CRS
+    from pyproj.crs import BoundCRS
+    from pyproj.crs.coordinate_operation import ToWGS84Transformation
+    _prep_environment(tmp_path, monkeypatch)
+    projected = CRS.from_epsg(6588)
+    bound = BoundCRS(source_crs=projected, target_crs=CRS.from_epsg(4326),
+        transformation=ToWGS84Transformation(projected.geodetic_crs,
+            x_axis_translation=shift, y_axis_translation=2 * shift, z_axis_translation=3 * shift))
+    with h5py.File(files[0], "a") as hdf:
+        hdf.attrs["Projection"] = bound.to_wkt()
+    prepared = RasFim.prepare_coupled_model(*files, tmp_path / "prep", allow_unqualified=True)
+    receipt = prepared.validate()
+    assert receipt["schema"] == "ras-commander-coupled-preparation/1" and receipt["qualified"] is False
+    assert CRS.from_wkt(receipt["grid"]["crs"]).to_epsg() == 6588
+    provenance = receipt["crs_provenance"]
+    assert provenance["model"]["is_bound"] and not provenance["terrain"]["is_bound"]
+    assert CRS.from_wkt(provenance["model"]["original_wkt"]) == bound
+    assert provenance["model"]["binding_operation"] == CRS.from_wkt(bound.to_wkt()).coordinate_operation.to_json_dict()
+
+
 def test_terrain_identity_probe_timeout_is_forwarded(files, monkeypatch):
     import rasterio
     from subprocess import CompletedProcess
@@ -171,6 +194,25 @@ def test_receipt_binding_and_mesh_hash_coverage(files, tmp_path, monkeypatch):
     (prepared.folder / "two_d/values.bin").write_bytes(b"changed")
     with pytest.raises(FimUnsupportedError, match="changed"):
         prepared.validate()
+
+
+@pytest.mark.parametrize("legacy", [False, True])
+def test_crs_provenance_is_checked_without_breaking_legacy_receipts(files, tmp_path, monkeypatch, legacy):
+    _prep_environment(tmp_path, monkeypatch)
+    prepared = RasFim.prepare_coupled_model(*files, tmp_path / "prep", allow_unqualified=True)
+    receipt = prepared.receipt
+    if legacy:
+        receipt.pop("crs_provenance")
+    else:
+        receipt["crs_provenance"]["model"]["binding_operation"] = {"changed": True}
+    path = prepared.folder / "coupled_preparation.json"
+    path.write_text(json.dumps(receipt))
+    reconstructed = FimPreparedCoupledModel._from_preparation(prepared.folder, _coupled.digest(path))
+    if legacy:
+        assert reconstructed.validate()["qualified"] is False
+    else:
+        with pytest.raises(FimUnsupportedError, match="CRS binding provenance"):
+            reconstructed.validate()
 
 
 @pytest.mark.parametrize("existing", [True, False])
@@ -339,8 +381,9 @@ def test_terrain_identity_checked_once_before_profiles(files, tmp_path, monkeypa
     prepared = RasFim.prepare_coupled_model(*files, tmp_path / "prep", profiles={"a": 0, "b": 1}, allow_unqualified=True)
     renders = _complete_engine(monkeypatch, tmp_path, engine)
     probes = []
-    def identity(*args, timeout=None):
+    def identity(*args, timeout=None, source_crs_identity=False):
         assert not renders, "terrain identity was checked after rendering began"
+        assert source_crs_identity is True
         probes.append(timeout)
         return {"epsg": 6588, "crs_identity": {"kind": "epsg"}}
     monkeypatch.setattr(_engine, "terrain_identity", identity)

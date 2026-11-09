@@ -5,6 +5,11 @@ using System.Xml;
 using System.Linq.Expressions;
 using System.Threading;
 using System.Runtime.ExceptionServices;
+using System.Globalization;
+using System.Security.Cryptography;
+using System.Runtime.InteropServices;
+using System.ComponentModel;
+using System.Diagnostics;
 
 /// <summary>
 /// Headless stored map generator that respects rendering mode.
@@ -25,12 +30,276 @@ class RasStoreMapHelper
 {
     static string _hecrasDir;
     static Assembly _asm;
+    static bool _polygonSerial;
+    static bool _jobMemoryLimited;
     static bool _diagnosticsEnabled;
     static int _diagnosticCount;
     [ThreadStatic] static bool _writingDiagnostic;
     [ThreadStatic] static bool _handlingDiagnosticException;
     const int DiagnosticLimit = 64;
     const int DiagnosticLengthLimit = 16384;
+
+    // This unnamed, non-inheritable handle belongs only to this helper. Children
+    // inherit job membership, never the handle that controls failure cleanup.
+    sealed class MemoryJob
+    {
+        const uint JobMemory = 0x200, KillOnClose = 0x2000, ActiveLimit = 8;
+        IntPtr handle;
+        bool assigned;
+        [StructLayout(LayoutKind.Sequential)]
+        struct BasicLimits
+        {
+            public long ProcessTime, JobTime;
+            public uint Flags;
+            public UIntPtr MinimumWorkingSet, MaximumWorkingSet;
+            public uint ActiveProcesses;
+            public UIntPtr Affinity;
+            public uint Priority, Scheduling;
+        }
+        [StructLayout(LayoutKind.Sequential)]
+        struct IoCounters { public ulong A, B, C, D, E, F; }
+        [StructLayout(LayoutKind.Sequential)]
+        struct ExtendedLimits
+        {
+            public BasicLimits Basic;
+            public IoCounters Io;
+            public UIntPtr ProcessMemory, JobMemory, PeakProcessMemory, PeakJobMemory;
+        }
+        [StructLayout(LayoutKind.Sequential)]
+        struct Accounting
+        {
+            public long UserTime, KernelTime, PeriodUserTime, PeriodKernelTime;
+            public uint PageFaults, TotalProcesses, ActiveProcesses, TerminatedProcesses;
+        }
+        [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+        static extern IntPtr CreateJobObject(IntPtr attributes, string name);
+        [DllImport("kernel32.dll", SetLastError = true)]
+        static extern bool SetInformationJobObject(IntPtr job, int kind, ref ExtendedLimits limits, uint length);
+        [DllImport("kernel32.dll", SetLastError = true)]
+        static extern bool QueryInformationJobObject(IntPtr job, int kind, ref ExtendedLimits limits, uint length, IntPtr returned);
+        [DllImport("kernel32.dll", SetLastError = true)]
+        static extern bool QueryInformationJobObject(IntPtr job, int kind, ref Accounting accounting, uint length, IntPtr returned);
+        [DllImport("kernel32.dll", SetLastError = true)]
+        static extern bool AssignProcessToJobObject(IntPtr job, IntPtr process);
+        [DllImport("kernel32.dll", SetLastError = true)]
+        static extern bool IsProcessInJob(IntPtr process, IntPtr job, out bool member);
+        [DllImport("kernel32.dll", SetLastError = true)]
+        static extern bool CloseHandle(IntPtr handle);
+        [DllImport("kernel32.dll", SetLastError = true)]
+        static extern bool TerminateJobObject(IntPtr job, uint exitCode);
+
+        static void Check(bool success, string operation)
+        {
+            if (!success) throw new Win32Exception(Marshal.GetLastWin32Error(), operation);
+        }
+        ExtendedLimits Limits()
+        {
+            ExtendedLimits limits = new ExtendedLimits();
+            Check(QueryInformationJobObject(handle, 9, ref limits, (uint)Marshal.SizeOf(typeof(ExtendedLimits)), IntPtr.Zero), "Query job memory limits");
+            return limits;
+        }
+        public bool Contains(Process process)
+        {
+            bool member;
+            Check(IsProcessInJob(process.Handle, handle, out member), "Query child job membership");
+            return member;
+        }
+        public MemoryJob(int mib)
+        {
+            if (Environment.OSVersion.Platform != PlatformID.Win32NT || IntPtr.Size != 8)
+                throw new PlatformNotSupportedException("Job memory limit requires 64-bit native Windows");
+            handle = CreateJobObject(IntPtr.Zero, null);
+            if (handle == IntPtr.Zero) throw new Win32Exception(Marshal.GetLastWin32Error(), "Create memory job");
+            try
+            {
+                ExtendedLimits limits = new ExtendedLimits();
+                limits.Basic.Flags = JobMemory | KillOnClose;
+                limits.JobMemory = new UIntPtr(checked((ulong)mib * 1024UL * 1024UL));
+                Check(SetInformationJobObject(handle, 9, ref limits, (uint)Marshal.SizeOf(typeof(ExtendedLimits))), "Set job memory limit");
+                using (Process self = Process.GetCurrentProcess())
+                {
+                    Check(AssignProcessToJobObject(handle, self.Handle), "Assign helper to memory job (nested jobs must be supported)");
+                    assigned = true;
+                    if (!Contains(self)) throw new InvalidOperationException("Helper memory job membership readback failed");
+                }
+                ExtendedLimits actual = Limits();
+                if (actual.JobMemory != limits.JobMemory || actual.Basic.Flags != limits.Basic.Flags)
+                    throw new InvalidOperationException("Memory job limit/flags readback failed");
+                Console.WriteLine("NATIVE_JOB_MEMORY_LIMIT_EFFECTIVE_MIB=" + mib);
+                Console.WriteLine("NATIVE_JOB_MEMORY_FLAGS=" + actual.Basic.Flags);
+                Console.WriteLine("NATIVE_JOB_MEMORY_SELF_MEMBER=True");
+                Console.WriteLine("NATIVE_JOB_MEMORY_CLR=" + Environment.Version);
+            }
+            catch { Close(false); throw; }
+        }
+        public void Close(bool successful)
+        {
+            if (handle == IntPtr.Zero) return;
+            if (assigned)
+            {
+                try { Console.WriteLine("NATIVE_JOB_MEMORY_PEAK_COMMIT_BYTES=" + Limits().PeakJobMemory.ToUInt64().ToString(CultureInfo.InvariantCulture)); }
+                catch (Exception error) { Console.Error.WriteLine("NATIVE_JOB_MEMORY_PEAK_QUERY_FAILED=" + error.Message); }
+            }
+            if (successful && assigned)
+            {
+                Accounting accounting = new Accounting();
+                Stopwatch cleanupWait = Stopwatch.StartNew();
+                do
+                {
+                    Check(QueryInformationJobObject(handle, 1, ref accounting, (uint)Marshal.SizeOf(typeof(Accounting)), IntPtr.Zero), "Query live job processes");
+                    if (accounting.ActiveProcesses == 1) break;
+                    // Process exit can be signaled before job accounting has
+                    // retired the exited child. Never clear kill-on-close early.
+                    Thread.Sleep(10);
+                } while (cleanupWait.ElapsedMilliseconds < 5000);
+                if (accounting.ActiveProcesses != 1)
+                    throw new InvalidOperationException("Cannot complete capped helper while job descendants remain alive");
+                ExtendedLimits limits = Limits();
+                // Prevent a late child spawn before dropping kill-on-close.
+                limits.Basic.Flags |= ActiveLimit;
+                limits.Basic.ActiveProcesses = 1;
+                Check(SetInformationJobObject(handle, 9, ref limits, (uint)Marshal.SizeOf(typeof(ExtendedLimits))), "Seal completed job against new children");
+                limits.Basic.Flags &= ~KillOnClose;
+                Check(SetInformationJobObject(handle, 9, ref limits, (uint)Marshal.SizeOf(typeof(ExtendedLimits))), "Clear completed job kill-on-close");
+                if (Limits().Basic.Flags != limits.Basic.Flags)
+                    throw new InvalidOperationException("Completed job cleanup readback failed");
+                Console.WriteLine("NATIVE_JOB_MEMORY_CHILDREN_EXITED=True");
+            }
+            Console.Out.Flush(); Console.Error.Flush();
+            // Closing a kill-on-close job can report exit0 for its own process.
+            // Preserve an unambiguous failing status while terminating only
+            // this helper's unnamed job (including all its descendants).
+            if (!successful && assigned)
+                Check(TerminateJobObject(handle, 99), "Terminate failed helper memory job");
+            IntPtr closing = handle; handle = IntPtr.Zero;
+            Check(CloseHandle(closing), "Close helper memory job");
+        }
+    }
+
+    static int ParseMemoryMiB(string value)
+    {
+        int result;
+        if (!Int32.TryParse(value, NumberStyles.None, CultureInfo.InvariantCulture, out result) || result < 1 || result > 1048576)
+            throw new ArgumentException("native_job_memory_limit_mb must be an integer from 1 to 1048576 MiB");
+        return result;
+    }
+
+    static string MemoryRuntimeHash(string path)
+    {
+        using (SHA256 hash = SHA256.Create())
+        using (FileStream file = File.OpenRead(path))
+            return BitConverter.ToString(hash.ComputeHash(file)).Replace("-", "").ToLowerInvariant();
+    }
+
+    static void ValidateMemoryRuntime()
+    {
+        string mapper = MemoryRuntimeHash(Path.Combine(_hecrasDir, "RasMapperLib.dll"));
+        string utility = MemoryRuntimeHash(Path.Combine(_hecrasDir, "Utility.Core.dll"));
+        string merge = MemoryRuntimeHash(Path.Combine(_hecrasDir, "RasProcess.exe"));
+        string version;
+        if (mapper == "ffb8eb7ec518f6bfd0f4c5d0e9f889381477270a869d801b02103d7aad18f023" &&
+            utility == "ac5a1aed50c2f3bd52a7ffee62c0b87849d71a7883197908e92b4d2b479f8745" &&
+            merge == "dbfcbe0289bcfc80f95efe4a6b6105dee4413d9fbc5bef46fcec339cdb9b3cf0") version = "6.6";
+        else if (mapper == "8f246aae48a5833288d12568203919693cc15992d750514058467916a203fd7e" &&
+            utility == "a4267f07ca18fef84f5ac6b1c82f5d62ee6f46dd95033e281b61af96d0c0f327" &&
+            merge == "accab6ee51e8617f81f0b2ca7a488011d3f3d1eb31a58ab50a9e825c9be3292e") version = "7.0.1";
+        else throw new InvalidOperationException("Job memory cap requires an independently verified native launch chain");
+        Assembly loaded = Assembly.LoadFrom(Path.Combine(_hecrasDir, "Utility.Core.dll"));
+        if (!String.Equals(Path.GetFullPath(loaded.Location), Path.GetFullPath(Path.Combine(_hecrasDir, "Utility.Core.dll")), StringComparison.OrdinalIgnoreCase) ||
+            MemoryRuntimeHash(loaded.Location) != utility)
+            throw new InvalidOperationException("Loaded Utility.Core does not match the admitted memory containment runtime");
+        Console.WriteLine("NATIVE_JOB_MEMORY_RUNTIME_VERSION=" + version);
+        Console.WriteLine("NATIVE_JOB_MEMORY_UTILITY_CORE_SHA256=" + utility);
+        Console.WriteLine("NATIVE_JOB_MEMORY_MAPPER_SHA256=" + mapper);
+        Console.WriteLine("NATIVE_JOB_MEMORY_MERGE_SHA256=" + merge);
+        Console.WriteLine("NATIVE_JOB_MEMORY_CONTAINMENT_POLICY=direct_create_process_no_shell_no_breakaway");
+    }
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    static extern IntPtr VirtualAlloc(IntPtr address, UIntPtr bytes, uint allocation, uint protection);
+    [DllImport("kernel32.dll", SetLastError = true)]
+    static extern bool VirtualFree(IntPtr address, UIntPtr bytes, uint freeType);
+
+    static int MemoryProbeChild(string scenario, int mib)
+    {
+        if (mib < 96 || mib > 256 || (scenario != "Sleep" && scenario != "Allocate"))
+            throw new ArgumentException("Synthetic child probes are bounded to 96..256 MiB");
+        Console.WriteLine("NATIVE_JOB_MEMORY_CHILD_PID=" + Process.GetCurrentProcess().Id);
+        Console.Out.Flush();
+        if (scenario == "Sleep") { Thread.Sleep(120000); return 0; }
+        var blocks = new System.Collections.Generic.List<IntPtr>();
+        try
+        {
+            for (int i = 0; i <= mib / 4; i++)
+            {
+                IntPtr block = VirtualAlloc(IntPtr.Zero, new UIntPtr(4U * 1024U * 1024U), 0x3000, 4);
+                if (block == IntPtr.Zero)
+                {
+                    Console.WriteLine("NATIVE_JOB_MEMORY_ALLOCATION_REFUSED=True");
+                    Console.WriteLine("NATIVE_JOB_MEMORY_CHILD_COMMITTED_MIB=" + (blocks.Count * 4));
+                    return 0;
+                }
+                blocks.Add(block);
+            }
+            return 6;
+        }
+        finally { foreach (IntPtr block in blocks) VirtualFree(block, UIntPtr.Zero, 0x8000); }
+    }
+
+    static int RunMemoryProbe(string[] args, MemoryJob job, int mib)
+    {
+        foreach (Assembly assembly in AppDomain.CurrentDomain.GetAssemblies())
+            if (assembly.GetName().Name == "RasMapperLib")
+                throw new InvalidOperationException("Job memory probe must not load HEC-RAS");
+        Console.WriteLine("NATIVE_JOB_MEMORY_HEC_ASSEMBLIES_LOADED=False");
+        Console.WriteLine("NATIVE_JOB_MEMORY_CLR_ASSEMBLY=" + typeof(object).Assembly.Location);
+        if (args.Length != 4 && (args.Length != 6 || args[4] != "--ProbeScenario"))
+            throw new ArgumentException("Invalid memory probe arguments");
+        string scenario = args.Length == 6 && args[4] == "--ProbeScenario" ? args[5] : "Readback";
+        if (scenario == "Readback") return 0;
+        if (scenario == "Nested")
+        {
+            MemoryJob nested = new MemoryJob(mib);
+            try { Console.WriteLine("NATIVE_JOB_MEMORY_NESTED=True"); }
+            finally { nested.Close(true); }
+            return 0;
+        }
+        if (scenario != "Aggregate" && scenario != "ChildOnly" && scenario != "Timeout" && scenario != "Failure")
+            throw new ArgumentException("Unknown memory probe scenario");
+        if (mib < 96 || mib > 256)
+            throw new ArgumentException("Synthetic allocating probes are bounded to 96..256 MiB");
+        IntPtr parentBlock = IntPtr.Zero;
+        try
+        {
+            if (scenario == "Aggregate")
+            {
+                parentBlock = VirtualAlloc(IntPtr.Zero, new UIntPtr(16U * 1024U * 1024U), 0x3000, 4);
+                if (parentBlock == IntPtr.Zero) throw new InvalidOperationException("Probe parent commitment refused");
+                Console.WriteLine("NATIVE_JOB_MEMORY_PARENT_COMMITTED_MIB=16");
+            }
+            ProcessStartInfo info = new ProcessStartInfo(Assembly.GetExecutingAssembly().Location,
+                "--Mode JobMemoryLimitChild " + (scenario == "Aggregate" || scenario == "ChildOnly" ? "Allocate" : "Sleep") + " " + mib);
+            info.UseShellExecute = false; info.CreateNoWindow = true;
+            info.RedirectStandardOutput = true; info.RedirectStandardError = true;
+            using (Process child = Process.Start(info))
+            {
+                if (!job.Contains(child)) throw new InvalidOperationException("Probe child escaped memory job");
+                Console.WriteLine("NATIVE_JOB_MEMORY_CHILD_MEMBER=True");
+                Console.WriteLine("NATIVE_JOB_MEMORY_PROBE_CHILD_PID=" + child.Id);
+                Console.Out.Flush();
+                if (scenario == "Timeout") { Thread.Sleep(120000); return 7; }
+                if (scenario == "Failure") return 5;
+                string output = child.StandardOutput.ReadToEnd();
+                string error = child.StandardError.ReadToEnd();
+                if (!child.WaitForExit(10000)) throw new TimeoutException("Memory probe child did not exit");
+                Console.Write(output); Console.Error.Write(error);
+                if (child.ExitCode != 0 || output.IndexOf("NATIVE_JOB_MEMORY_ALLOCATION_REFUSED=True", StringComparison.Ordinal) < 0)
+                    throw new InvalidOperationException("Aggregate memory refusal not observed");
+            }
+            return 0;
+        }
+        finally { if (parentBlock != IntPtr.Zero) VirtualFree(parentBlock, UIntPtr.Zero, 0x8000); }
+    }
 
     static void WriteDiagnostic(string label, string text)
     {
@@ -116,6 +385,45 @@ class RasStoreMapHelper
 
     static int Main(string[] args)
     {
+        if (args.Length == 4 && args[0] == "--Mode" && args[1] == "JobMemoryLimitChild")
+            return MemoryProbeChild(args[2], ParseMemoryMiB(args[3]));
+        MemoryJob memoryJob = null;
+        int result = 99;
+        try
+        {
+            bool probe = args.Length >= 4 && args[0] == "--Mode" && args[1] == "JobMemoryLimitProbe" && args[2] == "--MemoryLimitMiB";
+            string cap = probe ? args[3] : Environment.GetEnvironmentVariable("RAS_COMMANDER_STORE_MAP_JOB_MEMORY_LIMIT_MIB");
+            if (!String.IsNullOrEmpty(cap))
+            {
+                if (!probe && (Environment.GetEnvironmentVariable("RAS_COMMANDER_STORE_MAP_POLYGON_SERIAL") != "1" ||
+                    args.Length < 6 || args[2] != "StoreMap" ||
+                    (!String.Equals(args[3], "Depth", StringComparison.OrdinalIgnoreCase) && !String.Equals(args[3], "ProfileMap:depth", StringComparison.OrdinalIgnoreCase))))
+                    throw new ArgumentException("Memory cap requires an individual serial Depth boundary");
+                int mib = ParseMemoryMiB(cap);
+                memoryJob = new MemoryJob(mib);
+                if (probe) { result = RunMemoryProbe(args, memoryJob, mib); return result; }
+                _jobMemoryLimited = true;
+            }
+            result = RunWithDiagnostics(args);
+            return result;
+        }
+        catch (Exception error) { return HandleException(error); }
+        finally
+        {
+            if (memoryJob != null)
+            {
+                try { memoryJob.Close(result == 0); }
+                catch (Exception error)
+                {
+                    Console.Error.WriteLine("ERROR closing memory job: " + error.Message);
+                    memoryJob.Close(false);
+                }
+            }
+        }
+    }
+
+    static int RunWithDiagnostics(string[] args)
+    {
         string diagnosticSetting = Environment.GetEnvironmentVariable("RAS_COMMANDER_STORE_MAP_DIAGNOSTICS");
         _diagnosticsEnabled = diagnosticSetting == "1" ||
             String.Equals(diagnosticSetting, "true", StringComparison.OrdinalIgnoreCase);
@@ -141,6 +449,27 @@ class RasStoreMapHelper
         }
 
         if (!ConfigureNativeCpuLimit()) return 2;
+
+        string polygonSetting = Environment.GetEnvironmentVariable("RAS_COMMANDER_STORE_MAP_POLYGON_SERIAL");
+        if (!String.IsNullOrEmpty(polygonSetting) && polygonSetting != "0" && polygonSetting != "1")
+        {
+            Console.Error.WriteLine("ERROR: native_polygon_serial must be 0 or 1");
+            return 2;
+        }
+        _polygonSerial = polygonSetting == "1";
+        if (_polygonSerial && (args[2] != "StoreMap" || args.Length < 6 ||
+            (!String.Equals(args[3], "Depth", StringComparison.OrdinalIgnoreCase) &&
+             !String.Equals(args[3], "ProfileMap:depth", StringComparison.OrdinalIgnoreCase))))
+        {
+            Console.Error.WriteLine("ERROR: native_polygon_serial requires an individual Depth StoreMap");
+            return 2;
+        }
+        string explicitTerrain = Environment.GetEnvironmentVariable("RAS_COMMANDER_STORE_MAP_TERRAIN_HDF");
+        if (_polygonSerial && (String.IsNullOrEmpty(explicitTerrain) || !File.Exists(explicitTerrain)))
+        {
+            Console.Error.WriteLine("ERROR: native_polygon_serial requires an explicit existing terrain HDF");
+            return 2;
+        }
 
         _hecrasDir = args[0];
         string renderMode = args[1].ToLowerInvariant();
@@ -168,7 +497,12 @@ class RasStoreMapHelper
 
         try
         {
+            if (_jobMemoryLimited) ValidateMemoryRuntime();
             _asm = Assembly.LoadFrom(asmPath);
+            if (_jobMemoryLimited &&
+                (!String.Equals(Path.GetFullPath(_asm.Location), Path.GetFullPath(asmPath), StringComparison.OrdinalIgnoreCase) ||
+                 MemoryRuntimeHash(_asm.Location) != MemoryRuntimeHash(asmPath)))
+                throw new InvalidOperationException("Loaded mapper differs from admitted memory containment runtime");
         }
         catch (Exception ex)
         {
@@ -178,6 +512,16 @@ class RasStoreMapHelper
 
         Console.WriteLine("HEC-RAS dir: " + _hecrasDir);
         Console.WriteLine("Render mode: " + renderMode);
+
+        if (args[2] == "BoundaryPrimitives")
+        {
+            if (args.Length != 5)
+            {
+                Console.Error.WriteLine("ERROR: BoundaryPrimitives requires request XML and output directory");
+                return 1;
+            }
+            return RunBoundaryPrimitives(args[3], args[4]);
+        }
 
         // Set render mode
         int modeResult = SetRenderMode(renderMode);
@@ -495,6 +839,17 @@ class RasStoreMapHelper
                 return 6;
             }
 
+            if (_polygonSerial)
+            {
+                PropertyInfo terrainProperty = cmdType.GetProperty("Terrain");
+                if (terrainProperty == null || !terrainProperty.CanWrite)
+                    throw new Exception("StoreMapCommand.Terrain is unavailable");
+                string terrainPath = Path.GetFullPath(Environment.GetEnvironmentVariable("RAS_COMMANDER_STORE_MAP_TERRAIN_HDF"));
+                terrainProperty.SetValue(cmd, terrainPath, null);
+                if (!String.Equals((string)terrainProperty.GetValue(cmd, null), terrainPath, StringComparison.Ordinal))
+                    throw new Exception("StoreMapCommand.Terrain readback differs from request");
+            }
+
             Console.WriteLine("Executing StoreMap...");
             string outputFile;
             bool success = ExecuteStoreMapHeadless(cmdType, cmd, out outputFile);
@@ -694,17 +1049,7 @@ class RasStoreMapHelper
             if (terrainType == null)
                 throw new Exception("TerrainLayer type not found");
 
-            ConstructorInfo terrainCtor = terrainType.GetConstructor(
-                new Type[] { typeof(string), typeof(string) }
-            );
-            if (terrainCtor == null)
-                throw new Exception(
-                    "TerrainLayer(string, string) constructor not found"
-                );
-
-            terrainLayer = terrainCtor.Invoke(
-                new object[] { "Terrain", terrainFilename }
-            );
+            terrainLayer = CreateTerrainLayer(terrainType, terrainFilename);
 
             MethodInfo setTerrainTemporary = geometry.GetType().GetMethod(
                 "SetTerrainTemporary"
@@ -716,6 +1061,14 @@ class RasStoreMapHelper
 
         if (terrainLayer == null)
             throw new Exception("Terrain is undefined or unavailable.");
+        if (_polygonSerial)
+        {
+            PropertyInfo terrainSource = terrainLayer.GetType().GetProperty("SourceFilename");
+            string actualTerrain = terrainSource == null ? null : terrainSource.GetValue(terrainLayer, null) as string;
+            if (String.IsNullOrEmpty(actualTerrain) || !String.Equals(Path.GetFullPath(actualTerrain), Path.GetFullPath(terrainFilename), StringComparison.OrdinalIgnoreCase))
+                throw new Exception("Native boundary terrain source differs from the explicit terrain HDF");
+            terrainFilename = actualTerrain;
+        }
 
         MethodInfo allSourceFilesExist = terrainLayer.GetType().GetMethod(
             "AllSourceFilesExist"
@@ -745,19 +1098,37 @@ class RasStoreMapHelper
         if (outputModeProp == null)
             throw new Exception("RASResultsMap.OutputMode property not found");
 
+        string outputModeName = _polygonSerial ? "StoredPolygonSpecifiedDepth" : "StoredDefaultTerrain";
         object storedDefaultTerrain = GetStaticMemberValue(
             outputModeProp.PropertyType,
-            "StoredDefaultTerrain"
+            outputModeName
         );
         if (storedDefaultTerrain == null)
-            throw new Exception("OutputModes.StoredDefaultTerrain not found");
+            throw new Exception("OutputModes." + outputModeName + " not found");
 
         outputModeProp.SetValue(resultsMap, storedDefaultTerrain, null);
+        if (_polygonSerial)
+        {
+            if (!Object.Equals(outputModeProp.GetValue(resultsMap, null), storedDefaultTerrain))
+                throw new Exception("Native boundary output mode readback differs from request");
+            ConfigurePolygonSerial(resultsMap, rasResultsMapType);
+            Console.WriteLine("NATIVE_POLYGON_TERRAIN=" + Path.GetFullPath(terrainFilename));
+            Console.WriteLine("NATIVE_POLYGON_OUTPUT_MODE=StoredPolygonSpecifiedDepth");
+            Console.WriteLine("NATIVE_POLYGON_MAPPER_ASSEMBLY=" + _asm.Location);
+            Console.WriteLine("NATIVE_POLYGON_MAPPER_VERSION=" + _asm.GetName().Version);
+        }
 
         MethodInfo trySetProfile = rasResultsMapType.GetMethod("TrySetProfile");
         if (trySetProfile == null)
             throw new Exception("RASResultsMap.TrySetProfile not found");
         trySetProfile.Invoke(resultsMap, new object[] { profileName });
+        if (_polygonSerial)
+        {
+            PropertyInfo profileIndex = rasResultsMapType.GetProperty("ProfileIndex");
+            if (profileIndex == null || (int)profileIndex.GetValue(resultsMap, null) == -1)
+                throw new Exception("Native boundary profile selection failed");
+            Console.WriteLine("NATIVE_POLYGON_PROFILE_INDEX=" + profileIndex.GetValue(resultsMap, null));
+        }
 
         if (!string.IsNullOrEmpty(outputBaseFilename))
         {
@@ -790,9 +1161,19 @@ class RasStoreMapHelper
                 new object[] { null, false }
             );
 
-            PropertyInfo vrtProp = rasResultsMapType.GetProperty("VRTFilename");
+            PropertyInfo vrtProp = rasResultsMapType.GetProperty(_polygonSerial ? "SHPFilename" : "VRTFilename");
             if (vrtProp != null)
                 outputFile = (string)vrtProp.GetValue(resultsMap, null) ?? "";
+            if (_polygonSerial && success)
+            {
+                if (String.IsNullOrEmpty(outputFile) || !String.Equals(Path.GetExtension(outputFile), ".shp", StringComparison.OrdinalIgnoreCase))
+                    throw new Exception("Native boundary did not report a shapefile output");
+                foreach (string extension in new string[] { ".shp", ".shx", ".dbf", ".prj" })
+                {
+                    if (!File.Exists(Path.ChangeExtension(outputFile, extension)))
+                        throw new Exception("Native boundary output is missing " + extension);
+                }
+            }
 
             return success;
         }
@@ -801,6 +1182,304 @@ class RasStoreMapHelper
             if (srsHelper != null)
                 srsHelper.Dispose();
         }
+    }
+
+    static int RunBoundaryPrimitives(string requestPath, string outputDirectory)
+    {
+        try
+        {
+            if (new FileInfo(requestPath).Length > 32 * 1024 * 1024)
+                throw new Exception("Boundary primitive request exceeds 32 MiB");
+            XmlReaderSettings settings = new XmlReaderSettings();
+            settings.DtdProcessing = DtdProcessing.Prohibit;
+            settings.XmlResolver = null;
+            settings.MaxCharactersInDocument = 32 * 1024 * 1024;
+            XmlDocument request = new XmlDocument();
+            request.XmlResolver = null;
+            using (XmlReader reader = XmlReader.Create(requestPath, settings)) request.Load(reader);
+            XmlElement root = request.DocumentElement;
+            if (root.Name != "boundary-primitives" || root.GetAttribute("schema") != "ras-commander-boundary-primitives/1")
+                throw new Exception("Invalid boundary primitive request schema");
+            if (!Directory.Exists(outputDirectory)) throw new Exception("Boundary primitive output directory is missing");
+            string combined = Path.Combine(outputDirectory, "combined.xy");
+            Type contourType = _asm.GetType("RasMapperLib.ContourBandRaster", true);
+            MethodInfo merge = contourType.GetMethod("ExternalProcessMerge", BindingFlags.Static | BindingFlags.Public);
+            if (merge == null) throw new Exception("Native ExternalProcessMerge is unavailable");
+            XmlDocument report = new XmlDocument();
+            XmlElement receipt = report.CreateElement("boundary-primitives-report");
+            receipt.SetAttribute("schema", "ras-commander-boundary-primitives-report/1");
+            receipt.SetAttribute("kind", root.GetAttribute("kind"));
+            receipt.SetAttribute("appdomain_target_framework", AppDomain.CurrentDomain.SetupInformation.TargetFrameworkName ?? "unspecified");
+            Type compatibility = typeof(object).Assembly.GetType("System.Runtime.Versioning.BinaryCompatibility");
+            PropertyInfo targets45 = compatibility == null ? null : compatibility.GetProperty("TargetsAtLeast_Desktop_V4_5", BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic);
+            receipt.SetAttribute("targets_at_least_desktop45", targets45 == null ? "unavailable" : Convert.ToString(targets45.GetValue(null, null), CultureInfo.InvariantCulture));
+            receipt.SetAttribute("mapper_path", _asm.Location);
+            receipt.SetAttribute("mapper_assembly_version", _asm.GetName().Version.ToString());
+            using (SHA256 hash = SHA256.Create())
+            using (FileStream assembly = File.OpenRead(_asm.Location))
+                receipt.SetAttribute("mapper_sha256", BitConverter.ToString(hash.ComputeHash(assembly)).Replace("-", "").ToLowerInvariant());
+            MethodInfo addNativePath = contourType.GetMethod("AddLongPointsToClipper", BindingFlags.Static | BindingFlags.NonPublic);
+            if (addNativePath == null) throw new Exception("Native clipping backend parameter is unavailable");
+            Assembly backend = addNativePath.GetParameters()[0].ParameterType.Assembly;
+            receipt.SetAttribute("clipper_path", backend.Location);
+            receipt.SetAttribute("clipper_assembly_version", backend.GetName().Version.ToString());
+            using (SHA256 hash = SHA256.Create())
+            using (FileStream assembly = File.OpenRead(backend.Location))
+                receipt.SetAttribute("clipper_sha256", BitConverter.ToString(hash.ComputeHash(assembly)).Replace("-", "").ToLowerInvariant());
+            report.AppendChild(receipt);
+            XmlElement units = report.CreateElement("units");
+            receipt.AppendChild(units);
+            string kind = root.GetAttribute("kind");
+            int maxRings = 10000;
+            bool explicitRingLimit = root.HasAttribute("max_rings");
+            if (explicitRingLimit)
+            {
+                if (kind != "rings" || !Int32.TryParse(root.GetAttribute("max_rings"), NumberStyles.None,
+                    CultureInfo.InvariantCulture, out maxRings) || maxRings < 1 || maxRings > 50000)
+                    throw new Exception("Primitive max_rings must be an integer from 1 through 50000 for rings");
+                receipt.SetAttribute("max_rings_effective", maxRings.ToString(CultureInfo.InvariantCulture));
+                receipt.SetAttribute("max_report_vertices_effective", "500000");
+                Console.WriteLine("BOUNDARY_PRIMITIVE_MAX_RINGS_EFFECTIVE=" + maxRings.ToString(CultureInfo.InvariantCulture));
+            }
+            if (kind == "terrain_rfi")
+            {
+                WriteTerrainRfi(root, report, receipt);
+            }
+            else if (kind == "rings")
+            {
+                XmlNodeList rings = root.SelectNodes("ring");
+                if (rings.Count > maxRings) throw new Exception("Boundary primitive ring count exceeds " + maxRings.ToString(CultureInfo.InvariantCulture));
+                int total = 0;
+                using (BinaryWriter writer = new BinaryWriter(File.Open(combined, FileMode.CreateNew)))
+                {
+                    foreach (XmlNode ring in rings)
+                    {
+                        XmlNodeList points = ring.SelectNodes("p");
+                        total = checked(total + points.Count);
+                        if (points.Count < 3 || total > 500000) throw new Exception("Invalid boundary primitive vertex count");
+                        writer.Write(points.Count);
+                        foreach (XmlNode point in points)
+                        {
+                            long x = Int64.Parse(point.Attributes["x"].Value, CultureInfo.InvariantCulture);
+                            long y = Int64.Parse(point.Attributes["y"].Value, CultureInfo.InvariantCulture);
+                            if (Math.Abs((double)x) > (1L << 50) || Math.Abs((double)y) > (1L << 50)) throw new Exception("Primitive coordinate exceeds range");
+                            writer.Write(x); writer.Write(y);
+                        }
+                    }
+                }
+                AddPrimitiveRings(report, units, combined, "0", explicitRingLimit ? 500000 : 131072);
+            }
+            else if (kind == "grids")
+            {
+                XmlNodeList grids = root.SelectNodes("grid");
+                if (grids.Count < 1 || grids.Count > 4) throw new Exception("Boundary primitive grid count must be 1 through 4");
+                Type rasterType = _asm.GetType("RasMapperLib.RasterM", true);
+                MethodInfo contourRaster = contourType.GetMethod("ContourRaster", new Type[] { rasterType, typeof(float[]) });
+                MethodInfo close = contourType.GetMethod("CloseBinaryWriters", BindingFlags.Instance | BindingFlags.NonPublic);
+                FieldInfo filenames = contourType.GetField("_bandXYFilename", BindingFlags.Instance | BindingFlags.NonPublic);
+                if (contourRaster == null || close == null || filenames == null) throw new Exception("Native primitive contour members are unavailable");
+                using (FileStream destination = File.Open(combined, FileMode.CreateNew))
+                {
+                    for (int index = 0; index < grids.Count; index++)
+                    {
+                        XmlElement grid = (XmlElement)grids[index];
+                        int rows = Int32.Parse(grid.GetAttribute("rows"), CultureInfo.InvariantCulture);
+                        int cols = Int32.Parse(grid.GetAttribute("cols"), CultureInfo.InvariantCulture);
+                        if (rows < 2 || cols < 2 || rows > 33 || cols > 33) throw new Exception("Primitive grid must be 2 through 33 rows/columns");
+                        double left = PrimitiveDouble(grid, "left"), top = PrimitiveDouble(grid, "top");
+                        double dx = PrimitiveDouble(grid, "dx"), dy = PrimitiveDouble(grid, "dy");
+                        if (dx <= 0 || dy >= 0) throw new Exception("Primitive grid must be north-up");
+                        XmlNodeList samples = grid.SelectNodes("v");
+                        if (samples.Count != rows * cols) throw new Exception("Primitive grid sample count differs");
+                        float[] values = new float[samples.Count];
+                        for (int n = 0; n < values.Length; n++)
+                        {
+                            uint bits = UInt32.Parse(samples[n].Attributes["bits"].Value, NumberStyles.HexNumber, CultureInfo.InvariantCulture);
+                            values[n] = BitConverter.ToSingle(BitConverter.GetBytes(bits), 0);
+                            if (Single.IsNaN(values[n]) || Single.IsInfinity(values[n])) throw new Exception("Nonfinite primitive sample");
+                        }
+                        object raster = Activator.CreateInstance(rasterType, new object[] { rows, cols, left + cols * dx, left, top, top + rows * dy });
+                        object contour = Activator.CreateInstance(contourType, new object[] { Path.Combine(outputDirectory, "unit-" + index + ".shp"), 0f, Single.MaxValue });
+                        try { contourRaster.Invoke(contour, new object[] { raster, values }); }
+                        finally { close.Invoke(contour, null); }
+                        string nativeFile = ((string[])filenames.GetValue(contour))[0];
+                        string retained = Path.Combine(outputDirectory, "unit-" + index.ToString("D4") + ".xy");
+                        File.Copy(nativeFile, retained, false);
+                        using (FileStream unit = File.OpenRead(retained)) unit.CopyTo(destination);
+                        AddPrimitiveRings(report, units, retained, index.ToString(CultureInfo.InvariantCulture));
+                    }
+                }
+            }
+            else throw new Exception("Unknown boundary primitive kind");
+            if (kind != "terrain_rfi")
+            {
+                merge.Invoke(null, new object[] { combined });
+                XmlElement final = report.CreateElement("final");
+                receipt.AppendChild(final);
+                AddPrimitiveRings(report, final, combined + ".out", "0", explicitRingLimit ? 500000 : 131072);
+            }
+            receipt.SetAttribute("status", "completed");
+            string reportPath = Path.Combine(outputDirectory, "primitive-report.xml");
+            report.Save(reportPath);
+            Console.WriteLine("RESULT_SUCCESS=True");
+            Console.WriteLine("RESULT_FILE=" + reportPath);
+            return 0;
+        }
+        catch (Exception exception)
+        {
+            Console.Error.WriteLine("ERROR: boundary primitive: " + exception);
+            return 99;
+        }
+    }
+
+    static object PrimitiveMember(object target, string name)
+    {
+        Type type = target.GetType();
+        FieldInfo field = type.GetField(name);
+        return field != null ? field.GetValue(target) : type.GetProperty(name).GetValue(target, null);
+    }
+
+    static void PrimitiveRaster(XmlDocument report, XmlElement parent, string name, object raster)
+    {
+        XmlElement node = report.CreateElement(name); parent.AppendChild(node);
+        foreach (string key in new string[] { "Rows", "Cols", "MinX", "MaxX", "MinY", "MaxY", "CellSize" })
+        {
+            object value = PrimitiveMember(raster, key);
+            node.SetAttribute(key, Convert.ToString(value, CultureInfo.InvariantCulture));
+            if (value is double) node.SetAttribute(key + "_bits", BitConverter.DoubleToInt64Bits((double)value).ToString("X16"));
+        }
+    }
+
+    // Read existing HDF/TIFF only; deliberately bypass TerrainLayer's VRT creation.
+    static void WriteTerrainRfi(XmlElement request, XmlDocument report, XmlElement receipt)
+    {
+        if (SetRenderMode("horizontal") != 0) throw new Exception("Native RFI GDAL initialization failed");
+        string hdf = Path.GetFullPath(request.GetAttribute("terrain_hdf_path"));
+        string tiff = Path.GetFullPath(request.GetAttribute("terrain_tiff_path"));
+        if (!File.Exists(hdf) || !File.Exists(tiff)) throw new Exception("RFI source files must exist");
+        XmlNodeList tiles = request.SelectNodes("tile");
+        if (tiles.Count < 1 || tiles.Count > 8) throw new Exception("RFI tile count must be one through eight");
+        Type rfiType = _asm.GetType("RasMapperLib.Terrain.RasterFileInfo", true);
+        ConstructorInfo[] rfiConstructors = rfiType.GetConstructors();
+        if (rfiConstructors.Length != 1) throw new Exception("RFI constructor contract differs");
+        ConstructorInfo constructor = rfiConstructors[0];
+        Type readerType = constructor.GetParameters()[0].ParameterType;
+        object reader = null;
+        foreach (ConstructorInfo candidate in readerType.GetConstructors())
+        {
+            ParameterInfo[] parameters = candidate.GetParameters();
+            if (parameters.Length == 0 || parameters[0].ParameterType != typeof(string)) continue;
+            object[] args = new object[parameters.Length]; args[0] = hdf; bool admitted = true;
+            for (int i = 1; i < args.Length; i++) { admitted &= parameters[i].IsOptional; args[i] = parameters[i].DefaultValue; }
+            if (admitted) { reader = candidate.Invoke(args); break; }
+        }
+        if (reader == null) throw new Exception("Read-only H5Reader filename constructor unavailable");
+        try
+        {
+            object groups = readerType.InvokeMember("GetGroupNames", BindingFlags.Public | BindingFlags.Instance | BindingFlags.InvokeMethod | BindingFlags.OptionalParamBinding,
+                null, reader, new object[] { "Terrain" }, CultureInfo.InvariantCulture);
+            object selected = null;
+            foreach (object group in (System.Collections.IEnumerable)groups)
+            {
+                object rfi = constructor.Invoke(new object[] { reader, Path.GetDirectoryName(hdf), Path.GetFileNameWithoutExtension(hdf), group.ToString() });
+                if (String.Equals(Path.GetFullPath((string)PrimitiveMember(rfi, "Filename")), tiff, StringComparison.OrdinalIgnoreCase))
+                { if (selected != null) throw new Exception("Duplicate RFI source"); selected = rfi; }
+            }
+            if (selected == null) throw new Exception("Explicit TIFF is absent from terrain HDF");
+            receipt.SetAttribute("terrain_hdf_path", hdf); receipt.SetAttribute("terrain_tiff_path", tiff);
+            PrimitiveRaster(report, receipt, "rfi_extent", Activator.CreateInstance(_asm.GetType("RasMapperLib.RasterM", true),
+                new object[] { (int)PrimitiveMember(selected, "Rows"), (int)PrimitiveMember(selected, "Cols"), PrimitiveMember(PrimitiveMember(selected,"Extent"),"MaxX"),
+                    PrimitiveMember(PrimitiveMember(selected,"Extent"),"MinX"), PrimitiveMember(PrimitiveMember(selected,"Extent"),"MaxY"), PrimitiveMember(PrimitiveMember(selected,"Extent"),"MinY") }));
+            object coarse = ((Array)PrimitiveMember(selected, "TileRasters")).GetValue(0);
+            int tileSize = (int)((Array)PrimitiveMember(selected, "TileSize")).GetValue(0);
+            PrimitiveRaster(report, receipt, "tile_index_raster", coarse);
+            foreach (XmlElement tile in tiles)
+            {
+                int index = Int32.Parse(tile.GetAttribute("id"), CultureInfo.InvariantCulture);
+                if (index < 0 || index >= checked((int)PrimitiveMember(coarse,"Rows") * (int)PrimitiveMember(coarse,"Cols"))) throw new Exception("RFI tile ID out of range");
+                XmlElement node = report.CreateElement("tile"); node.SetAttribute("id", index.ToString(CultureInfo.InvariantCulture)); receipt.AppendChild(node);
+                object raster = coarse.GetType().GetMethod("GetCellRasterM").Invoke(coarse, new object[] { index, tileSize });
+                PrimitiveRaster(report, node, "source", raster);
+                PrimitiveRaster(report, node, "extended", raster.GetType().GetMethod("ExtendRaster").Invoke(raster, new object[] { 0, 1, 0, 1 }));
+            }
+        }
+        finally { ((IDisposable)reader).Dispose(); }
+        foreach (System.Diagnostics.ProcessModule module in System.Diagnostics.Process.GetCurrentProcess().Modules)
+        {
+            if (!module.FileName.StartsWith(_hecrasDir + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase)
+                && module.ModuleName.IndexOf("gdal", StringComparison.OrdinalIgnoreCase) < 0) continue;
+            XmlElement node = report.CreateElement("loaded_module"); node.SetAttribute("path", module.FileName);
+            using (SHA256 hash = SHA256.Create()) using (FileStream file = File.OpenRead(module.FileName))
+                node.SetAttribute("sha256", BitConverter.ToString(hash.ComputeHash(file)).Replace("-", "").ToLowerInvariant());
+            receipt.AppendChild(node);
+        }
+    }
+
+    static double PrimitiveDouble(XmlElement node, string name)
+    {
+        double value = Double.Parse(node.GetAttribute(name), CultureInfo.InvariantCulture);
+        if (Double.IsNaN(value) || Double.IsInfinity(value) || Math.Abs(value) > (1L << 40))
+            throw new Exception("Invalid primitive grid coordinate/step");
+        return value;
+    }
+
+    static void AddPrimitiveRings(XmlDocument report, XmlElement parent, string path, string sequence, int maxVertices = 131072)
+    {
+        XmlElement unit = report.CreateElement("unit");
+        unit.SetAttribute("sequence", sequence);
+        unit.SetAttribute("binary", Path.GetFileName(path));
+        parent.AppendChild(unit);
+        using (BinaryReader reader = new BinaryReader(File.OpenRead(path)))
+        {
+            if (reader.BaseStream.Length > 8 * 1024 * 1024) throw new Exception("Primitive native output exceeds 8 MiB");
+            int total = 0;
+            while (reader.BaseStream.Position < reader.BaseStream.Length)
+            {
+                int count = reader.ReadInt32();
+                total = checked(total + count);
+                if (count < 0 || total > maxVertices) throw new Exception("Invalid primitive native output vertex count");
+                XmlElement ring = report.CreateElement("ring");
+                unit.AppendChild(ring);
+                for (int n = 0; n < count; n++)
+                {
+                    XmlElement point = report.CreateElement("p");
+                    point.SetAttribute("x", reader.ReadInt64().ToString(CultureInfo.InvariantCulture));
+                    point.SetAttribute("y", reader.ReadInt64().ToString(CultureInfo.InvariantCulture));
+                    ring.AppendChild(point);
+                }
+            }
+        }
+    }
+
+    static object CreateTerrainLayer(Type terrainType, string terrainFilename)
+    {
+        ConstructorInfo constructor = terrainType.GetConstructor(new Type[] { typeof(string), typeof(string) });
+        if (constructor != null)
+            return constructor.Invoke(new object[] { "Terrain", terrainFilename });
+        // C# optional arguments are real CLR parameters. The 6.6 and 7.0.1
+        // runtimes expose (name, filename, canEdit=true), not a two-arg overload.
+        constructor = terrainType.GetConstructor(new Type[] { typeof(string), typeof(string), typeof(bool) });
+        if (constructor != null && constructor.GetParameters()[2].IsOptional)
+            return constructor.Invoke(new object[] { "Terrain", terrainFilename, constructor.GetParameters()[2].DefaultValue });
+        throw new Exception("TerrainLayer(name, filename[, optional canEdit]) constructor not found");
+    }
+
+    // This controls the actual ParallelOptions on polygon tiles. Affinity is
+    // independent and does not establish a single contour writer.
+    static void ConfigurePolygonSerial(object resultsMap, Type mapType)
+    {
+        PropertyInfo contour = mapType.GetProperty("ContourPolygonValue");
+        if (contour == null || !contour.CanWrite || contour.PropertyType != typeof(float))
+            throw new Exception("RASResultsMap.ContourPolygonValue is unavailable");
+        FieldInfo serial = mapType.GetField("FORCE_POLYGON_SERIAL", BindingFlags.Instance | BindingFlags.NonPublic);
+        if (serial == null || serial.FieldType != typeof(bool))
+            throw new Exception("RASResultsMap.FORCE_POLYGON_SERIAL is unavailable");
+        contour.SetValue(resultsMap, 0f, null);
+        serial.SetValue(resultsMap, true);
+        if ((float)contour.GetValue(resultsMap, null) != 0f || !(bool)serial.GetValue(resultsMap))
+            throw new Exception("Native polygon serial control readback failed");
+        Console.WriteLine("NATIVE_POLYGON_SERIAL_EFFECTIVE=True");
+        Console.WriteLine("NATIVE_POLYGON_CONTOUR=0");
     }
 
     static IDisposable CreateSrsHelper(Type setSrsHelperType, object terrainLayer)

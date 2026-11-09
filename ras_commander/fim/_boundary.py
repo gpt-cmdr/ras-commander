@@ -12,7 +12,7 @@ from .. import get_logger, log_call
 from . import _aoi, _engine, _sloping
 from ._boundary_inputs import stage_boundary_terrain
 from ._horizontal_engine import _write_geometry
-from .errors import FimEngineError, FimUnsupportedError
+from .errors import FimEngineError, FimGeometryError, FimUnsupportedError
 
 logger = get_logger(__name__)
 METHOD_ID = "deterministic-zero-depth-contours/1"
@@ -112,7 +112,7 @@ def _selected_tiles(shape, transform, geometry):
             for c in range(c0 // 256, (c1-1)//256 + 1)]
 
 
-def _read_product(path, profile, interpolation, crs, max_bytes):
+def _read_product(path, profile, interpolation, crs, max_bytes, *, method_id=METHOD_ID):
     import shapely
     from pyproj import CRS
     from pyproj.exceptions import CRSError
@@ -124,7 +124,7 @@ def _read_product(path, profile, interpolation, crs, max_bytes):
         feature = product["features"][0]
         properties = feature["properties"]
         if (feature["type"] != "Feature" or properties["profile_id"] != profile
-                or properties["interpolation"] != interpolation or properties["method_id"] != METHOD_ID
+                or properties["interpolation"] != interpolation or properties["method_id"] != method_id
                 or properties["native_vector_parity"] is not False):
             raise ValueError("feature identity or method differs from request")
         if CRS.from_user_input(product["crs"]["properties"]["name"]) != CRS.from_user_input(crs):
@@ -147,11 +147,19 @@ def _read_product(path, profile, interpolation, crs, max_bytes):
                 vertices += len(ring)
         parsed = shape(geometry)
         if not shapely.is_valid(parsed):
-            raise ValueError(f"invalid contour geometry: {shapely.is_valid_reason(parsed)}")
+            reason = str(shapely.is_valid_reason(parsed))
+            error = FimGeometryError(f"Invalid boundary product {path.name}: invalid contour geometry: {reason}",
+                validity_reason=reason)
+            error._boundary_counts = (len(geometry["coordinates"]), holes, vertices)
+            # Avoid retaining full parsing/GEOS allocations in an exception traceback.
+            product = feature = properties = geometry = parsed = polygon = ring = xy = None
+            raise error
         area = float(parsed.area)
         if not _finite(area):
             raise ValueError("geometry area is nonfinite")
         return product, (len(geometry["coordinates"]), holes, vertices, area)
+    except FimGeometryError:
+        raise
     except (KeyError, TypeError, ValueError, CRSError) as exc:
         raise FimEngineError(f"Invalid boundary product {path.name}: {exc}") from exc
 

@@ -1770,9 +1770,10 @@ from a TIFF/HDF pair: supply a terrain with no external modifications. An empty
 modification group is permitted and recorded. A replacement effective TIFF also
 needs matching regenerated terrain metadata and separate qualification.
 
-For a model with multiple terrain sources, first preprocess a dedicated single
-mapping terrain. Preserve source priority, CRS, grid, nodata and effective
-elevations, then generate its matching terrain HDF from that single source.
+For deterministic boundary mapping of a model with multiple terrain sources,
+first preprocess a dedicated single mapping terrain. Preserve source priority,
+CRS, grid, nodata and effective elevations, then generate its matching terrain
+HDF from that single source.
 Keep the project terrain unchanged and verify the prepared surface against the
 original effective terrain. Record preparation provenance and reuse this
 TIFF/HDF pair across all reach and timestep requests. This is a one-time
@@ -1780,7 +1781,8 @@ preparation workflow; a flattened TIFF paired with the old multi-source HDF
 does not satisfy the input contract. Newly prepared layouts require qualification
 before numerical equivalence is claimed.
 
-The method ID is `deterministic-zero-depth-contours/1`. It uses a stable
+The default `method="deterministic"` selects
+`deterministic-zero-depth-contours/1`. It uses a stable
 all-subject NonZero union and a 0.001 projected-coordinate-unit lattice,
 retaining canonical exterior and interior rings. Native RASMapper boundary
 exports can differ in hole topology and coordinates, including between
@@ -1820,12 +1822,116 @@ reproject coordinates or modify the TIFF.
 
 ### Compare native polygons
 
+To compare the native serial contour contract, set `method="native_serial"`
+and `allow_unqualified=True` on the same boundary APIs. This selects
+`rasmapper-serial-zero-depth-contours/1`; inspect the returned qualification
+and source receipts before treating a comparison as a numerical pass.
+The method admits stored XS and storage surfaces in addition to physical 2D
+cells, with physical coverage resolved before dry or missing-water filtering.
+It retains original terrain sources in native order, their own tile frames,
+all source masks and perimeters, and one complete global stitch TIN.
+Terrain modifications, face options, steady encroachment and blocked-obstruction
+polygons are refused.
+
+For this method, `terrain_path` identifies the first original source in the
+effective native terrain order. Complete stored Priority values are sorted
+ascending, preserving native enumeration for ties; incomplete Priority metadata
+retains native enumeration. Creation-indexed layouts with missing or tied
+priorities are refused. This order can differ from a VRT mosaic's top-priority
+source. If a legacy terrain HDF has no stored projection, admission requires a matching
+sibling VRT and agreement between its CRS, the model and every original TIFF.
+The VRT supplies CRS evidence; it does not replace the original terrain samples.
+A bound CRS retains its projected source CRS and binding provenance. No datum,
+coordinate or unit transformation is applied.
+
+Terrain masks and perimeters are read by active tile row. Their backing files
+still count toward `max_prepared_mib`; this disk allowance is distinct from
+working RAM. Complete hydraulic geometry and the global stitch TIN remain
+available throughout contouring. Empty tile units retain their positions in
+the merge sequence. Ambiguous physical 2D ownership at fuzzy polygon edges is
+refused rather than assigned an arbitrary native claim.
+
+For a generated native reference, pass
+`native_performance=StoreMapPerformanceOptions(native_polygon_serial=True)`
+with a single native mapping worker. Import `StoreMapPerformanceOptions` from
+`ras_commander`. The helper verifies the actual native serial polygon-loop
+flag; CPU affinity alone does not guarantee serial contour merging. Stored
+steady profile names select their actual profile indices. Keep the native
+runtime identity and interpolation options with retained references.
+Retain the rendering-helper and merge-host identities as well: the .NET host
+also determines native tie ordering at equal-height intersections.
+Generated native-serial comparisons record the requested runtime label and
+helper/library content identities before and after export. A changed identity
+refuses the comparison; the project rasmap is restored on failure.
+
+On Windows, an optional `native_job_memory_limit_mb` in these performance
+options caps the combined private committed memory of the native helper and
+its merge descendants. It requires `max_workers=1`, serial polygons and
+`memory_policy="enforce"`, with a verified 6.6 or 7.0.1 runtime. File-backed
+resident pages are separate from private commit. This native execution control
+does not change Rust mapping admission.
+
+Native-serial AOIs preserve every source tile and the complete hydraulic
+geometry. Only the final full vector is intersected with the requested polygon,
+using an unrounded GEOS intersection for both candidate and reference. The
+manifest records `aoi_clipping_method="unrounded-geos-intersection/1"`.
+There is no geometry repair, coordinate snapping, reprojection or raster-mask
+polygonization in this comparison.
+
+Native-serial comparisons admit both complete input geometries together under
+`max_working_mib`, including parsing and comparison scratch. GeoJSON coordinates
+and XY Polygon shapefile headers are counted before geometry allocation. The
+comparison manifest records the plan. Increasing the budget can admit larger
+boundaries; this planned allowance is not a hard process-memory cap. GeoPackage
+references retain the bounded reader's vertex limit.
+
+Normal mapping and comparison require valid polygon topology. To investigate
+a completed boundary that fails this check, use `preserve_raw_geometry=True`
+with `method="native_serial"`, `allow_unqualified=True` and no AOI options.
+The diagnostic preserves unchanged vector artifacts and records their source
+identities, CRS, counts and validity reason. It raises `FimGeometryError`,
+whose `diagnostic_manifest`, `artifacts` and `validity_reason` identify the
+retained evidence; it does not return a successful product or comparison row.
+An engine refusal before a complete vector exists cannot supply a raw vector.
+
+Raw comparison distinguishes ordered Float64 XY equality from exact ring-bit
+equality that ignores ring starts, orientation and part order. It preserves
+collinear points, internal repeated vertices and signed zeros. Invalid inputs
+receive no topology equality, area differences, IoU or Hausdorff metrics.
+Receipts record profile coverage and keep qualification and native-vector parity
+false, even when raw coordinates match. Neither repair nor rounding is applied.
+
+The Windows x64 native-serial checks use plain sloping, zero-depth contours,
+original terrain layouts and the verified native serial polygon loop. For valid
+fixtures, complete geometry and unrounded Float64 ring bits agree after normalizing only ring
+start, direction and part order; collinear and repeated vertices remain.
+
+| Fixture and selected profiles | Native runtime | Checked extent and result |
+|---|---|---|
+| Baxter; Big, Bigger and Biggest steady profiles | 6.6 and 7.0.1 | Full extent, full-source/polygon-with-hole/empty AOIs, workers 1/4: exact valid geometry and coordinates |
+| Davis; Max and saved index 108 | 7.0.1 | Same full/AOI and worker checks: exact; native 6.6 reference generation failed |
+| Bald Eagle; Max and saved index 108, original two terrain sources and storage | 6.6 and 7.0.1 | Full extent, workers 1/4: exact valid geometry and coordinates |
+| Reese; mixed-model Max | 6.6 and 7.0.1 | Full extent, workers 3: exact valid geometry and all 950,441 closed-ring vertices |
+| White Oak p19 Max; cross-sections and storage | 6.6 and 7.0.1 | Full extent, workers 2: all 5,136,224 vertices match as raw ring bits; the shared self-intersection prevents valid-vector delivery |
+
+These checks use one in-flight profile for Reese/White Oak and at most two for
+the other fixtures, 2 GiB prepared storage, and working allowances of 3 GiB
+for Reese, 12 GiB for White Oak and 4 GiB otherwise. The complete-vector and
+AOI checks do not qualify other profiles, modified terrain, another platform
+or native execution modes. Spring and Whisky have no completed native
+full-boundary reference within the bounded runs. Qualification defaults remain
+closed; raw equality does not make invalid topology suitable for GIS delivery.
+
 ```python
+from ras_commander import StoreMapPerformanceOptions
+
 comparison = RasFim.compare_inundation_boundaries(
     "model.p02.hdf", "Terrain/Original.tif", "boundary_comparison",
     terrain_hdf="Terrain/Terrain.hdf", plan_number="02", ras_object=ras,
     profiles={"maximum": "Max", "t108": 108},
     interpolation="sloping", threads=4,
+    method="native_serial", allow_unqualified=True,
+    native_performance=StoreMapPerformanceOptions(native_polygon_serial=True),
 )
 print(comparison[["profile", "extra_area", "missing_area", "geometry_equal"]])
 print(comparison.attrs["performance"])
@@ -1840,11 +1946,14 @@ CRS; no reprojection, geometry repair, reference rounding or depth filtering
 is applied.
 
 The comparison reports both directions of area difference, complete topology,
-unrounded topological equality and a separate quantized-coordinate equality metric.
+unrounded topological equality, `coordinates_equal` for unrounded vertices,
+and a separate quantized-coordinate equality metric. Unrounded vertex comparison
+ignores ring orientation, ring starting vertex and part order, while retaining
+collinear vertices.
 Native generation, shared Rust batch time and comparison scans have separate
 clocks. Repeated `candidate_batch_seconds` values identify one shared batch
 clock; do not sum them as independent profile times. A speed ratio is withheld
-because the vector methods differ. Discrete Hausdorff distance is omitted with
+while numerical qualification remains open. Discrete Hausdorff distance is omitted with
 an explicit receipt exclusion when the vertex-pair budget exceeds 25 million.
 See the [boundary qualification issue](https://github.com/gpt-cmdr/ras-commander-fast-map/issues/4).
 

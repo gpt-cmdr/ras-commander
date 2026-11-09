@@ -16,6 +16,7 @@ from pathlib import Path
 import numpy as np
 
 from .errors import FimUnsupportedError
+from ._source_crs import source_crs, describe_crs
 from ..Decorators import log_call
 
 METHOD_ID = "one-d-xs-surface-diagnostic/5"
@@ -362,7 +363,6 @@ class FimPreparedOneDModel:
             # validate grid and datum labels against the hashed source files as
             # well. A changed receipt cannot relabel unchanged raster bytes.
             import rasterio
-            from pyproj import CRS
             from ..hdf.HdfBase import HdfBase
             grid = receipt["grid"]
             transform = grid["geo_transform"]
@@ -370,18 +370,24 @@ class FimPreparedOneDModel:
                     or any(isinstance(v, bool) or not isinstance(v, (int, float)) or not math.isfinite(v) for v in transform)
                     or any(isinstance(grid[k], bool) or not isinstance(grid[k], int) or grid[k] <= 0 for k in ("width", "height"))):
                 raise ValueError("invalid source grid")
-            declared_crs = CRS.from_user_input(grid["crs"])
+            declared_crs = source_crs(grid["crs"])
             with rasterio.open(receipt["terrain"]) as terrain:
                 if (grid["width"] != terrain.width or grid["height"] != terrain.height
                         or tuple(transform) != terrain.transform.to_gdal()
                         or grid["tile_size"] != 256 or terrain.block_shapes != [(256, 256)]
                         or terrain.count != 1 or terrain.dtypes != ("float32",)
-                        or CRS.from_user_input(terrain.crs) != declared_crs):
+                        or source_crs(terrain.crs) != declared_crs):
                     raise ValueError("grid or CRS differs from bound terrain")
+                terrain_definition = describe_crs(terrain.crs)
+            model_definition = HdfBase.get_projection(receipt["source_hdf"])
             if (not declared_crs.is_projected
                     or any(abs(axis.unit_conversion_factor - 1200/3937) > 1e-12 for axis in declared_crs.axis_info[:2])
-                    or declared_crs != CRS.from_user_input(HdfBase.get_projection(receipt["source_hdf"]))):
+                    or declared_crs != source_crs(model_definition)):
                 raise ValueError("CRS differs from bound source model")
+            if "crs_provenance" in receipt and receipt["crs_provenance"] != {
+                    "policy": "bound-source-identity/1", "model": describe_crs(model_definition),
+                    "terrain": terrain_definition}:
+                raise ValueError("CRS binding provenance differs from original inputs")
             units = HdfBase.get_result_unit_metadata(receipt["source_hdf"])
             if receipt["units"] != units or units.get("unit_system") != "US Customary" or units.get("warnings") or units.get("contradictions"):
                 raise ValueError("units differ from bound source model")
@@ -411,7 +417,6 @@ class FimPreparedOneDModel:
 def prepare_one_d_model(hdf_path, terrain_path, output_folder, *, profiles=None,
                         allow_unqualified=False, max_working_mib=1024):
     import rasterio
-    from pyproj import CRS
     from pyproj.exceptions import CRSError
     from ..hdf.HdfBase import HdfBase
     from ..hdf.HdfXsec import HdfXsec
@@ -442,18 +447,21 @@ def prepare_one_d_model(hdf_path, terrain_path, output_folder, *, profiles=None,
                                                       max_bytes=budget//4) if storage else {})
         arrays, xs_receipts, offsets = canonical_arrays(data)
         try:
-            crs = CRS.from_user_input(HdfBase.get_projection(hdf))
+            model_definition = HdfBase.get_projection(hdf)
+            crs = source_crs(model_definition)
         except CRSError as exc:
             raise FimUnsupportedError("model has no valid projected CRS") from exc
         if not crs.is_projected or any(abs(a.unit_conversion_factor-1200/3937) > 1e-12 for a in crs.axis_info[:2]):
             raise FimUnsupportedError("1D requires a projected CRS in US survey feet; explicit conversion required")
         with rasterio.open(terrain) as src:
-            if CRS.from_user_input(src.crs) != crs:
+            if source_crs(src.crs) != crs:
                 raise FimUnsupportedError("terrain and model CRS differ; no datum relabelling or automatic reprojection")
             gt = src.transform.to_gdal()
             if src.count != 1 or src.dtypes[0] != "float32" or not src.is_tiled or src.block_shapes != [(256, 256)] or gt[1] != -gt[5] or gt[2] or gt[4] or gt[1] <= 0:
                 raise FimUnsupportedError("requires original single-band Float32 square-pixel 256-tiled north-up terrain")
             grid = {"width": src.width, "height": src.height, "geo_transform": list(gt), "tile_size": 256, "crs": crs.to_wkt()}
+            crs_provenance = {"policy": "bound-source-identity/1",
+                              "model": describe_crs(model_definition), "terrain": describe_crs(src.crs)}
         # Units metadata is retained, never inferred by assigning a CRS.
         units = HdfBase.get_result_unit_metadata(hdf)
         if units.get("unit_system") != "US Customary" or units.get("warnings") or units.get("contradictions"):
@@ -510,6 +518,7 @@ def prepare_one_d_model(hdf_path, terrain_path, output_folder, *, profiles=None,
                    "storage": storage_receipt, "result_kind": data["result_kind"],
                    "stored_profile_names": data["stored_profile_names"],
                    "source_hdf": str(hdf), "terrain": str(terrain), "grid": grid,
+                   "crs_provenance": crs_provenance,
                    "units": units, "files": files, "levels": levels,
                    "profiles": list(data["profiles"]), "profile_ids": profile_ids,
                    "cross_section_count": len(data["Attributes"]),

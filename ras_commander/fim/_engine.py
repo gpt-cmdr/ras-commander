@@ -160,10 +160,19 @@ def _find_wkt(obj):
     return None
 
 
-def terrain_identity(engine: Path, terrain_path: Path, results_crs, terrain_crs_fnv1a64: Optional[str] = None, *, timeout: Optional[float] = None) -> dict:
-    """Build the request ``terrain`` block after cross-checking engine and rasterio views."""
+def terrain_identity(engine: Path, terrain_path: Path, results_crs, terrain_crs_fnv1a64: Optional[str] = None, *, timeout: Optional[float] = None, source_crs_identity: bool = False) -> dict:
+    """Cross-check terrain identity, optionally retaining an unapplied BoundCRS.
+
+    The default compares complete definitions. Explicit source identity unwraps
+    only BoundCRS and preserves its original definition/binding in provenance.
+    No coordinate or datum conversion is performed.
+    """
     import rasterio
     from pyproj import CRS
+    from ._source_crs import source_crs, describe_crs
+
+    if not isinstance(source_crs_identity, bool):
+        raise ValueError("source_crs_identity must be a boolean")
 
     command = [str(engine), "terrain-info", str(terrain_path)]
     probe = (run_engine(command, "terrain-info") if timeout is None else
@@ -176,7 +185,14 @@ def terrain_identity(engine: Path, terrain_path: Path, results_crs, terrain_crs_
         crs_rio = CRS.from_user_input(src.crs) if src.crs else None
     if crs_rio is None:
         raise FimUnsupportedError(f"terrain {terrain_path.name} has no CRS")
-    if results_crs is None or CRS.from_user_input(results_crs) != crs_rio:
+    original_rio = crs_rio
+    original_results = CRS.from_user_input(results_crs) if results_crs is not None else None
+    if source_crs_identity:
+        crs_rio = source_crs(crs_rio)
+        compared_results = source_crs(original_results) if original_results is not None else None
+    else:
+        compared_results = original_results
+    if compared_results is None or compared_results != crs_rio:
         raise FimUnsupportedError(
             f"the hydraulic results CRS must equal the terrain CRS ({crs_rio.to_string()})"
         )
@@ -192,6 +208,31 @@ def terrain_identity(engine: Path, terrain_path: Path, results_crs, terrain_crs_
     if epsg is None:
         raise FimUnsupportedError(f"terrain CRS has no EPSG code: {crs_rio.to_string()}")
     fnv = info.get("crs_wkt_fnv1a64")
+    original_engine = None
+    engine_wkt = None
+    engine_wkt_error = None
+    if source_crs_identity:
+        if info.get("epsg") is not None and int(info["epsg"]) != epsg:
+            raise FimEngineError(f"terrain EPSG differs: engine {info['epsg']}, rasterio {epsg}")
+        if info.get("epsg") is None and terrain_crs_fnv1a64 and fnv != terrain_crs_fnv1a64:
+            raise FimEngineError(
+                f"terrain_crs_fnv1a64={terrain_crs_fnv1a64} does not match the engine WKT hash {fnv}"
+            )
+        automatic_wkt_identity = info.get("epsg") is None and not terrain_crs_fnv1a64
+        engine_wkt = _find_wkt(info.get("crs"))
+        if engine_wkt is not None:
+            try:
+                original_engine = CRS.from_wkt(engine_wkt)
+            except Exception as exc:
+                if automatic_wkt_identity:
+                    raise FimEngineError(f"engine terrain WKT is not parseable: {exc}") from exc
+                engine_wkt_error = str(exc)
+            # Retain the established authority order: identified matching EPSG,
+            # then explicit verified raw pin, then automatic WKT equivalence.
+            # Legacy WKT is diagnostic when either earlier authority applies.
+            if (original_engine is not None and automatic_wkt_identity
+                    and source_crs(original_engine) != crs_rio):
+                raise FimUnsupportedError(f"engine terrain source CRS differs from rasterio CRS {crs_rio.to_string()}")
     if info.get("epsg") is not None:
         if int(info["epsg"]) != epsg:
             raise FimEngineError(f"terrain EPSG differs: engine {info['epsg']}, rasterio {epsg}")
@@ -213,10 +254,18 @@ def terrain_identity(engine: Path, terrain_path: Path, results_crs, terrain_crs_
             crs_engine = CRS.from_wkt(wkt)
         except Exception as exc:
             raise FimEngineError(f"engine terrain WKT is not parseable: {exc}") from exc
-        if crs_engine != crs_rio:
+        if (source_crs(crs_engine) if source_crs_identity else crs_engine) != crs_rio:
             raise FimUnsupportedError(f"engine terrain CRS differs from rasterio CRS {crs_rio.to_string()}")
         identity = {"kind": "caller_verified_wkt", "fnv1a64": fnv}
-    return {"path": str(terrain_path), "epsg": epsg, "crs_identity": identity}
+    result = {"path": str(terrain_path), "epsg": epsg, "crs_identity": identity}
+    if source_crs_identity:
+        result["crs_provenance"] = {"policy": "bound-source-identity/1",
+            "rasterio": describe_crs(original_rio), "results": describe_crs(original_results),
+            "engine": describe_crs(original_engine) if original_engine is not None else None,
+            "engine_wkt": engine_wkt, "engine_wkt_parse_error": engine_wkt_error,
+            "engine_epsg": info.get("epsg"), "engine_crs_wkt_fnv1a64": fnv,
+            "terrain_crs_fnv1a64_requested": terrain_crs_fnv1a64}
+    return result
 
 
 @dataclass
