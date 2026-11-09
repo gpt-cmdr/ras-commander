@@ -22,17 +22,17 @@ FAST_HDF_WHEEL_MARKER = (
     ' or (platform_system == "Darwin" and platform_machine == "arm64"))'
 )
 # The native DSS engine (FAST-DSS) is optional: the default DSS backend is
-# "java". It is published as abi3 wheels for CPython 3.10+ on Windows x64,
-# Linux x86_64/aarch64 (manylinux and musllinux) and macOS arm64/x86_64, so the
+# "java". Release 0.1.1 is published as abi3 wheels for CPython 3.10+ on
+# Windows x64 and Linux x86_64/aarch64 (manylinux and musllinux) only, so the
 # marker keeps pip from compiling the Rust source distribution elsewhere.
-FAST_DSS_REQUIREMENT = 'ras-commander-fast-dss>=0.1.0,<0.2'
+# There are no macOS wheels; macOS users can build it from the sdist with
+# `pip install ras-commander-fast-dss` and a Rust toolchain.
+FAST_DSS_REQUIREMENT = 'ras-commander-fast-dss>=0.1.1,<0.2'
 FAST_DSS_WHEEL_MARKER = (
     'platform_python_implementation == "CPython" and ('
     '(platform_system == "Windows" and platform_machine == "AMD64")'
     ' or (platform_system == "Linux" and platform_machine == "x86_64")'
-    ' or (platform_system == "Linux" and platform_machine == "aarch64")'
-    ' or (platform_system == "Darwin" and platform_machine == "arm64")'
-    ' or (platform_system == "Darwin" and platform_machine == "x86_64"))'
+    ' or (platform_system == "Linux" and platform_machine == "aarch64"))'
 )
 FAST_DSS_DEPENDENCY = f'{FAST_DSS_REQUIREMENT}; {FAST_DSS_WHEEL_MARKER}'
 
