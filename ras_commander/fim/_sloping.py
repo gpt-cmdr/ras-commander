@@ -300,6 +300,8 @@ def map_profiles(
     velocity_depth="rendered",
     derived_products=(),
     _reduce_max=False,
+    shear_stress=False,
+    shear_depth="rendered",
 ):
     from .. import HdfMesh
     from ..fast_hdf import backend_scope
@@ -390,6 +392,36 @@ def map_profiles(
         raise ValueError("velocity_depth and derived_products require velocity=True")
     if _reduce_max and not derived_products:
         raise ValueError("the Max derived pass needs derived_products")
+    from . import _shear as _shear_inputs
+
+    if not isinstance(shear_stress, bool):
+        raise ValueError("shear_stress must be a boolean")
+    if shear_depth not in _shear_inputs.SHEAR_DEPTHS:
+        raise ValueError(f"shear_depth must be one of {_shear_inputs.SHEAR_DEPTHS}")
+    if shear_depth != "rendered" and not shear_stress:
+        raise ValueError("shear_depth requires shear_stress=True")
+    if shear_stress:
+        if render_mode != "sloping":
+            raise FimUnsupportedError(
+                "shear stress is qualified on plain sloping (shear_depth='horizontal' for "
+                "RAS Mapper's horizontal mode); slopingPretty is not"
+            )
+        if profiles is None:
+            profiles = {"Max": "Max"}
+        if wsel_profiles is not None or _prepared is not None:
+            raise FimUnsupportedError(
+                "shear stress needs the plan's stored time series; caller-supplied WSEL "
+                "profiles and prepared models have none"
+            )
+        if len(dict(profiles)) != 1 or set(dict(profiles).values()) != {"Max"}:
+            raise FimUnsupportedError(
+                "shear stress is RAS Mapper's Max only: pass exactly one profile selecting 'Max'"
+            )
+        if storage_areas or _reduce_max or native_products or row_stream_rows or template_raster is not None:
+            raise FimUnsupportedError(
+                "shear stress does not support storage areas, the Max derived pass, native "
+                "products, row streaming or template delivery"
+            )
     scope_info = None
     if (terrain_hdf is not None or velocity) and _prepared is not None:
         raise FimUnsupportedError("prepared sloping models do not support terrain_hdf or velocity")
@@ -422,6 +454,11 @@ def map_profiles(
         from copy import deepcopy
 
         model_scope = deepcopy(_prepared._model_scope)
+    if shear_stress and model_scope.get("storage_areas"):
+        raise FimUnsupportedError(
+            "shear stress is not qualified for plans with storage areas "
+            f"({model_scope['storage_areas']} found); use RAS Mapper for these plans"
+        )
     if velocity and model_scope.get("storage_areas"):
         raise FimUnsupportedError(
             "velocity is not qualified for plans with storage areas "
@@ -493,6 +530,8 @@ def map_profiles(
         )
         if _reduce_max and method.get("derived_max") != "reduce_max/1":
             raise FimUnsupportedError("engine does not advertise derived_max reduce_max/1")
+    if shear_stress:
+        _shear_inputs.require_engine(method, shear_depth)
     gravity = (
         _velocity_inputs.gravity(hdf) if "froude" in derived_products else None
     )
@@ -657,6 +696,10 @@ def map_profiles(
                     else None
                 ),
             }
+    if shear_stress:
+        details["shear_stress"] = _shear_inputs.describe(
+            shear_depth, render_mode, _shear_inputs.units(hdf)
+        )
     supplied_source = (_prepared._info.get("profile_source") if _prepared is not None else None)
     if supplied is not None or supplied_source is not None:
         details["qualification"] = "Caller-supplied WSEL; aggregate/changed-terrain/option combinations require independent qualification."
@@ -677,6 +720,8 @@ def map_profiles(
             frame.attrs["storage_areas"] = details["storage_areas"]
         if "max_derived" in details:
             frame.attrs["max_derived"] = details["max_derived"]
+        if "shear_stress" in details:
+            frame.attrs["shear_stress"] = details["shear_stress"]
         frame.attrs["invalid_cells"] = details["invalid_cells"]
         return frame
 
@@ -751,6 +796,12 @@ def map_profiles(
                     fields.update(
                         _velocity.stage(hdf, root, meshes, selected, units, threads=threads)
                     )
+                if shear_stress:
+                    shear_tick = time.perf_counter()
+                    fields.update(
+                        _shear_inputs.stage(hdf, root, meshes, shear_depth=shear_depth, threads=threads)
+                    )
+                    preparation["shear_staging_seconds"] = time.perf_counter() - shear_tick
                 if storage is not None:
                     from . import _storage_areas
 
@@ -912,6 +963,7 @@ def map_profiles(
                                 or unit.get("pixels") != int(np.prod(plan.shape))
                                 or (unit.get("velocity") is True) != velocity
                                 or unit.get("derived", []) != list(derived_products)
+                                or (unit.get("shear_stress") is True) != shear_stress
                             ):
                                 raise _StreamProtocolError(
                                     "Sloping stream profile or dimensions mismatch"
@@ -936,6 +988,11 @@ def map_profiles(
                                     _read_stream_f32(process.stdout, plan.shape, expired, timeout, product)
                                     for product in derived_products
                                 ]
+                                shear = (
+                                    _read_stream_f32(process.stdout, plan.shape, expired, timeout, "shear_stress")
+                                    if shear_stress
+                                    else None
+                                )
                                 result = SimpleNamespace(
                                     profile=name,
                                     depth=depth,
@@ -972,6 +1029,11 @@ def map_profiles(
                                         _products.write_raster(path, values, plan.transform, plan.crs)
                                         products[f"{product}_tif"] = str(path)
                                     del derived_arrays
+                                    if shear is not None:
+                                        path = _shear_inputs.shear_path(folder, name)
+                                        _products.write_raster(path, shear, plan.transform, plan.crs)
+                                        products["shear_stress_tif"] = str(path)
+                                    del shear
                             rows[name].update(products)
                             details["performance"]["product_write_seconds"][name] = (
                                 time.perf_counter() - write_tick
@@ -1073,6 +1135,19 @@ def map_profiles(
                         if expired.is_set():
                             raise FimEngineError(f"Sloping engine timed out after {timeout} seconds")
                         details["performance"]["engine_report"] = report
+                        if shear_stress:
+                            engine_shear = report.get("shear_stress")
+                            if (
+                                not isinstance(engine_shear, dict)
+                                or not isinstance(engine_shear.get("method"), dict)
+                                or engine_shear["method"].get("method_id") != _shear_inputs.METHOD_ID
+                                or engine_shear.get("depth") != shear_depth
+                            ):
+                                raise FimEngineError("Missing or invalid shear-stress engine report")
+                            details["shear_stress"]["engine"] = {
+                                key: engine_shear.get(key)
+                                for key in ("units", "factor", "meshes", "face_seconds")
+                            }
                         if storage is not None:
                             from . import _storage_areas
 

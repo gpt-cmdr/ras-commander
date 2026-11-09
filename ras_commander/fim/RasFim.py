@@ -98,6 +98,7 @@ MANIFEST_COLUMNS = [
     "depth_x_velocity_tif",
     "depth_x_velocity_squared_tif",
     "froude_tif",
+    "shear_stress_tif",
 ]
 
 PathLike = Union[str, os.PathLike]
@@ -833,6 +834,8 @@ class RasFim:
         storage_areas: bool = False,
         velocity_depth: str = "rendered",
         derived_products: Sequence[str] = (),
+        shear_stress: bool = False,
+        shear_depth: str = "rendered",
     ) -> pd.DataFrame:
         """Map 2D HDF WSE with the Rust sloping engine.
 
@@ -1009,6 +1012,30 @@ class RasFim:
                 still agree under rasterio and resolve to an EPSG code. Ignored
                 when the engine reports an EPSG code. The manifest records the
                 accepted identity as ``terrain_crs_identity``.
+            shear_stress: Also render RAS Mapper's Max shear stress
+                (``rasmapper-face-shear-max/1``) and add ``shear_stress_tif``
+                (``15_<profile>_shear_stress.tif``, float32, NaN nodata,
+                lb/ft2 or N/m2) to the row. RAS Mapper's Max shear is a face
+                quantity: at every stored output time each face's shear
+                ``k*|V|*V*n^2/R^(1/3)`` is computed from least-squares
+                facepoint velocities, the ``Faces Area Elevation`` hydraulic
+                radius at the sloping face water surface and the face's
+                Manning's n (``k`` = 28.258362 US, 9810 SI); each face keeps
+                its largest magnitude, facepoints average their faces, and
+                the plain sloping weights paint them. The values do not depend
+                on the render mode; ``shear_depth`` sets the mask. Max only:
+                ``profiles`` must be one name selecting ``"Max"`` (default
+                ``{"Max": "Max"}``). Plain ``sloping`` with HDF profiles; refuses
+                ``wsel_profiles``, prepared models, storage-area plans, native
+                products, row streaming and ``template_raster``. Stages every
+                stored output time's cell ``Water Surface`` and ``Face
+                Velocity``. Requires an engine advertising the method; see
+                :meth:`supports_shear_stress`. ``attrs["shear_stress"]``
+                records the rule and the engine's face pass.
+            shear_depth: ``"rendered"`` (default) draws shear where this
+                request's rendered Max depth is > 0; ``"horizontal"`` uses the
+                horizontal cell-constant Max depth, reproducing RAS Mapper's
+                horizontal-mode Shear Stress (Max).
             storage_areas: Also draw the plan's standalone storage areas as
                 RAS Mapper level pools (``storage-area-level-pool/1``): every
                 pixel whose centre is inside a storage-area polygon gets that
@@ -1061,7 +1088,35 @@ class RasFim:
             velocity=velocity, invalid_cells=invalid_cells, product_writer=product_writer,
             row_stream_rows=row_stream_rows,
             terrain_crs_fnv1a64=terrain_crs_fnv1a64, storage_areas=storage_areas,
-            velocity_depth=velocity_depth, derived_products=derived_products)
+            velocity_depth=velocity_depth, derived_products=derived_products,
+            shear_stress=shear_stress, shear_depth=shear_depth)
+
+    #: Engine method ID of Max shear stress.
+    SHEAR_STRESS_METHOD = "rasmapper-face-shear-max/1"
+
+    @staticmethod
+    @log_call
+    def supports_shear_stress(engine_path: Optional[PathLike] = None) -> bool:
+        """Whether the installed engine renders RAS Mapper's Max shear stress.
+
+        True when the engine's ``sloping`` method advertises
+        ``shear_stress`` = ``rasmapper-face-shear-max/1``, so
+        ``shear_stress=True`` can be passed to :meth:`map_sloping_profiles`.
+        False when the engine is older or missing; never raises for a missing
+        engine. Engine execution or metadata errors propagate.
+
+        Args:
+            engine_path: Engine executable, otherwise environment/PATH.
+
+        Returns:
+            bool: Max shear stress is available.
+        """
+        try:
+            capabilities = RasFim.get_capabilities(engine_path)
+        except FileNotFoundError:
+            return False
+        method = capabilities.methods.get("sloping")
+        return method is not None and method.flags.get("shear_stress") == RasFim.SHEAR_STRESS_METHOD
 
     #: Engine method ID of storage-area level-pool surfaces.
     STORAGE_AREA_METHOD = "storage-area-level-pool/1"
