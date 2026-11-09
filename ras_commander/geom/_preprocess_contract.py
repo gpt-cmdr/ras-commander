@@ -925,8 +925,10 @@ def validate(
             if (
                 CALIBRATION not in hdf
                 or not isinstance(hdf[CALIBRATION], h5py.Dataset)
-                or hdf[CALIBRATION].dtype != expected["calibration_skeleton_dtype"]
                 or not _calibration_skeleton(read_typed(hdf[CALIBRATION]))
+                # Native preprocessing can expand name storage without changing values.
+                or hdf[CALIBRATION].dtype["Base Manning's n Value"]
+                != expected["calibration_skeleton_dtype"]["Base Manning's n Value"]
             ):
                 changed.append(CALIBRATION)
         for path, digest in expected["inputs"].items():

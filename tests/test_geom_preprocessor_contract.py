@@ -117,6 +117,23 @@ def test_named_all_nan_calibration_source_remains_strict(tmp_path):
 
 
 @pytest.mark.synthetic_hdf_layout
+@pytest.mark.parametrize("after", [[(b"", np.nan)], [(b"Water", np.nan), (b"Forest", np.nan)]])
+def test_empty_calibration_name_storage_can_expand(tmp_path, after):
+    """Allow native string-capacity changes without changing numeric storage."""
+    text, path, expected = fixture(tmp_path)
+    narrow = [("Land Cover Name", "S1"), ("Base Manning's n Value", "f4")]
+    with h5py.File(path, "r+") as hdf:
+        hdf.create_dataset(CALIBRATION, data=np.array([(b"", np.nan)], dtype=narrow))
+    captured = snapshot(text, path)
+    expected["calibration_skeleton_dtype"] = captured["calibration_skeleton_dtype"]
+    with h5py.File(path, "r+") as hdf:
+        del hdf[CALIBRATION]
+        hdf.create_dataset(CALIBRATION, data=np.array(after, dtype=CALIBRATION_DTYPE))
+    changed, missing, evidence = validate(text, path, expected, time.time() - 1)
+    assert not changed and not missing and evidence["inputs_preserved"]
+
+
+@pytest.mark.synthetic_hdf_layout
 @pytest.mark.parametrize(
     "dtype,row",
     [
