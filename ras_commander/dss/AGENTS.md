@@ -129,10 +129,13 @@ This file is the canonical local instruction file for `ras_commander/dss/`.
 
 - `pyjnius` and Java are optional runtime prerequisites and should fail with clear installation guidance when missing.
 - `ras_commander_fast_dss` (distribution `ras-commander-fast-dss`, on PyPI from
-  0.1.0) is optional. `setup.py` requests `ras-commander-fast-dss>=0.1.0,<0.2` in the
+  0.1.0) is optional. `setup.py` requests `ras-commander-fast-dss>=0.1.1,<0.2` in the
   `dss`, `dss-native` and `all` extras, with a marker limited to the published
-  CPython abi3 wheel platforms; never make it a core dependency while `java` is
-  the default. The `dss-native` extra also keeps pydsstools for
+  CPython abi3 wheel platforms (Windows AMD64, Linux x86_64/aarch64; 0.1.1 has no
+  macOS wheels, so Darwin is excluded and macOS builds from the sdist); never make
+  it a core dependency while `java` is the default. `RasDss.repair` wraps the
+  engine's `repair` (gated on the `repair_copy_out` feature, on every backend);
+  RasDss writers do not expose the engine's opt-in `sync=False`. The `dss-native` extra also keeps pydsstools for
   `write_precip_grid_arrays` on the `java` backend. `native` without it raises `ImportError`. `shadow` without it
   falls back to Java and logs one warning.
 - Keep the monolith download flow lazy and on-demand.

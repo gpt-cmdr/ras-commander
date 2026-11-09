@@ -234,8 +234,9 @@ HEC-RAS is run only through RAS Commander's APIs.
 ### Installation {#dss-installation}
 
 !!! note "Published on PyPI"
-    `ras-commander-fast-dss` is published on PyPI from release **0.1.0**:
-    [pypi.org/project/ras-commander-fast-dss](https://pypi.org/project/ras-commander-fast-dss/).
+    The current release of `ras-commander-fast-dss` is **0.1.1**:
+    [pypi.org/project/ras-commander-fast-dss](https://pypi.org/project/ras-commander-fast-dss/)
+    ([changelog](https://github.com/gpt-cmdr/ras-commander-fast-dss/blob/main/CHANGELOG.md)).
     The source is the public repository
     [gpt-cmdr/ras-commander-fast-dss](https://github.com/gpt-cmdr/ras-commander-fast-dss)
     (licence MIT AND BSD-3-Clause).
@@ -245,18 +246,19 @@ pip install ras-commander-fast-dss
 ```
 
 or install it with the DSS extras, which request
-`ras-commander-fast-dss>=0.1.0,<0.2`:
+`ras-commander-fast-dss>=0.1.1,<0.2`:
 
 ```bash
 pip install "ras-commander[dss]"          # pyjnius (java backend) + FAST-DSS
 pip install "ras-commander[dss-native]"   # pydsstools + FAST-DSS
 ```
 
-Wheels (abi3, CPython 3.10 and later) are published for Windows x64, Linux
-x86_64 and aarch64 (manylinux) and x86_64 (musllinux), and macOS arm64 and
-x86_64. The extras request the engine only on those platforms; elsewhere,
-`pip install ras-commander-fast-dss` builds it from the source distribution,
-which needs a Rust toolchain.
+Wheels (abi3, CPython 3.10 and later) are published for Windows x64 and for
+Linux x86_64 and aarch64 (manylinux and musllinux). The extras request the
+engine only on those platforms. There are no macOS wheels: on macOS, and on any
+other platform, `pip install ras-commander-fast-dss` builds it from the source
+distribution, which needs a Rust toolchain. The extras do not request it there,
+so `pip install "ras-commander[dss]"` never starts a Rust build.
 
 Then select the backend as shown above. `ras-commander` itself does not require
 the package; `import ras_commander` and the `java` backend work without it. Check
@@ -269,6 +271,62 @@ print(sorted(fast_dss.FEATURES))   # e.g. grid_srs_monolith_parity, gridded_impo
 
 Existing [DSS operations](user-guide/dss-operations.md) work unchanged on the
 default `java` backend.
+
+### Interrupted writes, `sync=False` and `repair` {#dss-repair}
+
+Release 0.1.1 fixes how a DSS7 write that was interrupted is completed, and adds
+two engine functions. The scope is the engine's, and ras-commander does not
+widen it:
+
+- **Interrupted writes.** The engine's guarantee covers **process death**: the
+  writing process killed at any point. The next native write reconciles the
+  interrupted one when the file was consistent before it. It is not a power-loss
+  or operating-system-crash guarantee, and a normal write never repairs damage it
+  did not cause.
+- **`sync=False` (opt-in).** The engine's writers (`write_timeseries`,
+  `write_paired_data`, `write_grid`, `write_location`, `write_profile`) accept
+  `sync=`. The default, `True`, keeps the `fsync` calls at the transaction's
+  flush points. `False` skips them: the process-death behavior is unchanged, but
+  after a power loss or an operating-system crash the write, and earlier
+  unflushed writes, may be missing or torn. Use it only for scratch or
+  regenerable files. RasDss writers always use the default; call the engine
+  directly to opt in:
+
+    ```python
+    import ras_commander_fast_dss as fast_dss
+
+    fast_dss.create("scratch.dss")  # the engine writers need an existing file
+    fast_dss.write_timeseries("scratch.dss", "/A/B/FLOW/01JAN2020/1HOUR/RUN/",
+                              [10.0, 12.5, 11.0], start="2020-01-01 01:00", units="CFS",
+                              data_type="INST-VAL", sync=False)
+    ```
+
+- **`repair(src, dest)`** is the recovery path for a damaged DSS7 file. It opens
+  `src` read-only, copies the readable records that its documented discovery
+  procedure reaches into a new file `dest`, verifies every copied record against
+  its source, and reports what it did not copy. Bytes that no pointer reaches are
+  out of scope. **A partial recovery is still published**, so always check
+  `complete` and `not_copied`. A complete copy is not an integrity certificate
+  for `src`. `dest` must not exist. DSS6 files are not supported. In RAS
+  Commander, `RasDss.repair` calls it on every backend (there is no Java
+  equivalent):
+
+    ```python
+    from ras_commander import RasDss
+
+    result = RasDss.repair("damaged.dss", "recovered.dss")
+    if not result["complete"]:
+        for pathname, reason in result["not_copied"]:
+            print(pathname, reason)
+    ```
+
+    `ras_commander_fast_dss.repair(src, dest)` returns the same `dict`.
+    `RasDss.get_capabilities().attrs["native_repair_available"]` reports
+    whether the installed engine has it (`FEATURES` flag `repair_copy_out`;
+    `write_sync_policy` marks `sync=`).
+
+The engine's README section "Interrupted writes, `sync=` and `repair`" and its
+DSS7 format notes give the full crash model and known limitations.
 
 ### Performance
 

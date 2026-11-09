@@ -9,6 +9,26 @@ alone does not identify a development checkout.
 
 ### Unreleased
 
+- **The DSS extras move to `ras-commander-fast-dss` 0.1.1.** The `dss`,
+  `dss-native` and `all` extras now request `ras-commander-fast-dss>=0.1.1,<0.2`.
+  The platform marker matches the 0.1.1 wheels: CPython on Windows x64 and
+  Linux x86_64 and aarch64. macOS is no longer in the marker, because 0.1.1
+  publishes no macOS wheels; macOS users can build the engine from source with
+  `pip install ras-commander-fast-dss`. `java` remains the default backend.
+  0.1.1 fixes how an interrupted DSS7 write is completed (the guarantee covers
+  process death, not power loss), adds an opt-in `sync=False` on the engine's
+  writers and adds `repair`, and speeds up DSS7 reads and catalog filtering
+  ([engine changelog](https://github.com/gpt-cmdr/ras-commander-fast-dss/blob/main/CHANGELOG.md)).
+- **New `RasDss.repair(src, dest)`.** A thin wrapper around
+  `ras_commander_fast_dss.repair`: it copies the readable records of a damaged
+  DSS7 file that the engine's discovery procedure reaches into a new file and
+  returns the engine's report. It runs natively on every backend, refuses an
+  existing `dest`, and logs a warning when `complete` is `False`; a partial
+  recovery is still published, so check `complete` and `not_copied`.
+  `get_capabilities()` adds a `repair` row and
+  `attrs["native_repair_available"]`. RasDss writers keep the default
+  `sync=True`; see
+  [Interrupted writes, `sync=False` and `repair`](../native-engine.md#dss-repair).
 - **`ras-commander-fast-dss` 0.1.0 is published, and the DSS extras install it.**
   FAST-DSS is on PyPI
   ([pypi.org/project/ras-commander-fast-dss](https://pypi.org/project/ras-commander-fast-dss/);

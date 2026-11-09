@@ -37,7 +37,7 @@ An unknown name raises `ValueError`.
 ## Installing ras-commander-fast-dss
 
 `ras-commander-fast-dss` (import name `ras_commander_fast_dss`) is the optional
-dependency for the native backend. It is published on PyPI from release 0.1.0
+dependency for the native backend. The current release is 0.1.1
 ([pypi.org/project/ras-commander-fast-dss](https://pypi.org/project/ras-commander-fast-dss/);
 source: [gpt-cmdr/ras-commander-fast-dss](https://github.com/gpt-cmdr/ras-commander-fast-dss)).
 
@@ -47,10 +47,12 @@ pip install ras-commander-fast-dss
 pip install "ras-commander[dss]"
 ```
 
-The `dss`, `dss-native` and `all` extras request `ras-commander-fast-dss>=0.1.0,<0.2`
-on the platforms with published wheels (see
-[Installation](../native-engine.md#dss-installation)). Installing it does not
-change the default backend, which stays `java`.
+The `dss`, `dss-native` and `all` extras request `ras-commander-fast-dss>=0.1.1,<0.2`
+on the platforms with published wheels: CPython on Windows x64 and Linux x86_64
+and aarch64 (see [Installation](../native-engine.md#dss-installation)). There are
+no macOS wheels; macOS users can build it from source with
+`pip install ras-commander-fast-dss` and a Rust toolchain. Installing it does
+not change the default backend, which stays `java`.
 
 If `ras-commander-fast-dss` is not installed:
 
@@ -70,6 +72,7 @@ If `ras-commander-fast-dss` is not installed:
 | `check_pathname_format`, `is_valid_pathname`, `check_file_exists` | No DSS access |
 | `write_timeseries`, `write_timeseries_from_dataframe`, `write_paired_data`, `write_grid_timeseries`, `copy_grid_with_zero_tail` | `java`: Java. `native`: ras-commander-fast-dss writers (see [Writes](#writes)). `shadow`: Java; the write is repeated natively on a temporary copy and compared |
 | `write_precip_grid_arrays` | `java`: pydsstools (unchanged). `native`: ras-commander-fast-dss. `shadow`: pydsstools, compared with a native copy |
+| `repair` | ras-commander-fast-dss on every backend; DSS7 copy-out recovery into a new file (see [Interrupted writes and `repair`](../native-engine.md#dss-repair)) |
 
 `RasDss.get_capabilities()` returns this matrix as a DataFrame (`operation`,
 `java`, `native`, `shadow`, `note`; values `yes`, `gated`, `java`, `no`).
