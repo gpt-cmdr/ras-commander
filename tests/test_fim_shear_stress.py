@@ -242,3 +242,4 @@ def test_real_shear_matches_native(shear_case, tmp_path):
         assert ref_valid.sum() > 0
         assert (ref_valid != my_valid).sum() == 0
         assert np.array_equal(mine[my_valid].view("u4"), reference[ref_valid].astype("f4").view("u4"))
+

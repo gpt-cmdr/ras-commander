@@ -1252,6 +1252,8 @@ def map_profiles(
                 _velocity.velocity_path(folder, name).unlink(missing_ok=True)
                 for product in derived_products:
                     _velocity.derived_path(folder, name, product).unlink(missing_ok=True)
+            if shear_stress:
+                _shear_inputs.shear_path(folder, name).unlink(missing_ok=True)
             rows[name] = _empty_row(
                 name, "failed", error=f"{type(exc).__name__}: {exc}"
             )
