@@ -153,7 +153,7 @@ repository,
 [gpt-cmdr/ras-commander-fast-hdf](https://github.com/gpt-cmdr/ras-commander-fast-hdf),
 and published on PyPI as `ras-commander-fast-hdf` (and, from 0.2.0, on
 crates.io as a Rust crate of the same name). ras-commander 0.107.1 and later
-list it as a core dependency (0.108.0 and later: `>=0.2,<0.3`; 0.109.0 and later: `>=0.2.3,<0.3`; 0.112.0 and later: `>=0.2.5,<0.3`; 0.113.0 and later: `>=0.3.0,<0.4`), limited by an environment marker to the
+list it as a core dependency (0.108.0 and later: `>=0.2,<0.3`; 0.109.0 and later: `>=0.2.3,<0.3`; 0.112.0 and later: `>=0.2.5,<0.3`; 0.113.0 and later: `>=0.3.0,<0.4`; 0.117.0 and later: `>=0.5.0,<0.6`), limited by an environment marker to the
 platforms that have wheels, so the normal install is enough:
 
 ```bash
@@ -198,7 +198,7 @@ automatically, use `pip install "ras-commander[fast]"` or
 
 ```python
 import ras_commander_fast_hdf as native
-print(native.API_VERSION)      # 11 (published wheel), or 12 (legacy mesh layouts)
+print(native.API_VERSION)      # 12 (0.5.0 and later; 11 before: no legacy mesh layouts)
 print(native.ENGINE_COMMIT)    # Source revision of the installed engine
 print(native.ENGINE_FEATURES)  # ('catalog', 'hdf', 'mesh', 'results')
 
@@ -746,7 +746,7 @@ first.
 |---|---|
 | Engine | `ras-commander-fast-hdf` crate 0.2.0 ([crates.io](https://crates.io/crates/ras-commander-fast-hdf); source in [gpt-cmdr/ras-commander-fast-hdf](https://github.com/gpt-cmdr/ras-commander-fast-hdf)), engine API 10 |
 | Bridge | Python package `ras-commander-fast-hdf` 0.2.0 (module `ras_commander_fast_hdf`), `API_VERSION` 11, text API 1, features `catalog, hdf, mesh, results`, `ENGINE_COMMIT` = the commit of tag `v0.2.0` |
-| ras-commander | 0.108.0 and later require `ras-commander-fast-hdf>=0.2,<0.3` and bridge API 11; 0.109.0 and later require `>=0.2.3,<0.3`; 0.112.0 and later require `>=0.2.5,<0.3`; 0.113.0 and later require `>=0.3.0,<0.4` (bridge API 11 unchanged) |
+| ras-commander | 0.108.0 and later require `ras-commander-fast-hdf>=0.2,<0.3` and bridge API 11; 0.109.0 and later require `>=0.2.3,<0.3`; 0.112.0 and later require `>=0.2.5,<0.3`; 0.113.0 and later require `>=0.3.0,<0.4` (bridge API 11 unchanged); 0.117.0 and later require `>=0.5.0,<0.6` (bridge API 12, the first published build with the legacy mesh layouts) |
 | Wheels | On PyPI: Windows `cp310-abi3-win_amd64`, Linux `cp310-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64` and `cp310-abi3-musllinux_1_2_x86_64`, macOS `cp310-abi3-macosx_11_0_arm64` (not yet qualified); source distribution |
 
 `ENGINE_COMMIT` is the commit of the ras-commander-fast-hdf repository the

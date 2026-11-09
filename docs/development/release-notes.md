@@ -9,6 +9,8 @@ alone does not identify a development checkout.
 
 ### Unreleased
 
+### 0.117.0 — 2026-11-09
+
 - **slopingPretty velocity and derived Max:** `map_sloping_profiles(velocity=True)`
   and `map_derived_max` accept `reduce_shallow_to_horizontal` and
   `use_depth_weighted_faces` when the engine advertises
@@ -25,9 +27,34 @@ alone does not identify a development checkout.
   through the engine's `rasmapper-face-shear-max/1` method, adding
   `shear_stress_tif` to the product manifest; `RasFim.supports_shear_stress()`
   detects it. Native HEC-RAS 7.0.1 bridges p05 and Davis p02, sloping and
-  horizontal: 0 mask and 0 bit differences. Needs a Fast-Map build with the
-  method; older engines refuse with `FimUnsupportedError`. See
+  horizontal: 0 mask and 0 bit differences. Fast-Map 0.16.0 has the method;
+  older engines refuse with `FimUnsupportedError`. See
   [Max shear stress](../native-mapping-engine.md#max-shear-stress).
+
+- **Mapping engine dependency:** mapping extras select
+  `ras-commander-fast-map>=0.16.0,<0.17`. Fast-Map 0.16.0 advertises both
+  records above (`shear_stress`, `velocity_with_faces`), so a plain
+  `ras-commander[full]` or `[fim]` install maps Max shear stress and
+  slopingPretty velocity and derived Max products. These products are
+  qualified against RAS Mapper 7.0.1 output on the models named above, for
+  pure 2D models.
+
+- **HDF engine dependency:** the core requirement is
+  `ras-commander-fast-hdf>=0.5.0,<0.6` (was `>=0.3.0,<0.4`). 0.5.0 is the
+  first published build with bridge API 12, which this adapter has accepted
+  since 0.114.0; the engine API stays 10 and no binding is removed or renamed.
+  What changes for a plain install:
+    - HEC-RAS 5.0.x and 6.1 plan files read natively in more places: 2D
+      summaries that store no `Location` (qualified by name and width) and
+      mesh inventories from the legacy `Names` dataset. Layouts the engine
+      cannot prove stay refused, so automatic mode reads them with h5py and
+      required-native mode raises.
+    - The engine's HDF5 reader is 0.12.1 (fast-hdf 0.4.0). Files with a user
+      block are refused at open, SZIP stays refused, and a zero-width datatype
+      or a missing variable-length heap object fails the native read instead
+      of returning a partial result. HEC-RAS does not write such files. See
+      the engine's
+      [changelog](https://github.com/gpt-cmdr/ras-commander-fast-hdf/blob/main/CHANGELOG.md).
 
 ### 0.116.0 — 2026-11-09
 
