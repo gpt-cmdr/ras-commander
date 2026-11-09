@@ -20,6 +20,15 @@ alone does not identify a development checkout.
   reduction (the `store_maps` default for `"slopingPretty"`) compared with a
   plain run. Engines without the record keep refusing those options.
 
+- **Max shear stress:** `RasFim.map_sloping_profiles(shear_stress=True,
+  shear_depth="rendered"|"horizontal")` renders RAS Mapper's Shear Stress (Max)
+  through the engine's `rasmapper-face-shear-max/1` method, adding
+  `shear_stress_tif` to the product manifest; `RasFim.supports_shear_stress()`
+  detects it. Native HEC-RAS 7.0.1 bridges p05 and Davis p02, sloping and
+  horizontal: 0 mask and 0 bit differences. Needs a Fast-Map build with the
+  method; older engines refuse with `FimUnsupportedError`. See
+  [Max shear stress](../native-mapping-engine.md#max-shear-stress).
+
 ### 0.116.0 — 2026-11-09
 
 - **Native serial boundaries:** the existing boundary map and comparison APIs

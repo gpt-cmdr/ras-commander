@@ -69,6 +69,7 @@ engine failures and malformed metadata raise instead.
 | Cell-constant surfaces | `RasFim.map_horizontal_profiles()` |
 | Storage-area level pools | `storage_areas=True` on supported mapping calls |
 | Velocity and depth/velocity products | `velocity=True`, `derived_products`, `RasFim.map_derived_max()` |
+| Max shear stress | `shear_stress=True` on `RasFim.map_sloping_profiles()` |
 | Arrival time, duration and percent inundated | `RasFim.map_whole_simulation()` |
 | Repeated reach/timestep jobs | `RasFim.map_catalog()` |
 | Zero-depth vector boundaries | `RasFim.map_inundation_boundaries()` |
@@ -954,7 +955,55 @@ ordinary 2D grid extension is exposed.
 
 Velocity comparisons require matching render modes: horizontal-mode velocity
 must not be compared with sloping-mode depth.
-Shear stress is not rendered (see the Fast-Map research notes).
+Shear stress uses its own method; see [Max shear stress](#max-shear-stress).
+
+## Max shear stress
+
+`shear_stress=True` adds `shear_stress_tif` (`15_<profile>_shear_stress.tif`,
+float32, NaN nodata, lb/ft2 or N/m2) for the Max profile, rendered by the
+engine's `rasmapper-face-shear-max/1` method
+(`RasFim.supports_shear_stress()`):
+
+```python
+frame = RasFim.map_sloping_profiles(
+    "model.p05.hdf", "terrain.tif", "shear",
+    shear_stress=True,  # profiles default to {"Max": "Max"}
+    shear_depth="rendered",  # or "horizontal" for RAS Mapper's horizontal mode
+)
+frame.loc[0, "shear_stress_tif"]
+```
+
+RAS Mapper's Shear Stress (Max) is a face quantity, not a pixel maximum over
+time. At every stored output time each face's shear is
+`k*|V|*V*n^2/R^(1/3)` (`k` = 28.258362 US Customary, 9810 SI; the Manning
+friction-slope form of `gamma*R*S_f`), with `V` the mean of the face's two
+least-squares facepoint velocities, `R` from the `Faces Area Elevation` table
+at the sloping face water surface, and `n` the face's first Manning's n. Each
+face keeps its largest magnitude (RAS Mapper's PostProcessing
+`Maximum Shear`); facepoints average their faces and the plain sloping weights
+paint them. The values do not depend on the render mode; `shear_depth` sets
+the mask (the rendered sloping Max depth, or the horizontal cell-constant
+Max depth). The engine's [shear-stress notes](https://github.com/gpt-cmdr/ras-commander-fast-map/blob/main/docs/shear-stress.md)
+give the complete rule.
+
+The call stages every stored output time's cell `Water Surface` and
+`Face Velocity`, plus the face tables. Max only, plain `sloping`, HDF
+profiles; `wsel_profiles`, prepared models, storage-area plans, native
+products, row streaming and `template_raster` are refused.
+`attrs["shear_stress"]` records the rule and the engine's face pass.
+
+| Native 7.0.1 reference | Clipping depth | Valid pixels | Bit / mask differences |
+|---|---|---|---|
+| bridges p05 Max (433 times) | sloping | 973,902 | 0 / 0 |
+| bridges p05 Max | horizontal | 973,532 | 0 / 0 |
+| Davis p02 Max (217 times, 2 meshes) | sloping | 22,041 | 0 / 0 |
+| Davis p02 Max | horizontal | 20,560 | 0 / 0 |
+
+Per-face Max equals RAS Mapper's PostProcessing `Maximum Shear` bit for bit on
+both models (54,636 and 5,590 faces). Bridges also matches on the priority-1
+source TIFF (`terrain_hdf`). Measured on a shared Windows host: bridges 25 s /
+1.0 GB peak against RAS Mapper's 94-191 s / 0.9 GB for the same map; Davis
+2.5 s / 0.18 GB against 45-74 s / 0.35 GB.
 
 ## Whole-simulation products
 
