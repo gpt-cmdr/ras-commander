@@ -170,9 +170,11 @@ def test_broken_native_wheel_cannot_break_java(monkeypatch, no_jvm):
     assert _backend.native_available() is False
     assert _backend.native_grid_qualified() is False
     assert _backend.native_writes_available() is False
+    assert _backend.native_repair_available() is False
     caps = RasDss.get_capabilities()
     assert caps.attrs["native_installed"] is False
     assert caps.attrs["native_writes_available"] is False
+    assert caps.attrs["native_repair_available"] is False
     monkeypatch.setattr(RasDss, "backend", "shadow")
     _backend.reset_fallback_warning()
     assert RasDss.get_backend() == "java"
@@ -194,7 +196,8 @@ def test_capabilities_matrix(no_jvm):
         assert table.loc[op, "native"] == "gated"
     assert table.loc["write_timeseries", "shadow"] == "java"
     assert set(caps.attrs) == {"requested_backend", "native_installed", "native_grid_qualified",
-                               "native_writes_available"}
+                               "native_writes_available", "native_repair_available"}
+    assert tuple(table.loc["repair", ["java", "native", "shadow"]]) == ("gated",) * 3
     assert caps.attrs["requested_backend"] == "java"
 
 

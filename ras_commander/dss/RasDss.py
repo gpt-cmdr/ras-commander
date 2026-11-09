@@ -264,17 +264,18 @@ class RasDss:
             - ``"yes"``: supported on that backend;
             - ``"gated"``: needs a qualified or writer-capable engine, or an
               explicit opt-in, and otherwise raises ``DssCapabilityError``:
-              ``read_grid`` under ``native`` (``attrs["native_grid_qualified"]``)
-              and the writers under ``native``
-              (``attrs["native_writes_available"]``);
+              ``read_grid`` under ``native`` (``attrs["native_grid_qualified"]``),
+              the writers under ``native``
+              (``attrs["native_writes_available"]``), and ``repair`` on every
+              backend (``attrs["native_repair_available"]``);
             - ``"java"``: runs on Java, whatever the backend (shadow writes
               also repeat the write natively on a temporary copy);
             - ``"no"``: not provided.
 
             ``attrs``: ``requested_backend`` (``RasDss.backend`` or the
             environment override), ``native_installed`` (bool),
-            ``native_grid_qualified`` (bool) and ``native_writes_available``
-            (bool).
+            ``native_grid_qualified`` (bool), ``native_writes_available``
+            (bool) and ``native_repair_available`` (bool).
 
         Example:
             caps = RasDss.get_capabilities().set_index("operation")
@@ -290,6 +291,7 @@ class RasDss:
             "native_installed": _backend.native_available(),
             "native_grid_qualified": _backend.native_grid_qualified(),
             "native_writes_available": _backend.native_writes_available(),
+            "native_repair_available": _backend.native_repair_available(),
         }
         return df
 
@@ -4073,6 +4075,69 @@ class RasDss:
         if backend == "shadow":
             return RasDss._get_file_version_shadow(dss_file)
         return RasDss._get_file_version_java(dss_file)
+
+    @staticmethod
+    @log_call
+    def repair(src: Union[str, Path], dest: Union[str, Path]) -> Dict[str, Any]:
+        """Copy the readable records of a damaged DSS7 file into a new DSS7 file.
+
+        A thin wrapper around ``ras_commander_fast_dss.repair`` (ras-commander-fast-dss
+        0.1.1 and later). It always runs on the native engine, whatever
+        ``RasDss.backend`` is; there is no Java equivalent.
+
+        ``src`` is opened read-only and never written. The engine finds records by one
+        bounded discovery procedure (bin-block chain, hash-table slots and bin
+        overflow words), copies each readable record it reaches with the normal
+        writer, reads the new file back, verifies every copied record against its
+        source, and only then publishes ``dest``. Records it could not copy are listed
+        in ``not_copied``; bytes that no pointer reaches are out of scope.
+
+        **A partial recovery is still published.** Always check ``result["complete"]``
+        and ``result["not_copied"]``. ``complete`` is ``True`` exactly when no ledger
+        entry is ``"not_copied"``; it covers only what the discovery procedure reached
+        and is not an integrity certificate for ``src``. A warning is logged when
+        ``complete`` is ``False``.
+
+        Args:
+            src: Existing DSS7 file to recover from.
+            dest: New file to create. It must not exist; nothing is replaced.
+
+        Returns:
+            The engine's result ``dict`` unchanged, including ``records_copied``,
+            ``hidden_records_copied``, ``not_copied`` (``(pathname, reason)`` pairs),
+            ``ledger``, ``src_listed_records``, ``src_interrupted_write`` and
+            ``complete``. See ``help(ras_commander_fast_dss.repair)`` for every key.
+
+        Raises:
+            FileNotFoundError: If ``src`` does not exist.
+            IsADirectoryError: If ``src`` is not a file.
+            FileExistsError: If ``dest`` already exists.
+            ImportError: If ras-commander-fast-dss is not installed.
+            DssCapabilityError: If the installed ras-commander-fast-dss has no
+                ``repair`` (``attrs["native_repair_available"]`` in
+                ``get_capabilities()``).
+
+        Example:
+            result = RasDss.repair("damaged.dss", "recovered.dss")
+            if not result["complete"]:
+                for pathname, reason in result["not_copied"]:
+                    print(pathname, reason)
+        """
+        from ras_commander.RasUtils import RasUtils
+
+        src_path = RasDss._check_existing_file(src)
+        dest_path = Path(dest)
+        if dest_path.exists():
+            raise FileExistsError(f"repair destination already exists: {dest_path}")
+        dc = _backend.require_native_repair()
+        result = dict(dc.repair(RasUtils.safe_resolve(src_path), dest_path))
+        if not result.get("complete", False):
+            logger.warning(
+                "DSS repair of %s into %s is incomplete: %d record(s) not copied; "
+                "check result['not_copied']",
+                src_path, dest_path, len(result.get("not_copied") or ()),
+            )
+        return result
 
     @staticmethod
     def _check_existing_file(dss_file: Union[str, Path]) -> Path:

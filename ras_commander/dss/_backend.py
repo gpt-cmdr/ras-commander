@@ -668,6 +668,46 @@ def require_native_writes():
     return dc
 
 
+#: ras-commander-fast-dss FEATURES flag for the DSS7 copy-out recovery (0.1.1 and later).
+NATIVE_REPAIR_FEATURE = "repair_copy_out"
+
+NATIVE_REPAIR_GATE_MESSAGE = (
+    "The installed ras-commander-fast-dss does not provide repair "
+    "(ras_commander_fast_dss.repair with the 'repair_copy_out' feature). "
+    "Upgrade with 'pip install -U ras-commander-fast-dss' (0.1.1 and later include it; "
+    "check RasDss.get_capabilities().attrs['native_repair_available'])."
+)
+
+
+def native_repair_available() -> bool:
+    """True when the installed ras-commander-fast-dss provides ``repair``.
+
+    A capability check, not a version pin: ``ras_commander_fast_dss.repair`` must be
+    callable and ``FEATURES`` must contain ``NATIVE_REPAIR_FEATURE``. Never raises.
+    """
+    dc = _maybe_native()
+    if dc is None:
+        return False
+    try:
+        return bool(callable(getattr(dc, "repair", None))
+                    and NATIVE_REPAIR_FEATURE in getattr(dc, "FEATURES", ()))
+    except Exception:
+        return False
+
+
+def require_native_repair():
+    """``ras_commander_fast_dss`` with ``repair``, or ``DssCapabilityError`` (never Java).
+
+    Raises ``ImportError`` (naming the package) when the engine is not installed.
+    """
+    from . import _errors
+
+    dc = import_native()
+    if not native_repair_available():
+        raise _errors.get("DssCapabilityError")(NATIVE_REPAIR_GATE_MESSAGE)
+    return dc
+
+
 #: Shadow writes copy an existing target file to a temporary directory before the Java
 #: write, so that the native writer can repeat the write on the copy. Larger files are
 #: not copied and the comparison is skipped. Default limit in MB; override it with
@@ -747,6 +787,10 @@ CAPABILITIES = (
      "java column: pydsstools, not Java; native writes through ras-commander-fast-dss; shadow "
      "writes with pydsstools and compares a native copy"),
     ("write_paired_data", "yes", "gated", "java", "as write_timeseries"),
+    ("repair", "gated", "gated", "gated",
+     "DSS7 copy-out recovery into a new file; always runs on ras-commander-fast-dss "
+     "(no Java equivalent), whatever the backend; needs 'repair_copy_out' "
+     "(native_repair_available)"),
 )
 
 
