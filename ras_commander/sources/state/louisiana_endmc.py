@@ -1456,6 +1456,13 @@ def _finalize(job: _FileJob, verify: str, timeout: float) -> None:
         if expected and head.headers.get("x-amz-checksum-type", "FULL_OBJECT") == "FULL_OBJECT":
             actual = file_checksum(job.part, algorithm)
             if actual != expected:
+                # Discard the corrupt partial and its range state so a rerun
+                # downloads every range again, not only the last one.
+                for stale in (job.part, job.state):
+                    try:
+                        os.remove(_io_path(stale))
+                    except OSError:
+                        pass
                 raise IOError(f"{algorithm} mismatch: local {actual}, S3 {expected}")
             job.result["checksum"] = f"{algorithm.lower()}:{expected}"
             verified = algorithm.lower()

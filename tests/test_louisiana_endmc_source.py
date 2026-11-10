@@ -545,6 +545,8 @@ def test_checksum_mismatch_fails_file(tmp_path, fake_bucket):
     assert df.loc[0, "status"] == "failed"
     assert "CRC32 mismatch" in df.loc[0, "error"]
     assert not (tmp_path / "m" / "a.txt").exists()
+    assert not (tmp_path / "m" / "a.txt.part").exists()
+    assert not (tmp_path / "m" / "a.txt.part.json").exists()
 
 
 def test_crc64nvme_objects_require_awscrt(monkeypatch, tmp_path, fake_bucket):
