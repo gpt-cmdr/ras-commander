@@ -134,7 +134,8 @@ _RESOURCE_ID_RE = re.compile(r"^[0-9a-f]{24}$")
 _REGION_RE = re.compile(r"\bRegion\s*(\d{1,2})\b|\(R(\d{1,2})\)", re.IGNORECASE)
 _VERSION_RE = re.compile(r"^\d+\.\d+(?:\.\d+)?$")
 _EPSG_RE = re.compile(r"^EPSG:\d+$", re.IGNORECASE)
-_WINDOWS_INVALID = set('<>:"|?*')
+# Backslash is rejected so keys such as "a\\b" and "a/b" cannot collide on Windows.
+_WINDOWS_INVALID = set('<>:"|?*\\')
 
 _RASTER_EXTS = {".tif", ".tiff", ".vrt", ".img", ".flt", ".asc", ".bil", ".grd"}
 _RASTER_SIDECARS = (".aux.xml", ".ovr", ".tfw", ".xml", ".hdr", ".prj")

@@ -360,6 +360,8 @@ def test_invalid_ids_and_paths(tmp_path):
         endmc.safe_destination(tmp_path, "a//b.txt")
     with pytest.raises(ValueError):
         endmc.safe_destination(tmp_path, "a/b:c.txt")
+    with pytest.raises(ValueError):
+        endmc.safe_destination(tmp_path, "a\\b.txt")
     assert endmc.safe_destination(tmp_path, "a/b c.txt") == tmp_path / "a" / "b c.txt"
 
 
