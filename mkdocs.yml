@@ -284,6 +284,7 @@ nav:
     - eBFE Models:
       - Working with eBFE Models: ebfe_models.md
       - eBFE Delivery Validation: user-guide/ebfe-delivery-validation.md
+    - Louisiana LWI EnDMC: user-guide/louisiana-endmc.md
   - Example Notebooks:
     - Overview: examples/index.md
     - Example Projects: examples/example-projects.md

@@ -73,6 +73,33 @@ bundle = load_audit_bundle(audit_folder)
 )
 ```
 
+## Louisiana LWI EnDMC
+
+`LouisianaEndmc` lists the public LWI EnDMC catalog, classifies each
+resource's S3 objects, downloads selected components with resumable parallel
+range requests, and returns `/vsicurl/` paths for range-reading rasters. See
+[Louisiana Watershed Initiative EnDMC](../user-guide/louisiana-endmc.md).
+
+::: ras_commander.sources.state.louisiana_endmc.LouisianaEndmc
+    options:
+      show_root_heading: false
+      heading_level: 3
+      show_source: false
+      members:
+        - list_resources
+        - list_s3_resource_ids
+        - get_resource_metadata
+        - list_objects
+        - classify_object
+        - object_url
+        - vsicurl_path
+        - get_raster_urls
+        - read_range
+        - download_resource
+        - list_models
+        - download_model
+        - get_source_status
+
 ## Complete source reference
 
 ### RasEbfeModels source reference
