@@ -196,7 +196,10 @@ def test_capabilities_matrix(no_jvm):
         assert table.loc[op, "native"] == "gated"
     assert table.loc["write_timeseries", "shadow"] == "java"
     assert set(caps.attrs) == {"requested_backend", "native_installed", "native_grid_qualified",
-                               "native_writes_available", "native_repair_available"}
+                               "native_writes_available", "native_repair_available",
+                               "native_write_sync_available",
+                               "native_profile_write_available",
+                               "native_location_write_available"}
     assert tuple(table.loc["repair", ["java", "native", "shadow"]]) == ("gated",) * 3
     assert caps.attrs["requested_backend"] == "java"
 

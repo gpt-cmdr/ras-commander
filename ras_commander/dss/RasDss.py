@@ -275,7 +275,10 @@ class RasDss:
             ``attrs``: ``requested_backend`` (``RasDss.backend`` or the
             environment override), ``native_installed`` (bool),
             ``native_grid_qualified`` (bool), ``native_writes_available``
-            (bool) and ``native_repair_available`` (bool).
+            (bool), ``native_repair_available`` (bool),
+            ``native_write_sync_available`` (bool; the writers take ``sync=``),
+            ``native_profile_write_available`` (bool) and
+            ``native_location_write_available`` (bool).
 
         Example:
             caps = RasDss.get_capabilities().set_index("operation")
@@ -292,6 +295,11 @@ class RasDss:
             "native_grid_qualified": _backend.native_grid_qualified(),
             "native_writes_available": _backend.native_writes_available(),
             "native_repair_available": _backend.native_repair_available(),
+            "native_write_sync_available": _backend.native_sync_available(),
+            "native_profile_write_available": _backend.native_feature(
+                _backend.NATIVE_PROFILE_WRITE_FEATURE),
+            "native_location_write_available": _backend.native_feature(
+                _backend.NATIVE_LOCATION_WRITE_FEATURE),
         }
         return df
 
@@ -2743,6 +2751,7 @@ class RasDss:
         nodata: Optional[float] = None,
         overwrite: bool = False,
         grid_reference_origin: Optional[Tuple[float, float]] = None,
+        sync: Optional[Any] = None,
     ) -> List[str]:
         """Write interval precipitation arrays directly to a new native DSS7 file.
 
@@ -2780,6 +2789,10 @@ class RasDss:
                 such as legacy HMS HRAP file discretizations; use the model's
                 reference, commonly (0, 0). None preserves local indexing from
                 the raster lower-left corner. Neither choice reprojects data.
+            sync: Flush policy of the ras-commander-fast-dss writer, passed to it
+                unchanged; ``None`` (default) leaves the engine's own default.
+                Used under ``native`` (and by the shadow repeat); pydsstools
+                does not use it. See ``write_timeseries``.
 
         Returns:
             Exact record pathnames written. Output uses DSS7 specified-time
@@ -2816,12 +2829,13 @@ class RasDss:
             transform=transform, crs=crs, units=units, nodata=nodata,
             overwrite=overwrite, grid_reference_origin=grid_reference_origin,
         )
-        if backend == "native":
-            return _native_grid.write_precip_grid_arrays_native(*args, **kwargs)
-        paths = _native_grid.write_precip_grid_arrays(*args, **kwargs)
-        if backend == "shadow":
-            RasDss._write_precip_grid_arrays_shadow(paths, args, kwargs)
-        return paths
+        with _backend.write_sync(sync, backend):
+            if backend == "native":
+                return _native_grid.write_precip_grid_arrays_native(*args, **kwargs)
+            paths = _native_grid.write_precip_grid_arrays(*args, **kwargs)
+            if backend == "shadow":
+                RasDss._write_precip_grid_arrays_shadow(paths, args, kwargs)
+            return paths
 
     @staticmethod
     def _write_precip_grid_arrays_shadow(paths: List[str], args: tuple, kwargs: Dict) -> None:
@@ -2874,6 +2888,7 @@ class RasDss:
         create_if_missing: bool = True,
         *,
         dss_version: Optional[int] = None,
+        sync: Optional[Any] = None,
     ) -> List[str]:
         """
         Write a time-varying spatial grid series to HEC-DSS.
@@ -2919,6 +2934,10 @@ class RasDss:
                 current default. Existing files must match an explicit value.
                 For DSS6, default precipitation compression is configured with
                 the version-specific safe base/scale ordering.
+            sync: Flush policy of the native writer, passed to
+                ras-commander-fast-dss unchanged; ``None`` (default) leaves the
+                installed engine's own default. The ``java`` backend does not
+                use it. See ``write_timeseries``.
 
         Returns:
             List of DSS pathnames written, one per timestep.
@@ -2965,11 +2984,12 @@ class RasDss:
         """
         backend = RasDss._write_backend()
         args = (dss_file, pathname, data, times, grid_info, create_if_missing)
-        if backend == "native":
-            return RasDss._write_grid_timeseries_native(*args, dss_version=dss_version)
-        if backend == "shadow":
-            return RasDss._write_grid_timeseries_shadow(*args, dss_version=dss_version)
-        return RasDss._write_grid_timeseries_java(*args, dss_version=dss_version)
+        with _backend.write_sync(sync, backend):
+            if backend == "native":
+                return RasDss._write_grid_timeseries_native(*args, dss_version=dss_version)
+            if backend == "shadow":
+                return RasDss._write_grid_timeseries_shadow(*args, dss_version=dss_version)
+            return RasDss._write_grid_timeseries_java(*args, dss_version=dss_version)
 
     @staticmethod
     def _write_grid_timeseries_java(
@@ -3344,7 +3364,8 @@ class RasDss:
                 if source_nodata is not None:
                     nodata_mask |= frame == np.float32(source_nodata)
                 frame[nodata_mask] = np.nan
-                dc.write_grid(str(target), record_pathname, frame, **kwargs)
+                dc.write_grid(str(target), record_pathname, frame, **kwargs,
+                              **_backend.native_sync_kwargs())
                 written.append(record_pathname)
         logger.info(
             f"Wrote {len(written)} grid records to {target.name} "
@@ -3444,6 +3465,7 @@ class RasDss:
         x_shift: float = 0.0,
         y_shift: float = 0.0,
         overwrite: bool = False,
+        sync: Optional[Any] = None,
     ) -> Dict[str, Any]:
         """Create a non-destructive grid derivative with an explicit zero tail.
 
@@ -3492,6 +3514,10 @@ class RasDss:
             overwrite: Atomically replace an existing destination after full
                 temporary readback. When false, publish only by atomic hard
                 link if the destination still does not exist.
+            sync: Flush policy of the native writer, passed to
+                ras-commander-fast-dss unchanged; ``None`` (default) leaves the
+                installed engine's own default. The ``java`` backend does not
+                use it. See ``write_timeseries``.
 
         Returns:
             A dictionary describing source coverage, translations, DSS
@@ -3536,11 +3562,12 @@ class RasDss:
             time_shift_minutes=time_shift_minutes, output_pathname=output_pathname,
             x_shift=x_shift, y_shift=y_shift, overwrite=overwrite,
         )
-        if backend == "native":
-            return RasDss._copy_grid_with_zero_tail_impl(*args, native=True, **kwargs)
-        if backend == "shadow":
-            return RasDss._copy_grid_with_zero_tail_shadow(*args, **kwargs)
-        return RasDss._copy_grid_with_zero_tail_impl(*args, native=False, **kwargs)
+        with _backend.write_sync(sync, backend):
+            if backend == "native":
+                return RasDss._copy_grid_with_zero_tail_impl(*args, native=True, **kwargs)
+            if backend == "shadow":
+                return RasDss._copy_grid_with_zero_tail_shadow(*args, **kwargs)
+            return RasDss._copy_grid_with_zero_tail_impl(*args, native=False, **kwargs)
 
     @staticmethod
     def _copy_grid_with_zero_tail_impl(
@@ -4139,6 +4166,272 @@ class RasDss:
             )
         return result
 
+    # =========================================================================
+    # Profiles and locations (ras-commander-fast-dss on every backend)
+    # =========================================================================
+
+    @staticmethod
+    def _engine_function(name: str, feature: Optional[str] = None) -> Any:
+        """``ras_commander_fast_dss.<name>``, or ``DssCapabilityError`` when the installed
+        engine has no such function or does not advertise ``feature``. ``ImportError``
+        without the engine. Never uses Java."""
+        if feature is not None:
+            dc = _backend.require_native_feature(feature, f"{name}")
+        else:
+            dc = _backend.import_native()
+        function = getattr(dc, name, None)
+        if not callable(function):
+            raise _errors.get("DssCapabilityError")(
+                f"The installed ras-commander-fast-dss has no {name}; upgrade with "
+                "'pip install -U ras-commander-fast-dss' (0.1.1 and later include it)."
+            )
+        return function
+
+    @staticmethod
+    @log_call
+    def read_profile(
+        dss_file: Union[str, Path],
+        pathname: str,
+        start_date: Optional[Any] = None,
+        end_date: Optional[Any] = None,
+        *,
+        raw: bool = False,
+        trim_missing: bool = True,
+    ) -> Any:
+        """Read a regular-interval profile dataset (DSS7 record types 102 and 107).
+
+        A thin wrapper around ``ras_commander_fast_dss.read_profile``. It always runs
+        on the native engine, whatever ``RasDss.backend`` is; the Java path has no
+        profile reader.
+
+        Args:
+            dss_file: Existing DSS file. It is never created or modified.
+            pathname: ``/A/B/C/D/E/F/`` with any D part (or none): the whole dataset
+                is read, stitched from every block.
+            start_date: Optional inclusive window start (as ``read_timeseries``).
+            end_date: Optional inclusive window end.
+            raw: Keep HEC missing markers as stored instead of ``NaN``.
+            trim_missing: Remove leading and trailing rows whose every depth is
+                missing (default), as HEC's reader does.
+
+        Returns:
+            The engine's ``ras_commander_fast_dss.Profile`` unchanged: ``times``,
+            ``depths`` (``n_depths``), ``values`` (``n_times`` by ``n_depths``, stored
+            width), ``depth_units``, ``value_units``, ``value_type``, ``quality`` and
+            ``to_dataframe()`` (rows are times, columns are depths).
+
+        Raises:
+            FileNotFoundError: If ``dss_file`` does not exist.
+            ImportError: If ras-commander-fast-dss is not installed.
+            DssPathnameNotFoundError: No data for ``pathname`` (a ``ValueError``).
+            DssUnsupportedRecordError: The record is not a regular profile (a scalar
+                time series, an irregular profile 112/117, any DSS6 record).
+            DssCapabilityError: The installed engine has no ``read_profile``.
+
+        Example:
+            profile = RasDss.read_profile("lake.dss", "/LAKE/DAM/TEMP-WATER//1Day/OBS/")
+            frame = profile.to_dataframe()
+        """
+        from ras_commander.RasUtils import RasUtils
+
+        dss_path = RasDss._check_existing_file(dss_file)
+        function = RasDss._engine_function("read_profile")
+        return function(
+            RasUtils.safe_resolve(dss_path), pathname, start_date, end_date,
+            raw=raw, trim_missing=trim_missing,
+        )
+
+    @staticmethod
+    @log_call
+    def write_profile(
+        dss_file: Union[str, Path],
+        pathname: str,
+        depths: Any,
+        values: Any,
+        *,
+        start: Any,
+        depth_units: str,
+        value_units: str,
+        data_type: str,
+        create_if_missing: bool = True,
+        sync: Optional[Any] = None,
+        **kwargs: Any,
+    ) -> Dict[str, Any]:
+        """Store a regular-interval profile (values by time and depth) in a DSS7 file.
+
+        A thin wrapper around ``ras_commander_fast_dss.write_profile``. It always runs
+        on the native engine, whatever ``RasDss.backend`` is; the Java writers of this
+        class do not store profiles. Profiles exist only in DSS7.
+
+        Args:
+            dss_file: DSS7 file. A new file is created as DSS7 when
+                ``create_if_missing`` is true, and removed again if the write fails.
+            pathname: ``/A/B/C/D/E/F/``; E is a standard regular interval and D is
+                replaced for each block.
+            depths: The depth axis, 1-D, ``n_depths`` values. Every block of a dataset
+                has one axis; a write whose depths differ from a stored block is refused.
+            values: 2-D, shape ``(n_times, n_depths)``. Never flattened or reshaped.
+            start: Time of the first row; the rows follow at the E-part interval.
+            depth_units: Units of the depth axis.
+            value_units: Units of the values.
+            data_type: HEC data type (``INST-VAL``, ``PER-AVER``, ...).
+            create_if_missing: Create the file when it does not exist (default True).
+            sync: Flush policy, passed to the engine unchanged. ``None`` (default)
+                states nothing and the installed engine's own default applies; see
+                ``write_timeseries``.
+            **kwargs: Other ``ras_commander_fast_dss.write_profile`` options, passed
+                unchanged (``quality``, ``time_zone``, ``precision``, ``value_type``,
+                ``raw``, ``allow_undetectable_readers``).
+
+        Returns:
+            The engine's report ``dict`` unchanged.
+
+        Raises:
+            FileNotFoundError: The file does not exist and ``create_if_missing`` is false.
+            ValueError: An existing file is not DSS7, or the engine refuses the input.
+            ImportError: If ras-commander-fast-dss is not installed.
+            DssCapabilityError: The installed engine does not advertise
+                ``write_profile`` (``attrs["native_profile_write_available"]`` in
+                ``get_capabilities()``).
+            DssLockedError: HEC software has the file open (a ``RuntimeError``).
+
+        Example:
+            RasDss.write_profile(
+                "lake.dss", "/LAKE/DAM/TEMP-WATER//1Day/OBS/",
+                depths=[0.0, 5.0, 10.0], values=temperatures,
+                start="01JAN2024 2400", depth_units="ft", value_units="DEG F",
+                data_type="INST-VAL",
+            )
+        """
+        function = RasDss._engine_function(
+            "write_profile", _backend.NATIVE_PROFILE_WRITE_FEATURE)
+        dc = _backend.require_native_writes()
+        target, version, existed, created_dirs = RasDss._native_write_target(
+            dss_file, 7, create_if_missing
+        )
+        with RasDss._native_new_file(dc, target, version, existed, created_dirs):
+            return function(
+                str(target), pathname, depths, values, start=start,
+                depth_units=depth_units, value_units=value_units, data_type=data_type,
+                **_backend.native_sync_kwargs(sync), **kwargs,
+            )
+
+    @staticmethod
+    @log_call
+    def read_location(dss_file: Union[str, Path], pathname: str) -> Any:
+        """Read a DSS7 location record (``/A/B/Location Info////``).
+
+        A thin wrapper around ``ras_commander_fast_dss.read_location``; it always runs
+        on the native engine. Use ``read_associated_location`` for the location of a
+        data record.
+
+        Args:
+            dss_file: Existing DSS7 file. It is never created or modified.
+            pathname: Pathname of the location record.
+
+        Returns:
+            The engine's ``ras_commander_fast_dss.Location`` unchanged (``x``, ``y``,
+            ``z``, coordinate system, units and datum codes and names, ``time_zone``,
+            ``supplemental``; ``to_dict()``).
+
+        Raises:
+            FileNotFoundError: If ``dss_file`` does not exist.
+            ImportError: If ras-commander-fast-dss is not installed.
+            DssPathnameNotFoundError: The record does not exist (a ``ValueError``).
+            DssUnsupportedRecordError: The record is not a location record, or the
+                file is DSS6 (DSS6 has no location records).
+        """
+        from ras_commander.RasUtils import RasUtils
+
+        dss_path = RasDss._check_existing_file(dss_file)
+        function = RasDss._engine_function("read_location")
+        return function(RasUtils.safe_resolve(dss_path), pathname)
+
+    @staticmethod
+    @log_call
+    def read_associated_location(dss_file: Union[str, Path], pathname: str) -> Optional[Any]:
+        """Return the location stored for a data record, or ``None`` when there is none.
+
+        A thin wrapper around ``ras_commander_fast_dss.read_associated_location``; it
+        always runs on the native engine. DSS7: the location record built from the A
+        and B parts of ``pathname``. DSS6: the coordinates in the time-series record's
+        own header.
+
+        Args:
+            dss_file: Existing DSS file. It is never created or modified.
+            pathname: Pathname of the data record (any D part).
+
+        Returns:
+            The engine's ``ras_commander_fast_dss.Location``, or ``None``.
+
+        Raises:
+            FileNotFoundError: If ``dss_file`` does not exist.
+            ImportError: If ras-commander-fast-dss is not installed.
+            DssLocationConflictError: DSS6 blocks of one dataset store different
+                locations (a ``ras_commander_fast_dss`` ``DssError``).
+        """
+        from ras_commander.RasUtils import RasUtils
+
+        dss_path = RasDss._check_existing_file(dss_file)
+        function = RasDss._engine_function("read_associated_location")
+        return function(RasUtils.safe_resolve(dss_path), pathname)
+
+    @staticmethod
+    @log_call
+    def write_location(
+        dss_file: Union[str, Path],
+        pathname: str,
+        *,
+        sync: Optional[Any] = None,
+        **kwargs: Any,
+    ) -> Dict[str, Any]:
+        """Store location data (coordinates, datums, supplemental text) for a pathname.
+
+        A thin wrapper around ``ras_commander_fast_dss.write_location``; it always runs
+        on the native engine, whatever ``RasDss.backend`` is. DSS7 stores the record
+        ``/A/B/Location Info////``. DSS6 rewrites the header of every block of the
+        time series named by ``pathname``, which must exist.
+
+        Args:
+            dss_file: Existing DSS6 or DSS7 file. This method does not create files.
+            pathname: DSS7: any pathname of the location (A and B are used). DSS6: a
+                time-series pathname.
+            sync: Flush policy, passed to the engine unchanged. ``None`` (default)
+                states nothing and the installed engine's own default applies; see
+                ``write_timeseries``.
+            **kwargs: The ``ras_commander_fast_dss.write_location`` fields, passed
+                unchanged: ``x``, ``y``, ``z``, ``coordinate_system``,
+                ``coordinate_id``, ``horizontal_units``, ``horizontal_datum``,
+                ``vertical_units``, ``vertical_datum``, ``time_zone`` (DSS7),
+                ``supplemental``, ``keep_existing`` and
+                ``allow_undetectable_readers``. Supplemental text is informational:
+                a datum named in it is never applied to values.
+
+        Returns:
+            The engine's report ``dict`` unchanged.
+
+        Raises:
+            FileNotFoundError: If ``dss_file`` does not exist.
+            ImportError: If ras-commander-fast-dss is not installed.
+            DssCapabilityError: The installed engine does not advertise
+                ``write_location`` (``attrs["native_location_write_available"]``).
+            DssUnsupportedRecordError: DSS6 without a time series for ``pathname``.
+            DssLockedError: HEC software has the file open (a ``RuntimeError``).
+
+        Example:
+            RasDss.write_location("gages.dss", "/BASIN/GAGE1/FLOW//1Hour/OBS/",
+                                  x=-90.07, y=29.95, z=3.2)
+        """
+        from ras_commander.RasUtils import RasUtils
+
+        dss_path = RasDss._check_existing_file(dss_file)
+        function = RasDss._engine_function(
+            "write_location", _backend.NATIVE_LOCATION_WRITE_FEATURE)
+        return function(
+            str(RasUtils.safe_resolve(dss_path)), pathname,
+            **_backend.native_sync_kwargs(sync), **kwargs,
+        )
+
     @staticmethod
     def _check_existing_file(dss_file: Union[str, Path]) -> Path:
         dss_path = Path(dss_file)
@@ -4252,6 +4545,7 @@ class RasDss:
         create_if_missing: bool = True,
         *,
         dss_version: Optional[int] = None,
+        sync: Optional[Any] = None,
     ) -> None:
         """
         Write a time series to a DSS file.
@@ -4276,6 +4570,15 @@ class RasDss:
             dss_version: Major DSS version to use when creating a new file.
                 Pass 6 or 7 explicitly, or omit it to preserve the bridge's
                 current default. Existing files must match an explicit value.
+            sync: Flush policy of the native writer, passed to
+                ras-commander-fast-dss unchanged. ``None`` (default) states nothing,
+                so the installed engine's own default applies; that default is the
+                engine's to define and can change between its releases. With
+                ras-commander-fast-dss 0.1.1, ``True`` flushes at each write step
+                and ``False`` does not flush. No value is a power-loss guarantee.
+                The ``java`` backend does not use it; ``shadow`` applies it to the
+                native repeat only. Stated under ``native`` with an engine that has
+                no ``write_sync_policy`` feature: ``DssCapabilityError``.
 
         Raises:
             FileNotFoundError: If DSS file doesn't exist and create_if_missing=False
@@ -4337,11 +4640,12 @@ class RasDss:
         """
         backend = RasDss._write_backend()
         args = (dss_file, pathname, times, values, units, data_type, create_if_missing)
-        if backend == "native":
-            return RasDss._write_timeseries_native(*args, dss_version=dss_version)
-        if backend == "shadow":
-            return RasDss._write_timeseries_shadow(*args, dss_version=dss_version)
-        return RasDss._write_timeseries_java(*args, dss_version=dss_version)
+        with _backend.write_sync(sync, backend):
+            if backend == "native":
+                return RasDss._write_timeseries_native(*args, dss_version=dss_version)
+            if backend == "shadow":
+                return RasDss._write_timeseries_shadow(*args, dss_version=dss_version)
+            return RasDss._write_timeseries_java(*args, dss_version=dss_version)
 
     @staticmethod
     def _write_timeseries_java(
@@ -4598,7 +4902,7 @@ class RasDss:
             report = dc.write_timeseries(
                 str(target), pathname, values, times=stamps, units=units,
                 data_type=data_type, version=version, value_type="double",
-                raw=(version == 7),
+                raw=(version == 7), **_backend.native_sync_kwargs(),
             )
         logger.info(f"Wrote {len(values)} values to {target.name}")
         logger.debug(
@@ -4756,6 +5060,7 @@ class RasDss:
         create_if_missing: bool = True,
         *,
         dss_version: Optional[int] = None,
+        sync: Optional[Any] = None,
     ) -> None:
         """
         Write a time series DataFrame to a DSS file.
@@ -4774,6 +5079,10 @@ class RasDss:
             dss_version: Major DSS version (6 or 7) for new-file creation.
                 Omit it to preserve the current default. Existing files must
                 match an explicit value.
+            sync: Flush policy of the native writer, passed to
+                ras-commander-fast-dss unchanged; ``None`` (default) leaves the
+                installed engine's own default. The ``java`` backend does not
+                use it. See ``write_timeseries``.
 
         Example:
             >>> # Read from one DSS file, write to another
@@ -4800,6 +5109,7 @@ class RasDss:
             data_type=data_type,
             create_if_missing=create_if_missing,
             dss_version=dss_version,
+            sync=sync,
         )
 
     # ------------------------------------------------------------------
@@ -4824,6 +5134,7 @@ class RasDss:
         y_precision: Optional[int] = None,
         value_type: str = "auto",
         dss_version: Optional[int] = None,
+        sync: Optional[Any] = None,
     ) -> None:
         """
         Write one paired-data record (rating curve, damage curve, temporal pattern,
@@ -4867,6 +5178,15 @@ class RasDss:
                 ``"float"`` or ``"double"`` choose.
             dss_version: Major DSS version (6 or 7) for a new file. Omit it for DSS7.
                 An existing file must match an explicit value.
+            sync: Flush policy of the native writer, passed to
+                ras-commander-fast-dss unchanged. ``None`` (default) states nothing,
+                so the installed engine's own default applies; that default is the
+                engine's to define and can change between its releases. With
+                ras-commander-fast-dss 0.1.1, ``True`` flushes at each write step
+                and ``False`` does not flush. No value is a power-loss guarantee.
+                The ``java`` backend does not use it; ``shadow`` applies it to the
+                native repeat only. Stated under ``native`` with an engine that has
+                no ``write_sync_policy`` feature: ``DssCapabilityError``.
 
         Returns:
             None. As with ``write_timeseries``, a failed write raises.
@@ -4927,17 +5247,18 @@ class RasDss:
         )
         dss_version = RasDss._validate_dss_version(dss_version)
         backend = RasDss._write_backend()
-        if backend == "native":
-            return RasDss._write_paired_data_native(
+        with _backend.write_sync(sync, backend):
+            if backend == "native":
+                return RasDss._write_paired_data_native(
+                    dss_file, pathname, spec, create_if_missing, dss_version=dss_version
+                )
+            if backend == "shadow":
+                return RasDss._write_paired_data_shadow(
+                    dss_file, pathname, spec, create_if_missing, dss_version=dss_version
+                )
+            return RasDss._write_paired_data_java(
                 dss_file, pathname, spec, create_if_missing, dss_version=dss_version
             )
-        if backend == "shadow":
-            return RasDss._write_paired_data_shadow(
-                dss_file, pathname, spec, create_if_missing, dss_version=dss_version
-            )
-        return RasDss._write_paired_data_java(
-            dss_file, pathname, spec, create_if_missing, dss_version=dss_version
-        )
 
     @staticmethod
     def _paired_data_numeric(values: Any, what: str) -> np.ndarray:
@@ -5200,6 +5521,7 @@ class RasDss:
                 y_units=spec["y_units"], y_type=spec["y_type"],
                 labels=spec["labels"], value_type=spec["value_type"], raw=True,
                 x_precision=x_precision, y_precision=y_precision, version=version,
+                **_backend.native_sync_kwargs(),
             )
         logger.info(
             f"Wrote {spec['n_curves']} curve(s) of {spec['x'].shape[0]} ordinates to {target.name}"

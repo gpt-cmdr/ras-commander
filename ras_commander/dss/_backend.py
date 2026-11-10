@@ -28,12 +28,15 @@ is guarded so that a missing or broken wheel (``ImportError``, or for example an
 
 from __future__ import annotations
 
+import contextvars
 import importlib
+import inspect
 import logging
 import os
 import threading
 from collections import Counter, deque
 from collections.abc import Mapping
+from contextlib import contextmanager
 from typing import Any, Deque, Dict, List, Optional, Tuple
 
 import numpy as np
@@ -708,6 +711,183 @@ def require_native_repair():
     return dc
 
 
+def native_feature(name: str) -> bool:
+    """True when the installed ras-commander-fast-dss lists ``name`` in ``FEATURES``.
+
+    A capability check, not a version pin. Never raises: a missing or broken engine,
+    or a ``FEATURES`` of another shape, is ``False``.
+    """
+    dc = _maybe_native()
+    if dc is None:
+        return False
+    try:
+        features = getattr(dc, "FEATURES", None)
+        if isinstance(features, Mapping):
+            return bool(features.get(name, False))
+        if isinstance(features, (set, frozenset, tuple, list)):
+            return any(isinstance(f, str) and f == name for f in features)
+    except Exception:
+        return False
+    return False
+
+
+def require_native_feature(name: str, what: str):
+    """``ras_commander_fast_dss`` advertising ``name``, or ``DssCapabilityError``.
+
+    ``what`` names the operation in the message. Raises ``ImportError`` (naming the
+    package) when the engine is not installed. Never uses Java.
+    """
+    from . import _errors
+
+    dc = import_native()
+    if not native_feature(name):
+        raise _errors.get("DssCapabilityError")(
+            f"The installed ras-commander-fast-dss does not provide {what} "
+            f"(feature {name!r} is not in ras_commander_fast_dss.FEATURES). "
+            "Upgrade with 'pip install -U ras-commander-fast-dss' "
+            "(0.1.1 and later include it)."
+        )
+    return dc
+
+
+# ---------------------------------------------------------------------------
+# Flush policy of native writes (``sync=``)
+# ---------------------------------------------------------------------------
+
+#: ras-commander-fast-dss FEATURES flag for the writers' ``sync=`` option (0.1.1 and later).
+NATIVE_SYNC_FEATURE = "write_sync_policy"
+
+#: The ``sync=`` value a public RasDss writer was called with. ``None`` means the caller
+#: stated nothing, and the engine's own default applies: RasDss never names that default,
+#: because the engine may change it between releases.
+_WRITE_SYNC: contextvars.ContextVar = contextvars.ContextVar("rasdss_write_sync", default=None)
+
+
+def native_sync_available() -> bool:
+    """True when the installed ras-commander-fast-dss writers take ``sync=``. Never raises."""
+    return native_feature(NATIVE_SYNC_FEATURE)
+
+
+def require_native_sync():
+    """``ras_commander_fast_dss`` whose writers take ``sync=``, or ``DssCapabilityError``."""
+    return require_native_feature(NATIVE_SYNC_FEATURE, "the writers' sync= flush option")
+
+
+@contextmanager
+def write_sync(sync: Any, backend: str):
+    """State ``sync`` for the native writes made inside the block.
+
+    ``None`` changes nothing, so a public writer called from inside another public
+    writer keeps the outer caller's value. Under ``native`` a stated value needs an
+    engine with ``NATIVE_SYNC_FEATURE``; otherwise ``DssCapabilityError`` is raised
+    before any file is touched. The Java writers have no such option: under ``java``
+    the value is not used (one DEBUG line says so). Under ``shadow`` it reaches only
+    the native repeat on the temporary copy.
+    """
+    if sync is None:
+        yield
+        return
+    if backend == "native":
+        require_native_sync()
+    elif backend == "java":
+        logger.debug("sync=%r is not used by the java DSS backend (HEC's library "
+                     "manages its own flushing)", sync)
+    token = _WRITE_SYNC.set(sync)
+    try:
+        yield
+    finally:
+        _WRITE_SYNC.reset(token)
+
+
+def native_sync_kwargs(sync: Any = None) -> Dict[str, Any]:
+    """Keyword arguments that pass a stated ``sync`` to an engine writer unchanged.
+
+    ``sync`` is the value given directly; when it is ``None`` the value stated by an
+    enclosing :func:`write_sync` block is used. Empty when nothing was stated: the
+    engine's default then applies.
+    """
+    value = sync if sync is not None else _WRITE_SYNC.get()
+    return {} if value is None else {"sync": value}
+
+
+def takes_keyword(function: Any, name: str) -> bool:
+    """True when ``function`` accepts the keyword ``name`` (or any keyword). Never raises."""
+    try:
+        parameters = inspect.signature(function).parameters
+    except (TypeError, ValueError):
+        return True
+    return name in parameters or any(
+        p.kind is inspect.Parameter.VAR_KEYWORD for p in parameters.values()
+    )
+
+
+def engine_sync_kwargs(function: Any, sync: Any, what: str) -> Dict[str, Any]:
+    """``{"sync": sync}`` for an engine function that takes it; empty when unstated.
+
+    Raises ``DssCapabilityError`` when ``sync`` is stated and the installed engine's
+    function has no such option (a capability check on the function itself).
+    """
+    if sync is None:
+        return {}
+    if not takes_keyword(function, "sync"):
+        from . import _errors
+
+        raise _errors.get("DssCapabilityError")(
+            f"The installed ras-commander-fast-dss {what} takes no sync= option; "
+            "omit sync, or upgrade with 'pip install -U ras-commander-fast-dss'."
+        )
+    return {"sync": sync}
+
+
+#: ras-commander-fast-dss FEATURES flags of the profile and location writers.
+NATIVE_PROFILE_WRITE_FEATURE = "write_profile"
+NATIVE_LOCATION_WRITE_FEATURE = "write_location"
+
+#: ``RasDssGrid`` method -> the FEATURES flag it needs.
+GRIDDED_FEATURES = {
+    "import_gridded": "gridded_import",
+    "import_arrays": "gridded_import",
+    "list_variables": "gridded_import",
+    "import_zarr": "gridded_zarr",
+    "read_zarr": "gridded_zarr",
+    "zarr_variables": "gridded_zarr",
+    "shift_times": "gridded_time_tools",
+    "resample_times": "gridded_time_tools",
+    "time_steps": "gridded_time_tools",
+    "series_info": "gridded_time_tools",
+    "read_window": "gridded_time_tools",
+    "read_nearest": "gridded_time_tools",
+    "read_min_max": "gridded_time_tools",
+    "calculate": "grid_tools",
+    "calculate_raster": "grid_tools",
+    "sanitize": "grid_tools",
+    "clip": "grid_tools",
+    "normalize": "grid_tools",
+    "grid_to_point": "grid_to_point",
+    "zonal_statistics": "grid_to_point",
+    "zone_masks": "grid_to_point",
+}
+
+
+def require_gridded(method: str):
+    """The engine's ``gridded`` function behind ``RasDssGrid.<method>``.
+
+    Raises ``ImportError`` without the engine and ``DssCapabilityError`` when the
+    installed engine does not advertise the feature or has no such function.
+    """
+    from . import _errors
+
+    feature = GRIDDED_FEATURES[method]
+    dc = require_native_feature(feature, f"gridded.{method}")
+    function = getattr(getattr(dc, "gridded", None), method, None)
+    if not callable(function):
+        raise _errors.get("DssCapabilityError")(
+            f"The installed ras-commander-fast-dss has no gridded.{method}; "
+            "upgrade with 'pip install -U ras-commander-fast-dss'."
+        )
+    return function
+
+
 #: Shadow writes copy an existing target file to a temporary directory before the Java
 #: write, so that the native writer can repeat the write on the copy. Larger files are
 #: not copied and the comparison is skipped. Default limit in MB; override it with
@@ -791,6 +971,18 @@ CAPABILITIES = (
      "DSS7 copy-out recovery into a new file; always runs on ras-commander-fast-dss "
      "(no Java equivalent), whatever the backend; needs 'repair_copy_out' "
      "(native_repair_available)"),
+    ("read_profile", "gated", "gated", "gated",
+     "DSS7 regular profiles (102/107); always runs on ras-commander-fast-dss, "
+     "whatever the backend"),
+    ("write_profile", "gated", "gated", "gated",
+     "always runs on ras-commander-fast-dss, whatever the backend; needs 'write_profile'"),
+    ("read_location", "gated", "gated", "gated",
+     "DSS7 location records; always runs on ras-commander-fast-dss, whatever the backend"),
+    ("read_associated_location", "gated", "gated", "gated",
+     "location of a data record (DSS7 location record, DSS6 time-series header); "
+     "always runs on ras-commander-fast-dss, whatever the backend"),
+    ("write_location", "gated", "gated", "gated",
+     "always runs on ras-commander-fast-dss, whatever the backend; needs 'write_location'"),
 )
 
 

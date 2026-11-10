@@ -285,6 +285,7 @@ def test_public_signature_is_additive_and_keyword_scoped() -> None:
         "x_shift",
         "y_shift",
         "overwrite",
+        "sync",
     ]
     for name in (
         "time_shift_minutes",
@@ -292,6 +293,7 @@ def test_public_signature_is_additive_and_keyword_scoped() -> None:
         "x_shift",
         "y_shift",
         "overwrite",
+        "sync",
     ):
         assert signature.parameters[name].kind is inspect.Parameter.KEYWORD_ONLY
 

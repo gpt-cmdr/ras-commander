@@ -53,15 +53,22 @@ Usage:
     ras = init_ras_project("project_path", "7.0")
     enhanced = RasDss.extract_boundary_timeseries(ras.boundaries_df, ras_object=ras)
 
+Gridded import and grid tools (ras-commander-fast-dss on every backend):
+    from ras_commander import RasDssGrid
+
+    result = RasDssGrid.import_gridded(grib_files, "storm.dss", product="mrms_qpe")
+    RasDssGrid.grid_to_point("storm.dss", "basins.geojson", "NAME", "basin_average.dss")
+
 See Also:
     - examples/310_dss_boundary_extraction.ipynb for complete workflow
     - ras_commander/dss/AGENTS.md for package-local development guidance
 """
 
 from .RasDss import RasDss
+from .RasDssGrid import RasDssGrid
 from . import _errors
 
-__all__ = ['RasDss', *_errors.ERROR_NAMES]
+__all__ = ['RasDss', 'RasDssGrid', *_errors.ERROR_NAMES]
 
 
 def __getattr__(name):

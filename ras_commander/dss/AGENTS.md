@@ -11,7 +11,7 @@ This file is the canonical local instruction file for `ras_commander/dss/`.
 
 ## Architecture
 
-- Public API: `RasDss`
+- Public API: `RasDss`, `RasDssGrid`
 - Private support: `_hec_monolith.py`, `_backend.py`, `_errors.py`, `_native_grid.py`
 - Backends (`_backend.py`): `RasDss.backend` = `"java"` (default this
   release) | `"native"` | `"shadow"`; the environment variable
@@ -134,11 +134,35 @@ This file is the canonical local instruction file for `ras_commander/dss/`.
   CPython abi3 wheel platforms (Windows AMD64, Linux x86_64/aarch64; 0.1.1 has no
   macOS wheels, so Darwin is excluded and macOS builds from the sdist); never make
   it a core dependency while `java` is the default. `RasDss.repair` wraps the
-  engine's `repair` (gated on the `repair_copy_out` feature, on every backend);
-  RasDss writers do not expose the engine's opt-in `sync=False`. The `dss-native` extra also keeps pydsstools for
+  engine's `repair` (gated on the `repair_copy_out` feature, on every backend).
+  The `dss-native` extra also keeps pydsstools for
   `write_precip_grid_arrays` on the `java` backend. `native` without it raises `ImportError`. `shadow` without it
   falls back to Java and logs one warning.
 - Keep the monolith download flow lazy and on-demand.
+
+## Engine-Only Wrappers
+
+- `RasDss.read_profile`, `write_profile`, `read_location`, `read_associated_location`,
+  `write_location` and every `RasDssGrid` method (the engine's `gridded` namespace:
+  import, calculator, sanitizer, clipper, normalizer, time tools, zonal statistics)
+  run on ras-commander-fast-dss on every backend, like `repair`. They have no Java
+  path, no shadow comparison and no dispatch triple.
+- Keep them thin: resolve paths, check the gate (`_backend.require_native_feature`,
+  `require_gridded`; a capability check, never a version pin), pass the remaining
+  arguments through `**kwargs` and return the engine's result unchanged. Do not
+  re-validate, rename or default engine options here.
+- `sync=`: public writers take `sync: Optional[Any] = None`. `None` sends nothing, so
+  the engine's default applies. **Never write the engine's default into code or
+  state it as RasDss behavior**: it changes between engine releases (0.1.2 changes
+  it). A stated value is passed unchanged, without type checks. Backend-switched
+  writers set it with `_backend.write_sync(sync, backend)` and each `dc.write_*`
+  call adds `**_backend.native_sync_kwargs()`; a nested public writer called with
+  `None` keeps the outer value. Under `native` a stated value needs the
+  `write_sync_policy` feature (`DssCapabilityError` before any file change); `java`
+  does not use it; `shadow` applies it to the native repeat. `RasDssGrid` checks
+  the engine function's own signature (`engine_sync_kwargs`).
+- Tests: `tests/test_rasdss_wrappers.py` (synthetic files and the public grid
+  fixture; no JVM).
 
 ## Common API Surface (quick reference)
 
@@ -161,6 +185,13 @@ RasDss.check_pathname("file.dss", path); RasDss.is_pathname_available("file.dss"
 RasDss.write_timeseries(...)          # selected backend (native: ras-commander-fast-dss writers)
 RasDss.write_paired_data("out.dss", "/A/B/STAGE-FLOW///F/", pdf)    # frame from read_paired_data, or x, y arrays
 RasDss.get_capabilities().attrs["native_writes_available"]
+RasDss.write_timeseries(..., sync=False)   # passed to the engine unchanged; None = engine default
+profile = RasDss.read_profile("file.dss", "/A/B/TEMP//1Day/F/")     # engine Profile, any backend
+RasDss.write_location("file.dss", path, x=1.0, y=2.0)               # engine, any backend
+
+from ras_commander import RasDssGrid
+RasDssGrid.import_gridded(files, "out.dss", product="mrms_qpe")     # engine ImportResult
+RasDssGrid.grid_to_point("out.dss", "zones.geojson", "NAME", "points.dss")
 ```
 
 Under native/shadow:

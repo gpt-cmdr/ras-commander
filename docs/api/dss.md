@@ -339,6 +339,20 @@ Get DSS file information.
 **Returns:** Dict with filepath, filename, file size, total pathname count, and
 a preview of the first five catalog rows.
 
+## RasDssGrid
+
+Gridded import and grid tools for DSS files: thin wrappers around the
+`ras_commander_fast_dss.gridded` namespace. Every method runs on the optional
+ras-commander-fast-dss engine, whatever `RasDss.backend` is, and returns the
+engine's result unchanged. See
+[Engine-only operations](../user-guide/dss-native-backend.md#engine-only-operations).
+
+::: ras_commander.dss.RasDssGrid.RasDssGrid
+    options:
+      show_root_heading: false
+      heading_level: 3
+      show_source: false
+
 ## Usage
 
 ```python
@@ -459,12 +473,17 @@ source immutability is required. These APIs do not guarantee read-only file acce
         - get_info
         - is_pathname_available
         - is_valid_pathname
+        - read_associated_location
         - read_grid
+        - read_location
         - read_multiple_timeseries
+        - read_profile
         - read_timeseries
         - repair
         - shutdown_jvm
         - write_grid_timeseries
+        - write_location
         - write_paired_data
+        - write_profile
         - write_timeseries
         - write_timeseries_from_dataframe
