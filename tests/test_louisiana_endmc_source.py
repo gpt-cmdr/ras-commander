@@ -7,9 +7,12 @@ and skip when it is unreachable. No credentials are used anywhere.
 
 from __future__ import annotations
 
+import base64
+import hashlib
 import json
 import xml.etree.ElementTree as ET
 from pathlib import Path
+import zlib
 from urllib.parse import unquote
 
 import pandas as pd
@@ -60,10 +63,12 @@ class _Response:
 class FakeBucket:
     """Serve ListObjectsV2 and ranged GETs for an in-memory prefix."""
 
-    def __init__(self, kind, resource_id, files):
+    def __init__(self, kind, resource_id, files, checksums=None):
         self.prefix = f"endmc-managed/{kind}/{resource_id}/"
         self.files = {self.prefix + rel: data for rel, data in files.items()}
         self.etags = {key: f"etag{i:04d}" for i, key in enumerate(self.files)}
+        # {relative path: (algorithm, base64 value)} served on HEAD with checksum mode.
+        self.checksums = {self.prefix + rel: v for rel, v in (checksums or {}).items()}
         self.requests = []
         self.fail_ranges = set()
 
@@ -72,9 +77,15 @@ class FakeBucket:
         items = []
         for key, data in self.files.items():
             if key.startswith(prefix):
+                checksum = ""
+                if key in self.checksums:
+                    checksum = (
+                        f"<ChecksumAlgorithm>{self.checksums[key][0]}</ChecksumAlgorithm>"
+                        "<ChecksumType>FULL_OBJECT</ChecksumType>"
+                    )
                 items.append(
                     f"<Contents><Key>{key}</Key><LastModified>2026-01-01T00:00:00.000Z"
-                    f"</LastModified><ETag>&quot;{self.etags[key]}&quot;</ETag>"
+                    f"</LastModified><ETag>&quot;{self.etags[key]}&quot;</ETag>{checksum}"
                     f"<Size>{len(data)}</Size><StorageClass>STANDARD</StorageClass></Contents>"
                 )
         body = (
@@ -102,13 +113,21 @@ class FakeBucket:
         return _Response(200, data)
 
     def head(self, url, headers=None, timeout=None):
+        key = unquote(url[len(endmc.S3_ENDPOINT) + 1 :])
+        if key in self.checksums and (headers or {}).get("x-amz-checksum-mode") == "ENABLED":
+            algorithm, value = self.checksums[key]
+            return _Response(
+                200,
+                b"",
+                {f"x-amz-checksum-{algorithm.lower()}": value, "x-amz-checksum-type": "FULL_OBJECT"},
+            )
         return _Response(200, b"", {})
 
 
 @pytest.fixture
 def fake_bucket(monkeypatch):
-    def install(files, kind="model_application", resource_id=FAKE_ID):
-        bucket = FakeBucket(kind, resource_id, files)
+    def install(files, kind="model_application", resource_id=FAKE_ID, checksums=None):
+        bucket = FakeBucket(kind, resource_id, files, checksums)
         monkeypatch.setattr(endmc.requests, "get", bucket.get)
         monkeypatch.setattr(endmc.requests, "head", bucket.head)
         return bucket
@@ -471,7 +490,21 @@ def test_crc64nvme_matches_reference_vector(tmp_path):
     assert endmc.crc64nvme_file(path) == expected
 
 
-def test_crc_verify_requires_awscrt(monkeypatch, tmp_path):
+def _b64(raw: bytes) -> str:
+    return base64.b64encode(raw).decode()
+
+
+def test_file_checksum_algorithms(tmp_path):
+    path = tmp_path / "check.txt"
+    path.write_bytes(b"123456789")
+    # CRC-32 (ISO-HDLC) check value for "123456789" is 0xCBF43926.
+    assert endmc.file_checksum(path, "CRC32") == _b64(bytes.fromhex("cbf43926"))
+    assert endmc.file_checksum(path, "sha256") == _b64(hashlib.sha256(b"123456789").digest())
+    with pytest.raises(ValueError):
+        endmc.file_checksum(path, "MD5")
+
+
+def _block_awscrt(monkeypatch):
     import builtins
 
     real_import = builtins.__import__
@@ -482,8 +515,43 @@ def test_crc_verify_requires_awscrt(monkeypatch, tmp_path):
         return real_import(name, *args, **kwargs)
 
     monkeypatch.setattr(builtins, "__import__", blocked)
+
+
+def test_checksum_verify_crc32_without_awscrt(monkeypatch, tmp_path, fake_bucket):
+    _block_awscrt(monkeypatch)
+    good = b"Proj Title=Example\n"
+    plain = b"no checksum stored"
+    fake_bucket(
+        {"Model/Example.prj": good, "Model/notes.txt": plain},
+        checksums={"Model/Example.prj": ("CRC32", _b64(zlib.crc32(good).to_bytes(4, "big")))},
+    )
+    df = LouisianaEndmc.download_resource(
+        FAKE_ID, tmp_path / "v", kind="model_application", verify="checksum"
+    ).set_index("relative_path")
+    assert df.loc["Model/Example.prj", "verified"] == "crc32"
+    assert df.loc["Model/notes.txt", "verified"] == "size"
+    receipt = json.loads((tmp_path / "v" / f"_endmc_{FAKE_ID}.json").read_text())
+    assert receipt["files"]["Model/Example.prj"]["checksum"].startswith("crc32:")
+
+
+def test_checksum_mismatch_fails_file(tmp_path, fake_bucket):
+    fake_bucket(
+        {"a.txt": b"actual bytes"},
+        checksums={"a.txt": ("CRC32", _b64((0).to_bytes(4, "big")))},
+    )
+    df = LouisianaEndmc.download_resource(FAKE_ID, tmp_path / "m", kind="model_application", verify="checksum")
+    assert df.loc[0, "status"] == "failed"
+    assert "CRC32 mismatch" in df.loc[0, "error"]
+    assert not (tmp_path / "m" / "a.txt").exists()
+
+
+def test_crc64nvme_objects_require_awscrt(monkeypatch, tmp_path, fake_bucket):
+    _block_awscrt(monkeypatch)
+    fake_bucket({"a.bin": b"x"}, checksums={"a.bin": ("CRC64NVME", "AAAAAAAAAAA=")})
     with pytest.raises(ImportError, match="awscrt"):
-        LouisianaEndmc.download_resource(FAKE_ID, tmp_path, kind="dataset", verify="crc64nvme")
+        LouisianaEndmc.download_resource(FAKE_ID, tmp_path, kind="model_application", verify="checksum")
+    with pytest.raises(ValueError, match="verify"):
+        LouisianaEndmc.download_resource(FAKE_ID, tmp_path, kind="model_application", verify="md5")
 
 
 # ---------------------------------------------------------------------------
@@ -520,11 +588,21 @@ def test_live_list_small_dataset_and_range_read(tmp_path):
 
 @pytest.mark.network
 @pytest.mark.integration
-def test_live_crc64nvme_verification(tmp_path):
+def test_live_checksum_verification(tmp_path):
     pytest.importorskip("awscrt")
     if not _bucket_reachable():
         pytest.skip("lwi-model-data bucket unreachable")
+    # This dataset's objects carry full-object CRC64NVME checksums.
     df = LouisianaEndmc.download_resource(
-        TINY_DATASET, tmp_path / "c", kind="dataset", patterns=["*.cpg"], verify="crc64nvme"
+        TINY_DATASET, tmp_path / "c", kind="dataset", patterns=["*.cpg"], verify="checksum"
     )
     assert df.loc[0, "verified"] == "crc64nvme"
+    # The Abbeville project file carries a full-object CRC32 checksum.
+    df = LouisianaEndmc.download_resource(
+        "6a3d7158f74d9b1d5415493a",
+        tmp_path / "a",
+        kind="model_application",
+        patterns=["_Abbeville/VE_Abbeville.prj"],
+        verify="checksum",
+    )
+    assert df.loc[0, "verified"] == "crc32"

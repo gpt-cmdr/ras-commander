@@ -37,6 +37,7 @@ projects, and generated artifacts are intentionally excluded from this README.
 - [910_usgs_gauge_catalog.ipynb](910_usgs_gauge_catalog.ipynb) through [923_stofs3d_coastal_boundary.ipynb](923_stofs3d_coastal_boundary.ipynb) - gauge, validation, forecast, and coastal boundary workflows.
 - [917_mrms_precipitation_qpe.ipynb](917_mrms_precipitation_qpe.ipynb) - MRMS source inspection and spatially averaged, uniform precipitation-boundary comparisons. Use [924_mrms_netcdf_rain_on_grid.ipynb](924_mrms_netcdf_rain_on_grid.ipynb) for spatial MRMS forcing through direct NetCDF rain-on-grid.
 - [920_terrain_creation.ipynb](920_terrain_creation.ipynb), [925_xs_interpolation_surface.ipynb](925_xs_interpolation_surface.ipynb), [930_terrain_modification_analysis.ipynb](930_terrain_modification_analysis.ipynb), and [931_native_rasmapper_terrain_export.ipynb](931_native_rasmapper_terrain_export.ipynb) - terrain creation, analysis, and native registered-terrain export workflows.
+- [932_louisiana_endmc_public_models.ipynb](932_louisiana_endmc_public_models.ipynb) - Louisiana Watershed Initiative EnDMC public catalog, `/vsicurl/` raster reads, and selective verified downloads.
 - [950_ebfe_spring_creek.ipynb](950_ebfe_spring_creek.ipynb) through [958_model_sources_showcase.ipynb](958_model_sources_showcase.ipynb) - FEMA eBFE/BLE organization and validation.
 - [960_cloud_native_geometry_export.ipynb](960_cloud_native_geometry_export.ipynb) through [962_cloud_native_cog_results_export.ipynb](962_cloud_native_cog_results_export.ipynb) - cloud-native export with `ras2cng`.
 
@@ -158,6 +159,10 @@ for experimental API status and the evidence required before restoring them.
 `920_terrain_creation.ipynb`, `925_xs_interpolation_surface.ipynb`,
 `930_terrain_modification_analysis.ipynb`,
 `931_native_rasmapper_terrain_export.ipynb`
+
+### 930s - Public Model Sources
+
+`932_louisiana_endmc_public_models.ipynb`
 
 ### 950s - eBFE Delivery
 

@@ -24,9 +24,10 @@ Throughput guidance (measured from a CLB workstation, November 2026): about
 60 MB/s on one stream and about 120 MB/s with four parallel streams. Large
 design-storm resources exceed 400 GiB, so select components before
 downloading. S3 ETags for multipart uploads are not MD5 digests; downloads are
-verified by byte length, and optionally by the full-object CRC64NVME checksum
-S3 returns when ``x-amz-checksum-mode: ENABLED`` is sent (requires the
-optional ``awscrt`` package).
+verified by byte length, and optionally (``verify="checksum"``) by the
+full-object checksum S3 stored at upload and returns when
+``x-amz-checksum-mode: ENABLED`` is sent. Published objects carry CRC32 or
+CRC64NVME; CRC64NVME needs the optional ``awscrt`` package.
 
 Example:
     >>> from ras_commander.sources.state import LouisianaEndmc
@@ -44,6 +45,7 @@ from __future__ import annotations
 
 import base64
 import fnmatch
+import hashlib
 import html
 import json
 import os
@@ -51,6 +53,7 @@ import re
 import threading
 import time
 import uuid
+import zlib
 import xml.etree.ElementTree as ET
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
@@ -523,9 +526,14 @@ class LouisianaEndmc:
             chunk_size: Range size in bytes (default 64 MiB).
             overwrite: Re-download files that already exist with the
                 expected size.
-            verify: ``"size"`` (default) or ``"crc64nvme"``. The checksum
-                mode compares S3's full-object CRC64NVME with the local file
-                and requires the optional ``awscrt`` package.
+            verify: ``"size"`` (default) or ``"checksum"``. The checksum
+                mode compares the full-object checksum S3 stored at upload
+                (the algorithm the listing reports: CRC32, CRC32C,
+                CRC64NVME, SHA1, or SHA256) with the local file. CRC32 and
+                SHA use the standard library; CRC32C and CRC64NVME need the
+                optional ``awscrt`` package. Objects stored without a
+                full-object checksum are verified by size and reported in
+                ``attrs["size_only"]``.
             max_path_length: Refuse the download when any destination path
                 (plus the partial-file suffix) exceeds this length. ``None``
                 disables the check.
@@ -541,12 +549,11 @@ class LouisianaEndmc:
 
         Raises:
             ValueError: Unsafe object paths, path length or size limits.
-            ImportError: ``verify="crc64nvme"`` without ``awscrt``.
+            ImportError: ``verify="checksum"`` selects CRC32C/CRC64NVME
+                objects and ``awscrt`` is not installed.
         """
-        if verify not in {"size", "crc64nvme"}:
-            raise ValueError("verify must be 'size' or 'crc64nvme'")
-        if verify == "crc64nvme":
-            _require_awscrt()
+        if verify not in {"size", "checksum"}:
+            raise ValueError("verify must be 'size' or 'checksum'")
         if max_workers < 1:
             raise ValueError("max_workers must be >= 1")
         if chunk_size < 1024 * 1024:
@@ -576,6 +583,15 @@ class LouisianaEndmc:
                 "for archive-only copies."
             )
 
+        if verify == "checksum" and not dry_run:
+            needs_crt = {
+                str(row.checksum_algorithm).upper()
+                for row, _ in plan
+                if row.checksum_type == "FULL_OBJECT"
+            } & {"CRC32C", "CRC64NVME"}
+            if needs_crt:
+                _require_awscrt(sorted(needs_crt))
+
         total_bytes = int(sum(int(row.size) for row, _ in plan))
         if max_bytes is not None and total_bytes > max_bytes:
             raise ValueError(
@@ -583,10 +599,7 @@ class LouisianaEndmc:
                 f"{max_bytes:,}. Narrow components/patterns or raise max_bytes."
             )
         logger.info(
-            "EnDMC %s: %d objects, %.2f GiB selected",
-            resource_id,
-            len(plan),
-            total_bytes / 1024**3,
+            "EnDMC %s: %d objects, %s selected", resource_id, len(plan), _format_bytes(total_bytes)
         )
 
         results: Dict[str, Dict[str, Any]] = {}
@@ -610,7 +623,14 @@ class LouisianaEndmc:
             if not overwrite and _existing_size(target) == int(row.size):
                 result["status"] = "present"
                 continue
-            jobs.append(_FileJob(row.key, target, int(row.size), row.etag, result))
+            algorithm = (
+                str(row.checksum_algorithm).upper()
+                if row.checksum_type == "FULL_OBJECT" and row.checksum_algorithm
+                else None
+            )
+            jobs.append(
+                _FileJob(row.key, target, int(row.size), row.etag, result, checksum_algorithm=algorithm)
+            )
 
         if jobs:
             _run_jobs(jobs, max_workers=max_workers, chunk_size=chunk_size, verify=verify, timeout=timeout)
@@ -631,6 +651,16 @@ class LouisianaEndmc:
             }
         )
         if not dry_run:
+            size_only = int(
+                ((df["status"] == "downloaded") & (df["verified"] == "size")).sum()
+            ) if verify == "checksum" else 0
+            df.attrs["size_only"] = size_only
+            if size_only:
+                logger.info(
+                    "EnDMC %s: %d file(s) have no full-object S3 checksum; verified by size",
+                    resource_id,
+                    size_only,
+                )
             receipt = _write_receipt(
                 root, resource_id, kind, list(results.values()), components, patterns, verify
             )
@@ -1233,27 +1263,78 @@ def _atomic_write_json(path: Path, payload: Any) -> None:
     os.replace(_io_path(temporary), _io_path(path))
 
 
-def _require_awscrt():
+def _format_bytes(value: int) -> str:
+    for unit, scale in (("GiB", 1024**3), ("MiB", 1024**2), ("KiB", 1024)):
+        if value >= scale:
+            return f"{value / scale:.2f} {unit}"
+    return f"{value} bytes"
+
+
+def _require_awscrt(algorithms: Sequence[str] = ("CRC64NVME",)):
     try:
         from awscrt import checksums  # noqa: F401
     except ImportError as exc:
         raise ImportError(
-            "verify='crc64nvme' requires the optional 'awscrt' package: pip install awscrt"
+            f"verify='checksum' for {', '.join(algorithms)} objects requires the optional "
+            "'awscrt' package: pip install awscrt"
         ) from exc
     return checksums
 
 
-def crc64nvme_file(path: Union[str, Path], block_size: int = 8 * 1024 * 1024) -> str:
-    """Return the base64 CRC64NVME of a file, matching S3's checksum header."""
-    checksums = _require_awscrt()
-    crc = 0
+_CHECKSUM_HEADERS = {
+    "CRC32": "x-amz-checksum-crc32",
+    "CRC32C": "x-amz-checksum-crc32c",
+    "CRC64NVME": "x-amz-checksum-crc64nvme",
+    "SHA1": "x-amz-checksum-sha1",
+    "SHA256": "x-amz-checksum-sha256",
+}
+
+
+def file_checksum(
+    path: Union[str, Path], algorithm: str, block_size: int = 8 * 1024 * 1024
+) -> str:
+    """
+    Return a file's base64 checksum in the form S3 reports it.
+
+    Args:
+        path: Local file.
+        algorithm: ``CRC32``, ``CRC32C``, ``CRC64NVME``, ``SHA1``, or
+            ``SHA256``. CRC32C and CRC64NVME require ``awscrt``.
+    """
+    algorithm = algorithm.upper()
+    if algorithm in {"SHA1", "SHA256"}:
+        digest = hashlib.new(algorithm.lower())
+        update = digest.update
+    elif algorithm == "CRC32":
+        state = {"crc": 0}
+
+        def update(block: bytes) -> None:
+            state["crc"] = zlib.crc32(block, state["crc"])
+    elif algorithm in {"CRC32C", "CRC64NVME"}:
+        checksums = _require_awscrt([algorithm])
+        function = checksums.crc32c if algorithm == "CRC32C" else checksums.crc64nvme
+        state = {"crc": 0}
+
+        def update(block: bytes) -> None:
+            state["crc"] = function(block, state["crc"])
+    else:
+        raise ValueError(f"Unsupported checksum algorithm: {algorithm}")
     with open(_io_path(path), "rb") as stream:
         while True:
             block = stream.read(block_size)
             if not block:
                 break
-            crc = checksums.crc64nvme(block, crc)
-    return base64.b64encode(crc.to_bytes(8, "big")).decode("ascii")
+            update(block)
+    if algorithm in {"SHA1", "SHA256"}:
+        raw = digest.digest()
+    else:
+        raw = state["crc"].to_bytes(8 if algorithm == "CRC64NVME" else 4, "big")
+    return base64.b64encode(raw).decode("ascii")
+
+
+def crc64nvme_file(path: Union[str, Path], block_size: int = 8 * 1024 * 1024) -> str:
+    """Return the base64 CRC64NVME of a file, matching S3's checksum header."""
+    return file_checksum(path, "CRC64NVME", block_size)
 
 
 @dataclass
@@ -1268,6 +1349,7 @@ class _FileJob:
     remaining: int = 0
     lock: threading.Lock = field(default_factory=threading.Lock)
     failed: bool = False
+    checksum_algorithm: Optional[str] = None
 
     @property
     def part(self) -> Path:
@@ -1361,22 +1443,21 @@ def _finalize(job: _FileJob, verify: str, timeout: float) -> None:
     if size != job.size:
         raise IOError(f"size mismatch: local {size}, listed {job.size}")
     verified = "size"
-    if verify == "crc64nvme":
+    algorithm = job.checksum_algorithm
+    if verify == "checksum" and algorithm in _CHECKSUM_HEADERS:
         head = requests.head(
             LouisianaEndmc.object_url(job.key),
             headers={"x-amz-checksum-mode": "ENABLED", "User-Agent": USER_AGENT},
             timeout=timeout,
         )
         head.raise_for_status()
-        expected = head.headers.get("x-amz-checksum-crc64nvme")
-        if expected:
-            actual = crc64nvme_file(job.part)
+        expected = head.headers.get(_CHECKSUM_HEADERS[algorithm])
+        if expected and head.headers.get("x-amz-checksum-type", "FULL_OBJECT") == "FULL_OBJECT":
+            actual = file_checksum(job.part, algorithm)
             if actual != expected:
-                raise IOError(f"CRC64NVME mismatch: local {actual}, S3 {expected}")
-            job.result["crc64nvme"] = expected
-            verified = "crc64nvme"
-        else:
-            logger.warning("%s: S3 returned no CRC64NVME; verified by size only", job.key)
+                raise IOError(f"{algorithm} mismatch: local {actual}, S3 {expected}")
+            job.result["checksum"] = f"{algorithm.lower()}:{expected}"
+            verified = algorithm.lower()
     os.replace(_io_path(job.part), _io_path(job.target))
     try:
         os.remove(_io_path(job.state))
@@ -1458,7 +1539,7 @@ def _write_receipt(
     for result in results:
         entry = {
             k: result.get(k)
-            for k in ("key", "component", "size", "etag", "last_modified", "status", "verified", "error", "crc64nvme")
+            for k in ("key", "component", "size", "etag", "last_modified", "status", "verified", "error", "checksum")
             if result.get(k) is not None
         }
         files[result["relative_path"]] = entry
@@ -1489,6 +1570,7 @@ __all__ = [
     "OUTPUT_RASTER_COMPONENTS",
     "classify_object",
     "crc64nvme_file",
+    "file_checksum",
     "derive_region",
     "filter_objects",
     "objects_dataframe",

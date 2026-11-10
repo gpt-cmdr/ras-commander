@@ -9,7 +9,7 @@ See [Example Projects](example-projects.md) for the CRS-valid source catalog and
 !!! tip "New here? Start with the 100s."
     Run **100 → 101 → 110** for the core initialize → inspect → execute loop, then branch into the series that matches your work: **200s** geometry & calibration, **300s** unsteady & DSS, **400s** HDF results, **900s** data integration & forecasting.
 
-*143 notebooks indexed - 131 with runtime data, 12 without.*
+*144 notebooks indexed - 132 with runtime data, 12 without.*
 
 ## Selected Workflow Contracts
 
@@ -457,6 +457,12 @@ These optional contracts are curated in `examples/notebooks.yml` and published u
 | --- | --- | --- |
 | [900 - AORC Precipitation for HEC-RAS Rain-on-Grid Models](../notebooks/900_aorc_precipitation.md)<br>This notebook demonstrates a complete workflow for using NOAA's Analysis of Record for Calibration (AORC) gridded precipitation data with HEC-RAS 2D rain-on-grid models, including data-driven simulation buffer selection based on observed... | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/900_aorc_precipitation.ipynb) | 4.8 min |
 | [901 - AORC Precipitation Catalog for HEC-RAS Rain-on-Grid Models](../notebooks/901_aorc_precipitation_catalog.md)<br>This notebook demonstrates a complete workflow for using NOAA's Analysis of Record for Calibration (AORC) gridded precipitation data with HEC-RAS 2D rain-on-grid models. | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/901_aorc_precipitation_catalog.ipynb) | 3.1 min |
+
+## 900s - Data Integration & Forecasting
+
+| Notebook | Source | Runtime |
+| --- | --- | --- |
+| [932 - Louisiana LWI EnDMC: Public Catalog, Cloud Raster Reads, and Selective Download](../notebooks/932_louisiana_endmc_public_models.md)<br>Read the public Louisiana Watershed Initiative EnDMC catalog without an account, filter models by region and software, classify a resource's S3 files, window-read an online depth raster through /vsicurl/, and download HEC-RAS project text files with a receipt and checksum verification. | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/932_louisiana_endmc_public_models.ipynb) | 10 s |
 
 ## 910s - Gauge Data & Validation
 

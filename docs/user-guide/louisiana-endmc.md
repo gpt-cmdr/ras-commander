@@ -21,6 +21,10 @@ A dated snapshot of the public catalog fields (id, kind, title, software,
 record date, keywords) ships with the package and is used automatically when
 the live catalog is unreachable.
 
+The executed example notebook
+[932: Louisiana LWI EnDMC](../notebooks/932_louisiana_endmc_public_models.md)
+walks through each step below on live public data.
+
 ## Browse the catalog
 
 ```python
@@ -81,9 +85,12 @@ result["status"].value_counts(), result.attrs["receipt_path"]
   Ranges carry `If-Match` with the listed ETag, so a file replaced on the
   server restarts rather than mixing versions.
 - **Verified.** Every file is checked against the listed byte length.
-  `verify="crc64nvme"` also compares the full-object CRC64NVME checksum that
-  S3 returns, which requires the optional `awscrt` package
-  (`pip install awscrt`). S3 ETags for multipart uploads are not MD5 digests.
+  `verify="checksum"` also compares the full-object checksum S3 stored at
+  upload, using the algorithm the listing reports. Published objects carry
+  CRC32 (verified with the standard library) or CRC64NVME (requires the
+  optional `awscrt` package, `pip install awscrt`). Objects without a stored
+  checksum fall back to size and are counted in `attrs["size_only"]`. S3 ETags
+  for multipart uploads are not MD5 digests.
 - **Receipt.** `_endmc_<resource_id>.json` in the destination records the key,
   size, ETag, modification time, status, and verification of each file.
 - **Short paths.** Resource paths are already long. The default
