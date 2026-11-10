@@ -1,0 +1,17 @@
+{
+ "currentQuery": "",
+ "datasetsEnabled": true,
+ "results": {
+  "model_application": [
+   {"_id": "aaaaaaaaaaaaaaaaaaaaaaaa", "title": " LWI Region 5 Example Breakout HEC-RAS Model", "description": "Example 2D model.", "keywords_agg": ["HEC-RAS", "6.4.1", "EPSG:3452", " Region 5"], "url": "/view/model_application/aaaaaaaaaaaaaaaaaaaaaaaa"},
+   {"_id": "bbbbbbbbbbbbbbbbbbbbbbbb", "title": "Louisiana Watershed Initiative (LWI)-Region 6 (R6) Example HMS", "description": "Example hydrologic model.", "keywords_agg": ["HEC-HMS"], "url": "/view/model_application/bbbbbbbbbbbbbbbbbbbbbbbb"},
+   {"_id": "not-an-id", "title": "Malformed", "keywords_agg": []}
+  ],
+  "dataset": [
+   {"_id": "cccccccccccccccccccccccc", "title": "Coastwide DEM", "description": "Statewide terrain.", "keywords_agg": null, "url": "/view/dataset/cccccccccccccccccccccccc"}
+  ],
+  "simulation_package": [
+   {"_id": "dddddddddddddddddddddddd", "title": "LWI Region 5 Example Watershed", "description": "", "keywords_agg": [], "url": "/view/simulation_package/dddddddddddddddddddddddd"}
+  ]
+ }
+}

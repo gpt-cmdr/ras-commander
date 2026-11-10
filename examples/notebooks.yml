@@ -4403,6 +4403,29 @@ notebooks:
   excluded: false
   code_cells: 9
   executed_cells: 9
+- id: 932_louisiana_endmc_public_models
+  filename: 932_louisiana_endmc_public_models.ipynb
+  title: 'Louisiana LWI EnDMC: Public Catalog, Cloud Raster Reads, and Selective Download'
+  series: 900
+  series_name: Data Integration
+  summary: Read the public Louisiana Watershed Initiative EnDMC catalog without an account, filter models
+    by region and software, classify a resource's S3 files, window-read an online depth raster through
+    /vsicurl/, and download HEC-RAS project text files with a receipt and checksum verification.
+  tags:
+  - model-sources
+  - catalog
+  - cloud-native
+  - louisiana
+  - 2d
+  difficulty: intermediate
+  est_runtime: 1 min
+  data_project: null
+  functions_used: []
+  hec_refs: []
+  learning_paths: []
+  excluded: false
+  code_cells: 14
+  executed_cells: 14
 - id: 950_ebfe_spring_creek
   filename: 950_ebfe_spring_creek.ipynb
   title: 'Using eBFE Models: Spring Creek 2D Analysis'

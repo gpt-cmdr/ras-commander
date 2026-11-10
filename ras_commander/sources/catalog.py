@@ -213,6 +213,12 @@ def get_catalog(auto_register: bool = True) -> ModelCatalog:
                 logger.debug("AlabamaFloodModels not available")
 
             try:
+                from ras_commander.sources.state.louisiana_endmc import LouisianaEndmc
+                _catalog.register_source(LouisianaEndmc())
+            except (ImportError, Exception):
+                logger.debug("LouisianaEndmc not available")
+
+            try:
                 from ras_commander.sources.federal.noaa_ras2fim import NoaaRas2fimModels
                 _catalog.register_source(NoaaRas2fimModels())
             except (ImportError, Exception):

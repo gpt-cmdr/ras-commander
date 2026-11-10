@@ -5,6 +5,7 @@ build-backend = "setuptools.build_meta:__legacy__"
 [tool.pytest.ini_options]
 markers = [
     "integration: opt-in real-project or external dependency smoke tests",
+    "network: reads public internet endpoints; skipped when the endpoint is unreachable",
     "qualification_critical: real-project classification qualification gates",
     "qualification_harness: deterministic qualification infrastructure tests that do not execute HEC-RAS",
     "offline_evidence: existing-artifact inspection without HEC-RAS execution or COM",
