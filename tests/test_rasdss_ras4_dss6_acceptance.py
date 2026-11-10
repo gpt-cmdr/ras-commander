@@ -14,18 +14,35 @@ only through ``RasControl.run_plan`` on disposable copies.
    with the HEC file and once with the native file. The boundary data HEC-RAS writes to
    its ``.b##`` file, the computed results at every cross section and output time
    (``RasControl.get_unsteady_results``) and the computation messages must be identical.
-3. ``test_dss6_merge_extend_acceptance_pending_p66``: the merge/extend cases wait for
-   the engine's DSS6 regular time-series merge/extend (P66) and are skipped until then.
+3. ``test_native_dss6_merge_matches_hec_merge``: each DSS6 merge/extend case is made twice
+   on copies of the HEC-written file, once by the native engine and once by HEC Monolith
+   (the oracle). The native reader and Monolith must each read the two files identically.
+   No HEC-RAS run.
+4. ``test_ras4_reads_native_dss6_merge_like_hec_merge``: HEC-RAS runs a PMF plan on the
+   natively merged file and on the HEC-merged file. The ``.b##`` boundary input, the
+   messages and the results must be identical, and the ``.b##`` input must differ from the
+   run on the unmerged file (the control: HEC-RAS read the merged values). Where HEC-RAS
+   refuses to compute (missing values inside the simulation window), it must refuse both
+   files in the same way.
+
+The merge cases follow the engine's DSS6 regular merge/extend qualification (P66). The
+boundary records are uncompressed doubles, so a merge keeps every stored value outside the
+written window on both writers; the engine's documented exception for delta-compressed
+blocks (D70) does not arise in this file.
 
 Tests skip cleanly without the selected HEC-RAS 4.x install, its example archive, the
-archive's ``7za.exe``, an accepted TCU, or ras-commander-fast-dss with writers. The TCU is
+archive's ``7za.exe``, an accepted TCU, or ras-commander-fast-dss with writers. The merge
+tests also need the Java backend (pyjnius, a JVM and HEC Monolith) for the oracle. The TCU is
 never accepted here; acceptance changes the registry and is left to the qualification
 operator (``RasTcu.accept``).
 
 ``RAS4_DSS_ACCEPTANCE_VERSIONS`` selects versions (default ``4.1,4.0``).
 ``RAS4_DSS_ACCEPTANCE_PLANS`` selects plans (default ``04``; ``04,05,06,08`` covers every
-plan whose unsteady file reads DSS). ``RAS4_DSS_ACCEPTANCE_EVIDENCE`` names a folder for a
-JSON record of each comparison.
+plan whose unsteady file reads DSS). ``RAS4_DSS_ACCEPTANCE_MERGE_CASES`` selects the merge
+cases that run in HEC-RAS (default ``partial_block_overlap``; ``all`` runs every case,
+about 35 to 42 minutes per version; ``none`` runs no merge case in HEC-RAS).
+``RAS4_DSS_ACCEPTANCE_MERGE_PLANS`` selects their PMF plans (default ``04``).
+``RAS4_DSS_ACCEPTANCE_EVIDENCE`` names a folder for a JSON record of each comparison.
 """
 
 from __future__ import annotations
@@ -37,6 +54,7 @@ import shutil
 import subprocess
 from contextlib import contextmanager
 from pathlib import Path
+from datetime import datetime
 from typing import Dict, List, Optional
 
 import numpy as np
@@ -122,17 +140,21 @@ def _stage(source: Path, dss: Path, folder: Path) -> Path:
 
 
 @contextmanager
-def _native_backend():
-    """Native backend whatever RAS_COMMANDER_DSS_BACKEND says, restored afterwards."""
+def _backend_selected(name: str):
+    """``name`` backend whatever RAS_COMMANDER_DSS_BACKEND says, restored afterwards."""
     previous_env = os.environ.pop(_backend.ENV_VAR, None)
     previous_attr = RasDss.backend
-    RasDss.backend = "native"
+    RasDss.backend = name
     try:
         yield
     finally:
         RasDss.backend = previous_attr
         if previous_env is not None:
             os.environ[_backend.ENV_VAR] = previous_env
+
+
+def _native_backend():
+    return _backend_selected("native")
 
 
 def _dss_boundary_paths(project: Path, version: str) -> List[str]:
@@ -204,7 +226,8 @@ def bench(request, tmp_path_factory):
     native_dss = root / "native6.dss"
     records = _rewrite_native_dss6(hec_dss, paths, native_dss)
     return {"version": version, "root": root, "source": source, "hec_dss": hec_dss,
-            "native_dss": native_dss, "paths": paths, "records": records}
+            "native_dss": native_dss, "paths": paths, "records": records,
+            "runs": {}, "merged": {}}
 
 
 def test_native_dss6_rewrite_reproduces_hec_records(bench):
@@ -228,8 +251,14 @@ def _normalized(text: str, folder: Path, drop_timing: bool) -> List[str]:
     return [line for line in lines if not (drop_timing and TIMING_LINE.search(line))]
 
 
-def _run(folder: Path, version: str, plan: str) -> Dict:
-    from ras_commander import RasControl
+def _run(folder: Path, version: str, plan: str,
+         simulation_start: Optional[datetime] = None) -> Dict:
+    """Run ``plan`` in ``folder`` through ``RasControl`` and collect what is compared.
+
+    ``simulation_start`` moves the plan's start and keeps its end. A run that HEC-RAS ends
+    without writing its output returns ``{"refused": <reason>}``.
+    """
+    from ras_commander import RasControl, RasPlan
 
     ras = RasPrj()
     init_ras_project(folder, version, ras_object=ras, load_results_summary=False, hide_intro=True)
@@ -239,8 +268,21 @@ def _run(folder: Path, version: str, plan: str) -> Dict:
             f"HEC-RAS {version} TCU is not accepted ({status.reason}). Acceptance changes the "
             "registry, so this test leaves it to the qualification operator."
         )
-    result = RasControl.run_plan(plan, ras_object=ras, force_recompute=True, strict_close=True,
-                                 max_runtime=3600)
+    if simulation_start is not None:
+        row = ras.plan_df[ras.plan_df["plan_number"] == plan].iloc[0]
+        end_date, end_time = str(row["Simulation Date"]).split(",")[2:4]
+        end = pd.to_datetime(end_date, format="%d%b%Y") + pd.Timedelta(hours=int(end_time[:2]), minutes=int(end_time[2:]))
+        RasPlan.update_simulation_date(plan, simulation_start, end.to_pydatetime(), ras_object=ras)
+    try:
+        result = RasControl.run_plan(plan, ras_object=ras, force_recompute=True, strict_close=True,
+                                     max_runtime=3600)
+    except RuntimeError as error:
+        if "result artifact was not created" not in str(error):
+            raise
+        return {
+            "refused": str(error).replace(str(folder), "<RUN>"),
+            "bfile_written": (folder / f"{PROJECT}.b{plan}").is_file(),
+        }
     assert result.success, list(result.messages)[-20:]
     messages = RasControl.get_comp_msgs(plan, ras_object=ras) or ""
     return {
@@ -250,6 +292,38 @@ def _run(folder: Path, version: str, plan: str) -> Dict:
     }
 
 
+def _assert_runs_identical(reference: Dict, candidate: Dict) -> Dict:
+    """``candidate`` gave HEC-RAS the same boundary input, messages and results."""
+    assert "refused" not in reference, reference["refused"]
+    assert "refused" not in candidate, candidate["refused"]
+    # Boundary hydrographs as HEC-RAS read them from DSS and passed to its solver.
+    assert candidate["bfile"] == reference["bfile"]
+    assert any("Hydrograph" in line for line in reference["bfile"])
+    # Computation messages, timing lines removed.
+    assert candidate["messages"] == reference["messages"]
+    # Results at every cross section and output time, including the Max WS rows.
+    left, right = reference["results"], candidate["results"]
+    keys = ["river", "reach", "node_id", "time_string"]
+    assert len(left) > 0 and left[keys].equals(right[keys])
+    numeric = [c for c in left.columns if pd.api.types.is_float_dtype(left[c])]
+    for column in numeric:
+        np.testing.assert_array_equal(right[column].to_numpy(), left[column].to_numpy(), err_msg=column)
+    return {
+        "bfile_lines": len(reference["bfile"]), "message_lines": len(reference["messages"]),
+        "result_rows": len(left), "cross_sections": int(left["node_id"].nunique()),
+        "times": int(left["time_string"].nunique()),
+    }
+
+
+def _unmerged_run(bench: Dict, plan: str) -> Dict:
+    """The run on the unmerged HEC file, shared by the tests of one version."""
+    key = ("hec", plan)
+    if key not in bench["runs"]:
+        folder = _stage(bench["source"], bench["hec_dss"], bench["root"] / f"hec_p{plan}")
+        bench["runs"][key] = _run(folder, bench["version"], plan)
+    return bench["runs"][key]
+
+
 @pytest.mark.parametrize("plan", _plans())
 @pytest.mark.integration
 @pytest.mark.real_ras
@@ -257,39 +331,280 @@ def _run(folder: Path, version: str, plan: str) -> Dict:
 @pytest.mark.slow
 def test_ras4_reads_native_dss6_boundaries_like_hec_dss(bench, plan):
     version, root = bench["version"], bench["root"]
-    hec = _run(_stage(bench["source"], bench["hec_dss"], root / f"hec_p{plan}"), version, plan)
+    hec = _unmerged_run(bench, plan)
     native = _run(_stage(bench["source"], bench["native_dss"], root / f"native_p{plan}"), version, plan)
-
-    # Boundary hydrographs as HEC-RAS read them from DSS and passed to its solver.
-    assert native["bfile"] == hec["bfile"]
-    assert any("Hydrograph" in line for line in hec["bfile"])
-    # Computation messages, timing lines removed.
-    assert native["messages"] == hec["messages"]
-    # Results at every cross section and output time, including the Max WS rows.
-    left, right = hec["results"], native["results"]
-    keys = ["river", "reach", "node_id", "time_string"]
-    assert len(left) > 0 and left[keys].equals(right[keys])
-    numeric = [c for c in left.columns if pd.api.types.is_float_dtype(left[c])]
-    for column in numeric:
-        np.testing.assert_array_equal(right[column].to_numpy(), left[column].to_numpy(), err_msg=column)
-    _record(f"run_{version}_p{plan}", {
-        "version": version, "plan": plan, "bfile_lines": len(hec["bfile"]),
-        "message_lines": len(hec["messages"]), "result_rows": len(left),
-        "cross_sections": int(left["node_id"].nunique()), "times": int(left["time_string"].nunique()),
-    })
+    summary = _assert_runs_identical(hec, native)
+    _record(f"run_{version}_p{plan}", {"version": version, "plan": plan, **summary})
 
 
-#: DSS6 merge/extend acceptance cases that wait for P66 (DSS6 regular time-series
-#: merge/extend into existing blocks with heclib store semantics).
-PENDING_P66 = {
-    "partial_block_overlap": "replace part of an existing month block in a copy of the HEC file",
-    "extend_across_block_boundary": "extend an existing series past its month block into the next block",
-    "missing_values": "merge a window containing -901/NaN over stored values",
-    "float_into_double": "merge float values into an existing RTD (double) record",
-    "double_into_float": "merge double values into an existing RTS (float) record",
+# ---------------------------------------------------------------------------------------
+# DSS6 merge/extend cases (engine packet P66): the native merge against the HEC merge.
+# ---------------------------------------------------------------------------------------
+
+#: PMF plans: their boundary records span 01JAN1999 00:00 to 08JAN1999 00:00 in the
+#: 01DEC1998 and 01JAN1999 blocks of the HEC file.
+PMF_PLANS = ("04", "06", "08")
+#: Factor applied to the stored values a merge replaces, so HEC-RAS sees a changed boundary.
+MERGE_FACTOR = 1.05
+#: A day inside the 01JAN1999 block and inside every PMF plan's simulation window.
+MERGE_WINDOW = ("1999-01-02 00:00", "1999-01-03 00:00")
+
+#: Each case merges one window into every PMF boundary record of a copy of the base file.
+#: ``window``: first and last written time. ``constant``: write the record's first stored
+#: value (times the factor) instead of the stored values, for times the record lacks.
+#: ``missing_from``: from this time on the written values alternate NaN and -901.
+#: ``value_type``: ``float`` writes single precision. ``base``: ``hec_float`` merges into a
+#: file HEC Monolith wrote as floats (RTS) instead of the HEC example file (RTD).
+#: ``simulation_start``: start the plan here so HEC-RAS reads the extended part.
+#: ``refused``: HEC-RAS 4.x ends the run without output; both files must be refused alike.
+MERGE_CASES: Dict[str, Dict] = {
+    "partial_block_overlap": {
+        "what": "replace one day inside an existing month block",
+        "window": MERGE_WINDOW,
+    },
+    "extend_across_block_boundary": {
+        "what": "extend the series one day earlier, across the 01DEC1998/01JAN1999 block boundary",
+        "window": ("1998-12-31 00:00", "1999-01-01 06:00"),
+        "constant": True,
+        "simulation_start": datetime(1998, 12, 31, 12, 0),
+    },
+    "missing_values": {
+        "what": "merge NaN and -901 over stored values after the simulation window",
+        "window": ("1999-01-04 00:00", "1999-01-06 00:00"),
+        "missing_from": "1999-01-05 06:00",
+    },
+    "missing_values_in_simulation": {
+        "what": "merge NaN and -901 over stored values inside the simulation window",
+        "window": MERGE_WINDOW,
+        "missing_from": "1999-01-02 12:00",
+        "refused": True,
+    },
+    "float_into_double": {
+        "what": "merge float values into an existing RTD (double) record",
+        "window": MERGE_WINDOW,
+        "value_type": "float",
+    },
+    "double_into_float": {
+        "what": "merge double values into an existing RTS (float) record",
+        "window": MERGE_WINDOW,
+        "base": "hec_float",
+    },
 }
 
 
-@pytest.mark.parametrize("case", sorted(PENDING_P66))
-def test_dss6_merge_extend_acceptance_pending_p66(case):
-    pytest.skip(f"pending P66 (DSS6 merge/extend): {PENDING_P66[case]}")
+def _merge_cases() -> List[str]:
+    """Merge cases that run in HEC-RAS (``RAS4_DSS_ACCEPTANCE_MERGE_CASES``)."""
+    raw = os.environ.get("RAS4_DSS_ACCEPTANCE_MERGE_CASES", "partial_block_overlap").strip()
+    if raw.lower() == "all":
+        return sorted(MERGE_CASES)
+    if raw.lower() in ("", "none"):
+        return []
+    cases = [c.strip() for c in raw.split(",") if c.strip()]
+    unknown = sorted(set(cases) - set(MERGE_CASES))
+    if unknown:
+        raise ValueError(f"unknown merge cases {unknown}; choose from {sorted(MERGE_CASES)}")
+    return cases
+
+
+def _merge_plans() -> List[str]:
+    raw = os.environ.get("RAS4_DSS_ACCEPTANCE_MERGE_PLANS", "04")
+    plans = [p.strip().zfill(2) for p in raw.split(",") if p.strip()]
+    unknown = sorted(set(plans) - set(PMF_PLANS))
+    if unknown:
+        raise ValueError(f"plans {unknown} are not PMF plans; choose from {PMF_PLANS}")
+    return plans
+
+
+def _require_java_backend() -> None:
+    """HEC Monolith makes the oracle merges; skip without pyjnius, a JVM or Monolith."""
+    try:
+        RasDss._configure_jvm()
+    except Exception as error:  # the oracle is unavailable, not a failure of the native writer
+        pytest.skip(f"Java DSS backend (HEC Monolith) is not available: {error}")
+
+
+def _monolith_put_floats(dss: Path, pathname: str, times: pd.DatetimeIndex, values: np.ndarray,
+                         units: str, data_type: str, new_dss6_file: bool = False) -> None:
+    """Store single-precision values through HEC Monolith.
+
+    ``RasDss.write_timeseries`` on the Java backend always stores doubles, so the float
+    oracle sets the container's store-as-doubles flag itself.
+    """
+    from jnius import autoclass, cast
+
+    HecDss = autoclass("hec.heclib.dss.HecDss")
+    TimeSeriesContainer = autoclass("hec.io.TimeSeriesContainer")
+    HecTimeArray = autoclass("hec.heclib.util.HecTimeArray")
+    hec_times = RasDss._datetimes_to_hec_times(times)
+    tsc = TimeSeriesContainer()
+    tsc.fullName, tsc.units, tsc.type = pathname, units, data_type
+    tsc.interval = int(np.median(np.diff(hec_times)))
+    tsc.setStoreAsDoubles(False)
+    assert tsc.setTimes(HecTimeArray(hec_times.tolist())) == 0
+    assert tsc.setValues([float(v) for v in values]) == 0
+    tsc.numberValues = len(values)
+    RasDss._drain_hec_messages()
+    handle = HecDss.open(str(dss), 6) if new_dss6_file else HecDss.open(str(dss))
+    try:
+        handle.put(cast("hec.io.DataContainer", tsc))
+        RasDss._raise_hec_write_failures(RasDss._drain_hec_messages())
+    finally:
+        handle.done()
+        RasDss._release_dss_file(str(dss))
+
+
+def _merge_writes(case: str, records: Dict[str, pd.DataFrame]) -> List[Dict]:
+    """The writes of ``case``: one window for every PMF boundary record."""
+    spec = MERGE_CASES[case]
+    times = pd.date_range(*spec["window"], freq="15min")
+    writes = []
+    for pathname, stored in records.items():
+        if stored.index[0].year != 1999:
+            continue  # the 1972 records belong to plan 05
+        if spec.get("constant"):
+            values = np.full(len(times), stored["value"].iloc[0] * MERGE_FACTOR)
+        else:
+            values = stored["value"].reindex(times).to_numpy() * MERGE_FACTOR
+            assert not np.isnan(values).any(), pathname
+        if spec.get("missing_from"):
+            missing = np.flatnonzero(times >= pd.Timestamp(spec["missing_from"]))
+            values[missing[0::2]] = np.nan
+            values[missing[1::2]] = -901.0
+        writes.append({"pathname": pathname, "times": times, "values": values,
+                       "units": stored.attrs["units"], "type": stored.attrs["type"]})
+    assert writes
+    return writes
+
+
+def _apply_merge(writer: str, dss: Path, writes: List[Dict], value_type: str) -> None:
+    """Merge ``writes`` into the existing DSS6 file ``dss`` with the native engine or HEC."""
+    import ras_commander_fast_dss as fast_dss
+
+    for w in writes:
+        if value_type == "double":
+            # Both writers through the public API; an existing file keeps its DSS version.
+            with _backend_selected("native" if writer == "native" else "java"):
+                RasDss.write_timeseries(dss, w["pathname"], w["times"], w["values"],
+                                        units=w["units"], data_type=w["type"], dss_version=6)
+        elif writer == "native":
+            fast_dss.write_timeseries(str(dss), w["pathname"], w["values"], times=w["times"].values,
+                                      units=w["units"], data_type=w["type"], version=6,
+                                      value_type="float")
+        else:
+            _monolith_put_floats(dss, w["pathname"], w["times"], w["values"], w["units"], w["type"])
+
+
+def _merged_files(bench: Dict, case: str) -> Dict:
+    """Copies of the base file merged by the native engine and by HEC, made once per version."""
+    if case in bench["merged"]:
+        return bench["merged"][case]
+    _require_java_backend()
+    spec, root, records = MERGE_CASES[case], bench["root"], bench["records"]
+    base = bench["hec_dss"]
+    if spec.get("base") == "hec_float":
+        base = root / "hec_float_base.dss"
+        if not base.exists():
+            for pathname, stored in records.items():
+                _monolith_put_floats(base, pathname, stored.index, stored["value"].to_numpy(),
+                                     stored.attrs["units"], stored.attrs["type"],
+                                     new_dss6_file=not base.exists())
+    writes = _merge_writes(case, records)
+    files = {"base": base, "writes": writes}
+    for writer in ("native", "hec"):
+        files[writer] = root / f"merge_{case}_{writer}.dss"
+        shutil.copyfile(base, files[writer])
+        _apply_merge(writer, files[writer], writes, spec.get("value_type", "double"))
+    bench["merged"][case] = files
+    return files
+
+
+def _read_all(backend: str, dss: Path, pathnames: List[str]) -> Dict[str, pd.DataFrame]:
+    with _backend_selected(backend):
+        return {p: RasDss.read_timeseries(dss, p) for p in pathnames}
+
+
+@pytest.mark.parametrize("case", sorted(MERGE_CASES))
+def test_native_dss6_merge_matches_hec_merge(bench, case):
+    files = _merged_files(bench, case)
+    spec, writes = MERGE_CASES[case], files["writes"]
+    pathnames = [w["pathname"] for w in writes]
+    with _native_backend():
+        assert RasDss.get_file_version(files["native"]) == 6
+        assert RasDss.get_file_version(files["hec"]) == 6
+
+    # Both readers read the natively merged file as they read the HEC-merged file.
+    reads = {}
+    for reader in ("native", "java"):
+        reads[reader] = native, hec = (_read_all(reader, files["native"], pathnames),
+                                       _read_all(reader, files["hec"], pathnames))
+        for pathname in pathnames:
+            assert native[pathname].index.equals(hec[pathname].index), (reader, pathname)
+            np.testing.assert_array_equal(native[pathname]["value"].to_numpy(),
+                                          hec[pathname]["value"].to_numpy(), err_msg=f"{reader} {pathname}")
+            assert native[pathname].attrs["units"] == hec[pathname].attrs["units"]
+            assert native[pathname].attrs["type"] == hec[pathname].attrs["type"]
+    # Same blocks and record types (RTD 105, RTS 100) in both files.
+    blocks = _blocks(files["native"], pathnames)
+    assert blocks == _blocks(files["hec"], pathnames)
+
+    # The merge did what the case says: written values at the written times, every other
+    # stored value unchanged, and the series covers the stored and the written times.
+    base = _read_all("native", files["base"], pathnames)
+    merged, merged_java = reads["native"][0], reads["java"][0]
+    missing_total = 0
+    mixed_precision = len({record_type for _, record_type in blocks}) > 1
+    for w in writes:
+        pathname, times = w["pathname"], w["times"]
+        series, stored = merged[pathname]["value"], base[pathname]["value"]
+        assert series.index.equals(stored.index.union(times)), pathname
+        expected = np.where(w["values"] == -901.0, np.nan, w["values"])
+        if spec.get("value_type") == "float":
+            expected = expected.astype(np.float32).astype(np.float64)
+        np.testing.assert_array_equal(series.reindex(times).to_numpy(), expected, err_msg=pathname)
+        kept = stored.index.difference(times)
+        np.testing.assert_array_equal(series.reindex(kept).to_numpy(), stored.reindex(kept).to_numpy())
+        # Monolith agrees with the native reader wherever a value is stored. It returns a
+        # series whose blocks mix floats and doubles in single precision.
+        present = ~series.isna().to_numpy()
+        java_values, native_values = merged_java[pathname]["value"].to_numpy()[present], series.to_numpy()[present]
+        if mixed_precision:
+            java_values, native_values = java_values.astype(np.float32), native_values.astype(np.float32)
+        np.testing.assert_array_equal(java_values, native_values, err_msg=pathname)
+        missing_total += int((~present).sum())
+    assert (missing_total > 0) == bool(spec.get("missing_from"))
+    _record(f"merge_{bench['version']}_{case}", {
+        "case": case, "what": spec["what"], "records": len(writes), "values_per_write": len(writes[0]["times"]),
+        "missing_values": missing_total, "blocks": blocks,
+    })
+
+
+@pytest.mark.parametrize("plan", _merge_plans())
+@pytest.mark.parametrize("case", _merge_cases())
+@pytest.mark.integration
+@pytest.mark.real_ras
+@pytest.mark.destructive_copy
+@pytest.mark.slow
+def test_ras4_reads_native_dss6_merge_like_hec_merge(bench, case, plan):
+    version, root, spec = bench["version"], bench["root"], MERGE_CASES[case]
+    files = _merged_files(bench, case)
+    start = spec.get("simulation_start")
+    hec = _run(_stage(bench["source"], files["hec"], root / f"{case}_hec_p{plan}"), version, plan, start)
+    native = _run(_stage(bench["source"], files["native"], root / f"{case}_native_p{plan}"), version, plan, start)
+
+    if spec.get("refused"):
+        # HEC-RAS 4.x does not compute with missing boundary values in the simulation
+        # window. It must treat the native merge exactly as it treats the HEC merge.
+        assert "refused" in hec and "refused" in native
+        assert native == hec
+        _record(f"merge_run_{version}_{case}_p{plan}", {"version": version, "case": case, "plan": plan, **hec})
+        return
+    summary = _assert_runs_identical(hec, native)
+    # Control: HEC-RAS read the merged values, so its boundary input differs from the
+    # run on the unmerged file.
+    unmerged = _unmerged_run(bench, plan)["bfile"]
+    changed = sum(a != b for a, b in zip(native["bfile"], unmerged)) + abs(len(native["bfile"]) - len(unmerged))
+    assert changed > 0
+    _record(f"merge_run_{version}_{case}_p{plan}", {
+        "version": version, "case": case, "plan": plan, **summary,
+        "bfile_lines_changed_from_unmerged": changed,
+    })
