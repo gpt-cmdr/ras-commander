@@ -433,6 +433,7 @@ outlets = result.streams[result.streams["DSLINKNO"] < 0]
 | Notebook | Description |
 |----------|-------------|
 | `316_terrain_modifications.ipynb` | Terrain modification writer: high ground, channel, polygon |
+| `321_terrain_modification_layer_writers.ipynb` | Every writer layer kind, `read_layers` / `add_modification_layer` round trip, pixel checks against RAS Mapper exports (6.6, 7.0.1) |
 | `920_terrain_creation.ipynb` | Terrain HDF creation from rasters |
 | `930_terrain_modification_analysis.ipynb` | Cut/fill analysis with RasTerrainMod |
 | `931_native_rasmapper_terrain_export.ipynb` | Bounded native export, typed result, receipt, and visual grid evidence |

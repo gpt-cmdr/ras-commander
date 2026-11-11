@@ -9,7 +9,7 @@ See [Example Projects](example-projects.md) for the CRS-valid source catalog and
 !!! tip "New here? Start with the 100s."
     Run **100 → 101 → 110** for the core initialize → inspect → execute loop, then branch into the series that matches your work: **200s** geometry & calibration, **300s** unsteady & DSS, **400s** HDF results, **900s** data integration & forecasting.
 
-*144 notebooks indexed - 132 with runtime data, 12 without.*
+*145 notebooks indexed - 133 with runtime data, 12 without.*
 
 ## Selected Workflow Contracts
 
@@ -385,6 +385,7 @@ These optional contracts are curated in `examples/notebooks.yml` and published u
 | [318 - Validating DSS File Paths and Data Availability](../notebooks/318_validating_dss_paths.md)<br>DSS boundary workflows | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/318_validating_dss_paths.ipynb) | 4 s |
 | [319 - Post-fire debris-flow 2D modeling, built from scratch (non-Newtonian)](../notebooks/319_post_fire_debris_flow_nonnewtonian.md)<br>This example builds a **complete 2D HEC-RAS debris-flow model from nothing** — no starting project — and runs a clear-water baseline plus **Bingham non-Newtonian** mud/debris-flow variants, then derives hazard-intensity and arrival-time... | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/319_post_fire_debris_flow_nonnewtonian.ipynb) | 6.3 min |
 | [320 - 1D Boundary Condition Visualization](../notebooks/320_1d_boundary_condition_visualization.md)<br>This notebook demonstrates how to extract and visualize 1D boundary conditions from a HEC-RAS project. The workflow: | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/320_1d_boundary_condition_visualization.ipynb) | 5 s |
+| [321 - Terrain Modification Layer Writers: Write, Read Back, Verify in RAS Mapper](../notebooks/321_terrain_modification_layer_writers.md)<br>write channel, high-ground, constant-polygon and ellipse terrain-modification layers into a copied Bald Eagle Creek terrain, read them back with read_layers, write them into a second terrain with add_modification_layer, and compare RAS Mapper's native exports (HEC-RAS 6.6 and 7.0.1) pixel by pixel; no hydraulic plans are run | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/321_terrain_modification_layer_writers.ipynb) | 20 s |
 
 ## 400s - HDF Results Extraction
 
@@ -500,7 +501,7 @@ These optional contracts are curated in `examples/notebooks.yml` and published u
 | --- | --- | --- |
 | [920 - Creating a RAS Terrain with ras-commander](../notebooks/920_terrain_creation.md)<br>terrain and geometry surface workflows | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/920_terrain_creation.ipynb) | 12 s |
 | [925 - Cross-Section Interpolation Surface](../notebooks/925_xs_interpolation_surface.md)<br>Build cross-section TIN interpolation surfaces from real geometry, write spatial review layers and optional rasters, and compare channel-only and full-extent surfaces. | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/925_xs_interpolation_surface.ipynb) | 6 s |
-| [930 - Terrain Modification Analysis](../notebooks/930_terrain_modification_analysis.md)<br>write and verify a channel terrain modification in the Bald Eagle Creek example, then use the optional GDAL bridge to report terrain extent and sample the modified profile and polygon elevation-volume curve; no baseline or modified hydraulic plans are run | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/930_terrain_modification_analysis.ipynb) | 15 s |
+| [930 - Terrain Modification Analysis](../notebooks/930_terrain_modification_analysis.md)<br>write a channel terrain modification with a uniform design-grade invert along Bald Eagle Creek, then use the optional GDAL bridge to compare existing and proposed terrain profiles and polygon elevation-volume curves and report the cut volume; no baseline or modified hydraulic plans are run | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/930_terrain_modification_analysis.ipynb) | 16 s |
 | [931 - Native RAS Mapper Terrain Export](../notebooks/931_native_rasmapper_terrain_export.md)<br>export a registered, stitched RAS Mapper terrain to one bounded and semantically validated GeoTIFF, then inspect its typed result, source inventory, receipt, grid alignment, and visual evidence | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/931_native_rasmapper_terrain_export.ipynb) | 3 s |
 
 ## 950s - eBFE Delivery
