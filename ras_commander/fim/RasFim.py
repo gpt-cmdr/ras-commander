@@ -1361,6 +1361,8 @@ class RasFim:
         threads: int = 1, max_working_mib: int = 4096,
         timeout: Optional[float] = None,
         terrain_crs_fnv1a64: Optional[str] = None,
+        hecras_version: Optional[str] = None,
+        ras_object=None,
     ) -> Dict[str, Any]:
         """Build RAS Mapper's effective terrain in Rust, with qualified modifications.
 
@@ -1393,25 +1395,41 @@ class RasFim:
             timeout: Engine timeout in seconds.
             terrain_crs_fnv1a64: Caller-verified WKT hash when the source CRS
                 has no EPSG identification in the engine.
+            hecras_version: HEC-RAS version whose export the modifications
+                reproduce (for example ``"6.6"`` or ``"7.0.1"``). ``None``
+                resolves the project's version: ``ras_object``'s HEC-RAS
+                version, else the newest ``Program Version`` of the plan and
+                geometry files beside ``rasmap_path`` or the terrain's project
+                folder, else 7.0.1. HEC-RAS 6.6 maps to the engine's 6.6
+                rules; every other version follows 7.0.1 (7.0 applies
+                modifications as 7.0.1 does; earlier 6.x is not measured).
+            ras_object: Optional initialized RAS project whose HEC-RAS
+                version selects ``hecras_version``.
 
         Returns:
             dict: Receipt with ``method_id`` (the method the engine reports:
             ``/2`` from current engines for every request, ``/1`` from older
-            engines), ``sources_in_priority_order``, ``priority_basis``,
-            ``seconds`` and the engine ``engine_report``.
+            engines), ``hecras_version`` (``None`` for
+            an unmodified terrain), ``hecras_version_basis``,
+            ``sources_in_priority_order``, ``priority_basis``, ``seconds`` and
+            the engine ``engine_report``.
 
-        Terrain modifications (engine ``rasmapper-effective-terrain/2``): ground
-        lines (high ground and channels, ``SetValue``/``SetIfHigher``/
-        ``SetIfLower``, without a ``System Name``), constant-elevation polygons
-        and ellipses (any rotation) are rasterized as RAS Mapper's
-        ``rasterize_modifications=True`` export does, layers in descending
-        ``Priority`` (Priority 0 last). Ground-line profiles are densified in
-        the project's unit system (``SI Units`` in the ``.prj`` beside
-        ``rasmap_path`` means meters). Qualified against HEC-RAS 7.0.1 in
-        ras-commander-fast-map. Any other form (ground-line ``Add``, control
-        points, any non-empty ``System Name``, boundary-profile or vertex-Z
-        polygons, other RAS layer types) is refused, so the caller uses the
-        RAS Mapper export. Layer types RAS Mapper ignores (for example
+        Terrain modifications (engine ``rasmapper-effective-terrain/2`` with a
+        ``modifications`` record): ground lines (high ground and channels, any
+        elevation type including ``Add``, named systems, control points, NaN
+        templates and negative slopes), polygons (constant, or boundary
+        elevations from perimeter control points or a stored profile, interior
+        control points) and ellipses (any rotation) are rasterized as RAS
+        Mapper's ``rasterize_modifications=True`` export does, layers in
+        descending ``Priority`` (Priority 0 last). Ground-line profiles are
+        densified in the project's unit system (``SI Units`` in the ``.prj``
+        beside ``rasmap_path`` means meters). Qualified against HEC-RAS 7.0.1
+        and 6.6 exports in ras-commander-fast-map. The engine refuses the
+        remaining forms (boundary elevations sampled from the terrain,
+        shape-Z polygons, multi-part polygons needing a TIN, named ground lines
+        with control points or a NaN template, named ground lines under 6.6,
+        other RAS layer types), so the caller uses the RAS Mapper export. An
+        engine advertising only ``/1`` refuses every modified terrain. Layer types RAS Mapper ignores (for example
         ``Type=Channel`` from older ras-commander writers) are skipped, and
         when ``rasmap_path`` is given without an ``ElevationModificationGroup``
         under the terrain, no modification is applied, as in RAS Mapper.
@@ -1429,6 +1447,7 @@ class RasFim:
             terrain_hdf, output_path, rasmap_path=rasmap_path, engine_path=engine_path,
             threads=threads, max_working_mib=max_working_mib, timeout=timeout,
             terrain_crs_fnv1a64=terrain_crs_fnv1a64,
+            hecras_version=hecras_version, ras_object=ras_object,
         )
 
     @staticmethod

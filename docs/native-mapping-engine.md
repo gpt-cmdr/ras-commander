@@ -947,6 +947,39 @@ the export, which took 242.6 s through `RasTerrain.export_rasmapper_terrain`.
 Bridges whole-simulation and horizontal requests are refused on the source
 TIFF because 28 mapped 2D pixels lie outside its footprint.
 
+## Build the effective terrain, with modifications
+
+`RasFim.build_effective_terrain` writes the grid that
+`RasTerrain.export_rasmapper_terrain(downsample_factor=1)` produces, in Rust
+and without HEC-RAS. For a terrain with `/Modifications` it needs an engine
+that advertises `rasmapper-effective-terrain/2` with a `modifications` record;
+an engine that advertises only `/1` refuses every modified terrain.
+
+```python
+receipt = RasFim.build_effective_terrain(
+    "Terrain/Terrain.hdf", "effective.tif",
+    rasmap_path="Project.rasmap", hecras_version="6.6",
+)
+receipt["method_id"], receipt["hecras_version"], receipt["modification_layers"]
+```
+
+- Every HDF layer RAS Mapper applies is staged: ground lines (`Type=Levee`,
+  any elevation type including `Add`, named systems, control points, NaN
+  templates), polygons (constant, or boundary elevations from perimeter
+  control points or a stored profile) and ellipses (any rotation).
+- `hecras_version` selects the export to reproduce. `6.6` follows HEC-RAS 6.6;
+  every other version follows 7.0.1. Without it, the version comes from
+  `ras_object`, else from the newest `Program Version` of the project's plan
+  and geometry files, else 7.0.1.
+- With `rasmap_path`, RAS Mapper applies the HDF modifications only when the
+  terrain layer has an `ElevationModificationGroup` element; without one the
+  terrain is treated as unmodified.
+- Forms the engine does not reproduce raise `FimUnsupportedError`: boundary
+  elevations sampled from the terrain, shape-Z polygons, multi-part polygons
+  that need a TIN, named ground lines with control points or a NaN template,
+  named ground lines under 6.6, and other RAS layer types. Use the RAS Mapper
+  export for those terrains.
+
 ## Sloping velocity
 
 `velocity=True` adds `velocity_tif` (`12_<profile>_velocity.tif`) to each
