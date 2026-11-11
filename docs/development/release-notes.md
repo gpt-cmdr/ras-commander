@@ -9,6 +9,8 @@ alone does not identify a development checkout.
 
 ### Unreleased
 
+### 0.118.0 — 2026-11-11
+
 - **Final-format delivery:** `RasFim.map_sloping_profiles(final_format=...)`
   has the engine write sloping Depth/WSE once in delivery form: full-grid
   placement (`grid="terrain"` or an explicit window), numeric nodata, tiled
@@ -19,22 +21,25 @@ alone does not identify a development checkout.
   Rasterio fallback. Spring River p02 Max, installed Fast-Map 0.17.0 wheels
   on Windows and Linux: 0 mask and 0 bit differences against the stock route
   plus GDAL normalization at base, overview 2 and overview 4. See
-  [final-format delivery](../native-mapping-engine.md).
+  [final-format delivery](../native-mapping-engine.md). (#829)
 
 - **Cell-validation reuse:** a successful horizontal cell validation is cached
   per geometry and terrain grid plan, in process and on disk
   (`RAS_COMMANDER_FIM_VALIDATION_CACHE` overrides the location), so repeated
   maps of the same model skip it. Passes that relied on the coordinate-roundoff
   tolerance are not cached. A multi-threaded validity check no longer drops the
-  caller's warnings.
+  caller's warnings. (#829)
 
 - **Coordinate-roundoff overlap tolerance:** the horizontal overlap check
-  accepts unsampled coordinate-roundoff residue between cells, ported from the
-  open PR 803 into the faster check.
+  accepts unsampled coordinate-roundoff residue between cells, with a
+  `RuntimeWarning` for each tolerated overlap. The tolerance from #803 is carried
+  into the faster check by #829, which supersedes #803.
 
 - **Mapping engine dependency:** mapping extras select
   `ras-commander-fast-map>=0.17.0,<0.18`. 0.17.0 adds `native_final_format` with
-  no change to existing requests or products.
+  no change to existing requests or products. As before, the extras install the
+  engine only on Windows x64 and Linux x86_64; elsewhere no engine is installed
+  and `final_format` is refused with `FimUnsupportedError`.
 
 ### 0.117.0 — 2026-11-09
 
