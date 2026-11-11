@@ -1362,7 +1362,7 @@ class RasFim:
         timeout: Optional[float] = None,
         terrain_crs_fnv1a64: Optional[str] = None,
         hecras_version: Optional[str] = None,
-        ras_object=None,
+        ras_object: Any = None,
     ) -> Dict[str, Any]:
         """Build RAS Mapper's effective terrain in Rust, with qualified modifications.
 
