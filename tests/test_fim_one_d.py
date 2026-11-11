@@ -161,7 +161,7 @@ def test_batched_workers_match_sequential_single_profile_bits(files, tmp_path, m
     assert batched.attrs["xs_render_workers"] > 1
     assert batched.attrs["xs_profiles_per_request"] > 1
     monkeypatch.setattr(_one_d, "_xs_batch_limit", lambda flags: 1)
-    monkeypatch.setattr(_one_d, "_xs_render_workers", lambda *args: 1)
+    monkeypatch.setattr(_one_d, "_xs_render_workers", lambda *args, **kwargs: 1)
     monkeypatch.setattr(_one_d, "_terrain_tiff", lambda flags: False)  # rasterio-staged terrain
     single = RasFim.map_one_d_profiles(hdf, terrain, tmp_path / "single", threads=1, **kwargs)
     assert single.attrs["xs_render_workers"] == 1
@@ -221,6 +221,184 @@ def test_xs_worker_and_batch_flags_are_parsed_conservatively():
     scratch = 256 * 256 + 1000 * 8
     assert _xs_render_workers(workers, 8, 100 + 2 * scratch, receipt, grid, 100) == 3
     assert _xs_render_workers(workers, 8, 100, receipt, grid, 100) == 1
+    # Scratch that scales with the worker count (terrain readers, writers) counts too.
+    per_worker = lambda n: n * 1000
+    assert _xs_render_workers(workers, 8, 100 + 2 * scratch + 3000, receipt, grid, 100, per_worker) == 3
+    assert _xs_render_workers(workers, 8, 100 + 2 * scratch + 2999, receipt, grid, 100, per_worker) == 2
+
+def _fake_one_d_engine(monkeypatch, tmp_path, flags, failure=None):
+    """Simulated ras2fim-batch for the 1D route; records each request.
+
+    Writes the products an engine advertising ``flags`` would deliver: raw
+    ``depth.bin``/``wse.bin`` on the window, or ``final_format`` GeoTIFFs on the
+    requested (window or full) grid. ``failure`` replaces the result with a
+    nonzero exit carrying that stderr text.
+    """
+    import subprocess
+    from affine import Affine
+    from ras_commander.fim import _engine, _one_d
+    exe = tmp_path / "fake-ras2fim-batch.exe"
+    exe.write_bytes(b"simulated engine")
+    record = {"engine": {"package": "simulated", "version": "0.0.0"},
+              "one_d_clipped_diagnostic": {"method_id": _one_d.METHOD_ID,
+                                           "request_schemas": [_one_d.REQUEST_SCHEMA],
+                                           "native_parity_qualified": False, **flags}}
+    requests = []
+    monkeypatch.setattr(_engine, "find_engine", lambda path=None: exe)
+    monkeypatch.setattr(_engine, "engine_method", lambda engine: record)
+
+    def run(args, what, timeout=None):
+        assert args[1] == "one-d-diagnostic"
+        request = json.loads(Path(args[2]).read_text())
+        requests.append(request)
+        if failure is not None:
+            return subprocess.CompletedProcess(args, 1, "", failure)
+        out = Path(args[3])
+        out.mkdir()
+        w = request["window"]
+        depth = np.full((w["height"], w["width"]), 1.5, dtype="<f4")
+        if request.get("aoi_mask_file"):
+            keep = np.fromfile(request["aoi_mask_file"], "u1").reshape(depth.shape).astype(bool)
+            depth[~keep] = np.nan
+        report = {"status": "complete", "method": {"method_id": _one_d.METHOD_ID},
+                  "width": w["width"], "height": w["height"]}
+        fmt = request.get("final_format")
+        if fmt is None:
+            depth.tofile(out / "depth.bin")
+            (depth + 1).tofile(out / "wse.bin")
+        else:
+            source = Affine.from_gdal(*request["geo_transform"])
+            full = fmt.get("full_grid") or {
+                "width": w["width"], "height": w["height"], "row_offset": 0, "col_offset": 0,
+                "transform": list((source * Affine.translation(w["col"], w["row"])).to_gdal())}
+            for name, values in (("depth", depth), ("wse", depth + 1)):
+                grid = np.full((full["height"], full["width"]), np.nan, dtype="<f4")
+                r, c = full["row_offset"], full["col_offset"]
+                grid[r:r + w["height"], c:c + w["width"]] = values
+                with rasterio.open(out / f"{name}.tif", "w", driver="GTiff", width=full["width"],
+                                   height=full["height"], count=1, dtype="float32",
+                                   crs=f"EPSG:{request['epsg']}", transform=Affine.from_gdal(*full["transform"]),
+                                   nodata=fmt["nodata"], tiled=True, blockxsize=fmt["block_size"],
+                                   blockysize=fmt["block_size"], compress="deflate") as dst:
+                    dst.write(np.where(np.isnan(grid), np.float32(fmt["nodata"]), grid), 1)
+            finite = int(np.isfinite(depth).sum())
+            report.update(compression="DEFLATE", final_format=fmt,
+                          depth_finite_pixels=finite, flooded_pixels=finite)
+        (out / "report.json").write_text(json.dumps(report))
+        return subprocess.CompletedProcess(args, 0, "", "")
+
+    monkeypatch.setattr(_engine, "run_engine", run)
+    return exe, requests
+
+
+def _native_final_flags():
+    return {"native_geotiff_outputs": True,
+            "native_final_format": {"control": "final_format", "compression": "DEFLATE", "layout": "tiled",
+                                    "block_size": {"min": 16, "max": 4096, "multiple_of": 16},
+                                    "zlevel": {"min": 1, "max": 9}, "full_grid": True,
+                                    "overview_resampling": ["average"]}}
+
+
+@pytest.mark.parametrize("grid", ["window", "terrain", [0, 0, 300, 512]])
+@pytest.mark.parametrize("aoi", ["bbox", "polygon"])
+def test_final_format_rows_describe_delivered_grid(files, tmp_path, monkeypatch, grid, aoi):
+    """Manifest rows carry the final_format grid, as map_sloping_profiles rows do."""
+    from shapely.geometry import Polygon
+    hdf, terrain = files
+    exe, requests = _fake_one_d_engine(monkeypatch, tmp_path, _native_final_flags())
+    region = ({"bbox": (10, 20, 100, 100)} if aoi == "bbox"
+              else {"polygon": Polygon([(3, 2), (97, 9), (40, 95)]), "aoi_crs": "EPSG:6588"})
+    out = RasFim.map_one_d_profiles(hdf, terrain, tmp_path / "out", profiles=["Max", 0], allow_unqualified=True,
+                                    max_working_mib=64, engine_path=exe,
+                                    final_format={"nodata": -9999.0, "block_size": 16, "grid": grid}, **region)
+    window = requests[0]["window"]
+    on_grid = out.attrs["final_format"]["window_on_grid"]
+    assert on_grid[2:] == [window["width"], window["height"]]
+    for row in out.to_dict(orient="records"):
+        assert row["status"] == "complete"
+        with rasterio.open(row["depth_tif"]) as image:
+            assert (row["height"], row["width"]) == image.shape
+            assert tuple(row["transform"]) == tuple(image.transform)[:6]
+            assert out.attrs["final_format"]["grid_on_terrain"] == [
+                row["col_off"], row["row_off"], row["width"], row["height"]]
+            assert (row["col_off"] + on_grid[0], row["row_off"] + on_grid[1]) == (window["col"], window["row"])
+    persisted = json.loads((tmp_path / "out" / "fim_manifest.json").read_text())
+    assert persisted["status"] == "complete"
+
+
+@pytest.mark.parametrize("mib,final,expected", [
+    (12, False, None), (16, False, 1), (24, False, 3), (40, False, 6),
+    (16, True, None), (24, True, 1), (40, True, 3)])
+def test_workers_fit_engine_terrain_read_and_final_format_scratch(files, tmp_path, monkeypatch, mib, final, expected):
+    """With small budgets Python drops workers or refuses where the engine would refuse.
+
+    Expected counts were also admitted by the Fast-Map PR #39 engine (ba9da17);
+    without terrain-read/writer scratch Python admitted 8 workers, which it refused.
+    """
+    from ras_commander.fim import FimUnsupportedError
+    hdf, terrain = files
+    flags = {"render_workers": {"control": "threads", "max": 64},
+             "terrain_tiff": {"control": "terrain_tiff", "reader": "terrio",
+                              "schemas": ["fast-map-one-d-diagnostic/3"]},
+             **_native_final_flags()}
+    exe, requests = _fake_one_d_engine(monkeypatch, tmp_path, flags)
+    kwargs = dict(profiles=["Max"], allow_unqualified=True, max_working_mib=mib, threads=8, engine_path=exe,
+                  final_format={"nodata": -9999.0, "grid": "terrain", "block_size": 512} if final else None)
+    if expected is None:
+        with pytest.raises(FimUnsupportedError, match="exceeds max_working_mib with one worker"):
+            RasFim.map_one_d_profiles(hdf, terrain, tmp_path / "out", **kwargs)
+        assert not requests
+        return
+    out = RasFim.map_one_d_profiles(hdf, terrain, tmp_path / "out", **kwargs)
+    assert out.attrs["xs_render_workers"] == expected
+    assert requests[0].get("threads", 1) == expected
+    assert "terrain_tiff" in requests[0]
+
+
+def test_engine_scratch_planners_mirror_recorded_engine_plans():
+    """Planned bytes recorded from the PR #39 engine's budget refusals (ba9da17)."""
+    from affine import Affine
+    from ras_commander.fim import _final_format
+    from ras_commander.fim._one_d import _terrain_read_bytes
+    # 8 terrio readers over a 512-wide window of a 256-row tiled source.
+    assert _terrain_read_bytes(512, 256, 8) == 8 * (512 * 256 * 8 + (4 << 20))
+    wire = {"block_size": 512, "overview_factors": []}
+    grid = {"width": 512, "height": 512, "transform": Affine.identity()}
+    # Engine: 74618936 planned with final_format minus 45757480 without it.
+    assert _final_format.planned_bytes(wire, grid, 8) == 74618936 - 45757480
+    more = _final_format.planned_bytes({"block_size": 64, "overview_factors": [2, 4]}, grid, 2)
+    assert more > _final_format.planned_bytes({"block_size": 64, "overview_factors": []}, grid, 2)
+
+
+def test_final_format_nodata_collision_is_unsupported(files, tmp_path, monkeypatch):
+    from ras_commander.fim import FimMappingError
+    hdf, terrain = files
+    exe, _ = _fake_one_d_engine(
+        monkeypatch, tmp_path, _native_final_flags(),
+        failure="invalid input: final_format: a valid product value is non-finite or reads as the nodata value")
+    with pytest.raises(FimMappingError, match="FimUnsupportedError: final_format nodata=") as caught:
+        RasFim.map_one_d_profiles(hdf, terrain, tmp_path / "out", profiles=["Max"], allow_unqualified=True,
+                                  max_working_mib=64, engine_path=exe, final_format={"nodata": 0.0})
+    assert isinstance(caught.value.__cause__, FimUnsupportedError)
+    assert not list((tmp_path / "out").glob("*.tif"))
+
+
+def test_digests_bounded_by_caller_threads(tmp_path, monkeypatch):
+    import concurrent.futures
+    from ras_commander.fim import _one_d
+    paths = []
+    for i in range(12):
+        paths.append(tmp_path / f"f{i}")
+        paths[-1].write_bytes(bytes([i]) * 10)
+    seen = []
+    original = concurrent.futures.ThreadPoolExecutor
+    monkeypatch.setattr(concurrent.futures, "ThreadPoolExecutor",
+                        lambda max_workers: seen.append(max_workers) or original(max_workers=max_workers))
+    expected = {p: _one_d.digest(p) for p in paths}
+    assert _one_d._digests(paths) == expected and seen == []
+    assert _one_d._digests(paths, 3) == expected and seen == [3]
+    assert _one_d._digests(paths, 64) == expected and seen == [3, 8]
+
 
 def test_crs_identity_refused_before_writes(files, tmp_path):
     hdf, terrain = files
@@ -455,13 +633,13 @@ def test_integrity_failure_after_publication_removes_batch_products(files, tmp_p
     _fake_engine(monkeypatch, tmp_path)
     original = FimPreparedOneDModel.validate
     calls = 0
-    def validate(self):
+    def validate(self, **kwargs):
         nonlocal calls
         calls += 1
         if calls == 3:
             with payload.open("ab") as stream:
                 stream.write(b"changed after TIFF publication")
-        return original(self)
+        return original(self, **kwargs)
     monkeypatch.setattr(FimPreparedOneDModel, "validate", validate)
     output = tmp_path / "mapped"
     with pytest.raises(FimMappingError, match="changed") as error:

@@ -36,14 +36,19 @@ def digest(path):
     return checksum.hexdigest()
 
 
-def _digests(paths):
-    """SHA-256 of every path, hashed concurrently (hashlib releases the GIL).
+def _digests(paths, threads=1):
+    """SHA-256 of every path on at most ``threads`` (and 8) hashing threads.
 
-    Results are keyed by path, so callers keep their own checking order.
+    hashlib releases the GIL, so a caller's thread budget can hash files
+    concurrently. Results are keyed by path, so callers keep their own
+    checking order.
     """
-    from concurrent.futures import ThreadPoolExecutor
     paths = list(paths)
-    with ThreadPoolExecutor(max_workers=max(1, min(8, len(paths)))) as pool:
+    workers = max(1, min(8, int(threads), len(paths)))
+    if workers == 1:
+        return {path: digest(path) for path in paths}
+    from concurrent.futures import ThreadPoolExecutor
+    with ThreadPoolExecutor(max_workers=workers) as pool:
         return dict(zip(paths, pool.map(digest, paths)))
 
 
@@ -318,7 +323,11 @@ class FimPreparedOneDModel:
         return json.loads(payload)
 
     @log_call
-    def validate(self):
+    def validate(self, threads=1):
+        """Recheck the receipt, hashes, grid, CRS and units of the bound inputs.
+
+        ``threads`` bounds concurrent file hashing (at most 8).
+        """
         from pyproj.exceptions import CRSError
         receipt = self.receipt
         if (receipt.get("schema") != "ras-commander-one-d-preparation/1"
@@ -369,7 +378,7 @@ class FimPreparedOneDModel:
                 raise ValueError("normalization evidence byte count")
             if any(not isinstance(expected, str) or len(expected) != 64 for expected in hashes.values()):
                 raise ValueError("source or payload changed: invalid recorded hash")
-            actual = _digests(hashes)
+            actual = _digests(hashes, threads)
             for path, expected in hashes.items():
                 if actual[path] != expected:
                     raise ValueError("source or payload changed: " + str(path))
@@ -637,11 +646,24 @@ def _inline_storage(flags):
             and REQUEST_SCHEMA in (record.get("schemas") or ()))
 
 
-def _xs_render_workers(flags, threads, budget, receipt, grid, planned):
+def _terrain_read_bytes(window_width, stripe_rows, workers):
+    """Engine terrain-TIFF decode scratch for ``workers`` readers.
+
+    Mirrors ``one_d_terrain::Source::planned_bytes`` of the Fast-Map 1D
+    ``terrain_tiff`` reader (PR #39 head ba9da17): per worker, one window-wide
+    source tile row of 8-byte values plus 4 MiB of tile decode slack.
+    """
+    return (int(window_width) * int(stripe_rows) * 8 + (4 << 20)) * max(1, int(workers))
+
+
+def _xs_render_workers(flags, threads, budget, receipt, grid, planned, worker_bytes=None):
     """Largest advertised XS render worker count within threads and the budget.
 
     Each extra engine worker needs a tile claim buffer plus one candidate
     reference per stored triangle; workers never change output bits.
+    ``worker_bytes(n)`` adds engine scratch that scales with the worker count
+    (terrain-TIFF readers, final_format compression workers). The caller still
+    checks that one worker fits.
     """
     record = flags.get("render_workers")
     if not isinstance(record, Mapping) or record.get("control") != "threads":
@@ -650,8 +672,9 @@ def _xs_render_workers(flags, threads, budget, receipt, grid, planned):
     if not isinstance(maximum, int) or isinstance(maximum, bool) or maximum < 1:
         return 1
     scratch = int(grid["tile_size"]) ** 2 + int(receipt["triangle_count"]) * 8
+    extra = worker_bytes or (lambda workers: 0)
     workers = min(threads, maximum)
-    while workers > 1 and planned + (workers - 1) * scratch > budget:
+    while workers > 1 and planned + (workers - 1) * scratch + extra(workers) > budget:
         workers -= 1
     return workers
 
@@ -717,7 +740,7 @@ def map_one_d_profiles(hdf_path, terrain_path, output_folder, *, profiles=None,
             prepared = prepare_one_d_model(hdf_path, terrain_path, scratch / "prepared",
                                            profiles=profiles, allow_unqualified=True,
                                            max_working_mib=max_working_mib)
-        receipt = prepared.validate()
+        receipt = prepared.validate(threads=threads)
         names = receipt.get("profile_ids", [f"profile_{i:04d}" for i in range(len(receipt["profiles"]))])
         if isinstance(hdf_path, FimPreparedOneDModel) and profiles is not None:
             if isinstance(profiles, Mapping):
@@ -762,32 +785,18 @@ def map_one_d_profiles(hdf_path, terrain_path, output_folder, *, profiles=None,
         window, mask_geometry, aoi_scratch = _plan_delivery_aoi(constraint, transform, grid, budget)
         pixels = int(window.width * window.height)
         pool_overhead = (Path(storage["polygons"]).stat().st_size * 32 + storage["count"] * 4096 + 1024**2) if storage else 0
-        if (pixels * (160 if storage else 32) + pool_overhead + aoi_scratch +
-                (pixels if mask_geometry is not None else 0) +
-                receipt["point_count"] * 128 + receipt["triangle_count"] * 256 > budget):
+        planned = (pixels * (160 if storage else 32) + pool_overhead + aoi_scratch +
+                   (pixels if mask_geometry is not None else 0) +
+                   receipt["point_count"] * 128 + receipt["triangle_count"] * 256)
+        if planned > budget:
             raise FimUnsupportedError("planned 1D delivery/geometry exceeds max_working_mib")
-        workers = _xs_render_workers(support.flags, threads, budget, receipt, grid,
-                                     pixels * (160 if storage else 32) + pool_overhead + aoi_scratch +
-                                     (pixels if mask_geometry is not None else 0) +
-                                     receipt["point_count"] * 128 + receipt["triangle_count"] * 256)
         batch_limit = _xs_batch_limit(support.flags)
         inline_storage = bool(storage) and _inline_storage(support.flags)
-        mask = None
-        if mask_geometry is not None:
-            # Use complete projected geometry and ORIGINAL source transform;
-            # never clip geometry or normalize against a cropped transform.
-            mask = _aoi_lattice.mask(mask_geometry, transform, window)
-            if not mask.any():
-                raise FimUnsupportedError("AOI contains no source-grid pixels")
+        # The XS request delivers products unless a separate composition does.
+        delivers = not storage or inline_storage
         # Engines advertising terrain_tiff read the source GeoTIFF with terrio,
         # applying GDAL's Float32 nodata mask; older engines get a staged buffer.
-        terrain_tiff = _terrain_tiff(support.flags) and (not storage or inline_storage)
-        terrain_file = None
-        if not terrain_tiff:
-            with rasterio.open(receipt["terrain"]) as source:
-                terrain = source.read(1, window=window, masked=True).astype("<f4").filled(np.nan)
-            terrain_file = scratch / "terrain.bin"
-            terrain.tofile(terrain_file)
+        terrain_tiff = _terrain_tiff(support.flags) and delivers
         final = None
         final_fields = {}
         if final_options is not None:
@@ -801,6 +810,46 @@ def map_one_d_profiles(hdf_path, terrain_path, output_folder, *, profiles=None,
             final_fields = {"final_format": final[0], "epsg": int(epsg),
                             "flooded_depth_range": [_products.FLOODPLAIN_MIN_DEPTH,
                                                     _products.FLOODPLAIN_MAX_DEPTH]}
+
+        def delivery_bytes(count):
+            """Engine final_format writer scratch with ``count`` compression workers."""
+            if final is None:
+                return 0
+            return (_final_format.planned_bytes(final[0], final[1], count)
+                    + (pixels if mask_geometry is not None else 0))
+
+        def xs_worker_bytes(count):
+            # Engine scratch that scales with the XS request's thread count.
+            return ((_terrain_read_bytes(window.width, grid["tile_size"], count) if terrain_tiff else 0)
+                    + (delivery_bytes(count) if delivers else 0))
+
+        workers = _xs_render_workers(support.flags, threads, budget, receipt, grid, planned,
+                                     worker_bytes=xs_worker_bytes)
+        composition_threads = min(threads, 64)
+        if not delivers:
+            # The separate composition call writes final_format products.
+            while composition_threads > 1 and planned + delivery_bytes(composition_threads) > budget:
+                composition_threads -= 1
+        if (planned + (workers - 1) * (int(grid["tile_size"]) ** 2 + receipt["triangle_count"] * 8)
+                + xs_worker_bytes(workers) > budget
+                or not delivers and planned + delivery_bytes(composition_threads) > budget):
+            raise FimUnsupportedError(
+                "planned 1D delivery/geometry exceeds max_working_mib with one worker, "
+                "including engine terrain-read and final_format writer scratch")
+        mask = None
+        if mask_geometry is not None:
+            # Use complete projected geometry and ORIGINAL source transform;
+            # never clip geometry or normalize against a cropped transform.
+            mask = _aoi_lattice.mask(mask_geometry, transform, window)
+            if not mask.any():
+                raise FimUnsupportedError("AOI contains no source-grid pixels")
+        terrain_file = None
+        if not terrain_tiff:
+            with rasterio.open(receipt["terrain"]) as source:
+                terrain = source.read(1, window=window, masked=True).astype("<f4").filled(np.nan)
+            terrain_file = scratch / "terrain.bin"
+            terrain.tofile(terrain_file)
+        if final is not None:
             if mask is not None:
                 mask_file = scratch / "aoi-mask.u8"
                 mask.astype("u1").tofile(mask_file)
@@ -830,19 +879,31 @@ def map_one_d_profiles(hdf_path, terrain_path, output_folder, *, profiles=None,
         rows, reports = [], []
         staged_products = []
         published_products = []
+        # Rows describe the delivered grid, as sloping rows do: the mapped
+        # window, or the final_format grid when one is requested.
+        if final is not None:
+            delivered_grid = dict(col_off=int(final[1]["col_off"]), row_off=int(final[1]["row_off"]),
+                                  width=int(final[1]["width"]), height=int(final[1]["height"]),
+                                  transform=tuple(float(v) for v in tuple(final[1]["transform"])[:6]))
+        else:
+            delivered_grid = dict(col_off=int(window.col_off), row_off=int(window.row_off),
+                                  width=int(window.width), height=int(window.height),
+                                  transform=tuple(rasterio.windows.transform(window, transform))[:6])
         for profile in selected_names:
             row = dict.fromkeys(MANIFEST_COLUMNS)
-            row.update(profile=profile, status="pending", col_off=int(window.col_off), row_off=int(window.row_off),
-                       width=int(window.width), height=int(window.height), crs=rasterio.crs.CRS.from_wkt(grid["crs"]).to_string(),
-                       transform=tuple(rasterio.windows.transform(window, transform))[:6])
+            row.update(profile=profile, status="pending", crs=rasterio.crs.CRS.from_wkt(grid["crs"]).to_string(),
+                       **delivered_grid)
             rows.append(row)
+
+        threads_effective = max(workers, min(threads, 4) if storage else 1,
+                                composition_threads if final is not None and not delivers else 1)
 
         def manifest_frame():
             result = pd.DataFrame(rows, columns=MANIFEST_COLUMNS)
             result.attrs.update(schema=MANIFEST_SCHEMA, method_id=final_method_id,
                                 request_schema=final_schema, **details,
                                 qualified=False, preparation=receipt,
-                                threads_requested=threads, threads_effective=max(workers, min(threads, 4) if storage else 1),
+                                threads_requested=threads, threads_effective=threads_effective,
                                 xs_render_workers=workers, xs_profiles_per_request=batch_limit,
                                 storage_inline=inline_storage, engine_sha256=engine_hash)
             return result
@@ -854,14 +915,27 @@ def map_one_d_profiles(hdf_path, terrain_path, output_folder, *, profiles=None,
                        "qualified": False,
                        "preparation": receipt, "engine_sha256": engine_hash, "reports": reports,
                        "status": status, "error": error,
-                       "threads_requested": threads, "threads_effective": max(workers, min(threads, 4) if storage else 1),
+                       "threads_requested": threads, "threads_effective": threads_effective,
                        "xs_render_workers": workers, "xs_profiles_per_request": batch_limit,
                        "storage_inline": inline_storage})
 
         def verify_inputs():
-            prepared.validate()
+            prepared.validate(threads=threads)
             if digest(engine) != engine_hash:
                 raise FimEngineError("engine changed during mapping")
+
+        window_geo_transform = list(rasterio.windows.transform(window, transform).to_gdal())
+
+        def engine_failure(out, proc):
+            """Exception for a failed delivering engine call, as sloping surfaces it."""
+            refusal = _engine.read_refusal(out, proc.stderr)
+            if refusal is not None:
+                return refusal
+            if (final_options is not None and _final_format.NODATA_REFUSAL in
+                    f"{proc.stderr} {_final_format.report_error(out)}"):
+                # Never drop or alter a valid pixel to fit the nodata marker.
+                return _final_format.nodata_collision_error(final_options["nodata"])
+            return FimEngineError(proc.stderr[-4000:])
 
         try:
             persist("in_progress")
@@ -881,7 +955,6 @@ def map_one_d_profiles(hdf_path, terrain_path, output_folder, *, profiles=None,
                     request["levels_files"] = [selected_levels[k] for k in batch]
                 else:
                     request["levels_file"] = selected_levels[first]
-                delivers = not storage or inline_storage
                 if workers > 1 or (final_fields and delivers):
                     request["threads"] = workers
                 if delivers:
@@ -897,15 +970,24 @@ def map_one_d_profiles(hdf_path, terrain_path, output_folder, *, profiles=None,
                 out = scratch / f"engine-{first}"
                 proc = _engine.run_engine([str(engine), "one-d-diagnostic", str(request_file), str(out)], "1D mapping", timeout)
                 if proc.returncode != 0:
-                    raise _engine.read_refusal(out, proc.stderr) or FimEngineError(proc.stderr[-4000:])
+                    raise engine_failure(out, proc)
                 top = json.loads((out / "report.json").read_text())
                 if top.get("status") != "complete" or top.get("method", {}).get("method_id") != METHOD_ID:
                     raise FimEngineError("incomplete or mismatched 1D engine report")
+                summaries = top.get("profiles")
                 if batch_limit > 1 and (top.get("profile_count") != len(batch) or
-                                        len(top.get("profiles", ())) != len(batch)):
+                                        not isinstance(summaries, list) or len(summaries) != len(batch)):
                     raise FimEngineError("1D engine report does not cover every requested profile")
                 for offset, k in enumerate(batch):
                     folder_k = out / f"profile-{offset:04d}" if batch_limit > 1 else out
+                    if batch_limit > 1:
+                        # The top-level summary must bind this folder to this profile's levels.
+                        summary = summaries[offset]
+                        if (not isinstance(summary, Mapping) or summary.get("index") != offset
+                                or summary.get("levels_file") != request["levels_files"][offset]
+                                or summary.get("folder") != folder_k.name
+                                or summary.get("status") != "complete"):
+                            raise FimEngineError("1D engine profile summary does not match the request")
                     report = json.loads((folder_k / "report.json").read_text()) if batch_limit > 1 else top
                     if report.get("status") != "complete" or report.get("method", {}).get("method_id") != METHOD_ID:
                         raise FimEngineError("incomplete or mismatched 1D engine profile report")
@@ -913,6 +995,14 @@ def map_one_d_profiles(hdf_path, terrain_path, output_folder, *, profiles=None,
                             report.get("storage", {}).get("method", {}).get("method_id") != STORAGE_METHOD_ID
                             or report.get("composition", {}).get("method", {}).get("method_id") != COMPOSITION_METHOD_ID):
                         raise FimEngineError("1D engine profile report lacks inline storage composition")
+                    if (inline_storage or batch_limit > 1) and (
+                            report.get("width") != int(window.width) or report.get("height") != int(window.height)
+                            or report.get("source_col") != int(window.col_off)
+                            or report.get("source_row") != int(window.row_off)
+                            or report.get("source_width") != grid["width"]
+                            or report.get("source_height") != grid["height"]
+                            or report.get("geo_transform") != window_geo_transform):
+                        raise FimEngineError("1D engine profile report grid differs from the request window")
                     xs_outputs[k] = (folder_k, report)
 
             xs_outputs = {}
@@ -958,13 +1048,13 @@ def map_one_d_profiles(hdf_path, terrain_path, output_folder, *, profiles=None,
                                                "owners_file": str(pool_out / "owners.bin"), "area_count": storage["count"]},
                                    "max_working_bytes": budget}
                     if final_fields:
-                        composition.update(final_fields, threads=min(threads, 64))
+                        composition.update(final_fields, threads=composition_threads)
                     composed = scratch / f"composed-{i}"
                     composition_file = scratch / f"composition-{i}.json"
                     write_json(composition_file, composition)
                     proc = _engine.run_engine([str(engine), "coupled-diagnostic", str(composition_file), str(composed)], "XS/storage composition", timeout)
                     if proc.returncode:
-                        raise _engine.read_refusal(composed, proc.stderr) or FimEngineError(proc.stderr[-4000:])
+                        raise engine_failure(composed, proc)
                     composition_report = json.loads((composed / "report.json").read_text())
                     if (composition_report.get("status") != "complete" or
                             composition_report.get("schema") != COMPOSITION_SCHEMA or

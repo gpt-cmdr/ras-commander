@@ -2157,7 +2157,11 @@ normalization and endpoint-selection rules. Full-corpus and broader raster
 qualification remain gates. Transport availability
 does not establish numerical qualification. With engines that advertise
 `render_workers`, the XS pass renders source-terrain tile rows on up to
-`threads` workers, reduced to fit `max_working_mib`. With engines that advertise
+`threads` workers, reduced to fit `max_working_mib`. Admission counts the
+engine's per-worker scratch: tile claims, triangle candidates, terrain-TIFF
+decode buffers when the engine reads the terrain itself, and `final_format`
+writer buffers. When one worker does not fit, mapping is refused before any
+engine call. With engines that advertise
 `multi_profile`, all selected profiles share one engine call, so inputs and the
 prepared surface are read and built once. Neither option changes output bits.
 Older engines run one sequential XS request per profile. Storage rendering uses
@@ -2174,8 +2178,12 @@ are bit-identical to the separate calls; manifests record `storage_inline`.
 on the 1D (or storage-composition) method, the engine applies the AOI pixel
 mask, counts finite and flooded Depth pixels and writes each Depth/WSE GeoTIFF
 once; Commander verifies the header and file and moves it into place. Valid
-pixel bits and the nodata mask equal the Rasterio-written products. The model
-CRS needs an EPSG code. There is no Rasterio fallback.
+pixel bits and the nodata mask equal the Rasterio-written products. Manifest
+rows record the delivered grid (`col_off`, `row_off`, `width`, `height` and
+`transform` on the terrain), as sloping rows do; `final_format.window_on_grid`
+locates the mapped window. A valid value that is infinite or reads as `nodata`
+is refused (`FimUnsupportedError`, wrapped in `FimMappingError`); no product is
+delivered. The model CRS needs an EPSG code. There is no Rasterio fallback.
 
 The diagnostic scope includes stored unsteady or explicit steady XS profiles,
 including junction ordering, levees, endpoint obstruction blocks and disjoint

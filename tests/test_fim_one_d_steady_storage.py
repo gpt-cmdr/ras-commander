@@ -217,24 +217,54 @@ def test_inline_storage_matches_separate_composition_bits(steady_storage, tmp_pa
                 np.testing.assert_array_equal(got[valid].view('<u4'), expected[valid].view('<u4'))
 
 
-def test_inline_storage_report_mismatch_cannot_publish(steady_storage, tmp_path, monkeypatch):
+def _corrupt_composition(top, profiles):
+    for report in profiles or [top]:
+        report['composition']['method']['method_id'] = 'wrong-composition/1'
+    return len(profiles or [top])
+
+
+def _corrupt_summary(top, profiles):
+    if not profiles:
+        pytest.skip('engine lacks multi_profile summaries')
+    top['profiles'][0]['levels_file'] += '.other'
+    return 1
+
+
+def _corrupt_grid(top, profiles):
+    for report in profiles or [top]:
+        report['geo_transform'][0] += 1.0
+    return len(profiles or [top])
+
+
+@pytest.mark.parametrize('corrupt,message', [
+    (_corrupt_composition, 'inline storage composition'),
+    (_corrupt_summary, 'profile summary does not match'),
+    (_corrupt_grid, 'grid differs from the request window')])
+def test_inline_storage_report_mismatch_cannot_publish(steady_storage, tmp_path, monkeypatch, corrupt, message):
+    """Each inline-storage report check is exercised on the engine's actual report layout."""
     import json
     from pathlib import Path
     from ras_commander.fim import _engine, FimMappingError
     engine = _storage_engine_inline()
     original = _engine.run_engine
+    corrupted = []
     def run(args, *other, **kwargs):
         result = original(args, *other, **kwargs)
-        if args[1] == 'one-d-diagnostic':
-            for path in Path(args[3]).glob('profile-*/report.json'):
-                report = json.loads(path.read_text())
-                report['composition']['method']['method_id'] = 'wrong-composition/1'
+        if args[1] == 'one-d-diagnostic' and result.returncode == 0:
+            out = Path(args[3])
+            top = json.loads((out / 'report.json').read_text())
+            paths = sorted(out.glob('profile-*/report.json'))
+            profiles = [json.loads(path.read_text()) for path in paths]
+            corrupted.append(corrupt(top, profiles))
+            (out / 'report.json').write_text(json.dumps(top))
+            for path, report in zip(paths, profiles):
                 path.write_text(json.dumps(report))
         return result
     monkeypatch.setattr(_engine, 'run_engine', run)
     output = tmp_path / 'out'
-    with pytest.raises(FimMappingError, match='inline storage composition'):
+    with pytest.raises(FimMappingError, match=message):
         RasFim.map_one_d_profiles(*steady_storage, output, profiles={'dry': 0},
                                  allow_unqualified=True, engine_path=engine,
                                  bbox=(0, 0, 100, 100), max_working_mib=64)
+    assert corrupted and all(corrupted), 'no engine report was altered'
     assert not list(output.glob('*.tif'))
