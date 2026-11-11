@@ -9,6 +9,33 @@ alone does not identify a development checkout.
 
 ### Unreleased
 
+- **Final-format delivery:** `RasFim.map_sloping_profiles(final_format=...)`
+  has the engine write sloping Depth/WSE once in delivery form: full-grid
+  placement (`grid="terrain"` or an explicit window), numeric nodata, tiled
+  DEFLATE and average overviews matching GDAL 3.10.3 `AVERAGE`, so callers no
+  longer re-encode the rasters in Python. It requires `product_writer="native"`
+  Depth/WSE delivery and an engine advertising `native_final_format`; other
+  deliveries and older engines are refused with `FimUnsupportedError`, with no
+  Rasterio fallback. Spring River p02 Max, installed Fast-Map 0.17.0 wheels
+  on Windows and Linux: 0 mask and 0 bit differences against the stock route
+  plus GDAL normalization at base, overview 2 and overview 4. See
+  [final-format delivery](../native-mapping-engine.md).
+
+- **Cell-validation reuse:** a successful horizontal cell validation is cached
+  per geometry and terrain grid plan, in process and on disk
+  (`RAS_COMMANDER_FIM_VALIDATION_CACHE` overrides the location), so repeated
+  maps of the same model skip it. Passes that relied on the coordinate-roundoff
+  tolerance are not cached. A multi-threaded validity check no longer drops the
+  caller's warnings.
+
+- **Coordinate-roundoff overlap tolerance:** the horizontal overlap check
+  accepts unsampled coordinate-roundoff residue between cells, ported from the
+  open PR 803 into the faster check.
+
+- **Mapping engine dependency:** mapping extras select
+  `ras-commander-fast-map>=0.17.0,<0.18`. 0.17.0 adds `native_final_format` with
+  no change to existing requests or products.
+
 ### 0.117.0 — 2026-11-09
 
 - **slopingPretty velocity and derived Max:** `map_sloping_profiles(velocity=True)`

@@ -73,6 +73,19 @@ def _worker_example_projects_dir(tmp_path_factory):
     RasExamples.projects_dir = tmp_path_factory.getbasetemp() / "example_projects"
 
 
+@pytest.fixture(scope="session", autouse=True)
+def _worker_fim_validation_cache(tmp_path_factory):
+    """Keep persisted FIM cell-validation records under the basetemp of this worker."""
+    name = "RAS_COMMANDER_FIM_VALIDATION_CACHE"
+    previous = os.environ.get(name)
+    os.environ[name] = str(tmp_path_factory.getbasetemp() / "fim-cell-validation")
+    yield
+    if previous is None:
+        os.environ.pop(name, None)
+    else:
+        os.environ[name] = previous
+
+
 @pytest.fixture(autouse=True)
 def _restore_interop_process_state():
     yield

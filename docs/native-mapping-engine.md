@@ -693,6 +693,69 @@ changing the window budget from 64 requires `multi_window_cache`. Native cache b
 are admitted inside `max_working_mib`; validation retention is reserved inside
 `max_prepared_mib`, capped at one eighth of that budget.
 
+Stateless `RasFim.map_sloping_profiles()` calls reuse a passed cell validation
+when the planned cell polygons are unchanged. The key is a SHA-256 of the
+ordered polygon coordinates and ring structure with the Shapely and GEOS
+versions, not a file name, size or timestamp, so a changed geometry, AOI cell
+subset or library version validates again. Only passes are recorded, as small
+JSON files under the user data directory (`fim-cell-validation`); a missing,
+damaged or mismatching record runs the full validation.
+`RAS_COMMANDER_FIM_VALIDATION_CACHE` names another directory, and `0` or `off`
+keeps reuse inside the process. `preparation.cell_validation_reused` reports
+the outcome. The overlap check uses up to `threads` workers; accepted and
+refused cell sets are unchanged.
+
+A positive-area overlap is accepted only as coordinate-roundoff residue: its
+area fits an eight-ULP boundary-error envelope at the coordinates' scale and
+no output pixel centre of the planned window lies inside it (checked in both
+the cropped and the global terrain-lattice arithmetic). Each accepted residue
+raises a `RuntimeWarning`; ownership polygons and hydraulic topology are
+unchanged. Because that judgement depends on the grid plan, a validation that
+accepted any residue is never recorded for reuse, by the stateless store or by
+a prepared model's `validation_cache_mib` cache, and is repeated on every call.
+
+### Engine-written final delivery format
+
+`final_format` on `RasFim.map_sloping_profiles()`, a prepared model's
+`map_profiles()` and `RasFim.map_catalog()` asks an engine advertising
+`native_final_format` to write Depth and WSE once in their delivery form: a
+tiled DEFLATE (predictor 1) float32 GeoTIFF with a numeric nodata value. It
+requires `product_writer="native"`. No array is streamed to Python and Rasterio
+writes nothing, so there is no fallback: an engine without the capability is
+refused before inputs are staged.
+
+```python
+RasFim.map_sloping_profiles(
+    plan_hdf, terrain_tif, output_folder, profiles={"Max": "Max"},
+    product_writer="native",
+    final_format={"nodata": -9999.0, "overviews": [2, 4], "grid": "terrain"},
+)
+```
+
+| Key | Default | Contract |
+|---|---|---|
+| `nodata` | required | Finite and exactly representable as float32; written for every invalid pixel |
+| `block_size` | 256 | Square tile edge, a multiple of 16 from 16 through 4096 |
+| `zlevel` | 6 | zlib level 1 through 9 |
+| `overviews` | `[]` | Consecutive powers of two such as `[2, 4]`; GDAL average arithmetic |
+| `grid` | `"window"` | `"window"` (the mapped window), `"terrain"` (the whole terrain grid) or `[col, row, width, height]` terrain pixels that contain the mapped window |
+
+Product names (`09_<profile>_depth_nudge.tif`, `10_<profile>_wsel_nudge.tif`)
+are unchanged. Manifest rows describe the delivered grid (`col_off`, `row_off`,
+`width`, `height`, `transform`), and the manifest `final_format` block records
+the request, the window's position on that grid and, for full-array rendering,
+the engine's per-file counts. Commander verifies the completion record and each
+file (grid, CRS, float32, nodata, DEFLATE, tiling, overview factors and the
+`rio_overview` resampling item) before moving it into the output folder.
+
+Window pixels keep the product's float32 bits; only the invalid marker,
+placement, tiling, compression and overviews differ from the Rasterio route. A
+valid value that is infinite, or that GDAL's nodata mask would read as the
+nodata value, is refused with `FimUnsupportedError` rather than masked; choose
+a nodata value outside the product range. Floodplain polygons, template
+delivery, velocity and derived products need arrays in Python and stay on the
+Rasterio writer.
+
 Each request resolves its bbox or polygon, plans the output window, validates
 selected cell overlaps, builds ownership and raster arrays, and writes its
 products. Complete global mesh topology and prepared results remain available

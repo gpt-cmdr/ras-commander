@@ -302,6 +302,7 @@ def map_profiles(
     _reduce_max=False,
     shear_stress=False,
     shear_depth="rendered",
+    final_format=None,
 ):
     from .. import HdfMesh
     from ..fast_hdf import backend_scope
@@ -330,6 +331,16 @@ def map_profiles(
         )
     if native_products and (write_floodplain or template_raster is not None or velocity):
         raise FimUnsupportedError("Native products do not support templates, floodplain or velocity")
+    from . import _final_format
+
+    final_options = _final_format.normalize(final_format)
+    if final_options is not None and (not native_products or _reduce_max):
+        # Floodplain, template and velocity deliveries need arrays in Python and
+        # are already refused for native products above.
+        raise FimUnsupportedError(
+            "final_format requires product_writer='native' Depth/WSE delivery; "
+            "it has no Rasterio fallback"
+        )
     selected_options = _validate_options(
         render_mode, reduce_shallow_to_horizontal, use_depth_weighted_faces
     )
@@ -493,6 +504,8 @@ def map_profiles(
     )
     if native_products and not method.get("native_geotiff_outputs"):
         raise FimUnsupportedError("Native products require native_geotiff_outputs capability")
+    if final_options is not None:
+        _final_format.require_engine(method, final_options, row_stream_rows)
     if row_stream_rows:
         capability = method.get("native_row_streaming")
         if (
@@ -605,8 +618,12 @@ def map_profiles(
     preparation["grid_plan_seconds"] = time.perf_counter() - phase
     phase = time.perf_counter()
     if _prepared is None:
-        _horizontal.prepare_grid(cells, terrain, plan, False)
-        preparation["cell_validation_reused"] = False
+        from . import _cell_validation
+
+        # Reuse is keyed by the validated polygon content, never by file identity.
+        preparation["cell_validation_reused"] = _cell_validation.validate(
+            cells, terrain, plan, threads=threads
+        )
     else:
         preparation["cell_validation_reused"] = _prepared._validate_grid(plan)
     preparation["cell_validation_seconds"] = time.perf_counter() - phase
@@ -633,6 +650,7 @@ def map_profiles(
             "writer_threads": writer_threads,
             "product_writer": product_writer,
             "row_stream_rows": row_stream_rows,
+            "final_format": final_options,
             "max_inflight_profiles": max_inflight_profiles,
             "max_working_mib": budget,
             "write_floodplain": bool(write_floodplain),
@@ -722,6 +740,8 @@ def map_profiles(
             frame.attrs["max_derived"] = details["max_derived"]
         if "shear_stress" in details:
             frame.attrs["shear_stress"] = details["shear_stress"]
+        if "final_format" in details:
+            frame.attrs["final_format"] = details["final_format"]
         frame.attrs["invalid_cells"] = details["invalid_cells"]
         return frame
 
@@ -819,6 +839,12 @@ def map_profiles(
                         full_transform = list(src.transform.to_gdal())
                 else:
                     full_transform = _prepared._terrain_transform
+                final = None
+                if final_options is not None:
+                    with rasterio.open(terrain) as src:
+                        final = _final_format.resolve(final_options, plan, src.width, src.height)
+                    details["final_format"] = _final_format.describe(final_options, *final)
+                    details["final_format"]["products"] = {}
                 request = dict(
                     schema="ras-commander-sloping-request/1",
                     **(
@@ -841,6 +867,7 @@ def map_profiles(
                     stream_outputs=not _reduce_max,
                     **({"geotiff_outputs": True} if native_products else {}),
                     **({"row_stream_rows": row_stream_rows} if row_stream_rows else {}),
+                    **({"compression": "DEFLATE", "final_format": final[0]} if final else {}),
                     **fields,
                 )
                 if velocity_depth != "rendered":
@@ -971,7 +998,11 @@ def map_profiles(
                             if native_products:
                                 from ._native_products import deliver
                                 write_tick = time.perf_counter() - unit["write_seconds"]
-                                products = deliver(root / "out" / name, folder, name, unit, plan)
+                                products = deliver(root / "out" / name, folder, name, unit, plan, final)
+                                if final is not None:
+                                    details["final_format"]["products"][name] = (
+                                        _final_format.check_header(unit, final[0])
+                                    )
                             else:
                                 depth = _read_stream_f32(
                                     process.stdout, plan.shape, expired, timeout, "depth"
@@ -1195,6 +1226,9 @@ def map_profiles(
                             process, errors, details, expired=expired,
                             wait_for_exit=isinstance(failure, _StreamProtocolError),
                         )
+                        if final is not None:
+                            # The temporary engine folder is gone once this unwinds.
+                            details["engine_report_error"] = _final_format.report_error(root / "out")
                         if isinstance(failure, FimEngineError) and expired.is_set():
                             raise FimEngineError(
                                 f"Sloping engine timed out after {timeout} seconds"
@@ -1243,6 +1277,19 @@ def map_profiles(
         details["status"] = "complete"
     except BaseException as exc:
         details["status"] = "aborted"
+        surfaced = exc
+        if (
+            final_options is not None
+            and isinstance(exc, FimEngineError)
+            and _final_format.NODATA_REFUSAL
+            in f"{exc} {details.get('engine_stderr', '')} {details.get('engine_report_error', '')}"
+        ):
+            # Never drop or alter a valid pixel to fit the nodata marker.
+            surfaced = FimUnsupportedError(
+                f"final_format nodata={final_options['nodata']!r} cannot mark invalid pixels: "
+                "a valid Depth/WSE value is infinite or would read as that nodata value. "
+                "Choose a nodata value outside the product range; no product was delivered"
+            )
         for name in selected:
             for product in _products.product_paths(folder, name):
                 product.unlink(missing_ok=True)
@@ -1255,8 +1302,10 @@ def map_profiles(
             if shear_stress:
                 _shear_inputs.shear_path(folder, name).unlink(missing_ok=True)
             rows[name] = _empty_row(
-                name, "failed", error=f"{type(exc).__name__}: {exc}"
+                name, "failed", error=f"{type(surfaced).__name__}: {surfaced}"
             )
+        if surfaced is not exc:
+            raise surfaced from exc
         raise
     finally:
         details.setdefault("performance", {})["total_seconds"] = (

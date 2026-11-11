@@ -383,6 +383,7 @@ class RasFim:
         engine_path: Optional[PathLike] = None,
         timeout: Optional[float] = None, cancel_event: Any = None,
         raise_on_failure: bool = True,
+        final_format: Optional[Dict[str, Any]] = None,
     ) -> pd.DataFrame:
         """Map ordered reach/timestep groups under shared CPU/memory budgets.
 
@@ -396,7 +397,9 @@ class RasFim:
         ``corner_elevation_source`` and ``invalid_cells``. Unknown fields raise.
 
         Cache controls follow :meth:`prepare_sloping_model` and are shared
-        within each actor's prepared model. ``product_writer="native"`` opts
+        within each actor's prepared model. ``final_format`` (with
+        ``product_writer="native"``) has the :meth:`map_sloping_profiles`
+        contract and applies to every job. ``product_writer="native"`` opts
         into terrio LZW output on engines advertising native_geotiff_outputs;
         it currently requires sloping jobs. The default is ``"rasterio"``.
         Native compression uses one worker. Output masks and float32 values
@@ -485,6 +488,7 @@ class RasFim:
             validation_cache_mib=validation_cache_mib, product_writer=product_writer,
             engine_path=engine_path, timeout=timeout,
             cancel_event=cancel_event, raise_on_failure=raise_on_failure,
+            final_format=final_format,
         )
 
     @staticmethod
@@ -823,6 +827,7 @@ class RasFim:
         writer_threads: int = 1,
         product_writer: str = "rasterio",
         row_stream_rows: int = 0,
+        final_format: Optional[Dict[str, Any]] = None,
         max_working_mib: int = 1024, timeout: Optional[float] = None,
         max_inflight_profiles: int = 1,
         write_floodplain: bool = False,
@@ -943,6 +948,23 @@ class RasFim:
                 batches with a capable engine and ``product_writer="native"``.
                 Requires plain sloping without velocity or storage areas.
                 Ownership and terrain remain resident for the full window.
+            final_format: ``None`` (default) or a dict asking a capable
+                engine (``native_final_format``) to write Depth and WSE once
+                in their delivery form: tiled DEFLATE (predictor 1) with a
+                numeric nodata value. Requires ``product_writer="native"``;
+                arrays are not streamed to Python and Rasterio writes
+                nothing, so there is no fallback. Keys: ``nodata``
+                (required; finite and exact in float32), ``block_size``
+                (default 256; multiple of 16, 16 through 4096), ``zlevel``
+                (default 6; 1 through 9), ``overviews`` (default ``[]``;
+                consecutive powers of two such as ``[2, 4]``, GDAL average)
+                and ``grid``: ``"window"`` (default, the mapped window),
+                ``"terrain"`` (the whole terrain grid) or
+                ``[col, row, width, height]`` terrain pixels containing the
+                mapped window; pixels outside the window are nodata. Product
+                names are unchanged and manifest rows describe the delivered
+                grid. A valid value that is infinite or would read as the
+                nodata value is refused rather than masked.
             write_floodplain: Also polygonize positive retained depth pixels.
             template_raster: Optional float32 GeoTIFF defining the delivered
                 grid, nodata and storage profile. Must share the terrain pixel
@@ -1086,7 +1108,7 @@ class RasFim:
             max_inflight_profiles=max_inflight_profiles,
             template_raster=template_raster, terrain_hdf=terrain_hdf,
             velocity=velocity, invalid_cells=invalid_cells, product_writer=product_writer,
-            row_stream_rows=row_stream_rows,
+            row_stream_rows=row_stream_rows, final_format=final_format,
             terrain_crs_fnv1a64=terrain_crs_fnv1a64, storage_areas=storage_areas,
             velocity_depth=velocity_depth, derived_products=derived_products,
             shear_stress=shear_stress, shear_depth=shear_depth)
