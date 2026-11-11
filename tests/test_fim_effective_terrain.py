@@ -131,3 +131,75 @@ def test_real_terrain_matches_the_rasmapper_export(tmp_path):
             x, y = a.read(1, window=window), b.read(1, window=window)
             mask_diff += int(((x != a.nodata) != (y != b.nodata)).sum())
     assert mask_diff == 0
+
+
+def _fake_engine(monkeypatch, record, reported):
+    """An engine advertising ``record`` that reports ``reported`` (None: no method_id)."""
+    monkeypatch.setattr(_effective_terrain._engine, "find_engine", lambda path=None: Path("engine.exe"))
+    monkeypatch.setattr(_effective_terrain._engine, "engine_method",
+                        lambda engine: {"effective_terrain": record})
+    monkeypatch.setattr(_effective_terrain._engine, "terrain_identity",
+                        lambda *a, **k: {"epsg": 26915, "crs_identity": {"kind": "epsg"}})
+    requests = []
+
+    def run_engine(args, what, timeout=None):
+        from types import SimpleNamespace
+
+        requests.append(json.loads(Path(args[2]).read_text(encoding="utf-8")))
+        out = Path(args[3])
+        out.mkdir(parents=True)
+        (out / "effective_terrain.tif").write_bytes(b"tif")
+        report = {"status": "complete"}
+        if reported is not None:
+            report["method_id"] = reported
+        (out / "report.json").write_text(json.dumps(report), encoding="utf-8")
+        return SimpleNamespace(returncode=0, stderr="")
+
+    monkeypatch.setattr(_effective_terrain._engine, "run_engine", run_engine)
+    return requests
+
+
+V1, V2 = _effective_terrain.METHOD_ID, _effective_terrain.METHOD_ID_V2
+S1, S2 = _effective_terrain.SCHEMA, _effective_terrain.SCHEMA_V2
+
+
+@pytest.mark.parametrize("record, reported, schema", [
+    # Current engine: /2 only, both request schemas, /2 receipts for both.
+    ({"method_id": V2, "request_schemas": [S1, S2], "modifications": {"supported": {}}}, V2, S2),
+    # Interim engine: /2 with /1 listed as compatible.
+    ({"method_id": V2, "compatible_method_ids": [V1], "modifications": {}}, V2, S2),
+    # /2 without a modifications record: schema 1, which may report /2.
+    ({"method_id": V2}, V2, S1),
+    # Older /1-only engine, with and without a reported method_id.
+    ({"method_id": V1}, V1, S1),
+    ({"method_id": V1}, None, S1),
+])
+def test_unmodified_terrain_on_every_engine_generation(tmp_path, monkeypatch, record, reported, schema):
+    hdf = _terrain(tmp_path, ["only"], priorities=[0])
+    requests = _fake_engine(monkeypatch, record, reported)
+    assert RasFim.supports_effective_terrain() is True
+    receipt = RasFim.build_effective_terrain(hdf, tmp_path / "out.tif")
+    assert requests[0]["schema"] == schema and requests[0]["modifications"] == 0
+    assert receipt["method_id"] == (reported or V1)
+    assert receipt["modification_layers"] == []
+
+
+@pytest.mark.parametrize("record, reported", [
+    ({"method_id": V2, "request_schemas": [S1, S2], "modifications": {}}, V1),  # schema 2 must report /2
+    ({"method_id": V1}, "rasmapper-effective-terrain/9"),
+])
+def test_unexpected_reported_method_is_an_engine_error(tmp_path, monkeypatch, record, reported):
+    from ras_commander.fim.errors import FimEngineError
+
+    hdf = _terrain(tmp_path, ["only"], priorities=[0])
+    _fake_engine(monkeypatch, record, reported)
+    with pytest.raises(FimEngineError, match="reported method"):
+        RasFim.build_effective_terrain(hdf, tmp_path / "out.tif")
+    assert not (tmp_path / "out.tif").exists()
+
+
+def test_engine_without_schema_2_is_not_used_for_modifications(tmp_path, monkeypatch):
+    hdf = _terrain(tmp_path, ["only"], priorities=[0])
+    _fake_engine(monkeypatch, {"method_id": V2, "request_schemas": [S1], "modifications": {}}, V2)
+    assert _effective_terrain.engine_supports(Path("engine.exe"), modifications=True) is False
+    assert _effective_terrain.engine_supports(Path("engine.exe")) is True

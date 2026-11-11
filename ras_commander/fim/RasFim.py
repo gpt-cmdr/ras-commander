@@ -1395,8 +1395,10 @@ class RasFim:
                 has no EPSG identification in the engine.
 
         Returns:
-            dict: Receipt with ``method_id``, ``sources_in_priority_order``,
-            ``priority_basis``, ``seconds`` and the engine ``engine_report``.
+            dict: Receipt with ``method_id`` (the method the engine reports:
+            ``/2`` from current engines for every request, ``/1`` from older
+            engines), ``sources_in_priority_order``, ``priority_basis``,
+            ``seconds`` and the engine ``engine_report``.
 
         Terrain modifications (engine ``rasmapper-effective-terrain/2``): ground
         lines (high ground and channels, ``SetIfHigher``/``SetIfLower``),

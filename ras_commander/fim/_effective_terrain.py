@@ -59,15 +59,38 @@ def engine_supports(engine: Path, modifications: bool = False) -> bool:
     """Whether ``engine`` builds the effective terrain.
 
     ``modifications=True`` asks for ``rasmapper-effective-terrain/2`` (terrain
-    modifications); otherwise ``/1`` or ``/2`` will do.
+    modifications, request schema 2); otherwise an engine advertising ``/1``
+    or ``/2`` (as its method ID or a compatible ID) will do. When the record
+    lists ``request_schemas``, schema 2 must be among them.
     """
     record = _record(engine)
     if record is None:
         return False
     ids = {record.get("method_id"), *(record.get("compatible_method_ids") or [])}
     if modifications:
-        return METHOD_ID_V2 in ids and isinstance(record.get("modifications"), dict)
+        schemas = record.get("request_schemas")
+        return (METHOD_ID_V2 in ids and isinstance(record.get("modifications"), dict)
+                and (schemas is None or SCHEMA_V2 in schemas))
     return bool(ids & {METHOD_ID, METHOD_ID_V2})
+
+
+def _receipt_method(report: dict, schema: str) -> str:
+    """The method the engine reports, checked against the request schema.
+
+    Schema 2 requests must report ``/2``. Schema 1 requests report ``/1``
+    from older engines and ``/2`` from engines that run the ``/2`` rule for
+    both schemas. A report without ``method_id`` (older engines) is read as
+    the method the schema implies.
+    """
+    expected = METHOD_ID_V2 if schema == SCHEMA_V2 else METHOD_ID
+    reported = report.get("method_id", expected)
+    allowed = {METHOD_ID_V2} if schema == SCHEMA_V2 else {METHOD_ID, METHOD_ID_V2}
+    if reported not in allowed:
+        raise FimEngineError(
+            f"effective-terrain reported method {reported!r} for a {schema} request "
+            f"(expected one of {sorted(allowed)})"
+        )
+    return reported
 
 
 def _write_mask(dataset, path: Path) -> list:
@@ -236,10 +259,11 @@ def build(
         produced = out_dir / "effective_terrain.tif"
         if report.get("status") != "complete" or not produced.is_file():
             raise FimEngineError(f"effective-terrain did not complete: {report.get('status')!r}")
+        method_id = _receipt_method(report, request["schema"])
         os.replace(produced, output_path)
         receipt = {
             "schema": RECEIPT_SCHEMA,
-            "method_id": METHOD_ID_V2 if v2 else METHOD_ID,
+            "method_id": method_id,
             "modification_layers": [
                 {"name": layer["name"], "kind": layer["kind"], "priority": layer["priority"],
                  "features": len(layer["features"])}
