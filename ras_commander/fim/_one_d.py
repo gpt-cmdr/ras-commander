@@ -399,7 +399,7 @@ class FimPreparedOneDModel:
     def map_profiles(self, output_folder, *, profiles=None, allow_unqualified=False,
                      bbox=None, polygon=None, polygon_layer=None, aoi_crs=None,
                      engine_path=None, threads=1, max_working_mib=1024, timeout=None,
-                     raise_on_failure=True):
+                     raise_on_failure=True, final_format=None):
         """Map prepared profile names into a new or empty output folder.
 
         ``profiles`` is an ordered sequence of prepared names, following the
@@ -411,7 +411,7 @@ class FimPreparedOneDModel:
             allow_unqualified=allow_unqualified, bbox=bbox, polygon=polygon,
             polygon_layer=polygon_layer, aoi_crs=aoi_crs, engine_path=engine_path,
             threads=threads, max_working_mib=max_working_mib, timeout=timeout,
-            raise_on_failure=raise_on_failure)
+            raise_on_failure=raise_on_failure, final_format=final_format)
 
 
 def prepare_one_d_model(hdf_path, terrain_path, output_folder, *, profiles=None,
@@ -629,7 +629,8 @@ def _xs_render_workers(flags, threads, budget, receipt, grid, planned):
 def map_one_d_profiles(hdf_path, terrain_path, output_folder, *, profiles=None,
                        allow_unqualified=False, bbox=None, polygon=None, aoi_crs=None,
                        polygon_layer=None, engine_path=None, threads=1,
-                       max_working_mib=1024, timeout=None, raise_on_failure=True):
+                       max_working_mib=1024, timeout=None, raise_on_failure=True,
+                       final_format=None):
     """Render globally prepared XS surfaces through Rust, returning a manifest.
 
     A prepared model may replace hdf_path; terrain_path must then be None.
@@ -640,15 +641,17 @@ def map_one_d_profiles(hdf_path, terrain_path, output_folder, *, profiles=None,
     engine call and one prepared surface. Older engines run one sequential
     request per profile. threads is an upper budget, not a promise.
     """
+    import shutil
     import tempfile
     import pandas as pd
     import rasterio
     from affine import Affine
-    from . import _aoi, _aoi_lattice, _engine, _products
+    from . import _aoi, _aoi_lattice, _engine, _final_format, _products
     from .errors import FimEngineError, FimMappingError
     from .RasFim import MANIFEST_COLUMNS, MANIFEST_SCHEMA, RasFim, _positive_int, _prepare_output_folder
 
     threads = _positive_int(threads, "threads")
+    final_options = _final_format.normalize(final_format)
     budget = _positive_int(max_working_mib, "max_working_mib") * 1024**2
     if not isinstance(raise_on_failure, bool):
         raise ValueError("raise_on_failure must be a boolean")
@@ -718,6 +721,9 @@ def map_one_d_profiles(hdf_path, terrain_path, output_folder, *, profiles=None,
             final_support = coupled
             final_method_id, final_schema = COMPOSITION_METHOD_ID, COMPOSITION_SCHEMA
             component_contracts["storage"] = {"method_id": STORAGE_METHOD_ID, "request_schema": STORAGE_SCHEMA}
+        if final_options is not None:
+            final_key = "coupled_storage_diagnostic" if storage else "one_d_clipped_diagnostic"
+            _final_format.require_engine(plain(capabilities.raw_record.get(final_key, {})), final_options)
         grid = receipt["grid"]
         transform = Affine.from_gdal(*grid["geo_transform"])
         constraint = _aoi.resolve_aoi(bbox=bbox, polygon=polygon, aoi_crs=aoi_crs,
@@ -745,6 +751,23 @@ def map_one_d_profiles(hdf_path, terrain_path, output_folder, *, profiles=None,
             terrain = source.read(1, window=window, masked=True).astype("<f4").filled(np.nan)
         terrain_file = scratch / "terrain.bin"
         terrain.tofile(terrain_file)
+        final = None
+        final_fields = {}
+        if final_options is not None:
+            from types import SimpleNamespace
+            epsg = rasterio.crs.CRS.from_wkt(grid["crs"]).to_epsg()
+            if epsg is None:
+                raise FimUnsupportedError("final_format requires a model CRS with an EPSG code")
+            placement = SimpleNamespace(window=window, shape=(int(window.height), int(window.width)),
+                                        source_transform=transform)
+            final = _final_format.resolve(final_options, placement, grid["width"], grid["height"])
+            final_fields = {"final_format": final[0], "epsg": int(epsg),
+                            "flooded_depth_range": [_products.FLOODPLAIN_MIN_DEPTH,
+                                                    _products.FLOODPLAIN_MAX_DEPTH]}
+            if mask is not None:
+                mask_file = scratch / "aoi-mask.u8"
+                mask.astype("u1").tofile(mask_file)
+                final_fields["aoi_mask_file"] = str(mask_file)
         inputs = {path: {"path": path, "size": Path(path).stat().st_size, "sha256": sha}
                   for path, sha in receipt["sha256"].items()}
         aoi_description = constraint.describe() if constraint else None
@@ -764,6 +787,8 @@ def map_one_d_profiles(hdf_path, terrain_path, output_folder, *, profiles=None,
             "engine": engine_identity, "method_record": plain(final_support.flags),
             "component_contracts": component_contracts,
         }
+        if final is not None:
+            details["final_format"] = _final_format.describe(final_options, *final)
         folder = _prepare_output_folder(output_folder)
         rows, reports = [], []
         staged_products = []
@@ -816,8 +841,10 @@ def map_one_d_profiles(hdf_path, terrain_path, output_folder, *, profiles=None,
                     request["levels_files"] = [selected_levels[k] for k in batch]
                 else:
                     request["levels_file"] = selected_levels[first]
-                if workers > 1:
+                if workers > 1 or (final_fields and not storage):
                     request["threads"] = workers
+                if not storage:
+                    request.update(final_fields)
                 request.update({name + "_file": path for name, path in receipt["files"].items()})
                 request_file = scratch / f"request-{first}.json"
                 write_json(request_file, request)
@@ -880,6 +907,8 @@ def map_one_d_profiles(hdf_path, terrain_path, output_folder, *, profiles=None,
                                    "storage": {"component": component(pool_out / "depth.bin", pool_out / "wse.bin"),
                                                "owners_file": str(pool_out / "owners.bin"), "area_count": storage["count"]},
                                    "max_working_bytes": budget}
+                    if final_fields:
+                        composition.update(final_fields, threads=min(threads, 64))
                     composed = scratch / f"composed-{i}"
                     composition_file = scratch / f"composition-{i}.json"
                     write_json(composition_file, composition)
@@ -899,6 +928,29 @@ def map_one_d_profiles(hdf_path, terrain_path, output_folder, *, profiles=None,
                     reports.append(composition_report)
                     out = composed
                 row = rows[i]
+                if final is not None:
+                    delivered = reports[-1]
+                    counts = _final_format.check_header(delivered, final[0])
+                    flooded = delivered.get("flooded_pixels")
+                    finite = delivered.get("depth_finite_pixels")
+                    if (type(flooded) is not int or type(finite) is not int
+                            or not 0 <= flooded <= finite <= pixels):
+                        raise FimEngineError("invalid 1D final_format pixel counts")
+                    for product in ("depth", "wse"):
+                        source = out / f"{product}.tif"
+                        with rasterio.open(source) as image:
+                            _final_format.check_file(image, final[0], final[1],
+                                                     rasterio.crs.CRS.from_wkt(grid["crs"]))
+                    for product in ("depth", "wse"):
+                        path = _products.product_paths(folder, profile)[0 if product == "depth" else 1]
+                        partial = path.with_name(path.name + ".partial")
+                        staged_products.append((partial, path))
+                        shutil.move(str(out / f"{product}.tif"), partial)
+                        row[product + "_tif"] = str(path)
+                    row["depth_finite_pixels"] = finite
+                    row["flooded_pixels"] = flooded
+                    details["final_format"].setdefault("products", {})[profile] = counts
+                    continue
                 for product in ("depth", "wse"):
                     raw = out / (product + ".bin")
                     if raw.stat().st_size != pixels*4:

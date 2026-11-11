@@ -2131,6 +2131,14 @@ Older engines run one sequential XS request per profile. Storage rendering uses
 up to four workers within the requested thread budget. Manifests record the
 requested and effective counts, `xs_render_workers` and `xs_profiles_per_request`.
 
+`final_format` has the `map_sloping_profiles()` contract (`nodata`, `block_size`,
+`zlevel`, `overviews`, `grid`). With an engine advertising `native_final_format`
+on the 1D (or storage-composition) method, the engine applies the AOI pixel
+mask, counts finite and flooded Depth pixels and writes each Depth/WSE GeoTIFF
+once; Commander verifies the header and file and moves it into place. Valid
+pixel bits and the nodata mask equal the Rasterio-written products. The model
+CRS needs an EPSG code. There is no Rasterio fallback.
+
 The diagnostic scope includes stored unsteady or explicit steady XS profiles,
 including junction ordering, levees, endpoint obstruction blocks and disjoint
 storage level pools. Mixed 2D/pipe geometry, blocked polygons, actual

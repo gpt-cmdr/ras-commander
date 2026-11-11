@@ -172,6 +172,40 @@ def test_batched_workers_match_sequential_single_profile_bits(files, tmp_path, m
                 np.testing.assert_array_equal(x.read(1).view("<u4"), y.read(1).view("<u4"))
 
 
+@pytest.mark.parametrize("grid,aoi", [("window", "bbox"), ("terrain", "bbox"), ("window", "polygon")])
+def test_final_format_engine_geotiffs_match_python_products(files, tmp_path, grid, aoi):
+    """Engine-written delivery keeps every valid bit and the complete nodata mask."""
+    import os
+    engine = os.environ.get("RAS_COMMANDER_FIM_ENGINE")
+    if not engine:
+        pytest.skip("explicit opt-in engine")
+    method = dict(RasFim.get_capabilities(engine).raw_record.get("one_d_clipped_diagnostic", {}))
+    if "native_final_format" not in method:
+        pytest.skip("engine lacks 1D native_final_format")
+    hdf, terrain = files
+    from shapely.geometry import Polygon
+    region = ({"bbox": (0, 0, 100, 100)} if aoi == "bbox"
+              else {"polygon": Polygon([(3, 2), (97, 9), (40, 95)]), "aoi_crs": "EPSG:6588"})
+    kwargs = dict(profiles=["Max", 0], allow_unqualified=True, max_working_mib=64,
+                  engine_path=engine, threads=2, **region)
+    stock = RasFim.map_one_d_profiles(hdf, terrain, tmp_path / "stock", **kwargs)
+    final = RasFim.map_one_d_profiles(hdf, terrain, tmp_path / "final",
+                                      final_format={"nodata": -9999.0, "block_size": 16,
+                                                    "overviews": [2], "grid": grid}, **kwargs)
+    assert final.attrs["final_format"]["writer"] == "native"
+    for a, b in zip(stock.itertuples(), final.itertuples()):
+        assert a.depth_finite_pixels == b.depth_finite_pixels
+        assert a.flooded_pixels == b.flooded_pixels
+        for column in ("depth_tif", "wse_tif"):
+            with rasterio.open(getattr(a, column)) as x, rasterio.open(getattr(b, column)) as y:
+                assert y.nodata == -9999.0 and y.compression.name.lower() == "deflate"
+                window = rasterio.windows.from_bounds(*x.bounds, transform=y.transform)
+                expected = x.read(1)
+                got = y.read(1, window=window.round_offsets().round_lengths())
+                valid = ~np.isnan(expected)
+                assert np.array_equal(got == -9999.0, ~valid)
+                np.testing.assert_array_equal(got[valid].view("<u4"), expected[valid].view("<u4"))
+
 def test_xs_worker_and_batch_flags_are_parsed_conservatively():
     from ras_commander.fim._one_d import _xs_batch_limit, _xs_render_workers
     receipt, grid = {"triangle_count": 1000}, {"tile_size": 256}
