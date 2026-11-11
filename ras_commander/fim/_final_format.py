@@ -200,6 +200,28 @@ def check_header(header, wire):
     return counts
 
 
+def expected_overview_shapes(grid, factors):
+    """Stored ``(height, width)`` of each requested overview.
+
+    GDAL and the engine both store an overview of factor ``f`` as
+    ``ceil(size / f)``. Rasterio's ``overviews()`` derives factors back from those
+    sizes, so an odd-sized grid can report e.g. 3 for a requested 4; compare
+    shapes instead.
+    """
+    return [(-(-grid["height"] // f), -(-grid["width"] // f)) for f in factors]
+
+
+def overview_shapes(image):
+    """Stored ``(height, width)`` of each overview of band 1 of an open dataset."""
+    import rasterio
+
+    shapes = []
+    for level in range(len(image.overviews(1))):
+        with rasterio.open(image.name, overview_level=level) as overview:
+            shapes.append((overview.height, overview.width))
+    return shapes
+
+
 def check_file(image, wire, grid, crs):
     """Require the delivered file to carry exactly the requested format."""
     import rasterio
@@ -223,7 +245,7 @@ def check_file(image, wire, grid, crs):
         problems.append("predictor")
     if image.block_shapes != [(block, block)]:
         problems.append("tiling")
-    if image.overviews(1) != factors:
+    if overview_shapes(image) != expected_overview_shapes(grid, factors):
         problems.append("overviews")
     if factors and image.tags(ns="rio_overview").get("resampling") != "average":
         problems.append("overview resampling tag")

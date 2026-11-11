@@ -197,6 +197,23 @@ def header(wire, finite=7, flooded=5, **changes):
     return {k: v for k, v in record.items() if v is not ...}
 
 
+@pytest.mark.parametrize("width,height", [(17, 17), (17, 5), (5, 3), (300, 299)])
+def test_odd_sized_overviews_are_checked_by_stored_shape(tmp_path, width, height):
+    # Rasterio reports a factor-4 overview of a 17-pixel grid (stored 5 wide) as
+    # factor 3; a valid delivery must still pass, and a wrong pyramid must not.
+    crs = rasterio.crs.CRS.from_epsg(26915)
+    grid = dict(width=width, height=height, transform=rasterio.Affine(10, 0, 0, 0, -10, 0))
+    wire = dict(block_size=16, overview_factors=[2, 4], nodata=-9999.0)
+    path = tmp_path / "valid.tif"
+    write_final(path, grid, crs, block=16, overviews=(2, 4))
+    with rasterio.open(path) as image:
+        _final_format.check_file(image, wire, grid, crs)
+    wrong = tmp_path / "wrong.tif"
+    write_final(wrong, grid, crs, block=16, overviews=(2, 8))
+    with rasterio.open(wrong) as image, pytest.raises(FimEngineError, match="overviews"):
+        _final_format.check_file(image, wire, grid, crs)
+
+
 @pytest.fixture
 def staged(tmp_path):
     planned = plan()
