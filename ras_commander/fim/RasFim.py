@@ -1331,7 +1331,9 @@ class RasFim:
         """Whether the installed engine builds RAS Mapper's effective terrain.
 
         True when ``ras2fim-batch method`` advertises
-        ``rasmapper-effective-terrain/1``. Never raises for a missing engine.
+        ``rasmapper-effective-terrain/1`` or ``/2`` (as its method ID or a
+        compatible ID). Modified terrains also need ``/2`` with a
+        ``modifications`` record. Never raises for a missing engine.
         Engine execution or metadata errors propagate.
 
         Args:
@@ -1347,7 +1349,10 @@ class RasFim:
         except FileNotFoundError:
             return False
         method = capabilities.methods.get("effective_terrain")
-        return method is not None and method.method_id == _effective_terrain.METHOD_ID
+        if method is None:
+            return False
+        ids = {method.method_id, *(method.flags.get("compatible_method_ids") or ())}
+        return bool(ids & {_effective_terrain.METHOD_ID, _effective_terrain.METHOD_ID_V2})
 
     @staticmethod
     @log_call
@@ -1358,8 +1363,10 @@ class RasFim:
         threads: int = 1, max_working_mib: int = 4096,
         timeout: Optional[float] = None,
         terrain_crs_fnv1a64: Optional[str] = None,
+        hecras_version: Optional[str] = None,
+        ras_object: Any = None,
     ) -> Dict[str, Any]:
-        """Build RAS Mapper's effective terrain of an unmodified terrain in Rust.
+        """Build RAS Mapper's effective terrain in Rust, with qualified modifications.
 
         Writes the float32 grid ``RasTerrain.export_rasmapper_terrain(
         downsample_factor=1, rasterize_modifications=False)`` obtains from
@@ -1380,8 +1387,9 @@ class RasFim:
         Args:
             terrain_hdf: Registered terrain HDF.
             output_path: New ``.tif`` path (replaced if it exists).
-            rasmap_path: Optional rasmap; modification layers registered there
-                for this terrain are also refused.
+            rasmap_path: Optional rasmap; a modification layer registered there
+                but not stored in the terrain HDF is refused. RAS Mapper's export
+                applies every HDF modification whatever its ``Checked`` state.
             engine_path: Engine executable, otherwise environment/PATH.
             threads: Engine worker threads (1-64).
             max_working_mib: Engine memory admission; the output is held in
@@ -1389,13 +1397,47 @@ class RasFim:
             timeout: Engine timeout in seconds.
             terrain_crs_fnv1a64: Caller-verified WKT hash when the source CRS
                 has no EPSG identification in the engine.
+            hecras_version: HEC-RAS version whose export the modifications
+                reproduce (for example ``"6.6"`` or ``"7.0.1"``). ``None``
+                resolves the project's version: ``ras_object``'s HEC-RAS
+                version, else the newest ``Program Version`` of the plan and
+                geometry files beside ``rasmap_path`` or the terrain's project
+                folder, else 7.0.1. HEC-RAS 6.6 maps to the engine's 6.6
+                rules; every other version follows 7.0.1 (7.0 applies
+                modifications as 7.0.1 does; earlier 6.x is not measured).
+            ras_object: Optional initialized RAS project whose HEC-RAS
+                version selects ``hecras_version``.
 
         Returns:
-            dict: Receipt with ``method_id``, ``sources_in_priority_order``,
-            ``priority_basis``, ``seconds`` and the engine ``engine_report``.
+            dict: Receipt with ``method_id`` (the method the engine reports:
+            ``/2`` from current engines for every request, ``/1`` from older
+            engines), ``hecras_version`` (``None`` for
+            an unmodified terrain), ``hecras_version_basis``,
+            ``sources_in_priority_order``, ``priority_basis``, ``seconds`` and
+            the engine ``engine_report``.
+
+        Terrain modifications (engine ``rasmapper-effective-terrain/2`` with a
+        ``modifications`` record): ground lines (high ground and channels, any
+        elevation type including ``Add``, named systems, control points, NaN
+        templates and negative slopes), polygons (constant, or boundary
+        elevations from perimeter control points or a stored profile, interior
+        control points) and ellipses (any rotation) are rasterized as RAS
+        Mapper's ``rasterize_modifications=True`` export does, layers in
+        descending ``Priority`` (Priority 0 last). Ground-line profiles are
+        densified in the project's unit system (``SI Units`` in the ``.prj``
+        beside ``rasmap_path`` means meters). Qualified against HEC-RAS 7.0.1
+        and 6.6 exports in ras-commander-fast-map. The engine refuses the
+        remaining forms (boundary elevations sampled from the terrain,
+        shape-Z polygons, multi-part polygons needing a TIN, named ground lines
+        with control points or a NaN template, named ground lines under 6.6,
+        other RAS layer types), so the caller uses the RAS Mapper export. An
+        engine advertising only ``/1`` refuses every modified terrain. Layer types RAS Mapper ignores (for example
+        ``Type=Channel`` from older ras-commander writers) are skipped, and
+        when ``rasmap_path`` is given without an ``ElevationModificationGroup``
+        under the terrain, no modification is applied, as in RAS Mapper.
 
         Raises:
-            FimUnsupportedError: Terrain modifications, unproven priority,
+            FimUnsupportedError: Unqualified terrain modifications, unproven priority,
                 missing masks, an engine without the method, or an engine
                 refusal (sources in different CRSs, non-square cells).
             FimEngineNotFoundError: The optional executable is unavailable.
@@ -1407,6 +1449,7 @@ class RasFim:
             terrain_hdf, output_path, rasmap_path=rasmap_path, engine_path=engine_path,
             threads=threads, max_working_mib=max_working_mib, timeout=timeout,
             terrain_crs_fnv1a64=terrain_crs_fnv1a64,
+            hecras_version=hecras_version, ras_object=ras_object,
         )
 
     @staticmethod

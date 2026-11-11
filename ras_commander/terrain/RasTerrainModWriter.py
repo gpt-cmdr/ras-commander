@@ -9,9 +9,23 @@ Supports:
     - Channel modifications (TakeLower) along polylines
     - High-ground levee/road modifications (TakeHigher) along polylines
     - Fill-surface encroachment modifications (SetValue) along polylines
-    - Polygon multipoint modifications with boundary and interior elevations
+    - Polygon modifications with constant, vertex-Z or terrain boundaries
+    - Ellipse and circle modifications
+    - Writing a layer read by ``ras_commander.fim._terrain_mods.read_layers``
+      back with :meth:`RasTerrainModWriter.add_modification_layer`
     - Modification groups for organizing multiple modifications
     - Writing to both terrain HDF and .rasmap XML
+
+RAS Mapper compatibility (verified with HEC-RAS 6.6 and 7.0.1 exports):
+    Layers are written in the layout RAS Mapper itself saves, so RAS Mapper
+    applies them exactly as it applies its own: ground lines are
+    ``Type=Levee`` with ``Subtype`` Levee/Channel, an empty ``System Name``
+    (a non-empty one sends even a lone feature through RAS Mapper's system
+    path), NaN ``Transition Percent`` and ``Top Elevation``, and an absolute
+    elevation profile in ``Profile Info`` / ``Profile Values``. A new layer is
+    inserted at the top of the modification list (``Priority`` 0, applied
+    last, so it wins) and the other layers are renumbered, as RAS Mapper does
+    when a layer is added in the GUI.
 
 Platform:
     Cross-platform (no pythonnet/RasMapperLib required for writing).
@@ -114,8 +128,10 @@ class RasTerrainModWriter:
         profile_points: Optional[Union[np.ndarray, Sequence[Sequence[float]]]] = None,
         mode: Union[str, int] = "take_higher",
         elev_pt_tolerance: float = 50.0,
-        transition_fraction: float = 0.5,
+        transition_fraction: Optional[float] = None,
         group_name: str = "Modifications",
+        system_name: Optional[str] = None,
+        priority: Optional[int] = None,
     ) -> Path:
         """
         Add a high-ground line terrain modification for levees or roads.
@@ -145,22 +161,32 @@ class RasTerrainModWriter:
         left_slope, right_slope : float, optional
             Explicit left and right side slopes as H:V ratios.
         max_extent : float
-            Maximum lateral extent width in terrain units.
+            Total footprint width in terrain units, half on each side of the
+            line (RAS Mapper's ``Max Reach``).
         elevation : float, optional
             Constant crest/fill elevation. Required when ``polyline_points`` has
             no Z column and ``profile_points`` is not provided.
         profile_points : array-like, optional
-            Nx2 station/elevation profile along the line. Overrides Z values in
+            Nx2 station/elevation profile along the line (absolute
+            elevations; stations from 0 along the line). Overrides Z values in
             ``polyline_points`` when provided.
         mode : {"take_higher", "fill_surface"} or int
             Terrain merge mode. ``take_higher`` writes Higher Terrain Value;
             ``fill_surface`` writes Set Value.
         elev_pt_tolerance : float
             Elevation point tolerance.
-        transition_fraction : float
-            Transition fraction written to the HDF attribute table.
+        transition_fraction : float, optional
+            ``Transition Percent``. RAS Mapper uses it only for system joins;
+            the default stores NaN, as RAS Mapper does.
         group_name : str
             Name of the modification group in .rasmap.
+        system_name : str, optional
+            ``System Name``. Leave empty (default) for an ordinary line. Any
+            non-empty name makes RAS Mapper build the feature through its
+            system path, even a lone feature, which changes its footprint.
+        priority : int, optional
+            Position in the modification list; 0 (default) is the top layer,
+            applied last, so it wins where layers overlap.
 
         Returns
         -------
@@ -181,7 +207,8 @@ class RasTerrainModWriter:
         left = side_slope if left_slope is None else left_slope
         right = side_slope if right_slope is None else right_slope
         RasTerrainModWriter._validate_ground_line_dimensions(
-            top_width, left, right, max_extent, elev_pt_tolerance, transition_fraction
+            top_width, left, right, max_extent, elev_pt_tolerance,
+            0.0 if transition_fraction is None else transition_fraction,
         )
 
         stations = RasTerrainModWriter._station_values(line_points[:, :2])
@@ -204,19 +231,26 @@ class RasTerrainModWriter:
             terrain_hdf_path.name,
         )
 
-        RasTerrainModWriter._write_ground_line_to_hdf(
+        RasTerrainModWriter._write_ground_line_layer(
             terrain_hdf_path=terrain_hdf_path,
             name=name,
-            polyline_points=line_points[:, :2],
-            profile_data=profile_data,
-            width=top_width,
-            left_slope=left,
-            right_slope=right,
-            max_extent=max_extent,
-            elev_pt_tolerance=elev_pt_tolerance,
-            modification_type=modification_type,
-            transition_fraction=transition_fraction,
             subtype="Levee",
+            features=[
+                RasTerrainModWriter._ground_line_feature(
+                    points=line_points[:, :2],
+                    profile=profile_data,
+                    modification_type=modification_type,
+                    top_width=top_width,
+                    left_slope=left,
+                    right_slope=right,
+                    max_reach=max_extent,
+                    elev_pt_tolerance=elev_pt_tolerance,
+                    system_name=system_name,
+                    transition_fraction=transition_fraction,
+                    feature_name=name,
+                )
+            ],
+            priority=priority,
         )
 
         RasTerrainModWriter._update_rasmap_xml(
@@ -247,8 +281,10 @@ class RasTerrainModWriter:
         elevation: Optional[float] = None,
         profile_points: Optional[Union[np.ndarray, Sequence[Sequence[float]]]] = None,
         elev_pt_tolerance: float = 50.0,
-        transition_fraction: float = 0.5,
+        transition_fraction: Optional[float] = None,
         group_name: str = "Modifications",
+        system_name: Optional[str] = None,
+        priority: Optional[int] = None,
     ) -> Path:
         """
         Add a set-value fill-surface terrain modification along a line.
@@ -273,6 +309,8 @@ class RasTerrainModWriter:
             elev_pt_tolerance=elev_pt_tolerance,
             transition_fraction=transition_fraction,
             group_name=group_name,
+            system_name=system_name,
+            priority=priority,
         )
 
     @staticmethod
@@ -288,6 +326,8 @@ class RasTerrainModWriter:
         mode: Union[str, int] = "set_value",
         elev_pt_tolerance: float = 50.0,
         group_name: str = "Modifications",
+        elevation: Optional[float] = None,
+        priority: Optional[int] = None,
     ) -> Path:
         """
         Add a polygon multipoint terrain modification.
@@ -308,11 +348,22 @@ class RasTerrainModWriter:
         polygon_coords : array-like or GeoJSON-like
             Polygon boundary as an Nx2/Nx3 ring or a sequence of rings. Rings
             are closed automatically when needed.
-        elevation_method : {"boundary_from_terrain", "shape_z", "provided"}
+        elevation_method : {"boundary_from_terrain", "shape_z", "provided", "constant"}
             Source for polygon boundary elevations. ``boundary_from_terrain``
             samples the terrain source raster(s); ``shape_z`` uses the third
             coordinate from ``polygon_coords``; ``provided`` uses
-            ``boundary_elevations``.
+            ``boundary_elevations``; ``constant`` (implied by ``elevation``)
+            sets the whole polygon to one elevation.
+
+            How RAS Mapper applies each form (HEC-RAS 6.6 and 7.0.1):
+            a constant or level boundary is stored as RAS Mapper's constant
+            ``Elevation Value``. A varying ``shape_z``/``provided`` boundary
+            is stored as vertex Z with ``Use ShapeFile Z Elevations`` on and
+            ``Generate Boundary Elevations`` off, which every version
+            interpolates from the vertices. ``boundary_from_terrain`` sets
+            ``Generate Boundary Elevations``: 7.0 and 7.0.1 use the stored
+            sampled profile, while 6.6 stores no polygon profile and samples
+            the terrain itself.
         control_points : sequence, optional
             Interior elevation points as ``(x, y, elevation)`` tuples or dicts
             with ``x``, ``y``, and ``elevation``/``z`` keys.
@@ -330,6 +381,10 @@ class RasTerrainModWriter:
             Elevation point tolerance written to HDF and .rasmap metadata.
         group_name : str
             Name of the modification group in .rasmap.
+        elevation : float, optional
+            Constant polygon elevation (``elevation_method="constant"``).
+        priority : int, optional
+            Position in the modification list; 0 (default) is the top layer.
 
         Returns
         -------
@@ -341,6 +396,17 @@ class RasTerrainModWriter:
             rasmap_path = RasTerrainModWriter._infer_rasmap_path(terrain_hdf_path)
         else:
             rasmap_path = Path(rasmap_path)
+
+        if elevation is not None:
+            RasTerrainModWriter._validate_finite("elevation", elevation)
+            if boundary_elevations is not None:
+                raise ValueError("pass either elevation or boundary_elevations, not both")
+            elevation_method = "constant"
+        elif boundary_elevations is not None:
+            # The boundary resolver uses supplied elevations whatever the
+            # method; the serializer must see the same method, or it writes
+            # Generate Boundary Elevations=1 and RAS Mapper samples the terrain.
+            elevation_method = "provided"
 
         modification_type = RasTerrainModWriter._resolve_modification_type(mode)
         RasTerrainModWriter._validate_non_negative(
@@ -362,6 +428,7 @@ class RasTerrainModWriter:
             rings_z=rings_z,
             elevation_method=elevation_method,
             boundary_elevations=boundary_elevations,
+            elevation=elevation,
         )
 
         logger.debug(
@@ -381,6 +448,7 @@ class RasTerrainModWriter:
             modification_type=modification_type,
             elevation_method=elevation_method,
             elev_pt_tolerance=elev_pt_tolerance,
+            priority=priority,
         )
 
         RasTerrainModWriter._update_rasmap_xml(
@@ -404,12 +472,19 @@ class RasTerrainModWriter:
         name: str,
         polyline_points: Union[np.ndarray, Sequence[Sequence[float]]],
         width: float = 50.0,
-        depth: float = 10.0,
+        depth: Optional[float] = None,
         left_slope: float = 3.0,
         right_slope: float = 3.0,
         max_extent: float = 200.0,
         elev_pt_tolerance: float = 50.0,
         group_name: str = "Modifications",
+        *,
+        elevation: Optional[float] = None,
+        profile_points: Optional[Union[np.ndarray, Sequence[Sequence[float]]]] = None,
+        mode: Union[str, int] = "take_lower",
+        transition_fraction: Optional[float] = None,
+        system_name: Optional[str] = None,
+        priority: Optional[int] = None,
     ) -> Path:
         """
         Add a channel terrain modification along a polyline alignment.
@@ -417,6 +492,13 @@ class RasTerrainModWriter:
         Creates a trapezoidal channel cut into the terrain along the given
         polyline. The channel uses "TakeLower" mode - the terrain is lowered
         where the channel cross-section is below the existing ground.
+
+        RAS Mapper stores a channel invert as an **absolute** elevation
+        profile along the line. Give it as ``profile_points``, ``elevation``
+        or a Z column in ``polyline_points``. Alternatively give ``depth``:
+        the invert is then the terrain source elevation sampled at each
+        vertex minus ``depth`` (needs rasterio and the terrain's source
+        rasters). With no profile input, ``depth`` defaults to 10.
 
         Parameters
         ----------
@@ -427,22 +509,39 @@ class RasTerrainModWriter:
         name : str
             Name for this channel modification (e.g., "Main Channel").
         polyline_points : np.ndarray
-            Nx2 array of (x, y) coordinates defining the channel alignment.
+            Nx2 array of (x, y) coordinates defining the channel alignment,
+            or Nx3 with the absolute invert elevation as Z.
             Must be in the same coordinate system as the terrain.
         width : float
             Bottom width of the trapezoidal channel in terrain units (default 50).
-        depth : float
-            Depth of the channel below the terrain surface (default 10).
+        depth : float, optional
+            Invert depth below the sampled terrain surface at each vertex.
+            Mutually exclusive with ``elevation``/``profile_points``/Z.
         left_slope : float
             Left side slope as H:V ratio (default 3.0 = 3H:1V).
         right_slope : float
             Right side slope as H:V ratio (default 3.0 = 3H:1V).
         max_extent : float
-            Maximum lateral extent of the modification in terrain units (default 200).
+            Total footprint width in terrain units, half on each side of the
+            line (RAS Mapper's ``Max Reach``; default 200).
         elev_pt_tolerance : float
             Elevation point tolerance (default 50).
         group_name : str
             Name of the modification group (default "Modifications").
+        elevation : float, optional
+            Constant absolute invert elevation.
+        profile_points : array-like, optional
+            Nx2 station/absolute-elevation invert profile, stations from 0
+            along the line.
+        mode : {"take_lower", "set_value"} or int
+            ``take_lower`` (default) only lowers the terrain.
+        transition_fraction : float, optional
+            ``Transition Percent``; NaN by default, as RAS Mapper stores it.
+        system_name : str, optional
+            ``System Name``; leave empty for an ordinary channel (see
+            :meth:`add_high_ground_modification`).
+        priority : int, optional
+            Position in the modification list; 0 (default) is the top layer.
 
         Returns
         -------
@@ -451,51 +550,302 @@ class RasTerrainModWriter:
         """
         terrain_hdf_path = Path(terrain_hdf_path)
         rasmap_path = Path(rasmap_path)
-        line_points = RasTerrainModWriter._validate_polyline_points(polyline_points)[:, :2]
+        raw_points = RasTerrainModWriter._validate_polyline_points(polyline_points)
+        line_points = raw_points[:, :2]
+        modification_type = RasTerrainModWriter._resolve_modification_type(mode)
+        if modification_type not in {MODIFICATION_TAKE_LOWER, MODIFICATION_SET_VALUE}:
+            raise ValueError("Channel modifications support mode='take_lower' or 'set_value'")
         RasTerrainModWriter._validate_ground_line_dimensions(
-            width, left_slope, right_slope, max_extent, elev_pt_tolerance, 0.5
+            width, left_slope, right_slope, max_extent, elev_pt_tolerance,
+            0.0 if transition_fraction is None else transition_fraction,
         )
-        RasTerrainModWriter._validate_positive("depth", depth)
+
+        absolute = (
+            elevation is not None
+            or profile_points is not None
+            or raw_points.shape[1] == 3
+        )
+        stations = RasTerrainModWriter._station_values(line_points)
+        if absolute:
+            if depth is not None:
+                raise ValueError(
+                    "depth cannot be combined with an absolute invert "
+                    "(elevation, profile_points or polyline Z)"
+                )
+            profile_data = RasTerrainModWriter._build_profile_data(
+                line_points=raw_points,
+                stations=stations,
+                elevation=elevation,
+                profile_points=profile_points,
+            )
+        else:
+            depth = 10.0 if depth is None else depth
+            RasTerrainModWriter._validate_positive("depth", depth)
+            ground = RasTerrainModWriter._sample_terrain_elevations(
+                terrain_hdf_path, line_points
+            )
+            profile_data = np.column_stack([stations, ground - float(depth)])
+            logger.info(
+                "Channel '%s': invert set %.3f below the terrain source sampled at %d vertices",
+                name, float(depth), len(line_points),
+            )
 
         logger.debug(f"Adding channel modification '{name}' to {terrain_hdf_path.name}")
         logger.debug(f"  Alignment: {len(line_points)} points")
-        logger.debug(f"  Channel: width={width}, depth={depth}, slopes={left_slope}/{right_slope}")
+        logger.debug(f"  Channel: width={width}, slopes={left_slope}/{right_slope}")
 
-        stations = RasTerrainModWriter._station_values(line_points)
-        profile_data = np.column_stack(
-            [
-                np.array([0.0, stations[-1] / 2, stations[-1]], dtype=np.float64),
-                np.full(3, -float(depth), dtype=np.float64),
-            ]
-        )
-
-        RasTerrainModWriter._write_ground_line_to_hdf(
+        RasTerrainModWriter._write_ground_line_layer(
             terrain_hdf_path=terrain_hdf_path,
             name=name,
-            polyline_points=line_points,
-            profile_data=profile_data,
-            width=width,
-            left_slope=left_slope,
-            right_slope=right_slope,
-            max_extent=max_extent,
-            elev_pt_tolerance=elev_pt_tolerance,
-            modification_type=MODIFICATION_TAKE_LOWER,
-            transition_fraction=0.5,
             subtype="Channel",
-            elevation_value=-float(depth),
-            top_elevation=0.0,
+            features=[
+                RasTerrainModWriter._ground_line_feature(
+                    points=line_points,
+                    profile=profile_data,
+                    modification_type=modification_type,
+                    top_width=width,
+                    left_slope=left_slope,
+                    right_slope=right_slope,
+                    max_reach=max_extent,
+                    elev_pt_tolerance=elev_pt_tolerance,
+                    system_name=system_name,
+                    transition_fraction=transition_fraction,
+                    feature_name=name,
+                )
+            ],
+            priority=priority,
         )
 
         RasTerrainModWriter._update_rasmap_xml(
             rasmap_path, terrain_hdf_path, name,
             mod_type="GroundLineModificationLayer",
-            default_mod_type=MODIFICATION_TAKE_LOWER,
+            default_mod_type=modification_type,
             elev_pt_tolerance=elev_pt_tolerance,
             group_name=group_name,
         )
 
         logger.debug(f"Channel modification '{name}' added successfully")
         return terrain_hdf_path
+
+    @staticmethod
+    @log_call
+    def add_ellipse_modification(
+        terrain_hdf_path: Union[str, Path],
+        rasmap_path: Union[str, Path],
+        name: str,
+        ellipses: Sequence[Dict[str, Any]],
+        mode: Union[str, int] = "set_value",
+        group_name: str = "Modifications",
+        priority: Optional[int] = None,
+    ) -> Path:
+        """
+        Add an ellipse/circle terrain modification layer (RAS Mapper ``Circle``).
+
+        Every raster cell whose centre lies inside an ellipse takes its
+        ``elevation`` under the merge mode.
+
+        Parameters
+        ----------
+        terrain_hdf_path, rasmap_path : Path
+            Terrain HDF to modify and the .rasmap registering it.
+        name : str
+            Layer name.
+        ellipses : sequence of dict
+            One dict per feature with ``center`` ``(x, y)``, ``radius_x``,
+            optional ``radius_y`` (default ``radius_x``: a circle),
+            ``rotation`` in degrees (default 0), ``elevation``, and optional
+            ``mode`` overriding the layer ``mode``.
+        mode : str or int
+            Default merge mode (``set_value``, ``take_higher``,
+            ``take_lower``, ``add``).
+        group_name : str
+            Modification group name in .rasmap.
+        priority : int, optional
+            Position in the modification list; 0 (default) is the top layer.
+        """
+        terrain_hdf_path = Path(terrain_hdf_path)
+        layer_type = RasTerrainModWriter._resolve_modification_type(mode)
+        if len(ellipses) == 0:
+            raise ValueError("ellipses must contain at least one ellipse")
+        circles, types, elevations = [], [], []
+        for i, ellipse in enumerate(ellipses):
+            cx, cy = (float(v) for v in ellipse["center"])
+            rx = float(ellipse["radius_x"])
+            ry = float(ellipse.get("radius_y", rx))
+            rotation = float(ellipse.get("rotation", 0.0))
+            z = float(ellipse["elevation"])
+            for label, value in (("center", cx), ("center", cy), ("rotation", rotation), ("elevation", z)):
+                RasTerrainModWriter._validate_finite(f"ellipse {i} {label}", value)
+            RasTerrainModWriter._validate_positive(f"ellipse {i} radius_x", rx)
+            RasTerrainModWriter._validate_positive(f"ellipse {i} radius_y", ry)
+            circles.append([cx, cy, rx, ry, rotation])
+            types.append(
+                RasTerrainModWriter._resolve_modification_type(ellipse.get("mode", layer_type))
+            )
+            elevations.append(z)
+
+        import h5py
+
+        with h5py.File(terrain_hdf_path, "a") as f:
+            mod_grp = RasTerrainModWriter._new_layer_group(f, name, "Circle", None, priority)
+            ds = RasTerrainModWriter._create_hdf_dataset(
+                mod_grp, "Circles", np.asarray(circles, dtype=np.float64)
+            )
+            ds.attrs["Column Ordering"] = np.bytes_("X, Y, RadiusX, RadiusY, AngleRotation")
+            names = [""] * len(circles)
+            attrs = np.zeros(
+                len(circles),
+                dtype=[
+                    ("Name", RasTerrainModWriter._string_dtype(names)),
+                    ("Elevation Value", "<f4"),
+                    ("Elevation Type", "S11"),
+                ],
+            )
+            attrs["Elevation Value"] = np.asarray(elevations, dtype=np.float32)
+            attrs["Elevation Type"] = [
+                RasTerrainModWriter._modification_type_disk_name(t).encode() for t in types
+            ]
+            RasTerrainModWriter._create_hdf_dataset(mod_grp, "Attributes", attrs)
+
+        RasTerrainModWriter._update_rasmap_xml(
+            Path(rasmap_path), terrain_hdf_path, name,
+            mod_type="EllipseElevationModificationLayer",
+            default_mod_type=layer_type,
+            elev_pt_tolerance=50.0,
+            group_name=group_name,
+            ground_line_defaults=False,
+        )
+        return terrain_hdf_path
+
+    @staticmethod
+    @log_call
+    def add_modification_layer(
+        terrain_hdf_path: Union[str, Path],
+        rasmap_path: Union[str, Path],
+        layer: Dict[str, Any],
+        group_name: str = "Modifications",
+        priority: Optional[int] = None,
+    ) -> Path:
+        """
+        Write one layer in the ``modification_layers`` form back to a terrain.
+
+        ``layer`` is a dict as returned by
+        ``ras_commander.fim._terrain_mods.read_layers`` (kinds
+        ``ground_line``, ``polygon`` with constant elevation, and
+        ``ellipse``), so a layer read from a RAS-Mapper-authored terrain can
+        be written into another terrain and RAS Mapper applies it the same
+        way. All features of the layer stay in one layer, in order.
+        ``layer["priority"]`` is not used; pass ``priority`` (0 = top,
+        default) or write layers from the highest priority number down.
+        ``null`` template values are written as NaN.
+
+        Raises:
+            ValueError: The layer has fields this writer does not store, so
+                the written layer would change the terrain differently:
+                layer ``control_points``, polygons with boundary elevations
+                (``generate_boundary``), shape-Z polygons (``use_shape_z`` or
+                ``vertex_z``), or an empty ground-line profile.
+        """
+        kind = layer.get("kind")
+        name = layer["name"]
+        terrain_hdf_path = Path(terrain_hdf_path)
+        rasmap_path = Path(rasmap_path)
+        features = layer.get("features") or []
+        if not features:
+            raise ValueError(f"layer {name!r} has no features")
+        if layer.get("control_points"):
+            raise ValueError(
+                f"layer {name!r}: control points are not written by add_modification_layer"
+            )
+
+        def _num(value, default=float("nan")) -> float:
+            return default if value is None else float(value)
+
+        if kind == "ground_line":
+            subtype = str(layer["subtype"]).capitalize()
+            if subtype not in ("Levee", "Channel"):
+                raise ValueError(f"layer {name!r}: subtype must be levee or channel")
+            written = []
+            for i, feat in enumerate(features):
+                points = RasTerrainModWriter._validate_polyline_points(feat["points"])[:, :2]
+                profile = np.asarray(feat["profile"], dtype=np.float64)
+                if profile.ndim != 2 or profile.shape[1] != 2 or len(profile) < 2:
+                    raise ValueError(f"layer {name!r} feature {i}: profile must be Nx2")
+                written.append(
+                    RasTerrainModWriter._ground_line_feature(
+                        points=points,
+                        profile=profile,
+                        modification_type=RasTerrainModWriter._modification_type_value(
+                            feat["elevation_type"]
+                        ),
+                        top_width=_num(feat["top_width"]),
+                        left_slope=_num(feat["left_slope"]),
+                        right_slope=_num(feat["right_slope"]),
+                        max_reach=_num(feat["max_reach"]),
+                        elev_pt_tolerance=_num(feat.get("elev_pt_tolerance", 50.0)),
+                        system_name=feat.get("system_name") or None,
+                        transition_fraction=feat.get("transition_percent"),
+                        feature_name=feat.get("name", ""),
+                    )
+                )
+            RasTerrainModWriter._write_ground_line_layer(
+                terrain_hdf_path, name, subtype, written, priority=priority
+            )
+            RasTerrainModWriter._update_rasmap_xml(
+                rasmap_path, terrain_hdf_path, name,
+                mod_type="GroundLineModificationLayer",
+                default_mod_type=written[0]["modification_type"],
+                # the .rasmap default is an integer GUI setting; NaN keeps 50
+                elev_pt_tolerance=(written[0]["elev_pt_tolerance"]
+                                   if np.isfinite(written[0]["elev_pt_tolerance"]) else 50.0),
+                group_name=group_name,
+            )
+            return terrain_hdf_path
+
+        if kind == "polygon":
+            for i, feat in enumerate(features):
+                if feat.get("generate_boundary") or feat.get("use_shape_z") or feat.get("vertex_z"):
+                    raise ValueError(
+                        f"layer {name!r} feature {i}: only constant polygons are written by "
+                        "add_modification_layer (no boundary elevations or shape Z)"
+                    )
+            RasTerrainModWriter._write_constant_polygon_layer(
+                terrain_hdf_path, name, features, priority=priority
+            )
+            RasTerrainModWriter._update_rasmap_xml(
+                rasmap_path, terrain_hdf_path, name,
+                mod_type="PolygonElevationModificationLayer",
+                default_mod_type=RasTerrainModWriter._modification_type_value(
+                    features[0]["elevation_type"]
+                ),
+                elev_pt_tolerance=50.0,
+                group_name=group_name,
+                ground_line_defaults=False,
+            )
+            return terrain_hdf_path
+
+        if kind == "ellipse":
+            return RasTerrainModWriter.add_ellipse_modification(
+                terrain_hdf_path, rasmap_path, name,
+                [
+                    {
+                        "center": feat["center"],
+                        "radius_x": feat["radius_x"],
+                        "radius_y": feat["radius_y"],
+                        "rotation": feat.get("rotation", 0.0),
+                        "elevation": feat["elevation"],
+                        "mode": RasTerrainModWriter._modification_type_value(
+                            feat["elevation_type"]
+                        ),
+                    }
+                    for feat in features
+                ],
+                mode=RasTerrainModWriter._modification_type_value(features[0]["elevation_type"]),
+                group_name=group_name,
+                priority=priority,
+            )
+
+        raise ValueError(f"layer {name!r}: unsupported kind {kind!r}")
 
     @staticmethod
     @log_call
@@ -569,11 +919,30 @@ class RasTerrainModWriter:
                         "max_extent",
                         "elev_pt_tolerance",
                         "profile_points",
+                        "feature_count",
+                        "system_names",
                     ]
                 )
 
             for mod_name, mod_grp in mods.items():
                 attr_row = {}
+                system_names: List[str] = []
+                feature_count = 0
+                if "Attributes" in mod_grp:
+                    attributes = mod_grp["Attributes"]
+                    feature_count = int(len(attributes))
+                    if (
+                        feature_count
+                        and attributes.dtype.names
+                        and "System Name" in attributes.dtype.names
+                    ):
+                        system_names = sorted(
+                            {
+                                RasTerrainModWriter._decode_hdf_scalar(v).strip()
+                                for v in read_typed(attributes, slice(None))["System Name"]
+                            }
+                            - {""}
+                        )
                 if "Attributes" in mod_grp and len(mod_grp["Attributes"]) > 0:
                     attr_row = {
                         key: RasTerrainModWriter._decode_hdf_scalar(value)
@@ -620,6 +989,8 @@ class RasTerrainModWriter:
                         "profile_points": RasTerrainModWriter._profile_point_count(
                             mod_grp
                         ),
+                        "feature_count": feature_count,
+                        "system_names": system_names,
                     }
                 )
 
@@ -840,6 +1211,7 @@ class RasTerrainModWriter:
             left_slope=float(attrs["left_slope"]),
             right_slope=float(attrs["right_slope"]),
             max_extent=float(attrs["max_extent"]),
+            channel=attrs.get("subtype") == "Channel",
         )
         modified = RasTerrainModWriter._apply_modification_mode(
             existing, surface, int(attrs["modification_type"])
@@ -968,116 +1340,284 @@ class RasTerrainModWriter:
         )
 
     @staticmethod
-    def _write_ground_line_to_hdf(
-        terrain_hdf_path: Path,
-        name: str,
-        polyline_points: np.ndarray,
-        width: float,
-        left_slope: float,
-        right_slope: float,
-        max_extent: float,
-        elev_pt_tolerance: float,
-        modification_type: int,
-        transition_fraction: float,
-        subtype: str,
-        profile_data: np.ndarray,
-        elevation_value: Optional[float] = None,
-        top_elevation: Optional[float] = None,
-    ) -> None:
-        """Write a ground-line modification to a terrain HDF file."""
+    def _assign_priorities(mods_group, name: str, position: Optional[int] = None) -> None:
+        """Place layer ``name`` at ``position`` and renumber every layer.
+
+        RAS Mapper inserts a new modification layer at the top of the list
+        and, when it saves, writes each layer's list index as ``Priority``
+        (0..n-1; Priority 0 is applied last and wins). The other layers keep
+        their relative order (ascending Priority, a missing Priority last).
+        """
         import h5py
 
-        with h5py.File(terrain_hdf_path, 'a') as f:
-            # Create /Modifications group if needed
-            mods = f.require_group('Modifications')
+        others = []
+        for index, (key, grp) in enumerate(mods_group.items()):
+            if key == name or not isinstance(grp, h5py.Group):
+                continue
+            value = grp.attrs.get("Priority")
+            value = int(np.asarray(value)) if value is not None else np.iinfo(np.int32).max
+            others.append((value, index, key))
+        order = [key for _, _, key in sorted(others)]
+        position = 0 if position is None else int(position)
+        if not 0 <= position <= len(order):
+            raise ValueError(f"priority must be between 0 and {len(order)}")
+        order.insert(position, name)
+        for value, key in enumerate(order):
+            mods_group[key].attrs["Priority"] = np.int32(value)
 
-            # Create the named modification group
-            if name in mods:
-                logger.warning(f"Modification '{name}' already exists, overwriting")
-                del mods[name]
+    @staticmethod
+    def _new_layer_group(f, name: str, layer_type: str, subtype: Optional[str], priority: Optional[int]):
+        """Create ``/Modifications/<name>`` (replacing it) with RAS Mapper's group attributes."""
+        if not name or "/" in name or "\\" in name:
+            raise ValueError("modification layer names must be non-empty without '/' or '\\'")
+        mods = f.require_group("Modifications")
+        if priority is not None:
+            others = sum(1 for key in mods if key != name)
+            if not 0 <= int(priority) <= others:
+                raise ValueError(f"priority must be between 0 and {others}")
+        if name in mods:
+            logger.warning("Modification '%s' already exists, overwriting", name)
+            del mods[name]
+        grp = mods.create_group(name)
+        grp.attrs["Type"] = np.bytes_(layer_type)
+        if subtype is not None:
+            grp.attrs["Subtype"] = np.bytes_(subtype)
+        RasTerrainModWriter._assign_priorities(mods, name, priority)
+        return grp
 
-            mod_grp = mods.create_group(name)
+    @staticmethod
+    def _string_dtype(values: Sequence[str]) -> str:
+        """Fixed-length string dtype sized to the longest value, as RAS Mapper writes."""
+        longest = max((len(str(v).encode("utf-8")) for v in values), default=0)
+        return f"S{max(1, longest)}"
 
-            # Set type attributes
-            mod_grp.attrs['Type'] = np.bytes_(subtype)
-            mod_grp.attrs['Subtype'] = np.bytes_(subtype)
-            mod_grp.attrs['Priority'] = np.int32(0)
+    @staticmethod
+    def _ground_line_feature(
+        points: np.ndarray,
+        profile: np.ndarray,
+        modification_type: int,
+        top_width: float,
+        left_slope: float,
+        right_slope: float,
+        max_reach: float,
+        elev_pt_tolerance: float = 50.0,
+        system_name: Optional[str] = None,
+        transition_fraction: Optional[float] = None,
+        feature_name: str = "",
+    ) -> Dict[str, Any]:
+        """Validate one ground-line feature for :meth:`_write_ground_line_layer`."""
+        modification_type = RasTerrainModWriter._resolve_modification_type(modification_type)
+        points = np.asarray(points, dtype=np.float64)[:, :2]
+        profile = np.asarray(profile, dtype=np.float64)
+        if profile.ndim != 2 or profile.shape[1] != 2 or len(profile) < 2:
+            raise ValueError("ground-line profile must be an Nx2 station/elevation array")
+        if not np.all(np.isfinite(profile)):
+            raise ValueError("ground-line profile must contain finite values")
+        if np.any(np.diff(profile[:, 0]) < 0):
+            raise ValueError("ground-line profile stations must increase")
+        length = float(RasTerrainModWriter._station_values(points)[-1])
+        if profile[0, 0] < 0 or profile[-1, 0] > length * (1 + 1e-9) + 1e-6:
+            logger.warning(
+                "Ground-line profile stations %.3f..%.3f fall outside the line length %.3f; "
+                "RAS Mapper shifts the first station to 0 and clamps stations to the length",
+                profile[0, 0], profile[-1, 0], length,
+            )
+        transition = np.nan if transition_fraction is None else float(transition_fraction)
+        return {
+            "points": points,
+            "profile": profile,
+            "modification_type": modification_type,
+            "top_width": float(top_width),
+            "left_slope": float(left_slope),
+            "right_slope": float(right_slope),
+            "max_reach": float(max_reach),
+            "elev_pt_tolerance": float(elev_pt_tolerance),
+            "system_name": "" if system_name is None else str(system_name),
+            "transition_fraction": transition,
+            "feature_name": str(feature_name),
+        }
 
-            # Write polyline using HEC-RAS HDF5Storage format
-            # Polyline Info: [start_index, num_points, part_start, num_parts]
-            n_pts = len(polyline_points)
-            polyline_info = np.array([[0, n_pts, 0, 1]], dtype=np.int32)
-            RasTerrainModWriter._create_hdf_dataset(
-                mod_grp, 'Polyline Info', polyline_info
+    @staticmethod
+    def _write_ground_line_layer(
+        terrain_hdf_path: Path,
+        name: str,
+        subtype: str,
+        features: Sequence[Dict[str, Any]],
+        priority: Optional[int] = None,
+    ) -> None:
+        """Write a ground-line layer (one or more features) in RAS Mapper's layout.
+
+        Matches what RasMapperLib 6.6/7.0/7.0.1 saves: ``Type=Levee`` with
+        ``Subtype`` Levee/Channel; ``Polyline Info/Parts/Points``;
+        ``Profile Info`` + float32 ``Profile Values`` (absolute elevations;
+        RAS Mapper never reads a ``Profile`` dataset); one ``Attributes`` row
+        per feature with ``System Name`` empty unless a system join is
+        intended, and ``Top Elevation`` / ``Transition Percent`` NaN unless
+        given. No ``Control Points`` group is written.
+        """
+        import h5py
+
+        if subtype not in ("Levee", "Channel"):
+            raise ValueError("ground-line subtype must be 'Levee' or 'Channel'")
+        if not features:
+            raise ValueError("a ground-line layer needs at least one feature")
+        if any(feat["system_name"] for feat in features):
+            logger.warning(
+                "Ground-line layer '%s' has a System Name: RAS Mapper builds named ground "
+                "lines through its system path (joined by name and endpoint), which changes "
+                "their footprint", name,
             )
 
-            # Polyline Parts: [start_index, num_points_in_part]
-            polyline_parts = np.array([[0, n_pts]], dtype=np.int32)
-            RasTerrainModWriter._create_hdf_dataset(
-                mod_grp, 'Polyline Parts', polyline_parts
+        point_blocks, info_rows, part_rows, profile_blocks, profile_rows = [], [], [], [], []
+        point_start = profile_start = 0
+        for part_index, feat in enumerate(features):
+            n_pts = len(feat["points"])
+            info_rows.append([point_start, n_pts, part_index, 1])
+            part_rows.append([0, n_pts])
+            point_blocks.append(feat["points"])
+            n_prof = len(feat["profile"])
+            profile_rows.append([profile_start, n_prof])
+            profile_blocks.append(feat["profile"])
+            point_start += n_pts
+            profile_start += n_prof
+
+        system_names = [feat["system_name"] for feat in features]
+        names = [feat["feature_name"] for feat in features]
+        attr_dtype = np.dtype([
+            ("System Name", RasTerrainModWriter._string_dtype(system_names)),
+            ("Name", RasTerrainModWriter._string_dtype(names)),
+            ("Elevation Type", "S11"),
+            ("Top Elevation", "<f4"),
+            ("Top Width", "<f4"),
+            ("Left Slope", "<f4"),
+            ("Right Slope", "<f4"),
+            ("Max Reach", "<f4"),
+            ("Transition Percent", "<f4"),
+            ("Elev Pt Tolerance", "<f4"),
+        ])
+        attrs = np.zeros(len(features), dtype=attr_dtype)
+        for i, feat in enumerate(features):
+            attrs[i] = (
+                feat["system_name"].encode("utf-8"),
+                feat["feature_name"].encode("utf-8"),
+                RasTerrainModWriter._modification_type_disk_name(
+                    feat["modification_type"]
+                ).encode("utf-8"),
+                np.float32(np.nan),
+                np.float32(feat["top_width"]),
+                np.float32(feat["left_slope"]),
+                np.float32(feat["right_slope"]),
+                np.float32(feat["max_reach"]),
+                np.float32(feat["transition_fraction"]),
+                np.float32(feat["elev_pt_tolerance"]),
             )
 
-            # Polyline Points: Nx2 array of (x, y)
+        with h5py.File(terrain_hdf_path, "a") as f:
+            mod_grp = RasTerrainModWriter._new_layer_group(f, name, "Levee", subtype, priority)
+            RasTerrainModWriter._create_hdf_dataset(mod_grp, "Attributes", attrs)
             RasTerrainModWriter._create_hdf_dataset(
-                mod_grp, 'Polyline Points', polyline_points
-            )
-            mod_grp['Polyline Info'].attrs['Feature Type'] = np.bytes_('Polyline')
-
-            profile_data = np.asarray(profile_data, dtype=np.float64)
-            profile_info = np.array([[0, len(profile_data)]], dtype=np.int32)
-            RasTerrainModWriter._create_hdf_dataset(
-                mod_grp, 'Profile Info', profile_info
+                mod_grp, "Polyline Info", np.asarray(info_rows, dtype=np.int32),
+                column=["Point Starting Index", "Point Count", "Part Starting Index", "Part Count"],
+                row="Feature", feature_type="Polyline",
             )
             RasTerrainModWriter._create_hdf_dataset(
-                mod_grp, 'Profile Values', profile_data.astype(np.float32)
+                mod_grp, "Polyline Parts", np.asarray(part_rows, dtype=np.int32),
+                column=["Point Starting Index", "Point Count"], row="Part",
             )
-            RasTerrainModWriter._create_hdf_dataset(mod_grp, 'Profile', profile_data)
-
-            # Write attributes as a compound dataset
-            # This matches the GroundLineModificationLayer attribute schema
-            attr_dtype = np.dtype([
-                ('System Name', 'S128'),
-                ('Name', 'S128'),
-                ('Elevation Type', 'S16'),
-                ('Top Elevation', '<f4'),
-                ('Top Width', '<f4'),
-                ('Left Slope', '<f4'),
-                ('Right Slope', '<f4'),
-                ('Max Reach', '<f4'),
-                ('Transition Percent', '<f4'),
-                ('Elev Pt Tolerance', '<f4'),
-            ])
-
-            if elevation_value is None:
-                elevation_value = float(np.mean(profile_data[:, 1]))
-            if top_elevation is None:
-                top_elevation = float(np.max(profile_data[:, 1]))
-
-            attrs_data = np.array([(
-                name.encode('utf-8')[:128],
-                name.encode('utf-8')[:128],
-                RasTerrainModWriter._modification_type_disk_name(modification_type)
-                .encode('utf-8')[:16],
-                np.float32(top_elevation),
-                np.float32(width),
-                np.float32(left_slope),
-                np.float32(right_slope),
-                np.float32(max_extent),
-                np.float32(transition_fraction),
-                np.float32(elev_pt_tolerance),
-            )], dtype=attr_dtype)
-
             RasTerrainModWriter._create_hdf_dataset(
-                mod_grp, 'Attributes', attrs_data
+                mod_grp, "Polyline Points", np.vstack(point_blocks).astype(np.float64),
+                column=["X", "Y"], row="Points",
+            )
+            RasTerrainModWriter._create_hdf_dataset(
+                mod_grp, "Profile Info", np.asarray(profile_rows, dtype=np.int32),
+                column=["Starting Index", "Count"], row="Feature",
+            )
+            RasTerrainModWriter._create_hdf_dataset(
+                mod_grp, "Profile Values", np.vstack(profile_blocks).astype(np.float32),
+                column=["X", "Y"], row="Values",
             )
 
-            # Create empty Control Points group
-            cp_grp = mod_grp.create_group('Control Points')
-            cp_grp.attrs['Type'] = np.bytes_('ControlCrossSection')
+        logger.debug(
+            "Wrote ground-line layer '%s' (%s, %d features) to %s",
+            name, subtype, len(features), Path(terrain_hdf_path).name,
+        )
 
-            logger.debug(f"Wrote ground-line modification '{name}' to HDF: "
-                        f"{n_pts} pts, length={profile_data[-1, 0]:.1f}, "
-                        f"width={width}, mode={modification_type}")
+    @staticmethod
+    def _write_constant_polygon_layer(
+        terrain_hdf_path: Path,
+        name: str,
+        features: Sequence[Dict[str, Any]],
+        priority: Optional[int] = None,
+    ) -> None:
+        """Write constant-elevation polygons (``rings``, ``elevation``,
+        ``elevation_type``) as RAS Mapper does with both boundary flags off."""
+        import h5py
+
+        info_rows, part_rows, point_blocks, profile_rows, profile_blocks = [], [], [], [], []
+        point_start = part_start = profile_start = 0
+        types, elevations = [], []
+        for i, feat in enumerate(features):
+            rings_xy, _ = RasTerrainModWriter._validate_polygon_rings(feat["rings"])
+            z = float(feat["elevation"])
+            RasTerrainModWriter._validate_finite(f"polygon {i} elevation", z)
+            n_feature_pts = 0
+            for ring in rings_xy:
+                part_rows.append([n_feature_pts, len(ring)])
+                point_blocks.append(ring)
+                n_feature_pts += len(ring)
+            info_rows.append([point_start, n_feature_pts, part_start, len(rings_xy)])
+            perimeter = RasTerrainModWriter._polygon_profile_values(
+                rings_xy, np.full(n_feature_pts, z)
+            )
+            profile_rows.append([profile_start, len(perimeter)])
+            profile_blocks.append(perimeter)
+            point_start += n_feature_pts
+            part_start += len(rings_xy)
+            profile_start += len(perimeter)
+            types.append(RasTerrainModWriter._modification_type_value(feat["elevation_type"]))
+            elevations.append(z)
+
+        attrs = np.zeros(
+            len(features),
+            dtype=[
+                ("Name", "S1"),
+                ("Elevation Value", "<f4"),
+                ("Elevation Type", "S11"),
+                ("Elev Pt Tolerance", "<f4"),
+                ("Generate Boundary Elevations", "u1"),
+                ("Use ShapeFile Z Elevations", "u1"),
+            ],
+        )
+        attrs["Elevation Value"] = np.asarray(elevations, dtype=np.float32)
+        attrs["Elevation Type"] = [
+            RasTerrainModWriter._modification_type_disk_name(t).encode() for t in types
+        ]
+        attrs["Elev Pt Tolerance"] = np.float32(50.0)
+
+        with h5py.File(terrain_hdf_path, "a") as f:
+            mod_grp = RasTerrainModWriter._new_layer_group(f, name, "Polygon", None, priority)
+            RasTerrainModWriter._create_hdf_dataset(mod_grp, "Attributes", attrs)
+            RasTerrainModWriter._create_hdf_dataset(
+                mod_grp, "Polygon Info", np.asarray(info_rows, dtype=np.int32),
+                column=["Point Starting Index", "Point Count", "Part Starting Index", "Part Count"],
+                row="Feature", feature_type="Polygon",
+            )
+            RasTerrainModWriter._create_hdf_dataset(
+                mod_grp, "Polygon Parts", np.asarray(part_rows, dtype=np.int32),
+                column=["Point Starting Index", "Point Count"], row="Part",
+            )
+            RasTerrainModWriter._create_hdf_dataset(
+                mod_grp, "Polygon Points", np.vstack(point_blocks).astype(np.float64),
+                column=["X", "Y"], row="Points",
+            )
+            RasTerrainModWriter._create_hdf_dataset(
+                mod_grp, "Profile Info", np.asarray(profile_rows, dtype=np.int32),
+                column=["Starting Index", "Count"], row="Feature",
+            )
+            RasTerrainModWriter._create_hdf_dataset(
+                mod_grp, "Profile Values", np.vstack(profile_blocks).astype(np.float32),
+                column=["X", "Y"], row="Values",
+            )
 
     @staticmethod
     def _write_polygon_to_hdf(
@@ -1091,9 +1631,21 @@ class RasTerrainModWriter:
         modification_type: int,
         elevation_method: str,
         elev_pt_tolerance: float,
+        priority: Optional[int] = None,
     ) -> None:
         """Write a polygon multipoint modification to a terrain HDF file."""
         import h5py
+
+        method_key = (
+            str(elevation_method).strip().lower().replace("-", "_").replace(" ", "_")
+        )
+        generate_boundary = method_key in {"boundary_from_terrain", "terrain", "from_terrain"}
+        finite = boundary_elevations[np.isfinite(boundary_elevations)]
+        level = bool(finite.size) and float(np.ptp(finite)) == 0.0
+        # A varying boundary is stored as vertex Z with Use ShapeFile Z on and
+        # Generate off: the one varying form RAS Mapper 6.6, 7.0 and 7.0.1
+        # all interpolate from the stored data (6.6 keeps no polygon profile).
+        vertex_z = not generate_boundary and not level
 
         polygon_parts: List[List[int]] = []
         all_points: List[np.ndarray] = []
@@ -1105,6 +1657,10 @@ class RasTerrainModWriter:
             point_start += ring_count
 
         polygon_points = np.vstack(all_points).astype(np.float64)
+        if vertex_z:
+            polygon_points = np.column_stack(
+                [polygon_points, boundary_elevations.astype(np.float64)]
+            )
         polygon_info = np.array(
             [[0, len(polygon_points), 0, len(polygon_parts)]],
             dtype=np.int32,
@@ -1115,7 +1671,7 @@ class RasTerrainModWriter:
         )
         profile_info = np.array([[0, len(profile_values)]], dtype=np.int32)
         boundary_points = np.column_stack(
-            [polygon_points, boundary_elevations.astype(np.float64)]
+            [polygon_points[:, :2], boundary_elevations.astype(np.float64)]
         )
 
         if len(control_xy):
@@ -1128,16 +1684,11 @@ class RasTerrainModWriter:
             elevation_points = boundary_points.copy()
 
         with h5py.File(terrain_hdf_path, "a") as f:
-            mods = f.require_group("Modifications")
-
-            if name in mods:
-                logger.warning("Modification '%s' already exists, overwriting", name)
-                del mods[name]
-
-            mod_grp = mods.create_group(name)
-            mod_grp.attrs["Type"] = np.bytes_("Polygon")
+            mod_grp = RasTerrainModWriter._new_layer_group(
+                f, name, "Polygon", None, priority
+            )
+            # Informational only: RAS Mapper does not read these two.
             mod_grp.attrs["Subtype"] = np.bytes_("Multipoint")
-            mod_grp.attrs["Priority"] = np.int32(0)
             mod_grp.attrs["Boundary Elevation Method"] = np.bytes_(
                 str(elevation_method)[:64]
             )
@@ -1166,7 +1717,9 @@ class RasTerrainModWriter:
                 ["Point Starting Index", "Point Count"], dtype="S32"
             )
             polygon_parts_ds.attrs["Row"] = np.bytes_("Part")
-            polygon_points_ds.attrs["Column"] = np.asarray(["X", "Y"], dtype="S8")
+            polygon_points_ds.attrs["Column"] = np.asarray(
+                ["X", "Y", "Z"] if vertex_z else ["X", "Y"], dtype="S8"
+            )
             polygon_points_ds.attrs["Row"] = np.bytes_("Points")
 
             profile_info_ds = RasTerrainModWriter._create_hdf_dataset(
@@ -1192,18 +1745,6 @@ class RasTerrainModWriter:
                 mod_grp, "Elevation Points", elevation_points
             )
 
-            method_key = (
-                str(elevation_method)
-                .strip()
-                .lower()
-                .replace("-", "_")
-                .replace(" ", "_")
-            )
-            generate_boundary = method_key in {
-                "boundary_from_terrain",
-                "terrain",
-                "from_terrain",
-            }
             attr_dtype = np.dtype(
                 [
                     ("Name", "S128"),
@@ -1214,17 +1755,24 @@ class RasTerrainModWriter:
                     ("Use ShapeFile Z Elevations", "u1"),
                 ]
             )
+            # With both flags off RAS Mapper sets the polygon to its constant
+            # Elevation Value and ignores any stored profile; a NaN Elevation
+            # Value makes it skip the polygon. Level boundaries store the
+            # constant; varying ones carry vertex Z (Use ShapeFile Z on).
+            elevation_value = 0.0
+            if not generate_boundary and finite.size:
+                elevation_value = float(finite[0])
             attrs_data = np.array(
                 [
                     (
                         name.encode("utf-8")[:128],
-                        np.float32(0.0),
+                        np.float32(elevation_value),
                         RasTerrainModWriter._modification_type_disk_name(
                             modification_type
                         ).encode("utf-8")[:11],
                         np.float32(elev_pt_tolerance),
                         np.uint8(1 if generate_boundary else 0),
-                        np.uint8(1 if method_key in {"shape_z", "polygon_z", "z"} else 0),
+                        np.uint8(1 if vertex_z else 0),
                     )
                 ],
                 dtype=attr_dtype,
@@ -1528,8 +2076,13 @@ class RasTerrainModWriter:
         rings_z: Sequence[np.ndarray],
         elevation_method: str,
         boundary_elevations: Optional[Union[np.ndarray, Sequence[float]]],
+        elevation: Optional[float] = None,
     ) -> np.ndarray:
         method = str(elevation_method).strip().lower().replace("-", "_").replace(" ", "_")
+        if method == "constant":
+            if elevation is None:
+                raise ValueError("elevation is required when elevation_method='constant'")
+            return np.full(len(boundary_xy), float(elevation), dtype=np.float64)
         if boundary_elevations is not None:
             method = "provided"
 
@@ -1566,7 +2119,7 @@ class RasTerrainModWriter:
 
         raise ValueError(
             "Unsupported elevation_method. Use 'boundary_from_terrain', "
-            "'shape_z', or 'provided'."
+            "'shape_z', 'provided' or 'constant'."
         )
 
     @staticmethod
@@ -1680,7 +2233,34 @@ class RasTerrainModWriter:
                 continue
             seen.add(key)
             unique.append(candidate)
-        return unique
+        return RasTerrainModWriter._priority_ordered(terrain_hdf_path, unique)
+
+    @staticmethod
+    def _priority_ordered(terrain_hdf_path: Path, paths: List[Path]) -> List[Path]:
+        """Put the terrain's source rasters first, highest priority first.
+
+        Samplers keep the first finite value per point, so overlapping sources
+        must be read in the terrain's declared priority (``Priority``
+        attributes or the terrain VRT). When the priority cannot be proven and
+        more than one source raster is found, discovery order is kept with a
+        warning.
+        """
+        from ..fim import _terrain_scope
+        from ..fim.errors import FimUnsupportedError
+
+        try:
+            sources = _terrain_scope.top_priority_source(terrain_hdf_path)["sources"]
+        except (FimUnsupportedError, OSError, KeyError) as exc:
+            if sum(p.suffix.lower() in (".tif", ".tiff") for p in paths) > 1:
+                logger.warning(
+                    "terrain %s: source priority not proven (%s); sampling sources in discovery order",
+                    Path(terrain_hdf_path).name, exc,
+                )
+            return paths
+        ordered = [(Path(terrain_hdf_path).parent / name) for name in sources]
+        ordered = [p for p in ordered if p.exists()]
+        keys = {str(p.resolve()).lower() for p in ordered}
+        return ordered + [p for p in paths if str(p.resolve()).lower() not in keys]
 
     @staticmethod
     def _iter_hdf_strings(value: Any):
@@ -1731,12 +2311,34 @@ class RasTerrainModWriter:
         return points
 
     @staticmethod
-    def _create_hdf_dataset(group, name: str, data: np.ndarray):
-        """Create a chunked HDF dataset compatible with HEC H5Assist readers."""
+    def _create_hdf_dataset(
+        group,
+        name: str,
+        data: np.ndarray,
+        column: Optional[Sequence[str]] = None,
+        row: Optional[str] = None,
+        feature_type: Optional[str] = None,
+    ):
+        """Create a chunked, gzip-compressed dataset as RAS Mapper's H5Assist writes.
+
+        ``column``/``row``/``feature_type`` set the ``Column``, ``Row`` and
+        ``Feature Type`` dataset attributes RAS Mapper writes (only
+        ``Feature Type`` and a 3-column ``Column`` are read back by RAS Mapper).
+        """
         data = np.asarray(data)
         if data.shape and all(dim > 0 for dim in data.shape):
-            return group.create_dataset(name, data=data, chunks=data.shape)
-        return group.create_dataset(name, data=data)
+            ds = group.create_dataset(
+                name, data=data, chunks=data.shape, compression="gzip"
+            )
+        else:
+            ds = group.create_dataset(name, data=data)
+        if column is not None:
+            ds.attrs["Column"] = np.asarray([str(c).encode("utf-8") for c in column])
+        if row is not None:
+            ds.attrs["Row"] = np.bytes_(row)
+        if feature_type is not None:
+            ds.attrs["Feature Type"] = np.bytes_(feature_type)
+        return ds
 
     @staticmethod
     def _station_values(xy_points: np.ndarray) -> np.ndarray:
@@ -1924,7 +2526,14 @@ class RasTerrainModWriter:
 
     @staticmethod
     def _read_profile_array(mod_grp) -> np.ndarray:
-        if "Profile" in mod_grp:
+        """First feature's profile as RAS Mapper reads it.
+
+        RAS Mapper reads ``Profile Info`` + float32 ``Profile Values`` and
+        never a ``Profile`` dataset (written by ras-commander before #790's
+        follow-up); ``Profile`` is only a fallback when ``Profile Values`` is
+        absent.
+        """
+        if "Profile Values" not in mod_grp and "Profile" in mod_grp:
             values = np.asarray(read_typed(mod_grp["Profile"], slice(None)), dtype=np.float64)
             if "Profile Info" in mod_grp and len(mod_grp["Profile Info"]) > 0:
                 start, count = np.asarray(read_typed(mod_grp["Profile Info"], 0), dtype=np.int64)
@@ -1959,6 +2568,12 @@ class RasTerrainModWriter:
                 raise KeyError(f"Modification polyline not found: {mod_path}/Polyline Points")
 
             line = np.asarray(read_typed(mod_grp["Polyline Points"], slice(None)), dtype=np.float64)
+            if "Polyline Info" in mod_grp and len(mod_grp["Polyline Info"]) > 0:
+                start, count = np.asarray(
+                    read_typed(mod_grp["Polyline Info"], 0), dtype=np.int64
+                )[:2]
+                line = line[start : start + count]
+            subtype = RasTerrainModWriter._decode_hdf_scalar(read_attr(mod_grp, "Subtype", ""))
             profile = RasTerrainModWriter._read_profile_array(mod_grp)
             attr_row = {}
             if "Attributes" in mod_grp and len(mod_grp["Attributes"]) > 0:
@@ -1992,6 +2607,11 @@ class RasTerrainModWriter:
                 )
             ),
         }
+        # Stored slopes are positive; RAS Mapper's per-feature path reads NaN
+        # as 3 (and 0 as 0.001, applied in the surface helper).
+        for key in ("left_slope", "right_slope"):
+            if np.isnan(attrs[key]):
+                attrs[key] = 3.0
 
         missing = [
             key for key, value in attrs.items()
@@ -2005,6 +2625,7 @@ class RasTerrainModWriter:
         if int(attrs["modification_type"]) < 0:
             raise ValueError(f"Modification '{name}' has unknown merge mode")
 
+        attrs["subtype"] = subtype
         return line[:, :2], profile, attrs
 
     @staticmethod
@@ -2092,21 +2713,33 @@ class RasTerrainModWriter:
         left_slope: float,
         right_slope: float,
         max_extent: float,
+        channel: bool = False,
     ) -> np.ndarray:
-        """Compute the proposed ground-line surface at projected station/offsets."""
+        """Proposed ground-line surface at projected station/offsets.
+
+        RAS Mapper's template: a flat top ``width`` wide at the profile
+        elevation, then side slopes (H:V) out to ``max_extent / 2`` on each
+        side (``Max Reach`` is the total footprint width). Levee sides fall
+        and channel sides rise. A slope of 0 is read as 0.001. This is a
+        straight-segment approximation: RAS Mapper builds a ribbon TIN, so
+        results can differ near bends and line ends.
+        """
         half_width = width / 2.0
+        half_reach = max(max_extent / 2.0, half_width)
         distance = np.abs(offset)
         crest = np.interp(station, profile[:, 0], profile[:, 1])
         slopes = np.where(offset >= 0.0, left_slope, right_slope).astype(np.float64)
+        slopes = np.where(slopes == 0.0, 0.001, slopes)
 
         surface = np.full(len(station), np.nan, dtype=np.float64)
-        in_extent = distance <= max_extent
+        in_extent = distance <= half_reach
         on_crest = distance <= half_width
         surface[in_extent & on_crest] = crest[in_extent & on_crest]
 
-        on_slope = in_extent & ~on_crest & (slopes > 0.0)
+        on_slope = in_extent & ~on_crest
         lateral = distance[on_slope] - half_width
-        surface[on_slope] = crest[on_slope] - lateral / slopes[on_slope]
+        sign = 1.0 if channel else -1.0
+        surface[on_slope] = crest[on_slope] + sign * lateral / slopes[on_slope]
 
         return surface
 
@@ -2316,8 +2949,14 @@ class RasTerrainModWriter:
         default_mod_type: int,
         elev_pt_tolerance: float,
         group_name: str,
+        ground_line_defaults: bool = True,
     ) -> None:
-        """Update .rasmap XML to include the terrain modification layer."""
+        """Update .rasmap XML to include the terrain modification layer.
+
+        The layer element is inserted first in the group, matching RAS
+        Mapper's tree (newest layer on top, Priority 0). RAS Mapper's export
+        does not need any of this XML; it reads the terrain HDF.
+        """
         # Ensure the group exists first
         mod_group = RasTerrainModWriter._ensure_modification_group_in_rasmap(
             rasmap_path, terrain_hdf_path, group_name
@@ -2349,24 +2988,26 @@ class RasTerrainModWriter:
                 logger.warning(f"Modification layer '{name}' already in .rasmap, replacing")
                 mod_group.remove(child)
 
-        # Add the modification layer
-        mod_layer = ET.SubElement(mod_group, 'Layer')
+        # Add the modification layer at the top of the group
+        mod_layer = ET.Element('Layer')
+        mod_group.insert(0, mod_layer)
         mod_layer.set('Name', name)
         mod_layer.set('Type', mod_type)
         mod_layer.set('Checked', 'True')
         mod_layer.set('Expanded', 'True')
 
-        default_type_el = ET.SubElement(mod_layer, 'DefaultModificationType')
-        default_type_el.set('Value', str(default_mod_type))
+        if ground_line_defaults:
+            default_type_el = ET.SubElement(mod_layer, 'DefaultModificationType')
+            default_type_el.set('Value', str(default_mod_type))
 
-        default_tol_el = ET.SubElement(mod_layer, 'DefaultElevPtTol')
-        default_tol_el.set('Value', str(int(elev_pt_tolerance)))
+            default_tol_el = ET.SubElement(mod_layer, 'DefaultElevPtTol')
+            default_tol_el.set('Value', str(int(elev_pt_tolerance)))
 
-        # Add control points sub-layer
-        cp_layer = ET.SubElement(mod_layer, 'Layer')
-        cp_layer.set('Name', 'Control Points')
-        cp_layer.set('Type', 'ElevationControlPointLayer')
-        cp_layer.set('Checked', 'True')
+            # Add control points sub-layer
+            cp_layer = ET.SubElement(mod_layer, 'Layer')
+            cp_layer.set('Name', 'Control Points')
+            cp_layer.set('Type', 'ElevationControlPointLayer')
+            cp_layer.set('Checked', 'True')
 
         _write_ras_xml(tree, rasmap_path, xml_declaration=False, encoding="unicode")
         logger.debug(f"Added modification layer '{name}' to .rasmap")
