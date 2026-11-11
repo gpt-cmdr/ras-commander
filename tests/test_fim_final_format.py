@@ -324,7 +324,9 @@ def test_real_engine_final_format_equals_the_rasterio_route(case, tmp_path, rows
         for band in ("depth_tif", "wse_tif"):
             with rasterio.open(getattr(a, band)) as final, rasterio.open(getattr(b, band)) as stock:
                 assert final.shape == shape and final.transform == transform
-                assert final.nodata == -9999 and final.overviews(1) == [2, 4]
+                assert final.nodata == -9999
+                assert _final_format.overview_shapes(final) == _final_format.expected_overview_shapes(
+                    dict(height=shape[0], width=shape[1]), [2, 4])
                 assert final.compression.name == "deflate" and final.block_shapes == [(256, 256)]
                 assert final.tags(ns="rio_overview") == {"resampling": "average"}
                 # The mapped window keeps the product bits; NaN becomes the nodata value.
