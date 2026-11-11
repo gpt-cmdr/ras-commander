@@ -179,6 +179,8 @@ def build(
     max_working_mib: int = 4096,
     timeout: Optional[float] = None,
     terrain_crs_fnv1a64: Optional[str] = None,
+    hecras_version: Optional[str] = None,
+    ras_object=None,
 ) -> dict:
     """Write the effective terrain GeoTIFF; return the receipt (also written as JSON)."""
     import rasterio
@@ -198,6 +200,7 @@ def build(
         )
     info = _terrain_scope.top_priority_source(terrain_hdf, rasmap_path)
     layers = []
+    version, version_basis = None, None
     if info["modified"]:
         hdf_names = {name[4:] for name in info["modifications"] if name.startswith("hdf:")}
         rasmap_only = sorted(
@@ -213,8 +216,24 @@ def build(
                 f"terrain {info['terrain_hdf'].name} has modifications {info['modifications']}; "
                 f"the engine lacks {METHOD_ID_V2} (use the RAS Mapper export)"
             )
+        if hecras_version is not None:
+            version, version_basis = _terrain_mods.hecras_version_for(hecras_version), "argument"
+        else:
+            version, version_basis = _terrain_mods.project_hecras_version(
+                info["terrain_hdf"], rasmap_path, ras_object)
+        record = _record(engine) or {}
+        if version != "7.0.1" and "hecras_version" not in record.get("modifications", {}):
+            raise FimUnsupportedError(
+                f"the engine does not advertise hecras_version; HEC-RAS {version} modification rules "
+                "need a newer ras-commander-fast-map (use the RAS Mapper export)"
+            )
         # Raises FimUnsupportedError for any modification form not qualified.
-        layers = _terrain_mods.read_layers(info["terrain_hdf"])
+        layers = _terrain_mods.read_layers(
+            info["terrain_hdf"],
+            length_units=_terrain_mods.project_length_units(
+                info["terrain_hdf"], rasmap_path, ras_object),
+            hecras_version=version,
+        )
     v2 = engine_supports(engine, modifications=True)
     with rasterio.open(info["tif"]) as src:
         crs = src.crs
@@ -238,6 +257,8 @@ def build(
         }
         if v2:
             request["modification_layers"] = layers
+            if layers and version != "7.0.1":
+                request["hecras_version"] = version
         request_path = work / "request.json"
         request_path.write_text(json.dumps(request, indent=1), encoding="utf-8")
         out_dir = work / "out"
@@ -269,6 +290,8 @@ def build(
                  "features": len(layer["features"])}
                 for layer in layers
             ],
+            "hecras_version": version,
+            "hecras_version_basis": version_basis,
             "terrain_hdf": str(info["terrain_hdf"]),
             "sources_in_priority_order": info["sources"],
             "priority_basis": info["priority_basis"],

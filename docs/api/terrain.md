@@ -151,11 +151,17 @@ Line and polygon terrain modification HDF/`.rasmap` writing. Also available as t
 
 - `add_high_ground_modification(terrain_hdf_path, rasmap_path, name, polyline_points, top_width=20.0, side_slope=2.0, ...)` - Add levee/road terrain modification with trapezoidal profile along polyline (TakeHigher mode)
 - `add_fill_surface_modification(terrain_hdf_path, rasmap_path, name, polyline_points, top_width=20.0, side_slope=2.0, ...)` - Add fill-surface (SetValue) modification along polyline
-- `add_channel_modification(terrain_hdf_path, rasmap_path, name, polyline_points, width=50.0, depth=10.0, left_slope=3.0, right_slope=3.0, ...)` - Add trapezoidal channel modification (TakeLower mode)
+- `add_channel_modification(terrain_hdf_path, rasmap_path, name, polyline_points, width=50.0, depth=None, ..., *, elevation=None, profile_points=None, ...)` - Add trapezoidal channel modification (TakeLower mode). The invert is an absolute elevation profile (`profile_points`, `elevation` or polyline Z); `depth` instead sets it below the terrain source sampled at each vertex.
 
-### Polygon Modification Methods
+Ground lines are written as RAS Mapper saves them: `Type=Levee`, an empty `System Name` (a non-empty one sends even a lone line through RAS Mapper's system path and changes its footprint at bends; pass `system_name` only for an intended join), NaN `Transition Percent`, and an absolute profile in `Profile Info`/`Profile Values`. A new layer goes on top of the list (`Priority` 0, which wins), as in the RAS Mapper GUI; pass `priority` to place it elsewhere. HEC-RAS 6.6 and 7.0.1 exports of writer layers equal those of the same features authored in RAS Mapper.
 
-- `add_modification_polygon(terrain_hdf_path, name, polygon_coords, elevation_method="boundary_from_terrain", control_points=None, ...)` - Add polygon multipoint modification (detention pond/wetland grading)
+### Polygon and Ellipse Modification Methods
+
+- `add_modification_polygon(terrain_hdf_path, name, polygon_coords, elevation_method="boundary_from_terrain", control_points=None, ..., elevation=None)` - Add polygon modification: constant (`elevation`), vertex-Z (`shape_z`/`provided`, portable across 6.6 and 7.x) or terrain-sampled boundary
+- `add_ellipse_modification(terrain_hdf_path, rasmap_path, name, ellipses, mode="set_value")` - Add ellipse/circle modifications (rotation in degrees)
+- `add_modification_layer(terrain_hdf_path, rasmap_path, layer)` - Write one layer in the `read_layers` form (ground line, constant polygon, ellipse) back to a terrain
+
+The RAS Mapper export applies a terrain's HDF modifications only when its `.rasmap` terrain layer has an `ElevationModificationGroup` element; the writers create it.
 
 ### Group Management
 

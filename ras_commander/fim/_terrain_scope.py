@@ -20,6 +20,7 @@ inconsistent declarations are refused.
 
 from __future__ import annotations
 
+import logging
 import xml.etree.ElementTree as ET
 from pathlib import Path
 from typing import Optional
@@ -27,6 +28,8 @@ from typing import Optional
 import numpy as np
 
 from .errors import FimUnsupportedError
+
+logger = logging.getLogger(__name__)
 
 METHOD_ID = "top-priority-source-footprint/1"
 TILE_PIXELS = 256 * 256
@@ -74,12 +77,24 @@ def _modifications(source, rasmap_path, terrain_hdf: Path) -> list:
         ]
         if not layers:
             raise FimUnsupportedError(f"{rasmap.name} does not register terrain {terrain_hdf.name}")
+        has_group = False
         for layer in layers:
             for group_layer in layer.findall("Layer"):
                 if group_layer.get("Type") == "ElevationModificationGroup":
+                    has_group = True
                     found.extend(
                         f"rasmap:{child.get('Name')}" for child in group_layer.findall("Layer")
                     )
+        if not has_group and found:
+            # RAS Mapper's terrain export (HEC-RAS 6.6 and 7.0.1) applies the
+            # HDF's modifications only when the rasmap terrain layer carries
+            # an ElevationModificationGroup element; its contents and Checked
+            # states do not matter. Without it nothing is applied.
+            logger.warning(
+                "%s registers %s without a modification group: RAS Mapper applies none of "
+                "its %d HDF modification layers", rasmap.name, terrain_hdf.name, len(found),
+            )
+            found = []
     return found
 
 
