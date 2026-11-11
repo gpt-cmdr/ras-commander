@@ -598,6 +598,34 @@ def _plan_delivery_aoi(constraint, transform, grid, budget):
     return window, geometry if masked else None, scratch
 
 
+def _xs_batch_limit(flags):
+    """Profiles per XS engine request: the advertised multi-profile maximum, else 1."""
+    record = flags.get("multi_profile")
+    if not isinstance(record, Mapping) or record.get("control") != "levels_files":
+        return 1
+    maximum = record.get("max")
+    return maximum if isinstance(maximum, int) and not isinstance(maximum, bool) and maximum > 1 else 1
+
+
+def _xs_render_workers(flags, threads, budget, receipt, grid, planned):
+    """Largest advertised XS render worker count within threads and the budget.
+
+    Each extra engine worker needs a tile claim buffer plus one candidate
+    reference per stored triangle; workers never change output bits.
+    """
+    record = flags.get("render_workers")
+    if not isinstance(record, Mapping) or record.get("control") != "threads":
+        return 1
+    maximum = record.get("max")
+    if not isinstance(maximum, int) or isinstance(maximum, bool) or maximum < 1:
+        return 1
+    scratch = int(grid["tile_size"]) ** 2 + int(receipt["triangle_count"]) * 8
+    workers = min(threads, maximum)
+    while workers > 1 and planned + (workers - 1) * scratch > budget:
+        workers -= 1
+    return workers
+
+
 def map_one_d_profiles(hdf_path, terrain_path, output_folder, *, profiles=None,
                        allow_unqualified=False, bbox=None, polygon=None, aoi_crs=None,
                        polygon_layer=None, engine_path=None, threads=1,
@@ -606,8 +634,11 @@ def map_one_d_profiles(hdf_path, terrain_path, output_folder, *, profiles=None,
 
     A prepared model may replace hdf_path; terrain_path must then be None.
     AOIs restrict output only. All global geometry and original tile origins
-    remain intact. The diagnostic transport is sequential (threads is an upper
-    budget, not a promise of parallelism).
+    remain intact. When the engine advertises ``render_workers``, up to
+    ``threads`` workers render source-tile rows (bit-identical for any count);
+    when it advertises ``multi_profile``, all selected profiles share one
+    engine call and one prepared surface. Older engines run one sequential
+    request per profile. threads is an upper budget, not a promise.
     """
     import tempfile
     import pandas as pd
@@ -698,6 +729,11 @@ def map_one_d_profiles(hdf_path, terrain_path, output_folder, *, profiles=None,
                 (pixels if mask_geometry is not None else 0) +
                 receipt["point_count"] * 128 + receipt["triangle_count"] * 256 > budget):
             raise FimUnsupportedError("planned 1D delivery/geometry exceeds max_working_mib")
+        workers = _xs_render_workers(support.flags, threads, budget, receipt, grid,
+                                     pixels * (160 if storage else 32) + pool_overhead + aoi_scratch +
+                                     (pixels if mask_geometry is not None else 0) +
+                                     receipt["point_count"] * 128 + receipt["triangle_count"] * 256)
+        batch_limit = _xs_batch_limit(support.flags)
         mask = None
         if mask_geometry is not None:
             # Use complete projected geometry and ORIGINAL source transform;
@@ -744,7 +780,8 @@ def map_one_d_profiles(hdf_path, terrain_path, output_folder, *, profiles=None,
             result.attrs.update(schema=MANIFEST_SCHEMA, method_id=final_method_id,
                                 request_schema=final_schema, **details,
                                 qualified=False, preparation=receipt,
-                                threads_requested=threads, threads_effective=min(threads, 4) if storage else 1, engine_sha256=engine_hash)
+                                threads_requested=threads, threads_effective=max(workers, min(threads, 4) if storage else 1),
+                                xs_render_workers=workers, xs_profiles_per_request=batch_limit, engine_sha256=engine_hash)
             return result
 
         def persist(status, error=None):
@@ -754,7 +791,8 @@ def map_one_d_profiles(hdf_path, terrain_path, output_folder, *, profiles=None,
                        "qualified": False,
                        "preparation": receipt, "engine_sha256": engine_hash, "reports": reports,
                        "status": status, "error": error,
-                       "threads_requested": threads, "threads_effective": min(threads, 4) if storage else 1})
+                       "threads_requested": threads, "threads_effective": max(workers, min(threads, 4) if storage else 1),
+                       "xs_render_workers": workers, "xs_profiles_per_request": batch_limit})
 
         def verify_inputs():
             prepared.validate()
@@ -763,25 +801,48 @@ def map_one_d_profiles(hdf_path, terrain_path, output_folder, *, profiles=None,
 
         try:
             persist("in_progress")
-            for i, (profile, levels) in enumerate(zip(selected_names, selected_levels)):
+            def run_xs_batch(first):
+                """One engine call for profiles first..first+n; outputs stay in scratch."""
+                batch = list(range(first, min(first + batch_limit, len(selected_levels))))
                 request = {"schema": REQUEST_SCHEMA, "scope": "xs-surface-only",
                            "point_count": receipt["point_count"], "triangle_count": receipt["triangle_count"],
                            "segment_count": receipt["segment_count"], "cross_section_count": receipt["cross_section_count"],
-                           "levels_file": levels, "terrain_file": str(terrain_file),
+                           "terrain_file": str(terrain_file),
                            "width": grid["width"], "height": grid["height"],
                            "geo_transform": grid["geo_transform"], "tile_size": grid["tile_size"],
                            "window": dict(zip(("col", "row", "width", "height"), map(int, (window.col_off, window.row_off, window.width, window.height)))),
                            "max_working_bytes": budget, "clipping_scope": "levees-and-xs-end-obstructions-only"}
+                if batch_limit > 1:
+                    request["levels_files"] = [selected_levels[k] for k in batch]
+                else:
+                    request["levels_file"] = selected_levels[first]
+                if workers > 1:
+                    request["threads"] = workers
                 request.update({name + "_file": path for name, path in receipt["files"].items()})
-                request_file = scratch / f"request-{i}.json"
+                request_file = scratch / f"request-{first}.json"
                 write_json(request_file, request)
-                out = scratch / f"engine-{i}"
+                out = scratch / f"engine-{first}"
                 proc = _engine.run_engine([str(engine), "one-d-diagnostic", str(request_file), str(out)], "1D mapping", timeout)
                 if proc.returncode != 0:
                     raise _engine.read_refusal(out, proc.stderr) or FimEngineError(proc.stderr[-4000:])
-                report = json.loads((out / "report.json").read_text())
-                if report.get("status") != "complete" or report.get("method", {}).get("method_id") != METHOD_ID:
+                top = json.loads((out / "report.json").read_text())
+                if top.get("status") != "complete" or top.get("method", {}).get("method_id") != METHOD_ID:
                     raise FimEngineError("incomplete or mismatched 1D engine report")
+                if batch_limit > 1 and (top.get("profile_count") != len(batch) or
+                                        len(top.get("profiles", ())) != len(batch)):
+                    raise FimEngineError("1D engine report does not cover every requested profile")
+                for offset, k in enumerate(batch):
+                    folder_k = out / f"profile-{offset:04d}" if batch_limit > 1 else out
+                    report = json.loads((folder_k / "report.json").read_text()) if batch_limit > 1 else top
+                    if report.get("status") != "complete" or report.get("method", {}).get("method_id") != METHOD_ID:
+                        raise FimEngineError("incomplete or mismatched 1D engine profile report")
+                    xs_outputs[k] = (folder_k, report)
+
+            xs_outputs = {}
+            for i, (profile, levels) in enumerate(zip(selected_names, selected_levels)):
+                if i not in xs_outputs:
+                    run_xs_batch(i)
+                out, report = xs_outputs.pop(i)
                 reports.append(report)
                 if storage:
                     pool_out = scratch / f"storage-{i}"

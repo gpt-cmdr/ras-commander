@@ -2122,9 +2122,14 @@ This diagnostic path uses `one-d-xs-surface-diagnostic/5` and its existing
 refuses execution. The preparation receipt identifies the version-specific
 normalization and endpoint-selection rules. Full-corpus and broader raster
 qualification remain gates. Transport availability
-does not establish numerical qualification. The XS pass executes sequentially;
-storage rendering uses up to four workers within the requested thread budget.
-Manifests record requested and effective counts.
+does not establish numerical qualification. With engines that advertise
+`render_workers`, the XS pass renders source-terrain tile rows on up to
+`threads` workers, reduced to fit `max_working_mib`. With engines that advertise
+`multi_profile`, all selected profiles share one engine call, so inputs and the
+prepared surface are read and built once. Neither option changes output bits.
+Older engines run one sequential XS request per profile. Storage rendering uses
+up to four workers within the requested thread budget. Manifests record the
+requested and effective counts, `xs_render_workers` and `xs_profiles_per_request`.
 
 The diagnostic scope includes stored unsteady or explicit steady XS profiles,
 including junction ordering, levees, endpoint obstruction blocks and disjoint

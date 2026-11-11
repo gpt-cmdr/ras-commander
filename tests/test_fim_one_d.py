@@ -144,6 +144,49 @@ def test_real_engine_synthetic_mapping(files, tmp_path):
 
 
 
+
+def test_batched_workers_match_sequential_single_profile_bits(files, tmp_path, monkeypatch):
+    """Multi-profile engine calls and render workers never change product pixels."""
+    import os
+    from ras_commander.fim import _one_d
+    engine = os.environ.get("RAS_COMMANDER_FIM_ENGINE")
+    if not engine:
+        pytest.skip("explicit opt-in engine")
+    flags = RasFim.get_capabilities(engine).methods["one_d_clipped_diagnostic"].flags
+    if _one_d._xs_batch_limit(flags) < 2 or not flags.get("render_workers"):
+        pytest.skip("engine lacks multi_profile/render_workers")
+    hdf, terrain = files
+    kwargs = dict(profiles=["Max", 0, 1], allow_unqualified=True, max_working_mib=64, engine_path=engine)
+    batched = RasFim.map_one_d_profiles(hdf, terrain, tmp_path / "batched", threads=4, **kwargs)
+    assert batched.attrs["xs_render_workers"] > 1
+    assert batched.attrs["xs_profiles_per_request"] > 1
+    monkeypatch.setattr(_one_d, "_xs_batch_limit", lambda flags: 1)
+    monkeypatch.setattr(_one_d, "_xs_render_workers", lambda *args: 1)
+    single = RasFim.map_one_d_profiles(hdf, terrain, tmp_path / "single", threads=1, **kwargs)
+    assert single.attrs["xs_render_workers"] == 1
+    for a, b in zip(batched.itertuples(), single.itertuples()):
+        assert a.status == b.status == "complete"
+        for column in ("depth_tif", "wse_tif"):
+            with rasterio.open(getattr(a, column)) as x, rasterio.open(getattr(b, column)) as y:
+                assert x.transform == y.transform and x.crs == y.crs
+                np.testing.assert_array_equal(x.read(1).view("<u4"), y.read(1).view("<u4"))
+
+
+def test_xs_worker_and_batch_flags_are_parsed_conservatively():
+    from ras_commander.fim._one_d import _xs_batch_limit, _xs_render_workers
+    receipt, grid = {"triangle_count": 1000}, {"tile_size": 256}
+    workers = {"render_workers": {"control": "threads", "max": 64}}
+    assert _xs_batch_limit({}) == 1
+    assert _xs_batch_limit({"multi_profile": {"control": "levels_files", "max": 256}}) == 256
+    assert _xs_batch_limit({"multi_profile": {"control": "other", "max": 256}}) == 1
+    assert _xs_batch_limit({"multi_profile": {"control": "levels_files", "max": True}}) == 1
+    assert _xs_render_workers({}, 8, 10**9, receipt, grid, 0) == 1
+    assert _xs_render_workers(workers, 8, 10**9, receipt, grid, 0) == 8
+    assert _xs_render_workers({"render_workers": {"control": "threads", "max": 2}}, 8, 10**9, receipt, grid, 0) == 2
+    scratch = 256 * 256 + 1000 * 8
+    assert _xs_render_workers(workers, 8, 100 + 2 * scratch, receipt, grid, 100) == 3
+    assert _xs_render_workers(workers, 8, 100, receipt, grid, 100) == 1
+
 def test_crs_identity_refused_before_writes(files, tmp_path):
     hdf, terrain = files
     with rasterio.open(terrain, 'r+') as dst:
