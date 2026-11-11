@@ -42,6 +42,36 @@ receipt to the share. A qualification path whose fully qualified helper response
 name exceeded the legacy .NET 260-character limit also failed cleanly; long-path
 output staging remains unqualified.
 
+A failed export returns `success=False` with a `failure_kind` that callers can
+act on without parsing the error text:
+
+| `failure_kind` | Condition | Next action |
+|---|---|---|
+| `out_of_memory` | The helper raised .NET `System.OutOfMemoryException`, including when it is wrapped in a type-initializer exception | Retry with more memory available to the helper process |
+| `empty_extent` | RAS Mapper reported that its partial TIFF "does not have embedded statistics", and a full-resolution scan of every registered source that intersects the window found no valid cell | Skip the window, or pass `empty_extent="nodata"` |
+| `empty_extent_unconfirmed` | RAS Mapper reported the same error, but the coverage scan could not read a source or rasterio is not installed | Check the source paths listed in `empty_extent_check` |
+| `no_response`, `invalid_response` | The helper wrote no response file, or a response that failed schema validation | Inspect the exit code and stderr in `helper_invocations` |
+| `native_error` | Any other exception reported by the helper | Read `error` and the helper response |
+| `timeout`, `error` | The bounded runtime expired, or a host-side step such as GeoTIFF validation failed | Read `error` |
+
+With `empty_extent="nodata"`, a confirmed empty window produces an all-nodata
+Float32 GeoTIFF (nodata `-9999`) on the snapped export grid, using the
+`.rasmap` projection file's CRS, and the result sets `empty_extent=True`. If
+the scan finds any valid cell, the export fails as `native_error`; RAS Commander
+does not replace a native failure with nodata output.
+
+`helper_invocations` records each native helper call: the request, process
+exit code, parsed response, the last 20,000 characters of stderr, and a status.
+The receipt carries the same records, so the evidence remains after the
+task-local stage is removed. Under Wine, stderr often holds only the
+`XDG_RUNTIME_DIR is invalid or not set` warning, which also appears in
+successful runs. RAS Commander keeps that line in the record but never uses it
+as the failure summary. A helper that reports success and then exits non-zero,
+for example after a crash during runtime shutdown, is not treated as a failure.
+Its response must still validate, an export's TIFF must exist, and the output
+goes through the same semantic GeoTIFF validation. The record status is
+`success_nonzero_exit`, and `messages` notes the exit code.
+
 Supported HEC-RAS versions are deliberately narrow:
 
 | Runtime | Status | Evidence |

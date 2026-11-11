@@ -42,6 +42,51 @@ _NATIVE_HDF_LIBRARIES = ("hdf5.dll", "hdf5_hl.dll", "szip.dll", "zlib.dll")
 _WINDOWS_PATH = re.compile(r"^(?:[A-Za-z]:[\\/]|\\\\)")
 _BETA_LABEL_TOKEN = re.compile(r"(?<![A-Za-z0-9])beta(?![A-Za-z0-9])", re.IGNORECASE)
 
+# Failure classes reported in ``TerrainExportResult.failure_kind``.
+FAILURE_NATIVE_ERROR = "native_error"
+FAILURE_OUT_OF_MEMORY = "out_of_memory"
+FAILURE_EMPTY_EXTENT = "empty_extent"
+FAILURE_EMPTY_EXTENT_UNCONFIRMED = "empty_extent_unconfirmed"
+FAILURE_NO_RESPONSE = "no_response"
+FAILURE_INVALID_RESPONSE = "invalid_response"
+FAILURE_TIMEOUT = "timeout"
+FAILURE_ERROR = "error"
+EMPTY_EXTENT_OPTIONS = ("fail", "nodata")
+EMPTY_EXTENT_NODATA_VALUE = -9999.0
+
+# RAS Mapper's terrain writer raises this when the export window holds no
+# valid cell: TiffAssist.FloatTiffWriter.ComputeSetHistogram, called from
+# TerrainLayer.GenerateNewRasTerrain.
+_EMPTY_WINDOW_MARKER = "does not have embedded statistics"
+_OUT_OF_MEMORY_MARKER = "OutOfMemoryException"
+# Wine prints these in successful and failed runs alike. They are kept in the
+# retained stderr but never used as the summary of a helper failure.
+_BENIGN_STDERR_PATTERNS = (
+    re.compile(r"XDG_RUNTIME_DIR is invalid or not set"),
+    re.compile(r"^(?:[0-9A-Fa-f]+:)?fixme:"),
+)
+_STDERR_RETAINED_CHARS = 20000
+_COVERAGE_SCAN_CELLS_PER_READ = 16 * 1024 * 1024
+
+
+class TerrainHelperError(RuntimeError):
+    """A classified native terrain helper failure.
+
+    ``failure_kind`` is one of the ``FAILURE_*`` constants in this module.
+    ``invocation`` is the helper call record (request, exit code, response,
+    retained stderr, and status) that produced the failure.
+    """
+
+    def __init__(
+        self,
+        message: str,
+        failure_kind: str,
+        invocation: Optional[dict[str, Any]] = None,
+    ):
+        super().__init__(message)
+        self.failure_kind = failure_kind
+        self.invocation = invocation or {}
+
 
 def _executable_runtime_label(executable: Any) -> str:
     """Return an executable's parent folder using its own path dialect."""
@@ -424,10 +469,71 @@ def validate_helper_request(request: dict[str, Any]) -> None:
             raise ValueError("rasterize_modifications must be boolean")
 
 
-def _helper_failure_detail(response: dict[str, Any], stderr: str = "") -> str:
-    """Retain the native exception details when temporary receipts are removed."""
-    summary = str(response.get("error") or stderr.strip() or "unknown native error")
+def _split_stderr(stderr: Optional[str]) -> tuple[str, str]:
+    """Split helper stderr into diagnostic lines and known-benign Wine lines."""
+    diagnostic: list[str] = []
+    benign: list[str] = []
+    for line in (stderr or "").splitlines():
+        if not line.strip():
+            continue
+        if any(pattern.search(line) for pattern in _BENIGN_STDERR_PATTERNS):
+            benign.append(line)
+        else:
+            diagnostic.append(line)
+    return "\n".join(diagnostic), "\n".join(benign)
+
+
+def _retained_stderr(stderr: Optional[str]) -> str:
+    """Keep the end of stderr, where .NET writes the final exception."""
+    text = (stderr or "").strip()
+    if len(text) <= _STDERR_RETAINED_CHARS:
+        return text
+    return "[truncated]\n" + text[-_STDERR_RETAINED_CHARS:]
+
+
+def classify_helper_failure(response: dict[str, Any], stderr: str = "") -> str:
+    """Classify a helper failure from its response fields and stderr.
+
+    Returns ``out_of_memory`` when any field names a .NET
+    ``OutOfMemoryException`` (also when it is wrapped, for example in a
+    ``TypeInitializationException``), ``empty_extent_unconfirmed`` for RAS
+    Mapper's empty-window statistics error, and ``native_error`` otherwise.
+    """
+    text = "\n".join(
+        [str(response.get(key) or "") for key in ("error_type", "error", "details")]
+        + [stderr or ""]
+    )
+    if _OUT_OF_MEMORY_MARKER in text:
+        return FAILURE_OUT_OF_MEMORY
+    if _EMPTY_WINDOW_MARKER in text:
+        return FAILURE_EMPTY_EXTENT_UNCONFIRMED
+    return FAILURE_NATIVE_ERROR
+
+
+def _helper_failure_detail(
+    response: dict[str, Any],
+    stderr: str = "",
+    exit_code: Optional[int] = None,
+) -> str:
+    """Retain the native exception details when temporary receipts are removed.
+
+    Known-benign Wine stderr lines are never used as the summary. When the
+    response has no error text, the summary states the exit code instead.
+    """
+    diagnostic, benign = _split_stderr(stderr)
+    summary = str(response.get("error") or diagnostic.strip() or "")
+    if not summary:
+        if exit_code is not None:
+            summary = f"helper exited with code {exit_code} without reporting an error"
+        else:
+            summary = "unknown native error"
+        if benign:
+            summary += (
+                " (stderr held only Wine runtime warnings, which are not the cause)"
+            )
     parts = [summary]
+    if exit_code is not None and "exited with code" not in summary:
+        parts.append(f"Helper exit code: {exit_code}")
     error_type = response.get("error_type")
     if error_type and str(error_type) not in summary:
         parts.append(f"Native exception type: {error_type}")
@@ -891,8 +997,35 @@ def _run_helper(
     request: dict[str, Any],
     stage: Path,
     timeout: float,
+    invocations: Optional[list[dict[str, Any]]] = None,
+    expected_output: Optional[Path] = None,
 ) -> dict[str, Any]:
+    """Run one helper call and return its validated response.
+
+    Each call appends a record to ``invocations`` (request, exit code,
+    response, retained stderr, status) before raising, so the evidence
+    survives removal of the task-local stage. A response that reports
+    success and passes validation is accepted even when the process exits
+    non-zero (for example a crash during Wine/.NET shutdown after the TIFF
+    was written); the record status is then ``success_nonzero_exit``. For an
+    export, ``expected_output`` must then exist and be non-empty, and the
+    caller still validates it semantically.
+
+    Raises:
+        TerrainHelperError: Classified helper failure.
+        subprocess.TimeoutExpired: The bounded runtime expired.
+    """
     validate_helper_request(request)
+    record: dict[str, Any] = {
+        "operation": request["operation"],
+        "request": dict(request),
+        "exit_code": None,
+        "response": None,
+        "stderr": "",
+        "status": "started",
+    }
+    if invocations is not None:
+        invocations.append(record)
     request_path = stage / ("request-" + uuid.uuid4().hex + ".json")
     response_path = stage / ("response-" + uuid.uuid4().hex + ".json")
     request_path.write_text(json.dumps(request, allow_nan=False), encoding="utf-8")
@@ -907,26 +1040,95 @@ def _run_helper(
             _helper_path(request_path),
             _helper_path(response_path),
         ]
-    completed = run_owned_process(
-        command,
-        timeout=timeout,
-        cwd=stage,
-        env=_runtime_env(hecras_dir, wine_config),
-    )
+    try:
+        completed = run_owned_process(
+            command,
+            timeout=timeout,
+            cwd=stage,
+            env=_runtime_env(hecras_dir, wine_config),
+        )
+    except subprocess.TimeoutExpired:
+        record["status"] = FAILURE_TIMEOUT
+        raise
+    exit_code = completed.returncode
+    stderr = completed.stderr or ""
+    record["exit_code"] = exit_code
+    record["stderr"] = _retained_stderr(stderr)
+
+    def fail(message: str, kind: str, cause: Optional[BaseException] = None):
+        record["status"] = kind
+        error = TerrainHelperError(message, kind, record)
+        if cause is not None:
+            raise error from cause
+        raise error
+
     if not response_path.is_file():
-        raise RuntimeError(
-            "Terrain helper returned no response "
-            f"(exit={completed.returncode}, stderr={completed.stderr.strip()!r})"
+        diagnostic, benign = _split_stderr(stderr)
+        if _OUT_OF_MEMORY_MARKER in stderr:
+            fail(
+                "Native terrain helper ran out of memory (.NET "
+                "System.OutOfMemoryException) and wrote no response "
+                f"(exit={exit_code}). Retry with more memory available to the "
+                f"helper process.\nNative stderr:\n{diagnostic}",
+                FAILURE_OUT_OF_MEMORY,
+            )
+        if diagnostic:
+            detail = f"Native stderr:\n{diagnostic}"
+        elif benign:
+            detail = "stderr held only Wine runtime warnings, which are not the cause"
+        else:
+            detail = "stderr was empty"
+        fail(
+            f"Terrain helper returned no response (exit={exit_code}); {detail}",
+            FAILURE_NO_RESPONSE,
         )
     try:
         response = json.loads(response_path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as exc:
-        raise RuntimeError("Terrain helper returned invalid JSON") from exc
-    validate_helper_response(response, request["operation"], require_success=False)
-    if completed.returncode != 0 or not response["success"]:
-        detail = _helper_failure_detail(response, completed.stderr)
-        raise RuntimeError(f"Native terrain helper failed: {detail}")
-    validate_helper_response(response, request["operation"])
+        fail(
+            f"Terrain helper returned invalid JSON (exit={exit_code})",
+            FAILURE_INVALID_RESPONSE,
+            exc,
+        )
+    record["response"] = response
+    try:
+        validate_helper_response(response, request["operation"], require_success=False)
+    except RuntimeError as exc:
+        fail(str(exc), FAILURE_INVALID_RESPONSE, exc)
+    if not response["success"]:
+        kind = classify_helper_failure(response, stderr)
+        detail = _helper_failure_detail(response, stderr, exit_code)
+        if kind == FAILURE_OUT_OF_MEMORY:
+            fail(
+                "Native terrain helper ran out of memory (.NET "
+                "System.OutOfMemoryException). Retry with more memory available "
+                f"to the helper process.\n{detail}",
+                kind,
+            )
+        fail(f"Native terrain helper failed: {detail}", kind)
+    try:
+        validate_helper_response(response, request["operation"])
+    except RuntimeError as exc:
+        fail(str(exc), FAILURE_INVALID_RESPONSE, exc)
+    if exit_code != 0:
+        if expected_output is not None and (
+            not expected_output.is_file() or expected_output.stat().st_size <= 0
+        ):
+            fail(
+                "Native terrain helper reported success but exited with code "
+                f"{exit_code}, and its output TIFF is missing or empty.\n"
+                + _helper_failure_detail(response, stderr, exit_code),
+                FAILURE_NATIVE_ERROR,
+            )
+        logger.warning(
+            "Terrain helper %s reported success but exited with code %s; "
+            "keeping its output for validation.",
+            request["operation"],
+            exit_code,
+        )
+        record["status"] = "success_nonzero_exit"
+    else:
+        record["status"] = "success"
     return response
 
 
@@ -1040,6 +1242,232 @@ def validate_output_semantics(
     }
 
 
+def _extents_intersect(bounds: dict[str, Any], extent: Sequence[float]) -> bool:
+    return not (
+        float(bounds["max_x"]) <= extent[0]
+        or float(bounds["min_x"]) >= extent[2]
+        or float(bounds["max_y"]) <= extent[1]
+        or float(bounds["min_y"]) >= extent[3]
+    )
+
+
+def _count_valid_cells(path: Path, extent: Sequence[float]) -> int:
+    """Count valid full-resolution cells of one raster inside ``extent``."""
+    import numpy as np
+    import rasterio
+    from rasterio.windows import Window
+
+    with rasterio.open(path) as dataset:
+        transform = dataset.transform
+        if transform.b != 0 or transform.d != 0:
+            raise ValueError("rotated source rasters are not scanned")
+        inverse = ~transform
+        col_a, row_a = inverse @ (extent[0], extent[3])
+        col_b, row_b = inverse @ (extent[2], extent[1])
+        col0 = max(0, int(math.floor(min(col_a, col_b))))
+        col1 = min(dataset.width, int(math.ceil(max(col_a, col_b))))
+        row0 = max(0, int(math.floor(min(row_a, row_b))))
+        row1 = min(dataset.height, int(math.ceil(max(row_a, row_b))))
+        if col1 <= col0 or row1 <= row0:
+            return 0
+        width = col1 - col0
+        rows_per_read = max(1, _COVERAGE_SCAN_CELLS_PER_READ // width)
+        for start in range(row0, row1, rows_per_read):
+            height = min(rows_per_read, row1 - start)
+            block = dataset.read(
+                1, window=Window(col0, start, width, height), masked=True
+            )
+            valid = ~np.ma.getmaskarray(block) & np.isfinite(block.filled(np.nan))
+            count = int(valid.sum())
+            if count:
+                # One valid cell is enough to refute an empty window.
+                return count
+    return 0
+
+
+def check_extent_source_coverage(
+    sources: Sequence[dict[str, Any]], extent: Sequence[float]
+) -> dict[str, Any]:
+    """Scan registered terrain sources for valid cells inside ``extent``.
+
+    Every source whose extent intersects the window is read at full
+    resolution until a valid (unmasked, finite) cell is found.
+
+    Returns:
+        dict: ``status`` is ``"empty"`` (every intersecting source was read
+        and holds no valid cell, or no source intersects), ``"has_data"``,
+        or ``"unconfirmed"`` (rasterio is unavailable or a source could not
+        be read). ``sources`` lists the per-source outcome.
+    """
+    report: dict[str, Any] = {
+        "extent": [float(value) for value in extent],
+        "status": "unconfirmed",
+        "sources": [],
+    }
+    import importlib.util
+
+    if importlib.util.find_spec("rasterio") is None:
+        report["reason"] = "rasterio is not installed"
+        return report
+    unreadable = False
+    found = False
+    for source in sources:
+        entry: dict[str, Any] = {
+            "index": source.get("index"),
+            "filename": source.get("filename"),
+            "intersects": _extents_intersect(source.get("extent") or {}, extent),
+        }
+        if entry["intersects"]:
+            try:
+                path = _normalize_host_path(str(source["filename"]))
+                entry["valid_cells"] = _count_valid_cells(path, extent)
+                found = found or entry["valid_cells"] > 0
+            except Exception as exc:
+                entry["error"] = f"{type(exc).__name__}: {exc}"
+                unreadable = True
+        report["sources"].append(entry)
+        if found:
+            break
+    if found:
+        report["status"] = "has_data"
+    elif unreadable:
+        report["status"] = "unconfirmed"
+        report["reason"] = "one or more intersecting sources could not be read"
+    else:
+        report["status"] = "empty"
+    return report
+
+
+def _rasmap_projection_wkt(rasmap_path: Path) -> str:
+    """Return the CRS RAS Mapper exports with: the .rasmap projection file."""
+    from ..hdf.HdfUtils import CRS_EVIDENCE_FOUND, HdfUtils
+
+    for item in HdfUtils.collect_rasmap_crs_evidence(rasmap_path):
+        if item.source == "rasmap_projection":
+            if item.status == CRS_EVIDENCE_FOUND and item.wkt:
+                return item.wkt
+            raise RuntimeError(
+                "Cannot write an all-nodata terrain: the .rasmap projection "
+                f"file gives no CRS ({item.status}: {item.detail or item.path})"
+            )
+    raise RuntimeError(
+        "Cannot write an all-nodata terrain: the .rasmap names no projection file"
+    )
+
+
+def write_nodata_geotiff(
+    path: Union[str, Path],
+    snapped_extent: Sequence[float],
+    cell_size: float,
+    columns: int,
+    rows: int,
+    crs_wkt: str,
+    nodata: float = EMPTY_EXTENT_NODATA_VALUE,
+) -> dict[str, Any]:
+    """Write and verify an all-nodata Float32 GeoTIFF on the export grid."""
+    path = Path(path)
+    import numpy as np
+    import rasterio
+    from rasterio.transform import from_origin
+    from rasterio.windows import Window
+
+    transform = from_origin(snapped_extent[0], snapped_extent[3], cell_size, cell_size)
+    profile = {
+        "driver": "GTiff",
+        "width": columns,
+        "height": rows,
+        "count": 1,
+        "dtype": "float32",
+        "crs": crs_wkt,
+        "transform": transform,
+        "nodata": nodata,
+        "tiled": True,
+        "blockxsize": 256,
+        "blockysize": 256,
+        "compress": "deflate",
+        "BIGTIFF": "IF_SAFER",
+    }
+    rows_per_write = max(1, _COVERAGE_SCAN_CELLS_PER_READ // columns)
+    with rasterio.Env(GDAL_PAM_ENABLED="NO"):
+        with rasterio.open(path, "w", **profile) as dataset:
+            for start in range(0, rows, rows_per_write):
+                height = min(rows_per_write, rows - start)
+                dataset.write(
+                    np.full((height, columns), nodata, dtype="float32"),
+                    1,
+                    window=Window(0, start, columns, height),
+                )
+        with rasterio.open(path) as dataset:
+            failures = []
+            if (dataset.width, dataset.height) != (columns, rows):
+                failures.append("size does not match the export grid")
+            if dataset.crs is None:
+                failures.append("coordinate reference system is missing")
+            if dataset.dtypes[0] != "float32" or dataset.nodata != nodata:
+                failures.append("band type or nodata does not match")
+            if not dataset.transform.almost_equals(transform):
+                failures.append("geotransform does not match the export grid")
+    unexpected = [str(item) for item in _terrain_sidecar_paths(path) if item.exists()]
+    if unexpected:
+        failures.append("unexpected sidecars: " + ", ".join(unexpected))
+    if failures:
+        raise RuntimeError("All-nodata GeoTIFF validation failed: " + "; ".join(failures))
+    return {
+        "driver": "GTiff",
+        "columns": columns,
+        "rows": rows,
+        "band_count": 1,
+        "data_type": "Float32",
+        "nodata": float(nodata),
+        "computed_min": None,
+        "computed_max": None,
+        "checksum": None,
+        "geotransform": list(transform.to_gdal()),
+        "actual_extent": [float(value) for value in snapped_extent],
+        "crs_present": True,
+        "sidecars": [],
+        "empty_extent": True,
+        "valid_cell_count": 0,
+        "writer": "ras-commander all-nodata output replacing the failed RAS Mapper export",
+    }
+
+
+def _resolve_empty_window(
+    error: TerrainHelperError, check: dict[str, Any], empty_extent: str
+) -> None:
+    """Re-raise RAS Mapper's statistics error with a confirmed classification.
+
+    Returns only when the window is confirmed empty and the caller asked for
+    an all-nodata output.
+    """
+    native = str(error)
+    if check["status"] == "has_data":
+        raise TerrainHelperError(
+            f"{native}\nThe source coverage scan found valid terrain cells in "
+            "the export window, so this is not an empty-window failure.",
+            FAILURE_NATIVE_ERROR,
+            error.invocation,
+        ) from error
+    if check["status"] != "empty":
+        raise TerrainHelperError(
+            "RAS Mapper could not compute statistics for the export window, which "
+            "usually means the window holds no terrain data, but source coverage "
+            f"could not be confirmed ({check.get('reason', 'unknown reason')}).\n"
+            f"{native}",
+            FAILURE_EMPTY_EXTENT_UNCONFIRMED,
+            error.invocation,
+        ) from error
+    if empty_extent != "nodata":
+        raise TerrainHelperError(
+            "No terrain data in the requested extent: no registered terrain "
+            f"source has a valid cell inside {check['extent']}. Pass "
+            "empty_extent='nodata' to write an all-nodata GeoTIFF instead.\n"
+            f"RAS Mapper reported: {native}",
+            FAILURE_EMPTY_EXTENT,
+            error.invocation,
+        ) from error
+
+
 def _terrain_sidecar_paths(tif_path: Path) -> list[Path]:
     """Return every owned sidecar spelling rejected by semantic validation."""
     candidates = [
@@ -1128,6 +1556,7 @@ def export_rasmapper_terrain(
     hecras_version: Optional[str] = None,
     ras_object: Any = None,
     receipt_path: Optional[Union[str, Path]] = None,
+    empty_extent: str = "fail",
 ) -> TerrainExportResult:
     """Implement the public supervised export contract used by ``RasTerrain``."""
     started = time.monotonic()
@@ -1137,6 +1566,14 @@ def export_rasmapper_terrain(
         raise ValueError("rasterize_modifications must be boolean")
     if not isinstance(overwrite, bool):
         raise ValueError("overwrite must be boolean")
+    if empty_extent not in EMPTY_EXTENT_OPTIONS:
+        raise ValueError(
+            f"empty_extent must be one of {EMPTY_EXTENT_OPTIONS}, got {empty_extent!r}"
+        )
+    if empty_extent == "nodata":
+        from .._optional_deps import require_module
+
+        require_module("rasterio", "writing an all-nodata terrain export")
     timeout = float(timeout_seconds)
     if not math.isfinite(timeout) or timeout <= 0:
         raise ValueError("timeout_seconds must be finite and positive")
@@ -1196,6 +1633,7 @@ def export_rasmapper_terrain(
         downsample_factor=factor,
         rasterize_modifications=rasterize_modifications,
     )
+    invocations = result.helper_invocations
     helper_response: Optional[dict[str, Any]] = None
     promoted = False
     receipt_promoted = False
@@ -1221,7 +1659,13 @@ def export_rasmapper_terrain(
         }
         remaining = timeout - (time.monotonic() - started)
         inspection = _run_helper(
-            helper, hecras_dir, run_config, inspect_request, stage, remaining
+            helper,
+            hecras_dir,
+            run_config,
+            inspect_request,
+            stage,
+            remaining,
+            invocations=invocations,
         )
         sources = inspection["sources"]
         authoritative, native_cell = select_authoritative_source(sources)
@@ -1279,20 +1723,66 @@ def export_rasmapper_terrain(
             "rasterize_modifications": rasterize_modifications,
         }
         remaining = timeout - (time.monotonic() - started)
-        helper_response = _run_helper(
-            helper, hecras_dir, run_config, export_request, stage, remaining
-        )
-        result.messages = [
-            f"{item.get('type', 'Message')}: {item.get('message', '')}"
-            for item in helper_response.get("messages", [])
-        ]
-        remaining = timeout - (time.monotonic() - started)
-        info = _run_gdalinfo(
-            partial_tif, hecras_dir, run_config, stage, remaining
-        )
-        result.validation = validate_output_semantics(
-            info, partial_tif, snapped, output_cell, columns, rows
-        )
+        try:
+            helper_response = _run_helper(
+                helper,
+                hecras_dir,
+                run_config,
+                export_request,
+                stage,
+                remaining,
+                invocations=invocations,
+                expected_output=partial_tif,
+            )
+        except TerrainHelperError as exc:
+            if exc.failure_kind != FAILURE_EMPTY_EXTENT_UNCONFIRMED:
+                raise
+            helper_response = exc.invocation.get("response")
+            result.empty_extent_check = check_extent_source_coverage(
+                source_records, snapped
+            )
+            _resolve_empty_window(exc, result.empty_extent_check, empty_extent)
+            # Confirmed empty and the caller opted in: replace RAS Mapper's
+            # failed partial with an all-nodata GeoTIFF on the export grid.
+            for owned in [partial_tif, *_terrain_sidecar_paths(partial_tif)]:
+                with contextlib.suppress(FileNotFoundError):
+                    owned.unlink()
+            result.validation = write_nodata_geotiff(
+                partial_tif,
+                snapped,
+                output_cell,
+                columns,
+                rows,
+                _rasmap_projection_wkt(rasmap_path),
+            )
+            result.empty_extent = True
+            result.messages.append(
+                "No terrain data in the export window (source coverage scan "
+                "confirmed 0 valid cells); wrote an all-nodata GeoTIFF as "
+                "requested by empty_extent='nodata'."
+            )
+            logger.warning(
+                "Terrain export window has no terrain data; wrote all-nodata output"
+            )
+        else:
+            result.messages = [
+                f"{item.get('type', 'Message')}: {item.get('message', '')}"
+                for item in helper_response.get("messages", [])
+            ]
+            remaining = timeout - (time.monotonic() - started)
+            info = _run_gdalinfo(
+                partial_tif, hecras_dir, run_config, stage, remaining
+            )
+            result.validation = validate_output_semantics(
+                info, partial_tif, snapped, output_cell, columns, rows
+            )
+        for item in invocations:
+            if item.get("status") == "success_nonzero_exit":
+                result.messages.append(
+                    f"Terrain helper {item['operation']} reported success but "
+                    f"exited with code {item['exit_code']}; its output passed "
+                    "validation and was kept."
+                )
         result.success = True
         result.elapsed_seconds = time.monotonic() - started
         payload = _receipt_payload(
@@ -1341,10 +1831,20 @@ def export_rasmapper_terrain(
         result.success = False
         result.timed_out = True
         result.error = f"Native terrain export timed out after {timeout:.1f} seconds"
+        result.failure_kind = FAILURE_TIMEOUT
         result.messages.append(str(exc))
+    except TerrainHelperError as exc:
+        result.success = False
+        result.error = str(exc)
+        result.failure_kind = exc.failure_kind
+        logger.error(
+            "Native RAS Mapper terrain export failed (%s): %s", exc.failure_kind, exc
+        )
+        logger.debug("Native terrain export failure", exc_info=True)
     except Exception as exc:
         result.success = False
         result.error = str(exc)
+        result.failure_kind = FAILURE_ERROR
         logger.error("Native RAS Mapper terrain export failed: %s", exc)
         logger.debug("Native terrain export failure", exc_info=True)
     finally:
@@ -1397,6 +1897,10 @@ def export_rasmapper_terrain(
 
 __all__ = [
     "ALLOWED_DOWNSAMPLE_FACTORS",
+    "EMPTY_EXTENT_OPTIONS",
+    "TerrainHelperError",
+    "check_extent_source_coverage",
+    "classify_helper_failure",
     "export_rasmapper_terrain",
     "normalize_extent",
     "run_owned_process",
@@ -1408,4 +1912,5 @@ __all__ = [
     "validate_helper_response",
     "validate_output_semantics",
     "vendor_invocation_extent",
+    "write_nodata_geotiff",
 ]
