@@ -649,14 +649,21 @@ def test_layers_get_unique_priorities_newest_on_top(tmp_path):
     assert priorities == {"A": 0, "B": 1, "C": 2}
 
 
-def test_varying_polygon_boundary_is_stored_as_vertex_z(tmp_path):
+@pytest.mark.parametrize("method", ["shape_z", "provided"])
+def test_varying_polygon_boundary_is_stored_as_vertex_z(tmp_path, method):
     """Vertex Z with Use ShapeFile Z on is the varying-boundary form RAS
-    Mapper 6.6, 7.0 and 7.0.1 all read (6.6 stores no polygon profile)."""
+    Mapper 6.6, 7.0 and 7.0.1 all read (6.6 stores no polygon profile). A
+    varying provided boundary is stored the same way (it used to store a 0
+    constant that RAS Mapper applied)."""
     terrain_hdf, rasmap = _write_minimal_terrain(tmp_path)
+    xyz = [[0.0, 0.0, 10.0], [10.0, 0.0, 11.0], [10.0, 10.0, 12.0], [0.0, 10.0, 11.0]]
+    if method == "shape_z":
+        kwargs = dict(polygon_coords=xyz)
+    else:
+        kwargs = dict(polygon_coords=[p[:2] for p in xyz],
+                      boundary_elevations=[10.0, 11.0, 12.0, 11.0, 10.0])
     RasTerrainModWriter.add_modification_polygon(
-        terrain_hdf, name="Pond",
-        polygon_coords=[[0.0, 0.0, 10.0], [10.0, 0.0, 11.0], [10.0, 10.0, 12.0], [0.0, 10.0, 11.0]],
-        elevation_method="shape_z", rasmap_path=rasmap,
+        terrain_hdf, name="Pond", elevation_method=method, rasmap_path=rasmap, **kwargs,
     )
     with h5py.File(terrain_hdf, "r") as hdf:
         mod = hdf["Modifications/Pond"]
