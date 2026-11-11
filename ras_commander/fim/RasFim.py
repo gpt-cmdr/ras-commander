@@ -1401,16 +1401,20 @@ class RasFim:
             ``seconds`` and the engine ``engine_report``.
 
         Terrain modifications (engine ``rasmapper-effective-terrain/2``): ground
-        lines (high ground and channels, ``SetIfHigher``/``SetIfLower``),
-        constant-elevation polygons and unrotated ellipses are rasterized as
-        RAS Mapper's ``rasterize_modifications=True`` export does, layers in
-        descending ``Priority`` (Priority 0 last). Qualified against HEC-RAS
-        7.0.1 on HCFCD Prop_Topo and Kingswood TerrainAlt1-3/existing_1m: no
-        difference outside the stitch TIN except isolated 1/32 ft roundings at
-        exact ties. Any other form (ground-line ``Add``/``SetValue``, control
-        points, ``System Name`` joins, boundary-profile polygons, rotated
-        ellipses, ``Max Reach`` not above ``Top Width``) is refused, so the
-        caller uses the RAS Mapper export.
+        lines (high ground and channels, ``SetValue``/``SetIfHigher``/
+        ``SetIfLower``, without a ``System Name``), constant-elevation polygons
+        and ellipses (any rotation) are rasterized as RAS Mapper's
+        ``rasterize_modifications=True`` export does, layers in descending
+        ``Priority`` (Priority 0 last). Ground-line profiles are densified in
+        the project's unit system (``SI Units`` in the ``.prj`` beside
+        ``rasmap_path`` means meters). Qualified against HEC-RAS 7.0.1 in
+        ras-commander-fast-map. Any other form (ground-line ``Add``, control
+        points, any non-empty ``System Name``, boundary-profile or vertex-Z
+        polygons, other RAS layer types) is refused, so the caller uses the
+        RAS Mapper export. Layer types RAS Mapper ignores (for example
+        ``Type=Channel`` from older ras-commander writers) are skipped, and
+        when ``rasmap_path`` is given without an ``ElevationModificationGroup``
+        under the terrain, no modification is applied, as in RAS Mapper.
 
         Raises:
             FimUnsupportedError: Unqualified terrain modifications, unproven priority,

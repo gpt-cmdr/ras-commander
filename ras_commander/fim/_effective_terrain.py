@@ -214,7 +214,10 @@ def build(
                 f"the engine lacks {METHOD_ID_V2} (use the RAS Mapper export)"
             )
         # Raises FimUnsupportedError for any modification form not qualified.
-        layers = _terrain_mods.read_layers(info["terrain_hdf"])
+        layers = _terrain_mods.read_layers(
+            info["terrain_hdf"],
+            length_units=_terrain_mods.project_length_units(info["terrain_hdf"], rasmap_path),
+        )
     v2 = engine_supports(engine, modifications=True)
     with rasterio.open(info["tif"]) as src:
         crs = src.crs

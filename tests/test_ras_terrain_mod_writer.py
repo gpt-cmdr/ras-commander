@@ -296,12 +296,13 @@ def test_add_high_ground_modification_writes_hdf_and_rasmap(tmp_path):
             mod["Profile Values"][:],
             np.array([[0.0, 572.0], [100.0, 573.0], [200.0, 574.0]]),
         )
-        np.testing.assert_allclose(
-            mod["Profile"][:],
-            np.array([[0.0, 572.0], [100.0, 573.0], [200.0, 574.0]]),
-        )
+        # RAS Mapper reads Profile Info/Values only and saves no Profile
+        # dataset and no empty Control Points group.
+        assert "Profile" not in mod and "Control Points" not in mod
 
         attrs = mod["Attributes"][0]
+        assert _decode(attrs["System Name"]) == ""
+        assert np.isnan(attrs["Transition Percent"]) and np.isnan(attrs["Top Elevation"])
         assert _decode(attrs["Elevation Type"]) == "SetIfHigher"
         assert attrs["Top Width"] == pytest.approx(20.0)
         assert attrs["Left Slope"] == pytest.approx(2.0)
@@ -371,7 +372,7 @@ def test_add_channel_modification_keeps_take_lower_mode(tmp_path):
         name="Pilot Channel",
         polyline_points=np.array([[0.0, 0.0], [30.0, 40.0]]),
         width=15.0,
-        depth=4.0,
+        profile_points=[[0.0, 96.0], [50.0, 95.0]],
         max_extent=75.0,
     )
 
@@ -379,11 +380,12 @@ def test_add_channel_modification_keeps_take_lower_mode(tmp_path):
         mod = hdf["Modifications/Pilot Channel"]
         assert _decode(mod.attrs["Type"]) == "Levee"
         assert _decode(mod.attrs["Subtype"]) == "Channel"
+        # RAS Mapper's profile is the absolute invert elevation.
         np.testing.assert_allclose(
-            mod["Profile Values"][:],
-            np.array([[0.0, -4.0], [25.0, -4.0], [50.0, -4.0]]),
+            mod["Profile Values"][:], np.array([[0.0, 96.0], [50.0, 95.0]])
         )
         assert _decode(mod["Attributes"][0]["Elevation Type"]) == "SetIfLower"
+        assert _decode(mod["Attributes"][0]["System Name"]) == ""
 
     layer = _mod_layer(rasmap, "Pilot Channel")
     assert layer.find("DefaultModificationType").get("Value") == str(
@@ -391,47 +393,100 @@ def test_add_channel_modification_keeps_take_lower_mode(tmp_path):
     )
 
 
-def test_profile_readback_prefers_float64_profile_for_large_stations(tmp_path):
+def test_profile_readback_reads_profile_values_like_ras_mapper(tmp_path):
+    """RAS Mapper reads the float32 Profile Values; the float64 Profile
+    dataset older writers added is never read, so the helpers must not
+    prefer it."""
     terrain_hdf, rasmap = _write_minimal_terrain(tmp_path)
-    profile_points = np.array(
-        [
-            [500000.123456, 601.1234567],
-            [500250.654321, 601.7654321],
-        ],
-        dtype=np.float64,
-    )
-
+    profile_points = np.array([[0.0, 601.1234567], [250.5, 601.7654321]])
     RasTerrainModWriter.add_high_ground_modification(
-        terrain_hdf,
-        rasmap,
-        name="Precision Levee",
-        polyline_points=np.array(
-            [[500000.1, 300000.2], [500250.6, 300000.3]],
-            dtype=np.float64,
-        ),
+        terrain_hdf, rasmap, name="Old",
+        polyline_points=np.array([[0.0, 0.0], [250.5, 0.0]]),
         profile_points=profile_points,
     )
-
-    with h5py.File(terrain_hdf, "r") as hdf:
-        mod = hdf["Modifications/Precision Levee"]
-        assert mod["Profile Values"].dtype == np.dtype("float32")
-        assert mod["Profile"].dtype == np.dtype("float64")
-        assert not np.allclose(
-            mod["Profile Values"][:], profile_points, rtol=0.0, atol=1e-12
+    with h5py.File(terrain_hdf, "a") as hdf:
+        hdf["Modifications/Old"].create_dataset(
+            "Profile", data=np.array([[0.0, 1.0], [250.5, 2.0]])
         )
-        np.testing.assert_allclose(
-            mod["Profile"][:], profile_points, rtol=0.0, atol=1e-12
-        )
-
-    profile = RasTerrainModWriter.get_modification_profile(
-        terrain_hdf, "Precision Levee"
-    )
-    np.testing.assert_allclose(
+    profile = RasTerrainModWriter.get_modification_profile(terrain_hdf, "Old")
+    np.testing.assert_array_equal(
         profile[["station", "elevation"]].to_numpy(),
-        profile_points,
-        rtol=0.0,
-        atol=1e-12,
+        profile_points.astype(np.float32).astype(np.float64),
     )
+
+
+def test_channel_depth_is_measured_below_the_sampled_terrain(tmp_path, monkeypatch):
+    """depth used to be written as an absolute -depth profile: HEC-RAS 6.6 and
+    7.0.1 then cut the channel to -10 ft, up to 1,825 ft below ground."""
+    terrain_hdf, rasmap = _write_minimal_terrain(tmp_path)
+    monkeypatch.setattr(
+        RasTerrainModWriter, "_sample_terrain_elevations",
+        staticmethod(lambda hdf, xy: 900.0 + xy[:, 0]),
+    )
+    RasTerrainModWriter.add_channel_modification(
+        terrain_hdf, rasmap, name="Cut",
+        polyline_points=np.array([[0.0, 0.0], [30.0, 40.0], [60.0, 80.0]]),
+        width=15.0, depth=4.0, max_extent=75.0,
+    )
+    profile = RasTerrainModWriter.get_modification_profile(terrain_hdf, "Cut")
+    np.testing.assert_allclose(profile["station"], [0.0, 50.0, 100.0])
+    np.testing.assert_allclose(profile["elevation"], [896.0, 926.0, 956.0])
+
+    with pytest.raises(ValueError, match="depth cannot be combined"):
+        RasTerrainModWriter.add_channel_modification(
+            terrain_hdf, rasmap, name="Both",
+            polyline_points=np.array([[0.0, 0.0], [30.0, 40.0]]),
+            depth=4.0, elevation=95.0,
+        )
+
+
+def test_ground_line_layout_matches_ras_mapper(tmp_path):
+    """Field by field, the layout RasMapperLib 6.6/7.0.1 saves for a channel."""
+    terrain_hdf, rasmap = _write_minimal_terrain(tmp_path)
+    RasTerrainModWriter.add_channel_modification(
+        terrain_hdf, rasmap, name="chan",
+        polyline_points=np.array([[0.0, 0.0], [30.0, 40.0], [100.0, 40.0]]),
+        width=40.0, left_slope=3.0, right_slope=3.0, max_extent=160.0,
+        profile_points=[[0.0, 1200.0], [120.0, 1100.0]],
+    )
+    with h5py.File(terrain_hdf, "r") as hdf:
+        mod = hdf["Modifications/chan"]
+        assert {k: _decode(v) for k, v in mod.attrs.items()} == {
+            "Type": "Levee", "Subtype": "Channel", "Priority": 0,
+        }
+        assert sorted(mod.keys()) == [
+            "Attributes", "Polyline Info", "Polyline Parts", "Polyline Points",
+            "Profile Info", "Profile Values",
+        ]
+        assert mod["Attributes"].dtype.names == (
+            "System Name", "Name", "Elevation Type", "Top Elevation", "Top Width",
+            "Left Slope", "Right Slope", "Max Reach", "Transition Percent",
+            "Elev Pt Tolerance",
+        )
+        assert mod["Attributes"].dtype["Elevation Type"] == np.dtype("S11")
+        assert mod["Profile Values"].dtype == np.dtype("float32")
+        assert mod["Polyline Points"].dtype == np.dtype("float64")
+        assert _decode(mod["Polyline Info"].attrs["Feature Type"]) == "Polyline"
+        np.testing.assert_array_equal(mod["Polyline Info"][:], [[0, 3, 0, 1]])
+        np.testing.assert_array_equal(mod["Polyline Parts"][:], [[0, 3]])
+
+
+def test_named_system_is_opt_in(tmp_path, caplog):
+    terrain_hdf, rasmap = _write_minimal_terrain(tmp_path)
+    with caplog.at_level("WARNING"):
+        RasTerrainModWriter.add_high_ground_modification(
+            terrain_hdf, rasmap, name="Wall",
+            polyline_points=np.array([[0.0, 0.0, 10.0], [100.0, 0.0, 10.0]]),
+            system_name="Ring Levee", transition_fraction=0.5,
+        )
+    assert "system path" in caplog.text
+    with h5py.File(terrain_hdf, "r") as hdf:
+        attrs = hdf["Modifications/Wall/Attributes"][0]
+        assert _decode(attrs["System Name"]) == "Ring Levee"
+        assert attrs["Transition Percent"] == pytest.approx(0.5)
+    listing = RasTerrainModWriter.list_modifications(terrain_hdf)
+    assert listing.loc[0, "system_names"] == ["Ring Levee"]
+    assert listing.loc[0, "feature_count"] == 1
 
 
 def test_update_rasmap_xml_raises_clear_error_when_group_missing(
@@ -564,13 +619,14 @@ def test_provided_level_boundary_is_stored_as_the_constant_elevation(tmp_path):
         assert attrs["Generate Boundary Elevations"] == 0
 
 
-def test_layers_get_unique_increasing_priorities(tmp_path):
-    """RAS Mapper numbers modification layers 0..n-1; equal priorities leave
-    the application order undefined."""
+def test_layers_get_unique_priorities_newest_on_top(tmp_path):
+    """RAS Mapper numbers modification layers 0..n-1 by list position, puts a
+    new layer on top and applies Priority 0 last (it wins); equal priorities
+    leave the application order undefined."""
     terrain_hdf, rasmap = _write_minimal_terrain(tmp_path)
     RasTerrainModWriter.add_channel_modification(
         terrain_hdf, rasmap, name="A", polyline_points=np.array([[0.0, 0.0], [30.0, 40.0]]),
-        width=15.0, depth=4.0, max_extent=75.0,
+        width=15.0, elevation=4.0, max_extent=75.0,
     )
     RasTerrainModWriter.add_modification_polygon(
         terrain_hdf, name="B", polygon_coords=[[0.0, 0.0], [10.0, 0.0], [10.0, 10.0]],
@@ -578,8 +634,130 @@ def test_layers_get_unique_increasing_priorities(tmp_path):
     )
     RasTerrainModWriter.add_channel_modification(
         terrain_hdf, rasmap, name="A", polyline_points=np.array([[0.0, 0.0], [30.0, 40.0]]),
-        width=15.0, depth=4.0, max_extent=75.0,
+        width=15.0, elevation=4.0, max_extent=75.0,
     )
     with h5py.File(terrain_hdf, "r") as hdf:
         priorities = {name: int(grp.attrs["Priority"]) for name, grp in hdf["Modifications"].items()}
-    assert priorities == {"B": 1, "A": 2}
+    assert priorities == {"A": 0, "B": 1}
+
+    RasTerrainModWriter.add_modification_polygon(
+        terrain_hdf, name="C", polygon_coords=[[0.0, 0.0], [10.0, 0.0], [10.0, 10.0]],
+        elevation=7.0, rasmap_path=rasmap, priority=2,
+    )
+    with h5py.File(terrain_hdf, "r") as hdf:
+        priorities = {name: int(grp.attrs["Priority"]) for name, grp in hdf["Modifications"].items()}
+    assert priorities == {"A": 0, "B": 1, "C": 2}
+
+
+def test_varying_polygon_boundary_is_stored_as_vertex_z(tmp_path):
+    """Vertex Z with Use ShapeFile Z on is the varying-boundary form RAS
+    Mapper 6.6, 7.0 and 7.0.1 all read (6.6 stores no polygon profile)."""
+    terrain_hdf, rasmap = _write_minimal_terrain(tmp_path)
+    RasTerrainModWriter.add_modification_polygon(
+        terrain_hdf, name="Pond",
+        polygon_coords=[[0.0, 0.0, 10.0], [10.0, 0.0, 11.0], [10.0, 10.0, 12.0], [0.0, 10.0, 11.0]],
+        elevation_method="shape_z", rasmap_path=rasmap,
+    )
+    with h5py.File(terrain_hdf, "r") as hdf:
+        mod = hdf["Modifications/Pond"]
+        np.testing.assert_allclose(mod["Polygon Points"][:, 2], [10.0, 11.0, 12.0, 11.0, 10.0])
+        assert _decode_array(mod["Polygon Points"].attrs["Column"]) == ["X", "Y", "Z"]
+        attrs = mod["Attributes"][0]
+        assert attrs["Use ShapeFile Z Elevations"] == 1
+        assert attrs["Generate Boundary Elevations"] == 0
+        assert np.isfinite(attrs["Elevation Value"])  # NaN would make RAS skip it
+
+
+def test_constant_polygon_and_ellipse_writers(tmp_path):
+    terrain_hdf, rasmap = _write_minimal_terrain(tmp_path)
+    RasTerrainModWriter.add_modification_polygon(
+        terrain_hdf, name="Pad", polygon_coords=[[0.0, 0.0], [10.0, 0.0], [10.0, 10.0]],
+        elevation=700.0, rasmap_path=rasmap,
+    )
+    RasTerrainModWriter.add_ellipse_modification(
+        terrain_hdf, rasmap, "Mounds",
+        [{"center": (5.0, 6.0), "radius_x": 4.0, "radius_y": 2.0, "rotation": 30.0, "elevation": 47.75},
+         {"center": (50.0, 6.0), "radius_x": 3.0, "elevation": 40.0, "mode": "take_higher"}],
+    )
+    with h5py.File(terrain_hdf, "r") as hdf:
+        pad = hdf["Modifications/Pad/Attributes"][0]
+        assert pad["Elevation Value"] == pytest.approx(700.0)
+        assert pad["Generate Boundary Elevations"] == 0 and pad["Use ShapeFile Z Elevations"] == 0
+        mounds = hdf["Modifications/Mounds"]
+        assert _decode(mounds.attrs["Type"]) == "Circle" and "Subtype" not in mounds.attrs
+        np.testing.assert_allclose(
+            mounds["Circles"][:], [[5.0, 6.0, 4.0, 2.0, 30.0], [50.0, 6.0, 3.0, 3.0, 0.0]]
+        )
+        assert _decode_array(mounds["Attributes"]["Elevation Type"]) == ["SetValue", "SetIfHigher"]
+    assert _mod_layer(rasmap, "Mounds").get("Type") == "EllipseElevationModificationLayer"
+    group = next(
+        layer for layer in ET.parse(rasmap).getroot().iter("Layer")
+        if layer.get("Type") == "ElevationModificationGroup"
+    )
+    assert [layer.get("Name") for layer in group.findall("Layer")] == ["Mounds", "Pad"]
+
+
+def test_read_layers_round_trips_through_add_modification_layer(tmp_path):
+    """A layer read from a terrain and written back reads identically."""
+    from ras_commander.fim import _terrain_mods
+
+    terrain_hdf, rasmap = _write_minimal_terrain(tmp_path)
+    RasTerrainModWriter.add_modification_layer(terrain_hdf, rasmap, {
+        "kind": "ground_line", "name": "Levees", "subtype": "levee", "features": [
+            {"elevation_type": "SetIfHigher", "top_width": 20.0, "left_slope": 2.0,
+             "right_slope": 3.0, "max_reach": 100.0,
+             "points": [[0.0, 0.0], [100.0, 0.0], [150.0, 50.0]],
+             "profile": [[0.0, 10.0], [170.5, 12.0]]},
+            {"elevation_type": "SetValue", "top_width": 600.0, "left_slope": 2.0,
+             "right_slope": 2.0, "max_reach": 100.0,
+             "points": [[0.0, 10.0], [50.0, 10.0]], "profile": [[0.0, 5.0], [50.0, 5.0]]},
+        ]})
+    RasTerrainModWriter.add_modification_layer(terrain_hdf, rasmap, {
+        "kind": "polygon", "name": "Pads", "features": [
+            {"elevation_type": "SetValue", "elevation": 40.5,
+             "rings": [[[0.0, 0.0], [10.0, 0.0], [10.0, 10.0], [0.0, 0.0]],
+                       [[2.0, 2.0], [4.0, 2.0], [4.0, 4.0], [2.0, 2.0]]]},
+            {"elevation_type": "SetIfLower", "elevation": 1.0,
+             "rings": [[[20.0, 0.0], [30.0, 0.0], [30.0, 10.0], [20.0, 0.0]]]},
+        ]})
+    RasTerrainModWriter.add_modification_layer(terrain_hdf, rasmap, {
+        "kind": "ellipse", "name": "E", "features": [
+            {"elevation_type": "SetValue", "elevation": 47.75, "center": [5.0, 6.0],
+             "radius_x": 4.0, "radius_y": 2.0, "rotation": -63.5}]})
+    first = _terrain_mods.read_layers(terrain_hdf)
+    assert [layer["name"] for layer in first] == ["E", "Levees", "Pads"]
+    assert [layer["priority"] for layer in first] == [0, 2, 1]
+
+    (tmp_path / "copy").mkdir()
+    copy_hdf, copy_rasmap = _write_minimal_terrain(tmp_path / "copy")
+    for layer in sorted(first, key=lambda layer: -layer["priority"]):
+        RasTerrainModWriter.add_modification_layer(copy_hdf, copy_rasmap, layer)
+    assert _terrain_mods.read_layers(copy_hdf) == first
+
+
+@pytest.mark.parametrize("channel, offset, expected", [
+    (False, 0.0, 10.0),
+    (False, 10.0, 7.5),     # 5 ft down a 2:1 side
+    (False, 16.0, np.nan),  # beyond Max Reach / 2 = 15
+    (True, 10.0, 12.5),     # channel sides rise
+])
+def test_sample_modification_surface_follows_ras_template(tmp_path, channel, offset, expected):
+    terrain_hdf, rasmap = _write_minimal_terrain(tmp_path)
+    line = np.array([[0.0, 0.0, 10.0], [100.0, 0.0, 10.0]])
+    if channel:
+        RasTerrainModWriter.add_channel_modification(
+            terrain_hdf, rasmap, "T", line, width=10.0, left_slope=2.0, right_slope=2.0,
+            max_extent=30.0,
+        )
+    else:
+        RasTerrainModWriter.add_high_ground_modification(
+            terrain_hdf, rasmap, "T", line, top_width=10.0, side_slope=2.0, max_extent=30.0,
+        )
+    sampled = RasTerrainModWriter.sample_modification_surface(
+        terrain_hdf, "T", points=np.array([[50.0, offset]])
+    )
+    value = sampled["modification_surface"].iloc[0]
+    if np.isnan(expected):
+        assert np.isnan(value)
+    else:
+        assert value == pytest.approx(expected)

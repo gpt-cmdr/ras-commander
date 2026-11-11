@@ -108,17 +108,36 @@ def test_qualified_layers_are_staged(tmp_path):
     assert poly["elevation"] == pytest.approx(40.5) and len(poly["rings"]) == 1
     circle = layers["Ellipses"]["features"][0]
     assert circle["center"] == [5.0, 6.0] and circle["radius_x"] == 4.0
+    assert circle["rotation"] == 0.0
+    assert feature["system_name"] == ""
+    assert hg["length_units"] == "feet"
     json.dumps(list(layers.values()))  # the request is plain JSON
+
+
+def test_forms_the_engine_now_applies_are_staged(tmp_path):
+    """Ground-line SetValue, Max Reach <= Top Width and rotated ellipses are
+    applied exactly by the engine (fast-map qualification, HEC-RAS 7.0.1)."""
+    hdf = _hdf(tmp_path)
+    with h5py.File(hdf, "a") as f:
+        mods = f["Modifications"]
+        _ground_line(mods, "Fill", 0, et=b"SetValue")
+        _ground_line(mods, "Trap", 1, width=600.0, reach=100.0)
+        _circle(mods, "Rot", 2, rotation=-63.5)
+    layers = {layer["name"]: layer for layer in _terrain_mods.read_layers(hdf, length_units="meters")}
+    assert layers["Fill"]["features"][0]["elevation_type"] == "SetValue"
+    assert layers["Trap"]["features"][0]["max_reach"] == 100.0
+    assert layers["Rot"]["features"][0]["rotation"] == -63.5
+    assert layers["Fill"]["length_units"] == "meters"
 
 
 @pytest.mark.parametrize("build, reason", [
     (lambda m: _ground_line(m, "Wall", 0, et=b"Add"), "elevation type 'Add'"),
-    (lambda m: _ground_line(m, "Fill", 0, et=b"SetValue"), "elevation type 'SetValue'"),
-    (lambda m: _ground_line(m, "Trap", 0, width=22.0, reach=22.0), "Max Reach not above Top Width"),
+    # A lone named feature already takes RAS Mapper's system path.
+    (lambda m: _ground_line(m, "Named", 0, system=b"chan"), "System Name 'chan'"),
     (lambda m: _ground_line(m, "Sys", 0, system=b"Hoeys",
-                            lines=[[(0.0, 0.0), (10.0, 0.0)], [(10.0, 0.0), (20.0, 5.0)]]), "systems"),
+                            lines=[[(0.0, 0.0), (10.0, 0.0)], [(10.0, 0.0), (20.0, 5.0)]]), "system path"),
+    (lambda m: _ground_line(m, "Odd", 0, subtype="levee"), "subtype 'levee'"),
     (lambda m: _polygon(m, "Fix", 0, gen=1), "boundary elevations"),
-    (lambda m: _circle(m, "Rot", 0, rotation=15.0), "rotated"),
 ])
 def test_unqualified_forms_are_refused(tmp_path, build, reason):
     hdf = _hdf(tmp_path)
@@ -143,14 +162,61 @@ def test_control_points_shared_priorities_and_unknown_types_are_refused(tmp_path
     with pytest.raises(FimUnsupportedError, match="share a Priority"):
         _terrain_mods.read_layers(hdf)
 
-    hdf = _hdf(tmp_path, "unknown.hdf")
+    hdf = _hdf(tmp_path, "pier.hdf")
     with h5py.File(hdf, "a") as f:
-        g = f["Modifications"].create_group("Bridge")
-        g.attrs["Type"] = np.bytes_("Bridge")
+        g = f["Modifications"].create_group("Piers")
+        g.attrs["Type"] = np.bytes_("Pier")
         g.attrs["Priority"] = np.int32(0)
         g.create_dataset("Attributes", data=np.zeros(1, dtype=CIRCLE_DTYPE))
-    with pytest.raises(FimUnsupportedError, match="type 'Bridge'"):
+    with pytest.raises(FimUnsupportedError, match="type 'Pier'"):
         _terrain_mods.read_layers(hdf)
+
+
+def test_types_ras_mapper_ignores_are_skipped(tmp_path, caplog):
+    """RAS Mapper loads only its known Types; an old writer's Type=Channel
+    ground line (and any other unknown Type) leaves the export unchanged."""
+    hdf = _hdf(tmp_path)
+    with h5py.File(hdf, "a") as f:
+        mods = f["Modifications"]
+        old = _ground_line(mods, "OldWriterChannel", 0, subtype="Channel", et=b"SetIfLower")
+        old.attrs["Type"] = np.bytes_("Channel")
+        g = mods.create_group("Bridge")
+        g.attrs["Type"] = np.bytes_("Bridge")
+        g.attrs["Priority"] = np.int32(1)
+        g.create_dataset("Attributes", data=np.zeros(1, dtype=CIRCLE_DTYPE))
+        _polygon(mods, "Pad", 2)
+    with caplog.at_level("WARNING"):
+        layers = _terrain_mods.read_layers(hdf)
+    assert [layer["name"] for layer in layers] == ["Pad"]
+    assert "ignored by RAS Mapper" in caplog.text and "Type=Levee" in caplog.text
+
+
+def test_nan_elevation_features_are_skipped_and_nan_slope_reads_as_three(tmp_path):
+    hdf = _hdf(tmp_path)
+    with h5py.File(hdf, "a") as f:
+        mods = f["Modifications"]
+        g = _circle(mods, "Mound", 0)
+        attrs = g["Attributes"][()]
+        attrs["Elevation Value"] = np.nan
+        g["Attributes"][...] = attrs
+        gl = _ground_line(mods, "Levee", 1)
+        attrs = gl["Attributes"][()]
+        attrs["Left Slope"] = np.nan
+        gl["Attributes"][...] = attrs
+    layers = _terrain_mods.read_layers(hdf)
+    assert [layer["name"] for layer in layers] == ["Levee"]
+    assert layers[0]["features"][0]["left_slope"] == 3.0
+
+
+def test_project_length_units_follow_the_ras_project(tmp_path):
+    terrain = tmp_path / "Terrain" / "T.hdf"
+    terrain.parent.mkdir()
+    (tmp_path / "Terrain" / "Projection.prj").write_text('PROJCS["x",UNIT["Meter",1.0]]')
+    assert _terrain_mods.project_length_units(terrain) == "feet"
+    (tmp_path / "M.prj").write_text("Proj Title=M\nSI Units\n")
+    assert _terrain_mods.project_length_units(terrain) == "meters"
+    (tmp_path / "M.prj").write_text("Proj Title=M\nEnglish Units\n")
+    assert _terrain_mods.project_length_units(terrain, tmp_path / "M.rasmap") == "feet"
 
 
 def test_empty_control_point_group_is_not_a_control_point(tmp_path):
