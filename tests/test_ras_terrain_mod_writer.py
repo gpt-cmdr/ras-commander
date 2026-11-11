@@ -761,3 +761,73 @@ def test_sample_modification_surface_follows_ras_template(tmp_path, channel, off
         assert np.isnan(value)
     else:
         assert value == pytest.approx(expected)
+
+
+def test_failed_replacement_keeps_the_existing_layer(tmp_path):
+    """An out-of-range priority is refused before the old layer is deleted."""
+    terrain_hdf, rasmap = _write_minimal_terrain(tmp_path)
+    RasTerrainModWriter.add_modification_polygon(
+        terrain_hdf, name="Pad", polygon_coords=[[0.0, 0.0], [10.0, 0.0], [10.0, 10.0]],
+        elevation=7.0, rasmap_path=rasmap,
+    )
+    with pytest.raises(ValueError, match="priority must be between 0 and 0"):
+        RasTerrainModWriter.add_modification_polygon(
+            terrain_hdf, name="Pad", polygon_coords=[[0.0, 0.0], [10.0, 0.0], [10.0, 10.0]],
+            elevation=9.0, rasmap_path=rasmap, priority=3,
+        )
+    with h5py.File(terrain_hdf, "r") as hdf:
+        assert "Attributes" in hdf["Modifications/Pad"]
+        assert float(hdf["Modifications/Pad/Attributes"]["Elevation Value"][0]) == 7.0
+
+
+@pytest.mark.parametrize("layer, reason", [
+    ({"kind": "polygon", "name": "P", "control_points": [{"x": 1.0, "y": 1.0, "elevation": 3.0}],
+      "features": [{"elevation_type": "SetValue", "elevation": 1.0,
+                    "rings": [[[0.0, 0.0], [10.0, 0.0], [10.0, 10.0], [0.0, 0.0]]]}]},
+     "control points"),
+    ({"kind": "polygon", "name": "P", "features": [
+        {"elevation_type": "SetValue", "elevation": 1.0, "generate_boundary": True,
+         "profile": [[0.0, 1.0], [30.0, 2.0]],
+         "rings": [[[0.0, 0.0], [10.0, 0.0], [10.0, 10.0], [0.0, 0.0]]]}]},
+     "only constant polygons"),
+])
+def test_add_modification_layer_refuses_fields_it_cannot_store(tmp_path, layer, reason):
+    terrain_hdf, rasmap = _write_minimal_terrain(tmp_path)
+    with pytest.raises(ValueError, match=reason):
+        RasTerrainModWriter.add_modification_layer(terrain_hdf, rasmap, layer)
+    with h5py.File(terrain_hdf, "r") as hdf:
+        assert "Modifications" not in hdf or "P" not in hdf["Modifications"]
+
+
+def test_add_modification_layer_writes_null_template_values_as_nan(tmp_path):
+    from ras_commander.fim import _terrain_mods
+
+    terrain_hdf, rasmap = _write_minimal_terrain(tmp_path)
+    RasTerrainModWriter.add_modification_layer(terrain_hdf, rasmap, {
+        "kind": "ground_line", "name": "L", "subtype": "levee", "features": [
+            {"elevation_type": "SetIfHigher", "top_width": 20.0, "left_slope": None,
+             "right_slope": 3.0, "max_reach": None, "elev_pt_tolerance": None,
+             "transition_percent": None,
+             "points": [[0.0, 0.0], [100.0, 0.0]], "profile": [[0.0, 10.0], [100.0, 12.0]]}]})
+    feature = _terrain_mods.read_layers(terrain_hdf)[0]["features"][0]
+    assert (feature["left_slope"], feature["max_reach"], feature["elev_pt_tolerance"]) == (None, None, None)
+    assert feature["transition_percent"] is None
+
+
+def test_terrain_sources_are_sampled_in_priority_order(tmp_path):
+    """Samplers keep the first finite value, so the priority-0 source comes first."""
+    terrain_dir = tmp_path / "Terrain"
+    terrain_dir.mkdir()
+    hdf_path = terrain_dir / "T.hdf"
+    for name in ("a_low.tif", "z_high.tif"):
+        (terrain_dir / name).write_bytes(b"")
+    with h5py.File(hdf_path, "w") as hdf:
+        for group, file, priority in (("T.a_low", "a_low.tif", 1), ("T.z_high", "z_high.tif", 0)):
+            g = hdf.create_group(f"Terrain/{group}")
+            g.attrs["File"] = np.bytes_(file)
+            g.attrs["Priority"] = np.int32(priority)
+            mask = np.ones((1, 65536), dtype=np.uint8)
+            g.create_group("0").create_dataset("Mask", data=mask)
+    ordered = RasTerrainModWriter._priority_ordered(
+        hdf_path, [terrain_dir / "a_low.tif", terrain_dir / "z_high.tif"])
+    assert [p.name for p in ordered] == ["z_high.tif", "a_low.tif"]

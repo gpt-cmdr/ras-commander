@@ -385,10 +385,12 @@ def project_length_units(terrain_hdf, rasmap_path=None) -> str:
             continue
         if not text.startswith("Proj Title="):
             continue  # ESRI projection files share the .prj suffix
-        if re.search(r"^SI Units\s*$", text, flags=re.MULTILINE):
-            return "meters"
-        if re.search(r"^English Units\s*$", text, flags=re.MULTILINE):
-            return "feet"
+        from ..RasPrj import RasPrj
+
+        # Bare "SI Units" / "English Units" markers and the "SI Units=<bool>" form.
+        units = RasPrj.get_project_units(prj)
+        if units is not None:
+            return "meters" if units == "m" else "feet"
     return "feet"
 
 

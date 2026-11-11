@@ -732,6 +732,14 @@ class RasTerrainModWriter:
         way. All features of the layer stay in one layer, in order.
         ``layer["priority"]`` is not used; pass ``priority`` (0 = top,
         default) or write layers from the highest priority number down.
+        ``null`` template values are written as NaN.
+
+        Raises:
+            ValueError: The layer has fields this writer does not store, so
+                the written layer would change the terrain differently:
+                layer ``control_points``, polygons with boundary elevations
+                (``generate_boundary``), shape-Z polygons (``use_shape_z`` or
+                ``vertex_z``), or an empty ground-line profile.
         """
         kind = layer.get("kind")
         name = layer["name"]
@@ -740,6 +748,13 @@ class RasTerrainModWriter:
         features = layer.get("features") or []
         if not features:
             raise ValueError(f"layer {name!r} has no features")
+        if layer.get("control_points"):
+            raise ValueError(
+                f"layer {name!r}: control points are not written by add_modification_layer"
+            )
+
+        def _num(value, default=float("nan")) -> float:
+            return default if value is None else float(value)
 
         if kind == "ground_line":
             subtype = str(layer["subtype"]).capitalize()
@@ -758,11 +773,11 @@ class RasTerrainModWriter:
                         modification_type=RasTerrainModWriter._modification_type_value(
                             feat["elevation_type"]
                         ),
-                        top_width=float(feat["top_width"]),
-                        left_slope=float(feat["left_slope"]),
-                        right_slope=float(feat["right_slope"]),
-                        max_reach=float(feat["max_reach"]),
-                        elev_pt_tolerance=float(feat.get("elev_pt_tolerance", 50.0)),
+                        top_width=_num(feat["top_width"]),
+                        left_slope=_num(feat["left_slope"]),
+                        right_slope=_num(feat["right_slope"]),
+                        max_reach=_num(feat["max_reach"]),
+                        elev_pt_tolerance=_num(feat.get("elev_pt_tolerance", 50.0)),
                         system_name=feat.get("system_name") or None,
                         transition_fraction=feat.get("transition_percent"),
                         feature_name=feat.get("name", ""),
@@ -775,12 +790,20 @@ class RasTerrainModWriter:
                 rasmap_path, terrain_hdf_path, name,
                 mod_type="GroundLineModificationLayer",
                 default_mod_type=written[0]["modification_type"],
-                elev_pt_tolerance=written[0]["elev_pt_tolerance"],
+                # the .rasmap default is an integer GUI setting; NaN keeps 50
+                elev_pt_tolerance=(written[0]["elev_pt_tolerance"]
+                                   if np.isfinite(written[0]["elev_pt_tolerance"]) else 50.0),
                 group_name=group_name,
             )
             return terrain_hdf_path
 
         if kind == "polygon":
+            for i, feat in enumerate(features):
+                if feat.get("generate_boundary") or feat.get("use_shape_z") or feat.get("vertex_z"):
+                    raise ValueError(
+                        f"layer {name!r} feature {i}: only constant polygons are written by "
+                        "add_modification_layer (no boundary elevations or shape Z)"
+                    )
             RasTerrainModWriter._write_constant_polygon_layer(
                 terrain_hdf_path, name, features, priority=priority
             )
@@ -1343,6 +1366,10 @@ class RasTerrainModWriter:
         if not name or "/" in name or "\\" in name:
             raise ValueError("modification layer names must be non-empty without '/' or '\\'")
         mods = f.require_group("Modifications")
+        if priority is not None:
+            others = sum(1 for key in mods if key != name)
+            if not 0 <= int(priority) <= others:
+                raise ValueError(f"priority must be between 0 and {others}")
         if name in mods:
             logger.warning("Modification '%s' already exists, overwriting", name)
             del mods[name]
@@ -2201,7 +2228,34 @@ class RasTerrainModWriter:
                 continue
             seen.add(key)
             unique.append(candidate)
-        return unique
+        return RasTerrainModWriter._priority_ordered(terrain_hdf_path, unique)
+
+    @staticmethod
+    def _priority_ordered(terrain_hdf_path: Path, paths: List[Path]) -> List[Path]:
+        """Put the terrain's source rasters first, highest priority first.
+
+        Samplers keep the first finite value per point, so overlapping sources
+        must be read in the terrain's declared priority (``Priority``
+        attributes or the terrain VRT). When the priority cannot be proven and
+        more than one source raster is found, discovery order is kept with a
+        warning.
+        """
+        from ..fim import _terrain_scope
+        from ..fim.errors import FimUnsupportedError
+
+        try:
+            sources = _terrain_scope.top_priority_source(terrain_hdf_path)["sources"]
+        except (FimUnsupportedError, OSError, KeyError) as exc:
+            if sum(p.suffix.lower() in (".tif", ".tiff") for p in paths) > 1:
+                logger.warning(
+                    "terrain %s: source priority not proven (%s); sampling sources in discovery order",
+                    Path(terrain_hdf_path).name, exc,
+                )
+            return paths
+        ordered = [(Path(terrain_hdf_path).parent / name) for name in sources]
+        ordered = [p for p in ordered if p.exists()]
+        keys = {str(p.resolve()).lower() for p in ordered}
+        return ordered + [p for p in paths if str(p.resolve()).lower() not in keys]
 
     @staticmethod
     def _iter_hdf_strings(value: Any):

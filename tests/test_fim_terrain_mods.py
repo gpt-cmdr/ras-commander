@@ -533,3 +533,14 @@ def test_real_engine_accepts_every_staged_field(tmp_path, version):
         assert src.read(1)[row, col] == 50.0
         row, col = src.index(x0 + 400, y0 - 300)
         assert src.read(1)[row, col] == 47.75
+
+
+@pytest.mark.parametrize("line, expected", [
+    ("SI Units=1", "meters"), ("SI Units=True", "meters"), ("SI Units=0", "feet"),
+    ("si units", "meters"), ("English Units", "feet"),
+])
+def test_project_length_units_accept_every_units_form(tmp_path, line, expected):
+    terrain = tmp_path / "Terrain" / "T.hdf"
+    terrain.parent.mkdir()
+    (tmp_path / "M.prj").write_text(f"Proj Title=M\n{line}\n")
+    assert _terrain_mods.project_length_units(terrain) == expected
