@@ -775,9 +775,9 @@ def map_one_d_profiles(hdf_path, terrain_path, output_folder, *, profiles=None,
             final_method_id, final_schema = COMPOSITION_METHOD_ID, COMPOSITION_SCHEMA
             component_contracts["storage"] = {"method_id": STORAGE_METHOD_ID, "request_schema": STORAGE_SCHEMA}
         if final_options is not None:
-            final_key = ("coupled_storage_diagnostic" if storage and not _inline_storage(support.flags)
-                         else "one_d_clipped_diagnostic")
-            _final_format.require_engine(plain(capabilities.raw_record.get(final_key, {})), final_options)
+            # The delivering method's parsed flags (structured or legacy records).
+            delivering = (final_support if storage and not _inline_storage(support.flags) else support)
+            _final_format.require_engine(plain(delivering.flags), final_options)
         grid = receipt["grid"]
         transform = Affine.from_gdal(*grid["geo_transform"])
         constraint = _aoi.resolve_aoi(bbox=bbox, polygon=polygon, aoi_crs=aoi_crs,

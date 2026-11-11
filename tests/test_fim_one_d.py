@@ -226,7 +226,7 @@ def test_xs_worker_and_batch_flags_are_parsed_conservatively():
     assert _xs_render_workers(workers, 8, 100 + 2 * scratch + 3000, receipt, grid, 100, per_worker) == 3
     assert _xs_render_workers(workers, 8, 100 + 2 * scratch + 2999, receipt, grid, 100, per_worker) == 2
 
-def _fake_one_d_engine(monkeypatch, tmp_path, flags, failure=None):
+def _fake_one_d_engine(monkeypatch, tmp_path, flags, failure=None, structured=False):
     """Simulated ras2fim-batch for the 1D route; records each request.
 
     Writes the products an engine advertising ``flags`` would deliver: raw
@@ -243,6 +243,14 @@ def _fake_one_d_engine(monkeypatch, tmp_path, flags, failure=None):
               "one_d_clipped_diagnostic": {"method_id": _one_d.METHOD_ID,
                                            "request_schemas": [_one_d.REQUEST_SCHEMA],
                                            "native_parity_qualified": False, **flags}}
+    if structured:
+        # Structured discovery without a duplicate top-level method record.
+        method = record.pop("one_d_clipped_diagnostic")
+        record.update(capabilities_schema="ras-commander-fast-map-capabilities/1", capabilities=[{
+            "key": "one_d_clipped_diagnostic", "method_id": method["method_id"],
+            "request_schemas": method["request_schemas"], "cli_command": "one-d-diagnostic",
+            "api_contract": "experimental", "intended_use": "diagnostic",
+            "numerical_qualification": {"status": "unqualified"}, "flags": method}])
     requests = []
     monkeypatch.setattr(_engine, "find_engine", lambda path=None: exe)
     monkeypatch.setattr(_engine, "engine_method", lambda engine: record)
@@ -297,6 +305,16 @@ def _native_final_flags():
                                     "block_size": {"min": 16, "max": 4096, "multiple_of": 16},
                                     "zlevel": {"min": 1, "max": 9}, "full_grid": True,
                                     "overview_resampling": ["average"]}}
+
+
+def test_final_format_support_read_from_structured_capabilities(files, tmp_path, monkeypatch):
+    """final_format admission uses the parsed method flags, not only legacy raw records."""
+    hdf, terrain = files
+    exe, requests = _fake_one_d_engine(monkeypatch, tmp_path, _native_final_flags(), structured=True)
+    out = RasFim.map_one_d_profiles(hdf, terrain, tmp_path / "out", profiles=["Max"], allow_unqualified=True,
+                                    max_working_mib=64, engine_path=exe, bbox=(0, 0, 100, 100),
+                                    final_format={"nodata": -9999.0, "block_size": 16})
+    assert out.status.tolist() == ["complete"] and requests[0]["final_format"]["nodata"] == -9999.0
 
 
 @pytest.mark.parametrize("grid", ["window", "terrain", [0, 0, 300, 512]])

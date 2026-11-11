@@ -2164,8 +2164,10 @@ writer buffers. When one worker does not fit, mapping is refused before any
 engine call. With engines that advertise
 `multi_profile`, all selected profiles share one engine call, so inputs and the
 prepared surface are read and built once. Neither option changes output bits.
-Older engines run one sequential XS request per profile. Storage rendering uses
-up to four workers within the requested thread budget. Manifests record the
+Older engines run one sequential XS request per profile. A separate storage
+request uses up to four workers within the requested thread budget; with
+`inline_storage`, composition runs in the XS request on its admitted worker
+count. Manifests record the
 requested and effective counts, `xs_render_workers` and `xs_profiles_per_request`.
 
 With engines that advertise `inline_storage`, storage level pools and their
