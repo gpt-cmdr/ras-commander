@@ -2131,6 +2131,11 @@ Older engines run one sequential XS request per profile. Storage rendering uses
 up to four workers within the requested thread budget. Manifests record the
 requested and effective counts, `xs_render_workers` and `xs_profiles_per_request`.
 
+With engines that advertise `inline_storage`, storage level pools and their
+composition run inside the batched XS request: physical storage labels are
+rasterized once and no separate storage or composition process runs. Products
+are bit-identical to the separate calls; manifests record `storage_inline`.
+
 `final_format` has the `map_sloping_profiles()` contract (`nodata`, `block_size`,
 `zlevel`, `overviews`, `grid`). With an engine advertising `native_final_format`
 on the 1D (or storage-composition) method, the engine applies the AOI pixel

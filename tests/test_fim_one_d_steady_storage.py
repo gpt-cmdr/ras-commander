@@ -157,6 +157,8 @@ def test_mismatched_composition_report_cannot_publish(steady_storage, tmp_path, 
     engine = os.environ.get('RAS_COMMANDER_STORAGE_ENGINE')
     if not engine:
         pytest.skip('set RAS_COMMANDER_STORAGE_ENGINE to exercise storage CLI')
+    from ras_commander.fim import _one_d
+    monkeypatch.setattr(_one_d, '_inline_storage', lambda flags: False)  # separate composition call
     original = _engine.run_engine
     def run(args, *other, **kwargs):
         result = original(args, *other, **kwargs)
@@ -174,3 +176,65 @@ def test_mismatched_composition_report_cannot_publish(steady_storage, tmp_path, 
                                  bbox=(0, 0, 100, 100), max_working_mib=64)
     assert not list(output.glob('*.tif'))
     assert json.loads((output/'fim_manifest.json').read_text())['status'] == 'failed'
+
+
+def _storage_engine_inline():
+    import os
+    from ras_commander.fim import _one_d
+    engine = os.environ.get('RAS_COMMANDER_STORAGE_ENGINE')
+    if not engine:
+        pytest.skip('set RAS_COMMANDER_STORAGE_ENGINE to exercise storage CLI')
+    flags = RasFim.get_capabilities(engine).methods['one_d_clipped_diagnostic'].flags
+    if not _one_d._inline_storage(flags):
+        pytest.skip('engine lacks inline_storage')
+    return engine
+
+
+@pytest.mark.parametrize('final_format', [None, {'nodata': -9999.0, 'block_size': 16}])
+def test_inline_storage_matches_separate_composition_bits(steady_storage, tmp_path, monkeypatch, final_format):
+    import rasterio
+    from ras_commander.fim import _one_d
+    engine = _storage_engine_inline()
+    hdf, terrain = steady_storage
+    prepared = RasFim.prepare_one_d_model(hdf, terrain, tmp_path / 'prep', profiles={'dry': 0, 'wet': 'High flow'},
+                                          allow_unqualified=True)
+    kwargs = dict(profiles=['dry', 'wet'], allow_unqualified=True, engine_path=engine,
+                  bbox=(0, 0, 100, 100), max_working_mib=64, threads=3)
+    inline = prepared.map_profiles(tmp_path / 'inline', final_format=final_format, **kwargs)
+    assert inline.attrs['storage_inline'] is True
+    assert inline.attrs['method_id'] == 'one-d-two-d-storage-coverage-first-diagnostic/1'
+    monkeypatch.setattr(_one_d, '_inline_storage', lambda flags: False)
+    separate = prepared.map_profiles(tmp_path / 'separate', **kwargs)
+    assert separate.attrs['storage_inline'] is False
+    for a, b in zip(inline.itertuples(), separate.itertuples()):
+        assert (a.depth_finite_pixels, a.flooded_pixels) == (b.depth_finite_pixels, b.flooded_pixels)
+        for column in ('depth_tif', 'wse_tif'):
+            with rasterio.open(getattr(a, column)) as x, rasterio.open(getattr(b, column)) as y:
+                got, expected = x.read(1), y.read(1)
+                valid = ~np.isnan(expected)
+                missing = np.isnan(got) if final_format is None else got == final_format['nodata']
+                assert np.array_equal(missing, ~valid)
+                np.testing.assert_array_equal(got[valid].view('<u4'), expected[valid].view('<u4'))
+
+
+def test_inline_storage_report_mismatch_cannot_publish(steady_storage, tmp_path, monkeypatch):
+    import json
+    from pathlib import Path
+    from ras_commander.fim import _engine, FimMappingError
+    engine = _storage_engine_inline()
+    original = _engine.run_engine
+    def run(args, *other, **kwargs):
+        result = original(args, *other, **kwargs)
+        if args[1] == 'one-d-diagnostic':
+            for path in Path(args[3]).glob('profile-*/report.json'):
+                report = json.loads(path.read_text())
+                report['composition']['method']['method_id'] = 'wrong-composition/1'
+                path.write_text(json.dumps(report))
+        return result
+    monkeypatch.setattr(_engine, 'run_engine', run)
+    output = tmp_path / 'out'
+    with pytest.raises(FimMappingError, match='inline storage composition'):
+        RasFim.map_one_d_profiles(*steady_storage, output, profiles={'dry': 0},
+                                 allow_unqualified=True, engine_path=engine,
+                                 bbox=(0, 0, 100, 100), max_working_mib=64)
+    assert not list(output.glob('*.tif'))

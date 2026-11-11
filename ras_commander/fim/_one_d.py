@@ -607,6 +607,15 @@ def _xs_batch_limit(flags):
     return maximum if isinstance(maximum, int) and not isinstance(maximum, bool) and maximum > 1 else 1
 
 
+def _inline_storage(flags):
+    """True when the XS method composes storage pools in its own request."""
+    record = flags.get("inline_storage")
+    return (isinstance(record, Mapping) and record.get("control") == "storage"
+            and record.get("storage_method_id") == STORAGE_METHOD_ID
+            and record.get("composition_method_id") == COMPOSITION_METHOD_ID
+            and REQUEST_SCHEMA in (record.get("schemas") or ()))
+
+
 def _xs_render_workers(flags, threads, budget, receipt, grid, planned):
     """Largest advertised XS render worker count within threads and the budget.
 
@@ -722,7 +731,8 @@ def map_one_d_profiles(hdf_path, terrain_path, output_folder, *, profiles=None,
             final_method_id, final_schema = COMPOSITION_METHOD_ID, COMPOSITION_SCHEMA
             component_contracts["storage"] = {"method_id": STORAGE_METHOD_ID, "request_schema": STORAGE_SCHEMA}
         if final_options is not None:
-            final_key = "coupled_storage_diagnostic" if storage else "one_d_clipped_diagnostic"
+            final_key = ("coupled_storage_diagnostic" if storage and not _inline_storage(support.flags)
+                         else "one_d_clipped_diagnostic")
             _final_format.require_engine(plain(capabilities.raw_record.get(final_key, {})), final_options)
         grid = receipt["grid"]
         transform = Affine.from_gdal(*grid["geo_transform"])
@@ -740,6 +750,7 @@ def map_one_d_profiles(hdf_path, terrain_path, output_folder, *, profiles=None,
                                      (pixels if mask_geometry is not None else 0) +
                                      receipt["point_count"] * 128 + receipt["triangle_count"] * 256)
         batch_limit = _xs_batch_limit(support.flags)
+        inline_storage = bool(storage) and _inline_storage(support.flags)
         mask = None
         if mask_geometry is not None:
             # Use complete projected geometry and ORIGINAL source transform;
@@ -806,7 +817,8 @@ def map_one_d_profiles(hdf_path, terrain_path, output_folder, *, profiles=None,
                                 request_schema=final_schema, **details,
                                 qualified=False, preparation=receipt,
                                 threads_requested=threads, threads_effective=max(workers, min(threads, 4) if storage else 1),
-                                xs_render_workers=workers, xs_profiles_per_request=batch_limit, engine_sha256=engine_hash)
+                                xs_render_workers=workers, xs_profiles_per_request=batch_limit,
+                                storage_inline=inline_storage, engine_sha256=engine_hash)
             return result
 
         def persist(status, error=None):
@@ -817,7 +829,8 @@ def map_one_d_profiles(hdf_path, terrain_path, output_folder, *, profiles=None,
                        "preparation": receipt, "engine_sha256": engine_hash, "reports": reports,
                        "status": status, "error": error,
                        "threads_requested": threads, "threads_effective": max(workers, min(threads, 4) if storage else 1),
-                       "xs_render_workers": workers, "xs_profiles_per_request": batch_limit})
+                       "xs_render_workers": workers, "xs_profiles_per_request": batch_limit,
+                       "storage_inline": inline_storage})
 
         def verify_inputs():
             prepared.validate()
@@ -841,10 +854,16 @@ def map_one_d_profiles(hdf_path, terrain_path, output_folder, *, profiles=None,
                     request["levels_files"] = [selected_levels[k] for k in batch]
                 else:
                     request["levels_file"] = selected_levels[first]
-                if workers > 1 or (final_fields and not storage):
+                delivers = not storage or inline_storage
+                if workers > 1 or (final_fields and delivers):
                     request["threads"] = workers
-                if not storage:
+                if delivers:
                     request.update(final_fields)
+                if inline_storage:
+                    request["storage"] = {
+                        "storage_areas_file": storage["polygons"], "storage_area_count": storage["count"],
+                        "levels_files": [storage["levels"][positions[k]] for k in batch],
+                        "geo_transform": list(rasterio.windows.transform(window, transform).to_gdal())}
                 request.update({name + "_file": path for name, path in receipt["files"].items()})
                 request_file = scratch / f"request-{first}.json"
                 write_json(request_file, request)
@@ -863,6 +882,10 @@ def map_one_d_profiles(hdf_path, terrain_path, output_folder, *, profiles=None,
                     report = json.loads((folder_k / "report.json").read_text()) if batch_limit > 1 else top
                     if report.get("status") != "complete" or report.get("method", {}).get("method_id") != METHOD_ID:
                         raise FimEngineError("incomplete or mismatched 1D engine profile report")
+                    if inline_storage and (
+                            report.get("storage", {}).get("method", {}).get("method_id") != STORAGE_METHOD_ID
+                            or report.get("composition", {}).get("method", {}).get("method_id") != COMPOSITION_METHOD_ID):
+                        raise FimEngineError("1D engine profile report lacks inline storage composition")
                     xs_outputs[k] = (folder_k, report)
 
             xs_outputs = {}
@@ -871,7 +894,7 @@ def map_one_d_profiles(hdf_path, terrain_path, output_folder, *, profiles=None,
                     run_xs_batch(i)
                 out, report = xs_outputs.pop(i)
                 reports.append(report)
-                if storage:
+                if storage and not inline_storage:
                     pool_out = scratch / f"storage-{i}"
                     pool_request = {"schema": "fast-map-storage/1", "storage_areas_file": storage["polygons"],
                                     "storage_area_count": storage["count"],
