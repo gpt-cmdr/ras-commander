@@ -968,6 +968,20 @@ class RasTerrainModWriter:
         )
 
     @staticmethod
+    def _next_priority(mods_group, name: str) -> np.int32:
+        """Priority for a new layer: one above every other layer's.
+
+        RAS Mapper numbers modification layers 0..n-1 uniquely; the writer
+        used to give every layer 0, which leaves their order undefined.
+        """
+        values = [
+            int(np.asarray(grp.attrs.get("Priority", -1)))
+            for key, grp in mods_group.items()
+            if key != name
+        ]
+        return np.int32(max(values, default=-1) + 1)
+
+    @staticmethod
     def _write_ground_line_to_hdf(
         terrain_hdf_path: Path,
         name: str,
@@ -998,10 +1012,12 @@ class RasTerrainModWriter:
 
             mod_grp = mods.create_group(name)
 
-            # Set type attributes
-            mod_grp.attrs['Type'] = np.bytes_(subtype)
+            # RAS Mapper stores every ground line (high ground and channel)
+            # as Type=Levee and tells them apart by Subtype. A layer written
+            # with Type=Channel is ignored by RAS Mapper 7.0.1's terrain export.
+            mod_grp.attrs['Type'] = np.bytes_('Levee')
             mod_grp.attrs['Subtype'] = np.bytes_(subtype)
-            mod_grp.attrs['Priority'] = np.int32(0)
+            mod_grp.attrs['Priority'] = RasTerrainModWriter._next_priority(mods, name)
 
             # Write polyline using HEC-RAS HDF5Storage format
             # Polyline Info: [start_index, num_points, part_start, num_parts]
@@ -1137,7 +1153,7 @@ class RasTerrainModWriter:
             mod_grp = mods.create_group(name)
             mod_grp.attrs["Type"] = np.bytes_("Polygon")
             mod_grp.attrs["Subtype"] = np.bytes_("Multipoint")
-            mod_grp.attrs["Priority"] = np.int32(0)
+            mod_grp.attrs["Priority"] = RasTerrainModWriter._next_priority(mods, name)
             mod_grp.attrs["Boundary Elevation Method"] = np.bytes_(
                 str(elevation_method)[:64]
             )
@@ -1214,11 +1230,28 @@ class RasTerrainModWriter:
                     ("Use ShapeFile Z Elevations", "u1"),
                 ]
             )
+            # With Generate Boundary Elevations off, RAS Mapper sets the
+            # polygon to its constant Elevation Value and ignores the stored
+            # profile (HEC-RAS 7.0.1 exports; a 0.0 here flattened provided
+            # 700 ft boundaries to 0 ft). Store the constant when the
+            # boundary is level.
+            elevation_value = 0.0
+            if not generate_boundary:
+                finite = boundary_elevations[np.isfinite(boundary_elevations)]
+                if finite.size and np.ptp(finite) == 0:
+                    elevation_value = float(finite[0])
+                else:
+                    logger.warning(
+                        "Polygon modification '%s': boundary elevations vary; RAS Mapper "
+                        "applies only the constant Elevation Value with Generate Boundary "
+                        "Elevations off, so the stored profile is not used",
+                        name,
+                    )
             attrs_data = np.array(
                 [
                     (
                         name.encode("utf-8")[:128],
-                        np.float32(0.0),
+                        np.float32(elevation_value),
                         RasTerrainModWriter._modification_type_disk_name(
                             modification_type
                         ).encode("utf-8")[:11],
