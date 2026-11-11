@@ -402,6 +402,11 @@ class RasTerrainModWriter:
             if boundary_elevations is not None:
                 raise ValueError("pass either elevation or boundary_elevations, not both")
             elevation_method = "constant"
+        elif boundary_elevations is not None:
+            # The boundary resolver uses supplied elevations whatever the
+            # method; the serializer must see the same method, or it writes
+            # Generate Boundary Elevations=1 and RAS Mapper samples the terrain.
+            elevation_method = "provided"
 
         modification_type = RasTerrainModWriter._resolve_modification_type(mode)
         RasTerrainModWriter._validate_non_negative(

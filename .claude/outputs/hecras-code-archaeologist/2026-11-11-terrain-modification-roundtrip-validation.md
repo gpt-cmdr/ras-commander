@@ -75,17 +75,28 @@ Pixel counts are pixels the RAS export modifies. "Diff" is writer-vs-RAS pixels 
 
 ## What remains unsupported or unverified
 
-- Writing or staging named systems (System Name joins), ground-line control points, ground-line `Add`, boundary-elevation (Generate) polygons, vertex-Z polygons in `read_layers`, and RAS types Rectangle, Triangle, Encroachment Polygon, Levee1, Pier and Tree. `read_layers` refuses all of these. The writers still write `system_name` and Add on explicit request, and Generate polygons via `boundary_from_terrain`; none of these is round-trip-qualified.
+> **Update (ras-commander-fast-map#40 and the final `read_layers`):** the engine now reproduces named systems, ground-line control points, ground-line `Add`, NaN templates, and polygons with boundary elevations from perimeter control points or a stored profile. `read_layers` stages them, with `system_name`, `transition_percent`, `elev_pt_tolerance`, layer `control_points`, polygon `generate_boundary`, `use_shape_z`, `profile`, `vertex_z` and `length_units`. The request also carries `hecras_version` (`"6.6"`, or 7.0.1 rules for every other version). The list below states only what is still refused or unverified.
+
+- Refused by `read_layers` and the engine:
+  - boundary elevations sampled from the terrain (no stored profile and no perimeter control point);
+  - shape-Z polygons without boundary elevations;
+  - multi-part polygons that need a TIN;
+  - named ground lines with control points or a NaN template;
+  - named ground lines and terrain-sampled boundaries under 6.6;
+  - a NaN Top Width with a finite Max Reach;
+  - RAS types Rectangle, Triangle, Encroachment Polygon, Levee1, Pier and Tree.
+
+  The writers still write `system_name` and Add on explicit request, and Generate polygons via `boundary_from_terrain`; none of these writer paths is round-trip-qualified.
 - Vertex-Z polygon writing follows the code reading but has no export measurement yet.
 - `copy_modification_features`/`get_modification_features` still refuse ellipse layers, and refuse a whole polygon group when any of its features is not a constant SetValue polygon, even if that feature is not selected.
 - `list_modifications` reports the first feature's attributes per layer (now with `feature_count` and `system_names`).
 - No measurements on HEC-RAS 7.0.2 (not installed on the host), on the build-host M1–M3 projects, or on the agency models (not reachable from the host).
 
-## Fields Fast-Map may need that `read_layers` does not provide
+## Fields Fast-Map needed (now provided)
 
-- The target HEC-RAS version, to decide whether ground lines narrower than a cell are skipped (6.6) or burned in (7.x).
-- Whether the project `.rasmap` carries the `ElevationModificationGroup`. `read_layers` returns layers whenever the HDF has them, and the gate is applied by the effective-terrain caller only when it is given `rasmap_path`.
-- `elev_pt_tolerance`, feature names and `Transition Percent` are not sent. They have no effect on the per-feature path.
+- The target HEC-RAS version: `build_effective_terrain(hecras_version=...)`, else the `ras_object` or the project's newest `Program Version`.
+- The `.rasmap` `ElevationModificationGroup` gate is still applied by the effective-terrain caller only when it is given `rasmap_path`.
+- `elev_pt_tolerance` and `Transition Percent` are now sent, because the engine's system path and control-point search use them. Feature names are not sent; they have no effect.
 
 ---
 *Prose findings only; no decompiled source reproduced. Scratch harnesses and exports were kept outside the repository.*

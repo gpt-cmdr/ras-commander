@@ -838,3 +838,19 @@ def test_terrain_sources_are_sampled_in_priority_order(tmp_path):
     ordered = RasTerrainModWriter._priority_ordered(
         hdf_path, [terrain_dir / "a_low.tif", terrain_dir / "z_high.tif"])
     assert [p.name for p in ordered] == ["z_high.tif", "a_low.tif"]
+
+
+def test_supplied_boundary_elevations_imply_provided(tmp_path):
+    """Without elevation_method, supplied boundary elevations are stored as
+    vertex Z, not as a terrain-sampled boundary (Generate on)."""
+    terrain_hdf, rasmap = _write_minimal_terrain(tmp_path)
+    RasTerrainModWriter.add_modification_polygon(
+        terrain_hdf, name="Pond", polygon_coords=[[0.0, 0.0], [10.0, 0.0], [10.0, 10.0], [0.0, 10.0]],
+        boundary_elevations=[10.0, 11.0, 12.0, 11.0, 10.0], rasmap_path=rasmap,
+    )
+    with h5py.File(terrain_hdf, "r") as hdf:
+        mod = hdf["Modifications/Pond"]
+        attrs = mod["Attributes"][0]
+        assert attrs["Generate Boundary Elevations"] == 0
+        assert attrs["Use ShapeFile Z Elevations"] == 1
+        np.testing.assert_allclose(mod["Polygon Points"][:, 2], [10.0, 11.0, 12.0, 11.0, 10.0])

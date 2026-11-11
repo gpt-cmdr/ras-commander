@@ -544,3 +544,18 @@ def test_project_length_units_accept_every_units_form(tmp_path, line, expected):
     terrain.parent.mkdir()
     (tmp_path / "M.prj").write_text(f"Proj Title=M\n{line}\n")
     assert _terrain_mods.project_length_units(terrain) == expected
+
+
+def test_project_length_units_follow_the_selected_project(tmp_path):
+    terrain = tmp_path / "Terrain" / "T.hdf"
+    terrain.parent.mkdir()
+    (tmp_path / "A.prj").write_text("Proj Title=A\nEnglish Units\n")
+    (tmp_path / "B.prj").write_text("Proj Title=B\nSI Units\n")
+    with pytest.raises(FimUnsupportedError, match="different units"):
+        _terrain_mods.project_length_units(terrain)
+
+    class Project:
+        prj_file = tmp_path / "B.prj"
+
+    assert _terrain_mods.project_length_units(terrain, None, Project()) == "meters"
+    assert _terrain_mods.project_length_units(terrain, tmp_path / "A.rasmap") == "feet"

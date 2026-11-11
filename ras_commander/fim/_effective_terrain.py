@@ -230,7 +230,8 @@ def build(
         # Raises FimUnsupportedError for any modification form not qualified.
         layers = _terrain_mods.read_layers(
             info["terrain_hdf"],
-            length_units=_terrain_mods.project_length_units(info["terrain_hdf"], rasmap_path),
+            length_units=_terrain_mods.project_length_units(
+                info["terrain_hdf"], rasmap_path, ras_object),
             hecras_version=version,
         )
     v2 = engine_supports(engine, modifications=True)

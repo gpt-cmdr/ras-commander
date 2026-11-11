@@ -9,7 +9,7 @@ Statements marked **(inferred)** were deduced, not read directly.
 
 ## 1. Summary
 
-- Modifications live in the terrain HDF under `/Modifications/<layer name>`. One group per layer. The group attributes `Type`, `Subtype` and `Priority` select the layer class and order. The `.rasmap` is not needed to apply modifications.
+- Modifications live in the terrain HDF under `/Modifications/<layer name>`. One group per layer. The group attributes `Type`, `Subtype` and `Priority` select the layer class and order. The export applies them only when the terrain's `.rasmap` layer has an `ElevationModificationGroup` child element (any content; measured, section 12). Per-layer XML entries and `Checked` states are ignored.
 - The layer class is chosen **only** from the group attribute `Type`: Circle, Rectangle, Triangle, Polygon, Encroachment Polygon, Levee, Levee1, Pier, Tree. Any other value is silently skipped on load, and RAS Mapper deletes such groups the next time it saves the group (`ElevationModificationGroup.cs` ~156-185).
 - Ground lines are `Type=Levee` (class GroundLineModificationLayer) with `Subtype` Levee or Channel. Datasets: `Polyline Info/Parts/Points`, `Profile Info` + `Profile Values`, `Attributes`, optional `Control Points` subgroup. A dataset literally named `Profile` is never read.
 - The stored ground-line profile is (station along the polyline, absolute elevation) in float32. `Top Elevation` is read from disk but not used by the computation in any of the three versions.
@@ -212,6 +212,8 @@ Class `GroundLineModificationLayer1.cs`. Same `Polyline`, `Profile Info/Values`,
 
 ## 7. `.rasmap` XML
 
+> **Correction (section 12):** the export requires the terrain layer's `ElevationModificationGroup` element. The code reading below, which treats the `.rasmap` as optional for application, is superseded on that point; per-layer entries and `Checked` states remain optional.
+
 Generic layer XML (`Layer.cs` ~1543-1650):
 
 - Element `Layer`. Attributes in order: `Name` (omitted when equal to the class name), `Type` (CLR class name), `Checked="True"` only if checked, `Expanded="True"` only if expanded, and for non-geometry layers `Filename` (relative to the `.rasmap`). Children: optional `Symbology`, `PlotOption`, `PlotOptionOff`, and nested `Layer` elements.
@@ -278,7 +280,7 @@ Polygon (varying boundary): preferred portable form is vertex Z in `Polygon Poin
 
 Circle/ellipse: `Type` = "Circle" (no Subtype); `Circles` float64 [n,5] with degrees rotation; attributes Name, Elevation Value, Elevation Type.
 
-`.rasmap`: nothing is required for application. For the GUI tree to show the group, add a `Layer` child of the terrain with first attribute `Name="Modifications"` and `Type="ElevationModificationGroup"`, and one child per layer whose `Name` equals the HDF group name and `Type` is its class name; add `Checked="True"`. Ground-line layers may add `DefaultModificationType` (integer enum value) and `DefaultElevPtTol`.
+`.rasmap`: the terrain layer needs an `ElevationModificationGroup` child element, or the export applies none of the HDF modifications (measured, section 12). Its per-layer children and `Checked` states are not required. For the GUI tree to show the group, a `Layer` child of the terrain with first attribute `Name="Modifications"` and `Type="ElevationModificationGroup"`, and one child per layer whose `Name` equals the HDF group name and `Type` is its class name; add `Checked="True"`. Ground-line layers may add `DefaultModificationType` (integer enum value) and `DefaultElevPtTol`.
 
 ### 10.2 Forms that cannot be reproduced faithfully
 

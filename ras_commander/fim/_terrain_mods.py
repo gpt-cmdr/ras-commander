@@ -363,35 +363,56 @@ def _ellipse_layer(name, group, priority) -> dict:
     return {"kind": "ellipse", "name": name, "priority": priority, "features": features}
 
 
-def project_length_units(terrain_hdf, rasmap_path=None) -> str:
+def project_length_units(terrain_hdf, rasmap_path=None, ras_object=None) -> str:
     """RAS Mapper's unit system for a terrain: ``"feet"`` or ``"meters"``.
 
     RAS Mapper densifies ground-line profiles every 100 ft, or 100/3.281 m in
-    SI projects, by the project unit system (not by the terrain CRS). Reads
-    ``SI Units`` / ``English Units`` from the project file beside the rasmap
-    (or the terrain's parent project folder). Defaults to feet.
-    """
-    candidates = []
-    if rasmap_path is not None:
-        rasmap_path = Path(rasmap_path)
-        candidates.append(rasmap_path.with_suffix(".prj"))
-        candidates.extend(sorted(rasmap_path.parent.glob("*.prj")))
-    terrain_hdf = Path(terrain_hdf)
-    candidates.extend(sorted(terrain_hdf.parent.parent.glob("*.prj")))
-    for prj in candidates:
-        try:
-            text = prj.read_text(encoding="utf-8", errors="replace")
-        except OSError:
-            continue
-        if not text.startswith("Proj Title="):
-            continue  # ESRI projection files share the .prj suffix
-        from ..RasPrj import RasPrj
+    SI projects, by the project unit system (not by the terrain CRS). The
+    project is ``ras_object``'s project file, else the ``.prj`` named like
+    ``rasmap_path``, else the RAS project files beside the rasmap (or in the
+    terrain's parent project folder). Units come from
+    :meth:`RasPrj.get_project_units` (``SI Units``, ``English Units`` or
+    ``SI Units=<bool>``). Defaults to feet when no project states its units.
 
-        # Bare "SI Units" / "English Units" markers and the "SI Units=<bool>" form.
+    Raises:
+        FimUnsupportedError: Several candidate project files state different
+            units and none is selected by ``ras_object`` or the rasmap name.
+    """
+    from ..RasPrj import RasPrj
+
+    def units_of(prj) -> Optional[str]:
+        prj = Path(prj)
+        try:
+            with prj.open("r", encoding="utf-8", errors="replace") as handle:
+                if not handle.readline().startswith("Proj Title="):
+                    return None  # ESRI projection files share the .prj suffix
+        except OSError:
+            return None
         units = RasPrj.get_project_units(prj)
+        return None if units is None else ("meters" if units == "m" else "feet")
+
+    selected = []
+    prj_file = getattr(ras_object, "prj_file", None) if ras_object is not None else None
+    if prj_file:
+        selected.append(Path(prj_file))
+    if rasmap_path is not None:
+        selected.append(Path(rasmap_path).with_suffix(".prj"))
+    for prj in selected:
+        units = units_of(prj)
         if units is not None:
-            return "meters" if units == "m" else "feet"
-    return "feet"
+            return units
+    folder = Path(rasmap_path).parent if rasmap_path is not None else Path(terrain_hdf).parent.parent
+    found = {}
+    for prj in sorted(folder.glob("*.prj")):
+        units = units_of(prj)
+        if units is not None:
+            found[prj.name] = units
+    if len(set(found.values())) > 1:
+        raise FimUnsupportedError(
+            f"project files in {folder.name} state different units {found}; pass ras_object "
+            "or a rasmap named like its project"
+        )
+    return next(iter(found.values()), "feet")
 
 
 def hecras_version_for(version) -> str:
