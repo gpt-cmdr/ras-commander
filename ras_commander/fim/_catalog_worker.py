@@ -132,6 +132,7 @@ def _run_unit(unit, config, emit):
                         max_inflight_profiles=controls["max_inflight_profiles"],
                         timeout=config["timeout"],
                         product_writer=controls["product_writer"],
+                        final_format=controls.get("final_format"),
                         **selection,
                     )
                 else:
