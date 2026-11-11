@@ -162,6 +162,7 @@ def test_batched_workers_match_sequential_single_profile_bits(files, tmp_path, m
     assert batched.attrs["xs_profiles_per_request"] > 1
     monkeypatch.setattr(_one_d, "_xs_batch_limit", lambda flags: 1)
     monkeypatch.setattr(_one_d, "_xs_render_workers", lambda *args: 1)
+    monkeypatch.setattr(_one_d, "_terrain_tiff", lambda flags: False)  # rasterio-staged terrain
     single = RasFim.map_one_d_profiles(hdf, terrain, tmp_path / "single", threads=1, **kwargs)
     assert single.attrs["xs_render_workers"] == 1
     for a, b in zip(batched.itertuples(), single.itertuples()):

@@ -36,6 +36,17 @@ def digest(path):
     return checksum.hexdigest()
 
 
+def _digests(paths):
+    """SHA-256 of every path, hashed concurrently (hashlib releases the GIL).
+
+    Results are keyed by path, so callers keep their own checking order.
+    """
+    from concurrent.futures import ThreadPoolExecutor
+    paths = list(paths)
+    with ThreadPoolExecutor(max_workers=max(1, min(8, len(paths)))) as pool:
+        return dict(zip(paths, pool.map(digest, paths)))
+
+
 def write_json(path, value):
     path = Path(path)
     temporary = path.with_name(path.name + ".partial")
@@ -356,8 +367,11 @@ class FimPreparedOneDModel:
                 raise ValueError("profile byte count")
             if Path(receipt["point_m_evidence"]).stat().st_size != p*2*8:
                 raise ValueError("normalization evidence byte count")
+            if any(not isinstance(expected, str) or len(expected) != 64 for expected in hashes.values()):
+                raise ValueError("source or payload changed: invalid recorded hash")
+            actual = _digests(hashes)
             for path, expected in hashes.items():
-                if not isinstance(expected, str) or len(expected) != 64 or digest(path) != expected:
+                if actual[path] != expected:
                     raise ValueError("source or payload changed: " + str(path))
             # Reconstructing a prepared instance binds its current receipt, so
             # validate grid and datum labels against the hashed source files as
@@ -607,6 +621,13 @@ def _xs_batch_limit(flags):
     return maximum if isinstance(maximum, int) and not isinstance(maximum, bool) and maximum > 1 else 1
 
 
+def _terrain_tiff(flags):
+    """True when the XS method reads the source terrain GeoTIFF itself."""
+    record = flags.get("terrain_tiff")
+    return (isinstance(record, Mapping) and record.get("control") == "terrain_tiff"
+            and record.get("reader") == "terrio" and REQUEST_SCHEMA in (record.get("schemas") or ()))
+
+
 def _inline_storage(flags):
     """True when the XS method composes storage pools in its own request."""
     record = flags.get("inline_storage")
@@ -758,10 +779,15 @@ def map_one_d_profiles(hdf_path, terrain_path, output_folder, *, profiles=None,
             mask = _aoi_lattice.mask(mask_geometry, transform, window)
             if not mask.any():
                 raise FimUnsupportedError("AOI contains no source-grid pixels")
-        with rasterio.open(receipt["terrain"]) as source:
-            terrain = source.read(1, window=window, masked=True).astype("<f4").filled(np.nan)
-        terrain_file = scratch / "terrain.bin"
-        terrain.tofile(terrain_file)
+        # Engines advertising terrain_tiff read the source GeoTIFF with terrio,
+        # applying GDAL's Float32 nodata mask; older engines get a staged buffer.
+        terrain_tiff = _terrain_tiff(support.flags) and (not storage or inline_storage)
+        terrain_file = None
+        if not terrain_tiff:
+            with rasterio.open(receipt["terrain"]) as source:
+                terrain = source.read(1, window=window, masked=True).astype("<f4").filled(np.nan)
+            terrain_file = scratch / "terrain.bin"
+            terrain.tofile(terrain_file)
         final = None
         final_fields = {}
         if final_options is not None:
@@ -845,7 +871,8 @@ def map_one_d_profiles(hdf_path, terrain_path, output_folder, *, profiles=None,
                 request = {"schema": REQUEST_SCHEMA, "scope": "xs-surface-only",
                            "point_count": receipt["point_count"], "triangle_count": receipt["triangle_count"],
                            "segment_count": receipt["segment_count"], "cross_section_count": receipt["cross_section_count"],
-                           "terrain_file": str(terrain_file),
+                           **({"terrain_tiff": str(receipt["terrain"])} if terrain_tiff
+                              else {"terrain_file": str(terrain_file)}),
                            "width": grid["width"], "height": grid["height"],
                            "geo_transform": grid["geo_transform"], "tile_size": grid["tile_size"],
                            "window": dict(zip(("col", "row", "width", "height"), map(int, (window.col_off, window.row_off, window.width, window.height)))),
