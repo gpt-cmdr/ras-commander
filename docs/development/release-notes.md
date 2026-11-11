@@ -37,7 +37,9 @@ alone does not identify a development checkout.
 
 - **Mapping engine dependency:** mapping extras select
   `ras-commander-fast-map>=0.17.0,<0.18`. 0.17.0 adds `native_final_format` with
-  no change to existing requests or products.
+  no change to existing requests or products. As before, the extras install the
+  engine only on Windows x64 and Linux x86_64; elsewhere no engine is installed
+  and `final_format` is refused with `FimUnsupportedError`.
 
 ### 0.117.0 — 2026-11-09
 
