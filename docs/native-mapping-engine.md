@@ -980,6 +980,38 @@ receipt["method_id"], receipt["hecras_version"], receipt["modification_layers"]
   named ground lines under 6.6, and other RAS layer types. Use the RAS Mapper
   export for those terrains.
 
+<a id="read-the-modification-layers"></a>
+
+### Read the modification layers
+
+`RasFim.read_terrain_modifications` returns the `modification_layers` that
+`build_effective_terrain` would send to the engine, without running it. Use it
+to route a modified terrain before any terrain work: `status == "staged"` means
+every layer is a form the reader stages, `"refused"` means the terrain needs the
+RAS Mapper export, and `refusal` says why.
+
+```python
+record = RasFim.read_terrain_modifications(
+    "Terrain/Terrain.hdf", rasmap_path="Project.rasmap", hecras_version="6.6",
+)
+record["status"], record["refusal"]          # "staged" | "none" | "refused"
+record["hecras_version"], record["length_units"]
+[(layer["kind"], layer["name"], layer["priority"]) for layer in record["layers"]]
+```
+
+The record (`ras-commander-terrain-modifications/1`) carries `terrain_hdf`,
+`method_id` (`rasmapper-effective-terrain/2`), `status`, `refusal`,
+`hecras_version` and `length_units` with their `*_basis`, and `layers`. Layers
+are `ground_line`, `polygon` or `ellipse` records in the engine request form;
+the field list, units and refusal reasons are in the
+[`RasFim` reference](api/core.md#mapping). The HEC-RAS version and unit system
+are resolved as `build_effective_terrain` resolves them. `strict=True` raises
+`FimUnsupportedError` instead of returning a refusal. A staged terrain can
+still be refused by an older engine; compare the layers with the engine's
+`modifications` capability record. The reader does not apply the rasmap
+`ElevationModificationGroup` gate; `top_priority_terrain_source()["modified"]`
+reports it.
+
 ## Sloping velocity
 
 `velocity=True` adds `velocity_tif` (`12_<profile>_velocity.tif`) to each

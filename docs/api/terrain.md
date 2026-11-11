@@ -172,6 +172,11 @@ The RAS Mapper export applies a terrain's HDF modifications only when its `.rasm
 - `list_modifications(terrain_hdf_path)` - List all terrain modifications stored in HDF sidecar group
 - `get_modification_profile(terrain_hdf_path, name)` - Read modification station/elevation profile
 
+To read the modification layers in the form the native effective-terrain
+engine (`rasmapper-effective-terrain/2`) needs, with the reason for any form it
+refuses, use
+[`RasFim.read_terrain_modifications()`](../native-mapping-engine.md#read-the-modification-layers).
+
 ### Analysis Methods
 
 - `sample_modification_surface(terrain_hdf_path, name, points, existing_elevations=None, ...)` - Evaluate line modification surface at XY points
