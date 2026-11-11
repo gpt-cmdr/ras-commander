@@ -1329,7 +1329,9 @@ class RasFim:
         """Whether the installed engine builds RAS Mapper's effective terrain.
 
         True when ``ras2fim-batch method`` advertises
-        ``rasmapper-effective-terrain/1``. Never raises for a missing engine.
+        ``rasmapper-effective-terrain/1`` or ``/2`` (as its method ID or a
+        compatible ID). Modified terrains also need ``/2`` with a
+        ``modifications`` record. Never raises for a missing engine.
         Engine execution or metadata errors propagate.
 
         Args:
@@ -1345,7 +1347,10 @@ class RasFim:
         except FileNotFoundError:
             return False
         method = capabilities.methods.get("effective_terrain")
-        return method is not None and method.method_id == _effective_terrain.METHOD_ID
+        if method is None:
+            return False
+        ids = {method.method_id, *(method.flags.get("compatible_method_ids") or ())}
+        return bool(ids & {_effective_terrain.METHOD_ID, _effective_terrain.METHOD_ID_V2})
 
     @staticmethod
     @log_call
