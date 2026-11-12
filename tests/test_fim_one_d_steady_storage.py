@@ -5,7 +5,7 @@ import pytest
 from ras_commander import HdfXsec, fast_hdf
 from ras_commander.fim import RasFim, FimUnsupportedError
 from ras_commander.fim._one_d import normalize_segment
-from test_fim_one_d import files, inputs
+from test_fim_one_d import _fake_one_d_engine, files, inputs
 
 BASE = 'Results/Steady/Output/Output Blocks/Base Output/Steady Profiles/'
 
@@ -270,3 +270,30 @@ def test_inline_storage_report_mismatch_cannot_publish(steady_storage, tmp_path,
                                  bbox=(0, 0, 100, 100), max_working_mib=64)
     assert corrupted and all(corrupted), 'no engine report was altered'
     assert not list(output.glob('*.tif'))
+
+
+
+def test_inline_storage_threads_effective_reports_admitted_workers(steady_storage, tmp_path, monkeypatch):
+    """With inline storage, threads_effective is the XS request's admitted worker count.
+
+    The budget cuts threads=8 to two render workers, below the four threads the
+    separate storage call would use. That call does not run on the inline
+    route, so neither the returned attrs nor the saved manifest count it.
+    """
+    import json
+    from ras_commander.fim import _one_d
+    hdf, terrain = steady_storage
+    flags = {"render_workers": {"control": "threads", "max": 64},
+             "inline_storage": {"control": "storage", "storage_method_id": _one_d.STORAGE_METHOD_ID,
+                                "composition_method_id": _one_d.COMPOSITION_METHOD_ID,
+                                "schemas": [_one_d.REQUEST_SCHEMA]}}
+    exe, requests = _fake_one_d_engine(monkeypatch, tmp_path, flags, storage=True)
+    out = RasFim.map_one_d_profiles(hdf, terrain, tmp_path / "out", profiles={"dry": 0}, allow_unqualified=True,
+                                    max_working_mib=3, threads=8, engine_path=exe, bbox=(0, 0, 124, 100))
+    assert out.status.tolist() == ["complete"] and out.attrs["storage_inline"] is True
+    assert [r.get("threads") for r in requests] == [2] and "storage" in requests[0]
+    assert out.attrs["xs_render_workers"] == 2 < min(8, 4)
+    assert out.attrs["threads_requested"] == 8
+    assert out.attrs["threads_effective"] == 2
+    saved = json.loads((tmp_path / "out" / "fim_manifest.json").read_text())
+    assert saved["threads_effective"] == 2 and saved["storage_inline"] is True

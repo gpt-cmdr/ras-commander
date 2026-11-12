@@ -2170,6 +2170,13 @@ request uses up to four workers within the requested thread budget; with
 `inline_storage`, composition runs in the XS request on its admitted worker
 count. Manifests record the
 requested and effective counts, `xs_render_workers` and `xs_profiles_per_request`.
+`threads_effective` counts only the requests issued: on the inline route it is
+the XS worker count, never the four-thread separate storage call.
+
+With engines that advertise `terrain_tiff`, the engine reads the source terrain
+GeoTIFF itself and applies only its Float32 nodata value. A terrain with a
+per-dataset or alpha mask keeps the staged Rasterio read, which turns masked
+pixels into NaN, so the direct read never exposes masked pixels as terrain.
 
 With engines that advertise `inline_storage`, storage level pools and their
 composition run inside the batched XS request: physical storage labels are

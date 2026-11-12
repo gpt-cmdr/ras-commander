@@ -228,13 +228,15 @@ def test_xs_worker_and_batch_flags_are_parsed_conservatively():
     assert _xs_render_workers(workers, 8, 100 + 2 * scratch + 3000, receipt, grid, 100, per_worker) == 3
     assert _xs_render_workers(workers, 8, 100 + 2 * scratch + 2999, receipt, grid, 100, per_worker) == 2
 
-def _fake_one_d_engine(monkeypatch, tmp_path, flags, failure=None, structured=False):
+def _fake_one_d_engine(monkeypatch, tmp_path, flags, failure=None, structured=False, storage=False):
     """Simulated ras2fim-batch for the 1D route; records each request.
 
     Writes the products an engine advertising ``flags`` would deliver: raw
     ``depth.bin``/``wse.bin`` on the window, or ``final_format`` GeoTIFFs on the
     requested (window or full) grid. ``failure`` replaces the result with a
-    nonzero exit carrying that stderr text.
+    nonzero exit carrying that stderr text. ``storage`` also advertises the
+    storage-pool and coupled composition methods that storage-area models need;
+    only the inline route (one ``one-d-diagnostic`` request) is simulated.
     """
     import subprocess
     from affine import Affine
@@ -245,6 +247,10 @@ def _fake_one_d_engine(monkeypatch, tmp_path, flags, failure=None, structured=Fa
               "one_d_clipped_diagnostic": {"method_id": _one_d.METHOD_ID,
                                            "request_schemas": [_one_d.REQUEST_SCHEMA],
                                            "native_parity_qualified": False, **flags}}
+    if storage:
+        record["storage"] = {"method_id": _one_d.STORAGE_METHOD_ID, "request_schemas": [_one_d.STORAGE_SCHEMA]}
+        record["coupled_storage_diagnostic"] = {"method_id": _one_d.COMPOSITION_METHOD_ID,
+                                                "request_schemas": [_one_d.COMPOSITION_SCHEMA]}
     if structured:
         # Structured discovery without a duplicate top-level method record.
         method = record.pop("one_d_clipped_diagnostic")
@@ -270,14 +276,21 @@ def _fake_one_d_engine(monkeypatch, tmp_path, flags, failure=None, structured=Fa
         if request.get("aoi_mask_file"):
             keep = np.fromfile(request["aoi_mask_file"], "u1").reshape(depth.shape).astype(bool)
             depth[~keep] = np.nan
+        source = Affine.from_gdal(*request["geo_transform"])
         report = {"status": "complete", "method": {"method_id": _one_d.METHOD_ID},
-                  "width": w["width"], "height": w["height"]}
+                  "width": w["width"], "height": w["height"],
+                  "source_col": w["col"], "source_row": w["row"],
+                  "source_width": request["width"], "source_height": request["height"],
+                  "geo_transform": list((source * Affine.translation(w["col"], w["row"])).to_gdal())}
+        if "storage" in request:
+            # Inline storage composition records, as engines advertising inline_storage write.
+            report.update(storage={"method": {"method_id": _one_d.STORAGE_METHOD_ID}},
+                          composition={"method": {"method_id": _one_d.COMPOSITION_METHOD_ID}})
         fmt = request.get("final_format")
         if fmt is None:
             depth.tofile(out / "depth.bin")
             (depth + 1).tofile(out / "wse.bin")
         else:
-            source = Affine.from_gdal(*request["geo_transform"])
             full = fmt.get("full_grid") or {
                 "width": w["width"], "height": w["height"], "row_offset": 0, "col_offset": 0,
                 "transform": list((source * Affine.translation(w["col"], w["row"])).to_gdal())}
@@ -373,6 +386,45 @@ def test_workers_fit_engine_terrain_read_and_final_format_scratch(files, tmp_pat
     assert out.attrs["xs_render_workers"] == expected
     assert requests[0].get("threads", 1) == expected
     assert "terrain_tiff" in requests[0]
+
+
+@pytest.mark.parametrize("mask", ["per_dataset", "nodata_only"])
+def test_terrain_with_dataset_mask_keeps_staged_read(files, tmp_path, monkeypatch, mask):
+    """The engine terrain_tiff reader applies only nodata; dataset masks stay on the staged read.
+
+    The staged rasterio read turns masked pixels into NaN, so a terrain with an
+    internal per-dataset mask is never handed to the engine's direct reader.
+    """
+    hdf, terrain = files
+    if mask == "per_dataset":
+        with rasterio.Env(GDAL_TIFF_INTERNAL_MASK=True), rasterio.open(terrain, "r+") as dst:
+            keep = np.full((512, 512), 255, dtype="uint8")
+            keep[:, :50] = 0
+            dst.write_mask(keep)
+        with rasterio.open(terrain) as src:
+            assert src.nodata is None and "per_dataset" in [f.name for f in src.mask_flag_enums[0]]
+    flags = {"terrain_tiff": {"control": "terrain_tiff", "reader": "terrio",
+                              "schemas": ["fast-map-one-d-diagnostic/3"]}}
+    exe, requests = _fake_one_d_engine(monkeypatch, tmp_path, flags)
+    from ras_commander.fim import _engine
+    fake, captured = _engine.run_engine, []
+
+    def run(args, what, timeout=None):
+        request = json.loads(Path(args[2]).read_text())
+        if "terrain_file" in request:
+            captured.append(np.fromfile(request["terrain_file"], "<f4"))
+        return fake(args, what, timeout)
+
+    monkeypatch.setattr(_engine, "run_engine", run)
+    out = RasFim.map_one_d_profiles(hdf, terrain, tmp_path / "out", profiles=["Max"], allow_unqualified=True,
+                                    max_working_mib=64, engine_path=exe, bbox=(0, 0, 100, 100))
+    assert out.status.tolist() == ["complete"]
+    if mask == "nodata_only":
+        assert "terrain_tiff" in requests[0] and not captured
+        return
+    assert "terrain_tiff" not in requests[0]
+    staged = captured[0].reshape(100, 100)
+    assert np.isnan(staged[:, :50]).all() and np.isfinite(staged[:, 50:]).all()
 
 
 def test_engine_scratch_planners_mirror_recorded_engine_plans():

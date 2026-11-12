@@ -646,6 +646,19 @@ def _inline_storage(flags):
             and REQUEST_SCHEMA in (record.get("schemas") or ()))
 
 
+def _has_dataset_mask(path):
+    """True when GDAL masks the terrain with a per-dataset or alpha mask.
+
+    The engine's ``terrain_tiff`` reader applies only the Float32 nodata value;
+    the staged rasterio read (``masked=True``) applies these masks as NaN.
+    """
+    import rasterio
+    from rasterio.enums import MaskFlags
+    with rasterio.open(path) as source:
+        flags = source.mask_flag_enums[0]
+    return MaskFlags.per_dataset in flags or MaskFlags.alpha in flags
+
+
 # Largest source block (tile or strip) the engine's terrain_tiff reader accepts
 # (Fast-Map ``one_d_terrain::MAX_BLOCK_BYTES``, PR #39 cc1379a).
 TERRAIN_TIFF_MAX_BLOCK_BYTES = 16 << 20
@@ -817,7 +830,10 @@ def map_one_d_profiles(hdf_path, terrain_path, output_folder, *, profiles=None,
         delivers = not storage or inline_storage
         # Engines advertising terrain_tiff read the source GeoTIFF with terrio,
         # applying GDAL's Float32 nodata mask; older engines get a staged buffer.
-        terrain_tiff = _terrain_tiff(support.flags) and delivers
+        # The staged read also honours per-dataset/alpha masks, which the
+        # direct read does not, so such terrains keep the staged route.
+        terrain_tiff = (_terrain_tiff(support.flags) and delivers
+                        and not _has_dataset_mask(receipt["terrain"]))
         terrain_block = _terrain_block(receipt["terrain"]) if terrain_tiff else None
         final = None
         final_fields = {}
@@ -917,8 +933,13 @@ def map_one_d_profiles(hdf_path, terrain_path, output_folder, *, profiles=None,
                        **delivered_grid)
             rows.append(row)
 
-        threads_effective = max(workers, min(threads, 4) if storage else 1,
-                                composition_threads if final is not None and not delivers else 1)
+        # Threads of the requests actually issued. Only the separate storage
+        # route runs the storage call (at most four threads) and, with
+        # final_format, the separate composition writer; inline storage runs
+        # inside the XS request on its admitted workers.
+        separate_storage = bool(storage) and not inline_storage
+        threads_effective = max(workers, min(threads, 4) if separate_storage else 1,
+                                composition_threads if final is not None and separate_storage else 1)
 
         def manifest_frame():
             result = pd.DataFrame(rows, columns=MANIFEST_COLUMNS)
@@ -964,19 +985,20 @@ def map_one_d_profiles(hdf_path, terrain_path, output_folder, *, profiles=None,
             def run_xs_batch(first):
                 """One engine call for profiles first..first+n; outputs stay in scratch."""
                 batch = list(range(first, min(first + batch_limit, len(selected_levels))))
+                # Key order matches the single-profile request older engines
+                # receive, so their request bytes are unchanged.
+                levels_entry = ({"levels_files": [selected_levels[k] for k in batch]} if batch_limit > 1
+                                else {"levels_file": selected_levels[first]})
                 request = {"schema": REQUEST_SCHEMA, "scope": "xs-surface-only",
                            "point_count": receipt["point_count"], "triangle_count": receipt["triangle_count"],
                            "segment_count": receipt["segment_count"], "cross_section_count": receipt["cross_section_count"],
+                           **levels_entry,
                            **({"terrain_tiff": str(receipt["terrain"])} if terrain_tiff
                               else {"terrain_file": str(terrain_file)}),
                            "width": grid["width"], "height": grid["height"],
                            "geo_transform": grid["geo_transform"], "tile_size": grid["tile_size"],
                            "window": dict(zip(("col", "row", "width", "height"), map(int, (window.col_off, window.row_off, window.width, window.height)))),
                            "max_working_bytes": budget, "clipping_scope": "levees-and-xs-end-obstructions-only"}
-                if batch_limit > 1:
-                    request["levels_files"] = [selected_levels[k] for k in batch]
-                else:
-                    request["levels_file"] = selected_levels[first]
                 if workers > 1 or (final_fields and delivers):
                     request["threads"] = workers
                 if delivers:
