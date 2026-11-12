@@ -81,6 +81,21 @@ from .RasPrj import ras
 if TYPE_CHECKING:
     from .ComputeResults import RasControlResult, RasProcessInventory
 
+
+def _console_print(text: str = "") -> None:
+    """Print a status line, replacing characters the console encoding lacks.
+
+    The cleanup reports use status marks outside ASCII. On a console whose encoding
+    cannot represent them (cp1252 on Windows) ``print`` raises ``UnicodeEncodeError``
+    after the process was already handled, so the report falls back to the stream's
+    replacement character instead of failing the call.
+    """
+    try:
+        print(text)
+    except UnicodeEncodeError:
+        encoding = getattr(sys.stdout, "encoding", None) or "ascii"
+        print(text.encode(encoding, errors="replace").decode(encoding))
+
 logger = get_logger(__name__)
 
 
@@ -3974,25 +3989,25 @@ class RasControl:
         orphans = RasControl.scan_orphans()
 
         if not orphans:
-            print("✅ No orphaned processes found")
+            _console_print("✅ No orphaned processes found")
             logger.info("No orphaned processes found")
             return 0
 
-        print(f"Found {len(orphans)} orphaned RAS process(es):")
+        _console_print(f"Found {len(orphans)} orphaned RAS process(es):")
         for orphan in orphans:
             age_min = (time.time() - orphan.start_time) / 60
-            print(f"  • PID {orphan.ras_pid}: {Path(orphan.project_path).name} "
+            _console_print(f"  • PID {orphan.ras_pid}: {Path(orphan.project_path).name} "
                   f"(running {age_min:.1f} min, Python {orphan.python_pid} crashed)")
 
         if dry_run:
-            print("\n[Dry run - no action taken]")
+            _console_print("\n[Dry run - no action taken]")
             logger.info("Dry run - no orphans terminated")
             return 0
 
         if interactive:
             response = input("\nClean up these processes? (y/n): ")
             if response.lower() != 'y':
-                print("Cancelled")
+                _console_print("Cancelled")
                 logger.info("Cleanup cancelled by user")
                 return 0
 
@@ -4090,15 +4105,15 @@ class RasControl:
                     continue
 
                 icon = "✅" if signal == "Terminated" else "⚠️ "
-                print(f"{icon} {signal} PID {orphan.ras_pid}")
+                _console_print(f"{icon} {signal} PID {orphan.ras_pid}")
                 log = logger.info if signal == "Terminated" else logger.warning
                 log(f"{signal} orphaned PID {orphan.ras_pid}")
                 cleaned += 1
             except Exception as e:
-                print(f"❌ Failed to terminate PID {orphan.ras_pid}: {e}")
+                _console_print(f"❌ Failed to terminate PID {orphan.ras_pid}: {e}")
                 logger.error(f"Failed to terminate orphaned PID {orphan.ras_pid}: {e}")
 
-        print(f"\n✅ Cleaned up {cleaned}/{len(orphans)} processes")
+        _console_print(f"\n✅ Cleaned up {cleaned}/{len(orphans)} processes")
         logger.info(f"Cleaned up {cleaned}/{len(orphans)} orphaned processes")
         return cleaned
 
@@ -4127,20 +4142,20 @@ class RasControl:
                    if p.info['name'] and p.info['name'].lower() == 'ras.exe']
 
         if not all_ras:
-            print("No ras.exe processes found")
+            _console_print("No ras.exe processes found")
             logger.info("No ras.exe processes to clean up")
             return 0
 
-        print(f"⚠️  WARNING: This will terminate ALL {len(all_ras)} ras.exe process(es)")
-        print("This includes:")
-        print("  • Your tracked processes")
-        print("  • Other users' processes")
-        print("  • Manual HEC-RAS GUI sessions")
-        print("  • Other Python scripts' processes")
+        _console_print(f"⚠️  WARNING: This will terminate ALL {len(all_ras)} ras.exe process(es)")
+        _console_print("This includes:")
+        _console_print("  • Your tracked processes")
+        _console_print("  • Other users' processes")
+        _console_print("  • Manual HEC-RAS GUI sessions")
+        _console_print("  • Other Python scripts' processes")
 
         response = input("\n⚠️  Type 'YES' in all caps to confirm: ")
         if response != 'YES':
-            print("Cancelled")
+            _console_print("Cancelled")
             logger.info("Force cleanup cancelled by user")
             return 0
 
@@ -4149,23 +4164,23 @@ class RasControl:
             try:
                 proc.terminate()
                 proc.wait(timeout=5)
-                print(f"✅ Terminated PID {proc.pid}")
+                _console_print(f"✅ Terminated PID {proc.pid}")
                 logger.info(f"Force terminated PID {proc.pid}")
                 terminated += 1
             except psutil.TimeoutExpired:
                 try:
                     proc.kill()
-                    print(f"⚠️  Force killed PID {proc.pid}")
+                    _console_print(f"⚠️  Force killed PID {proc.pid}")
                     logger.warning(f"Force killed PID {proc.pid}")
                     terminated += 1
                 except Exception as e:
-                    print(f"❌ Failed to kill PID {proc.pid}: {e}")
+                    _console_print(f"❌ Failed to kill PID {proc.pid}: {e}")
                     logger.error(f"Failed to kill PID {proc.pid}: {e}")
             except Exception as e:
-                print(f"❌ Failed to terminate PID {proc.pid}: {e}")
+                _console_print(f"❌ Failed to terminate PID {proc.pid}: {e}")
                 logger.error(f"Failed to terminate PID {proc.pid}: {e}")
 
-        print(f"\n✅ Terminated {terminated}/{len(all_ras)} processes")
+        _console_print(f"\n✅ Terminated {terminated}/{len(all_ras)} processes")
         logger.info(f"Force cleanup terminated {terminated}/{len(all_ras)} processes")
 
         # Clean up all lock files
