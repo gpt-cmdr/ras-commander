@@ -742,6 +742,36 @@ def test_read_layers_round_trips_through_add_modification_layer(tmp_path):
     assert _terrain_mods.read_layers(copy_hdf) == first
 
 
+def test_round_trip_of_binary32_profile_stations_does_not_warn(tmp_path, caplog):
+    """A read-back profile ending one float32 step past the line is not an overrun."""
+    from ras_commander.fim import _terrain_mods
+
+    terrain_hdf, rasmap = _write_minimal_terrain(tmp_path)
+    # Length 3383.914...: float32 rounds it up, so the stored last station
+    # reads back larger than the binary64 length of the same vertices.
+    line = np.array([[0.0, 0.0], [1500.0, 1000.0], [2000.0, 2500.0]])
+    length = float(RasTerrainModWriter._station_values(line)[-1])
+    assert float(np.float32(length)) > length
+    RasTerrainModWriter.add_high_ground_modification(
+        terrain_hdf, rasmap, "Levee", line, top_width=20.0, side_slope=3.0,
+        max_extent=120.0, elevation=562.0,
+    )
+    (layer,) = _terrain_mods.read_layers(terrain_hdf)
+    (tmp_path / "copy").mkdir()
+    copy_hdf, copy_rasmap = _write_minimal_terrain(tmp_path / "copy")
+    with caplog.at_level("WARNING"):
+        RasTerrainModWriter.add_modification_layer(copy_hdf, copy_rasmap, layer)
+    assert "fall outside the line length" not in caplog.text
+    assert _terrain_mods.read_layers(copy_hdf) == [layer]
+
+    with caplog.at_level("WARNING"):
+        RasTerrainModWriter.add_high_ground_modification(
+            copy_hdf, copy_rasmap, "Long", line, top_width=20.0, side_slope=3.0,
+            max_extent=120.0, profile_points=[[0.0, 1.0], [length + 1.0, 1.0]],
+        )
+    assert "fall outside the line length" in caplog.text
+
+
 @pytest.mark.parametrize("channel, offset, expected", [
     (False, 0.0, 10.0),
     (False, 10.0, 7.5),     # 5 ft down a 2:1 side

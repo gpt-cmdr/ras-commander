@@ -1454,7 +1454,11 @@ class RasTerrainModWriter:
         if np.any(np.diff(profile[:, 0]) < 0):
             raise ValueError("ground-line profile stations must increase")
         length = float(RasTerrainModWriter._station_values(points)[-1])
-        if profile[0, 0] < 0 or profile[-1, 0] > length * (1 + 1e-9) + 1e-6:
+        # ``Profile Values`` is binary32, so a profile read back from a terrain
+        # (read_layers -> add_modification_layer) can end one float32 step past
+        # the binary64 line length. That is the same station, not an overrun.
+        station_limit = max(length, float(np.float32(length)))
+        if profile[0, 0] < 0 or profile[-1, 0] > station_limit * (1 + 1e-9) + 1e-6:
             logger.warning(
                 "Ground-line profile stations %.3f..%.3f fall outside the line length %.3f; "
                 "RAS Mapper shifts the first station to 0 and clamps stations to the length",
