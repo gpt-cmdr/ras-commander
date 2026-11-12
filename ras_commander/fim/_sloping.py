@@ -183,6 +183,26 @@ def _profile_block(dataset, time_index, start, stop, remaining, cache, chunk_byt
 
 
 STAGED_CELLS_METHOD = "ras-commander-staged-cells/1"
+#: Request features the engine refuses together with ``staged_cells_files``.
+STAGED_CELLS_EXCLUDES = (
+    "velocity", "shear_stress", "storage_areas", "terrain_scope", "stored_grid",
+    "reduce_max", "derived_products", "export_physical_ownership",
+)
+
+
+def staged_cells_supported(capabilities, method="depth_groups"):
+    """True when the engine's ``method`` capability (``sloping`` or ``depth_groups``)
+    accepts ``staged_cells_files`` (``ras-commander-staged-cells/1``).
+
+    ``capabilities`` is the engine method record (``RasFim.get_engine_info()["method"]``).
+    Engines without it reject the field (unknown request fields are refused), so
+    callers stage complete meshes instead. ``sloping_native_grid`` never accepts it,
+    and neither does any request using a feature in :data:`STAGED_CELLS_EXCLUDES`.
+    """
+    if method not in ("sloping", "depth_groups"):
+        return False
+    record = (capabilities or {}).get(method) or {}
+    return record.get("staged_cells") == STAGED_CELLS_METHOD
 
 
 def _mesh_array(header_path, header, key, columns):
