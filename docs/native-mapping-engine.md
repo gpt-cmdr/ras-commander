@@ -2155,18 +2155,56 @@ This diagnostic path uses `one-d-xs-surface-diagnostic/5` and its existing
 refuses execution. The preparation receipt identifies the version-specific
 normalization and endpoint-selection rules. Full-corpus and broader raster
 qualification remain gates. Transport availability
-does not establish numerical qualification. The XS pass executes sequentially;
-storage rendering uses up to four workers within the requested thread budget.
-Manifests record requested and effective counts.
+does not establish numerical qualification. With engines that advertise
+`render_workers`, the XS pass renders source-terrain tile rows on up to
+`threads` workers, reduced to fit `max_working_mib`. Admission counts the
+engine's per-worker scratch: tile claims, triangle candidates, terrain-TIFF
+decode buffers when the engine reads the terrain itself, and `final_format`
+writer buffers. When one worker does not fit, mapping is refused before any
+engine call. With engines that advertise
+`multi_profile`, each engine call covers up to the advertised `multi_profile.max`
+selected profiles, so inputs and the prepared surface are read and built once per
+call. Neither option changes output bits.
+Older engines run one sequential XS request per profile. A separate storage
+request uses up to four workers within the requested thread budget; with
+`inline_storage`, composition runs in the XS request on its admitted worker
+count. Manifests record the
+requested and effective counts, `xs_render_workers` and `xs_profiles_per_request`.
+`threads_effective` counts only the requests issued: on the inline route it is
+the XS worker count, never the four-thread separate storage call.
+
+With engines that advertise `terrain_tiff`, the engine reads the source terrain
+GeoTIFF itself and applies only its Float32 nodata value. A terrain with a
+per-dataset or alpha mask keeps the staged Rasterio read, which turns masked
+pixels into NaN, so the direct read never exposes masked pixels as terrain.
+
+With engines that advertise `inline_storage`, storage level pools and their
+composition run inside the batched XS request: physical storage labels are
+rasterized once and no separate storage or composition process runs. Products
+are bit-identical to the separate calls; manifests record `storage_inline`.
+
+`final_format` has the `map_sloping_profiles()` contract (`nodata`, `block_size`,
+`zlevel`, `overviews`, `grid`). With an engine advertising `native_final_format`
+on the 1D (or storage-composition) method, the engine applies the AOI pixel
+mask, counts finite and flooded Depth pixels and writes each Depth/WSE GeoTIFF
+once; Commander verifies the header and file and moves it into place. Valid
+pixel bits and the nodata mask equal the Rasterio-written products. Manifest
+rows record the delivered grid (`col_off`, `row_off`, `width`, `height` and
+`transform` on the terrain), as sloping rows do; `final_format.window_on_grid`
+locates the mapped window. A valid value that is infinite or reads as `nodata`
+is refused (`FimUnsupportedError`, wrapped in `FimMappingError`); no product is
+delivered. The model CRS needs an EPSG code. There is no Rasterio fallback.
 
 The diagnostic scope includes stored unsteady or explicit steady XS profiles,
 including junction ordering, levees, endpoint obstruction blocks and disjoint
 storage level pools. Mixed 2D/pipe geometry, blocked polygons, actual
 encroachment datasets and degenerate triangles refuse. No triangle is dropped.
 Storage polygons take precedence over XS coverage even when their pools are
-dry; overlapping pools and storage/2D overlap remain refused. Rust renders
-pools through `fast-map-storage/1`, using `storage-area-level-pool/1`, then
-composes products through existing coupled schema `/2` with zero 2D cells.
+dry; overlapping pools and storage/2D overlap remain refused. Without
+`inline_storage`, Rust renders pools through a separate `fast-map-storage/1`
+call, using `storage-area-level-pool/1`, then composes products through a
+separate coupled schema `/2` call with zero 2D cells. With `inline_storage`,
+the same pool and composition methods run inside the XS request.
 These transports require advertised capabilities and retain `qualified=False`.
 Final composed products identify the coupled-storage method and request schema,
 with separate XS and storage component contracts in the manifest.

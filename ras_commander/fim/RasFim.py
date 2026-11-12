@@ -265,14 +265,16 @@ class RasFim:
         polygon: Any = None, aoi_crs: Any = None, polygon_layer: Optional[str] = None,
         engine_path: Optional[PathLike] = None, threads: int = 1,
         max_working_mib: int = 1024, timeout: Optional[float] = None,
-        raise_on_failure: bool = True,
+        raise_on_failure: bool = True, final_format: Optional[Dict[str, Any]] = None,
     ) -> pd.DataFrame:
         """Map canonical stored 1D surfaces with the clipped diagnostic Rust method.
 
         Use allow_unqualified=True explicitly. Call the prepared model's
         map_profiles method to reuse preparation. AOIs retain all
-        global geometry and original terrain tile history. The transport is
-        sequential; threads caps the budget without promising parallelism.
+        global geometry and original terrain tile history. threads caps the
+        render and DEFLATE workers an advertising engine may use. final_format
+        has the :meth:`map_sloping_profiles` contract: the engine writes each
+        Depth/WSE GeoTIFF once, with no Rasterio fallback.
         """
         from ._one_d import map_one_d_profiles
         return map_one_d_profiles(hdf_path, terrain_path, output_folder,
@@ -280,7 +282,7 @@ class RasFim:
                                   bbox=bbox, polygon=polygon, aoi_crs=aoi_crs,
                                   polygon_layer=polygon_layer, engine_path=engine_path,
                                   threads=threads, max_working_mib=max_working_mib, timeout=timeout,
-                                  raise_on_failure=raise_on_failure)
+                                  raise_on_failure=raise_on_failure, final_format=final_format)
 
     @staticmethod
     @log_call
