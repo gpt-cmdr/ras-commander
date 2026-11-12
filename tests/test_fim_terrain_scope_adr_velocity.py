@@ -122,7 +122,7 @@ def test_rasmap_modification_layers_are_reported(tmp_path):
     rasmap = tmp_path / "m.rasmap"
     rasmap.write_text(
         '<RASMapper><Terrains><Layer Name="T" Type="TerrainLayer" Filename=".\\T.hdf">'
-        '<Layer Name="Mods" Type="ElevationModificationGroup"><Layer Name="Levee" Type="X"/></Layer>'
+        '<Layer Name="Modifications" Type="ElevationModificationGroup"><Layer Name="Levee" Type="X"/></Layer>'
         "</Layer></Terrains></RASMapper>",
         encoding="utf-8",
     )
@@ -155,6 +155,64 @@ def test_hdf_modifications_need_the_rasmap_modification_group(tmp_path):
     info = RasFim.top_priority_terrain_source(hdf, rasmap_path=rasmap)
     assert info["modified"] and info["modifications"] == ["hdf:Channel"]
     assert RasFim.top_priority_terrain_source(hdf)["modified"]  # no rasmap: assume applied
+
+
+def test_hdf_modifications_without_a_group_report_the_missing_group(tmp_path):
+    hdf = _terrain(tmp_path, ["a"], priorities=[0], modifications=True)
+    rasmap = tmp_path / "m.rasmap"
+    rasmap.write_text(
+        '<RASMapper><Terrains><Layer Name="T" Type="TerrainLayer" Filename=".\\T.hdf" />'
+        "</Terrains></RASMapper>",
+        encoding="utf-8",
+    )
+    info = RasFim.top_priority_terrain_source(hdf, rasmap_path=rasmap)
+    assert [w["code"] for w in info["rasmap_warnings"]] == ["modification_group_missing"]
+    assert RasFim.top_priority_terrain_source(hdf)["rasmap_warnings"] == []
+
+
+def test_misnamed_modification_group_is_flagged_and_not_applied(tmp_path):
+    """HEC-RAS 6.6 and 7.0.1 apply modifications only from a group named exactly
+    Modifications: a terrain whose layers sit in "Hydroconnectors" exports
+    unchanged. The reader flags it and changes neither file."""
+    hdf = _terrain(tmp_path, ["a"], priorities=[0], modifications=True)
+    rasmap = tmp_path / "m.rasmap"
+    rasmap.write_text(
+        '<RASMapper><Terrains><Layer Name="T" Type="TerrainLayer" Filename=".\\T.hdf">'
+        '<Layer Name="Hydroconnectors" Type="ElevationModificationGroup" Checked="True">'
+        '<Layer Name="Channel" Type="GroundLineModificationLayer" /></Layer>'
+        "</Layer></Terrains></RASMapper>",
+        encoding="utf-8",
+    )
+    before = (rasmap.read_bytes(), hdf.read_bytes())
+    info = RasFim.top_priority_terrain_source(hdf, rasmap_path=rasmap)
+    assert info["modified"] is False and info["modifications"] == []
+    [warning] = info["rasmap_warnings"]
+    assert warning["code"] == "modification_group_misnamed"
+    assert warning["group"] == "Hydroconnectors" and warning["layers"] == ["Channel"]
+    assert "named exactly 'Modifications'" in warning["message"]
+    assert (rasmap.read_bytes(), hdf.read_bytes()) == before
+    assert _terrain_scope.describe(info)["rasmap_warnings"] == [warning]
+    # Renamed, nothing else changed: RAS Mapper applies the layers.
+    rasmap.write_text(rasmap.read_text(encoding="utf-8").replace("Hydroconnectors", "Modifications"),
+                      encoding="utf-8")
+    info = RasFim.top_priority_terrain_source(hdf, rasmap_path=rasmap)
+    assert info["modified"] and info["rasmap_warnings"] == []
+    assert info["modifications"] == ["hdf:Channel", "rasmap:Channel"]
+
+
+def test_misnamed_group_beside_the_modifications_group_is_flagged(tmp_path):
+    hdf = _terrain(tmp_path, ["a"], priorities=[0], modifications=True)
+    rasmap = tmp_path / "m.rasmap"
+    rasmap.write_text(
+        '<RASMapper><Terrains><Layer Name="T" Type="TerrainLayer" Filename=".\\T.hdf">'
+        '<Layer Name="Modifications" Type="ElevationModificationGroup" />'
+        '<Layer Name="Hydroconnectors" Type="ElevationModificationGroup" />'
+        "</Layer></Terrains></RASMapper>",
+        encoding="utf-8",
+    )
+    info = RasFim.top_priority_terrain_source(hdf, rasmap_path=rasmap)
+    assert info["modified"] and info["modifications"] == ["hdf:Channel"]
+    assert [w["group"] for w in info["rasmap_warnings"]] == ["Hydroconnectors"]
 
 
 def test_resolve_requires_the_priority_one_tiff_and_stages_its_mask(tmp_path):

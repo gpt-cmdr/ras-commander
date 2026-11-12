@@ -1302,14 +1302,24 @@ class RasFim:
         Args:
             terrain_hdf: Registered terrain HDF.
             rasmap_path: Optional rasmap; its terrain layer's elevation
-                modification layers are then also reported.
+                modification layers are then also reported, and the RAS
+                Mapper gate is applied: HEC-RAS 6.6 and 7.0.1 apply the HDF
+                modifications only when the terrain layer has an
+                ``ElevationModificationGroup`` named exactly
+                ``Modifications``. Without one, ``modified`` is False.
 
         Returns:
             dict: ``tif`` (Path of the priority-1 source TIFF), ``source_count``,
-            ``terrain_hdf``, ``modified`` (terrain modifications present),
-            ``source``, ``sources`` (file names in priority order),
+            ``terrain_hdf``, ``modified`` (terrain modifications RAS Mapper
+            applies), ``source``, ``sources`` (file names in priority order),
             ``priority_basis``, ``mask_dataset``, ``mask_shape``,
-            ``modifications`` and ``rasmap_checked``.
+            ``modifications``, ``rasmap_checked`` and ``rasmap_warnings``: a
+            list of ``{"code", "group", "layers", "message"}`` records, with
+            code ``"modification_group_misnamed"`` for each modification
+            group under another name (RAS Mapper ignores it; rename it to
+            ``Modifications``) and ``"modification_group_missing"`` when the
+            HDF has modifications but the terrain layer has no group. Neither
+            file is changed.
 
         Raises:
             FimUnsupportedError: Priority cannot be proven (missing, partial,
@@ -1393,8 +1403,12 @@ class RasFim:
             max_working_mib: Engine memory admission; the output is held in
                 memory (4 bytes/px plus a 1-bit TIN map).
             timeout: Engine timeout in seconds.
-            terrain_crs_fnv1a64: Caller-verified WKT hash when the source CRS
-                has no EPSG identification in the engine.
+            terrain_crs_fnv1a64: Caller-verified WKT hash when the engine
+                does not identify the EPSG code of a source CRS that rasterio
+                identifies by EPSG. It cannot replace the EPSG code itself:
+                the engine request carries the CRS as an EPSG code and labels
+                the output with it, so a CRS without one (for example
+                ``ESRI:102630``) is refused; use the RAS Mapper export.
             hecras_version: HEC-RAS version whose export the modifications
                 reproduce (for example ``"6.6"`` or ``"7.0.1"``). ``None``
                 resolves the project's version: ``ras_object``'s HEC-RAS
@@ -1411,8 +1425,9 @@ class RasFim:
             ``/2`` from current engines for every request, ``/1`` from older
             engines), ``hecras_version`` (``None`` for
             an unmodified terrain), ``hecras_version_basis``,
-            ``sources_in_priority_order``, ``priority_basis``, ``seconds`` and
-            the engine ``engine_report``.
+            ``sources_in_priority_order``, ``priority_basis``,
+            ``rasmap_warnings`` (as for :meth:`top_priority_terrain_source`),
+            ``seconds`` and the engine ``engine_report``.
 
         Terrain modifications (engine ``rasmapper-effective-terrain/2`` with a
         ``modifications`` record): ground lines (high ground and channels, any
@@ -1432,12 +1447,15 @@ class RasFim:
         engine advertising only ``/1`` refuses every modified terrain. Layer types RAS Mapper ignores (for example
         ``Type=Channel`` from older ras-commander writers) are skipped, and
         when ``rasmap_path`` is given without an ``ElevationModificationGroup``
-        under the terrain, no modification is applied, as in RAS Mapper.
+        named ``Modifications`` under the terrain (none, or only under another
+        name), no modification is applied, as in RAS Mapper, and the receipt's
+        ``rasmap_warnings`` says why.
 
         Raises:
             FimUnsupportedError: Unqualified terrain modifications, unproven priority,
-                missing masks, an engine without the method, or an engine
-                refusal (sources in different CRSs, non-square cells).
+                missing masks, an engine without the method, a source CRS
+                with no EPSG code, or an engine refusal (sources in different
+                CRSs, non-square cells).
             FimEngineNotFoundError: The optional executable is unavailable.
             FimEngineError: Engine failure.
         """

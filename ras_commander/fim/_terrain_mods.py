@@ -44,9 +44,11 @@ Load rules followed (RasMapperLib 6.6 / 7.0 / 7.0.1):
   order, which is not qualified: refused.
 * The ``.rasmap`` ``Checked`` state and per-layer entries are not consulted
   by the export, so the rasmap is not read here. The export does need the
-  terrain layer's ``ElevationModificationGroup`` element (any content):
-  without it HEC-RAS 6.6 and 7.0.1 apply none of the HDF modifications.
-  That gate is checked by ``_terrain_scope`` when a rasmap is given.
+  terrain layer's ``ElevationModificationGroup`` element named exactly
+  ``Modifications`` (any content): without it, or with the group under
+  another name, HEC-RAS 6.6 and 7.0.1 apply none of the HDF modifications.
+  That gate is checked by ``_terrain_scope`` when a rasmap is given, which
+  reports a misnamed group in ``rasmap_warnings``.
 
 Refused here, before the engine runs (each one the engine also refuses):
 shape-Z polygons without boundary elevations (vertex Z storage is not
