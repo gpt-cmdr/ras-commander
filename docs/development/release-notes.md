@@ -13,7 +13,8 @@ alone does not identify a development checkout.
   returns a terrain's modification layers in the form the native effective
   terrain (`rasmapper-effective-terrain/2`) stages them, with the resolved
   HEC-RAS version and unit system, and the reason when a form is refused
-  (`status` `"staged"`, `"none"` or `"refused"`;
+  (`refusal`, plus the error's `reason` code as `refusal_reason`, for example
+  `multi_ring_polygon`; `status` `"staged"`, `"none"` or `"refused"`;
   `ras-commander-terrain-modifications/1`). It wraps the reader that
   `build_effective_terrain` already uses, so callers such as ras2cng no
   longer import the private `ras_commander.fim._terrain_mods` module. No change

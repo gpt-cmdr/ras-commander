@@ -1521,6 +1521,12 @@ class RasFim:
         - ``refusal`` (str or None): For ``"refused"``, the reason the
           terrain cannot take the native route, naming the layer and
           feature; otherwise ``None``.
+        - ``refusal_reason`` (str or None): The stable reason code of the
+          refusal, copied from the ``reason`` attribute of the reader's
+          :class:`FimUnsupportedError` (for example
+          ``"multi_ring_polygon"``); ``None`` when the refusal has no code
+          or there is no refusal. Match on this code rather than on the
+          ``refusal`` text.
         - ``hecras_version`` (str or None): ``"7.0.1"`` or ``"6.6"``;
           ``None`` only when the version could not be resolved.
         - ``hecras_version_basis`` (str or None): ``"argument"``,
@@ -1569,17 +1575,21 @@ class RasFim:
         elevation type; ground lines with no stored profile and no control
         points; a NaN ``Top Width`` with a finite ``Max Reach``; named ground
         lines with control points, a NaN template or under HEC-RAS 6.6;
-        multi-part ground lines;
+        multi-part ground lines; polygon features with more than one ring
+        (holes or separate/overlapping parts), refused up front with
+        ``reason="multi_ring_polygon"`` because RAS Mapper's joining and
+        triangulation of such rings is not reproducible as a rule;
         polygon boundary elevations sampled from the terrain (and any
         boundary elevations without control points under 6.6); shape-Z
         polygons without boundary elevations; invalid geometry or control
         points; and project files in the folder that state different units.
-        An engine can still refuse a staged terrain (for example multi-part
-        polygons that need a TIN); compare the layers with the engine's
-        ``modifications`` capability record.
+        An engine can still refuse a staged terrain; compare the layers with
+        the engine's ``modifications`` capability record.
 
         Raises:
-            FimUnsupportedError: With ``strict=True``, for a refusal.
+            FimUnsupportedError: With ``strict=True``, for a refusal; its
+                ``reason`` attribute carries the reason code when one is
+                assigned.
             ValueError: ``length_units`` is not ``"feet"`` or ``"meters"``.
             OSError: The terrain HDF cannot be opened.
         """
@@ -1593,6 +1603,7 @@ class RasFim:
             "method_id": "rasmapper-effective-terrain/2",
             "status": "refused",
             "refusal": None,
+            "refusal_reason": None,
             "hecras_version": None,
             "hecras_version_basis": None,
             "length_units": None,
@@ -1618,6 +1629,7 @@ class RasFim:
             if strict:
                 raise
             record["refusal"] = str(exc)
+            record["refusal_reason"] = getattr(exc, "reason", None)
             return record
         record.update(status="staged" if layers else "none", layers=layers)
         return record

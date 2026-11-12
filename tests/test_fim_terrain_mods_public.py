@@ -27,7 +27,7 @@ from test_fim_terrain_mods import (  # noqa: E402
 )
 
 RECORD_KEYS = {
-    "schema", "terrain_hdf", "method_id", "status", "refusal", "hecras_version",
+    "schema", "terrain_hdf", "method_id", "status", "refusal", "refusal_reason", "hecras_version",
     "hecras_version_basis", "length_units", "length_units_basis", "layers",
 }
 GROUND_LINE_FEATURE_KEYS = {
@@ -79,6 +79,7 @@ def test_matches_the_private_reader_and_documented_shape(tmp_path, units_line, u
     assert record["method_id"] == "rasmapper-effective-terrain/2"
     assert record["terrain_hdf"] == str(hdf)
     assert record["status"] == "staged" and record["refusal"] is None
+    assert record["refusal_reason"] is None
     assert record["hecras_version"] == expected
     assert record["hecras_version_basis"] == f"Program Version {version} in {tmp_path.name}"
     assert record["length_units"] == units and record["length_units_basis"] == "project"
@@ -162,6 +163,7 @@ def test_refusals_carry_the_private_readers_reason(tmp_path, build, reason, vers
     assert set(record) == RECORD_KEYS
     assert record["status"] == "refused" and record["layers"] == []
     assert record["refusal"] == str(private.value) and reason in record["refusal"]
+    assert record["refusal_reason"] == getattr(private.value, "reason", None)
     assert record["hecras_version"] == version
     with pytest.raises(FimUnsupportedError, match=reason):
         RasFim.read_terrain_modifications(hdf, hecras_version=version, strict=True)
@@ -180,3 +182,24 @@ def test_conflicting_project_units_are_a_refusal(tmp_path):
 def test_invalid_length_units_raise(tmp_path):
     with pytest.raises(ValueError, match="length_units"):
         RasFim.read_terrain_modifications(_hdf(tmp_path), length_units="yards")
+
+
+def test_refusal_reason_code_is_surfaced(tmp_path, monkeypatch):
+    """A reader refusal's ``reason`` code (for example ``multi_ring_polygon``
+    from a polygon with more than one ring) is returned as ``refusal_reason``."""
+    error = FimUnsupportedError("modification 'Pond' feature 0: multi-ring polygon (2 rings) "
+                                "is not qualified [reason: multi_ring_polygon]")
+    error.reason = "multi_ring_polygon"
+
+    def refuse(*args, **kwargs):
+        raise error
+
+    monkeypatch.setattr(_terrain_mods, "read_layers", refuse)
+    record = RasFim.read_terrain_modifications(_hdf(tmp_path), hecras_version="7.0.1",
+                                               length_units="feet")
+    assert record["status"] == "refused"
+    assert record["refusal_reason"] == "multi_ring_polygon"
+    assert "multi-ring polygon" in record["refusal"]
+    with pytest.raises(FimUnsupportedError) as raised:
+        RasFim.read_terrain_modifications(_hdf(tmp_path, "b.hdf"), strict=True)
+    assert raised.value.reason == "multi_ring_polygon"

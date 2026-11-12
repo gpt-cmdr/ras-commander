@@ -1001,6 +1001,8 @@ record["hecras_version"], record["length_units"]
 
 The record (`ras-commander-terrain-modifications/1`) carries `terrain_hdf`,
 `method_id` (`rasmapper-effective-terrain/2`), `status`, `refusal`,
+`refusal_reason` (the `reason` code of the reader's `FimUnsupportedError`, for
+example `multi_ring_polygon` for a polygon with more than one ring, or `None`),
 `hecras_version` and `length_units` with their `*_basis`, and `layers`. Layers
 are `ground_line`, `polygon` or `ellipse` records in the engine request form;
 the field list, units and refusal reasons are in the
