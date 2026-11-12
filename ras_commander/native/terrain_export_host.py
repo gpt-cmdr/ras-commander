@@ -661,8 +661,14 @@ def _validate_source_inventory(sources: list[Any]) -> None:
                 )
 
 
-def _normalize_host_path(value: Union[str, os.PathLike[str]]) -> Path:
-    """Convert Windows/Wine-visible input to this host's filesystem path."""
+def _normalize_host_path(
+    value: Union[str, os.PathLike[str]], timeout: Optional[float] = None
+) -> Path:
+    """Convert Windows/Wine-visible input to this host's filesystem path.
+
+    ``timeout`` bounds the ``winepath`` conversion on Linux
+    (``subprocess.TimeoutExpired`` when it runs out).
+    """
     text = os.fspath(value)
     if platform.system() == "Linux" and _WINDOWS_PATH.match(text):
         from ..RasProcess import RasProcess
@@ -677,6 +683,7 @@ def _normalize_host_path(value: Union[str, os.PathLike[str]]) -> Path:
             text=True,
             check=False,
             env=RasProcess._build_wine_env(config),
+            timeout=timeout,
         )
         if result.returncode != 0 or not result.stdout.strip():
             raise ValueError(f"Wine could not resolve path: {text!r}")
@@ -1345,7 +1352,11 @@ def check_extent_source_coverage(
         }
         if entry["intersects"]:
             try:
-                path = _normalize_host_path(str(source["filename"]))
+                _check_deadline(deadline, "terrain-coverage-scan")
+                path = _normalize_host_path(
+                    str(source["filename"]),
+                    None if deadline is None else max(0.001, deadline - time.monotonic()),
+                )
                 entry["valid_cells"] = _count_valid_cells(path, extent, deadline)
                 found = found or entry["valid_cells"] > 0
             except subprocess.TimeoutExpired:

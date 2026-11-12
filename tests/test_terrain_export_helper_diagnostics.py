@@ -506,3 +506,23 @@ def test_timeout_keeps_partial_stderr_and_response(tmp_path, monkeypatch):
     assert invocations[0]["status"] == "timeout"
     assert "partial helper stderr" in invocations[0]["stderr"]
     assert invocations[0]["response"] == {"ok": True, "stage": "shutdown"}
+
+
+def test_coverage_scan_bounds_wine_path_conversion(monkeypatch):
+    seen = {}
+
+    def normalize(value, timeout=None):
+        seen["timeout"] = timeout
+        raise subprocess.TimeoutExpired(["winepath"], timeout)
+
+    monkeypatch.setattr(host, "_normalize_host_path", normalize)
+    import time
+
+    with pytest.raises(subprocess.TimeoutExpired):
+        host.check_extent_source_coverage(
+            [{"index": 0, "filename": "Z:\terrain\source.tif",
+              "extent": {"min_x": 0, "min_y": 0, "max_x": 20, "max_y": 20}}],
+            (0.0, 0.0, 20.0, 20.0),
+            deadline=time.monotonic() + 30,
+        )
+    assert 0 < seen["timeout"] <= 30
