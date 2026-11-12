@@ -488,14 +488,22 @@ class RasTerrainModWriter:
             control_names = list(control_names) + list(perim_names)
 
         boundary_xy = np.vstack(rings_xy)
-        boundary_values = RasTerrainModWriter._boundary_elevations_for_polygon(
-            terrain_hdf_path=terrain_hdf_path,
-            boundary_xy=boundary_xy,
-            rings_z=rings_z,
-            elevation_method=elevation_method,
-            boundary_elevations=boundary_elevations,
-            elevation=elevation,
-        )
+        if perimeter_control_points is not None:
+            # The perimeter points set the boundary in RAS Mapper; the stored
+            # profile is interpolated from them along the ring, as RAS Mapper
+            # does, so no terrain is read (a vertex over NoData is fine).
+            boundary_values = RasTerrainModWriter._perimeter_profile_elevations(
+                rings_xy[0], perim_xy, perim_elevations
+            )
+        else:
+            boundary_values = RasTerrainModWriter._boundary_elevations_for_polygon(
+                terrain_hdf_path=terrain_hdf_path,
+                boundary_xy=boundary_xy,
+                rings_z=rings_z,
+                elevation_method=elevation_method,
+                boundary_elevations=boundary_elevations,
+                elevation=elevation,
+            )
 
         logger.debug(
             "Adding polygon multipoint terrain modification '%s' to %s",
@@ -2126,6 +2134,42 @@ class RasTerrainModWriter:
                 "control_points must fall inside the polygon exterior; "
                 f"outside point indices: {outside}"
             )
+
+    @staticmethod
+    def _perimeter_profile_elevations(
+        ring_xy: np.ndarray,
+        perim_xy: np.ndarray,
+        perim_elevations: np.ndarray,
+    ) -> np.ndarray:
+        """Elevation at each ring vertex, interpolated from perimeter points.
+
+        Each point is projected to its nearest perimeter station; vertex
+        elevations are linear in station between neighbouring points, wrapping
+        across the ring start (one point gives a constant boundary).
+        """
+        ring = np.asarray(ring_xy, dtype=np.float64)[:, :2]
+        closed = ring if np.array_equal(ring[0], ring[-1]) else np.vstack([ring, ring[:1]])
+        starts, ends = closed[:-1], closed[1:]
+        vector = ends - starts
+        lengths = np.sqrt((vector * vector).sum(axis=1))
+        cum = np.concatenate([[0.0], np.cumsum(lengths)])
+        total = float(cum[-1])
+        stations = []
+        for point in np.asarray(perim_xy, dtype=np.float64):
+            length2 = lengths * lengths
+            safe = np.where(length2 > 0, length2, 1.0)
+            t = np.clip(((point - starts) * vector).sum(axis=1) / safe, 0.0, 1.0)
+            d = np.sqrt((((starts + vector * t[:, None]) - point) ** 2).sum(axis=1))
+            k = int(np.argmin(d))
+            stations.append(float(cum[k] + t[k] * lengths[k]))
+        order = np.argsort(stations, kind="stable")
+        xs = np.asarray(stations, dtype=np.float64)[order]
+        zs = np.asarray(perim_elevations, dtype=np.float64)[order]
+        # Periodic: repeat the points one perimeter before and after.
+        xs = np.concatenate([xs - total, xs, xs + total])
+        zs = np.concatenate([zs, zs, zs])
+        vertex_stations = RasTerrainModWriter._station_values(ring)
+        return np.interp(vertex_stations, xs, zs)
 
     @staticmethod
     def _validate_control_points_on_perimeter(

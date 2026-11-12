@@ -1713,11 +1713,21 @@ class RasFim:
         }
         try:
             rules = RasFim._engine_hecras_versions(engine_path)
-            if hecras_version is not None:
-                version, basis = _terrain_mods.hecras_version_for(hecras_version, rules), "argument"
-            else:
-                version, basis = _terrain_mods.project_hecras_version(
-                    terrain_path, rasmap_path, ras_object, rules)
+            try:
+                if hecras_version is not None:
+                    version, basis = (
+                        _terrain_mods.hecras_version_for(hecras_version, rules), "argument")
+                else:
+                    version, basis = _terrain_mods.project_hecras_version(
+                        terrain_path, rasmap_path, ras_object, rules)
+            except FimUnsupportedError as exc:
+                # The release gate applies to modified terrains only, as in
+                # build_effective_terrain: nothing to stage is "none".
+                if (getattr(exc, "reason", None) == _terrain_mods.UNQUALIFIED_HECRAS_VERSION
+                        and not _terrain_mods.has_layers(terrain_path)):
+                    record.update(status="none")
+                    return record
+                raise
             record.update(hecras_version=version, hecras_version_basis=basis)
             if length_units is not None:
                 units, units_basis = length_units, "argument"

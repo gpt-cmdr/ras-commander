@@ -1000,3 +1000,32 @@ def test_perimeter_control_points_are_validated(tmp_path, monkeypatch, kwargs, m
         _perimeter_pond(tmp_path, monkeypatch, **kwargs)
     with h5py.File(tmp_path / "Terrain" / "Terrain.Clone.hdf", "r") as hdf:
         assert "Modifications" not in hdf or "Perimeter Pond" not in hdf["Modifications"]
+
+
+def test_perimeter_control_points_need_no_terrain_and_set_the_stored_profile(tmp_path, monkeypatch):
+    """No terrain raster is read (a vertex over NoData cannot fail the write);
+    the stored profile is interpolated from the points along the ring."""
+
+    def no_raster(path):  # pragma: no cover - must not run
+        raise AssertionError("terrain sampled")
+
+    monkeypatch.setitem(sys.modules, "rasterio", SimpleNamespace(open=no_raster))
+    terrain_hdf, _ = _write_minimal_terrain(tmp_path)
+    RasTerrainModWriter.add_modification_polygon(
+        terrain_hdf, name="Perimeter Pond",
+        polygon_coords=[[0.0, 0.0], [100.0, 0.0], [100.0, 100.0], [0.0, 100.0]],
+        perimeter_control_points=[(-10.0, 50.0, 905.0), (50.0, 115.0, 912.0), (110.0, -5.0, 908.0)],
+        elev_pt_tolerance=20.0,
+    )
+    with h5py.File(terrain_hdf, "r") as hdf:
+        mod = hdf["Modifications/Perimeter Pond"]
+        profile = mod["Profile Values"][:]
+        assert int(mod["Attributes"]["Generate Boundary Elevations"][0]) == 1
+    # Stations 0,100,...,400; points at 350 (905), 250 (912) and 100 (908, the corner).
+    np.testing.assert_allclose(profile[:, 0], [0.0, 100.0, 200.0, 300.0, 400.0])
+    np.testing.assert_allclose(profile[:, 1], [906.0, 908.0, 910.6666667, 908.5, 906.0], rtol=0, atol=1e-4)
+    single = RasTerrainModWriter._perimeter_profile_elevations(
+        np.array([[0.0, 0.0], [10.0, 0.0], [10.0, 10.0], [0.0, 0.0]]),
+        np.array([[5.0, -1.0]]), np.array([3.0]))
+    assert single.tolist() == [3.0, 3.0, 3.0, 3.0]
+

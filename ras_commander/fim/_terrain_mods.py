@@ -669,6 +669,19 @@ def project_hecras_version(terrain_hdf, rasmap_path=None, ras_object=None, rules
     return "7.0.1", "default"
 
 
+def has_layers(terrain_hdf) -> bool:
+    """Whether ``terrain_hdf`` stores any layer the reader would stage or refuse.
+
+    ``False`` only when :func:`read_layers` stages nothing (no
+    ``/Modifications`` group, or only layers and features RAS Mapper skips);
+    a refused layer counts as a layer.
+    """
+    try:
+        return bool(read_layers(terrain_hdf, length_units="feet", hecras_version="7.0.1"))
+    except FimUnsupportedError:
+        return True
+
+
 def read_layers(terrain_hdf, length_units: Optional[str] = "feet",
                 hecras_version: str = "7.0.1") -> list:
     """Every modification layer of ``terrain_hdf`` as engine request layers.

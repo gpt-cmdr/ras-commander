@@ -194,6 +194,15 @@ def test_unqualified_project_release_is_refused(tmp_path, monkeypatch, version):
     assert exc.value.reason == _terrain_mods.UNQUALIFIED_HECRAS_VERSION
 
 
+def test_unmodified_terrain_on_an_unqualified_release_is_none(tmp_path):
+    """The release gate applies to modified terrains only."""
+    hdf = _project(tmp_path, "English Units", "6.50")
+    record = RasFim.read_terrain_modifications(hdf)
+    assert record["status"] == "none" and record["refusal"] is None and record["layers"] == []
+    record = RasFim.read_terrain_modifications(hdf, hecras_version="7.1")
+    assert record["status"] == "none"
+
+
 def test_engine_table_selects_the_6_7_rule(tmp_path, monkeypatch):
     hdf = _project(tmp_path, "English Units", "6.70")
     _qualified(hdf)
