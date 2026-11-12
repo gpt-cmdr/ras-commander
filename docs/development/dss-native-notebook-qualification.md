@@ -19,6 +19,25 @@ files, and the HEC-RAS results.
   mode, 318 no longer deletes the shared example-project folder, and 731 has a native export route.
   All five fixed notebooks pass on all three backends; see "Final round" below.
 
+!!! warning "Correction (2026-11-12): 916 forcing before the review-1 fix"
+    Every 916 run recorded in this report before the 2026-11-12 review-1 fix drove the
+    forecast plan with the `qpkit` route (GDAL crops of the HRRR running accumulations,
+    differenced, reprojected and written by `qpkit` 0.1.0). Those runs are **execution
+    and DSS read-back evidence only; their forcing failed source-spatial qualification.**
+    For cycle 2024-08-08 15Z the qpkit grids leave 69 lattice cells missing in every hour
+    (71 in one hour), which the notebook's `np.nansum` and finite filters turned into zero
+    rain, and against an independent full-source GDAL bilinear warp of the same HRRR
+    message the 18-hour total has an RMSE of 14.4 mm (the native import: 0.00024 mm).
+    "Identical across backends" for those runs means the backends read the same defective
+    grids identically; it says nothing about their spatial correctness. From the review-1
+    fix, 916 drives its runs with native hourly forcing validated against a full-source
+    warp; see "ras-commander-fast-dss 0.1.2 notebooks".
+
+    Notebook 926 also writes its forcing with `qpkit` (WPC QPF). Its retained grids from
+    the qualified fixed cycle 2026-11-05 00Z have 126 cells missing in every one of the
+    28 frames. 926 has not yet been assessed against a full-source warp; until it is,
+    treat its runs in this report as execution and read-back evidence only.
+
 **Counts.** These are the unmodified notebooks run on each backend: 9 run in full, plus a
 partial DSS check of 952.
 
@@ -91,7 +110,7 @@ Wall times are single incidental observations, not benchmarks.
 | 313 HMS-to-RAS boundary matching | pass | pass | pass | `get_catalog`, `read_timeseries`, `extract_boundary_timeseries` | catalog 1, read_timeseries 59: all identical | None | 31 / 27 / 26 |
 | 318 Validating DSS paths | pass | pass | pass | `check_file_exists`, `check_pathname*`, `check_data_availability`, `is_pathname_available`, `is_valid_pathname`, `get_catalog`, `read_timeseries` | catalog 9, read_timeseries 5: all identical | None, after rerun with a fixed hash seed (note 2) | 4.5 / 4.6 / 4.3 |
 | 728 Extend gridded DSS forcing window | pass | pass | pass | `write_timeseries` and `write_grid_timeseries` (DSS7, SHG, in a child process), `get_catalog`, `read_grid`, `copy_grid_with_zero_tail`, `get_file_version`, `configure_gridded_dss_precipitation`; HEC-RAS run | catalog 4, file_version 1, read_grid 17: identical. copy_grid_with_zero_tail 1: **expected W2**. Child-process writes: write_timeseries identical, write_grid_timeseries **expected W2** (note 3) | 5 DSS files: all records equal. HDF: every physical cell bit-equal (note 4) | 219 / 219 / 157 |
-| 916 HRRR forecast | fail @17 | fail @17 | fail @17 | `qpkit` writes HRRR grids; `RasDss.get_catalog`, `read_grid`; HEC-RAS runs | catalog 1, read_grid 18: all identical | DSS: 18 grid records equal. HDF: every physical cell bit-equal (note 4). Same failure on all backends (note 5) | 305 / 452 / 340 |
+| 916 HRRR forecast (qpkit forcing; see correction) | fail @17 | fail @17 | fail @17 | `qpkit` writes HRRR grids; `RasDss.get_catalog`, `read_grid`; HEC-RAS runs | catalog 1, read_grid 18: all identical | DSS: 18 grid records equal. HDF: every physical cell bit-equal (note 4). Same failure on all backends (note 5) | 305 / 452 / 340 |
 | 917 MRMS QPE | fail @10 | fail @10 | fail @10 | Vortex writes 37 MRMS grids; `RasDss.get_catalog`, `read_grid`; HEC-RAS run | catalog 1, read_grid 37: all identical | DSS: 37 grid records equal; catalog row order follows each Vortex run. Same failure on all backends (note 5) | 160 / 141 / 121 |
 | 918 HMS-RAS coupled forecast | pass | pass | pass | None executed. The DSS calls appear only in printed patterns. | none | None | 2 / 2 / 2 |
 | 926 WPC QPF | fail @15 | fail @15 | fail @15 | `qpkit` writes WPC grids; `RasDss.get_catalog`, `read_grid`; HEC-RAS runs | catalog 1, read_grid 28: all identical | DSS: 28 grid records equal. HDF: every physical cell bit-equal (note 4). Same failure on all backends (note 5) | 343 / 313 / 381 |
@@ -108,7 +127,7 @@ The edit is not committed.
 | NB | java | native | shadow | Shadow summary | Differences | Wall time j / n / s (s) |
 |---|---|---|---|---|---|---|
 | 917 MRMS QPE (Davis and NewOrleansMetro) | pass | pass | pass | catalog 4, read_grid 122: all identical | DSS: Davis 37 and NOLA 24 grid records, equal. Text: only Vortex catalog row order, run timestamps, and file sizes that carry write times. Images: identical. HDF: all float result datasets bit-equal except `Minimum Link DS Velocity` (Davis) and `Main Gates` (NOLA). Both also differ in the no-rain baseline runs, which use no DSS, so they are HEC-RAS run-to-run variation. | 2011 / 1888 / 2052 |
-| 916 HRRR forecast | pass | pass | pass | catalog 1, read_grid 18: all identical | No text or image differences | 346 / 334 / 304 |
+| 916 HRRR forecast (qpkit forcing; execution/read-back evidence only, failed spatial qualification) | pass | pass | pass | catalog 1, read_grid 18: all identical | No text or image differences | 346 / 334 / 304 |
 | 926 WPC QPF | fail @15 | fail @7 | fail @15 | Inconclusive (see below) | | 347 / 8 / 315 |
 
 **Why the 926 rerun is inconclusive.** 926 downloads the *current-day* WPC QPF cycle. The rerun
@@ -180,7 +199,7 @@ each was run again on `java`, `native` and `shadow` with the same harness and me
 | NB | Change | java | native | shadow | Differences | Wall time j / n / s (s) |
 |---|---|---|---|---|---|---|
 | 318 | Clean-up removes only `BaldEagleCrkMulti2D_311`, not the shared `example_projects` folder | pass | pass | pass | None | 6 / 4 / 4 |
-| 916 | `get_mesh_cell_points(..., include_ghost_cells=False)` to match the ghost-free result rows | pass | pass | pass | No text or image differences. DSS: every record of the 4 DSS files equal, including the 18 HRRR grids. HDF: every physical-cell and face dataset bit-equal (note 4 classes only) | 350 / 350 / 428 |
+| 916 (qpkit forcing; execution/read-back evidence only, failed spatial qualification) | `get_mesh_cell_points(..., include_ghost_cells=False)` to match the ghost-free result rows | pass | pass | pass | No text or image differences. DSS: every record of the 4 DSS files equal, including the 18 HRRR grids. HDF: every physical-cell and face dataset bit-equal (note 4 classes only) | 350 / 350 / 428 |
 | 917 | `include_ghost_cells=True` in every `get_mesh_timeseries(..., truncate=False)` call, because the notebook checks that boundary cells receive no rain | pass | pass (note A) | pass (note A) | Shadow: catalog 4, read_grid 122, all identical. DSS: 37 Davis and 24 NOLA grids equal. Text: run-folder timestamps, Vortex catalog row order, file sizes and the NOLA volume-accounting value only | 1886 / 2323 / 2052 |
 | 926 | Fixed-cycle mode (`RAS_COMMANDER_WPC_QPF_CYCLE`, `RAS_COMMANDER_WPC_QPF_GRIB_DIR`); physical cell centers as 916 | pass | pass | pass | Cycle 2026-11-05 00Z. No text or image differences. DSS: every record equal, including the 28 WPC grids. HDF: every physical-cell and face dataset bit-equal (note 4 classes only) | 437 / 775 / 552 |
 | 731 | `DSS_EXPORT_ROUTE = "native"` beside the default `"vortex"`; `SOURCE_BUFFER_PERCENT` | — | — | — | See note B | — |
@@ -240,8 +259,8 @@ the default-lane runs.
 | 321 Native DSS Records, Backends, and Copy-Out Recovery (new) | Records, backends, `sync=`, paired data, locations and `repair` on public HEC files; no HEC-RAS | pass | pass | in-notebook (note C) | 28 / 30 / — |
 | 732 Native Gridded Import and Grid Tools on Real Precipitation (new) | `RasDssGrid` on AORC Zarr/NetCDF, IMERG HDF5, Stage IV GRIB1/GRIB2 and MRMS GRIB2; every grid tool; no HEC-RAS | pass | pass | not applicable (note D) | 43 / 53 / — |
 | 731 Atlas 14 shared temporal pattern | Public preset (NewOrleansMetro, NOAA `se100yr24ha`); native export through `RasDssGrid.import_gridded` | pass (native export route) | pass | — | 115 / 54; Vortex route 39 (note E) |
-| 916 HRRR forecast | Native lane on the authentic HRRR messages and a Stage IV analysis, each checked against GDAL's decode of its own source | pass | pass | — | 555 / 1707 (note G) |
-| 917 MRMS QPE | Visible backend selectors; native preprocessing (1-72 h windows, overlap/gap reports, shapefile clip, threads) | pass | pass (`RAS_COMMANDER_MRMS_BACKEND=native`) | pass (`...=shadow`) | 2389 / 2351 / 3507 (note F) |
+| 916 HRRR forecast | Review 1: the HEC-RAS runs are driven by native hourly forcing (HRRR one-hour APCP messages through `RasDssGrid`), validated against a full-source GDAL warp with a coverage gate; qpkit kept as a disclosed comparison that fails spatial qualification | pass | pass | pass | 371 / 405 / 330 (note G) |
+| 917 MRMS QPE | Visible backend selectors; native preprocessing (1-72 h windows, overlap/gap reports, shapefile clip, threads) | pass | pass (`RAS_COMMANDER_MRMS_BACKEND=native`) | pass (`...=shadow`) | 2910 / 2351 / 3507 (note F) |
 
 **Note C, 321.** The notebook's own comparison cell runs `native`, `java` and
 `shadow` in one kernel. In the default lane every series was equal to the native
@@ -277,18 +296,21 @@ New Orleans MRMS grids are equal cell for cell on all three lanes (HEC-Vortex on
 default, the native importer on native, both on shadow); the event plans' water
 surface and cumulative precipitation are bit-identical across lanes; shadow
 recorded 151 comparisons (`catalog` 4, `read_grid` 147), all `identical`; the native
-lane loaded no JVM.
+lane loaded no JVM. After review 1, the scale variable is validated (a non-numeric, non-finite or non-positive value raises `ValueError`) and the default lane was rerun with that code (2,910 s, pass); the committed outputs come from that rerun. The native and shadow figures are from the run before this validation-only change.
 
-**Note G, 916.** The first default run of the revised notebook stopped in cell 17
-when HEC-RAS exited with `STATUS_DLL_INIT_FAILED` at the moment the runner's parent
-shell was stopped; it was rerun alone and passed. The native lane ran while other
-work loaded the host. The native 0-18 h HRRR record and the qpkit sum of 18 hourly
-grids, on the same 26 x 23 SHG lattice, differ more than two warps of one source
-would: the qpkit grid has 69 cells at 0 mm along its southern and eastern edges
-where the native record has rain, and its storm core sits about two rows north of
-the native record's (the comparison figure). The cause was not resolved; the
-hydraulic runs keep the qualified qpkit route. Both GRIB decodes (HRRR f18 and
-Stage IV) match GDAL to 1.5e-5 mm with identical masks.
+**Note G, 916 (review 1).** The independent review of `2f9431eef` found that the qpkit
+route used until then is spatially wrong for this cycle (see the correction at the top).
+The notebook now downloads the one-hour APCP message of each forecast hour, imports the
+18 messages with `RasDssGrid.import_gridded` onto a 3,000 m SHG lattice covering the
+buffered model footprint, and stops if any forcing cell is missing. Each hourly record is
+compared with a Rasterio/GDAL bilinear warp of its complete source message onto the stored
+lattice (gate: no missing cell in either, at most 0.01 mm difference): no missing cell in any of the 18 hours, RMSE at most 1.9e-4 mm and maximum difference at most 0.00077 mm; the sum of the 18 hours differs from the warped 0-18 h running accumulation by at most 0.015 mm. The three lanes wrote identical forcing records, the forecast plan's water surface and cumulative rainfall are bit-identical across lanes, shadow recorded 79 comparisons (catalog 2, read_grid 77), all `identical`, and the native lane loaded no JVM.
+The temporary and final plan HDFs are checked against that forcing, and every mesh cell
+must sample a valid forcing cell. The qpkit route still runs, into a separate file no plan
+uses; its missing cells are counted and kept missing: 69 cells missing in every hour (71 in one), and over the 527 cells valid in every hour an RMSE of 4.8 mm against a bilinear and 5.0 mm against a nearest-neighbour full-source warp on qpkit's own lattice; the notebook reports it as not spatially qualified. Both GRIB decodes
+match GDAL to 1.5e-5 mm. `qpkit` is a third-party package (Gyan Basyal, WEST Consultants,
+Inc.; Apache-2.0; source `github.com/gyanz/qpkit`, 0.1.0 built from commit `64455cb9efad`);
+it is not a gpt-cmdr or CLB package. Nothing was reported upstream from this work.
 
 ## Skipped notebooks
 

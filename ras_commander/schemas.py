@@ -29,7 +29,7 @@ Each entry of :data:`DATAFRAME_SCHEMAS`:
 """
 
 # Schema contract version -- bump when the documented column surface changes meaningfully.
-SCHEMA_VERSION = "1.32"
+SCHEMA_VERSION = "1.33"
 
 _GEOMETRY_ASSOCIATION_COLUMNS = [
     {"name": "geom_number", "dtype": "str", "description": "Normalized geometry identifier."},
@@ -2162,4 +2162,33 @@ DATAFRAME_SCHEMAS["fim_boundary_comparison"] = {
         )
     ],
     "note": "Difference metrics retain complete polygons and holes. Native vector parity is not presumed. Shared timing/provenance and exclusions are recorded in attrs and boundary_comparison.json.",
+}
+
+
+DATAFRAME_SCHEMAS["dss_grid_zonal_statistics"] = {
+    "description": "Zonal statistics of DSS (or other) grids by polygon zone, one row per grid frame and zone.",
+    "accessor": "RasDssGrid.zonal_statistics(grids, zones, zone_field, **kwargs)",
+    "source": "ras_commander.dss.RasDssGrid.RasDssGrid.zonal_statistics() -> ras_commander_fast_dss.gridded.zonal_statistics()",
+    "extra_columns": False,
+    "dynamic": False,
+    "index": "Default RangeIndex; rows are ordered by grid frame, then by zone in the zones file.",
+    "columns": [
+        {"name": name, "dtype": dtype, "description": description}
+        for name, dtype, description in (
+            ("zone", "str", "Value of zone_field for the zone (the B part grid_to_point writes)."),
+            ("variable", "str", "Grid variable: the C part of a DSS grid, or the source variable name."),
+            ("units", "str", "Units of the grid values as stored (for example MM); every statistic except the two percentages is in these units."),
+            ("start", "datetime64", "Start of the frame's period (naive, as stored; the unit, us or ns, follows pandas)."),
+            ("end", "datetime64", "End of the frame's period (naive, as stored)."),
+            ("average", "float64", "Mean of the zone's valid cells (area-weighted when area_weighted=True), in units."),
+            ("min", "float64", "Minimum of the zone's valid cells, in units."),
+            ("max", "float64", "Maximum of the zone's valid cells, in units."),
+            ("median", "float64", "Median of the zone's valid cells, in units."),
+            ("q1", "float64", "First quartile of the zone's valid cells, in units."),
+            ("q3", "float64", "Third quartile of the zone's valid cells, in units."),
+            ("pct_gt_0", "float64", "Percent (0-100) of the zone's valid cells above 0."),
+            ("pct_gt_q1", "float64", "Percent (0-100) of the zone's valid cells above q1."),
+        )
+    ],
+    "note": "The column set is fixed: zonal_statistics always returns all eight statistics, whatever grid_to_point's statistics argument would select. A statistic with no valid cell is NaN unless raw=True, which keeps the stored missing marker. The str columns are object dtype on pandas 2. The frame is the engine's result, returned unchanged; attrs are empty.",
 }

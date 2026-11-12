@@ -163,8 +163,9 @@ untouched. Its documentation lists the supported source layouts, projections and
 resampling methods, and where its records differ from HEC-Vortex by design.
 Import `units=` relabels a record; it does not convert values. The importer's
 `cell_size` is in metres. With ras-commander-fast-dss 0.1.2 the importers use
-every core by default (`threads=None`), and the file is byte-identical to
-`threads=1`. SNODAS times come from the NOHRSC header by default;
+every core by default (`threads=None`). Pathnames, grid values and metadata
+equal those of `threads=1`; the file bytes can differ, because DSS stores write
+timestamps. SNODAS times come from the NOHRSC header by default;
 `snodas_times="vortex"` gives HEC-Vortex 1.1.0's timing (see
 [Gridded import and tools](../native-engine.md#gridded-import-and-tools)).
 

@@ -528,6 +528,32 @@ def test_zonal_statistics_and_grid_to_point(grids, zones, tmp_path):
         assert df.index[0] == pd.Timestamp("2020-01-01 01:00")
 
 
+def test_zonal_statistics_frame_matches_its_schema(grids, zones):
+    """The live RasDssGrid.zonal_statistics frame against schemas.DATAFRAME_SCHEMAS."""
+    from pandas.api import types
+
+    from ras_commander.schemas import DATAFRAME_SCHEMAS
+
+    schema = DATAFRAME_SCHEMAS["dss_grid_zonal_statistics"]
+    target, _ = grids
+    table = RasDssGrid.zonal_statistics(target, zones, "NAME", assume_no_datum_shift=True)
+    assert list(table.columns) == [column["name"] for column in schema["columns"]]
+    assert schema["extra_columns"] is False and schema["dynamic"] is False
+    assert isinstance(table.index, pd.RangeIndex)
+    checks = {
+        "str": lambda s: types.is_string_dtype(s) or types.is_object_dtype(s),
+        "datetime64": types.is_datetime64_dtype,
+        "float64": lambda s: s.dtype == np.float64,
+    }
+    for column in schema["columns"]:
+        assert checks[column["dtype"]](table[column["name"]]), (column["name"], table[column["name"]].dtype)
+    assert table["units"].eq("MM").all()
+    assert table["pct_gt_0"].between(0, 100).all() and table["pct_gt_q1"].between(0, 100).all()
+    # Rows by frame, then zone (in the zones file's order).
+    assert list(table["zone"]) == ["WEST", "EAST"] * 3
+    assert (table["end"] > table["start"]).all()
+
+
 def test_read_tools_on_the_public_grid_fixture():
     fixture = Path(__file__).parent / "fixtures" / "dss_native_public" / "synthetic_grid7.dss"
     if not fixture.exists():  # pragma: no cover

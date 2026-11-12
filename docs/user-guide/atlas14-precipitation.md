@@ -734,4 +734,4 @@ Complete workflow demonstrations:
 
 ### Existing-model shared-pattern notebook
 
-[Notebook 731](../notebooks/731_atlas14_shared_temporal_existing_model.md) applies an original NOAA depth raster and one explicitly selected temporal curve to an existing model footprint. It checks interval depths and masks, serializes Float32 intervals before explicit bilinear SHG conversion, and optionally attaches the resulting DSS to a staged model copy without running a solver. Its public preset runs the workflow on the NewOrleansMetro example and NOAA's Volume 9 grid; the native export goes through `RasDssGrid.import_gridded`.
+[Notebook 731](../notebooks/731_atlas14_shared_temporal_existing_model.md) applies an original NOAA depth raster and one explicitly selected temporal curve to an existing model footprint. It checks interval depths and masks, serializes Float32 intervals before explicit bilinear SHG conversion, and optionally attaches the resulting DSS to a staged model copy without running a solver.

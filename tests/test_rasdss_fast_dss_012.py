@@ -178,4 +178,3 @@ def test_replace_published_replaces_when_nothing_holds_the_target(tmp_path):
     source.write_bytes(b"new")
     _backend.replace_published(source, target)
     assert target.read_bytes() == b"new" and not source.exists()
-

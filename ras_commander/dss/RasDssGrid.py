@@ -102,8 +102,9 @@ class RasDssGrid:
     every flush point and ``"none"`` (or ``False``) does not flush.
 
     ``threads`` of the importers: with 0.1.2 the engine's default (``None``) uses
-    every core available to the process; the file written is byte-identical to
-    ``threads=1``.
+    every core available to the process. The records written have the same
+    pathnames, grid values and metadata as with ``threads=1``; the file bytes can
+    differ, because DSS stores write timestamps.
     """
 
     @staticmethod

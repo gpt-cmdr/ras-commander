@@ -9,6 +9,20 @@ alone does not identify a development checkout.
 
 ### Unreleased
 
+- **Notebook 916 now drives HEC-RAS with native hourly HRRR forcing.** The qpkit route
+  it used before left 69 forcing cells missing in every hour for its HRRR cycle, which
+  the notebook read as zero rain, and did not match a full-source warp of the same HRRR
+  messages. The notebook now imports HRRR's one-hour APCP messages with
+  `RasDssGrid.import_gridded`, validates every hourly grid against a full-source GDAL
+  warp, and stops if a forcing cell is missing or a mesh cell samples none. The qpkit
+  route remains only as a disclosed comparison. Earlier 916 runs in the
+  [qualification report](dss-native-notebook-qualification.md) are labelled as execution
+  and read-back evidence whose forcing failed spatial qualification.
+- **`RasDssGrid.zonal_statistics` has a schema contract.** `schemas.py`
+  (`SCHEMA_VERSION` 1.33) registers `dss_grid_zonal_statistics`: thirteen fixed columns
+  (`zone`, `variable`, `units`, `start`, `end` and the eight statistics) on a default
+  RangeIndex, one row per frame and zone.
+
 - **The DSS extras move to `ras-commander-fast-dss` 0.1.2.** The `dss`,
   `dss-native` and `all` extras now request `ras-commander-fast-dss>=0.1.2,<0.2`,
   with the same platform marker (no macOS wheels; build from source there).
@@ -20,7 +34,8 @@ alone does not identify a development checkout.
   A `DssFile` session holds one native handle after its first write: close it
   before renaming, replacing or deleting the file. Gridded import reads Stage IV
   GRIB1, PRISM BIL and packages, SNODAS and GeoTIFFs with a nodata-only
-  `.aux.xml`, and uses every core by default with byte-identical output. DSS6
+  `.aux.xml`, and uses every core by default (pathnames, grid values and metadata
+  equal those of `threads=1`; file bytes can differ by write timestamps). DSS6
   irregular-pattern writes need an engine opt-in that RasDss does not pass, so
   they are refused.
 - **Engine wrappers for the native-only operations.** New static class

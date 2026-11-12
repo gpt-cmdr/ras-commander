@@ -144,7 +144,9 @@ through the same writer as `RasDss`. Each run is planned before a cell is read:
 every pathname, window and unit is decided first, so a refusal leaves the output
 file untouched. It follows HEC-Vortex's importer rules for products, C parts,
 units and time windows. From 0.1.2 an import uses every core by default
-(`threads=None`); the file it writes is byte-identical to `threads=1`.
+(`threads=None`). The records it writes have the same pathnames, grid values and
+metadata as with `threads=1`; the file bytes can differ, because DSS stores write
+timestamps.
 
 SNODAS times come from the checked NOHRSC header by default
 (`snodas_times="header"`): a daily total is `PER-CUM` over the 24 hours ending at
@@ -238,8 +240,8 @@ Notebooks that teach the native engine directly:
   `RasDssGrid` on AORC Zarr/NetCDF, IMERG HDF5, Stage IV GRIB1/GRIB2 and MRMS GRIB2, every grid tool
   and the zonal statistics.
 - [731](notebooks/731_atlas14_shared_temporal_existing_model.md) (Atlas 14 export through
-  `RasDssGrid` or HEC-Vortex), [916](notebooks/916_hrrr_precipitation_forecast.md) (native HRRR and
-  Stage IV import beside the qpkit route) and [917](notebooks/917_mrms_precipitation_qpe.md) (MRMS
+  `RasDssGrid` or HEC-Vortex), [916](notebooks/916_hrrr_precipitation_forecast.md) (HEC-RAS
+  runs driven by native hourly HRRR forcing, validated against a full-source warp) and [917](notebooks/917_mrms_precipitation_qpe.md) (MRMS
   accumulation windows, overlaps, shapefile clipping and threads).
 
 ### HEC-RAS acceptance
@@ -318,8 +320,8 @@ default `java` backend.
   packages, SNODAS (header timing by default), and a loose GeoTIFF with an
   `.aux.xml` that sets only nodata. `RasDssGrid.get_features()` reports their
   flags (`gridded_grib1_stage4`, `gridded_prism_bil`, `gridded_snodas`).
-- **Gridded import uses every core by default**, with output byte-identical to
-  `threads=1`. Kilometre-to-metre axis conversion now matches HEC-Vortex exactly.
+- **Gridded import uses every core by default.** Pathnames, grid values and
+  metadata equal those of `threads=1`; file bytes can differ by write timestamps. Kilometre-to-metre axis conversion now matches HEC-Vortex exactly.
 - **DSS6.** Regular time-series merge and extend into existing records is now
   qualified against HEC's libraries. Writing a DSS6 *irregular pattern* (an `IR-`
   E part with a `TS-` D part) needs the engine's explicit opt-in
