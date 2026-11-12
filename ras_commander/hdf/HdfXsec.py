@@ -239,9 +239,14 @@ class HdfXsec:
     def _attribute_columns(
         group: h5py.Group,
         row_count: int,
+        layout: Optional[str] = None,
     ) -> Dict[str, np.ndarray]:
-        """Return normalized attribute columns for either supported XS schema."""
-        if "Attributes" not in group:
+        """Return normalized attribute columns for any supported XS schema.
+
+        A ``"hybrid"`` layout reads the separated datasets and never the stale
+        compound ``Attributes`` table.
+        """
+        if layout == "hybrid" or "Attributes" not in group:
             return HdfXsec._legacy_cross_section_attributes(group, row_count)
         attributes = HdfXsec._dataset(group, "Attributes")
         if len(attributes) != row_count or not attributes.dtype.names:
@@ -732,6 +737,12 @@ class HdfXsec:
         The returned GeoDataFrame includes the coordinate system from the HDF file
         when available. All byte strings are converted to regular strings.
 
+        Some HEC-RAS 5.0.3 geometry files carry a compound ``Attributes`` table
+        with fewer rows than the separated datasets next to it. These hybrid
+        files are read from the separated datasets, preferring
+        ``Station Manning's n`` and ``Blocked Ineffective``, and a warning
+        names the ignored compound datasets.
+
         Raises
         ------
         FileNotFoundError
@@ -772,9 +783,21 @@ class HdfXsec:
                     return gpd.GeoDataFrame()
 
                 group = HdfXsec._cross_section_group(hdf)
-                row_count = HdfXsec._get_cross_section_count(hdf)
+                layout, row_count, stale = (
+                    _HdfXsecSchema.validated_cross_section_layout(group)
+                )
                 if row_count == 0:
                     return gpd.GeoDataFrame()
+                hybrid = layout == "hybrid"
+                if hybrid:
+                    logger.warning(
+                        "Ignoring stale compound cross-section datasets in %s "
+                        "(%s; Attributes=%d rows) in favour of %d separated-layout rows.",
+                        HdfXsec._filename(hdf_path),
+                        ", ".join(sorted(stale)),
+                        int(group["Attributes"].shape[0]),
+                        row_count,
+                    )
 
                 geometries = HdfXsec._polyline_geometries(
                     group,
@@ -790,14 +813,21 @@ class HdfXsec:
                     row_count,
                     value_columns=2,
                 )
+                mann_names = (
+                    ("Manning's n Info", "Manning's n Values"),
+                    ("Station Manning's n Info", "Station Manning's n Values"),
+                )
+                if hybrid:
+                    # The compound-era Manning's n pair may be stale.
+                    mann_names = mann_names[::-1]
                 mann_info, mann_values = HdfXsec._info_values_pair(
                     group,
-                    ("Manning's n Info", "Station Manning's n Info"),
-                    ("Manning's n Values", "Station Manning's n Values"),
+                    tuple(info for info, _ in mann_names),
+                    tuple(values for _, values in mann_names),
                     row_count,
                     value_columns=2,
                 )
-                attributes = HdfXsec._attribute_columns(group, row_count)
+                attributes = HdfXsec._attribute_columns(group, row_count, layout)
 
                 modern_ineff = ("Ineffective Info", "Ineffective Blocks")
                 legacy_ineff = (
@@ -805,7 +835,12 @@ class HdfXsec:
                     "Blocked Ineffective Values",
                 )
                 ineff_info = ineff_values = None
-                for info_name, value_name in (modern_ineff, legacy_ineff):
+                ineff_names = (
+                    (legacy_ineff, modern_ineff)
+                    if hybrid
+                    else (modern_ineff, legacy_ineff)
+                )
+                for info_name, value_name in ineff_names:
                     if info_name in group or value_name in group:
                         ineff_info, ineff_values = HdfXsec._info_values_pair(
                             group,
