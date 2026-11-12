@@ -928,9 +928,22 @@ datum included):
   (`terrain_hdf_projection` or `source_tiff_geokeys`).
 - **1D `final_format`**: GDAL's tags for the model CRS, checked the same way.
 
-Methods without `crs_any` (Step05 `map_profiles`, boundaries, depth groups,
-whole-simulation products, coupled mapping) still need an EPSG code. EPSG
-terrains produce the same requests as before.
+- **Boundaries** (legacy and native): the request carries GDAL's WKT of the
+  terrain CRS (`crs_wkt`). The engine writes it verbatim as the GeoJSON's
+  legacy `crs` member, which geopandas/GDAL read back exactly
+  (`is_exact_same`). Native boundaries also accept RAS Mapper sources that
+  carry no CRS: the terrain HDF `Projection` must equal the model CRS, and
+  the sources are sent as `untagged`.
+- **Step05 `map_profiles`**: a terrain without an EPSG code is sent by its
+  GeoKeys. An `output_crs` without one is sent as `nudge.dst_wkt`, and the
+  products are labelled with `output_crs` by rasterio.
+- **Whole-simulation products and coupled mapping**: the horizontal, 2D and
+  XS requests carry `crs_geokeys`. Coupled mapping also needs `crs_any` on
+  every component method.
+
+Each path needs its method's `crs_any`; otherwise the earlier EPSG refusal
+applies. EPSG terrains produce the same requests as before, and the capability
+is asked of the engine only for a CRS without an EPSG code.
 
 **Terrain CRS the engine cannot identify (sloping).** HEC-RAS 7.0.1 can write
 terrain GeoTIFFs whose WKT the engine reads as `PROJCS["unknown", ...]` with no

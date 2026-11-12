@@ -195,6 +195,16 @@ def _storage_overlap(hdf, storage, grid, budget):
                     f"storage area {name!r} physically overlaps 2D flow area {mesh_name!r}; "
                     "physical storage/2D overlap is refused by the coupled storage composition "
                     "until qualified")
+def _coupled_crs_any(engine_path) -> bool:
+    """Whether the engine's coupled, 1D and 2D sloping methods all advertise
+    ``crs_any`` (a CRS without an EPSG code, carried as GeoKeys)."""
+    from . import _engine
+    try:
+        record = _engine.engine_method(Path(engine_path))
+    except Exception:
+        return False
+    return all(_engine.crs_any(record.get(key)) for key in
+               ("coupled_diagnostic", "coupled_storage_diagnostic", "one_d_clipped_diagnostic", "sloping"))
 
 
 def _require_engine(engine_path, grid_contract=None):
@@ -487,8 +497,9 @@ class FimPreparedCoupledModel:
                     or any(isinstance(grid[k], bool) or not isinstance(grid[k], int) or grid[k] <= 0 for k in ("width", "height"))):
                 raise ValueError("invalid source grid")
             declared_crs = source_crs(grid["crs"])
-            if declared_crs.to_epsg() is None:
-                raise FimUnsupportedError("coupled terrain CRS must have an EPSG code; no CRS relabelling is performed")
+            if declared_crs.to_epsg() is None and not _coupled_crs_any(receipt["engine_path"]):
+                raise FimUnsupportedError("coupled terrain CRS must have an EPSG code (or an engine that "
+                                          "advertises crs_any); no CRS relabelling is performed")
             with rasterio.open(receipt["terrain"]) as terrain:
                 _terrain_validity(terrain)
                 if (grid["width"] != terrain.width or grid["height"] != terrain.height
@@ -573,8 +584,9 @@ def prepare_coupled_model(hdf_path, terrain_path, output_folder, *, profiles=Non
             raise FimUnsupportedError("model has no valid projected CRS") from exc
         if not crs.is_projected or any(abs(a.unit_conversion_factor-1200/3937) > 1e-12 for a in crs.axis_info[:2]):
             raise FimUnsupportedError("coupled preparation requires a projected CRS in US survey feet; explicit conversion required")
-        if crs.to_epsg() is None:
-            raise FimUnsupportedError("coupled terrain CRS must have an EPSG code; no CRS relabelling is performed")
+        if crs.to_epsg() is None and not _coupled_crs_any(engine):
+            raise FimUnsupportedError("coupled terrain CRS must have an EPSG code (or an engine that "
+                                      "advertises crs_any); no CRS relabelling is performed")
         with rasterio.open(terrain) as src:
             _terrain_validity(src)
             if source_crs(src.crs) != crs:
@@ -827,7 +839,7 @@ def _validate_two_d_report(report, request, gt, out):
     owners = report.get("physical_ownership", {})
     expected = {"kind": "physical_2d", "dtype": "<u4", "count": count, "path": "owners.bin",
                 "bytes": count*4, "width": window[2], "height": window[3], "window": window,
-                "geo_transform": gt, "epsg": request["epsg"], "crs_identity": request["crs_identity"],
+                "geo_transform": gt, "epsg": request.get("epsg"), "crs_identity": request["crs_identity"],
                 "owner_cell_count": len(request["owner_cells"])}
     descriptor = request.get("grid_contract")
     contracts = _contracts(descriptor["id"] if descriptor is not None else None)
@@ -970,7 +982,10 @@ def map_coupled_profiles(hdf_path, terrain_path, output_folder, *, profiles=None
         if receipt["engine_path"] != str(engine) or receipt["engine_sha256"] != engine_hash:
             raise FimUnsupportedError("mapping engine differs from the prepared engine")
         identity = _engine.terrain_identity(engine, Path(receipt["terrain"]), receipt["grid"]["crs"],
-                                            timeout=timeout, source_crs_identity=True)
+                                            timeout=timeout, source_crs_identity=True,
+                                            **({"crs_any": True}
+                                               if source_crs(receipt["grid"]["crs"]).to_epsg() is None
+                                               and _coupled_crs_any(engine) else {}))
         final_support = support
         final_method_id, final_schema = contracts["method"], contracts["schema"]
         component_contracts = _component_contracts(contracts)
@@ -1108,7 +1123,7 @@ def map_coupled_profiles(hdf_path, terrain_path, output_folder, *, profiles=None
                 mesh = receipt["mesh"]
                 unit = mesh["profiles"][positions[i]]
                 two_request = {"schema": contracts["two_schema"], "terrain": receipt["terrain"],
-                    "epsg": identity["epsg"], "crs_identity": identity["crs_identity"],
+                    **_engine.request_crs(identity), "crs_identity": identity["crs_identity"],
                     "terrain_transform": grid["geo_transform"],
                     "window": [int(window.col_off), int(window.row_off), int(window.width), int(window.height)],
                     "geometry_file": str(prepared.folder / mesh["geometry_file"]),

@@ -306,9 +306,10 @@ def build(
             hecras_version=version,
         )
     v2 = engine_supports(engine, modifications=True)
-    any_crs = _engine.crs_any(_record(engine))
     with rasterio.open(info["tif"]) as src:
         crs = src.crs
+    # Asked of the engine only for a CRS that has no EPSG code (or no CRS at all).
+    any_crs = (not crs or crs.to_epsg() is None) and _engine.crs_any(_record(engine))
     declared = None
     if not crs and any_crs:
         # RAS Mapper writes terrain sources whose CRS has no EPSG code without

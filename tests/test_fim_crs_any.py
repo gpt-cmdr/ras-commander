@@ -274,3 +274,87 @@ def test_one_d_final_format_sends_geokeys_for_an_esri_model(tmp_path, monkeypatc
     assert out.status.tolist() == ["complete"]
     assert requests[0]["crs_geokeys"] == KEYS and "epsg" not in requests[0]
     assert len(calls) == 1 and calls[0].equals(CRS.from_user_input(ESRI))
+
+
+def test_step05_request_terrain_and_destination():
+    """EPSG requests keep their exact terrain spec; GeoKeys and WKT replace the codes."""
+    epsg = _engine.build_request({"path": "t.tif", "epsg": 2277, "crs_identity": {"kind": "epsg"}}, [],
+                                 dst_epsg=3857, threads=1, max_cache_bytes=1, max_profile_bytes=1,
+                                 nudge_method="lookup")
+    assert json.dumps(epsg["terrain"]) == json.dumps({"path": "t.tif", "epsg": 2277, "crs_identity": {"kind": "epsg"}})
+    assert "dst_wkt" not in epsg["nudge"] and epsg["nudge"]["dst_epsg"] == 3857
+    keys = _engine.build_request({"path": "t.tif", "epsg": None, "crs_identity": {"kind": "geokeys"},
+                                  "crs_geokeys": KEYS, "crs_geokeys_fnv1a64": "x"}, [],
+                                 dst_epsg=0, dst_wkt="WKT", threads=1, max_cache_bytes=1,
+                                 max_profile_bytes=1, nudge_method="lookup")
+    assert keys["terrain"] == {"path": "t.tif", "crs_geokeys": KEYS, "crs_identity": {"kind": "geokeys"}}
+    assert keys["nudge"]["dst_epsg"] == 0 and keys["nudge"]["dst_wkt"] == "WKT"
+
+
+def test_source_identity_declares_untagged_sources(tmp_path, monkeypatch):
+    tif = _tif(tmp_path / "t.tif", None)
+    calls = []
+    monkeypatch.setattr(_engine, "geokeys_for_crs", lambda e, crs, folder, timeout=None: calls.append(crs) or KEYS)
+    block = _engine.source_identity(Path("engine"), tif, ESRI, crs_any=True, declared_crs=ESRI,
+                                    keys_folder=tmp_path)
+    assert block["crs_identity"] == {"kind": "untagged"} and block["crs_geokeys"] == KEYS
+    assert _engine.request_crs(block) == {"crs_geokeys": KEYS}
+    # The declared CRS must equal the results CRS; no declaration, no CRS.
+    with pytest.raises(FimUnsupportedError, match="differs from the results CRS"):
+        _engine.source_identity(Path("engine"), tif, "EPSG:26930", crs_any=True, declared_crs=ESRI)
+    _terrain_info(monkeypatch, {"width": 4, "height": 3, "geo_transform": [2150000.0, 3.25, 0, 1200000.0, 0, -3.25]})
+    with pytest.raises(FimUnsupportedError, match="has no CRS"):
+        _engine.source_identity(Path("engine"), tif, ESRI, crs_any=True)
+
+
+@pytest.mark.parametrize("advertised", [True, False])
+def test_coupled_needs_crs_any_on_every_component(monkeypatch, advertised):
+    from ras_commander.fim import _coupled
+
+    record = {key: ({"crs_any": True} if advertised else {}) for key in
+              ("coupled_diagnostic", "coupled_storage_diagnostic", "one_d_clipped_diagnostic", "sloping")}
+    monkeypatch.setattr(_engine, "engine_method", lambda engine: record)
+    assert _coupled._coupled_crs_any("engine.exe") is advertised
+    record["sloping"] = {}
+    assert _coupled._coupled_crs_any("engine.exe") is False
+
+
+@pytest.mark.skipif(not _real_engine_crs_any(), reason="installed engine lacks crs_any")
+def test_real_engine_boundary_geojson_reads_back_in_the_terrain_crs(tmp_path):
+    """A storage-only boundary on an ESRI:102630 terrain: the GeoJSON's legacy crs
+    member is GDAL's WKT of the terrain, which geopandas/GDAL read back exactly."""
+    import struct
+    import subprocess
+
+    gpd = pytest.importorskip("geopandas")
+    engine = _engine.find_engine(None)
+    with rasterio.open(tmp_path / "terrain.tif", "w", driver="GTiff", width=4, height=4, count=1,
+                       dtype="float32", crs=ESRI, transform=from_origin(0, 4, 1, 1), nodata=-9999) as dst:
+        dst.write(np.zeros((1, 4, 4), "float32"))
+        wkt = dst.crs.to_wkt()
+    (tmp_path / "mask").write_bytes(b"" * 65536)
+    (tmp_path / "perimeter").write_bytes(struct.pack("<f", -9999.0) * 513)
+    (tmp_path / "levels").write_bytes(struct.pack("<f", 1.0))
+    ring = np.array([[0, 0], [0, 4], [4, 4], [4, 0], [0, 0]], "<f8").tobytes()
+    poly = struct.pack("<BIII", 1, 3, 1, 5) + ring
+    (tmp_path / "storage.wkb").write_bytes(struct.pack("<I", len(poly)) + poly)
+    identity = _engine.terrain_identity(engine, tmp_path / "terrain.tif", ESRI, crs_any=True)
+    request = {"schema": "ras-commander-boundary-request/2", "interpolation": "sloping",
+               "contour_method": "rasmapper-serial-zero-depth-contours/1", "crs_wkt": wkt,
+               "model": {"schema": "ras-commander-sloping-request/1", "terrain": "terrain.tif",
+                         **_engine.request_crs(identity), "crs_identity": identity["crs_identity"],
+                         "terrain_transform": [0, 1, 0, 4, 0, -1], "window": [0, 0, 4, 4],
+                         "geometry_file": "unused", "mesh_files": [], "owner_cells": [],
+                         "storage_areas_file": "storage.wkb", "storage_area_count": 1,
+                         "profiles": [{"id": "a", "values_files": [], "storage_area_values_file": "levels"}],
+                         "threads": 1, "max_inflight_profiles": 1, "max_working_bytes": 1 << 27},
+               "terrain_metadata": {"shape": [4, 4], "transform": [0, 1, 0, 4, 0, -1], "tile_shape": [256, 256],
+                                    "tile_grid": [1, 1], "selected_tiles": [0],
+                                    "mask": {"path": "mask", "dtype": "|u1", "shape": [1, 65536]},
+                                    "perimeter": {"path": "perimeter", "dtype": "<f4", "shape": [1, 513]}}}
+    (tmp_path / "request.json").write_text(json.dumps(request))
+    subprocess.run([str(engine), "boundary", str(tmp_path / "request.json"), str(tmp_path / "out")], check=True,
+                   capture_output=True, cwd=tmp_path)
+    frame = gpd.read_file(tmp_path / "out" / "a.geojson")
+    got = CRS.from_user_input(frame.crs)
+    assert got.is_exact_same(CRS.from_wkt(wkt)) and got.to_authority() == ("ESRI", "102630")

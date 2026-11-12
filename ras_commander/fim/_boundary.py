@@ -247,8 +247,9 @@ def map_inundation_boundaries(
             remaining = prepared_bytes - context._info["planned_prepared_bytes"] - transport
             if remaining <= 0:
                 raise FimUnsupportedError("Boundary geometry transport exceeds max_prepared_mib")
-            if context._terrain_identity.get("epsg") is None:
-                # Boundary requests label GeoJSON with an EPSG code (no crs_any).
+            no_code = context._terrain_identity.get("epsg") is None
+            if no_code and not _engine.crs_any(method):
+                # Older engines label GeoJSON with an EPSG code only.
                 raise FimUnsupportedError(
                     "inundation boundaries need a terrain CRS with an EPSG code; the engine's "
                     "boundary method does not advertise crs_any")
@@ -258,7 +259,7 @@ def map_inundation_boundaries(
             lookup = {mesh["mesh_name"]: i for i, mesh in enumerate(context._meshes)}
             owners = [[lookup[row.mesh_name], int(row.cell_id)] for row in cells.itertuples()]
             model = {"schema": "ras-commander-sloping-request/1", "options": _sloping._validate_options("sloping", False, False),
-                     "terrain": str(Path(terrain_path).resolve()), "epsg": context._terrain_identity["epsg"],
+                     "terrain": str(Path(terrain_path).resolve()), **_engine.request_crs(context._terrain_identity),
                      "crs_identity": context._terrain_identity["crs_identity"], "terrain_transform": context._terrain_transform,
                      "window": [0, 0, shape[1], shape[0]], "geometry_file": "boundary-cells.wkb",
                      "mesh_files": context._mesh_files, "owner_cells": owners,
@@ -269,7 +270,9 @@ def map_inundation_boundaries(
                 model["aoi_file"] = "boundary-aoi.wkb"
             request = root / "boundary-request.json"
             _atomic_json(request, {"schema": "ras-commander-boundary-request/1", "interpolation": interpolation,
-                                   "model": model, "terrain_metadata": metadata})
+                                   "model": model, "terrain_metadata": metadata,
+                                   # GDAL's WKT of the terrain CRS labels the GeoJSON verbatim.
+                                   **({"crs_wkt": crs.to_wkt()} if no_code else {})})
             unchanged()
             tick = time.perf_counter()
             output = root / "boundary-engine"

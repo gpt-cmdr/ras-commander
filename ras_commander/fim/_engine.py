@@ -219,6 +219,38 @@ def geokeys_for_crs(engine: Path, crs, folder: Path, *, timeout: Optional[float]
     return keys
 
 
+def source_identity(engine: Path, tiff: Path, results_crs, terrain_crs_fnv1a64: Optional[str] = None, *,
+                    crs_any: bool = False, declared_crs=None, keys_folder: Optional[Path] = None,
+                    timeout: Optional[float] = None, source_crs_identity: bool = False) -> dict:
+    """:func:`terrain_identity`, plus RAS Mapper sources that carry no CRS.
+
+    A TIFF without any CRS tags (RAS Mapper's terrain sources in a CRS without
+    an EPSG code) is accepted only with ``crs_any`` and an explicit
+    ``declared_crs`` (the terrain HDF's ``Projection``) equal to
+    ``results_crs``: the identity is ``untagged`` with GDAL's GeoKeys for
+    that CRS (:func:`geokeys_for_crs`, round-trip checked).
+    """
+    import rasterio
+    from pyproj import CRS
+
+    with rasterio.open(tiff) as src:
+        tagged = bool(src.crs)
+    if tagged or not crs_any or declared_crs is None:
+        kwargs = {"timeout": timeout} if timeout is not None else {}
+        if crs_any:
+            kwargs["crs_any"] = True
+        if source_crs_identity:
+            kwargs["source_crs_identity"] = True
+        return terrain_identity(engine, tiff, results_crs, terrain_crs_fnv1a64, **kwargs)
+    declared = CRS.from_user_input(declared_crs)
+    if results_crs is None or not declared.equals(CRS.from_user_input(results_crs)):
+        raise FimUnsupportedError(
+            f"terrain {Path(tiff).name} carries no CRS and the declared terrain CRS differs from the results CRS")
+    keys = geokeys_for_crs(engine, declared, Path(keys_folder or Path(tiff).parent), timeout=timeout)
+    return {"path": str(tiff), "epsg": None, "crs_identity": {"kind": "untagged"}, "crs_geokeys": keys,
+            "declared_crs": declared.to_wkt()}
+
+
 def _find_wkt(obj):
     if isinstance(obj, str):
         head = obj.lstrip().upper()
@@ -403,8 +435,13 @@ def _dest_geotransform(grids) -> list:
 
 def build_request(terrain: dict, profiles: List[ProfileRequest], *, dst_epsg: int, threads: int,
                   max_cache_bytes: int, max_profile_bytes: int, nudge_method: str,
-                  max_inflight_profiles: int = 1) -> dict:
-    """Return a ``ras2fim-step05-request/1`` document."""
+                  max_inflight_profiles: int = 1, dst_wkt: Optional[str] = None) -> dict:
+    """Return a ``ras2fim-step05-request/1`` document.
+
+    ``terrain`` is a :func:`terrain_identity` result (EPSG code or GeoKeys).
+    ``dst_wkt`` (with ``dst_epsg`` 0) names a destination CRS without an EPSG
+    code, for engines whose ``step05_r2`` advertises ``crs_any``.
+    """
     items = []
     for p in profiles:
         if not _SAFE_ID.match(p.profile):
@@ -424,13 +461,15 @@ def build_request(terrain: dict, profiles: List[ProfileRequest], *, dst_epsg: in
         })
     return {
         "schema": REQUEST_SCHEMA,
-        "terrain": terrain,
+        "terrain": {"path": terrain["path"], **request_crs(terrain),
+                    "crs_identity": terrain["crs_identity"]},
         "source_crs": {"kind": "terrain"},
         "budgets": {"threads": int(threads), "max_cache_bytes": int(max_cache_bytes),
                     "max_profile_bytes": int(max_profile_bytes),
                     "max_inflight_profiles": int(max_inflight_profiles)},
         "interpolation": {"selection": "auto"},
-        "nudge": {"dst_epsg": int(dst_epsg), "error_threshold": NUDGE_ERROR_THRESHOLD,
+        "nudge": {"dst_epsg": int(dst_epsg), **({"dst_wkt": dst_wkt} if dst_wkt is not None else {}),
+                  "error_threshold": NUDGE_ERROR_THRESHOLD,
                   "memory_limit_bytes": NUDGE_MEMORY_LIMIT_BYTES, "method": nudge_method},
         "stages": [],
         "profiles": items,

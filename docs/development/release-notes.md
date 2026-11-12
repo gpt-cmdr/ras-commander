@@ -56,8 +56,11 @@ alone does not identify a development checkout.
   `_engine.crs_any`, `request_crs` and `geokeys_for_crs`; the
   effective-terrain receipt gains `crs`. Engines without `crs_any` still
   refuse with a clear message. EPSG terrains send the same requests as before.
-  Boundaries, Step05 `map_profiles`, depth groups, whole-simulation products
-  and coupled mapping still need an EPSG code.
+  Boundaries (GeoJSON labelled with GDAL's WKT of the terrain CRS; native
+  boundaries also on untagged RAS Mapper sources), Step05 `map_profiles`
+  (terrain by GeoKeys, `output_crs` without an EPSG code by WKT),
+  whole-simulation products and coupled mapping take the same route when
+  their engine methods advertise `crs_any`.
 
 ### 0.120.0 — 2026-11-12
 
