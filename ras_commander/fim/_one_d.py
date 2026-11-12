@@ -646,14 +646,35 @@ def _inline_storage(flags):
             and REQUEST_SCHEMA in (record.get("schemas") or ()))
 
 
-def _terrain_read_bytes(window_width, stripe_rows, workers):
+# Largest source block (tile or strip) the engine's terrain_tiff reader accepts
+# (Fast-Map ``one_d_terrain::MAX_BLOCK_BYTES``, PR #39 cc1379a).
+TERRAIN_TIFF_MAX_BLOCK_BYTES = 16 << 20
+
+
+def _terrain_block(path):
+    """Stored block ``(cols, rows)`` of the terrain GeoTIFF, from its header only.
+
+    Refuses blocks the engine's terrain_tiff reader would refuse: it decodes a
+    whole block per read, so per-worker scratch scales with the block.
+    """
+    import rasterio
+    with rasterio.open(path) as source:
+        rows, cols = source.block_shapes[0]
+    if cols <= 0 or rows <= 0 or cols * rows * 4 > TERRAIN_TIFF_MAX_BLOCK_BYTES:
+        raise FimUnsupportedError(
+            f"terrain GeoTIFF block {cols}x{rows} exceeds {TERRAIN_TIFF_MAX_BLOCK_BYTES} Float32 bytes, "
+            "the engine terrain_tiff limit; use a tiled GeoTIFF")
+    return int(cols), int(rows)
+
+
+def _terrain_read_bytes(block_cols, block_rows, workers):
     """Engine terrain-TIFF decode scratch for ``workers`` readers.
 
     Mirrors ``one_d_terrain::Source::planned_bytes`` of the Fast-Map 1D
-    ``terrain_tiff`` reader (PR #39 head ba9da17): per worker, one window-wide
-    source tile row of 8-byte values plus 4 MiB of tile decode slack.
+    ``terrain_tiff`` reader (PR #39 cc1379a): per worker, three Float32 blocks
+    (decoded block, compressed bytes and window copy) plus 1 MiB reader slack.
     """
-    return (int(window_width) * int(stripe_rows) * 8 + (4 << 20)) * max(1, int(workers))
+    return (int(block_cols) * int(block_rows) * 4 * 3 + (1 << 20)) * max(1, int(workers))
 
 
 def _xs_render_workers(flags, threads, budget, receipt, grid, planned, worker_bytes=None):
@@ -797,6 +818,7 @@ def map_one_d_profiles(hdf_path, terrain_path, output_folder, *, profiles=None,
         # Engines advertising terrain_tiff read the source GeoTIFF with terrio,
         # applying GDAL's Float32 nodata mask; older engines get a staged buffer.
         terrain_tiff = _terrain_tiff(support.flags) and delivers
+        terrain_block = _terrain_block(receipt["terrain"]) if terrain_tiff else None
         final = None
         final_fields = {}
         if final_options is not None:
@@ -820,7 +842,7 @@ def map_one_d_profiles(hdf_path, terrain_path, output_folder, *, profiles=None,
 
         def xs_worker_bytes(count):
             # Engine scratch that scales with the XS request's thread count.
-            return ((_terrain_read_bytes(window.width, grid["tile_size"], count) if terrain_tiff else 0)
+            return ((_terrain_read_bytes(*terrain_block, count) if terrain_tiff else 0)
                     + (delivery_bytes(count) if delivers else 0))
 
         workers = _xs_render_workers(support.flags, threads, budget, receipt, grid, planned,

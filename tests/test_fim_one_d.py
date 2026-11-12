@@ -347,13 +347,13 @@ def test_final_format_rows_describe_delivered_grid(files, tmp_path, monkeypatch,
 
 
 @pytest.mark.parametrize("mib,final,expected", [
-    (12, False, None), (16, False, 1), (24, False, 3), (40, False, 6),
-    (16, True, None), (24, True, 1), (40, True, 3)])
+    (9, False, None), (10, False, 1), (12, False, 2), (16, False, 4), (24, False, 8),
+    (16, True, None), (24, True, 2), (40, True, 5)])
 def test_workers_fit_engine_terrain_read_and_final_format_scratch(files, tmp_path, monkeypatch, mib, final, expected):
     """With small budgets Python drops workers or refuses where the engine would refuse.
 
-    Expected counts were also admitted by the Fast-Map PR #39 engine (ba9da17);
-    without terrain-read/writer scratch Python admitted 8 workers, which it refused.
+    Expected counts follow the Fast-Map PR #39 engine plan (cc1379a); without
+    terrain-read/writer scratch Python admitted 8 workers that the engine refused.
     """
     from ras_commander.fim import FimUnsupportedError
     hdf, terrain = files
@@ -380,14 +380,31 @@ def test_engine_scratch_planners_mirror_recorded_engine_plans():
     from affine import Affine
     from ras_commander.fim import _final_format
     from ras_commander.fim._one_d import _terrain_read_bytes
-    # 8 terrio readers over a 512-wide window of a 256-row tiled source.
-    assert _terrain_read_bytes(512, 256, 8) == 8 * (512 * 256 * 8 + (4 << 20))
+    # 8 terrio readers of a 256x256-tiled source (PR #39 cc1379a).
+    assert _terrain_read_bytes(256, 256, 8) == 8 * (256 * 256 * 12 + (1 << 20))
+    assert _terrain_read_bytes(256, 256, 0) == _terrain_read_bytes(256, 256, 1)
     wire = {"block_size": 512, "overview_factors": []}
     grid = {"width": 512, "height": 512, "transform": Affine.identity()}
     # Engine: 74618936 planned with final_format minus 45757480 without it.
     assert _final_format.planned_bytes(wire, grid, 8) == 74618936 - 45757480
     more = _final_format.planned_bytes({"block_size": 64, "overview_factors": [2, 4]}, grid, 2)
     assert more > _final_format.planned_bytes({"block_size": 64, "overview_factors": []}, grid, 2)
+
+
+def test_terrain_block_limit_mirrors_engine(tmp_path):
+    """Blocks over the engine's 16 MiB terrain_tiff limit refuse before any engine call."""
+    from ras_commander.fim._one_d import TERRAIN_TIFF_MAX_BLOCK_BYTES, _terrain_block
+    tiled, striped = tmp_path / "tiled.tif", tmp_path / "striped.tif"
+    for path, layout in ((tiled, dict(tiled=True, blockxsize=256, blockysize=256)),
+                         (striped, dict(tiled=False, blockysize=1000))):
+        with rasterio.open(path, "w", driver="GTiff", width=4200, height=1000, count=1, dtype="float32",
+                           crs="EPSG:6588", transform=from_origin(0, 1000, 1, 1), compress="deflate",
+                           **layout) as dst:
+            dst.write(np.zeros((1000, 4200), dtype="float32"), 1)
+    assert _terrain_block(tiled) == (256, 256)
+    assert 4200 * 1000 * 4 > TERRAIN_TIFF_MAX_BLOCK_BYTES == 16 << 20
+    with pytest.raises(FimUnsupportedError, match="block 4200x1000 exceeds"):
+        _terrain_block(striped)
 
 
 def test_final_format_nodata_collision_is_unsupported(files, tmp_path, monkeypatch):
