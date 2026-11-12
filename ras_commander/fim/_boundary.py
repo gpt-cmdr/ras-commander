@@ -237,6 +237,9 @@ def map_inundation_boundaries(
             root = Path(context._temporary.name)
             with rasterio.open(terrain_path) as raster:
                 crs, shape = raster.crs, [raster.height, raster.width]
+            if not crs and context._terrain_identity.get("declared_crs"):
+                # Untagged RAS Mapper source: the CRS its terrain HDF declares.
+                crs = rasterio.crs.CRS.from_wkt(context._terrain_identity["declared_crs"])
             aoi = _aoi.resolve_aoi(bbox, polygon, polygon_layer, aoi_crs, default_crs=crs)
             geometry = _aoi.geometry_in_crs(aoi, crs) if aoi is not None else None
             tiles = _selected_tiles(shape, context._terrain_transform, geometry)

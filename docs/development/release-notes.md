@@ -61,6 +61,21 @@ alone does not identify a development checkout.
   (terrain by GeoKeys, `output_crs` without an EPSG code by WKT),
   whole-simulation products and coupled mapping take the same route when
   their engine methods advertise `crs_any`.
+- **FIM: untagged RAS Mapper terrain sources on every native route.** A
+  source TIFF with no CRS tags (RAS Mapper writes none for a CRS without an
+  EPSG code) now takes the `Projection` of the one sibling HEC terrain HDF
+  that registers it (`_effective_terrain.registered_source_crs`), for sloping,
+  prepared sloping, horizontal and both boundary methods, and only with an
+  engine that advertises `crs_any` (`_engine.source_identity`). The terrain
+  CRS must still equal the model CRS. Boundary staging takes the same CRS for
+  `crs_wkt`, and the boundary AOI is resolved in it. On unmodified Helena
+  (ESRI:102630) WSE/Depth now map on the source TIFF with the same valid mask
+  as RAS Mapper.
+- **FIM fix (not CRS): boundary staging treats empty stitch TIN arrays as no
+  stitch TIN.** Single-source terrains store `(0, 0)` `Stitch TIN Points` and
+  `Stitch TIN Triangles`; boundary staging refused them as an unsupported
+  shape, which also refused EPSG terrains. They are now absent, as effective
+  terrain already treats them. One empty and one non-empty array still refuse.
 
 ### 0.120.0 — 2026-11-12
 

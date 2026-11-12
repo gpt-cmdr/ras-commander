@@ -105,7 +105,7 @@ def run_batch(
         raise FimEngineError("Polygon masking requires Fast-Map global-terrain-lattice/1 (0.10.1+)")
     if grid.plan.geometry is not None:
         details["aoi_mask"] = "global-terrain-lattice/1"
-    identity = _engine.terrain_identity(engine, terrain, ordered.crs, **_engine.crs_any_kwargs(method))
+    identity = _engine.source_identity(engine, terrain, ordered.crs, crs_any=_engine.crs_any(method))
     details["engine"] = {"path": str(engine), "method": method}
     pixels = int(np.prod(grid.plan.shape))
     required = (

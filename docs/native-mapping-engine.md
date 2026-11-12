@@ -933,7 +933,15 @@ datum included):
   legacy `crs` member, which geopandas/GDAL read back exactly
   (`is_exact_same`). Native boundaries also accept RAS Mapper sources that
   carry no CRS: the terrain HDF `Projection` must equal the model CRS, and
-  the sources are sent as `untagged`.
+  the sources are sent as `untagged`. Boundary staging stages that
+  `Projection` as `crs_wkt` and resolves the AOI in it. Empty `(0, 0)` stitch
+  TIN arrays (single-source terrains) are staged as no stitch TIN.
+- **Untagged sources on the mapping routes**: sloping, prepared sloping and
+  horizontal mapping also accept a source TIFF with no CRS tags. Its CRS is
+  the `Projection` of the one sibling `HEC Terrain` HDF whose `Terrain/*`
+  `File` names it; none or more than one such HDF leaves the source without
+  a CRS (refused as before). The Python horizontal path still needs a tagged
+  terrain.
 - **Step05 `map_profiles`**: a terrain without an EPSG code is sent by its
   GeoKeys. An `output_crs` without one is sent as `nudge.dst_wkt`, and the
   products are labelled with `output_crs` by rasterio.

@@ -871,8 +871,8 @@ def map_profiles(
         else:
             tick = time.perf_counter()
             identity = (
-                _engine.terrain_identity(engine, terrain, cells.crs, terrain_crs_fnv1a64,
-                                         **_engine.crs_any_kwargs(method))
+                _engine.source_identity(engine, terrain, cells.crs, terrain_crs_fnv1a64,
+                                        crs_any=_engine.crs_any(method))
                 if _prepared is None
                 else _prepared._terrain_identity
             )

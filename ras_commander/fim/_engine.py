@@ -235,6 +235,9 @@ def source_identity(engine: Path, tiff: Path, results_crs, terrain_crs_fnv1a64: 
 
     with rasterio.open(tiff) as src:
         tagged = bool(src.crs)
+    if not tagged and crs_any and declared_crs is None:
+        from ._effective_terrain import registered_source_crs
+        declared_crs = registered_source_crs(tiff)
     if tagged or not crs_any or declared_crs is None:
         kwargs = {"timeout": timeout} if timeout is not None else {}
         if crs_any:
@@ -246,7 +249,12 @@ def source_identity(engine: Path, tiff: Path, results_crs, terrain_crs_fnv1a64: 
     if results_crs is None or not declared.equals(CRS.from_user_input(results_crs)):
         raise FimUnsupportedError(
             f"terrain {Path(tiff).name} carries no CRS and the declared terrain CRS differs from the results CRS")
-    keys = geokeys_for_crs(engine, declared, Path(keys_folder or Path(tiff).parent), timeout=timeout)
+    if keys_folder is None:
+        import tempfile
+        with tempfile.TemporaryDirectory(prefix="ras-fim-crs-") as folder:
+            keys = geokeys_for_crs(engine, declared, Path(folder), timeout=timeout)
+    else:
+        keys = geokeys_for_crs(engine, declared, Path(keys_folder), timeout=timeout)
     return {"path": str(tiff), "epsg": None, "crs_identity": {"kind": "untagged"}, "crs_geokeys": keys,
             "declared_crs": declared.to_wkt()}
 

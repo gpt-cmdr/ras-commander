@@ -149,6 +149,38 @@ def _source_identities(engine: Path, sources: list, crs, identity: dict) -> None
             source["crs_identity"] = {"kind": "caller_verified_wkt", "fnv1a64": fnv}
 
 
+def registered_source_crs(tif):
+    """The CRS of a RAS Mapper terrain source TIFF that carries none, or None.
+
+    Evidence, never inference: exactly one sibling HEC terrain HDF must
+    register this file name as a source (``Terrain/<source>`` ``File``), and
+    that HDF's root ``Projection`` is the CRS.
+    """
+    import h5py
+
+    tif = Path(tif)
+    found = []
+    for hdf in sorted(tif.parent.glob("*.hdf")):
+        try:
+            with h5py.File(hdf, "r") as handle:
+                kind = handle.attrs.get("File Type")
+                kind = kind.decode("utf-8", "replace") if isinstance(kind, bytes) else kind
+                terrain = handle.get("Terrain")
+                if kind != "HEC Terrain" or terrain is None:
+                    continue
+                names = []
+                for group in terrain.values():
+                    value = getattr(group, "attrs", {}).get("File")
+                    names.append(value.decode("utf-8", "replace") if isinstance(value, bytes) else value)
+        except OSError:
+            continue
+        if tif.name in names:
+            found.append(hdf)
+    if len(found) != 1:
+        return None
+    return _terrain_hdf_crs(found[0])
+
+
 def _terrain_hdf_crs(terrain_hdf):
     """The terrain CRS stored in the terrain HDF's root ``Projection`` attribute, or None."""
     import h5py

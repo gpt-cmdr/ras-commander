@@ -120,9 +120,19 @@ def plan_grid(
             raise FimUnsupportedError(
                 "horizontal mapping requires north-up square terrain pixels"
             )
-        if src.crs is None or not _prepare.same_crs(cells.crs, src.crs):
+        terrain_crs = src.crs
+        if terrain_crs is None and native:
+            # A RAS Mapper source with no CRS tags: the Projection of the one
+            # terrain HDF that registers it. The engine identity then admits it
+            # only for crs_any engines (_engine.source_identity).
+            from ._effective_terrain import registered_source_crs
+
+            declared = registered_source_crs(terrain_path)
+            if declared is not None:
+                terrain_crs = rasterio.crs.CRS.from_wkt(declared.to_wkt())
+        if terrain_crs is None or not _prepare.same_crs(cells.crs, terrain_crs):
             raise FimUnsupportedError("horizontal cells and terrain must share a CRS")
-        crs = _aoi.to_crs(src.crs)
+        crs = _aoi.to_crs(terrain_crs)
         # Preserve the unbounded output extent; an AOI may only remove pixels.
         fc0, fc1 = _aoi.center_index_range(bounds[0], bounds[2], t.c, t.a, src.width)
         fr0, fr1 = _aoi.center_index_range(bounds[1], bounds[3], t.f, t.e, src.height)

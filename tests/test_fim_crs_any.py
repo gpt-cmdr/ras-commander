@@ -358,3 +358,55 @@ def test_real_engine_boundary_geojson_reads_back_in_the_terrain_crs(tmp_path):
     frame = gpd.read_file(tmp_path / "out" / "a.geojson")
     got = CRS.from_user_input(frame.crs)
     assert got.is_exact_same(CRS.from_wkt(wkt)) and got.to_authority() == ("ESRI", "102630")
+
+
+def test_registered_source_crs_needs_exactly_one_registering_terrain_hdf(tmp_path):
+    hdf = _untagged_terrain(tmp_path)
+    tif = tmp_path / "T.only.tif"
+    with h5py.File(hdf, "a") as f:
+        f.attrs["File Type"] = b"HEC Terrain"
+    assert _effective_terrain.registered_source_crs(tif).equals(CRS.from_user_input(ESRI))
+    # An unregistered TIFF has no evidence.
+    assert _effective_terrain.registered_source_crs(_tif(tmp_path / "other.tif", None)) is None
+    # Two terrain HDFs registering the same source are ambiguous.
+    import shutil
+    shutil.copy(hdf, tmp_path / "copy.hdf")
+    assert _effective_terrain.registered_source_crs(tif) is None
+
+
+def test_source_identity_finds_the_registering_hdf(tmp_path, monkeypatch):
+    hdf = _untagged_terrain(tmp_path)
+    with h5py.File(hdf, "a") as f:
+        f.attrs["File Type"] = b"HEC Terrain"
+    calls = []
+    monkeypatch.setattr(_engine, "geokeys_for_crs", lambda e, crs, folder, timeout=None: calls.append(crs) or KEYS)
+    block = _engine.source_identity(Path("engine"), tmp_path / "T.only.tif", ESRI, crs_any=True)
+    assert block["crs_identity"] == {"kind": "untagged"} and block["crs_geokeys"] == KEYS
+    assert CRS.from_wkt(block["declared_crs"]).equals(CRS.from_user_input(ESRI)) and len(calls) == 1
+
+
+@pytest.mark.parametrize("native", [True, False])
+def test_horizontal_plan_takes_the_registered_crs_of_an_untagged_source(tmp_path, native):
+    """Native grid planning reads an untagged RAS Mapper source in its registering
+    terrain HDF's Projection; the Python path keeps requiring a tagged terrain."""
+    import geopandas as gpd
+    from shapely.geometry import box
+
+    from ras_commander.fim import _horizontal
+
+    hdf = _untagged_terrain(tmp_path)
+    with h5py.File(hdf, "a") as f:
+        f.attrs["File Type"] = b"HEC Terrain"
+    tif = tmp_path / "T.only.tif"
+    with rasterio.open(tif) as src:
+        left, bottom, right, top = src.bounds
+    cells = gpd.GeoDataFrame({"cell_id": [0]}, geometry=[box(left, bottom, right, top)], crs=ESRI)
+    if not native:
+        with pytest.raises(FimUnsupportedError, match="share a CRS"):
+            _horizontal.plan_grid(cells, tif, None, 64, native=False)
+        return
+    plan = _horizontal.plan_grid(cells, tif, None, 256, native=True)
+    assert CRS.from_user_input(plan.crs).equals(CRS.from_user_input(ESRI))
+    # A CRS other than the registered one is still refused.
+    with pytest.raises(FimUnsupportedError, match="share a CRS"):
+        _horizontal.plan_grid(cells.set_crs("EPSG:26930", allow_override=True), tif, None, 256, native=True)

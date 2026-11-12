@@ -258,3 +258,69 @@ def test_optional_real_public_terrain_metadata(tmp_path):
             reference = dataset[:1] if key in {"mask", "perimeter"} else dataset[...]
             actual = np.fromfile(tmp_path / descriptor["path"], dtype=descriptor["dtype"]).reshape(descriptor["shape"])
             assert actual.tobytes() == reference.tobytes()
+
+
+def _untag(tif):
+    with rasterio.open(tif) as src:
+        profile, data = src.profile, src.read()
+    profile.pop("crs", None)
+    tif.unlink()
+    with rasterio.open(tif, "w", **profile) as dst:
+        dst.write(data)
+    with rasterio.open(tif) as src:
+        assert not src.crs
+
+
+def _payload_reads(monkeypatch):
+    from ras_commander import fast_hdf
+    monkeypatch.setattr(fast_hdf, "read_dataset", lambda dataset, selection, **kwargs: dataset[selection])
+
+
+def test_untagged_tiff_takes_the_terrain_hdf_projection(terrain, tmp_path, monkeypatch):
+    """A RAS Mapper source with no CRS tags (a CRS without an EPSG code) is staged
+    in its terrain HDF's Projection, which becomes the request crs_wkt."""
+    from pyproj import CRS
+    hdf, tif = terrain
+    esri = CRS.from_user_input("ESRI:102630")
+    with h5py.File(hdf, "a") as handle:
+        handle.attrs["Projection"] = esri.to_wkt().encode()
+    _untag(tif)
+    _payload_reads(monkeypatch)
+    result = stage_boundary_terrain(hdf, tif, tmp_path / "out", selected_tiles=[0])
+    assert CRS.from_wkt(result["crs_wkt"]).equals(esri)
+
+
+def test_untagged_tiff_without_a_projection_is_refused(terrain, tmp_path, monkeypatch):
+    from ras_commander import fast_hdf
+    hdf, tif = terrain
+    with h5py.File(hdf, "a") as handle:
+        del handle.attrs["Projection"]
+    _untag(tif)
+    monkeypatch.setattr(fast_hdf, "read_dataset", lambda *a, **k: pytest.fail("read without a CRS"))
+    with pytest.raises(FimUnsupportedError, match="stored projected CRS"):
+        stage_boundary_terrain(hdf, tif, tmp_path / "out")
+    assert not (tmp_path / "out").exists()
+
+
+def test_empty_stitch_arrays_are_no_stitch_tin(terrain, tmp_path, monkeypatch):
+    """Single-source terrains store (0, 0) stitch arrays; they are staged as absent
+    (previously refused as an unsupported shape), as effective terrain treats them."""
+    hdf, tif = terrain
+    with h5py.File(hdf, "a") as handle:
+        for name in ("Points", "Triangles"):
+            del handle[f"Terrain/Stitch TIN {name}"]
+            handle.create_dataset(f"Terrain/Stitch TIN {name}", shape=(0, 0), dtype="<f4")
+    _payload_reads(monkeypatch)
+    result = stage_boundary_terrain(hdf, tif, tmp_path / "out", selected_tiles=[0])
+    assert result["stitch_points"] is None and result["stitch_triangles"] is None
+
+
+def test_one_empty_stitch_array_still_refuses(terrain, tmp_path, monkeypatch):
+    from ras_commander import fast_hdf
+    hdf, tif = terrain
+    with h5py.File(hdf, "a") as handle:
+        del handle["Terrain/Stitch TIN Triangles"]
+        handle.create_dataset("Terrain/Stitch TIN Triangles", shape=(0, 0), dtype="<f4")
+    monkeypatch.setattr(fast_hdf, "read_dataset", lambda *a, **k: pytest.fail("read malformed stitch"))
+    with pytest.raises(FimUnsupportedError, match="shape or dtype"):
+        stage_boundary_terrain(hdf, tif, tmp_path / "out")
