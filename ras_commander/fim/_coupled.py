@@ -161,7 +161,10 @@ def _storage_overlap(hdf, storage, grid, budget):
     from .. import HdfMesh
     perimeters = HdfMesh.get_mesh_areas(hdf)
     if perimeters is None or perimeters.empty:
-        return
+        # _require_mixed admitted 2D areas, so an empty frame means the
+        # perimeters could not be read; the overlap stays unproven.
+        raise FimUnsupportedError(
+            "storage/2D overlap cannot be checked: 2D flow area perimeters are unreadable")
     gt = grid["geo_transform"]
     names = perimeters["mesh_name"] if "mesh_name" in perimeters else perimeters.index
     for name, polygon in zip(storage.names, storage.polygons):

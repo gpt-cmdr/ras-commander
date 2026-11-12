@@ -78,7 +78,7 @@ def _storage_environment(files, tmp_path, monkeypatch, *, caps=None,
     return engine, caps
 
 
-def _storage_engine(monkeypatch, tmp_path, engine, caps):
+def _storage_engine(monkeypatch, tmp_path, engine, caps, composed_storage_pixels=3):
     """Fake engine: the existing XS/2D components plus storage and schema /2."""
     calls = _complete_engine(monkeypatch, tmp_path, engine)
     monkeypatch.setattr(_coupled, "_require_engine", lambda *args: (engine.resolve(), caps))
@@ -116,7 +116,8 @@ def _storage_engine(monkeypatch, tmp_path, engine, caps):
                       "method": {"method_id": _coupled.STORAGE_COMPOSITION_METHOD_ID},
                       **{key: xs[key] for key in ("profile_id", "crs", "width", "height", "geo_transform")},
                       "counts": {"valid_pixels": count, "two_d_owned_pixels": count,
-                                 "dry_two_d_suppressed_wet_xs": 0, "storage_owned_pixels": 3,
+                                 "dry_two_d_suppressed_wet_xs": 0,
+                                 "storage_owned_pixels": composed_storage_pixels,
                                  "dry_storage_suppressed_wet_xs": 1}}
             (out / "report.json").write_text(json.dumps(report))
             return CompletedProcess(args, 0, "", "")
@@ -165,6 +166,33 @@ def test_storage_preparation_and_mapping_compose_schema_2_unqualified(files, tmp
                and r["two_d_cell_count"] == 1 for r in composed)
     on_disk = json.loads((tmp_path / "maps" / "fim_manifest.json").read_text())
     assert on_disk["qualified"] is False and on_disk["status"] == "complete"
+    composition_counts = [r["counts"] for r in on_disk["reports"]
+                          if r.get("schema") == "fast-map-coupled-diagnostic/2"]
+    assert composition_counts and all(c["storage_owned_pixels"] == 3
+                                      and c["dry_storage_suppressed_wet_xs"] == 1
+                                      for c in composition_counts)
+    storage_reports = [r for r in on_disk["reports"] if r.get("schema") == "fast-map-storage/1"]
+    assert [r["storage_owned_pixels"] for r in storage_reports] == [3, 3]
+
+
+def test_composition_storage_counts_must_match_the_storage_component(files, tmp_path, monkeypatch):
+    from ras_commander.fim import FimMappingError
+    engine, caps = _storage_environment(files, tmp_path, monkeypatch)
+    prepared = RasFim.prepare_coupled_model(*files, tmp_path / "prep", allow_unqualified=True)
+    _storage_engine(monkeypatch, tmp_path, engine, caps, composed_storage_pixels=4)
+    with pytest.raises(FimMappingError, match="storage composition coverage counts differ"):
+        prepared.map_profiles(tmp_path / "maps", bbox=(0, 0, 50, 50), allow_unqualified=True,
+                              max_working_mib=64)
+    assert not list((tmp_path / "maps").glob("*.tif*"))
+
+
+def test_unreadable_2d_perimeters_refuse_storage_before_writes(files, tmp_path, monkeypatch):
+    import geopandas as gpd
+    _storage_environment(files, tmp_path, monkeypatch)
+    monkeypatch.setattr(HdfMesh, "get_mesh_areas", lambda _: gpd.GeoDataFrame())
+    with pytest.raises(FimUnsupportedError, match="perimeters are unreadable"):
+        RasFim.prepare_coupled_model(*files, tmp_path / "prep", allow_unqualified=True)
+    assert not (tmp_path / "prep").exists()
 
 
 def test_storage_mapping_still_requires_allow_unqualified(files, tmp_path, monkeypatch):
