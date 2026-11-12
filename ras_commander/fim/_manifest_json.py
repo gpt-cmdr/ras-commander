@@ -26,5 +26,15 @@ def json_value(value):
 
 
 def records(frame):
-    """Keep Python float round trips; pandas' JSON formatter rounds transforms."""
-    return json_value(frame.to_dict(orient="records"))
+    """Keep Python float round trips; pandas' JSON formatter rounds transforms.
+
+    Row access deep-copies ``DataFrame.attrs`` (pandas ``__finalize__``); a large
+    receipt there made every row cost a full copy. The rows never read attrs, so
+    they are detached for the conversion and restored afterwards.
+    """
+    attrs = frame.attrs
+    frame.attrs = {}
+    try:
+        return json_value(frame.to_dict(orient="records"))
+    finally:
+        frame.attrs = attrs

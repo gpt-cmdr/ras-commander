@@ -44,13 +44,18 @@ Load rules followed (RasMapperLib 6.6 / 7.0 / 7.0.1):
   order, which is not qualified: refused.
 * The ``.rasmap`` ``Checked`` state and per-layer entries are not consulted
   by the export, so the rasmap is not read here. The export does need the
-  terrain layer's ``ElevationModificationGroup`` element (any content):
-  without it HEC-RAS 6.6 and 7.0.1 apply none of the HDF modifications.
-  That gate is checked by ``_terrain_scope`` when a rasmap is given.
+  terrain layer's ``ElevationModificationGroup`` element named exactly
+  ``Modifications`` (any content): without it, or with the group under
+  another name, HEC-RAS 6.6 and 7.0.1 apply none of the HDF modifications.
+  That gate is checked by ``_terrain_scope`` when a rasmap is given, which
+  reports a misnamed group in ``rasmap_warnings``.
 
 Refused here, before the engine runs (each one the engine also refuses):
-shape-Z polygons without boundary elevations (vertex Z storage is not
-export-measured), boundary elevations sampled from the terrain when the
+polygon features with more than one ring (holes in any winding, separate or
+overlapping parts; reason code ``multi_ring_polygon`` on the error's
+``reason``), because RAS Mapper joins and triangulates such rings in a way
+that cannot be reproduced as a rule; shape-Z polygons without boundary
+elevations (vertex Z storage is not export-measured), boundary elevations sampled from the terrain when the
 layer has no control points and the polygon no stored profile, named ground
 lines in a layer with control points or with a NaN template, a NaN Top Width
 with a finite Max Reach, and, for ``hecras_version="6.6"``, named ground lines
@@ -83,6 +88,8 @@ RAS_APPLIED_UNSTAGED_TYPES = (
     "Rectangle", "Triangle", "Encroachment Polygon", "Levee1", "Pier", "Tree",
 )
 LENGTH_UNITS = ("feet", "meters")
+#: Refusal reason code for a polygon feature with more than one ring.
+MULTI_RING_POLYGON = "multi_ring_polygon"
 #: HEC-RAS versions whose terrain export the engine reproduces.
 HECRAS_VERSIONS = ("7.0.1", "6.6")
 
@@ -297,6 +304,15 @@ def _polygon_layer(name, group, priority, length_units, hecras_version) -> dict:
         if shape_z and not generate:
             raise FimUnsupportedError(f"{what}: polygons with shapefile Z elevations are not qualified")
         start, _count, part_start, part_count = (int(v) for v in info[i])
+        if part_count > 1:
+            # RAS Mapper joins a polygon's rings (holes in any winding, separate
+            # or overlapping parts) and triangulates them in a way that is not
+            # reproducible as a rule; the engine refuses them (Fast-Map #42).
+            raise FimUnsupportedError(
+                f"{what}: multi-ring polygon ({part_count} rings: a hole or separate/overlapping "
+                f"parts) is not qualified [reason: {MULTI_RING_POLYGON}]; use the RAS Mapper export",
+                reason=MULTI_RING_POLYGON,
+            )
         rings, vertex_z = [], []
         for j in range(part_count):
             offset, n = (int(v) for v in parts[part_start + j])
@@ -366,6 +382,14 @@ def _ellipse_layer(name, group, priority) -> dict:
 def project_length_units(terrain_hdf, rasmap_path=None, ras_object=None) -> str:
     """RAS Mapper's unit system for a terrain: ``"feet"`` or ``"meters"``.
 
+    The units of :func:`resolve_length_units`, without their basis.
+    """
+    return resolve_length_units(terrain_hdf, rasmap_path, ras_object)[0]
+
+
+def resolve_length_units(terrain_hdf, rasmap_path=None, ras_object=None) -> tuple:
+    """RAS Mapper's unit system for a terrain, with the basis it came from.
+
     RAS Mapper densifies ground-line profiles every 100 ft, or 100/3.281 m in
     SI projects, by the project unit system (not by the terrain CRS). The
     project is ``ras_object``'s project file, else the ``.prj`` named like
@@ -373,6 +397,11 @@ def project_length_units(terrain_hdf, rasmap_path=None, ras_object=None) -> str:
     terrain's parent project folder). Units come from
     :meth:`RasPrj.get_project_units` (``SI Units``, ``English Units`` or
     ``SI Units=<bool>``). Defaults to feet when no project states its units.
+
+    Returns:
+        tuple: ``(units, basis)``: ``units`` is ``"feet"`` or ``"meters"``;
+        ``basis`` is ``"project"`` when a project file states the units and
+        ``"default"`` when none does and feet is assumed.
 
     Raises:
         FimUnsupportedError: Several candidate project files state different
@@ -400,7 +429,7 @@ def project_length_units(terrain_hdf, rasmap_path=None, ras_object=None) -> str:
     for prj in selected:
         units = units_of(prj)
         if units is not None:
-            return units
+            return units, "project"
     folder = Path(rasmap_path).parent if rasmap_path is not None else Path(terrain_hdf).parent.parent
     found = {}
     for prj in sorted(folder.glob("*.prj")):
@@ -412,7 +441,9 @@ def project_length_units(terrain_hdf, rasmap_path=None, ras_object=None) -> str:
             f"project files in {folder.name} state different units {found}; pass ras_object "
             "or a rasmap named like its project"
         )
-    return next(iter(found.values()), "feet")
+    if found:
+        return next(iter(found.values())), "project"
+    return "feet", "default"
 
 
 def hecras_version_for(version) -> str:
@@ -530,7 +561,12 @@ def read_layers(terrain_hdf, length_units: Optional[str] = "feet",
                 )
                 continue
             if "Attributes" not in layer or len(layer["Attributes"]) == 0:
-                continue  # RAS Mapper loads a layer without Attributes as empty
+                # RAS Mapper loads a layer without Attributes as empty.
+                logger.warning(
+                    "modification %r: %s; RAS Mapper loads it as an empty layer (skipped)", name,
+                    "no Attributes table" if "Attributes" not in layer else "empty Attributes table",
+                )
+                continue
             priority = layer.attrs.get("Priority")
             if priority is None:
                 raise FimUnsupportedError(f"modification {name!r} has no Priority")

@@ -37,7 +37,15 @@ class FimGeometryError(FimEngineError, ValueError):
 
 
 class FimUnsupportedError(FimError):
-    """The input is outside the current engine contract."""
+    """The input is outside the current engine contract.
+
+    ``reason`` is an optional stable code naming the refused form (for
+    example ``"multi_ring_polygon"``); ``None`` when none is assigned.
+    """
+
+    def __init__(self, *args, reason=None):
+        super().__init__(*args)
+        self.reason = reason
 
 
 class FimAoiError(FimError, ValueError):

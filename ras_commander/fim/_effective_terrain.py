@@ -131,6 +131,37 @@ def _source_identities(engine: Path, sources: list, crs, identity: dict) -> None
             source["crs_identity"] = {"kind": "caller_verified_wkt", "fnv1a64": fnv}
 
 
+def _require_epsg(crs, tif: Path, terrain_crs_fnv1a64: Optional[str]) -> None:
+    """Refuse a terrain CRS with no EPSG code, before any staging.
+
+    The engine's effective-terrain request carries the CRS as an integer
+    ``epsg`` (required by every engine release) and the engine writes the
+    output GeoTIFF's CRS from that code alone. ``crs_identity`` (including a
+    ``caller_verified_wkt`` pin from ``terrain_crs_fnv1a64``) only proves that
+    the engine reads each source in that CRS; it cannot label the output. A
+    CRS that PROJ identifies only by another authority, such as
+    ``ESRI:102630`` (NAD83 / Alabama West, US feet), therefore has no valid
+    request.
+    """
+    from pyproj import CRS
+
+    parsed = CRS.from_user_input(crs) if crs else None
+    if parsed is None or parsed.to_epsg() is not None:
+        return  # no CRS at all is refused by the engine identity check
+    pinned = (
+        f" terrain_crs_fnv1a64={terrain_crs_fnv1a64!r} does not replace it: the hash only pins "
+        "the engine's WKT reading of the sources."
+        if terrain_crs_fnv1a64 else ""
+    )
+    raise FimUnsupportedError(
+        f"terrain source {Path(tif).name} has CRS {parsed.to_string()} ({parsed.name}), which "
+        "has no EPSG code. The native effective terrain needs one: the engine request carries "
+        "the CRS as an EPSG code and the engine writes the output GeoTIFF's CRS from it."
+        f"{pinned} Use the RAS Mapper export (RasTerrain.export_rasmapper_terrain) for this "
+        "terrain, or rebuild the terrain from sources in a CRS with an EPSG code."
+    )
+
+
 def stage(info: dict, root: Path) -> dict:
     """Write every source mask and the stitch TIN beside the request.
 
@@ -237,6 +268,7 @@ def build(
     v2 = engine_supports(engine, modifications=True)
     with rasterio.open(info["tif"]) as src:
         crs = src.crs
+    _require_epsg(crs, info["tif"], terrain_crs_fnv1a64)
     started = time.perf_counter()
     output_path.parent.mkdir(parents=True, exist_ok=True)
     work = Path(tempfile.mkdtemp(prefix=".effective-terrain-", dir=output_path.parent))
@@ -297,6 +329,7 @@ def build(
             "priority_basis": info["priority_basis"],
             "stitch_tin": staged["stitch_tin"] is not None,
             "rasmap_checked": info["rasmap_checked"],
+            "rasmap_warnings": info["rasmap_warnings"],
             "output": str(output_path),
             "nodata": NODATA,
             "seconds": time.perf_counter() - started,

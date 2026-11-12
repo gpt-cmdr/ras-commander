@@ -161,16 +161,21 @@ Ground lines are written as RAS Mapper saves them: `Type=Levee`, an empty `Syste
 - `add_ellipse_modification(terrain_hdf_path, rasmap_path, name, ellipses, mode="set_value")` - Add ellipse/circle modifications (rotation in degrees)
 - `add_modification_layer(terrain_hdf_path, rasmap_path, layer)` - Write one layer in the `read_layers` form (ground line, constant polygon, ellipse) back to a terrain
 
-The RAS Mapper export applies a terrain's HDF modifications only when its `.rasmap` terrain layer has an `ElevationModificationGroup` element; the writers create it.
+The RAS Mapper export (HEC-RAS 6.6 and 7.0.1) applies a terrain's HDF modifications only when its `.rasmap` terrain layer has an `ElevationModificationGroup` named exactly `Modifications`. Without that group, or with the group under any other name, the export applies none of them and reports nothing: a terrain written into a `Hydroconnectors` group exported unchanged, and renaming the group to `Modifications` applied it. The writers always register layers in `Modifications`. `group_name` accepts only `"Modifications"` (the default) and raises `ValueError` for any other name, before anything is written; an existing group under another name is renamed to `Modifications`, with a warning, because the terrain's other HDF layers then also apply. `RasFim.top_priority_terrain_source(terrain_hdf, rasmap_path=...)` flags an existing misnamed group in `rasmap_warnings` (code `modification_group_misnamed`) without changing either file.
 
 ### Group Management
 
-- `add_modification_group(terrain_hdf_path, rasmap_path, group_name="Modifications")` - Add empty modification group to terrain HDF and `.rasmap`
+- `add_modification_group(terrain_hdf_path, rasmap_path, group_name="Modifications")` - Add the empty `Modifications` group to terrain HDF and `.rasmap` (no other group name is accepted)
 
 ### Query Methods
 
 - `list_modifications(terrain_hdf_path)` - List all terrain modifications stored in HDF sidecar group
 - `get_modification_profile(terrain_hdf_path, name)` - Read modification station/elevation profile
+
+To read the modification layers in the form the native effective-terrain
+engine (`rasmapper-effective-terrain/2`) needs, with the reason for any form it
+refuses, use
+[`RasFim.read_terrain_modifications()`](../native-mapping-engine.md#read-the-modification-layers).
 
 ### Analysis Methods
 

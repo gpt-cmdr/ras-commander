@@ -13,7 +13,6 @@ Supports:
     - Ellipse and circle modifications
     - Writing a layer read by ``ras_commander.fim._terrain_mods.read_layers``
       back with :meth:`RasTerrainModWriter.add_modification_layer`
-    - Modification groups for organizing multiple modifications
     - Writing to both terrain HDF and .rasmap XML
 
 RAS Mapper compatibility (verified with HEC-RAS 6.6 and 7.0.1 exports):
@@ -26,6 +25,17 @@ RAS Mapper compatibility (verified with HEC-RAS 6.6 and 7.0.1 exports):
     inserted at the top of the modification list (``Priority`` 0, applied
     last, so it wins) and the other layers are renumbered, as RAS Mapper does
     when a layer is added in the GUI.
+
+    RAS Mapper applies a terrain's HDF modifications only when the terrain's
+    ``.rasmap`` layer holds an ``ElevationModificationGroup`` named exactly
+    ``Modifications`` (HEC-RAS 6.6 and 7.0.1). Without that group, or with
+    the group under any other name, its exports apply none of the HDF
+    layers, silently: a terrain written into a group named
+    ``Hydroconnectors`` exported unchanged, and renaming the group to
+    ``Modifications``, nothing else changed, applied it. The writers
+    therefore always register layers in ``Modifications``: ``group_name``
+    accepts only that name, and an existing group under another name is
+    renamed, with a warning.
 
 Platform:
     Cross-platform (no pythonnet/RasMapperLib required for writing).
@@ -51,6 +61,9 @@ from ..LoggingConfig import get_logger
 from ..fast_hdf import read_attr, read_attrs, read_typed
 
 logger = get_logger(__name__)
+
+#: The only ``.rasmap`` modification group name RAS Mapper applies (6.6, 7.0.1).
+RASMAPPER_MODIFICATION_GROUP = "Modifications"
 
 # Modification type constants
 MODIFICATION_SET_VALUE = 0
@@ -179,7 +192,10 @@ class RasTerrainModWriter:
             ``Transition Percent``. RAS Mapper uses it only for system joins;
             the default stores NaN, as RAS Mapper does.
         group_name : str
-            Name of the modification group in .rasmap.
+            ``.rasmap`` modification group. Only ``"Modifications"`` (the
+            default) is accepted: RAS Mapper applies a terrain's
+            modifications only from a group with that exact name, so any
+            other name raises :class:`ValueError`.
         system_name : str, optional
             ``System Name``. Leave empty (default) for an ordinary line. Any
             non-empty name makes RAS Mapper build the feature through its
@@ -193,6 +209,7 @@ class RasTerrainModWriter:
         Path
             Path to the modified terrain HDF file.
         """
+        RasTerrainModWriter._require_modification_group_name(group_name)
         terrain_hdf_path = Path(terrain_hdf_path)
         rasmap_path = Path(rasmap_path)
         line_points = RasTerrainModWriter._validate_polyline_points(polyline_points)
@@ -380,7 +397,10 @@ class RasTerrainModWriter:
         elev_pt_tolerance : float
             Elevation point tolerance written to HDF and .rasmap metadata.
         group_name : str
-            Name of the modification group in .rasmap.
+            ``.rasmap`` modification group. Only ``"Modifications"`` (the
+            default) is accepted: RAS Mapper applies a terrain's
+            modifications only from a group with that exact name, so any
+            other name raises :class:`ValueError`.
         elevation : float, optional
             Constant polygon elevation (``elevation_method="constant"``).
         priority : int, optional
@@ -391,6 +411,7 @@ class RasTerrainModWriter:
         Path
             Path to the modified terrain HDF file.
         """
+        RasTerrainModWriter._require_modification_group_name(group_name)
         terrain_hdf_path = Path(terrain_hdf_path)
         if rasmap_path is None:
             rasmap_path = RasTerrainModWriter._infer_rasmap_path(terrain_hdf_path)
@@ -527,7 +548,10 @@ class RasTerrainModWriter:
         elev_pt_tolerance : float
             Elevation point tolerance (default 50).
         group_name : str
-            Name of the modification group (default "Modifications").
+            ``.rasmap`` modification group. Only ``"Modifications"`` (the
+            default) is accepted: RAS Mapper applies a terrain's
+            modifications only from a group with that exact name, so any
+            other name raises :class:`ValueError`.
         elevation : float, optional
             Constant absolute invert elevation.
         profile_points : array-like, optional
@@ -548,6 +572,7 @@ class RasTerrainModWriter:
         Path
             Path to the modified terrain HDF file.
         """
+        RasTerrainModWriter._require_modification_group_name(group_name)
         terrain_hdf_path = Path(terrain_hdf_path)
         rasmap_path = Path(rasmap_path)
         raw_points = RasTerrainModWriter._validate_polyline_points(polyline_points)
@@ -659,10 +684,14 @@ class RasTerrainModWriter:
             Default merge mode (``set_value``, ``take_higher``,
             ``take_lower``, ``add``).
         group_name : str
-            Modification group name in .rasmap.
+            ``.rasmap`` modification group. Only ``"Modifications"`` (the
+            default) is accepted: RAS Mapper applies a terrain's
+            modifications only from a group with that exact name, so any
+            other name raises :class:`ValueError`.
         priority : int, optional
             Position in the modification list; 0 (default) is the top layer.
         """
+        RasTerrainModWriter._require_modification_group_name(group_name)
         terrain_hdf_path = Path(terrain_hdf_path)
         layer_type = RasTerrainModWriter._resolve_modification_type(mode)
         if len(ellipses) == 0:
@@ -739,13 +768,18 @@ class RasTerrainModWriter:
         default) or write layers from the highest priority number down.
         ``null`` template values are written as NaN.
 
+        ``group_name`` accepts only ``"Modifications"``, as for the other
+        writers.
+
         Raises:
             ValueError: The layer has fields this writer does not store, so
                 the written layer would change the terrain differently:
                 layer ``control_points``, polygons with boundary elevations
                 (``generate_boundary``), shape-Z polygons (``use_shape_z`` or
-                ``vertex_z``), or an empty ground-line profile.
+                ``vertex_z``), or an empty ground-line profile; or
+                ``group_name`` is not ``"Modifications"``.
         """
+        RasTerrainModWriter._require_modification_group_name(group_name)
         kind = layer.get("kind")
         name = layer["name"]
         terrain_hdf_path = Path(terrain_hdf_path)
@@ -867,10 +901,14 @@ class RasTerrainModWriter:
         rasmap_path : Path
             Path to the .rasmap XML file.
         group_name : str
-            Name for the modification group (default "Modifications").
+            ``.rasmap`` modification group. Only ``"Modifications"`` (the
+            default) is accepted: RAS Mapper applies a terrain's
+            modifications only from a group with that exact name, so any
+            other name raises :class:`ValueError`.
         """
         import h5py
 
+        RasTerrainModWriter._require_modification_group_name(group_name)
         terrain_hdf_path = Path(terrain_hdf_path)
         rasmap_path = Path(rasmap_path)
 
@@ -2913,12 +2951,41 @@ class RasTerrainModWriter:
         return Path(normalized).name == target_path.name
 
     @staticmethod
+    def _require_modification_group_name(group_name: str) -> None:
+        """Refuse a ``.rasmap`` group name RAS Mapper would not apply."""
+        if group_name != RASMAPPER_MODIFICATION_GROUP:
+            raise ValueError(
+                f"group_name={group_name!r} is not supported: RAS Mapper (HEC-RAS 6.6 and "
+                f"7.0.1) applies a terrain's modifications only when its .rasmap group is "
+                f"named exactly {RASMAPPER_MODIFICATION_GROUP!r}; under any other name its "
+                f"exports apply none of them. Omit group_name (default "
+                f"{RASMAPPER_MODIFICATION_GROUP!r})."
+            )
+
+    @staticmethod
+    def _modification_group(terrain_layer: ET.Element) -> Optional[ET.Element]:
+        """The terrain layer's ``Modifications`` group element, if present."""
+        for child in terrain_layer.findall('Layer'):
+            if (
+                child.get('Type') == 'ElevationModificationGroup'
+                and child.get('Name') == RASMAPPER_MODIFICATION_GROUP
+            ):
+                return child
+        return None
+
+    @staticmethod
     def _ensure_modification_group_in_rasmap(
         rasmap_path: Path,
         terrain_hdf_path: Path,
         group_name: str,
     ) -> ET.Element:
-        """Ensure the modification group exists in .rasmap XML. Returns the group element."""
+        """Ensure the terrain's ``Modifications`` group exists in .rasmap XML.
+
+        Returns the group element. An existing ``ElevationModificationGroup``
+        under another name (which RAS Mapper ignores) is renamed to
+        ``Modifications`` with a warning, its layer entries unchanged.
+        """
+        RasTerrainModWriter._require_modification_group_name(group_name)
         tree = ET.parse(rasmap_path)
         root = tree.getroot()
 
@@ -2926,18 +2993,36 @@ class RasTerrainModWriter:
             root, rasmap_path, terrain_hdf_path
         )
 
-        # Find or create the modification group layer
-        mod_group = None
-        for child in terrain_layer.findall('Layer'):
-            if child.get('Type') == 'ElevationModificationGroup':
-                mod_group = child
-                break
-
+        mod_group = RasTerrainModWriter._modification_group(terrain_layer)
+        misnamed = [
+            child for child in terrain_layer.findall('Layer')
+            if child.get('Type') == 'ElevationModificationGroup'
+            and child.get('Name') != RASMAPPER_MODIFICATION_GROUP
+        ]
+        if mod_group is None and misnamed:
+            mod_group = misnamed.pop(0)
+            logger.warning(
+                "Renamed .rasmap modification group %r of terrain %s to %r: RAS Mapper "
+                "(HEC-RAS 6.6, 7.0.1) applies no terrain modifications from a group with "
+                "another name. The terrain's existing HDF modification layers, previously "
+                "not applied by RAS Mapper exports, now are.",
+                mod_group.get('Name'), terrain_hdf_path.name, RASMAPPER_MODIFICATION_GROUP,
+            )
+            mod_group.set('Name', RASMAPPER_MODIFICATION_GROUP)
+        if misnamed:
+            logger.warning(
+                ".rasmap terrain %s also has modification group(s) %s, which RAS Mapper "
+                "ignores; layers are written to %r",
+                terrain_hdf_path.name, [child.get('Name') for child in misnamed],
+                RASMAPPER_MODIFICATION_GROUP,
+            )
         if mod_group is None:
             mod_group = ET.SubElement(terrain_layer, 'Layer')
-            mod_group.set('Name', group_name)
+            mod_group.set('Name', RASMAPPER_MODIFICATION_GROUP)
             mod_group.set('Type', 'ElevationModificationGroup')
-            logger.debug(f"Created modification group '{group_name}' in .rasmap")
+            logger.debug(
+                "Created modification group '%s' in .rasmap", RASMAPPER_MODIFICATION_GROUP
+            )
         mod_group.set('Checked', 'True')
         mod_group.set('Expanded', 'True')
 
@@ -2959,7 +3044,11 @@ class RasTerrainModWriter:
 
         The layer element is inserted first in the group, matching RAS
         Mapper's tree (newest layer on top, Priority 0). RAS Mapper's export
-        does not need any of this XML; it reads the terrain HDF.
+        reads the layer geometry and parameters from the terrain HDF, but it
+        applies them only when the terrain layer holds an
+        ``ElevationModificationGroup`` named exactly ``Modifications``
+        (HEC-RAS 6.6 and 7.0.1); without it, or under another name, the
+        export applies no modification. This method ensures that group.
         """
         # Ensure the group exists first
         mod_group = RasTerrainModWriter._ensure_modification_group_in_rasmap(
@@ -2975,11 +3064,7 @@ class RasTerrainModWriter:
             root, rasmap_path, terrain_hdf_path
         )
 
-        mod_group = None
-        for child in terrain_layer.findall('Layer'):
-            if child.get('Type') == 'ElevationModificationGroup':
-                mod_group = child
-                break
+        mod_group = RasTerrainModWriter._modification_group(terrain_layer)
 
         if mod_group is None:
             raise RuntimeError(
