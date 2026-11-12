@@ -228,7 +228,8 @@ def test_xs_worker_and_batch_flags_are_parsed_conservatively():
     assert _xs_render_workers(workers, 8, 100 + 2 * scratch + 3000, receipt, grid, 100, per_worker) == 3
     assert _xs_render_workers(workers, 8, 100 + 2 * scratch + 2999, receipt, grid, 100, per_worker) == 2
 
-def _fake_one_d_engine(monkeypatch, tmp_path, flags, failure=None, structured=False, storage=False):
+def _fake_one_d_engine(monkeypatch, tmp_path, flags, failure=None, structured=False, storage=False,
+                       crs_any_label=None):
     """Simulated ras2fim-batch for the 1D route; records each request.
 
     Writes the products an engine advertising ``flags`` would deliver: raw
@@ -300,7 +301,8 @@ def _fake_one_d_engine(monkeypatch, tmp_path, flags, failure=None, structured=Fa
                 grid[r:r + w["height"], c:c + w["width"]] = values
                 with rasterio.open(out / f"{name}.tif", "w", driver="GTiff", width=full["width"],
                                    height=full["height"], count=1, dtype="float32",
-                                   crs=f"EPSG:{request['epsg']}", transform=Affine.from_gdal(*full["transform"]),
+                                   crs=(f"EPSG:{request['epsg']}" if "epsg" in request else crs_any_label),
+                                   transform=Affine.from_gdal(*full["transform"]),
                                    nodata=fmt["nodata"], tiled=True, blockxsize=fmt["block_size"],
                                    blockysize=fmt["block_size"], compress="deflate") as dst:
                     dst.write(np.where(np.isnan(grid), np.float32(fmt["nodata"]), grid), 1)

@@ -40,6 +40,25 @@ alone does not identify a development checkout.
   defect on one minimum-Y window, which does not rule it out. Projects on
   those releases can use the native effective terrain instead.
 
+- **CRSs without an EPSG code on the native route.** With an engine that
+  advertises `crs_any` (ras-commander-fast-map 0.19+), the following accept a
+  terrain whose CRS has no EPSG code, such as ESRI:102630 (NAD83 / Alabama
+  West, US survey feet):
+  - `RasFim.build_effective_terrain`;
+  - sloping mapping and `prepare_sloping_model`;
+  - horizontal mapping;
+  - 1D `final_format`.
+
+  Requests carry the CRS as `crs_geokeys`: the terrain's own GeoKey tags, or,
+  for RAS Mapper terrain sources that carry no CRS, GDAL's tags for the
+  terrain HDF's `Projection`, checked by a GDAL round trip. The engine writes
+  them verbatim, so outputs read back in exactly the source CRS. New helpers:
+  `_engine.crs_any`, `request_crs` and `geokeys_for_crs`; the
+  effective-terrain receipt gains `crs`. Engines without `crs_any` still
+  refuse with a clear message. EPSG terrains send the same requests as before.
+  Boundaries, Step05 `map_profiles`, depth groups, whole-simulation products
+  and coupled mapping still need an EPSG code.
+
 ### 0.120.0 — 2026-11-12
 
 - **Mapping engine dependency:** mapping extras (`fim`, `fast-map`, `full`
@@ -87,6 +106,7 @@ alone does not identify a development checkout.
   that physically overlap a 2D flow area, storage with the native stored-grid
   contract and older engines are still refused before any write. Results stay
   `qualified=False` and still require `allow_unqualified=True`.
+
 ### 0.119.0 — 2026-11-12
 
 - **Mapping engine dependency:** mapping extras (`fim`, `fast-map`, `full`

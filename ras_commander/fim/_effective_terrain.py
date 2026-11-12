@@ -111,15 +111,27 @@ def _source_identities(engine: Path, sources: list, crs, identity: dict) -> None
     RAS terrain sources often store the same CRS with different WKT text; the
     engine compares WKT hashes, so each source carries its caller-verified hash.
     Sources whose CRS differs (by rasterio/PROJ equality) are refused.
+
+    With ``crs_geokeys`` (a CRS without an EPSG code): when the first source
+    carries no CRS (``untagged``), every source must carry none; otherwise a
+    source whose GeoKey tags differ from the first's but whose CRS is equal
+    is pinned by its own WKT hash.
     """
     import rasterio
     from pyproj import CRS
 
+    kind = identity["crs_identity"].get("kind")
     first = CRS.from_user_input(crs)
     for source in sources[1:]:
         path = Path(source["path"])
         with rasterio.open(path) as src:
             other = CRS.from_user_input(src.crs) if src.crs else None
+        if kind == "untagged":
+            if other is not None:
+                raise FimUnsupportedError(
+                    f"terrain source {path.name} carries a CRS but the first source carries none")
+            source["crs_identity"] = {"kind": "untagged"}
+            continue
         if other is None or other != first:
             raise FimUnsupportedError(f"terrain source {path.name} is not in the first source's CRS")
         info = _engine._json_stdout(
@@ -127,26 +139,50 @@ def _source_identities(engine: Path, sources: list, crs, identity: dict) -> None
             "ras2fim-batch terrain-info",
         )
         fnv = info.get("crs_wkt_fnv1a64")
-        if identity["crs_identity"].get("kind") == "caller_verified_wkt" and fnv:
+        if kind == "geokeys":
+            if info.get("geokeys") != identity["crs_geokeys"]:
+                if not fnv:
+                    raise FimUnsupportedError(f"the engine reads no CRS from terrain source {path.name}")
+                source["crs_identity"] = {"kind": "caller_verified_wkt", "fnv1a64": fnv}
+            continue
+        if kind == "caller_verified_wkt" and fnv:
             source["crs_identity"] = {"kind": "caller_verified_wkt", "fnv1a64": fnv}
 
 
-def _require_epsg(crs, tif: Path, terrain_crs_fnv1a64: Optional[str]) -> None:
-    """Refuse a terrain CRS with no EPSG code, before any staging.
+def _terrain_hdf_crs(terrain_hdf):
+    """The terrain CRS stored in the terrain HDF's root ``Projection`` attribute, or None."""
+    import h5py
+    from pyproj import CRS
 
-    The engine's effective-terrain request carries the CRS as an integer
-    ``epsg`` (required by every engine release) and the engine writes the
-    output GeoTIFF's CRS from that code alone. ``crs_identity`` (including a
-    ``caller_verified_wkt`` pin from ``terrain_crs_fnv1a64``) only proves that
-    the engine reads each source in that CRS; it cannot label the output. A
-    CRS that PROJ identifies only by another authority, such as
-    ``ESRI:102630`` (NAD83 / Alabama West, US feet), therefore has no valid
-    request.
+    with h5py.File(terrain_hdf, "r") as hdf:
+        value = hdf.attrs.get("Projection")
+    if isinstance(value, bytes):
+        value = value.decode("utf-8", "replace")
+    if not isinstance(value, str) or not value.strip():
+        return None
+    try:
+        return CRS.from_wkt(value.strip())
+    except Exception:
+        return None
+
+
+def _require_epsg(crs, tif: Path, terrain_crs_fnv1a64: Optional[str], crs_any: bool = False) -> None:
+    """Refuse a terrain CRS with no EPSG code before any staging, unless the
+    engine advertises ``crs_any``.
+
+    Engines without ``crs_any`` (Fast-Map 0.18 and older) carry the CRS as an
+    integer ``epsg`` and write the output GeoTIFF's CRS from that code alone.
+    ``crs_identity`` (including a ``caller_verified_wkt`` pin from
+    ``terrain_crs_fnv1a64``) only proves that the engine reads each source in
+    that CRS; it cannot label the output. A CRS that PROJ identifies only by
+    another authority, such as ``ESRI:102630`` (NAD83 / Alabama West, US
+    feet), therefore has no valid request for them. Engines with ``crs_any``
+    take its GeoKey tags (``crs_geokeys``) and write them verbatim.
     """
     from pyproj import CRS
 
     parsed = CRS.from_user_input(crs) if crs else None
-    if parsed is None or parsed.to_epsg() is not None:
+    if crs_any or parsed is None or parsed.to_epsg() is not None:
         return  # no CRS at all is refused by the engine identity check
     pinned = (
         f" terrain_crs_fnv1a64={terrain_crs_fnv1a64!r} does not replace it: the hash only pins "
@@ -157,8 +193,9 @@ def _require_epsg(crs, tif: Path, terrain_crs_fnv1a64: Optional[str]) -> None:
         f"terrain source {Path(tif).name} has CRS {parsed.to_string()} ({parsed.name}), which "
         "has no EPSG code. The native effective terrain needs one: the engine request carries "
         "the CRS as an EPSG code and the engine writes the output GeoTIFF's CRS from it."
-        f"{pinned} Use the RAS Mapper export (RasTerrain.export_rasmapper_terrain) for this "
-        "terrain, or rebuild the terrain from sources in a CRS with an EPSG code."
+        f"{pinned} Use ras-commander-fast-map 0.19+ (crs_any), the RAS Mapper export "
+        "(RasTerrain.export_rasmapper_terrain) for this terrain, or rebuild the terrain from "
+        "sources in a CRS with an EPSG code."
     )
 
 
@@ -269,22 +306,45 @@ def build(
             hecras_version=version,
         )
     v2 = engine_supports(engine, modifications=True)
+    any_crs = _engine.crs_any(_record(engine))
     with rasterio.open(info["tif"]) as src:
         crs = src.crs
-    _require_epsg(crs, info["tif"], terrain_crs_fnv1a64)
+    declared = None
+    if not crs and any_crs:
+        # RAS Mapper writes terrain sources whose CRS has no EPSG code without
+        # any CRS tags; the terrain HDF's Projection is the terrain's CRS.
+        declared = _terrain_hdf_crs(info["terrain_hdf"])
+        if declared is None:
+            raise FimUnsupportedError(
+                f"terrain source {Path(info['tif']).name} has no CRS and "
+                f"{Path(info['terrain_hdf']).name} has no readable Projection")
+    _require_epsg(crs or declared, info["tif"], terrain_crs_fnv1a64, any_crs)
     started = time.perf_counter()
     output_path.parent.mkdir(parents=True, exist_ok=True)
     work = Path(tempfile.mkdtemp(prefix=".effective-terrain-", dir=output_path.parent))
     try:
         staged = stage(info, work)
-        identity = _engine.terrain_identity(engine, Path(info["tif"]), crs, terrain_crs_fnv1a64)
-        if v2:
-            _source_identities(engine, staged["sources"], crs, identity)
+        if declared is not None:
+            # GDAL's GeoKeys for the declared CRS, verified by a GDAL round trip;
+            # the engine checks that the sources carry no CRS of their own.
+            keys = _engine.geokeys_for_crs(engine, declared, work / "crs", timeout=timeout)
+            identity = {"path": str(info["tif"]), "epsg": None, "crs_identity": {"kind": "untagged"},
+                        "crs_geokeys": keys}
+            crs_record = {"kind": "geokeys", "basis": "terrain_hdf_projection",
+                          "source_identity": "untagged", "crs": declared.to_wkt()}
+        else:
+            identity = _engine.terrain_identity(engine, Path(info["tif"]), crs, terrain_crs_fnv1a64,
+                                                **({"crs_any": True} if any_crs else {}))
+            crs_record = ({"kind": "epsg", "code": int(identity["epsg"])} if identity["epsg"] is not None
+                          else {"kind": "geokeys", "basis": "source_tiff_geokeys",
+                                "source_identity": "geokeys"})
+        if v2 or declared is not None:
+            _source_identities(engine, staged["sources"], crs or declared, identity)
         request = {
             "schema": SCHEMA_V2 if v2 else SCHEMA,
             "sources": staged["sources"],
             "stitch_tin": staged["stitch_tin"],
-            "epsg": int(identity["epsg"]),
+            **_engine.request_crs(identity),
             "crs_identity": identity["crs_identity"],
             "modifications": len(layers),
             "threads": int(threads),
@@ -334,6 +394,7 @@ def build(
             "rasmap_checked": info["rasmap_checked"],
             "rasmap_warnings": info["rasmap_warnings"],
             "output": str(output_path),
+            "crs": crs_record,
             "nodata": NODATA,
             "seconds": time.perf_counter() - started,
             "engine_report": report,

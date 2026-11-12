@@ -247,6 +247,11 @@ def map_inundation_boundaries(
             remaining = prepared_bytes - context._info["planned_prepared_bytes"] - transport
             if remaining <= 0:
                 raise FimUnsupportedError("Boundary geometry transport exceeds max_prepared_mib")
+            if context._terrain_identity.get("epsg") is None:
+                # Boundary requests label GeoJSON with an EPSG code (no crs_any).
+                raise FimUnsupportedError(
+                    "inundation boundaries need a terrain CRS with an EPSG code; the engine's "
+                    "boundary method does not advertise crs_any")
             metadata = stage_boundary_terrain(terrain_hdf, terrain_path, root, threads=threads,
                 max_staged_bytes=remaining, selected_tiles=tiles)
             _write_geometry(root / "boundary-cells.wkb", cells.geometry.to_numpy())

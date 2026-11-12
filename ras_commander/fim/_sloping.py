@@ -871,7 +871,8 @@ def map_profiles(
         else:
             tick = time.perf_counter()
             identity = (
-                _engine.terrain_identity(engine, terrain, cells.crs, terrain_crs_fnv1a64)
+                _engine.terrain_identity(engine, terrain, cells.crs, terrain_crs_fnv1a64,
+                                         **_engine.crs_any_kwargs(method))
                 if _prepared is None
                 else _prepared._terrain_identity
             )
@@ -970,7 +971,7 @@ def map_profiles(
                         else {}
                     ),
                     terrain=str(terrain),
-                    epsg=identity["epsg"],
+                    **_engine.request_crs(identity),
                     crs_identity=identity["crs_identity"],
                     terrain_transform=full_transform,
                     window=[int(v) for v in plan.window.flatten()],

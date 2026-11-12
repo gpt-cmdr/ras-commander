@@ -1412,10 +1412,13 @@ class RasFim:
             timeout: Engine timeout in seconds.
             terrain_crs_fnv1a64: Caller-verified WKT hash when the engine
                 does not identify the EPSG code of a source CRS that rasterio
-                identifies by EPSG. It cannot replace the EPSG code itself:
-                the engine request carries the CRS as an EPSG code and labels
-                the output with it, so a CRS without one (for example
-                ``ESRI:102630``) is refused; use the RAS Mapper export.
+                identifies by EPSG. It cannot replace the EPSG code itself.
+                A CRS without one (for example ``ESRI:102630``) needs an
+                engine that advertises ``crs_any`` (Fast-Map 0.19+), which
+                takes the CRS as verbatim GeoKey tags: the source's own, or,
+                for RAS Mapper sources that carry no CRS, GDAL's tags for
+                the terrain HDF's ``Projection`` (checked by a GDAL round
+                trip). Older engines refuse it; use the RAS Mapper export.
             hecras_version: HEC-RAS release whose export the modifications
                 reproduce (for example ``"6.6"``, ``"6.7 Beta 5"`` or
                 ``"7.0.2"``). ``None`` resolves the project's version:

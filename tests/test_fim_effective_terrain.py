@@ -243,7 +243,16 @@ def test_esri_only_crs_is_refused_with_the_engine_epsg_requirement(tmp_path, mon
     assert not (tmp_path / "out").exists() or not any((tmp_path / "out").iterdir())
 
 
-@pytest.mark.skipif(not _engine_with_method(), reason="installed engine lacks effective_terrain")
+def _engine_with_crs_any():
+    try:
+        from ras_commander.fim import _engine
+        return _engine.crs_any(_effective_terrain._record(_engine.find_engine(None)))
+    except Exception:
+        return False
+
+
+@pytest.mark.skipif(not _engine_with_method() or _engine_with_crs_any(),
+                    reason="installed engine lacks effective_terrain, or takes any CRS (test_fim_crs_any)")
 def test_real_engine_reports_no_epsg_for_an_esri_only_terrain(tmp_path):
     """The installed engine identifies no EPSG code for ESRI:102630 either; the
     request is refused in RasFim with the actionable reason, even with the

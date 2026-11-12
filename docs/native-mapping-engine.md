@@ -903,6 +903,35 @@ manifest.attrs["terrain_scope"]   # method, source, priority basis, mask dataset
   after the source pixels re-hash to the same value. For sloping, you can
   instead map the source TIFF directly with `terrain_crs_fnv1a64` (below).
 
+**CRSs without an EPSG code.** <a id="crss-without-an-epsg-code"></a> Engines that
+advertise `crs_any` on a method record (Fast-Map 0.19+: `effective_terrain`,
+`sloping`, `horizontal`, and `native_final_format` of the 1D methods) accept a
+terrain and results CRS that PROJ identifies by no EPSG code, such as
+`ESRI:102630`. The request then carries the CRS as `crs_geokeys`, the GeoKey
+tags of a GeoTIFF in that CRS. The engine writes them verbatim into its
+GeoTIFFs, so GDAL reads the output CRS as the source's (US survey feet and
+datum included):
+
+- **Mapping** (`map_sloping_profiles`, `prepare_sloping_model`, horizontal):
+  the terrain's own GeoKey tags, with `crs_identity` `{"kind": "geokeys"}`.
+  The engine checks that they are the terrain's. rasterio/PROJ decide whether
+  the CRS has an EPSG code; the engine's own identification is never used
+  instead (it can name a code GDAL does not). The results CRS must still
+  equal the terrain CRS.
+- **`build_effective_terrain`**: a source TIFF with tags is handled as above.
+  RAS Mapper writes terrain sources in such a CRS with **no CRS tags at all**.
+  For those, the CRS is the terrain HDF's `Projection`. GDAL encodes it in a
+  one-pixel GeoTIFF, which must read back as the same CRS, and the engine
+  checks that every source carries no CRS (`{"kind": "untagged"}`). For the
+  Helena terrain (ESRI:102630) these tags are byte-identical to the ones in
+  RAS Mapper's own export. The receipt's `crs` records the basis
+  (`terrain_hdf_projection` or `source_tiff_geokeys`).
+- **1D `final_format`**: GDAL's tags for the model CRS, checked the same way.
+
+Methods without `crs_any` (Step05 `map_profiles`, boundaries, depth groups,
+whole-simulation products, coupled mapping) still need an EPSG code. EPSG
+terrains produce the same requests as before.
+
 **Terrain CRS the engine cannot identify (sloping).** HEC-RAS 7.0.1 can write
 terrain GeoTIFFs whose WKT the engine reads as `PROJCS["unknown", ...]` with no
 EPSG code, although rasterio identifies the EPSG code. Davis 7.0.1 is an
@@ -985,13 +1014,14 @@ receipt["method_id"], receipt["hecras_version"], receipt["modification_layers"]
   receipt's `rasmap_warnings` records why (`modification_group_misnamed` or
   `modification_group_missing`); rename the group to `Modifications` to apply
   the layers.
-- The source CRS needs an EPSG code. The engine request carries the CRS as an
-  EPSG code and the engine writes the output GeoTIFF's CRS from it.
-  `terrain_crs_fnv1a64` only covers a CRS that rasterio identifies by EPSG
-  but the engine does not; it cannot replace the code. A CRS that PROJ
-  identifies only by another authority, such as `ESRI:102630` (NAD83 /
-  Alabama West, US feet), raises `FimUnsupportedError`; use the RAS Mapper
-  export for such terrains.
+- A source CRS without an EPSG code, such as `ESRI:102630` (NAD83 / Alabama
+  West, US survey feet), needs an engine whose `effective_terrain` record
+  advertises `crs_any` (Fast-Map 0.19+). See
+  [CRSs without an EPSG code](#crss-without-an-epsg-code). With older engines
+  it raises `FimUnsupportedError`, because their requests carry the CRS as an
+  EPSG code and they label the output from it alone; use the RAS Mapper
+  export there. `terrain_crs_fnv1a64` only covers a CRS that rasterio
+  identifies by EPSG but the engine does not; it cannot replace the code.
 - Forms the engine does not reproduce raise `FimUnsupportedError`: boundary
   elevations sampled from the terrain, shape-Z polygons, polygons with more
   than one ring, named ground lines with control points or a NaN template,
@@ -2270,7 +2300,10 @@ rows record the delivered grid (`col_off`, `row_off`, `width`, `height` and
 `transform` on the terrain), as sloping rows do; `final_format.window_on_grid`
 locates the mapped window. A valid value that is infinite or reads as `nodata`
 is refused (`FimUnsupportedError`, wrapped in `FimMappingError`); no product is
-delivered. The model CRS needs an EPSG code. There is no Rasterio fallback.
+delivered. The model CRS needs an EPSG code, unless the engine's
+`native_final_format` advertises `crs_any` (see
+[CRSs without an EPSG code](#crss-without-an-epsg-code)). There is no Rasterio
+fallback.
 
 The diagnostic scope includes stored unsteady or explicit steady XS profiles,
 including junction ordering, levees, endpoint obstruction blocks and disjoint

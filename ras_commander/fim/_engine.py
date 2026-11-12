@@ -145,6 +145,80 @@ def engine_method(engine: Path) -> dict:
     return _json_stdout(run_engine([str(engine), "method"], "method"), "ras2fim-batch method")
 
 
+def crs_any(record) -> bool:
+    """Whether an engine method record accepts a CRS without an EPSG code.
+
+    Fast-Map 0.19+ advertises ``crs_any: true`` on methods that take
+    ``crs_geokeys``: the GeoKey tags of a GeoTIFF in that CRS, which the
+    engine writes back verbatim into its GeoTIFFs. Older engines label
+    outputs from an EPSG code alone.
+    """
+    return isinstance(record, dict) and record.get("crs_any") is True
+
+
+def crs_any_kwargs(record) -> dict:
+    """``{"crs_any": True}`` for :func:`terrain_identity` when ``record`` advertises it, else ``{}``."""
+    return {"crs_any": True} if crs_any(record) else {}
+
+
+def request_crs(identity: dict) -> dict:
+    """The CRS fields of an engine request for a :func:`terrain_identity` result.
+
+    ``{"epsg": code}`` as before, or ``{"crs_geokeys": {...}}`` for a CRS
+    without an EPSG code (the engine's ``epsg`` then defaults to 0).
+    """
+    if identity.get("epsg") is not None:
+        return {"epsg": int(identity["epsg"])}
+    keys = identity.get("crs_geokeys")
+    if not isinstance(keys, dict):
+        raise FimEngineError("terrain identity has neither an EPSG code nor crs_geokeys")
+    return {"crs_geokeys": keys}
+
+
+def _crs_equal(a, b) -> bool:
+    from pyproj import CRS
+    return CRS.from_user_input(a).equals(CRS.from_user_input(b))
+
+
+def geokeys_for_crs(engine: Path, crs, folder: Path, *, timeout: Optional[float] = None) -> dict:
+    """GeoKey tags that GDAL writes for ``crs``, checked by a GDAL round trip.
+
+    For a CRS that has no GeoTIFF to copy tags from (RAS Mapper terrain
+    sources carry none when the CRS has no EPSG code; 1D grids), GDAL
+    encodes ``crs`` in a one-pixel GeoTIFF under ``folder`` and the engine
+    reads its tags (``terrain-info``). The tags are used only when GDAL
+    reads that file back as the same CRS (``pyproj.CRS.equals``); otherwise
+    the CRS has no faithful GeoTIFF encoding here and the request is refused.
+    For RAS Mapper's ESRI:102630 terrain these are the tags of RAS Mapper's
+    own export of that terrain.
+    """
+    import numpy as np
+    import rasterio
+    from rasterio.transform import from_origin
+
+    folder = Path(folder)
+    folder.mkdir(parents=True, exist_ok=True)
+    reference = folder / "crs_reference.tif"
+    declared = rasterio.crs.CRS.from_user_input(crs)
+    with rasterio.open(reference, "w", driver="GTiff", width=1, height=1, count=1,
+                       dtype="float32", crs=declared, transform=from_origin(0.0, 1.0, 1.0, 1.0)) as dst:
+        dst.write(np.zeros((1, 1), dtype="float32"), 1)
+    with rasterio.open(reference) as src:
+        written = src.crs
+    if written is None or not _crs_equal(written.to_wkt(), declared.to_wkt()):
+        raise FimUnsupportedError(
+            f"GDAL does not write CRS {declared.to_string()} to GeoTIFF keys that read back as the same CRS; "
+            "the native engine cannot label its output faithfully"
+        )
+    command = [str(engine), "terrain-info", str(reference)]
+    info = _json_stdout(run_engine(command, "terrain-info") if timeout is None else
+                        run_engine(command, "terrain-info", timeout), "ras2fim-batch terrain-info")
+    keys = info.get("geokeys")
+    if not isinstance(keys, dict):
+        raise FimEngineError(f"the engine read no GeoKeys from {reference}: {info.get('geokeys_error')}")
+    return keys
+
+
 def _find_wkt(obj):
     if isinstance(obj, str):
         head = obj.lstrip().upper()
@@ -160,12 +234,20 @@ def _find_wkt(obj):
     return None
 
 
-def terrain_identity(engine: Path, terrain_path: Path, results_crs, terrain_crs_fnv1a64: Optional[str] = None, *, timeout: Optional[float] = None, source_crs_identity: bool = False) -> dict:
+def terrain_identity(engine: Path, terrain_path: Path, results_crs, terrain_crs_fnv1a64: Optional[str] = None, *, timeout: Optional[float] = None, source_crs_identity: bool = False, crs_any: bool = False) -> dict:
     """Cross-check terrain identity, optionally retaining an unapplied BoundCRS.
 
     The default compares complete definitions. Explicit source identity unwraps
     only BoundCRS and preserves its original definition/binding in provenance.
     No coordinate or datum conversion is performed.
+
+    ``crs_any`` (the engine method advertises it, see :func:`crs_any`) accepts
+    a terrain CRS without an EPSG code: the result has ``epsg: None``,
+    ``crs_identity: {"kind": "geokeys"}`` and the terrain's own GeoKey tags
+    as ``crs_geokeys``, which the engine checks against the terrain and
+    writes verbatim. Whether the CRS has an EPSG code is decided by
+    rasterio/PROJ, never by the engine's reading. Build request fields with
+    :func:`request_crs`.
     """
     import rasterio
     from pyproj import CRS
@@ -205,12 +287,29 @@ def terrain_identity(engine: Path, terrain_path: Path, results_crs, terrain_crs_
         raise FimEngineError(f"terrain geotransform differs: engine {engine_gt}, rasterio {gt}")
 
     epsg = crs_rio.to_epsg()
+    if epsg is None and crs_any:
+        keys = info.get("geokeys")
+        if not isinstance(keys, dict):
+            raise FimUnsupportedError(
+                f"terrain {Path(terrain_path).name} has CRS {crs_rio.to_string()} without an EPSG code "
+                f"and no GeoKey tags the engine can copy ({info.get('geokeys_error') or 'none'})"
+            )
+        result = {"path": str(terrain_path), "epsg": None, "crs_identity": {"kind": "geokeys"},
+                  "crs_geokeys": keys, "crs_geokeys_fnv1a64": info.get("geokeys_fnv1a64")}
+        if source_crs_identity:
+            result["crs_provenance"] = {"policy": "bound-source-identity/1",
+                "rasterio": describe_crs(original_rio), "results": describe_crs(original_results),
+                "engine": None, "engine_wkt": _find_wkt(info.get("crs")), "engine_wkt_parse_error": None,
+                "engine_epsg": info.get("epsg"), "engine_crs_wkt_fnv1a64": info.get("crs_wkt_fnv1a64"),
+                "terrain_crs_fnv1a64_requested": terrain_crs_fnv1a64}
+        return result
     if epsg is None:
         raise FimUnsupportedError(
-            f"terrain CRS has no EPSG code: {crs_rio.to_string()} ({crs_rio.name}). Native engine "
-            "requests carry the terrain CRS as an EPSG code; terrain_crs_fnv1a64 only pins the "
-            "engine's WKT reading of a CRS that rasterio identifies by EPSG and cannot replace "
-            "the code. Use a terrain (and results) in a CRS with an EPSG code."
+            f"terrain CRS has no EPSG code: {crs_rio.to_string()} ({crs_rio.name}). This engine "
+            "method does not advertise crs_any, so its requests carry the terrain CRS as an EPSG "
+            "code; terrain_crs_fnv1a64 only pins the engine's WKT reading of a CRS that rasterio "
+            "identifies by EPSG and cannot replace the code. Use ras-commander-fast-map 0.19+ "
+            "(crs_any), or a terrain (and results) in a CRS with an EPSG code."
         )
     fnv = info.get("crs_wkt_fnv1a64")
     original_engine = None

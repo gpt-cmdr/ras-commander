@@ -181,7 +181,8 @@ class FimPreparedSlopingModel:
             # Retain the model-wide spatial index once, before reach planning.
             self._cells.sindex
             self._terrain_identity = _engine.terrain_identity(
-                self._engine, self._terrain, self._cells.crs, terrain_crs_fnv1a64
+                self._engine, self._terrain, self._cells.crs, terrain_crs_fnv1a64,
+                **_engine.crs_any_kwargs(self._method),
             )
             with rasterio.open(self._terrain) as source:
                 self._terrain_transform = list(source.transform.to_gdal())
