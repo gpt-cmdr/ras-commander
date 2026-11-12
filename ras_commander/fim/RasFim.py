@@ -1506,57 +1506,60 @@ class RasFim:
                 returning a ``"refused"`` record.
 
         Returns:
-            dict: A ``ras-commander-terrain-modifications/1`` record:
+            dict: A ``ras-commander-terrain-modifications/1`` record with the
+            fields listed below.
 
-            - ``schema`` (str): ``"ras-commander-terrain-modifications/1"``.
-            - ``terrain_hdf`` (str): The terrain HDF read.
-            - ``method_id`` (str): The engine method the layers are staged for,
-              ``"rasmapper-effective-terrain/2"``.
-            - ``status`` (str): ``"staged"`` (one or more layers),
-              ``"none"`` (no layer RAS Mapper applies: no ``/Modifications``
-              group, or only skipped layers and features) or ``"refused"``.
-            - ``refusal`` (str or None): For ``"refused"``, the reason the
-              terrain cannot take the native route, naming the layer and
-              feature; otherwise ``None``.
-            - ``hecras_version`` (str or None): ``"7.0.1"`` or ``"6.6"``;
-              ``None`` only when the version could not be resolved.
-            - ``hecras_version_basis`` (str or None): ``"argument"``,
-              ``"ras_object.ras_version <label>"``,
-              ``"ras_object.ras_exe_path <folder>"``,
-              ``"Program Version <label> in <folder>"`` or ``"default"``.
-            - ``length_units`` (str or None): ``"feet"`` or ``"meters"``;
-              ``None`` only when the unit system could not be resolved.
-            - ``length_units_basis`` (str or None): ``"argument"`` or
-              ``"project"``.
-            - ``layers`` (list of dict): Engine request layers in HDF order
-              (empty unless ``"staged"``). Layer ``priority`` is the HDF
-              ``Priority`` (0 is applied last and wins). Coordinates are in
-              the terrain CRS; elevations, widths, reaches and tolerances in
-              the project's vertical/horizontal length units; slopes as
-              horizontal:vertical ratios; ``transition_percent`` in percent;
-              ellipse ``rotation`` in degrees. NaN template values are
-              ``None``. By ``kind``:
+        Record fields:
 
-              * ``"ground_line"``: ``name``, ``priority``, ``subtype``
-                (``"levee"`` or ``"channel"``), ``length_units``, optional
-                ``control_points`` (``{"x", "y", "elevation"}`` dicts; a NaN
-                elevation is ``None``) and
-                ``features`` with ``elevation_type`` (``SetValue``,
-                ``SetIfHigher``, ``SetIfLower``, ``Add``), ``top_width``,
-                ``left_slope``, ``right_slope``, ``max_reach``, ``points``
-                (``[x, y]``), ``profile`` (``[station, elevation]``),
-                ``system_name``, ``transition_percent`` and
-                ``elev_pt_tolerance``.
-              * ``"polygon"``: ``name``, ``priority``, ``length_units``,
-                optional ``control_points`` and ``features`` with
-                ``elevation_type`` (as ground lines), ``elevation``,
-                ``rings`` (``[[x, y], ...]`` per part), ``generate_boundary``,
-                ``use_shape_z``, ``profile``, ``elev_pt_tolerance`` and, with
-                ``use_shape_z``, ``vertex_z``.
-              * ``"ellipse"``: ``name``, ``priority`` and ``features`` with
-                ``elevation_type`` (``SetValue``, ``SetIfHigher``,
-                ``SetIfLower``), ``elevation``, ``center`` (``[x, y]``),
-                ``radius_x``, ``radius_y`` and ``rotation``.
+        - ``schema`` (str): ``"ras-commander-terrain-modifications/1"``.
+        - ``terrain_hdf`` (str): The terrain HDF read.
+        - ``method_id`` (str): The engine method the layers are staged for,
+          ``"rasmapper-effective-terrain/2"``.
+        - ``status`` (str): ``"staged"`` (one or more layers),
+          ``"none"`` (no layer RAS Mapper applies: no ``/Modifications``
+          group, or only skipped layers and features) or ``"refused"``.
+        - ``refusal`` (str or None): For ``"refused"``, the reason the
+          terrain cannot take the native route, naming the layer and
+          feature; otherwise ``None``.
+        - ``hecras_version`` (str or None): ``"7.0.1"`` or ``"6.6"``;
+          ``None`` only when the version could not be resolved.
+        - ``hecras_version_basis`` (str or None): ``"argument"``,
+          ``"ras_object.ras_version <label>"``,
+          ``"ras_object.ras_exe_path <folder>"``,
+          ``"Program Version <label> in <folder>"`` or ``"default"``.
+        - ``length_units`` (str or None): ``"feet"`` or ``"meters"``;
+          ``None`` only when the unit system could not be resolved.
+        - ``length_units_basis`` (str or None): ``"argument"`` or
+          ``"project"``.
+        - ``layers`` (list of dict): Engine request layers in HDF order
+          (empty unless ``"staged"``). Layer ``priority`` is the HDF
+          ``Priority`` (0 is applied last and wins). Coordinates are in
+          the terrain CRS; elevations, widths, reaches and tolerances in
+          the project's vertical/horizontal length units; slopes as
+          horizontal:vertical ratios; ``transition_percent`` in percent;
+          ellipse ``rotation`` in degrees. NaN template values are
+          ``None``. By ``kind``:
+
+          * ``"ground_line"``: ``name``, ``priority``, ``subtype``
+            (``"levee"`` or ``"channel"``), ``length_units``, optional
+            ``control_points`` (``{"x", "y", "elevation"}`` dicts; a NaN
+            elevation is ``None``) and
+            ``features`` with ``elevation_type`` (``SetValue``,
+            ``SetIfHigher``, ``SetIfLower``, ``Add``), ``top_width``,
+            ``left_slope``, ``right_slope``, ``max_reach``, ``points``
+            (``[x, y]``), ``profile`` (``[station, elevation]``),
+            ``system_name``, ``transition_percent`` and
+            ``elev_pt_tolerance``.
+          * ``"polygon"``: ``name``, ``priority``, ``length_units``,
+            optional ``control_points`` and ``features`` with
+            ``elevation_type`` (as ground lines), ``elevation``,
+            ``rings`` (``[[x, y], ...]`` per part), ``generate_boundary``,
+            ``use_shape_z``, ``profile``, ``elev_pt_tolerance`` and, with
+            ``use_shape_z``, ``vertex_z``.
+          * ``"ellipse"``: ``name``, ``priority`` and ``features`` with
+            ``elevation_type`` (``SetValue``, ``SetIfHigher``,
+            ``SetIfLower``), ``elevation``, ``center`` (``[x, y]``),
+            ``radius_x``, ``radius_y`` and ``rotation``.
 
         Refusal reasons (the first one met is reported; each is a form the
         engine also refuses or whose order or export is unproven): RAS layer
