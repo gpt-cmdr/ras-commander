@@ -382,6 +382,14 @@ def _ellipse_layer(name, group, priority) -> dict:
 def project_length_units(terrain_hdf, rasmap_path=None, ras_object=None) -> str:
     """RAS Mapper's unit system for a terrain: ``"feet"`` or ``"meters"``.
 
+    The units of :func:`resolve_length_units`, without their basis.
+    """
+    return resolve_length_units(terrain_hdf, rasmap_path, ras_object)[0]
+
+
+def resolve_length_units(terrain_hdf, rasmap_path=None, ras_object=None) -> tuple:
+    """RAS Mapper's unit system for a terrain, with the basis it came from.
+
     RAS Mapper densifies ground-line profiles every 100 ft, or 100/3.281 m in
     SI projects, by the project unit system (not by the terrain CRS). The
     project is ``ras_object``'s project file, else the ``.prj`` named like
@@ -389,6 +397,11 @@ def project_length_units(terrain_hdf, rasmap_path=None, ras_object=None) -> str:
     terrain's parent project folder). Units come from
     :meth:`RasPrj.get_project_units` (``SI Units``, ``English Units`` or
     ``SI Units=<bool>``). Defaults to feet when no project states its units.
+
+    Returns:
+        tuple: ``(units, basis)``: ``units`` is ``"feet"`` or ``"meters"``;
+        ``basis`` is ``"project"`` when a project file states the units and
+        ``"default"`` when none does and feet is assumed.
 
     Raises:
         FimUnsupportedError: Several candidate project files state different
@@ -416,7 +429,7 @@ def project_length_units(terrain_hdf, rasmap_path=None, ras_object=None) -> str:
     for prj in selected:
         units = units_of(prj)
         if units is not None:
-            return units
+            return units, "project"
     folder = Path(rasmap_path).parent if rasmap_path is not None else Path(terrain_hdf).parent.parent
     found = {}
     for prj in sorted(folder.glob("*.prj")):
@@ -428,7 +441,9 @@ def project_length_units(terrain_hdf, rasmap_path=None, ras_object=None) -> str:
             f"project files in {folder.name} state different units {found}; pass ras_object "
             "or a rasmap named like its project"
         )
-    return next(iter(found.values()), "feet")
+    if found:
+        return next(iter(found.values())), "project"
+    return "feet", "default"
 
 
 def hecras_version_for(version) -> str:
@@ -546,7 +561,12 @@ def read_layers(terrain_hdf, length_units: Optional[str] = "feet",
                 )
                 continue
             if "Attributes" not in layer or len(layer["Attributes"]) == 0:
-                continue  # RAS Mapper loads a layer without Attributes as empty
+                # RAS Mapper loads a layer without Attributes as empty.
+                logger.warning(
+                    "modification %r: %s; RAS Mapper loads it as an empty layer (skipped)", name,
+                    "no Attributes table" if "Attributes" not in layer else "empty Attributes table",
+                )
+                continue
             priority = layer.attrs.get("Priority")
             if priority is None:
                 raise FimUnsupportedError(f"modification {name!r} has no Priority")

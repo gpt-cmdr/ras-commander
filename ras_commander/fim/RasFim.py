@@ -1503,13 +1503,21 @@ class RasFim:
         polygon and ellipse features whose ``Elevation Value`` is NaN. The
         ``.rasmap`` ``ElevationModificationGroup`` gate is not applied here:
         :meth:`top_priority_terrain_source` reports whether RAS Mapper applies
-        the modifications at all (``modified``).
+        the modifications at all (``modified``). With ``rasmap_path``, the
+        record's ``warnings`` report registration problems, including layers
+        the rasmap lists that the HDF does not store.
+
+        The call is logged through ``@log_call`` (entry and exit at DEBUG,
+        exceptions with the method name).
 
         Args:
-            terrain_hdf: Registered terrain HDF.
+            terrain_hdf: Registered terrain HDF. Links are resolved before
+                the project folder is searched, as in
+                :meth:`build_effective_terrain`.
             rasmap_path: Optional project rasmap. It selects the project file
                 for the unit system and the folder searched for plan and
-                geometry ``Program Version`` lines.
+                geometry ``Program Version`` lines, and its terrain layer is
+                checked for the ``warnings`` field.
             ras_object: Optional initialized RAS project. Its HEC-RAS version
                 and project file take precedence over ``rasmap_path``.
             hecras_version: HEC-RAS version whose export the layers reproduce,
@@ -1522,7 +1530,11 @@ class RasFim:
                 else 7.0.1.
             length_units: RAS Mapper unit system, ``"feet"`` or ``"meters"``.
                 ``None`` reads it from the project file (``SI Units`` means
-                meters; feet when no project file states units).
+                meters; feet when no project file states units), as
+                :meth:`build_effective_terrain` does. An explicit value
+                applies to this reader only: it shows the layers staged for
+                that unit system, and :meth:`build_effective_terrain`, which
+                has no such argument, still uses the project's units.
             strict: Raise :class:`FimUnsupportedError` for a refusal instead of
                 returning a ``"refused"`` record.
 
@@ -1533,7 +1545,7 @@ class RasFim:
         Record fields:
 
         - ``schema`` (str): ``"ras-commander-terrain-modifications/1"``.
-        - ``terrain_hdf`` (str): The terrain HDF read.
+        - ``terrain_hdf`` (str): The terrain HDF read (links resolved).
         - ``method_id`` (str): The engine method the layers are staged for,
           ``"rasmapper-effective-terrain/2"``.
         - ``status`` (str): ``"staged"`` (one or more layers),
@@ -1555,9 +1567,22 @@ class RasFim:
           ``"ras_object.ras_exe_path <folder>"``,
           ``"Program Version <label> in <folder>"`` or ``"default"``.
         - ``length_units`` (str or None): ``"feet"`` or ``"meters"``;
-          ``None`` only when the unit system could not be resolved.
-        - ``length_units_basis`` (str or None): ``"argument"`` or
-          ``"project"``.
+          ``None`` when the unit system could not be resolved: project files
+          that state different units, on a terrain with no layer to stage
+          (status ``"none"``; with layers to stage it is a refusal).
+        - ``length_units_basis`` (str or None): ``"argument"``,
+          ``"project"`` (a project file states the units) or ``"default"``
+          (no project file states units; feet assumed).
+        - ``warnings`` (list of dict): ``{"code", "group", "layers",
+          "message"}`` rasmap registration records, empty without
+          ``rasmap_path``: ``"modification_group_misnamed"`` and
+          ``"modification_group_missing"`` (as in
+          :meth:`top_priority_terrain_source`; RAS Mapper then applies no
+          modification), ``"rasmap_layer_not_in_hdf"`` (the ``Modifications``
+          group lists layers the HDF does not store;
+          :meth:`build_effective_terrain` refuses the terrain) and
+          ``"rasmap_not_checked"`` (the rasmap cannot be read or does not
+          register this terrain). Warnings do not change ``status``.
         - ``layers`` (list of dict): Engine request layers in HDF order
           (empty unless ``"staged"``). Layer ``priority`` is the HDF
           ``Priority`` (0 is applied last and wins). Coordinates are in
@@ -1603,7 +1628,8 @@ class RasFim:
         polygon boundary elevations sampled from the terrain (and any
         boundary elevations without control points under 6.6); shape-Z
         polygons without boundary elevations; invalid geometry or control
-        points; and project files in the folder that state different units.
+        points; and project files in the folder that state different units
+        when there are layers to stage.
         An engine can still refuse a staged terrain; compare the layers with
         the engine's ``modifications`` capability record.
 
@@ -1612,15 +1638,18 @@ class RasFim:
                 ``reason`` attribute carries the reason code when one is
                 assigned.
             ValueError: ``length_units`` is not ``"feet"`` or ``"meters"``.
-            OSError: The terrain HDF cannot be opened.
+            OSError: The terrain HDF does not exist or cannot be opened.
         """
-        from . import _terrain_mods
+        from . import _terrain_mods, _terrain_scope
 
         if length_units is not None and length_units not in _terrain_mods.LENGTH_UNITS:
             raise ValueError(f"length_units must be one of {_terrain_mods.LENGTH_UNITS}")
+        # Resolve links first, as build_effective_terrain does, so the project
+        # folders searched for the version and units are the HDF's own.
+        terrain_path = Path(terrain_hdf).resolve(strict=True)
         record: Dict[str, Any] = {
             "schema": RasFim.TERRAIN_MODIFICATIONS_SCHEMA,
-            "terrain_hdf": str(Path(terrain_hdf)),
+            "terrain_hdf": str(terrain_path),
             "method_id": "rasmapper-effective-terrain/2",
             "status": "refused",
             "refusal": None,
@@ -1630,22 +1659,32 @@ class RasFim:
             "length_units": None,
             "length_units_basis": None,
             "layers": [],
+            "warnings": _terrain_scope.rasmap_modification_warnings(terrain_path, rasmap_path),
         }
         try:
             if hecras_version is not None:
                 version, basis = _terrain_mods.hecras_version_for(hecras_version), "argument"
             else:
                 version, basis = _terrain_mods.project_hecras_version(
-                    terrain_hdf, rasmap_path, ras_object)
+                    terrain_path, rasmap_path, ras_object)
             record.update(hecras_version=version, hecras_version_basis=basis)
             if length_units is not None:
                 units, units_basis = length_units, "argument"
             else:
-                units = _terrain_mods.project_length_units(terrain_hdf, rasmap_path, ras_object)
-                units_basis = "project"
+                try:
+                    units, units_basis = _terrain_mods.resolve_length_units(
+                        terrain_path, rasmap_path, ras_object)
+                except FimUnsupportedError:
+                    # Units matter only for layers to stage; build_effective_terrain
+                    # resolves them only for a modified terrain.
+                    if _terrain_mods.read_layers(terrain_path, length_units="feet",
+                                                 hecras_version=version):
+                        raise
+                    record.update(status="none")
+                    return record
             record.update(length_units=units, length_units_basis=units_basis)
             layers = _terrain_mods.read_layers(
-                terrain_hdf, length_units=units, hecras_version=version)
+                terrain_path, length_units=units, hecras_version=version)
         except FimUnsupportedError as exc:
             if strict:
                 raise

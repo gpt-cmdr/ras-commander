@@ -1021,11 +1021,20 @@ The record (`ras-commander-terrain-modifications/1`) carries `terrain_hdf`,
 `method_id` (`rasmapper-effective-terrain/2`), `status`, `refusal`,
 `refusal_reason` (the `reason` code of the reader's `FimUnsupportedError`, for
 example `multi_ring_polygon` for a polygon with more than one ring, or `None`),
-`hecras_version` and `length_units` with their `*_basis`, and `layers`. Layers
+`hecras_version` and `length_units` with their `*_basis` (`"default"` when no
+project file states the value and the 7.0.1 rules or feet are assumed),
+`warnings` and `layers`. Layers
 are `ground_line`, `polygon` or `ellipse` records in the engine request form;
 the field list, units and refusal reasons are in the
 [`RasFim` reference](api/core.md#mapping). The HEC-RAS version and unit system
-are resolved as `build_effective_terrain` resolves them. `strict=True` raises
+are resolved as `build_effective_terrain` resolves them, from the HDF's own
+project folder after links are resolved; an explicit `length_units` applies to
+the reader only. Project files that state different units refuse a terrain
+with layers to stage and leave an unmodified one `"none"`. With `rasmap_path`,
+`warnings` lists registration problems: a misnamed or missing `Modifications`
+group (RAS Mapper then applies nothing), layers the group lists that the HDF
+does not store (`rasmap_layer_not_in_hdf`; `build_effective_terrain` refuses
+the terrain) and a rasmap that does not register the terrain. `strict=True` raises
 `FimUnsupportedError` instead of returning a refusal. A staged terrain can
 still be refused by an older engine; compare the layers with the engine's
 `modifications` capability record. The reader does not apply the rasmap

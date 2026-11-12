@@ -7,6 +7,8 @@ terrain-modification fixtures of ``test_fim_terrain_mods``.
 """
 
 import json
+import logging
+import os
 
 import numpy as np
 import pytest
@@ -28,7 +30,7 @@ from test_fim_terrain_mods import (  # noqa: E402
 
 RECORD_KEYS = {
     "schema", "terrain_hdf", "method_id", "status", "refusal", "refusal_reason", "hecras_version",
-    "hecras_version_basis", "length_units", "length_units_basis", "layers",
+    "hecras_version_basis", "length_units", "length_units_basis", "layers", "warnings",
 }
 GROUND_LINE_FEATURE_KEYS = {
     "elevation_type", "top_width", "left_slope", "right_slope", "max_reach", "points",
@@ -77,8 +79,9 @@ def test_matches_the_private_reader_and_documented_shape(tmp_path, units_line, u
     assert set(record) == RECORD_KEYS
     assert record["schema"] == RasFim.TERRAIN_MODIFICATIONS_SCHEMA
     assert record["method_id"] == "rasmapper-effective-terrain/2"
-    assert record["terrain_hdf"] == str(hdf)
+    assert record["terrain_hdf"] == str(hdf.resolve())
     assert record["status"] == "staged" and record["refusal"] is None
+    assert record["warnings"] == []
     assert record["refusal_reason"] is None
     assert record["hecras_version"] == expected
     assert record["hecras_version_basis"] == f"Program Version {version} in {tmp_path.name}"
@@ -169,14 +172,131 @@ def test_refusals_carry_the_private_readers_reason(tmp_path, build, reason, vers
         RasFim.read_terrain_modifications(hdf, hecras_version=version, strict=True)
 
 
-def test_conflicting_project_units_are_a_refusal(tmp_path):
+def test_conflicting_project_units_refuse_only_layers_to_stage(tmp_path):
+    """A units conflict refuses a terrain with layers; an unmodified one is ``"none"``.
+
+    ``build_effective_terrain`` resolves the project units only for a modified
+    terrain, so the reader does not refuse a terrain with nothing to stage.
+    """
     (tmp_path / "Terrain").mkdir()
     (tmp_path / "A.prj").write_text("Proj Title=A\nEnglish Units\n")
     (tmp_path / "B.prj").write_text("Proj Title=B\nSI Units\n")
     hdf = _hdf(tmp_path / "Terrain", "Terrain.hdf")
     record = RasFim.read_terrain_modifications(hdf)
+    assert record["status"] == "none" and record["refusal"] is None and record["layers"] == []
+    assert record["hecras_version"] == "7.0.1"
+    assert record["length_units"] is None and record["length_units_basis"] is None
+
+    _qualified(hdf)
+    record = RasFim.read_terrain_modifications(hdf)
     assert record["status"] == "refused" and "different units" in record["refusal"]
     assert record["hecras_version"] == "7.0.1" and record["length_units"] is None
+    with pytest.raises(FimUnsupportedError, match="different units"):
+        RasFim.read_terrain_modifications(hdf, strict=True)
+
+
+def test_units_basis_reports_the_feet_default(tmp_path):
+    """Feet assumed because no project file states units is ``"default"``, not ``"project"``."""
+    (tmp_path / "Terrain").mkdir()
+    hdf = _hdf(tmp_path / "Terrain", "Terrain.hdf")
+    _qualified(hdf)
+    record = RasFim.read_terrain_modifications(hdf)
+    assert (record["length_units"], record["length_units_basis"]) == ("feet", "default")
+    assert _terrain_mods.resolve_length_units(hdf) == ("feet", "default")
+    (tmp_path / "M.prj").write_text("Proj Title=M\nEnglish Units\n")
+    record = RasFim.read_terrain_modifications(hdf)
+    assert (record["length_units"], record["length_units_basis"]) == ("feet", "project")
+    assert _terrain_mods.project_length_units(hdf) == "feet"
+
+
+def test_linked_terrain_uses_its_own_project(tmp_path):
+    """A link elsewhere resolves to the HDF before the project folder is searched."""
+    (tmp_path / "real").mkdir()
+    hdf = _project(tmp_path / "real", "SI Units", "6.60")
+    _qualified(hdf)
+    elsewhere = tmp_path / "other"
+    (elsewhere / "Terrain").mkdir(parents=True)
+    (elsewhere / "O.prj").write_text("Proj Title=O\nEnglish Units\n")
+    (elsewhere / "O.g01").write_text("Geom Title=g\nProgram Version=7.00\n")
+    link = elsewhere / "Terrain" / "Terrain.hdf"
+    try:
+        os.symlink(hdf, link)
+    except (OSError, NotImplementedError):
+        pytest.skip("symbolic links are not available")
+    record = RasFim.read_terrain_modifications(link)
+    assert record["terrain_hdf"] == str(hdf.resolve())
+    assert (record["hecras_version"], record["length_units"]) == ("6.6", "meters")
+    assert record["hecras_version_basis"] == "Program Version 6.60 in real"
+
+
+def _rasmap(folder, hdf, groups):
+    """A rasmap registering ``hdf`` with ``{group name: [layer names]}`` groups."""
+    body = "".join(
+        f'<Layer Name="{name}" Type="ElevationModificationGroup">'
+        + "".join(f'<Layer Name="{layer}" Type="X"/>' for layer in layers) + "</Layer>"
+        for name, layers in groups.items())
+    rasmap = folder / "M.rasmap"
+    rasmap.write_text(
+        f'<RASMapper><Terrains><Layer Name="T" Type="TerrainLayer" Filename=".\\Terrain\\{hdf.name}">'
+        f"{body}</Layer></Terrains></RASMapper>", encoding="utf-8")
+    return rasmap
+
+
+def test_rasmap_registration_warnings(tmp_path):
+    """Layers the rasmap lists but the HDF lacks are a warning; status is unchanged."""
+    hdf = _project(tmp_path)
+    _qualified(hdf)
+    rasmap = _rasmap(tmp_path, hdf, {"Modifications": ["HighGround", "Pads", "Ghost"]})
+    record = RasFim.read_terrain_modifications(hdf, rasmap_path=rasmap)
+    assert record["status"] == "staged" and len(record["layers"]) == 4
+    assert [w["code"] for w in record["warnings"]] == ["rasmap_layer_not_in_hdf"]
+    assert record["warnings"][0]["layers"] == ["Ghost"]
+    assert "build_effective_terrain refuses" in record["warnings"][0]["message"]
+    json.dumps(record, allow_nan=False)
+
+    rasmap = _rasmap(tmp_path, hdf, {"Modifications": ["HighGround"]})
+    assert RasFim.read_terrain_modifications(hdf, rasmap_path=rasmap)["warnings"] == []
+
+    rasmap = _rasmap(tmp_path, hdf, {"Terrain Mods": ["HighGround"]})
+    record = RasFim.read_terrain_modifications(hdf, rasmap_path=rasmap)
+    assert [w["code"] for w in record["warnings"]] == ["modification_group_misnamed"]
+    assert record["status"] == "staged"
+
+    other = tmp_path / "Other.rasmap"
+    other.write_text("<RASMapper><Terrains/></RASMapper>", encoding="utf-8")
+    record = RasFim.read_terrain_modifications(hdf, rasmap_path=other)
+    assert [w["code"] for w in record["warnings"]] == ["rasmap_not_checked"]
+    assert "does not register" in record["warnings"][0]["message"]
+
+
+def test_skipped_layer_without_attributes_is_logged(tmp_path, caplog):
+    hdf = _hdf(tmp_path)
+    with h5py.File(hdf, "a") as f:
+        layer = f["Modifications"].create_group("Empty")
+        layer.attrs["Type"] = np.bytes_("Polygon")
+        layer.attrs["Priority"] = np.int32(0)
+    with caplog.at_level(logging.WARNING, logger="ras_commander.fim._terrain_mods"):
+        record = RasFim.read_terrain_modifications(hdf, hecras_version="7.0.1", length_units="feet")
+    assert record["status"] == "none"
+    assert any("'Empty'" in r.getMessage() and "no Attributes table" in r.getMessage()
+               for r in caplog.records)
+
+
+def test_multi_ring_polygon_refusal_reason_from_the_reader(tmp_path):
+    """The real reader's ``multi_ring_polygon`` code reaches ``refusal_reason``."""
+    hdf = _hdf(tmp_path)
+    with h5py.File(hdf, "a") as f:
+        g = _polygon(f["Modifications"], "Pond", 0)
+        ring = [(0, 0), (10, 0), (10, 10), (0, 10), (0, 0)]
+        hole = [(2, 2), (4, 2), (4, 4), (2, 4), (2, 2)]
+        for name in ("Polygon Info", "Polygon Parts", "Polygon Points"):
+            del g[name]
+        g.create_dataset("Polygon Info", data=np.array([[0, 10, 0, 2]], np.int32))
+        g.create_dataset("Polygon Parts", data=np.array([[0, 5], [5, 5]], np.int32))
+        g.create_dataset("Polygon Points", data=np.asarray(ring + hole, float))
+    record = RasFim.read_terrain_modifications(hdf, hecras_version="7.0.1", length_units="feet")
+    assert record["status"] == "refused"
+    assert record["refusal_reason"] == "multi_ring_polygon"
 
 
 def test_invalid_length_units_raise(tmp_path):

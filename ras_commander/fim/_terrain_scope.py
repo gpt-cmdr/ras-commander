@@ -135,6 +135,49 @@ def _modifications(source, rasmap_path, terrain_hdf: Path) -> tuple:
     return found, warnings
 
 
+#: ``rasmap_warnings`` code: the rasmap registers layers the HDF does not store.
+LAYER_NOT_IN_HDF = "rasmap_layer_not_in_hdf"
+#: ``rasmap_warnings`` code: the rasmap could not be checked for this terrain.
+RASMAP_NOT_CHECKED = "rasmap_not_checked"
+
+
+def rasmap_modification_warnings(terrain_hdf, rasmap_path) -> list:
+    """Rasmap registration warnings for a terrain's modifications.
+
+    The ``rasmap_warnings`` records of :func:`top_priority_source`
+    (``modification_group_misnamed``, ``modification_group_missing``), plus
+    ``rasmap_layer_not_in_hdf`` for layers the ``Modifications`` group lists
+    that the terrain HDF does not store (``build_effective_terrain`` refuses
+    such a terrain), and ``rasmap_not_checked`` when the rasmap cannot be read
+    or does not register the terrain. Empty without a rasmap. Nothing is
+    changed in either file.
+    """
+    import h5py
+
+    if rasmap_path is None:
+        return []
+    terrain_hdf = Path(terrain_hdf).resolve(strict=True)
+    try:
+        with h5py.File(terrain_hdf, "r") as source:
+            names, warnings = _modifications(source, rasmap_path, terrain_hdf)
+    except (FimUnsupportedError, OSError) as exc:
+        message = f"rasmap {Path(rasmap_path).name} was not checked: {exc}"
+        logger.warning(message)
+        return [{"code": RASMAP_NOT_CHECKED, "group": None, "layers": [], "message": message}]
+    stored = {name[4:] for name in names if name.startswith("hdf:")}
+    missing = sorted({name[7:] for name in names
+                      if name.startswith("rasmap:") and name[7:] not in stored})
+    if missing:
+        message = (
+            f"{Path(rasmap_path).name} registers modification layers {missing} that "
+            f"{terrain_hdf.name} does not store; build_effective_terrain refuses this terrain"
+        )
+        logger.warning(message)
+        warnings.append({"code": LAYER_NOT_IN_HDF, "group": MODIFICATION_GROUP,
+                         "layers": missing, "message": message})
+    return warnings
+
+
 def top_priority_source(terrain_hdf, rasmap_path=None) -> dict:
     """Identify the priority-1 source TIFF and level-0 mask of a terrain HDF."""
     import h5py
