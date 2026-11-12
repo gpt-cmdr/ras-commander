@@ -413,6 +413,26 @@ def test_import_gridded_reads_an_ascii_grid(tmp_path):
     assert sorted(stored.ravel().tolist()) == [1.0, 2.0, 3.0, 4.0, 5.0, 6.0]
 
 
+
+@pytest.mark.parametrize("method", ["near", "bilinear", "average"])
+def test_resampling_method_keyword_reaches_the_engine(tmp_path, monkeypatch, method):
+    """``method=`` is the engine's resampling option; the wrapper must not take it."""
+    source = tmp_path / "depth.asc"
+    source.write_text("\n".join([
+        "ncols 4", "nrows 4", "xllcorner 100000", "yllcorner 200000", "cellsize 1000",
+        "NODATA_value -9999", "1 2 3 4", "5 6 7 8", "9 10 11 12", "13 14 15 16", "",
+    ]))
+    (tmp_path / "depth.prj").write_text(dc.SHG_WKT)
+    calls = _spy(monkeypatch, dc.gridded, "import_gridded")
+    result = RasDssGrid.import_gridded(
+        source, tmp_path / "out.dss", variable=RasDssGrid.list_variables(source)[0],
+        target_crs="SHG", cell_size=2000, method=method,
+        parts={"A": "SHG", "B": "ASC", "C": "DEPTH", "F": method.upper()},
+        units="MM", data_type="INST-VAL",
+    )
+    assert calls[0]["method"] == method
+    assert len(result.pathnames) == 1
+
 def test_calculate_and_sanitize(grids, tmp_path):
     target, pathnames = grids
     doubled = RasDssGrid.calculate(target, tmp_path / "x2.dss", multiply=2.0,

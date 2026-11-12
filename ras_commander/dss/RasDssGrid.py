@@ -107,9 +107,11 @@ class RasDssGrid:
     """
 
     @staticmethod
-    def _call(method: str, *args: Any, sync: Any = None, **kwargs: Any) -> Any:
-        function = _backend.require_gridded(method)
-        kwargs.update(_backend.engine_sync_kwargs(function, sync, f"gridded.{method}"))
+    def _call(_name: str, /, *args: Any, sync: Any = None, **kwargs: Any) -> Any:
+        # ``_name`` is positional-only: the engine's own ``method=`` (the resampling
+        # method) and any other keyword must pass through ``kwargs`` untouched.
+        function = _backend.require_gridded(_name)
+        kwargs.update(_backend.engine_sync_kwargs(function, sync, f"gridded.{_name}"))
         return function(*args, **kwargs)
 
     @staticmethod
