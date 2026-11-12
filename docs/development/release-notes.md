@@ -9,6 +9,20 @@ alone does not identify a development checkout.
 
 ### Unreleased
 
+- **Terrain export failure diagnostics:** `RasTerrain.export_rasmapper_terrain`
+  now classifies failures in `TerrainExportResult.failure_kind`, including
+  `out_of_memory` for a .NET `System.OutOfMemoryException` and `empty_extent`
+  when RAS Mapper's "does not have embedded statistics" error is confirmed by a
+  full-resolution scan of the registered sources. The new `empty_extent="nodata"`
+  option writes an all-nodata GeoTIFF for a confirmed empty window.
+  `helper_invocations` and the receipt keep each helper request, exit code,
+  response, and stderr. A failure summary no longer quotes Wine's
+  `XDG_RUNTIME_DIR` warning. A helper that reports success and then exits
+  non-zero keeps its validated output instead of failing the export.
+  The empty-window scan, the all-nodata write and the final commit honour
+  `timeout_seconds`, and a timed-out helper's partial stderr and response stay
+  in `helper_invocations`.
+
 - **Coupled mapping with storage areas:** `RasFim.prepare_coupled_model()` and
   `RasFim.map_coupled_profiles()` accept mixed 1D/2D models with storage areas
   when the engine is `ras-commander-fast-map` 0.18.0 or later. Earlier
