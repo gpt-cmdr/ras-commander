@@ -9,6 +9,16 @@ alone does not identify a development checkout.
 
 ### Unreleased
 
+- **Coupled mapping with storage areas:** `RasFim.prepare_coupled_model()` and
+  `RasFim.map_coupled_profiles()` accept mixed 1D/2D models with storage areas
+  when the engine is `ras-commander-fast-map` 0.18.0 or later. Earlier
+  releases refused them with `FimUnsupportedError: mixed models with storage
+  areas are unsupported`. Storage areas are mapped as level pools and composed
+  with the XS and 2D components through coupled schema `/2`. Storage areas
+  that physically overlap a 2D flow area, storage with the native stored-grid
+  contract and older engines are still refused before any write. Results stay
+  `qualified=False` and still require `allow_unqualified=True`.
+
 ### 0.119.0 — 2026-11-12
 
 - **Mapping engine dependency:** mapping extras (`fim`, `fast-map`, `full`

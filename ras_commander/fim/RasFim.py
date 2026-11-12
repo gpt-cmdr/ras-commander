@@ -295,8 +295,11 @@ class RasFim:
     ) -> "FimPreparedCoupledModel":
         """Prepare receipt-bound global mixed XS/2D inputs for diagnostic mapping.
 
-        Explicit allow_unqualified=True is required. Initial scope is unsteady
-        plain corner sloping Depth/WSE without storage or pipe geometry.
+        Explicit allow_unqualified=True is required. Scope is unsteady plain
+        corner sloping Depth/WSE without pipe geometry. Storage areas are
+        staged as level pools when the engine is ras-commander-fast-map
+        0.18.0 or later; storage areas that physically overlap a 2D flow
+        area, storage with ``grid_contract`` and older engines refuse.
         ``grid_contract="rasmapper-stored-tile-grid/1"`` explicitly selects
         native stored tile sampling and derived delivery framing while retaining
         the original terrain identity. None retains source-grid delivery.
@@ -322,6 +325,8 @@ class RasFim:
 
         The default qualification gate refuses. AOIs mask final composition;
         dry and terrain-nodata 2D cells still suppress the XS component.
+        Storage areas compose through coupled schema ``/2`` on Fast-Map
+        0.18.0+; results remain ``qualified=False``.
         ``grid_contract`` selects the explicit native stored tile layout during
         path-based preparation. Prepared models inherit their sealed layout
         and refuse overrides.
