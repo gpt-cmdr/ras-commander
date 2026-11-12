@@ -223,7 +223,7 @@ def test_native_dss_engine_is_optional_in_the_dss_extras(monkeypatch):
                   if spec.startswith("ras-commander-fast-dss")]
         assert len(native) == 1, extra
         requirement = native[0]
-        assert str(requirement.specifier) == "<0.2,>=0.1.1"
+        assert str(requirement.specifier) == "<0.2,>=0.1.2"
         for system, machine in (("Windows", "AMD64"), ("Linux", "x86_64"),
                                 ("Linux", "aarch64")):
             assert requirement.marker.evaluate({
@@ -237,7 +237,7 @@ def test_native_dss_engine_is_optional_in_the_dss_extras(monkeypatch):
                      "platform_system": "Windows", "platform_machine": "ARM64"},
                     {"platform_python_implementation": "CPython",
                      "platform_system": "Linux", "platform_machine": "ppc64le"},
-                    # 0.1.1 publishes no macOS wheels; the optional extra must
+                    # 0.1.2 publishes no macOS wheels; the optional extra must
                     # not force an sdist (Rust) build there.
                     {"platform_python_implementation": "CPython",
                      "platform_system": "Darwin", "platform_machine": "arm64"},

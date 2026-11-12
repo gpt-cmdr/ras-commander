@@ -745,7 +745,7 @@ def require_native_feature(name: str, what: str):
             f"The installed ras-commander-fast-dss does not provide {what} "
             f"(feature {name!r} is not in ras_commander_fast_dss.FEATURES). "
             "Upgrade with 'pip install -U ras-commander-fast-dss' "
-            "(0.1.1 and later include it)."
+            "(0.1.2 includes it)."
         )
     return dc
 
@@ -756,6 +756,10 @@ def require_native_feature(name: str, what: str):
 
 #: ras-commander-fast-dss FEATURES flag for the writers' ``sync=`` option (0.1.1 and later).
 NATIVE_SYNC_FEATURE = "write_sync_policy"
+
+#: FEATURES flag for the three named flush policies of 0.1.2 (``"end"``, ``"step"``,
+#: ``"none"``; ``True`` and ``False`` mean ``"end"`` and ``"none"``).
+NATIVE_SYNC_MODES_FEATURE = "write_sync_modes"
 
 #: The ``sync=`` value a public RasDss writer was called with. ``None`` means the caller
 #: stated nothing, and the engine's own default applies: RasDss never names that default,
@@ -869,6 +873,17 @@ GRIDDED_FEATURES = {
 }
 
 
+#: FEATURES flags of gridded sources and import behaviour that no single method maps to.
+GRIDDED_SOURCE_FEATURES = (
+    "gridded_netcdf",
+    "gridded_accumulation_window",
+    "gridded_grib1_stage4",
+    "gridded_prism_bil",
+    "gridded_snodas",
+    "gridded_threads_all_cores",
+)
+
+
 def require_gridded(method: str):
     """The engine's ``gridded`` function behind ``RasDssGrid.<method>``.
 
@@ -915,6 +930,28 @@ def shadow_copy_limit_bytes(attribute_mb: Any) -> int:
     if not np.isfinite(mb) or mb < 0:
         raise ValueError(f"invalid shadow copy limit {raw!r} from {source}: expected MB >= 0")
     return int(mb * 1024 * 1024)
+
+
+def replace_published(temporary, target) -> None:
+    """``os.replace(temporary, target)``, naming the held-handle rule when it is refused.
+
+    From ras-commander-fast-dss 0.1.2 a ``ras_commander_fast_dss.DssFile`` session keeps
+    one read+write handle after its first write, until it is closed. On Windows,
+    ``os.replace`` onto a file such a session holds fails. RasDss never holds a session
+    on a file it replaces; a caller's own session can. The ``PermissionError`` is raised
+    again with the coordination rule added; ``target`` is unchanged.
+    """
+    try:
+        os.replace(temporary, target)
+    except PermissionError as exc:
+        raise PermissionError(
+            exc.errno,
+            f"Could not replace {target}: another handle holds it. Close any "
+            "ras_commander_fast_dss.DssFile session (and HEC software) that has this "
+            "file open before replacing it; a session that has written keeps its handle "
+            f"until it is closed. ({exc.strerror})",
+            str(target),
+        ) from exc
 
 
 def make_parents(path: Any) -> List[Any]:

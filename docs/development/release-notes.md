@@ -9,6 +9,55 @@ alone does not identify a development checkout.
 
 ### Unreleased
 
+- **The DSS extras move to `ras-commander-fast-dss` 0.1.2.** The `dss`,
+  `dss-native` and `all` extras now request `ras-commander-fast-dss>=0.1.2,<0.2`,
+  with the same platform marker (no macOS wheels; build from source there).
+  `java` remains the default backend. What changes for RAS Commander users
+  ([engine changelog](https://github.com/gpt-cmdr/ras-commander-fast-dss/blob/main/CHANGELOG.md);
+  [details](../native-engine.md#dss-0-1-2)):
+  `sync=True` now means one flush per write call (`"end"`, the engine default);
+  `"step"` is the 0.1.1 per-step behaviour and `"none"`/`False` does not flush.
+  A `DssFile` session holds one native handle after its first write: close it
+  before renaming, replacing or deleting the file. Gridded import reads Stage IV
+  GRIB1, PRISM BIL and packages, SNODAS and GeoTIFFs with a nodata-only
+  `.aux.xml`, and uses every core by default with byte-identical output. DSS6
+  irregular-pattern writes need an engine opt-in that RasDss does not pass, so
+  they are refused.
+- **Engine wrappers for the native-only operations.** New static class
+  `RasDssGrid` (gridded import of files, arrays and local Zarr v2; calculator,
+  raster calculator, sanitizer, clipper, normalizer, time shift and resampling,
+  window/nearest/min-max reads and grid-to-point/zonal statistics). New
+  `RasDss.read_profile`, `write_profile`, `read_location`,
+  `read_associated_location` and `write_location`. Each runs on the native engine
+  on every backend, is gated on the engine's `FEATURES`, passes its options
+  through and returns the engine's result unchanged.
+- **`sync=` on the RasDss writers and `RasDss.repair`.** `write_timeseries`,
+  `write_timeseries_from_dataframe`, `write_paired_data`,
+  `write_grid_timeseries`, `copy_grid_with_zero_tail`, `write_precip_grid_arrays`,
+  the profile and location writers and `repair` pass `sync=` to the engine
+  unchanged; unstated, the engine's default applies. `java` does not use it.
+  `get_capabilities().attrs` adds `native_write_sync_available` and
+  `native_write_sync_modes_available`.
+- **A refused file replacement names the session rule.** When a caller's
+  `DssFile` session holds the destination of `copy_grid_with_zero_tail(overwrite=True)`
+  or `write_precip_grid_arrays(overwrite=True)`, the `PermissionError` says to close
+  the session first; the destination is unchanged.
+- **DSS performance section.** [DSS performance](../native-engine.md#dss-performance)
+  replaces the placeholder. It states which calls use the default `java` backend
+  and which use the native engine, and summarizes internal evaluations on a
+  private corpus without figures; the engine's `benchmarks/bench_public.py`
+  reproduces measurements on generated data. The section now has its own anchor,
+  so links to the HDF [Performance](../native-engine.md#performance) section
+  resolve to the HDF benchmark again. A DSS read speed-up figure was removed from
+  [DSS Read and Write Backends](../user-guide/dss-native-backend.md).
+- **HEC-RAS 4.0 and 4.1 acceptance tests for native DSS6 boundaries.**
+  `tests/test_rasdss_ras4_dss6_acceptance.py` rewrites the BaldEagleDamBrk
+  boundary file of HEC's 4.x example archive natively and checks that HEC-RAS 4.0
+  and 4.1 (through `RasControl`) produce identical `.b##` input, messages and
+  results, including five DSS6 merge/extend cases against HEC Monolith merges. The
+  tests skip without HEC-RAS 4.x, its example archive, an accepted TCU or the
+  engine. `RasControl.cleanup_orphans` and `force_cleanup_all` no longer end in
+  `UnicodeEncodeError` on a cp1252 console.
 - **The DSS extras move to `ras-commander-fast-dss` 0.1.1.** The `dss`,
   `dss-native` and `all` extras now request `ras-commander-fast-dss>=0.1.1,<0.2`.
   The platform marker matches the 0.1.1 wheels: CPython on Windows x64 and
@@ -26,9 +75,9 @@ alone does not identify a development checkout.
   existing `dest`, and logs a warning when `complete` is `False`; a partial
   recovery is still published, so check `complete` and `not_copied`.
   `get_capabilities()` adds a `repair` row and
-  `attrs["native_repair_available"]`. RasDss writers keep the default
-  `sync=True`; see
-  [Interrupted writes, `sync=False` and `repair`](../native-engine.md#dss-repair).
+  `attrs["native_repair_available"]`. For `sync=` on the RasDss writers and
+  `repair`, see the entries above and
+  [Interrupted writes, `sync=` and `repair`](../native-engine.md#dss-repair).
 - **`ras-commander-fast-dss` 0.1.0 is published, and the DSS extras install it.**
   FAST-DSS is on PyPI
   ([pypi.org/project/ras-commander-fast-dss](https://pypi.org/project/ras-commander-fast-dss/);

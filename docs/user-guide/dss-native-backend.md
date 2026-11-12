@@ -37,7 +37,7 @@ An unknown name raises `ValueError`.
 ## Installing ras-commander-fast-dss
 
 `ras-commander-fast-dss` (import name `ras_commander_fast_dss`) is the optional
-dependency for the native backend. The current release is 0.1.1
+dependency for the native backend. The current release is 0.1.2
 ([pypi.org/project/ras-commander-fast-dss](https://pypi.org/project/ras-commander-fast-dss/);
 source: [gpt-cmdr/ras-commander-fast-dss](https://github.com/gpt-cmdr/ras-commander-fast-dss)).
 
@@ -47,7 +47,7 @@ pip install ras-commander-fast-dss
 pip install "ras-commander[dss]"
 ```
 
-The `dss`, `dss-native` and `all` extras request `ras-commander-fast-dss>=0.1.1,<0.2`
+The `dss`, `dss-native` and `all` extras request `ras-commander-fast-dss>=0.1.2,<0.2`
 on the platforms with published wheels: CPython on Windows x64 and Linux x86_64
 and aarch64 (see [Installation](../native-engine.md#dss-installation)). There are
 no macOS wheels; macOS users can build it from source with
@@ -86,8 +86,8 @@ Under `native`, an operation the backend does not support raises
 reads and writes DSS needs no Java at all.
 
 Under `native`, `read_multiple_timeseries` opens the file once for all
-pathnames. On the RasExamples shadow run this made reads 9.6 times faster than
-Java in total; with one open per call they were 3.0 times faster.
+pathnames instead of once per pathname. For what the native engine does and does
+not speed up, see [DSS performance](../native-engine.md#dss-performance).
 
 ## Engine-only operations
 
@@ -131,7 +131,7 @@ or GDAL.
 
 | Method | What it does |
 |---|---|
-| `import_gridded`, `import_arrays`, `import_zarr` | GRIB2, NetCDF, HDF5, GeoTIFF, ASCII grid, a local Zarr v2 store, or arrays, to DSS grids |
+| `import_gridded`, `import_arrays`, `import_zarr` | GRIB2, Stage IV GRIB1, NetCDF, HDF5, GeoTIFF, ASCII grid, PRISM BIL and packages, SNODAS, a local Zarr v2 store, or arrays, to DSS grids |
 | `list_variables`, `zarr_variables`, `read_zarr` | What a source offers; a window of a Zarr variable |
 | `calculate`, `calculate_raster`, `sanitize`, `clip`, `normalize` | Grid calculator, raster calculator, sanitizer, clipper, normalizer |
 | `shift_times`, `resample_times`, `time_steps` | Time shift and time-step resampling |
@@ -157,13 +157,41 @@ The engine plans a run before it writes, so a refused run leaves the output
 untouched. Its documentation lists the supported source layouts, projections and
 resampling methods, and where its records differ from HEC-Vortex by design.
 Import `units=` relabels a record; it does not convert values. The importer's
-`cell_size` is in metres.
+`cell_size` is in metres. With ras-commander-fast-dss 0.1.2 the importers use
+every core by default (`threads=None`), and the file is byte-identical to
+`threads=1`. SNODAS times come from the NOHRSC header by default;
+`snodas_times="vortex"` gives HEC-Vortex 1.1.0's timing (see
+[Gridded import and tools](../native-engine.md#gridded-import-and-tools)).
 
 ### Flush policy (`sync=`)
 
-The RasDss writers and the `RasDssGrid` methods that write accept `sync=` and
-pass it to the engine unchanged. Unstated, the installed engine's own default
-applies. See [Interrupted writes, `sync=` and `repair`](../native-engine.md#dss-repair).
+The RasDss writers, `RasDss.repair` and the `RasDssGrid` methods that write
+accept `sync=` and pass it to the engine unchanged. With ras-commander-fast-dss
+0.1.2: `"end"` (the engine's default; `True` means the same) flushes once per
+write call, `"step"` flushes at every flush point (the 0.1.1 meaning of `True`),
+and `"none"` (`False`) does not flush. Unstated, the installed engine's own
+default applies. Recovery after process death is the same in every mode; no mode
+is a power-loss guarantee. See
+[Interrupted writes, `sync=` and `repair`](../native-engine.md#dss-repair).
+
+### Sessions that hold the file
+
+A `ras_commander_fast_dss.DssFile` session keeps one native handle after its
+first write until it is closed. Close it before renaming, replacing or deleting
+the file: on Windows, `os.replace` onto a held file fails. RasDss holds no
+session on a file it replaces; if a caller's session holds the destination of
+`copy_grid_with_zero_tail(overwrite=True)` or
+`write_precip_grid_arrays(overwrite=True)`, the call raises `PermissionError`
+naming this rule and the destination is unchanged. See
+[Sessions and file replacement](../native-engine.md#dss-sessions).
+
+### DSS6 irregular patterns
+
+ras-commander-fast-dss 0.1.2 writes a DSS6 irregular pattern (an `IR-` E part
+with a `TS-` D part) only with an explicit opt-in, because no HEC reader has
+confirmed such records. RasDss does not pass that opt-in: under `native` the
+write raises `DssUnsupportedRecordError` and leaves no new file. Ordinary DSS6
+irregular series and all DSS7 patterns are unaffected.
 
 ## Differences from the Java backend
 

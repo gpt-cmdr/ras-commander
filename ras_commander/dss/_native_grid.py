@@ -113,7 +113,9 @@ def _prepare(dss_file, pathname, data, interval_bounds, *, transform, crs, units
 
 def _publish(temporary, target, overwrite):
     if overwrite:
-        os.replace(temporary, target)
+        from . import _backend
+
+        _backend.replace_published(temporary, target)
     else:
         # Atomic no-clobber publication on Windows and POSIX. Both paths
         # are siblings on the same filesystem; never replace a racing writer.

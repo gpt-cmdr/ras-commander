@@ -133,13 +133,27 @@ Native writes keep the existing file's DSS version (new files are DSS7 unless
 ### Gridded import and tools (HEC-Vortex replacement) {#gridded-import-and-tools}
 
 `ras_commander_fast_dss.gridded` imports gridded data to DSS grids in the calling
-process. It reads GRIB2, NetCDF (classic and NetCDF-4), HDF5, GeoTIFF and ASCII
-grids, local Zarr v2 stores, and NumPy arrays; reprojects to SHG, HRAP or a WKT
+process; in RAS Commander, `RasDssGrid` wraps it (see
+[Engine-only operations](user-guide/dss-native-backend.md#engine-only-operations)).
+It reads GRIB2, NCEP Stage IV GRIB1 (2002 to July 2020), NetCDF (classic and
+NetCDF-4), HDF5, GeoTIFF (with an optional `.aux.xml` that sets only nodata) and
+ASCII grids, PRISM BIL files and packages, SNODAS daily files, local Zarr v2
+stores, and NumPy arrays; reprojects to SHG, HRAP or a WKT
 target with `near`, `bilinear` or `average` resampling; and writes DSS6 or DSS7
 through the same writer as `RasDss`. Each run is planned before a cell is read:
 every pathname, window and unit is decided first, so a refusal leaves the output
 file untouched. It follows HEC-Vortex's importer rules for products, C parts,
-units and time windows.
+units and time windows. From 0.1.2 an import uses every core by default
+(`threads=None`); the file it writes is byte-identical to `threads=1`.
+
+SNODAS times come from the checked NOHRSC header by default
+(`snodas_times="header"`): a daily total is `PER-CUM` over the 24 hours ending at
+06:00 UTC of the file's date. `snodas_times="vortex"` gives HEC-Vortex 1.1.0's
+timing and types for compatibility (Vortex puts each daily total one day later and
+types it `PER-AVER`). Products without a qualified interpretation (snowpack average
+temperature, historical melt and sublimation variants) are refused unless one of
+those options is named. Clip SNODAS to the model envelope: the whole grid exceeds
+the per-record cell limit.
 
 | Task | Function | HEC-Vortex tool it replaces |
 |---|---|---|
@@ -160,9 +174,9 @@ RAS Commander routes that use the importer:
   [WPC QPF](user-guide/gridded-precipitation.md#wpc-qpf-to-dss-with-fast-dss).
 
 ```python
-from ras_commander_fast_dss import gridded
+from ras_commander import RasDssGrid
 
-result = gridded.import_gridded(
+result = RasDssGrid.import_gridded(
     grib_files, "forcing.dss",
     product="total_precipitation",              # or variable="..." from list_variables()
     envelope=(1494000, 2120000, 1564000, 2188000),  # SHG metres: west, south, east, north
@@ -234,7 +248,7 @@ HEC-RAS is run only through RAS Commander's APIs.
 ### Installation {#dss-installation}
 
 !!! note "Published on PyPI"
-    The current release of `ras-commander-fast-dss` is **0.1.1**:
+    The current release of `ras-commander-fast-dss` is **0.1.2**:
     [pypi.org/project/ras-commander-fast-dss](https://pypi.org/project/ras-commander-fast-dss/)
     ([changelog](https://github.com/gpt-cmdr/ras-commander-fast-dss/blob/main/CHANGELOG.md)).
     The source is the public repository
@@ -246,7 +260,7 @@ pip install ras-commander-fast-dss
 ```
 
 or install it with the DSS extras, which request
-`ras-commander-fast-dss>=0.1.1,<0.2`:
+`ras-commander-fast-dss>=0.1.2,<0.2`:
 
 ```bash
 pip install "ras-commander[dss]"          # pyjnius (java backend) + FAST-DSS
@@ -265,52 +279,88 @@ the package; `import ras_commander` and the `java` backend work without it. Chec
 the installed engine with:
 
 ```python
+import importlib.metadata
 import ras_commander_fast_dss as fast_dss
+
+print(importlib.metadata.version("ras-commander-fast-dss"))   # the package has no __version__
 print(sorted(fast_dss.FEATURES))   # e.g. grid_srs_monolith_parity, gridded_import
 ```
+
+Test for a capability with its `FEATURES` flag, not with a version number.
 
 Existing [DSS operations](user-guide/dss-operations.md) work unchanged on the
 default `java` backend.
 
+### What 0.1.2 changes for RAS Commander {#dss-0-1-2}
+
+- **`sync=` names three flush policies.** See [below](#dss-repair). `True` now
+  means one flush per write call; code that wants the 0.1.1 per-step behaviour
+  passes `sync="step"`.
+- **A `ras_commander_fast_dss.DssFile` session holds one native handle** after its
+  first write, until it is closed. Close the session before renaming, replacing or
+  deleting its file; on Windows, `os.replace` onto a file that a session holds
+  fails. RasDss opens its own sessions for reading only, and closes them before it
+  publishes a file. See [Sessions and file replacement](#dss-sessions).
+- **New gridded sources:** NCEP Stage IV GRIB1, PRISM BIL and its zipped and 2025
+  packages, SNODAS (header timing by default), and a loose GeoTIFF with an
+  `.aux.xml` that sets only nodata. `RasDssGrid.get_features()` reports their
+  flags (`gridded_grib1_stage4`, `gridded_prism_bil`, `gridded_snodas`).
+- **Gridded import uses every core by default**, with output byte-identical to
+  `threads=1`. Kilometre-to-metre axis conversion now matches HEC-Vortex exactly.
+- **DSS6.** Regular time-series merge and extend into existing records is now
+  qualified against HEC's libraries. Writing a DSS6 *irregular pattern* (an `IR-`
+  E part with a `TS-` D part) needs the engine's explicit opt-in
+  `allow_unconfirmed_dss6_irregular_pattern=True`, because no HEC reader has
+  confirmed such records. No RasDss writer passes that opt-in, so `RasDss` refuses
+  those writes with `DssUnsupportedRecordError` and leaves no new file behind.
+  Ordinary DSS6 irregular series are unaffected. Pathnames that are not printable
+  ASCII are refused for writing (as in 0.1.1; now documented).
+
 ### Interrupted writes, `sync=` and `repair` {#dss-repair}
 
-Release 0.1.1 fixes how a DSS7 write that was interrupted is completed, and adds
-two engine functions. The scope is the engine's, and ras-commander does not
-widen it:
+The scope is the engine's, and RAS Commander does not widen it:
 
 - **Interrupted writes.** The engine's guarantee covers **process death**: the
   writing process killed at any point. The next native write reconciles the
   interrupted one when the file was consistent before it. It is not a power-loss
   or operating-system-crash guarantee, and a normal write never repairs damage it
   did not cause.
-- **`sync=` (flush policy).** The engine's writers accept `sync=`, and the RasDss
-  writers (`write_timeseries`, `write_timeseries_from_dataframe`,
+- **`sync=` (flush policy).** Every public writer of the engine accepts `sync=`,
+  and the RasDss writers (`write_timeseries`, `write_timeseries_from_dataframe`,
   `write_paired_data`, `write_grid_timeseries`, `copy_grid_with_zero_tail`,
-  `write_precip_grid_arrays`, `write_profile`, `write_location`) and the
-  `RasDssGrid` tools that write pass it through unchanged. Left unstated
-  (`sync=None`), RasDss sends nothing and the installed engine's own default
-  applies; that default belongs to the engine and can change between its
-  releases, so state a value when a workflow depends on one. In
-  ras-commander-fast-dss 0.1.1, `True` keeps the `fsync` calls at the
-  transaction's flush points and `False` skips them: the process-death behavior
-  is unchanged, but after a power loss or an operating-system crash the write,
-  and earlier unflushed writes, may be missing or torn. No value is a power-loss
-  guarantee. Use `False` only for scratch or regenerable files:
+  `write_precip_grid_arrays`, `write_profile`, `write_location`), `RasDss.repair`
+  and the `RasDssGrid` methods that write pass it through unchanged. In
+  ras-commander-fast-dss 0.1.2:
+
+    | `sync=` | Flushing |
+    |---|---|
+    | `"end"` (engine default; `True` means the same) | One `fsync` at the end of each write call. A call that stores several records (gridded import, grid tools, grid-to-point) flushes once, after its last record |
+    | `"step"` | An `fsync` at every flush point of the transaction (the 0.1.1 meaning of `True`) |
+    | `"none"` (`False` means the same) | No flush; the operating system writes the data later |
+
+    The three policies make the same writes in the same order, so the
+    process-death behaviour is the same in each. No policy is a power-loss
+    guarantee: after a power loss or an operating-system crash, writes that were
+    not flushed may be missing or torn. Use `"none"` only for scratch or
+    regenerable files:
 
     ```python
     from ras_commander import RasDss
 
     RasDss.backend = "native"
     RasDss.write_timeseries("scratch.dss", "/A/B/FLOW//1HOUR/RUN/", times, values,
-                            units="CFS", data_type="INST-VAL", sync=False)
+                            units="CFS", data_type="INST-VAL", sync="none")
     ```
 
-    The `java` backend does not use `sync` (HEC's library manages its own
-    flushing), and `shadow` applies it to the native repeat only.
-    `RasDss.get_capabilities().attrs["native_write_sync_available"]` reports
-    whether the installed engine's writers take it (`FEATURES` flag
-    `write_sync_policy`); stating `sync` under `native` without it raises
-    `DssCapabilityError`.
+    Left unstated (`sync=None`), RasDss sends nothing and the installed engine's
+    own default applies; that default belongs to the engine, so state a value when
+    a workflow depends on one. The `java` backend does not use `sync` (HEC's
+    library manages its own flushing), and `shadow` applies it to the native repeat
+    only. `RasDss.get_capabilities().attrs` reports
+    `native_write_sync_available` (`FEATURES` flag `write_sync_policy`) and
+    `native_write_sync_modes_available` (`write_sync_modes`); stating `sync` under
+    `native` without the first raises `DssCapabilityError`. An unknown value is
+    the engine's `ValueError`, raised before anything is written.
 
 - **`repair(src, dest)`** is the recovery path for a damaged DSS7 file. It opens
   `src` read-only, copies the readable records that its documented discovery
@@ -318,7 +368,8 @@ widen it:
   its source, and reports what it did not copy. Bytes that no pointer reaches are
   out of scope. **A partial recovery is still published**, so always check
   `complete` and `not_copied`. A complete copy is not an integrity certificate
-  for `src`. `dest` must not exist. DSS6 files are not supported. In RAS
+  for `src`, and copying a healthy file shows the mechanics, not salvage of a
+  damaged one. `dest` must not exist. DSS6 files are not supported. In RAS
   Commander, `RasDss.repair` calls it on every backend (there is no Java
   equivalent):
 
@@ -331,20 +382,82 @@ widen it:
             print(pathname, reason)
     ```
 
-    `ras_commander_fast_dss.repair(src, dest)` returns the same `dict`.
+    `ras_commander_fast_dss.repair(src, dest)` returns the same `dict`. The engine
+    builds `dest` under a temporary name that no reader sees until it is
+    published; `sync="end"` and `"step"` flush it once before it is verified and
+    published, and `"none"` does not flush it.
     `RasDss.get_capabilities().attrs["native_repair_available"]` reports
     whether the installed engine has it (`FEATURES` flag `repair_copy_out`).
 
 The engine's README section "Interrupted writes, `sync=` and `repair`" and its
 DSS7 format notes give the full crash model and known limitations.
 
-### Performance
+### Sessions and file replacement {#dss-sessions}
 
-<!-- PERFORMANCE-PLACEHOLDER: measured FAST-DSS timings are added here after the release benchmark. -->
-!!! warning "Placeholder: DSS performance measurements"
-    This section is reserved for measured FAST-DSS timings. No DSS benchmark is
-    reported on this page yet, and the HDF and Mapping Engine measurements below do
-    not establish DSS performance.
+Code that uses the engine directly can keep a file open across calls with
+`ras_commander_fast_dss.open(path)`, which returns a `DssFile`. From 0.1.2, the
+first write through a `DssFile` opens one read+write handle, which the session
+keeps until `close()` or the end of its `with` block. Every write still takes and
+releases HEC's lock, so other programs see the file unlocked between writes.
+
+**Coordination rule: close the `DssFile` before renaming, replacing or deleting
+its file.** On Windows, `os.replace` onto a held file fails. RAS Commander's own
+publish steps (`copy_grid_with_zero_tail(overwrite=True)`,
+`write_precip_grid_arrays(overwrite=True)`) write to a temporary file, close every
+handle they opened and only then replace the destination. If a caller's session
+still holds the destination, the replace raises `PermissionError` naming this
+rule, and the destination is left unchanged.
+
+```python
+import ras_commander_fast_dss as fast_dss
+
+with fast_dss.open("forcing.dss") as session:
+    session.write_timeseries(pathname, values, times=times, units="MM",
+                             data_type="PER-CUM", sync="none")
+# The session is closed here, so RasDss may now replace forcing.dss.
+```
+
+### Performance {#dss-performance}
+
+**Which engine your calls use.** `RasDss` calls run on the default `java` backend
+(HEC Monolith through pyjnius) unless you select `native` or `shadow`, and
+`PrecipMrms.to_dss` runs HEC-Vortex unless you pass `backend="native"`.
+`RasDssGrid`, `repair` and the profile and location methods always run on the
+native engine. The statements below describe the native engine,
+`ras-commander-fast-dss` 0.1.2. Under `shadow` each call runs both paths, so it
+is for qualification rather than speed.
+
+Performance of the native engine is qualified internally against HEC's DSS C
+library, pydsstools, hecdss, HEC Monolith and HEC-Vortex on a private corpus of
+production model files; those files and the detailed results are not published.
+The statements below summarize those evaluations. To measure on your own machine,
+run `benchmarks/bench_public.py` from the
+[engine repository](https://github.com/gpt-cmdr/ras-commander-fast-dss), which
+generates its own data and checks every result. Absolute times depend on storage,
+antivirus scanning and file layout.
+
+- **Reads and catalogs** are on par with HEC's C library and pydsstools. On very
+  large DSS7 catalogs pydsstools is somewhat faster, because FAST-DSS validates
+  and normalizes every pathname it returns.
+- **Compared with the Java path (HEC Monolith, RAS Commander's default `java`
+  backend) and hecdss,** whole-dataset reads are many times faster on the
+  `native` backend, because FAST-DSS decodes records directly into NumPy arrays
+  without a per-record Python or Java crossing. The `native` backend also starts
+  no JVM.
+- **Gridded import** (`RasDssGrid.import_gridded`,
+  `PrecipMrms.to_dss(backend="native")`) is on par with HEC-Vortex for
+  continental grids and faster for smaller imports, with no JVM start-up. The
+  grid tools and grid-to-point are slower than Vortex, because each output record
+  is written separately.
+- **Writes are durable by default and therefore slower.** By default the engine
+  flushes to disk at the end of every write call (`sync="end"`), so that a killed
+  process leaves a file HEC can read. The other tools, including the `java`
+  backend, leave flushing to the operating system. For bulk loads of regenerable
+  output, write inside a `DssFile` session with `sync="none"` (or pass
+  `sync="none"` to the RasDss writers). Bulk series writes are then on par with
+  the C-based tools. Writing many small records or paired-data records one call
+  at a time remains noticeably slower than the C libraries, because of per-call
+  overhead; reducing it is planned in the engine.
 
 ### Attributions and acknowledgments {#dss-attributions}
 

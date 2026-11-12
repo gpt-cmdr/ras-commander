@@ -277,6 +277,8 @@ class RasDss:
             ``native_grid_qualified`` (bool), ``native_writes_available``
             (bool), ``native_repair_available`` (bool),
             ``native_write_sync_available`` (bool; the writers take ``sync=``),
+            ``native_write_sync_modes_available`` (bool; ``sync=`` takes ``"end"``,
+            ``"step"`` and ``"none"``),
             ``native_profile_write_available`` (bool) and
             ``native_location_write_available`` (bool).
 
@@ -296,6 +298,8 @@ class RasDss:
             "native_writes_available": _backend.native_writes_available(),
             "native_repair_available": _backend.native_repair_available(),
             "native_write_sync_available": _backend.native_sync_available(),
+            "native_write_sync_modes_available": _backend.native_feature(
+                _backend.NATIVE_SYNC_MODES_FEATURE),
             "native_profile_write_available": _backend.native_feature(
                 _backend.NATIVE_PROFILE_WRITE_FEATURE),
             "native_location_write_available": _backend.native_feature(
@@ -3875,7 +3879,7 @@ class RasDss:
 
             ops["close"](temporary)
             if overwrite:
-                os.replace(temporary, output)
+                _backend.replace_published(temporary, output)
             else:
                 try:
                     os.link(temporary, output)
@@ -4105,11 +4109,16 @@ class RasDss:
 
     @staticmethod
     @log_call
-    def repair(src: Union[str, Path], dest: Union[str, Path]) -> Dict[str, Any]:
+    def repair(
+        src: Union[str, Path],
+        dest: Union[str, Path],
+        *,
+        sync: Optional[Any] = None,
+    ) -> Dict[str, Any]:
         """Copy the readable records of a damaged DSS7 file into a new DSS7 file.
 
         A thin wrapper around ``ras_commander_fast_dss.repair`` (ras-commander-fast-dss
-        0.1.1 and later). It always runs on the native engine, whatever
+        0.1.1 and later; ``sync=`` from 0.1.2). It always runs on the native engine, whatever
         ``RasDss.backend`` is; there is no Java equivalent.
 
         ``src`` is opened read-only and never written. The engine finds records by one
@@ -4128,6 +4137,12 @@ class RasDss:
         Args:
             src: Existing DSS7 file to recover from.
             dest: New file to create. It must not exist; nothing is replaced.
+            sync: Flush policy, passed to the engine unchanged. ``None`` (default)
+                states nothing, so the installed engine's own default applies. The
+                engine builds ``dest`` under a temporary name that no reader sees until
+                it is published; with 0.1.2, ``"end"`` (its default; ``True``) and
+                ``"step"`` flush it once before it is verified and published, and
+                ``"none"`` (``False``) does not flush it.
 
         Returns:
             The engine's result ``dict`` unchanged, including ``records_copied``,
@@ -4157,7 +4172,10 @@ class RasDss:
         if dest_path.exists():
             raise FileExistsError(f"repair destination already exists: {dest_path}")
         dc = _backend.require_native_repair()
-        result = dict(dc.repair(RasUtils.safe_resolve(src_path), dest_path))
+        result = dict(dc.repair(
+            RasUtils.safe_resolve(src_path), dest_path,
+            **_backend.engine_sync_kwargs(dc.repair, sync, "repair"),
+        ))
         if not result.get("complete", False):
             logger.warning(
                 "DSS repair of %s into %s is incomplete: %d record(s) not copied; "
@@ -4183,7 +4201,7 @@ class RasDss:
         if not callable(function):
             raise _errors.get("DssCapabilityError")(
                 f"The installed ras-commander-fast-dss has no {name}; upgrade with "
-                "'pip install -U ras-commander-fast-dss' (0.1.1 and later include it)."
+                "'pip install -U ras-commander-fast-dss' (0.1.2 includes it)."
             )
         return function
 
@@ -4574,8 +4592,12 @@ class RasDss:
                 ras-commander-fast-dss unchanged. ``None`` (default) states nothing,
                 so the installed engine's own default applies; that default is the
                 engine's to define and can change between its releases. With
-                ras-commander-fast-dss 0.1.1, ``True`` flushes at each write step
-                and ``False`` does not flush. No value is a power-loss guarantee.
+                ras-commander-fast-dss 0.1.2 the policies are ``"end"`` (its
+                default; ``True`` means the same): one flush at the end of the
+                write call; ``"step"``: a flush at every flush point, the 0.1.1
+                behaviour of ``True``; and ``"none"`` (``False`` means the same):
+                no flush. The process-death recovery guarantee is the same in every
+                mode; no value is a power-loss guarantee.
                 The ``java`` backend does not use it; ``shadow`` applies it to the
                 native repeat only. Stated under ``native`` with an engine that has
                 no ``write_sync_policy`` feature: ``DssCapabilityError``.
@@ -5182,8 +5204,12 @@ class RasDss:
                 ras-commander-fast-dss unchanged. ``None`` (default) states nothing,
                 so the installed engine's own default applies; that default is the
                 engine's to define and can change between its releases. With
-                ras-commander-fast-dss 0.1.1, ``True`` flushes at each write step
-                and ``False`` does not flush. No value is a power-loss guarantee.
+                ras-commander-fast-dss 0.1.2 the policies are ``"end"`` (its
+                default; ``True`` means the same): one flush at the end of the
+                write call; ``"step"``: a flush at every flush point, the 0.1.1
+                behaviour of ``True``; and ``"none"`` (``False`` means the same):
+                no flush. The process-death recovery guarantee is the same in every
+                mode; no value is a power-loss guarantee.
                 The ``java`` backend does not use it; ``shadow`` applies it to the
                 native repeat only. Stated under ``native`` with an engine that has
                 no ``write_sync_policy`` feature: ``DssCapabilityError``.

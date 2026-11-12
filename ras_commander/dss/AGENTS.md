@@ -129,9 +129,9 @@ This file is the canonical local instruction file for `ras_commander/dss/`.
 
 - `pyjnius` and Java are optional runtime prerequisites and should fail with clear installation guidance when missing.
 - `ras_commander_fast_dss` (distribution `ras-commander-fast-dss`, on PyPI from
-  0.1.0) is optional. `setup.py` requests `ras-commander-fast-dss>=0.1.1,<0.2` in the
+  0.1.0) is optional. `setup.py` requests `ras-commander-fast-dss>=0.1.2,<0.2` in the
   `dss`, `dss-native` and `all` extras, with a marker limited to the published
-  CPython abi3 wheel platforms (Windows AMD64, Linux x86_64/aarch64; 0.1.1 has no
+  CPython abi3 wheel platforms (Windows AMD64, Linux x86_64/aarch64; 0.1.2 has no
   macOS wheels, so Darwin is excluded and macOS builds from the sdist); never make
   it a core dependency while `java` is the default. `RasDss.repair` wraps the
   engine's `repair` (gated on the `repair_copy_out` feature, on every backend).
@@ -159,10 +159,21 @@ This file is the canonical local instruction file for `ras_commander/dss/`.
   call adds `**_backend.native_sync_kwargs()`; a nested public writer called with
   `None` keeps the outer value. Under `native` a stated value needs the
   `write_sync_policy` feature (`DssCapabilityError` before any file change); `java`
-  does not use it; `shadow` applies it to the native repeat. `RasDssGrid` checks
-  the engine function's own signature (`engine_sync_kwargs`).
+  does not use it; `shadow` applies it to the native repeat. `RasDssGrid` and
+  `RasDss.repair` check the engine function's own signature (`engine_sync_kwargs`).
+- Held handle (0.1.2): a `ras_commander_fast_dss.DssFile` that has written keeps
+  its handle until closed, and on Windows `os.replace` onto it fails. Native
+  sessions in RasDss are read-only and are closed before any publish. Every
+  replace of a published file goes through `_backend.replace_published`, which
+  names the coordination rule on `PermissionError`; never call `os.replace` on a
+  DSS destination directly, and never publish while a `dc.open(...)` block on the
+  destination is still open.
+- DSS6 irregular patterns: no RasDss writer passes the engine's
+  `allow_unconfirmed_dss6_irregular_pattern` opt-in; the engine's refusal reaches
+  the caller. Add the opt-in only with a wrapper that must write such records and
+  HEC-reader evidence for them.
 - Tests: `tests/test_rasdss_wrappers.py` (synthetic files and the public grid
-  fixture; no JVM).
+  fixture; no JVM) and `tests/test_rasdss_fast_dss_012.py` (0.1.2 behaviour).
 
 ## Common API Surface (quick reference)
 

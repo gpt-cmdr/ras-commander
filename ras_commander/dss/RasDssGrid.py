@@ -3,7 +3,8 @@ RasDssGrid - gridded import and grid tools for HEC-DSS files.
 
 Thin wrappers around the ``ras_commander_fast_dss.gridded`` namespace of the
 optional ras-commander-fast-dss package: import gridded source files (GRIB2,
-NetCDF, HDF5, GeoTIFF, ASCII grid, local Zarr v2) or arrays into DSS grid
+Stage IV GRIB1, NetCDF, HDF5, GeoTIFF, ASCII grid, PRISM BIL and packages,
+SNODAS, local Zarr v2) or arrays into DSS grid
 records, and process DSS grids (calculator, sanitizer, clipper, normalizer,
 time shift, time-step resampling, zonal statistics) without Java, Vortex or
 GDAL.
@@ -95,7 +96,14 @@ class RasDssGrid:
 
     ``sync`` (on the methods that write): the engine's flush policy, passed through
     unchanged. ``None`` (default) states nothing, so the installed engine's own
-    default applies; that default can change between engine releases.
+    default applies; that default can change between engine releases. With
+    ras-commander-fast-dss 0.1.2 a call that stores several records flushes once,
+    after its last record, by default (``"end"``, or ``True``); ``"step"`` flushes at
+    every flush point and ``"none"`` (or ``False``) does not flush.
+
+    ``threads`` of the importers: with 0.1.2 the engine's default (``None``) uses
+    every core available to the process; the file written is byte-identical to
+    ``threads=1``.
     """
 
     @staticmethod
@@ -114,10 +122,12 @@ class RasDssGrid:
         Returns:
             ``dict`` of engine feature name to ``bool``: ``gridded_import``,
             ``gridded_netcdf``, ``gridded_zarr``, ``gridded_accumulation_window``,
-            ``gridded_time_tools``, ``grid_tools`` and ``grid_to_point``.
+            ``gridded_grib1_stage4``, ``gridded_prism_bil``, ``gridded_snodas``,
+            ``gridded_threads_all_cores``, ``gridded_time_tools``, ``grid_tools``
+            and ``grid_to_point``.
         """
         names = sorted(set(_backend.GRIDDED_FEATURES.values())
-                       | {"gridded_netcdf", "gridded_accumulation_window"})
+                       | set(_backend.GRIDDED_SOURCE_FEATURES))
         return {name: _backend.native_feature(name) for name in names}
 
     # ------------------------------------------------------------------ import
@@ -134,9 +144,12 @@ class RasDssGrid:
         """Import grids from files into a DSS file, one frame at a time.
 
         Args:
-            inputs: One path or a sequence, read in the order given: GRIB2, NetCDF
-                (classic and NetCDF-4), HDF5, GeoTIFF, ASCII grid, or the folder of
-                a local Zarr v2 store.
+            inputs: One path or a sequence, read in the order given: GRIB2, NCEP
+                Stage IV GRIB1 (``gridded_grib1_stage4``), NetCDF (classic and
+                NetCDF-4), HDF5, GeoTIFF (a loose ``.aux.xml`` sidecar may set nodata
+                only), ASCII grid, PRISM BIL and ``*_bil.zip``/``*_asc.zip``/2025
+                packages (``gridded_prism_bil``), SNODAS daily tars and ``.dat``
+                members (``gridded_snodas``), or the folder of a local Zarr v2 store.
             output: DSS file to write. It is created when the first record is written.
             sync: Flush policy, passed to the engine unchanged (see the class notes).
             **kwargs: Options of ``ras_commander_fast_dss.gridded.import_gridded``,
@@ -145,7 +158,11 @@ class RasDssGrid:
                 ``cell_size`` (metres, default 2000), ``method``, ``parts``,
                 ``units`` (relabels; it does not convert), ``data_type``,
                 ``version``, ``align``, ``window_rule``, ``duplicates``,
-                ``threads``, ``progress``, ``bbox``, ``times`` and the reader limits.
+                ``threads`` (default every core), ``progress``, ``bbox``, ``times``,
+                ``snodas_times`` (``"header"`` default; ``"vortex"`` for HEC-Vortex
+                timing), ``snodas_georeference`` and the reader limits. SNODAS
+                products without a qualified interpretation are refused unless one
+                of the two ``snodas_times`` options is named.
 
         Returns:
             The engine's ``ImportResult`` (``output``, ``records``, ``pathnames``).
@@ -514,9 +531,9 @@ class RasDssGrid:
             zones: A shapefile or GeoJSON file of zones.
             zone_field: The field that names each zone; it becomes the B part.
             output: DSS file to write the time series to.
-            sync: Flush policy, passed to the engine unchanged. ras-commander-fast-dss
-                0.1.1 has no such option on this function: stating it then raises
-                ``DssCapabilityError``.
+            sync: Flush policy, passed to the engine unchanged (see the class notes).
+                ras-commander-fast-dss 0.1.2 added it to this function; an engine
+                without it raises ``DssCapabilityError`` when it is stated.
             **kwargs: ``statistics`` (default ``("average",)``), ``accumulate``,
                 ``parts`` (A and F), ``variables``, ``zones_crs``, ``area_weighted``,
                 ``compatibility``, ``version``, ``assume_no_datum_shift``,

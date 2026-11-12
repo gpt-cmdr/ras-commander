@@ -1,4 +1,4 @@
-"""``RasDss.repair``: the DSS7 copy-out recovery from ras-commander-fast-dss 0.1.1.
+"""``RasDss.repair``: the DSS7 copy-out recovery from ras-commander-fast-dss (0.1.1 and later).
 
 The wrapper always runs on the native engine, whatever ``RasDss.backend`` is, and
 returns the engine's result unchanged. These tests write a small DSS7 file with the

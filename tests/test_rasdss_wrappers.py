@@ -1,4 +1,4 @@
-"""Wrappers over ras-commander-fast-dss 0.1.1: ``sync=`` on the RasDss writers,
+"""Wrappers over ras-commander-fast-dss (0.1.1 API, run on 0.1.2): ``sync=`` on the RasDss writers,
 ``RasDss`` profile and location methods, and the ``RasDssGrid`` namespace.
 
 Every wrapper passes its arguments to the engine and returns the engine's result
@@ -95,7 +95,7 @@ def test_write_timeseries_passes_sync_unchanged_and_stores_the_data(tmp_path, mo
 
 
 def test_sync_is_the_engines_value_not_a_bool_this_wrapper_checks(tmp_path, monkeypatch):
-    """A value a later engine may add reaches the engine as given (0.1.1 refuses it)."""
+    """A value a later engine may add reaches the engine as given (0.1.2 refuses it)."""
     seen = []
 
     def fake(*args, **kwargs):
@@ -107,9 +107,11 @@ def test_sync_is_the_engines_value_not_a_bool_this_wrapper_checks(tmp_path, monk
     monkeypatch.setattr(dc, "write_timeseries", fake)
     RasDss.write_timeseries(target, TS_PATH, TIMES, np.arange(24.0), sync="per_step")
     assert seen == ["per_step"]
-    monkeypatch.undo()
+    monkeypatch.undo()  # also restores the environment override, so clear it again
     monkeypatch.setattr(RasDss, "backend", "native")
-    with pytest.raises(TypeError, match="sync"):  # the engine's own refusal, unchanged
+    monkeypatch.delenv(_backend.ENV_VAR, raising=False)
+    # The engine's own refusal, unchanged: TypeError in 0.1.1, ValueError in 0.1.2.
+    with pytest.raises((TypeError, ValueError), match="sync"):
         RasDss.write_timeseries(target, TS_PATH, TIMES, np.arange(24.0), sync="per_step")
 
 
@@ -527,10 +529,15 @@ def test_sync_reaches_the_engine_tools_only_when_stated(grids, tmp_path, monkeyp
     assert calls[1]["sync"] is False
 
 
-def test_sync_on_a_tool_without_the_option_is_a_capability_error(grids, zones, tmp_path):
+def test_sync_on_a_tool_without_the_option_is_a_capability_error(
+        grids, zones, tmp_path, monkeypatch):
     target, _ = grids
-    if _backend.takes_keyword(dc.gridded.grid_to_point, "sync"):  # pragma: no cover
-        pytest.skip("this engine's grid_to_point takes sync")
+
+    def grid_to_point_0_1_1(grids, zones, zone_field, output, *, statistics=("average",),
+                            assume_no_datum_shift=False):  # no sync= (0.1.1)
+        raise AssertionError("must not be called")
+
+    monkeypatch.setattr(dc.gridded, "grid_to_point", grid_to_point_0_1_1)
     out = tmp_path / "points.dss"
     with pytest.raises(_errors.get("DssCapabilityError"), match="sync"):
         RasDssGrid.grid_to_point(target, zones, "NAME", out, assume_no_datum_shift=True,

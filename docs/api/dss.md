@@ -133,9 +133,9 @@ Java and compares a native repeat on a temporary copy. The native writer
 refuses some input that Java truncates (see
 [Writes](../user-guide/dss-native-backend.md#writes)).
 
-#### repair(src, dest)
+#### repair(src, dest, *, sync=None)
 Copy the readable records of a damaged DSS7 file into a new DSS7 file through
-ras-commander-fast-dss 0.1.1 or later, on every backend (there is no Java
+ras-commander-fast-dss 0.1.1 or later (`sync=` from 0.1.2), on every backend (there is no Java
 equivalent). `src` is opened read-only; `dest` must not exist. A partial
 recovery is still published, so always check `complete` and `not_copied` in the
 returned `dict`. See
@@ -144,6 +144,8 @@ returned `dict`. See
 **Parameters:**
 - `src` (str|Path): Existing DSS7 file
 - `dest` (str|Path): New file to create
+- `sync` (keyword, optional): The engine's flush policy (`"end"`, `"step"`,
+  `"none"`, `True` or `False`), passed unchanged; `None` leaves the engine default
 
 **Returns:** The engine's result `dict` (`records_copied`, `not_copied`,
 `ledger`, `complete`, ...). Raises `FileExistsError` if `dest` exists,
