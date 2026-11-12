@@ -39,7 +39,10 @@ alone does not identify a development checkout.
 - **Public terrain-modification reader:** `RasFim.read_terrain_modifications()`
   returns a terrain's modification layers in the form the native effective
   terrain (`rasmapper-effective-terrain/2`) stages them, with the resolved
-  HEC-RAS version and unit system, and the reason when a form is refused
+  HEC-RAS version and unit system and how each was resolved (`*_basis`;
+  `"default"` when assumed), rasmap registration `warnings` (misnamed or
+  missing group, layers the rasmap lists that the HDF does not store), and the
+  reason when a form is refused
   (`refusal`, plus the error's `reason` code as `refusal_reason`, for example
   `multi_ring_polygon`; `status` `"staged"`, `"none"` or `"refused"`;
   `ras-commander-terrain-modifications/1`). It wraps the reader that
