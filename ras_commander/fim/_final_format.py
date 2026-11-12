@@ -158,6 +158,37 @@ def resolve(options, plan, terrain_width, terrain_height):
     )
 
 
+def planned_bytes(wire, grid, threads):
+    """Engine writer scratch for one delivery with ``threads`` compression workers.
+
+    Mirrors Fast-Map ``final_tiff::Layout::planned_bytes`` (PR #39 head
+    ba9da17): per level one row of tiles, its compressed tiles in flight, the
+    rows handed to the next level and the carried source rows, tile tables,
+    plus three tiles of scratch per worker and the shared nodata tile.
+    Callers add the engine's AOI mask buffer.
+    """
+    block = int(wire["block_size"])
+    tile = block * block * 4
+    width, height = int(grid["width"]), int(grid["height"])
+    total = max(1, int(threads)) * tile * 3 + tile
+    levels = [(width, height)] + [(-(-width // f), -(-height // f)) for f in wire["overview_factors"]]
+    for w, h in levels:
+        band = block * w * 4
+        across = -(-w // block)
+        tiles = across * -(-h // block)
+        total += band + across * (tile + 1024) + band // 2 + 4 * w * 4 + tiles * 16 + w * 32
+    return total
+
+
+def nodata_collision_error(nodata):
+    """The caller-facing refusal when the nodata marker would hide a valid value."""
+    return FimUnsupportedError(
+        f"final_format nodata={nodata!r} cannot mark invalid pixels: "
+        "a valid Depth/WSE value is infinite or would read as that nodata value. "
+        "Choose a nodata value outside the product range; no product was delivered"
+    )
+
+
 def report_error(out_dir):
     """Best-effort error text of an aborted engine report."""
     import json

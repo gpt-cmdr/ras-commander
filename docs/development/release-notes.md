@@ -20,6 +20,118 @@ alone does not identify a development checkout.
   `XDG_RUNTIME_DIR` warning. A helper that reports success and then exits
   non-zero keeps its validated output instead of failing the export.
 
+- **Coupled mapping with storage areas:** `RasFim.prepare_coupled_model()` and
+  `RasFim.map_coupled_profiles()` accept mixed 1D/2D models with storage areas
+  when the engine is `ras-commander-fast-map` 0.18.0 or later. Earlier
+  releases refused them with `FimUnsupportedError: mixed models with storage
+  areas are unsupported`. Storage areas are mapped as level pools and composed
+  with the XS and 2D components through coupled schema `/2`. Storage areas
+  that physically overlap a 2D flow area, storage with the native stored-grid
+  contract and older engines are still refused before any write. Results stay
+  `qualified=False` and still require `allow_unqualified=True`.
+
+### 0.119.0 — 2026-11-12
+
+- **Mapping engine dependency:** mapping extras (`fim`, `fast-map`, `full`
+  and `all`) select `ras-commander-fast-map>=0.18.0,<0.19` (was
+  `>=0.17.0,<0.18`). As before, the extras install the engine only on
+  Windows x64 and Linux x86_64. Fast-Map 0.18.0 keeps every earlier JSON
+  request unchanged, adds the 1D capabilities below and confines its terrain
+  reader's thread pool, so a request never has more busy threads than it was
+  given. It also identifies some terrains whose CRS 0.17.0 could not match to
+  an EPSG code: the Davis terrain now reads as EPSG:2871 with its HARN datum
+  and maps without `terrain_crs_fnv1a64`, with outputs identical to the
+  override route.
+
+- **Effective terrain `/2`:** `RasFim.build_effective_terrain` uses
+  `rasmapper-effective-terrain/2`, which Fast-Map 0.18.0 runs for both request
+  schemas. **Unmodified terrains (schema 1) get different values from `/1`
+  engines** (RAS Mapper render-block sampling and its export TIN), and their
+  receipts report `/2`; ras-commander accepts a `/2` receipt for a schema 1
+  request. Terrain modifications now go through the engine when it advertises
+  `/2` with a `modifications` record: ground lines (high ground and channels,
+  control points, NaN templates, `Add`/`SetValue`), constant and
+  boundary-elevation polygons, and ellipses, following HEC-RAS 7.0.1 or 6.6
+  rules (`hecras_version`, resolved from the project by default). Forms the
+  engine does not reproduce are refused with `FimUnsupportedError` before it
+  runs, so callers use the RAS Mapper export; engines advertising only `/1`
+  still refuse every modified terrain. (#790, #833)
+
+- **Terrain-modification writers:** `RasTerrainModWriter` layers export
+  exactly like layers drawn in RAS Mapper (HEC-RAS 6.6 and 7.0.1 round trips:
+  0 differing pixels): an empty `System Name`, absolute channel inverts
+  (`depth=` now means below the sampled terrain), new layers on top
+  (Priority 0), `add_ellipse_modification` and `add_modification_layer` (the
+  inverse of the reader), and varying polygon boundaries stored as vertex Z.
+  Example notebook 321 writes every layer kind, reads it back and checks the
+  RAS Mapper exports. (#790, #833, #835)
+
+- **Terrain-modification group name:** HEC-RAS 6.6 and 7.0.1 RAS Mapper
+  apply a terrain's modifications only when the `.rasmap` group holding them
+  is named exactly `Modifications`; under any other name the export applies
+  none of them, silently. `RasTerrainModWriter` now always registers layers in
+  `Modifications`: `group_name` accepts only that name and raises
+  `ValueError` otherwise (before anything is written), and an existing group
+  under another name is renamed with a warning. The module note that RAS
+  Mapper's export does not need the `.rasmap` XML is corrected.
+  `RasFim.top_priority_terrain_source` and the `build_effective_terrain`
+  receipt add `rasmap_warnings` (`modification_group_misnamed`,
+  `modification_group_missing`), and a terrain whose modification group has
+  another name is treated as unmodified, as RAS Mapper treats it. (#837)
+
+- **Multi-ring modification polygons refused up front:** the terrain
+  modification reader (used by `build_effective_terrain` and
+  `read_terrain_modifications`) refuses a polygon feature with more than one
+  ring (holes in any winding, separate or overlapping parts) before the engine
+  runs, as Fast-Map 0.18.0 does. The `FimUnsupportedError` carries
+  `reason="multi_ring_polygon"` (also in the message) so callers route those
+  terrains to the RAS Mapper export. `FimUnsupportedError` gains an optional
+  `reason` attribute (default `None`). (#837)
+
+- **Effective terrain CRS refusal:** `RasFim.build_effective_terrain` refuses
+  a source CRS with no EPSG code (for example `ESRI:102630`) before staging,
+  with a message that states why: the engine's `rasmapper-effective-terrain`
+  request carries the CRS as an EPSG code and the engine labels the output
+  GeoTIFF from it, so `terrain_crs_fnv1a64` cannot replace it. Use the RAS
+  Mapper export for such terrains. The shared engine CRS check states the
+  same requirement. (#837)
+
+- **Public terrain-modification reader:** `RasFim.read_terrain_modifications()`
+  returns a terrain's modification layers in the form the native effective
+  terrain (`rasmapper-effective-terrain/2`) stages them, with the resolved
+  HEC-RAS version and unit system and how each was resolved (`*_basis`;
+  `"default"` when assumed), the reason when a form is refused (`refusal`,
+  plus the error's `reason` code as `refusal_reason`, for example
+  `multi_ring_polygon`; `status` `"staged"`, `"none"` or `"refused"`), and
+  rasmap registration `warnings` (misnamed or missing group, layers the rasmap
+  lists that the HDF does not store). `status` describes the layers the HDF
+  stores; `top_priority_terrain_source()["modified"]` says whether RAS Mapper
+  applies them. Record schema
+  `ras-commander-terrain-modifications/1`. It wraps the reader that
+  `build_effective_terrain` already uses, so callers such as ras2cng no
+  longer import the private `ras_commander.fim._terrain_mods` module. No change
+  to the staged layers or the engine request. (#836)
+
+- **1D mapping throughput:** `RasFim.map_one_d_profiles()` and
+  `FimPreparedOneDModel.map_profiles()` use Fast-Map 0.18.0's 1D capabilities
+  when the engine advertises them: all selected profiles in one request
+  (`multi_profile`), XS rendering on up to `threads` workers reduced to fit
+  `max_working_mib` (`render_workers`), storage pools composed inside that
+  request (`inline_storage`) and a direct read of the source terrain GeoTIFF
+  (`terrain_tiff`; terrains with a dataset or alpha mask keep the staged
+  read). Products are bit-identical to the sequential route; manifests record
+  `xs_render_workers`, `xs_profiles_per_request`, `storage_inline` and a
+  `threads_effective` that counts only the requests issued. Older engines
+  receive byte-identical requests. 1D mapping remains unqualified
+  (`qualified=False`). (#834)
+
+- **1D `final_format`:** both 1D entry points accept `final_format` with the
+  `map_sloping_profiles()` contract. With an engine advertising
+  `native_final_format` on the delivering method, the engine writes each
+  Depth/WSE GeoTIFF once in delivery form; manifest rows record the delivered
+  grid. There is no Rasterio fallback; a model CRS without an EPSG code or an
+  engine without the capability is refused with `FimUnsupportedError`. (#834)
+
 ### 0.118.0 — 2026-11-11
 
 - **Final-format delivery:** `RasFim.map_sloping_profiles(final_format=...)`

@@ -947,6 +947,105 @@ the export, which took 242.6 s through `RasTerrain.export_rasmapper_terrain`.
 Bridges whole-simulation and horizontal requests are refused on the source
 TIFF because 28 mapped 2D pixels lie outside its footprint.
 
+## Build the effective terrain, with modifications
+
+`RasFim.build_effective_terrain` writes the grid that
+`RasTerrain.export_rasmapper_terrain(downsample_factor=1)` produces, in Rust
+and without HEC-RAS. For a terrain with `/Modifications` it needs an engine
+that advertises `rasmapper-effective-terrain/2` with a `modifications` record;
+an engine that advertises only `/1` refuses every modified terrain.
+
+```python
+receipt = RasFim.build_effective_terrain(
+    "Terrain/Terrain.hdf", "effective.tif",
+    rasmap_path="Project.rasmap", hecras_version="6.6",
+)
+receipt["method_id"], receipt["hecras_version"], receipt["modification_layers"]
+```
+
+- Every HDF layer RAS Mapper applies is staged: ground lines (`Type=Levee`,
+  any elevation type including `Add`, named systems, control points, NaN
+  templates), polygons (constant, or boundary elevations from perimeter
+  control points or a stored profile) and ellipses (any rotation).
+- `hecras_version` selects the export to reproduce. `6.6` follows HEC-RAS 6.6;
+  every other version follows 7.0.1. Without it, the version comes from
+  `ras_object`, else from the newest `Program Version` of the project's plan
+  and geometry files, else 7.0.1.
+- With `rasmap_path`, RAS Mapper applies the HDF modifications only when the
+  terrain layer has an `ElevationModificationGroup` named exactly
+  `Modifications`; without one, or with the group under another name (for
+  example `Hydroconnectors`), the terrain is treated as unmodified. The
+  receipt's `rasmap_warnings` records why (`modification_group_misnamed` or
+  `modification_group_missing`); rename the group to `Modifications` to apply
+  the layers.
+- The source CRS needs an EPSG code. The engine request carries the CRS as an
+  EPSG code and the engine writes the output GeoTIFF's CRS from it.
+  `terrain_crs_fnv1a64` only covers a CRS that rasterio identifies by EPSG
+  but the engine does not; it cannot replace the code. A CRS that PROJ
+  identifies only by another authority, such as `ESRI:102630` (NAD83 /
+  Alabama West, US feet), raises `FimUnsupportedError`; use the RAS Mapper
+  export for such terrains.
+- Forms the engine does not reproduce raise `FimUnsupportedError`: boundary
+  elevations sampled from the terrain, shape-Z polygons, polygons with more
+  than one ring, named ground lines with control points or a NaN template,
+  named ground lines under 6.6, and other RAS layer types. Use the RAS Mapper
+  export for those terrains.
+- A polygon feature with more than one ring (a hole in either winding, or
+  separate or overlapping parts) is refused while the layers are read, before
+  the engine runs. RAS Mapper joins and triangulates such rings in a way that
+  cannot be reproduced as a rule. The error's `reason` is
+  `multi_ring_polygon`, and the message carries `[reason: multi_ring_polygon]`,
+  so callers can route the terrain to the RAS Mapper export without calling
+  the engine. Single-ring polygons are unaffected.
+
+<a id="read-the-modification-layers"></a>
+
+### Read the modification layers
+
+`RasFim.read_terrain_modifications` returns the `modification_layers` that
+`build_effective_terrain` would send to the engine, without running it. Use it
+to route a modified terrain before any terrain work: `status == "staged"` means
+every layer is a form the reader stages, `"refused"` means the terrain needs the
+RAS Mapper export, and `refusal` says why. `status` describes the layers the HDF
+stores, not whether RAS Mapper applies them: check
+`top_priority_terrain_source()["modified"]` before treating the layers as
+applied, or pass `rasmap_path` and read `warnings`. RAS Mapper applies nothing
+when no group is named `Modifications` (`modification_group_missing`, or only
+misnamed groups); a misnamed group beside a correct one is only ignored.
+
+```python
+record = RasFim.read_terrain_modifications(
+    "Terrain/Terrain.hdf", rasmap_path="Project.rasmap", hecras_version="6.6",
+)
+record["status"], record["refusal"]          # "staged" | "none" | "refused"
+record["hecras_version"], record["length_units"]
+[(layer["kind"], layer["name"], layer["priority"]) for layer in record["layers"]]
+```
+
+The record (`ras-commander-terrain-modifications/1`) carries `terrain_hdf`,
+`method_id` (`rasmapper-effective-terrain/2`), `status`, `refusal`,
+`refusal_reason` (the `reason` code of the reader's `FimUnsupportedError`, for
+example `multi_ring_polygon` for a polygon with more than one ring, or `None`),
+`hecras_version` and `length_units` with their `*_basis` (`"default"` when no
+project file states the value and the 7.0.1 rules or feet are assumed),
+`warnings` and `layers`. Layers
+are `ground_line`, `polygon` or `ellipse` records in the engine request form;
+the field list, units and refusal reasons are in the
+[`RasFim` reference](api/core.md#mapping). The HEC-RAS version and unit system
+are resolved as `build_effective_terrain` resolves them, from the HDF's own
+project folder after links are resolved; an explicit `length_units` applies to
+the reader only. Project files that state different units refuse a terrain
+with layers to stage and leave an unmodified one `"none"`. With `rasmap_path`,
+`warnings` lists registration problems: a misnamed or missing `Modifications`
+group (RAS Mapper then applies nothing), layers the group lists that the HDF
+does not store (`rasmap_layer_not_in_hdf`; `build_effective_terrain` refuses
+the terrain) and a rasmap that does not register the terrain. `strict=True` raises
+`FimUnsupportedError` instead of returning a refusal. A staged terrain can
+still be refused by an older engine; compare the layers with the engine's
+`modifications` capability record. The reader does not apply the rasmap
+`ElevationModificationGroup` gate; `top_priority_terrain_source()["modified"]`
+reports it.
+
 ## Sloping velocity
 
 `velocity=True` adds `velocity_tif` (`12_<profile>_velocity.tif`) to each
@@ -2122,18 +2221,56 @@ This diagnostic path uses `one-d-xs-surface-diagnostic/5` and its existing
 refuses execution. The preparation receipt identifies the version-specific
 normalization and endpoint-selection rules. Full-corpus and broader raster
 qualification remain gates. Transport availability
-does not establish numerical qualification. The XS pass executes sequentially;
-storage rendering uses up to four workers within the requested thread budget.
-Manifests record requested and effective counts.
+does not establish numerical qualification. With engines that advertise
+`render_workers`, the XS pass renders source-terrain tile rows on up to
+`threads` workers, reduced to fit `max_working_mib`. Admission counts the
+engine's per-worker scratch: tile claims, triangle candidates, terrain-TIFF
+decode buffers when the engine reads the terrain itself, and `final_format`
+writer buffers. When one worker does not fit, mapping is refused before any
+engine call. With engines that advertise
+`multi_profile`, each engine call covers up to the advertised `multi_profile.max`
+selected profiles, so inputs and the prepared surface are read and built once per
+call. Neither option changes output bits.
+Older engines run one sequential XS request per profile. A separate storage
+request uses up to four workers within the requested thread budget; with
+`inline_storage`, composition runs in the XS request on its admitted worker
+count. Manifests record the
+requested and effective counts, `xs_render_workers` and `xs_profiles_per_request`.
+`threads_effective` counts only the requests issued: on the inline route it is
+the XS worker count, never the four-thread separate storage call.
+
+With engines that advertise `terrain_tiff`, the engine reads the source terrain
+GeoTIFF itself and applies only its Float32 nodata value. A terrain with a
+per-dataset or alpha mask keeps the staged Rasterio read, which turns masked
+pixels into NaN, so the direct read never exposes masked pixels as terrain.
+
+With engines that advertise `inline_storage`, storage level pools and their
+composition run inside the batched XS request: physical storage labels are
+rasterized once and no separate storage or composition process runs. Products
+are bit-identical to the separate calls; manifests record `storage_inline`.
+
+`final_format` has the `map_sloping_profiles()` contract (`nodata`, `block_size`,
+`zlevel`, `overviews`, `grid`). With an engine advertising `native_final_format`
+on the 1D (or storage-composition) method, the engine applies the AOI pixel
+mask, counts finite and flooded Depth pixels and writes each Depth/WSE GeoTIFF
+once; Commander verifies the header and file and moves it into place. Valid
+pixel bits and the nodata mask equal the Rasterio-written products. Manifest
+rows record the delivered grid (`col_off`, `row_off`, `width`, `height` and
+`transform` on the terrain), as sloping rows do; `final_format.window_on_grid`
+locates the mapped window. A valid value that is infinite or reads as `nodata`
+is refused (`FimUnsupportedError`, wrapped in `FimMappingError`); no product is
+delivered. The model CRS needs an EPSG code. There is no Rasterio fallback.
 
 The diagnostic scope includes stored unsteady or explicit steady XS profiles,
 including junction ordering, levees, endpoint obstruction blocks and disjoint
 storage level pools. Mixed 2D/pipe geometry, blocked polygons, actual
 encroachment datasets and degenerate triangles refuse. No triangle is dropped.
 Storage polygons take precedence over XS coverage even when their pools are
-dry; overlapping pools and storage/2D overlap remain refused. Rust renders
-pools through `fast-map-storage/1`, using `storage-area-level-pool/1`, then
-composes products through existing coupled schema `/2` with zero 2D cells.
+dry; overlapping pools and storage/2D overlap remain refused. Without
+`inline_storage`, Rust renders pools through a separate `fast-map-storage/1`
+call, using `storage-area-level-pool/1`, then composes products through a
+separate coupled schema `/2` call with zero 2D cells. With `inline_storage`,
+the same pool and composition methods run inside the XS request.
 These transports require advertised capabilities and retain `qualified=False`.
 Final composed products identify the coupled-storage method and request schema,
 with separate XS and storage component contracts in the manifest.
@@ -2219,9 +2356,38 @@ assert products.attrs["qualified"] is False
 
 `RasFim.map_coupled_profiles()` provides the source-path convenience route.
 Preparation and mapping refuse by default before engine lookup or output writes.
-Only plain corner-sloping Depth/WSE is admitted. Mixed steady results, storage
-areas, pipes, blocked polygons, encroachments and degenerate geometry remain
-unsupported. Existing 1D-only and strict 2D admission are unchanged.
+Only plain corner-sloping Depth/WSE is admitted. Mixed steady results, pipes,
+blocked polygons, encroachments and degenerate geometry remain unsupported.
+Existing 1D-only and strict 2D admission are unchanged.
+
+### Mixed models with storage areas
+
+With `ras-commander-fast-map` 0.18.0 or later, mixed models that contain
+storage areas are prepared and mapped through the same calls. Preparation
+stages the storage-area polygons and one Float32 water surface per area and
+profile (`Maximum Water Surface` for `"Max"`, otherwise the stored output row),
+and proves that the storage-area series uses the shared Base Output timestamp
+axis. For each profile the mapper runs the XS and 2D components, then the
+storage-only transport (`fast-map-storage/1`, `storage-area-level-pool/1`), and
+composes all three with coupled schema `/2`
+(`one-d-two-d-storage-coverage-first-diagnostic/1`). Physical storage coverage
+suppresses the XS surface before visibility, as 2D coverage does, including
+where the storage area is dry. The receipt's `storage` record binds the names,
+polygons and levels; the manifest identifies the schema `/2` method and the
+storage component contract, with `qualified=False`.
+
+Refused with `FimUnsupportedError` before any write:
+
+- a storage area whose interior overlaps a 2D flow area perimeter at a terrain
+  pixel centre (the engine rejects physical storage/2D overlap until it is
+  qualified; a shared edge is admitted);
+- storage areas with `grid_contract="rasmapper-stored-tile-grid/1"`, because
+  the stored-grid coupled schema `/3` excludes storage;
+- engines older than Fast-Map 0.18.0, or engines that lack the `storage` and
+  `coupled_storage_diagnostic` contracts.
+
+Storage support does not change qualification: the route still requires
+`allow_unqualified=True`.
 
 The engine must advertise `export_physical_ownership`. The sloping pass exports
 UInt32 labels from the same physical polygon burn used by its products, including

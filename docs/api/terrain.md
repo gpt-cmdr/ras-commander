@@ -181,20 +181,31 @@ Line and polygon terrain modification HDF/`.rasmap` writing. Also available as t
 
 - `add_high_ground_modification(terrain_hdf_path, rasmap_path, name, polyline_points, top_width=20.0, side_slope=2.0, ...)` - Add levee/road terrain modification with trapezoidal profile along polyline (TakeHigher mode)
 - `add_fill_surface_modification(terrain_hdf_path, rasmap_path, name, polyline_points, top_width=20.0, side_slope=2.0, ...)` - Add fill-surface (SetValue) modification along polyline
-- `add_channel_modification(terrain_hdf_path, rasmap_path, name, polyline_points, width=50.0, depth=10.0, left_slope=3.0, right_slope=3.0, ...)` - Add trapezoidal channel modification (TakeLower mode)
+- `add_channel_modification(terrain_hdf_path, rasmap_path, name, polyline_points, width=50.0, depth=None, ..., *, elevation=None, profile_points=None, ...)` - Add trapezoidal channel modification (TakeLower mode). The invert is an absolute elevation profile (`profile_points`, `elevation` or polyline Z); `depth` instead sets it below the terrain source sampled at each vertex.
 
-### Polygon Modification Methods
+Ground lines are written as RAS Mapper saves them: `Type=Levee`, an empty `System Name` (a non-empty one sends even a lone line through RAS Mapper's system path and changes its footprint at bends; pass `system_name` only for an intended join), NaN `Transition Percent`, and an absolute profile in `Profile Info`/`Profile Values`. A new layer goes on top of the list (`Priority` 0, which wins), as in the RAS Mapper GUI; pass `priority` to place it elsewhere. HEC-RAS 6.6 and 7.0.1 exports of writer layers equal those of the same features authored in RAS Mapper.
 
-- `add_modification_polygon(terrain_hdf_path, name, polygon_coords, elevation_method="boundary_from_terrain", control_points=None, ...)` - Add polygon multipoint modification (detention pond/wetland grading)
+### Polygon and Ellipse Modification Methods
+
+- `add_modification_polygon(terrain_hdf_path, name, polygon_coords, elevation_method="boundary_from_terrain", control_points=None, ..., elevation=None)` - Add polygon modification: constant (`elevation`), vertex-Z (`shape_z`/`provided`, portable across 6.6 and 7.x) or terrain-sampled boundary
+- `add_ellipse_modification(terrain_hdf_path, rasmap_path, name, ellipses, mode="set_value")` - Add ellipse/circle modifications (rotation in degrees)
+- `add_modification_layer(terrain_hdf_path, rasmap_path, layer)` - Write one layer in the `read_layers` form (ground line, constant polygon, ellipse) back to a terrain
+
+The RAS Mapper export (HEC-RAS 6.6 and 7.0.1) applies a terrain's HDF modifications only when its `.rasmap` terrain layer has an `ElevationModificationGroup` named exactly `Modifications`. Without that group, or with the group under any other name, the export applies none of them and reports nothing: a terrain written into a `Hydroconnectors` group exported unchanged, and renaming the group to `Modifications` applied it. The writers always register layers in `Modifications`. `group_name` accepts only `"Modifications"` (the default) and raises `ValueError` for any other name, before anything is written; an existing group under another name is renamed to `Modifications`, with a warning, because the terrain's other HDF layers then also apply. `RasFim.top_priority_terrain_source(terrain_hdf, rasmap_path=...)` flags an existing misnamed group in `rasmap_warnings` (code `modification_group_misnamed`) without changing either file.
 
 ### Group Management
 
-- `add_modification_group(terrain_hdf_path, rasmap_path, group_name="Modifications")` - Add empty modification group to terrain HDF and `.rasmap`
+- `add_modification_group(terrain_hdf_path, rasmap_path, group_name="Modifications")` - Add the empty `Modifications` group to terrain HDF and `.rasmap` (no other group name is accepted)
 
 ### Query Methods
 
 - `list_modifications(terrain_hdf_path)` - List all terrain modifications stored in HDF sidecar group
 - `get_modification_profile(terrain_hdf_path, name)` - Read modification station/elevation profile
+
+To read the modification layers in the form the native effective-terrain
+engine (`rasmapper-effective-terrain/2`) needs, with the reason for any form it
+refuses, use
+[`RasFim.read_terrain_modifications()`](../native-mapping-engine.md#read-the-modification-layers).
 
 ### Analysis Methods
 
@@ -457,6 +468,7 @@ outlets = result.streams[result.streams["DSLINKNO"] < 0]
 | Notebook | Description |
 |----------|-------------|
 | `316_terrain_modifications.ipynb` | Terrain modification writer: high ground, channel, polygon |
+| `321_terrain_modification_layer_writers.ipynb` | Every writer layer kind, `read_layers` / `add_modification_layer` round trip, pixel checks against RAS Mapper exports (6.6, 7.0.1) |
 | `920_terrain_creation.ipynb` | Terrain HDF creation from rasters |
 | `930_terrain_modification_analysis.ipynb` | Cut/fill analysis with RasTerrainMod |
 | `931_native_rasmapper_terrain_export.ipynb` | Bounded native export, typed result, receipt, and visual grid evidence |

@@ -182,3 +182,22 @@ def test_append_rejects_incompatible_existing_pair_atomically(polygons, change):
             *polygons, {"Polygons": [1]}, group_prefix="contributor_", append=True
         )
     assert before == (polygons[1].read_bytes(), polygons[3].read_bytes())
+
+
+def test_ras_7x_polygon_profile_tables_are_accepted_and_subset(polygons):
+    """HEC-RAS 7.0/7.0.1 save a perimeter profile with every polygon layer
+    (6.6 does not); constant polygons ignore it, but the layout must not be
+    refused and the copied subset keeps each feature's own profile rows."""
+    source, target, mapper, child = polygons
+    with h5py.File(source, "a") as f:
+        g = f["Modifications/Polygons"]
+        g.create_dataset("Profile Info", data=np.array([[0, 2], [2, 3]], dtype="int32"))
+        g.create_dataset(
+            "Profile Values",
+            data=np.array([[0, 100], [40, 100], [0, 99], [20, 99], [40, 99]], dtype="float32"),
+        )
+    RasTerrainModWriter.copy_modification_features(*polygons, {"Polygons": [1]})
+    with h5py.File(target) as t:
+        copied = t["Modifications/Polygons"]
+        assert copied["Profile Info"][:].tolist() == [[0, 3]]
+        assert copied["Profile Values"][:].tolist() == [[0, 99], [20, 99], [40, 99]]

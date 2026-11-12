@@ -32,6 +32,7 @@ projects, and generated artifacts are intentionally excluded from this README.
 - [110_single_plan_execution.ipynb](110_single_plan_execution.ipynb) and [113_parallel_execution.ipynb](113_parallel_execution.ipynb) - run plans through RAS Commander.
 - [201_1d_plaintext_geometry.ipynb](201_1d_plaintext_geometry.ipynb), [203_htab_parameter_optimization.ipynb](203_htab_parameter_optimization.ipynb), and [205_extract_xs_xyz_from_geometry.ipynb](205_extract_xs_xyz_from_geometry.ipynb) - geometry and HTAB workflows.
 - [312_boundary_df_qmult_dss_paths.ipynb](312_boundary_df_qmult_dss_paths.ipynb) and [318_validating_dss_paths.ipynb](318_validating_dss_paths.ipynb) - DSS boundary workflows.
+- [316_terrain_modifications.ipynb](316_terrain_modifications.ipynb) and [321_terrain_modification_layer_writers.ipynb](321_terrain_modification_layer_writers.ipynb) - terrain-modification writers, `read_layers` round trip, and RAS Mapper export checks.
 - [410_2d_hdf_data_extraction.ipynb](410_2d_hdf_data_extraction.ipynb), [412_2d_detail_face_data_extraction.ipynb](412_2d_detail_face_data_extraction.ipynb), and [413_profile_line_flow_extraction.ipynb](413_profile_line_flow_extraction.ipynb) - HDF mesh and results extraction.
 - [720_precipitation_methods_comprehensive.ipynb](720_precipitation_methods_comprehensive.ipynb), [721_precipitation_hyetograph_comparison.ipynb](721_precipitation_hyetograph_comparison.ipynb), and [725_atlas14_spatial_variance.ipynb](725_atlas14_spatial_variance.ipynb) - precipitation methods.
 - [910_usgs_gauge_catalog.ipynb](910_usgs_gauge_catalog.ipynb) through [923_stofs3d_coastal_boundary.ipynb](923_stofs3d_coastal_boundary.ipynb) - gauge, validation, forecast, and coastal boundary workflows.
@@ -95,7 +96,8 @@ for experimental API status and the evidence required before restoring them.
 `314_reference_line_generation.ipynb`, `315_2d_computation_options.ipynb`,
 `316_terrain_modifications.ipynb`, `317_restart_file_settings.ipynb`,
 `318_validating_dss_paths.ipynb`, `319_post_fire_debris_flow_nonnewtonian.ipynb`,
-`320_1d_boundary_condition_visualization.ipynb`
+`320_1d_boundary_condition_visualization.ipynb`,
+`321_terrain_modification_layer_writers.ipynb`
 
 ### 400s - HDF Results Extraction
 

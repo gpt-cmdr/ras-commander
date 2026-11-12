@@ -122,7 +122,7 @@ def test_rasmap_modification_layers_are_reported(tmp_path):
     rasmap = tmp_path / "m.rasmap"
     rasmap.write_text(
         '<RASMapper><Terrains><Layer Name="T" Type="TerrainLayer" Filename=".\\T.hdf">'
-        '<Layer Name="Mods" Type="ElevationModificationGroup"><Layer Name="Levee" Type="X"/></Layer>'
+        '<Layer Name="Modifications" Type="ElevationModificationGroup"><Layer Name="Levee" Type="X"/></Layer>'
         "</Layer></Terrains></RASMapper>",
         encoding="utf-8",
     )
@@ -132,6 +132,105 @@ def test_rasmap_modification_layers_are_reported(tmp_path):
     other.write_text("<RASMapper><Terrains/></RASMapper>", encoding="utf-8")
     with pytest.raises(FimUnsupportedError, match="does not register"):
         RasFim.top_priority_terrain_source(hdf, rasmap_path=other)
+
+
+def test_hdf_modifications_need_the_rasmap_modification_group(tmp_path):
+    """HEC-RAS 6.6 and 7.0.1 exports apply the HDF's modifications only when
+    the rasmap terrain layer has an ElevationModificationGroup element (an
+    empty or unchecked group is enough); without it they change nothing."""
+    hdf = _terrain(tmp_path, ["a"], priorities=[0], modifications=True)
+    rasmap = tmp_path / "m.rasmap"
+    rasmap.write_text(
+        '<RASMapper><Terrains><Layer Name="T" Type="TerrainLayer" Filename=".\\T.hdf" />'
+        "</Terrains></RASMapper>",
+        encoding="utf-8",
+    )
+    assert not RasFim.top_priority_terrain_source(hdf, rasmap_path=rasmap)["modified"]
+    rasmap.write_text(
+        '<RASMapper><Terrains><Layer Name="T" Type="TerrainLayer" Filename=".\\T.hdf">'
+        '<Layer Name="Modifications" Type="ElevationModificationGroup" />'
+        "</Layer></Terrains></RASMapper>",
+        encoding="utf-8",
+    )
+    info = RasFim.top_priority_terrain_source(hdf, rasmap_path=rasmap)
+    assert info["modified"] and info["modifications"] == ["hdf:Channel"]
+    assert RasFim.top_priority_terrain_source(hdf)["modified"]  # no rasmap: assume applied
+
+
+def test_hdf_modifications_without_a_group_report_the_missing_group(tmp_path):
+    hdf = _terrain(tmp_path, ["a"], priorities=[0], modifications=True)
+    rasmap = tmp_path / "m.rasmap"
+    rasmap.write_text(
+        '<RASMapper><Terrains><Layer Name="T" Type="TerrainLayer" Filename=".\\T.hdf" />'
+        "</Terrains></RASMapper>",
+        encoding="utf-8",
+    )
+    info = RasFim.top_priority_terrain_source(hdf, rasmap_path=rasmap)
+    assert [w["code"] for w in info["rasmap_warnings"]] == ["modification_group_missing"]
+    assert RasFim.top_priority_terrain_source(hdf)["rasmap_warnings"] == []
+
+
+def test_misnamed_modification_group_is_flagged_and_not_applied(tmp_path):
+    """HEC-RAS 6.6 and 7.0.1 apply modifications only from a group named exactly
+    Modifications: a terrain whose layers sit in "Hydroconnectors" exports
+    unchanged. The reader flags it and changes neither file."""
+    hdf = _terrain(tmp_path, ["a"], priorities=[0], modifications=True)
+    rasmap = tmp_path / "m.rasmap"
+    rasmap.write_text(
+        '<RASMapper><Terrains><Layer Name="T" Type="TerrainLayer" Filename=".\\T.hdf">'
+        '<Layer Name="Hydroconnectors" Type="ElevationModificationGroup" Checked="True">'
+        '<Layer Name="Channel" Type="GroundLineModificationLayer" /></Layer>'
+        "</Layer></Terrains></RASMapper>",
+        encoding="utf-8",
+    )
+    before = (rasmap.read_bytes(), hdf.read_bytes())
+    info = RasFim.top_priority_terrain_source(hdf, rasmap_path=rasmap)
+    assert info["modified"] is False and info["modifications"] == []
+    [warning] = info["rasmap_warnings"]
+    assert warning["code"] == "modification_group_misnamed"
+    assert warning["group"] == "Hydroconnectors" and warning["layers"] == ["Channel"]
+    assert "named exactly 'Modifications'" in warning["message"]
+    assert (rasmap.read_bytes(), hdf.read_bytes()) == before
+    assert _terrain_scope.describe(info)["rasmap_warnings"] == [warning]
+    # Renamed, nothing else changed: RAS Mapper applies the layers.
+    rasmap.write_text(rasmap.read_text(encoding="utf-8").replace("Hydroconnectors", "Modifications"),
+                      encoding="utf-8")
+    info = RasFim.top_priority_terrain_source(hdf, rasmap_path=rasmap)
+    assert info["modified"] and info["rasmap_warnings"] == []
+    assert info["modifications"] == ["hdf:Channel", "rasmap:Channel"]
+
+
+def test_misnamed_group_beside_the_modifications_group_is_flagged(tmp_path):
+    hdf = _terrain(tmp_path, ["a"], priorities=[0], modifications=True)
+    rasmap = tmp_path / "m.rasmap"
+    rasmap.write_text(
+        '<RASMapper><Terrains><Layer Name="T" Type="TerrainLayer" Filename=".\\T.hdf">'
+        '<Layer Name="Modifications" Type="ElevationModificationGroup" />'
+        '<Layer Name="Hydroconnectors" Type="ElevationModificationGroup">'
+        '<Layer Name="NotInHdf" Type="GroundLineModificationLayer" /></Layer>'
+        "</Layer></Terrains></RASMapper>",
+        encoding="utf-8",
+    )
+    info = RasFim.top_priority_terrain_source(hdf, rasmap_path=rasmap)
+    # Entries of the ignored group are reported, never counted as applied.
+    assert info["modified"] and info["modifications"] == ["hdf:Channel"]
+    assert [(w["group"], w["layers"]) for w in info["rasmap_warnings"]] == [("Hydroconnectors", ["NotInHdf"])]
+
+
+def test_ignored_group_entries_do_not_mark_an_unmodified_terrain_modified(tmp_path):
+    hdf = _terrain(tmp_path, ["a"], priorities=[0])
+    rasmap = tmp_path / "m.rasmap"
+    rasmap.write_text(
+        '<RASMapper><Terrains><Layer Name="T" Type="TerrainLayer" Filename=".\\T.hdf">'
+        '<Layer Name="Modifications" Type="ElevationModificationGroup" />'
+        '<Layer Name="Hydroconnectors" Type="ElevationModificationGroup">'
+        '<Layer Name="Levee" Type="GroundLineModificationLayer" /></Layer>'
+        "</Layer></Terrains></RASMapper>",
+        encoding="utf-8",
+    )
+    info = RasFim.top_priority_terrain_source(hdf, rasmap_path=rasmap)
+    assert info["modified"] is False and info["modifications"] == []
+    assert [w["code"] for w in info["rasmap_warnings"]] == ["modification_group_misnamed"]
 
 
 def test_resolve_requires_the_priority_one_tiff_and_stages_its_mask(tmp_path):

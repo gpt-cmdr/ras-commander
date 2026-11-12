@@ -33,6 +33,11 @@ on:
       - 'tests/test_fim_retained_state.py'
       - 'tests/test_fim_effective_terrain.py'
       - 'tests/test_fim_storage_areas.py'
+      - 'tests/test_fim_terrain_mods.py'
+      - 'ras_commander/terrain/RasTerrainModWriter.py'
+      - 'ras_commander/_terrain_modification_subset.py'
+      - 'tests/test_ras_terrain_mod_writer.py'
+      - 'tests/test_terrain_polygon_subset.py'
       - 'setup.py'
       - '.github/workflows/optional-fim.yml'
   workflow_dispatch:
@@ -72,6 +77,7 @@ jobs:
           tests/test_fim_coupled.py
           tests/test_fim_coupled_contract.py
           tests/test_fim_coupled_native_grid.py
+          tests/test_fim_coupled_storage.py
           tests/test_fim_grid_admission.py
           tests/test_fim_manifest_precision.py
           tests/test_fim_engine_failures.py
@@ -88,6 +94,8 @@ jobs:
           -q
       - name: Invalid 2D cell polygon policies
         run: python -m pytest tests/test_fim_invalid_cells.py -q
+      - name: Terrain modifications (staging, writer and subset readers)
+        run: python -m pytest tests/test_fim_terrain_mods.py tests/test_fim_terrain_mods_public.py tests/test_ras_terrain_mod_writer.py tests/test_terrain_polygon_subset.py -q -rs
       - name: Catalog admission and bounded native HDF staging
         run: python -m pytest tests/test_fim_catalog.py tests/test_fim_catalog_real.py tests/test_fim_retained_state.py -q
       - name: Python adapter and installed horizontal engine
