@@ -2353,6 +2353,7 @@ notebooks:
   data_project: BaldEagleCrkMulti2D
   functions_used:
   - RasExamples.extract_project
+  - RasFim.read_terrain_modifications
   - RasTerrain.export_rasmapper_terrain
   - RasTerrainModWriter.add_channel_modification
   - RasTerrainModWriter.add_ellipse_modification
@@ -2363,8 +2364,8 @@ notebooks:
   hec_refs: []
   learning_paths: []
   excluded: false
-  code_cells: 10
-  executed_cells: 10
+  code_cells: 11
+  executed_cells: 11
 - id: 400_1d_hdf_data_extraction
   filename: 400_1d_hdf_data_extraction.ipynb
   title: 1D HDF Data Extraction
