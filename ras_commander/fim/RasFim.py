@@ -1502,6 +1502,7 @@ class RasFim:
         )
 
     @staticmethod
+    @log_call
     def supports_effective_terrain_basis(basis: str, engine_path: Optional[PathLike] = None) -> bool:
         """Whether :meth:`build_effective_terrain` accepts ``basis`` with this engine.
 
