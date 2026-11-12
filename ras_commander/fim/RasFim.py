@@ -1554,11 +1554,13 @@ class RasFim:
           Mapper skips) or ``"refused"``. ``status`` describes the HDF
           layers only, not whether RAS Mapper applies them: it applies none
           unless the rasmap terrain layer has an ``ElevationModificationGroup``
-          named ``Modifications``. Pass ``rasmap_path`` and check
-          ``warnings`` (``modification_group_misnamed`` or
-          ``modification_group_missing`` mean nothing is applied), or
-          :meth:`top_priority_terrain_source` ``["modified"]``, before
-          treating ``layers`` as applied.
+          named ``Modifications``. Use
+          :meth:`top_priority_terrain_source` ``["modified"]`` before
+          treating ``layers`` as applied, or pass ``rasmap_path`` and check
+          ``warnings``: ``modification_group_missing`` means nothing is
+          applied; ``modification_group_misnamed`` means that group's entries
+          are ignored, and nothing is applied only when no group is named
+          ``Modifications``.
         - ``refusal`` (str or None): For ``"refused"``, the reason the
           terrain cannot take the native route, naming the layer and
           feature; otherwise ``None``.
@@ -1585,8 +1587,9 @@ class RasFim:
           "message"}`` rasmap registration records, empty without
           ``rasmap_path``: ``"modification_group_misnamed"`` and
           ``"modification_group_missing"`` (as in
-          :meth:`top_priority_terrain_source`; RAS Mapper then applies no
-          modification), ``"rasmap_layer_not_in_hdf"`` (the ``Modifications``
+          :meth:`top_priority_terrain_source`; RAS Mapper ignores a misnamed
+          group, and applies no modification when there is no group named
+          ``Modifications``), ``"rasmap_layer_not_in_hdf"`` (the ``Modifications``
           group lists layers the HDF does not store;
           :meth:`build_effective_terrain` refuses the terrain) and
           ``"rasmap_not_checked"`` (the rasmap cannot be read or does not

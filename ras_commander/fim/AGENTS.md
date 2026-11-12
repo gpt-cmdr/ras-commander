@@ -170,9 +170,10 @@ Parent `ras_commander/AGENTS.md` and root `AGENTS.md` still apply.
   with the version/units resolution `build_effective_terrain` uses (links
   resolved first) and never runs the engine; callers such as ras2cng route on
   `status` and `refusal_reason` instead of importing `_terrain_mods`. `status`
-  describes the HDF layers only: pass `rasmap_path` and check `warnings` (or
-  `top_priority_terrain_source()["modified"]`) before treating layers as
-  applied, since RAS Mapper applies none without a `Modifications` group. Keep the
+  describes the HDF layers only: check `top_priority_terrain_source()["modified"]`
+  (or `warnings` with `rasmap_path`) before treating layers as applied, since
+  RAS Mapper applies none without a group named `Modifications`; a misnamed
+  group alongside a correct one is only ignored. Keep the
   staged layers identical to the build request. Report how each value was
   resolved (`*_basis`, `"default"` for assumed values), surface rasmap
   registration problems in `warnings` and do not apply the

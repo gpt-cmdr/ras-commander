@@ -1007,10 +1007,11 @@ receipt["method_id"], receipt["hecras_version"], receipt["modification_layers"]
 to route a modified terrain before any terrain work: `status == "staged"` means
 every layer is a form the reader stages, `"refused"` means the terrain needs the
 RAS Mapper export, and `refusal` says why. `status` describes the layers the HDF
-stores, not whether RAS Mapper applies them: pass `rasmap_path` and check
-`warnings` (a misnamed or missing `Modifications` group means RAS Mapper applies
-none), or `top_priority_terrain_source()["modified"]`, before treating the
-layers as applied.
+stores, not whether RAS Mapper applies them: check
+`top_priority_terrain_source()["modified"]` before treating the layers as
+applied, or pass `rasmap_path` and read `warnings`. RAS Mapper applies nothing
+when no group is named `Modifications` (`modification_group_missing`, or only
+misnamed groups); a misnamed group beside a correct one is only ignored.
 
 ```python
 record = RasFim.read_terrain_modifications(
