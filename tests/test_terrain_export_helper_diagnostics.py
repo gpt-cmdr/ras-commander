@@ -441,3 +441,68 @@ def test_out_of_memory_without_response_is_classified(tmp_path, monkeypatch):
 )
 def test_classify_helper_failure(response, stderr, expected):
     assert host.classify_helper_failure(response, stderr) == expected
+
+
+# --- Deadline and timeout evidence ------------------------------------------
+
+
+def test_empty_window_scan_and_write_respect_the_export_deadline(monkeypatch, tmp_path):
+    source = _write_source_tif(tmp_path / "source.tif", valid=False)
+    rasmap, output, sources = _project(monkeypatch, tmp_path, str(source))
+    process = _fake_process(monkeypatch, _empty_window_failure)
+    process.sources = sources
+    real_scan = host.check_extent_source_coverage
+    seen = {}
+
+    def scan_after_deadline(records, extent, *, deadline=None):
+        # The helper used the whole budget: the scan must stop, not run on.
+        seen["deadline"] = deadline
+        return real_scan(records, extent, deadline=0.0)
+
+    monkeypatch.setattr(host, "check_extent_source_coverage", scan_after_deadline)
+
+    result = _run_export(rasmap, output, empty_extent="nodata", timeout_seconds=60)
+
+    assert not result
+    assert result.timed_out is True
+    assert result.failure_kind == "timeout"
+    assert seen["deadline"] is not None
+    assert not output.exists()
+
+
+def test_coverage_scan_and_nodata_write_raise_after_deadline(tmp_path):
+    source = _write_source_tif(tmp_path / "source.tif", valid=False)
+    extent = (0.0, 0.0, 20.0, 20.0)
+    with pytest.raises(subprocess.TimeoutExpired):
+        host.check_extent_source_coverage(
+            [{"index": 0, "filename": str(source),
+              "extent": {"min_x": 0, "min_y": 0, "max_x": 20, "max_y": 20}}],
+            extent,
+            deadline=0.0,
+        )
+    with pytest.raises(subprocess.TimeoutExpired):
+        host.write_nodata_geotiff(
+            tmp_path / "nodata.tif", extent, 5.0, 4, 4, "EPSG:26915", deadline=0.0
+        )
+
+
+def test_timeout_keeps_partial_stderr_and_response(tmp_path, monkeypatch):
+    def run(command, **_kwargs):
+        Path(command[-1]).write_text(json.dumps({"ok": True, "stage": "shutdown"}))
+        raise subprocess.TimeoutExpired(command, 1, stderr=b"partial helper stderr")
+
+    monkeypatch.setattr(host, "run_owned_process", run)
+    monkeypatch.setattr(host, "_runtime_env", lambda *_: {})
+    request = {
+        "schema_version": 1, "operation": "inspect", "terrain_name": "Terrain",
+        "rasmap_path": str(tmp_path / "example.rasmap"),
+    }
+    invocations: list[dict] = []
+    with pytest.raises(subprocess.TimeoutExpired):
+        host._run_helper(
+            tmp_path / "helper.exe", tmp_path, None, request, tmp_path, 1,
+            invocations=invocations,
+        )
+    assert invocations[0]["status"] == "timeout"
+    assert "partial helper stderr" in invocations[0]["stderr"]
+    assert invocations[0]["response"] == {"ok": True, "stage": "shutdown"}

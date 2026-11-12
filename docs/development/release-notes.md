@@ -19,6 +19,9 @@ alone does not identify a development checkout.
   response, and stderr. A failure summary no longer quotes Wine's
   `XDG_RUNTIME_DIR` warning. A helper that reports success and then exits
   non-zero keeps its validated output instead of failing the export.
+  The empty-window scan, the all-nodata write and the final commit honour
+  `timeout_seconds`, and a timed-out helper's partial stderr and response stay
+  in `helper_invocations`.
 
 - **Coupled mapping with storage areas:** `RasFim.prepare_coupled_model()` and
   `RasFim.map_coupled_profiles()` accept mixed 1D/2D models with storage areas

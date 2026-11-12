@@ -1047,8 +1047,20 @@ def _run_helper(
             cwd=stage,
             env=_runtime_env(hecras_dir, wine_config),
         )
-    except subprocess.TimeoutExpired:
+    except subprocess.TimeoutExpired as exc:
         record["status"] = FAILURE_TIMEOUT
+        # Keep whatever the helper left before it hung: partial stderr and a
+        # response written before a stalled shutdown.
+        partial = exc.stderr
+        if isinstance(partial, bytes):
+            partial = partial.decode("utf-8", errors="replace")
+        if partial:
+            record["stderr"] = _retained_stderr(partial)
+        if response_path.is_file():
+            try:
+                record["response"] = json.loads(response_path.read_text(encoding="utf-8"))
+            except (OSError, ValueError):
+                pass
         raise
     exit_code = completed.returncode
     stderr = completed.stderr or ""
@@ -1251,7 +1263,15 @@ def _extents_intersect(bounds: dict[str, Any], extent: Sequence[float]) -> bool:
     )
 
 
-def _count_valid_cells(path: Path, extent: Sequence[float]) -> int:
+def _check_deadline(deadline: Optional[float], step: str) -> None:
+    """Raise ``TimeoutExpired`` once the export's monotonic ``deadline`` passes."""
+    if deadline is not None and time.monotonic() >= deadline:
+        raise subprocess.TimeoutExpired([step], 0)
+
+
+def _count_valid_cells(
+    path: Path, extent: Sequence[float], deadline: Optional[float] = None
+) -> int:
     """Count valid full-resolution cells of one raster inside ``extent``."""
     import numpy as np
     import rasterio
@@ -1273,6 +1293,7 @@ def _count_valid_cells(path: Path, extent: Sequence[float]) -> int:
         width = col1 - col0
         rows_per_read = max(1, _COVERAGE_SCAN_CELLS_PER_READ // width)
         for start in range(row0, row1, rows_per_read):
+            _check_deadline(deadline, "terrain-coverage-scan")
             height = min(rows_per_read, row1 - start)
             block = dataset.read(
                 1, window=Window(col0, start, width, height), masked=True
@@ -1286,12 +1307,17 @@ def _count_valid_cells(path: Path, extent: Sequence[float]) -> int:
 
 
 def check_extent_source_coverage(
-    sources: Sequence[dict[str, Any]], extent: Sequence[float]
+    sources: Sequence[dict[str, Any]],
+    extent: Sequence[float],
+    *,
+    deadline: Optional[float] = None,
 ) -> dict[str, Any]:
     """Scan registered terrain sources for valid cells inside ``extent``.
 
     Every source whose extent intersects the window is read at full
-    resolution until a valid (unmasked, finite) cell is found.
+    resolution until a valid (unmasked, finite) cell is found. With a
+    ``deadline`` (``time.monotonic()`` value), the scan raises
+    ``subprocess.TimeoutExpired`` once it passes.
 
     Returns:
         dict: ``status`` is ``"empty"`` (every intersecting source was read
@@ -1320,8 +1346,10 @@ def check_extent_source_coverage(
         if entry["intersects"]:
             try:
                 path = _normalize_host_path(str(source["filename"]))
-                entry["valid_cells"] = _count_valid_cells(path, extent)
+                entry["valid_cells"] = _count_valid_cells(path, extent, deadline)
                 found = found or entry["valid_cells"] > 0
+            except subprocess.TimeoutExpired:
+                raise
             except Exception as exc:
                 entry["error"] = f"{type(exc).__name__}: {exc}"
                 unreadable = True
@@ -1363,8 +1391,14 @@ def write_nodata_geotiff(
     rows: int,
     crs_wkt: str,
     nodata: float = EMPTY_EXTENT_NODATA_VALUE,
+    *,
+    deadline: Optional[float] = None,
 ) -> dict[str, Any]:
-    """Write and verify an all-nodata Float32 GeoTIFF on the export grid."""
+    """Write and verify an all-nodata Float32 GeoTIFF on the export grid.
+
+    With a ``deadline`` (``time.monotonic()`` value), the write raises
+    ``subprocess.TimeoutExpired`` once it passes.
+    """
     path = Path(path)
     import numpy as np
     import rasterio
@@ -1391,6 +1425,7 @@ def write_nodata_geotiff(
     with rasterio.Env(GDAL_PAM_ENABLED="NO"):
         with rasterio.open(path, "w", **profile) as dataset:
             for start in range(0, rows, rows_per_write):
+                _check_deadline(deadline, "terrain-nodata-write")
                 height = min(rows_per_write, rows - start)
                 dataset.write(
                     np.full((height, columns), nodata, dtype="float32"),
@@ -1739,7 +1774,7 @@ def export_rasmapper_terrain(
                 raise
             helper_response = exc.invocation.get("response")
             result.empty_extent_check = check_extent_source_coverage(
-                source_records, snapped
+                source_records, snapped, deadline=started + timeout
             )
             _resolve_empty_window(exc, result.empty_extent_check, empty_extent)
             # Confirmed empty and the caller opted in: replace RAS Mapper's
@@ -1754,6 +1789,7 @@ def export_rasmapper_terrain(
                 columns,
                 rows,
                 _rasmap_projection_wkt(rasmap_path),
+                deadline=started + timeout,
             )
             result.empty_extent = True
             result.messages.append(
@@ -1783,6 +1819,9 @@ def export_rasmapper_terrain(
                     f"exited with code {item['exit_code']}; its output passed "
                     "validation and was kept."
                 )
+        # Nothing is committed after the deadline (the empty-window path does
+        # its own scan and write after the helper returns).
+        _check_deadline(started + timeout, "terrain-export-commit")
         result.success = True
         result.elapsed_seconds = time.monotonic() - started
         payload = _receipt_payload(
