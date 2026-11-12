@@ -182,16 +182,107 @@ def _profile_block(dataset, time_index, start, stop, remaining, cache, chunk_byt
     return values[time_index - first]
 
 
+STAGED_CELLS_METHOD = "ras-commander-staged-cells/1"
+
+
+def _mesh_array(header_path, header, key, columns):
+    descriptor = header["arrays"][key]
+    rows = int(descriptor["rows"])
+    path = Path(header_path).parent / descriptor["path"]
+    if rows == 0:
+        return np.empty((0, columns), dtype="<i4")
+    return np.memmap(path, dtype="<i4", mode="r", shape=(rows, columns))
+
+
+def _gather_incidence(info, values, rows):
+    """Concatenate CSR rows ``rows`` of ``values`` (first column) in row order."""
+    starts = np.asarray(info[rows, 0], dtype=np.int64)
+    counts = np.asarray(info[rows, 1], dtype=np.int64)
+    if (counts < 0).any() or (starts < 0).any() or (starts + counts > len(values)).any():
+        raise ValueError("Invalid sloping incidence rows")
+    total = int(counts.sum())
+    if total == 0:
+        return np.empty(0, dtype=np.int64)
+    offsets = np.repeat(starts - np.cumsum(counts) + counts, counts)
+    return np.asarray(values[offsets + np.arange(total), 0], dtype=np.int64)
+
+
+def staged_cell_subsets(mesh_files, owner_cells):
+    """Per mesh, the ascending global cells whose WSE can reach an owner pixel.
+
+    Fast-Map's ``ras-commander-staged-cells/1`` closure: the endpoints of every
+    owner-cell face, every face incident to those vertices, and both cells of
+    each such face (ghost cells included). Fast-Map verifies the closure and
+    refuses a subset that misses a cell. A mesh without owner cells stages
+    cell 0 only, which rendering never reads. ``owner_cells`` holds
+    ``[mesh_index, cell_id]`` pairs as in the sloping request.
+    """
+    owners = np.asarray(owner_cells, dtype=np.int64).reshape(-1, 2)
+    subsets = []
+    for index, header_path in enumerate(mesh_files):
+        header = json.loads(Path(header_path).read_text(encoding="utf-8"))
+        if header.get("schema") != "ras-commander-sloping-mesh/1":
+            raise ValueError("Unsupported sloping mesh schema")
+        cells = np.unique(owners[owners[:, 0] == index, 1])
+        if cells.size == 0:
+            subsets.append(np.zeros(1, dtype="<u4"))
+            continue
+        cell_info = _mesh_array(header_path, header, "cell_info", 2)
+        if cells[0] < 0 or cells[-1] >= len(cell_info):
+            raise ValueError("Owner cell outside sloping mesh")
+        faces = _gather_incidence(cell_info, _mesh_array(header_path, header, "cell_faces", 2), cells)
+        face_vertices = _mesh_array(header_path, header, "face_vertices", 2)
+        vertices = np.unique(np.asarray(face_vertices[faces], dtype=np.int64))
+        ring = _gather_incidence(
+            _mesh_array(header_path, header, "vertex_info", 2),
+            _mesh_array(header_path, header, "vertex_faces", 2),
+            vertices,
+        )
+        face_cells = _mesh_array(header_path, header, "face_cells", 2)
+        closure = np.unique(np.concatenate([
+            cells, np.asarray(face_cells[np.unique(np.concatenate([faces, ring]))], dtype=np.int64).ravel(),
+        ]))
+        if closure[0] < 0 or closure[-1] >= len(cell_info) or closure[-1] >= 2**32:
+            raise ValueError("Sloping face cell outside mesh")
+        subsets.append(closure.astype("<u4"))
+        del cell_info, face_vertices, face_cells
+    return subsets
+
+
+def write_staged_cells(root, subsets):
+    """Write one ``<u4`` staged-cell file per mesh; returns their paths."""
+    paths = []
+    for index, cells in enumerate(subsets):
+        path = Path(root) / f"staged-cells-{index}.bin"
+        np.ascontiguousarray(cells, dtype="<u4").tofile(path)
+        paths.append(str(path))
+    return paths
+
+
 def _stage_profiles(
     hdf, root, meshes, max_values, selected, *, deduplicate=False, max_staged_bytes=None,
-    chunk_bytes=8 * 1024 * 1024,
+    chunk_bytes=8 * 1024 * 1024, cell_subsets=None,
 ):
+    """Stage float32 cell WSE per profile and mesh.
+
+    With ``cell_subsets`` (ascending global cells per mesh, as from
+    :func:`staged_cell_subsets`) each file holds only those cells' values in
+    that order. Every complete source row is still read and checked finite.
+    """
     from .. import HdfResultsMesh
     from ..fast_hdf import backend_scope
     from .RasFim import _file_identity
     import h5py
     if isinstance(chunk_bytes, bool) or not isinstance(chunk_bytes, int) or chunk_bytes < 4:
         raise ValueError("chunk_bytes must be an integer >= 4")
+    if cell_subsets is not None:
+        cell_subsets = [np.asarray(c, dtype=np.int64) for c in cell_subsets]
+        if len(cell_subsets) != len(meshes) or any(
+            c.ndim != 1 or c.size == 0 or c[0] < 0 or c[-1] >= m["cell_count"]
+            or (c.size > 1 and (np.diff(c) <= 0).any())
+            for c, m in zip(cell_subsets, meshes)
+        ):
+            raise ValueError("cell_subsets must be ascending in-range cells, one array per mesh")
     before = _file_identity(hdf)
 
     staged_bytes = 0
@@ -207,7 +298,9 @@ def _stage_profiles(
         values_files = []
         for i, mesh in enumerate(meshes):
             size = mesh["cell_count"]
-            if max_staged_bytes is not None and staged_bytes + size * 4 > max_staged_bytes:
+            subset = None if cell_subsets is None else cell_subsets[i]
+            stored = size if subset is None else len(subset)
+            if max_staged_bytes is not None and staged_bytes + stored * 4 > max_staged_bytes:
                 raise FimUnsupportedError("Prepared sloping inputs exceed max_prepared_mib")
             filename = f"values-{profile_index}-{i}.bin"
             destination = root / filename
@@ -250,6 +343,9 @@ def _stage_profiles(
                         array = np.asarray(values, dtype="<f4").reshape(-1)
                         if len(array) != stop - start or not np.isfinite(array).all():
                             raise ValueError(f"Invalid complete cell profile {name!r} for {mesh['mesh_name']!r}")
+                        if subset is not None:
+                            lo, hi = np.searchsorted(subset, [start, stop])
+                            array = array[subset[lo:hi] - start]
                         stream.write(memoryview(np.ascontiguousarray(array)).cast("B"))
                         del values, array
                 if _file_identity(hdf) != before:
@@ -259,7 +355,7 @@ def _stage_profiles(
                 partial.unlink(missing_ok=True)
                 raise
             values_files.append(filename)
-            staged_bytes += size * 4
+            staged_bytes += stored * 4
         cached[selector] = values_files
         units.append(dict(id=name, values_files=values_files))
     return units, len(profile_views), staged_bytes
