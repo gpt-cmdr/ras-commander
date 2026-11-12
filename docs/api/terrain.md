@@ -187,7 +187,7 @@ Ground lines are written as RAS Mapper saves them: `Type=Levee`, an empty `Syste
 
 ### Polygon and Ellipse Modification Methods
 
-- `add_modification_polygon(terrain_hdf_path, name, polygon_coords, elevation_method="boundary_from_terrain", control_points=None, ..., elevation=None)` - Add polygon modification: constant (`elevation`), vertex-Z (`shape_z`/`provided`, portable across 6.6 and 7.x) or terrain-sampled boundary
+- `add_modification_polygon(terrain_hdf_path, name, polygon_coords, elevation_method="boundary_from_terrain", control_points=None, ..., elevation=None, priority=None, perimeter_control_points=None)` - Add polygon modification: constant (`elevation`), vertex-Z (`shape_z`/`provided`, portable across 6.6 and 7.x), terrain-sampled boundary, or a boundary from `perimeter_control_points` (outside the ring, within `elev_pt_tolerance`; rendered identically by HEC-RAS 6.6, 6.7 Beta 4/5, 7.0, 7.0.1 and 7.0.2). `control_points` are interior mass points
 - `add_ellipse_modification(terrain_hdf_path, rasmap_path, name, ellipses, mode="set_value")` - Add ellipse/circle modifications (rotation in degrees)
 - `add_modification_layer(terrain_hdf_path, rasmap_path, layer)` - Write one layer in the `read_layers` form (ground line, constant polygon, ellipse) back to a terrain
 

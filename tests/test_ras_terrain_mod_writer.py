@@ -940,3 +940,63 @@ def test_writer_renames_an_existing_misnamed_group(tmp_path, caplog):
     groups = _modification_groups(rasmap)
     assert [group.get("Name") for group in groups] == ["Modifications"]
     assert [layer.get("Name") for layer in groups[0].findall("Layer")] == ["Levee", "Old"]
+
+
+def _perimeter_pond(tmp_path, monkeypatch, **kwargs):
+    terrain_hdf, rasmap = _write_minimal_terrain(tmp_path)
+    terrain_hdf.with_suffix(".tif").write_text("fake raster", encoding="utf-8")
+    monkeypatch.setitem(sys.modules, "rasterio", SimpleNamespace(open=lambda path: _FakeRaster()))
+    arguments = dict(
+        name="Perimeter Pond",
+        polygon_coords=[[0.0, 0.0], [100.0, 0.0], [100.0, 100.0], [0.0, 100.0]],
+        control_points=[(50.0, 50.0, 880.0)],
+        perimeter_control_points=[(-10.0, 50.0, 905.0), {"x": 50.0, "y": 115.0, "z": 912.0},
+                                  (110.0, -5.0, 908.0, "SE")],
+        elev_pt_tolerance=20.0,
+    )
+    arguments.update(kwargs)
+    RasTerrainModWriter.add_modification_polygon(terrain_hdf, **arguments)
+    return terrain_hdf
+
+
+def test_perimeter_control_points_are_written_after_interior_points(tmp_path, monkeypatch):
+    terrain_hdf = _perimeter_pond(tmp_path, monkeypatch)
+    with h5py.File(terrain_hdf, "r") as hdf:
+        mod = hdf["Modifications/Perimeter Pond"]
+        assert int(mod["Attributes"]["Generate Boundary Elevations"][0]) == 1
+        cp = mod["Control Points"]
+        np.testing.assert_array_equal(
+            cp["Points"][:], [[50.0, 50.0], [-10.0, 50.0], [50.0, 115.0], [110.0, -5.0]]
+        )
+        assert cp["Attributes"]["Elevation"].tolist() == [880.0, 905.0, 912.0, 908.0]
+        assert _decode_array(cp["Attributes"]["Name"]) == [
+            "Control Point 1", "Perimeter Point 1", "Perimeter Point 2", "SE",
+        ]
+        # The writer's chunked layout, which RAS Mapper reads (a contiguous
+        # Control Points group is ignored by RAS Mapper).
+        assert cp["Points"].chunks is not None
+    # The native reader stages it under every rule, including 6.6.
+    from ras_commander.fim import _terrain_mods
+
+    for rule in ("6.6", "6.7", "7.0.1"):
+        layer = _terrain_mods.read_layers(terrain_hdf, hecras_version=rule)[0]
+        assert len(layer["control_points"]) == 4
+
+
+@pytest.mark.parametrize("kwargs, message", [
+    ({"perimeter_control_points": [(50.0, 50.0, 900.0)]}, "outside the polygon exterior"),
+    ({"perimeter_control_points": [(100.0, 50.0, 900.0)]}, "outside the polygon exterior"),
+    ({"perimeter_control_points": [(-21.0, 50.0, 900.0)]}, "within elev_pt_tolerance"),
+    ({"perimeter_control_points": []}, "is empty"),
+    ({"perimeter_control_points": [(-5.0, 50.0, 900.0)], "elevation": 900.0},
+     "boundary_from_terrain"),
+    ({"perimeter_control_points": [(-5.0, 50.0, 900.0)],
+      "polygon_coords": [[[0.0, 0.0], [100.0, 0.0], [100.0, 100.0], [0.0, 100.0]],
+                         [[20.0, 20.0], [40.0, 20.0], [40.0, 40.0], [20.0, 40.0]]]},
+     "single-ring"),
+])
+def test_perimeter_control_points_are_validated(tmp_path, monkeypatch, kwargs, message):
+    with pytest.raises(ValueError, match=message):
+        _perimeter_pond(tmp_path, monkeypatch, **kwargs)
+    with h5py.File(tmp_path / "Terrain" / "Terrain.Clone.hdf", "r") as hdf:
+        assert "Modifications" not in hdf or "Perimeter Pond" not in hdf["Modifications"]

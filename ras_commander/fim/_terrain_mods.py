@@ -10,7 +10,7 @@ reader where the refusal is cheap to decide here. A refusal raises
 :class:`FimUnsupportedError` with the reason, so the caller falls back to the
 RAS Mapper export instead of an approximation.
 
-Load rules followed (RasMapperLib 6.6 / 7.0 / 7.0.1):
+Load rules followed (RasMapperLib 6.6, 6.7 Beta 4/5, 7.0, 7.0.1 and 7.0.2):
 
 * The layer class comes only from the group attribute ``Type``. ``Levee``
   (ground line), ``Polygon`` and ``Circle`` (ellipse) are staged. RAS Mapper
@@ -35,7 +35,7 @@ Load rules followed (RasMapperLib 6.6 / 7.0 / 7.0.1):
   polygons.
 * Polygons carry ``Generate Boundary Elevations``, ``Use ShapeFile Z
   Elevations``, ``Elev Pt Tolerance`` and the stored perimeter profile
-  (``Profile Info`` + ``Profile Values``, HEC-RAS 7.x). Vertex Z is passed
+  (``Profile Info`` + ``Profile Values``, HEC-RAS 6.7 and 7.x). Vertex Z is passed
   when ``Polygon Points`` names a ``Z`` column.
 * Features whose ``Elevation Value`` is NaN are skipped by RAS Mapper
   (polygons and ellipses); they are dropped here.
@@ -55,16 +55,22 @@ polygon features with more than one ring (holes in any winding, separate or
 overlapping parts; reason code ``multi_ring_polygon`` on the error's
 ``reason``), because RAS Mapper joins and triangulates such rings in a way
 that cannot be reproduced as a rule; shape-Z polygons without boundary
-elevations (vertex Z storage is not export-measured), boundary elevations sampled from the terrain when the
-layer has no control points and the polygon no stored profile, named ground
+elevations (vertex Z storage is not export-measured), boundary elevations
+sampled from the terrain (a polygon with boundary elevations, no control point
+outside its ring within Elev Pt Tolerance and no stored profile), named ground
 lines in a layer with control points or with a NaN template, a NaN Top Width
-with a finite Max Reach, and, for ``hecras_version="6.6"``, named ground lines
-and boundary elevations without control points.
+with a finite Max Reach, for the ``"6.6"`` and ``"6.7"`` rules named ground
+lines, and for the ``"6.6"`` rule boundary elevations without a perimeter
+control point (6.6 samples the terrain even when a profile is stored).
 
-``hecras_version`` selects the HEC-RAS version whose export is reproduced:
-``"7.0.1"`` or ``"6.6"`` (the engine skips ground lines whose Max Reach is not
-wider than one cell under 6.6). :func:`hecras_version_for` maps a project's
-version to one of these; versions other than 6.6 follow 7.0.1.
+``hecras_version`` is the engine rule that reproduces a HEC-RAS release's
+export: ``"7.0.1"`` (HEC-RAS 7.0, 7.0.1 and 7.0.2), ``"6.6"`` (6.6; the engine
+skips ground lines whose Max Reach is not wider than one cell) or ``"6.7"``
+(6.7 betas, engines that advertise it: the 6.6 rule with stored-profile
+boundary elevations as 7.0.1). :func:`hecras_version_for` maps a release to its
+rule, from the engine's advertised ``hecras_versions`` table when there is one,
+else from :data:`HECRAS_RELEASE_RULES`. Any other release (before 6.6, after
+7.0.2) is refused with reason :data:`UNQUALIFIED_HECRAS_VERSION`.
 """
 
 from __future__ import annotations
@@ -90,8 +96,19 @@ RAS_APPLIED_UNSTAGED_TYPES = (
 LENGTH_UNITS = ("feet", "meters")
 #: Refusal reason code for a polygon feature with more than one ring.
 MULTI_RING_POLYGON = "multi_ring_polygon"
-#: HEC-RAS versions whose terrain export the engine reproduces.
-HECRAS_VERSIONS = ("7.0.1", "6.6")
+#: Engine rules (request ``hecras_version`` values) the reader stages for.
+HECRAS_VERSIONS = ("7.0.1", "6.6", "6.7")
+#: HEC-RAS releases qualified for the native route, and the engine rule each
+#: takes with an engine that advertises no ``hecras_versions`` table
+#: (Fast-Map 0.18.0, which has the 7.0.1 and 6.6 rules only). Measured in the
+#: per-release qualification of 2026-11-12: 7.0 and 7.0.2 render every form
+#: exactly as 7.0.1; the 6.7 betas exactly as 6.6 on every form the 6.6 rule
+#: accepts; 6.5 and earlier match neither rule.
+HECRAS_RELEASE_RULES = {
+    "6.6": "6.6", "6.7": "6.6", "7.0": "7.0.1", "7.0.1": "7.0.1", "7.0.2": "7.0.1",
+}
+#: Refusal reason code for a HEC-RAS release without a qualified engine rule.
+UNQUALIFIED_HECRAS_VERSION = "unqualified_hecras_version"
 
 
 def _text(value) -> str:
@@ -242,8 +259,8 @@ def _ground_line_layer(name, group, priority, length_units, hecras_version) -> d
                 reason = "in a layer with control points"
             elif any(value is None for value in template.values()):
                 reason = "with a NaN template value"
-            elif hecras_version == "6.6":
-                reason = "under HEC-RAS 6.6 (its system path differs)"
+            elif hecras_version in ("6.6", "6.7"):
+                reason = f"under HEC-RAS {hecras_version} (its system path differs)"
             if reason:
                 raise FimUnsupportedError(
                     f"{what}: named ground line (System Name {system_name!r}) {reason} is not qualified"
@@ -276,6 +293,57 @@ def _z_column(dataset) -> Optional[int]:
         if len(names) == 3 and names[2] == "Z":
             return 2
     return None
+
+
+def _inside_ring(ring, x, y) -> bool:
+    """Even-odd point-in-ring test, as the engine's ``point_in_rings``."""
+    inside = False
+    n = len(ring)
+    j = n - 1
+    for i in range(n):
+        xi, yi = ring[i]
+        xj, yj = ring[j]
+        if (yi > y) != (yj > y) and x < (xj - xi) * (y - yi) / (yj - yi) + xi:
+            inside = not inside
+        j = i
+    return inside
+
+
+def _ring_distance(ring, x, y) -> float:
+    """Shortest distance from ``(x, y)`` to the closed ring's segments."""
+    pts = np.asarray(ring, dtype=float)
+    if not np.array_equal(pts[0], pts[-1]):
+        pts = np.vstack([pts, pts[:1]])
+    a, b = pts[:-1], pts[1:]
+    d = b - a
+    q = np.array([x, y], dtype=float)
+    length2 = (d * d).sum(axis=1)
+    safe = np.where(length2 > 0, length2, 1.0)
+    t = np.where(length2 > 0, ((q - a) * d).sum(axis=1) / safe, 0.0)
+    t = np.clip(t, 0.0, 1.0)
+    nearest = a + d * t[:, None]
+    return float(np.sqrt(((nearest - q) ** 2).sum(axis=1)).min())
+
+
+def _perimeter_control_points(ring, control_points, shape_z, tolerance) -> int:
+    """Control points that set a polygon's boundary elevations in the engine.
+
+    A point with an elevation, outside the ring (inside points are mass
+    points) and within the feature's Elev Pt Tolerance (binary32) of the
+    perimeter; none when the polygon uses shapefile Z.
+    """
+    if shape_z or not control_points:
+        return 0
+    tol = float(np.float32(tolerance))
+    if np.isnan(tol):
+        return 0
+    count = 0
+    for c in control_points:
+        if c["elevation"] is None or _inside_ring(ring, c["x"], c["y"]):
+            continue
+        if _ring_distance(ring, c["x"], c["y"]) <= tol:
+            count += 1
+    return count
 
 
 def _polygon_layer(name, group, priority, length_units, hecras_version) -> dict:
@@ -323,15 +391,20 @@ def _polygon_layer(name, group, priority, length_units, hecras_version) -> dict:
             rings.append(ring.tolist())
             if z_column is not None:
                 vertex_z.extend(block[:, z_column].tolist())
-        if generate and not control_points:
+        if generate and part_count == 1 and not _perimeter_control_points(
+                rings[0], control_points, shape_z, _float(row, "Elev Pt Tolerance")):
+            # As the engine decides: only a control point outside the ring and
+            # within Elev Pt Tolerance sets a boundary elevation; one inside the
+            # ring is a mass point.
             if hecras_version == "6.6":
                 raise FimUnsupportedError(
-                    f"{what}: HEC-RAS 6.6 samples boundary elevations from the terrain (not qualified)"
+                    f"{what}: HEC-RAS 6.6 samples boundary elevations from the terrain when no "
+                    "control point lies outside the ring within Elev Pt Tolerance (not qualified)"
                 )
             if not profiles[i]:
                 raise FimUnsupportedError(
                     f"{what}: boundary elevations sampled from the terrain (no stored profile, "
-                    "no control points) are not qualified"
+                    "no control point outside the ring within Elev Pt Tolerance) are not qualified"
                 )
         feature = {
             "elevation_type": et,
@@ -446,28 +519,91 @@ def resolve_length_units(terrain_hdf, rasmap_path=None, ras_object=None) -> tupl
     return "feet", "default"
 
 
-def hecras_version_for(version) -> str:
-    """The engine ``hecras_version`` that reproduces a HEC-RAS version's export.
+def hecras_release(version) -> Optional[str]:
+    """A HEC-RAS release label as ``"major.minor[.patch]"``, or ``None``.
 
-    ``6.6`` (any 6.6 patch) maps to ``"6.6"``. Every other version maps to
-    ``"7.0.1"``: the engine is qualified against HEC-RAS 7.0.1 and 6.6 exports
-    only, and RasMapperLib 7.0 loads and applies modifications as 7.0.1 does.
-    Earlier 6.x releases are not measured and follow 7.0.1.
+    Reads release labels (``"6.6"``, ``"7.0.1"``), plan-file ``Program
+    Version`` values (``"6.60"``, ``"7.00"``, ``"7.02"``), the dotted
+    product form (``"7.00.0002"``), install folder names (``"6.7 Beta 5"``,
+    a ``Ras.exe`` path) and tuples (``(6, 6, 0)``). A zero patch is dropped:
+    ``"7.0.0"`` reads as ``"7.0"``.
+    """
+    if version is None:
+        return None
+    if isinstance(version, (tuple, list)):
+        values = [int(v) for v in version]
+        if len(values) < 2:
+            return None
+        major, minor, patch = values[0], values[1], values[2] if len(values) > 2 else 0
+    else:
+        text = str(version).strip()
+        if text.lower().endswith(".exe"):
+            text = re.split(r"[\\/]", text)[-2] if re.search(r"[\\/]", text) else ""
+        match = re.search(r"(?<![\d.])(\d+)\.(\d+)(?:\.(\d+))?(?![\d.])", text)
+        if match is None:
+            return None
+        major, minor_text, patch_text = int(match.group(1)), match.group(2), match.group(3)
+        if patch_text is None and len(minor_text) == 2:
+            # Plan files: 6.60 = 6.6, 7.02 = 7.0.2.
+            minor, patch = int(minor_text[0]), int(minor_text[1])
+        elif patch_text is None and len(minor_text) > 2:
+            return None
+        else:
+            minor, patch = int(minor_text), int(patch_text or 0)
+    return f"{major}.{minor}" if patch == 0 else f"{major}.{minor}.{patch}"
+
+
+def release_rules(advertised=None) -> dict:
+    """``{release: engine rule}`` for every HEC-RAS release with a native rule.
+
+    ``advertised`` is the engine's ``effective_terrain.hecras_versions``
+    record (``{label: rule}``). When it maps any release to a rule this
+    reader stages, it replaces :data:`HECRAS_RELEASE_RULES`, so a newer
+    engine's rules (for example ``"6.7"``) are used and an engine without the
+    table keeps the Fast-Map 0.18.0 mapping.
+    """
+    table = {}
+    if isinstance(advertised, dict):
+        for label, rule in advertised.items():
+            release = hecras_release(label)
+            if release is not None and rule in HECRAS_VERSIONS:
+                table[release] = rule
+    return table or dict(HECRAS_RELEASE_RULES)
+
+
+def _release_key(release: str) -> tuple:
+    return tuple(int(v) for v in release.split("."))
+
+
+def hecras_version_for(version, rules=None) -> str:
+    """The engine ``hecras_version`` rule that reproduces a HEC-RAS release's export.
+
+    HEC-RAS 7.0, 7.0.1 and 7.0.2 map to ``"7.0.1"``; 6.6 to ``"6.6"``; the
+    6.7 betas to ``"6.7"`` when the engine advertises that rule, else
+    ``"6.6"`` (see :func:`release_rules`). ``None`` gives ``"7.0.1"``.
 
     Args:
-        version: A version label such as ``"6.6"``, ``"6.60"``, ``"7.0.1"``,
-            ``"7.00"`` or a tuple ``(6, 6, 0)``; ``None`` gives ``"7.0.1"``.
+        version: A release label such as ``"6.6"``, ``"6.60"``, ``"6.7 Beta
+            5"``, ``"7.0.1"``, ``"7.00"`` or a tuple ``(6, 6, 0)``.
+        rules: Optional engine ``effective_terrain.hecras_versions`` record.
+
+    Raises:
+        FimUnsupportedError: Any other release (before 6.6, after 7.0.2, or
+            unreadable), with ``reason`` :data:`UNQUALIFIED_HECRAS_VERSION`;
+            such terrains take the RAS Mapper export.
     """
     if version is None:
         return "7.0.1"
-    if isinstance(version, (tuple, list)):
-        major, minor = (int(v) for v in tuple(version)[:2])
-    else:
-        match = re.search(r"(\d+)\.(\d)", str(version))
-        if match is None:
-            return "7.0.1"
-        major, minor = int(match.group(1)), int(match.group(2))
-    return "6.6" if (major, minor) == (6, 6) else "7.0.1"
+    table = release_rules(rules)
+    release = hecras_release(version)
+    if release in table:
+        return table[release]
+    raise FimUnsupportedError(
+        f"HEC-RAS {version!r} has no qualified native effective-terrain rule "
+        f"(qualified releases: {', '.join(sorted(table, key=_release_key))}) "
+        f"[reason: {UNQUALIFIED_HECRAS_VERSION}]; use the RAS Mapper export",
+        reason=UNQUALIFIED_HECRAS_VERSION,
+    )
 
 
 def _program_versions(folder: Path) -> list:
@@ -485,25 +621,37 @@ def _program_versions(folder: Path) -> list:
     return found
 
 
-def project_hecras_version(terrain_hdf, rasmap_path=None, ras_object=None) -> tuple:
-    """The HEC-RAS version whose export a terrain's modifications follow.
+def project_hecras_version(terrain_hdf, rasmap_path=None, ras_object=None, rules=None) -> tuple:
+    """The engine rule for the HEC-RAS release a terrain's modifications follow.
 
     Resolution: the initialized ``ras_object``'s HEC-RAS version (or its
     ``Ras.exe`` folder), else the newest ``Program Version`` of the plan and
     geometry files beside ``rasmap_path`` (or in the terrain's parent project
-    folder), else 7.0.1.
+    folder), else 7.0.1 (basis ``"default"``, only when no version is found).
+    A resolved release is mapped by :func:`hecras_version_for` with ``rules``.
 
     Returns:
         tuple: ``(hecras_version, basis)``, ``hecras_version`` one of
         :data:`HECRAS_VERSIONS` and ``basis`` a short description.
+
+    Raises:
+        FimUnsupportedError: The resolved release has no qualified rule
+            (``reason`` :data:`UNQUALIFIED_HECRAS_VERSION`); the message
+            names the basis.
     """
+    def mapped(label, basis):
+        try:
+            return hecras_version_for(label, rules), basis
+        except FimUnsupportedError as exc:
+            raise FimUnsupportedError(f"{exc} (from {basis})", reason=exc.reason) from exc
+
     if ras_object is not None:
         for attr in ("ras_version", "ras_exe_path"):
             value = getattr(ras_object, attr, None)
             if value:
                 label = Path(str(value)).parent.name if attr == "ras_exe_path" else str(value)
                 if re.search(r"\d+\.\d", label):
-                    return hecras_version_for(label), f"ras_object.{attr} {label}"
+                    return mapped(label, f"ras_object.{attr} {label}")
     folders = []
     if rasmap_path is not None:
         folders.append(Path(rasmap_path).parent)
@@ -517,7 +665,7 @@ def project_hecras_version(terrain_hdf, rasmap_path=None, ras_object=None) -> tu
                 parsed.append(((int(match.group(1)), int(match.group(2))), label))
         if parsed:
             label = max(parsed)[1]
-            return hecras_version_for(label), f"Program Version {label} in {folder.name}"
+            return mapped(label, f"Program Version {label} in {folder.name}")
     return "7.0.1", "default"
 
 
@@ -530,9 +678,9 @@ def read_layers(terrain_hdf, length_units: Optional[str] = "feet",
         length_units: RAS Mapper project unit system, ``"feet"`` or
             ``"meters"`` (see :func:`project_length_units`); set on every
             ground-line and polygon layer.
-        hecras_version: ``"7.0.1"`` or ``"6.6"`` (see
-            :func:`hecras_version_for`); forms the engine refuses for that
-            version are refused here.
+        hecras_version: An engine rule from :data:`HECRAS_VERSIONS` (see
+            :func:`hecras_version_for`); forms the engine refuses under that
+            rule are refused here.
 
     Raises:
         FimUnsupportedError: a layer or feature is not a qualified form.

@@ -1416,14 +1416,18 @@ class RasFim:
                 the engine request carries the CRS as an EPSG code and labels
                 the output with it, so a CRS without one (for example
                 ``ESRI:102630``) is refused; use the RAS Mapper export.
-            hecras_version: HEC-RAS version whose export the modifications
-                reproduce (for example ``"6.6"`` or ``"7.0.1"``). ``None``
-                resolves the project's version: ``ras_object``'s HEC-RAS
-                version, else the newest ``Program Version`` of the plan and
-                geometry files beside ``rasmap_path`` or the terrain's project
-                folder, else 7.0.1. HEC-RAS 6.6 maps to the engine's 6.6
-                rules; every other version follows 7.0.1 (7.0 applies
-                modifications as 7.0.1 does; earlier 6.x is not measured).
+            hecras_version: HEC-RAS release whose export the modifications
+                reproduce (for example ``"6.6"``, ``"6.7 Beta 5"`` or
+                ``"7.0.2"``). ``None`` resolves the project's version:
+                ``ras_object``'s HEC-RAS version, else the newest ``Program
+                Version`` of the plan and geometry files beside
+                ``rasmap_path`` or the terrain's project folder, else 7.0.1
+                when no version is found. The release maps to an engine rule
+                through the engine's advertised ``hecras_versions`` table
+                (Fast-Map 0.18.0 has none: 6.6 and 6.7 take the 6.6 rule;
+                7.0, 7.0.1 and 7.0.2 take 7.0.1). A modified terrain from any
+                other release (6.5 and earlier, after 7.0.2) is refused with
+                ``reason`` ``"unqualified_hecras_version"``.
             ras_object: Optional initialized RAS project whose HEC-RAS
                 version selects ``hecras_version``.
 
@@ -1445,12 +1449,12 @@ class RasFim:
         Mapper's ``rasterize_modifications=True`` export does, layers in
         descending ``Priority`` (Priority 0 last). Ground-line profiles are
         densified in the project's unit system (``SI Units`` in the ``.prj``
-        beside ``rasmap_path`` means meters). Qualified against HEC-RAS 7.0.1
-        and 6.6 exports in ras-commander-fast-map. The engine refuses the
+        beside ``rasmap_path`` means meters). Qualified against HEC-RAS 6.6,
+        6.7 (Beta 4 and 5), 7.0, 7.0.1 and 7.0.2 exports. The engine refuses the
         remaining forms (boundary elevations sampled from the terrain,
         shape-Z polygons, polygons with more than one ring (holes or several
         parts; refused before the engine runs, ``reason`` ``multi_ring_polygon``), named ground lines
-        with control points or a NaN template, named ground lines under 6.6,
+        with control points or a NaN template, named ground lines under 6.6 or 6.7,
         other RAS layer types), so the caller uses the RAS Mapper export. An
         engine advertising only ``/1`` refuses every modified terrain. Layer types RAS Mapper ignores (for example
         ``Type=Channel`` from older ras-commander writers) are skipped, and
@@ -1480,6 +1484,19 @@ class RasFim:
     TERRAIN_MODIFICATIONS_SCHEMA = "ras-commander-terrain-modifications/1"
 
     @staticmethod
+    def _engine_hecras_versions(engine_path: Optional[PathLike] = None) -> Optional[Dict[str, str]]:
+        """The engine's advertised ``effective_terrain.hecras_versions``, or None."""
+        from . import _effective_terrain, _engine
+        from .errors import FimError
+
+        try:
+            record = _effective_terrain._record(_engine.find_engine(engine_path))
+        except (FimError, OSError, ValueError):
+            return None
+        table = (record or {}).get("hecras_versions")
+        return table if isinstance(table, dict) else None
+
+    @staticmethod
     @log_call
     def read_terrain_modifications(
         terrain_hdf: PathLike, *,
@@ -1488,6 +1505,7 @@ class RasFim:
         hecras_version: Optional[Any] = None,
         length_units: Optional[str] = None,
         strict: bool = False,
+        engine_path: Optional[PathLike] = None,
     ) -> Dict[str, Any]:
         """Read a terrain's modification layers as ``rasmapper-effective-terrain/2`` stages them.
 
@@ -1499,8 +1517,8 @@ class RasFim:
         export. The layers are the same objects the request carries; this
         method does not change them.
 
-        The reader follows RAS Mapper's load rules for HEC-RAS 6.6, 7.0 and
-        7.0.1. It stages ground lines (HDF ``Type=Levee``, subtypes ``Levee``
+        The reader follows RAS Mapper's load rules for HEC-RAS 6.6, 6.7
+        (Beta 4 and 5), 7.0, 7.0.1 and 7.0.2. It stages ground lines (HDF ``Type=Levee``, subtypes ``Levee``
         and ``Channel``), polygons (``Type=Polygon``) and ellipses
         (``Type=Circle``). Layer types RAS Mapper ignores (for example
         ``Type=Channel`` from older ras-commander writers) and layers without
@@ -1525,14 +1543,18 @@ class RasFim:
                 checked for the ``warnings`` field.
             ras_object: Optional initialized RAS project. Its HEC-RAS version
                 and project file take precedence over ``rasmap_path``.
-            hecras_version: HEC-RAS version whose export the layers reproduce,
-                for example ``"6.6"``, ``"6.60"``, ``"7.0.1"`` or ``(6, 6, 0)``.
-                Any 6.6 release maps to the engine's ``"6.6"`` rules; every
-                other version maps to ``"7.0.1"``. ``None`` resolves the
+            hecras_version: HEC-RAS release whose export the layers reproduce,
+                for example ``"6.6"``, ``"6.60"``, ``"6.7 Beta 5"``,
+                ``"7.0.2"`` or ``(6, 6, 0)``. HEC-RAS 7.0, 7.0.1 and 7.0.2 map
+                to the engine's ``"7.0.1"`` rule, 6.6 to ``"6.6"`` and the 6.7
+                betas to ``"6.7"`` (engines that advertise it) or ``"6.6"``
+                (Fast-Map 0.18.0). Any other release (6.5 and earlier, later
+                than 7.0.2) is refused with ``refusal_reason``
+                ``"unqualified_hecras_version"``. ``None`` resolves the
                 project's version: ``ras_object``'s HEC-RAS version, else the
                 newest ``Program Version`` of the plan and geometry files
                 beside ``rasmap_path`` or in the terrain's project folder,
-                else 7.0.1.
+                else 7.0.1 when no version is found at all.
             length_units: RAS Mapper unit system, ``"feet"`` or ``"meters"``.
                 ``None`` reads it from the project file (``SI Units`` means
                 meters; feet when no project file states units), as
@@ -1542,6 +1564,12 @@ class RasFim:
                 has no such argument, still uses the project's units.
             strict: Raise :class:`FimUnsupportedError` for a refusal instead of
                 returning a ``"refused"`` record.
+            engine_path: Optional engine executable whose advertised
+                ``hecras_versions`` table maps the release to a rule, as
+                :meth:`build_effective_terrain` does. Otherwise the engine is
+                found as there (environment, PATH, installed wheel); without
+                one, or with an engine that advertises no table, the Fast-Map
+                0.18.0 mapping applies.
 
         Returns:
             dict: A ``ras-commander-terrain-modifications/1`` record with the
@@ -1572,11 +1600,14 @@ class RasFim:
         - ``refusal_reason`` (str or None): The stable reason code of the
           refusal, copied from the ``reason`` attribute of the reader's
           :class:`FimUnsupportedError` (for example
-          ``"multi_ring_polygon"``); ``None`` when the refusal has no code
+          ``"multi_ring_polygon"`` or ``"unqualified_hecras_version"``);
+          ``None`` when the refusal has no code
           or there is no refusal. Match on this code rather than on the
           ``refusal`` text.
-        - ``hecras_version`` (str or None): ``"7.0.1"`` or ``"6.6"``;
-          ``None`` only when the version could not be resolved.
+        - ``hecras_version`` (str or None): The engine rule, ``"7.0.1"``,
+          ``"6.6"`` or ``"6.7"``; ``None`` when the version could not be
+          resolved or has no qualified rule (``refusal_reason``
+          ``"unqualified_hecras_version"``).
         - ``hecras_version_basis`` (str or None): ``"argument"``,
           ``"ras_object.ras_version <label>"``,
           ``"ras_object.ras_exe_path <folder>"``,
@@ -1636,13 +1667,16 @@ class RasFim:
         shared ``Priority``; an unknown ground-line subtype or an unqualified
         elevation type; ground lines with no stored profile and no control
         points; a NaN ``Top Width`` with a finite ``Max Reach``; named ground
-        lines with control points, a NaN template or under HEC-RAS 6.6;
+        lines with control points, a NaN template or under HEC-RAS 6.6 or 6.7;
         multi-part ground lines; polygon features with more than one ring
         (holes or separate/overlapping parts), refused up front with
         ``reason="multi_ring_polygon"`` because RAS Mapper's joining and
         triangulation of such rings is not reproducible as a rule;
-        polygon boundary elevations sampled from the terrain (and any
-        boundary elevations without control points under 6.6); shape-Z
+        polygon boundary elevations sampled from the terrain (no control
+        point outside the ring within Elev Pt Tolerance and no stored
+        profile; under 6.6 any boundary elevations without such a point); a
+        HEC-RAS release without a qualified rule
+        (``"unqualified_hecras_version"``); shape-Z
         polygons without boundary elevations; invalid geometry or control
         points; and project files in the folder that state different units
         when there are layers to stage.
@@ -1678,11 +1712,12 @@ class RasFim:
             "warnings": _terrain_scope.rasmap_modification_warnings(terrain_path, rasmap_path),
         }
         try:
+            rules = RasFim._engine_hecras_versions(engine_path)
             if hecras_version is not None:
-                version, basis = _terrain_mods.hecras_version_for(hecras_version), "argument"
+                version, basis = _terrain_mods.hecras_version_for(hecras_version, rules), "argument"
             else:
                 version, basis = _terrain_mods.project_hecras_version(
-                    terrain_path, rasmap_path, ras_object)
+                    terrain_path, rasmap_path, ras_object, rules)
             record.update(hecras_version=version, hecras_version_basis=basis)
             if length_units is not None:
                 units, units_basis = length_units, "argument"

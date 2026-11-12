@@ -189,8 +189,19 @@ class RasTerrain:
             is forward-open for its future official binary, with the helper's
             exact managed-contract check retained as the runtime safety gate.
             HEC-RAS 7.0.2 is qualified on Windows for bounded two-source export;
-            its changed spatial-index overload is selected at runtime. Vector
-            modifications and Wine have not been qualified on 7.0.2.
+            its changed spatial-index overload is selected at runtime. Its
+            vector-modification exports were pixel-identical to 7.0.1's for
+            every form in the 2026-11-12 per-release qualification (bounded
+            and whole-terrain); Wine has not been qualified on 7.0.2.
+            The 6.7 betas and 7.0.0 stay refused by this export even though
+            that qualification found their modification rendering identical
+            to 6.6 (betas, on every form 6.6 renders) and 7.0.1 (7.0.0, which
+            did not show its documented defect on the one minimum-Y window
+            tried): prerelease builds are not production runtimes, and one
+            negative probe does not clear an official HEC known defect.
+            Projects on those releases can still take the native effective
+            terrain (``RasFim.build_effective_terrain``), whose rules were
+            qualified against their exports.
             Windows-drive and UNC project/input paths are supported, but direct
             output to a UNC share is not qualified because the task-local GDAL
             junction may not be staged on a remote volume; use a local output
