@@ -9,6 +9,30 @@ alone does not identify a development checkout.
 
 ### Unreleased
 
+### 0.120.0 — 2026-11-12
+
+- **Mapping engine dependency:** mapping extras (`fim`, `fast-map`, `full`
+  and `all`) select `ras-commander-fast-map>=0.19.0,<0.20` (was
+  `>=0.18.0,<0.19`). As before, the extras install the engine only on
+  Windows x64 and Linux x86_64. Fast-Map 0.19.0 keeps every earlier JSON
+  request unchanged and adds staged cell subsets (capability `staged_cells`,
+  `ras-commander-staged-cells/1`).
+
+- **Staged cell subsets (opt-in):** `_sloping.staged_cell_subsets` returns, for
+  each mesh, the ascending global cells whose WSE can reach an owner cell's
+  pixels. That set is Fast-Map's stencil closure: owner face endpoints, every
+  face at those vertices, and both cells of each face, ghost cells included.
+  `_sloping.write_staged_cells` writes them as the request's
+  `staged_cells_files`. `_stage_profiles(..., cell_subsets=...)` then stages
+  only those cells' WSE, and the staged-byte budget counts the subset. Every
+  complete source row is still read and checked finite.
+  `staged_cells_supported(capabilities, method)` reports whether the
+  installed engine advertises the capability. Fast-Map refuses a subset that
+  misses a closure cell, so Depth and WSE stay bit-identical to the complete
+  mesh. Velocity, shear, storage areas, terrain scope, a stored grid,
+  `reduce_max` and derived products, and ownership export do not take
+  subsets. Default staging is unchanged (#842).
+
 - **Terrain export failure diagnostics:** `RasTerrain.export_rasmapper_terrain`
   now classifies failures in `TerrainExportResult.failure_kind`, including
   `out_of_memory` for a .NET `System.OutOfMemoryException` and `empty_extent`
