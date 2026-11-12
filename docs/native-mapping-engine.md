@@ -972,13 +972,31 @@ receipt["method_id"], receipt["hecras_version"], receipt["modification_layers"]
   `ras_object`, else from the newest `Program Version` of the project's plan
   and geometry files, else 7.0.1.
 - With `rasmap_path`, RAS Mapper applies the HDF modifications only when the
-  terrain layer has an `ElevationModificationGroup` element; without one the
-  terrain is treated as unmodified.
+  terrain layer has an `ElevationModificationGroup` named exactly
+  `Modifications`; without one, or with the group under another name (for
+  example `Hydroconnectors`), the terrain is treated as unmodified. The
+  receipt's `rasmap_warnings` records why (`modification_group_misnamed` or
+  `modification_group_missing`); rename the group to `Modifications` to apply
+  the layers.
+- The source CRS needs an EPSG code. The engine request carries the CRS as an
+  EPSG code and the engine writes the output GeoTIFF's CRS from it.
+  `terrain_crs_fnv1a64` only covers a CRS that rasterio identifies by EPSG
+  but the engine does not; it cannot replace the code. A CRS that PROJ
+  identifies only by another authority, such as `ESRI:102630` (NAD83 /
+  Alabama West, US feet), raises `FimUnsupportedError`; use the RAS Mapper
+  export for such terrains.
 - Forms the engine does not reproduce raise `FimUnsupportedError`: boundary
-  elevations sampled from the terrain, shape-Z polygons, multi-part polygons
-  that need a TIN, named ground lines with control points or a NaN template,
+  elevations sampled from the terrain, shape-Z polygons, polygons with more
+  than one ring, named ground lines with control points or a NaN template,
   named ground lines under 6.6, and other RAS layer types. Use the RAS Mapper
   export for those terrains.
+- A polygon feature with more than one ring (a hole in either winding, or
+  separate or overlapping parts) is refused while the layers are read, before
+  the engine runs. RAS Mapper joins and triangulates such rings in a way that
+  cannot be reproduced as a rule. The error's `reason` is
+  `multi_ring_polygon`, and the message carries `[reason: multi_ring_polygon]`,
+  so callers can route the terrain to the RAS Mapper export without calling
+  the engine. Single-ring polygons are unaffected.
 
 ## Sloping velocity
 

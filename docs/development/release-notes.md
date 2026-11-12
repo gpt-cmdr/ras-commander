@@ -9,6 +9,34 @@ alone does not identify a development checkout.
 
 ### Unreleased
 
+- **Terrain-modification group name:** HEC-RAS 6.6 and 7.0.1 RAS Mapper
+  apply a terrain's modifications only when the `.rasmap` group holding them
+  is named exactly `Modifications`; under any other name the export applies
+  none of them, silently. `RasTerrainModWriter` now always registers layers in
+  `Modifications`: `group_name` accepts only that name and raises
+  `ValueError` otherwise (before anything is written), and an existing group
+  under another name is renamed with a warning. The module note that RAS
+  Mapper's export does not need the `.rasmap` XML is corrected.
+  `RasFim.top_priority_terrain_source` and the `build_effective_terrain`
+  receipt add `rasmap_warnings` (`modification_group_misnamed`,
+  `modification_group_missing`), and a terrain whose modification group has
+  another name is treated as unmodified, as RAS Mapper treats it.
+- **Multi-ring modification polygons refused up front:** the terrain
+  modification reader (`ras_commander.fim._terrain_mods.read_layers`, used by
+  `build_effective_terrain`) refuses a polygon feature with more than one
+  ring (holes in any winding, separate or overlapping parts) before the engine
+  runs, as the engine does from ras-commander-fast-map #42. The
+  `FimUnsupportedError` carries `reason="multi_ring_polygon"` (also in the
+  message) so callers route those terrains to the RAS Mapper export.
+  `FimUnsupportedError` gains an optional `reason` attribute (default `None`).
+- **Effective terrain CRS refusal:** `RasFim.build_effective_terrain` refuses
+  a source CRS with no EPSG code (for example `ESRI:102630`) before staging,
+  with a message that states why: the engine's `rasmapper-effective-terrain`
+  request carries the CRS as an EPSG code and the engine labels the output
+  GeoTIFF from it, so `terrain_crs_fnv1a64` cannot replace it. Use the RAS
+  Mapper export for such terrains. The shared engine CRS check states the
+  same requirement.
+
 ### 0.118.0 — 2026-11-11
 
 - **Final-format delivery:** `RasFim.map_sloping_profiles(final_format=...)`

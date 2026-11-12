@@ -722,8 +722,8 @@ def test_read_layers_round_trips_through_add_modification_layer(tmp_path):
     RasTerrainModWriter.add_modification_layer(terrain_hdf, rasmap, {
         "kind": "polygon", "name": "Pads", "features": [
             {"elevation_type": "SetValue", "elevation": 40.5,
-             "rings": [[[0.0, 0.0], [10.0, 0.0], [10.0, 10.0], [0.0, 0.0]],
-                       [[2.0, 2.0], [4.0, 2.0], [4.0, 4.0], [2.0, 2.0]]]},
+             # Single ring: read_layers refuses multi-ring polygons (Fast-Map #42).
+             "rings": [[[0.0, 0.0], [10.0, 0.0], [10.0, 10.0], [0.0, 0.0]]]},
             {"elevation_type": "SetIfLower", "elevation": 1.0,
              "rings": [[[20.0, 0.0], [30.0, 0.0], [30.0, 10.0], [20.0, 0.0]]]},
         ]})
@@ -854,3 +854,59 @@ def test_supplied_boundary_elevations_imply_provided(tmp_path):
         assert attrs["Generate Boundary Elevations"] == 0
         assert attrs["Use ShapeFile Z Elevations"] == 1
         np.testing.assert_allclose(mod["Polygon Points"][:, 2], [10.0, 11.0, 12.0, 11.0, 10.0])
+
+
+def _modification_groups(rasmap):
+    return [
+        layer for layer in ET.parse(rasmap).getroot().iter("Layer")
+        if layer.get("Type") == "ElevationModificationGroup"
+    ]
+
+
+def test_writer_registers_layers_in_the_modifications_group(tmp_path):
+    """RAS Mapper (6.6, 7.0.1) applies modifications only from a group named Modifications."""
+    terrain_hdf, rasmap = _write_minimal_terrain(tmp_path)
+    RasTerrainModWriter.add_high_ground_modification(
+        terrain_hdf, rasmap, name="Levee", polyline_points=[[0, 0, 10], [100, 0, 10]],
+    )
+    RasTerrainModWriter.add_ellipse_modification(
+        terrain_hdf, rasmap, name="Mound", ellipses=[{"center": (5, 5), "radius_x": 2, "elevation": 9}],
+    )
+    groups = _modification_groups(rasmap)
+    assert [group.get("Name") for group in groups] == ["Modifications"]
+    assert [layer.get("Name") for layer in groups[0].findall("Layer")] == ["Mound", "Levee"]
+
+
+@pytest.mark.parametrize("group_name", ["Hydroconnectors", "modifications", ""])
+def test_writer_refuses_a_group_name_ras_mapper_ignores(tmp_path, group_name):
+    terrain_hdf, rasmap = _write_minimal_terrain(tmp_path)
+    before = rasmap.read_bytes()
+    with pytest.raises(ValueError, match="named exactly 'Modifications'"):
+        RasTerrainModWriter.add_high_ground_modification(
+            terrain_hdf, rasmap, name="Levee", polyline_points=[[0, 0, 10], [100, 0, 10]],
+            group_name=group_name,
+        )
+    with pytest.raises(ValueError, match="named exactly 'Modifications'"):
+        RasTerrainModWriter.add_modification_group(terrain_hdf, rasmap, group_name=group_name)
+    # Refused before anything is written.
+    assert rasmap.read_bytes() == before
+    with h5py.File(terrain_hdf, "r") as hdf:
+        assert "Modifications" not in hdf
+
+
+def test_writer_renames_an_existing_misnamed_group(tmp_path, caplog):
+    terrain_hdf, rasmap = _write_minimal_terrain(tmp_path)
+    text = rasmap.read_text(encoding="utf-8").replace(
+        "<Surface On=\"True\" />",
+        "<Surface On=\"True\" />\n      <Layer Name=\"Hydroconnectors\" Type=\"ElevationModificationGroup\">"
+        "<Layer Name=\"Old\" Type=\"GroundLineModificationLayer\" /></Layer>",
+    )
+    rasmap.write_text(text, encoding="utf-8")
+    with caplog.at_level("WARNING"):
+        RasTerrainModWriter.add_high_ground_modification(
+            terrain_hdf, rasmap, name="Levee", polyline_points=[[0, 0, 10], [100, 0, 10]],
+        )
+    assert "Renamed .rasmap modification group 'Hydroconnectors'" in caplog.text
+    groups = _modification_groups(rasmap)
+    assert [group.get("Name") for group in groups] == ["Modifications"]
+    assert [layer.get("Name") for layer in groups[0].findall("Layer")] == ["Levee", "Old"]
