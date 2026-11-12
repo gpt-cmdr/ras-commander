@@ -2162,8 +2162,9 @@ engine's per-worker scratch: tile claims, triangle candidates, terrain-TIFF
 decode buffers when the engine reads the terrain itself, and `final_format`
 writer buffers. When one worker does not fit, mapping is refused before any
 engine call. With engines that advertise
-`multi_profile`, all selected profiles share one engine call, so inputs and the
-prepared surface are read and built once. Neither option changes output bits.
+`multi_profile`, each engine call covers up to the advertised `multi_profile.max`
+selected profiles, so inputs and the prepared surface are read and built once per
+call. Neither option changes output bits.
 Older engines run one sequential XS request per profile. A separate storage
 request uses up to four workers within the requested thread budget; with
 `inline_storage`, composition runs in the XS request on its admitted worker
@@ -2192,9 +2193,11 @@ including junction ordering, levees, endpoint obstruction blocks and disjoint
 storage level pools. Mixed 2D/pipe geometry, blocked polygons, actual
 encroachment datasets and degenerate triangles refuse. No triangle is dropped.
 Storage polygons take precedence over XS coverage even when their pools are
-dry; overlapping pools and storage/2D overlap remain refused. Rust renders
-pools through `fast-map-storage/1`, using `storage-area-level-pool/1`, then
-composes products through existing coupled schema `/2` with zero 2D cells.
+dry; overlapping pools and storage/2D overlap remain refused. Without
+`inline_storage`, Rust renders pools through a separate `fast-map-storage/1`
+call, using `storage-area-level-pool/1`, then composes products through a
+separate coupled schema `/2` call with zero 2D cells. With `inline_storage`,
+the same pool and composition methods run inside the XS request.
 These transports require advertised capabilities and retain `qualified=False`.
 Final composed products identify the coupled-storage method and request schema,
 with separate XS and storage component contracts in the manifest.

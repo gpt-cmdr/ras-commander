@@ -153,8 +153,10 @@ def test_batched_workers_match_sequential_single_profile_bits(files, tmp_path, m
     if not engine:
         pytest.skip("explicit opt-in engine")
     flags = RasFim.get_capabilities(engine).methods["one_d_clipped_diagnostic"].flags
-    if _one_d._xs_batch_limit(flags) < 2 or not flags.get("render_workers"):
-        pytest.skip("engine lacks multi_profile/render_workers")
+    workers = flags.get("render_workers")
+    if (_one_d._xs_batch_limit(flags) < 2 or not hasattr(workers, "get")
+            or not isinstance(workers.get("max"), int) or workers["max"] < 2):
+        pytest.skip("engine lacks multi_profile/render_workers above one")
     hdf, terrain = files
     kwargs = dict(profiles=["Max", 0, 1], allow_unqualified=True, max_working_mib=64, engine_path=engine)
     batched = RasFim.map_one_d_profiles(hdf, terrain, tmp_path / "batched", threads=4, **kwargs)

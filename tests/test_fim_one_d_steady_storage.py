@@ -178,7 +178,7 @@ def test_mismatched_composition_report_cannot_publish(steady_storage, tmp_path, 
     assert json.loads((output/'fim_manifest.json').read_text())['status'] == 'failed'
 
 
-def _storage_engine_inline():
+def _storage_engine_inline(final_format=None):
     import os
     from ras_commander.fim import _one_d
     engine = os.environ.get('RAS_COMMANDER_STORAGE_ENGINE')
@@ -187,6 +187,8 @@ def _storage_engine_inline():
     flags = RasFim.get_capabilities(engine).methods['one_d_clipped_diagnostic'].flags
     if not _one_d._inline_storage(flags):
         pytest.skip('engine lacks inline_storage')
+    if final_format is not None and 'native_final_format' not in flags:
+        pytest.skip('engine lacks 1D native_final_format')
     return engine
 
 
@@ -194,7 +196,7 @@ def _storage_engine_inline():
 def test_inline_storage_matches_separate_composition_bits(steady_storage, tmp_path, monkeypatch, final_format):
     import rasterio
     from ras_commander.fim import _one_d
-    engine = _storage_engine_inline()
+    engine = _storage_engine_inline(final_format)
     hdf, terrain = steady_storage
     prepared = RasFim.prepare_one_d_model(hdf, terrain, tmp_path / 'prep', profiles={'dry': 0, 'wet': 'High flow'},
                                           allow_unqualified=True)
