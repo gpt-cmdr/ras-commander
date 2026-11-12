@@ -4087,6 +4087,8 @@ notebooks:
   - RasCmdr.compute_plan
   - RasDss.get_catalog
   - RasDss.read_grid
+  - RasDssGrid.import_gridded
+  - RasDssGrid.list_variables
   - RasExamples.extract_project
   - RasPlan.clone_plan
   - RasPlan.clone_unsteady
@@ -4104,8 +4106,8 @@ notebooks:
   hec_refs: []
   learning_paths: []
   excluded: false
-  code_cells: 11
-  executed_cells: 11
+  code_cells: 13
+  executed_cells: 13
 - id: 917_mrms_precipitation_qpe
   filename: 917_mrms_precipitation_qpe.ipynb
   title: MRMS QPE Boundary-Hyetograph Hydraulic Comparison
@@ -4135,8 +4137,10 @@ notebooks:
   - HdfResultsPlan.get_compute_messages_hdf_only
   - RasCmdr.compute_plan
   - RasCmdr.inspect_plan_processes
+  - RasDss.get_backend
   - RasDss.get_catalog
   - RasDss.read_grid
+  - RasDssGrid.import_gridded
   - RasExamples.extract_project
   - RasPlan.get_plan_value
   - RasPlan.update_plan_intervals
@@ -4176,8 +4180,8 @@ notebooks:
     inspection/rendering only. Native run durations are recorded separately. Uniform boundaries follow
     simulation start; spatial rain-on-grid, other configurations and hydraulic acceptance remain unqualified.
     Follow-ups: issues 398, 438, 440 and 441.'
-  code_cells: 10
-  executed_cells: 10
+  code_cells: 13
+  executed_cells: 13
 - id: 918_hms_ras_coupled_forecast
   filename: 918_hms_ras_coupled_forecast.ipynb
   title: HMS-RAS Coupled Forecast Execution

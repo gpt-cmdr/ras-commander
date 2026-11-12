@@ -225,13 +225,78 @@ its diagnostic cell was changed to print the interpreter name and repository-rel
 `matplotlib.animation` logger was set to WARNING, and the `PrecipMrms` and `RasUnsteady` INFO messages
 were changed to give file names (full paths moved to DEBUG), so the outputs carry no host paths.
 
+## ras-commander-fast-dss 0.1.2 notebooks (2026-11-12)
+
+Two new notebooks teach the native engine, and three existing ones were revised.
+Each was run with the same harness as above on `ras-commander-fast-dss` 0.1.2 from
+PyPI (CPython 3.12.11; 916 on CPython 3.13.5 for `qpkit`), HEC-RAS 7.0 through
+`RasCmdr` only, and HEC-Vortex 0.13.3 for the Vortex routes. "default" means
+`RAS_COMMANDER_DSS_BACKEND` unset, so `RasDss` uses `java`; notebooks 321, 731 and
+732 select the native engine explicitly where they teach it. Committed outputs are
+the default-lane runs.
+
+| NB | Change | default | native | shadow | Wall time (s) |
+|---|---|---|---|---|---|
+| 321 Native DSS Records, Backends, and Copy-Out Recovery (new) | Records, backends, `sync=`, paired data, locations and `repair` on public HEC files; no HEC-RAS | pass | pass | in-notebook (note C) | 28 / 30 / — |
+| 732 Native Gridded Import and Grid Tools on Real Precipitation (new) | `RasDssGrid` on AORC Zarr/NetCDF, IMERG HDF5, Stage IV GRIB1/GRIB2 and MRMS GRIB2; every grid tool; no HEC-RAS | pass | pass | not applicable (note D) | 43 / 53 / — |
+| 731 Atlas 14 shared temporal pattern | Public preset (NewOrleansMetro, NOAA `se100yr24ha`); native export through `RasDssGrid.import_gridded` | pass (native export route) | pass | — | 115 / 54; Vortex route 39 (note E) |
+| 916 HRRR forecast | Native lane on the authentic HRRR messages and a Stage IV analysis, each checked against GDAL's decode of its own source | pass | pass | — | 555 / 1707 (note G) |
+| 917 MRMS QPE | Visible backend selectors; native preprocessing (1-72 h windows, overlap/gap reports, shapefile clip, threads) | pass | pass (`RAS_COMMANDER_MRMS_BACKEND=native`) | pass (`...=shadow`) | 2389 / 2351 / 3507 (note F) |
+
+**Note C, 321.** The notebook's own comparison cell runs `native`, `java` and
+`shadow` in one kernel. In the default lane every series was equal to the native
+read on all three, and the shadow summary was `read_timeseries|identical|identical: 2`.
+With `RAS_COMMANDER_DSS_BACKEND` set, the environment overrides the attribute, so
+the cell compares one backend with itself; the notebook says to run it without
+the variable.
+
+**Note D, 732.** Every operation runs on the engine whatever the backend; the only
+backend-dependent calls are `RasDss.read_grid` read-backs, which the notebook pins
+to `native`. Findings: Zarr and NetCDF imports of the same AORC hours are identical
+with `near`; with `bilinear`/`average` up to 20 cells, all within 2.6 km of the source
+chunk's edge differ, where each route resamples from beyond its own extent. A
+Lambert conformal US-foot target (EPSG:2276) is refused while planning (the engine
+supports foot targets on Transverse Mercator); EPSG:2257 is used. `threads=1` and
+the all-cores default store identical cells. The MRMS 24H Pass 2 product equals
+the sum of the 24 hourly grids; the Stage IV 24-hour analysis over the same period
+is about 64 % higher over the envelope, and the normalizer imposes it exactly.
+
+**Note E, 731.** The `native` and `vortex` export routes wrote the same 144
+records with identical cell values. Before the committed run, hms-commander's Atlas
+14 helper logged its cache file's full path at INFO; the notebook now sets that
+logger to WARNING and was rerun. The attachment and precompute steps stay off in
+the preset (see note B).
+
+**Note F, 917.** The first default run stopped when the Davis event plan reached
+its 1,200 s `max_runtime` on a shared, loaded host. The notebook now reads
+`RAS_COMMANDER_917_MAX_RUNTIME_SCALE` (default 1); all three lanes ran with 3. A
+second default run stopped in the new preprocessing cell (the New Orleans case has
+no fixed MRMS box); the cell now derives the bounds as the case runner does, was
+checked in isolation, and all three lanes were rerun. Results: the 37 Davis and 24
+New Orleans MRMS grids are equal cell for cell on all three lanes (HEC-Vortex on
+default, the native importer on native, both on shadow); the event plans' water
+surface and cumulative precipitation are bit-identical across lanes; shadow
+recorded 151 comparisons (`catalog` 4, `read_grid` 147), all `identical`; the native
+lane loaded no JVM.
+
+**Note G, 916.** The first default run of the revised notebook stopped in cell 17
+when HEC-RAS exited with `STATUS_DLL_INIT_FAILED` at the moment the runner's parent
+shell was stopped; it was rerun alone and passed. The native lane ran while other
+work loaded the host. The native 0-18 h HRRR record and the qpkit sum of 18 hourly
+grids, on the same 26 x 23 SHG lattice, differ more than two warps of one source
+would: the qpkit grid has 69 cells at 0 mm along its southern and eastern edges
+where the native record has rain, and its storm core sits about two rows north of
+the native record's (the comparison figure). The cause was not resolved; the
+hydraulic runs keep the qualified qpkit route. Both GRIB decodes (HRRR f18 and
+Stage IV) match GDAL to 1.5e-5 mm with identical masks.
+
 ## Skipped notebooks
 
 A skip is not a pass. Each reason below was checked on this host.
 
 | Notebook | Reason |
 |---|---|
-| 731 Atlas 14 shared temporal, existing model | This is a template for a user's model. It needs `SOURCE_PROJECT = C:/Models/MyModel` and a NOAA Atlas 14 ASC grid, neither of which exists here. All three backends stop at cell 5 with `FileNotFoundError`. Its DSS export runs only when `RUN_DSS_EXPORT = True`; the default is False. |
+| 731 Atlas 14 shared temporal, existing model (before 2026-11-12) | This is a template for a user's model. It needs `SOURCE_PROJECT = C:/Models/MyModel` and a NOAA Atlas 14 ASC grid, neither of which exists here. All three backends stop at cell 5 with `FileNotFoundError`. Its DSS export runs only when `RUN_DSS_EXPORT = True`; the default is False. |
 | 950, 951, 953, 954, 955, 957 eBFE deliveries | These notebooks organize into `RAS_COMMANDER_EBFE_ROOT`, a shared workspace that this qualification was not permitted to write to. The organized deliveries already present there contain no DSS files (checked: Spring Creek, North Galveston Bay, Rio Hondo, Lake Maurepas, Tickfaw, Spring River), so `_validate_dss_files` and the notebooks' `RasDss` calls have nothing to read. Running them in a private workspace would mean downloading the FEMA archives again. |
 | 952 eBFE Upper Guadalupe, full notebook | The organized delivery is 56 GB in the shared workspace. Only its DSS operations were run, on copies of its 3 unique DSS files in a private workspace (table row "952 partial"). |
 | 956 hydrofabric conflation, 959 2D breakout geometry, 430 channel capacity, 237 subdomain breakout | These call eBFE organizers only to stage geometry. The deliveries are in the shared workspace or need an external `EBFE_SOURCE` download, and the notebooks perform no `RasDss` read or write of their own. |
