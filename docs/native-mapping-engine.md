@@ -1060,6 +1060,43 @@ receipt["method_id"], receipt["hecras_version"], receipt["modification_layers"]
   so callers can route the terrain to the RAS Mapper export without calling
   the engine. Single-ring polygons are unaffected.
 
+<a id="stored-map-basis"></a>
+
+### Stored-map basis: the terrain RAS Mapper's stored maps read
+
+RAS Mapper's terrain export and its stored maps do not read the same terrain.
+The export samples render blocks between source cell centres, so the last
+cell row and column of each source stay nodata, and it rounds every value to
+1/32. RAS Mapper writes stored maps per terrain source, on the source's own
+grid, from the source's own cells, with the modifications unrounded. Mapping
+on the export therefore misses wet pixels on the source's last row and column
+and differs by up to 1/64 ft on modified pixels.
+
+`basis="stored_map"` (engines whose `effective_terrain` record lists it in
+`bases`; check with `RasFim.supports_effective_terrain_basis("stored_map")`)
+builds that terrain instead, rule `rasmapper-stored-map-terrain/1`:
+
+```python
+receipt = RasFim.build_effective_terrain(
+    "Terrain/Terrain.hdf", "stored_map_terrain.tif",
+    rasmap_path="Project.rasmap", basis="stored_map",
+)
+receipt["basis"], receipt["basis_rule_id"]
+```
+
+- The output is the single source's cells on its own GeoTIFF grid, then the
+  modifications rasterized as for the export, without rounding. Unmodified,
+  it is the source TIFF bit for bit.
+- Multi-source terrains are refused (`FimUnsupportedError`) before the
+  engine runs; use the default `basis="export"`.
+- The default request is unchanged: Commander sends no `basis` field unless
+  asked, and the receipt records `basis`.
+- Qualified on Helena (one source, Middle Cahaba p01 Max, sloping, two
+  channel ground lines): against HEC-RAS 7.0.1 and 6.6 stored maps, Depth
+  equals float32(WSE - terrain) on all 7,506,407 wet pixels. On the export
+  basis 2,341 of them are nodata (the source's last row and column) and 1,460
+  modified depths differ by up to 1/64 ft.
+
 <a id="read-the-modification-layers"></a>
 
 ### Read the modification layers
