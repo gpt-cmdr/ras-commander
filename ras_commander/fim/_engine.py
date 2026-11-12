@@ -206,7 +206,12 @@ def terrain_identity(engine: Path, terrain_path: Path, results_crs, terrain_crs_
 
     epsg = crs_rio.to_epsg()
     if epsg is None:
-        raise FimUnsupportedError(f"terrain CRS has no EPSG code: {crs_rio.to_string()}")
+        raise FimUnsupportedError(
+            f"terrain CRS has no EPSG code: {crs_rio.to_string()} ({crs_rio.name}). Native engine "
+            "requests carry the terrain CRS as an EPSG code; terrain_crs_fnv1a64 only pins the "
+            "engine's WKT reading of a CRS that rasterio identifies by EPSG and cannot replace "
+            "the code. Use a terrain (and results) in a CRS with an EPSG code."
+        )
     fnv = info.get("crs_wkt_fnv1a64")
     original_engine = None
     engine_wkt = None

@@ -5,7 +5,7 @@ import pytest
 from ras_commander import HdfXsec, fast_hdf
 from ras_commander.fim import RasFim, FimUnsupportedError
 from ras_commander.fim._one_d import normalize_segment
-from test_fim_one_d import files, inputs
+from test_fim_one_d import _fake_one_d_engine, files, inputs
 
 BASE = 'Results/Steady/Output/Output Blocks/Base Output/Steady Profiles/'
 
@@ -157,6 +157,8 @@ def test_mismatched_composition_report_cannot_publish(steady_storage, tmp_path, 
     engine = os.environ.get('RAS_COMMANDER_STORAGE_ENGINE')
     if not engine:
         pytest.skip('set RAS_COMMANDER_STORAGE_ENGINE to exercise storage CLI')
+    from ras_commander.fim import _one_d
+    monkeypatch.setattr(_one_d, '_inline_storage', lambda flags: False)  # separate composition call
     original = _engine.run_engine
     def run(args, *other, **kwargs):
         result = original(args, *other, **kwargs)
@@ -174,3 +176,124 @@ def test_mismatched_composition_report_cannot_publish(steady_storage, tmp_path, 
                                  bbox=(0, 0, 100, 100), max_working_mib=64)
     assert not list(output.glob('*.tif'))
     assert json.loads((output/'fim_manifest.json').read_text())['status'] == 'failed'
+
+
+def _storage_engine_inline(final_format=None):
+    import os
+    from ras_commander.fim import _one_d
+    engine = os.environ.get('RAS_COMMANDER_STORAGE_ENGINE')
+    if not engine:
+        pytest.skip('set RAS_COMMANDER_STORAGE_ENGINE to exercise storage CLI')
+    flags = RasFim.get_capabilities(engine).methods['one_d_clipped_diagnostic'].flags
+    if not _one_d._inline_storage(flags):
+        pytest.skip('engine lacks inline_storage')
+    if final_format is not None and 'native_final_format' not in flags:
+        pytest.skip('engine lacks 1D native_final_format')
+    return engine
+
+
+@pytest.mark.parametrize('final_format', [None, {'nodata': -9999.0, 'block_size': 16}])
+def test_inline_storage_matches_separate_composition_bits(steady_storage, tmp_path, monkeypatch, final_format):
+    import rasterio
+    from ras_commander.fim import _one_d
+    engine = _storage_engine_inline(final_format)
+    hdf, terrain = steady_storage
+    prepared = RasFim.prepare_one_d_model(hdf, terrain, tmp_path / 'prep', profiles={'dry': 0, 'wet': 'High flow'},
+                                          allow_unqualified=True)
+    kwargs = dict(profiles=['dry', 'wet'], allow_unqualified=True, engine_path=engine,
+                  bbox=(0, 0, 100, 100), max_working_mib=64, threads=3)
+    inline = prepared.map_profiles(tmp_path / 'inline', final_format=final_format, **kwargs)
+    assert inline.attrs['storage_inline'] is True
+    assert inline.attrs['method_id'] == 'one-d-two-d-storage-coverage-first-diagnostic/1'
+    monkeypatch.setattr(_one_d, '_inline_storage', lambda flags: False)
+    separate = prepared.map_profiles(tmp_path / 'separate', **kwargs)
+    assert separate.attrs['storage_inline'] is False
+    for a, b in zip(inline.itertuples(), separate.itertuples()):
+        assert (a.depth_finite_pixels, a.flooded_pixels) == (b.depth_finite_pixels, b.flooded_pixels)
+        for column in ('depth_tif', 'wse_tif'):
+            with rasterio.open(getattr(a, column)) as x, rasterio.open(getattr(b, column)) as y:
+                got, expected = x.read(1), y.read(1)
+                valid = ~np.isnan(expected)
+                missing = np.isnan(got) if final_format is None else got == final_format['nodata']
+                assert np.array_equal(missing, ~valid)
+                np.testing.assert_array_equal(got[valid].view('<u4'), expected[valid].view('<u4'))
+
+
+def _corrupt_composition(top, profiles):
+    for report in profiles or [top]:
+        report['composition']['method']['method_id'] = 'wrong-composition/1'
+    return len(profiles or [top])
+
+
+def _corrupt_summary(top, profiles):
+    if not profiles:
+        pytest.skip('engine lacks multi_profile summaries')
+    top['profiles'][0]['levels_file'] += '.other'
+    return 1
+
+
+def _corrupt_grid(top, profiles):
+    for report in profiles or [top]:
+        report['geo_transform'][0] += 1.0
+    return len(profiles or [top])
+
+
+@pytest.mark.parametrize('corrupt,message', [
+    (_corrupt_composition, 'inline storage composition'),
+    (_corrupt_summary, 'profile summary does not match'),
+    (_corrupt_grid, 'grid differs from the request window')])
+def test_inline_storage_report_mismatch_cannot_publish(steady_storage, tmp_path, monkeypatch, corrupt, message):
+    """Each inline-storage report check is exercised on the engine's actual report layout."""
+    import json
+    from pathlib import Path
+    from ras_commander.fim import _engine, FimMappingError
+    engine = _storage_engine_inline()
+    original = _engine.run_engine
+    corrupted = []
+    def run(args, *other, **kwargs):
+        result = original(args, *other, **kwargs)
+        if args[1] == 'one-d-diagnostic' and result.returncode == 0:
+            out = Path(args[3])
+            top = json.loads((out / 'report.json').read_text())
+            paths = sorted(out.glob('profile-*/report.json'))
+            profiles = [json.loads(path.read_text()) for path in paths]
+            corrupted.append(corrupt(top, profiles))
+            (out / 'report.json').write_text(json.dumps(top))
+            for path, report in zip(paths, profiles):
+                path.write_text(json.dumps(report))
+        return result
+    monkeypatch.setattr(_engine, 'run_engine', run)
+    output = tmp_path / 'out'
+    with pytest.raises(FimMappingError, match=message):
+        RasFim.map_one_d_profiles(*steady_storage, output, profiles={'dry': 0},
+                                 allow_unqualified=True, engine_path=engine,
+                                 bbox=(0, 0, 100, 100), max_working_mib=64)
+    assert corrupted and all(corrupted), 'no engine report was altered'
+    assert not list(output.glob('*.tif'))
+
+
+
+def test_inline_storage_threads_effective_reports_admitted_workers(steady_storage, tmp_path, monkeypatch):
+    """With inline storage, threads_effective is the XS request's admitted worker count.
+
+    The budget cuts threads=8 to two render workers, below the four threads the
+    separate storage call would use. That call does not run on the inline
+    route, so neither the returned attrs nor the saved manifest count it.
+    """
+    import json
+    from ras_commander.fim import _one_d
+    hdf, terrain = steady_storage
+    flags = {"render_workers": {"control": "threads", "max": 64},
+             "inline_storage": {"control": "storage", "storage_method_id": _one_d.STORAGE_METHOD_ID,
+                                "composition_method_id": _one_d.COMPOSITION_METHOD_ID,
+                                "schemas": [_one_d.REQUEST_SCHEMA]}}
+    exe, requests = _fake_one_d_engine(monkeypatch, tmp_path, flags, storage=True)
+    out = RasFim.map_one_d_profiles(hdf, terrain, tmp_path / "out", profiles={"dry": 0}, allow_unqualified=True,
+                                    max_working_mib=3, threads=8, engine_path=exe, bbox=(0, 0, 124, 100))
+    assert out.status.tolist() == ["complete"] and out.attrs["storage_inline"] is True
+    assert [r.get("threads") for r in requests] == [2] and "storage" in requests[0]
+    assert out.attrs["xs_render_workers"] == 2 < min(8, 4)
+    assert out.attrs["threads_requested"] == 8
+    assert out.attrs["threads_effective"] == 2
+    saved = json.loads((tmp_path / "out" / "fim_manifest.json").read_text())
+    assert saved["threads_effective"] == 2 and saved["storage_inline"] is True

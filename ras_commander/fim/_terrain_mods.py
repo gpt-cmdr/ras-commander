@@ -44,13 +44,18 @@ Load rules followed (RasMapperLib 6.6 / 7.0 / 7.0.1):
   order, which is not qualified: refused.
 * The ``.rasmap`` ``Checked`` state and per-layer entries are not consulted
   by the export, so the rasmap is not read here. The export does need the
-  terrain layer's ``ElevationModificationGroup`` element (any content):
-  without it HEC-RAS 6.6 and 7.0.1 apply none of the HDF modifications.
-  That gate is checked by ``_terrain_scope`` when a rasmap is given.
+  terrain layer's ``ElevationModificationGroup`` element named exactly
+  ``Modifications`` (any content): without it, or with the group under
+  another name, HEC-RAS 6.6 and 7.0.1 apply none of the HDF modifications.
+  That gate is checked by ``_terrain_scope`` when a rasmap is given, which
+  reports a misnamed group in ``rasmap_warnings``.
 
 Refused here, before the engine runs (each one the engine also refuses):
-shape-Z polygons without boundary elevations (vertex Z storage is not
-export-measured), boundary elevations sampled from the terrain when the
+polygon features with more than one ring (holes in any winding, separate or
+overlapping parts; reason code ``multi_ring_polygon`` on the error's
+``reason``), because RAS Mapper joins and triangulates such rings in a way
+that cannot be reproduced as a rule; shape-Z polygons without boundary
+elevations (vertex Z storage is not export-measured), boundary elevations sampled from the terrain when the
 layer has no control points and the polygon no stored profile, named ground
 lines in a layer with control points or with a NaN template, a NaN Top Width
 with a finite Max Reach, and, for ``hecras_version="6.6"``, named ground lines
@@ -83,6 +88,8 @@ RAS_APPLIED_UNSTAGED_TYPES = (
     "Rectangle", "Triangle", "Encroachment Polygon", "Levee1", "Pier", "Tree",
 )
 LENGTH_UNITS = ("feet", "meters")
+#: Refusal reason code for a polygon feature with more than one ring.
+MULTI_RING_POLYGON = "multi_ring_polygon"
 #: HEC-RAS versions whose terrain export the engine reproduces.
 HECRAS_VERSIONS = ("7.0.1", "6.6")
 
@@ -297,6 +304,15 @@ def _polygon_layer(name, group, priority, length_units, hecras_version) -> dict:
         if shape_z and not generate:
             raise FimUnsupportedError(f"{what}: polygons with shapefile Z elevations are not qualified")
         start, _count, part_start, part_count = (int(v) for v in info[i])
+        if part_count > 1:
+            # RAS Mapper joins a polygon's rings (holes in any winding, separate
+            # or overlapping parts) and triangulates them in a way that is not
+            # reproducible as a rule; the engine refuses them (Fast-Map #42).
+            raise FimUnsupportedError(
+                f"{what}: multi-ring polygon ({part_count} rings: a hole or separate/overlapping "
+                f"parts) is not qualified [reason: {MULTI_RING_POLYGON}]; use the RAS Mapper export",
+                reason=MULTI_RING_POLYGON,
+            )
         rings, vertex_z = [], []
         for j in range(part_count):
             offset, n = (int(v) for v in parts[part_start + j])

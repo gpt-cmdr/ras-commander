@@ -972,13 +972,31 @@ receipt["method_id"], receipt["hecras_version"], receipt["modification_layers"]
   `ras_object`, else from the newest `Program Version` of the project's plan
   and geometry files, else 7.0.1.
 - With `rasmap_path`, RAS Mapper applies the HDF modifications only when the
-  terrain layer has an `ElevationModificationGroup` element; without one the
-  terrain is treated as unmodified.
+  terrain layer has an `ElevationModificationGroup` named exactly
+  `Modifications`; without one, or with the group under another name (for
+  example `Hydroconnectors`), the terrain is treated as unmodified. The
+  receipt's `rasmap_warnings` records why (`modification_group_misnamed` or
+  `modification_group_missing`); rename the group to `Modifications` to apply
+  the layers.
+- The source CRS needs an EPSG code. The engine request carries the CRS as an
+  EPSG code and the engine writes the output GeoTIFF's CRS from it.
+  `terrain_crs_fnv1a64` only covers a CRS that rasterio identifies by EPSG
+  but the engine does not; it cannot replace the code. A CRS that PROJ
+  identifies only by another authority, such as `ESRI:102630` (NAD83 /
+  Alabama West, US feet), raises `FimUnsupportedError`; use the RAS Mapper
+  export for such terrains.
 - Forms the engine does not reproduce raise `FimUnsupportedError`: boundary
-  elevations sampled from the terrain, shape-Z polygons, multi-part polygons
-  that need a TIN, named ground lines with control points or a NaN template,
+  elevations sampled from the terrain, shape-Z polygons, polygons with more
+  than one ring, named ground lines with control points or a NaN template,
   named ground lines under 6.6, and other RAS layer types. Use the RAS Mapper
   export for those terrains.
+- A polygon feature with more than one ring (a hole in either winding, or
+  separate or overlapping parts) is refused while the layers are read, before
+  the engine runs. RAS Mapper joins and triangulates such rings in a way that
+  cannot be reproduced as a rule. The error's `reason` is
+  `multi_ring_polygon`, and the message carries `[reason: multi_ring_polygon]`,
+  so callers can route the terrain to the RAS Mapper export without calling
+  the engine. Single-ring polygons are unaffected.
 
 <a id="read-the-modification-layers"></a>
 
@@ -2189,18 +2207,56 @@ This diagnostic path uses `one-d-xs-surface-diagnostic/5` and its existing
 refuses execution. The preparation receipt identifies the version-specific
 normalization and endpoint-selection rules. Full-corpus and broader raster
 qualification remain gates. Transport availability
-does not establish numerical qualification. The XS pass executes sequentially;
-storage rendering uses up to four workers within the requested thread budget.
-Manifests record requested and effective counts.
+does not establish numerical qualification. With engines that advertise
+`render_workers`, the XS pass renders source-terrain tile rows on up to
+`threads` workers, reduced to fit `max_working_mib`. Admission counts the
+engine's per-worker scratch: tile claims, triangle candidates, terrain-TIFF
+decode buffers when the engine reads the terrain itself, and `final_format`
+writer buffers. When one worker does not fit, mapping is refused before any
+engine call. With engines that advertise
+`multi_profile`, each engine call covers up to the advertised `multi_profile.max`
+selected profiles, so inputs and the prepared surface are read and built once per
+call. Neither option changes output bits.
+Older engines run one sequential XS request per profile. A separate storage
+request uses up to four workers within the requested thread budget; with
+`inline_storage`, composition runs in the XS request on its admitted worker
+count. Manifests record the
+requested and effective counts, `xs_render_workers` and `xs_profiles_per_request`.
+`threads_effective` counts only the requests issued: on the inline route it is
+the XS worker count, never the four-thread separate storage call.
+
+With engines that advertise `terrain_tiff`, the engine reads the source terrain
+GeoTIFF itself and applies only its Float32 nodata value. A terrain with a
+per-dataset or alpha mask keeps the staged Rasterio read, which turns masked
+pixels into NaN, so the direct read never exposes masked pixels as terrain.
+
+With engines that advertise `inline_storage`, storage level pools and their
+composition run inside the batched XS request: physical storage labels are
+rasterized once and no separate storage or composition process runs. Products
+are bit-identical to the separate calls; manifests record `storage_inline`.
+
+`final_format` has the `map_sloping_profiles()` contract (`nodata`, `block_size`,
+`zlevel`, `overviews`, `grid`). With an engine advertising `native_final_format`
+on the 1D (or storage-composition) method, the engine applies the AOI pixel
+mask, counts finite and flooded Depth pixels and writes each Depth/WSE GeoTIFF
+once; Commander verifies the header and file and moves it into place. Valid
+pixel bits and the nodata mask equal the Rasterio-written products. Manifest
+rows record the delivered grid (`col_off`, `row_off`, `width`, `height` and
+`transform` on the terrain), as sloping rows do; `final_format.window_on_grid`
+locates the mapped window. A valid value that is infinite or reads as `nodata`
+is refused (`FimUnsupportedError`, wrapped in `FimMappingError`); no product is
+delivered. The model CRS needs an EPSG code. There is no Rasterio fallback.
 
 The diagnostic scope includes stored unsteady or explicit steady XS profiles,
 including junction ordering, levees, endpoint obstruction blocks and disjoint
 storage level pools. Mixed 2D/pipe geometry, blocked polygons, actual
 encroachment datasets and degenerate triangles refuse. No triangle is dropped.
 Storage polygons take precedence over XS coverage even when their pools are
-dry; overlapping pools and storage/2D overlap remain refused. Rust renders
-pools through `fast-map-storage/1`, using `storage-area-level-pool/1`, then
-composes products through existing coupled schema `/2` with zero 2D cells.
+dry; overlapping pools and storage/2D overlap remain refused. Without
+`inline_storage`, Rust renders pools through a separate `fast-map-storage/1`
+call, using `storage-area-level-pool/1`, then composes products through a
+separate coupled schema `/2` call with zero 2D cells. With `inline_storage`,
+the same pool and composition methods run inside the XS request.
 These transports require advertised capabilities and retain `qualified=False`.
 Final composed products identify the coupled-storage method and request schema,
 with separate XS and storage component contracts in the manifest.

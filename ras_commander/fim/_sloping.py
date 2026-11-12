@@ -1285,11 +1285,7 @@ def map_profiles(
             in f"{exc} {details.get('engine_stderr', '')} {details.get('engine_report_error', '')}"
         ):
             # Never drop or alter a valid pixel to fit the nodata marker.
-            surfaced = FimUnsupportedError(
-                f"final_format nodata={final_options['nodata']!r} cannot mark invalid pixels: "
-                "a valid Depth/WSE value is infinite or would read as that nodata value. "
-                "Choose a nodata value outside the product range; no product was delivered"
-            )
+            surfaced = _final_format.nodata_collision_error(final_options["nodata"])
         for name in selected:
             for product in _products.product_paths(folder, name):
                 product.unlink(missing_ok=True)

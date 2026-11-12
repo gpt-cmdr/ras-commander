@@ -203,3 +203,84 @@ def test_engine_without_schema_2_is_not_used_for_modifications(tmp_path, monkeyp
     _fake_engine(monkeypatch, {"method_id": V2, "request_schemas": [S1], "modifications": {}}, V2)
     assert _effective_terrain.engine_supports(Path("engine.exe"), modifications=True) is False
     assert _effective_terrain.engine_supports(Path("engine.exe")) is True
+
+
+# ESRI:102630 is NAD83 / Alabama West (US survey feet). PROJ identifies it only
+# by its ESRI code: EPSG has no US-feet Alabama West CRS (EPSG:26930 is metres).
+ESRI_ONLY_CRS = "ESRI:102630"
+
+
+def _esri_only_terrain(root):
+    """Synthetic single-source terrain whose source TIFF is in ESRI:102630."""
+    from rasterio.crs import CRS
+
+    hdf = _terrain(root, ["only"], priorities=[0])
+    with h5py.File(hdf, "a") as f:
+        f["Terrain/T.only/0/Mask"][...] = 1
+    with rasterio.open(Path(root) / "T.only.tif", "r+") as src:
+        src.crs = CRS.from_user_input(ESRI_ONLY_CRS)
+    with rasterio.open(Path(root) / "T.only.tif") as src:
+        assert src.crs.to_epsg() is None
+    return hdf
+
+
+@pytest.mark.parametrize("pin", [None, "f15e991dcc6bd62d"])
+def test_esri_only_crs_is_refused_with_the_engine_epsg_requirement(tmp_path, monkeypatch, pin):
+    """The effective-terrain request needs an EPSG code: the engine labels the
+    output GeoTIFF from it. A WKT pin cannot replace it, so the refusal says
+    so and names the RAS Mapper export, before anything is staged or run."""
+    hdf = _esri_only_terrain(tmp_path)
+    requests = _fake_engine(monkeypatch, {"method_id": V2, "request_schemas": [S1, S2],
+                                          "modifications": {}}, V2)
+    with pytest.raises(FimUnsupportedError) as caught:
+        RasFim.build_effective_terrain(hdf, tmp_path / "out" / "e.tif", terrain_crs_fnv1a64=pin)
+    message = str(caught.value)
+    assert "ESRI:102630" in message and "has no EPSG code" in message
+    assert "writes the output GeoTIFF's CRS" in message
+    assert "export_rasmapper_terrain" in message
+    assert ("does not replace it" in message) is (pin is not None)
+    assert requests == []
+    assert not (tmp_path / "out").exists() or not any((tmp_path / "out").iterdir())
+
+
+@pytest.mark.skipif(not _engine_with_method(), reason="installed engine lacks effective_terrain")
+def test_real_engine_reports_no_epsg_for_an_esri_only_terrain(tmp_path):
+    """The installed engine identifies no EPSG code for ESRI:102630 either; the
+    request is refused in RasFim with the actionable reason, even with the
+    engine's own WKT hash supplied."""
+    import subprocess
+
+    from ras_commander.fim import _engine
+
+    hdf = _esri_only_terrain(tmp_path)
+    engine = _engine.find_engine(None)
+    info = json.loads(subprocess.run(
+        [str(engine), "terrain-info", str(tmp_path / "T.only.tif")],
+        capture_output=True, text=True, check=True,
+    ).stdout)
+    assert info.get("epsg") is None and info.get("crs_wkt_fnv1a64")
+    with pytest.raises(FimUnsupportedError, match="has no EPSG code"):
+        RasFim.build_effective_terrain(hdf, tmp_path / "out" / "e.tif",
+                                       terrain_crs_fnv1a64=info["crs_wkt_fnv1a64"])
+
+
+def test_misnamed_rasmap_group_is_unmodified_and_reported_in_the_receipt(tmp_path, monkeypatch):
+    """Layers in a "Hydroconnectors" group are not applied by RAS Mapper: the
+    terrain builds unmodified and the receipt carries the reason code."""
+    hdf = _terrain(tmp_path, ["only"], priorities=[0], modifications=True)
+    rasmap = tmp_path / "m.rasmap"
+    rasmap.write_text(
+        '<RASMapper><Terrains><Layer Name="T" Type="TerrainLayer" Filename=".\\T.hdf">'
+        '<Layer Name="Hydroconnectors" Type="ElevationModificationGroup">'
+        '<Layer Name="Channel" Type="GroundLineModificationLayer" /></Layer>'
+        "</Layer></Terrains></RASMapper>",
+        encoding="utf-8",
+    )
+    requests = _fake_engine(monkeypatch, {"method_id": V2, "request_schemas": [S1, S2],
+                                          "modifications": {}}, V2)
+    receipt = RasFim.build_effective_terrain(hdf, tmp_path / "out.tif", rasmap_path=rasmap)
+    assert requests[0]["modifications"] == 0 and requests[0]["modification_layers"] == []
+    assert receipt["modification_layers"] == [] and receipt["hecras_version"] is None
+    assert [(w["code"], w["group"]) for w in receipt["rasmap_warnings"]] == [
+        ("modification_group_misnamed", "Hydroconnectors")
+    ]
