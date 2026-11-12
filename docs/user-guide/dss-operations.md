@@ -19,7 +19,9 @@ grid reads and native writes are gated on the installed engine
 (`native_grid_qualified`, `native_writes_available`).
 `RasDss.get_capabilities()` reports the support matrix. See
 [DSS Read and Write Backends](dss-native-backend.md) for selection,
-installation and every difference from the Java path.
+installation and every difference from the Java path. Notebook
+[321](../notebooks/321_native_dss_records_and_recovery.md) compares the backends on public
+HEC files and demonstrates the native-only operations.
 
 ## Direct precipitation arrays to DSS7
 

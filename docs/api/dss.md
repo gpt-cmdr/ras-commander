@@ -347,7 +347,8 @@ Gridded import and grid tools for DSS files: thin wrappers around the
 `ras_commander_fast_dss.gridded` namespace. Every method runs on the optional
 ras-commander-fast-dss engine, whatever `RasDss.backend` is, and returns the
 engine's result unchanged. See
-[Engine-only operations](../user-guide/dss-native-backend.md#engine-only-operations).
+[Engine-only operations](../user-guide/dss-native-backend.md#engine-only-operations) and
+notebook [732](../notebooks/732_native_gridded_import_and_grid_tools.md).
 
 ::: ras_commander.dss.RasDssGrid.RasDssGrid
     options:

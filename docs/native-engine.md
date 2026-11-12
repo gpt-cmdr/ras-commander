@@ -229,6 +229,19 @@ No notebook behaves differently on `native`; every shadow comparison was
 across backends. Results per notebook are in the
 [DSS native backend notebook qualification](development/dss-native-notebook-qualification.md).
 
+Notebooks that teach the native engine directly:
+
+- [321: Native DSS Records, Backends, and Copy-Out Recovery](notebooks/321_native_dss_records_and_recovery.md):
+  DSS6/DSS7 round trips and merges, `sync=` policies, a backend comparison, paired data,
+  locations and `RasDss.repair`, on public HEC data.
+- [732: Native Gridded Import and Grid Tools on Real Precipitation](notebooks/732_native_gridded_import_and_grid_tools.md):
+  `RasDssGrid` on AORC Zarr/NetCDF, IMERG HDF5, Stage IV GRIB1/GRIB2 and MRMS GRIB2, every grid tool
+  and the zonal statistics.
+- [731](notebooks/731_atlas14_shared_temporal_existing_model.md) (Atlas 14 export through
+  `RasDssGrid` or HEC-Vortex), [916](notebooks/916_hrrr_precipitation_forecast.md) (native HRRR and
+  Stage IV import beside the qpkit route) and [917](notebooks/917_mrms_precipitation_qpe.md) (MRMS
+  accumulation windows, overlaps, shapefile clipping and threads).
+
 ### HEC-RAS acceptance
 
 `tests/test_rasdss_hecras_acceptance.py` runs public example plans through
