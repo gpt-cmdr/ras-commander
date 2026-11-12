@@ -36,6 +36,19 @@ alone does not identify a development checkout.
   GeoTIFF from it, so `terrain_crs_fnv1a64` cannot replace it. Use the RAS
   Mapper export for such terrains. The shared engine CRS check states the
   same requirement.
+- **Public terrain-modification reader:** `RasFim.read_terrain_modifications()`
+  returns a terrain's modification layers in the form the native effective
+  terrain (`rasmapper-effective-terrain/2`) stages them, with the resolved
+  HEC-RAS version and unit system and how each was resolved (`*_basis`;
+  `"default"` when assumed), rasmap registration `warnings` (misnamed or
+  missing group, layers the rasmap lists that the HDF does not store), and the
+  reason when a form is refused
+  (`refusal`, plus the error's `reason` code as `refusal_reason`, for example
+  `multi_ring_polygon`; `status` `"staged"`, `"none"` or `"refused"`;
+  `ras-commander-terrain-modifications/1`). It wraps the reader that
+  `build_effective_terrain` already uses, so callers such as ras2cng no
+  longer import the private `ras_commander.fim._terrain_mods` module. No change
+  to the staged layers or the engine request.
 
 ### 0.118.0 — 2026-11-11
 
