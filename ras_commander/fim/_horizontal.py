@@ -44,7 +44,7 @@ class HorizontalGrid:
 
 def plan_grid(
     cells, terrain_path: Path, aoi, max_working_mib: int, native: bool = False,
-    storage_areas=None,
+    storage_areas=None, terrain_hdf=None,
 ) -> GridPlan:
     """Inspect metadata and admit the window before allocating raster arrays.
 
@@ -122,12 +122,12 @@ def plan_grid(
             )
         terrain_crs = src.crs
         if terrain_crs is None and native:
-            # A RAS Mapper source with no CRS tags: the Projection of the one
-            # terrain HDF that registers it. The engine identity then admits it
+            # A RAS Mapper source with no CRS tags: the Projection of the
+            # terrain HDF that registers it (``terrain_hdf`` when selected). The engine identity then admits it
             # only for crs_any engines (_engine.source_identity).
             from ._effective_terrain import registered_source_crs
 
-            declared = registered_source_crs(terrain_path)
+            declared = registered_source_crs(terrain_path, terrain_hdf)
             if declared is not None:
                 terrain_crs = rasterio.crs.CRS.from_wkt(declared.to_wkt())
         if terrain_crs is None or not _prepare.same_crs(cells.crs, terrain_crs):

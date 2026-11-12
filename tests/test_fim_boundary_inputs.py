@@ -324,3 +324,22 @@ def test_one_empty_stitch_array_still_refuses(terrain, tmp_path, monkeypatch):
     monkeypatch.setattr(fast_hdf, "read_dataset", lambda *a, **k: pytest.fail("read malformed stitch"))
     with pytest.raises(FimUnsupportedError, match="shape or dtype"):
         stage_boundary_terrain(hdf, tif, tmp_path / "out")
+
+
+def test_strict_links_refuse_soft_linked_empty_stitch_arrays(terrain, tmp_path, monkeypatch):
+    """Strict link checks precede the empty-array skip: soft-linked empty stitch
+    arrays are refused, never dereferenced and dropped."""
+    from ras_commander.fim._boundary_inputs import _boundary_specs
+    hdf, _ = terrain
+    with h5py.File(hdf, "a") as handle:
+        for name in ("Points", "Triangles"):
+            del handle[f"Terrain/Stitch TIN {name}"]
+            handle.create_dataset(f"Empty {name}", shape=(0, 0), dtype="<f4")
+            handle[f"Terrain/Stitch TIN {name}"] = h5py.SoftLink(f"/Empty {name}")
+    with h5py.File(hdf, "r") as handle:
+        source = handle["Terrain/source"]
+        with pytest.raises(FimUnsupportedError, match="Linked terrain boundary metadata"):
+            _boundary_specs(handle, source, [0], 6, strict_links=True)
+        # Without strict links the same arrays are no stitch TIN.
+        specs = _boundary_specs(handle, source, [0], 6, strict_links=False)
+        assert "stitch_points" not in specs and "stitch_triangles" not in specs

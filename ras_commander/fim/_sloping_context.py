@@ -182,9 +182,15 @@ class FimPreparedSlopingModel:
             self._cells.sindex
             # Untagged RAS Mapper sources take their registering terrain HDF's
             # Projection (crs_any engines only); otherwise as terrain_identity.
+            # That HDF is watched with the other inputs from before it is read.
+            self._terrain_crs_hdf = (_engine.untagged_source_hdf(self._terrain)
+                                     if _engine.crs_any(self._method) else None)
+            if self._terrain_crs_hdf is not None:
+                self._watched["terrain_crs_hdf"] = self._terrain_crs_hdf
+                self._identities["terrain_crs_hdf"] = _file_identity(self._terrain_crs_hdf)
             self._terrain_identity = _engine.source_identity(
                 self._engine, self._terrain, self._cells.crs, terrain_crs_fnv1a64,
-                crs_any=_engine.crs_any(self._method),
+                crs_any=_engine.crs_any(self._method), terrain_hdf=self._terrain_crs_hdf,
             )
             with rasterio.open(self._terrain) as source:
                 self._terrain_transform = list(source.transform.to_gdal())

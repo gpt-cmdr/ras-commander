@@ -219,16 +219,32 @@ def geokeys_for_crs(engine: Path, crs, folder: Path, *, timeout: Optional[float]
     return keys
 
 
+def untagged_source_hdf(tiff, terrain_hdf=None):
+    """For a terrain TIFF without CRS tags, the terrain HDF that registers it
+    (its CRS source, to watch with the other inputs); None for tagged TIFFs."""
+    import rasterio
+
+    with rasterio.open(tiff) as src:
+        if src.crs:
+            return None
+    from ._effective_terrain import registered_source_hdf
+    return registered_source_hdf(tiff, terrain_hdf)
+
+
 def source_identity(engine: Path, tiff: Path, results_crs, terrain_crs_fnv1a64: Optional[str] = None, *,
                     crs_any: bool = False, declared_crs=None, keys_folder: Optional[Path] = None,
-                    timeout: Optional[float] = None, source_crs_identity: bool = False) -> dict:
+                    timeout: Optional[float] = None, source_crs_identity: bool = False,
+                    terrain_hdf=None) -> dict:
     """:func:`terrain_identity`, plus RAS Mapper sources that carry no CRS.
 
     A TIFF without any CRS tags (RAS Mapper's terrain sources in a CRS without
     an EPSG code) is accepted only with ``crs_any`` and an explicit
     ``declared_crs`` (the terrain HDF's ``Projection``) equal to
     ``results_crs``: the identity is ``untagged`` with GDAL's GeoKeys for
-    that CRS (:func:`geokeys_for_crs`, round-trip checked).
+    that CRS (:func:`geokeys_for_crs`, round-trip checked). Without
+    ``declared_crs`` it is the Projection of the terrain HDF that registers
+    the TIFF (``terrain_hdf`` when given; see
+    :func:`_effective_terrain.registered_source_hdf`).
     """
     import rasterio
     from pyproj import CRS
@@ -237,7 +253,7 @@ def source_identity(engine: Path, tiff: Path, results_crs, terrain_crs_fnv1a64: 
         tagged = bool(src.crs)
     if not tagged and crs_any and declared_crs is None:
         from ._effective_terrain import registered_source_crs
-        declared_crs = registered_source_crs(tiff)
+        declared_crs = registered_source_crs(tiff, terrain_hdf)
     if tagged or not crs_any or declared_crs is None:
         kwargs = {"timeout": timeout} if timeout is not None else {}
         if crs_any:

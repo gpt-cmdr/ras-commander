@@ -2094,6 +2094,12 @@ class RasFim:
             watched["terrain_hdf"] = scope_info["terrain_hdf"]
         if isinstance(polygon, (str, os.PathLike)):
             watched["polygon"] = _require_path(polygon, "polygon")
+        # An untagged source's CRS comes from its terrain HDF: watch it too.
+        crs_hdf = (_engine.untagged_source_hdf(
+            terrain, scope_info["terrain_hdf"] if scope_info is not None else None)
+            if backend == "rust" else None)
+        if crs_hdf is not None:
+            watched.setdefault("terrain_crs_hdf", crs_hdf)
         before = {key: _file_identity(path) for key, path in watched.items()}
         mapping_started = time.perf_counter()
         ordered = cells.sort_values("cell_idx", kind="stable").reset_index(drop=True)
@@ -2102,6 +2108,7 @@ class RasFim:
         plan = _horizontal.plan_grid(
             ordered, terrain, constraint, budget, native=backend == "rust",
             storage_areas=storage[0].polygons if storage is not None else None,
+            terrain_hdf=crs_hdf,
         )
         folder = _prepare_output_folder(output_folder)
         rows = {name: _empty_row(name, "not_run") for name in names}

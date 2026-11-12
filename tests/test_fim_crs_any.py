@@ -410,3 +410,30 @@ def test_horizontal_plan_takes_the_registered_crs_of_an_untagged_source(tmp_path
     # A CRS other than the registered one is still refused.
     with pytest.raises(FimUnsupportedError, match="share a CRS"):
         _horizontal.plan_grid(cells.set_crs("EPSG:26930", allow_override=True), tif, None, 256, native=True)
+
+
+def test_an_explicit_terrain_hdf_resolves_an_ambiguous_source(tmp_path):
+    """Two sibling HDFs registering one source are ambiguous only without a
+    selection; the caller's terrain HDF must itself register the source."""
+    import shutil
+
+    hdf = _untagged_terrain(tmp_path)
+    with h5py.File(hdf, "a") as f:
+        f.attrs["File Type"] = b"HEC Terrain"
+    other = tmp_path / "copy.hdf"
+    shutil.copy(hdf, other)
+    with h5py.File(other, "a") as f:
+        f.attrs["Projection"] = CRS.from_user_input("EPSG:26930").to_wkt().encode()
+    tif = tmp_path / "T.only.tif"
+    assert _effective_terrain.registered_source_hdf(tif) is None
+    assert _effective_terrain.registered_source_hdf(tif, hdf) == hdf.resolve()
+    assert _effective_terrain.registered_source_crs(tif, hdf).equals(CRS.from_user_input(ESRI))
+    assert _effective_terrain.registered_source_crs(tif, other).equals(CRS.from_user_input("EPSG:26930"))
+    unrelated = tmp_path / "unrelated.hdf"
+    with h5py.File(unrelated, "w") as f:
+        f.attrs["File Type"] = b"HEC Terrain"
+        f.create_group("Terrain/x").attrs["File"] = b"x.tif"
+    assert _effective_terrain.registered_source_hdf(tif, unrelated) is None
+    # Tagged TIFFs have no CRS HDF to watch.
+    assert _engine.untagged_source_hdf(_tif(tmp_path / "tagged.tif", ESRI)) is None
+    assert _engine.untagged_source_hdf(tif, hdf) == hdf.resolve()

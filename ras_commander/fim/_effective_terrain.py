@@ -149,36 +149,47 @@ def _source_identities(engine: Path, sources: list, crs, identity: dict) -> None
             source["crs_identity"] = {"kind": "caller_verified_wkt", "fnv1a64": fnv}
 
 
-def registered_source_crs(tif):
-    """The CRS of a RAS Mapper terrain source TIFF that carries none, or None.
-
-    Evidence, never inference: exactly one sibling HEC terrain HDF must
-    register this file name as a source (``Terrain/<source>`` ``File``), and
-    that HDF's root ``Projection`` is the CRS.
-    """
+def _registers(hdf, tif) -> bool:
+    """True when ``hdf`` is a HEC terrain HDF with a ``Terrain/<source>`` whose
+    ``File`` (relative to the HDF) is ``tif``."""
     import h5py
 
+    try:
+        with h5py.File(hdf, "r") as handle:
+            kind = handle.attrs.get("File Type")
+            kind = kind.decode("utf-8", "replace") if isinstance(kind, bytes) else kind
+            terrain = handle.get("Terrain")
+            if kind != "HEC Terrain" or not isinstance(terrain, h5py.Group):
+                return False
+            names = []
+            for group in terrain.values():
+                value = getattr(group, "attrs", {}).get("File")
+                if value is not None:
+                    names.append(value.decode("utf-8", "replace") if isinstance(value, bytes) else str(value))
+    except OSError:
+        return False
+    target = Path(tif).resolve()
+    return any((Path(hdf).parent / name.replace("\\", "/")).resolve() == target for name in names)
+
+
+def registered_source_hdf(tif, terrain_hdf=None):
+    """The HEC terrain HDF that registers terrain source ``tif``, or None.
+
+    With ``terrain_hdf`` (the caller's selection) only that HDF is checked.
+    Without it, exactly one sibling ``*.hdf`` must register ``tif``; none or
+    several leave it unresolved. Evidence, never inference.
+    """
     tif = Path(tif)
-    found = []
-    for hdf in sorted(tif.parent.glob("*.hdf")):
-        try:
-            with h5py.File(hdf, "r") as handle:
-                kind = handle.attrs.get("File Type")
-                kind = kind.decode("utf-8", "replace") if isinstance(kind, bytes) else kind
-                terrain = handle.get("Terrain")
-                if kind != "HEC Terrain" or terrain is None:
-                    continue
-                names = []
-                for group in terrain.values():
-                    value = getattr(group, "attrs", {}).get("File")
-                    names.append(value.decode("utf-8", "replace") if isinstance(value, bytes) else value)
-        except OSError:
-            continue
-        if tif.name in names:
-            found.append(hdf)
-    if len(found) != 1:
-        return None
-    return _terrain_hdf_crs(found[0])
+    candidates = [Path(terrain_hdf)] if terrain_hdf is not None else sorted(tif.parent.glob("*.hdf"))
+    found = [hdf for hdf in candidates if _registers(hdf, tif)]
+    return found[0].resolve() if len(found) == 1 else None
+
+
+def registered_source_crs(tif, terrain_hdf=None):
+    """The CRS of a RAS Mapper terrain source TIFF that carries none, or None:
+    the root ``Projection`` of :func:`registered_source_hdf`."""
+    hdf = registered_source_hdf(tif, terrain_hdf)
+    return _terrain_hdf_crs(hdf) if hdf is not None else None
 
 
 def _terrain_hdf_crs(terrain_hdf):

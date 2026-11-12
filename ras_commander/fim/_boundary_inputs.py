@@ -83,8 +83,16 @@ def _boundary_specs(handle, source, tiles, tile_count, *, include_stitch=True,
         present = ((handle.get(path, getlink=True) is not None) if strict_links
                    else path in handle for path in (points_path, triangles_path))
         points_present, triangles_present = present
+        def hard(path):
+            parts = path.strip("/").split("/")
+            return all(isinstance(handle.get("/".join(parts[:n]), getlink=True), h5py.HardLink)
+                       for n in range(1, len(parts) + 1))
+
+        # Strict mode checks every link before any dataset is dereferenced;
+        # linked stitch arrays then fall through to add(), which refuses them.
         if points_present and triangles_present and all(
-                isinstance(handle.get(path), h5py.Dataset) and handle[path].size == 0
+                (not strict_links or hard(path))
+                and isinstance(handle.get(path), h5py.Dataset) and handle[path].size == 0
                 for path in (points_path, triangles_path)):
             # A single-source terrain stores empty (0, 0) stitch arrays: no TIN.
             points_present = triangles_present = False
