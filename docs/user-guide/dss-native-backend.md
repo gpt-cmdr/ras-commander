@@ -73,11 +73,13 @@ If `ras-commander-fast-dss` is not installed:
 | `write_timeseries`, `write_timeseries_from_dataframe`, `write_paired_data`, `write_grid_timeseries`, `copy_grid_with_zero_tail` | `java`: Java. `native`: ras-commander-fast-dss writers (see [Writes](#writes)). `shadow`: Java; the write is repeated natively on a temporary copy and compared |
 | `write_precip_grid_arrays` | `java`: pydsstools (unchanged). `native`: ras-commander-fast-dss. `shadow`: pydsstools, compared with a native copy |
 | `repair` | ras-commander-fast-dss on every backend; DSS7 copy-out recovery into a new file (see [Interrupted writes and `repair`](../native-engine.md#dss-repair)) |
+| `read_profile`, `write_profile`, `read_location`, `read_associated_location`, `write_location` | ras-commander-fast-dss on every backend (see [Engine-only operations](#engine-only-operations)) |
+| `RasDssGrid.*` (gridded import and grid tools) | ras-commander-fast-dss on every backend (see [Engine-only operations](#engine-only-operations)) |
 
 `RasDss.get_capabilities()` returns this matrix as a DataFrame (`operation`,
 `java`, `native`, `shadow`, `note`; values `yes`, `gated`, `java`, `no`).
 `attrs["native_writes_available"]` tells whether the installed wheel has the
-writers.
+writers, and `attrs["native_write_sync_available"]` whether they take `sync=`.
 
 Under `native`, an operation the backend does not support raises
 `DssCapabilityError`; it never falls back to Java. A `native` workflow that
@@ -86,6 +88,82 @@ reads and writes DSS needs no Java at all.
 Under `native`, `read_multiple_timeseries` opens the file once for all
 pathnames. On the RasExamples shadow run this made reads 9.6 times faster than
 Java in total; with one open per call they were 3.0 times faster.
+
+## Engine-only operations
+
+Some operations have no Java route in RAS Commander. They always run on
+ras-commander-fast-dss, whatever `RasDss.backend` is, pass their arguments to the
+engine and return its result unchanged. Each raises `ImportError` when the package
+is missing and `DssCapabilityError` when the installed version does not provide
+the operation. `help(ras_commander_fast_dss.<name>)` is the full reference for
+every option.
+
+### Profiles and locations
+
+```python
+from ras_commander import RasDss
+
+# A regular-interval profile: values by time and depth (DSS7 record types 102/107).
+RasDss.write_profile(
+    "lake.dss", "/LAKE/DAM/TEMP-WATER//1Day/OBS/",
+    depths=[0.0, 5.0, 10.0], values=temperatures,       # shape (n_times, n_depths)
+    start="01JAN2024 2400", depth_units="ft", value_units="DEG F", data_type="INST-VAL",
+)
+profile = RasDss.read_profile("lake.dss", "/LAKE/DAM/TEMP-WATER//1Day/OBS/")
+frame = profile.to_dataframe()                           # rows are times, columns are depths
+
+# Location data: a DSS7 location record, or the header of a DSS6 time series.
+RasDss.write_location("gages.dss", "/BASIN/GAGE1/FLOW//1Hour/OBS/", x=-90.07, y=29.95, z=3.2)
+location = RasDss.read_associated_location("gages.dss", "/BASIN/GAGE1/FLOW//1Hour/OBS/")
+print(location.coordinates)
+```
+
+`read_profile` returns the engine's `Profile` and the location readers its
+`Location`. Profiles exist only in DSS7; irregular profiles (112/117) are not
+read or written. `write_location` needs an existing file. Supplemental location
+text is informational: a datum named in it is never applied to values.
+
+### Gridded import and grid tools (`RasDssGrid`)
+
+`RasDssGrid` wraps the engine's `gridded` namespace: importing gridded source
+files into DSS grid records, and processing DSS grids, without Java, HEC-Vortex
+or GDAL.
+
+| Method | What it does |
+|---|---|
+| `import_gridded`, `import_arrays`, `import_zarr` | GRIB2, NetCDF, HDF5, GeoTIFF, ASCII grid, a local Zarr v2 store, or arrays, to DSS grids |
+| `list_variables`, `zarr_variables`, `read_zarr` | What a source offers; a window of a Zarr variable |
+| `calculate`, `calculate_raster`, `sanitize`, `clip`, `normalize` | Grid calculator, raster calculator, sanitizer, clipper, normalizer |
+| `shift_times`, `resample_times`, `time_steps` | Time shift and time-step resampling |
+| `series_info`, `read_window`, `read_nearest`, `read_min_max` | Read a grid series without writing |
+| `grid_to_point`, `zonal_statistics`, `zone_masks` | Zonal statistics as DSS time series, or as a table |
+| `get_features` | Which of these groups the installed engine provides |
+
+```python
+from ras_commander import RasDssGrid
+
+result = RasDssGrid.import_gridded(
+    ["MRMS_MultiSensor_QPE_01H_Pass2_00.00_20240926-220000.grib2"],
+    "storm.dss",
+    product="mrms_qpe",
+    envelope=(-646000, 1922000, -444000, 2124000),
+    parts={"A": "SHG", "B": "MRMS_QPE", "F": "PASS2"},
+)
+RasDssGrid.grid_to_point("storm.dss", "basins.geojson", "NAME", "basin_average.dss",
+                         parts={"A": "SHG", "F": "PASS2"})
+```
+
+The engine plans a run before it writes, so a refused run leaves the output
+untouched. Its documentation lists the supported source layouts, projections and
+resampling methods, and where its records differ from HEC-Vortex by design.
+Import `units=` relabels a record; it does not convert values. The importer's
+`cell_size` is in metres.
+
+### Flush policy (`sync=`)
+
+The RasDss writers and the `RasDssGrid` methods that write accept `sync=` and
+pass it to the engine unchanged. Unstated, the installed engine's own default
+applies. See [Interrupted writes, `sync=` and `repair`](../native-engine.md#dss-repair).
 
 ## Differences from the Java backend
 

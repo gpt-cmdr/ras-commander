@@ -210,7 +210,8 @@ def write_precip_grid_arrays_native(dss_file, pathname, data, interval_bounds, *
     try:
         dc.create(str(temporary), 7)
         for path, frame in zip(paths, values):
-            dc.write_grid(str(temporary), path, frame, **kwargs)
+            dc.write_grid(str(temporary), path, frame, **kwargs,
+                          **_backend.native_sync_kwargs())
         expected_zero = np.asarray(cell_zero, dtype=np.float32)
         with dc.open(str(temporary)) as reader:
             for path in paths:

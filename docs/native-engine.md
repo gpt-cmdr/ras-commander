@@ -272,7 +272,7 @@ print(sorted(fast_dss.FEATURES))   # e.g. grid_srs_monolith_parity, gridded_impo
 Existing [DSS operations](user-guide/dss-operations.md) work unchanged on the
 default `java` backend.
 
-### Interrupted writes, `sync=False` and `repair` {#dss-repair}
+### Interrupted writes, `sync=` and `repair` {#dss-repair}
 
 Release 0.1.1 fixes how a DSS7 write that was interrupted is completed, and adds
 two engine functions. The scope is the engine's, and ras-commander does not
@@ -283,23 +283,34 @@ widen it:
   interrupted one when the file was consistent before it. It is not a power-loss
   or operating-system-crash guarantee, and a normal write never repairs damage it
   did not cause.
-- **`sync=False` (opt-in).** The engine's writers (`write_timeseries`,
-  `write_paired_data`, `write_grid`, `write_location`, `write_profile`) accept
-  `sync=`. The default, `True`, keeps the `fsync` calls at the transaction's
-  flush points. `False` skips them: the process-death behavior is unchanged, but
-  after a power loss or an operating-system crash the write, and earlier
-  unflushed writes, may be missing or torn. Use it only for scratch or
-  regenerable files. RasDss writers always use the default; call the engine
-  directly to opt in:
+- **`sync=` (flush policy).** The engine's writers accept `sync=`, and the RasDss
+  writers (`write_timeseries`, `write_timeseries_from_dataframe`,
+  `write_paired_data`, `write_grid_timeseries`, `copy_grid_with_zero_tail`,
+  `write_precip_grid_arrays`, `write_profile`, `write_location`) and the
+  `RasDssGrid` tools that write pass it through unchanged. Left unstated
+  (`sync=None`), RasDss sends nothing and the installed engine's own default
+  applies; that default belongs to the engine and can change between its
+  releases, so state a value when a workflow depends on one. In
+  ras-commander-fast-dss 0.1.1, `True` keeps the `fsync` calls at the
+  transaction's flush points and `False` skips them: the process-death behavior
+  is unchanged, but after a power loss or an operating-system crash the write,
+  and earlier unflushed writes, may be missing or torn. No value is a power-loss
+  guarantee. Use `False` only for scratch or regenerable files:
 
     ```python
-    import ras_commander_fast_dss as fast_dss
+    from ras_commander import RasDss
 
-    fast_dss.create("scratch.dss")  # the engine writers need an existing file
-    fast_dss.write_timeseries("scratch.dss", "/A/B/FLOW/01JAN2020/1HOUR/RUN/",
-                              [10.0, 12.5, 11.0], start="2020-01-01 01:00", units="CFS",
-                              data_type="INST-VAL", sync=False)
+    RasDss.backend = "native"
+    RasDss.write_timeseries("scratch.dss", "/A/B/FLOW//1HOUR/RUN/", times, values,
+                            units="CFS", data_type="INST-VAL", sync=False)
     ```
+
+    The `java` backend does not use `sync` (HEC's library manages its own
+    flushing), and `shadow` applies it to the native repeat only.
+    `RasDss.get_capabilities().attrs["native_write_sync_available"]` reports
+    whether the installed engine's writers take it (`FEATURES` flag
+    `write_sync_policy`); stating `sync` under `native` without it raises
+    `DssCapabilityError`.
 
 - **`repair(src, dest)`** is the recovery path for a damaged DSS7 file. It opens
   `src` read-only, copies the readable records that its documented discovery
@@ -322,8 +333,7 @@ widen it:
 
     `ras_commander_fast_dss.repair(src, dest)` returns the same `dict`.
     `RasDss.get_capabilities().attrs["native_repair_available"]` reports
-    whether the installed engine has it (`FEATURES` flag `repair_copy_out`;
-    `write_sync_policy` marks `sync=`).
+    whether the installed engine has it (`FEATURES` flag `repair_copy_out`).
 
 The engine's README section "Interrupted writes, `sync=` and `repair`" and its
 DSS7 format notes give the full crash model and known limitations.

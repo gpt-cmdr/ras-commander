@@ -127,6 +127,7 @@ Automated geometry repair:
 Classes for reading and writing DSS files:
 
 - [`RasDss`](dss.md#rasdss) - DSS file operations
+- [`RasDssGrid`](dss.md#rasdssgrid) - Gridded import and grid tools for DSS files
 
 ## Containers and Slurm
 
