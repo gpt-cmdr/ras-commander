@@ -526,3 +526,30 @@ def test_coverage_scan_bounds_wine_path_conversion(monkeypatch):
             deadline=time.monotonic() + 30,
         )
     assert 0 < seen["timeout"] <= 30
+
+
+def test_out_of_memory_needs_the_exception_token():
+    path_only = "C:\cases\System.OutOfMemoryExceptionTests\terrain.tif not found"
+    assert host.classify_helper_failure({"error": path_only}, "") == "native_error"
+    assert host.classify_helper_failure(
+        {}, "Unhandled exception. System.OutOfMemoryException: Insufficient memory"
+    ) == "out_of_memory"
+
+
+@pytest.mark.parametrize("dtype, nodata", [("int16", -32768), ("uint8", 0)])
+def test_coverage_scan_reads_integer_rasters(tmp_path, dtype, nodata):
+    path = tmp_path / f"{dtype}.tif"
+    data = np.full((4, 4), nodata, dtype=dtype)
+    data[1, 2] = 7
+    with rasterio.open(
+        path, "w", driver="GTiff", width=4, height=4, count=1, dtype=dtype,
+        crs=f"EPSG:{CRS_EPSG}", transform=from_origin(0.0, 20.0, 5.0, 5.0), nodata=nodata,
+    ) as dataset:
+        dataset.write(data, 1)
+    report = host.check_extent_source_coverage(
+        [{"index": 0, "filename": str(path),
+          "extent": {"min_x": 0, "min_y": 0, "max_x": 20, "max_y": 20}}],
+        (0.0, 0.0, 20.0, 20.0),
+    )
+    assert report["status"] == "has_data"
+    assert report["sources"][0]["valid_cells"] == 1

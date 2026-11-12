@@ -58,7 +58,8 @@ EMPTY_EXTENT_NODATA_VALUE = -9999.0
 # valid cell: TiffAssist.FloatTiffWriter.ComputeSetHistogram, called from
 # TerrainLayer.GenerateNewRasTerrain.
 _EMPTY_WINDOW_MARKER = "does not have embedded statistics"
-_OUT_OF_MEMORY_MARKER = "OutOfMemoryException"
+#: The .NET exception name as a token, not part of a path or identifier.
+_OUT_OF_MEMORY_PATTERN = re.compile(r"(?<![\w.])System\.OutOfMemoryException(?!\w)")
 # Wine prints these in successful and failed runs alike. They are kept in the
 # retained stderr but never used as the summary of a helper failure.
 _BENIGN_STDERR_PATTERNS = (
@@ -503,7 +504,7 @@ def classify_helper_failure(response: dict[str, Any], stderr: str = "") -> str:
         [str(response.get(key) or "") for key in ("error_type", "error", "details")]
         + [stderr or ""]
     )
-    if _OUT_OF_MEMORY_MARKER in text:
+    if _OUT_OF_MEMORY_PATTERN.search(text):
         return FAILURE_OUT_OF_MEMORY
     if _EMPTY_WINDOW_MARKER in text:
         return FAILURE_EMPTY_EXTENT_UNCONFIRMED
@@ -1083,7 +1084,7 @@ def _run_helper(
 
     if not response_path.is_file():
         diagnostic, benign = _split_stderr(stderr)
-        if _OUT_OF_MEMORY_MARKER in stderr:
+        if _OUT_OF_MEMORY_PATTERN.search(stderr):
             fail(
                 "Native terrain helper ran out of memory (.NET "
                 "System.OutOfMemoryException) and wrote no response "
@@ -1305,7 +1306,11 @@ def _count_valid_cells(
             block = dataset.read(
                 1, window=Window(col0, start, width, height), masked=True
             )
-            valid = ~np.ma.getmaskarray(block) & np.isfinite(block.filled(np.nan))
+            valid = ~np.ma.getmaskarray(block)
+            data = np.ma.getdata(block)
+            if np.issubdtype(data.dtype, np.floating):
+                # Integer rasters have no non-finite values (and cannot hold NaN).
+                valid &= np.isfinite(data)
             count = int(valid.sum())
             if count:
                 # One valid cell is enough to refute an empty window.
