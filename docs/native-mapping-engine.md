@@ -2356,9 +2356,38 @@ assert products.attrs["qualified"] is False
 
 `RasFim.map_coupled_profiles()` provides the source-path convenience route.
 Preparation and mapping refuse by default before engine lookup or output writes.
-Only plain corner-sloping Depth/WSE is admitted. Mixed steady results, storage
-areas, pipes, blocked polygons, encroachments and degenerate geometry remain
-unsupported. Existing 1D-only and strict 2D admission are unchanged.
+Only plain corner-sloping Depth/WSE is admitted. Mixed steady results, pipes,
+blocked polygons, encroachments and degenerate geometry remain unsupported.
+Existing 1D-only and strict 2D admission are unchanged.
+
+### Mixed models with storage areas
+
+With `ras-commander-fast-map` 0.18.0 or later, mixed models that contain
+storage areas are prepared and mapped through the same calls. Preparation
+stages the storage-area polygons and one Float32 water surface per area and
+profile (`Maximum Water Surface` for `"Max"`, otherwise the stored output row),
+and proves that the storage-area series uses the shared Base Output timestamp
+axis. For each profile the mapper runs the XS and 2D components, then the
+storage-only transport (`fast-map-storage/1`, `storage-area-level-pool/1`), and
+composes all three with coupled schema `/2`
+(`one-d-two-d-storage-coverage-first-diagnostic/1`). Physical storage coverage
+suppresses the XS surface before visibility, as 2D coverage does, including
+where the storage area is dry. The receipt's `storage` record binds the names,
+polygons and levels; the manifest identifies the schema `/2` method and the
+storage component contract, with `qualified=False`.
+
+Refused with `FimUnsupportedError` before any write:
+
+- a storage area whose interior overlaps a 2D flow area perimeter at a terrain
+  pixel centre (the engine rejects physical storage/2D overlap until it is
+  qualified; a shared edge is admitted);
+- storage areas with `grid_contract="rasmapper-stored-tile-grid/1"`, because
+  the stored-grid coupled schema `/3` excludes storage;
+- engines older than Fast-Map 0.18.0, or engines that lack the `storage` and
+  `coupled_storage_diagnostic` contracts.
+
+Storage support does not change qualification: the route still requires
+`allow_unqualified=True`.
 
 The engine must advertise `export_physical_ownership`. The sloping pass exports
 UInt32 labels from the same physical polygon burn used by its products, including

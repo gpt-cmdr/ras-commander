@@ -3,7 +3,9 @@ from __future__ import annotations
 
 import hashlib
 import json
+import logging
 import math
+import re
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -16,13 +18,20 @@ from . import _native_grid
 from ._source_crs import source_crs, describe_crs
 from ._one_d import (digest, write_json, _profile_selection, canonical_arrays,
                      _plan_delivery_aoi, METHOD_ID as XS_METHOD_ID,
-                     REQUEST_SCHEMA as XS_SCHEMA)
+                     REQUEST_SCHEMA as XS_SCHEMA, STORAGE_METHOD_ID, STORAGE_SCHEMA,
+                     COMPOSITION_METHOD_ID as STORAGE_COMPOSITION_METHOD_ID,
+                     COMPOSITION_SCHEMA as STORAGE_COMPOSITION_SCHEMA)
+
+logger = logging.getLogger(__name__)
 
 METHOD_ID = "one-d-two-d-coverage-first-diagnostic/1"
 REQUEST_SCHEMA = "fast-map-coupled-diagnostic/1"
 TWO_D_METHOD = "rasmapper-plain-sloping/1"
 TWO_D_SCHEMA = "ras-commander-sloping-request/1"
 _PREPARATION_SEAL = object()
+# Fast-Map release whose coupled schema /2 contract composes prepared storage
+# products with physical 2D coverage; earlier engines are refused.
+STORAGE_ENGINE_MINIMUM = (0, 18, 0)
 
 
 def _contracts(grid_contract=None):
@@ -89,9 +98,103 @@ def _require_mixed(hdf):
     scope = RasFim.inspect_model_scope(hdf)
     if scope.dimension != "mixed_1d_2d" or not scope.mesh_names or not scope.cross_section_count:
         raise FimUnsupportedError("coupled mapping requires actual mixed_1d_2d geometry")
-    if scope.storage_area_names:
-        raise FimUnsupportedError("mixed models with storage areas are unsupported")
     return scope
+
+
+def _storage_names(scope):
+    return tuple(getattr(scope, "storage_area_names", ()) or ())
+
+
+def _storage_contract():
+    return {"storage": {"method_id": STORAGE_METHOD_ID, "request_schema": STORAGE_SCHEMA},
+            "composition": {"method_id": STORAGE_COMPOSITION_METHOD_ID,
+                            "request_schema": STORAGE_COMPOSITION_SCHEMA}}
+
+
+def _engine_version(capabilities):
+    """Release triple reported by the engine, or None when it is not parseable."""
+    raw = getattr(capabilities, "engine_version", None)
+    if raw is None:
+        record = getattr(capabilities, "raw_record", None) or {}
+        raw = (record.get("engine") or {}).get("version") if isinstance(record, Mapping) else None
+    match = re.match(r"^\s*v?(\d+)\.(\d+)\.(\d+)", str(raw)) if raw is not None else None
+    return (tuple(int(part) for part in match.groups()) if match else None), raw
+
+
+def _require_storage_engine(capabilities, grid_contract=None):
+    """Require Fast-Map 0.18.0+ storage transport and coupled storage schema /2."""
+    if grid_contract is not None:
+        raise FimUnsupportedError(
+            "mixed models with storage areas are unsupported with grid_contract; the native "
+            "stored-grid coupled schema /3 excludes storage (use grid_contract=None)")
+    version, raw = _engine_version(capabilities)
+    minimum = ".".join(map(str, STORAGE_ENGINE_MINIMUM))
+    if version is None or version < STORAGE_ENGINE_MINIMUM:
+        raise FimUnsupportedError(
+            f"mixed models with storage areas require ras-commander-fast-map >= {minimum}; "
+            f"the engine reports version {raw!r}")
+    methods = getattr(capabilities, "methods", {}) or {}
+    for key, method, schema in (("storage", STORAGE_METHOD_ID, STORAGE_SCHEMA),
+                                ("coupled_storage_diagnostic", STORAGE_COMPOSITION_METHOD_ID,
+                                 STORAGE_COMPOSITION_SCHEMA)):
+        support = methods.get(key)
+        if (support is None or support.method_id != method
+                or schema not in support.request_schemas):
+            raise FimUnsupportedError(
+                f"mixed models with storage areas require engine contract {key} "
+                f"({method}, {schema}); install ras-commander-fast-map >= {minimum}")
+    return methods["storage"], methods["coupled_storage_diagnostic"]
+
+
+def _storage_overlap(hdf, storage, grid, budget):
+    """Refuse storage areas whose pixels would also be physical 2D coverage.
+
+    Fast-Map's coupled storage schema /2 rejects any pixel owned by both a
+    storage area and a 2D cell. This check applies the same pixel-centre rule
+    to each storage polygon's intersection with the 2D flow area perimeters
+    on the full terrain lattice, so the refusal names the areas before any
+    staging. Shared edges have no area and are admitted.
+    """
+    import shapely
+    from affine import Affine
+    from rasterio import features
+    from .. import HdfMesh
+    perimeters = HdfMesh.get_mesh_areas(hdf)
+    if perimeters is None or perimeters.empty:
+        # _require_mixed admitted 2D areas, so an empty frame means the
+        # perimeters could not be read; the overlap stays unproven.
+        raise FimUnsupportedError(
+            "storage/2D overlap cannot be checked: 2D flow area perimeters are unreadable")
+    gt = grid["geo_transform"]
+    names = perimeters["mesh_name"] if "mesh_name" in perimeters else perimeters.index
+    for name, polygon in zip(storage.names, storage.polygons):
+        polygon = shapely.make_valid(polygon)
+        for mesh_name, perimeter in zip(names, perimeters.geometry):
+            overlap = polygon.intersection(shapely.make_valid(perimeter))
+            if overlap.is_empty or overlap.area <= 0:
+                continue
+            minx, miny, maxx, maxy = overlap.bounds
+            col0 = max(int(math.floor((minx - gt[0]) / gt[1])), 0)
+            col1 = min(int(math.ceil((maxx - gt[0]) / gt[1])), grid["width"])
+            row0 = max(int(math.floor((maxy - gt[3]) / gt[5])), 0)
+            row1 = min(int(math.ceil((miny - gt[3]) / gt[5])), grid["height"])
+            if col1 <= col0 or row1 <= row0:
+                continue
+            if (col1 - col0) * (row1 - row0) > max(budget // 8, 1):
+                raise FimUnsupportedError(
+                    f"storage area {name!r} overlap check against 2D area {mesh_name!r} exceeds max_working_mib")
+            # GDAL's default rasterization selects pixel centres, as the
+            # storage and physical 2D burns do.
+            inside = features.rasterize(
+                [overlap], out_shape=(row1 - row0, col1 - col0),
+                transform=Affine.from_gdal(gt[0] + col0 * gt[1], gt[1], 0.0,
+                                           gt[3] + row0 * gt[5], 0.0, gt[5]),
+                fill=0, default_value=1, dtype="uint8")
+            if inside.any():
+                raise FimUnsupportedError(
+                    f"storage area {name!r} physically overlaps 2D flow area {mesh_name!r}; "
+                    "physical storage/2D overlap is refused by the coupled storage composition "
+                    "until qualified")
 
 
 def _require_engine(engine_path, grid_contract=None):
@@ -168,8 +271,25 @@ def _alignment(hdf, profiles):
         for selector in profiles:
             if selector != "Max" and (not isinstance(selector, int) or selector >= len(axis)):
                 raise FimUnsupportedError("mixed profile must select Max or a stored timestamp index")
-        return {"axis_path": axis_path, "timestamps": axis, "components": components,
-                "selected": ["Max" if p == "Max" else axis[p] for p in profiles]}
+        result = {"axis_path": axis_path, "timestamps": axis, "components": components,
+                  "selected": ["Max" if p == "Max" else axis[p] for p in profiles]}
+        attributes = source.get("Geometry/Storage Areas/Attributes")
+        if isinstance(attributes, h5py.Dataset) and attributes.shape and attributes.shape[0]:
+            # Storage areas are a separate component keyed outside the mesh
+            # names; models without storage keep their earlier alignment.
+            series = source.get(prefix + "Storage Areas/Water Surface")
+            if (not isinstance(series, h5py.Dataset) or series.ndim != 2
+                    or series.shape != (len(axis), attributes.shape[0])):
+                raise FimUnsupportedError("storage-area output does not bind the shared Base Output timestamp axis")
+            storage = {"dataset": series.name, "shape": list(series.shape)}
+            if "Max" in profiles:
+                summary = source.get(summary_prefix + "Storage Areas/Maximum Water Surface")
+                if (not isinstance(summary, h5py.Dataset) or summary.ndim != 2
+                        or summary.shape[1] != attributes.shape[0]):
+                    raise FimUnsupportedError("storage-area Max requires a stored summary for every storage area")
+                storage["maximum"] = {"dataset": summary.name, "shape": list(summary.shape)}
+            result["storage"] = storage
+        return result
 
 
 def _stage_mesh(hdf, folder, selected, budget, threads):
@@ -222,6 +342,9 @@ def _validate_coupled_receipt(prepared, receipt):
         scope = _require_mixed(receipt["source_hdf"])
         if scope.to_dict() != receipt["scope_evidence"]:
             raise ValueError("model scope evidence changed")
+        storage_names = sorted((receipt.get("storage") or {}).get("names", []))
+        if sorted(_storage_names(scope)) != storage_names:
+            raise ValueError("storage areas differ from the model scope")
         geometry_path = getattr(scope, "geometry_path", None)
         if geometry_path is not None and str(geometry_path) not in receipt["sha256"]:
             raise ValueError("missing source geometry hash coverage")
@@ -326,8 +449,21 @@ class FimPreparedCoupledModel:
             if not isinstance(files, dict) or set(files) != set(sizes) or not isinstance(hashes, dict):
                 raise ValueError("required payloads")
             required = [receipt["source_hdf"], receipt["terrain"], receipt["point_m_evidence"], *files.values(), *levels]
-            if receipt.get("storage") is not None:
-                raise ValueError("mixed storage is unsupported")
+            storage = receipt.get("storage")
+            if storage is not None:
+                count = storage["count"]
+                if (receipt.get("grid_contract") is not None
+                        or isinstance(count, bool) or not isinstance(count, int) or count <= 0
+                        or not isinstance(storage["names"], list) or len(storage["names"]) != count
+                        or len(set(storage["names"])) != count
+                        or not isinstance(storage["levels"], list) or len(storage["levels"]) != len(levels)
+                        or storage["method_id"] != STORAGE_METHOD_ID
+                        or storage["request_schema"] != STORAGE_SCHEMA
+                        or storage.get("composition") != _storage_contract()["composition"]):
+                    raise ValueError("storage receipt identity/cardinality")
+                required.extend([storage["polygons"], *storage["levels"]])
+                if any(Path(path).stat().st_size != count*4 for path in storage["levels"]):
+                    raise ValueError("storage profile byte count")
             if any(not isinstance(path, str) or path not in hashes for path in required):
                 raise ValueError("missing source/payload hash coverage")
             for name, size in sizes.items():
@@ -425,6 +561,8 @@ def prepare_coupled_model(hdf_path, terrain_path, output_folder, *, profiles=Non
     created_paths = []
     try:
         scope = _require_mixed(hdf)
+        if _storage_names(scope):
+            _require_storage_engine(capabilities, grid_contract)
         geometry_path = getattr(scope, "geometry_path", None)
         if geometry_path is not None:
             metadata_sources[str(geometry_path)] = _source_identity(geometry_path)
@@ -476,6 +614,17 @@ def prepare_coupled_model(hdf_path, terrain_path, output_folder, *, profiles=Non
         for k, xs_receipt in enumerate(xs_receipts):
             xs_receipt["profile_wse"] = [float(row[k]) for row in checked_levels]
             xs_receipt["profile_wse_f32_bits"] = [int(row[k:k+1].view("<u4")[0]) for row in checked_levels]
+        storage = storage_values = None
+        if _storage_names(scope):
+            from . import _storage_areas
+            storage = _storage_areas.read(hdf, max_bytes=budget//4,
+                                         geometry_policy=_storage_areas.NATIVE_EVEN_ODD)
+            if storage is None or sorted(storage.names) != sorted(_storage_names(scope)):
+                raise FimUnsupportedError("storage-area geometry does not match the model scope")
+            _storage_overlap(hdf, storage, grid, budget)
+            storage_values = _storage_areas.profile_values(
+                hdf, storage, dict(zip(profile_ids, profiles)), max_bytes=budget//4)
+            logger.debug("Coupled preparation stages %d storage areas", len(storage))
         folder = _prepare_output_folder(output_folder)
         files = {}
         for name, array in arrays.items():
@@ -493,6 +642,22 @@ def prepare_coupled_model(hdf_path, terrain_path, output_folder, *, profiles=Non
             values.tofile(path)
             levels.append(str(path))
         storage_receipt = None
+        if storage is not None:
+            from . import _storage_areas
+            storage_file = folder / "storage_areas.wkb"
+            created_paths.append(storage_file)
+            _storage_areas.stage_polygons(storage, folder)
+            pool_levels = []
+            for i, name in enumerate(profile_ids):
+                path = folder / f"storage-profile-{i:04d}.f32"
+                created_paths.append(path)
+                storage_values[name].tofile(path)
+                pool_levels.append(str(path))
+            storage_receipt = {"names": list(storage.names), "count": len(storage),
+                               "polygons": str(storage_file), "levels": pool_levels,
+                               **_storage_contract()["storage"],
+                               "composition": _storage_contract()["composition"],
+                               "geometry": _storage_areas.geometry_metadata(storage)}
         # Per-point raw/normalized evidence preserves Float64 bits including unchanged points.
         evidence = np.column_stack((arrays["points"][:, 3], arrays["normalized_m"]))
         evidence_path = folder / "point-m-evidence.f64"
@@ -502,7 +667,9 @@ def prepare_coupled_model(hdf_path, terrain_path, output_folder, *, profiles=Non
                    "method_id": contracts["method"], "request_schema": contracts["schema"],
                    "component_contracts": _component_contracts(contracts),
                    "semantics_reference": "7.0.1 preparation; 6.6 normalization/endpoint selection source-verified; full-corpus parity unqualified",
-                   "scope": "global stored XS TIN and physical 2D plain corner-sloping coverage",
+                   "scope": ("global stored XS TIN, physical 2D plain corner-sloping coverage "
+                             "and disjoint storage level pools" if storage is not None else
+                             "global stored XS TIN and physical 2D plain corner-sloping coverage"),
                    "storage": storage_receipt, "result_kind": data["result_kind"],
                    "stored_profile_names": data["stored_profile_names"],
                    "source_hdf": str(hdf), "terrain": str(terrain), "grid": grid,
@@ -689,6 +856,32 @@ def _validate_two_d_report(report, request, gt, out):
         raise FimEngineError("physical ownership coverage count differs")
 
 
+def _validate_storage_report(report, request, out, area_count):
+    """Bind the storage transport report and labels to the requested window."""
+    count = request["width"] * request["height"]
+    owned = report.get("storage_owned_pixels")
+    valid = report.get("valid_pixels")
+    if (report.get("schema") != STORAGE_SCHEMA or report.get("status") != "complete"
+            or report.get("method", {}).get("method_id") != STORAGE_METHOD_ID
+            or report.get("width") != request["width"] or report.get("height") != request["height"]
+            or report.get("geo_transform") != request["geo_transform"]
+            or report.get("owners_file") != "owners.bin"
+            or any(isinstance(v, bool) or not isinstance(v, int) for v in (owned, valid))
+            or not 0 <= valid <= owned <= count
+            or (out / "owners.bin").stat().st_size != count*4):
+        raise FimEngineError("mismatched storage component report")
+    labels = np.memmap(out / "owners.bin", dtype="<u4", mode="r")
+    labelled = 0
+    for start in range(0, count, 65536):
+        block = labels[start:start+65536]
+        if (block > area_count).any():
+            raise FimEngineError("storage owner labels exceed the storage-area count")
+        labelled += int(np.count_nonzero(block))
+    del labels
+    if labelled != owned:
+        raise FimEngineError("storage ownership coverage count differs")
+
+
 def map_coupled_profiles(hdf_path, terrain_path, output_folder, *, profiles=None,
                        allow_unqualified=False, bbox=None, polygon=None, aoi_crs=None,
                        polygon_layer=None, engine_path=None, threads=1,
@@ -781,6 +974,13 @@ def map_coupled_profiles(hdf_path, terrain_path, output_folder, *, profiles=None
         final_support = support
         final_method_id, final_schema = contracts["method"], contracts["schema"]
         component_contracts = _component_contracts(contracts)
+        storage = receipt.get("storage")
+        if storage:
+            # Storage composes through coupled schema /2 on Fast-Map 0.18.0+;
+            # results stay unqualified exactly as the schema /1 route.
+            _, final_support = _require_storage_engine(capabilities, selected_grid_contract)
+            final_method_id, final_schema = STORAGE_COMPOSITION_METHOD_ID, STORAGE_COMPOSITION_SCHEMA
+            component_contracts["storage"] = _storage_contract()["storage"]
         grid = receipt["grid"]
         descriptor = receipt.get("grid_contract")
         if descriptor is not None:
@@ -794,7 +994,10 @@ def map_coupled_profiles(hdf_path, terrain_path, output_folder, *, profiles=None
         staged_bytes = sum(Path(path).stat().st_size for path in receipt["sha256"]
                            if prepared.folder in Path(path).parents)
         component_overhead = staged_bytes*3 + 16*1024**2
-        if (pixels * 192 + aoi_scratch + component_overhead +
+        if storage:
+            component_overhead += (Path(storage["polygons"]).stat().st_size * 32
+                                   + storage["count"] * 4096 + 1024**2)
+        if (pixels * (192 + (140 if storage else 0)) + aoi_scratch + component_overhead +
                 (pixels if mask_geometry is not None else 0) +
                 receipt["point_count"] * 128 + receipt["triangle_count"] * 256 > budget):
             raise FimUnsupportedError("planned coupled delivery/component geometry exceeds max_working_mib")
@@ -818,7 +1021,8 @@ def map_coupled_profiles(hdf_path, terrain_path, output_folder, *, profiles=None
                 aoi_description["projected_geometry_wkb_hex"] = mask_geometry.wkb_hex
                 aoi_description["projected_crs_wkt"] = grid["crs"]
         details = {
-            "threads_by_component": {"xs": 1, "two_d": threads, "composition": 1},
+            "threads_by_component": {"xs": 1, "two_d": threads, "composition": 1,
+                                     **({"storage": min(threads, 4)} if storage else {})},
             "aoi": aoi_description,
             "aoi_mask": (_aoi_lattice.METHOD if mask is not None else
                          "pixel-center-bounds/1") if constraint else None,
@@ -934,7 +1138,28 @@ def map_coupled_profiles(hdf_path, terrain_path, output_folder, *, profiles=None
                 if _verify_products(out, pixels) != report["valid_pixels"]:
                     raise FimEngineError("XS product validity count differs from report")
                 _verify_products(two_out / profile, pixels)
-                composition = {"schema": contracts["schema"],
+                pool_out = pool_report = None
+                if storage:
+                    pool_request = {"schema": STORAGE_SCHEMA, "storage_areas_file": storage["polygons"],
+                                    "storage_area_count": storage["count"],
+                                    "levels_file": storage["levels"][positions[i]],
+                                    "terrain_file": str(terrain_file), "width": int(window.width),
+                                    "height": int(window.height), "geo_transform": gt,
+                                    "max_working_bytes": budget-component_overhead-pixels*24-aoi_scratch,
+                                    "threads": min(threads, 4)}
+                    pool_file = scratch / f"storage-request-{i}.json"
+                    write_json(pool_file, pool_request)
+                    pool_out = scratch / f"storage-{i}"
+                    pool_report = _run(engine, "storage", pool_file, pool_out, timeout,
+                                       reports=reports, component="storage", profile_id=profile)
+                    _validate_storage_report(pool_report, pool_request, pool_out, storage["count"])
+                    if _verify_products(pool_out, pixels) != pool_report["valid_pixels"]:
+                        raise FimEngineError("storage product validity count differs from report")
+                    reports.append(pool_report)
+                    raw_hashes[pool_file] = digest(pool_file)
+                    reports.append({"component": "storage", "request_sha256": raw_hashes[pool_file],
+                                    "report_sha256": digest(pool_out / "report.json")})
+                composition = {"schema": final_schema,
                     "xs": component(out / "depth.bin", out / "wse.bin"),
                     "two_d": component(two_out / profile / "depth.bin", two_out / profile / "wse.bin"),
                     "two_d_owners_file": str(two_out / "owners.bin"),
@@ -943,6 +1168,11 @@ def map_coupled_profiles(hdf_path, terrain_path, output_folder, *, profiles=None
                     composition.update(grid_contract=descriptor, window=two_request["window"])
                 component_paths = [out / "depth.bin", out / "wse.bin", two_out / profile / "depth.bin",
                                    two_out / profile / "wse.bin", two_out / "owners.bin"]
+                if storage:
+                    composition["storage"] = {
+                        "component": component(pool_out / "depth.bin", pool_out / "wse.bin"),
+                        "owners_file": str(pool_out / "owners.bin"), "area_count": storage["count"]}
+                    component_paths += [pool_out / "depth.bin", pool_out / "wse.bin", pool_out / "owners.bin"]
                 raw_hashes.update({path: digest(path) for path in component_paths})
                 verify_inputs()
                 composition_file = scratch / f"composition-{i}.json"
@@ -950,7 +1180,7 @@ def map_coupled_profiles(hdf_path, terrain_path, output_folder, *, profiles=None
                 composed = scratch / f"composed-{i}"
                 composition_report = _run(engine, "coupled-diagnostic", composition_file, composed, timeout,
                                           reports=reports, component="composition", profile_id=profile)
-                expected = {"schema": contracts["schema"], "status": "complete", "profile_id": profile,
+                expected = {"schema": final_schema, "status": "complete", "profile_id": profile,
                             "crs": grid["crs"], "width": int(window.width), "height": int(window.height),
                             "geo_transform": gt}
                 if descriptor is not None:
@@ -967,8 +1197,7 @@ def map_coupled_profiles(hdf_path, terrain_path, output_folder, *, profiles=None
                                 "report_sha256": digest(composed / "report.json")})
                 reports.append({"profile_id": profile, "input_products": {
                     str(path): {"sha256": digest(path), "bytes": path.stat().st_size}
-                    for path in [out / "depth.bin", out / "wse.bin", two_out / profile / "depth.bin",
-                                 two_out / profile / "wse.bin", two_out / "owners.bin"]}})
+                    for path in component_paths}})
                 out = composed
                 valid_count = _verify_products(out, pixels)
                 counts = composition_report.get("counts", {})
@@ -978,6 +1207,12 @@ def map_coupled_profiles(hdf_path, terrain_path, output_folder, *, profiles=None
                         not isinstance(counts.get("dry_two_d_suppressed_wet_xs"), int) or
                         not 0 <= counts["dry_two_d_suppressed_wet_xs"] <= counts["two_d_owned_pixels"]):
                     raise FimEngineError("coupled composition coverage counts differ")
+                if storage and (
+                        counts.get("storage_owned_pixels") != pool_report["storage_owned_pixels"] or
+                        isinstance(counts.get("dry_storage_suppressed_wet_xs"), bool) or
+                        not isinstance(counts.get("dry_storage_suppressed_wet_xs"), int) or
+                        not 0 <= counts["dry_storage_suppressed_wet_xs"] <= counts["storage_owned_pixels"]):
+                    raise FimEngineError("coupled storage composition coverage counts differ")
                 raw_hashes.update({out / (product + ".bin"): digest(out / (product + ".bin"))
                                    for product in ("depth", "wse")})
                 row = rows[i]
