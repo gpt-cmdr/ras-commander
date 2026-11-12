@@ -722,8 +722,8 @@ def test_read_layers_round_trips_through_add_modification_layer(tmp_path):
     RasTerrainModWriter.add_modification_layer(terrain_hdf, rasmap, {
         "kind": "polygon", "name": "Pads", "features": [
             {"elevation_type": "SetValue", "elevation": 40.5,
-             "rings": [[[0.0, 0.0], [10.0, 0.0], [10.0, 10.0], [0.0, 0.0]],
-                       [[2.0, 2.0], [4.0, 2.0], [4.0, 4.0], [2.0, 2.0]]]},
+             # Single ring: read_layers refuses multi-ring polygons (Fast-Map #42).
+             "rings": [[[0.0, 0.0], [10.0, 0.0], [10.0, 10.0], [0.0, 0.0]]]},
             {"elevation_type": "SetIfLower", "elevation": 1.0,
              "rings": [[[20.0, 0.0], [30.0, 0.0], [30.0, 10.0], [20.0, 0.0]]]},
         ]})

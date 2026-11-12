@@ -1441,7 +1441,8 @@ class RasFim:
         beside ``rasmap_path`` means meters). Qualified against HEC-RAS 7.0.1
         and 6.6 exports in ras-commander-fast-map. The engine refuses the
         remaining forms (boundary elevations sampled from the terrain,
-        shape-Z polygons, multi-part polygons needing a TIN, named ground lines
+        shape-Z polygons, polygons with more than one ring (holes or several
+        parts; refused before the engine runs, ``reason`` ``multi_ring_polygon``), named ground lines
         with control points or a NaN template, named ground lines under 6.6,
         other RAS layer types), so the caller uses the RAS Mapper export. An
         engine advertising only ``/1`` refuses every modified terrain. Layer types RAS Mapper ignores (for example

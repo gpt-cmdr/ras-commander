@@ -986,10 +986,17 @@ receipt["method_id"], receipt["hecras_version"], receipt["modification_layers"]
   Alabama West, US feet), raises `FimUnsupportedError`; use the RAS Mapper
   export for such terrains.
 - Forms the engine does not reproduce raise `FimUnsupportedError`: boundary
-  elevations sampled from the terrain, shape-Z polygons, multi-part polygons
-  that need a TIN, named ground lines with control points or a NaN template,
+  elevations sampled from the terrain, shape-Z polygons, polygons with more
+  than one ring, named ground lines with control points or a NaN template,
   named ground lines under 6.6, and other RAS layer types. Use the RAS Mapper
   export for those terrains.
+- A polygon feature with more than one ring (a hole in either winding, or
+  separate or overlapping parts) is refused while the layers are read, before
+  the engine runs. RAS Mapper joins and triangulates such rings in a way that
+  cannot be reproduced as a rule. The error's `reason` is
+  `multi_ring_polygon`, and the message carries `[reason: multi_ring_polygon]`,
+  so callers can route the terrain to the RAS Mapper export without calling
+  the engine. Single-ring polygons are unaffected.
 
 ## Sloping velocity
 

@@ -559,3 +559,52 @@ def test_project_length_units_follow_the_selected_project(tmp_path):
 
     assert _terrain_mods.project_length_units(terrain, None, Project()) == "meters"
     assert _terrain_mods.project_length_units(terrain, tmp_path / "A.rasmap") == "feet"
+
+
+def _multi_ring_polygon(mods, name, rings):
+    """Polygon feature whose ``Polygon Parts`` hold every ring of ``rings``."""
+    g = _polygon(mods, name, 0)
+    for table in ("Polygon Info", "Polygon Parts", "Polygon Points"):
+        del g[table]
+    parts, points = [], []
+    for ring in rings:
+        parts.append([len(points), len(ring)])
+        points += ring
+    g.create_dataset("Polygon Info", data=np.array([[0, len(points), 0, len(rings)]], np.int32))
+    g.create_dataset("Polygon Parts", data=np.asarray(parts, np.int32))
+    g.create_dataset("Polygon Points", data=np.asarray(points, float))
+    return g
+
+
+OUTER = [(0, 0), (10, 0), (10, 10), (0, 10), (0, 0)]
+
+
+@pytest.mark.parametrize("rings", [
+    # A hole, in either winding.
+    [OUTER, [(3, 3), (3, 6), (6, 6), (6, 3), (3, 3)]],
+    [OUTER, [(3, 3), (6, 3), (6, 6), (3, 6), (3, 3)]],
+    # Two separate parts.
+    [OUTER, [(20, 0), (30, 0), (30, 10), (20, 10), (20, 0)]],
+    # Two overlapping parts.
+    [OUTER, [(5, 5), (15, 5), (15, 15), (5, 15), (5, 5)]],
+], ids=["hole-cw", "hole-ccw", "separate-parts", "overlapping-parts"])
+def test_multi_ring_polygons_are_refused_before_the_engine(tmp_path, rings):
+    """RAS Mapper joins and triangulates a polygon's rings in a way the engine
+    cannot reproduce as a rule (Fast-Map #42), so the reader refuses them with
+    a reason code and callers route the terrain to the RAS Mapper export."""
+    hdf = _hdf(tmp_path)
+    with h5py.File(hdf, "a") as f:
+        _multi_ring_polygon(f["Modifications"], "Pond", rings)
+    with pytest.raises(FimUnsupportedError, match="multi-ring polygon") as caught:
+        _terrain_mods.read_layers(hdf, length_units="feet")
+    assert caught.value.reason == _terrain_mods.MULTI_RING_POLYGON == "multi_ring_polygon"
+    assert "[reason: multi_ring_polygon]" in str(caught.value)
+    assert "'Pond'" in str(caught.value)
+
+
+def test_single_ring_polygon_is_still_staged(tmp_path):
+    hdf = _hdf(tmp_path)
+    with h5py.File(hdf, "a") as f:
+        _multi_ring_polygon(f["Modifications"], "Pad", [OUTER])
+    [layer] = _terrain_mods.read_layers(hdf, length_units="feet")
+    assert layer["kind"] == "polygon" and len(layer["features"][0]["rings"]) == 1
