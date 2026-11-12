@@ -1006,7 +1006,11 @@ receipt["method_id"], receipt["hecras_version"], receipt["modification_layers"]
 `build_effective_terrain` would send to the engine, without running it. Use it
 to route a modified terrain before any terrain work: `status == "staged"` means
 every layer is a form the reader stages, `"refused"` means the terrain needs the
-RAS Mapper export, and `refusal` says why.
+RAS Mapper export, and `refusal` says why. `status` describes the layers the HDF
+stores, not whether RAS Mapper applies them: pass `rasmap_path` and check
+`warnings` (a misnamed or missing `Modifications` group means RAS Mapper applies
+none), or `top_priority_terrain_source()["modified"]`, before treating the
+layers as applied.
 
 ```python
 record = RasFim.read_terrain_modifications(

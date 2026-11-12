@@ -1548,9 +1548,17 @@ class RasFim:
         - ``terrain_hdf`` (str): The terrain HDF read (links resolved).
         - ``method_id`` (str): The engine method the layers are staged for,
           ``"rasmapper-effective-terrain/2"``.
-        - ``status`` (str): ``"staged"`` (one or more layers),
-          ``"none"`` (no layer RAS Mapper applies: no ``/Modifications``
-          group, or only skipped layers and features) or ``"refused"``.
+        - ``status`` (str): ``"staged"`` (the HDF stores one or more
+          layers, all in forms the engine stages), ``"none"`` (no layer to
+          stage: no ``/Modifications`` group, or only layers and features RAS
+          Mapper skips) or ``"refused"``. ``status`` describes the HDF
+          layers only, not whether RAS Mapper applies them: it applies none
+          unless the rasmap terrain layer has an ``ElevationModificationGroup``
+          named ``Modifications``. Pass ``rasmap_path`` and check
+          ``warnings`` (``modification_group_misnamed`` or
+          ``modification_group_missing`` mean nothing is applied), or
+          :meth:`top_priority_terrain_source` ``["modified"]``, before
+          treating ``layers`` as applied.
         - ``refusal`` (str or None): For ``"refused"``, the reason the
           terrain cannot take the native route, naming the layer and
           feature; otherwise ``None``.
