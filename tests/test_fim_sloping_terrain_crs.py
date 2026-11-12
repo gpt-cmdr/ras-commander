@@ -145,31 +145,44 @@ def products(folder):
 
 
 def test_real_unknown_terrain_crs_maps_with_override(unknown_crs_case, tmp_path):
+    """Davis terrain CRS: mapped without the override; the override route still works.
+
+    Fast-Map 0.17.0 identified no EPSG code for this terrain, so mapping was
+    refused unless the caller pinned the engine WKT hash. Fast-Map 0.18.0
+    (terrio 0.8.0) reads it as EPSG:2871 with its HARN datum, so the plain call
+    maps with an EPSG identity. EPSG identification takes precedence over a
+    caller pin, so the override route still maps and records the EPSG identity.
+    All routes write identical products.
+    """
     from ras_commander import RasFim
 
     case = unknown_crs_case
     common = dict(profiles={"Max": "Max"}, engine_path=case.get("engine"), threads=4)
-    with pytest.raises(FimUnsupportedError):
-        RasFim.map_sloping_profiles(case["hdf"], case["terrain"], tmp_path / "refused", **common)
+    plain = RasFim.map_sloping_profiles(case["hdf"], case["terrain"], tmp_path / "plain", **common)
+    assert list(plain.status) == ["complete"]
+    manifest = json.loads((tmp_path / "plain" / "fim_manifest.json").read_text(encoding="utf-8"))
+    assert manifest["terrain_crs_identity"] == {"kind": "epsg"}
 
     direct = RasFim.map_sloping_profiles(case["hdf"], case["terrain"], tmp_path / "direct",
                                          terrain_crs_fnv1a64=case["crs_wkt_fnv1a64"], **common)
     assert list(direct.status) == ["complete"]
     manifest = json.loads((tmp_path / "direct" / "fim_manifest.json").read_text(encoding="utf-8"))
-    assert manifest["terrain_crs_identity"] == {"kind": "caller_verified_wkt",
-                                                "fnv1a64": case["crs_wkt_fnv1a64"]}
+    assert manifest["terrain_crs_identity"] == {"kind": "epsg"}
 
     with RasFim.prepare_sloping_model(case["hdf"], case["terrain"], profiles={"Max": "Max"},
                                       engine_path=case.get("engine"), threads=4,
                                       terrain_crs_fnv1a64=case["crs_wkt_fnv1a64"]) as model:
-        assert model.info["terrain_crs_identity"]["fnv1a64"] == case["crs_wkt_fnv1a64"]
+        assert model.info["terrain_crs_identity"] == {"kind": "epsg"}
         model.map_profiles(tmp_path / "prepared")
 
     expected = products(tmp_path / "direct")
     assert expected
-    for name, (transform, crs, bits) in products(tmp_path / "prepared").items():
-        assert expected[name][0] == transform and expected[name][1] == crs
-        assert np.array_equal(expected[name][2], bits)
+    for folder in ("plain", "prepared"):
+        mapped = products(tmp_path / folder)
+        assert mapped.keys() == expected.keys()
+        for name, (transform, crs, bits) in mapped.items():
+            assert expected[name][0] == transform and expected[name][1] == crs
+            assert np.array_equal(expected[name][2], bits)
 
     if case.get("epsg_terrain"):
         RasFim.map_sloping_profiles(case["hdf"], case["epsg_terrain"], tmp_path / "epsg", **common)
