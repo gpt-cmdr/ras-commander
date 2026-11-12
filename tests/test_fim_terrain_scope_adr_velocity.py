@@ -206,13 +206,31 @@ def test_misnamed_group_beside_the_modifications_group_is_flagged(tmp_path):
     rasmap.write_text(
         '<RASMapper><Terrains><Layer Name="T" Type="TerrainLayer" Filename=".\\T.hdf">'
         '<Layer Name="Modifications" Type="ElevationModificationGroup" />'
-        '<Layer Name="Hydroconnectors" Type="ElevationModificationGroup" />'
+        '<Layer Name="Hydroconnectors" Type="ElevationModificationGroup">'
+        '<Layer Name="NotInHdf" Type="GroundLineModificationLayer" /></Layer>'
         "</Layer></Terrains></RASMapper>",
         encoding="utf-8",
     )
     info = RasFim.top_priority_terrain_source(hdf, rasmap_path=rasmap)
+    # Entries of the ignored group are reported, never counted as applied.
     assert info["modified"] and info["modifications"] == ["hdf:Channel"]
-    assert [w["group"] for w in info["rasmap_warnings"]] == ["Hydroconnectors"]
+    assert [(w["group"], w["layers"]) for w in info["rasmap_warnings"]] == [("Hydroconnectors", ["NotInHdf"])]
+
+
+def test_ignored_group_entries_do_not_mark_an_unmodified_terrain_modified(tmp_path):
+    hdf = _terrain(tmp_path, ["a"], priorities=[0])
+    rasmap = tmp_path / "m.rasmap"
+    rasmap.write_text(
+        '<RASMapper><Terrains><Layer Name="T" Type="TerrainLayer" Filename=".\\T.hdf">'
+        '<Layer Name="Modifications" Type="ElevationModificationGroup" />'
+        '<Layer Name="Hydroconnectors" Type="ElevationModificationGroup">'
+        '<Layer Name="Levee" Type="GroundLineModificationLayer" /></Layer>'
+        "</Layer></Terrains></RASMapper>",
+        encoding="utf-8",
+    )
+    info = RasFim.top_priority_terrain_source(hdf, rasmap_path=rasmap)
+    assert info["modified"] is False and info["modifications"] == []
+    assert [w["code"] for w in info["rasmap_warnings"]] == ["modification_group_misnamed"]
 
 
 def test_resolve_requires_the_priority_one_tiff_and_stages_its_mask(tmp_path):

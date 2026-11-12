@@ -103,10 +103,11 @@ def _modifications(source, rasmap_path, terrain_hdf: Path) -> tuple:
                 if group_layer.get("Type") != "ElevationModificationGroup":
                     continue
                 children = [child.get("Name") for child in group_layer.findall("Layer")]
-                found.extend(f"rasmap:{name}" for name in children)
                 if group_layer.get("Name") == MODIFICATION_GROUP:
                     has_group = True
+                    found.extend(f"rasmap:{name}" for name in children)
                     continue
+                # RAS Mapper ignores this group: its entries are reported, never applied.
                 name = group_layer.get("Name")
                 message = (
                     f"{rasmap.name} registers modification group {name!r} under terrain "
