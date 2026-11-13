@@ -212,6 +212,7 @@ def map_whole_simulation(
     plan = _horizontal.plan_grid(
         cells, terrain, None, budget, native=True,
         storage_areas=storage.polygons if storage is not None else None,
+        terrain_hdf=scope_info["terrain_hdf"] if scope_info is not None else None,
     )
     _horizontal.prepare_grid(cells, terrain, plan, False)  # validates polygons and overlap
     timings["cell_and_grid_seconds"] = time.perf_counter() - tick
@@ -324,12 +325,14 @@ def _run(
         raise FimEngineError(
             f"whole-simulation staging needs at least {required} free bytes on the output volume"
         )
-    identity_args = (engine, terrain, cells.crs)
-    if terrain_crs_fnv1a64 is not None:
-        identity_args += (terrain_crs_fnv1a64,)
-    identity = _engine.terrain_identity(
-        *identity_args, **({"timeout": timeout} if timeout is not None else {}),
-        **_engine.crs_any_kwargs((details.get("engine") or {}).get("method")))
+    # A RAS Mapper source with no CRS tags takes the Projection of the terrain
+    # HDF that registers it, as on the horizontal and sloping routes; crs_any
+    # engines only (the whole_simulation record advertises it).
+    identity = _engine.source_identity(
+        engine, terrain, cells.crs, terrain_crs_fnv1a64,
+        crs_any=_engine.crs_any((details.get("engine") or {}).get("method")),
+        terrain_hdf=scope_info["terrain_hdf"] if scope_info is not None else None,
+        **({"timeout": timeout} if timeout is not None else {}))
     details["terrain_identity"] = identity
     with tempfile.TemporaryDirectory(prefix=".whole-simulation-", dir=folder) as temporary:
         root = Path(temporary)
