@@ -293,3 +293,98 @@ def test_misnamed_rasmap_group_is_unmodified_and_reported_in_the_receipt(tmp_pat
     assert [(w["code"], w["group"]) for w in receipt["rasmap_warnings"]] == [
         ("modification_group_misnamed", "Hydroconnectors")
     ]
+
+
+_STORED = {"method_id": V2, "request_schemas": [S1, S2], "modifications": {},
+           "bases": ["export", "stored_map"],
+           "stored_map": {"rule_id": _effective_terrain.STORED_MAP_RULE_ID}}
+
+
+def _fake_basis_engine(monkeypatch, record, reported_basis):
+    """``_fake_engine`` whose report echoes ``reported_basis`` (None: no basis field)."""
+    requests = _fake_engine(monkeypatch, record, V2)
+    run = _effective_terrain._engine.run_engine
+
+    def run_engine(args, what, timeout=None):
+        proc = run(args, what, timeout)
+        if reported_basis is not None:
+            out = Path(args[3]) / "report.json"
+            report = json.loads(out.read_text(encoding="utf-8"))
+            report["basis"] = reported_basis
+            out.write_text(json.dumps(report), encoding="utf-8")
+        return proc
+
+    monkeypatch.setattr(_effective_terrain._engine, "run_engine", run_engine)
+    return requests
+
+
+def test_export_basis_requests_are_unchanged(tmp_path, monkeypatch):
+    """The default sends no ``basis`` field, so old and new engines get the same request."""
+    hdf = _terrain(tmp_path, ["only"], priorities=[0])
+    requests = _fake_basis_engine(monkeypatch, _STORED, None)
+    receipt = RasFim.build_effective_terrain(hdf, tmp_path / "out.tif")
+    assert "basis" not in requests[0]
+    assert receipt["basis"] == "export" and receipt["basis_rule_id"] is None
+    receipt = RasFim.build_effective_terrain(hdf, tmp_path / "out.tif", basis="export")
+    assert "basis" not in requests[1]
+
+
+def test_stored_map_basis_is_sent_and_checked(tmp_path, monkeypatch):
+    hdf = _terrain(tmp_path, ["only"], priorities=[0])
+    requests = _fake_basis_engine(monkeypatch, _STORED, "stored_map")
+    assert RasFim.supports_effective_terrain_basis("stored_map") is True
+    receipt = RasFim.build_effective_terrain(hdf, tmp_path / "out.tif", basis="stored_map")
+    assert requests[0]["basis"] == "stored_map"
+    assert receipt["basis"] == "stored_map"
+    assert receipt["basis_rule_id"] == "rasmapper-stored-map-terrain/1"
+    assert json.loads((tmp_path / "out.tif.json").read_text())["basis"] == "stored_map"
+
+
+def test_stored_map_basis_reported_as_export_is_an_engine_error(tmp_path, monkeypatch):
+    from ras_commander.fim.errors import FimEngineError
+
+    hdf = _terrain(tmp_path, ["only"], priorities=[0])
+    _fake_basis_engine(monkeypatch, _STORED, None)
+    with pytest.raises(FimEngineError, match="reported basis"):
+        RasFim.build_effective_terrain(hdf, tmp_path / "out.tif", basis="stored_map")
+    assert not (tmp_path / "out.tif").exists()
+
+
+@pytest.mark.parametrize("record", [
+    {"method_id": V2, "request_schemas": [S1, S2], "modifications": {}},
+    {"method_id": V2, "bases": ["export", "stored_map"]},  # no stored_map record
+    {"method_id": V2, "bases": ["export"], "stored_map": {"rule_id": _effective_terrain.STORED_MAP_RULE_ID}},
+])
+def test_stored_map_basis_needs_the_engine_record(tmp_path, monkeypatch, record):
+    hdf = _terrain(tmp_path, ["only"], priorities=[0])
+    requests = _fake_basis_engine(monkeypatch, record, "stored_map")
+    assert RasFim.supports_effective_terrain_basis("stored_map") is False
+    assert RasFim.supports_effective_terrain_basis("export") is True
+    with pytest.raises(FimUnsupportedError, match="basis 'stored_map'"):
+        RasFim.build_effective_terrain(hdf, tmp_path / "out.tif", basis="stored_map")
+    assert requests == []
+
+
+def test_stored_map_basis_refuses_multi_source_terrains_before_the_engine(tmp_path, monkeypatch):
+    hdf = _terrain(tmp_path, ["fine", "coarse"], priorities=[0, 1])
+    requests = _fake_basis_engine(monkeypatch, _STORED, "stored_map")
+    with pytest.raises(FimUnsupportedError, match="single-source"):
+        RasFim.build_effective_terrain(hdf, tmp_path / "out.tif", basis="stored_map")
+    assert requests == []
+
+
+def test_unknown_basis_is_a_value_error(tmp_path):
+    with pytest.raises(ValueError, match="basis"):
+        RasFim.build_effective_terrain(tmp_path / "T.hdf", tmp_path / "out.tif", basis="renderer")
+    with pytest.raises(ValueError, match="basis"):
+        _effective_terrain.engine_supports_basis(Path("engine.exe"), "renderer")
+
+
+def test_supports_basis_without_an_engine(monkeypatch):
+    from ras_commander.fim.errors import FimEngineNotFoundError
+
+    def missing(path=None):
+        raise FimEngineNotFoundError("no engine")
+
+    monkeypatch.setattr(_effective_terrain._engine, "find_engine", missing)
+    assert RasFim.supports_effective_terrain_basis("stored_map") is False

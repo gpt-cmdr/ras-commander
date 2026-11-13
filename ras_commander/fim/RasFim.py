@@ -1380,6 +1380,7 @@ class RasFim:
         terrain_crs_fnv1a64: Optional[str] = None,
         hecras_version: Optional[str] = None,
         ras_object: Any = None,
+        basis: str = "export",
     ) -> Dict[str, Any]:
         """Build RAS Mapper's effective terrain in Rust, with qualified modifications.
 
@@ -1433,9 +1434,26 @@ class RasFim:
                 ``reason`` ``"unqualified_hecras_version"``.
             ras_object: Optional initialized RAS project whose HEC-RAS
                 version selects ``hecras_version``.
+            basis: ``"export"`` (default): RAS Mapper's terrain export, as
+                above. ``"stored_map"``: the terrain RAS Mapper's stored maps
+                read (rule ``rasmapper-stored-map-terrain/1``; engines that
+                list it in the method record's ``bases``, see
+                :meth:`supports_effective_terrain_basis`). The two differ in
+                RAS Mapper itself: the export never answers a source's last
+                cell row and column and rounds every value to 1/32, while
+                stored maps are written per source on the source's own grid
+                from its own cells with the modifications unrounded. The
+                stored-map basis is the single source's cells on its own
+                GeoTIFF grid (unmodified: the source TIFF bit for bit), then
+                the modifications rasterized as for the export, without
+                rounding. Map on it to match RAS Mapper's stored maps; it is
+                refused for multi-source terrains. Qualified on Helena
+                (one source, two channel ground lines, HEC-RAS 7.0.1 and 6.6
+                stored maps): Depth equals float32(WSE - terrain) on every wet
+                pixel.
 
         Returns:
-            dict: Receipt with ``method_id`` (the method the engine reports:
+            dict: Receipt with ``basis`` and ``basis_rule_id``, ``method_id`` (the method the engine reports:
             ``/2`` from current engines for every request, ``/1`` from older
             engines), ``hecras_version`` (``None`` for
             an unmodified terrain), ``hecras_version_basis``,
@@ -1480,8 +1498,32 @@ class RasFim:
             terrain_hdf, output_path, rasmap_path=rasmap_path, engine_path=engine_path,
             threads=threads, max_working_mib=max_working_mib, timeout=timeout,
             terrain_crs_fnv1a64=terrain_crs_fnv1a64,
-            hecras_version=hecras_version, ras_object=ras_object,
+            hecras_version=hecras_version, ras_object=ras_object, basis=basis,
         )
+
+    @staticmethod
+    @log_call
+    def supports_effective_terrain_basis(basis: str, engine_path: Optional[PathLike] = None) -> bool:
+        """Whether :meth:`build_effective_terrain` accepts ``basis`` with this engine.
+
+        ``"export"`` is available wherever the method is; ``"stored_map"``
+        needs an engine whose ``effective_terrain`` record lists it in
+        ``bases``. Never raises for a missing engine.
+
+        Args:
+            basis: ``"export"`` or ``"stored_map"``.
+            engine_path: Engine executable, otherwise environment/PATH.
+
+        Returns:
+            bool: The basis is available.
+        """
+        from . import _effective_terrain
+
+        try:
+            engine = _effective_terrain._engine.find_engine(engine_path)
+        except FileNotFoundError:
+            return False
+        return _effective_terrain.engine_supports_basis(engine, basis)
 
     #: Schema of the record returned by :meth:`read_terrain_modifications`.
     TERRAIN_MODIFICATIONS_SCHEMA = "ras-commander-terrain-modifications/1"

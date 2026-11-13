@@ -76,6 +76,17 @@ alone does not identify a development checkout.
   `Stitch TIN Triangles`; boundary staging refused them as an unsupported
   shape, which also refused EPSG terrains. They are now absent, as effective
   terrain already treats them. One empty and one non-empty array still refuse.
+- **Effective terrain, stored-map basis (opt-in):**
+  `RasFim.build_effective_terrain(..., basis="stored_map")` builds the
+  terrain RAS Mapper's stored maps read (Fast-Map rule
+  `rasmapper-stored-map-terrain/1`): a single-source terrain's own cells on
+  its own grid, with the modifications applied unrounded. RAS Mapper's export,
+  which the default `basis="export"` reproduces, leaves the source's last cell
+  row and column nodata and rounds to 1/32, so maps on it differ from RAS
+  Mapper's stored maps there. `RasFim.supports_effective_terrain_basis()`
+  reports whether the engine offers it. Multi-source terrains are refused on
+  this basis. Default requests are unchanged (no `basis` field is sent);
+  receipts gain `basis` and `basis_rule_id`.
 
 ### 0.120.0 — 2026-11-12
 

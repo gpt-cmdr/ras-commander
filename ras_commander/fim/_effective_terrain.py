@@ -20,6 +20,16 @@ Mapper export. An engine that advertises only ``/1`` still refuses every
 modified terrain. Source priority is the one proven by
 :func:`._terrain_scope.top_priority_source` (``Priority`` attributes or the
 terrain VRT order), never inferred.
+
+Stored-map basis (``basis="stored_map"``, engines whose record lists it in
+``bases``): RAS Mapper's export and its stored maps read different terrains.
+The export never answers a source's last cell row and column (render blocks lie
+between cell centres) and rounds to 1/32; stored maps are written per source on
+the source's own grid from its own cells, with the modifications unrounded. The
+engine's stored-map basis writes that terrain (rule
+``rasmapper-stored-map-terrain/1``) for single-source terrains; mapping on it
+matches RAS Mapper's stored maps where mapping on the export does not. The
+default stays the export.
 """
 
 from __future__ import annotations
@@ -44,6 +54,12 @@ SCHEMA_V2 = "ras-commander-effective-terrain-request/2"
 RECEIPT_SCHEMA = "ras-commander-effective-terrain/1"
 NODATA = -9999.0
 _TILE_PIXELS = 256 * 256
+#: ``basis`` values: RAS Mapper's terrain export (default) or the terrain of
+#: RAS Mapper's stored maps.
+BASIS_EXPORT = "export"
+BASIS_STORED_MAP = "stored_map"
+BASES = (BASIS_EXPORT, BASIS_STORED_MAP)
+STORED_MAP_RULE_ID = "rasmapper-stored-map-terrain/1"
 
 
 def _record(engine: Path):
@@ -72,6 +88,25 @@ def engine_supports(engine: Path, modifications: bool = False) -> bool:
         return (METHOD_ID_V2 in ids and isinstance(record.get("modifications"), dict)
                 and (schemas is None or SCHEMA_V2 in schemas))
     return bool(ids & {METHOD_ID, METHOD_ID_V2})
+
+
+def engine_supports_basis(engine: Path, basis: str) -> bool:
+    """Whether ``engine`` builds the effective terrain on ``basis``.
+
+    ``"export"`` needs only the method; ``"stored_map"`` needs it listed in the
+    record's ``bases`` with a ``stored_map`` record naming
+    ``rasmapper-stored-map-terrain/1``.
+    """
+    if basis not in BASES:
+        raise ValueError(f"basis must be one of {BASES}, not {basis!r}")
+    record = _record(engine)
+    if record is None or not engine_supports(engine):
+        return False
+    if basis == BASIS_EXPORT:
+        return True
+    stored = record.get("stored_map")
+    return (BASIS_STORED_MAP in (record.get("bases") or ())
+            and isinstance(stored, dict) and stored.get("rule_id") == STORED_MAP_RULE_ID)
 
 
 def _receipt_method(report: dict, schema: str) -> str:
@@ -300,9 +335,13 @@ def build(
     terrain_crs_fnv1a64: Optional[str] = None,
     hecras_version: Optional[str] = None,
     ras_object=None,
+    basis: str = BASIS_EXPORT,
 ) -> dict:
     """Write the effective terrain GeoTIFF; return the receipt (also written as JSON)."""
     import rasterio
+
+    if basis not in BASES:
+        raise ValueError(f"basis must be one of {BASES}, not {basis!r}")
 
     output_path = Path(output_path)
     if output_path.suffix.lower() not in (".tif", ".tiff"):
@@ -317,7 +356,17 @@ def build(
             f"engine lacks {METHOD_ID}; install ras-commander-fast-map with effective-terrain support "
             "or export the terrain through RAS Mapper"
         )
+    if basis == BASIS_STORED_MAP and not engine_supports_basis(engine, basis):
+        raise FimUnsupportedError(
+            f"engine does not advertise the effective-terrain basis {basis!r} "
+            f"({STORED_MAP_RULE_ID}); install a newer ras-commander-fast-map or use basis='export'"
+        )
     info = _terrain_scope.top_priority_source(terrain_hdf, rasmap_path)
+    if basis == BASIS_STORED_MAP and len(info["sources"]) != 1:
+        raise FimUnsupportedError(
+            f"basis {basis!r} is qualified for single-source terrains only; "
+            f"{info['terrain_hdf'].name} has {len(info['sources'])} sources (use basis='export')"
+        )
     layers = []
     version, version_basis = None, None
     if info["modified"]:
@@ -406,6 +455,9 @@ def build(
             request["modification_layers"] = layers
             if layers and version != "7.0.1":
                 request["hecras_version"] = version
+        if basis != BASIS_EXPORT:
+            # Only sent when asked for, so export requests stay as before.
+            request["basis"] = basis
         request_path = work / "request.json"
         request_path.write_text(json.dumps(request, indent=1), encoding="utf-8")
         out_dir = work / "out"
@@ -428,10 +480,17 @@ def build(
         if report.get("status") != "complete" or not produced.is_file():
             raise FimEngineError(f"effective-terrain did not complete: {report.get('status')!r}")
         method_id = _receipt_method(report, request["schema"])
+        reported_basis = report.get("basis", BASIS_EXPORT)
+        if reported_basis != basis:
+            raise FimEngineError(
+                f"effective-terrain reported basis {reported_basis!r} for a {basis!r} request"
+            )
         os.replace(produced, output_path)
         receipt = {
             "schema": RECEIPT_SCHEMA,
             "method_id": method_id,
+            "basis": basis,
+            "basis_rule_id": STORED_MAP_RULE_ID if basis == BASIS_STORED_MAP else None,
             "modification_layers": [
                 {"name": layer["name"], "kind": layer["kind"], "priority": layer["priority"],
                  "features": len(layer["features"])}
