@@ -63,7 +63,8 @@ def stored_map_terrain(terrain_tif, terrain_hdf):
     """
     import json
 
-    from ._effective_terrain import BASIS_STORED_MAP, RECEIPT_SCHEMA
+    from ._effective_terrain import (BASIS_STORED_MAP, METHOD_ID_V2, RECEIPT_SCHEMA,
+                                     STORED_MAP_RULE_ID)
 
     tif = Path(terrain_tif).resolve(strict=True)
     sidecar = tif.with_name(tif.name + ".json")
@@ -84,16 +85,33 @@ def stored_map_terrain(terrain_tif, terrain_hdf):
     if (not output or Path(output).resolve() != tif or not receipt.get("terrain_hdf")
             or Path(receipt["terrain_hdf"]).resolve() != hdf):
         raise FimUnsupportedError(f"effective terrain receipt {sidecar.name} names another output or terrain HDF")
+    if receipt.get("method_id") != METHOD_ID_V2 or receipt.get("basis_rule_id") != STORED_MAP_RULE_ID:
+        raise FimUnsupportedError(
+            f"effective terrain receipt {sidecar.name} names method {receipt.get('method_id')!r} "
+            f"and rule {receipt.get('basis_rule_id')!r}, not {METHOD_ID_V2!r} / {STORED_MAP_RULE_ID!r}")
     sources = receipt.get("sources_in_priority_order")
     if not isinstance(sources, list) or len(sources) != 1 or not isinstance(sources[0], str):
         raise FimUnsupportedError("stored-map boundary ground needs a single-source terrain")
     source = (hdf.parent / sources[0]).resolve()
     if not source.is_file():
         raise FimUnsupportedError(f"terrain source {sources[0]} of {tif.name} is missing")
-    built = tif.stat().st_mtime_ns
-    if any(path.stat().st_mtime_ns > built for path in (hdf, source)):
-        raise FimUnsupportedError(
-            f"{hdf.name} or {source.name} changed after {tif.name} was built; rebuild the effective terrain")
+    stale = (f"{hdf.name} or {source.name} differs from the build of {tif.name}; "
+             "rebuild the effective terrain")
+    inputs = receipt.get("inputs")
+    if isinstance(inputs, dict):
+        # The receipt records the inputs' size and mtime as built: any other
+        # file (edited, or restored with an older or newer timestamp) refuses.
+        recorded = [inputs.get("terrain_hdf")] + list(inputs.get("sources") or [])
+        if len(recorded) != 2 or any(
+                not isinstance(r, dict) or r.get("size") != p.stat().st_size
+                or r.get("mtime_ns") != p.stat().st_mtime_ns
+                for r, p in zip(recorded, (hdf, source))):
+            raise FimUnsupportedError(stale)
+    else:
+        # Receipts written before input identities: a newer input refuses.
+        built = tif.stat().st_mtime_ns
+        if any(path.stat().st_mtime_ns > built for path in (hdf, source)):
+            raise FimUnsupportedError(stale)
     return {"receipt": receipt, "source": source}
 
 
@@ -118,12 +136,22 @@ def _apply_effective_perimeter(effective, source, perimeter_path, tiles, tile_gr
                 or eff.nodata is None or not math.isfinite(eff.nodata)):
             raise FimUnsupportedError(
                 "stored-map effective terrain must keep its source's grid, float32 and 256x256 tiles")
+        # The engine classifies the staged perimeters (the source's own values,
+        # its nodata included) with the ground file's nodata.
+        if src.nodata is None or np.float32(eff.nodata) != np.float32(src.nodata):
+            raise FimUnsupportedError(
+                f"stored-map effective terrain nodata {eff.nodata} differs from its source's "
+                f"{src.nodata}; the staged tile perimeters carry the source's nodata")
 
         def valid(values, nodata):
             return np.isfinite(values) & (values != nodata)
 
-        for row in range(0, height, 256):
-            window = Window(0, row, width, min(256, height - row))
+        # Valid cells on every staged tile and its next row and column (the
+        # cells the engine contours), one tile window at a time: at most
+        # 2 x 257 x 257 float32 values are held, whatever the raster's size.
+        for tile in tiles:
+            r0, c0 = (tile // tile_grid[1]) * 256, (tile % tile_grid[1]) * 256
+            window = Window(c0, r0, min(257, width - c0), min(257, height - r0))
             if not np.array_equal(valid(eff.read(1, window=window), eff.nodata),
                                   valid(src.read(1, window=window), src.nodata)):
                 raise FimUnsupportedError("stored-map effective terrain and its source differ in valid cells")

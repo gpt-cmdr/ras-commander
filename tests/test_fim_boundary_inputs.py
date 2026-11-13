@@ -367,7 +367,8 @@ def _perimeters(values, nodata=-9999.0):
 def modified(tmp_path):
     """A single-source terrain with a modification layer and its stored-map
     effective terrain (a raised block across tile column 256 and row 256)."""
-    from ras_commander.fim._effective_terrain import RECEIPT_SCHEMA
+    from ras_commander.fim._effective_terrain import (METHOD_ID_V2, RECEIPT_SCHEMA,
+                                                     STORED_MAP_RULE_ID, _input_identity)
     crs = rasterio.crs.CRS.from_epsg(32615)
     rows, cols = np.mgrid[0:300, 0:520]
     values = (100 + 0.01 * rows + 0.02 * cols).astype("float32")
@@ -391,8 +392,10 @@ def modified(tmp_path):
     out = tmp_path / "effective.tif"
     with rasterio.open(out, "w", **profile) as raster:
         raster.write(effective, 1)
-    receipt = {"schema": RECEIPT_SCHEMA, "basis": "stored_map", "output": str(out),
-               "terrain_hdf": str(hdf), "sources_in_priority_order": [tif.name]}
+    receipt = {"schema": RECEIPT_SCHEMA, "method_id": METHOD_ID_V2, "basis": "stored_map",
+               "basis_rule_id": STORED_MAP_RULE_ID, "output": str(out),
+               "terrain_hdf": str(hdf), "sources_in_priority_order": [tif.name],
+               "inputs": {"terrain_hdf": _input_identity(hdf), "sources": [_input_identity(tif)]}}
     (tmp_path / "effective.tif.json").write_text(json.dumps(receipt))
     return hdf, tif, out, values, effective
 
@@ -440,10 +443,23 @@ def test_stored_map_receipt_is_checked(modified, tmp_path):
         sidecar.write_text(json.dumps(dict(receipt, **change)))
         with pytest.raises(FimUnsupportedError, match=message):
             stored_map_terrain(effective, hdf)
+    sidecar.write_text(json.dumps(dict(receipt, basis_rule_id="other")))
+    with pytest.raises(FimUnsupportedError, match="rule"):
+        stored_map_terrain(effective, hdf)
     sidecar.write_text(json.dumps(receipt))
+    assert stored_map_terrain(effective, hdf)["source"] == tif.resolve()
+    # An HDF restored with an older timestamp (copy2/robocopy) is still refused:
+    # the receipt holds the inputs' identities as built.
+    earlier = hdf.stat().st_mtime_ns - 10**9
+    os.utime(hdf, ns=(earlier, earlier))
+    with pytest.raises(FimUnsupportedError, match="differs from the build"):
+        stored_map_terrain(effective, hdf)
+    # A receipt from before input identities falls back to timestamps.
+    sidecar.write_text(json.dumps({k: v for k, v in receipt.items() if k != "inputs"}))
+    assert stored_map_terrain(effective, hdf)["source"] == tif.resolve()
     later = effective.stat().st_mtime_ns + 10**9
     os.utime(hdf, ns=(later, later))
-    with pytest.raises(FimUnsupportedError, match="changed after"):
+    with pytest.raises(FimUnsupportedError, match="differs from the build"):
         stored_map_terrain(effective, hdf)
 
 
@@ -465,3 +481,31 @@ def test_stored_map_ground_must_keep_valid_cells_and_tile_history(modified, tmp_
         perimeter[0] = row
     with pytest.raises(FimUnsupportedError, match="perimeters differ"):
         stage_boundary_terrain(hdf, tif, tmp_path / "b", effective_terrain=effective)
+
+
+def test_stored_map_ground_must_share_the_source_nodata(modified, tmp_path, monkeypatch):
+    """The engine classifies staged (source) perimeters with the ground's nodata."""
+    hdf, tif, effective, values, changed = modified
+    _stub_reads(monkeypatch)
+    data = changed.copy()
+    data[data == -9999.0] = -3.4028235e38
+    with rasterio.open(effective, "r+") as raster:
+        profile = raster.profile
+    profile.update(nodata=-3.4028235e38)
+    with rasterio.open(effective, "w", **profile) as raster:
+        raster.write(data, 1)
+    with pytest.raises(FimUnsupportedError, match="nodata"):
+        stage_boundary_terrain(hdf, tif, tmp_path / "out", effective_terrain=effective)
+
+
+def test_stored_map_valid_cell_check_reads_only_staged_tiles(modified, tmp_path, monkeypatch):
+    """A selected tile checks its own cells (and next row/column), not the raster."""
+    hdf, tif, effective, values, changed = modified
+    _stub_reads(monkeypatch)
+    with rasterio.open(effective, "r+") as raster:
+        data = raster.read(1)
+        data[5, 515] = -9999.0  # tile 2 (row 0, columns 512..519) only
+        raster.write(data, 1)
+    stage_boundary_terrain(hdf, tif, tmp_path / "a", effective_terrain=effective, selected_tiles=[0])
+    with pytest.raises(FimUnsupportedError, match="valid cells"):
+        stage_boundary_terrain(hdf, tif, tmp_path / "b", effective_terrain=effective, selected_tiles=[2])

@@ -242,3 +242,27 @@ def test_untagged_terrain_aoi_uses_the_declared_crs(adapter, monkeypatch):
                                         profiles={"max": "Max"}, bbox=[0, 0, 20, 20])
     assert seen["crs"] == rasterio.crs.CRS.from_epsg(32615)
     assert adapter.request["terrain_metadata"]["selected_tiles"] == [0]
+
+
+def test_stored_map_terrain_is_the_ground_and_its_source_is_staged(adapter, monkeypatch):
+    """A stored-map effective terrain passed as terrain_path: the model maps it,
+    tile metadata is staged from the source the terrain HDF registers, and the
+    source is watched."""
+    from ras_commander.fim import _boundary_inputs
+    effective, terrain_hdf = adapter.args[1], adapter.terrain_hdf
+    source = effective.parent / "source.tif"
+    source.write_bytes(b"source")
+    monkeypatch.setattr(_boundary_inputs, "stored_map_terrain",
+                        lambda tif, hdf: {"receipt": {}, "source": source})
+    staged = {}
+
+    def stage(hdf, tif, root, **kwargs):
+        staged.update(tif=Path(tif), **kwargs)
+        return {"selected_tiles": kwargs["selected_tiles"]}
+
+    monkeypatch.setattr(_boundary, "stage_boundary_terrain", stage)
+    _boundary.map_inundation_boundaries(*adapter.args, terrain_hdf=terrain_hdf, profiles={"max": "Max"})
+    assert staged["tif"] == source and staged["effective_terrain"] == Path(effective)
+    assert adapter.request["model"]["terrain"] == str(Path(effective).resolve())
+    manifest = json.loads((adapter.args[2] / "boundary_manifest.json").read_text())
+    assert manifest["sources"]["terrain_source"]["path"] == str(source)

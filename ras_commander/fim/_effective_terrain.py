@@ -109,6 +109,12 @@ def engine_supports_basis(engine: Path, basis: str) -> bool:
             and isinstance(stored, dict) and stored.get("rule_id") == STORED_MAP_RULE_ID)
 
 
+def _input_identity(path: Path) -> dict:
+    """``{"path", "size", "mtime_ns"}`` of a build input."""
+    stat = Path(path).stat()
+    return {"path": str(Path(path).resolve()), "size": stat.st_size, "mtime_ns": stat.st_mtime_ns}
+
+
 def _receipt_method(report: dict, schema: str) -> str:
     """The method the engine reports, checked against the request schema.
 
@@ -508,6 +514,13 @@ def build(
             "crs": crs_record,
             "nodata": NODATA,
             "seconds": time.perf_counter() - started,
+            # Size and mtime of the terrain HDF and each source as built, so a
+            # consumer of this receipt can tell a stale effective terrain.
+            "inputs": {
+                "terrain_hdf": _input_identity(Path(info["terrain_hdf"])),
+                "sources": [_input_identity(Path(info["terrain_hdf"]).parent / name)
+                            for name in info["sources"]],
+            },
             "engine_report": report,
         }
         receipt["engine_report"]["output"] = str(output_path)
