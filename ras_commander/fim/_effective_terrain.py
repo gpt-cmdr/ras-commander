@@ -27,9 +27,11 @@ The export never answers a source's last cell row and column (render blocks lie
 between cell centres) and rounds to 1/32; stored maps are written per source on
 the source's own grid from its own cells, with the modifications unrounded. The
 engine's stored-map basis writes that terrain (rule
-``rasmapper-stored-map-terrain/1``) for single-source terrains; mapping on it
-matches RAS Mapper's stored maps where mapping on the export does not. The
-default stays the export.
+``rasmapper-stored-map-terrain/1``) for single-source terrains, and for
+several sources on one lattice on engines that advertise
+``stored_map.multi_source`` (``rasmapper-stored-map-composition/1``); mapping
+on it matches RAS Mapper's stored maps where mapping on the export does not.
+The default stays the export.
 """
 
 from __future__ import annotations

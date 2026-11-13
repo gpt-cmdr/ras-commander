@@ -1087,8 +1087,14 @@ receipt["basis"], receipt["basis_rule_id"]
 - The output is the single source's cells on its own GeoTIFF grid, then the
   modifications rasterized as for the export, without rounding. Unmodified,
   it is the source TIFF bit for bit.
-- Multi-source terrains are refused (`FimUnsupportedError`) before the
-  engine runs; use the default `basis="export"`.
+- Multi-source terrains need an engine whose `effective_terrain.stored_map`
+  record has `multi_source` (`rasmapper-stored-map-composition/1`). It
+  composes sources that share one lattice (same cell size, origins whole cells
+  apart) as RAS Mapper's stored maps do: priority order, a lower source hidden
+  under a higher source's 8-connected interior and on its edge ring unless
+  interior itself. Sources on different lattices are refused by the engine;
+  older engines are refused (`FimUnsupportedError`) before the engine runs.
+  Use the default `basis="export"` there.
 - The default request is unchanged: Commander sends no `basis` field unless
   asked, and the receipt records `basis`.
 - Qualified on Helena (one source, Middle Cahaba p01 Max, sloping, two
