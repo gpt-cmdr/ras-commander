@@ -9,6 +9,37 @@ alone does not identify a development checkout.
 
 ### Unreleased
 
+- **Effective terrain for HEC-RAS 6.6 to 7.0.2:** `RasFim.build_effective_terrain`
+  and `RasFim.read_terrain_modifications` map the project's HEC-RAS release to
+  the engine's modification rule from a table: 7.0, 7.0.1 and 7.0.2 to
+  `7.0.1`, 6.6 to `6.6`, and the 6.7 betas to `6.7` when the engine
+  advertises `effective_terrain.hecras_versions` (otherwise `6.6`). **Every
+  other release is now refused** (`reason` `unqualified_hecras_version`)
+  instead of following 7.0.1, which was wrong for 6.7 (narrow ground lines,
+  named systems) and for 6.5 and earlier (their exports match no rule). The
+  table is read from the engine when it advertises one; `read_terrain_modifications`
+  takes `engine_path` for that. Per-release qualification, 2026-11-12:
+  0 mask and 0 value differences on every accepted layer for 6.6, 6.7 Beta 4/5,
+  7.0, 7.0.1 and 7.0.2.
+- **Boundary polygons follow the engine's control-point test:** the reader
+  stages a polygon with boundary elevations only when a control point lies
+  outside its ring within Elev Pt Tolerance, or it has a stored profile (not
+  under 6.6). Points inside the ring are mass points, so such polygons were
+  staged before and then refused by the engine.
+- **Writer: perimeter control points.**
+  `RasTerrainModWriter.add_modification_polygon(..., perimeter_control_points=...)`
+  stores boundary control points outside the ring (within `elev_pt_tolerance`)
+  in the layer's `Control Points` group, with
+  `elevation_method="boundary_from_terrain"`. RAS Mapper 6.6, 6.7 Beta 4/5,
+  7.0, 7.0.1 and 7.0.2 exports of such polygons are identical to each other and
+  to the engine. This is the only boundary-elevation form HEC-RAS 6.6 renders
+  as the later releases do.
+- **RAS Mapper export unchanged:** `RasTerrain.export_rasmapper_terrain` still
+  refuses the 6.7 betas (prerelease) and 7.0.0 (HEC's documented
+  modification-export defect). The qualification did not reproduce that
+  defect on one minimum-Y window, which does not rule it out. Projects on
+  those releases can use the native effective terrain instead.
+
 ### 0.120.0 — 2026-11-12
 
 - **Mapping engine dependency:** mapping extras (`fim`, `fast-map`, `full`
@@ -56,37 +87,6 @@ alone does not identify a development checkout.
   that physically overlap a 2D flow area, storage with the native stored-grid
   contract and older engines are still refused before any write. Results stay
   `qualified=False` and still require `allow_unqualified=True`.
-- **Effective terrain for HEC-RAS 6.6 to 7.0.2:** `RasFim.build_effective_terrain`
-  and `RasFim.read_terrain_modifications` map the project's HEC-RAS release to
-  the engine's modification rule from a table: 7.0, 7.0.1 and 7.0.2 to
-  `7.0.1`, 6.6 to `6.6`, and the 6.7 betas to `6.7` when the engine
-  advertises `effective_terrain.hecras_versions` (otherwise `6.6`). **Every
-  other release is now refused** (`reason` `unqualified_hecras_version`)
-  instead of following 7.0.1, which was wrong for 6.7 (narrow ground lines,
-  named systems) and for 6.5 and earlier (their exports match no rule). The
-  table is read from the engine when it advertises one; `read_terrain_modifications`
-  takes `engine_path` for that. Per-release qualification, 2026-11-12:
-  0 mask and 0 value differences on every accepted layer for 6.6, 6.7 Beta 4/5,
-  7.0, 7.0.1 and 7.0.2.
-- **Boundary polygons follow the engine's control-point test:** the reader
-  stages a polygon with boundary elevations only when a control point lies
-  outside its ring within Elev Pt Tolerance, or it has a stored profile (not
-  under 6.6). Points inside the ring are mass points, so such polygons were
-  staged before and then refused by the engine.
-- **Writer: perimeter control points.**
-  `RasTerrainModWriter.add_modification_polygon(..., perimeter_control_points=...)`
-  stores boundary control points outside the ring (within `elev_pt_tolerance`)
-  in the layer's `Control Points` group, with
-  `elevation_method="boundary_from_terrain"`. RAS Mapper 6.6, 6.7 Beta 4/5,
-  7.0, 7.0.1 and 7.0.2 exports of such polygons are identical to each other and
-  to the engine. This is the only boundary-elevation form HEC-RAS 6.6 renders
-  as the later releases do.
-- **RAS Mapper export unchanged:** `RasTerrain.export_rasmapper_terrain` still
-  refuses the 6.7 betas (prerelease) and 7.0.0 (HEC's documented
-  modification-export defect). The qualification did not reproduce that
-  defect on one minimum-Y window, which does not rule it out. Projects on
-  those releases can use the native effective terrain instead.
-
 ### 0.119.0 — 2026-11-12
 
 - **Mapping engine dependency:** mapping extras (`fim`, `fast-map`, `full`
