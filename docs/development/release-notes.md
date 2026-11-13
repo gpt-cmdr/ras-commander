@@ -9,6 +9,30 @@ alone does not identify a development checkout.
 
 ### Unreleased
 
+### 0.121.0 — 2026-11-12
+
+- **Mapping engine dependency:** mapping extras (`fim`, `fast-map`, `full`
+  and `all`) select `ras-commander-fast-map>=0.20.0,<0.21` (was
+  `>=0.19.0,<0.20`). As before, the extras install the engine only on
+  Windows x64 and Linux x86_64. Fast-Map 0.20.0 keeps the output bytes of
+  every request 0.19.0 accepts and adds `crs_any` (CRSs without an EPSG code),
+  the HEC-RAS release table with the 6.7 rule (`effective_terrain.hecras_versions`)
+  and the opt-in stored-map effective-terrain basis.
+
+- **Behaviour changes (read before upgrading):**
+  - A *modified* terrain whose project release is outside 6.6 to 7.0.2 (6.5
+    and earlier, after 7.0.2) is now refused by `RasFim.build_effective_terrain`
+    (`FimUnsupportedError`, `reason="unqualified_hecras_version"`), and
+    `RasFim.read_terrain_modifications` reports it as `refused`. Earlier
+    releases applied the 7.0.1 rule, which the 2026-11-12 per-release
+    qualification showed does not reproduce those releases' exports. Passing
+    `hecras_version="7.0.1"` explicitly keeps the previous result.
+  - HEC-RAS 6.7 projects take the engine's `6.7` rule with Fast-Map 0.20.0.
+    With an engine that has no release table (0.19.0 and older, supplied
+    explicitly), they take the `6.6` rule instead of `7.0.1`; under it,
+    boundary polygons that need a stored profile are refused.
+  - Unmodified terrains and requests on 6.6 and 7.0.x are unchanged.
+
 - **Effective terrain for HEC-RAS 6.6 to 7.0.2:** `RasFim.build_effective_terrain`
   and `RasFim.read_terrain_modifications` map the project's HEC-RAS release to
   the engine's modification rule from a table: 7.0, 7.0.1 and 7.0.2 to
