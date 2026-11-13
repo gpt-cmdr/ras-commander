@@ -18,6 +18,16 @@ alone does not identify a development checkout.
   0.20+). Older engines keep the refusal. Tagged terrains send the same
   requests as before.
 
+- **Inundation boundaries on modified terrains:**
+  `RasFim.map_inundation_boundaries` (deterministic and `native_serial`)
+  accepts a modified single-source terrain's stored-map effective terrain
+  (`build_effective_terrain(..., basis="stored_map")`, its receipt beside it)
+  as `terrain_path`. Tile masks stay the terrain HDF's; staged tile perimeters
+  take the effective values where modifications changed them. Before, any
+  non-empty `/Modifications` refused. On Helena with edge-crossing polygon
+  modifications the boundaries equal RAS Mapper 7.0.1's (0 ft² difference,
+  horizontal and sloping). Unmodified terrains send unchanged requests.
+
 ### 0.121.0 — 2026-11-12
 
 - **Mapping engine dependency:** mapping extras (`fim`, `fast-map`, `full`
