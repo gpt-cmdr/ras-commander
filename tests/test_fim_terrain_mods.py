@@ -244,12 +244,45 @@ def test_shape_z_with_boundary_elevations_carries_vertex_z(tmp_path):
     assert feature["rings"][0][1] == [10.0, 0.0]
 
 
+QUALIFIED_RELEASES = [
+    # (label, Fast-Map 0.18.0 rule, rule with an engine advertising 6.7)
+    ("6.6", "6.6", "6.6"), ("6.60", "6.6", "6.6"), ((6, 6, 0), "6.6", "6.6"),
+    ("6.7", "6.6", "6.7"), ("6.70", "6.6", "6.7"), ("6.7 Beta 4", "6.6", "6.7"),
+    ("6.7 Beta 5", "6.6", "6.7"), (r"C:\Program Files (x86)\HEC\HEC-RAS\6.7 Beta 5\Ras.exe", "6.6", "6.7"),
+    ("7.0", "7.0.1", "7.0.1"), ("7.00", "7.0.1", "7.0.1"), ("7.0.0", "7.0.1", "7.0.1"),
+    ("7.0.1", "7.0.1", "7.0.1"), ("7.01", "7.0.1", "7.0.1"), ("7.00.0001", "7.0.1", "7.0.1"),
+    ("7.0.2", "7.0.1", "7.0.1"), ("7.02", "7.0.1", "7.0.1"), ((7, 0, 2), "7.0.1", "7.0.1"),
+]
+ENGINE_TABLE = {"6.6": "6.6", "6.7": "6.7", "6.7 Beta 4": "6.7", "6.7 Beta 5": "6.7",
+                "7.0": "7.0.1", "7.0.0": "7.0.1", "7.0.1": "7.0.1", "7.0.2": "7.0.1"}
+
+
+@pytest.mark.parametrize("label, rule_0_18, rule_table", QUALIFIED_RELEASES)
+def test_qualified_releases_map_to_their_rule(label, rule_0_18, rule_table):
+    assert _terrain_mods.hecras_version_for(label) == rule_0_18
+    assert _terrain_mods.hecras_version_for(label, ENGINE_TABLE) == rule_table
+
+
+@pytest.mark.parametrize("label", [
+    "6.5", "6.50", "6.4.1", "6.41", "6.3.1", "6.0", "5.0.7", "5.07", "6.6.1", "7.0.3", "7.1",
+    "7.10", "8.0", "unknown", "6.7.1",
+])
+def test_unqualified_releases_are_refused(label):
+    for rules in (None, ENGINE_TABLE):
+        with pytest.raises(FimUnsupportedError, match="no qualified native") as exc:
+            _terrain_mods.hecras_version_for(label, rules)
+        assert exc.value.reason == _terrain_mods.UNQUALIFIED_HECRAS_VERSION
+        assert "7.0.2" in str(exc.value)
+
+
+def test_release_rules_ignore_unknown_engine_rules():
+    assert _terrain_mods.release_rules(None) == _terrain_mods.HECRAS_RELEASE_RULES
+    assert _terrain_mods.release_rules({"7.0.2": "7.9"}) == _terrain_mods.HECRAS_RELEASE_RULES
+    assert _terrain_mods.release_rules({"7.0.2": "7.0.1"}) == {"7.0.2": "7.0.1"}
+
+
 def test_hecras_version_mapping_and_project_detection(tmp_path):
-    assert _terrain_mods.hecras_version_for("6.6") == "6.6"
-    assert _terrain_mods.hecras_version_for("6.60") == "6.6"
-    assert _terrain_mods.hecras_version_for((6, 6, 0)) == "6.6"
-    for other in ("7.0.1", "7.00", "7.0", "6.5", "6.10", None, "unknown"):
-        assert _terrain_mods.hecras_version_for(other) == "7.0.1"
+    assert _terrain_mods.hecras_version_for(None) == "7.0.1"
     terrain = tmp_path / "Terrain" / "T.hdf"
     terrain.parent.mkdir()
     assert _terrain_mods.project_hecras_version(terrain) == ("7.0.1", "default")
@@ -263,6 +296,13 @@ def test_hecras_version_mapping_and_project_detection(tmp_path):
         ras_exe_path = None
 
     assert _terrain_mods.project_hecras_version(terrain, None, Project())[0] == "7.0.1"
+    Project.ras_version = "6.5"
+    with pytest.raises(FimUnsupportedError, match="ras_object.ras_version 6.5") as exc:
+        _terrain_mods.project_hecras_version(terrain, None, Project())
+    assert exc.value.reason == _terrain_mods.UNQUALIFIED_HECRAS_VERSION
+    (tmp_path / "M.g02").write_text("Geom Title=b\nProgram Version=7.10\n")
+    with pytest.raises(FimUnsupportedError, match="Program Version 7.10"):
+        _terrain_mods.project_hecras_version(terrain, tmp_path / "M.rasmap")
     with pytest.raises(ValueError, match="hecras_version"):
         _terrain_mods.read_layers(_hdf(tmp_path, "v.hdf"), hecras_version="6.5")
 
@@ -277,8 +317,20 @@ def test_hecras_version_mapping_and_project_detection(tmp_path):
     (lambda m: _control_point_group(_ground_line(m, "NamedCp", 0, system=b"s"), [[0.0, 0.0]], [1.0]),
      "control points", "7.0.1"),
     (lambda m: _ground_line(m, "Named66", 0, system=b"s"), "HEC-RAS 6.6", "6.6"),
+    (lambda m: _ground_line(m, "Named67", 0, system=b"s"), "HEC-RAS 6.7", "6.7"),
     (lambda m: _polygon(m, "Sampled", 0, gen=1), "sampled from the terrain", "7.0.1"),
+    (lambda m: _polygon(m, "Sampled67", 0, gen=1), "sampled from the terrain", "6.7"),
     (lambda m: _polygon(m, "Sampled66", 0, gen=1), "HEC-RAS 6.6", "6.6"),
+    # Control points only inside the ring are mass points, not perimeter points.
+    (lambda m: _control_point_group(_polygon(m, "Inside66", 0, gen=1), [[5.0, 5.0]], [41.0]),
+     "HEC-RAS 6.6", "6.6"),
+    (lambda m: _control_point_group(_polygon(m, "Inside", 0, gen=1), [[5.0, 5.0]], [41.0]),
+     "sampled from the terrain", "7.0.1"),
+    # Outside the ring but beyond Elev Pt Tolerance (20), or without an elevation.
+    (lambda m: _control_point_group(_polygon(m, "Far66", 0, gen=1), [[-25.0, 5.0]], [41.0]),
+     "HEC-RAS 6.6", "6.6"),
+    (lambda m: _control_point_group(_polygon(m, "NanCp66", 0, gen=1), [[-1.0, 5.0]], [np.nan]),
+     "HEC-RAS 6.6", "6.6"),
     (lambda m: _set_attr(_polygon(m, "ShapeZ", 0), "Use ShapeFile Z Elevations", 1),
      "shapefile Z", "7.0.1"),
     (lambda m: _set_attr(_circle(m, "AddEllipse", 0), "Elevation Type", b"Add"),
@@ -290,6 +342,32 @@ def test_forms_the_engine_refuses_are_refused_first(tmp_path, build, reason, ver
         build(f["Modifications"])
     with pytest.raises(FimUnsupportedError, match=reason):
         _terrain_mods.read_layers(hdf, hecras_version=version)
+
+
+@pytest.mark.parametrize("version", ["6.6", "6.7", "7.0.1"])
+def test_perimeter_control_point_outside_the_ring_sets_the_boundary(tmp_path, version):
+    """The only boundary form the 6.6 rule accepts: a control point outside the
+    ring within Elev Pt Tolerance (inside points are mass points)."""
+    hdf = _hdf(tmp_path)
+    with h5py.File(hdf, "a") as f:
+        g = _polygon(f["Modifications"], "Perimeter", 0, gen=1)
+        _control_point_group(g, [[-19.0, 5.0], [5.0, 5.0]], [40.0, 41.0])
+    layer = _terrain_mods.read_layers(hdf, hecras_version=version)[0]
+    assert layer["features"][0]["generate_boundary"] is True
+    assert len(layer["control_points"]) == 2
+
+
+@pytest.mark.parametrize("version", ["6.7", "7.0.1"])
+def test_stored_profile_with_interior_points_is_staged_by_6_7_and_7_0_1(tmp_path, version):
+    hdf = _hdf(tmp_path)
+    with h5py.File(hdf, "a") as f:
+        g = _polygon(f["Modifications"], "Stored", 0, gen=1)
+        g.create_dataset("Profile Info", data=np.array([[0, 2]], np.int32))
+        g.create_dataset("Profile Values", data=np.array([[0.0, 40.0], [40.0, 41.0]], np.float32))
+        _control_point_group(g, [[5.0, 5.0]], [44.0])
+    assert _terrain_mods.read_layers(hdf, hecras_version=version)[0]["name"] == "Stored"
+    with pytest.raises(FimUnsupportedError, match="HEC-RAS 6.6 samples"):
+        _terrain_mods.read_layers(hdf, hecras_version="6.6")
 
 
 def test_ground_line_without_profile_or_control_points_is_refused(tmp_path):
@@ -456,6 +534,49 @@ def test_hecras_version_reaches_the_engine(tmp_path, monkeypatch):
         RasFim.build_effective_terrain(hdf, tmp_path / "out.tif", hecras_version="6.6")
 
 
+def test_engine_release_table_decides_the_rule(tmp_path, monkeypatch):
+    hdf = _terrain(tmp_path, ["only"], priorities=[0])
+    with h5py.File(hdf, "a") as f:
+        _ground_line(f.create_group("Modifications"), "HighGround", 0)
+    # Fast-Map 0.18.0: no table; 6.7 takes the 6.6 rule, 7.0.2 the default.
+    _v2_engine(monkeypatch)
+    captured = _capture_request(monkeypatch)
+    with pytest.raises(_Stop):
+        RasFim.build_effective_terrain(hdf, tmp_path / "out.tif", hecras_version="6.7 Beta 5")
+    assert captured["hecras_version"] == "6.6"
+    captured.clear()
+    with pytest.raises(_Stop):
+        RasFim.build_effective_terrain(hdf, tmp_path / "out.tif", hecras_version="7.0.2")
+    assert "hecras_version" not in captured
+    # An engine advertising hecras_versions with a 6.7 rule.
+    _v2_engine(monkeypatch, {
+        "method_id": _effective_terrain.METHOD_ID_V2,
+        "request_schemas": [_effective_terrain.SCHEMA, _effective_terrain.SCHEMA_V2],
+        "hecras_versions": ENGINE_TABLE,
+        "modifications": {"supported": {}, "hecras_version": "release label"},
+    })
+    captured.clear()
+    with pytest.raises(_Stop):
+        RasFim.build_effective_terrain(hdf, tmp_path / "out.tif", hecras_version="6.7 Beta 4")
+    assert captured["hecras_version"] == "6.7"
+
+
+@pytest.mark.parametrize("version", ["6.5", "6.4.1", "7.1"])
+def test_unqualified_release_is_refused_before_the_engine(tmp_path, monkeypatch, version):
+    hdf = _terrain(tmp_path, ["only"], priorities=[0])
+    with h5py.File(hdf, "a") as f:
+        _ground_line(f.create_group("Modifications"), "HighGround", 0)
+    _v2_engine(monkeypatch)
+
+    def no_engine(*args, **kwargs):  # pragma: no cover - must not run
+        raise AssertionError("engine called for an unqualified release")
+
+    monkeypatch.setattr(_effective_terrain._engine, "run_engine", no_engine)
+    with pytest.raises(FimUnsupportedError, match="no qualified native") as exc:
+        RasFim.build_effective_terrain(hdf, tmp_path / "out.tif", hecras_version=version)
+    assert exc.value.reason == _terrain_mods.UNQUALIFIED_HECRAS_VERSION
+
+
 def test_v1_engine_refuses_modified_terrains(tmp_path, monkeypatch):
     hdf = _terrain(tmp_path, ["only"], priorities=[0])
     with h5py.File(hdf, "a") as f:
@@ -493,11 +614,14 @@ def _engine_with_modifications():
 
 @pytest.mark.skipif(not _engine_with_modifications(),
                     reason="installed engine lacks rasmapper-effective-terrain/2 modifications")
-@pytest.mark.parametrize("version", ["7.0.1", "6.6"])
+@pytest.mark.parametrize("version", ["7.0.1", "6.6", "6.7 Beta 5", "7.0.2"])
 def test_real_engine_accepts_every_staged_field(tmp_path, version):
     """The engine deserializes every field read_layers sends (serde
-    deny_unknown_fields) and applies a constant polygon and an ellipse."""
+    deny_unknown_fields) and applies a constant polygon and an ellipse.
+    Release labels map to the rule the installed engine advertises (6.7: the
+    6.7 rule, or 6.6 with Fast-Map 0.18.0; 7.0.2: 7.0.1)."""
     rasterio = pytest.importorskip("rasterio")
+    rule = _terrain_mods.hecras_version_for(version, RasFim._engine_hecras_versions())
     hdf = _terrain(tmp_path, ["only"], priorities=[0])
     x0, y0 = 500000.0, 4000000.0
     with h5py.File(hdf, "a") as f:
@@ -518,16 +642,16 @@ def test_real_engine_accepts_every_staged_field(tmp_path, version):
                            lines=[[(x0 + 20, y0 - 60), (x0 + 560, y0 - 60)]])
         _set_attr(nan, "Right Slope", np.nan)
         _set_attr(nan, "Left Slope", -1.0)
-        if version == "7.0.1":
+        if rule == "7.0.1":
             _ground_line(mods, "Named", 4, system=b"sys", lines=[[(x0 + 20, y0 - 480), (x0 + 560, y0 - 470)]])
     out = tmp_path / "out" / "effective.tif"
     receipt = RasFim.build_effective_terrain(hdf, out, threads=1, max_working_mib=256,
                                              hecras_version=version)
     assert receipt["method_id"] == _effective_terrain.METHOD_ID_V2
-    assert receipt["hecras_version"] == version
+    assert receipt["hecras_version"] == rule
     changed = {layer["name"]: layer["changed_pixels"]
                for layer in receipt["engine_report"]["modifications"]["layers"]}
-    assert len(changed) == (5 if version == "7.0.1" else 4) and all(changed.values())
+    assert len(changed) == (5 if rule == "7.0.1" else 4) and all(changed.values())
     with rasterio.open(out) as src:
         row, col = src.index(x0 + 150, y0 - 150)
         assert src.read(1)[row, col] == 50.0

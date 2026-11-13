@@ -967,10 +967,17 @@ receipt["method_id"], receipt["hecras_version"], receipt["modification_layers"]
   any elevation type including `Add`, named systems, control points, NaN
   templates), polygons (constant, or boundary elevations from perimeter
   control points or a stored profile) and ellipses (any rotation).
-- `hecras_version` selects the export to reproduce. `6.6` follows HEC-RAS 6.6;
-  every other version follows 7.0.1. Without it, the version comes from
-  `ras_object`, else from the newest `Program Version` of the project's plan
-  and geometry files, else 7.0.1.
+- `hecras_version` names the HEC-RAS release whose export to reproduce. Each
+  qualified release maps to an engine rule: 7.0, 7.0.1 and 7.0.2 to `7.0.1`;
+  6.6 to `6.6`; the 6.7 betas to `6.7` with an engine that advertises it in
+  `effective_terrain.hecras_versions`, else to `6.6` (Fast-Map 0.18.0). The
+  receipt's `hecras_version` is the rule. Any other release (6.5 and earlier,
+  or later than 7.0.2) raises `FimUnsupportedError` with `reason`
+  `unqualified_hecras_version` before the engine runs: those releases'
+  exports match no rule (per-release qualification, 2026-11-12). Without the
+  argument, the version comes from `ras_object`, else from the newest
+  `Program Version` of the project's plan and geometry files; when neither
+  names a version, the 7.0.1 rule is used.
 - With `rasmap_path`, RAS Mapper applies the HDF modifications only when the
   terrain layer has an `ElevationModificationGroup` named exactly
   `Modifications`; without one, or with the group under another name (for
@@ -988,7 +995,11 @@ receipt["method_id"], receipt["hecras_version"], receipt["modification_layers"]
 - Forms the engine does not reproduce raise `FimUnsupportedError`: boundary
   elevations sampled from the terrain, shape-Z polygons, polygons with more
   than one ring, named ground lines with control points or a NaN template,
-  named ground lines under 6.6, and other RAS layer types. Use the RAS Mapper
+  named ground lines under 6.6 or 6.7, and other RAS layer types. A polygon
+  takes its boundary elevations from a control point only when the point lies
+  outside the ring within Elev Pt Tolerance; points inside the ring are
+  interior mass points, so a boundary polygon whose control points all lie
+  inside needs a stored profile (and is refused under 6.6). Use the RAS Mapper
   export for those terrains.
 - A polygon feature with more than one ring (a hole in either winding, or
   separate or overlapping parts) is refused while the layers are read, before

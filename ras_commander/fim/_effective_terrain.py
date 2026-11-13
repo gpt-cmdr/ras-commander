@@ -247,12 +247,15 @@ def build(
                 f"terrain {info['terrain_hdf'].name} has modifications {info['modifications']}; "
                 f"the engine lacks {METHOD_ID_V2} (use the RAS Mapper export)"
             )
+        record = _record(engine) or {}
+        # The engine's advertised release table, else the Fast-Map 0.18.0
+        # mapping; a release without a rule is refused (RAS Mapper export).
+        rules = record.get("hecras_versions")
         if hecras_version is not None:
-            version, version_basis = _terrain_mods.hecras_version_for(hecras_version), "argument"
+            version, version_basis = _terrain_mods.hecras_version_for(hecras_version, rules), "argument"
         else:
             version, version_basis = _terrain_mods.project_hecras_version(
-                info["terrain_hdf"], rasmap_path, ras_object)
-        record = _record(engine) or {}
+                info["terrain_hdf"], rasmap_path, ras_object, rules)
         if version != "7.0.1" and "hecras_version" not in record.get("modifications", {}):
             raise FimUnsupportedError(
                 f"the engine does not advertise hecras_version; HEC-RAS {version} modification rules "

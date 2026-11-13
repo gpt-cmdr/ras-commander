@@ -57,7 +57,8 @@ def _qualified(hdf):
         _ground_line(mods, "HighGround", 1)
         _ground_line(mods, "Channels", 2, subtype="Channel", et=b"SetIfLower")
         cp = _polygon(mods, "Pads", 3, gen=1)
-        _control_point_group(cp, [[0.0, 0.0], [10.0, 10.0]], [40.0, np.nan])
+        # Outside the ring and within Elev Pt Tolerance: a perimeter point.
+        _control_point_group(cp, [[-1.0, 5.0], [10.0, 10.0]], [40.0, np.nan])
         _circle(mods, "Mound", 0, rotation=30.0)
 
 
@@ -69,10 +70,15 @@ def test_public_api_is_exported():
 
 @pytest.mark.parametrize("units_line, units, version, expected", [
     ("English Units", "feet", "7.00", "7.0.1"),
+    ("English Units", "feet", "7.02", "7.0.1"),
     ("SI Units", "meters", "6.60", "6.6"),
+    ("SI Units", "meters", "6.70", "6.6"),
 ])
-def test_matches_the_private_reader_and_documented_shape(tmp_path, units_line, units, version,
-                                                         expected):
+def test_matches_the_private_reader_and_documented_shape(tmp_path, monkeypatch, units_line, units,
+                                                         version, expected):
+    # The Fast-Map 0.18.0 mapping (no advertised table); the 6.7 rule of newer
+    # engines is covered by test_engine_table_selects_the_6_7_rule.
+    monkeypatch.setattr(RasFim, "_engine_hecras_versions", staticmethod(lambda path=None: None))
     hdf = _project(tmp_path, units_line, version)
     _qualified(hdf)
     record = RasFim.read_terrain_modifications(hdf)
@@ -106,7 +112,7 @@ def test_matches_the_private_reader_and_documented_shape(tmp_path, units_line, u
             assert layer["length_units"] == units
     assert kinds["Channels"]["subtype"] == "channel"
     assert kinds["Pads"]["control_points"] == [
-        {"x": 0.0, "y": 0.0, "elevation": 40.0}, {"x": 10.0, "y": 10.0, "elevation": None},
+        {"x": -1.0, "y": 5.0, "elevation": 40.0}, {"x": 10.0, "y": 10.0, "elevation": None},
     ]
     assert kinds["Mound"]["features"][0]["rotation"] == 30.0
 
@@ -170,6 +176,53 @@ def test_refusals_carry_the_private_readers_reason(tmp_path, build, reason, vers
     assert record["hecras_version"] == version
     with pytest.raises(FimUnsupportedError, match=reason):
         RasFim.read_terrain_modifications(hdf, hecras_version=version, strict=True)
+
+
+@pytest.mark.parametrize("version", ["6.50", "6.41", "7.10", "5.07"])
+def test_unqualified_project_release_is_refused(tmp_path, monkeypatch, version):
+    monkeypatch.setattr(RasFim, "_engine_hecras_versions", staticmethod(lambda path=None: None))
+    hdf = _project(tmp_path, "English Units", version)
+    _qualified(hdf)
+    record = RasFim.read_terrain_modifications(hdf)
+    assert set(record) == RECORD_KEYS
+    assert record["status"] == "refused" and record["layers"] == []
+    assert record["refusal_reason"] == _terrain_mods.UNQUALIFIED_HECRAS_VERSION
+    assert record["hecras_version"] is None
+    assert f"Program Version {version}" in record["refusal"]
+    with pytest.raises(FimUnsupportedError) as exc:
+        RasFim.read_terrain_modifications(hdf, hecras_version="6.5", strict=True)
+    assert exc.value.reason == _terrain_mods.UNQUALIFIED_HECRAS_VERSION
+
+
+def test_unmodified_terrain_on_an_unqualified_release_is_none(tmp_path):
+    """The release gate applies to modified terrains only."""
+    hdf = _project(tmp_path, "English Units", "6.50")
+    record = RasFim.read_terrain_modifications(hdf)
+    assert record["status"] == "none" and record["refusal"] is None and record["layers"] == []
+    record = RasFim.read_terrain_modifications(hdf, hecras_version="7.1")
+    assert record["status"] == "none"
+
+
+def test_engine_table_selects_the_6_7_rule(tmp_path, monkeypatch):
+    hdf = _project(tmp_path, "English Units", "6.70")
+    _qualified(hdf)
+    table = {"6.6": "6.6", "6.7": "6.7", "6.7 Beta 4": "6.7", "6.7 Beta 5": "6.7",
+             "7.0": "7.0.1", "7.0.0": "7.0.1", "7.0.1": "7.0.1", "7.0.2": "7.0.1"}
+    seen = []
+
+    def advertised(path=None):
+        seen.append(path)
+        return table
+
+    monkeypatch.setattr(RasFim, "_engine_hecras_versions", staticmethod(advertised))
+    record = RasFim.read_terrain_modifications(hdf, engine_path="engine.exe")
+    assert record["status"] == "staged" and record["hecras_version"] == "6.7"
+    assert seen == ["engine.exe"]
+    assert RasFim.read_terrain_modifications(hdf, hecras_version="6.7 Beta 4")["hecras_version"] == "6.7"
+    assert RasFim.read_terrain_modifications(hdf, hecras_version="7.0.2")["hecras_version"] == "7.0.1"
+    # Without a table (Fast-Map 0.18.0) 6.7 takes the 6.6 rule.
+    monkeypatch.setattr(RasFim, "_engine_hecras_versions", staticmethod(lambda path=None: None))
+    assert RasFim.read_terrain_modifications(hdf)["hecras_version"] == "6.6"
 
 
 def test_conflicting_project_units_refuse_only_layers_to_stage(tmp_path):

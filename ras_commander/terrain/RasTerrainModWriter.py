@@ -345,6 +345,7 @@ class RasTerrainModWriter:
         group_name: str = "Modifications",
         elevation: Optional[float] = None,
         priority: Optional[int] = None,
+        perimeter_control_points: Optional[Sequence[Any]] = None,
     ) -> Path:
         """
         Add a polygon multipoint terrain modification.
@@ -378,12 +379,30 @@ class RasTerrainModWriter:
             is stored as vertex Z with ``Use ShapeFile Z Elevations`` on and
             ``Generate Boundary Elevations`` off, which every version
             interpolates from the vertices. ``boundary_from_terrain`` sets
-            ``Generate Boundary Elevations``: 7.0 and 7.0.1 use the stored
-            sampled profile, while 6.6 stores no polygon profile and samples
-            the terrain itself.
+            ``Generate Boundary Elevations``: 6.7 (betas), 7.0, 7.0.1 and
+            7.0.2 use the stored sampled profile, while 6.6 stores no polygon
+            profile and samples the terrain itself. With
+            ``perimeter_control_points`` every version from 6.6 to 7.0.2
+            takes the boundary from those points instead.
         control_points : sequence, optional
             Interior elevation points as ``(x, y, elevation)`` tuples or dicts
-            with ``x``, ``y``, and ``elevation``/``z`` keys.
+            with ``x``, ``y``, and ``elevation``/``z`` keys. They must lie
+            inside or on the polygon exterior; RAS Mapper uses them as
+            interior mass points.
+        perimeter_control_points : sequence, optional
+            Boundary elevation points in the same forms, each strictly
+            outside the polygon exterior and within ``elev_pt_tolerance`` of
+            it (RAS Mapper ignores a point farther away). RAS Mapper projects
+            them onto the perimeter and interpolates the boundary profile
+            between them, so the boundary does not depend on the terrain.
+            This is the one boundary-elevation form that HEC-RAS 6.6 renders
+            like the later releases, and the only one the native engine
+            accepts under its 6.6 rule. Needs
+            ``elevation_method="boundary_from_terrain"`` (``Generate Boundary
+            Elevations`` on) and a single-ring polygon. They are written to
+            the layer's ``Control Points`` group after ``control_points``,
+            in the layout RAS Mapper itself reads (exported identically by
+            HEC-RAS 6.6, 6.7 Beta 4/5, 7.0, 7.0.1 and 7.0.2).
         rasmap_path : Path, optional
             Path to the .rasmap XML file. When omitted, the writer searches the
             terrain folder and project folder for a .rasmap referencing this
@@ -441,16 +460,50 @@ class RasTerrainModWriter:
         RasTerrainModWriter._validate_control_points_inside_polygon(
             control_xy, rings_xy[0]
         )
+        if perimeter_control_points is not None:
+            method_key = (
+                str(elevation_method).strip().lower().replace("-", "_").replace(" ", "_")
+            )
+            if method_key not in {"boundary_from_terrain", "terrain", "from_terrain"}:
+                raise ValueError(
+                    "perimeter_control_points set boundary elevations only with "
+                    "elevation_method='boundary_from_terrain' (Generate Boundary Elevations)"
+                )
+            if len(rings_xy) != 1:
+                raise ValueError("perimeter_control_points need a single-ring polygon")
+            perim_xy, perim_elevations, perim_names = (
+                RasTerrainModWriter._validate_control_points(perimeter_control_points)
+            )
+            if len(perim_xy) == 0:
+                raise ValueError("perimeter_control_points is empty")
+            RasTerrainModWriter._validate_control_points_on_perimeter(
+                perim_xy, rings_xy[0], elev_pt_tolerance
+            )
+            perim_names = [
+                f"Perimeter Point {idx + 1}" if str(n).startswith("Control Point ") else n
+                for idx, n in enumerate(perim_names)
+            ]
+            control_xy = np.vstack([control_xy, perim_xy])
+            control_elevations = np.concatenate([control_elevations, perim_elevations])
+            control_names = list(control_names) + list(perim_names)
 
         boundary_xy = np.vstack(rings_xy)
-        boundary_values = RasTerrainModWriter._boundary_elevations_for_polygon(
-            terrain_hdf_path=terrain_hdf_path,
-            boundary_xy=boundary_xy,
-            rings_z=rings_z,
-            elevation_method=elevation_method,
-            boundary_elevations=boundary_elevations,
-            elevation=elevation,
-        )
+        if perimeter_control_points is not None:
+            # The perimeter points set the boundary in RAS Mapper; the stored
+            # profile is interpolated from them along the ring, as RAS Mapper
+            # does, so no terrain is read (a vertex over NoData is fine).
+            boundary_values = RasTerrainModWriter._perimeter_profile_elevations(
+                rings_xy[0], perim_xy, perim_elevations
+            )
+        else:
+            boundary_values = RasTerrainModWriter._boundary_elevations_for_polygon(
+                terrain_hdf_path=terrain_hdf_path,
+                boundary_xy=boundary_xy,
+                rings_z=rings_z,
+                elevation_method=elevation_method,
+                boundary_elevations=boundary_elevations,
+                elevation=elevation,
+            )
 
         logger.debug(
             "Adding polygon multipoint terrain modification '%s' to %s",
@@ -2080,6 +2133,80 @@ class RasTerrainModWriter:
             raise ValueError(
                 "control_points must fall inside the polygon exterior; "
                 f"outside point indices: {outside}"
+            )
+
+    @staticmethod
+    def _perimeter_profile_elevations(
+        ring_xy: np.ndarray,
+        perim_xy: np.ndarray,
+        perim_elevations: np.ndarray,
+    ) -> np.ndarray:
+        """Elevation at each ring vertex, interpolated from perimeter points.
+
+        Each point is projected to its nearest perimeter station; vertex
+        elevations are linear in station between neighbouring points, wrapping
+        across the ring start (one point gives a constant boundary).
+        """
+        ring = np.asarray(ring_xy, dtype=np.float64)[:, :2]
+        closed = ring if np.array_equal(ring[0], ring[-1]) else np.vstack([ring, ring[:1]])
+        starts, ends = closed[:-1], closed[1:]
+        vector = ends - starts
+        lengths = np.sqrt((vector * vector).sum(axis=1))
+        cum = np.concatenate([[0.0], np.cumsum(lengths)])
+        total = float(cum[-1])
+        stations = []
+        for point in np.asarray(perim_xy, dtype=np.float64):
+            length2 = lengths * lengths
+            safe = np.where(length2 > 0, length2, 1.0)
+            t = np.clip(((point - starts) * vector).sum(axis=1) / safe, 0.0, 1.0)
+            d = np.sqrt((((starts + vector * t[:, None]) - point) ** 2).sum(axis=1))
+            k = int(np.argmin(d))
+            stations.append(float(cum[k] + t[k] * lengths[k]))
+        order = np.argsort(stations, kind="stable")
+        xs = np.asarray(stations, dtype=np.float64)[order]
+        zs = np.asarray(perim_elevations, dtype=np.float64)[order]
+        # Periodic: repeat the points one perimeter before and after.
+        xs = np.concatenate([xs - total, xs, xs + total])
+        zs = np.concatenate([zs, zs, zs])
+        vertex_stations = RasTerrainModWriter._station_values(ring)
+        return np.interp(vertex_stations, xs, zs)
+
+    @staticmethod
+    def _validate_control_points_on_perimeter(
+        control_xy: np.ndarray,
+        exterior_ring: np.ndarray,
+        elev_pt_tolerance: float,
+    ) -> None:
+        """Perimeter points: strictly outside the ring, within the tolerance.
+
+        The tolerance is compared in binary32, as RAS Mapper stores it.
+        """
+        ring = np.asarray(exterior_ring, dtype=np.float64)[:, :2]
+        if not np.array_equal(ring[0], ring[-1]):
+            ring = np.vstack([ring, ring[:1]])
+        tolerance = float(np.float32(elev_pt_tolerance))
+        inside, far = [], []
+        for idx, point in enumerate(control_xy):
+            if RasTerrainModWriter._point_in_or_on_ring(point, ring):
+                inside.append(idx)
+                continue
+            starts, ends = ring[:-1], ring[1:]
+            vector = ends - starts
+            length2 = (vector * vector).sum(axis=1)
+            safe = np.where(length2 > 0, length2, 1.0)
+            t = np.clip(((point - starts) * vector).sum(axis=1) / safe, 0.0, 1.0)
+            distance = np.sqrt((((starts + vector * t[:, None]) - point) ** 2).sum(axis=1)).min()
+            if not distance <= tolerance:
+                far.append(idx)
+        if inside:
+            raise ValueError(
+                "perimeter_control_points must lie outside the polygon exterior (inside "
+                f"points are interior mass points; use control_points); point indices: {inside}"
+            )
+        if far:
+            raise ValueError(
+                "perimeter_control_points must lie within elev_pt_tolerance "
+                f"({elev_pt_tolerance}) of the polygon perimeter; point indices: {far}"
             )
 
     @staticmethod
