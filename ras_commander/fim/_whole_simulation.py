@@ -327,7 +327,9 @@ def _run(
     identity_args = (engine, terrain, cells.crs)
     if terrain_crs_fnv1a64 is not None:
         identity_args += (terrain_crs_fnv1a64,)
-    identity = _engine.terrain_identity(*identity_args, **({"timeout": timeout} if timeout is not None else {}))
+    identity = _engine.terrain_identity(
+        *identity_args, **({"timeout": timeout} if timeout is not None else {}),
+        **_engine.crs_any_kwargs((details.get("engine") or {}).get("method")))
     details["terrain_identity"] = identity
     with tempfile.TemporaryDirectory(prefix=".whole-simulation-", dir=folder) as temporary:
         root = Path(temporary)
@@ -399,7 +401,7 @@ def _run(
         horizontal = {
             "schema": "ras2fim-horizontal-request/1",
             "terrain": str(terrain),
-            "epsg": identity["epsg"],
+            **_engine.request_crs(identity),
             "crs_identity": identity["crs_identity"],
             "terrain_transform": full_transform,
             "window": [int(v) for v in plan.window.flatten()],

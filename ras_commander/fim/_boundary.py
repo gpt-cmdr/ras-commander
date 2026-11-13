@@ -237,6 +237,9 @@ def map_inundation_boundaries(
             root = Path(context._temporary.name)
             with rasterio.open(terrain_path) as raster:
                 crs, shape = raster.crs, [raster.height, raster.width]
+            if not crs and context._terrain_identity.get("declared_crs"):
+                # Untagged RAS Mapper source: the CRS its terrain HDF declares.
+                crs = rasterio.crs.CRS.from_wkt(context._terrain_identity["declared_crs"])
             aoi = _aoi.resolve_aoi(bbox, polygon, polygon_layer, aoi_crs, default_crs=crs)
             geometry = _aoi.geometry_in_crs(aoi, crs) if aoi is not None else None
             tiles = _selected_tiles(shape, context._terrain_transform, geometry)
@@ -247,13 +250,19 @@ def map_inundation_boundaries(
             remaining = prepared_bytes - context._info["planned_prepared_bytes"] - transport
             if remaining <= 0:
                 raise FimUnsupportedError("Boundary geometry transport exceeds max_prepared_mib")
+            no_code = context._terrain_identity.get("epsg") is None
+            if no_code and not _engine.crs_any(method):
+                # Older engines label GeoJSON with an EPSG code only.
+                raise FimUnsupportedError(
+                    "inundation boundaries need a terrain CRS with an EPSG code; the engine's "
+                    "boundary method does not advertise crs_any")
             metadata = stage_boundary_terrain(terrain_hdf, terrain_path, root, threads=threads,
                 max_staged_bytes=remaining, selected_tiles=tiles)
             _write_geometry(root / "boundary-cells.wkb", cells.geometry.to_numpy())
             lookup = {mesh["mesh_name"]: i for i, mesh in enumerate(context._meshes)}
             owners = [[lookup[row.mesh_name], int(row.cell_id)] for row in cells.itertuples()]
             model = {"schema": "ras-commander-sloping-request/1", "options": _sloping._validate_options("sloping", False, False),
-                     "terrain": str(Path(terrain_path).resolve()), "epsg": context._terrain_identity["epsg"],
+                     "terrain": str(Path(terrain_path).resolve()), **_engine.request_crs(context._terrain_identity),
                      "crs_identity": context._terrain_identity["crs_identity"], "terrain_transform": context._terrain_transform,
                      "window": [0, 0, shape[1], shape[0]], "geometry_file": "boundary-cells.wkb",
                      "mesh_files": context._mesh_files, "owner_cells": owners,
@@ -264,7 +273,9 @@ def map_inundation_boundaries(
                 model["aoi_file"] = "boundary-aoi.wkb"
             request = root / "boundary-request.json"
             _atomic_json(request, {"schema": "ras-commander-boundary-request/1", "interpolation": interpolation,
-                                   "model": model, "terrain_metadata": metadata})
+                                   "model": model, "terrain_metadata": metadata,
+                                   # GDAL's WKT of the terrain CRS labels the GeoJSON verbatim.
+                                   **({"crs_wkt": crs.to_wkt()} if no_code else {})})
             unchanged()
             tick = time.perf_counter()
             output = root / "boundary-engine"

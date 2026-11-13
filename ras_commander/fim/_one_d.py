@@ -839,13 +839,23 @@ def map_one_d_profiles(hdf_path, terrain_path, output_folder, *, profiles=None,
         final_fields = {}
         if final_options is not None:
             from types import SimpleNamespace
-            epsg = rasterio.crs.CRS.from_wkt(grid["crs"]).to_epsg()
-            if epsg is None:
-                raise FimUnsupportedError("final_format requires a model CRS with an EPSG code")
+            model_crs = rasterio.crs.CRS.from_wkt(grid["crs"])
+            epsg = model_crs.to_epsg()
+            if epsg is not None:
+                crs_fields = {"epsg": int(epsg)}
+            elif _engine.crs_any(plain(delivering.flags).get(_final_format.CAPABILITY)):
+                # A CRS without an EPSG code: GDAL's GeoKeys for it (checked by a
+                # GDAL round trip), written verbatim by the engine.
+                crs_fields = {"crs_geokeys": _engine.geokeys_for_crs(
+                    engine, model_crs, Path(scratch_name) / "crs", timeout=timeout)}
+            else:
+                raise FimUnsupportedError(
+                    "final_format requires a model CRS with an EPSG code, or an engine whose "
+                    "native_final_format advertises crs_any (ras-commander-fast-map 0.20+)")
             placement = SimpleNamespace(window=window, shape=(int(window.height), int(window.width)),
                                         source_transform=transform)
             final = _final_format.resolve(final_options, placement, grid["width"], grid["height"])
-            final_fields = {"final_format": final[0], "epsg": int(epsg),
+            final_fields = {"final_format": final[0], **crs_fields,
                             "flooded_depth_range": [_products.FLOODPLAIN_MIN_DEPTH,
                                                     _products.FLOODPLAIN_MAX_DEPTH]}
 

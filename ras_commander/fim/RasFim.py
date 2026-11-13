@@ -1412,10 +1412,13 @@ class RasFim:
             timeout: Engine timeout in seconds.
             terrain_crs_fnv1a64: Caller-verified WKT hash when the engine
                 does not identify the EPSG code of a source CRS that rasterio
-                identifies by EPSG. It cannot replace the EPSG code itself:
-                the engine request carries the CRS as an EPSG code and labels
-                the output with it, so a CRS without one (for example
-                ``ESRI:102630``) is refused; use the RAS Mapper export.
+                identifies by EPSG. It cannot replace the EPSG code itself.
+                A CRS without one (for example ``ESRI:102630``) needs an
+                engine that advertises ``crs_any`` (Fast-Map 0.20+), which
+                takes the CRS as verbatim GeoKey tags: the source's own, or,
+                for RAS Mapper sources that carry no CRS, GDAL's tags for
+                the terrain HDF's ``Projection`` (checked by a GDAL round
+                trip). Older engines refuse it; use the RAS Mapper export.
             hecras_version: HEC-RAS release whose export the modifications
                 reproduce (for example ``"6.6"``, ``"6.7 Beta 5"`` or
                 ``"7.0.2"``). ``None`` resolves the project's version:
@@ -2091,6 +2094,12 @@ class RasFim:
             watched["terrain_hdf"] = scope_info["terrain_hdf"]
         if isinstance(polygon, (str, os.PathLike)):
             watched["polygon"] = _require_path(polygon, "polygon")
+        # An untagged source's CRS comes from its terrain HDF: watch it too.
+        crs_hdf = (_engine.untagged_source_hdf(
+            terrain, scope_info["terrain_hdf"] if scope_info is not None else None)
+            if backend == "rust" else None)
+        if crs_hdf is not None:
+            watched.setdefault("terrain_crs_hdf", crs_hdf)
         before = {key: _file_identity(path) for key, path in watched.items()}
         mapping_started = time.perf_counter()
         ordered = cells.sort_values("cell_idx", kind="stable").reset_index(drop=True)
@@ -2099,6 +2108,7 @@ class RasFim:
         plan = _horizontal.plan_grid(
             ordered, terrain, constraint, budget, native=backend == "rust",
             storage_areas=storage[0].polygons if storage is not None else None,
+            terrain_hdf=crs_hdf,
         )
         folder = _prepare_output_folder(output_folder)
         rows = {name: _empty_row(name, "not_run") for name in names}
@@ -2879,7 +2889,8 @@ class RasFim:
             hdf_path: Plan or geometry HDF; centres are read through
                 :meth:`get_cell_centers`.
             mesh_name: 2D flow area for ``hdf_path`` (required for several).
-            output_crs: CRS of the final grid (must have an EPSG code).
+            output_crs: CRS of the final grid. One without an EPSG code needs an
+                engine whose ``step05_r2`` advertises ``crs_any`` (sent as WKT).
             output_resolution: Final pixel size in ``output_crs`` units.
             bbox: Bounding box; without ``aoi_crs`` it is in ``output_crs``.
             polygon: Polygon area of interest; see :meth:`resolve_aoi`.
@@ -2963,9 +2974,7 @@ class RasFim:
         if not (np.isfinite(output_resolution) and output_resolution > 0):
             raise ValueError(f"output_resolution must be positive, got {output_resolution!r}")
         output_crs = CRS.from_user_input(output_crs)
-        dst_epsg = output_crs.to_epsg()
-        if dst_epsg is None:
-            raise FimUnsupportedError(f"output_crs {output_crs.to_string()} has no EPSG code")
+        dst_epsg = output_crs.to_epsg()  # None: checked against the engine's crs_any below
         if aoi is not None:
             if any(v is not None for v in (bbox, polygon, polygon_layer, aoi_crs)):
                 raise ValueError("give aoi or the bbox/polygon arguments, not both")
@@ -3031,7 +3040,16 @@ class RasFim:
             lattice_origin = (float(t.c), float(t.f))
             lattice_bounds = terrain_bounds
         coplanar_samples: Dict[str, int] = {}
-        terrain_block = _engine.terrain_identity(engine, terrain, cells.crs, terrain_crs_fnv1a64)
+        step05_record = method.get("step05_r2") if isinstance(method, dict) else None
+        dst_wkt = None
+        if dst_epsg is None:
+            if not _engine.crs_any(step05_record):
+                raise FimUnsupportedError(
+                    f"output_crs {output_crs.to_string()} has no EPSG code; the engine's Step05 method "
+                    "does not advertise crs_any (ras-commander-fast-map 0.20+)")
+            dst_epsg, dst_wkt = 0, output_crs.to_wkt()
+        terrain_block = _engine.terrain_identity(engine, terrain, cells.crs, terrain_crs_fnv1a64,
+                                                 **_engine.crs_any_kwargs(step05_record))
 
         folder = _prepare_output_folder(output_folder)
         work = Path(tempfile.mkdtemp(prefix=".fim_work_", dir=folder))
@@ -3110,6 +3128,7 @@ class RasFim:
                     terrain_block,
                     requests,
                     dst_epsg=dst_epsg,
+                    dst_wkt=dst_wkt,
                     threads=threads,
                     max_cache_bytes=max_cache_mib * 1024 * 1024,
                     max_profile_bytes=max_profile_mib * 1024 * 1024,

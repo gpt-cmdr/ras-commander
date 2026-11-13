@@ -4,6 +4,7 @@ from copy import deepcopy
 from pathlib import Path
 import math
 import os
+import shutil
 import subprocess
 import tempfile
 import time
@@ -19,7 +20,7 @@ REQUEST_SCHEMA = "ras-commander-boundary-request/2"
 AOI_CLIPPING_METHOD = "unrounded-geos-intersection/1"
 
 
-def _terrain_header(hdf, terrain):
+def _terrain_header(hdf, terrain, declared_crs=None):
     import rasterio
     from pyproj import CRS
     from pyproj.exceptions import CRSError
@@ -27,7 +28,9 @@ def _terrain_header(hdf, terrain):
     from ._source_crs import source_crs
 
     with rasterio.open(terrain) as source:
-        crs = source_crs(source.crs) if source.crs else None
+        # A RAS Mapper source with no CRS tags takes the terrain HDF's CRS (crs_any only).
+        crs = source_crs(source.crs) if source.crs else (
+            source_crs(declared_crs) if declared_crs is not None else None)
         gt = source.transform.to_gdal()
         if (crs is None or not crs.is_projected
                 or any(abs(axis.unit_conversion_factor - 1200 / 3937) > 1e-12 for axis in crs.axis_info[:2])):
@@ -295,9 +298,19 @@ def map_native_boundaries(hdf_path, terrain_path, output_folder, *, terrain_hdf,
     hdf, terrain = Path(hdf_path).resolve(strict=True), Path(terrain_path).resolve(strict=True)
     terrain_hdf = Path(terrain_hdf).resolve(strict=True)
     scope = RasFim.inspect_model_scope(hdf)
-    crs, shape, transform, units = _terrain_header(hdf, terrain)
-    identity = _engine.terrain_identity(engine, terrain, crs, terrain_crs_fnv1a64, timeout=timeout,
-                                        source_crs_identity=True)
+    any_crs = _engine.crs_any(method)
+    declared = None
+    if any_crs:
+        from ._effective_terrain import _terrain_hdf_crs
+        declared = _terrain_hdf_crs(terrain_hdf)
+    crs, shape, transform, units = _terrain_header(hdf, terrain, declared)
+    keys_folder = Path(tempfile.mkdtemp(prefix=".native-boundary-crs-"))
+    try:
+        identity = _engine.source_identity(engine, terrain, crs, terrain_crs_fnv1a64, crs_any=any_crs,
+                                           declared_crs=declared, keys_folder=keys_folder, timeout=timeout,
+                                           source_crs_identity=True)
+    finally:
+        shutil.rmtree(keys_folder, ignore_errors=True)
     watched = {"hdf": hdf, "terrain": terrain, "terrain_hdf": terrain_hdf, "engine": engine}
     if getattr(scope, "geometry_path", None) is not None:
         watched["geometry"] = Path(scope.geometry_path).resolve(strict=True)
@@ -354,7 +367,8 @@ def map_native_boundaries(hdf_path, terrain_path, output_folder, *, terrain_hdf,
                 terrain_sources = stage_native_terrain_sources(terrain_hdf, terrain, root,
                     engine_path=engine, threads=threads, model_crs=crs,
                     max_staged_bytes=remaining, timeout=timeout,
-                    primary_crs_pin=terrain_crs_fnv1a64)
+                    primary_crs_pin=terrain_crs_fnv1a64, crs_any=any_crs,
+                    primary_identity=identity)
                 _watch_terrain_sources(terrain_sources, terrain, terrain_hdf, watched, snapshots, hashes)
                 metadata = terrain_sources["terrain_metadata"]
                 extras = terrain_sources["additional_terrains"]
@@ -364,7 +378,7 @@ def map_native_boundaries(hdf_path, terrain_path, output_folder, *, terrain_hdf,
                 mesh = prepared["mesh"]
                 model = {"schema": "ras-commander-sloping-request/1",
                     "options": _sloping._validate_options("sloping", False, False),
-                    "terrain": str(terrain), "epsg": identity["epsg"],
+                    "terrain": str(terrain), **_engine.request_crs(identity),
                     "crs_identity": identity["crs_identity"], "terrain_transform": transform,
                     "window": [0, 0, shape[1], shape[0]],
                     "geometry_file": mesh["geometry_file"] if mesh else "",
@@ -387,6 +401,9 @@ def map_native_boundaries(hdf_path, terrain_path, output_folder, *, terrain_hdf,
                 request_data = {"schema": REQUEST_SCHEMA, "interpolation": interpolation,
                     "contour_method": METHOD_ID, "model": model, "terrain_metadata": metadata,
                     "additional_terrains": extras}
+                if identity["epsg"] is None:
+                    # GDAL's WKT of the model CRS labels the GeoJSON verbatim.
+                    request_data["crs_wkt"] = crs.to_wkt()
                 if prepared["xs"] is not None:
                     request_data["one_d"] = prepared["xs"]
                 request = root / "boundary-request.json"

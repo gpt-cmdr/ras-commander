@@ -103,7 +103,7 @@ def _native_sources(handle):
     return records
 
 
-def _source_header(tiff, model_crs):
+def _source_header(tiff, model_crs, allow_untagged=False):
     import rasterio
     from pyproj import CRS
     from ._source_crs import source_crs
@@ -118,14 +118,16 @@ def _source_header(tiff, model_crs):
                 or raster.scales != (1.0,) or raster.offsets != (0.0,)
                 or raster.nodata is None or not math.isfinite(raster.nodata)):
             raise FimUnsupportedError("Native boundary sources require original north-up square float32 TIFFs with 256x256 tiles")
-        if crs != model_crs:
+        if crs is None and allow_untagged:
+            pass  # RAS Mapper source without CRS tags; the terrain HDF Projection equals the model CRS.
+        elif crs != model_crs:
             raise FimUnsupportedError("Every original terrain source CRS must equal the model CRS")
         return math.ceil(raster.height / 256) * math.ceil(raster.width / 256)
 
 
 def stage_native_terrain_sources(
     terrain_hdf, primary_tiff, root, *, engine_path, threads, model_crs,
-    max_staged_bytes, timeout, primary_crs_pin=None,
+    max_staged_bytes, timeout, primary_crs_pin=None, crs_any=False, primary_identity=None,
 ):
     """Stage all original source units in native order and one global stitch TIN.
 
@@ -181,7 +183,7 @@ def stage_native_terrain_sources(
             if tiff in seen:
                 raise FimUnsupportedError("Duplicate original terrain source TIFF identity")
             seen.add(tiff)
-            count = _source_header(tiff, model_crs)
+            count = _source_header(tiff, model_crs, allow_untagged=bool(crs_any and projection))
             if count > max_staged_bytes // (65536 + 513 * 4):
                 raise FimUnsupportedError("Native terrain source metadata exceeds the staging budget")
             specs = _boundary_inputs._boundary_specs(handle, source, range(count), count,
@@ -216,9 +218,33 @@ def stage_native_terrain_sources(
     if crs_evidence.get("path") and hashes[vrt] != crs_evidence["sha256"]:
         raise FimEngineError("Registered terrain VRT content changed after CRS verification")
     verify()
-    identities = [_engine.terrain_identity(Path(engine_path), tiff, model_crs,
-                   primary_crs_pin if index == 0 else None, timeout=timeout, source_crs_identity=True)
-                  for index, (_, tiff, _, _) in enumerate(rows)]
+    import rasterio
+
+    if crs_any and primary_identity is not None and primary_identity.get("epsg") is None:
+        # A CRS without an EPSG code: the primary's GeoKeys label every source.
+        # Untagged sources are checked as such; tagged ones with other keys are
+        # pinned by their own WKT hash (their CRS equals the model CRS above).
+        keys = primary_identity["crs_geokeys"]
+        identities = [dict(primary_identity)]
+        for _, tiff, _, _ in rows[1:]:
+            with rasterio.open(tiff) as src:
+                tagged = bool(src.crs)
+            if not tagged:
+                identities.append({"crs_identity": {"kind": "untagged"}})
+                continue
+            info = _engine._json_stdout(_engine.run_engine([str(engine_path), "terrain-info", str(tiff)],
+                                                           "terrain-info"), "ras2fim-batch terrain-info")
+            if info.get("geokeys") == keys:
+                identities.append({"crs_identity": {"kind": "geokeys"}})
+            elif info.get("crs_wkt_fnv1a64"):
+                identities.append({"crs_identity": {"kind": "caller_verified_wkt",
+                                                    "fnv1a64": info["crs_wkt_fnv1a64"]}})
+            else:
+                raise FimUnsupportedError(f"the engine reads no CRS from terrain source {Path(tiff).name}")
+    else:
+        identities = [_engine.terrain_identity(Path(engine_path), tiff, model_crs,
+                       primary_crs_pin if index == 0 else None, timeout=timeout, source_crs_identity=True)
+                      for index, (_, tiff, _, _) in enumerate(rows)]
     verify()
     outputs, created, directories = [], [], []
     try:

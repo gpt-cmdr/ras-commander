@@ -33,6 +33,7 @@ def adapter(tmp_path, monkeypatch):
                              geometry=[box(0, 0, 10, 10), box(10, 0, 20, 10)], crs="EPSG:32615")
     state = SimpleNamespace(failure=None, options=None, request=None)
     method = {"method_id": _boundary.METHOD_ID, "native_vector_parity": False, "coordinate_precision": 0.001}
+    state.method = method
     monkeypatch.setattr(_boundary._engine, "find_engine", lambda *a: engine)
     monkeypatch.setattr(_boundary._engine, "engine_method", lambda *a: {"boundary": method})
 
@@ -205,3 +206,39 @@ def test_public_raw_guard_is_before_paths_engine_or_outputs(tmp_path, method, al
         getattr(RasFim, api)("missing.hdf", "missing.tif", tmp_path / "out", terrain_hdf="missing.hdf",
             method=method, allow_unqualified=allow, preserve_raw_geometry=True, **extra)
     assert not (tmp_path / "out").exists()
+
+
+def test_untagged_terrain_aoi_uses_the_declared_crs(adapter, monkeypatch):
+    """An untagged RAS Mapper source resolves the AOI in the CRS its terrain HDF
+    declares (the prepared context's identity), not in no CRS."""
+    from ras_commander.fim.RasFim import RasFim
+    terrain = adapter.args[1]
+    with rasterio.open(terrain) as src:
+        profile, data = src.profile, src.read()
+    profile.pop("crs", None)
+    terrain.unlink()
+    with rasterio.open(terrain, "w", **profile) as dst:
+        dst.write(data)
+    context = RasFim.prepare_sloping_model
+    seen = {}
+
+    def declared(*args, **options):
+        made = context(*args, **options)
+        made._terrain_identity = {"epsg": None, "crs_identity": {"kind": "untagged"}, "crs_geokeys": {},
+                                  "declared_crs": rasterio.crs.CRS.from_epsg(32615).to_wkt()}
+        return made
+
+    resolve = _boundary._aoi.resolve_aoi
+
+    def recorded(*args, default_crs=None, **kwargs):
+        seen["crs"] = default_crs
+        return resolve(*args, default_crs=default_crs, **kwargs)
+
+    adapter.method["crs_any"] = True
+    monkeypatch.setattr(RasFim, "prepare_sloping_model", declared)
+    monkeypatch.setattr(_boundary._aoi, "resolve_aoi", recorded)
+    monkeypatch.setattr(_boundary._engine, "request_crs", lambda identity: {"epsg": 32615})
+    _boundary.map_inundation_boundaries(*adapter.args, terrain_hdf=adapter.terrain_hdf,
+                                        profiles={"max": "Max"}, bbox=[0, 0, 20, 20])
+    assert seen["crs"] == rasterio.crs.CRS.from_epsg(32615)
+    assert adapter.request["terrain_metadata"]["selected_tiles"] == [0]

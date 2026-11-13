@@ -40,6 +40,43 @@ alone does not identify a development checkout.
   defect on one minimum-Y window, which does not rule it out. Projects on
   those releases can use the native effective terrain instead.
 
+- **CRSs without an EPSG code on the native route.** With an engine that
+  advertises `crs_any` (ras-commander-fast-map 0.20+), the following accept a
+  terrain whose CRS has no EPSG code, such as ESRI:102630 (NAD83 / Alabama
+  West, US survey feet):
+  - `RasFim.build_effective_terrain`;
+  - sloping mapping and `prepare_sloping_model`;
+  - horizontal mapping;
+  - 1D `final_format`.
+
+  Requests carry the CRS as `crs_geokeys`: the terrain's own GeoKey tags, or,
+  for RAS Mapper terrain sources that carry no CRS, GDAL's tags for the
+  terrain HDF's `Projection`, checked by a GDAL round trip. The engine writes
+  them verbatim, so outputs read back in exactly the source CRS. New helpers:
+  `_engine.crs_any`, `request_crs` and `geokeys_for_crs`; the
+  effective-terrain receipt gains `crs`. Engines without `crs_any` still
+  refuse with a clear message. EPSG terrains send the same requests as before.
+  Boundaries (GeoJSON labelled with GDAL's WKT of the terrain CRS; native
+  boundaries also on untagged RAS Mapper sources), Step05 `map_profiles`
+  (terrain by GeoKeys, `output_crs` without an EPSG code by WKT),
+  whole-simulation products and coupled mapping take the same route when
+  their engine methods advertise `crs_any`.
+- **FIM: untagged RAS Mapper terrain sources on every native route.** A
+  source TIFF with no CRS tags (RAS Mapper writes none for a CRS without an
+  EPSG code) now takes the `Projection` of the one sibling HEC terrain HDF
+  that registers it (`_effective_terrain.registered_source_crs`), for sloping,
+  prepared sloping, horizontal and both boundary methods, and only with an
+  engine that advertises `crs_any` (`_engine.source_identity`). The terrain
+  CRS must still equal the model CRS. Boundary staging takes the same CRS for
+  `crs_wkt`, and the boundary AOI is resolved in it. On unmodified Helena
+  (ESRI:102630) WSE/Depth now map on the source TIFF with the same valid mask
+  as RAS Mapper.
+- **FIM fix (not CRS): boundary staging treats empty stitch TIN arrays as no
+  stitch TIN.** Single-source terrains store `(0, 0)` `Stitch TIN Points` and
+  `Stitch TIN Triangles`; boundary staging refused them as an unsupported
+  shape, which also refused EPSG terrains. They are now absent, as effective
+  terrain already treats them. One empty and one non-empty array still refuse.
+
 ### 0.120.0 — 2026-11-12
 
 - **Mapping engine dependency:** mapping extras (`fim`, `fast-map`, `full`
@@ -87,6 +124,7 @@ alone does not identify a development checkout.
   that physically overlap a 2D flow area, storage with the native stored-grid
   contract and older engines are still refused before any write. Results stay
   `qualified=False` and still require `allow_unqualified=True`.
+
 ### 0.119.0 — 2026-11-12
 
 - **Mapping engine dependency:** mapping extras (`fim`, `fast-map`, `full`

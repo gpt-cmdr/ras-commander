@@ -675,6 +675,14 @@ def map_profiles(
             watched.update(corner_sources)
     if _prepared is not None:
         watched.update(_prepared._watched)
+        crs_hdf = getattr(_prepared, "_terrain_crs_hdf", None)
+    else:
+        # An untagged source's CRS comes from its terrain HDF: watch it too.
+        crs_hdf = (_engine.untagged_source_hdf(
+            terrain, scope_info["terrain_hdf"] if scope_info is not None else None)
+            if _engine.crs_any(method) else None)
+        if crs_hdf is not None:
+            watched.setdefault("terrain_crs_hdf", crs_hdf)
     if template_raster is not None:
         template_raster = Path(template_raster).resolve(strict=True)
         watched["template_raster"] = template_raster
@@ -717,6 +725,7 @@ def map_profiles(
     plan = _horizontal.plan_grid(
         cells, terrain, constraint, budget, native=True,
         storage_areas=storage.polygons if storage is not None else None,
+        terrain_hdf=crs_hdf,
     )
     if plan.mask_geometry and method.get("aoi_mask") != "global-terrain-lattice/1":
         raise FimEngineError("Polygon masking requires Fast-Map global-terrain-lattice/1 (0.10.1+)")
@@ -871,7 +880,8 @@ def map_profiles(
         else:
             tick = time.perf_counter()
             identity = (
-                _engine.terrain_identity(engine, terrain, cells.crs, terrain_crs_fnv1a64)
+                _engine.source_identity(engine, terrain, cells.crs, terrain_crs_fnv1a64,
+                                        crs_any=_engine.crs_any(method), terrain_hdf=crs_hdf)
                 if _prepared is None
                 else _prepared._terrain_identity
             )
@@ -970,7 +980,7 @@ def map_profiles(
                         else {}
                     ),
                     terrain=str(terrain),
-                    epsg=identity["epsg"],
+                    **_engine.request_crs(identity),
                     crs_identity=identity["crs_identity"],
                     terrain_transform=full_transform,
                     window=[int(v) for v in plan.window.flatten()],

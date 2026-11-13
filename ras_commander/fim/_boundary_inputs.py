@@ -83,6 +83,19 @@ def _boundary_specs(handle, source, tiles, tile_count, *, include_stitch=True,
         present = ((handle.get(path, getlink=True) is not None) if strict_links
                    else path in handle for path in (points_path, triangles_path))
         points_present, triangles_present = present
+        def hard(path):
+            parts = path.strip("/").split("/")
+            return all(isinstance(handle.get("/".join(parts[:n]), getlink=True), h5py.HardLink)
+                       for n in range(1, len(parts) + 1))
+
+        # Strict mode checks every link before any dataset is dereferenced;
+        # linked stitch arrays then fall through to add(), which refuses them.
+        if points_present and triangles_present and all(
+                (not strict_links or hard(path))
+                and isinstance(handle.get(path), h5py.Dataset) and handle[path].size == 0
+                for path in (points_path, triangles_path)):
+            # A single-source terrain stores empty (0, 0) stitch arrays: no TIN.
+            points_present = triangles_present = False
         if points_present != triangles_present:
             raise FimUnsupportedError("Stitch TIN points and triangles must both be present or absent")
         if points_present:
@@ -140,13 +153,20 @@ def stage_boundary_terrain(
                 or not all(math.isfinite(v) for v in transform.to_gdal())
                 or raster.scales != (1.0,) or raster.offsets != (0.0,)):
             raise FimUnsupportedError("Boundary terrain requires an original north-up square float32 TIFF with 256x256 tiles")
-        if raster.crs is None or not raster.crs.is_projected:
+        stored = raster.crs
+        if stored is None:
+            # A RAS Mapper source with no CRS tags: its terrain HDF's Projection
+            # (the identity check admitted it only for crs_any engines).
+            from ._effective_terrain import _terrain_hdf_crs
+            declared = _terrain_hdf_crs(hdf)
+            stored = rasterio.crs.CRS.from_wkt(declared.to_wkt()) if declared is not None else None
+        if stored is None or not stored.is_projected:
             raise FimUnsupportedError("Boundary terrain requires a stored projected CRS")
         if raster.nodata is None or not math.isfinite(raster.nodata):
             raise FimUnsupportedError("Boundary terrain requires a finite stored nodata value")
         shape = [raster.height, raster.width]
         tile_grid = [math.ceil(raster.height / 256), math.ceil(raster.width / 256)]
-        crs, nodata = raster.crs, float(raster.nodata)
+        crs, nodata = stored, float(raster.nodata)
 
     tile_count = math.prod(tile_grid)
     max_tiles = max_staged_bytes // (65536 + 513 * 4)
