@@ -368,9 +368,32 @@ def test_stored_map_basis_needs_the_engine_record(tmp_path, monkeypatch, record)
 def test_stored_map_basis_refuses_multi_source_terrains_before_the_engine(tmp_path, monkeypatch):
     hdf = _terrain(tmp_path, ["fine", "coarse"], priorities=[0, 1])
     requests = _fake_basis_engine(monkeypatch, _STORED, "stored_map")
-    with pytest.raises(FimUnsupportedError, match="single-source"):
+    with pytest.raises(FimUnsupportedError, match="composes several sources"):
         RasFim.build_effective_terrain(hdf, tmp_path / "out.tif", basis="stored_map")
     assert requests == []
+
+
+_COMPOSING = dict(_STORED, stored_map={"rule_id": _effective_terrain.STORED_MAP_RULE_ID,
+              "multi_source": {"composition_rule_id": _effective_terrain.STORED_MAP_COMPOSITION_ID}})
+
+
+def test_stored_map_basis_sends_multi_source_terrains_to_a_composing_engine(tmp_path, monkeypatch):
+    hdf = _terrain(tmp_path, ["fine", "coarse"], priorities=[0, 1])
+    requests = _fake_basis_engine(monkeypatch, _COMPOSING, "stored_map")
+    # Lower-source CRS checks are covered by the multi-source export tests.
+    monkeypatch.setattr(_effective_terrain, "_source_identities", lambda *a, **k: None)
+    assert _effective_terrain.engine_composes_stored_map_sources(Path("engine.exe")) is True
+    receipt = RasFim.build_effective_terrain(hdf, tmp_path / "out.tif", basis="stored_map")
+    assert requests[0]["basis"] == "stored_map" and len(requests[0]["sources"]) == 2
+    assert receipt["basis"] == "stored_map"
+
+
+def test_composition_needs_the_stored_map_basis_record(monkeypatch):
+    composing_without_basis = dict(_COMPOSING, bases=["export"])
+    for record, expected in ((_STORED, False), (composing_without_basis, False), (_COMPOSING, True)):
+        monkeypatch.setattr(_effective_terrain, "_record", lambda engine, r=record: r)
+        monkeypatch.setattr(_effective_terrain, "engine_supports", lambda engine: True)
+        assert _effective_terrain.engine_composes_stored_map_sources(Path("engine.exe")) is expected
 
 
 def test_unknown_basis_is_a_value_error(tmp_path):

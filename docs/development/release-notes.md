@@ -28,6 +28,15 @@ alone does not identify a development checkout.
   modifications the boundaries equal RAS Mapper 7.0.1's (0 ft² difference,
   horizontal and sloping). Unmodified terrains send unchanged requests.
 
+- **Stored-map basis for multi-source terrains:** `build_effective_terrain(...,
+  basis="stored_map")` sends a multi-source terrain to engines whose
+  `effective_terrain.stored_map.multi_source` record names
+  `rasmapper-stored-map-composition/1` (ras-commander-fast-map with that
+  record; new probe `_effective_terrain.engine_composes_stored_map_sources`).
+  The engine composes sources on one lattice as RAS Mapper's stored maps do
+  and refuses other layouts. Older engines keep the single-source refusal,
+  before any request.
+
 ### 0.121.0 — 2026-11-12
 
 - **Mapping engine dependency:** mapping extras (`fim`, `fast-map`, `full`
