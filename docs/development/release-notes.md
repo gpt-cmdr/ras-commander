@@ -9,6 +9,16 @@ alone does not identify a development checkout.
 
 ### Unreleased
 
+### 0.122.0 — 2026-11-13
+
+- **Mapping engine dependency:** mapping extras (`fim`, `fast-map`, `full`
+  and `all`) select `ras-commander-fast-map>=0.21.0,<0.22` (was
+  `>=0.20.0,<0.21`). As before, the extras install the engine only on
+  Windows x64 and Linux x86_64. Fast-Map 0.21.0 keeps the output bytes of
+  every request 0.20.0 accepts and adds the stored-map basis for several
+  sources on one lattice (`rasmapper-stored-map-composition/1`), the
+  staged-session follow-ups and duration with storage-area level pools.
+
 - **Whole-simulation products on untagged RAS Mapper sources:**
   `RasFim.map_whole_simulation` now reads a terrain source TIFF with no CRS
   tags in the CRS of the terrain HDF that registers it (`terrain_hdf` when
