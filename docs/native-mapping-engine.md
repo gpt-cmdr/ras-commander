@@ -1092,7 +1092,12 @@ receipt["basis"], receipt["basis_rule_id"]
   composes sources that share one lattice (same cell size, origins whole cells
   apart) as RAS Mapper's stored maps do: priority order, a lower source hidden
   under a higher source's 8-connected interior and on its edge ring unless
-  interior itself. Sources on different lattices are refused by the engine;
+  interior itself. Results can still differ from RAS Mapper's stored maps on
+  source seams, where RAS Mapper composes per-source depth maps that one
+  terrain cannot hold. Tested on Helena split into 2 and 3 aligned sources
+  (HEC-RAS 7.0.1 composed stored maps): Depth equals float32(WSE - terrain) on
+  all but 27 and 68 of 6,865,021 wet pixels, all on seams, and on all 832
+  modified pixels. Sources on different lattices are refused by the engine;
   older engines are refused (`FimUnsupportedError`) before the engine runs.
   Use the default `basis="export"` there.
 - The default request is unchanged: Commander sends no `basis` field unless
