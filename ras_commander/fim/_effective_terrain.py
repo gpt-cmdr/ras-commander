@@ -115,6 +115,13 @@ def _input_identity(path: Path) -> dict:
     return {"path": str(Path(path).resolve()), "size": stat.st_size, "mtime_ns": stat.st_mtime_ns}
 
 
+def _build_inputs(info: dict) -> dict:
+    """Identities of the terrain HDF and each source named in ``info``."""
+    terrain_hdf = Path(info["terrain_hdf"])
+    return {"terrain_hdf": _input_identity(terrain_hdf),
+            "sources": [_input_identity(terrain_hdf.parent / name) for name in info["sources"]]}
+
+
 def _receipt_method(report: dict, schema: str) -> str:
     """The method the engine reports, checked against the request schema.
 
@@ -430,6 +437,9 @@ def build(
     output_path.parent.mkdir(parents=True, exist_ok=True)
     work = Path(tempfile.mkdtemp(prefix=".effective-terrain-", dir=output_path.parent))
     try:
+        # Identities taken before staging, so an input edited during the build
+        # is caught below and never recorded in its new state.
+        inputs = _build_inputs(info)
         staged = stage(info, work)
         if declared is not None:
             # GDAL's GeoKeys for the declared CRS, verified by a GDAL round trip;
@@ -485,6 +495,8 @@ def build(
         produced = out_dir / "effective_terrain.tif"
         if report.get("status") != "complete" or not produced.is_file():
             raise FimEngineError(f"effective-terrain did not complete: {report.get('status')!r}")
+        if _build_inputs(info) != inputs:
+            raise FimEngineError("effective-terrain input changed during the build; nothing was published")
         method_id = _receipt_method(report, request["schema"])
         reported_basis = report.get("basis", BASIS_EXPORT)
         if reported_basis != basis:
@@ -516,11 +528,7 @@ def build(
             "seconds": time.perf_counter() - started,
             # Size and mtime of the terrain HDF and each source as built, so a
             # consumer of this receipt can tell a stale effective terrain.
-            "inputs": {
-                "terrain_hdf": _input_identity(Path(info["terrain_hdf"])),
-                "sources": [_input_identity(Path(info["terrain_hdf"]).parent / name)
-                            for name in info["sources"]],
-            },
+            "inputs": inputs,
             "engine_report": report,
         }
         receipt["engine_report"]["output"] = str(output_path)
