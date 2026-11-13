@@ -1450,8 +1450,15 @@ class RasFim:
                 stored-map basis is the single source's cells on its own
                 GeoTIFF grid (unmodified: the source TIFF bit for bit), then
                 the modifications rasterized as for the export, without
-                rounding. Map on it to match RAS Mapper's stored maps; it is
-                refused for multi-source terrains. Qualified on Helena
+                rounding. Map on it to match RAS Mapper's stored maps.
+                Multi-source terrains need an engine that composes sources
+                on one lattice (``rasmapper-stored-map-composition/1``);
+                otherwise they are refused before the engine runs. Composed
+                terrains can differ from RAS Mapper's stored maps on source
+                seams, where RAS Mapper composes per-source depth maps: on
+                Helena split into 2 and 3 aligned sources (HEC-RAS 7.0.1),
+                27 and 68 of 6,865,021 wet pixels, all on seams, and no
+                modified pixel. Qualified on Helena
                 (one source, two channel ground lines, HEC-RAS 7.0.1 and 6.6
                 stored maps): Depth equals float32(WSE - terrain) on every wet
                 pixel.

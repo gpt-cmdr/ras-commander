@@ -27,9 +27,11 @@ The export never answers a source's last cell row and column (render blocks lie
 between cell centres) and rounds to 1/32; stored maps are written per source on
 the source's own grid from its own cells, with the modifications unrounded. The
 engine's stored-map basis writes that terrain (rule
-``rasmapper-stored-map-terrain/1``) for single-source terrains; mapping on it
-matches RAS Mapper's stored maps where mapping on the export does not. The
-default stays the export.
+``rasmapper-stored-map-terrain/1``) for single-source terrains, and for
+several sources on one lattice on engines that advertise
+``stored_map.multi_source`` (``rasmapper-stored-map-composition/1``); mapping
+on it matches RAS Mapper's stored maps where mapping on the export does not.
+The default stays the export.
 """
 
 from __future__ import annotations
@@ -120,6 +122,21 @@ def _build_inputs(info: dict) -> dict:
     terrain_hdf = Path(info["terrain_hdf"])
     return {"terrain_hdf": _input_identity(terrain_hdf),
             "sources": [_input_identity(terrain_hdf.parent / name) for name in info["sources"]]}
+
+
+#: Multi-source composition on the stored-map basis (Fast-Map 0.21.0+).
+STORED_MAP_COMPOSITION_ID = "rasmapper-stored-map-composition/1"
+
+
+def engine_composes_stored_map_sources(engine: Path) -> bool:
+    """Whether ``engine`` builds the stored-map basis for several sources
+    on one lattice (its ``stored_map.multi_source`` record names
+    ``rasmapper-stored-map-composition/1``). The engine still refuses sources
+    whose cell size or origin is off the lattice."""
+    if not engine_supports_basis(engine, BASIS_STORED_MAP):
+        return False
+    multi = (_record(engine) or {}).get("stored_map", {}).get("multi_source")
+    return isinstance(multi, dict) and multi.get("composition_rule_id") == STORED_MAP_COMPOSITION_ID
 
 
 def _receipt_method(report: dict, schema: str) -> str:
@@ -375,9 +392,11 @@ def build(
             f"({STORED_MAP_RULE_ID}); install a newer ras-commander-fast-map or use basis='export'"
         )
     info = _terrain_scope.top_priority_source(terrain_hdf, rasmap_path)
-    if basis == BASIS_STORED_MAP and len(info["sources"]) != 1:
+    if (basis == BASIS_STORED_MAP and len(info["sources"]) != 1
+            and not engine_composes_stored_map_sources(engine)):
         raise FimUnsupportedError(
-            f"basis {basis!r} is qualified for single-source terrains only; "
+            f"basis {basis!r} needs an engine that composes several sources "
+            f"({STORED_MAP_COMPOSITION_ID}, ras-commander-fast-map 0.21.0+); "
             f"{info['terrain_hdf'].name} has {len(info['sources'])} sources (use basis='export')"
         )
     layers = []

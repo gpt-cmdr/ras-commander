@@ -1087,8 +1087,19 @@ receipt["basis"], receipt["basis_rule_id"]
 - The output is the single source's cells on its own GeoTIFF grid, then the
   modifications rasterized as for the export, without rounding. Unmodified,
   it is the source TIFF bit for bit.
-- Multi-source terrains are refused (`FimUnsupportedError`) before the
-  engine runs; use the default `basis="export"`.
+- Multi-source terrains need an engine whose `effective_terrain.stored_map`
+  record has `multi_source` (`rasmapper-stored-map-composition/1`). It
+  composes sources that share one lattice (same cell size, origins whole cells
+  apart) as RAS Mapper's stored maps do: priority order, a lower source hidden
+  under a higher source's 8-connected interior and on its edge ring unless
+  interior itself. Results can still differ from RAS Mapper's stored maps on
+  source seams, where RAS Mapper composes per-source depth maps that one
+  terrain cannot hold. Tested on Helena split into 2 and 3 aligned sources
+  (HEC-RAS 7.0.1 composed stored maps): Depth equals float32(WSE - terrain) on
+  all but 27 and 68 of 6,865,021 wet pixels, all on seams, and on all 832
+  modified pixels. Sources on different lattices are refused by the engine;
+  older engines are refused (`FimUnsupportedError`) before the engine runs.
+  Use the default `basis="export"` there.
 - The default request is unchanged: Commander sends no `basis` field unless
   asked, and the receipt records `basis`.
 - Qualified on Helena (one source, Middle Cahaba p01 Max, sloping, two
