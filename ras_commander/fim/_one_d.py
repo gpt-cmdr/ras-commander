@@ -851,7 +851,7 @@ def map_one_d_profiles(hdf_path, terrain_path, output_folder, *, profiles=None,
             else:
                 raise FimUnsupportedError(
                     "final_format requires a model CRS with an EPSG code, or an engine whose "
-                    "native_final_format advertises crs_any (ras-commander-fast-map 0.19+)")
+                    "native_final_format advertises crs_any (ras-commander-fast-map 0.20+)")
             placement = SimpleNamespace(window=window, shape=(int(window.height), int(window.width)),
                                         source_transform=transform)
             final = _final_format.resolve(final_options, placement, grid["width"], grid["height"])

@@ -41,7 +41,7 @@ alone does not identify a development checkout.
   those releases can use the native effective terrain instead.
 
 - **CRSs without an EPSG code on the native route.** With an engine that
-  advertises `crs_any` (ras-commander-fast-map 0.19+), the following accept a
+  advertises `crs_any` (ras-commander-fast-map 0.20+), the following accept a
   terrain whose CRS has no EPSG code, such as ESRI:102630 (NAD83 / Alabama
   West, US survey feet):
   - `RasFim.build_effective_terrain`;

@@ -904,7 +904,7 @@ manifest.attrs["terrain_scope"]   # method, source, priority basis, mask dataset
   instead map the source TIFF directly with `terrain_crs_fnv1a64` (below).
 
 **CRSs without an EPSG code.** <a id="crss-without-an-epsg-code"></a> Engines that
-advertise `crs_any` on a method record (Fast-Map 0.19+: `effective_terrain`,
+advertise `crs_any` on a method record (Fast-Map 0.20+: `effective_terrain`,
 `sloping`, `horizontal`, and `native_final_format` of the 1D methods) accept a
 terrain and results CRS that PROJ identifies by no EPSG code, such as
 `ESRI:102630`. The request then carries the CRS as `crs_geokeys`, the GeoKey
@@ -1037,7 +1037,7 @@ receipt["method_id"], receipt["hecras_version"], receipt["modification_layers"]
   the layers.
 - A source CRS without an EPSG code, such as `ESRI:102630` (NAD83 / Alabama
   West, US survey feet), needs an engine whose `effective_terrain` record
-  advertises `crs_any` (Fast-Map 0.19+). See
+  advertises `crs_any` (Fast-Map 0.20+). See
   [CRSs without an EPSG code](#crss-without-an-epsg-code). With older engines
   it raises `FimUnsupportedError`, because their requests carry the CRS as an
   EPSG code and they label the output from it alone; use the RAS Mapper

@@ -1,6 +1,6 @@
 """Terrain CRSs without an EPSG code on the native route (Fast-Map ``crs_any``).
 
-Fast-Map 0.19+ advertises ``crs_any`` on methods that take ``crs_geokeys``:
+Fast-Map 0.20+ advertises ``crs_any`` on methods that take ``crs_geokeys``:
 the GeoKey tags of a GeoTIFF in the CRS, which the engine writes back verbatim.
 Unit tests drive a simulated engine; the real tests run when the installed
 engine (``RAS_COMMANDER_FIM_ENGINE``) advertises ``crs_any`` and check the
@@ -183,13 +183,35 @@ def test_geokeys_for_crs_refuses_without_engine_keys(tmp_path, monkeypatch):
         _engine.geokeys_for_crs(Path("engine"), ESRI, tmp_path / "crs")
 
 
-def _real_engine_crs_any():
+def test_geokeys_for_crs_refuses_a_crs_gdal_writes_differently(tmp_path, monkeypatch):
+    """The written CRS must read back equal; otherwise refuse before terrain-info."""
+    calls = []
+    monkeypatch.setattr(_engine, "run_engine", lambda *a, **k: calls.append(a) or b"{}")
+    monkeypatch.setattr(_engine, "_crs_equal", lambda a, b: False)
+    with pytest.raises(FimUnsupportedError, match="read back as the same CRS"):
+        _engine.geokeys_for_crs(Path("engine"), ESRI, tmp_path / "crs")
+    assert calls == []
+
+
+def test_terrain_hdf_projection_as_a_one_element_array(tmp_path):
+    wkt = CRS.from_user_input(ESRI).to_wkt()
+    one, two = tmp_path / "one.hdf", tmp_path / "two.hdf"
+    with h5py.File(one, "w") as f:
+        f.attrs["Projection"] = np.array([wkt], dtype=h5py.string_dtype())
+    with h5py.File(two, "w") as f:
+        f.attrs["Projection"] = np.array([wkt, "EPSG:2277"], dtype=h5py.string_dtype())
+    assert _effective_terrain._terrain_hdf_crs(one).equals(CRS.from_user_input(ESRI))
+    # Several definitions are ambiguous: no CRS is chosen.
+    assert _effective_terrain._terrain_hdf_crs(two) is None
+
+
+def _real_engine_crs_any(*methods):
     try:
         engine = _engine.find_engine(None)
         record = _engine.engine_method(engine)
     except Exception:
         return False
-    return _engine.crs_any(record.get("effective_terrain")) and _engine.crs_any(record.get("sloping"))
+    return all(_engine.crs_any(record.get(m)) for m in ("effective_terrain", "sloping") + methods)
 
 
 @pytest.mark.skipif(not _real_engine_crs_any(), reason="installed engine lacks crs_any")
@@ -319,7 +341,8 @@ def test_coupled_needs_crs_any_on_every_component(monkeypatch, advertised):
     assert _coupled._coupled_crs_any("engine.exe") is False
 
 
-@pytest.mark.skipif(not _real_engine_crs_any(), reason="installed engine lacks crs_any")
+@pytest.mark.skipif(not _real_engine_crs_any("native_boundary"),
+                    reason="installed engine lacks crs_any on native_boundary")
 def test_real_engine_boundary_geojson_reads_back_in_the_terrain_crs(tmp_path):
     """A storage-only boundary on an ESRI:102630 terrain: the GeoJSON's legacy crs
     member is GDAL's WKT of the terrain, which geopandas/GDAL read back exactly."""

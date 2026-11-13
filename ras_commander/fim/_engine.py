@@ -148,7 +148,7 @@ def engine_method(engine: Path) -> dict:
 def crs_any(record) -> bool:
     """Whether an engine method record accepts a CRS without an EPSG code.
 
-    Fast-Map 0.19+ advertises ``crs_any: true`` on methods that take
+    Fast-Map 0.20+ advertises ``crs_any: true`` on methods that take
     ``crs_geokeys``: the GeoKey tags of a GeoTIFF in that CRS, which the
     engine writes back verbatim into its GeoTIFFs. Older engines label
     outputs from an EPSG code alone.
@@ -364,7 +364,7 @@ def terrain_identity(engine: Path, terrain_path: Path, results_crs, terrain_crs_
             f"terrain CRS has no EPSG code: {crs_rio.to_string()} ({crs_rio.name}). This engine "
             "method does not advertise crs_any, so its requests carry the terrain CRS as an EPSG "
             "code; terrain_crs_fnv1a64 only pins the engine's WKT reading of a CRS that rasterio "
-            "identifies by EPSG and cannot replace the code. Use ras-commander-fast-map 0.19+ "
+            "identifies by EPSG and cannot replace the code. Use ras-commander-fast-map 0.20+ "
             "(crs_any), or a terrain (and results) in a CRS with an EPSG code."
         )
     fnv = info.get("crs_wkt_fnv1a64")

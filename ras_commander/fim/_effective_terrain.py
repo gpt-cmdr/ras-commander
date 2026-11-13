@@ -197,8 +197,16 @@ def _terrain_hdf_crs(terrain_hdf):
     import h5py
     from pyproj import CRS
 
+    import numpy as np
+
     with h5py.File(terrain_hdf, "r") as hdf:
         value = hdf.attrs.get("Projection")
+    if isinstance(value, np.ndarray):
+        # A one-element string array is the same definition (the HDF CRS
+        # reader accepts it); several definitions are ambiguous.
+        if value.size != 1:
+            return None
+        value = value.reshape(-1)[0]
     if isinstance(value, bytes):
         value = value.decode("utf-8", "replace")
     if not isinstance(value, str) or not value.strip():
@@ -236,7 +244,7 @@ def _require_epsg(crs, tif: Path, terrain_crs_fnv1a64: Optional[str], crs_any: b
         f"terrain source {Path(tif).name} has CRS {parsed.to_string()} ({parsed.name}), which "
         "has no EPSG code. The native effective terrain needs one: the engine request carries "
         "the CRS as an EPSG code and the engine writes the output GeoTIFF's CRS from it."
-        f"{pinned} Use ras-commander-fast-map 0.19+ (crs_any), the RAS Mapper export "
+        f"{pinned} Use ras-commander-fast-map 0.20+ (crs_any), the RAS Mapper export "
         "(RasTerrain.export_rasmapper_terrain) for this terrain, or rebuild the terrain from "
         "sources in a CRS with an EPSG code."
     )

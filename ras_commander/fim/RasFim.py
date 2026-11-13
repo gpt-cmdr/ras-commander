@@ -1414,7 +1414,7 @@ class RasFim:
                 does not identify the EPSG code of a source CRS that rasterio
                 identifies by EPSG. It cannot replace the EPSG code itself.
                 A CRS without one (for example ``ESRI:102630``) needs an
-                engine that advertises ``crs_any`` (Fast-Map 0.19+), which
+                engine that advertises ``crs_any`` (Fast-Map 0.20+), which
                 takes the CRS as verbatim GeoKey tags: the source's own, or,
                 for RAS Mapper sources that carry no CRS, GDAL's tags for
                 the terrain HDF's ``Projection`` (checked by a GDAL round
@@ -3046,7 +3046,7 @@ class RasFim:
             if not _engine.crs_any(step05_record):
                 raise FimUnsupportedError(
                     f"output_crs {output_crs.to_string()} has no EPSG code; the engine's Step05 method "
-                    "does not advertise crs_any (ras-commander-fast-map 0.19+)")
+                    "does not advertise crs_any (ras-commander-fast-map 0.20+)")
             dst_epsg, dst_wkt = 0, output_crs.to_wkt()
         terrain_block = _engine.terrain_identity(engine, terrain, cells.crs, terrain_crs_fnv1a64,
                                                  **_engine.crs_any_kwargs(step05_record))
