@@ -9,6 +9,15 @@ alone does not identify a development checkout.
 
 ### Unreleased
 
+- **Whole-simulation products on untagged RAS Mapper sources:**
+  `RasFim.map_whole_simulation` now reads a terrain source TIFF with no CRS
+  tags in the CRS of the terrain HDF that registers it (`terrain_hdf` when
+  given), as horizontal and sloping mapping already do. The request carries
+  `crs_identity: untagged` and GDAL's GeoKeys for that CRS, for engines whose
+  `whole_simulation` record advertises `crs_any` (ras-commander-fast-map
+  0.20+). Older engines keep the refusal. Tagged terrains send the same
+  requests as before.
+
 ### 0.121.0 — 2026-11-12
 
 - **Mapping engine dependency:** mapping extras (`fim`, `fast-map`, `full`
