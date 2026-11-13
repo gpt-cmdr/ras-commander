@@ -128,6 +128,7 @@ def _source_header(tiff, model_crs, allow_untagged=False):
 def stage_native_terrain_sources(
     terrain_hdf, primary_tiff, root, *, engine_path, threads, model_crs,
     max_staged_bytes, timeout, primary_crs_pin=None, crs_any=False, primary_identity=None,
+    effective_terrain=None,
 ):
     """Stage all original source units in native order and one global stitch TIN.
 
@@ -136,6 +137,11 @@ def stage_native_terrain_sources(
     ``terrain_identity`` performs the normal engine/header CRS cross-check; it
     does not generate terrain or invoke HEC-RAS. This is preparation support,
     not a native vector-parity qualification.
+
+    ``effective_terrain`` is the stored-map effective terrain of a modified
+    single-source terrain (see :func:`_boundary_inputs.stored_map_terrain`):
+    the request's ground, labelled by ``primary_identity``, while tile
+    metadata still comes from the original source.
     """
     import h5py
     import numpy as np
@@ -158,7 +164,7 @@ def stage_native_terrain_sources(
     rows, total = [], 0
     initial = {hdf: _boundary_inputs._identity(hdf)}
     with h5py.File(hdf, "r") as handle:
-        _boundary_inputs._modifications_state(handle)
+        _boundary_inputs._modifications_state(handle, applied=effective_terrain is not None)
         projection = _boundary_inputs._text(handle.attrs.get("Projection", ""))
         if projection:
             try:
@@ -168,6 +174,8 @@ def stage_native_terrain_sources(
             if terrain_crs != model_crs:
                 raise FimUnsupportedError("Terrain HDF Projection must equal the model CRS")
         records = _native_sources(handle)
+        if effective_terrain is not None and (len(records) != 1 or primary_identity is None):
+            raise FimUnsupportedError("stored-map boundary ground needs a single-source terrain")
         seen = set()
         for index, record in enumerate(records):
             source = handle[record["source_group"]]
@@ -245,6 +253,9 @@ def stage_native_terrain_sources(
         identities = [_engine.terrain_identity(Path(engine_path), tiff, model_crs,
                        primary_crs_pin if index == 0 else None, timeout=timeout, source_crs_identity=True)
                       for index, (_, tiff, _, _) in enumerate(rows)]
+    if effective_terrain is not None:
+        # The ground is the effective terrain, with the caller's identity.
+        identities[0] = dict(primary_identity)
     verify()
     outputs, created, directories = [], [], []
     try:
@@ -254,7 +265,8 @@ def stage_native_terrain_sources(
             metadata = _boundary_inputs.stage_boundary_terrain(hdf, tiff, destination,
                 threads=threads, max_staged_bytes=planned, selected_tiles=None,
                 allow_multiple_sources=True, include_stitch=index == 0,
-                verified_source_crs=model_crs)
+                verified_source_crs=model_crs,
+                effective_terrain=effective_terrain if index == 0 else None)
             for key in ("mask", "perimeter", "stitch_points", "stitch_triangles"):
                 if metadata[key] is not None:
                     path = (destination / metadata[key]["path"]).resolve()

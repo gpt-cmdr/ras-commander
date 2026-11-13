@@ -10,7 +10,7 @@ import tempfile
 import time
 
 from .. import log_call
-from . import _aoi, _boundary, _boundary_model, _engine, _one_d, _sloping, _storage_areas
+from . import _aoi, _boundary, _boundary_inputs, _boundary_model, _engine, _one_d, _sloping, _storage_areas
 from ._boundary_terrain_sources import stage_native_terrain_sources
 from ._horizontal_engine import _write_geometry
 from .errors import FimEngineError, FimGeometryError, FimUnsupportedError
@@ -312,6 +312,13 @@ def map_native_boundaries(hdf_path, terrain_path, output_folder, *, terrain_hdf,
     finally:
         shutil.rmtree(keys_folder, ignore_errors=True)
     watched = {"hdf": hdf, "terrain": terrain, "terrain_hdf": terrain_hdf, "engine": engine}
+    # A modified single-source terrain maps on its stored-map effective
+    # terrain; tile metadata comes from the source the terrain HDF registers.
+    stored = _boundary_inputs.stored_map_terrain(terrain, terrain_hdf)
+    staging_primary = stored["source"] if stored is not None else terrain
+    if stored is not None:
+        # The ordered source receipt binds "terrain" to the original source.
+        watched["terrain"], watched["effective_terrain"] = staging_primary, terrain
     if getattr(scope, "geometry_path", None) is not None:
         watched["geometry"] = Path(scope.geometry_path).resolve(strict=True)
     if isinstance(polygon, (str, os.PathLike)):
@@ -364,12 +371,13 @@ def map_native_boundaries(hdf_path, terrain_path, output_folder, *, terrain_hdf,
                     raise FimUnsupportedError("native boundary preparation exceeds max_prepared_mib")
                 # Native merging depends on global predecessor/first-subject
                 # order. AOIs clip final vectors; they never prune source tiles.
-                terrain_sources = stage_native_terrain_sources(terrain_hdf, terrain, root,
+                terrain_sources = stage_native_terrain_sources(terrain_hdf, staging_primary, root,
                     engine_path=engine, threads=threads, model_crs=crs,
                     max_staged_bytes=remaining, timeout=timeout,
                     primary_crs_pin=terrain_crs_fnv1a64, crs_any=any_crs,
-                    primary_identity=identity)
-                _watch_terrain_sources(terrain_sources, terrain, terrain_hdf, watched, snapshots, hashes)
+                    primary_identity=identity,
+                    effective_terrain=terrain if stored is not None else None)
+                _watch_terrain_sources(terrain_sources, staging_primary, terrain_hdf, watched, snapshots, hashes)
                 metadata = terrain_sources["terrain_metadata"]
                 extras = terrain_sources["additional_terrains"]
                 if terrain_sources["crs_identity"] != identity["crs_identity"]:

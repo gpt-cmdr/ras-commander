@@ -2096,8 +2096,31 @@ tiles plus a sample halo; only final contour polygons are clipped.
 Nonempty or linked `/Modifications` objects in the terrain HDF are refused
 before numeric reads. The API cannot infer externally registered modifications
 from a TIFF/HDF pair: supply a terrain with no external modifications. An empty
-modification group is permitted and recorded. A replacement effective TIFF also
-needs matching regenerated terrain metadata and separate qualification.
+modification group is permitted and recorded.
+
+**Modified single-source terrains** map on their stored-map effective terrain:
+pass the TIFF that `RasFim.build_effective_terrain(..., basis="stored_map")`
+wrote (its `.json` receipt beside it) as the terrain, with the original
+terrain HDF. Both methods (deterministic and `native_serial`) then contour that
+ground. Tile masks stay the HDF's; the staged tile perimeters (each tile's next
+row and column) take the effective values where a modification changed them.
+The effective terrain must keep its source's grid, 256-pixel tiles and valid
+cells exactly, and each HDF perimeter sample must equal the source TIFF;
+otherwise the request is refused. The receipt must name this terrain HDF, one
+source and the `stored_map` basis, and neither the HDF nor the source may have
+changed after the build. An export-basis effective terrain is refused (its last
+cell row and column are nodata). `boundary_manifest.json` records
+`modifications.state` `applied` and `perimeter_samples_replaced`.
+
+Checked on Middle Cahaba / Helena (ESRI:102630, HEC-RAS 7.0.1 results, Max)
+against RAS Mapper 7.0.1 inundation boundaries on the same modified terrain:
+with two constant polygons that cross the wet edge on tile lines (92 perimeter
+samples replaced), the deterministic horizontal and sloping and the
+native-serial sloping boundaries have 0 ft² symmetric difference from RAS
+Mapper's horizontal and sloping boundaries; without the perimeter replacement
+the horizontal boundary differs by 221 ft². With the project's two channel
+ground lines (under water) the boundaries equal the unmodified ones, as RAS
+Mapper's do.
 
 For deterministic boundary mapping of a model with multiple terrain sources,
 first preprocess a dedicated single mapping terrain. Preserve source priority,

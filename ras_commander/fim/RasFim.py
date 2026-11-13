@@ -626,7 +626,8 @@ class RasFim:
             output_folder: New or empty comparison/evidence folder.
             terrain_hdf: Associated original terrain HDF. Native ordering uses
                 every original source's masks/perimeters and one global stitch
-                TIN; no flattening or terrain modifications are applied.
+                TIN; no flattening is applied. A modified single-source
+                terrain is read from its stored-map effective terrain.
             profiles: Output names mapped to Max or source profile indices,
                 interpreted by canonical model preparation.
             interpolation: horizontal or plain corner sloping for 2D.
@@ -740,7 +741,10 @@ class RasFim:
                 ordering retains every original mosaic source and stages the
                 global TIN once. Complete source priorities determine stable
                 ascending order; otherwise native group order is retained.
-                Unsupported ambiguous ordering and terrain modifications refuse.
+                Unsupported ambiguous ordering refuses. A modified
+                single-source terrain maps on its stored-map effective terrain
+                (``build_effective_terrain(..., basis="stored_map")``) passed
+                as ``terrain_path``; other terrain modifications refuse.
             profiles: Output names mapped to Max or source profile indices,
                 interpreted by canonical model preparation.
             interpolation: horizontal or plain corner sloping for 2D.

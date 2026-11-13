@@ -10,6 +10,7 @@ import time
 
 from .. import get_logger, log_call
 from . import _aoi, _engine, _sloping
+from . import _boundary_inputs
 from ._boundary_inputs import stage_boundary_terrain
 from ._horizontal_engine import _write_geometry
 from .errors import FimEngineError, FimGeometryError, FimUnsupportedError
@@ -206,6 +207,11 @@ def map_inundation_boundaries(
         raise FimEngineError("Engine lacks deterministic boundary capability; install a matching Fast-Map engine (0.10+)")
     watched = {"hdf": Path(hdf_path).resolve(strict=True), "terrain": Path(terrain_path).resolve(strict=True),
                "terrain_hdf": Path(terrain_hdf).resolve(strict=True), "engine": engine}
+    # A modified terrain maps on its stored-map effective terrain; tile
+    # metadata then comes from the source that the terrain HDF registers.
+    stored = _boundary_inputs.stored_map_terrain(terrain_path, terrain_hdf)
+    if stored is not None:
+        watched["terrain_source"] = stored["source"]
     if isinstance(polygon, (str, os.PathLike)):
         watched["polygon"] = Path(polygon).resolve(strict=True)
         if watched["polygon"].suffix.lower() == ".shp":
@@ -256,8 +262,10 @@ def map_inundation_boundaries(
                 raise FimUnsupportedError(
                     "inundation boundaries need a terrain CRS with an EPSG code; the engine's "
                     "boundary method does not advertise crs_any")
-            metadata = stage_boundary_terrain(terrain_hdf, terrain_path, root, threads=threads,
-                max_staged_bytes=remaining, selected_tiles=tiles)
+            metadata = stage_boundary_terrain(terrain_hdf,
+                stored["source"] if stored is not None else terrain_path, root, threads=threads,
+                max_staged_bytes=remaining, selected_tiles=tiles,
+                effective_terrain=Path(terrain_path) if stored is not None else None)
             _write_geometry(root / "boundary-cells.wkb", cells.geometry.to_numpy())
             lookup = {mesh["mesh_name"]: i for i, mesh in enumerate(context._meshes)}
             owners = [[lookup[row.mesh_name], int(row.cell_id)] for row in cells.itertuples()]
