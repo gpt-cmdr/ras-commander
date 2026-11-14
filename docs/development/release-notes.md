@@ -9,6 +9,48 @@ alone does not identify a development checkout.
 
 ### Unreleased
 
+### 0.123.0 — TBD (planned 2026-11-14)
+
+**Read before upgrading.** `java` remains the default DSS backend; no default changes
+for callers who do not select `native` or `shadow`.
+
+- **Corrected notebooks 916 and 926.** Both now drive HEC-RAS with native forcing
+  imported by `RasDssGrid.import_gridded`, and stop when a forcing cell is missing.
+  Their earlier `qpkit` forcing left cells missing in every frame (69 for 916's HRRR
+  cycle, read as zero rain; 126 for 926's WPC cycle). Earlier 916 and 926 runs in the
+  [qualification report](dss-native-notebook-qualification.md) are labelled as
+  execution and read-back evidence whose forcing failed spatial qualification. Re-run
+  results that relied on them. See the two notebook entries below.
+- **Failed Java DSS writes now raise.** `write_timeseries` and
+  `write_timeseries_from_dataframe` refuse read-only files with `RuntimeError`, raise on
+  HEC library failure messages and confirm the record in the catalog (one extra catalog
+  read per time-series or paired-data write). They used to return normally with nothing
+  written.
+- **The `dss`, `dss-native` and `all` extras now install `ras-commander-fast-dss>=0.1.2,<0.2`**
+  on CPython for Windows x64 and Linux x86_64/aarch64. 0.122.0 did not install it. There
+  are no macOS wheels; macOS users can build it from source. With 0.1.2, `sync=True`
+  means one flush per write call, and a `DssFile` session holds its native handle until
+  closed.
+- **The development engine name `dss_commander` is no longer recognized.** The
+  `native` and `shadow` backends import `ras_commander_fast_dss`.
+- **HEC Monolith messages no longer reach the console.** They go to a private temporary
+  file; failure lines are logged at WARNING (`RasDss.hec_message_level`, default 1).
+- **`RasDss.extract_boundary_timeseries` now returns data for `DSS File=dss`**
+  boundaries, which returned none before.
+- **Under `native`, `read_grid` reads grids natively by default** with an engine that
+  advertises `grid_srs_monolith_parity` (0.1.2 does).
+
+**Added:** `RasDssGrid` (native gridded import and grid tools), `RasDss` profile and
+location readers and writers, `RasDss.write_paired_data`, `RasDss.repair`, `sync=` on
+the RasDss writers, the `dss_grid_zonal_statistics` schema (`SCHEMA_VERSION` 1.33), the
+DSS performance section (qualitative; no figures), HEC-RAS acceptance tests for
+native-written DSS files (including HEC-RAS 4.0 and 4.1 on DSS6), notebooks 322 and
+732, and a native DSS engine CI job.
+
+The entries below record each change in the order it merged. Entries that name the
+`ras-commander-fast-dss` 0.1.0 or 0.1.1 floors were superseded within this release by
+the 0.1.2 floor.
+
 - **Notebook 926 now drives HEC-RAS with native WPC forcing.** Its qpkit route left 126
   forcing cells missing in every six-hour frame of its committed WPC cycle, and the
   notebook's NaN-aware sums hid them. The notebook now downloads the published WPC GRIB2
@@ -123,11 +165,11 @@ alone does not identify a development checkout.
   that replace HEC-Vortex, the backends and how to choose one, the intended
   differences, the notebook qualification and the HEC-RAS acceptance results.
   Install with `pip install ras-commander-fast-dss` (published on PyPI from 0.1.0).
-  The DSS performance section is reserved for measured timings.
+  The DSS performance section is now written (see the DSS performance entry above).
 - **WPC QPF through the FAST-DSS importer.** The gridded precipitation guide adds
   [WPC QPF to DSS with FAST-DSS](../user-guide/gridded-precipitation.md#wpc-qpf-to-dss-with-fast-dss),
   which reads WPC's published GRIB2 without `qpkit`, HEC-Vortex, Java or GDAL.
-  Notebook 926's `qpkit` route is unchanged.
+  Notebook 926 now drives HEC-RAS through this route (see the 926 entry above).
 - **Notebook 731 has a native DSS export route.** `DSS_EXPORT_ROUTE = "native"`
   projects the Float32 interval NetCDF to SHG DSS with the FAST-DSS importer;
   `"vortex"` stays the default. `SOURCE_BUFFER_PERCENT` (default 10) sets the
