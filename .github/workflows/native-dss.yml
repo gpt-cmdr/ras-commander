@@ -1,0 +1,91 @@
+name: Native DSS engine
+
+# Offline tests of RasDss and RasDssGrid on the optional ras-commander-fast-dss
+# engine, installed from PyPI through the dss-native extra. No HEC-RAS, no test
+# data from the network and no private files: tests that need them skip.
+#
+# native: RAS_COMMANDER_DSS_BACKEND=native, no Java installed. The guard step
+#   fails the job if the engine is not the one from PyPI or if the native
+#   wrapper modules did not run (scripts/ci/native_dss_ci_guard.py).
+# shadow: adds a JDK, pyjnius and HEC Monolith (downloaded by ras-commander from
+#   HEC's public Nexus and Maven Central before the tests, cached between runs),
+#   so the Java-path comparisons run too.
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  native-dss:
+    name: native-dss (${{ matrix.os }}, ${{ matrix.backend }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        backend: [native, shadow]
+    env:
+      CI: '1'
+      PYTHONUTF8: '1'
+      RAS_COMMANDER_DSS_BACKEND: ${{ matrix.backend }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install the library with the dss-native extra
+        shell: bash
+        # pydsstools (in dss-native) needs NumPy 1.x on CPython 3.12.
+        run: >-
+          python -m pip install "numpy<2" -e ".[dss-native]"
+          pytest nbformat requests setuptools matplotlib geopandas "shapely>=2.0"
+          xarray rasterio scipy tqdm psutil
+
+      - name: Set up Java (shadow)
+        if: matrix.backend == 'shadow'
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Install pyjnius (shadow)
+        if: matrix.backend == 'shadow'
+        run: python -m pip install pyjnius
+
+      - name: Cache HEC Monolith (shadow)
+        if: matrix.backend == 'shadow'
+        uses: actions/cache@v4
+        with:
+          path: ~/.ras-commander/dss
+          key: hec-monolith-3.3.27-javaHeclib-7-IU-8-${{ runner.os }}
+
+      - name: Download HEC Monolith before the tests (shadow)
+        if: matrix.backend == 'shadow'
+        run: python -c "from ras_commander.dss._hec_monolith import HecMonolithDownloader as D; d = D(); d.install(); assert d.is_installed(); print(d.get_info())"
+
+      - name: Check the installed engine
+        run: python scripts/ci/native_dss_ci_guard.py engine
+
+      - name: Run the DSS and wrapper tests
+        shell: bash
+        run: |
+          files=$(ls tests/test_*dss*.py tests/test_hec_monolith_logging.py \
+            tests/test_precip_mrms*.py tests/test_compute_extra.py \
+            tests/test_rascontrol_cleanup_console_encoding.py | grep -v hecras_acceptance)
+          python -m pytest $files -m "not real_ras" -q -rs -p no:cacheprovider \
+            --basetemp="$RUNNER_TEMP/pytest-dss" --junitxml="$RUNNER_TEMP/native-dss.xml"
+
+      - name: Fail if the native tests did not run
+        if: always()
+        shell: bash
+        run: |
+          extra=""
+          if [ "${{ matrix.backend }}" = "shadow" ]; then extra="--java"; fi
+          python scripts/ci/native_dss_ci_guard.py junit "$RUNNER_TEMP/native-dss.xml" --min-passed 600 $extra
