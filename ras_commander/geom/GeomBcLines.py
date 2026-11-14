@@ -13,7 +13,9 @@ truth for geometry authoring. After writing, the user must run HEC-RAS
 geometry preprocessing (or launch HEC-RAS) for the new BC lines to
 appear in the compiled `.g##.hdf` and become visible to
 `HdfBndry.get_bc_lines()`. The companion `External Faces` HDF dataset
-is computed by HEC-RAS preprocessing — it cannot be authored here.
+is normally computed by HEC-RAS preprocessing. The experimental
+``compute_external_faces`` and ``write_external_faces`` methods provide a
+separate compiled-mesh recovery path with explicit qualification limits.
 
 Format conventions observed in real HEC-RAS output (Chippewa_2D,
 BaldEagleCrkMulti2D, Weise_2D):
@@ -1376,10 +1378,10 @@ class GeomBcLines:
 
         Args:
             geom_hdf: Compiled geometry or plan HDF path.
-            relative_tolerance: Nonnegative dimensionless overlap tolerance.
+            relative_tolerance: Dimensionless overlap tolerance in [0, 0.5).
 
         Returns:
-            dict: ``external_faces`` structured array with native field names and
+            dict: ``external_faces`` DataFrame with native field names and
                 ``lengths`` float64 array in BC attribute row order. Stations and
                 lengths use model units. Face indexes are local to the BC's area.
 
@@ -1410,6 +1412,13 @@ class GeomBcLines:
             points = coordinates(bc['Polyline Points'][()])
             areas = hdf['Geometry/2D Flow Areas']
             counts = {text(r['Name']): int(r['Cell Count']) for r in areas['Attributes'][()]}
+            if len(counts) != len(areas['Attributes']) or any(n <= 0 for n in counts.values()):
+                raise ValueError('Area names must be unique and real cell counts positive')
+            identities = [(text(a['SA-2D']), text(a['Name'])) for a in attributes]
+            if len(set(identities)) != len(identities):
+                raise ValueError('Duplicate BC identities')
+            if info.ndim != 2 or info.shape[1] != 4 or info.dtype.kind not in 'iu':
+                raise ValueError('Polyline Info must have integer (N, 4) shape')
             if len(info) != len(attributes):
                 raise ValueError('BC attributes and polyline counts differ')
             for line_id, attr in enumerate(attributes):
@@ -1420,6 +1429,8 @@ class GeomBcLines:
                     raise ValueError('Invalid or multipart BC polyline')
                 line = LineString(points[start:start + count])
                 area = text(attr['SA-2D'])
+                if area not in counts:
+                    raise ValueError('Unknown BC area')
                 mesh = areas[area]
                 perimeter = coordinates(mesh['Perimeter'][()])
                 if len(perimeter) < 3:
@@ -1445,6 +1456,8 @@ class GeomBcLines:
                 xy = coordinates(mesh['FacePoints Coordinate'][()])
                 if cells.shape != pairs.shape or cells.ndim != 2 or cells.shape[1] != 2:
                     raise ValueError('Face connectivity must have matching (N, 2) shape')
+                if cells.dtype.kind not in 'iu' or np.any(cells < -1):
+                    raise ValueError('Invalid face cell indexes')
                 if pairs.dtype.kind not in 'iu' or np.any(pairs < 0) or np.any(pairs >= len(xy)):
                     raise ValueError('Invalid face point indexes')
                 real = (cells >= 0) & (cells < counts[area])
@@ -1464,5 +1477,139 @@ class GeomBcLines:
                     u, v = max(intervals, key=lambda t: min(t[1], length) - max(t[0], 0))
                     if min(v, length) - max(u, 0) > tolerance:
                         line_rows.append((line_id, face, a, b, u, v))
-                rows.extend(sorted(line_rows, key=lambda r: (r[4], r[1])))
-        return {'external_faces': np.array(rows, dtype=dtype), 'lengths': np.asarray(lengths)}
+                line_rows.sort(key=lambda r: (r[4], r[1]))
+                if not line_rows:
+                    raise ValueError('BC span has no overlapping perimeter faces')
+                if (line_rows[0][4] > tolerance or line_rows[-1][5] < length - tolerance
+                        or any(left[3] != right[2] or abs(left[5] - right[4]) > tolerance
+                               for left, right in zip(line_rows, line_rows[1:]))):
+                    raise ValueError('Perimeter faces do not continuously cover the BC span')
+                rows.extend(line_rows)
+        return {'external_faces': pd.DataFrame.from_records(np.array(rows, dtype=dtype)),
+                'lengths': np.asarray(lengths, dtype=float)}
+
+    @staticmethod
+    @log_call
+    def write_external_faces(
+        geom_hdf: Union[Path, str], *, experimental: bool = False,
+        relative_tolerance: float = 1e-12,
+    ) -> dict:
+        """Recover compiled 7.0.1 geometry BC bindings on an isolated model copy.
+
+        Set ``experimental=True`` to acknowledge that native endpoint-touch
+        selection and solver equivalence remain unqualified. Only geometry HDFs
+        declaring HEC-RAS 7.0.1 and SI or US Customary units are accepted. Model
+        units are preserved. This does not mark geometry preprocessing complete.
+
+        The complete candidate binding is validated before staging a sibling
+        copy. The method preserves unrelated HDF objects and attributes, retains
+        a unique byte-for-byte backup, and atomically replaces the original.
+        Keep the file closed in other applications during this operation.
+
+        Args:
+            geom_hdf: Geometry ``.g##.hdf`` path; results files are rejected.
+            experimental: Required explicit opt-in for this recovery operation.
+            relative_tolerance: Dimensionless overlap tolerance passed to
+                ``compute_external_faces``.
+
+        Returns:
+            dict: Computed tables plus ``backup_path`` and ``geom_hdf`` Paths.
+
+        Raises:
+            ValueError: Opt-in absent, unsupported file/schema, or invalid binding.
+            RuntimeError: Open HDF handle or source changed during staging.
+            OSError: File access, backup, or replacement failed.
+        """
+        import hashlib
+        import re
+        import shutil
+        import uuid
+
+        import h5py
+
+        from .GeomPreprocessor import GeomPreprocessor
+
+        if experimental is not True:
+            raise ValueError('write_external_faces requires experimental=True')
+        path = Path(geom_hdf).absolute()
+        if path.is_symlink() or not re.search(r'\.g\d{1,2}\.hdf$', path.name, re.I):
+            raise ValueError('Expected a regular geometry .g##.hdf file')
+        release_native_sessions(path)
+        GeomPreprocessor._require_closed_geometry_hdf(path)
+
+        def digest(source):
+            value = hashlib.sha256()
+            with source.open('rb') as stream:
+                for chunk in iter(lambda: stream.read(1024 * 1024), b''):
+                    value.update(chunk)
+            return value.hexdigest()
+
+        def text(value):
+            return value.decode('utf-8').rstrip('\x00 ') if isinstance(value, bytes) else str(value)
+
+        original_hash = digest(path)
+        group_path = 'Geometry/Boundary Condition Lines'
+        native_dtype = np.dtype([(name, '<i4') for name in
+                                 ('BC Line ID', 'Face Index', 'FP Start Index', 'FP End Index')]
+                                + [(name, '<f4') for name in ('Station Start', 'Station End')])
+        with h5py.File(path, 'r') as hdf:
+            if (text(hdf.attrs.get('File Type', '')) != 'HEC-RAS Geometry'
+                    or re.match(r'^HEC-RAS 7\.0\.1(?:\s|$)', text(hdf.attrs.get('File Version', ''))) is None
+                    or text(hdf.attrs.get('Units System', '')) not in ('SI Units', 'US Customary')):
+                raise ValueError('Recovery requires a 7.0.1 geometry HDF with explicit supported units')
+            attributes = hdf[f'{group_path}/Attributes'][()]
+            if not {'Name', 'SA-2D', 'Type'}.issubset(attributes.dtype.names or ()):
+                raise ValueError('Unsupported BC attribute schema')
+            if 'Length' in attributes.dtype.names and attributes.dtype['Length'].kind != 'f':
+                raise ValueError('BC Length must have floating-point dtype')
+            if f'{group_path}/External Faces' in hdf:
+                if hdf[f'{group_path}/External Faces'].dtype != native_dtype:
+                    raise ValueError('Unsupported existing External Faces dtype')
+        result = GeomBcLines.compute_external_faces(path, relative_tolerance=relative_tolerance)
+        faces = np.empty(len(result['external_faces']), dtype=native_dtype)
+        with np.errstate(over='ignore'):
+            for name in native_dtype.names:
+                values = result['external_faces'][name].to_numpy()
+                if native_dtype[name].kind == 'i' and np.any(values > np.iinfo(np.int32).max):
+                    raise ValueError('External face index exceeds native int32 range')
+                faces[name] = values
+            length_dtype = attributes.dtype['Length'] if 'Length' in attributes.dtype.names else np.dtype('<f4')
+            lengths = result['lengths'].astype(length_dtype)
+        if (not np.isfinite(lengths).all() or np.any(lengths <= 0)
+                or not np.isfinite(faces['Station Start']).all()
+                or not np.isfinite(faces['Station End']).all()
+                or np.any(faces['Station End'] <= faces['Station Start'])):
+            raise ValueError('Binding cannot be represented by the native numeric schema')
+        if 'Length' not in attributes.dtype.names:
+            extended = np.empty(attributes.shape, dtype=[
+                (name, attributes.dtype.fields[name][0]) for name in attributes.dtype.names
+            ] + [('Length', '<f4')])
+            for name in attributes.dtype.names:
+                extended[name] = attributes[name]
+            attributes = extended
+        attributes['Length'] = lengths
+        token = uuid.uuid4().hex
+        backup = path.with_name(path.name + f'.external-faces-{token}.bak')
+        with TemporaryDirectory(prefix='bc-faces-', dir=path.parent) as directory:
+            staged = Path(directory) / path.name
+            shutil.copy2(path, staged)
+            with h5py.File(staged, 'r+') as hdf:
+                group = hdf[group_path]
+                for name, values in (('Attributes', attributes), ('External Faces', faces)):
+                    if name in group and group[name].shape == values.shape and group[name].dtype == values.dtype:
+                        group[name][...] = values
+                    else:
+                        metadata = dict(group[name].attrs) if name in group else {}
+                        if name in group:
+                            del group[name]
+                        dataset = group.create_dataset(name, data=values)
+                        for key, value in metadata.items():
+                            dataset.attrs[key] = value
+            if digest(path) != original_hash:
+                raise RuntimeError('Geometry HDF changed during BC binding preparation')
+            with backup.open('xb') as output, path.open('rb') as source:
+                shutil.copyfileobj(source, output)
+            if digest(backup) != original_hash or digest(path) != original_hash:
+                raise RuntimeError('Geometry HDF changed during BC binding backup')
+            os.replace(staged, path)
+        return {**result, 'geom_hdf': path, 'backup_path': backup}
