@@ -1157,6 +1157,85 @@ class TestGeometryHdfAvailability:
         assert _ensure_hdf(geom_text) == hdf_path
 
 
+@pytest.mark.parametrize("ghosts", [False, True])
+def test_consistency_compares_coordinates_with_equal_counts(tmp_path, ghosts):
+    geom = tmp_path / "coordinates.g01"
+    geom.write_text("Storage Area=Area\nStorage Area 2D Points= 2\n"
+                    + "".join(f"{v:<16.6f}" for v in [1., 2., 3., 4.]) + "\n")
+    hdf = tmp_path / "coordinates.g01.hdf"
+    _write_mesh_hdf(hdf, [{"name": "Area", "spacing_dx": 0.,
+                          "spacing_dy": 0., "cell_count": 2}])
+    with h5py.File(hdf, "a") as file:
+        group = file.require_group("Geometry/2D Flow Areas/Area")
+        points = [[1., 2.], [3., 4.]] + ([[100., 100.]] if ghosts else [])
+        del group["Cells Center Coordinate"]
+        group.create_dataset("Cells Center Coordinate", data=points)
+    check = geom_mesh_module._mesh_hdf_consistency_issues
+    assert check(geom, hdf) == []
+    # BC-only text and reordered file timestamps do not change representation.
+    with geom.open("a") as file:
+        file.write("BC Line Name=Inlet\n")
+    os.utime(hdf, (1, 1))
+    assert check(geom, hdf) == []
+    with h5py.File(hdf, "a") as file:
+        file["Geometry/2D Flow Areas/Area/Cells Center Coordinate"][0] = [1.5, 2.]
+    assert any("computation points do not match" in issue for issue in check(geom, hdf))
+    assert check(geom, hdf, ignore_seed_count=True) == []
+
+
+@pytest.mark.parametrize("failure", ["missing_area", "missing_centers", "nan", "short_centers", "truncated_text"])
+def test_coordinate_consistency_rejects_incomplete_mesh(tmp_path, failure):
+    geom = tmp_path / "incomplete.g01"
+    values = [1., 2., 3., 4., 5., 6.]
+    rows = "".join(
+        "".join(f"{value:16.6f}" for value in values[offset:offset + 4]) + "\n"
+        for offset in range(0, len(values), 4)
+    )
+    geom.write_text("Storage Area=Area\nStorage Area 2D Points= 3\n" + rows)
+    hdf = geom.with_suffix(".g01.hdf")
+    _write_mesh_hdf(hdf, [{"name": "Area", "cell_count": 3}])
+    with h5py.File(hdf, "a") as file:
+        file["Geometry/2D Flow Areas/Area/Cells Center Coordinate"][...] = np.array(values).reshape(3, 2)
+    check = geom_mesh_module._mesh_hdf_consistency_issues
+    assert check(geom, hdf) == []
+    if failure == "truncated_text":
+        geom.write_text("Storage Area=Area\nStorage Area 2D Points= 3\n" + rows.splitlines(True)[0])
+    else:
+        with h5py.File(hdf, "a") as file:
+            areas = file["Geometry/2D Flow Areas"]
+            if failure == "missing_area":
+                del areas["Attributes"]
+                del areas["Area"]
+            elif failure == "missing_centers":
+                del areas["Area/Cells Center Coordinate"]
+            elif failure == "nan":
+                areas["Area/Cells Center Coordinate"][1] = [np.nan, 4.]
+            else:
+                del areas["Area/Cells Center Coordinate"]
+                areas["Area/Cells Center Coordinate"] = [[1., 2.], [3., 4.]]
+    assert check(geom, hdf)
+    with pytest.raises(RuntimeError, match="stale"):
+        _ensure_hdf(geom)
+
+
+@pytest.mark.parametrize("change", ["spacing", "perimeter", "breaklines"])
+def test_coordinate_bypass_preserves_input_invalidation(tmp_path, change):
+    geom, hdf = _write_2d_perimeter_pair(tmp_path)
+    check = geom_mesh_module._mesh_hdf_consistency_issues
+    assert check(geom, hdf, ignore_seed_count=True) == []
+    if change == "spacing":
+        geom.write_text(geom.read_text().replace("50,50,,", "50,50,25,25"))
+    elif change == "perimeter":
+        with h5py.File(hdf, "a") as file:
+            file["Geometry/2D Flow Areas/Polygon Points"][1] = [20., 0.]
+    else:
+        with geom.open("a") as file:
+            file.write("BreakLine Name=NewBreakline\n")
+    issues = check(geom, hdf, ignore_seed_count=True)
+    expected = {"spacing": "Spacing", "perimeter": "perimeter", "breaklines": "breakline"}[change]
+    assert any(expected in issue for issue in issues)
+
+
 class TestDomainContainmentAudit:
     """One-cell inward containment is a mandatory pre-mesh gate."""
 
@@ -3287,3 +3366,28 @@ def test_generate_escalates_from_requested_ratio(monkeypatch, breakline_geom_tex
     assert result.ok
     assert ratios == expected
     assert f"Ratio:{expected[0]:g}->{expected[1]:g}" in result.fixes_applied
+
+
+@pytest.mark.parametrize('row', [None, 'Storage Area 2D PointsPerimeterTime=0\n', '2               \n', 'x2              0               \n'])
+def test_coordinate_rows_do_not_consume_following_records(tmp_path, row):
+    geom = tmp_path / 'bounded.g01'
+    prefix = 'Storage Area=Area\nStorage Area 2D Points= 1\n'
+    geom.write_text(prefix + (row or ''))
+    hdf = geom.with_suffix('.g01.hdf')
+    _write_mesh_hdf(hdf, [{'name': 'Area', 'cell_count': 1}])
+    with h5py.File(hdf, 'a') as file:
+        file['Geometry/2D Flow Areas/Area/Cells Center Coordinate'][...] = [[2., 0.]]
+    assert geom_mesh_module._mesh_hdf_consistency_issues(geom, hdf)
+    with pytest.raises(RuntimeError, match='stale'):
+        _ensure_hdf(geom)
+
+
+def test_coordinate_check_tolerates_non_utf8_unrelated_text(tmp_path):
+    geom = tmp_path / 'legacy.g01'
+    text = 'Storage Area=Area\nStorage Area 2D Points= 1\n' + f'{2.:16.6f}{0.:16.6f}\n'
+    geom.write_bytes(b'Geom Title=Caf\xe9\n' + text.encode('utf-8'))
+    hdf = geom.with_suffix('.g01.hdf')
+    _write_mesh_hdf(hdf, [{'name': 'Area', 'cell_count': 1}])
+    with h5py.File(hdf, 'a') as file:
+        file['Geometry/2D Flow Areas/Area/Cells Center Coordinate'][...] = [[2., 0.]]
+    assert geom_mesh_module._mesh_hdf_consistency_issues(geom, hdf) == []
