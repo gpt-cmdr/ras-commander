@@ -5,18 +5,31 @@ name: Publish PyPI Release
 # publisher registered for this repository, this workflow file (publish-pypi.yml) and the `pypi`
 # environment. PEP 740 attestations are generated and uploaded with the files.
 #
-# Publishing runs only for a vMAJOR.MINOR.PATCH tag, either pushed or named in a manual dispatch,
-# only when the repository variable PUBLISH_PYPI is 'true', and only after the `pypi`
-# environment's required reviewers approve.
+# Jobs:
+#   plan     - resolves and validates the tag; runs no repository code.
+#   build    - checks out the tag (or, for a pull request, the pull request) and builds the sdist
+#              and wheel. Package build code (setup.py, build backends) runs here and nowhere
+#              else; this job validates nothing.
+#   validate - a fresh job that runs no package code. It checks the built files with the release
+#              gate (.github/scripts/release_version_gate.py) taken from the DEFAULT BRANCH for
+#              tag pushes and dispatches, never from the tag or the build job. Version files are
+#              read from a sparse checkout, not executed. Then: tag == declared version and
+#              __version__, Name and Version inside the wheel and sdist, twine check --strict.
+#              On a release run it re-uploads exactly the files it checked.
+#   publish  - publishes only the files `validate` checked, only for a vMAJOR.MINOR.PATCH tag push
+#              or a manual dispatch, only when the repository variable PUBLISH_PYPI is 'true',
+#              and only after the `pypi` environment's required reviewers approve.
 #
-# The release gate (.github/scripts/release_version_gate.py) always runs from this workflow's own
-# commit (github.workflow_sha), checked out separately from the source being built. The source,
-# and so every published file, comes only from the tag. A manual dispatch can therefore publish
-# an existing tag that predates the gate script.
+# What remains: on a tag push GitHub runs THIS FILE as it exists at the tagged commit, so someone
+# who can push a release tag can also change this workflow, including the validate job. The
+# protected `pypi` environment (required reviewers, deployment rules for tag v* and branch main)
+# is therefore the real final gate. Reviewers should approve only tags they expect, from main.
 #
-# Pull requests that touch packaging run the build job twice as a dry run, publishing nothing:
-# `head` builds the pull request against its declared version, and `latest-tag` builds the newest
-# existing vMAJOR.MINOR.PATCH tag through exactly the path a manual dispatch uses.
+# Pull requests that touch packaging run plan, build and validate as a dry run for two targets
+# and never publish: `head` (the pull request against its declared version) and `latest-tag`
+# (the newest existing vX.Y.Z tag, built and validated exactly as a manual dispatch would). On a
+# pull request the gate comes from the pull request itself, because the pull request may be the
+# change to the gate; pull-request runs have no publish path.
 
 on:
   push:
@@ -47,59 +60,54 @@ env:
   VERSION_MODULE: ras_commander/__init__.py
 
 jobs:
-  build:
-    name: Build and check distributions (${{ matrix.target }})
+  plan:
+    name: Resolve the release tag
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        # release: the tag being published (tag push or manual dispatch); the only target whose
-        # files are uploaded. head / latest-tag: pull-request dry runs.
-        target: ${{ github.event_name == 'pull_request' && fromJSON('["head","latest-tag"]') || fromJSON('["release"]') }}
+    outputs:
+      release_tag: ${{ steps.resolve.outputs.release_tag }}
+      latest_tag: ${{ steps.resolve.outputs.latest_tag }}
     steps:
-      - name: Resolve the source ref
+      - name: Resolve and validate tags
         id: resolve
         env:
-          TARGET: ${{ matrix.target }}
+          EVENT: ${{ github.event_name }}
           PUSHED_TAG: ${{ github.event_name == 'push' && github.ref_type == 'tag' && github.ref_name || '' }}
           INPUT_TAG: ${{ inputs.tag }}
           REPO_URL: ${{ github.server_url }}/${{ github.repository }}
         run: |
           set -euo pipefail
           tag_re='^v[0-9]+\.[0-9]+\.[0-9]+((a|b|rc)[0-9]+)?(\.post[0-9]+)?(\.dev[0-9]+)?$'
-          case "$TARGET" in
-            release)
-              tag="${PUSHED_TAG:-$INPUT_TAG}"
-              [[ "$tag" =~ $tag_re ]] || { echo "::error::'$tag' is not a vMAJOR.MINOR.PATCH tag"; exit 1; }
-              ;;
-            latest-tag)
-              tag="$(git ls-remote --tags --refs "$REPO_URL" 'v*' | sed 's#.*refs/tags/##' \
-                     | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -n 1)"
-              [[ "$tag" =~ $tag_re ]] || { echo "::error::no existing vMAJOR.MINOR.PATCH tag found"; exit 1; }
-              ;;
-            head)
-              tag="" ;;  # the pull request's own source; tag set from its declared version below
-            *) echo "::error::unknown target $TARGET"; exit 1 ;;
-          esac
-          echo "tag=$tag" >> "$GITHUB_OUTPUT"
-          echo "TARGET_TAG=$tag" >> "$GITHUB_ENV"
-          echo "target=$TARGET tag=${tag:-<declared>}"
+          release_tag="" latest_tag=""
+          if [ "$EVENT" = pull_request ]; then
+            latest_tag="$(git ls-remote --tags --refs "$REPO_URL" 'v*' | sed 's#.*refs/tags/##' \
+                          | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -n 1)"
+            [[ "$latest_tag" =~ $tag_re ]] || { echo "::error::no existing vMAJOR.MINOR.PATCH tag found"; exit 1; }
+          else
+            release_tag="${PUSHED_TAG:-$INPUT_TAG}"
+            [[ "$release_tag" =~ $tag_re ]] || { echo "::error::'$release_tag' is not a vMAJOR.MINOR.PATCH tag"; exit 1; }
+          fi
+          echo "release_tag=$release_tag" >> "$GITHUB_OUTPUT"
+          echo "latest_tag=$latest_tag" >> "$GITHUB_OUTPUT"
+          echo "release_tag=${release_tag:-<none>} latest_tag=${latest_tag:-<none>}"
 
-      - name: Check out the release gate (this workflow's own commit)
-        uses: actions/checkout@v7
-        with:
-          ref: ${{ github.workflow_sha }}
-          path: gate
-          sparse-checkout: .github/scripts
-          persist-credentials: false
-
+  build:
+    name: Build distributions (${{ matrix.target }})
+    needs: plan
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        target: ${{ github.event_name == 'pull_request' && fromJSON('["head","latest-tag"]') || fromJSON('["release"]') }}
+    env:
+      TARGET_TAG: ${{ matrix.target == 'release' && needs.plan.outputs.release_tag || (matrix.target == 'latest-tag' && needs.plan.outputs.latest_tag || '') }}
+    steps:
       # Two separate checkouts: release and latest-tag build only from a validated tag; the
       # pull-request source is checked out only for the head dry run.
       - name: Check out the tag to build
         if: ${{ matrix.target != 'head' }}
         uses: actions/checkout@v7
         with:
-          ref: refs/tags/${{ steps.resolve.outputs.tag }}
+          ref: refs/tags/${{ env.TARGET_TAG }}
           path: src
           persist-credentials: false
 
@@ -115,20 +123,98 @@ jobs:
         with:
           python-version: '3.12'
 
-      - name: Pull request head - check against the declared version
-        if: ${{ matrix.target == 'head' }}
-        working-directory: src
-        run: echo "TARGET_TAG=$(python ../gate/.github/scripts/release_version_gate.py declared)" >> "$GITHUB_ENV"
-
-      - name: Check the tag against the declared versions
-        working-directory: src
-        run: python ../gate/.github/scripts/release_version_gate.py source --tag "$TARGET_TAG" --init "$VERSION_MODULE"
-
       - name: Build sdist and wheel
         working-directory: src
         run: |
-          python -m pip install build==1.6.1 twine==7.0.0
+          python -m pip install build==1.6.1
           python -m build --sdist --wheel --outdir ../dist
+
+      - name: Upload the unvalidated build
+        uses: actions/upload-artifact@v7
+        with:
+          name: python-dist-build-${{ matrix.target }}
+          path: dist/
+          if-no-files-found: error
+          retention-days: 3
+
+  validate:
+    name: Validate distributions (${{ matrix.target }})
+    needs: [plan, build]
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        target: ${{ github.event_name == 'pull_request' && fromJSON('["head","latest-tag"]') || fromJSON('["release"]') }}
+    env:
+      TARGET_TAG: ${{ matrix.target == 'release' && needs.plan.outputs.release_tag || (matrix.target == 'latest-tag' && needs.plan.outputs.latest_tag || '') }}
+    steps:
+      # The gate: from the default branch for tag pushes and dispatches (independent of the tag
+      # and of the build job); from the pull request itself for pull-request dry runs.
+      - name: Check out the release gate (default branch)
+        if: ${{ github.event_name != 'pull_request' }}
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          path: gate
+          sparse-checkout: .github/scripts
+          persist-credentials: false
+
+      - name: Check out the release gate (pull request under review)
+        if: ${{ github.event_name == 'pull_request' }}
+        uses: actions/checkout@v7
+        with:
+          path: gate
+          sparse-checkout: .github/scripts
+          persist-credentials: false
+
+      # The declared versions, read as text only: nothing from this checkout is executed.
+      - name: Check out the tag's version files
+        if: ${{ matrix.target != 'head' }}
+        uses: actions/checkout@v7
+        with:
+          ref: refs/tags/${{ env.TARGET_TAG }}
+          path: versions
+          sparse-checkout: |
+            pyproject.toml
+            setup.py
+            ${{ env.VERSION_MODULE }}
+          sparse-checkout-cone-mode: false
+          persist-credentials: false
+
+      - name: Check out the pull request's version files (head dry run)
+        if: ${{ matrix.target == 'head' }}
+        uses: actions/checkout@v7
+        with:
+          path: versions
+          sparse-checkout: |
+            pyproject.toml
+            setup.py
+            ${{ env.VERSION_MODULE }}
+          sparse-checkout-cone-mode: false
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+
+      - name: Install twine
+        run: python -m pip install twine==7.0.0
+
+      - name: Pull request head - check against the declared version
+        if: ${{ matrix.target == 'head' }}
+        working-directory: versions
+        run: echo "TARGET_TAG=$(python ../gate/.github/scripts/release_version_gate.py declared)" >> "$GITHUB_ENV"
+
+      - name: Check the tag against the declared versions
+        working-directory: versions
+        run: python ../gate/.github/scripts/release_version_gate.py source --tag "$TARGET_TAG" --init "$VERSION_MODULE"
+
+      - name: Download the build
+        uses: actions/download-artifact@v8
+        with:
+          name: python-dist-build-${{ matrix.target }}
+          path: dist/
 
       - name: Check the built versions
         run: python gate/.github/scripts/release_version_gate.py dist --tag "$TARGET_TAG" --dist dist --name "$DIST_NAME"
@@ -136,18 +222,21 @@ jobs:
       - name: twine check
         run: python -m twine check --strict dist/*
 
-      - name: Upload distributions
+      - name: Record the validated files
+        run: sha256sum dist/*
+
+      - name: Upload the validated distributions
         if: ${{ matrix.target == 'release' }}
         uses: actions/upload-artifact@v7
         with:
-          name: python-dist
+          name: python-dist-validated
           path: dist/
           if-no-files-found: error
           retention-days: 7
 
   publish:
     name: Publish to PyPI (trusted publishing)
-    needs: build
+    needs: validate
     if: ${{ vars.PUBLISH_PYPI == 'true' && (github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v'))) }}
     runs-on: ubuntu-latest
     environment:
@@ -157,11 +246,14 @@ jobs:
       id-token: write
       contents: read
     steps:
-      - name: Download distributions
+      - name: Download the validated distributions
         uses: actions/download-artifact@v8
         with:
-          name: python-dist
+          name: python-dist-validated
           path: dist/
+
+      - name: Files to publish
+        run: sha256sum dist/*
 
       # No password: the action uses the PyPI trusted publisher for this workflow. The old
       # PYPI_API_TOKEN repository secret is deliberately not referenced (attestations are
