@@ -9,6 +9,18 @@ alone does not identify a development checkout.
 
 ### Unreleased
 
+- **Notebook 926 now drives HEC-RAS with native WPC forcing.** Its qpkit route left 126
+  forcing cells missing in every six-hour frame of its committed WPC cycle, and the
+  notebook's NaN-aware sums hid them. The notebook now downloads the published WPC GRIB2
+  files directly, imports them with `RasDssGrid.import_gridded`, validates all 28 frames
+  against a full-source GDAL warp, and stops if a forcing cell is missing or a mesh cell
+  samples none. The qpkit route remains only as a disclosed comparison that drives no plan.
+  Earlier 926 runs in the [qualification report](dss-native-notebook-qualification.md)
+  are labelled as execution and read-back evidence whose forcing failed spatial
+  qualification. On that cycle the missing cells form an edge band that neither the mesh
+  cell centres nor their four-centre bilinear stencils reach, which suggests they did not
+  affect cell-centre rainfall; their effect in the earlier HEC-RAS runs has not been
+  independently established.
 - **Notebook 916 now drives HEC-RAS with native hourly HRRR forcing.** The qpkit route
   it used before left 69 forcing cells missing in every hour for its HRRR cycle, which
   the notebook read as zero rain, and did not match a full-source warp of the same HRRR

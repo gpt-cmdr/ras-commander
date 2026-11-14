@@ -4426,9 +4426,10 @@ notebooks:
   title: WPC QPF DSS-to-HEC-RAS Rain-on-Grid Qualification
   series: 900
   series_name: Data Integration
-  summary: qualify a complete current WPC forecast through verified native-projection GRIB crops, 28 DSS
-    grids, temporary and final HDF forcing, no-rain/event HEC-RAS 7.0 simulations, hydraulic response,
-    mapped convergence exceptions, and explicit manual review
+  summary: import a complete WPC forecast cycle with RasDssGrid to 28 six-hour DSS grids, validate every
+    frame against a full-source GDAL warp with missing-cell and mesh-coverage gates, then check temporary
+    and final HDF forcing, no-rain/event HEC-RAS 7.0 simulations, hydraulic response and mapped convergence
+    exceptions; the earlier qpkit route is kept as a disclosed comparison that fails spatial qualification
   tags:
   - dss
   - forecast
@@ -4451,6 +4452,8 @@ notebooks:
   - RasCmdr.compute_plan
   - RasDss.get_catalog
   - RasDss.read_grid
+  - RasDssGrid.import_gridded
+  - RasDssGrid.list_variables
   - RasExamples.extract_project
   - RasPlan.clone_plan
   - RasPlan.clone_unsteady
@@ -4467,8 +4470,8 @@ notebooks:
   hec_refs: []
   learning_paths: []
   excluded: false
-  code_cells: 11
-  executed_cells: 11
+  code_cells: 13
+  executed_cells: 13
 - id: 930_terrain_modification_analysis
   filename: 930_terrain_modification_analysis.ipynb
   title: Terrain Modification Analysis

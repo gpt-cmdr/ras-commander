@@ -100,7 +100,7 @@ remains documentation-backed. `netcdf_hdf_qualification` and
 receipt can mean either a blocked qualification run or an unresolved version;
 inspect `hec_ras_version` and the accompanying warnings.
 
-WPC QPF GRIB2 compression is not accepted by native HEC-RAS import through 7.0.1. Use DSS translation as demonstrated in notebook 926. `qpkit 0.1.0`'s `QPFGridOptions.extents` path produced an undersized 2-by-2 grid during qualification, so the notebook crops each source GRIB in its native projection, reopens and verifies it, and calls `kit.qpf_dss.write()` without `extents`. Generic GRIB ingestion requires an installed GDAL reader capable of decoding the selected bands and a grid meeting the requirements below.
+WPC QPF GRIB2 compression is not accepted by native HEC-RAS import through 7.0.1. Translate it to DSS with `RasDssGrid.import_gridded`, as notebook 926 does (see below). Notebook 926 previously used `qpkit` 0.1.0 on GDAL crops of the WPC files; on its committed cycle those grids left 126 cells missing in every frame, so that route failed spatial qualification and is kept only as a disclosed comparison. Generic GRIB ingestion requires an installed GDAL reader capable of decoding the selected bands and a grid meeting the requirements below.
 
 ### WPC QPF to DSS with FAST-DSS
 
@@ -117,7 +117,7 @@ result = gridded.import_gridded(
 )
 ```
 
-Each forecast file becomes one `PER-CUM` record in millimetres whose D and E parts state its six-hour window. On the 2026-11-07 00Z cycle (f006 to f168), this wrote the 28 records with consecutive six-hour windows. `envelope_crs` takes WKT, not an EPSG code, so state the envelope in the target CRS, as above. Then attach the DSS with `RasUnsteady.configure_gridded_dss_precipitation()` and review the precomputed forcing as notebook 926 does for the `qpkit` route; this importer route has not been run through HEC-RAS by that notebook. See [Gridded import and tools](../native-engine.md#gridded-import-and-tools) for the importer's agreement with HEC-Vortex and its refusals.
+Each forecast file becomes one `PER-CUM` record in millimetres whose D and E parts state its six-hour window. On the 2026-11-07 00Z cycle (f006 to f168), this wrote the 28 records with consecutive six-hour windows. `envelope_crs` takes WKT, not an EPSG code, so state the envelope in the target CRS, as above. Then attach the DSS with `RasUnsteady.configure_gridded_dss_precipitation()` and review the precomputed forcing. Notebook 926 runs this route through `RasDssGrid.import_gridded` and HEC-RAS 7.0: it checks every frame against a full-source GDAL warp and stops if a forcing cell is missing or a mesh cell samples none. See [Gridded import and tools](../native-engine.md#gridded-import-and-tools) for the importer's agreement with HEC-Vortex and its refusals.
 
 ## Direct GeoTIFF and GRIB ingestion
 
@@ -333,6 +333,6 @@ original source intervals for forcing or water-balance calculations.
 | 732 | `RasDssGrid` (FAST-DSS) import of real AORC Zarr/NetCDF, IMERG HDF5, Stage IV GRIB1/GRIB2 and MRMS GRIB2, then every grid tool and the eight zonal statistics over the NewOrleansMetro 2D area; no HEC-RAS run |
 | 917 | Two archived MRMS events: inspect spatial DSS grids, apply the arithmetic mean of a rectangular source clip as a uniform boundary, and compare every native cumulative rainfall timestamp and physical cell on the absolute model clock. Retained baseline/event evidence, HDF-based diagnostic maps, pump plots and interval-aligned animations; not spatial rain-on-grid qualification. A native preprocessing section shows `RasDssGrid` accumulation windows from 1 to 72 hours, overlap and gap reports, shapefile clipping and thread-count equality |
 | 924 | MRMS NetCDF rain-on-grid with precompute and final model checks |
-| 926 | Complete current WPC cycle, verified native-projection crop, 28-grid DSS catalog, objective wettest 24-hour window, temporary/final HDF forcing checks, no-rain/event HEC-RAS 7.0 runs, hydraulic/convergence figures, and manual diagnostics |
+| 926 | Complete WPC cycle (live or fixed) imported with `RasDssGrid` to 28 six-hour DSS grids, each validated against a full-source GDAL warp with a coverage gate (the earlier qpkit route is kept as a disclosed comparison that fails spatial qualification); objective wettest 24-hour window, temporary/final HDF forcing checks, no-rain/event HEC-RAS 7.0 runs, hydraulic/convergence figures, and manual diagnostics |
 
 Notebook 722 directs readers to the implemented Atlas 14 workflow instead of obsolete placeholders and raw meteorology edits. Updated source cells do not imply every live product was rerun on every HEC-RAS release; the version matrix records actual evidence.
