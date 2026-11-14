@@ -71,20 +71,19 @@ jobs:
             release)
               tag="${PUSHED_TAG:-$INPUT_TAG}"
               [[ "$tag" =~ $tag_re ]] || { echo "::error::'$tag' is not a vMAJOR.MINOR.PATCH tag"; exit 1; }
-              ref="refs/tags/$tag" ;;
+              ;;
             latest-tag)
               tag="$(git ls-remote --tags --refs "$REPO_URL" 'v*' | sed 's#.*refs/tags/##' \
                      | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -n 1)"
               [[ "$tag" =~ $tag_re ]] || { echo "::error::no existing vMAJOR.MINOR.PATCH tag found"; exit 1; }
-              ref="refs/tags/$tag" ;;
+              ;;
             head)
-              tag=""   # set from the declared version below
-              ref="$GITHUB_REF" ;;
+              tag="" ;;  # the pull request's own source; tag set from its declared version below
             *) echo "::error::unknown target $TARGET"; exit 1 ;;
           esac
-          echo "ref=$ref" >> "$GITHUB_OUTPUT"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
           echo "TARGET_TAG=$tag" >> "$GITHUB_ENV"
-          echo "target=$TARGET ref=$ref tag=${tag:-<declared>}"
+          echo "target=$TARGET tag=${tag:-<declared>}"
 
       - name: Check out the release gate (this workflow's own commit)
         uses: actions/checkout@v7
@@ -94,10 +93,20 @@ jobs:
           sparse-checkout: .github/scripts
           persist-credentials: false
 
-      - name: Check out the source to build
+      # Two separate checkouts: release and latest-tag build only from a validated tag; the
+      # pull-request source is checked out only for the head dry run.
+      - name: Check out the tag to build
+        if: ${{ matrix.target != 'head' }}
         uses: actions/checkout@v7
         with:
-          ref: ${{ steps.resolve.outputs.ref }}
+          ref: refs/tags/${{ steps.resolve.outputs.tag }}
+          path: src
+          persist-credentials: false
+
+      - name: Check out the pull request (head dry run)
+        if: ${{ matrix.target == 'head' }}
+        uses: actions/checkout@v7
+        with:
           path: src
           persist-credentials: false
 
