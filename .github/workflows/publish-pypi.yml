@@ -1,62 +1,109 @@
 name: Publish PyPI Release
 
+# Trusted publishing (PyPI OIDC): no API token. The publish job exchanges this workflow's
+# GitHub OIDC identity for a short-lived PyPI token, which PyPI accepts only for the trusted
+# publisher registered for this repository, this workflow file (publish-pypi.yml) and the `pypi`
+# environment. PEP 740 attestations are generated and uploaded with the files.
+#
+# Publishing runs only for a vMAJOR.MINOR.PATCH tag, either pushed or named in a manual dispatch,
+# only when the repository variable PUBLISH_PYPI is 'true', and only after the `pypi`
+# environment's required reviewers approve. Pull requests that touch packaging run the build
+# job alone, as a dry run against the declared version, and never publish.
+
 on:
+  push:
+    tags: ['v*']
   workflow_dispatch:
     inputs:
       tag:
-        description: Existing signed or annotated release tag to publish
+        description: Existing release tag to build and publish (vMAJOR.MINOR.PATCH)
         required: true
         type: string
+  pull_request:
+    paths:
+      - .github/workflows/publish-pypi.yml
+      - .github/scripts/release_version_gate.py
+      - pyproject.toml
+      - setup.py
+      - MANIFEST.in
 
 permissions:
   contents: read
 
+concurrency:
+  group: publish-pypi-${{ github.event_name == 'workflow_dispatch' && format('refs/tags/{0}', inputs.tag) || github.ref }}
+  cancel-in-progress: false
+
+env:
+  DIST_NAME: ras-commander
+  # Empty for pull requests; the build job then uses the declared version.
+  RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || (github.ref_type == 'tag' && github.ref_name || '') }}
+
 jobs:
-  publish:
+  build:
+    name: Build and check distributions
     runs-on: ubuntu-latest
     steps:
-      - name: Validate tag input
-        env:
-          RELEASE_TAG: ${{ inputs.tag }}
-        run: |
-          case "$RELEASE_TAG" in
-            v[0-9]*.[0-9]*.[0-9]*) ;;
-            *) echo "Expected a vMAJOR.MINOR.PATCH tag" >&2; exit 1 ;;
-          esac
-
-      - name: Check out tagged source
-        uses: actions/checkout@v4
+      - name: Check out the tag (pull requests use their merge ref)
+        uses: actions/checkout@v7
         with:
-          ref: ${{ inputs.tag }}
+          ref: ${{ github.event_name == 'pull_request' && github.ref || format('refs/tags/{0}', env.RELEASE_TAG) }}
+          persist-credentials: false
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v7
         with:
-          python-version: "3.12"
+          python-version: '3.12'
 
-      - name: Build and validate distributions
-        env:
-          RELEASE_TAG: ${{ inputs.tag }}
+      - name: Pull request dry run - check against the declared version
+        if: ${{ github.event_name == 'pull_request' }}
+        run: echo "RELEASE_TAG=$(python .github/scripts/release_version_gate.py declared)" >> "$GITHUB_ENV"
+
+      - name: Check the tag against the declared versions
+        run: python .github/scripts/release_version_gate.py source --tag "$RELEASE_TAG" --init ras_commander/__init__.py
+
+      - name: Build sdist and wheel
         run: |
-          python -m pip install --upgrade build twine
-          python - <<'PY'
-          import os
-          import re
-          from pathlib import Path
+          python -m pip install build==1.6.1 twine==7.0.0
+          python -m build --sdist --wheel --outdir dist
 
-          expected = os.environ["RELEASE_TAG"].removeprefix("v")
-          setup_text = Path("setup.py").read_text(encoding="utf-8")
-          match = re.search(r'^\s*version="([^"]+)"', setup_text, re.MULTILINE)
-          if match is None or match.group(1) != expected:
-              raise SystemExit(
-                  f"Tag version {expected!r} does not match setup.py: "
-                  f"{None if match is None else match.group(1)!r}"
-              )
-          PY
-          python -m build
-          python -m twine check dist/*
+      - name: Check the built versions
+        run: python .github/scripts/release_version_gate.py dist --tag "$RELEASE_TAG" --dist dist --name "$DIST_NAME"
 
-      - name: Publish distributions to PyPI
+      - name: twine check
+        run: python -m twine check --strict dist/*
+
+      - name: Upload distributions
+        uses: actions/upload-artifact@v7
+        with:
+          name: python-dist
+          path: dist/
+          if-no-files-found: error
+          retention-days: 7
+
+  publish:
+    name: Publish to PyPI (trusted publishing)
+    needs: build
+    if: ${{ vars.PUBLISH_PYPI == 'true' && (github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v'))) }}
+    runs-on: ubuntu-latest
+    environment:
+      name: pypi
+      url: https://pypi.org/project/ras-commander/
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - name: Download distributions
+        uses: actions/download-artifact@v8
+        with:
+          name: python-dist
+          path: dist/
+
+      # No password: the action uses the PyPI trusted publisher for this workflow. The old
+      # PYPI_API_TOKEN repository secret is deliberately not referenced (attestations are
+      # ignored when a token is used); it stays in place until the maintainer revokes it.
+      - name: Publish
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
-          password: ${{ secrets.PYPI_API_TOKEN }}
+          attestations: true
+          print-hash: true
