@@ -43,12 +43,18 @@ files, and the HEC-RAS results.
     finite filters treated as zero rain or dropped. "Identical across backends" for those
     runs means the backends read the same defective grids identically. Measured since,
     on grids that rerun bit-identical to the retained ones: the missing cells form a band
-    along the lattice edges, and no physical mesh cell centre, nor any cell of the
-    cell-centre bilinear stencil around it, falls on one; over the valid cells the
-    qpkit frames differ from a full-source GDAL warp by an RMSE of 0.032 mm (maximum
-    0.42 mm) bilinear and 0.041 mm (maximum 0.375 mm) nearest-neighbour. So the missing
-    cells did not reach the earlier hydraulic runs for this cycle, but the route is not
-    qualified: a missing-cell gate was absent and the zero-filling was hidden. From the
+    along the lattice edges. For this model and fixed cycle, neither the physical mesh cell
+    centres nor their four-centre bilinear stencils intersect the missing band. Over the
+    valid cells the qpkit frames differ from a full-source GDAL warp by an RMSE of
+    0.032 mm (maximum 0.42 mm) bilinear and 0.041 mm (maximum 0.375 mm)
+    nearest-neighbour. This suggests the edge missingness did not affect cell-centre
+    rainfall; its effect in the earlier HEC-RAS runs has not been independently
+    established. Not checked: the stencil count assumes a four-centre bilinear
+    interpolation and does not inspect HEC-RAS's actual sampling weights or the earlier
+    runs' cell precipitation; no earlier plan was rerun on grids with the missing band
+    repaired; and the hydraulic effect of the valid-cell differences was not assessed.
+    Agreement between backends cannot establish either. The route is not qualified: a
+    missing-cell gate was absent and the zero-filling was hidden. From the
     2026-11-13 rework, 926 drives its runs with native forcing validated against a
     full-source warp; see note H under "ras-commander-fast-dss 0.1.2 notebooks".
 
@@ -336,8 +342,8 @@ complete files with `RasDssGrid.import_gridded` onto a 2,000 m SHG lattice cover
 buffered model footprint, bilinear. A missing forcing cell stops the notebook; totals and
 the window selection use plain sums. Every one of the 28 records is compared with a
 Rasterio/GDAL bilinear warp of its complete source file onto the stored lattice (gate: no
-missing cell in either, at most 0.01 mm difference): no missing cell in any frame, RMSE at
-most 1.9e-5 mm and maximum difference at most 5.1e-5 mm. Every mesh cell centre must sample
+missing cell in either, at most 0.01 mm difference): no missing cell in any frame, worst
+RMSE about 1.92e-5 mm and worst absolute difference about 5.10e-5 mm. Every mesh cell centre must sample
 a present forcing cell. The temporary plan HDF matches the selected DSS total to 3e-7 in;
 the final HDF's 18,066 active cells agree with the nearest DSS cell to a mean of 0.0001 in
 (RMSE 0.0029 in). The cycle is the same fixed cycle as before, 2026-11-05 00Z (28 GRIB files

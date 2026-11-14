@@ -17,7 +17,10 @@ alone does not identify a development checkout.
   samples none. The qpkit route remains only as a disclosed comparison that drives no plan.
   Earlier 926 runs in the [qualification report](dss-native-notebook-qualification.md)
   are labelled as execution and read-back evidence whose forcing failed spatial
-  qualification.
+  qualification. On that cycle the missing cells form an edge band that neither the mesh
+  cell centres nor their four-centre bilinear stencils reach, which suggests they did not
+  affect cell-centre rainfall; their effect in the earlier HEC-RAS runs has not been
+  independently established.
 - **Notebook 916 now drives HEC-RAS with native hourly HRRR forcing.** The qpkit route
   it used before left 69 forcing cells missing in every hour for its HRRR cycle, which
   the notebook read as zero rain, and did not match a full-source warp of the same HRRR
