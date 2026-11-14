@@ -14,9 +14,15 @@ import time
 from contextlib import contextmanager, redirect_stdout
 from types import SimpleNamespace
 
+import sys
+
 import pytest
 
 pytest.importorskip("psutil")
+
+# RasControl drives the HECRASController COM interface, which exists only on Windows; the
+# reports these tests check name Windows project paths.
+pytestmark = pytest.mark.skipif(sys.platform != "win32", reason="RasControl is Windows-only")
 
 from ras_commander import RasControl
 
