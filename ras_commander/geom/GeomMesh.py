@@ -5945,6 +5945,7 @@ class GeomMesh:
         robustness_screening: bool = False,
         require_complete_products: bool = False,
         grid_anchor: Optional[Union[GridAnchor, Tuple[float, float]]] = None,
+        native_seed_removal_budget: int = 0,
     ) -> MeshResult:
         """
         Generate or regenerate a 2D mesh headlessly via text-first workflow.
@@ -6040,6 +6041,16 @@ class GeomMesh:
                 Requires RegenerateMeshPoints; there is no unanchored
                 fallback. Evidence is returned in ``MeshResult.grid_anchor``.
 
+            native_seed_removal_budget: Opt-in total seed-removal limit per area,
+                from 0 (disabled) to 8192; booleans are rejected. For native
+                FacePerimeterConnectionError or CellMinFaceError, remove only
+                identity-verified generated seeds and retry without changing the
+                perimeter, constraints or spacing. Stop on unverified candidates,
+                exhausted budget or no remaining retry; do not fall back to
+                perimeter repair for these errors. Individual cells can enlarge.
+                Evidence is returned in MeshResult.native_seed_repairs; indexes
+                refer to the input seed order of each recorded iteration.
+
         Returns:
             MeshResult with status, cell_count, face_count, fixes_applied, and
             the compiled geometry HDF path on success. ``perimeter_repairs``
@@ -6051,7 +6062,8 @@ class GeomMesh:
             supply an initialized project with a referencing plan.
 
         Raises:
-            ValueError: The face-length ratio is not positive and finite.
+            ValueError: The face-length ratio is not positive and finite, or
+                native_seed_removal_budget is not an integer from 0 to 8192.
             TypeError: ``grid_anchor`` is not a GridAnchor or ``(x, y)`` pair.
                 (A grid anchor whose spacing differs from the cell size
                 returns ``status="exception"`` with the reason.)
@@ -6059,6 +6071,12 @@ class GeomMesh:
                 fails, chained to the original mesh repair reason. Retries
                 share the existing ``max_iterations`` bound.
         """
+        if (
+            isinstance(native_seed_removal_budget, bool)
+            or not isinstance(native_seed_removal_budget, int)
+            or not 0 <= native_seed_removal_budget <= 8192
+        ):
+            raise ValueError("native_seed_removal_budget must be an integer from 0 to 8192")
         geom_path = _resolve_geom_text_path(geom_number, ras_object)
 
         result = MeshResult(
@@ -6425,6 +6443,7 @@ class GeomMesh:
             except AttributeError:
                 points_outside_val = None
 
+            native_seed_removals = 0
             for iteration in range(max_iterations):
                 ratio = ratios[min(ratio_idx, len(ratios) - 1)]
                 logger.debug(
@@ -6591,6 +6610,82 @@ class GeomMesh:
                     )
                     break
 
+                if native_seed_removal_budget and state_name in (
+                    "FacePerimeterConnectionError", "CellMinFaceError"
+                ):
+                    from .GeomMeshRepair import GeomMeshRepair
+
+                    # Keep the failed mesh and its exact input seed order paired.
+                    remaining = native_seed_removal_budget - native_seed_removals
+                    reason = None
+                    if result.iterations >= max_iterations:
+                        reason = "no iteration remains to verify repaired seeds"
+                    elif remaining <= 0:
+                        reason = "cumulative seed-removal budget exhausted"
+                    if reason is not None:
+                        result.error_message = f"{state_name}: {reason}"
+                        result.mesh_state = state_name
+                        return result
+                    try:
+                        repair = GeomMeshRepair.plan_native_seed_removal(
+                            mesh, current_seeds_pm, max_removals=remaining
+                        )
+                    except Exception as exc:
+                        result.error_message = f"{state_name}: seed-removal planning failed: {exc}"
+                        result.mesh_state = state_name
+                        return result
+                    indexes = {p["generated_point_index"] for p in repair["removed_points"]}
+                    # The planner can omit an unverified candidate. This opt-in
+                    # route requires the entire native candidate set to match.
+                    try:
+                        if state_name == "FacePerimeterConnectionError":
+                            bad = mesh.BadIndexes
+                            count = bad.Count if hasattr(bad, "Count") else len(bad)
+                            expected = set()
+                            for i in range(count):
+                                value = bad[i]
+                                index = int(value)
+                                if (
+                                    isinstance(value, bool)
+                                    or index != value
+                                    or not 0 <= index < current_seeds_pm.Count
+                                ):
+                                    raise ValueError("invalid native seed index")
+                                expected.add(index)
+                        else:
+                            expected = {
+                                i for i in range(int(mesh.NonVirtualCellCount))
+                                if mesh.CellFacesCount(i) < 3
+                            }
+                        if indexes != expected:
+                            raise ValueError("native candidates do not all match indexed seeds")
+                    except Exception as exc:
+                        result.error_message = f"{state_name}: unverified seed candidates: {exc}"
+                        result.mesh_state = state_name
+                        return result
+                    if not indexes:
+                        result.error_message = f"{state_name}: no identity-verified seeds to remove"
+                        result.mesh_state = state_name
+                        return result
+                    before = int(current_seeds_pm.Count)
+                    current_seeds_pm, removed = _remove_seed_indexes(
+                        current_seeds_pm, indexes, ns
+                    )
+                    native_seed_removals += removed
+                    repair.update({
+                        "iteration": result.iterations,
+                        "index_basis": "input_seed_order_for_iteration",
+                        "seed_count_before": before,
+                        "seed_count_after": int(current_seeds_pm.Count),
+                        "cumulative_removed": native_seed_removals,
+                        "remaining_budget": native_seed_removal_budget - native_seed_removals,
+                    })
+                    result.native_seed_repairs.append(repair)
+                    fix_msg = f"{state_name}:native-seed-removal(-{removed}pts)"
+                    result.fixes_applied.append(fix_msg)
+                    logger.debug(f"[{mesh_name}] Fix applied: {fix_msg}")
+                    continue
+
                 # Remove only generated seed points that HEC-RAS identifies as
                 # outside. Never respond by mutating the authored perimeter.
                 if points_outside_val is not None and state_val == points_outside_val:
@@ -6751,6 +6846,7 @@ class GeomMesh:
         strict_refinement_containment: bool = False,
         robustness_screening: bool = False,
         require_complete_products: bool = False,
+        native_seed_removal_budget: int = 0,
     ) -> List[MeshResult]:
         """Generate/repair all 2D mesh areas in a geometry file.
 
@@ -6769,6 +6865,15 @@ class GeomMesh:
             near_repeats: Number of offset seed rows along breaklines.
             protection_radius: Enable 1-cell protection radius (0 or 1).
             min_face_length_ratio: Minimum face-length ratio for mesh quality.
+            native_seed_removal_budget: Opt-in total seed-removal limit per area,
+                from 0 (disabled) to 8192; booleans are rejected. For native
+                FacePerimeterConnectionError or CellMinFaceError, remove only
+                identity-verified generated seeds and retry without changing the
+                perimeter, constraints or spacing. Stop on unverified candidates,
+                exhausted budget or no remaining retry; do not fall back to
+                perimeter repair for these errors. Individual cells can enlarge.
+                Evidence is returned in MeshResult.native_seed_repairs; indexes
+                refer to the input seed order of each recorded iteration.
             max_iterations: Maximum fix-loop iterations per mesh area.
             hecras_dir: Override path to the HEC-RAS installation directory.
             ras_object (RasPrj, optional): Optional RasPrj instance for multi-project support.
@@ -6785,7 +6890,17 @@ class GeomMesh:
 
         Returns:
             List of MeshResult, one per 2D flow area.
+
+        Raises:
+            ValueError: native_seed_removal_budget is not an integer from
+                0 to 8192, or is a boolean.
         """
+        if (
+            isinstance(native_seed_removal_budget, bool)
+            or not isinstance(native_seed_removal_budget, int)
+            or not 0 <= native_seed_removal_budget <= 8192
+        ):
+            raise ValueError("native_seed_removal_budget must be an integer from 0 to 8192")
         text_path = _resolve_geom_text_path(geom_number, ras_object=ras_object)
         _load_dlls(hecras_dir)
         ns = _imports()
@@ -6814,6 +6929,7 @@ class GeomMesh:
                 protection_radius=protection_radius,
                 min_face_length_ratio=min_face_length_ratio,
                 max_iterations=max_iterations,
+                native_seed_removal_budget=native_seed_removal_budget,
                 hecras_dir=hecras_dir,
                 ras_object=ras_object,
                 recompile_via_rasexe=recompile_via_rasexe,

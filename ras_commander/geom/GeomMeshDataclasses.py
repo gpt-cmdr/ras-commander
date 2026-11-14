@@ -170,6 +170,9 @@ class MeshResult:
     # Empty unless exact physical parent cells were copied into an owned child.
     cell_subset: Dict[str, Any] = field(default_factory=dict)
 
+    # Per-iteration native seed identities and cumulative removal accounting.
+    native_seed_repairs: list[dict[str, Any]] = field(default_factory=list)
+
     @property
     def ok(self) -> bool:
         return self.status == "complete"
