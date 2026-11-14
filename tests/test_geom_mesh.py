@@ -3366,3 +3366,28 @@ def test_generate_escalates_from_requested_ratio(monkeypatch, breakline_geom_tex
     assert result.ok
     assert ratios == expected
     assert f"Ratio:{expected[0]:g}->{expected[1]:g}" in result.fixes_applied
+
+
+@pytest.mark.parametrize('row', [None, 'Storage Area 2D PointsPerimeterTime=0\n', '2               \n', 'x2              0               \n'])
+def test_coordinate_rows_do_not_consume_following_records(tmp_path, row):
+    geom = tmp_path / 'bounded.g01'
+    prefix = 'Storage Area=Area\nStorage Area 2D Points= 1\n'
+    geom.write_text(prefix + (row or ''))
+    hdf = geom.with_suffix('.g01.hdf')
+    _write_mesh_hdf(hdf, [{'name': 'Area', 'cell_count': 1}])
+    with h5py.File(hdf, 'a') as file:
+        file['Geometry/2D Flow Areas/Area/Cells Center Coordinate'][...] = [[2., 0.]]
+    assert geom_mesh_module._mesh_hdf_consistency_issues(geom, hdf)
+    with pytest.raises(RuntimeError, match='stale'):
+        _ensure_hdf(geom)
+
+
+def test_coordinate_check_tolerates_non_utf8_unrelated_text(tmp_path):
+    geom = tmp_path / 'legacy.g01'
+    text = 'Storage Area=Area\nStorage Area 2D Points= 1\n' + f'{2.:16.6f}{0.:16.6f}\n'
+    geom.write_bytes(b'Geom Title=Caf\xe9\n' + text.encode('utf-8'))
+    hdf = geom.with_suffix('.g01.hdf')
+    _write_mesh_hdf(hdf, [{'name': 'Area', 'cell_count': 1}])
+    with h5py.File(hdf, 'a') as file:
+        file['Geometry/2D Flow Areas/Area/Cells Center Coordinate'][...] = [[2., 0.]]
+    assert geom_mesh_module._mesh_hdf_consistency_issues(geom, hdf) == []

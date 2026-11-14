@@ -3081,12 +3081,24 @@ def _mesh_hdf_consistency_issues(
             from .GeomStorage import GeomStorage
 
             try:
-                lines = geom_text_path.read_text(encoding="utf-8").splitlines(True)
+                lines = geom_text_path.read_text(encoding="utf-8", errors="replace").splitlines(True)
                 block = GeomStorage._find_storage_area_block(lines, area_name)[2]
                 info = GeomStorage._inspect_storage_area_block(block)
                 start = info["points_idx"] + 1
                 values = []
-                for line in block[start:start + (text_seed_count + 1) // 2]:
+                rows = block[start:start + (text_seed_count + 1) // 2]
+                if len(rows) != (text_seed_count + 1) // 2:
+                    raise ValueError("Incomplete computation point rows")
+                for index, line in enumerate(rows):
+                    row = line.rstrip("\r\n")
+                    field_count = min(4, 2 * text_seed_count - 4 * index)
+                    if ("=" in row or len(row) < field_count * 16
+                            or row[field_count * 16:].strip()):
+                        raise ValueError("Incomplete or invalid computation point row")
+                    # Validate whole fields before the shared parser can apply
+                    # its permissive numeric fallback to a following record.
+                    for offset in range(0, field_count * 16, 16):
+                        float(row[offset:offset + 16])
                     values.extend(GeomParser.parse_fixed_width(line, 16))
                 points = np.asarray(values, dtype=float).reshape((-1, 2))
                 with h5py.File(hdf_path, "r") as hdf:
