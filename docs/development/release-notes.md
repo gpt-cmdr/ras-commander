@@ -37,12 +37,29 @@ alone does not identify a development checkout.
 - **Native DSS6 grid writes name the Java scale/base convention.** Under `native`,
   `compression_base=100` with `compression_scale_factor=0` raises a `ValueError` that
   explains the Java route's swapped DSS6 convention; the values are never reinterpreted.
-- `RasDss.get_capabilities().attrs` adds `backend_source` and `default_backend_reason`.
+- **Behaviour change: time-series writes refuse times HEC-DSS would move, on every
+  backend.** `write_timeseries` and `write_timeseries_from_dataframe` now check a regular
+  series once, before any write: fixed intervals need a constant step; week, month,
+  semi-month, tri-month and year intervals must follow HEC-DSS's calendar placement
+  (single values included); DSS6 yearly series from a leap year after 2 March are refused
+  for DSS6. HEC Monolith used to store such values at other times and report success.
+  The message names the value, where HEC would store it and what works. See
+  [Time placement](../user-guide/dss-native-backend.md#time-placement).
+- **ras-commander-fast-dss 0.1.2 misdates some DSS6 yearly data** (for example a
+  HEC-written 2020-06-15 reads as 2020-06-14) and refuses to write those times; the
+  native default ships with 0.1.3, which reads and writes them as HEC does. Until then,
+  keep `RasDss.backend = "java"` for DSS6 yearly data.
+- `RasDss.get_capabilities().attrs` adds `backend_source`, `auto_backend` and
+  `default_backend_reason`. Under an explicit backend, what `auto` would select is
+  reported without being logged.
   `RasDss.shutdown_jvm()` is a silent no-op under `auto` (it still warns under an
   explicit `native`). Backend messages name both `RasDss.backend` and
   `RAS_COMMANDER_DSS_BACKEND`.
 - The agent banner of `init_ras_project` names `RasDss.read_timeseries()` (it named a
   nonexistent `get_timeseries()`).
+- Notebooks 310, 312, 313 and 318 print paths relative to `examples/` (or file names)
+  and were re-executed on the native default; `ras_commander.usgs` logs the geometry HDF
+  file name at INFO and its full path at DEBUG.
 - The native DSS CI job gains a default leg (no backend set, NumPy 2) and a
   non-blocking macOS leg that runs once a 0.1.3 macOS wheel is on PyPI.
 - **Corrected notebook 731's DSS export.** Its earlier grids, from HEC-Vortex or the
