@@ -72,6 +72,42 @@ class RasPreprocess:
         ...     print(f"Ready for Linux in {result.elapsed_seconds:.1f}s")
     """
 
+    @staticmethod
+    @log_call
+    def write_event_conditions(
+        plan_hdf: Union[str, Path], geom_hdf: Union[str, Path],
+        flow_file: Union[str, Path], *, start_time, end_time,
+        units: str, target_ras_version: str,
+    ) -> Path:
+        """Write experimental 7.0.1 metric 2D boundary forcing from flow text.
+
+        Args:
+            plan_hdf: Existing staged HDF without boundary forcing.
+            geom_hdf: Compiled geometry with External Faces and BC Length.
+            flow_file: Unsteady text containing flow hydrographs or normal depth.
+            start_time: Naive local datetime defining hydrograph day zero.
+            end_time: Naive local simulation end datetime.
+            units: Must be ``Metric`` and match geometry Units.
+            target_ras_version: Must be ``7.0.1``.
+
+        Returns:
+            Path: Updated plan HDF. A sibling .events.bak retains the original.
+
+        Raises:
+            ValueError: Unsupported forcing, associations, units, or time basis.
+            FileExistsError: Backup already exists.
+            OSError: File access or atomic replacement failed.
+
+        Prevalidates all forcing, writes a temporary sibling, then backs up and
+        atomically replaces the destination. Unrelated content is preserved.
+        Does not mark preprocessing complete or write initial conditions, mesh,
+        plan data, .x or .b files. Native solver equivalence remains unqualified.
+        Call only while no other process is modifying these files.
+        """
+        from ._event_conditions import _write_events
+        return _write_events(plan_hdf, geom_hdf, flow_file, start_time,
+                             end_time, units, target_ras_version)
+
     _TCU_DIALOG_TITLE = TCU_DIALOG_TITLE
     _TCU_BLOCKING_ERROR = TCU_BLOCKING_ERROR
     _TCU_SUPERVISION_ERROR = (

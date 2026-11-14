@@ -1,0 +1,195 @@
+"""Experimental 7.0.1 boundary-event authoring; no solver equivalence claim.
+
+Schema reference: gheistand/ras-agent PR 211 (Apache-2.0),
+69a1a4a8fd286a7b261f50378cbcdba59a963d89. Independently implemented.
+"""
+import os
+from pathlib import Path
+import re
+import shutil
+import tempfile
+from datetime import datetime, timedelta
+
+import h5py
+import numpy as np
+
+
+def _text(value):
+    return value.decode('latin-1').rstrip('\x00 ') if isinstance(value, bytes) else str(value)
+
+
+def _parse(path):
+    boundaries = {}
+    current = None
+    lines = Path(path).read_text(encoding='latin-1').splitlines()
+    i = 0
+    defaults = {'Use DSS': 'False', 'Use Fixed Start Time': 'False',
+                'Is Critical Boundary': 'False', 'Stage Hydrograph TW Check': '0',
+                'Flow Hydrograph Slope': '0', 'DSS Path': '', 'DSS File': '',
+                'Fixed Start Date/Time': ',', 'Critical Boundary Flow': '',
+                'Use Restart': '0', 'Precipitation Mode': 'Disable'}
+    while i < len(lines):
+        line = lines[i].strip()
+        i += 1
+        if not line:
+            continue
+        if line == 'BEGIN FILE DESCRIPTION:':
+            while i < len(lines) and lines[i].strip() != 'END FILE DESCRIPTION:':
+                i += 1
+            if i == len(lines):
+                raise ValueError('Unterminated file description')
+            i += 1
+            continue
+        key, sep, value = line.partition('=')
+        value = value.strip()
+        if not sep:
+            raise ValueError(f'Unsupported flow record: {line}')
+        if key in ('Flow Title', 'Program Version'):
+            continue
+        if key == 'Boundary Location':
+            fields = [x.strip() for x in value.split(',')]
+            if len(fields) < 8 or any(fields[:5]) or fields[6] or any(fields[8:]):
+                raise ValueError('Only external 2D boundary locations are supported')
+            identity = (fields[5], fields[7])
+            if not all(identity) or any('/' in x or '\x00' in x for x in identity) or identity in boundaries:
+                raise ValueError('Invalid or duplicate boundary association')
+            current = {}
+            boundaries[identity] = current
+        elif key in defaults:
+            if value != defaults[key]:
+                raise ValueError(f'Unsupported {key}={value}')
+        elif key == 'Interval' and current is not None:
+            match = re.fullmatch(r'([1-9][0-9]*)(SEC|MIN|HOUR|DAY)', value)
+            if not match:
+                raise ValueError('Invalid hydrograph interval')
+            current['step'] = int(match[1]) / {'SEC': 86400, 'MIN': 1440, 'HOUR': 24, 'DAY': 1}[match[2]]
+        elif key in ('Flow Hydrograph', 'Friction Slope') and current is not None:
+            if 'kind' in current:
+                raise ValueError('Multiple forcing types on one boundary')
+            current['kind'] = key
+            if key == 'Friction Slope':
+                values = [float(value)]
+                if values[0] <= 0:
+                    raise ValueError('Normal depth slope must be positive')
+            else:
+                count = int(value)
+                if count < 2:
+                    raise ValueError('Hydrograph requires at least two ordinates')
+                values = []
+                while len(values) < count and i < len(lines) and '=' not in lines[i]:
+                    row = lines[i]
+                    values.extend(float(row[k:k+8]) for k in range(0, len(row), 8) if row[k:k+8].strip())
+                    i += 1
+                if len(values) != count:
+                    raise ValueError('Hydrograph ordinate count mismatch')
+            current['values'] = values
+        else:
+            raise ValueError(f'Unsupported flow record: {key}')
+    if not boundaries:
+        raise ValueError('No boundary forcing found')
+    return boundaries
+
+
+def _write_events(plan_hdf, geom_hdf, flow_file, start_time, end_time, units, target_ras_version):
+    if target_ras_version != '7.0.1' or units != 'Metric':
+        raise ValueError('Experimental writer requires 7.0.1 and Metric units')
+    if not isinstance(start_time, datetime) or not isinstance(end_time, datetime) or start_time.tzinfo or end_time.tzinfo or end_time <= start_time:
+        raise ValueError('Supply increasing naive local simulation datetimes')
+    if any(t.second or t.microsecond for t in (start_time, end_time)):
+        raise ValueError('Simulation times require whole minutes')
+    target = Path(plan_hdf)
+    if target.resolve() in (Path(geom_hdf).resolve(), Path(flow_file).resolve()):
+        raise ValueError('Output must differ from source files')
+    boundaries = _parse(flow_file)
+    prepared = []
+    with h5py.File(geom_hdf, 'r') as geometry:
+        if _text(geometry.attrs.get('Units System', '')) != 'SI (Metric)':
+            raise ValueError('Geometry units must explicitly match Metric')
+        areas = [_text(r['Name']) for r in geometry['Geometry/2D Flow Areas/Attributes'][:]]
+        attrs = geometry['Geometry/Boundary Condition Lines/Attributes'][:]
+        external = geometry['Geometry/Boundary Condition Lines/External Faces'][:]
+        identities = [(_text(r['SA-2D']), _text(r['Name'])) for r in attrs]
+        if len(set(identities)) != len(identities) or set(identities) != set(boundaries):
+            raise ValueError('Missing, unknown, or duplicate boundary associations')
+        if np.any((external['BC Line ID'] < 0) | (external['BC Line ID'] >= len(attrs))):
+            raise ValueError('Unknown External Faces boundary ID')
+        for index, (identity, row) in enumerate(zip(identities, attrs)):
+            area, name = identity
+            if area not in areas:
+                raise ValueError('Unknown 2D area')
+            bc = boundaries[identity]
+            if 'kind' not in bc:
+                raise ValueError('Missing boundary forcing')
+            length = float(row['Length'])
+            rows = external[external['BC Line ID'] == index]
+            a, b = rows['Station Start'].astype(float), rows['Station End'].astype(float)
+            if not np.isfinite(length) or length <= 0 or not np.all(np.isfinite([a, b])) or np.any(b <= a):
+                raise ValueError('Invalid boundary length or stations')
+            fraction = (np.minimum(b, length) - np.maximum(a, 0)) / (b-a)
+            keep = np.flatnonzero(fraction > 0)
+            if not len(keep) or np.any(np.diff(keep) != 1):
+                raise ValueError('Boundary has no contiguous overlapping faces')
+            selected = rows[keep]
+            if np.any(selected['FP End Index'][:-1] != selected['FP Start Index'][1:]):
+                raise ValueError('Disconnected boundary face points')
+            if a[keep[0]] > 0 or b[keep[-1]] < length or not np.allclose(b[keep[:-1]], a[keep[1:]], rtol=0, atol=1e-6):
+                raise ValueError('Boundary stations do not cover BC Length')
+            faces = selected['Face Index']
+            points = np.r_[selected['FP Start Index'][:1], selected['FP End Index']]
+            mesh = geometry[f'Geometry/2D Flow Areas/{area}']
+            for ids, limit in ((faces, len(mesh['Faces FacePoint Indexes'])), (points, len(mesh['FacePoints Coordinate']))):
+                if np.any(ids < 0) or np.any(ids >= limit) or np.any(ids > np.iinfo(np.int32).max):
+                    raise ValueError('Invalid face or face-point indexes')
+            if len(np.unique(faces)) != len(faces):
+                raise ValueError('Duplicate boundary faces')
+            for face, p0, p1 in zip(faces, points[:-1], points[1:]):
+                if set(mesh['Faces FacePoint Indexes'][int(face)]) != {p0, p1}:
+                    raise ValueError('Face-point association mismatch')
+            values = np.asarray(bc['values'], dtype=float)
+            if bc['kind'] == 'Flow Hydrograph':
+                if 'step' not in bc:
+                    raise ValueError('Missing hydrograph interval')
+                times = np.arange(len(values)) * bc['step']
+                if times[-1] < (end_time-start_time).total_seconds()/86400:
+                    raise ValueError('Hydrograph does not cover simulation window')
+                values = np.column_stack((times, values))
+            with np.errstate(over='ignore'):
+                data = values.astype('float32')
+            if not np.all(np.isfinite(data)) or (data.ndim == 2 and np.any(np.diff(data[:, 0]) <= 0)):
+                raise ValueError('Nonfinite data or invalid float32 time basis')
+            prepared.append((area, name, areas.index(area)+1, data, faces.astype('int32'), points.astype('int32'), fraction[keep].astype('float32')))
+    group_path = 'Event Conditions/Unsteady/Boundary Conditions'
+    with h5py.File(target, 'r') as existing:
+        if group_path in existing and len(existing[group_path]):
+            raise ValueError('Destination already has boundary forcing; use a fresh staged copy')
+    fd, temporary = tempfile.mkstemp(prefix=target.name+'.', suffix='.tmp', dir=target.parent)
+    os.close(fd)
+    temporary = Path(temporary)
+    try:
+        shutil.copy2(target, temporary)
+        with h5py.File(temporary, 'r+') as output:
+            root = output.require_group(group_path)
+            for area, name, node, data, faces, points, fractions in prepared:
+                kind = 'Flow Hydrographs' if data.ndim == 2 else 'Normal Depths'
+                ds = root.require_group(kind).create_dataset(f'2D: {area} BCLine: {name}', data=data, chunks=data.shape, compression='gzip')
+                for key, value in {'2D Flow Area': area, 'BC Line': name, 'Check TW Stage': 'False'}.items():
+                    ds.attrs[key] = np.bytes_(value.encode('latin-1'))
+                ds.attrs['Face Indexes'] = faces
+                ds.attrs['Face Point Indexes'] = points
+                ds.attrs['Face Fraction'] = fractions
+                ds.attrs['Node Index'] = np.int32(node)
+                if data.ndim == 2:
+                    ds.attrs['Data Type'] = np.bytes_('INST-VAL')
+                    ds.attrs['Interval'] = np.bytes_('Days')
+                    ds.attrs['EG Slope For Distributing Flow'] = np.float32(0)
+                    for key, moment in (('Start Date', start_time), ('End Date', end_time)):
+                        stamp = (moment-timedelta(days=1)).strftime('%d%b%Y 2400') if key == 'Start Date' and moment.hour == moment.minute == 0 else moment.strftime('%d%b%Y %H%M')
+                        ds.attrs[key] = np.bytes_(stamp)
+        # Exclusive backup creation never overwrites a prior retained copy.
+        backup = target.with_name(target.name+'.events.bak')
+        with backup.open('xb') as saved, target.open('rb') as original:
+            shutil.copyfileobj(original, saved)
+        os.replace(temporary, target)
+    finally:
+        temporary.unlink(missing_ok=True)
+    return target
