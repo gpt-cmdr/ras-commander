@@ -171,7 +171,8 @@ RAS Commander routes that use the importer:
   `RAS_COMMANDER_MRMS_BACKEND` environment variable). The default stays HEC-Vortex.
   See [MRMS hourly QPE](user-guide/gridded-precipitation.md#mrms-hourly-qpe).
 - **Atlas 14 design storms.** Notebook 731 sets `DSS_EXPORT_ROUTE = "native"` to
-  project its Float32 interval NetCDF to SHG DSS without Vortex.
+  project its Float32 interval NetCDF to SHG DSS without Vortex, onto a stated
+  envelope, and checks the grids against a warp of the complete NOAA grid.
 - **WPC QPF.** The importer reads WPC's published GRIB2 directly; see
   [WPC QPF](user-guide/gridded-precipitation.md#wpc-qpf-to-dss-with-fast-dss).
 
@@ -196,8 +197,12 @@ differences below; the remaining cases are the refusals in that list. The warp
 kernels matched both Vortex versions on MRMS, HRRR, Stage IV and WPC samples. These
 are measurements on those inputs, not a proof over all inputs. In a run of notebook
 731 on the public NewOrleansMetro example with NOAA's Volume 9 100-year 24-hour
-grid, the native and HEC-Vortex 0.13.3 routes wrote the same 144 records, equal
-cell for cell; the stored null value was the only difference (label W2 below).
+grid, the native (with `align="vortex"`) and HEC-Vortex 0.13.3 routes wrote the same
+144 records, equal cell for cell; the stored null value was the only difference (label
+W2 below). Equal here means both moved the grid the same way: that rounded origin left
+7 corner cells missing and displaced the stored totals by up to 0.05 in from a warp of
+the complete NOAA grid. The notebook now states an envelope instead; see the
+[notebook qualification report](development/dss-native-notebook-qualification.md).
 
 ### Intended differences {#dss-intended-differences}
 

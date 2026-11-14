@@ -3712,8 +3712,9 @@ notebooks:
   series: 700
   series_name: Sensitivity & Precipitation
   summary: Apply a shared NOAA temporal curve to an existing model footprint, validate native rainfall
-    NetCDF, export Float32 intervals with explicit bilinear SHG conversion, and optionally configure a
-    staged model copy without computing.
+    NetCDF, export Float32 intervals to SHG DSS on a stated envelope with explicit bilinear conversion,
+    gate missing cells, full-source spatial agreement and mesh coverage, and optionally configure a staged
+    model copy without computing.
   tags:
   - precipitation
   difficulty: intermediate
@@ -3722,6 +3723,7 @@ notebooks:
   functions_used:
   - HdfLandCover.sanitize_classification_names
   - HdfMesh.get_mesh_areas
+  - HdfMesh.get_mesh_cell_points
   - HdfPlan.get_plan_met_precip_values
   - RasDss.get_catalog
   - RasDss.read_grid
