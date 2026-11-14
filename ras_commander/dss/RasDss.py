@@ -98,7 +98,7 @@ import pandas as pd
 
 # Import decorator from parent package
 from ..Decorators import log_call
-from . import _backend, _errors
+from . import _backend, _errors, _times
 
 logger = logging.getLogger(__name__)
 
@@ -282,7 +282,8 @@ class RasDss:
             ``attrs``: ``requested_backend`` (``RasDss.backend`` or the
             environment override, with ``"auto"`` resolved),
             ``backend_source`` (``"explicit"`` or ``"auto"``),
-            ``default_backend_reason`` (why ``"auto"`` resolves as it does),
+            ``auto_backend`` (what ``"auto"`` selects; hypothetical when the backend
+            is explicit, and then not logged), ``default_backend_reason`` (why),
             ``native_installed`` (bool),
             ``native_grid_qualified`` (bool), ``native_writes_available``
             (bool), ``native_repair_available`` (bool),
@@ -302,11 +303,14 @@ class RasDss:
             columns=["operation", "java", "native", "shadow", "note"],
         )
         explicit = _backend.explicit_backend(RasDss.backend)
-        default_backend, default_reason = _backend.default_backend()
+        # Announce the automatic choice only when auto is in use; under an explicit
+        # backend, what auto would select is assessed silently and reported as such.
+        auto_backend, auto_reason = _backend.default_backend(announce=explicit is None)
         df.attrs = {
-            "requested_backend": explicit or default_backend,
+            "requested_backend": explicit or auto_backend,
             "backend_source": "explicit" if explicit else "auto",
-            "default_backend_reason": default_reason,
+            "auto_backend": auto_backend,
+            "default_backend_reason": auto_reason,
             "native_installed": _backend.native_available(),
             "native_grid_qualified": _backend.native_grid_qualified(),
             "native_writes_available": _backend.native_writes_available(),
@@ -4670,14 +4674,25 @@ class RasDss:
                 ``DssError`` subclasses) are ``RuntimeError`` subclasses too.
 
         Backends:
-            ``"java"`` (default) writes through HEC Monolith. ``"native"``
-            writes through ras-commander-fast-dss without a JVM and never falls back to
-            Java: an existing file keeps its DSS version, a new file is DSS7
-            unless ``dss_version=6`` (the Java default). The E part decides
-            regular or irregular (``IR-DAY`` .. ``IR-CENTURY``) storage on both
-            backends. The native writer refuses, where Java truncates or
-            reinterprets: times that are not exactly regular for a regular E
-            part, DSS6 units or types longer than 8 characters, malformed
+            ``"java"`` writes through HEC Monolith. ``"native"`` (the
+            default through ``"auto"``) writes through ras-commander-fast-dss
+            without a JVM and never falls back to Java: an existing file keeps its
+            DSS version, a new file is DSS7 unless ``dss_version=6``. The E part
+            decides regular or irregular (``IR-DAY`` .. ``IR-CENTURY``) storage on
+            both backends.
+
+            On every backend, the times of a regular E part are checked once
+            before anything is written (``_times``): a fixed interval needs a
+            constant step, and week, month, semi-month, tri-month and year
+            intervals must follow HEC-DSS's calendar placement (single values
+            included; DSS6 yearly series from a leap year after 2 March are
+            refused for DSS6). Times HEC-DSS would store elsewhere raise
+            ``ValueError`` naming the value, where HEC would store it and what
+            works; HEC Monolith used to store them shifted and report success.
+            See ``docs/user-guide/dss-native-backend.md#time-placement``.
+
+            The native writer also refuses, where Java truncates or
+            reinterprets: DSS6 units or types longer than 8 characters, malformed
             pathnames, and infinite values. ``NaN`` is stored as Java stores
             it: as ``NaN`` in DSS7 files and as -901 in DSS6 files. A failed
             native write that created the file removes it. ``"shadow"``
@@ -4712,11 +4727,43 @@ class RasDss:
         backend = RasDss._write_backend()
         args = (dss_file, pathname, times, values, units, data_type, create_if_missing)
         with _backend.write_sync(sync, backend):
+            RasDss._check_write_times(dss_file, pathname, times, values, dss_version)
             if backend == "native":
                 return RasDss._write_timeseries_native(*args, dss_version=dss_version)
             if backend == "shadow":
                 return RasDss._write_timeseries_shadow(*args, dss_version=dss_version)
             return RasDss._write_timeseries_java(*args, dss_version=dss_version)
+
+    @staticmethod
+    def _check_write_times(dss_file, pathname, times, values, dss_version=None) -> None:
+        """Refuse times HEC-DSS would store elsewhere, before any backend writes.
+
+        Runs once per public write, on every backend (see ``_times``). The target's DSS
+        version decides the DSS6 rules: an existing file's own version, else
+        ``dss_version``, else 7 (a new file's default on both backends).
+        """
+        found = _times.write_stamps(pathname, times, values)
+        if found is None:
+            return
+        e_part, stamps = found
+        _times.check_regular_stamps(pathname, e_part, stamps,
+                                    RasDss._target_version(dss_file, dss_version))
+
+    @staticmethod
+    def _target_version(dss_file, dss_version=None) -> Optional[int]:
+        """DSS version a write to ``dss_file`` will use; None when it cannot be read
+        (the writer then raises its own error)."""
+        path = Path(dss_file)
+        if path.is_file():
+            try:
+                if _backend.native_available():
+                    return RasDss._get_file_version_native(path)
+                return RasDss._get_file_version_java(path)
+            except Exception:
+                return None
+        if path.exists():
+            return None
+        return dss_version if dss_version in (6, 7) else 7
 
     @staticmethod
     def _write_timeseries_java(

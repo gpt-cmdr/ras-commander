@@ -37,6 +37,7 @@ JAVA_MODULES = (
     "tests.test_rasdss_native_parity",
     "tests.test_rasdss_native_writes",
     "tests.test_rasdss_native_default",
+    "tests.test_rasdss_write_times",
 )
 
 #: Skip reasons that are intended on some platforms and do not make a required module

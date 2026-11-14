@@ -574,11 +574,66 @@ checks the installed package's API (`create`, `write_timeseries`,
   stores: DSS7 specified grids, PER-CUM, ZLIB, the WKT1_GDAL CRS and its name,
   and no time zone. It needs `affine` and `pyproj` but not pydsstools.
 
+### Time placement on every backend {#time-placement}
+
+HEC-DSS stores a regular series by position from its first time. HEC Monolith
+silently stored values given at other times where its own placement put them, single
+values included, and reported success. `write_timeseries` and
+`write_timeseries_from_dataframe` now check the times once, before any backend writes,
+and refuse with `ValueError` ("Refused before writing ...") anything HEC-DSS would store
+elsewhere. Nothing is written and no file is created. The rules:
+
+- **Minute, hour and day intervals** need a constant step. An offset start such as 00:15
+  under `1HOUR` is kept, as HEC keeps it, and a single value at any whole minute is kept.
+- **Week, month, semi-month, tri-month and year intervals** follow HEC-DSS's calendar
+  placement: leap years, month lengths, end-of-period stamps and the weekly decade
+  block. The series is written to a temporary DSS7 file by the ras-commander-fast-dss
+  engine and read back; every value must come back at its given time. For example, a
+  yearly series from 29 February continues on 1 March; a single `1MON` value on
+  29 February is stored on 1 March, so it is refused; a day of the month that a shorter
+  month lacks (the 29th to the 31st) is refused because HEC-DSS stores two values at one
+  time there.
+- **DSS6 yearly series** whose first time falls in a leap year after 2 March 00:00 are
+  stored one day later by HEC's DSS6 library, so they are refused for DSS6 files. The same
+  times work in a DSS7 file.
+- **Single DSS6 monthly, semi-monthly and tri-monthly values** are also qualified by a
+  DSS6 dry run, because HEC keeps exactly those the engine's DSS6 writer and reader keep.
+- **Irregular E parts** (`IR-DAY` to `IR-CENTURY`) store each value at its own time and
+  are not checked.
+
+Each message names the value, where HEC-DSS would store it, whether another DSS
+version works, and what to do instead. Because the calendar check applies HEC-DSS 7's
+placement to DSS6 files too, it refuses some multi-value DSS6 offset series that HEC's
+DSS6 library would keep (127 of the 11,992 oracle cases below, all DSS6); the message
+says so.
+
+Without the engine (for example under an explicit `java` on a platform with no wheel),
+the calendar part is skipped with one WARNING; fixed intervals are always checked. The
+calendar check imports the engine when it is installed, also under an explicit `java`;
+a broken wheel only skips it, with the same warning.
+
+**Evidence.** The rules and their HEC Monolith 3.3.27 oracle come from hms-commander,
+which adopted the same check: 11,992 multi-value and 7,774 single-value cases written
+and read back by HEC Monolith (DSS6 weekly read natively, label D8), across every start
+day of 2019-2020 and the leap-year, decade-week and month-overflow boundaries. Scored
+against that oracle, RasDss's check accepts no value HEC moves (0 of 19,766) with
+ras-commander-fast-dss 0.1.2 and with the 0.1.3 candidate; the 141 refused-but-kept
+cases are all DSS6. `tests/test_rasdss_write_times.py` writes the oracle's
+representative cases on both backends and reads them back with both readers, and shows
+that HEC Monolith moves the refused cases when the check is disabled.
+
+**Engine 0.1.2 and DSS6 yearly data.** ras-commander-fast-dss 0.1.2 reads some DSS6
+yearly series that HEC wrote one day early (for example the 2020 value of
+2019-06-15 / 2020-06-15 / 2021-06-15 reads as 2020-06-14) and refuses to write those
+times. The native default ships with 0.1.3; its release candidate reads and writes them
+as HEC does (checked on the same oracle: 0 differences). Until then, keep `RasDss.backend = "java"`
+for DSS6 yearly data.
+
 ### Intended differences
 
 | # | Case | Java backend | Native backend |
 |---|---|---|---|
-| W1 | Regular E part with times that are not exactly regular | Stores the values with a time offset, shifted onto the interval | `ValueError` |
+| W1 | Regular E part with times HEC-DSS would store elsewhere (an irregular step, or a calendar time off HEC's placement, single values included) | Refused on both backends since PR #863 review 1 (Monolith used to store them shifted and report success); see [Time placement](#time-placement) | `ValueError`, before any write |
 | W1 | DSS6 time-series units or type longer than 8 characters; DSS6 grid units longer than 12 | Truncated | `ValueError` |
 | W1 | Pathname without exactly 7 slashes, or with non-ASCII characters | Stores a truncated pathname or drops the characters, or raises a Java error | `ValueError` |
 | W1 | Infinite time-series values | Stored | `ValueError` |

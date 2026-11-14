@@ -119,8 +119,10 @@ to Java, whatever it raises.
 Under an explicit `native`, a missing engine raises `ImportError`, and an
 operation the installed engine does not support raises `DssCapabilityError`.
 `native` never falls back to Java. Under `shadow` without the engine, `RasDss`
-uses Java and logs one warning. An explicit `java` never imports the engine, so
-a missing or broken wheel cannot affect it.
+uses Java and logs one warning. An explicit `java` does not use the engine for
+reading or writing, and a missing or broken wheel cannot break it; the time-placement
+check of `write_timeseries` uses the engine when it is installed, on every backend
+(see [Time placement](user-guide/dss-native-backend.md#time-placement)).
 
 **Choosing.** The default suits most workflows. Before upgrading a workflow that
 depends on the Java results, run it once under `shadow` on your own files: it
