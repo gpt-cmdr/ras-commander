@@ -30,6 +30,23 @@ def test_dss_window_notebook_covers_derivative_precompute_and_final_results():
         assert expected in source
 
 
+def test_dss_window_notebook_reports_missing_cells_instead_of_hiding_them():
+    notebook = nbformat.read(NOTEBOOK, as_version=4)
+    source = "\n".join(cell.source for cell in notebook.cells if cell.cell_type == "code")
+
+    # A NaN-skipping reduction would read a missing DSS cell as a dry one.
+    for hidden in ("np.nansum", "np.nanmean(comparison_error", "np.nanmax(np.abs(precompute_error"):
+        assert hidden not in source
+    for expected in (
+        "expected_total = window_stack.sum(axis=0)",
+        'raise RuntimeError("Missing DSS cells in the model window',
+        'raise RuntimeError("Some mesh cells would sample missing or off-grid forcing")',
+        '"no missing cell in any DSS grid"',
+        '"every mesh cell samples present forcing"',
+    ):
+        assert expected in source
+
+
 def test_dss_window_notebook_is_fully_executed_clean_and_visual():
     notebook = nbformat.read(NOTEBOOK, as_version=4)
     code_cells = [cell for cell in notebook.cells if cell.cell_type == "code"]
@@ -63,6 +80,9 @@ def test_dss_window_notebook_is_fully_executed_clean_and_visual():
         "DSS-to-final RMSE (in)",
         "active cells",
         "tail maximum rain rate",
+        "Missing cells per source record: [0, 0, 0]",
+        "Missing cells in the 5 model-window grids: 0",
+        "off the grid or on a missing cell: 0; bilinear stencil touching a missing or off-grid cell: 0",
         "DSS forcing-window extension qualification complete.",
         "Review all HEC-RAS runtime and BCO messages",
     ]

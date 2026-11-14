@@ -9,6 +9,26 @@ alone does not identify a development checkout.
 
 ### Unreleased
 
+- **Corrected notebook 731's DSS export.** Its earlier grids, from HEC-Vortex or the
+  native importer's `align="vortex"`, had 7 corner cells missing in every record. They
+  were not NOAA NoData: they were corners of an unsnapped rectangular output lattice
+  that lay outside the reprojected crop, so the warp left them missing. Separately,
+  rounding the declared origin to whole cells on write moved the whole array, missing
+  cells included, by less than one cell, which put the stored storm totals up to
+  0.05 in (RMSE 0.018 in on totals near 14 in) from a warp of the complete NOAA grid. No model
+  cell was missing. The native route now writes to a stated envelope (the model
+  footprint snapped to whole cells, plus one cell). The notebook stops on any missing
+  cell, on a difference above 0.005 in from the complete-grid warp, and on any mesh
+  cell centre or bilinear stencil that is off the lattice or on a missing cell.
+  `"native"` is now the template's default route; the Vortex route stops at the
+  missing-cell check on the public preset. Earlier 731 exports in the
+  [qualification report](dss-native-notebook-qualification.md) are labelled as having
+  failed source-spatial qualification.
+- **Notebook 728 no longer uses `np.nansum`.** It counts missing cells in every DSS grid
+  it reads and stops on any, sums the window plainly, and checks that every mesh cell
+  samples present forcing. Its source is finite by construction, so the earlier sum hid
+  nothing: the rerun's results equal the previous ones.
+
 ### 0.123.0 — 2026-11-14
 
 **Read before upgrading.** `java` remains the default DSS backend; no default changes
