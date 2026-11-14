@@ -54,8 +54,15 @@ def test_mrms_boundary_notebook_is_fully_executed_with_preserved_diagnostics_and
                  for line in stream_text.splitlines() if line.startswith(QUALIFICATION_PREFIX)]
     assert len(summaries) == 1, "Expected one emitted machine-readable qualification summary"
     qualification = summaries[0]
+    # The metadata records the run receipt (final_qualification_summary.json)
+    # and must be refreshed whenever the saved outputs are re-executed.
     assert qualification == notebook.metadata["mrms_absolute_time_qualification"]
-    assert qualification["mode"] == "inspect_retained"
+    # Both documented modes run the same retained-result inspection; the
+    # notebook's markdown states which one produced the saved outputs.
+    assert qualification["mode"] in {"compute", "inspect_retained"}
+    assert notebook.metadata["mrms_execution_provenance"]["saved_execution_mode"] == qualification["mode"]
+    saved_mode = "compute-mode run" if qualification["mode"] == "compute" else "inspect_retained"
+    assert saved_mode in "\n".join(cell.source for cell in notebook.cells if cell.cell_type == "markdown")
     assert qualification["clock"] == "UTC-equivalent naive HEC-RAS model labels"
     assert qualification["inspection_utc"].endswith("Z")
     inspection = datetime.fromisoformat(qualification["inspection_utc"].replace("Z", "+00:00"))

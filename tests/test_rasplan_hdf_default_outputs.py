@@ -65,25 +65,52 @@ def test_unknown_after_defaults_still_rejects_without_writes(tmp_path, method):
     assert path.read_bytes() == before
 
 
-@pytest.mark.parametrize('notebook,index,variable', [
-    ('412_2d_detail_face_data_extraction.ipynb', 63, 'reference_line_output_variables'),
-    ('728_extend_gridded_dss_forcing_window.ipynb', 13, None),
-    ('914_historical_event_validation.ipynb', 13, None),
-    ('916_hrrr_precipitation_forecast.ipynb', 15, 'hdf_output_variables'),
-    ('917_mrms_precipitation_qpe.ipynb', 8, 'hdf_output_variables'),
-    ('926_wpc_qpf_precipitation_forecast.ipynb', 15, 'hdf_output_variables'),
-])
-def test_notebook_authoring_requests(tmp_path, notebook, index, variable):
+def _notebook_output_request(notebook, variable):
+    """Return the notebook's one literal HDF output request, wherever its cell sits.
+
+    With ``variable``, the request is a literal assignment to that name; without
+    it, a literal ``hdf_output_variables=`` keyword argument. Cells are searched
+    by content rather than index, so editing or reordering a notebook does not
+    break the contract; a missing or ambiguous request still fails.
+    """
     source = Path(__file__).resolve().parents[1] / 'examples' / notebook
-    cell = json.loads(source.read_text(encoding='utf-8'))['cells'][index]
-    tree = ast.parse(''.join(cell['source']))
-    if variable:
-        value = next(node.value for node in ast.walk(tree) if isinstance(node, ast.Assign)
-                     and any(isinstance(target, ast.Name) and target.id == variable for target in node.targets))
-    else:
-        value = next(node.value for node in ast.walk(tree)
-                     if isinstance(node, ast.keyword) and node.arg == 'hdf_output_variables')
-    labels = ast.literal_eval(value)
+    found = []
+    for cell in json.loads(source.read_text(encoding='utf-8'))['cells']:
+        if cell['cell_type'] != 'code':
+            continue
+        text = ''.join(cell['source'])
+        if (variable or 'hdf_output_variables') not in text:
+            continue
+        # IPython magics and shell escapes are not Python syntax.
+        text = '\n'.join('' if line.lstrip().startswith(('%', '!')) else line for line in text.splitlines())
+        for node in ast.walk(ast.parse(text)):
+            if variable:
+                if isinstance(node, ast.Assign) and any(
+                        isinstance(target, ast.Name) and target.id == variable for target in node.targets):
+                    found.append(node.value)
+            elif isinstance(node, ast.keyword) and node.arg == 'hdf_output_variables':
+                found.append(node.value)
+    literals = []
+    for value in found:
+        try:
+            literals.append(ast.literal_eval(value))
+        except ValueError:
+            continue  # a name passed through, e.g. hdf_output_variables=hdf_output_variables
+    assert len(literals) == 1, f'{notebook}: expected one literal HDF output request, found {len(literals)}'
+    return literals[0]
+
+
+@pytest.mark.parametrize('notebook,variable', [
+    ('412_2d_detail_face_data_extraction.ipynb', 'reference_line_output_variables'),
+    ('728_extend_gridded_dss_forcing_window.ipynb', None),
+    ('914_historical_event_validation.ipynb', None),
+    ('916_hrrr_precipitation_forecast.ipynb', 'hdf_output_variables'),
+    ('917_mrms_precipitation_qpe.ipynb', 'hdf_output_variables'),
+    ('926_wpc_qpf_precipitation_forecast.ipynb', 'hdf_output_variables'),
+])
+def test_notebook_authoring_requests(tmp_path, notebook, variable):
+    labels = _notebook_output_request(notebook, variable)
+    assert labels and all(isinstance(label, str) for label in labels)
     path = _plan(tmp_path)
     method = 'add' if notebook.startswith('412') else 'optimal'
     optional = [label for label in labels if label not in {'Water Surface', 'Face Velocity'}]
