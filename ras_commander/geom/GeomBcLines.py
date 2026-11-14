@@ -1362,3 +1362,107 @@ class GeomBcLines:
             expected_mesh_fingerprints,
             expected_bc_areas,
         )
+
+    @staticmethod
+    @log_call
+    def compute_external_faces(geom_hdf: Union[Path, str], *, relative_tolerance: float = 1e-12) -> dict:
+        """Compute candidate BC face bindings without modifying the compiled HDF.
+
+        This experimental calculation projects BC endpoints and the drawn line's
+        midpoint onto each area's perimeter. It excludes overlaps no larger than
+        ``relative_tolerance * perimeter_length``; this dimensionless tolerance
+        scales with model units. Zero requests strict positive overlap. Native
+        endpoint-touch selection and solver equivalence remain unqualified.
+
+        Args:
+            geom_hdf: Compiled geometry or plan HDF path.
+            relative_tolerance: Nonnegative dimensionless overlap tolerance.
+
+        Returns:
+            dict: ``external_faces`` structured array with native field names and
+                ``lengths`` float64 array in BC attribute row order. Stations and
+                lengths use model units. Face indexes are local to the BC's area.
+
+        Raises:
+            ValueError: Invalid topology, degenerate span, or unsupported BC type.
+            KeyError: Required compiled datasets or fields are missing.
+            OSError: HDF cannot be read.
+        """
+        import h5py
+        from shapely.geometry import LineString, Point
+
+        if not np.isfinite(relative_tolerance) or not 0 <= relative_tolerance < 0.5:
+            raise ValueError("relative_tolerance must be finite and in [0, 0.5)")
+        dtype = np.dtype([(n, '<i4') for n in
+                          ('BC Line ID', 'Face Index', 'FP Start Index', 'FP End Index')]
+                         + [(n, '<f8') for n in ('Station Start', 'Station End')])
+        def text(value):
+            return value.decode('utf-8').rstrip('\x00 ') if isinstance(value, bytes) else str(value)
+        def coordinates(value):
+            value = np.asarray(value, dtype=float)
+            if value.ndim != 2 or value.shape[1] != 2 or not np.isfinite(value).all():
+                raise ValueError('Coordinates must be finite (N, 2) arrays')
+            return value
+        rows, lengths = [], []
+        with h5py.File(Path(geom_hdf), 'r') as hdf:
+            bc = hdf['Geometry/Boundary Condition Lines']
+            attributes, info = bc['Attributes'][()], bc['Polyline Info'][()]
+            points = coordinates(bc['Polyline Points'][()])
+            areas = hdf['Geometry/2D Flow Areas']
+            counts = {text(r['Name']): int(r['Cell Count']) for r in areas['Attributes'][()]}
+            if len(info) != len(attributes):
+                raise ValueError('BC attributes and polyline counts differ')
+            for line_id, attr in enumerate(attributes):
+                if text(attr['Type']) != 'External':
+                    raise ValueError('Only External BC lines are supported')
+                start, count, _, parts = map(int, info[line_id])
+                if parts != 1 or start < 0 or count < 2 or start + count > len(points):
+                    raise ValueError('Invalid or multipart BC polyline')
+                line = LineString(points[start:start + count])
+                area = text(attr['SA-2D'])
+                mesh = areas[area]
+                perimeter = coordinates(mesh['Perimeter'][()])
+                if len(perimeter) < 3:
+                    raise ValueError('Perimeter needs at least three vertices')
+                if not np.array_equal(perimeter[0], perimeter[-1]):
+                    perimeter = np.vstack((perimeter, perimeter[0]))
+                ring = LineString(perimeter)
+                total = ring.length
+                if total <= 0 or not ring.is_simple or line.length <= 0:
+                    raise ValueError('Degenerate line or invalid perimeter')
+                origin = ring.project(Point(line.coords[0]))
+                end = ring.project(Point(line.coords[-1]))
+                middle = ring.project(line.interpolate(0.5, normalized=True))
+                forward = (end - origin) % total
+                sign = 1 if (middle - origin) % total <= forward else -1
+                length = (sign * (end - origin)) % total
+                tolerance = relative_tolerance * total
+                if length <= tolerance:
+                    raise ValueError('BC projected span is degenerate')
+                lengths.append(length)
+                cells = mesh['Faces Cell Indexes'][()]
+                pairs = mesh['Faces FacePoint Indexes'][()]
+                xy = coordinates(mesh['FacePoints Coordinate'][()])
+                if cells.shape != pairs.shape or cells.ndim != 2 or cells.shape[1] != 2:
+                    raise ValueError('Face connectivity must have matching (N, 2) shape')
+                if pairs.dtype.kind not in 'iu' or np.any(pairs < 0) or np.any(pairs >= len(xy)):
+                    raise ValueError('Invalid face point indexes')
+                real = (cells >= 0) & (cells < counts[area])
+                selected = np.flatnonzero(real[:, 0] ^ real[:, 1])
+                line_rows = []
+                for face in selected:
+                    a, b = map(int, pairs[face])
+                    u, v = [(sign * (ring.project(Point(xy[p])) - origin)) % total for p in (a, b)]
+                    # Unwrap the shorter face interval, then choose its periodic
+                    # copy with greatest intersection with this BC span.
+                    if abs(v - u) > total / 2:
+                        if u < v: u += total
+                        else: v += total
+                    if u > v:
+                        u, v, a, b = v, u, b, a
+                    intervals = [(u + k * total, v + k * total) for k in (-1, 0, 1)]
+                    u, v = max(intervals, key=lambda t: min(t[1], length) - max(t[0], 0))
+                    if min(v, length) - max(u, 0) > tolerance:
+                        line_rows.append((line_id, face, a, b, u, v))
+                rows.extend(sorted(line_rows, key=lambda r: (r[4], r[1])))
+        return {'external_faces': np.array(rows, dtype=dtype), 'lengths': np.asarray(lengths)}
