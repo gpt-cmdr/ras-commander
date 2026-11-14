@@ -154,10 +154,17 @@ def _engine_version(dc: Any) -> str:
     return str(version)
 
 
-def default_backend() -> Tuple[str, str]:
-    """``(backend, reason)`` that ``auto`` resolves to. Logs it once per process at INFO."""
+def default_backend(announce: bool = True) -> Tuple[str, str]:
+    """``(backend, reason)`` that ``auto`` resolves to.
+
+    With ``announce`` (the default, used when ``auto`` is actually in use) the result is
+    logged once per process at INFO. ``announce=False`` assesses silently, for callers
+    that only report what ``auto`` would select while another backend is selected.
+    """
     ready, reason = native_default_ready()
     backend = "native" if ready else "java"
+    if not announce:
+        return backend, reason
     key = (backend, reason)
     with _lock:
         first = key not in _default_logged

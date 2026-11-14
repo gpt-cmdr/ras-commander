@@ -197,7 +197,8 @@ def test_capabilities_matrix(no_jvm):
                "copy_grid_with_zero_tail", "write_precip_grid_arrays"):
         assert table.loc[op, "native"] == "gated"
     assert table.loc["write_timeseries", "shadow"] == "java"
-    assert set(caps.attrs) == {"requested_backend", "backend_source", "default_backend_reason",
+    assert set(caps.attrs) == {"requested_backend", "backend_source", "auto_backend",
+                               "default_backend_reason",
                                "native_installed", "native_grid_qualified",
                                "native_writes_available", "native_repair_available",
                                "native_write_sync_available",

@@ -150,6 +150,28 @@ def test_explicit_java_forces_java_with_a_ready_engine(monkeypatch, no_jvm, tmp_
     assert attrs["requested_backend"] == "java" and attrs["backend_source"] == "explicit"
 
 
+@pytest.mark.parametrize("source", ["attribute", "environment"])
+def test_explicit_java_capabilities_do_not_announce_native(monkeypatch, caplog, source):
+    """PR #863 review 1: an explicit java must not be logged as a native selection."""
+    pytest.importorskip("ras_commander_fast_dss")
+    if source == "attribute":
+        monkeypatch.setattr(RasDss, "backend", "java")
+    else:
+        monkeypatch.setenv(_backend.ENV_VAR, "java")
+    caplog.set_level(logging.INFO, logger=LOGGER)
+    attrs = RasDss.get_capabilities().attrs
+    assert RasDss.get_backend() == "java"
+    assert not [r for r in caplog.records if r.getMessage().startswith("DSS backend:")]
+    assert attrs["requested_backend"] == "java" and attrs["backend_source"] == "explicit"
+    assert attrs["auto_backend"] == "native"      # hypothetical, reported but not logged
+    # Switching to auto afterwards announces the automatic choice once.
+    monkeypatch.delenv(_backend.ENV_VAR, raising=False)
+    monkeypatch.setattr(RasDss, "backend", "auto")
+    RasDss.get_capabilities()
+    lines = [r for r in caplog.records if r.getMessage().startswith("DSS backend:")]
+    assert [r.getMessage().split(" (")[0] for r in lines] == ["DSS backend: native"]
+
+
 @pytest.mark.parametrize("value", ["java", "native", "shadow"])
 def test_environment_forces_backend_over_auto(monkeypatch, value):
     pytest.importorskip("ras_commander_fast_dss")
