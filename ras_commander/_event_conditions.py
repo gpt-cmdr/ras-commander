@@ -25,7 +25,7 @@ def _parse(path):
     i = 0
     defaults = {'Use DSS': 'False', 'Use Fixed Start Time': 'False',
                 'Is Critical Boundary': 'False', 'Stage Hydrograph TW Check': '0',
-                'Flow Hydrograph Slope': '0', 'DSS Path': '', 'DSS File': '',
+                'DSS Path': '', 'DSS File': '',
                 'Fixed Start Date/Time': ',', 'Critical Boundary Flow': '',
                 'Use Restart': '0', 'Precipitation Mode': 'Disable'}
     while i < len(lines):
@@ -55,6 +55,11 @@ def _parse(path):
                 raise ValueError('Invalid or duplicate boundary association')
             current = {}
             boundaries[identity] = current
+        elif key == 'Flow Hydrograph Slope' and current is not None:
+            slope = float(value)
+            if not np.isfinite(slope) or slope < 0:
+                raise ValueError('Flow distribution slope must be finite and nonnegative')
+            current['slope'] = slope
         elif key in defaults:
             if value != defaults[key]:
                 raise ValueError(f'Unsupported {key}={value}')
@@ -91,8 +96,9 @@ def _parse(path):
 
 
 def _write_events(plan_hdf, geom_hdf, flow_file, start_time, end_time, units, target_ras_version):
-    if target_ras_version != '7.0.1' or units != 'Metric':
-        raise ValueError('Experimental writer requires 7.0.1 and Metric units')
+    unit_labels = {'Metric': 'SI Units', 'English': 'US Customary'}
+    if target_ras_version != '7.0.1' or units not in unit_labels:
+        raise ValueError('Experimental writer requires 7.0.1 and Metric or English units')
     if not isinstance(start_time, datetime) or not isinstance(end_time, datetime) or start_time.tzinfo or end_time.tzinfo or end_time <= start_time:
         raise ValueError('Supply increasing naive local simulation datetimes')
     if any(t.second or t.microsecond for t in (start_time, end_time)):
@@ -100,14 +106,26 @@ def _write_events(plan_hdf, geom_hdf, flow_file, start_time, end_time, units, ta
     target = Path(plan_hdf)
     if target.resolve() in (Path(geom_hdf).resolve(), Path(flow_file).resolve()):
         raise ValueError('Output must differ from source files')
+    from .fast_hdf import release_native_sessions
+    from .geom.GeomPreprocessor import GeomPreprocessor
+    release_native_sessions(target, Path(geom_hdf))
+    GeomPreprocessor._require_closed_geometry_hdf(target)
+    GeomPreprocessor._require_closed_geometry_hdf(Path(geom_hdf))
     boundaries = _parse(flow_file)
     prepared = []
     with h5py.File(geom_hdf, 'r') as geometry:
-        if _text(geometry.attrs.get('Units System', '')) != 'SI Units':
-            raise ValueError('Geometry units must explicitly match Metric')
+        if re.match(r'^HEC-RAS 7\.0\.1(?:\s|$)', _text(geometry.attrs.get('File Version', ''))) is None:
+            raise ValueError('Geometry must declare HEC-RAS 7.0.1')
+        if _text(geometry.attrs.get('Units System', '')) != unit_labels[units]:
+            raise ValueError('Geometry units must explicitly match requested units')
         areas = [_text(r['Name']) for r in geometry['Geometry/2D Flow Areas/Attributes'][:]]
         attrs = geometry['Geometry/Boundary Condition Lines/Attributes'][:]
         external = geometry['Geometry/Boundary Condition Lines/External Faces'][:]
+        if len(set(areas)) != len(areas):
+            raise ValueError('Duplicate 2D area names')
+        for name in ('BC Line ID', 'Face Index', 'FP Start Index', 'FP End Index'):
+            if external.dtype[name].kind not in 'iu':
+                raise ValueError('External Faces indexes must have integer dtype')
         identities = [(_text(r['SA-2D']), _text(r['Name'])) for r in attrs]
         if len(set(identities)) != len(identities) or set(identities) != set(boundaries):
             raise ValueError('Missing, unknown, or duplicate boundary associations')
@@ -115,6 +133,8 @@ def _write_events(plan_hdf, geom_hdf, flow_file, start_time, end_time, units, ta
             raise ValueError('Unknown External Faces boundary ID')
         for index, (identity, row) in enumerate(zip(identities, attrs)):
             area, name = identity
+            if _text(row['Type']) != 'External':
+                raise ValueError('Only External boundary types are supported')
             if area not in areas:
                 raise ValueError('Unknown 2D area')
             bc = boundaries[identity]
@@ -157,9 +177,16 @@ def _write_events(plan_hdf, geom_hdf, flow_file, start_time, end_time, units, ta
                 data = values.astype('float32')
             if not np.all(np.isfinite(data)) or (data.ndim == 2 and np.any(np.diff(data[:, 0]) <= 0)):
                 raise ValueError('Nonfinite data or invalid float32 time basis')
-            prepared.append((area, name, areas.index(area)+1, data, faces.astype('int32'), points.astype('int32'), fraction[keep].astype('float32')))
+            slope = np.float32(bc.get('slope', 0))
+            if not np.isfinite(slope):
+                raise ValueError('Flow distribution slope exceeds float32 range')
+            prepared.append((area, name, areas.index(area)+1, data, faces.astype('int32'), points.astype('int32'), fraction[keep].astype('float32'), slope))
     group_path = 'Event Conditions/Unsteady/Boundary Conditions'
     with h5py.File(target, 'r') as existing:
+        if re.match(r'^HEC-RAS 7\.0\.1(?:\s|$)', _text(existing.attrs.get('File Version', ''))) is None:
+            raise ValueError('Destination must declare HEC-RAS 7.0.1')
+        if _text(existing.attrs.get('Units System', '')) != unit_labels[units]:
+            raise ValueError('Destination units must match requested units')
         if group_path in existing and len(existing[group_path]):
             raise ValueError('Destination already has boundary forcing; use a fresh staged copy')
     fd, temporary = tempfile.mkstemp(prefix=target.name+'.', suffix='.tmp', dir=target.parent)
@@ -169,7 +196,7 @@ def _write_events(plan_hdf, geom_hdf, flow_file, start_time, end_time, units, ta
         shutil.copy2(target, temporary)
         with h5py.File(temporary, 'r+') as output:
             root = output.require_group(group_path)
-            for area, name, node, data, faces, points, fractions in prepared:
+            for area, name, node, data, faces, points, fractions, slope in prepared:
                 kind = 'Flow Hydrographs' if data.ndim == 2 else 'Normal Depths'
                 ds = root.require_group(kind).create_dataset(f'2D: {area} BCLine: {name}', data=data, chunks=data.shape, compression='gzip')
                 for key, value in {'2D Flow Area': area, 'BC Line': name, 'Check TW Stage': 'False'}.items():
@@ -181,7 +208,7 @@ def _write_events(plan_hdf, geom_hdf, flow_file, start_time, end_time, units, ta
                 if data.ndim == 2:
                     ds.attrs['Data Type'] = np.bytes_('INST-VAL')
                     ds.attrs['Interval'] = np.bytes_('Days')
-                    ds.attrs['EG Slope For Distributing Flow'] = np.float32(0)
+                    ds.attrs['EG Slope For Distributing Flow'] = slope
                     for key, moment in (('Start Date', start_time), ('End Date', end_time)):
                         stamp = (moment-timedelta(days=1)).strftime('%d%b%Y 2400') if key == 'Start Date' and moment.hour == moment.minute == 0 else moment.strftime('%d%b%Y %H%M')
                         ds.attrs[key] = np.bytes_(stamp)

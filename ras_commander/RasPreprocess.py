@@ -27,6 +27,7 @@ import shutil
 import subprocess
 import sys
 import time
+from datetime import datetime
 from numbers import Number
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Tuple, Union
@@ -76,10 +77,10 @@ class RasPreprocess:
     @log_call
     def write_event_conditions(
         plan_hdf: Union[str, Path], geom_hdf: Union[str, Path],
-        flow_file: Union[str, Path], *, start_time, end_time,
+        flow_file: Union[str, Path], *, start_time: datetime, end_time: datetime,
         units: str, target_ras_version: str,
     ) -> Path:
-        """Write experimental 7.0.1 metric 2D boundary forcing from flow text.
+        """Write experimental 7.0.1 2D boundary forcing from flow text.
 
         Args:
             plan_hdf: Existing staged HDF without boundary forcing.
@@ -87,7 +88,8 @@ class RasPreprocess:
             flow_file: Unsteady text containing flow hydrographs or normal depth.
             start_time: Naive local datetime defining hydrograph day zero.
             end_time: Naive local simulation end datetime.
-            units: Must be ``Metric`` and match geometry Units.
+            units: ``Metric`` or ``English``; must match both HDF unit labels.
+                Hydrograph ordinates retain the caller-declared flow-file units.
             target_ras_version: Must be ``7.0.1``.
 
         Returns:
@@ -100,7 +102,8 @@ class RasPreprocess:
 
         Prevalidates all forcing, writes a temporary sibling, then backs up and
         atomically replaces the destination. Unrelated content is preserved.
-        Does not mark preprocessing complete or write initial conditions, mesh,
+        Both HDF files must declare 7.0.1. Does not mark preprocessing complete
+        or write initial conditions, mesh,
         plan data, .x or .b files. Native solver equivalence remains unqualified.
         Call only while no other process is modifying these files.
         """
