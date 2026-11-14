@@ -21,6 +21,10 @@ os.environ.pop("RAS_COMMANDER_DSS_BACKEND", None)
 import numpy as np  # noqa: E402
 
 from ras_commander import RasDss  # noqa: E402
+
+# The default backend is "auto" (native when the engine is installed); this worker
+# exercises the Java route, so it selects it explicitly.
+RasDss.backend = "java"  # pinned
 from ras_commander.dss import _backend  # noqa: E402
 
 

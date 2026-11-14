@@ -51,8 +51,9 @@ GRID_KEYS = {
 
 @pytest.fixture(autouse=True)
 def _java_default(monkeypatch):
+    # The default is "auto" (native with the engine); these tests pin the Java route.
     monkeypatch.delenv(_backend.ENV_VAR, raising=False)
-    monkeypatch.setattr(RasDss, "backend", _backend.DEFAULT_BACKEND)
+    monkeypatch.setattr(RasDss, "backend", "java")
     _backend.reset_shadow_stats()
     yield
     _backend.reset_shadow_stats()
@@ -136,6 +137,7 @@ def test_java_path_never_imports_ras_commander_fast_dss(tmp_path):
         "import ras_commander.dss as d\n"
         "from ras_commander import RasDss\n"
         "from ras_commander.dss import _errors\n"
+        "RasDss.backend = 'java'\n"
         "assert RasDss.get_backend() == 'java'\n"
         "for name in _errors.ERROR_NAMES:\n"
         "    getattr(d, name)\n"
@@ -195,7 +197,8 @@ def test_capabilities_matrix(no_jvm):
                "copy_grid_with_zero_tail", "write_precip_grid_arrays"):
         assert table.loc[op, "native"] == "gated"
     assert table.loc["write_timeseries", "shadow"] == "java"
-    assert set(caps.attrs) == {"requested_backend", "native_installed", "native_grid_qualified",
+    assert set(caps.attrs) == {"requested_backend", "backend_source", "default_backend_reason",
+                               "native_installed", "native_grid_qualified",
                                "native_writes_available", "native_repair_available",
                                "native_write_sync_available",
                                "native_write_sync_modes_available",
@@ -203,6 +206,7 @@ def test_capabilities_matrix(no_jvm):
                                "native_location_write_available"}
     assert tuple(table.loc["repair", ["java", "native", "shadow"]]) == ("gated",) * 3
     assert caps.attrs["requested_backend"] == "java"
+    assert caps.attrs["backend_source"] == "explicit"
 
 
 def test_native_grid_qualification_is_an_advertised_feature(monkeypatch):

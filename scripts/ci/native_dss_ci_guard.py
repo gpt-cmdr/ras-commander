@@ -1,8 +1,10 @@
 """CI guards for the native DSS engine job (.github/workflows/native-dss.yml).
 
-``python scripts/ci/native_dss_ci_guard.py engine``
+``python scripts/ci/native_dss_ci_guard.py engine [--expect-backend NAME]``
     Fails unless ras-commander-fast-dss is installed at 0.1.2 or later (below 0.2),
-    imports, advertises the features the wrappers use, and RasDss reports it.
+    imports, advertises the features the wrappers use, and RasDss reports it. With
+    --expect-backend, RasDss.get_backend() must also return NAME (the default leg
+    checks that the automatic default resolves to "native").
 
 ``python scripts/ci/native_dss_ci_guard.py junit REPORT.xml [--min-passed N] [--java]``
     Fails unless the pytest JUnit report shows at least N passed tests in total, no
@@ -34,6 +36,7 @@ REQUIRED_MODULES = (
 JAVA_MODULES = (
     "tests.test_rasdss_native_parity",
     "tests.test_rasdss_native_writes",
+    "tests.test_rasdss_native_default",
 )
 
 #: Skip reasons that are intended on some platforms and do not make a required module
@@ -50,7 +53,7 @@ def _version_tuple(text: str):
     return tuple(int(part) for part in text.split(".")[:3])
 
 
-def check_engine() -> int:
+def check_engine(expect_backend=None) -> int:
     version = importlib.metadata.version("ras-commander-fast-dss")
     if not (0, 1, 2) <= _version_tuple(version) < (0, 2, 0):
         print(f"ras-commander-fast-dss {version} is outside >=0.1.2,<0.2")
@@ -66,8 +69,13 @@ def check_engine() -> int:
     if not (attrs["native_installed"] and attrs["native_writes_available"]):
         print(f"RasDss does not see the engine: {attrs}")
         return 1
+    backend = RasDss.get_backend()
     print(f"ras-commander-fast-dss {version}; {len(engine.FEATURES)} features; "
-          f"RasDss backend {RasDss.get_backend()}")
+          f"RasDss backend {backend} ({attrs['backend_source']}: "
+          f"{attrs['default_backend_reason']})")
+    if expect_backend and backend != expect_backend:
+        print(f"RasDss backend is {backend!r}, expected {expect_backend!r}")
+        return 1
     return 0
 
 
@@ -114,14 +122,15 @@ def check_junit(path: str, min_passed: int, java: bool) -> int:
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     sub = parser.add_subparsers(dest="command", required=True)
-    sub.add_parser("engine")
+    engine = sub.add_parser("engine")
+    engine.add_argument("--expect-backend", choices=("java", "native", "shadow"))
     junit = sub.add_parser("junit")
     junit.add_argument("report")
     junit.add_argument("--min-passed", type=int, default=600)
     junit.add_argument("--java", action="store_true")
     args = parser.parse_args(argv)
     if args.command == "engine":
-        return check_engine()
+        return check_engine(args.expect_backend)
     return check_junit(args.report, args.min_passed, args.java)
 
 

@@ -180,14 +180,22 @@ pip install rasterio pyproj
 
 ### DSS File Operations
 
-For reading HEC-DSS boundary condition files:
+`pip install ras-commander` includes the native DSS engine
+(`ras-commander-fast-dss`) on CPython for Windows x64, Linux x86_64 and aarch64,
+and macOS. DSS reads and writes then need no Java: the default `RasDss` backend
+(`auto`) uses the engine wherever it is installed.
 
-```bash
-pip install pyjnius
-```
+!!! warning "Behaviour change: native DSS by default"
+    Earlier releases read and wrote DSS through HEC Monolith (Java) by default. To
+    keep the Java backend, set `RasDss.backend = "java"` or the environment variable
+    `RAS_COMMANDER_DSS_BACKEND=java`, and install its bridge:
 
-!!! note "Java Required"
-    DSS operations require Java 8+ (JRE or JDK) installed on your system.
+    ```bash
+    pip install "ras-commander[dss]"   # pyjnius; also needs Java 8+ (JRE or JDK)
+    ```
+
+    The differences between the backends are listed in
+    [DSS Read and Write Backends](../user-guide/dss-native-backend.md).
 
 ### Linux/Wine (Headless RasProcess Workflows)
 

@@ -263,7 +263,7 @@ Install only what you need using pip extras:
 | `gui` | GUI automation & screenshots (Pillow) | `pip install ras-commander[gui]` |
 | `usgs` | USGS gauge data (dataretrieval) | `pip install ras-commander[usgs]` |
 | `notebooks` | Example notebook deps (rasterio, pyproj, aiohttp, dataretrieval) | `pip install ras-commander[notebooks]` |
-| `dss` | DSS file operations (pyjnius; requires Java JRE/JDK 8+) | `pip install ras-commander[dss]` |
+| `dss` | Java backend for DSS (pyjnius; requires Java JRE/JDK 8+). The default native DSS engine, `ras-commander-fast-dss`, is a core dependency | `pip install ras-commander[dss]` |
 | `precip-huc12` | HUC12 watershed boundaries (pygeohydro) | `pip install ras-commander[precip-huc12]` |
 
 Combine extras as needed: `pip install ras-commander[notebooks,usgs,dss]`

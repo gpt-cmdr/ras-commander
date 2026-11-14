@@ -3019,7 +3019,7 @@ def init_ras_project(
             "                HdfResultsMesh.get_mesh_max_ws() / get_mesh_cells_timeseries()\n"
             "                HdfMesh.get_mesh_cell_points()\n"
             "  QA/QC:        RasCheck.run_check() / RasFixit (geometry repair)\n"
-            "  DSS:          RasDss.get_timeseries() / check_pathname()\n"
+            "  DSS:          RasDss.read_timeseries() / check_pathname()\n"
             "  USGS:         UsgsGaugeSpatial, GaugeMatcher, RasUsgsBoundaryGeneration\n"
             "  Precipitation: StormGenerator, Atlas14Storm, PrecipAorc, Atlas14Variance\n"
             "  Terrain:      RasTerrain.create_terrain_hdf() / RasTerrainMod\n"

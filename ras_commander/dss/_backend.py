@@ -2,16 +2,19 @@
 
 ``RasDss`` reads and writes DSS files through one of three backends:
 
-- ``"java"`` (default in this release): HEC Monolith through pyjnius.
-- ``"native"``: the optional ``ras_commander_fast_dss`` package (pure-Rust engine). It never
+- ``"java"``: HEC Monolith through pyjnius.
+- ``"native"``: the ``ras_commander_fast_dss`` package (pure-Rust engine). It never
   starts a JVM and never downloads HEC Monolith.
 - ``"shadow"``: returns the native result, also runs the Java path, and logs every
   difference. The comparison never raises. Differences that the migration plan
   classifies as intended (D15 cleanups and known Java-path bugs) are logged at
   DEBUG/INFO; anything else is logged at WARNING.
 
-The environment variable ``RAS_COMMANDER_DSS_BACKEND``, when set, overrides
-``RasDss.backend``. Catalog, time-series, paired-data and file-version reads switch.
+The default is ``"auto"``: ``native`` when ``ras_commander_fast_dss`` imports and advertises
+every feature the default surface uses (``DEFAULT_REQUIRED_FEATURES`` and the writer API),
+otherwise ``java``. The resolved backend and the reason are logged once at INFO. An explicit
+name always wins: the environment variable ``RAS_COMMANDER_DSS_BACKEND``, when set, overrides
+``RasDss.backend``, and either can force ``java``, ``native`` or ``shadow``. Catalog, time-series, paired-data and file-version reads switch.
 Native grid reads are gated until the wheel advertises qualified CRS (``native_grid_qualified()``).
 Writes switch as well: ``native`` needs the engine writers (``native_writes_available()``);
 ``shadow`` writes run on Java and are repeated natively on a temporary copy for comparison
@@ -46,24 +49,41 @@ logger = logging.getLogger("ras_commander.dss.RasDss")
 
 #: Environment variable that overrides ``RasDss.backend`` when set.
 ENV_VAR = "RAS_COMMANDER_DSS_BACKEND"
-#: Allowed backend names.
+#: Backend names that select a backend explicitly.
 BACKENDS = ("java", "native", "shadow")
-#: Default backend for this release (decision D4: native becomes the default later).
-DEFAULT_BACKEND = "java"
+#: The automatic default: ``native`` when the engine is ready (``native_default_ready``),
+#: otherwise ``java``.
+AUTO = "auto"
+#: Default value of ``RasDss.backend``.
+DEFAULT_BACKEND = AUTO
+#: Engine ``FEATURES`` the automatic default needs, besides the writer API
+#: (``native_writes_available``). With any of them missing, ``auto`` resolves to ``java``.
+DEFAULT_REQUIRED_FEATURES = (
+    "grid_srs_monolith_parity",
+    "write_sync_modes",
+    "repair_copy_out",
+)
+#: How to keep or force a backend; named in messages that refer to the setting.
+SETTING_HINT = (
+    "Set RasDss.backend = 'java' | 'native' | 'shadow' | 'auto', or the environment "
+    "variable RAS_COMMANDER_DSS_BACKEND"
+)
 
 #: HEC missing markers that the Java path returns raw (-FLT_MAX after Monolith's
 #: normalization; -901/-902 kept for safety). The native path maps them to NaN.
 JAVA_MISSING_MARKERS = np.array([-901.0, -902.0, float(-np.finfo(np.float32).max)])
 
 _NATIVE_INSTALL_HINT = (
-    "The 'native' DSS backend requires the optional ras-commander-fast-dss package "
-    "(import name ras_commander_fast_dss). Install it with "
-    "'pip install ras-commander-fast-dss' or 'pip install \"ras-commander[dss]\"', "
-    "or use RasDss.backend = 'java'."
+    "The 'native' DSS backend requires the ras-commander-fast-dss package "
+    "(import name ras_commander_fast_dss), a default dependency of ras-commander on the "
+    "platforms with published wheels. Install it with 'pip install ras-commander-fast-dss', "
+    "or use the Java backend: RasDss.backend = 'java' or RAS_COMMANDER_DSS_BACKEND=java."
 )
 
 _lock = threading.Lock()
 _fallback_warned = False
+#: (backend, reason) pairs of the automatic default already logged in this process.
+_default_logged: set = set()
 
 #: Outcome counts of shadow comparisons: key (operation, outcome, label).
 SHADOW_STATS: Counter = Counter()
@@ -77,24 +97,91 @@ SHADOW_RECORDS: Deque[Dict[str, Any]] = deque(maxlen=5000)
 
 
 def normalize_backend(value: Any, source: str) -> str:
-    """Validate a backend name and return it lower-cased."""
+    """Validate a backend name (``java``, ``native``, ``shadow`` or ``auto``); lower-case it."""
     name = str(value).strip().lower()
-    if name not in BACKENDS:
+    if name not in BACKENDS + (AUTO,):
         raise ValueError(
             f"Invalid DSS backend {value!r} from {source}; "
-            f"expected one of {', '.join(BACKENDS)}"
+            f"expected one of {', '.join(BACKENDS + (AUTO,))}"
         )
     return name
 
 
-def requested_backend(attribute_value: Any) -> str:
-    """Backend requested by the environment variable or ``RasDss.backend``."""
+def explicit_backend(attribute_value: Any) -> Optional[str]:
+    """Backend named by the environment variable or ``RasDss.backend``; None for ``auto``.
+
+    The environment variable, when set to a non-blank value, wins. ``None`` and a blank
+    attribute mean ``auto``. Raises ``ValueError`` for an unknown name.
+    """
     env_value = os.environ.get(ENV_VAR, "").strip()
     if env_value:
-        return normalize_backend(env_value, f"environment variable {ENV_VAR}")
-    if attribute_value is None or str(attribute_value).strip() == "":
-        return DEFAULT_BACKEND
-    return normalize_backend(attribute_value, "RasDss.backend")
+        name = normalize_backend(env_value, f"environment variable {ENV_VAR}")
+    elif attribute_value is None or str(attribute_value).strip() == "":
+        name = AUTO
+    else:
+        name = normalize_backend(attribute_value, "RasDss.backend")
+    return None if name == AUTO else name
+
+
+def native_default_ready() -> Tuple[bool, str]:
+    """Whether ``auto`` resolves to ``native``, and why. Never raises.
+
+    Ready means: ``ras_commander_fast_dss`` imports, provides the writer API
+    (``native_writes_available``) and lists every name in ``DEFAULT_REQUIRED_FEATURES``.
+    A capability check, not a version pin.
+    """
+    dc = _maybe_native()
+    if dc is None:
+        return False, "ras-commander-fast-dss is not installed or failed to load"
+    version = _engine_version(dc)
+    if not native_writes_available():
+        return False, f"ras-commander-fast-dss {version} lacks the writer API"
+    missing = [name for name in DEFAULT_REQUIRED_FEATURES if not native_feature(name)]
+    if missing:
+        return False, f"ras-commander-fast-dss {version} lacks {', '.join(missing)}"
+    return True, f"ras-commander-fast-dss {version}"
+
+
+def _engine_version(dc: Any) -> str:
+    version = getattr(dc, "__version__", None)
+    if not isinstance(version, str) or not version:
+        try:
+            import importlib.metadata as metadata
+
+            version = metadata.version("ras-commander-fast-dss")
+        except Exception:
+            version = "(unknown version)"
+    return str(version)
+
+
+def default_backend() -> Tuple[str, str]:
+    """``(backend, reason)`` that ``auto`` resolves to. Logs it once per process at INFO."""
+    ready, reason = native_default_ready()
+    backend = "native" if ready else "java"
+    key = (backend, reason)
+    with _lock:
+        first = key not in _default_logged
+        _default_logged.add(key)
+    if first:
+        if ready:
+            logger.info("DSS backend: native (%s)", reason)
+        else:
+            logger.info("DSS backend: java (%s). %s.", reason, SETTING_HINT)
+    return backend, reason
+
+
+def requested_backend(attribute_value: Any) -> str:
+    """Backend requested by the environment variable or ``RasDss.backend``, ``auto`` resolved."""
+    name = explicit_backend(attribute_value)
+    if name is None:
+        return default_backend()[0]
+    return name
+
+
+def reset_default_log() -> None:
+    """Allow the automatic-default INFO line to be logged again (tests)."""
+    with _lock:
+        _default_logged.clear()
 
 
 def native_available() -> bool:
@@ -613,7 +700,8 @@ NATIVE_GRID_GATE_MESSAGE = (
     "Native DSS grid reads are not yet qualified: the native CRS string can differ "
     "from HEC Monolith's for some legacy Albers grids, and the installed "
     "ras-commander-fast-dss does not advertise the 'grid_srs_monolith_parity' feature. RasDss does not "
-    "fall back to Java. Use RasDss.backend = 'java' (or 'shadow'), or pass "
+    "fall back to Java. Use RasDss.backend = 'java' (or 'shadow'), or "
+    "RAS_COMMANDER_DSS_BACKEND=java, or pass "
     "allow_unqualified_native=True to accept native cells and metadata with an "
     "unqualified CRS (metadata['crs_qualified'] is False)."
 )
@@ -657,7 +745,7 @@ NATIVE_WRITES_GATE_MESSAGE = (
     "RasDss does not fall back to Java. Upgrade with 'pip install -U ras-commander-fast-dss' "
     "(0.1.0 and later include the writers; check "
     "RasDss.get_capabilities().attrs['native_writes_available']), or use "
-    "RasDss.backend = 'java'."
+    "RasDss.backend = 'java' or RAS_COMMANDER_DSS_BACKEND=java."
 )
 
 

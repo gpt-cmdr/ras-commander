@@ -1,15 +1,21 @@
 name: Native DSS engine
 
-# Offline tests of RasDss and RasDssGrid on the optional ras-commander-fast-dss
-# engine, installed from PyPI through the dss-native extra. No HEC-RAS, no test
-# data from the network and no private files: tests that need them skip.
+# Offline tests of RasDss and RasDssGrid on the ras-commander-fast-dss engine,
+# installed from PyPI. No HEC-RAS, no test data from the network and no private
+# files: tests that need them skip.
 #
-# native: RAS_COMMANDER_DSS_BACKEND=native, no Java installed. The guard step
-#   fails the job if the engine is not the one from PyPI or if the native
-#   wrapper modules did not run (scripts/ci/native_dss_ci_guard.py).
+# default: no RAS_COMMANDER_DSS_BACKEND, a plain install (FAST-DSS is a core
+#   dependency) on the latest NumPy, no Java. The automatic default must resolve
+#   to "native" (guard: engine --expect-backend native).
+# native: RAS_COMMANDER_DSS_BACKEND=native with the dss-native extra, no Java. The
+#   guard step fails the job if the engine is not the one from PyPI or if the
+#   native wrapper modules did not run (scripts/ci/native_dss_ci_guard.py).
 # shadow (Windows only, see the matrix): adds a JDK, pyjnius and HEC Monolith
 #   (downloaded by ras-commander from HEC's public Nexus and Maven Central before
 #   the tests, cached between runs), so the Java-path comparisons run too.
+# macOS (default leg, non-blocking): ras-commander-fast-dss publishes macOS wheels
+#   from 0.1.3. Until a 0.1.3 macOS wheel is on PyPI the leg records a notice and
+#   skips its steps; it never builds the Rust source distribution.
 
 on:
   pull_request:
@@ -24,11 +30,16 @@ jobs:
   native-dss:
     name: native-dss (${{ matrix.os }}, ${{ matrix.backend }})
     runs-on: ${{ matrix.os }}
+    # macOS is non-blocking until ras-commander-fast-dss 0.1.3 macOS wheels are on PyPI.
+    continue-on-error: ${{ matrix.os == 'macos-latest' }}
     strategy:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, windows-latest]
-        backend: [native, shadow]
+        backend: [default, native, shadow]
+        include:
+          - os: macos-latest
+            backend: default
         exclude:
           # HEC's Linux native library (javaHeclib 7-IU-8, HEC Monolith 3.3.27)
           # aborts intermittently in DSS6 time-series writes ("Substring out of
@@ -39,7 +50,8 @@ jobs:
     env:
       CI: '1'
       PYTHONUTF8: '1'
-      RAS_COMMANDER_DSS_BACKEND: ${{ matrix.backend }}
+      # The default leg leaves the variable unset; the job-level value would be ''.
+      RAS_COMMANDER_DSS_BACKEND: ${{ matrix.backend != 'default' && matrix.backend || '' }}
     steps:
       - uses: actions/checkout@v4
 
@@ -47,7 +59,37 @@ jobs:
         with:
           python-version: '3.12'
 
+      - name: Check for a macOS ras-commander-fast-dss wheel
+        id: wheel
+        shell: bash
+        run: |
+          if [ "${{ runner.os }}" != "macOS" ]; then
+            echo "available=true" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+          if python -m pip download --only-binary :all: --no-deps -d "$RUNNER_TEMP/fastdss" \
+              "ras-commander-fast-dss>=0.1.3,<0.2"; then
+            echo "available=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "available=false" >> "$GITHUB_OUTPUT"
+            echo "::notice title=macOS native DSS leg skipped::no ras-commander-fast-dss>=0.1.3,<0.2 macOS wheel on PyPI yet (first expected with 0.1.3)."
+          fi
+
+      - name: Install the library (default leg)
+        if: matrix.backend == 'default' && steps.wheel.outputs.available == 'true'
+        shell: bash
+        # A plain install: FAST-DSS comes from the core dependencies, NumPy is unpinned.
+        run: >-
+          python -m pip install --only-binary ras-commander-fast-dss -e .
+          affine pyproj
+          pytest nbformat requests setuptools matplotlib geopandas "shapely>=2.0"
+          xarray rasterio scipy tqdm psutil
+
+      - name: Check NumPy 2 in the default leg
+        if: matrix.backend == 'default' && steps.wheel.outputs.available == 'true'
+        run: python -c "import numpy; print('numpy', numpy.__version__); assert int(numpy.__version__.split('.')[0]) >= 2"
+
       - name: Install the library with the dss-native extra
+        if: matrix.backend != 'default'
         shell: bash
         # pydsstools (in dss-native) needs NumPy 1.x on CPython 3.12.
         run: >-
@@ -78,9 +120,17 @@ jobs:
         run: python -c "from ras_commander.dss._hec_monolith import HecMonolithDownloader as D; d = D(); d.install(); assert d.is_installed(); print(d.get_info())"
 
       - name: Check the installed engine
-        run: python scripts/ci/native_dss_ci_guard.py engine
+        if: steps.wheel.outputs.available == 'true'
+        shell: bash
+        run: |
+          if [ "${{ matrix.backend }}" = "default" ]; then
+            python scripts/ci/native_dss_ci_guard.py engine --expect-backend native
+          else
+            python scripts/ci/native_dss_ci_guard.py engine
+          fi
 
       - name: Run the DSS and wrapper tests
+        if: steps.wheel.outputs.available == 'true'
         shell: bash
         run: |
           files=$(ls tests/test_*dss*.py tests/test_hec_monolith_logging.py \
@@ -90,7 +140,7 @@ jobs:
             --basetemp="$RUNNER_TEMP/pytest-dss" --junitxml="$RUNNER_TEMP/native-dss.xml"
 
       - name: Fail if the native tests did not run
-        if: always()
+        if: always() && steps.wheel.outputs.available == 'true'
         shell: bash
         run: |
           extra=""

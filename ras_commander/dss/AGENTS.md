@@ -13,12 +13,19 @@ This file is the canonical local instruction file for `ras_commander/dss/`.
 
 - Public API: `RasDss`, `RasDssGrid`
 - Private support: `_hec_monolith.py`, `_backend.py`, `_errors.py`, `_native_grid.py`
-- Backends (`_backend.py`): `RasDss.backend` = `"java"` (default this
-  release) | `"native"` | `"shadow"`; the environment variable
-  `RAS_COMMANDER_DSS_BACKEND` overrides it when set. `RasDss.get_backend()`
-  returns the effective backend.
-  - `native` reads through the optional `ras_commander_fast_dss` package. It never calls
-    `_configure_jvm()` or `_ensure_monolith()`.
+- Backends (`_backend.py`): `RasDss.backend` = `"auto"` (default) | `"java"` |
+  `"native"` | `"shadow"`; the environment variable `RAS_COMMANDER_DSS_BACKEND`
+  overrides it when set. `RasDss.get_backend()` returns the effective backend.
+  - `auto` resolves to `native` when `_backend.native_default_ready()` (engine
+    imports, writer API, `DEFAULT_REQUIRED_FEATURES`), otherwise `java`, and logs
+    the choice once at INFO. Never fall back to Java per operation: an engine gap
+    is a typed error or a documented refusal, not a silent backend switch.
+    `_backend.explicit_backend()` is `None` under `auto`.
+  - Tests and workers that exercise the Java route must pin
+    `RasDss.backend = "java"` (unsetting the environment variable now selects
+    `auto`, i.e. native).
+  - `native` reads through the `ras_commander_fast_dss` package (a core dependency
+    where wheels exist). It never calls `_configure_jvm()` or `_ensure_monolith()`.
   - `shadow` returns the native result, also runs the Java path, and logs
     every difference without raising.
   - `get_catalog`, `read_timeseries`, `read_multiple_timeseries`,
