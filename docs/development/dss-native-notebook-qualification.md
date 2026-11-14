@@ -459,9 +459,9 @@ were rerun on that lane.
   and 918 with a forced-`java` run of the same notebook. Run-root paths, timestamps and kernel
   identifiers were normalized.
 - **Committed outputs.**
-  - Committed only where the output changes because of the new default: 322 and 731.
-  - Those two were executed in a kernel whose `ras-commander` metadata matches the source
-    (0.123.0).
+  - Committed only where the output changes because of the new default: 322, 731 and 917.
+  - Those three were executed in a CPython 3.12.11 kernel whose `ras-commander` metadata matches
+    the source (0.123.0).
   - All other committed outputs are unchanged. Notebooks that print absolute run paths keep
     their earlier outputs.
 
@@ -470,8 +470,8 @@ were rerun on that lane.
 | 310, 313, 318 | pass | no | One INFO line, `DSS backend: native (ras-commander-fast-dss 0.1.2)`; data identical to a forced-`java` run | no (they print absolute run paths) | 11 / 12 / 8 |
 | 312 | pass | no | The same INFO line and stdout/stderr ordering; data and HEC-RAS steps identical to a forced-`java` run | no (absolute run paths) | 95 |
 | 322 | pass | yes, only in its own `java`/`shadow` comparison cell | `default backend: native` (was `java`); shadow 2 comparisons, both `identical` | **yes** | 14 |
-| 728 | pass | no | The source DSS file is now written natively, so its printed SHA-256 differs; every other output is unchanged | no | 243 |
-| 731 | pass | no | Grid read-back runs on the native route: one INFO line, and `metadata` adds `crs_qualified` and `native`. The banner names `RasDss.read_timeseries()` | **yes** | 67 |
+| 728 (after the missing-cell follow-up) | pass | no | The source DSS file is now written natively, so its printed SHA-256 differs; every other output, including the missing-cell and mesh gates, is unchanged | no | 260 |
+| 731 (after the missing-cell follow-up) | pass | no | Grid read-back runs on the native route: one INFO line, and `metadata` adds `crs_qualified` and `native`; the stated-envelope export, its gates and the 144 records are unchanged. The banner names `RasDss.read_timeseries()` | **yes** | 32 |
 | 732 | pass | no | None: the notebook pins `native` | no | 79 |
 | 916 | pass | no | None | no | 2651 (host under load) |
 | 918 | pass | no | None | no | 4 |
