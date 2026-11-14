@@ -108,6 +108,7 @@ def _parse(path):
             if not match:
                 raise ValueError('Invalid hydrograph interval')
             current['step'] = int(match[1]) / {'SEC': 86400, 'MIN': 1440, 'HOUR': 24, 'DAY': 1}[match[2]]
+            current['step_seconds'] = int(match[1]) * {'SEC': 1, 'MIN': 60, 'HOUR': 3600, 'DAY': 86400}[match[2]]
         elif key in ('Flow Hydrograph', 'Friction Slope') and current is not None:
             if 'kind' in current:
                 raise ValueError('Multiple forcing types on one boundary')
@@ -210,7 +211,8 @@ def _write_events(plan_hdf, geom_hdf, flow_file, start_time, end_time, units, ta
                 if 'step' not in bc:
                     raise ValueError('Missing hydrograph interval')
                 times = np.arange(len(values)) * bc['step']
-                if times[-1] < (end_time-start_time).total_seconds()/86400:
+                duration = end_time - start_time
+                if (len(values) - 1) * bc['step_seconds'] < duration.days * 86400 + duration.seconds:
                     raise ValueError('Hydrograph does not cover simulation window')
                 values = np.column_stack((times, values))
             with np.errstate(over='ignore'):
@@ -256,8 +258,14 @@ def _write_events(plan_hdf, geom_hdf, flow_file, start_time, end_time, units, ta
         # Exclusive backup creation never overwrites a prior retained copy.
         backup = target.with_name(target.name+'.events.bak')
         backup_fd = os.open(backup, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
-        with os.fdopen(backup_fd, 'wb') as saved, target.open('rb') as original:
-            shutil.copyfileobj(original, saved)
+        try:
+            with os.fdopen(backup_fd, 'wb') as saved, target.open('rb') as original:
+                shutil.copyfileobj(original, saved)
+        except BaseException:
+            # Exclusive creation succeeded: this attempt owns the incomplete
+            # backup. Existing backups never reach this cleanup path.
+            backup.unlink(missing_ok=True)
+            raise
         os.replace(temporary, target)
     finally:
         temporary.unlink(missing_ok=True)

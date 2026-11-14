@@ -269,3 +269,43 @@ def test_missing_destination_native_identity_table(case, name):
         write(case)
     assert case[1].read_bytes() == original
     assert not case[1].with_name('p.hdf.events.bak').exists()
+
+
+@pytest.mark.parametrize('interval', ['1HOUR', '60MIN', '3600SEC'])
+@pytest.mark.parametrize('minutes', [300, 301])
+def test_hourly_hydrograph_exact_coverage(case, interval, minutes):
+    case[2].write_text('Boundary Location=,,,,,A,,B\nInterval=' + interval
+                       + '\nFlow Hydrograph=6\n' + ''.join(f'{v:8d}' for v in range(6)) + '\n')
+    original = case[1].read_bytes()
+    def run():
+        return RasPreprocess.write_event_conditions(
+            case[1], case[0], case[2], start_time=datetime(2000, 1, 1),
+            end_time=datetime(2000, 1, 1) + timedelta(minutes=minutes),
+            units='Metric', target_ras_version='7.0.1')
+    if minutes == 300:
+        run()
+    else:
+        with pytest.raises(ValueError, match='does not cover'):
+            run()
+        assert case[1].read_bytes() == original
+        assert not case[1].with_name('p.hdf.events.bak').exists()
+
+
+def test_failed_backup_copy_is_removed_and_retry_succeeds(case, monkeypatch):
+    import shutil
+    original = case[1].read_bytes()
+    copy = shutil.copyfileobj
+    def fail(source, destination, *args, **kwargs):
+        if str(destination.name).endswith('.events.bak') or isinstance(destination.name, int):
+            destination.write(b'partial')
+            raise OSError('injected backup copy failure')
+        return copy(source, destination, *args, **kwargs)
+    with monkeypatch.context() as patch:
+        patch.setattr(shutil, 'copyfileobj', fail)
+        with pytest.raises(OSError, match='injected backup copy failure'):
+            write(case)
+    assert case[1].read_bytes() == original
+    assert not case[1].with_name('p.hdf.events.bak').exists()
+    assert not list(case[1].parent.glob('*.tmp'))
+    write(case)
+    assert case[1].with_name('p.hdf.events.bak').read_bytes() == original
