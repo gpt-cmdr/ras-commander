@@ -1157,6 +1157,32 @@ class TestGeometryHdfAvailability:
         assert _ensure_hdf(geom_text) == hdf_path
 
 
+@pytest.mark.parametrize("ghosts", [False, True])
+def test_consistency_compares_coordinates_with_equal_counts(tmp_path, ghosts):
+    geom = tmp_path / "coordinates.g01"
+    geom.write_text("Storage Area=Area\nStorage Area 2D Points= 2\n"
+                    + "".join(f"{v:<16.6f}" for v in [1., 2., 3., 4.]) + "\n")
+    hdf = tmp_path / "coordinates.g01.hdf"
+    _write_mesh_hdf(hdf, [{"name": "Area", "spacing_dx": 0.,
+                          "spacing_dy": 0., "cell_count": 2}])
+    with h5py.File(hdf, "a") as file:
+        group = file.require_group("Geometry/2D Flow Areas/Area")
+        points = [[1., 2.], [3., 4.]] + ([[100., 100.]] if ghosts else [])
+        del group["Cells Center Coordinate"]
+        group.create_dataset("Cells Center Coordinate", data=points)
+    check = geom_mesh_module._mesh_hdf_consistency_issues
+    assert check(geom, hdf) == []
+    # BC-only text and reordered file timestamps do not change representation.
+    with geom.open("a") as file:
+        file.write("BC Line Name=Inlet\n")
+    os.utime(hdf, (1, 1))
+    assert check(geom, hdf) == []
+    with h5py.File(hdf, "a") as file:
+        file["Geometry/2D Flow Areas/Area/Cells Center Coordinate"][0] = [1.5, 2.]
+    assert any("computation points do not match" in issue for issue in check(geom, hdf))
+    assert check(geom, hdf, ignore_seed_count=True) == []
+
+
 class TestDomainContainmentAudit:
     """One-cell inward containment is a mandatory pre-mesh gate."""
 

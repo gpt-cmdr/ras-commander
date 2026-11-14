@@ -3074,6 +3074,37 @@ def _mesh_hdf_consistency_issues(
                     f"but HDF Spacing {axis}={float(hdf_spacing):g}"
                 )
 
+        if not ignore_seed_count and isinstance(text_seed_count, int) and text_seed_count > 0:
+            import h5py
+            import numpy as np
+            from .GeomParser import GeomParser
+            from .GeomStorage import GeomStorage
+
+            try:
+                lines = geom_text_path.read_text(encoding="utf-8").splitlines(True)
+                block = GeomStorage._find_storage_area_block(lines, area_name)[2]
+                info = GeomStorage._inspect_storage_area_block(block)
+                start = info["points_idx"] + 1
+                values = []
+                for line in block[start:start + (text_seed_count + 1) // 2]:
+                    values.extend(GeomParser.parse_fixed_width(line, 16))
+                points = np.asarray(values, dtype=float).reshape((-1, 2))
+                with h5py.File(hdf_path, "r") as hdf:
+                    centers = read_typed(hdf[
+                        f"Geometry/2D Flow Areas/{area_name}/Cells Center Coordinate"
+                    ])
+                # Cell Count excludes ghost cells; trailing ghosts may also have
+                # been removed by the compiled-mesh staging path.
+                if hdf_count_source == "Attributes/Cell Count":
+                    centers = centers[:hdf_cell_count]
+                if (len(points) != text_seed_count or points.shape != centers.shape
+                        or not np.isfinite(points).all()
+                        or not np.isfinite(centers).all()
+                        or not np.allclose(points, centers, rtol=0.0, atol=1e-6)):
+                    issues.append(f"{area_name}: text computation points do not match HDF cell centers")
+            except (OSError, KeyError, TypeError, ValueError) as exc:
+                issues.append(f"{area_name}: computation point comparison failed; {exc}")
+
         try:
             text_perimeter = _text_flow_area_perimeter(geom_text_path, area_name)
             if text_perimeter is not None:
