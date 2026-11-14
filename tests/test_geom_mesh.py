@@ -3287,3 +3287,65 @@ def test_generate_escalates_from_requested_ratio(monkeypatch, breakline_geom_tex
     assert result.ok
     assert ratios == expected
     assert f"Ratio:{expected[0]:g}->{expected[1]:g}" in result.fixes_applied
+
+@pytest.mark.parametrize("budget", [None, 0, 2, 7])
+def test_generate_midpoint_budget_controls_ratio_escalation(monkeypatch, breakline_geom_text, budget):
+    breakline_geom_text.write_text(breakline_geom_text.read_text().replace("Storage Area=MainArea\n", "Storage Area=MainArea\nStorage Area Is2D=-1\n"))
+    _mock_generate_success(monkeypatch, breakline_geom_text, has_breaklines=True)
+    monkeypatch.setattr(geom_mesh_module, "_meshfv2d_takes_min_face_ratio", lambda ns: True)
+    ratios, repairs = [], []
+    limit = 5 if budget is None else budget
+
+    def compute(perimeter, seeds, breaklines, ratio, ns):
+        ratios.append(ratio)
+        mesh = FakeMesh()
+        if len(ratios) <= limit + 1:
+            mesh.MeshCompletionState = FakeMeshState(2, "MaxFacesPerCellExceeded")
+        return mesh
+
+    def repair(mesh, seeds, ns, **kwargs):
+        repairs.append(1)
+        return seeds + [MockPointM(25, 25)], 1, []
+
+    monkeypatch.setattr(geom_mesh_module, "_compute_mesh", compute)
+    monkeypatch.setattr(geom_mesh_module, "_autofix_max_faces", repair)
+    kwargs = {} if budget is None else {"max_midpoint_attempts": budget}
+    result = GeomMesh.generate(breakline_geom_text, max_iterations=limit + 2, **kwargs)
+    assert result.ok
+    assert len(repairs) == limit
+    assert ratios == [.05] * (limit + 1) + [.1]
+    assert result.max_midpoint_attempts == limit
+
+
+@pytest.mark.parametrize("value, error", [(-1, ValueError), (True, TypeError), (1.5, TypeError), ("5", TypeError), (None, TypeError)])
+def test_generate_invalid_midpoint_budget_before_path_resolution(value, error):
+    with pytest.raises(error, match="max_midpoint_attempts"):
+        GeomMesh.generate("missing.g01", max_midpoint_attempts=value)
+
+
+def test_generate_midpoint_provenance_on_early_exception(tmp_path):
+    geom = tmp_path / "missing.g01"
+    geom.write_text("Geom Title=Missing workspace\n")
+    result = GeomMesh.generate(geom, max_midpoint_attempts=9)
+    assert result.status == "exception"
+    assert result.max_midpoint_attempts == 9
+
+@pytest.mark.parametrize("adds_points", [True, False])
+def test_generate_midpoint_budget_respects_overall_limit(monkeypatch, breakline_geom_text, adds_points):
+    _mock_generate_success(monkeypatch, breakline_geom_text, has_breaklines=True)
+    monkeypatch.setattr(geom_mesh_module, "_meshfv2d_takes_min_face_ratio", lambda ns: True)
+    ratios = []
+    def compute(perimeter, seeds, breaklines, ratio, ns):
+        ratios.append(ratio)
+        mesh = FakeMesh()
+        mesh.MeshCompletionState = FakeMeshState(2, "MaxFacesPerCellExceeded")
+        return mesh
+    def repair(mesh, seeds, ns, **kwargs):
+        return seeds + ([MockPointM(25, 25)] if adds_points else []), int(adds_points), []
+    monkeypatch.setattr(geom_mesh_module, "_compute_mesh", compute)
+    monkeypatch.setattr(geom_mesh_module, "_autofix_max_faces", repair)
+    result = GeomMesh.generate(breakline_geom_text, max_iterations=2, max_midpoint_attempts=10)
+    assert result.status == "error"
+    assert result.iterations == 2
+    assert result.max_midpoint_attempts == 10
+    assert ratios == ([.05, .05] if adds_points else [.05, .1])

@@ -5945,6 +5945,7 @@ class GeomMesh:
         robustness_screening: bool = False,
         require_complete_products: bool = False,
         grid_anchor: Optional[Union[GridAnchor, Tuple[float, float]]] = None,
+        max_midpoint_attempts: int = 5,
     ) -> MeshResult:
         """
         Generate or regenerate a 2D mesh headlessly via text-first workflow.
@@ -5996,6 +5997,10 @@ class GeomMesh:
                 ratio is written to geometry text and the Mapper workspace.
                 Native geometry preprocessing remains the validation step.
             max_iterations: Maximum fix-and-retry attempts.
+            max_midpoint_attempts: Nonnegative integer limit on successful
+                midpoint insertion rounds across the repair loop (default 5).
+                Zero skips midpoint repair. No-point rounds can escalate the
+                ratio immediately. The overall max_iterations limit still applies.
             hecras_dir: HEC-RAS installation whose RasMapperLib to load
                 (6.0 or later). Defaults to the newest installed release
                 found, regardless of the project's version.
@@ -6051,20 +6056,28 @@ class GeomMesh:
             supply an initialized project with a referencing plan.
 
         Raises:
-            ValueError: The face-length ratio is not positive and finite.
-            TypeError: ``grid_anchor`` is not a GridAnchor or ``(x, y)`` pair.
+            ValueError: The face-length ratio is not positive and finite, or
+                max_midpoint_attempts is negative.
+            TypeError: max_midpoint_attempts is not an integer (booleans excluded),
+                or ``grid_anchor`` is not a GridAnchor or ``(x, y)`` pair.
                 (A grid anchor whose spacing differs from the cell size
                 returns ``status="exception"`` with the reason.)
             RuntimeError: A perimeter repair handoff or subsequent mesh retry
                 fails, chained to the original mesh repair reason. Retries
                 share the existing ``max_iterations`` bound.
         """
+        if isinstance(max_midpoint_attempts, bool) or not isinstance(max_midpoint_attempts, int):
+            raise TypeError("max_midpoint_attempts must be a nonnegative integer")
+        if max_midpoint_attempts < 0:
+            raise ValueError("max_midpoint_attempts must be nonnegative")
+
         geom_path = _resolve_geom_text_path(geom_number, ras_object)
 
         result = MeshResult(
             mesh_name=mesh_name or f"<index {mesh_index}>",
             status="error",
             geom_text_path=str(geom_path),
+            max_midpoint_attempts=max_midpoint_attempts,
         )
 
         min_face_length_ratio = _normalize_positive_value(
@@ -6403,7 +6416,6 @@ class GeomMesh:
             ratio_idx = 0
             tier4_count = 0
             midpoint_attempts = 0
-            MAX_MIDPOINT_ATTEMPTS = 5
             duplicate_tolerances = [
                 max(cell_size * 1e-8, 1e-6),
                 max(cell_size * 1e-6, 1e-4),
@@ -6623,7 +6635,7 @@ class GeomMesh:
                 # MaxFaces → add midpoint seeds at current ratio
                 if (
                     state_val == max_faces_val
-                    and midpoint_attempts < MAX_MIDPOINT_ATTEMPTS
+                    and midpoint_attempts < max_midpoint_attempts
                 ):
                     seeds_list = [
                         current_seeds_pm[i]
