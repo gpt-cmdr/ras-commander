@@ -169,6 +169,8 @@ class MeshResult:
 
     # Empty unless exact physical parent cells were copied into an owned child.
     cell_subset: Dict[str, Any] = field(default_factory=dict)
+    # Configured repair budget; None for operations other than generate().
+    max_midpoint_attempts: Optional[int] = None
 
     @property
     def ok(self) -> bool:
