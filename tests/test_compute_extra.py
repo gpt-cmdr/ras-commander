@@ -27,7 +27,8 @@ def test_compute_extra_has_only_process_supervision_dependencies(monkeypatch):
     metadata = _setup_metadata(monkeypatch)
 
     assert metadata["install_requires"][:3] == ["h5py", "numpy", "pandas"]
-    assert len(metadata["install_requires"]) == 4
+    # The two native engines (FAST-HDF and FAST-DSS), each behind a wheel marker.
+    assert len(metadata["install_requires"]) == 5
     expected = [
         "psutil>=5.6.6",
         'pywin32>=227; sys_platform == "win32"',
@@ -211,39 +212,56 @@ assert HdfMesh.__name__ == "HdfMesh"
     )
 
 
-def test_native_dss_engine_is_optional_in_the_dss_extras(monkeypatch):
+def test_native_dss_engine_is_a_default_dependency(monkeypatch):
+    """FAST-DSS is a core dependency wherever wheels are published, macOS included.
+
+    The default DSS backend ("auto") uses it when it is installed. The floor stays
+    at 0.1.2 until 0.1.3 (the first release with macOS wheels) is on PyPI.
+    """
     from packaging.requirements import Requirement
 
     metadata = _setup_metadata(monkeypatch)
-    assert not any(spec.startswith("ras-commander-fast-dss")
-                   for spec in metadata["install_requires"])
+    core = [Requirement(spec) for spec in metadata["install_requires"]
+            if spec.startswith("ras-commander-fast-dss")]
+    assert len(core) == 1
     extras = metadata["extras_require"]
-    for extra in ("dss", "dss-native", "all"):
-        native = [Requirement(spec) for spec in extras[extra]
-                  if spec.startswith("ras-commander-fast-dss")]
-        assert len(native) == 1, extra
-        requirement = native[0]
-        assert str(requirement.specifier) == "<0.2,>=0.1.2"
+    for name, specs in (("install_requires", None), ("dss", extras["dss"]),
+                        ("dss-native", extras["dss-native"]), ("all", extras["all"])):
+        if specs is None:
+            requirement = core[0]
+        else:
+            native = [Requirement(spec) for spec in specs
+                      if spec.startswith("ras-commander-fast-dss")]
+            assert len(native) == 1, name
+            requirement = native[0]
+        assert str(requirement.specifier) in ("<0.2,>=0.1.2", "<0.2,>=0.1.3"), name
         for system, machine in (("Windows", "AMD64"), ("Linux", "x86_64"),
-                                ("Linux", "aarch64")):
+                                ("Linux", "aarch64"), ("Darwin", "arm64"),
+                                ("Darwin", "x86_64")):
             assert requirement.marker.evaluate({
                 "platform_python_implementation": "CPython",
                 "platform_system": system,
                 "platform_machine": machine,
-            }), (extra, system, machine)
+            }), (name, system, machine)
         for env in ({"platform_python_implementation": "PyPy",
                      "platform_system": "Linux", "platform_machine": "x86_64"},
                     {"platform_python_implementation": "CPython",
                      "platform_system": "Windows", "platform_machine": "ARM64"},
                     {"platform_python_implementation": "CPython",
-                     "platform_system": "Linux", "platform_machine": "ppc64le"},
-                    # 0.1.2 publishes no macOS wheels; the optional extra must
-                    # not force an sdist (Rust) build there.
-                    {"platform_python_implementation": "CPython",
-                     "platform_system": "Darwin", "platform_machine": "arm64"},
-                    {"platform_python_implementation": "CPython",
-                     "platform_system": "Darwin", "platform_machine": "x86_64"}):
-            assert not requirement.marker.evaluate(env), (extra, env)
+                     "platform_system": "Linux", "platform_machine": "ppc64le"}):
+            assert not requirement.marker.evaluate(env), (name, env)
+
+
+def test_default_install_does_not_pin_numpy_below_2(monkeypatch):
+    """pydsstools (NumPy<2 on CPython 3.10-3.12) stays in the opt-in dss-native extra."""
+    metadata = _setup_metadata(monkeypatch)
+    for spec in metadata["install_requires"] + metadata["extras_require"]["all"]:
+        assert not spec.startswith("pydsstools"), spec
+        assert "numpy<2" not in spec.replace(" ", ""), spec
     # pydsstools stays in dss-native for write_precip_grid_arrays on "java".
-    assert "pydsstools>=3.1.0,<4" in extras["dss-native"]
-    assert "pyjnius" in extras["dss"]
+    assert "pydsstools>=3.1.0,<4" in extras_of(metadata, "dss-native")
+    assert "pyjnius" in extras_of(metadata, "dss")
+
+
+def extras_of(metadata, name):
+    return metadata["extras_require"][name]

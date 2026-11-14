@@ -7,16 +7,23 @@ Classes for reading and writing HEC-DSS files.
 Read HEC-DSS files for boundary condition extraction and write DSS time-series
 or gridded precipitation records.
 
-`write_grid_timeseries()` already supports direct array-to-grid writing using
-HEC Monolith. `write_precip_grid_arrays()` is an optional native alternative;
-pydsstools is not required for existing Monolith users.
+`RasDss.backend` defaults to `auto`: the native ras-commander-fast-dss engine when
+it is installed and ready, otherwise HEC Monolith (Java). Set
+`RasDss.backend = "java"` or `RAS_COMMANDER_DSS_BACKEND=java` to keep Java; see
+[DSS Read and Write Backends](../user-guide/dss-native-backend.md#auto-default).
+`write_grid_timeseries()` writes arrays directly to grids on either backend.
+`write_precip_grid_arrays()` writes through the native engine, or through
+pydsstools under `java`.
 
 ### Methods
 
 #### write_precip_grid_arrays(dss_file, pathname, data, interval_bounds, *, transform, crs, units, nodata=None, overwrite=False)
 
-Write NumPy interval-depth arrays directly to DSS7 specified-time grids using
-optional `ras-commander[dss-native]` (gyanz/pydsstools). Requires no Java/Vortex.
+Write NumPy interval-depth arrays directly to DSS7 specified-time grids. The
+native backend (the default) writes through ras-commander-fast-dss and needs
+`affine` and `pyproj`; the `java` backend uses the optional
+`ras-commander[dss-native]` extra (gyanz/pydsstools). Neither needs Java or Vortex.
+The notes below apply to the pydsstools route.
 Windows still requires the Visual C runtime and UCRT; a compatible wheel does
 not require a compiler. Tested pydsstools 3.1.0 provides Windows x64 wheels for
 CPython 3.9–3.13, not 3.14. See the

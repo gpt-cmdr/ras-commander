@@ -40,6 +40,7 @@ WORKER = textwrap.dedent(
 
     os.environ.pop("RAS_COMMANDER_DSS_BACKEND", None)
     from ras_commander import RasDss
+    RasDss.backend = "java"  # default is auto
 
     folder, version, result = Path(sys.argv[1]), int(sys.argv[2]), Path(sys.argv[3])
     try:
@@ -119,6 +120,7 @@ FAILURE_WORKER = textwrap.dedent(
 
     os.environ.pop("RAS_COMMANDER_DSS_BACKEND", None)
     from ras_commander import RasDss
+    RasDss.backend = "java"  # default is auto
 
     folder, version, result = Path(sys.argv[1]), int(sys.argv[2]), Path(sys.argv[3])
     try:
@@ -319,6 +321,7 @@ LEVEL_ZERO_WORKER = textwrap.dedent(
 
     os.environ.pop("RAS_COMMANDER_DSS_BACKEND", None)
     from ras_commander import RasDss
+    RasDss.backend = "java"  # default is auto
 
     RasDss.hec_message_level = 0
     path = Path(sys.argv[1])

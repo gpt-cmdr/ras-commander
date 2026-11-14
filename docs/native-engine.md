@@ -20,7 +20,7 @@ gridded importer replaces HEC-Vortex for gridded data.
 |---|---|---|---|
 | **HDF Engine** | Read stored results, geometry, text and attributes; assemble mesh geometry | `Hdf*`, `fast_hdf` | `ras-commander-fast-hdf`; installed with RAS Commander on supported wheel platforms. Default `auto` mode retains h5py fallback. |
 | **Mapping Engine** | Map computed physical 2D cells to Depth/WSE rasters using horizontal or sloping interpolation | `RasFim.map_horizontal_profiles`, `RasFim.map_sloping_profiles` | External `ras-commander-fast-map` crate and wheel; the optional Python `fim` extra installs the wheel on supported platforms. Explicit native mapping; no automatic Python fallback. |
-| **DSS Engine** (FAST-DSS) | Read and write DSS6 and DSS7 catalogs, time series, paired data and grids without Java; import gridded data to DSS without HEC-Vortex | `RasDss` with `RasDss.backend = "native"` or `"shadow"` | `ras-commander-fast-dss` ([install](#dss-installation)); optional. Opt-in; `java` remains the default backend. |
+| **DSS Engine** (FAST-DSS) | Read and write DSS6 and DSS7 catalogs, time series, paired data and grids without Java; import gridded data to DSS without HEC-Vortex | `RasDss` (the default `auto` backend uses it when installed; `RasDss.backend = "java"` keeps Java) | `ras-commander-fast-dss` ([install](#dss-installation)); a default dependency where wheels are published |
 
 ## Choose an engine workflow
 
@@ -70,10 +70,13 @@ for precipitation and other gridded data, with no Java, Jython or GDAL.
 
 !!! info "Short version"
     - The engine package is `ras-commander-fast-dss` (import name
-      `ras_commander_fast_dss`). It is optional; see [Installation](#dss-installation).
-    - `java` (HEC Monolith through pyjnius) remains the default `RasDss` backend,
-      and HEC-Vortex remains the default gridded-import route. Nothing switches
-      until you choose `native` or `shadow`.
+      `ras_commander_fast_dss`), a default dependency of ras-commander where wheels
+      are published; see [Installation](#dss-installation).
+    - The default `RasDss` backend is `auto`: `native` when the engine is installed
+      and advertises the features the default needs, otherwise `java` (HEC Monolith
+      through pyjnius). The choice is logged once at INFO. Set
+      `RasDss.backend = "java"` (or `RAS_COMMANDER_DSS_BACKEND=java`) to keep Java.
+      HEC-Vortex remains the default `PrecipMrms.to_dss` route.
     - `native` uses FAST-DSS only. `shadow` runs both and logs every difference.
     - Native data matches the Java path. The differences are intended changes and
       corrections of Java-path defects, each listed with its evidence in
@@ -83,37 +86,47 @@ for precipitation and other gridded data, with no Java, Jython or GDAL.
 
 | Backend | Reads and writes through | Returns | Use it to |
 |---|---|---|---|
-| `java` (default) | HEC Monolith via pyjnius; needs Java 8+ | Java result, unchanged behavior | Keep the current behavior |
-| `native` | FAST-DSS; no JVM | Native result | Work without Java |
+| `auto` (default) | `native` when the engine is ready, otherwise `java` | As the resolved backend | Use the native engine wherever it is installed |
+| `java` | HEC Monolith via pyjnius; needs Java 8+ | Java result | Keep the Java behavior |
+| `native` | FAST-DSS; no JVM | Native result | Require the native engine |
 | `shadow` | Both | Reads: the native result (grids: Java's). Writes: the Java write, repeated natively on a temporary copy for comparison | Check `native` against your own files before switching |
 
 Set `RasDss.backend`, or the environment variable `RAS_COMMANDER_DSS_BACKEND`,
-which overrides the attribute:
+which overrides the attribute. Either forces `java`, `native` or `shadow`:
 
 ```python
 from ras_commander import RasDss
 
-RasDss.backend = "native"            # "java" (default) | "native" | "shadow"
-print(RasDss.get_backend())          # backend the next call will use
+print(RasDss.get_backend())          # "native" with the engine installed, else "java"
+RasDss.backend = "java"              # "auto" (default) | "java" | "native" | "shadow"
 caps = RasDss.get_capabilities()     # support matrix per operation
-print(caps.attrs)                    # native_installed, native_grid_qualified, native_writes_available
+print(caps.attrs)                    # backend_source, default_backend_reason, native_installed, ...
 ```
 
 ```powershell
-$env:RAS_COMMANDER_DSS_BACKEND = "native"
+$env:RAS_COMMANDER_DSS_BACKEND = "java"   # keep the Java backend for a whole process
 ```
 
-Under `native`, a missing engine raises `ImportError`, and an operation the
-installed engine does not support raises `DssCapabilityError`. `native` never
-falls back to Java. Under `shadow` without the engine, `RasDss` uses Java and
-logs one warning. The Java backend never imports the engine, so a missing or
-broken wheel cannot affect it.
+**How `auto` resolves.** `auto` selects `native` when `ras_commander_fast_dss`
+imports, provides the writers and lists the features `grid_srs_monolith_parity`,
+`write_sync_modes` and `repair_copy_out` in `FEATURES` (0.1.2 and later do).
+Otherwise it selects `java`. The first DSS call logs one INFO line, for example
+`DSS backend: native (ras-commander-fast-dss 0.1.2)` or
+`DSS backend: java (ras-commander-fast-dss is not installed or failed to load)`.
+A broken wheel counts as absent. A call that runs on `native` never falls back
+to Java, whatever it raises.
 
-**Choosing.** Start with `shadow` on your own files: it returns the Java result
-for writes and grids, and logs each comparison as `identical`, `expected` (an
-intended difference, named) or `unexpected`. Move to `native` when the shadow log
-shows no `unexpected` outcome for your workflow, or when Java is not available.
-Stay on `java` where a workflow depends on a Java-path behavior listed under
+Under an explicit `native`, a missing engine raises `ImportError`, and an
+operation the installed engine does not support raises `DssCapabilityError`.
+`native` never falls back to Java. Under `shadow` without the engine, `RasDss`
+uses Java and logs one warning. An explicit `java` never imports the engine, so
+a missing or broken wheel cannot affect it.
+
+**Choosing.** The default suits most workflows. Before upgrading a workflow that
+depends on the Java results, run it once under `shadow` on your own files: it
+returns the Java result for writes and grids, and logs each comparison as
+`identical`, `expected` (an intended difference, named) or `unexpected`. Keep
+`java` where a workflow depends on a Java-path behavior listed under
 [intended differences](#dss-intended-differences).
 
 ### Reads and writes
@@ -274,24 +287,28 @@ HEC-RAS is run only through RAS Commander's APIs.
 pip install ras-commander-fast-dss
 ```
 
-or install it with the DSS extras, which request
-`ras-commander-fast-dss>=0.1.2,<0.2`:
+`pip install ras-commander` installs it: `ras-commander-fast-dss>=0.1.2,<0.2` is
+a core dependency on CPython for Windows x64, Linux x86_64 and aarch64, and macOS
+arm64 and x86_64. The extras add the Java route and pydsstools:
 
 ```bash
-pip install "ras-commander[dss]"          # pyjnius (java backend) + FAST-DSS
-pip install "ras-commander[dss-native]"   # pydsstools + FAST-DSS
+pip install "ras-commander[dss]"          # + pyjnius, for the java and shadow backends
+pip install "ras-commander[dss-native]"   # + pydsstools, affine, pyproj
 ```
 
 Wheels (abi3, CPython 3.10 and later) are published for Windows x64 and for
-Linux x86_64 and aarch64 (manylinux and musllinux). The extras request the
-engine only on those platforms. There are no macOS wheels: on macOS, and on any
-other platform, `pip install ras-commander-fast-dss` builds it from the source
-distribution, which needs a Rust toolchain. The extras do not request it there,
-so `pip install "ras-commander[dss]"` never starts a Rust build.
+Linux x86_64 and aarch64 (manylinux and musllinux); macOS wheels (arm64 and
+x86_64) are published from ras-commander-fast-dss 0.1.3. On any other platform
+or interpreter (Windows ARM64, PyPy) the marker leaves the engine out, `auto`
+selects `java`, and `pip install ras-commander-fast-dss` builds it from the
+source distribution, which needs a Rust toolchain.
 
-Then select the backend as shown above. `ras-commander` itself does not require
-the package; `import ras_commander` and the `java` backend work without it. Check
-the installed engine with:
+pydsstools 3.1.0 requires NumPy below 2 on CPython 3.10 to 3.12. It is only in
+the opt-in `dss-native` extra (used by `write_precip_grid_arrays` under `java`),
+so the default install does not constrain NumPy.
+
+`import ras_commander` never imports the engine; a DSS call resolves the backend.
+Check the installed engine with:
 
 ```python
 import importlib.metadata
@@ -303,8 +320,9 @@ print(sorted(fast_dss.FEATURES))   # e.g. grid_srs_monolith_parity, gridded_impo
 
 Test for a capability with its `FEATURES` flag, not with a version number.
 
-Existing [DSS operations](user-guide/dss-operations.md) work unchanged on the
-default `java` backend.
+Existing [DSS operations](user-guide/dss-operations.md) keep their signatures on
+every backend; the differences under `native` are listed in
+[DSS Read and Write Backends](user-guide/dss-native-backend.md#differences-from-the-java-backend).
 
 ### What 0.1.2 changes for RAS Commander {#dss-0-1-2}
 

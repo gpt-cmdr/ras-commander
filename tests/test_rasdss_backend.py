@@ -33,9 +33,11 @@ def clean_backend(monkeypatch):
     monkeypatch.setattr(RasDss, "backend", _backend.DEFAULT_BACKEND)
     _backend.reset_fallback_warning()
     _backend.reset_shadow_stats()
+    _backend.reset_default_log()
     yield
     _backend.reset_fallback_warning()
     _backend.reset_shadow_stats()
+    _backend.reset_default_log()
 
 
 @pytest.fixture
@@ -59,9 +61,107 @@ def without_ras_commander_fast_dss(monkeypatch):
 # ---------------------------------------------------------------------------
 
 
-def test_default_backend_is_java():
-    assert RasDss.backend == "java"
+def test_default_backend_is_auto():
+    assert _backend.DEFAULT_BACKEND == "auto"
+    assert RasDss.backend == "auto"
+    assert _backend.explicit_backend(RasDss.backend) is None
+
+
+def test_auto_default_is_native_with_a_ready_engine(caplog):
+    pytest.importorskip("ras_commander_fast_dss")
+    ready, reason = _backend.native_default_ready()
+    assert ready, reason
+    caplog.set_level(logging.INFO, logger=LOGGER)
+    for _ in range(3):
+        assert RasDss.get_backend() == "native"
+    lines = [r for r in caplog.records if r.getMessage().startswith("DSS backend:")]
+    assert len(lines) == 1, "the active backend is logged once"
+    assert lines[0].levelno == logging.INFO
+    assert lines[0].getMessage().startswith("DSS backend: native (ras-commander-fast-dss ")
+    attrs = RasDss.get_capabilities().attrs
+    assert attrs["requested_backend"] == "native"
+    assert attrs["backend_source"] == "auto"
+    assert attrs["default_backend_reason"].startswith("ras-commander-fast-dss ")
+
+
+def test_auto_default_is_java_without_the_engine(
+    without_ras_commander_fast_dss, no_jvm, caplog, tmp_path
+):
+    caplog.set_level(logging.INFO, logger=LOGGER)
     assert RasDss.get_backend() == "java"
+    with pytest.raises(_JavaCalled):
+        RasDss.get_catalog(tmp_path / "x.dss")
+    lines = [r for r in caplog.records if r.getMessage().startswith("DSS backend:")]
+    assert len(lines) == 1
+    message = lines[0].getMessage()
+    assert message.startswith("DSS backend: java (ras-commander-fast-dss is not installed")
+    assert "RasDss.backend" in message and _backend.ENV_VAR in message
+    # No warning: Java is the intended route where the engine is not installed.
+    assert not [r for r in caplog.records if r.levelno >= logging.WARNING]
+    attrs = RasDss.get_capabilities().attrs
+    assert attrs["requested_backend"] == "java"
+    assert attrs["backend_source"] == "auto"
+    assert "not installed" in attrs["default_backend_reason"]
+
+
+@pytest.mark.parametrize("missing", list(_backend.DEFAULT_REQUIRED_FEATURES))
+def test_auto_default_is_java_when_the_engine_lacks_a_feature(monkeypatch, missing):
+    pytest.importorskip("ras_commander_fast_dss")
+    real = _backend.native_feature
+    monkeypatch.setattr(_backend, "native_feature", lambda name: name != missing and real(name))
+    ready, reason = _backend.native_default_ready()
+    assert not ready and missing in reason
+    assert RasDss.get_backend() == "java"
+    # An explicit native still uses the engine (and gates the missing operation).
+    monkeypatch.setattr(RasDss, "backend", "native")
+    assert RasDss.get_backend() == "native"
+
+
+def test_auto_default_is_java_when_the_engine_lacks_the_writers(monkeypatch):
+    pytest.importorskip("ras_commander_fast_dss")
+    monkeypatch.setattr(_backend, "native_writes_available", lambda: False)
+    ready, reason = _backend.native_default_ready()
+    assert not ready and "writer API" in reason
+    assert RasDss.get_backend() == "java"
+
+
+def test_auto_default_is_java_when_the_engine_fails_to_load(monkeypatch):
+    """A broken wheel counts as absent for the default (never an exception)."""
+    import importlib
+
+    real_import = importlib.import_module
+
+    def broken(name, *args, **kwargs):
+        if name == "ras_commander_fast_dss":
+            raise OSError("DLL load failed")
+        return real_import(name, *args, **kwargs)
+
+    monkeypatch.setattr(_backend.importlib, "import_module", broken)
+    assert RasDss.get_backend() == "java"
+
+
+def test_explicit_java_forces_java_with_a_ready_engine(monkeypatch, no_jvm, tmp_path):
+    pytest.importorskip("ras_commander_fast_dss")
+    monkeypatch.setattr(RasDss, "backend", "java")
+    assert RasDss.get_backend() == "java"
+    with pytest.raises(_JavaCalled):
+        RasDss.get_catalog(tmp_path / "x.dss")
+    attrs = RasDss.get_capabilities().attrs
+    assert attrs["requested_backend"] == "java" and attrs["backend_source"] == "explicit"
+
+
+@pytest.mark.parametrize("value", ["java", "native", "shadow"])
+def test_environment_forces_backend_over_auto(monkeypatch, value):
+    pytest.importorskip("ras_commander_fast_dss")
+    monkeypatch.setenv(_backend.ENV_VAR, value)
+    assert RasDss.get_backend() == value
+    assert RasDss.get_capabilities().attrs["backend_source"] == "explicit"
+
+
+def test_environment_auto_overrides_an_explicit_attribute(monkeypatch):
+    monkeypatch.setattr(RasDss, "backend", "java")
+    monkeypatch.setenv(_backend.ENV_VAR, "AUTO")
+    assert _backend.explicit_backend(RasDss.backend) is None
 
 
 @pytest.mark.parametrize("value", ["native", "NATIVE", " shadow ", "java"])
@@ -78,6 +178,7 @@ def test_environment_overrides_attribute(monkeypatch):
 
 
 def test_blank_environment_value_is_ignored(monkeypatch):
+    monkeypatch.setattr(RasDss, "backend", "java")
     monkeypatch.setenv(_backend.ENV_VAR, "  ")
     assert RasDss.get_backend() == "java"
 
@@ -90,11 +191,12 @@ def test_invalid_environment_value_raises(monkeypatch):
 
 def test_invalid_attribute_value_raises(monkeypatch):
     monkeypatch.setattr(RasDss, "backend", "rust")
-    with pytest.raises(ValueError, match="java, native, shadow"):
+    with pytest.raises(ValueError, match="java, native, shadow, auto"):
         RasDss.get_backend()
 
 
-def test_java_backend_still_uses_the_jvm(no_jvm, tmp_path):
+def test_java_backend_still_uses_the_jvm(monkeypatch, no_jvm, tmp_path):
+    monkeypatch.setattr(RasDss, "backend", "java")
     with pytest.raises(_JavaCalled):
         RasDss.get_catalog(tmp_path / "any.dss")
     with pytest.raises(_JavaCalled):
@@ -123,7 +225,7 @@ def test_native_without_ras_commander_fast_dss_raises_import_error(
 def test_install_hint_names_the_published_fast_dss_package():
     hint = _backend._NATIVE_INSTALL_HINT
     assert "pip install ras-commander-fast-dss" in hint
-    assert "ras-commander[dss]" in hint
+    assert "RasDss.backend = 'java'" in hint and _backend.ENV_VAR in hint
     for stale in ("wheel you were given", "not yet published", ".whl"):
         assert stale not in hint
     # The old name is gone (no alias).
@@ -274,7 +376,15 @@ def test_shutdown_jvm_is_deprecated_noop_under_native(native):
         RasDss.shutdown_jvm()
 
 
-def test_shutdown_jvm_is_silent_under_java():
+def test_shutdown_jvm_is_silent_under_java(monkeypatch):
+    monkeypatch.setattr(RasDss, "backend", "java")
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        RasDss.shutdown_jvm()
+
+
+def test_shutdown_jvm_is_silent_under_the_automatic_default():
+    """Notebooks that call shutdown_jvm() did nothing wrong; auto never warns."""
     with warnings.catch_warnings():
         warnings.simplefilter("error")
         RasDss.shutdown_jvm()

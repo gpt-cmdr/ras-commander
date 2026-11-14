@@ -1186,12 +1186,6 @@ def test_real_grid_derivative_preserves_version_source_and_exact_content(
             "data_type": "PER-CUM",
             "compression": "PRECIP_2_BYTE",
         }
-        if version == 6:
-            # Monolith's V6 setter exposes base/scale in the opposite order.
-            grid_info.update(
-                compression_base=100.0,
-                compression_scale_factor=0.0,
-            )
         RasDss.write_grid_timeseries(
             source,
             "/SHG/TEST/PRECIPITATION///C04-SOURCE/",
@@ -1414,11 +1408,6 @@ def test_native_2400_family_uses_role_specific_midnight_spelling(
             "data_type": "PER-CUM",
             "compression": "PRECIP_2_BYTE",
         }
-        if version == 6:
-            grid_info.update(
-                compression_base=100.0,
-                compression_scale_factor=0.0,
-            )
 
         original_format_descriptor = RasDss.__dict__["_format_grid_dss_datetime"]
         original_format = original_format_descriptor.__func__
@@ -1553,11 +1542,6 @@ def test_same_process_source_handles_close_on_success_and_validation_failure(
             "data_type": "PER-CUM",
             "compression": "PRECIP_2_BYTE",
         }
-        if version == 6:
-            grid_info.update(
-                compression_base=100.0,
-                compression_scale_factor=0.0,
-            )
         RasDss.write_grid_timeseries(
             source,
             "/SHG/TEST/PRECIPITATION///C04-SOURCE/",

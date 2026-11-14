@@ -17,6 +17,10 @@ os.environ.pop("RAS_COMMANDER_DSS_BACKEND", None)
 
 from ras_commander import RasDss  # noqa: E402
 
+# The default backend is "auto" (native when the engine is installed); this worker
+# exercises the Java route, so it selects it explicitly.
+RasDss.backend = "java"  # pinned
+
 
 def _validation(result):
     """Picklable summary of a ValidationResult/ValidationReport."""

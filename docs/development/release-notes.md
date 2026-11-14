@@ -9,6 +9,43 @@ alone does not identify a development checkout.
 
 ### Unreleased
 
+**Read before upgrading.** This release is planned to ship with
+`ras-commander-fast-dss` 0.1.3, the first engine release with macOS wheels.
+
+- **Behaviour change: the native DSS engine is the default backend.** `RasDss.backend`
+  now defaults to `"auto"`: `native` when `ras-commander-fast-dss` is installed and
+  advertises the features the default needs, otherwise `java`. The first DSS call logs
+  the choice once at INFO (for example `DSS backend: native (ras-commander-fast-dss
+  0.1.2)`). Under `native`, missing values are `NaN` instead of -3.4028235e38,
+  `start_date`/`end_date` are honored, errors are typed, `get_catalog` on a missing file
+  raises `FileNotFoundError` instead of creating it, and input that the Java path
+  truncated or stored unreadably is refused; every difference is listed in
+  [DSS Read and Write Backends](../user-guide/dss-native-backend.md). **To keep Java,**
+  set `RasDss.backend = "java"` or the environment variable
+  `RAS_COMMANDER_DSS_BACKEND=java`, and install `ras-commander[dss]` (pyjnius) with
+  Java 8+. Explicit `java`, `native` and `shadow` settings behave as before.
+- **`ras-commander-fast-dss>=0.1.2,<0.2` is a core dependency** on CPython for Windows
+  x64, Linux x86_64/aarch64 and macOS arm64/x86_64 (macOS wheels from 0.1.3). It
+  requires only NumPy and pandas; the default install does not pin NumPy below 2.
+  pydsstools stays in the opt-in `dss-native` extra.
+- **Java-route DSS6 grid fixes.** `write_grid_timeseries` on `java` refuses
+  `compression="NONE"` for DSS6 with `DssUnsupportedRecordError` (Monolith stored a
+  record whose cells all read as missing), and applies its DSS6 scale/base workaround
+  when writing into an existing DSS6 file without `dss_version` (such writes stored
+  scale 0 and base 100 and lost every cell). Rewrite affected grids from their source;
+  the native route raises `DssFormatError` for them.
+- **Native DSS6 grid writes name the Java scale/base convention.** Under `native`,
+  `compression_base=100` with `compression_scale_factor=0` raises a `ValueError` that
+  explains the Java route's swapped DSS6 convention; the values are never reinterpreted.
+- `RasDss.get_capabilities().attrs` adds `backend_source` and `default_backend_reason`.
+  `RasDss.shutdown_jvm()` is a silent no-op under `auto` (it still warns under an
+  explicit `native`). Backend messages name both `RasDss.backend` and
+  `RAS_COMMANDER_DSS_BACKEND`.
+- The agent banner of `init_ras_project` names `RasDss.read_timeseries()` (it named a
+  nonexistent `get_timeseries()`).
+- The native DSS CI job gains a default leg (no backend set, NumPy 2) and a
+  non-blocking macOS leg that runs once a 0.1.3 macOS wheel is on PyPI.
+
 ### 0.123.0 — 2026-11-14
 
 **Read before upgrading.** `java` remains the default DSS backend; no default changes

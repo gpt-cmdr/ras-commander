@@ -21,18 +21,23 @@ FAST_HDF_WHEEL_MARKER = (
     ' or (platform_system == "Linux" and platform_machine == "x86_64")'
     ' or (platform_system == "Darwin" and platform_machine == "arm64"))'
 )
-# The native DSS engine (FAST-DSS) is optional: the default DSS backend is
-# "java". Release 0.1.2 is published as abi3 wheels for CPython 3.10+ on
-# Windows x64 and Linux x86_64/aarch64 (manylinux and musllinux) only, so the
-# marker keeps pip from compiling the Rust source distribution elsewhere.
-# There are no macOS wheels; macOS users can build it from the sdist with
-# `pip install ras-commander-fast-dss` and a Rust toolchain.
+# The native DSS engine (FAST-DSS) is a default dependency: RasDss.backend
+# "auto" (the default) uses it when it is installed and advertises the features
+# the default needs, otherwise the Java backend. It is published as abi3 wheels
+# for CPython 3.10+ on Windows x64, Linux x86_64/aarch64 (manylinux and
+# musllinux) and, from 0.1.3, macOS; the marker keeps pip from compiling the
+# Rust source distribution elsewhere (Windows ARM64, PyPy).
+# Release gate: the native default ships with ras-commander-fast-dss 0.1.3,
+# the first release with macOS wheels. Raise the floor to >=0.1.3 when it is on
+# PyPI; until then a macOS install would build 0.1.2 from source.
 FAST_DSS_REQUIREMENT = 'ras-commander-fast-dss>=0.1.2,<0.2'
 FAST_DSS_WHEEL_MARKER = (
     'platform_python_implementation == "CPython" and ('
     '(platform_system == "Windows" and platform_machine == "AMD64")'
     ' or (platform_system == "Linux" and platform_machine == "x86_64")'
-    ' or (platform_system == "Linux" and platform_machine == "aarch64"))'
+    ' or (platform_system == "Linux" and platform_machine == "aarch64")'
+    ' or (platform_system == "Darwin" and platform_machine == "arm64")'
+    ' or (platform_system == "Darwin" and platform_machine == "x86_64"))'
 )
 FAST_DSS_DEPENDENCY = f'{FAST_DSS_REQUIREMENT}; {FAST_DSS_WHEEL_MARKER}'
 
@@ -43,6 +48,7 @@ CORE_DEPENDENCIES = [
     'numpy',
     'pandas',
     f'{FAST_HDF_REQUIREMENT}; {FAST_HDF_WHEEL_MARKER}',
+    FAST_DSS_DEPENDENCY,
 ]
 
 COMPUTE_DEPENDENCIES = [
@@ -221,13 +227,15 @@ setup(
         # polyline profile queries for velocity, WSE, flow, time-series,
         # pipe-network, and plan-difference renderers (Windows HEC-RAS install required)
         'mesh': ['pythonnet>=3.0.5'],
-        # DSS file operations. The default "java" backend needs pyjnius and a
-        # Java JRE/JDK 8+; the optional native engine (FAST-DSS) serves the
-        # "native" and "shadow" backends without Java.
+        # DSS file operations. FAST-DSS (a core dependency) serves the default
+        # "auto"/"native" backend. This extra adds pyjnius for the "java" and
+        # "shadow" backends, which also need a Java JRE/JDK 8+.
         'dss': ['pyjnius', FAST_DSS_DEPENDENCY],
         # pydsstools writes NumPy grids directly to DSS7 for
         # write_precip_grid_arrays on the "java" backend; FAST-DSS serves the
-        # "native" backend.
+        # "native" backend with affine and pyproj. pydsstools 3.1.0 needs
+        # NumPy<2 on CPython 3.10-3.12, so it stays in this opt-in extra and out
+        # of the core dependencies and "all".
         'dss-native': ['pydsstools>=3.1.0,<4', 'pyproj', 'affine',
                        FAST_DSS_DEPENDENCY],
         # Everything (all optional dependencies)

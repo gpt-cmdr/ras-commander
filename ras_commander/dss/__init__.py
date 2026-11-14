@@ -1,33 +1,32 @@
 """
 ras-commander DSS subpackage: HEC-DSS file operations.
 
-This subpackage provides DSS file read/write capabilities using HEC Monolith
-Java libraries via pyjnius. All dependencies are lazy-loaded to minimize
-import time and keep optional dependencies truly optional.
+This subpackage reads and writes DSS6 and DSS7 files through the native
+ras-commander-fast-dss engine or, where it is not available, HEC Monolith Java
+libraries via pyjnius. All dependencies are lazy-loaded to minimize import time.
 
 Lazy Loading Behavior:
     - `import ras_commander` - DSS not loaded (fast startup)
     - `from ras_commander import RasDss` - DSS subpackage loaded
-    - `RasDss.get_catalog(...)` - pyjnius/Java loaded on first call
-    - HEC Monolith libraries downloaded automatically on first use (~20 MB)
+    - `RasDss.get_catalog(...)` - the selected backend loads on first call
+      (Java route: pyjnius, the JVM and a one-time ~20 MB HEC Monolith download)
 
 Backends:
-    RasDss.backend = "java" (default) | "native" | "shadow"; the environment
-    variable RAS_COMMANDER_DSS_BACKEND overrides it. "native" reads and writes
-    through the optional ras-commander-fast-dss package without Java.
-    See docs/user-guide/dss-native-backend.md.
+    RasDss.backend = "auto" (default) | "java" | "native" | "shadow"; the
+    environment variable RAS_COMMANDER_DSS_BACKEND overrides it. "auto" uses
+    "native" when ras-commander-fast-dss is installed and advertises the features
+    the default needs, otherwise "java", and logs the choice once at INFO. Set
+    "java" to keep the Java backend. See docs/user-guide/dss-native-backend.md.
 
 Dependencies:
-    Required at runtime for the java backend (lazy loaded):
-        - pyjnius: pip install pyjnius
+    Native backend:
+        - ras-commander-fast-dss: a default dependency on CPython for Windows x64,
+          Linux x86_64/aarch64 and macOS (where wheels are published)
+
+    Java backend (lazy loaded):
+        - pyjnius: pip install pyjnius (or the dss extra)
         - Java JRE/JDK 8+: Must be installed and JAVA_HOME set
-
-    Optional for the native backend:
-        - ras-commander-fast-dss: pip install ras-commander-fast-dss
-          (also installed by the dss, dss-native and all extras)
-
-    Auto-downloaded:
-        - HEC Monolith libraries (~20 MB, cached in ~/.ras-commander/dss/)
+        - HEC Monolith libraries (~20 MB, auto-downloaded to ~/.ras-commander/dss/)
 
 Usage:
     from ras_commander import RasDss

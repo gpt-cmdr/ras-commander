@@ -49,11 +49,12 @@ Functions:
 Backends:
     Read methods (``get_catalog``, ``read_timeseries``,
     ``read_multiple_timeseries``, ``read_paired_data``, ``get_file_version``
-    and everything built on them) use ``RasDss.backend``: ``"java"``
-    (default), ``"native"`` (optional ras-commander-fast-dss package, no JVM) or
-    ``"shadow"`` (native result, Java cross-check, differences logged). The
-    environment variable ``RAS_COMMANDER_DSS_BACKEND`` overrides the
-    attribute when set. ``read_grid`` under ``"native"`` requires a wheel
+    and everything built on them) use ``RasDss.backend``: ``"auto"``
+    (default: ``"native"`` when ras-commander-fast-dss is installed and ready,
+    otherwise ``"java"``), ``"java"`` (HEC Monolith), ``"native"``
+    (ras-commander-fast-dss, no JVM) or ``"shadow"`` (native result, Java
+    cross-check, differences logged). The environment variable
+    ``RAS_COMMANDER_DSS_BACKEND`` overrides the attribute when set. ``read_grid`` under ``"native"`` requires a wheel
     advertising qualified grid CRS (``grid_srs_monolith_parity``) or
     ``allow_unqualified_native=True``. The writers (``write_timeseries``,
     ``write_timeseries_from_dataframe``, ``write_grid_timeseries``,
@@ -131,7 +132,8 @@ class RasDss:
 
     Backends:
         ``RasDss.backend`` selects how read and write methods access DSS files:
-        ``"java"`` (default; HEC Monolith via pyjnius), ``"native"``
+        ``"auto"`` (default; ``"native"`` when ras-commander-fast-dss is installed and
+        ready, otherwise ``"java"``), ``"java"`` (HEC Monolith via pyjnius), ``"native"``
         (ras-commander-fast-dss, no JVM) or ``"shadow"`` (reads: native result plus a
         logged Java cross-check; writes: Java result plus a logged native
         repeat on a temporary copy). ``RAS_COMMANDER_DSS_BACKEND`` overrides it
@@ -152,8 +154,10 @@ class RasDss:
     #: refused writes. Set it before the first DSS call.
     hec_message_level = 1
 
-    #: Backend: "java" (default in this release), "native" or "shadow".
-    #: The environment variable RAS_COMMANDER_DSS_BACKEND overrides it when set.
+    #: Backend: "auto" (default), "java", "native" or "shadow". "auto" is "native" when
+    #: ras-commander-fast-dss is installed and advertises the features the default needs,
+    #: otherwise "java"; the choice is logged once at INFO. The environment variable
+    #: RAS_COMMANDER_DSS_BACKEND overrides it when set.
     backend = _backend.DEFAULT_BACKEND
 
     #: Shadow writes copy an existing target up to this size (MB) before the Java write;
@@ -166,11 +170,14 @@ class RasDss:
         """Return the backend the next read or write call will use.
 
         Resolution order: ``RAS_COMMANDER_DSS_BACKEND`` (when set), then
-        ``RasDss.backend``. ``"shadow"`` resolves to ``"java"`` when
-        ras-commander-fast-dss is not installed (one warning is logged).
+        ``RasDss.backend``. ``"auto"`` (the default) resolves to ``"native"`` when
+        ras-commander-fast-dss imports and advertises the features the default needs,
+        otherwise to ``"java"``; the result and reason are logged once at INFO.
+        ``"shadow"`` resolves to ``"java"`` when ras-commander-fast-dss is not
+        installed (one warning is logged).
 
         Raises:
-            ValueError: If the configured name is not java, native or shadow.
+            ValueError: If the configured name is not auto, java, native or shadow.
             ImportError: If ``"native"`` is selected and ras-commander-fast-dss is not
                 installed.
         """
@@ -273,7 +280,10 @@ class RasDss:
             - ``"no"``: not provided.
 
             ``attrs``: ``requested_backend`` (``RasDss.backend`` or the
-            environment override), ``native_installed`` (bool),
+            environment override, with ``"auto"`` resolved),
+            ``backend_source`` (``"explicit"`` or ``"auto"``),
+            ``default_backend_reason`` (why ``"auto"`` resolves as it does),
+            ``native_installed`` (bool),
             ``native_grid_qualified`` (bool), ``native_writes_available``
             (bool), ``native_repair_available`` (bool),
             ``native_write_sync_available`` (bool; the writers take ``sync=``),
@@ -291,8 +301,12 @@ class RasDss:
             list(_backend.CAPABILITIES),
             columns=["operation", "java", "native", "shadow", "note"],
         )
+        explicit = _backend.explicit_backend(RasDss.backend)
+        default_backend, default_reason = _backend.default_backend()
         df.attrs = {
-            "requested_backend": _backend.requested_backend(RasDss.backend),
+            "requested_backend": explicit or default_backend,
+            "backend_source": "explicit" if explicit else "auto",
+            "default_backend_reason": default_reason,
             "native_installed": _backend.native_available(),
             "native_grid_qualified": _backend.native_grid_qualified(),
             "native_writes_available": _backend.native_writes_available(),
@@ -2158,14 +2172,18 @@ class RasDss:
         This is a placeholder for API compatibility.
 
         Deprecated: under the native backend no JVM is started and this method
-        is a no-op that emits ``DeprecationWarning``. It will be removed with the
-        Java backend.
+        is a no-op. It emits ``DeprecationWarning`` when ``native`` was selected
+        explicitly; under the automatic default it is a silent no-op. It will be
+        removed with the Java backend.
         """
         try:
-            backend = _backend.requested_backend(RasDss.backend)
+            explicit = _backend.explicit_backend(RasDss.backend)
         except ValueError:
-            backend = None
-        if backend == "native":
+            explicit = None
+        if explicit is None:
+            logger.debug("shutdown_jvm(): nothing to do (automatic DSS backend)")
+            return
+        if explicit == "native":
             import warnings
 
             warnings.warn(
@@ -3008,21 +3026,11 @@ class RasDss:
         *,
         dss_version: Optional[int] = None,
     ) -> List[str]:
-        """``write_grid_timeseries`` through HEC Monolith (unchanged Java path)."""
+        """``write_grid_timeseries`` through HEC Monolith."""
         dss_version = RasDss._validate_dss_version(dss_version)
         if grid_info is None:
             raise ValueError("grid_info is required")
         grid_info = dict(grid_info)
-
-        # HEC Monolith's DSS6 precipitation-compression setter exposes its
-        # base and scale positions opposite to DSS7. Supply the known-safe V6
-        # defaults when the caller selects DSS6 and has not overridden them.
-        compression = grid_info.get("compression", "PRECIP_2_BYTE")
-        if dss_version == 6 and isinstance(compression, str):
-            compression_text = compression.upper().replace("-", "_")
-            if compression_text in {"PRECIP", "PRECIP2BYTE", "PRECIP_2_BYTE"}:
-                grid_info.setdefault("compression_base", 100.0)
-                grid_info.setdefault("compression_scale_factor", 0.0)
 
         grid_array = np.asarray(data, dtype=np.float32)
         if grid_array.ndim != 3:
@@ -3055,13 +3063,38 @@ class RasDss:
             raise IsADirectoryError(f"DSS path is not a file: {dss_path}")
         if file_existed:
             RasDss._require_writable_dss_file(dss_path)
-        if file_existed and dss_version is not None:
+        existing_version = None
+        if file_existed:
             existing_version = RasDss._get_file_version_java(dss_path)
-            if existing_version != dss_version:
+            if dss_version is not None and existing_version != dss_version:
                 raise ValueError(
                     f"Existing DSS file is version {existing_version}, not "
                     f"requested version {dss_version}: {dss_path}"
                 )
+        # The version the records will be stored in: the existing file's, else the
+        # requested one, else Monolith's default for a new file (DSS7).
+        target_version = existing_version or dss_version or 7
+
+        compression = grid_info.get("compression", "PRECIP_2_BYTE")
+        compression_text = (
+            compression.upper().replace("-", "_") if isinstance(compression, str) else None
+        )
+        if target_version == 6 and compression_text in {"NONE", "UNDEFINED"}:
+            # Monolith stores an uncompressed DSS6 grid with an invalid PRECIP_2_BYTE
+            # header: every cell then reads as missing, on Java and natively.
+            raise _errors.get("DssUnsupportedRecordError")(
+                "Uncompressed DSS6 grids are not supported: HEC Monolith stores them with "
+                "an invalid PRECIP_2_BYTE scale and base, and every cell is lost. Use "
+                "compression='PRECIP_2_BYTE' or 'ZLIB'. The native backend refuses them too."
+            )
+        # HEC Monolith's DSS6 precipitation-compression setter exposes its
+        # base and scale positions opposite to DSS7. Supply the known-safe V6
+        # defaults whenever the records go to a DSS6 file (requested, or an existing
+        # DSS6 file written without dss_version) and the caller has not overridden them.
+        if target_version == 6 and compression_text in {"PRECIP", "PRECIP2BYTE", "PRECIP_2_BYTE"}:
+            grid_info.setdefault("compression_base", 100.0)
+            grid_info.setdefault("compression_scale_factor", 0.0)
+
         if not file_existed:
             if not create_if_missing:
                 raise FileNotFoundError(f"DSS file not found: {dss_path}")
@@ -3305,6 +3338,20 @@ class RasDss:
                     "(the native writer then chooses them as HEC Monolith does)"
                 )
             if base is not None:
+                if version == 6 and not float(scale) > 0:
+                    # The Java backend passes these to Monolith's DSS6 setter in swapped
+                    # positions, so Java-era code passed base=100 and scale=0. Name that
+                    # instead of the engine's generic refusal; never reinterpret silently.
+                    raise ValueError(
+                        f"compression_scale_factor must be positive, got {scale!r} "
+                        f"(compression_base={base!r}). The native DSS backend stores DSS6 "
+                        "scale and base as named; compression_base=100 with "
+                        "compression_scale_factor=0 is the Java backend's swapped DSS6 "
+                        "convention. Omit both (the writer chooses them as HEC Monolith "
+                        "does), pass compression_scale_factor=100 and compression_base=0, "
+                        "or force the Java backend (RasDss.backend = 'java' or "
+                        "RAS_COMMANDER_DSS_BACKEND=java)."
+                    )
                 kwargs.update(base=float(base), scale_factor=float(scale))
         return kwargs
 
