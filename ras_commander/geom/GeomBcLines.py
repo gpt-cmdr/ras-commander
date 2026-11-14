@@ -1567,10 +1567,30 @@ class GeomBcLines:
 
         original_hash = digest(path)
         group_path = 'Geometry/Boundary Condition Lines'
+        def require_owned_storage(hdf):
+            group = hdf
+            for name in group_path.split('/'):
+                if not isinstance(group.get(name, getlink=True), h5py.HardLink):
+                    raise ValueError('BC write path requires owned hard-linked groups')
+                group = group[name]
+                if not isinstance(group, h5py.Group):
+                    raise ValueError('BC write path requires groups')
+            for name in ('Attributes', 'External Faces'):
+                link = group.get(name, getlink=True)
+                if link is None:
+                    continue
+                if not isinstance(link, h5py.HardLink):
+                    raise ValueError('BC target requires owned dataset storage')
+                dataset = group[name]
+                if (not isinstance(dataset, h5py.Dataset) or dataset.external
+                        or dataset.is_virtual):
+                    raise ValueError('BC target requires owned dataset storage')
+
         native_dtype = np.dtype([(name, '<i4') for name in
                                  ('BC Line ID', 'Face Index', 'FP Start Index', 'FP End Index')]
                                 + [(name, '<f4') for name in ('Station Start', 'Station End')])
         with h5py.File(path, 'r') as hdf:
+            require_owned_storage(hdf)
             if (text(hdf.attrs.get('File Type', '')) != 'HEC-RAS Geometry'
                     or re.match(r'^HEC-RAS 7\.0\.1(?:\s|$)', text(hdf.attrs.get('File Version', ''))) is None
                     or text(hdf.attrs.get('Units System', '')) not in ('SI Units', 'US Customary')):
@@ -1612,6 +1632,7 @@ class GeomBcLines:
             staged = Path(directory) / path.name
             shutil.copy2(path, staged)
             with h5py.File(staged, 'r+') as hdf:
+                require_owned_storage(hdf)
                 group = hdf[group_path]
                 for name, values in (('Attributes', attributes), ('External Faces', faces)):
                     if name in group and group[name].shape == values.shape and group[name].dtype == values.dtype:
@@ -1625,8 +1646,13 @@ class GeomBcLines:
                             dataset.attrs[key] = value
             if digest(path) != original_hash:
                 raise RuntimeError('Geometry HDF changed during BC binding preparation')
-            with backup.open('xb') as output, path.open('rb') as source:
-                shutil.copyfileobj(source, output)
+            backup_fd = os.open(backup, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+            try:
+                with os.fdopen(backup_fd, 'wb') as output, path.open('rb') as source:
+                    shutil.copyfileobj(source, output)
+            except BaseException:
+                backup.unlink(missing_ok=True)
+                raise
             if digest(backup) != original_hash or digest(path) != original_hash:
                 raise RuntimeError('Geometry HDF changed during BC binding backup')
             os.replace(staged, path)

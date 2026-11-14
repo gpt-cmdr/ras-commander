@@ -274,3 +274,88 @@ def test_float32_face_points_preserve_outer_boundary_candidates(tmp_path):
             parent[name] = data
     result = GeomBcLines.compute_external_faces(path)
     assert result['external_faces']['Face Index'].tolist() == [3, 0]
+
+
+@pytest.mark.parametrize('target', ['Geometry', 'Geometry/Boundary Condition Lines',
+                                    'Geometry/Boundary Condition Lines/Attributes',
+                                    'Geometry/Boundary Condition Lines/External Faces'])
+@pytest.mark.parametrize('kind', ['external', 'soft'])
+def test_writer_rejects_redirected_storage(tmp_path, target, kind):
+    path = make_mesh(tmp_path)
+    other = tmp_path / 'other.hdf'
+    with h5py.File(other, 'w') as out:
+        out.create_group('empty')
+    with h5py.File(path, 'r+') as f:
+        if target in f:
+            del f[target]
+        if kind == 'external':
+            f[target] = h5py.ExternalLink(str(other), '/empty')
+        else:
+            f.require_group('unowned')
+            f[target] = h5py.SoftLink('/unowned')
+    before, external = path.read_bytes(), other.read_bytes()
+    with pytest.raises(ValueError, match='owned'):
+        GeomBcLines.write_external_faces(path, experimental=True)
+    assert path.read_bytes() == before
+    assert other.read_bytes() == external
+    assert not list(tmp_path.glob('*.bak'))
+    assert not list(tmp_path.glob('bc-faces-*'))
+
+
+def test_backup_is_created_private(tmp_path, monkeypatch):
+    import os
+    import stat
+    path = make_mesh(tmp_path)
+    path.chmod(0o600)
+    original_open = os.open
+    modes = []
+    def capture(name, flags, mode=0o777, **kwargs):
+        if str(name).endswith('.bak'):
+            modes.append(mode)
+        return original_open(name, flags, mode, **kwargs)
+    monkeypatch.setattr(os, 'open', capture)
+    previous = os.umask(0o022)
+    try:
+        result = GeomBcLines.write_external_faces(path, experimental=True)
+    finally:
+        os.umask(previous)
+    assert modes == [0o600]
+    if os.name == 'posix':
+        assert stat.S_IMODE(result['backup_path'].stat().st_mode) == 0o600
+
+
+def test_partial_backup_is_removed(tmp_path, monkeypatch):
+    import shutil
+    path = make_mesh(tmp_path)
+    before = path.read_bytes()
+    original_copy = shutil.copyfileobj
+    def fail(source, output, *args, **kwargs):
+        if isinstance(output.name, int):
+            output.write(b'partial')
+            raise OSError('backup copy failed')
+        return original_copy(source, output, *args, **kwargs)
+    with monkeypatch.context() as patch:
+        patch.setattr(shutil, 'copyfileobj', fail)
+        with pytest.raises(OSError, match='backup copy failed'):
+            GeomBcLines.write_external_faces(path, experimental=True)
+    assert path.read_bytes() == before
+    assert not list(tmp_path.glob('*.bak'))
+    assert not list(tmp_path.glob('bc-faces-*'))
+    GeomBcLines.write_external_faces(path, experimental=True)
+
+
+def test_writer_rejects_external_raw_dataset_storage(tmp_path):
+    path = make_mesh(tmp_path)
+    raw = tmp_path / 'attributes.bin'
+    with h5py.File(path, 'r+') as f:
+        group = f['Geometry/Boundary Condition Lines']
+        values = group['Attributes'][()]
+        del group['Attributes']
+        group.create_dataset('Attributes', data=values,
+                             external=[(str(raw), 0, values.nbytes)])
+    before, external = path.read_bytes(), raw.read_bytes()
+    with pytest.raises(ValueError, match='owned dataset storage'):
+        GeomBcLines.write_external_faces(path, experimental=True)
+    assert path.read_bytes() == before
+    assert raw.read_bytes() == external
+    assert not list(tmp_path.glob('*.bak'))
