@@ -1411,10 +1411,14 @@ class GeomBcLines:
         overlaps in model units, and types used. ``requires_geometry_repair``
         means losing lines must be trimmed and rebound before writing. This
         preview does not qualify trimming, native selection, or a solver run.
-        The existing compute and write methods continue to reject shared faces.
+        Compute and default write calls continue to reject shared faces.
         """
         result = GeomBcLines._compute_external_faces(
             geom_hdf, relative_tolerance=relative_tolerance, collect_conflicts=True)
+        return GeomBcLines._arbitrate_external_faces(result, boundary_types)
+
+    @staticmethod
+    def _arbitrate_external_faces(result, boundary_types):
         types = dict(boundary_types or {})
         identities = result['identities']
         if any(key not in identities for key in types):
@@ -1449,7 +1453,7 @@ class GeomBcLines:
                 'qualification': 'read_only_arbitration_only'}
 
     @staticmethod
-    def _compute_external_faces(geom_hdf, *, relative_tolerance, collect_conflicts=False):
+    def _compute_external_faces(geom_hdf, *, relative_tolerance, collect_conflicts=False, polylines=None):
         import h5py
         from shapely.geometry import LineString, Point
 
@@ -1488,7 +1492,7 @@ class GeomBcLines:
                 start, count, _, parts = map(int, info[line_id])
                 if parts != 1 or start < 0 or count < 2 or start + count > len(points):
                     raise ValueError('Invalid or multipart BC polyline')
-                line = LineString(points[start:start + count])
+                line = LineString(points[start:start + count] if polylines is None else polylines[line_id])
                 area = text(attr['SA-2D'])
                 if area not in counts:
                     raise ValueError('Unknown BC area')
@@ -1569,9 +1573,31 @@ class GeomBcLines:
 
     @staticmethod
     @log_call
+    def preview_external_face_repair(
+        geom_hdf: Union[Path, str], *, boundary_types=None,
+        relative_tolerance: float = 1e-12, max_repair_passes: int = 5,
+    ) -> dict:
+        """Preview continuous end trims without modifying any file.
+
+        Types are keyed by (area, BC name), with values flow or normal_depth.
+        Larger overlap wins; ties within 0.001 model units require exactly one
+        flow against normal-depth boundaries. Clearance is at most one model
+        unit, one tenth of the lost face length, and half the retained span.
+        Only continuous monotonic nearest-perimeter projections are supported;
+        ambiguous, direction-reversing, split, empty, or oversized projection arrangements
+        raise ValueError. Coordinates are rounded to their stored dtype before
+        rebinding. Returns polyline_updates, repair_audit, tie_types and binding
+        tables. This preview does not establish native solver equivalence.
+        """
+        from ._bc_repair import prepare_repair
+        return prepare_repair(geom_hdf, boundary_types, relative_tolerance, max_repair_passes)
+
+    @staticmethod
+    @log_call
     def write_external_faces(
         geom_hdf: Union[Path, str], *, experimental: bool = False,
         relative_tolerance: float = 1e-12,
+        repair_conflicts: bool = False, boundary_types=None, max_repair_passes: int = 5,
     ) -> dict:
         """Recover compiled 7.0.1 geometry BC bindings on an isolated model copy.
 
@@ -1590,6 +1616,15 @@ class GeomBcLines:
             experimental: Required explicit opt-in for this recovery operation.
             relative_tolerance: Dimensionless overlap tolerance passed to
                 ``compute_external_faces``.
+            repair_conflicts: Explicit opt-in to previewed continuous end trims.
+                Default False preserves conflict rejection. Repairs change only
+                the HDF, not geometry text; a later rebuild needs another repair.
+                Copy repaired geometry, including its provenance attribute, into
+                a fresh plan before writing event conditions. Existing forcing
+                is not repaired. Inspect ``preview_external_face_repair`` first.
+            boundary_types: Mapping (area, BC name) to flow or normal_depth.
+                Required for type-based ties and previously stored tie decisions.
+            max_repair_passes: Finite bind-and-trim limit, from 1 through 100.
 
         Returns:
             dict: Computed tables plus ``backup_path`` and ``geom_hdf`` Paths.
@@ -1607,9 +1642,12 @@ class GeomBcLines:
         import h5py
 
         from .GeomPreprocessor import GeomPreprocessor
+        from .._bc_tie_provenance import read_receipt, write_receipt
 
         if experimental is not True:
             raise ValueError('write_external_faces requires experimental=True')
+        if not isinstance(repair_conflicts, bool):
+            raise ValueError('repair_conflicts must be a bool')
         path = Path(geom_hdf).absolute()
         if path.is_symlink() or not re.search(r'\.g\d{1,2}\.hdf$', path.name, re.I):
             raise ValueError('Expected a regular geometry .g##.hdf file')
@@ -1638,7 +1676,7 @@ class GeomBcLines:
                     raise ValueError('BC write path requires groups')
                 if h5py.h5o.get_info(group.id).rc != 1:
                     raise ValueError('BC write path contains a shared hard-linked group')
-            for name in ('Attributes', 'External Faces'):
+            for name in ('Attributes', 'External Faces', 'Polyline Points', 'Polyline Info', 'Polyline Parts'):
                 link = group.get(name, getlink=True)
                 if link is None:
                     continue
@@ -1656,6 +1694,10 @@ class GeomBcLines:
                                 + [(name, '<f4') for name in ('Station Start', 'Station End')])
         with h5py.File(path, 'r') as hdf:
             require_owned_storage(hdf)
+            event_path = 'Event Conditions/Unsteady/Boundary Conditions'
+            if repair_conflicts and event_path in hdf and len(hdf[event_path]):
+                raise ValueError('Repair requires geometry without existing boundary forcing')
+            prior_receipt = read_receipt(hdf, boundary_types, require_types=repair_conflicts)
             if (text(hdf.attrs.get('File Type', '')) != 'HEC-RAS Geometry'
                     or re.match(r'^HEC-RAS 7\.0\.1(?:\s|$)', text(hdf.attrs.get('File Version', ''))) is None
                     or text(hdf.attrs.get('Units System', '')) not in ('SI Units', 'US Customary')):
@@ -1668,7 +1710,12 @@ class GeomBcLines:
             if f'{group_path}/External Faces' in hdf:
                 if hdf[f'{group_path}/External Faces'].dtype != native_dtype:
                     raise ValueError('Unsupported existing External Faces dtype')
-        result = GeomBcLines.compute_external_faces(path, relative_tolerance=relative_tolerance)
+        if repair_conflicts:
+            result = GeomBcLines.preview_external_face_repair(
+                path, boundary_types=boundary_types, relative_tolerance=relative_tolerance,
+                max_repair_passes=max_repair_passes)
+        else:
+            result = GeomBcLines.compute_external_faces(path, relative_tolerance=relative_tolerance)
         faces = np.empty(len(result['external_faces']), dtype=native_dtype)
         with np.errstate(over='ignore'):
             for name in native_dtype.names:
@@ -1683,6 +1730,14 @@ class GeomBcLines:
                 or not np.isfinite(faces['Station End']).all()
                 or np.any(faces['Station End'] <= faces['Station Start'])):
             raise ValueError('Binding cannot be represented by the native numeric schema')
+        if repair_conflicts and not result['changed'] and result['has_receipt']:
+            with h5py.File(path, 'r') as hdf:
+                unchanged = (np.array_equal(hdf[f'{group_path}/External Faces'][()], faces)
+                             and np.array_equal(attributes['Length'], lengths))
+            if unchanged:
+                if digest(path) != original_hash:
+                    raise RuntimeError('Geometry HDF changed during repair preview')
+                return {**result, 'geom_hdf': path, 'backup_path': None}
         if 'Length' not in attributes.dtype.names:
             extended = np.empty(attributes.shape, dtype=[
                 (name, attributes.dtype.fields[name][0]) for name in attributes.dtype.names
@@ -1699,7 +1754,9 @@ class GeomBcLines:
             with h5py.File(staged, 'r+') as hdf:
                 require_owned_storage(hdf)
                 group = hdf[group_path]
-                for name, values in (('Attributes', attributes), ('External Faces', faces)):
+                updates = {'Attributes': attributes, 'External Faces': faces,
+                           **result.get('polyline_updates', {})}
+                for name, values in updates.items():
                     if name in group and group[name].shape == values.shape and group[name].dtype == values.dtype:
                         group[name][...] = values
                     else:
@@ -1709,6 +1766,19 @@ class GeomBcLines:
                         dataset = group.create_dataset(name, data=values)
                         for key, value in metadata.items():
                             dataset.attrs[key] = value
+                if result.get('changed') or prior_receipt:
+                    types = result.get('tie_types', {(r['area'], r['name']): r['type']
+                                                    for r in (prior_receipt or {}).get('types', [])})
+                    audit = result.get('prior_audit', (prior_receipt or {}).get('audit', [])) + result.get('repair_audit', [])
+                    write_receipt(hdf, types, audit)
+            # Re-read serialized geometry; sharing or changed stations aborts
+            # before backup/publication, preserving the original.
+            rebound = GeomBcLines.compute_external_faces(staged, relative_tolerance=relative_tolerance)
+            for name in native_dtype.names:
+                if not np.array_equal(rebound['external_faces'][name].to_numpy().astype(native_dtype[name]), faces[name]):
+                    raise ValueError('Serialized boundary binding differs from preview')
+            if not np.array_equal(rebound['lengths'].astype(length_dtype), lengths):
+                raise ValueError('Serialized boundary lengths differ from preview')
             if digest(path) != original_hash:
                 raise RuntimeError('Geometry HDF changed during BC binding preparation')
             backup_fd = os.open(backup, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
