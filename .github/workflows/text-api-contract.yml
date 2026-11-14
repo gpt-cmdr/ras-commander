@@ -121,3 +121,32 @@ jobs:
           if code != 0 or outcomes.counts != {"passed": 14}:
               sys.exit(1)
           PY
+      - name: Check example notebook contracts 916, 917, 926 offline (37 tests, none skipped)
+        run: |
+          python - <<'PY'
+          import socket, sys
+          def _blocked(*args, **kwargs):
+              raise OSError("network access is blocked in this CI step")
+          socket.socket.connect = _blocked
+          socket.socket.connect_ex = _blocked
+          socket.create_connection = _blocked
+          socket.getaddrinfo = _blocked
+          import pytest
+          class Outcomes:
+              def __init__(self):
+                  self.counts = {}
+              def pytest_runtest_logreport(self, report):
+                  if report.when == "call" or report.outcome != "passed":
+                      self.counts[report.outcome] = self.counts.get(report.outcome, 0) + 1
+          outcomes = Outcomes()
+          code = pytest.main(
+              ["tests/test_rasplan_hdf_default_outputs.py",
+               "tests/test_hrrr_precipitation_forecast_notebook.py",
+               "tests/test_mrms_boundary_hyetograph_notebook.py", "-v", "-rA",
+               "-p", "no:cacheprovider", f"--basetemp={__import__('os').environ['RUNNER_TEMP']}/pytest-notebook-contracts"],
+              plugins=[outcomes],
+          )
+          print(f"Notebook contract outcomes: {outcomes.counts}")
+          if code != 0 or outcomes.counts != {"passed": 37}:
+              sys.exit(1)
+          PY
