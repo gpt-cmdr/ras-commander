@@ -35,3 +35,11 @@ def test_ambiguous_drawn_endpoint_refused(points):
     with pytest.raises(ValueError, match='Ambiguous'):
         project_pieces(points, RING)
 
+
+@pytest.mark.parametrize('reverse', [False, True])
+def test_narrow_channel_nonadjacent_ties_refused(reverse):
+    ring = [(0,0), (1e-6,0), (1e-6,10), (0,10), (0,0)]
+    points = [(5e-7,2), (5e-7,8)]
+    with pytest.raises(ValueError, match='Ambiguous'):
+        project_pieces(points[::-1] if reverse else points, ring)
+

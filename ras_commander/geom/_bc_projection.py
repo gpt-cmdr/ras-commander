@@ -29,6 +29,20 @@ def project_pieces(points, ring, *, work_limit=2000000):
     stations = np.r_[0., np.cumsum(lengths)]
     total = stations[-1]
     eps = 128 * np.finfo(float).eps * max(total, np.max(np.abs(ring)), 1.)
+    def same_vertex(i, j, projected, tolerance):
+        if i == j:
+            return True
+        # Only neighboring edges can share a ring vertex. Spatial proximity
+        # alone cannot establish equivalence across a narrow channel.
+        if (i + 1) % len(edges) == j:
+            vertex = ring[j]
+        elif (j + 1) % len(edges) == i:
+            vertex = ring[i]
+        else:
+            return False
+        return (np.linalg.norm(projected[i] - vertex) <= tolerance
+                and np.linalg.norm(projected[j] - vertex) <= tolerance)
+
     result, arc, work = [], 0., 0
     for p, q in zip(points, points[1:]):
         v = q - p
@@ -74,7 +88,7 @@ def project_pieces(points, ring, *, work_limit=2000000):
                 # Distance ties near a shared vertex have quadratic spatial
                 # error; do not mistake root roundoff for distinct projections.
                 point_error = 4 * np.sqrt(eps * max(distances[best], 1.))
-                if any(np.linalg.norm(projected[k]-projected[best]) > point_error for k in near):
+                if any(not same_vertex(k, best, projected, point_error) for k in near):
                     raise ValueError('Ambiguous nearest perimeter edges at partition boundary')
             for left, right in zip(roots, roots[1:]):
                 t = (left+right)/2
@@ -83,7 +97,7 @@ def project_pieces(points, ring, *, work_limit=2000000):
                 near = np.flatnonzero(abs(dist-dist[best]) <= eps*eps)
                 projected = ring[:-1] + (a+b*t)[:, None]*edges
                 point_error = 4 * np.sqrt(eps * max(np.sqrt(max(dist[best], 0)), 1.))
-                if any(np.linalg.norm(projected[k]-projected[best]) > point_error for k in near):
+                if any(not same_vertex(k, best, projected, point_error) for k in near):
                     raise ValueError('Ambiguous nearest perimeter edges')
                 # At numerically coincident vertex projections prefer the
                 # moving edge projection over its clamped endpoint neighbor.
