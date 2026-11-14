@@ -86,6 +86,9 @@ class RasPreprocess:
             plan_hdf: Existing staged HDF without boundary forcing, containing
                 the same area order, mesh and boundary tables as geom_hdf.
             geom_hdf: Compiled geometry with External Faces and BC Length.
+                When boundaries were repaired, both HDFs must retain matching,
+                current repair provenance. Flow-file types must agree with every
+                flow/normal-depth tie decision recorded by the repair.
             flow_file: Unsteady text containing flow hydrographs or normal depth.
             start_time: Naive local datetime defining hydrograph day zero.
             end_time: Naive local simulation end datetime.

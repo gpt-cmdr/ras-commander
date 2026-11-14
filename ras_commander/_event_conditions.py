@@ -166,8 +166,12 @@ def _write_events(plan_hdf, geom_hdf, flow_file, start_time, end_time, units, ta
     GeomPreprocessor._require_closed_geometry_hdf(target)
     GeomPreprocessor._require_closed_geometry_hdf(Path(geom_hdf))
     boundaries = _parse(flow_file)
+    from ._bc_tie_provenance import read_receipt
+    boundary_types = {key: {'Flow Hydrograph': 'flow', 'Friction Slope': 'normal_depth'}.get(bc.get('kind'))
+                      for key, bc in boundaries.items()}
     prepared = []
     with h5py.File(geom_hdf, 'r') as geometry:
+        read_receipt(geometry, boundary_types, require_types=True)
         if re.match(r'^HEC-RAS 7\.0\.1(?:\s|$)', _text(geometry.attrs.get('File Version', ''))) is None:
             raise ValueError('Geometry must declare HEC-RAS 7.0.1')
         if _text(geometry.attrs.get('Units System', '')) != unit_labels[units]:
@@ -243,6 +247,10 @@ def _write_events(plan_hdf, geom_hdf, flow_file, start_time, end_time, units, ta
         if _text(existing.attrs.get('Units System', '')) != unit_labels[units]:
             raise ValueError('Destination units must match requested units')
         _require_matching_geometry(geometry, existing, areas)
+        source_receipt = read_receipt(geometry, boundary_types, require_types=True)
+        destination_receipt = read_receipt(existing, boundary_types, require_types=True)
+        if source_receipt != destination_receipt:
+            raise ValueError('Destination boundary repair provenance must match geometry')
         _require_owned_event_path(existing, group_path)
         if group_path in existing and len(existing[group_path]):
             raise ValueError('Destination already has boundary forcing; use a fresh staged copy')

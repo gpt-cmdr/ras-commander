@@ -49,6 +49,31 @@ def test_flow_and_backup(case):
         assert 'Completed Successfully' not in f['Event Conditions'].attrs
 
 
+@pytest.mark.parametrize('mode', ['valid', 'contradiction', 'missing', 'stale', 'malformed'])
+def test_boundary_repair_provenance(case, mode):
+    from ras_commander._bc_tie_provenance import write_receipt, ATTRIBUTE, GROUP
+    for path in case[:2]:
+        with h5py.File(path, 'r+') as f:
+            write_receipt(f, {('A', 'B'): 'normal_depth' if mode == 'contradiction' else 'flow'}, [])
+    with h5py.File(case[1], 'r+') as f:
+        if mode == 'missing':
+            del f[GROUP].attrs[ATTRIBUTE]
+        elif mode == 'stale':
+            f['Geometry/2D Flow Areas/A/FacePoints Coordinate'][0] = [1, 2]
+        elif mode == 'malformed':
+            f[GROUP].attrs[ATTRIBUTE] = '{broken'
+    before = case[1].read_bytes()
+    if mode == 'valid':
+        write(case)
+        with h5py.File(case[1]) as f:
+            assert ATTRIBUTE in f[GROUP].attrs
+    else:
+        with pytest.raises(ValueError):
+            write(case)
+        assert case[1].read_bytes() == before
+        assert not case[1].with_name('p.hdf.events.bak').exists()
+
+
 def test_normal_depth(case):
     case[2].write_text('Boundary Location=,,,,,A,,B\nFriction Slope=0.001\n')
     write(case)
