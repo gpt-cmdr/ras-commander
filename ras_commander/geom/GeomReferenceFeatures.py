@@ -1314,6 +1314,120 @@ class GeomReferenceFeatures:
 
     @staticmethod
     @log_call
+    def replace_reference_points(
+        geom_file: Union[str, Path],
+        points: Sequence[Mapping[str, Any]],
+        *,
+        expected_existing_names: Optional[Sequence[str]] = None,
+        create_backup: bool = True,
+    ) -> Optional[Path]:
+        """Replace the complete native reference-point collection atomically.
+
+        Pass an empty collection to remove all native reference points. To remove
+        selected points, filter ``get_reference_points()`` and pass the survivors.
+        IC Point records and all unrelated bytes and line endings are preserved.
+        Unchanged named points retain their original formatting. Callers must
+        exclude concurrent writers. This edits geometry text only; preprocess
+        and validate mesh membership before accepting subsequent solver results.
+
+        Args:
+            geom_file: Geometry text file, as str or Path.
+            points: Ordered mappings with unique name, finite x and finite y.
+                Names follow the same 40-byte contract as add_reference_points.
+            expected_existing_names: Optional exact ordered population guard.
+            create_backup: Preserve a numbered backup before replacement.
+
+        Returns:
+            Optional[Path]: Retained backup path, or None when backups are disabled.
+
+        Raises:
+            ValueError: Invalid points, malformed native records or failed guard.
+            TypeError: A point is not a mapping or create_backup is not boolean.
+            RuntimeError: Source bytes changed while preparing the replacement.
+            OSError: Reading, backup creation or atomic replacement failed.
+        """
+        import io
+        import os
+        import shutil
+        import tempfile
+
+        path = Path(geom_file)
+        if not isinstance(create_backup, bool):
+            raise TypeError('create_backup must be a bool')
+        original = path.read_bytes()
+        # Preserve unrelated legacy bytes without changing native name encoding.
+        lines = io.StringIO(original.decode('utf-8', errors='surrogateescape'), newline='').readlines()
+        records = _reference_point_records(lines)
+        starts = [i for i, line in enumerate(lines) if line.startswith('Reference Point Name=')]
+        positions = {i + 1 for i in starts}
+        if any(line.startswith('Reference Point Position=') and i not in positions
+               for i, line in enumerate(lines)):
+            raise ValueError('Orphan native Reference Point Position record')
+        names = [record['name'] for record in records]
+        if expected_existing_names is not None and list(expected_existing_names) != names:
+            raise ValueError(f'Reference-point population changed: observed {names!r}')
+        prepared, seen = [], set()
+        for index, item in enumerate(points):
+            if not isinstance(item, Mapping):
+                raise TypeError(f'points[{index}] must be a mapping')
+            name = _validate_reference_line_field(item.get('name', ''), 'point name', 40, allow_commas=True)
+            if name in seen:
+                raise ValueError(f'Duplicate native reference point name {name!r}')
+            seen.add(name)
+            try:
+                x, y = float(item['x']), float(item['y'])
+            except (KeyError, TypeError, ValueError) as exc:
+                raise ValueError(f'Reference point {name!r} requires numeric X,Y') from exc
+            if not math.isfinite(x) or not math.isfinite(y):
+                raise ValueError(f'Reference point {name!r} needs finite X,Y')
+            prepared.append(dict(name=name, x=x, y=y))
+        if prepared == records:
+            return GeomParser.create_backup(path) if create_backup else None
+        ending = next((e for line in lines for e in ('\r\n', '\n', '\r')
+                       if line.endswith(e)), '\n')
+        retained = {r['name']: (r, lines[i:i+2]) for r, i in zip(records, starts)}
+        replacement = []
+        for point in prepared:
+            if replacement and not replacement[-1].endswith(('\r', '\n')):
+                replacement[-1] += ending
+            old = retained.get(point['name'])
+            block = old[1] if old and old[0] == point else [
+                line + ending for line in _build_reference_point_block(**point)]
+            replacement.extend(block)
+        removed = set(starts) | positions
+        insert = starts[0] if starts else next(
+            (i for i, line in enumerate(lines) if line.startswith('LCMann ')), len(lines))
+        if replacement and insert and not lines[insert-1].endswith(('\r', '\n')):
+            # Adding a separator would alter an unrelated unterminated record.
+            raise ValueError('Cannot insert points after an unterminated unrelated record')
+        updated = [line for i, line in enumerate(lines[:insert]) if i not in removed]
+        suffix = [line for i, line in enumerate(lines[insert:], insert) if i not in removed]
+        if suffix and replacement and not replacement[-1].endswith(('\r', '\n')):
+            replacement[-1] += ending
+        updated.extend(replacement)
+        updated.extend(suffix)
+        if _reference_point_records(updated) != prepared:
+            raise RuntimeError('Reference-point replacement validation failed')
+        output = ''.join(updated).encode('utf-8', errors='surrogateescape')
+        fd, temporary = tempfile.mkstemp(prefix=path.name + '.', suffix='.tmp', dir=path.parent)
+        temporary = Path(temporary)
+        try:
+            with os.fdopen(fd, 'wb') as stream:
+                stream.write(output)
+            shutil.copymode(path, temporary)
+            if path.read_bytes() != original:
+                raise RuntimeError('Geometry changed during reference-point replacement')
+            backup = GeomParser.create_backup(path) if create_backup else None
+            if path.read_bytes() != original:
+                raise RuntimeError('Geometry changed during reference-point backup')
+            os.replace(temporary, path)
+        finally:
+            temporary.unlink(missing_ok=True)
+        logger.info('Replaced %d native reference points with %d in %s', len(records), len(prepared), path.name)
+        return backup
+
+    @staticmethod
+    @log_call
     def get_reference_lines(geom_file: Union[str, Path]) -> List[dict]:
         """Read named area-associated lines; reject malformed coordinate blocks."""
         geom_file = Path(geom_file)
