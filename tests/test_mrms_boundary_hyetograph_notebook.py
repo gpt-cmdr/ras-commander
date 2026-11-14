@@ -60,6 +60,7 @@ def test_mrms_boundary_notebook_is_fully_executed_with_preserved_diagnostics_and
     # Both documented modes run the same retained-result inspection; the
     # notebook's markdown states which one produced the saved outputs.
     assert qualification["mode"] in {"compute", "inspect_retained"}
+    assert notebook.metadata["mrms_execution_provenance"]["saved_execution_mode"] == qualification["mode"]
     saved_mode = "compute-mode run" if qualification["mode"] == "compute" else "inspect_retained"
     assert saved_mode in "\n".join(cell.source for cell in notebook.cells if cell.cell_type == "markdown")
     assert qualification["clock"] == "UTC-equivalent naive HEC-RAS model labels"
