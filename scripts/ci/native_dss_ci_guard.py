@@ -36,6 +36,12 @@ JAVA_MODULES = (
     "tests.test_rasdss_native_writes",
 )
 
+#: Skip reasons that are intended on some platforms and do not make a required module
+#: count as skipped (matched as substrings of the JUnit skip message).
+ALLOWED_SKIP_REASONS = (
+    "the held handle blocks os.replace on Windows",
+)
+
 FEATURES = ("write_sync_modes", "dssfile_held_handle", "repair_copy_out", "gridded_import",
             "grid_tools", "grid_to_point", "write_profile", "write_location")
 
@@ -74,10 +80,12 @@ def check_junit(path: str, min_passed: int, java: bool) -> int:
         # pytest classnames are "tests.test_x" or "tests.test_x.TestClass".
         parts = classname.split(".")
         module = ".".join(parts[:2]) if len(parts) >= 2 else classname
+        skipped = case.find("skipped")
         if case.find("failure") is not None or case.find("error") is not None:
             state = "failed"
-        elif case.find("skipped") is not None:
-            state = "skipped"
+        elif skipped is not None:
+            reason = (skipped.get("message") or "") + (skipped.text or "")
+            state = "platform_skip" if any(r in reason for r in ALLOWED_SKIP_REASONS) else "skipped"
         else:
             state = "passed"
         outcome[state] += 1

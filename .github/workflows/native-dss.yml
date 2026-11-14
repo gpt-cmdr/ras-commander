@@ -7,9 +7,9 @@ name: Native DSS engine
 # native: RAS_COMMANDER_DSS_BACKEND=native, no Java installed. The guard step
 #   fails the job if the engine is not the one from PyPI or if the native
 #   wrapper modules did not run (scripts/ci/native_dss_ci_guard.py).
-# shadow: adds a JDK, pyjnius and HEC Monolith (downloaded by ras-commander from
-#   HEC's public Nexus and Maven Central before the tests, cached between runs),
-#   so the Java-path comparisons run too.
+# shadow (Windows only, see the matrix): adds a JDK, pyjnius and HEC Monolith
+#   (downloaded by ras-commander from HEC's public Nexus and Maven Central before
+#   the tests, cached between runs), so the Java-path comparisons run too.
 
 on:
   pull_request:
@@ -29,6 +29,13 @@ jobs:
       matrix:
         os: [ubuntu-latest, windows-latest]
         backend: [native, shadow]
+        exclude:
+          # HEC's Linux native library (javaHeclib 7-IU-8, HEC Monolith 3.3.27)
+          # aborts intermittently in DSS6 time-series writes ("Substring out of
+          # bounds" in zsrtsi6.f), which the Java path of the shadow tests uses.
+          # Shadow runs on Windows; Linux runs the native leg.
+          - os: ubuntu-latest
+            backend: shadow
     env:
       CI: '1'
       PYTHONUTF8: '1'
