@@ -49,6 +49,13 @@ def prepare_repair(path, boundary_types, relative_tolerance, max_passes):
     for iteration in range(max_passes + 1):
         raw = GeomBcLines._compute_external_faces(
             path, relative_tolerance=relative_tolerance, collect_conflicts=True, polylines=lines)
+        certificates = []
+        for index, identity in enumerate(raw['identities']):
+            pieces = project_pieces(lines[index], rings[identity[0]])
+            if not np.isclose(abs(pieces[-1][3] - pieces[0][2]), raw['lengths'][index],
+                              rtol=0, atol=1e-7):
+                raise ValueError(f'Certified projection disagrees with binding for {identity}')
+            certificates.append(pieces)
         decision = GeomBcLines._arbitrate_external_faces(raw, types)
         if decision['unresolved_count']:
             raise ValueError('Unresolved shared-face arbitration tie')
@@ -86,7 +93,7 @@ def prepare_repair(path, boundary_types, relative_tolerance, max_passes):
                 high -= min(1., .1 * (lost_row['Station End'] - lost_row['Station Start']), .5 * (high - low))
             if high <= low:
                 raise ValueError(f'Cut would leave no span for {identity}')
-            pieces = project_pieces(lines[index], rings[identity[0]])
+            pieces = certificates[index]
             origin, end = pieces[0][2], pieces[-1][3]
             if not np.isclose(abs(end-origin), length, rtol=0, atol=1e-7):
                 raise ValueError(f'Certified projection disagrees with binding for {identity}')

@@ -155,3 +155,20 @@ def test_existing_forcing_refused(tmp_path):
     with pytest.raises(ValueError, match='existing boundary forcing'):
         GeomBcLines.write_external_faces(path, experimental=True, repair_conflicts=True, boundary_types=TYPES)
     assert path.read_bytes() == before
+
+
+@pytest.mark.parametrize('conflict', [True, False])
+def test_reversing_winner_or_uncontested_line_refused(tmp_path, conflict):
+    path = case(tmp_path)
+    with h5py.File(path, 'r+') as f:
+        g = f[GROUP]
+        del g['Polyline Points']
+        g['Polyline Points'] = np.array([[1,-1],[8,-1],[3,-1],[15,-1],
+                                         [15 if conflict else 21,-1],[29,-1]], float)
+        g['Polyline Info'][...] = [[0,4,0,1],[4,2,1,1]]
+        g['Polyline Parts'][...] = [[0,4],[0,2]]
+    before = path.read_bytes()
+    with pytest.raises(ValueError, match='Backwards|Discontinuous'):
+        GeomBcLines.write_external_faces(path, experimental=True, repair_conflicts=True, boundary_types=TYPES)
+    assert path.read_bytes() == before
+    assert not list(tmp_path.glob('*.bak'))

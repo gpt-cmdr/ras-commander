@@ -29,3 +29,9 @@ def test_bounded_work():
     with pytest.raises(ValueError, match='work limit'):
         project_pieces([(1, -2), (9, -2)], RING, work_limit=1)
 
+
+@pytest.mark.parametrize('points', [[(5,5),(9,-1)], [(9,-1),(5,5)]])
+def test_ambiguous_drawn_endpoint_refused(points):
+    with pytest.raises(ValueError, match='Ambiguous'):
+        project_pieces(points, RING)
+

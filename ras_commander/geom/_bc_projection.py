@@ -64,14 +64,30 @@ def project_pieces(points, ring, *, work_limit=2000000):
                             if abs(root.imag) <= 1e-12 and lo < root.real < hi:
                                 roots.append(float(root.real))
             roots = sorted(set(roots))
+            # Check the closed interval too: an endpoint can lie on a medial
+            # axis even when the entire open interval has a unique owner.
+            for t in roots:
+                projected = ring[:-1] + np.clip(alpha+beta*t, 0, 1)[:, None]*edges
+                distances = np.linalg.norm(p + t*v - projected, axis=1)
+                best = int(np.argmin(distances))
+                near = np.flatnonzero(abs(distances-distances[best]) <= eps)
+                # Distance ties near a shared vertex have quadratic spatial
+                # error; do not mistake root roundoff for distinct projections.
+                point_error = 4 * np.sqrt(eps * max(distances[best], 1.))
+                if any(np.linalg.norm(projected[k]-projected[best]) > point_error for k in near):
+                    raise ValueError('Ambiguous nearest perimeter edges at partition boundary')
             for left, right in zip(roots, roots[1:]):
                 t = (left+right)/2
                 dist = poly @ np.array([t*t, t, 1.])
                 best = int(np.argmin(dist))
                 near = np.flatnonzero(abs(dist-dist[best]) <= eps*eps)
                 projected = ring[:-1] + (a+b*t)[:, None]*edges
-                if any(np.linalg.norm(projected[k]-projected[best]) > eps for k in near):
+                point_error = 4 * np.sqrt(eps * max(np.sqrt(max(dist[best], 0)), 1.))
+                if any(np.linalg.norm(projected[k]-projected[best]) > point_error for k in near):
                     raise ValueError('Ambiguous nearest perimeter edges')
+                # At numerically coincident vertex projections prefer the
+                # moving edge projection over its clamped endpoint neighbor.
+                best = int(near[np.argmax(abs(b[near]))])
                 s0 = stations[best] + lengths[best]*(a[best]+b[best]*left)
                 s1 = stations[best] + lengths[best]*(a[best]+b[best]*right)
                 if result:
