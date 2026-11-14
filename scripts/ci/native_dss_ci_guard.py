@@ -9,7 +9,8 @@
 ``python scripts/ci/native_dss_ci_guard.py junit REPORT.xml [--min-passed N] [--java]``
     Fails unless the pytest JUnit report shows at least N passed tests in total, no
     failures or errors, and every native-engine module in REQUIRED_MODULES ran: it
-    has passed tests and none of its tests were skipped. A job whose engine is
+    has passed tests and none of its tests were skipped. Expected failures
+    (``pytest.xfail``, for documented engine gaps) are counted apart, not as skips. A job whose engine is
     missing, or whose native tests all skip, cannot pass this check. With --java,
     the Java-bridge modules in JAVA_MODULES must also have run (shadow leg).
 """
@@ -92,6 +93,9 @@ def check_junit(path: str, min_passed: int, java: bool) -> int:
         skipped = case.find("skipped")
         if case.find("failure") is not None or case.find("error") is not None:
             state = "failed"
+        elif skipped is not None and skipped.get("type") == "pytest.xfail":
+            # A declared expected failure (a documented engine gap), not a skipped test.
+            state = "xfailed"
         elif skipped is not None:
             reason = (skipped.get("message") or "") + (skipped.text or "")
             state = "platform_skip" if any(r in reason for r in ALLOWED_SKIP_REASONS) else "skipped"
