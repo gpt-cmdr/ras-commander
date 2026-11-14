@@ -1,4 +1,4 @@
-"""Typed native dataset and attribute routing for public HDF readers (bridge API 11).
+"""Typed native dataset and attribute routing for public HDF readers (bridge API 11 or 12).
 
 ``read(dataset, selection)`` returns exactly what ``dataset[selection]`` returns
 with h5py: same dtype (compounds included), shape, values and bits. When the

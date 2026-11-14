@@ -1153,7 +1153,7 @@ Routing policy:
 - **Attributes.** `fast_hdf.read_attrs(obj)` returns `{name: obj.attrs[name]}`
   in h5py's key order and `fast_hdf.read_attr(obj, name[, default])` returns
   one attribute (`obj.attrs[name]` / `obj.attrs.get(name, default)`), with
-  values rebuilt exactly from the engine's typed attributes (bridge API 11):
+  values rebuilt exactly from the engine's typed attributes (bridge API 11 or 12):
   numeric scalars/arrays in the stored dtype and byte order; bitfields as the
   unsigned integer of the same size and order; fixed strings with HDF5's
   NULLPAD conversion; an H5S_NULL dataspace as `h5py.Empty(dtype)`, never a
