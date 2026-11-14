@@ -210,3 +210,18 @@ def test_directory_named_like_a_library_is_not_accepted(tmp_path):
     home = tmp_path / "jdk"
     (home / "lib/server/libjvm.so").mkdir(parents=True)
     assert not RasDss._has_jvm_lib(home, "linux")
+
+
+def test_missing_pyjnius_fails_before_monolith_download(monkeypatch):
+    # The native CI leg has no pyjnius; the Java bridge workers must skip
+    # without reaching HEC's servers for the Monolith download.
+    import sys
+    monkeypatch.setattr(RasDss, "_jvm_configured", False)
+    monkeypatch.setitem(sys.modules, "jnius_config", None)
+    monkeypatch.setattr(
+        RasDss,
+        "_ensure_monolith",
+        lambda: pytest.fail("Monolith must not be installed without pyjnius"),
+    )
+    with pytest.raises(ImportError, match="pyjnius is required"):
+        RasDss._configure_jvm()

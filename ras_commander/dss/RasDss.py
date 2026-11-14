@@ -333,10 +333,9 @@ class RasDss:
         if RasDss._jvm_configured:
             return
 
-        # Ensure monolith is installed
-        monolith = RasDss._ensure_monolith()
-
-        # Lazy import pyjnius config
+        # Check pyjnius before the Monolith install: without it the Java path
+        # cannot run, so a missing pyjnius must not download ~20 MB first.
+        # Importing jnius_config does not start the JVM.
         try:
             import jnius_config
         except ImportError:
@@ -344,6 +343,9 @@ class RasDss:
                 "pyjnius is required for DSS file operations.\n"
                 "Install with: pip install pyjnius"
             )
+
+        # Ensure monolith is installed
+        monolith = RasDss._ensure_monolith()
 
         # Check if JVM already started using jnius_config (does NOT start the JVM)
         # IMPORTANT: Never import from jnius here - that would start the JVM with
