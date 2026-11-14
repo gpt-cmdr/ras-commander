@@ -121,7 +121,7 @@ jobs:
           if code != 0 or outcomes.counts != {"passed": 14}:
               sys.exit(1)
           PY
-      - name: Check example notebook contracts 916, 917, 926 offline (37 tests, none skipped)
+      - name: Check example notebook contracts 731, 916, 917, 926 offline (40 tests, none skipped)
         run: |
           python - <<'PY'
           import socket, sys
@@ -142,11 +142,12 @@ jobs:
           code = pytest.main(
               ["tests/test_rasplan_hdf_default_outputs.py",
                "tests/test_hrrr_precipitation_forecast_notebook.py",
-               "tests/test_mrms_boundary_hyetograph_notebook.py", "-v", "-rA",
+               "tests/test_mrms_boundary_hyetograph_notebook.py",
+               "tests/test_atlas14_shared_pattern_notebook.py", "-v", "-rA",
                "-p", "no:cacheprovider", f"--basetemp={__import__('os').environ['RUNNER_TEMP']}/pytest-notebook-contracts"],
               plugins=[outcomes],
           )
           print(f"Notebook contract outcomes: {outcomes.counts}")
-          if code != 0 or outcomes.counts != {"passed": 37}:
+          if code != 0 or outcomes.counts != {"passed": 40}:
               sys.exit(1)
           PY

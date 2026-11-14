@@ -58,6 +58,37 @@ files, and the HEC-RAS results.
     2026-11-13 rework, 926 drives its runs with native forcing validated against a
     full-source warp; see note H under "ras-commander-fast-dss 0.1.2 notebooks".
 
+!!! warning "Correction (2026-11-14): 731 DSS grids before the stated-envelope fix"
+    Every 731 export recorded in this report before 2026-11-14 used HEC-Vortex 0.13.3
+    or the native importer's `align="vortex"` option, which reproduces it. On the
+    public preset both wrote the same 144 records of 13 × 11 cells with **7 corner cells
+    missing in every record**. Those cells are not NOAA NoData: reading the complete
+    `se100yr24ha` grid at each declared cell centre gives 13.7 to 14.3 in, and the
+    cropped source has no NoData. Two separate effects are involved:
+
+    1. **Missing corners, from the warp.** Both routes warp the cropped source onto
+       GDAL's suggested rectangular extent, which is not snapped to whole cells. Seven
+       corner cells of that rectangle fall outside the reprojected crop's coverage, so
+       they are missing in the warped array before anything is written. A review
+       control (a GDAL warp of the cropped source onto the unrounded suggested lattice
+       with the stored 13 × 11 dimensions) leaves exactly the same 7 cells missing.
+    2. **Displacement, from the write.** When the records are serialized, the declared
+       origin is rounded to whole cells. The data is not resampled, so the whole array,
+       missing cells included, is declared less than one cell from where it was
+       sampled. The same control puts the shift at about 735 m north and 65 m west; the
+       engine does not report its planned transform, so this is an estimate, not an
+       engine measurement.
+
+    Against a GDAL bilinear warp of the complete NOAA grid onto the stored lattice, the
+    stored storm totals differed by up to 0.050 in (RMSE 0.018 in, on totals near
+    14 in); a GDAL warp of the importer's own cropped input also differed from them by
+    up to 0.031 in, so the displacement, not the crop, explains most of it. The notebook's footprint check (no missing cell over the model polygon) passed,
+    and the missing cells were outside it. Those runs are **execution and DSS read-back
+    evidence whose grids failed source-spatial qualification**. "Equal cell for cell"
+    between the two routes means both moved the grid the same way. From 2026-11-14 the
+    native route writes to a stated envelope and is checked against the full-source warp;
+    see note I.
+
 **Counts.** These are the unmodified notebooks run on each backend: 9 run in full, plus a
 partial DSS check of 952.
 
@@ -278,7 +309,7 @@ the default-lane runs.
 |---|---|---|---|---|---|
 | 322 Native DSS Records, Backends, and Copy-Out Recovery (new) | Records, backends, `sync=`, paired data, locations and `repair` on public HEC files; no HEC-RAS | pass | pass | in-notebook (note C) | 28 / 30 / — |
 | 732 Native Gridded Import and Grid Tools on Real Precipitation (new) | `RasDssGrid` on AORC Zarr/NetCDF, IMERG HDF5, Stage IV GRIB1/GRIB2 and MRMS GRIB2; every grid tool; no HEC-RAS | pass | pass | not applicable (note D) | 43 / 53 / — |
-| 731 Atlas 14 shared temporal pattern | Public preset (NewOrleansMetro, NOAA `se100yr24ha`); native export through `RasDssGrid.import_gridded` | pass (native export route) | pass | — | 115 / 54; Vortex route 39 (note E) |
+| 731 Atlas 14 shared temporal pattern | Public preset (NewOrleansMetro, NOAA `se100yr24ha`); native export through `RasDssGrid.import_gridded` (`align="vortex"`; grids failed source-spatial qualification, see the 2026-11-14 correction and note I) | pass (native export route) | pass | — | 115 / 54; Vortex route 39 (note E) |
 | 916 HRRR forecast | Review 1: the HEC-RAS runs are driven by native hourly forcing (HRRR one-hour APCP messages through `RasDssGrid`), validated against a full-source GDAL warp with a coverage gate; qpkit kept as a disclosed comparison that fails spatial qualification | pass | pass | pass | 371 / 405 / 330 (note G) |
 | 926 WPC QPF (2026-11-13) | The HEC-RAS runs are driven by native WPC forcing (the 28 published GRIB2 files through `RasDssGrid`), every frame validated against a full-source GDAL warp with missing-cell and mesh-coverage gates; qpkit kept as a disclosed comparison that fails spatial qualification | pass | pass | pass | 323 / 318 / 326 (note H) |
 | 917 MRMS QPE | Visible backend selectors; native preprocessing (1-72 h windows, overlap/gap reports, shapefile clip, threads) | pass | pass (`RAS_COMMANDER_MRMS_BACKEND=native`) | pass (`...=shadow`) | 2910 / 2351 / 3507 (note F) |
@@ -302,7 +333,7 @@ the sum of the 24 hourly grids; the Stage IV 24-hour analysis over the same peri
 is about 64 % higher over the envelope, and the normalizer imposes it exactly.
 
 **Note E, 731.** The `native` and `vortex` export routes wrote the same 144
-records with identical cell values. Before the committed run, hms-commander's Atlas
+records with identical cell values (both with the rounded origin; see the 2026-11-14 correction). Before the committed run, hms-commander's Atlas
 14 helper logged its cache file's full path at INFO; the notebook now sets that
 logger to WARNING and was rerun. The attachment and precompute steps stay off in
 the preset (see note B).
@@ -358,6 +389,60 @@ runs, into a separate file no plan uses; it reproduces the 126 cells missing in 
 keeps them missing, and reports the mesh-impact and full-source figures given in the
 correction, so the notebook prints that it is not spatially qualified. Committed outputs are
 the default lane's (CPython 3.13.5 kernel for `qpkit`, ras-commander-fast-dss 0.1.2).
+
+## Missing-cell follow-ups: 731 and 728 (2026-11-14)
+
+The 926 rework surveyed the retained gridded-DSS outputs of other notebooks. It found 7
+missing cells in every 731 record, on both export routes, and `np.nansum` in 728. Both
+notebooks were rerun with the same harness as above (isolated run root, the worktree's
+`ras_commander`, nbclient), on a CPython 3.13.5 kernel with ras-commander-fast-dss 0.1.2,
+rasterio 1.5.2 and NumPy 2.5.4. HEC-RAS 7.0 ran through `RasPreprocess` and `RasCmdr` only.
+Committed outputs are the default lane's.
+
+| NB | Change | default | native | Vortex route | Wall time (s) |
+|---|---|---|---|---|---|
+| 731 Atlas 14 shared temporal pattern | Native export onto a stated envelope; missing-cell, full-source warp and mesh gates; `"native"` becomes the default route | pass | pass | stops at the missing-cell gate (by design) | 79 / 29 / 54 (note I) |
+| 728 Extend gridded DSS forcing window | Plain sums with explicit missing-cell counts and gates; mesh centre and stencil gate | pass | pass | — | 703 / 156 (note J) |
+
+**Note I, 731.** The 7 missing cells were not NOAA NoData. They were corner cells of an
+unsnapped rectangular lattice that fell outside the reprojected crop during the warp;
+separately, rounding the declared origin on write displaced every value (see the
+correction at the top). The native route now passes `envelope=`: the model
+footprint in SHG, snapped outward to whole 2,000 m cells, plus one cell
+(`FORCING_MARGIN_CELLS`). On the public preset that is 10 × 9 cells from (558000, 774000).
+With an envelope, the importer's records equal a GDAL bilinear warp of its own cropped
+input to 2.1e-7 in. The notebook now:
+
+- counts missing cells in every record and stops on any (0 per record);
+- compares the stored storm total with a GDAL bilinear warp of the **complete** NOAA grid
+  onto the stored lattice, with an exact transformer (`tolerance=0`), and stops above
+  0.005 in: maximum 1.66e-3 in, RMSE 1.8e-4 in. The tolerance allows for GDAL's
+  downsampling kernel, which widens with the source-to-target scale, so cropped and
+  complete sources differ by about 1e-3 in near the crop. The old displaced grid (0.05 in
+  here) exceeded it, as would a crop too small for the lattice; one tolerance does not
+  guarantee detecting every possible shift on every rainfall field;
+- requires every physical mesh cell centre (19,711) and its four-centre bilinear stencil
+  to fall on present lattice cells: 0 fail.
+
+The 144 records are identical between the default and native lanes. A Vortex-route run
+(HEC-Vortex 0.13.3) reproduced the old 13 × 11 lattice with 7 missing cells in every
+record and stopped at the new gate, as intended; the notebook text says so. The template
+default `DSS_EXPORT_ROUTE` is now `"native"`. The default-lane wall time includes the
+NewOrleansMetro download. Not done: attachment and native precompute stay off in the
+preset (note B).
+
+**Note J, 728.** The source grid is built by `RasDss` writers from finite values, so
+`np.nansum` hid nothing here: the rerun counts 0 missing cells in the 3 source, 6
+derivative and 5 model-window grids, and its numbers equal the previous committed
+outputs (precompute error 2e-7 in; maximum cell WSEL error 0.832 ft, 2 cells above 0.1 ft;
+volume error 0.0088 %; DSS-to-final mean error 5e-6 in, RMSE 0.00069 in over 18,066
+active cells). It would have hidden a missing cell, so the window total is now a plain
+sum after explicit counts that stop the notebook, the temporary-HDF rainfall must be
+finite, and every physical mesh cell centre and bilinear stencil must lie on present
+cells (0 fail). The derivative DSS records and the plan's water surface and cumulative
+precipitation are bit-identical between the default and native lanes. The native lane
+loaded no JVM. The two wall times differ because of other load on the host, not the
+backend.
 
 ## Skipped notebooks
 
