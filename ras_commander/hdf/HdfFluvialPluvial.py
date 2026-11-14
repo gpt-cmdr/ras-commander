@@ -181,7 +181,7 @@ def _native_snapshot(hdf_path, retain_faces, *, reference_omissions=False, refer
     whose native ring is invalid. Their geometry is then dissolved by the
     reference, never by native ring assembly.
     """
-    # Same availability and API-version gate (fast_hdf.API 11) as every other native read.
+    # Same availability and API-version gate (bridge API 11 or 12) as every other native read.
     from .. import fast_hdf
     module, failure, _ = fast_hdf._load_native()
     if module is None:
