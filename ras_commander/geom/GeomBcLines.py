@@ -1390,6 +1390,66 @@ class GeomBcLines:
             KeyError: Required compiled datasets or fields are missing.
             OSError: HDF cannot be read.
         """
+        return GeomBcLines._compute_external_faces(
+            geom_hdf, relative_tolerance=relative_tolerance)
+
+    @staticmethod
+    @log_call
+    def preview_external_face_arbitration(
+        geom_hdf: Union[Path, str], *, boundary_types=None,
+        relative_tolerance: float = 1e-12,
+    ) -> dict:
+        """Audit shared-face claims without changing geometry or returning a writable binding.
+
+        ``boundary_types`` maps (area, BC name) to ``flow`` or ``normal_depth``.
+        Largest positive overlap wins. Claims within 1e-3 model units of the
+        largest overlap tie; exactly one flow among normal-depth competitors
+        resolves a tie. Missing or other types leave ties unresolved.
+        The relative overlap-selection tolerance is independent of this tie rule.
+
+        Returns a list of conflict decisions, including all claims, identities,
+        overlaps in model units, and types used. ``requires_geometry_repair``
+        means losing lines must be trimmed and rebound before writing. This
+        preview does not qualify trimming, native selection, or a solver run.
+        The existing compute and write methods continue to reject shared faces.
+        """
+        result = GeomBcLines._compute_external_faces(
+            geom_hdf, relative_tolerance=relative_tolerance, collect_conflicts=True)
+        types = dict(boundary_types or {})
+        identities = result['identities']
+        if any(key not in identities for key in types):
+            raise ValueError('Unknown boundary identity in boundary_types')
+        claims = {}
+        for row in result['external_faces'].to_dict('records'):
+            line_id = int(row['BC Line ID'])
+            identity = identities[line_id]
+            overlap = min(row['Station End'], result['lengths'][line_id]) - max(row['Station Start'], 0)
+            claims.setdefault((identity[0], int(row['Face Index'])), []).append({
+                'identity': identity, 'overlap': float(overlap),
+                'type': types.get(identity)})
+        decisions = []
+        for (area, face), competitors in sorted(claims.items()):
+            if len(competitors) < 2:
+                continue
+            largest = max(c['overlap'] for c in competitors)
+            tied = [c for c in competitors if largest - c['overlap'] <= 1e-3]
+            winner = tied[0] if len(tied) == 1 else None
+            reason = 'largest_overlap' if winner else 'unresolved_tie'
+            if winner is None:
+                flows = [c for c in tied if c['type'] == 'flow']
+                if len(flows) == 1 and all(c['type'] in ('flow', 'normal_depth') for c in tied):
+                    winner, reason = flows[0], 'flow_normal_depth_tie'
+            decisions.append({'area': area, 'face_index': face,
+                              'claims': competitors, 'reason': reason,
+                              'winner': None if winner is None else winner['identity'],
+                              'tie_types': {c['identity']: c['type'] for c in tied}
+                              if reason == 'flow_normal_depth_tie' else {}})
+        return {'conflicts': decisions, 'requires_geometry_repair': bool(decisions),
+                'unresolved_count': sum(d['winner'] is None for d in decisions),
+                'qualification': 'read_only_arbitration_only'}
+
+    @staticmethod
+    def _compute_external_faces(geom_hdf, *, relative_tolerance, collect_conflicts=False):
         import h5py
         from shapely.geometry import LineString, Point
 
@@ -1496,7 +1556,7 @@ class GeomBcLines:
                     raise ValueError('Perimeter faces do not continuously cover the BC span')
                 for row in line_rows:
                     key = (area, row[1])
-                    if key in face_owners:
+                    if key in face_owners and not collect_conflicts:
                         raise ValueError(
                             f'Conflicting BC face ownership: area {area}, face {row[1]}, '
                             f'BC lines {face_owners[key]} and {line_id}'
@@ -1504,7 +1564,8 @@ class GeomBcLines:
                     face_owners[key] = line_id
                 rows.extend(line_rows)
         return {'external_faces': pd.DataFrame.from_records(np.array(rows, dtype=dtype)),
-                'lengths': np.asarray(lengths, dtype=float)}
+                'lengths': np.asarray(lengths, dtype=float),
+                **({'identities': identities} if collect_conflicts else {})}
 
     @staticmethod
     @log_call

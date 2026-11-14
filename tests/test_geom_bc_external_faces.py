@@ -393,3 +393,43 @@ def test_backup_digest_failure_removes_unverified_copy(tmp_path, monkeypatch):
     assert path.read_bytes() == before
     assert not list(tmp_path.glob('*.bak'))
     assert not list(tmp_path.glob('bc-faces-*'))
+
+@pytest.mark.parametrize('second_end,types,winner,reason', [
+    (8, ('flow', 'normal_depth'), ('A', 'Other'), 'largest_overlap'),
+    (5, ('flow', 'normal_depth'), ('A', 'In'), 'flow_normal_depth_tie'),
+    (5, ('normal_depth', 'normal_depth'), None, 'unresolved_tie'),
+    (5, ('flow', 'flow'), None, 'unresolved_tie'),
+    (5, ('flow', None), None, 'unresolved_tie'),
+    (5.0009, ('flow', 'normal_depth'), ('A', 'In'), 'flow_normal_depth_tie'),
+    (5.0011, ('flow', 'normal_depth'), ('A', 'Other'), 'largest_overlap'),
+])
+def test_arbitration_preview_keeps_writer_closed(tmp_path, second_end, types, winner, reason):
+    path = make_mesh(tmp_path)
+    with h5py.File(path, 'r+') as f:
+        bc = f['Geometry/Boundary Condition Lines']
+        dtype = bc['Attributes'].dtype
+        for name in ('Attributes', 'Polyline Info', 'Polyline Points'):
+            del bc[name]
+        bc['Attributes'] = np.array([(b'In', b'A', b'External'),
+                                     (b'Other', b'A', b'External')], dtype=dtype)
+        bc['Polyline Info'] = [[0, 2, 0, 1], [2, 2, 1, 1]]
+        bc['Polyline Points'] = [[0, 0], [5, 0], [0, 0], [second_end, 0]]
+    before = path.read_bytes()
+    result = GeomBcLines.preview_external_face_arbitration(
+        path, boundary_types=dict(zip([('A', 'In'), ('A', 'Other')], types)))
+    assert result['requires_geometry_repair']
+    assert result['conflicts'][0]['winner'] == winner
+    assert result['conflicts'][0]['reason'] == reason
+    assert len(result['conflicts'][0]['claims']) == 2
+    with pytest.raises(ValueError, match='Conflicting'):
+        GeomBcLines.compute_external_faces(path)
+    with pytest.raises(ValueError, match='Conflicting'):
+        GeomBcLines.write_external_faces(path, experimental=True)
+    assert path.read_bytes() == before
+
+
+def test_arbitration_preview_no_conflicts(tmp_path):
+    path = make_mesh(tmp_path)
+    before = path.read_bytes()
+    assert GeomBcLines.preview_external_face_arbitration(path)['conflicts'] == []
+    assert path.read_bytes() == before
