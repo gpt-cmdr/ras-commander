@@ -391,7 +391,7 @@ were rerun on that lane.
 | 916 | pass | no | None | no | 2651 (host under load) |
 | 918 | pass | no | None | no | 4 |
 | 926 | pass | no | None (fixed cycle 2026-11-05 00Z) | no | 651 |
-| 917 | pass | no | `RasDss backend: native (class default)` (was `java`); the MRMS grids are written by HEC-Vortex as before and read back natively; the grid catalog row order follows each Vortex run | **yes** | 3272 (shared kernel); committed run below |
+| 917 | pass | no | `RasDss backend: native (class default)` (was `java`); the MRMS grids are written by HEC-Vortex as before and read back natively; the grid catalog row order follows each Vortex run | **yes** | 3272 (shared kernel); 3850 for the committed run (kernel reporting 0.123.0, `RAS_COMMANDER_917_MAX_RUNTIME_SCALE=3`) |
 
 No notebook behaves differently on the native default, apart from the documented differences
 of the native backend. No run needed Java except 322's deliberate comparison cell.
