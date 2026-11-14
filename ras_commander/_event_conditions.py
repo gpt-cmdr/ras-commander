@@ -103,7 +103,7 @@ def _write_events(plan_hdf, geom_hdf, flow_file, start_time, end_time, units, ta
     boundaries = _parse(flow_file)
     prepared = []
     with h5py.File(geom_hdf, 'r') as geometry:
-        if _text(geometry.attrs.get('Units System', '')) != 'SI (Metric)':
+        if _text(geometry.attrs.get('Units System', '')) != 'SI Units':
             raise ValueError('Geometry units must explicitly match Metric')
         areas = [_text(r['Name']) for r in geometry['Geometry/2D Flow Areas/Attributes'][:]]
         attrs = geometry['Geometry/Boundary Condition Lines/Attributes'][:]

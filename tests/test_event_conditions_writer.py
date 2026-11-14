@@ -10,7 +10,7 @@ from ras_commander import RasPreprocess
 def case(tmp_path):
     geom, plan, flow = [tmp_path / x for x in ('g.hdf', 'p.hdf', 'x.u01')]
     with h5py.File(geom, 'w') as f:
-        f.attrs['Units System'] = np.bytes_('SI (Metric)')
+        f.attrs['Units System'] = np.bytes_('SI Units')
         f.create_dataset('Geometry/2D Flow Areas/Attributes', data=np.array([(b'A',)], dtype=[('Name', 'S16')]))
         mesh = f.require_group('Geometry/2D Flow Areas/A')
         mesh['Faces FacePoint Indexes'] = [[0, 1], [1, 2], [2, 3]]
