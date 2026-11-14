@@ -141,8 +141,9 @@ def _repair_seeds():
 @pytest.mark.parametrize("repair_kind", ["dp", "vertex_removal"])
 @pytest.mark.parametrize("cell_size", [50.0, 80.0])
 @pytest.mark.parametrize("strict", [False, True])
+@pytest.mark.parametrize("timeout", [600, 3600])
 def test_generate_persists_reloads_and_retries(
-    repair_project, monkeypatch, repair_kind, cell_size, strict
+    repair_project, monkeypatch, repair_kind, cell_size, strict, timeout
 ):
     path, hdf, ras, calls = repair_project
     before = path.read_bytes()
@@ -168,6 +169,7 @@ def test_generate_persists_reloads_and_retries(
         max_iterations=2,
         cell_size=cell_size,
         require_complete_products=strict,
+        preprocess_timeout=timeout,
     )
     assert [
         kwargs["require_complete_products"]
@@ -195,6 +197,7 @@ def test_generate_persists_reloads_and_retries(
     assert record["repaired_perimeter_hash"] == expected_hash
     assert [name for name, _ in calls] == ["load", "points", "preprocess", "load"]
     preprocess = calls[2][1]
+    assert preprocess["max_wait"] == timeout
     assert (
         preprocess["geometry_only"]
         and preprocess["force"]

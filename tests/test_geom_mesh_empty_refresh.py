@@ -11,7 +11,8 @@ from ras_commander.geom import GeomStorage
 
 @pytest.mark.parametrize("by_index", [False, True])
 @pytest.mark.parametrize("strict", [False, True])
-def test_empty_area_bootstrap_precedes_hdf_validation(tmp_path, monkeypatch, by_index, strict):
+@pytest.mark.parametrize("timeout", [600, 3600])
+def test_empty_area_bootstrap_precedes_hdf_validation(tmp_path, monkeypatch, by_index, strict, timeout):
     text = tmp_path / "Example.g01"
     text.write_text("Geom Title=Example\n")
     GeomStorage.set_2d_flow_area_perimeter(
@@ -32,10 +33,12 @@ def test_empty_area_bootstrap_precedes_hdf_validation(tmp_path, monkeypatch, by_
     def compile_points(*args, **kwargs):
         assert calls == ["plan", "bootstrap"]
         assert kwargs["require_complete_products"] is strict
+        assert kwargs["preprocess_timeout"] == timeout
         calls.append("compile")
     monkeypatch.setattr(module, "_recompile_geometry_hdf_via_rasexe", compile_points)
     def validate(*args, **kwargs):
         assert calls == ["plan", "bootstrap", "compile"]
+        assert kwargs["preprocess_timeout"] == timeout
         assert module._read_mesh_metadata_from_text(text)["Main"]["seed_count"] == 1
         calls.append("validate")
         raise RuntimeError("stop before native preprocessing")
@@ -43,6 +46,7 @@ def test_empty_area_bootstrap_precedes_hdf_validation(tmp_path, monkeypatch, by_
     result = module.GeomMesh.generate(
         text, mesh_name=None if by_index else "Main", recompile_via_rasexe=True,
         require_complete_products=strict,
+        preprocess_timeout=timeout,
     )
     assert calls == ["plan", "bootstrap", "compile", "validate"]
     assert "stop before native preprocessing" in result.error_message
