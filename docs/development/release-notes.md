@@ -9,7 +9,7 @@ alone does not identify a development checkout.
 
 ### Unreleased
 
-### 0.123.0 — TBD (planned 2026-11-14)
+### 0.123.0 — 2026-11-14
 
 **Read before upgrading.** `java` remains the default DSS backend; no default changes
 for callers who do not select `native` or `shadow`.
@@ -51,6 +51,19 @@ The entries below record each change in the order it merged. Entries that name t
 `ras-commander-fast-dss` 0.1.0 or 0.1.1 floors were superseded within this release by
 the 0.1.2 floor.
 
+- **The notebook contract tests for 916, 917 and 926 pass again and run in CI.**
+  `test_rasplan_hdf_default_outputs` now finds each notebook's literal
+  `hdf_output_variables` request wherever its cell sits; the requested variables are
+  unchanged. Notebook 916 was re-executed with ras-commander-fast-hdf 0.5.0, which
+  removes the saved "incompatible ras-commander-fast-hdf extension" warning; its
+  computational cells and results are unchanged. Notebook 917's execution provenance
+  now matches its saved compute run, and its gallery runtime is corrected from 5.3 to
+  48.5 minutes (916's is now 8.6 minutes). The Text API contract workflow runs these
+  tests offline.
+- **Without pyjnius, `RasDss` no longer downloads HEC Monolith.** The Java backend
+  checks for pyjnius first and raises `ImportError` before the Monolith download, so a
+  native-only environment without pyjnius makes no Monolith download request to HEC's
+  servers.
 - **Notebook 926 now drives HEC-RAS with native WPC forcing.** Its qpkit route left 126
   forcing cells missing in every six-hour frame of its committed WPC cycle, and the
   notebook's NaN-aware sums hid them. The notebook now downloads the published WPC GRIB2
