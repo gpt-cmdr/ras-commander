@@ -9,7 +9,7 @@ this module from a directory outside the source checkout:
   HEC-RAS HDF files and/or directories containing them. Files named in
   ``CASES`` are hash-checked; real-fixture tests skip when none is found.
 
-The gate pins bridge ``API_VERSION`` 11 and accepts the engine commits of
+The gate pins bridge ``API_VERSION`` 12 and accepts the engine commits of
 ``tests/native_engine_provenance.py`` (set ``RAS_EXPECTED_ENGINE_COMMIT`` to
 require one specific build);
 checks that the extension is imported from site-packages and that its binary
